@@ -2684,7 +2684,6 @@ const renderDataTable = (title, data, columns, masterType, onDelete) => {
               <div className="account-tabs">
                 <button className={`tab-btn ${accountActiveTab === 'basic' ? 'active' : ''}`} onClick={() => setAccountActiveTab('basic')}>Basic Information</button>
                 <button className={`tab-btn ${accountActiveTab === 'gst' ? 'active' : ''}`} onClick={() => setAccountActiveTab('gst')}>GST Details</button>
-                <button className={`tab-btn ${accountActiveTab === 'other' ? 'active' : ''}`} onClick={() => setAccountActiveTab('other')}>Other Info</button>
               </div>
 
               <form className="master-form" onSubmit={saveAccount}>
@@ -2737,23 +2736,7 @@ const renderDataTable = (title, data, columns, masterType, onDelete) => {
                     </div>
                   </>
                 )}
-                {accountActiveTab === 'other' && (
-                  <>
-                    <div className="form-grid-3">
-                      <div className="labeled-input"><label>Last Account</label><input placeholder="Last Account" disabled value={accounts.length > 0 ? accounts[accounts.length-1].accountCode : '-'} /></div>
-                    </div>
-                    <div className="form-grid-3">
-                      <div className="labeled-input"><label>Total Solutions</label><input placeholder="101 - Total Solution" disabled value="101 - Total Solution" /></div>
-                      <div className="labeled-input"><label>Financial Year</label><input placeholder="101_2627" disabled value="101_2627" /></div>
-                      <div className="labeled-input"><label>Date</label><input placeholder="21/04/2026" disabled value="21/04/2026" /></div>
-                    </div>
-                    <div className="form-grid-3">
-                      <div className="labeled-input"><label>User</label><input placeholder="ADMIN" disabled value="ADMIN" /></div>
-                      <div className="labeled-input"><label>Version</label><input placeholder="V 3.0.2" disabled value="V 3.0.2" /></div>
-                    </div>
-                    <div className="form-row"><div className="labeled-input"><label>Message</label><textarea placeholder="Message" rows="3" disabled /></div></div>
-                  </>
-                )}
+               
                 <div className="form-actions">
                   <button type="submit" className="btn-save">Save Account</button>
                   <button type="button" className="btn-cancel" onClick={closeForm}>Cancel</button>
