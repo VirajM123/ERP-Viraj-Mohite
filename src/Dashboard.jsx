@@ -261,9 +261,9 @@ const Dashboard = () => {
 
   // Form states
   const [companyForm, setCompanyForm] = useState({ code: '', name: '', address: '', branchAddress: '' });
-  const [productForm, setProductForm] = useState({ 
-    code: '', name: '', companyId: '', group: '', category: '', description: '', 
-    gst: '', basicUnit: 'PCS', boxPack: '', inboxPack: '', retailerMargin: '', 
+  const [productForm, setProductForm] = useState({
+    code: '', name: '', companyId: '', group: '', category: '', description: '',
+    gst: '', basicUnit: 'PCS', boxPack: '', inboxPack: '', retailerMargin: '',
     distributorMargin: '', active: true, locked: false, hsn: '', weight: '0', allowFraction: false,
     Rate_Per_Unit: '1', Reorder_Level: '0', Min_Stock_Holding: '0'
   });
@@ -375,16 +375,17 @@ const Dashboard = () => {
   const saveGodown = (e) => {
     e.preventDefault();
     if (!godownForm.code || !godownForm.name) return alert('Code and Name required');
-    
+
     if (editGodownId) {
-      setGodowns(godowns.map(godown => 
-        godown.id === editGodownId 
+      setGodowns(godowns.map(godown =>
+        godown.id === editGodownId
           ? { ...godown, ...godownForm }
           : godown
       ));
       setEditGodownId(null);
     } else {
       const newId = Math.max(...godowns.map(g => g.id), 0) + 1;
+
       setGodowns([...godowns, { id: newId, ...godownForm }]);
     }
     setGodownForm({ code: '', name: '', address: '', location: '' });
@@ -409,7 +410,7 @@ const Dashboard = () => {
   };
 
   const getFilteredGodowns = () => {
-    return godowns.filter(godown => 
+    return godowns.filter(godown =>
       godown.code?.toLowerCase().includes(filters.godown.toLowerCase()) ||
       godown.name?.toLowerCase().includes(filters.godown.toLowerCase())
     );
@@ -500,7 +501,7 @@ const Dashboard = () => {
       const qty = parseFloat(item.qty) || 0;
       const rate = parseFloat(value) || 0;
       item.amount = (qty * rate).toFixed(2);
-      
+
       if (item.tprPct) {
         const tprPct = parseFloat(item.tprPct) || 0;
         item.tprAmt = ((qty * rate) * tprPct / 100).toFixed(2);
@@ -618,9 +619,20 @@ const Dashboard = () => {
   };
 
   const handleInvoiceProductClick = (index) => {
+    setActiveRow(index);
     setCurrentProductIndex(index);
     setProductListFilter('');
     setShowProductList(true);
+
+    setTimeout(() => {
+      const currentInput = document.querySelector(
+        `[data-product-index="${index}"]`
+      );
+
+      if (currentInput) {
+        currentInput.focus();
+      }
+    }, 0);
   };
 
   const handleProductSelect = (index, product) => {
@@ -676,38 +688,38 @@ const Dashboard = () => {
   const updatePurchaseItem = (index, field, value) => {
     const newItems = [...purchaseItems];
     newItems[index][field] = value;
-    
+
     if (field === 'quantity' && value && parseFloat(value) > 0) {
       const item = newItems[index];
       const qty = parseFloat(item.quantity) || 0;
       const rate = parseFloat(item.purRate) || 0;
       const grossAmt = qty * rate;
       item.grossAmount = grossAmt.toFixed(2);
-      
+
       let afterDisc1 = grossAmt;
       if (parseFloat(item.disc1)) {
         const disc1Amt = grossAmt * (parseFloat(item.disc1) / 100);
         afterDisc1 = grossAmt - disc1Amt;
       }
       item.afterDisc1 = afterDisc1.toFixed(2);
-      
+
       let afterDisc2 = afterDisc1;
       if (parseFloat(item.disc2)) {
         const disc2Amt = afterDisc1 * (parseFloat(item.disc2) / 100);
         afterDisc2 = afterDisc1 - disc2Amt;
       }
       item.afterDisc2 = afterDisc2.toFixed(2);
-      
+
       let afterDisc3 = afterDisc2;
       if (parseFloat(item.disc3)) {
         const disc3Amt = afterDisc2 * (parseFloat(item.disc3) / 100);
         afterDisc3 = afterDisc2 - disc3Amt;
       }
       item.afterDisc3 = afterDisc3.toFixed(2);
-      
+
       let taxableVal = afterDisc3;
       item.taxable = taxableVal.toFixed(2);
-      
+
       if (parseFloat(item.tax)) {
         const taxAmt = taxableVal * (parseFloat(item.tax) / 100);
         const cgstAmt = taxAmt / 2;
@@ -715,15 +727,15 @@ const Dashboard = () => {
         item.cgst = cgstAmt.toFixed(2);
         item.sgst = sgstAmt.toFixed(2);
       }
-      
+
       const amount = taxableVal + (parseFloat(item.cgst) || 0) + (parseFloat(item.sgst) || 0);
       item.amount = amount.toFixed(2);
-      
+
       let totalAmount = 0;
       newItems.forEach(i => {
         totalAmount += parseFloat(i.amount) || 0;
       });
-      
+
       // Add new row only when quantity is entered and it's the last row
       if (index === newItems.length - 1) {
         setTimeout(() => {
@@ -740,31 +752,31 @@ const Dashboard = () => {
       const rate = parseFloat(value) || 0;
       const grossAmt = qty * rate;
       item.grossAmount = grossAmt.toFixed(2);
-      
+
       let afterDisc1 = grossAmt;
       if (parseFloat(item.disc1)) {
         const disc1Amt = grossAmt * (parseFloat(item.disc1) / 100);
         afterDisc1 = grossAmt - disc1Amt;
       }
       item.afterDisc1 = afterDisc1.toFixed(2);
-      
+
       let afterDisc2 = afterDisc1;
       if (parseFloat(item.disc2)) {
         const disc2Amt = afterDisc1 * (parseFloat(item.disc2) / 100);
         afterDisc2 = afterDisc1 - disc2Amt;
       }
       item.afterDisc2 = afterDisc2.toFixed(2);
-      
+
       let afterDisc3 = afterDisc2;
       if (parseFloat(item.disc3)) {
         const disc3Amt = afterDisc2 * (parseFloat(item.disc3) / 100);
         afterDisc3 = afterDisc2 - disc3Amt;
       }
       item.afterDisc3 = afterDisc3.toFixed(2);
-      
+
       let taxableVal = afterDisc3;
       item.taxable = taxableVal.toFixed(2);
-      
+
       if (parseFloat(item.tax)) {
         const taxAmt = taxableVal * (parseFloat(item.tax) / 100);
         const cgstAmt = taxAmt / 2;
@@ -772,7 +784,7 @@ const Dashboard = () => {
         item.cgst = cgstAmt.toFixed(2);
         item.sgst = sgstAmt.toFixed(2);
       }
-      
+
       const amount = taxableVal + (parseFloat(item.cgst) || 0) + (parseFloat(item.sgst) || 0);
       item.amount = amount.toFixed(2);
     } else if (field === 'disc1' || field === 'disc2' || field === 'disc3') {
@@ -781,31 +793,31 @@ const Dashboard = () => {
       const rate = parseFloat(item.purRate) || 0;
       const grossAmt = qty * rate;
       item.grossAmount = grossAmt.toFixed(2);
-      
+
       let afterDisc1 = grossAmt;
       if (parseFloat(item.disc1)) {
         const disc1Amt = grossAmt * (parseFloat(item.disc1) / 100);
         afterDisc1 = grossAmt - disc1Amt;
       }
       item.afterDisc1 = afterDisc1.toFixed(2);
-      
+
       let afterDisc2 = afterDisc1;
       if (parseFloat(item.disc2)) {
         const disc2Amt = afterDisc1 * (parseFloat(item.disc2) / 100);
         afterDisc2 = afterDisc1 - disc2Amt;
       }
       item.afterDisc2 = afterDisc2.toFixed(2);
-      
+
       let afterDisc3 = afterDisc2;
       if (parseFloat(item.disc3)) {
         const disc3Amt = afterDisc2 * (parseFloat(item.disc3) / 100);
         afterDisc3 = afterDisc2 - disc3Amt;
       }
       item.afterDisc3 = afterDisc3.toFixed(2);
-      
+
       let taxableVal = afterDisc3;
       item.taxable = taxableVal.toFixed(2);
-      
+
       if (parseFloat(item.tax)) {
         const taxAmt = taxableVal * (parseFloat(item.tax) / 100);
         const cgstAmt = taxAmt / 2;
@@ -813,7 +825,7 @@ const Dashboard = () => {
         item.cgst = cgstAmt.toFixed(2);
         item.sgst = sgstAmt.toFixed(2);
       }
-      
+
       const amount = taxableVal + (parseFloat(item.cgst) || 0) + (parseFloat(item.sgst) || 0);
       item.amount = amount.toFixed(2);
     } else if (field === 'tax' && value) {
@@ -827,7 +839,7 @@ const Dashboard = () => {
       const amount = taxableVal + cgstAmt + sgstAmt;
       item.amount = amount.toFixed(2);
     }
-    
+
     setPurchaseItems(newItems);
     setPurchaseActiveRow(index);
   };
@@ -842,44 +854,44 @@ const Dashboard = () => {
     const { name, value } = e.target;
     let newValue = value;
     let updatedForm = { ...purchaseFormData, [name]: value };
-    
+
     if (name === 'mrpTotal' || name === 'tcbPercent' || name === 'diBc1' || name === 'diBc2' || name === 'diBc3') {
       const mrpTotal = parseFloat(updatedForm.mrpTotal) || 0;
       const tcbPercent = parseFloat(updatedForm.tcbPercent) || 0;
       const diBc1 = parseFloat(updatedForm.diBc1) || 0;
       const diBc2 = parseFloat(updatedForm.diBc2) || 0;
       const diBc3 = parseFloat(updatedForm.diBc3) || 0;
-      
+
       const tcbAmount = mrpTotal * tcbPercent / 100;
       updatedForm.tcbAmount = tcbAmount.toFixed(2);
-      
+
       const afterDiBc1 = mrpTotal - diBc1;
       updatedForm.afterDiBc1 = afterDiBc1.toFixed(2);
-      
+
       const groBsAmt = afterDiBc1 - tcbAmount;
       updatedForm.groBsAmt = groBsAmt.toFixed(2);
-      
+
       const afterDiBc2 = groBsAmt - diBc2;
       updatedForm.afterDiBc2 = afterDiBc2.toFixed(2);
-      
+
       const qbtAmt = afterDiBc2;
       updatedForm.qbtAmt = qbtAmt.toFixed(2);
-      
+
       const afterDiBc3 = qbtAmt - diBc3;
       updatedForm.afterDiBc3 = afterDiBc3.toFixed(2);
-      
+
       const ceBsAmt = afterDiBc3;
       updatedForm.ceBsAmt = ceBsAmt.toFixed(2);
-      
+
       const netAmt = ceBsAmt + (parseFloat(updatedForm.rounding) || 0);
       updatedForm.netAmt = netAmt.toFixed(2);
     }
-    
+
     if (name === 'rounding') {
       const netAmt = (parseFloat(updatedForm.ceBsAmt) || 0) + (parseFloat(value) || 0);
       updatedForm.netAmt = netAmt.toFixed(2);
     }
-    
+
     setPurchaseFormData(updatedForm);
   };
 
@@ -987,28 +999,28 @@ const Dashboard = () => {
       const rate = parseFloat(item.rate) || 0;
       const grossAmt = qty * rate;
       item.grossAmt = grossAmt.toFixed(2);
-      
+
       let schAmt = 0;
       if (parseFloat(item.schPercent)) {
         schAmt = grossAmt * (parseFloat(item.schPercent) / 100);
         item.schAmt = schAmt.toFixed(2);
       }
-      
+
       let tprAmt = 0;
       if (parseFloat(item.tprPercent)) {
         tprAmt = grossAmt * (parseFloat(item.tprPercent) / 100);
         item.tprAmt = tprAmt.toFixed(2);
       }
-      
+
       let cdAmt = 0;
       if (parseFloat(item.cdPercent)) {
         cdAmt = grossAmt * (parseFloat(item.cdPercent) / 100);
         item.cdAmt = cdAmt.toFixed(2);
       }
-      
+
       const taxable = grossAmt - tprAmt - schAmt;
       item.taxable = taxable.toFixed(2);
-      
+
       if (parseFloat(item.gstPercent)) {
         const gstAmt = taxable * (parseFloat(item.gstPercent) / 100);
         item.gstAmt = gstAmt.toFixed(2);
@@ -1020,9 +1032,9 @@ const Dashboard = () => {
           item.sgst = halfGst;
         }
       }
-      
+
       calcCreditNoteSummary(newItems);
-      
+
       // Add new row when qty is entered and it's the last row
       if (value && parseFloat(value) > 0 && index === newItems.length - 1) {
         setTimeout(() => {
@@ -1039,28 +1051,28 @@ const Dashboard = () => {
       const rate = parseFloat(value) || 0;
       const grossAmt = qty * rate;
       item.grossAmt = grossAmt.toFixed(2);
-      
+
       let schAmt = 0;
       if (parseFloat(item.schPercent)) {
         schAmt = grossAmt * (parseFloat(item.schPercent) / 100);
         item.schAmt = schAmt.toFixed(2);
       }
-      
+
       let tprAmt = 0;
       if (parseFloat(item.tprPercent)) {
         tprAmt = grossAmt * (parseFloat(item.tprPercent) / 100);
         item.tprAmt = tprAmt.toFixed(2);
       }
-      
+
       let cdAmt = 0;
       if (parseFloat(item.cdPercent)) {
         cdAmt = grossAmt * (parseFloat(item.cdPercent) / 100);
         item.cdAmt = cdAmt.toFixed(2);
       }
-      
+
       const taxable = grossAmt - tprAmt - schAmt;
       item.taxable = taxable.toFixed(2);
-      
+
       if (parseFloat(item.gstPercent)) {
         const gstAmt = taxable * (parseFloat(item.gstPercent) / 100);
         item.gstAmt = gstAmt.toFixed(2);
@@ -1072,7 +1084,7 @@ const Dashboard = () => {
           item.sgst = halfGst;
         }
       }
-      
+
       calcCreditNoteSummary(newItems);
     } else if (field === 'schPercent' && value) {
       const item = newItems[index];
@@ -1250,31 +1262,31 @@ const Dashboard = () => {
       const rate = parseFloat(item.rate) || 0;
       const grossAmt = qty * rate;
       item.grossAmt = grossAmt.toFixed(2);
-      
+
       let afterDisc1 = grossAmt;
       if (parseFloat(item.bvDisc1)) {
         const disc1Amt = grossAmt * (parseFloat(item.bvDisc1) / 100);
         afterDisc1 = grossAmt - disc1Amt;
       }
-      
+
       let afterDisc2 = afterDisc1;
       if (parseFloat(item.bvDisc2)) {
         const disc2Amt = afterDisc1 * (parseFloat(item.bvDisc2) / 100);
         afterDisc2 = afterDisc1 - disc2Amt;
       }
-      
+
       let afterAdd1 = afterDisc2;
       if (parseFloat(item.bvAdd1)) {
         afterAdd1 = afterDisc2 + (grossAmt * parseFloat(item.bvAdd1) / 100);
       }
-      
+
       let afterAdd2 = afterAdd1;
       if (parseFloat(item.bvAdd2)) {
         afterAdd2 = afterAdd1 + (grossAmt * parseFloat(item.bvAdd2) / 100);
       }
-      
+
       item.taxable = afterAdd2.toFixed(2);
-      
+
       if (parseFloat(item.gstPercent)) {
         const gstAmt = afterAdd2 * (parseFloat(item.gstPercent) / 100);
         item.gstArt = gstAmt.toFixed(2);
@@ -1286,9 +1298,9 @@ const Dashboard = () => {
           item.sgst = halfGst;
         }
       }
-      
+
       calcDebitNoteSummary(newItems);
-      
+
       // Add new row when qty is entered and it's the last row
       if (value && parseFloat(value) > 0 && index === newItems.length - 1) {
         setTimeout(() => {
@@ -1305,31 +1317,31 @@ const Dashboard = () => {
       const rate = parseFloat(value) || 0;
       const grossAmt = qty * rate;
       item.grossAmt = grossAmt.toFixed(2);
-      
+
       let afterDisc1 = grossAmt;
       if (parseFloat(item.bvDisc1)) {
         const disc1Amt = grossAmt * (parseFloat(item.bvDisc1) / 100);
         afterDisc1 = grossAmt - disc1Amt;
       }
-      
+
       let afterDisc2 = afterDisc1;
       if (parseFloat(item.bvDisc2)) {
         const disc2Amt = afterDisc1 * (parseFloat(item.bvDisc2) / 100);
         afterDisc2 = afterDisc1 - disc2Amt;
       }
-      
+
       let afterAdd1 = afterDisc2;
       if (parseFloat(item.bvAdd1)) {
         afterAdd1 = afterDisc2 + (grossAmt * parseFloat(item.bvAdd1) / 100);
       }
-      
+
       let afterAdd2 = afterAdd1;
       if (parseFloat(item.bvAdd2)) {
         afterAdd2 = afterAdd1 + (grossAmt * parseFloat(item.bvAdd2) / 100);
       }
-      
+
       item.taxable = afterAdd2.toFixed(2);
-      
+
       if (parseFloat(item.gstPercent)) {
         const gstAmt = afterAdd2 * (parseFloat(item.gstPercent) / 100);
         item.gstArt = gstAmt.toFixed(2);
@@ -1341,7 +1353,7 @@ const Dashboard = () => {
           item.sgst = halfGst;
         }
       }
-      
+
       calcDebitNoteSummary(newItems);
     } else if (field === 'bvDisc1' && value) {
       const item = newItems[index];
@@ -1477,10 +1489,10 @@ const Dashboard = () => {
   const exportToPDF = (data, title, columns) => {
     const doc = new jsPDF();
     doc.text(title, 14, 15);
-    
+
     const tableData = data.map(row => columns.map(col => row[col.key] || '-'));
     const headers = columns.map(col => col.label);
-    
+
     doc.autoTable({
       head: [headers],
       body: tableData,
@@ -1489,75 +1501,75 @@ const Dashboard = () => {
       styles: { fontSize: 8, cellPadding: 2 },
       headStyles: { fillColor: [59, 130, 246], textColor: 255 }
     });
-    
+
     doc.save(`${title}.pdf`);
   };
 
   // Get filtered data
   const getFilteredCompanies = () => {
-    return companies.filter(company => 
+    return companies.filter(company =>
       company.code?.toLowerCase().includes(filters.company.toLowerCase()) ||
       company.name?.toLowerCase().includes(filters.company.toLowerCase())
     );
   };
 
   const getFilteredGroups = () => {
-    return groupsState.filter(group => 
+    return groupsState.filter(group =>
       group.code?.toLowerCase().includes(filters.group.toLowerCase()) ||
       group.name?.toLowerCase().includes(filters.group.toLowerCase())
     );
   };
 
   const getFilteredCategories = () => {
-    return categoriesState.filter(category => 
+    return categoriesState.filter(category =>
       category.code?.toLowerCase().includes(filters.category.toLowerCase()) ||
       category.name?.toLowerCase().includes(filters.category.toLowerCase())
     );
   };
 
   const getFilteredProducts = () => {
-    return products.filter(product => 
+    return products.filter(product =>
       product.code?.toLowerCase().includes(filters.product.toLowerCase()) ||
       product.name?.toLowerCase().includes(filters.product.toLowerCase())
     );
   };
 
   const getFilteredAccounts = () => {
-    return accounts.filter(account => 
+    return accounts.filter(account =>
       account.accountCode?.toLowerCase().includes(filters.account.toLowerCase()) ||
       account.accountName?.toLowerCase().includes(filters.account.toLowerCase())
     );
   };
 
   const getFilteredOtherAccounts = () => {
-    return otherAccounts.filter(account => 
+    return otherAccounts.filter(account =>
       account.accountCode?.toLowerCase().includes(filters.otherAccount.toLowerCase()) ||
       account.accountName?.toLowerCase().includes(filters.otherAccount.toLowerCase())
     );
   };
 
   const getFilteredGST = () => {
-    return gstList.filter(gst => 
+    return gstList.filter(gst =>
       gst.code?.toLowerCase().includes(filters.gst.toLowerCase())
     );
   };
 
   const getFilteredSalesmen = () => {
-    return salesmen.filter(salesman => 
+    return salesmen.filter(salesman =>
       salesman.code?.toLowerCase().includes(filters.salesman.toLowerCase()) ||
       salesman.name?.toLowerCase().includes(filters.salesman.toLowerCase())
     );
   };
 
   const getFilteredAreas = () => {
-    return areas.filter(area => 
+    return areas.filter(area =>
       area.code?.toLowerCase().includes(filters.area.toLowerCase()) ||
       area.name?.toLowerCase().includes(filters.area.toLowerCase())
     );
   };
 
   const getFilteredServices = () => {
-    return services.filter(service => 
+    return services.filter(service =>
       service.code?.toLowerCase().includes(filters.service.toLowerCase()) ||
       service.name?.toLowerCase().includes(filters.service.toLowerCase())
     );
@@ -1574,7 +1586,7 @@ const Dashboard = () => {
     setOtherAccountActiveTab('basic');
     setEditGstId(null);
     setEditSalesmanId(null);
-    
+
     if (item === 'Sales') {
       setInvoiceItems([]);
       setInvoiceFormData({
@@ -1595,7 +1607,7 @@ const Dashboard = () => {
       });
       addInvoiceItem();
     }
-    
+
     if (item === 'Purchase') {
       setPurchaseItems([]);
       setPurchaseFormData({
@@ -1718,10 +1730,10 @@ const Dashboard = () => {
   const saveGst = (e) => {
     e.preventDefault();
     if (!gstForm.code || !gstForm.vat === '') return alert('Code and VAT % required');
-    
+
     if (editGstId) {
-      setGstList(gstList.map(gst => 
-        gst.id === editGstId 
+      setGstList(gstList.map(gst =>
+        gst.id === editGstId
           ? { ...gst, ...gstForm }
           : gst
       ));
@@ -1760,10 +1772,10 @@ const Dashboard = () => {
   const saveSalesman = (e) => {
     e.preventDefault();
     if (!salesmanForm.code || !salesmanForm.name) return alert('Code and Name required');
-    
+
     if (editSalesmanId) {
-      setSalesmen(salesmen.map(sm => 
-        sm.id === editSalesmanId 
+      setSalesmen(salesmen.map(sm =>
+        sm.id === editSalesmanId
           ? { ...sm, ...salesmanForm }
           : sm
       ));
@@ -1812,10 +1824,10 @@ const Dashboard = () => {
   const saveArea = (e) => {
     e.preventDefault();
     if (!areaForm.code || !areaForm.name) return alert('Code and Name required');
-    
+
     if (editAreaId) {
-      setAreas(areas.map(area => 
-        area.id === editAreaId 
+      setAreas(areas.map(area =>
+        area.id === editAreaId
           ? { ...area, ...areaForm }
           : area
       ));
@@ -1848,10 +1860,10 @@ const Dashboard = () => {
   const saveService = (e) => {
     e.preventDefault();
     if (!serviceForm.code || !serviceForm.name || !serviceForm.vat) return alert('Code, Name and VAT % required');
-    
+
     if (editServiceId) {
-      setServices(services.map(service => 
-        service.id === editServiceId 
+      setServices(services.map(service =>
+        service.id === editServiceId
           ? { ...service, ...serviceForm }
           : service
       ));
@@ -1908,11 +1920,11 @@ const Dashboard = () => {
     e.preventDefault();
     if (!productForm.code || !productForm.name) return alert('Code and Name required');
     setProducts([...products, { id: Date.now(), ...productForm }]);
-    setProductForm({ 
-        code: '', name: '', companyId: '', group: '', category: '', description: '', 
-        gst: '', basicUnit: 'PCS', boxPack: '', inboxPack: '', retailerMargin: '', 
-        distributorMargin: '', active: true, locked: false, hsn: '', weight: '', allowFraction: false,
-        Rate_Per_Unit: '1', Min_Stock_Holding: '0', Reorder_Level: '0' 
+    setProductForm({
+      code: '', name: '', companyId: '', group: '', category: '', description: '',
+      gst: '', basicUnit: 'PCS', boxPack: '', inboxPack: '', retailerMargin: '',
+      distributorMargin: '', active: true, locked: false, hsn: '', weight: '', allowFraction: false,
+      Rate_Per_Unit: '1', Min_Stock_Holding: '0', Reorder_Level: '0'
     });
     closeForm();
   };
@@ -2072,12 +2084,12 @@ const Dashboard = () => {
   };
 
   // ===== Salesman to Area Mapping Handlers =====
-  const filteredAreasForMapping = areas.filter(area => 
+  const filteredAreasForMapping = areas.filter(area =>
     area.name.toLowerCase().includes(areaFilter.toLowerCase()) ||
     area.code.toLowerCase().includes(areaFilter.toLowerCase())
   );
 
-  const filteredSalesmenForMapping = salesmen.filter(salesman => 
+  const filteredSalesmenForMapping = salesmen.filter(salesman =>
     salesman.name.toLowerCase().includes(salesmanFilter.toLowerCase()) ||
     salesman.code.toLowerCase().includes(salesmanFilter.toLowerCase())
   );
@@ -2090,7 +2102,7 @@ const Dashboard = () => {
     setCurrentEditingCell('');
     setShowAreaDropdown(false);
     setShowSalesmanDropdown(false);
-    
+
     if (company && areas.length > 0) {
       const initialData = areas.map((area, index) => ({
         id: `row_${index}_${Date.now()}`,
@@ -2204,7 +2216,7 @@ const Dashboard = () => {
   };
 
   // ===== Area To Party Mapping Handlers =====
-  const filteredAreasForPartyMapping = areas.filter(area => 
+  const filteredAreasForPartyMapping = areas.filter(area =>
     area.name.toLowerCase().includes(areaToPartyFilter.toLowerCase()) ||
     area.code.toLowerCase().includes(areaToPartyFilter.toLowerCase())
   );
@@ -2215,7 +2227,7 @@ const Dashboard = () => {
     setAreaToPartyEditingRow(-1);
     setAreaToPartyEditingCell('');
     setShowAreaToPartyDropdown(false);
-    
+
     if (company && accounts.length > 0) {
       const initialData = accounts.map((account, index) => ({
         id: `atp_${index}_${Date.now()}`,
@@ -2296,81 +2308,81 @@ const Dashboard = () => {
   };
 
   // Render data table with filters and export buttons
-const renderDataTable = (title, data, columns, masterType, onDelete) => {
-  const filteredData = data;
-  
-  return (
-    <div className="master-section grid-section">
-      <div className="grid-header">
-        <h3>{title} ({filteredData.length})</h3>
-        <div className="table-controls">
-          <input
-            type="text"
-            placeholder="Search..."
-            className="filter-input"
-            value={filters[masterType]}
-            onChange={(e) => handleFilterChange(masterType, e.target.value)}
-          />
-          <button className="btn-excel" onClick={() => exportToExcel(filteredData, title, columns)}>
-            📊 Export Excel
-          </button>
-          <button className="btn-pdf" onClick={() => exportToPDF(filteredData, title, columns)}>
-            📄 Export PDF
-          </button>
-          <button className="btn-add-new" onClick={() => setOpenFormFor(masterType === 'company' ? 'Company Master' : 
-            masterType === 'group' ? 'Group Master' :
-            masterType === 'category' ? 'Category Master' :
-            masterType === 'product' ? 'Product' :
-            masterType === 'account' ? 'Account' :
-            masterType === 'otherAccount' ? 'Other Account' :
-            masterType === 'gst' ? 'GST Master' :
-            masterType === 'salesman' ? 'Salesman' :
-            masterType === 'area' ? 'Area' : 
-            masterType === 'godown' ? 'GoDown Master' : 'Service')}>
-            + Add New
-          </button>
+  const renderDataTable = (title, data, columns, masterType, onDelete) => {
+    const filteredData = data;
+
+    return (
+      <div className="master-section grid-section">
+        <div className="grid-header">
+          <h3>{title} ({filteredData.length})</h3>
+          <div className="table-controls">
+            <input
+              type="text"
+              placeholder="Search..."
+              className="filter-input"
+              value={filters[masterType]}
+              onChange={(e) => handleFilterChange(masterType, e.target.value)}
+            />
+            <button className="btn-excel" onClick={() => exportToExcel(filteredData, title, columns)}>
+              📊 Export Excel
+            </button>
+            <button className="btn-pdf" onClick={() => exportToPDF(filteredData, title, columns)}>
+              📄 Export PDF
+            </button>
+            <button className="btn-add-new" onClick={() => setOpenFormFor(masterType === 'company' ? 'Company Master' :
+              masterType === 'group' ? 'Group Master' :
+                masterType === 'category' ? 'Category Master' :
+                  masterType === 'product' ? 'Product' :
+                    masterType === 'account' ? 'Account' :
+                      masterType === 'otherAccount' ? 'Other Account' :
+                        masterType === 'gst' ? 'GST Master' :
+                          masterType === 'salesman' ? 'Salesman' :
+                            masterType === 'area' ? 'Area' :
+                              masterType === 'godown' ? 'GoDown Master' : 'Service')}>
+              + Add New
+            </button>
+          </div>
         </div>
-      </div>
-      {filteredData.length > 0 ? (
-        <div className="data-table-container">
-          <table className="data-table">
-            <thead>
-              <tr>
-                {columns.map(col => <th key={col.key}>{col.label}</th>)}
-                <th>Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {filteredData.map(item => (
-                <tr key={item.id}>
-                  {columns.map(col => <td key={col.key}>{item[col.key] || '-'}</td>)}
-                  <td>
-                    <button className="btn-edit" onClick={() => {
-                      if (masterType === 'company') editCompany?.(item);
-                      else if (masterType === 'group') editGroup?.(item);
-                      else if (masterType === 'category') editCategory?.(item);
-                      else if (masterType === 'product') editProduct?.(item);
-                      else if (masterType === 'account') editAccount?.(item);
-                      else if (masterType === 'otherAccount') editOtherAccount?.(item);
-                      else if (masterType === 'gst') editGst(item);
-                      else if (masterType === 'salesman') editSalesman(item);
-                      else if (masterType === 'area') editArea(item);
-                      else if (masterType === 'godown') editGodown(item);
-                      else if (masterType === 'service') editService(item);
-                    }}>✏️ Edit</button>
-                    <button className="btn-delete" onClick={() => onDelete(item.id)}>🗑 Delete</button>
-                  </td>
+        {filteredData.length > 0 ? (
+          <div className="data-table-container">
+            <table className="data-table">
+              <thead>
+                <tr>
+                  {columns.map(col => <th key={col.key}>{col.label}</th>)}
+                  <th>Actions</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      ) : (
-        <div className="empty-state">No data found. Click + Add New to create one.</div>
-      )}
-    </div>
-  );
-};
+              </thead>
+              <tbody>
+                {filteredData.map(item => (
+                  <tr key={item.id}>
+                    {columns.map(col => <td key={col.key}>{item[col.key] || '-'}</td>)}
+                    <td>
+                      <button className="btn-edit" onClick={() => {
+                        if (masterType === 'company') editCompany?.(item);
+                        else if (masterType === 'group') editGroup?.(item);
+                        else if (masterType === 'category') editCategory?.(item);
+                        else if (masterType === 'product') editProduct?.(item);
+                        else if (masterType === 'account') editAccount?.(item);
+                        else if (masterType === 'otherAccount') editOtherAccount?.(item);
+                        else if (masterType === 'gst') editGst(item);
+                        else if (masterType === 'salesman') editSalesman(item);
+                        else if (masterType === 'area') editArea(item);
+                        else if (masterType === 'godown') editGodown(item);
+                        else if (masterType === 'service') editService(item);
+                      }}>✏️ Edit</button>
+                      <button className="btn-delete" onClick={() => onDelete(item.id)}>🗑 Delete</button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        ) : (
+          <div className="empty-state">No data found. Click + Add New to create one.</div>
+        )}
+      </div>
+    );
+  };
 
   return (
     <div className="dashboard-container">
@@ -2471,7 +2483,7 @@ const renderDataTable = (title, data, columns, masterType, onDelete) => {
 
           {/* Company Master - Form View */}
           {activeSubMenu === 'Company Master' && openFormFor === 'Company Master' && (
-<div className="master-section erp-master-form">
+            <div className="master-section erp-master-form">
               <div className="form-header">
                 <div className="page-title-large">Add New Company</div>
                 <button className="close-form-btn" onClick={closeForm}>✕</button>
@@ -2637,9 +2649,9 @@ const renderDataTable = (title, data, columns, masterType, onDelete) => {
                     <input name="Rate_Per_Unit" placeholder="0.00" value={productForm.Rate_Per_Unit} onChange={handleProductInput} type="number" step="0.01" />
                   </div>
                   <div className="checkbox-group">
-                     <label><input name="active" type="checkbox" checked={productForm.active} onChange={handleProductInput} /> Active</label>
-                     <label><input name="locked" type="checkbox" checked={productForm.locked} onChange={handleProductInput} /> Locked</label>
-                     <label><input name="allowFraction" type="checkbox" checked={productForm.allowFraction} onChange={handleProductInput} /> Allow Qty In Fraction</label>
+                    <label><input name="active" type="checkbox" checked={productForm.active} onChange={handleProductInput} /> Active</label>
+                    <label><input name="locked" type="checkbox" checked={productForm.locked} onChange={handleProductInput} /> Locked</label>
+                    <label><input name="allowFraction" type="checkbox" checked={productForm.allowFraction} onChange={handleProductInput} /> Allow Qty In Fraction</label>
                   </div>
                 </div>
                 <div className="section-subtitle">Stock Management</div>
@@ -2680,7 +2692,7 @@ const renderDataTable = (title, data, columns, masterType, onDelete) => {
                 <div className="page-title-large">Add New Account</div>
                 <button className="close-form-btn" onClick={closeForm}>✕</button>
               </div>
-              
+
               <div className="account-tabs">
                 <button className={`tab-btn ${accountActiveTab === 'basic' ? 'active' : ''}`} onClick={() => setAccountActiveTab('basic')}>Basic Information</button>
                 <button className={`tab-btn ${accountActiveTab === 'gst' ? 'active' : ''}`} onClick={() => setAccountActiveTab('gst')}>GST Details</button>
@@ -2736,7 +2748,7 @@ const renderDataTable = (title, data, columns, masterType, onDelete) => {
                     </div>
                   </>
                 )}
-               
+
                 <div className="form-actions">
                   <button type="submit" className="btn-save">Save Account</button>
                   <button type="button" className="btn-cancel" onClick={closeForm}>Cancel</button>
@@ -2763,7 +2775,7 @@ const renderDataTable = (title, data, columns, masterType, onDelete) => {
                 <div className="page-title-large">Add Other Account</div>
                 <button className="close-form-btn" onClick={closeForm}>✕</button>
               </div>
-              
+
               <div className="account-tabs">
                 <button className={`tab-btn ${otherAccountActiveTab === 'basic' ? 'active' : ''}`} onClick={() => setOtherAccountActiveTab('basic')}>Basic Information</button>
                 <button className={`tab-btn ${otherAccountActiveTab === 'gst' ? 'active' : ''}`} onClick={() => setOtherAccountActiveTab('gst')}>GST Details</button>
@@ -2773,7 +2785,7 @@ const renderDataTable = (title, data, columns, masterType, onDelete) => {
                 {otherAccountActiveTab === 'basic' && (
                   <>
                     <div className="form-row">
-                      <div className="labeled-input"><label>Last Account</label><input placeholder={otherAccounts.length > 0 ? otherAccounts[otherAccounts.length-1].accountCode : 'OUTIGST-1'} disabled /></div>
+                      <div className="labeled-input"><label>Last Account</label><input placeholder={otherAccounts.length > 0 ? otherAccounts[otherAccounts.length - 1].accountCode : 'OUTIGST-1'} disabled /></div>
                       <div className="labeled-input"><label>Opening Date</label><input name="openingDate" type="date" value={otherAccountForm.openingDate || '2026-04-04'} onChange={handleOtherAccountInput} /></div>
                     </div>
                     <div className="form-row">
@@ -2995,7 +3007,7 @@ const renderDataTable = (title, data, columns, masterType, onDelete) => {
           )}
 
           {/* Salesman To Area Mapping UI */}
-{activeSubMenu === 'Salesman To Area' && <SalesmanToAreaMapping />}
+          {activeSubMenu === 'Salesman To Area' && <SalesmanToAreaMapping />}
 
           {/* Sales Invoice */}
           {activeSubMenu === 'Sales' && (
@@ -3006,42 +3018,7 @@ const renderDataTable = (title, data, columns, masterType, onDelete) => {
                 </div>
               </div>
 
-              {/* Product Selection Dropdown */}
-              {showProductList && currentProductIndex >= 0 && (
-                <div className="product-dropdown-overlay">
-                  <div className="product-dropdown">
-                    <div className="dropdown-header">
-                      <input
-                        type="text"
-                        placeholder="Search products..."
-                        value={productListFilter}
-                        onChange={(e) => setProductListFilter(e.target.value)}
-                        autoFocus
-                      />
-                      <button onClick={() => setShowProductList(false)}>✕</button>
-                    </div>
-                    <div className="dropdown-list">
-                      {products
-                        .filter(p => 
-                          p.name.toLowerCase().includes(productListFilter.toLowerCase()) ||
-                          p.code.toLowerCase().includes(productListFilter.toLowerCase())
-                        )
-                        .map(product => (
-                          <div 
-                            key={product.id} 
-                            className="dropdown-item"
-                            onClick={() => handleProductSelect(currentProductIndex, product)}
-                          >
-                            <strong>{product.code}</strong> - {product.name}
-                          </div>
-                        ))}
-                      {products.length === 0 && (
-                        <div className="dropdown-item no-results">No products found</div>
-                      )}
-                    </div>
-                  </div>
-                </div>
-              )}
+
 
               {/* Invoice Header - 4 col grid */}
               <div className="form-section">
@@ -3130,25 +3107,118 @@ const renderDataTable = (title, data, columns, masterType, onDelete) => {
                         {invoiceItems.map((item, index) => (
                           <tr key={item.id} className={index === activeRow ? 'active-row' : ''}>
                             <td style={{ position: 'sticky', left: 0, backgroundColor: index === activeRow ? '#eff6ff' : 'white', zIndex: 5, minWidth: '50px' }}>{item.sr}</td>
-                            <td>
-                              <input 
+                            <td style={{ position: 'relative' }}>
+                              <input
                                 data-product-index={index}
-                                className="erp-input product-search" 
-                                value={item.product} 
-                                onChange={(e) => updateInvoiceItem(index, 'product', e.target.value)}
-                                onClick={() => handleInvoiceProductClick(index)}
-                                onFocus={() => setActiveRow(index)}
-                                ref={index === 0 ? productInputRef : null}
+                                className="erp-input product-search"
+                                value={item.product}
+                                onChange={(e) => {
+                                  const value = e.target.value;
+
+                                  updateInvoiceItem(index, 'product', value);
+
+                                  setCurrentProductIndex(index);
+
+                                  if (value.trim() !== '') {
+                                    setProductListFilter(value);
+                                    setShowProductList(true);
+                                  } else {
+                                    setShowProductList(false);
+                                  }
+                                }}
+                                // onClick={() => handleInvoiceProductClick(index)}
+                                onFocus={() => {
+                                  setActiveRow(index);
+
+                                  if (item.product) {
+                                    setProductListFilter(item.product);
+                                    setCurrentProductIndex(index);
+                                    setShowProductList(true);
+                                  }
+                                }}
+
                                 style={{ width: '100%', minWidth: '150px', cursor: 'pointer' }}
                                 placeholder="Click to select product"
                               />
+
+                              {/* Product Selection Dropdown */}
+                              {showProductList && currentProductIndex === index &&
+                                productListFilter.trim() !== '' && (
+                                  <div className="erlay">
+                                    <div className="product-dropdown">
+                                      {/* <div className="dropdown-header">
+                      <input
+                        type="text"
+                        placeholder="Search products..."
+                        value={productListFilter}
+                        onChange={(e) => setProductListFilter(e.target.value)}
+                        autoFocus
+                      />
+                      <button onClick={() => setShowProductList(false)}>✕</button>
+                    </div> */}
+                                      <div className="dropdown-list">
+                                        {products
+                                          .filter(p => {
+                                            const search = productListFilter.trim().toLowerCase();
+
+                                            if (!search) return false;
+
+                                            return (
+                                              p.name?.toLowerCase().startsWith(search) ||
+                                              p.code?.toLowerCase().startsWith(search)
+                                            );
+                                          })
+                                          .slice(0, 10)
+                                          .map(product => (
+                                            <div
+                                              key={product.id}
+                                              className="dropdown-item"
+                                              onClick={() => handleProductSelect(index, product)}
+                                              style={{
+                                                padding: '8px',
+                                                borderBottom: '1px solid #e5e7eb',
+                                                cursor: 'pointer',
+                                                fontSize: '13px'
+                                              }}
+                                            >
+                                              <div
+                                                style={{
+                                                  display: 'grid',
+                                                  gridTemplateColumns: '80px 1fr 80px 80px 60px 70px',
+                                                  gap: '10px',
+                                                  alignItems: 'center'
+                                                }}
+                                              >
+                                                <div>
+                                                  <strong>{product.code}</strong>
+                                                </div>
+
+                                                <div>{product.name}</div>
+
+                                                <div>MRP: {product.mrp || 0}</div>
+
+                                                <div>Rate: {product.Rate_Per_Unit || 0}</div>
+
+                                                <div>GST: {product.gst || 0}%</div>
+
+                                                <div>{product.basicUnit || 'PCS'}</div>
+                                              </div>
+                                            </div>
+                                          ))}
+                                        {products.length === 0 && (
+                                          <div className="dropdown-item no-results">No products found</div>
+                                        )}
+                                      </div>
+                                    </div>
+                                  </div>
+                                )}
                             </td>
                             <td>
-                              <select 
-                                className="erp-select" 
-                                data-field="units" 
-                                data-index={index} 
-                                value={item.units} 
+                              <select
+                                className="erp-select"
+                                data-field="units"
+                                data-index={index}
+                                value={item.units}
                                 onChange={(e) => updateInvoiceItem(index, 'units', e.target.value)}
                                 onKeyDown={(e) => handleInvoiceKeyDown(e, index, 'units')}
                                 style={{ width: '100%' }}
@@ -3229,42 +3299,7 @@ const renderDataTable = (title, data, columns, masterType, onDelete) => {
                 </div>
               </div>
 
-              {/* Product Selection Dropdown for Purchase */}
-              {showPurchaseProductList && currentPurchaseProductIndex >= 0 && (
-                <div className="product-dropdown-overlay">
-                  <div className="product-dropdown">
-                    <div className="dropdown-header">
-                      <input
-                        type="text"
-                        placeholder="Search products..."
-                        value={purchaseProductListFilter}
-                        onChange={(e) => setPurchaseProductListFilter(e.target.value)}
-                        autoFocus
-                      />
-                      <button onClick={() => setShowPurchaseProductList(false)}>✕</button>
-                    </div>
-                    <div className="dropdown-list">
-                      {products
-                        .filter(p => 
-                          p.name.toLowerCase().includes(purchaseProductListFilter.toLowerCase()) ||
-                          p.code.toLowerCase().includes(purchaseProductListFilter.toLowerCase())
-                        )
-                        .map(product => (
-                          <div 
-                            key={product.id} 
-                            className="dropdown-item"
-                            onClick={() => handlePurchaseProductSelect(currentPurchaseProductIndex, product)}
-                          >
-                            <strong>{product.code}</strong> - {product.name}
-                          </div>
-                        ))}
-                      {products.length === 0 && (
-                        <div className="dropdown-item no-results">No products found</div>
-                      )}
-                    </div>
-                  </div>
-                </div>
-              )}
+
 
               {/* Purchase Header Fields */}
               <div className="form-section">
@@ -3342,24 +3377,81 @@ const renderDataTable = (title, data, columns, masterType, onDelete) => {
                           <tr key={item.id} className={index === purchaseActiveRow ? 'active-row' : ''}>
                             <td style={{ position: 'sticky', left: 0, backgroundColor: index === purchaseActiveRow ? '#eff6ff' : 'white', zIndex: 5 }}>{item.sr}</td>
                             <td>
-                              <input 
+                              <input
                                 data-purchase-product-index={index}
-                                className="erp-input" 
+                                className="erp-input"
                                 placeholder="Click to select product"
-                                value={item.product} 
-                                onChange={(e) => updatePurchaseItem(index, 'product', e.target.value)}
-                                onClick={() => handlePurchaseProductClick(index)}
-                                onFocus={() => setPurchaseActiveRow(index)}
+                                value={item.product}
+                                onChange={(e) => {
+                                  updatePurchaseItem(index, 'product', e.target.value);
+
+                                  setPurchaseProductListFilter(e.target.value);
+                                  setCurrentPurchaseProductIndex(index);
+                                  setShowPurchaseProductList(true);
+                                }}
+                                //onClick={() => handlePurchaseProductClick(index)}
+                                onFocus={() => {
+                                  setPurchaseActiveRow(index);
+
+                                  if (item.product) {
+                                    setPurchaseProductListFilter(item.product);
+                                    setCurrentPurchaseProductIndex(index);
+                                    setShowPurchaseProductList(true);
+                                  }
+                                }}
                                 onKeyDown={(e) => handlePurchaseKeyDown(e, index, 'product')}
                                 style={{ width: '100%', cursor: 'pointer' }}
                               />
+                              {/* Product Selection Dropdown for Purchase */}
+                              {showPurchaseProductList && currentPurchaseProductIndex >= 0 && (
+                                <div className="product-dropdown-overlay">
+                                  <div className="product-dropdown">
+                                    {/* <div className="dropdown-header">
+                      <input
+                        type="text"
+                        placeholder="Search products..."
+                        value={purchaseProductListFilter}
+                        onChange={(e) => setPurchaseProductListFilter(e.target.value)}
+                        autoFocus
+                      />
+                      <button onClick={() => setShowPurchaseProductList(false)}>✕</button>
+                    </div> */}
+                                    <div className="dropdown-list">
+                                      {products
+                                        .filter(p => {
+                                          const search = purchaseProductListFilter.trim().toLowerCase();
+
+                                          if (!search) return false;
+
+                                          return (
+                                            p.name?.toLowerCase().startsWith(search) ||
+                                            p.code?.toLowerCase().startsWith(search)
+                                          );
+                                        })
+                                        .slice(0, 10)
+                                        .map(product => (
+                                          <div
+                                            key={product.id}
+                                            className="dropdown-item"
+                                            onClick={() => handlePurchaseProductSelect(currentPurchaseProductIndex, product)}
+                                          >
+                                            <strong>{product.code}</strong> - {product.name}
+                                          </div>
+                                        ))}
+                                      {products.length === 0 && (
+                                        <div className="dropdown-item no-results">No products found</div>
+                                      )}
+                                    </div>
+                                  </div>
+                                </div>
+                              )}
                             </td>
                             <td>
-                              <select 
-                                data-purchase-field="unitId" 
+                              <select
+                                data-purchase-field="unitId"
                                 data-purchase-index={index}
-                                className="erp-select" 
-                                value={item.unitId} 
+                                className="erp-select"
+                                value={item.unitId}
                                 onChange={(e) => updatePurchaseItem(index, 'unitId', e.target.value)}
                                 onKeyDown={(e) => handlePurchaseKeyDown(e, index, 'unitId')}
                                 style={{ width: '100%' }}
@@ -3372,192 +3464,192 @@ const renderDataTable = (title, data, columns, masterType, onDelete) => {
                               </select>
                             </td>
                             <td>
-                              <input 
-                                className="erp-input numeric" 
+                              <input
+                                className="erp-input numeric"
                                 type="number"
-                                data-purchase-field="quantity" 
+                                data-purchase-field="quantity"
                                 data-purchase-index={index}
                                 placeholder="Qty"
-                                value={item.quantity} 
+                                value={item.quantity}
                                 onChange={(e) => updatePurchaseItem(index, 'quantity', e.target.value)}
                                 onKeyDown={(e) => handlePurchaseKeyDown(e, index, 'quantity')}
                                 style={{ width: '100%' }}
                               />
                             </td>
                             <td>
-                              <input 
-                                className="erp-input numeric" 
+                              <input
+                                className="erp-input numeric"
                                 type="number"
-                                data-purchase-field="free" 
+                                data-purchase-field="free"
                                 data-purchase-index={index}
                                 placeholder="Free"
-                                value={item.free} 
+                                value={item.free}
                                 onChange={(e) => updatePurchaseItem(index, 'free', e.target.value)}
                                 onKeyDown={(e) => handlePurchaseKeyDown(e, index, 'free')}
                                 style={{ width: '100%' }}
                               />
                             </td>
                             <td>
-                              <input 
-                                className="erp-input numeric" 
+                              <input
+                                className="erp-input numeric"
                                 type="number"
-                                data-purchase-field="mrp" 
+                                data-purchase-field="mrp"
                                 data-purchase-index={index}
                                 placeholder="MRP"
-                                value={item.mrp} 
+                                value={item.mrp}
                                 onChange={(e) => updatePurchaseItem(index, 'mrp', e.target.value)}
                                 onKeyDown={(e) => handlePurchaseKeyDown(e, index, 'mrp')}
                                 style={{ width: '100%' }}
                               />
                             </td>
                             <td>
-                              <input 
-                                className="erp-input numeric" 
+                              <input
+                                className="erp-input numeric"
                                 type="number"
-                                data-purchase-field="purRate" 
+                                data-purchase-field="purRate"
                                 data-purchase-index={index}
                                 placeholder="Pur Rate"
-                                value={item.purRate} 
+                                value={item.purRate}
                                 onChange={(e) => updatePurchaseItem(index, 'purRate', e.target.value)}
                                 onKeyDown={(e) => handlePurchaseKeyDown(e, index, 'purRate')}
                                 style={{ width: '100%' }}
                               />
                             </td>
                             <td>
-                              <input 
-                                className="erp-input numeric" 
+                              <input
+                                className="erp-input numeric"
                                 type="number"
-                                data-purchase-field="disc1" 
+                                data-purchase-field="disc1"
                                 data-purchase-index={index}
                                 placeholder="Disc 1 %"
-                                value={item.disc1} 
+                                value={item.disc1}
                                 onChange={(e) => updatePurchaseItem(index, 'disc1', e.target.value)}
                                 onKeyDown={(e) => handlePurchaseKeyDown(e, index, 'disc1')}
                                 style={{ width: '100%' }}
                               />
                             </td>
                             <td>
-                              <input 
-                                className="erp-input numeric" 
+                              <input
+                                className="erp-input numeric"
                                 type="number"
-                                data-purchase-field="disc2" 
+                                data-purchase-field="disc2"
                                 data-purchase-index={index}
                                 placeholder="Disc 2 %"
-                                value={item.disc2} 
+                                value={item.disc2}
                                 onChange={(e) => updatePurchaseItem(index, 'disc2', e.target.value)}
                                 onKeyDown={(e) => handlePurchaseKeyDown(e, index, 'disc2')}
                                 style={{ width: '100%' }}
                               />
                             </td>
                             <td>
-                              <input 
-                                className="erp-input numeric" 
+                              <input
+                                className="erp-input numeric"
                                 type="number"
-                                data-purchase-field="disc3" 
+                                data-purchase-field="disc3"
                                 data-purchase-index={index}
                                 placeholder="Disc 3 %"
-                                value={item.disc3} 
+                                value={item.disc3}
                                 onChange={(e) => updatePurchaseItem(index, 'disc3', e.target.value)}
                                 onKeyDown={(e) => handlePurchaseKeyDown(e, index, 'disc3')}
                                 style={{ width: '100%' }}
                               />
                             </td>
                             <td>
-                              <input 
-                                className="erp-input numeric" 
+                              <input
+                                className="erp-input numeric"
                                 type="number"
-                                data-purchase-field="taxable" 
+                                data-purchase-field="taxable"
                                 data-purchase-index={index}
                                 placeholder="Taxable"
-                                value={item.taxable} 
+                                value={item.taxable}
                                 onChange={(e) => updatePurchaseItem(index, 'taxable', e.target.value)}
                                 onKeyDown={(e) => handlePurchaseKeyDown(e, index, 'taxable')}
                                 style={{ width: '100%' }}
                               />
                             </td>
                             <td>
-                              <input 
-                                className="erp-input numeric" 
+                              <input
+                                className="erp-input numeric"
                                 type="number"
-                                data-purchase-field="tax" 
+                                data-purchase-field="tax"
                                 data-purchase-index={index}
                                 placeholder="Tax %"
-                                value={item.tax} 
+                                value={item.tax}
                                 onChange={(e) => updatePurchaseItem(index, 'tax', e.target.value)}
                                 onKeyDown={(e) => handlePurchaseKeyDown(e, index, 'tax')}
                                 style={{ width: '100%' }}
                               />
                             </td>
                             <td>
-                              <input 
-                                className="erp-input numeric" 
+                              <input
+                                className="erp-input numeric"
                                 type="number"
-                                data-purchase-field="cgst" 
+                                data-purchase-field="cgst"
                                 data-purchase-index={index}
                                 placeholder="CGST"
-                                value={item.cgst} 
+                                value={item.cgst}
                                 onChange={(e) => updatePurchaseItem(index, 'cgst', e.target.value)}
                                 onKeyDown={(e) => handlePurchaseKeyDown(e, index, 'cgst')}
                                 style={{ width: '100%' }}
                               />
                             </td>
                             <td>
-                              <input 
-                                className="erp-input numeric" 
+                              <input
+                                className="erp-input numeric"
                                 type="number"
-                                data-purchase-field="sgst" 
+                                data-purchase-field="sgst"
                                 data-purchase-index={index}
                                 placeholder="SGST"
-                                value={item.sgst} 
+                                value={item.sgst}
                                 onChange={(e) => updatePurchaseItem(index, 'sgst', e.target.value)}
                                 onKeyDown={(e) => handlePurchaseKeyDown(e, index, 'sgst')}
                                 style={{ width: '100%' }}
                               />
                             </td>
                             <td>
-                              <input 
-                                className="erp-input numeric" 
+                              <input
+                                className="erp-input numeric"
                                 type="number"
-                                data-purchase-field="afterDisc1" 
+                                data-purchase-field="afterDisc1"
                                 data-purchase-index={index}
                                 placeholder="After Disc 1"
-                                value={item.afterDisc1} 
+                                value={item.afterDisc1}
                                 onChange={(e) => updatePurchaseItem(index, 'afterDisc1', e.target.value)}
                                 style={{ width: '100%' }}
                               />
                             </td>
                             <td>
-                              <input 
-                                className="erp-input numeric" 
+                              <input
+                                className="erp-input numeric"
                                 type="number"
-                                data-purchase-field="afterDisc2" 
+                                data-purchase-field="afterDisc2"
                                 data-purchase-index={index}
                                 placeholder="After Disc 2"
-                                value={item.afterDisc2} 
+                                value={item.afterDisc2}
                                 onChange={(e) => updatePurchaseItem(index, 'afterDisc2', e.target.value)}
                                 style={{ width: '100%' }}
                               />
                             </td>
                             <td>
-                              <input 
-                                className="erp-input numeric" 
+                              <input
+                                className="erp-input numeric"
                                 type="number"
-                                data-purchase-field="afterDisc3" 
+                                data-purchase-field="afterDisc3"
                                 data-purchase-index={index}
                                 placeholder="After Disc 3"
-                                value={item.afterDisc3} 
+                                value={item.afterDisc3}
                                 onChange={(e) => updatePurchaseItem(index, 'afterDisc3', e.target.value)}
                                 style={{ width: '100%' }}
                               />
                             </td>
                             <td>
-                              <input 
-                                className="erp-input numeric font-bold" 
+                              <input
+                                className="erp-input numeric font-bold"
                                 type="number"
-                                data-purchase-field="amount" 
+                                data-purchase-field="amount"
                                 data-purchase-index={index}
                                 placeholder="Amount"
-                                value={item.amount} 
+                                value={item.amount}
                                 onChange={(e) => updatePurchaseItem(index, 'amount', e.target.value)}
                                 style={{ width: '100%', fontWeight: 'bold' }}
                               />
@@ -3626,13 +3718,13 @@ const renderDataTable = (title, data, columns, masterType, onDelete) => {
                     </div>
                     <div className="dropdown-list">
                       {products
-                        .filter(p => 
+                        .filter(p =>
                           p.name.toLowerCase().includes(creditProductListFilter.toLowerCase()) ||
                           p.code.toLowerCase().includes(creditProductListFilter.toLowerCase())
                         )
                         .map(product => (
-                          <div 
-                            key={product.id} 
+                          <div
+                            key={product.id}
                             className="dropdown-item"
                             onClick={() => handleCreditProductSelect(currentCreditProductIndex, product)}
                           >
@@ -3735,11 +3827,11 @@ const renderDataTable = (title, data, columns, masterType, onDelete) => {
                           <tr key={item.id} className={index === creditNoteActiveRow ? 'active-row' : ''}>
                             <td style={{ position: 'sticky', left: 0, backgroundColor: index === creditNoteActiveRow ? '#eff6ff' : 'white', zIndex: 5 }}>{item.sr}</td>
                             <td>
-                              <select 
-                                className="erp-select" 
-                                data-credit-field="trn" 
-                                data-credit-index={index} 
-                                value={item.trn} 
+                              <select
+                                className="erp-select"
+                                data-credit-field="trn"
+                                data-credit-index={index}
+                                value={item.trn}
                                 onChange={(e) => updateCreditNoteItem(index, 'trn', e.target.value)}
                                 onKeyDown={(e) => handleCreditNoteKeyDown(e, index, 'trn')}
                                 style={{ width: '100%' }}
@@ -3749,11 +3841,11 @@ const renderDataTable = (title, data, columns, masterType, onDelete) => {
                               </select>
                             </td>
                             <td>
-                              <input 
-                                className="erp-input" 
-                                data-credit-field="itemCode" 
-                                data-credit-index={index} 
-                                value={item.itemCode} 
+                              <input
+                                className="erp-input"
+                                data-credit-field="itemCode"
+                                data-credit-index={index}
+                                value={item.itemCode}
                                 onChange={(e) => updateCreditNoteItem(index, 'itemCode', e.target.value)}
                                 onClick={() => handleCreditProductClick(index)}
                                 onKeyDown={(e) => handleCreditNoteKeyDown(e, index, 'itemCode')}
@@ -3762,22 +3854,22 @@ const renderDataTable = (title, data, columns, masterType, onDelete) => {
                               />
                             </td>
                             <td>
-                              <input 
-                                className="erp-input" 
-                                data-credit-field="itemName" 
-                                data-credit-index={index} 
-                                value={item.itemName} 
+                              <input
+                                className="erp-input"
+                                data-credit-field="itemName"
+                                data-credit-index={index}
+                                value={item.itemName}
                                 onChange={(e) => updateCreditNoteItem(index, 'itemName', e.target.value)}
                                 onKeyDown={(e) => handleCreditNoteKeyDown(e, index, 'itemName')}
                                 style={{ width: '100%' }}
                               />
                             </td>
                             <td>
-                              <select 
-                                className="erp-select" 
-                                data-credit-field="unit" 
-                                data-credit-index={index} 
-                                value={item.unit} 
+                              <select
+                                className="erp-select"
+                                data-credit-field="unit"
+                                data-credit-index={index}
+                                value={item.unit}
                                 onChange={(e) => updateCreditNoteItem(index, 'unit', e.target.value)}
                                 onKeyDown={(e) => handleCreditNoteKeyDown(e, index, 'unit')}
                                 style={{ width: '100%' }}
@@ -3790,304 +3882,304 @@ const renderDataTable = (title, data, columns, masterType, onDelete) => {
                               </select>
                             </td>
                             <td>
-                              <input 
-                                className="erp-input numeric" 
+                              <input
+                                className="erp-input numeric"
                                 type="number"
-                                data-credit-field="qty" 
-                                data-credit-index={index} 
-                                value={item.qty} 
+                                data-credit-field="qty"
+                                data-credit-index={index}
+                                value={item.qty}
                                 onChange={(e) => updateCreditNoteItem(index, 'qty', e.target.value)}
                                 onKeyDown={(e) => handleCreditNoteKeyDown(e, index, 'qty')}
                                 style={{ width: '100%' }}
                               />
                             </td>
                             <td>
-                              <input 
-                                className="erp-input numeric" 
+                              <input
+                                className="erp-input numeric"
                                 type="number"
-                                data-credit-field="free" 
-                                data-credit-index={index} 
-                                value={item.free} 
+                                data-credit-field="free"
+                                data-credit-index={index}
+                                value={item.free}
                                 onChange={(e) => updateCreditNoteItem(index, 'free', e.target.value)}
                                 onKeyDown={(e) => handleCreditNoteKeyDown(e, index, 'free')}
                                 style={{ width: '100%' }}
                               />
                             </td>
                             <td>
-                              <input 
-                                className="erp-input numeric" 
+                              <input
+                                className="erp-input numeric"
                                 type="number"
-                                data-credit-field="rate" 
-                                data-credit-index={index} 
-                                value={item.rate} 
+                                data-credit-field="rate"
+                                data-credit-index={index}
+                                value={item.rate}
                                 onChange={(e) => updateCreditNoteItem(index, 'rate', e.target.value)}
                                 onKeyDown={(e) => handleCreditNoteKeyDown(e, index, 'rate')}
                                 style={{ width: '100%' }}
                               />
                             </td>
                             <td>
-                              <input 
-                                className="erp-input numeric" 
+                              <input
+                                className="erp-input numeric"
                                 type="number"
-                                data-credit-field="grossAmt" 
-                                data-credit-index={index} 
-                                value={item.grossAmt} 
+                                data-credit-field="grossAmt"
+                                data-credit-index={index}
+                                value={item.grossAmt}
                                 onChange={(e) => updateCreditNoteItem(index, 'grossAmt', e.target.value)}
                                 style={{ width: '100%' }}
                               />
                             </td>
                             <td>
-                              <input 
-                                className="erp-input numeric small" 
+                              <input
+                                className="erp-input numeric small"
                                 type="number"
-                                data-credit-field="schPercent" 
-                                data-credit-index={index} 
-                                value={item.schPercent} 
+                                data-credit-field="schPercent"
+                                data-credit-index={index}
+                                value={item.schPercent}
                                 onChange={(e) => updateCreditNoteItem(index, 'schPercent', e.target.value)}
                                 onKeyDown={(e) => handleCreditNoteKeyDown(e, index, 'schPercent')}
                                 style={{ width: '100%' }}
                               />
                             </td>
                             <td>
-                              <input 
-                                className="erp-input numeric" 
+                              <input
+                                className="erp-input numeric"
                                 type="number"
-                                data-credit-field="schAmt" 
-                                data-credit-index={index} 
-                                value={item.schAmt} 
+                                data-credit-field="schAmt"
+                                data-credit-index={index}
+                                value={item.schAmt}
                                 onChange={(e) => updateCreditNoteItem(index, 'schAmt', e.target.value)}
                                 style={{ width: '100%' }}
                               />
                             </td>
                             <tr>
-                              <input 
-                                className="erp-input numeric small" 
+                              <input
+                                className="erp-input numeric small"
                                 type="number"
-                                data-credit-field="cdPercent" 
-                                data-credit-index={index} 
-                                value={item.cdPercent} 
+                                data-credit-field="cdPercent"
+                                data-credit-index={index}
+                                value={item.cdPercent}
                                 onChange={(e) => updateCreditNoteItem(index, 'cdPercent', e.target.value)}
                                 onKeyDown={(e) => handleCreditNoteKeyDown(e, index, 'cdPercent')}
                                 style={{ width: '100%' }}
                               />
                             </tr>
                             <td>
-                              <input 
-                                className="erp-input numeric" 
+                              <input
+                                className="erp-input numeric"
                                 type="number"
-                                data-credit-field="cdAmt" 
-                                data-credit-index={index} 
-                                value={item.cdAmt} 
+                                data-credit-field="cdAmt"
+                                data-credit-index={index}
+                                value={item.cdAmt}
                                 onChange={(e) => updateCreditNoteItem(index, 'cdAmt', e.target.value)}
                                 style={{ width: '100%' }}
                               />
                             </td>
                             <tr>
-                              <input 
-                                className="erp-input numeric small" 
+                              <input
+                                className="erp-input numeric small"
                                 type="number"
-                                data-credit-field="tprPercent" 
-                                data-credit-index={index} 
-                                value={item.tprPercent} 
+                                data-credit-field="tprPercent"
+                                data-credit-index={index}
+                                value={item.tprPercent}
                                 onChange={(e) => updateCreditNoteItem(index, 'tprPercent', e.target.value)}
                                 onKeyDown={(e) => handleCreditNoteKeyDown(e, index, 'tprPercent')}
                                 style={{ width: '100%' }}
                               />
                             </tr>
                             <td>
-                              <input 
-                                className="erp-input numeric" 
+                              <input
+                                className="erp-input numeric"
                                 type="number"
-                                data-credit-field="tprAmt" 
-                                data-credit-index={index} 
-                                value={item.tprAmt} 
+                                data-credit-field="tprAmt"
+                                data-credit-index={index}
+                                value={item.tprAmt}
                                 onChange={(e) => updateCreditNoteItem(index, 'tprAmt', e.target.value)}
                                 style={{ width: '100%' }}
                               />
                             </td>
                             <td>
-                              <input 
-                                className="erp-input numeric small" 
+                              <input
+                                className="erp-input numeric small"
                                 type="number"
-                                data-credit-field="starPercent" 
-                                data-credit-index={index} 
-                                value={item.starPercent} 
+                                data-credit-field="starPercent"
+                                data-credit-index={index}
+                                value={item.starPercent}
                                 onChange={(e) => updateCreditNoteItem(index, 'starPercent', e.target.value)}
                                 onKeyDown={(e) => handleCreditNoteKeyDown(e, index, 'starPercent')}
                                 style={{ width: '100%' }}
                               />
                             </td>
                             <td>
-                              <input 
-                                className="erp-input numeric" 
+                              <input
+                                className="erp-input numeric"
                                 type="number"
-                                data-credit-field="taxable" 
-                                data-credit-index={index} 
-                                value={item.taxable} 
+                                data-credit-field="taxable"
+                                data-credit-index={index}
+                                value={item.taxable}
                                 onChange={(e) => updateCreditNoteItem(index, 'taxable', e.target.value)}
                                 style={{ width: '100%' }}
                               />
                             </td>
                             <td>
-                              <input 
-                                className="erp-input numeric small" 
+                              <input
+                                className="erp-input numeric small"
                                 type="number"
-                                data-credit-field="gstPercent" 
-                                data-credit-index={index} 
-                                value={item.gstPercent} 
+                                data-credit-field="gstPercent"
+                                data-credit-index={index}
+                                value={item.gstPercent}
                                 onChange={(e) => updateCreditNoteItem(index, 'gstPercent', e.target.value)}
                                 onKeyDown={(e) => handleCreditNoteKeyDown(e, index, 'gstPercent')}
                                 style={{ width: '100%' }}
                               />
                             </td>
                             <td>
-                              <input 
-                                className="erp-input numeric" 
+                              <input
+                                className="erp-input numeric"
                                 type="number"
-                                data-credit-field="gstAmt" 
-                                data-credit-index={index} 
-                                value={item.gstAmt} 
+                                data-credit-field="gstAmt"
+                                data-credit-index={index}
+                                value={item.gstAmt}
                                 onChange={(e) => updateCreditNoteItem(index, 'gstAmt', e.target.value)}
                                 style={{ width: '100%' }}
                               />
                             </td>
                             <td>
-                              <input 
-                                className="erp-input numeric" 
+                              <input
+                                className="erp-input numeric"
                                 type="number"
-                                data-credit-field="avDisc1" 
-                                data-credit-index={index} 
-                                value={item.avDisc1} 
+                                data-credit-field="avDisc1"
+                                data-credit-index={index}
+                                value={item.avDisc1}
                                 onChange={(e) => updateCreditNoteItem(index, 'avDisc1', e.target.value)}
                                 style={{ width: '100%' }}
                               />
                             </td>
                             <td>
-                              <input 
-                                className="erp-input numeric" 
+                              <input
+                                className="erp-input numeric"
                                 type="number"
-                                data-credit-field="avDisc2" 
-                                data-credit-index={index} 
-                                value={item.avDisc2} 
+                                data-credit-field="avDisc2"
+                                data-credit-index={index}
+                                value={item.avDisc2}
                                 onChange={(e) => updateCreditNoteItem(index, 'avDisc2', e.target.value)}
                                 style={{ width: '100%' }}
                               />
                             </td>
                             <td>
-                              <input 
-                                className="erp-input" 
-                                data-credit-field="areaCode" 
-                                data-credit-index={index} 
-                                value={item.areaCode} 
+                              <input
+                                className="erp-input"
+                                data-credit-field="areaCode"
+                                data-credit-index={index}
+                                value={item.areaCode}
                                 onChange={(e) => updateCreditNoteItem(index, 'areaCode', e.target.value)}
                                 style={{ width: '100%' }}
                               />
                             </td>
                             <td>
-                              <input 
-                                className="erp-input numeric" 
+                              <input
+                                className="erp-input numeric"
                                 type="number"
-                                data-credit-field="cgst" 
-                                data-credit-index={index} 
-                                value={item.cgst} 
+                                data-credit-field="cgst"
+                                data-credit-index={index}
+                                value={item.cgst}
                                 onChange={(e) => updateCreditNoteItem(index, 'cgst', e.target.value)}
                                 style={{ width: '100%' }}
                               />
                             </td>
                             <td>
-                              <input 
-                                className="erp-input numeric" 
+                              <input
+                                className="erp-input numeric"
                                 type="number"
-                                data-credit-field="sgst" 
-                                data-credit-index={index} 
-                                value={item.sgst} 
+                                data-credit-field="sgst"
+                                data-credit-index={index}
+                                value={item.sgst}
                                 onChange={(e) => updateCreditNoteItem(index, 'sgst', e.target.value)}
                                 style={{ width: '100%' }}
                               />
                             </td>
                             <td>
-                              <input 
-                                className="erp-input numeric" 
+                              <input
+                                className="erp-input numeric"
                                 type="number"
-                                data-credit-field="igst" 
-                                data-credit-index={index} 
-                                value={item.igst} 
+                                data-credit-field="igst"
+                                data-credit-index={index}
+                                value={item.igst}
                                 onChange={(e) => updateCreditNoteItem(index, 'igst', e.target.value)}
                                 style={{ width: '100%' }}
                               />
                             </td>
                             <td>
-                              <input 
-                                className="erp-input numeric small" 
+                              <input
+                                className="erp-input numeric small"
                                 type="number"
-                                data-credit-field="cessPercent" 
-                                data-credit-index={index} 
-                                value={item.cessPercent} 
+                                data-credit-field="cessPercent"
+                                data-credit-index={index}
+                                value={item.cessPercent}
                                 onChange={(e) => updateCreditNoteItem(index, 'cessPercent', e.target.value)}
                                 style={{ width: '100%' }}
                               />
                             </td>
                             <td>
-                              <input 
-                                className="erp-input numeric" 
+                              <input
+                                className="erp-input numeric"
                                 type="number"
-                                data-credit-field="cessAmt" 
-                                data-credit-index={index} 
-                                value={item.cessAmt} 
+                                data-credit-field="cessAmt"
+                                data-credit-index={index}
+                                value={item.cessAmt}
                                 onChange={(e) => updateCreditNoteItem(index, 'cessAmt', e.target.value)}
                                 style={{ width: '100%' }}
                               />
                             </td>
                             <td>
-                              <input 
-                                className="erp-input numeric" 
+                              <input
+                                className="erp-input numeric"
                                 type="number"
-                                data-credit-field="cessPerPi" 
-                                data-credit-index={index} 
-                                value={item.cessPerPi} 
+                                data-credit-field="cessPerPi"
+                                data-credit-index={index}
+                                value={item.cessPerPi}
                                 onChange={(e) => updateCreditNoteItem(index, 'cessPerPi', e.target.value)}
                                 style={{ width: '100%' }}
                               />
                             </td>
                             <td>
-                              <input 
-                                className="erp-input numeric" 
+                              <input
+                                className="erp-input numeric"
                                 type="number"
-                                data-credit-field="secCessi" 
-                                data-credit-index={index} 
-                                value={item.secCessi} 
+                                data-credit-field="secCessi"
+                                data-credit-index={index}
+                                value={item.secCessi}
                                 onChange={(e) => updateCreditNoteItem(index, 'secCessi', e.target.value)}
                                 style={{ width: '100%' }}
                               />
                             </td>
                             <td>
-                              <input 
-                                className="erp-input numeric" 
+                              <input
+                                className="erp-input numeric"
                                 type="number"
-                                data-credit-field="crateSize" 
-                                data-credit-index={index} 
-                                value={item.crateSize} 
+                                data-credit-field="crateSize"
+                                data-credit-index={index}
+                                value={item.crateSize}
                                 onChange={(e) => updateCreditNoteItem(index, 'crateSize', e.target.value)}
                                 style={{ width: '100%' }}
                               />
                             </td>
                             <td>
-                              <input 
-                                className="erp-input numeric" 
+                              <input
+                                className="erp-input numeric"
                                 type="number"
-                                data-credit-field="crateQty" 
-                                data-credit-index={index} 
-                                value={item.crateQty} 
+                                data-credit-field="crateQty"
+                                data-credit-index={index}
+                                value={item.crateQty}
                                 onChange={(e) => updateCreditNoteItem(index, 'crateQty', e.target.value)}
                                 style={{ width: '100%' }}
                               />
                             </td>
                             <td>
-                              <input 
-                                className="erp-input numeric" 
-                                data-credit-field="crateSysProc" 
-                                data-credit-index={index} 
-                                value={item.crateSysProc} 
+                              <input
+                                className="erp-input numeric"
+                                data-credit-field="crateSysProc"
+                                data-credit-index={index}
+                                value={item.crateSysProc}
                                 onChange={(e) => updateCreditNoteItem(index, 'crateSysProc', e.target.value)}
                                 style={{ width: '100%' }}
                               />
@@ -4118,7 +4210,7 @@ const renderDataTable = (title, data, columns, masterType, onDelete) => {
                   <div>Coupon: <span className="amount">₹{creditNoteSummary.coupon}</span></div>
                   <div>Rounding: <span className="amount">₹{creditNoteSummary.rounding}</span></div>
                   <div>Cess Amt: <span className="amount">₹{creditNoteSummary.cessAmt.toFixed(2)}</span></div>
-                  <div className="tcs-field">TCS %: <input className="erp-input small" placeholder="0" value={creditNoteSummary.tcsPercent} onChange={(e) => setCreditNoteSummary({...creditNoteSummary, tcsPercent: e.target.value})} /> TCS Amt: ₹{creditNoteSummary.tcsAmt}</div>
+                  <div className="tcs-field">TCS %: <input className="erp-input small" placeholder="0" value={creditNoteSummary.tcsPercent} onChange={(e) => setCreditNoteSummary({ ...creditNoteSummary, tcsPercent: e.target.value })} /> TCS Amt: ₹{creditNoteSummary.tcsAmt}</div>
                   <div>Bill Bal. Amt: <span className="amount">₹{creditNoteSummary.billBalAmt}</span></div>
                   <div className="net-amount">Net Amt: <strong>₹{creditNoteSummary.netAmt}</strong></div>
                 </div>
@@ -4157,13 +4249,13 @@ const renderDataTable = (title, data, columns, masterType, onDelete) => {
                     </div>
                     <div className="dropdown-list">
                       {products
-                        .filter(p => 
+                        .filter(p =>
                           p.name.toLowerCase().includes(debitProductListFilter.toLowerCase()) ||
                           p.code.toLowerCase().includes(debitProductListFilter.toLowerCase())
                         )
                         .map(product => (
-                          <div 
-                            key={product.id} 
+                          <div
+                            key={product.id}
                             className="dropdown-item"
                             onClick={() => handleDebitProductSelect(currentDebitProductIndex, product)}
                           >
@@ -4252,11 +4344,11 @@ const renderDataTable = (title, data, columns, masterType, onDelete) => {
                           <tr key={item.id} className={index === debitNoteActiveRow ? 'active-row' : ''}>
                             <td style={{ position: 'sticky', left: 0, backgroundColor: index === debitNoteActiveRow ? '#eff6ff' : 'white', zIndex: 5 }}>{item.sr}</td>
                             <td>
-                              <select 
-                                className="erp-select" 
-                                data-debit-field="trn" 
-                                data-debit-index={index} 
-                                value={item.trn} 
+                              <select
+                                className="erp-select"
+                                data-debit-field="trn"
+                                data-debit-index={index}
+                                value={item.trn}
                                 onChange={(e) => updateDebitNoteItem(index, 'trn', e.target.value)}
                                 onKeyDown={(e) => handleDebitNoteKeyDown(e, index, 'trn')}
                                 style={{ width: '100%' }}
@@ -4266,11 +4358,11 @@ const renderDataTable = (title, data, columns, masterType, onDelete) => {
                               </select>
                             </td>
                             <td>
-                              <input 
-                                className="erp-input" 
-                                data-debit-field="itemCode" 
-                                data-debit-index={index} 
-                                value={item.itemCode} 
+                              <input
+                                className="erp-input"
+                                data-debit-field="itemCode"
+                                data-debit-index={index}
+                                value={item.itemCode}
                                 onChange={(e) => updateDebitNoteItem(index, 'itemCode', e.target.value)}
                                 onClick={() => handleDebitProductClick(index)}
                                 onKeyDown={(e) => handleDebitNoteKeyDown(e, index, 'itemCode')}
@@ -4279,22 +4371,22 @@ const renderDataTable = (title, data, columns, masterType, onDelete) => {
                               />
                             </td>
                             <td>
-                              <input 
-                                className="erp-input" 
-                                data-debit-field="itemName" 
-                                data-debit-index={index} 
-                                value={item.itemName} 
+                              <input
+                                className="erp-input"
+                                data-debit-field="itemName"
+                                data-debit-index={index}
+                                value={item.itemName}
                                 onChange={(e) => updateDebitNoteItem(index, 'itemName', e.target.value)}
                                 onKeyDown={(e) => handleDebitNoteKeyDown(e, index, 'itemName')}
                                 style={{ width: '100%' }}
                               />
                             </td>
                             <td>
-                              <select 
-                                className="erp-select" 
-                                data-debit-field="unit" 
-                                data-debit-index={index} 
-                                value={item.unit} 
+                              <select
+                                className="erp-select"
+                                data-debit-field="unit"
+                                data-debit-index={index}
+                                value={item.unit}
                                 onChange={(e) => updateDebitNoteItem(index, 'unit', e.target.value)}
                                 onKeyDown={(e) => handleDebitNoteKeyDown(e, index, 'unit')}
                                 style={{ width: '100%' }}
@@ -4307,218 +4399,218 @@ const renderDataTable = (title, data, columns, masterType, onDelete) => {
                               </select>
                             </td>
                             <td>
-                              <input 
-                                className="erp-input numeric" 
+                              <input
+                                className="erp-input numeric"
                                 type="number"
-                                data-debit-field="qty" 
-                                data-debit-index={index} 
-                                value={item.qty} 
+                                data-debit-field="qty"
+                                data-debit-index={index}
+                                value={item.qty}
                                 onChange={(e) => updateDebitNoteItem(index, 'qty', e.target.value)}
                                 onKeyDown={(e) => handleDebitNoteKeyDown(e, index, 'qty')}
                                 style={{ width: '100%' }}
                               />
                             </td>
                             <td>
-                              <input 
-                                className="erp-input numeric" 
+                              <input
+                                className="erp-input numeric"
                                 type="number"
-                                data-debit-field="free" 
-                                data-debit-index={index} 
-                                value={item.free} 
+                                data-debit-field="free"
+                                data-debit-index={index}
+                                value={item.free}
                                 onChange={(e) => updateDebitNoteItem(index, 'free', e.target.value)}
                                 onKeyDown={(e) => handleDebitNoteKeyDown(e, index, 'free')}
                                 style={{ width: '100%' }}
                               />
                             </td>
                             <td>
-                              <input 
-                                className="erp-input numeric" 
+                              <input
+                                className="erp-input numeric"
                                 type="number"
-                                data-debit-field="rate" 
-                                data-debit-index={index} 
-                                value={item.rate} 
+                                data-debit-field="rate"
+                                data-debit-index={index}
+                                value={item.rate}
                                 onChange={(e) => updateDebitNoteItem(index, 'rate', e.target.value)}
                                 onKeyDown={(e) => handleDebitNoteKeyDown(e, index, 'rate')}
                                 style={{ width: '100%' }}
                               />
                             </td>
                             <td>
-                              <input 
-                                className="erp-input numeric" 
+                              <input
+                                className="erp-input numeric"
                                 type="number"
-                                data-debit-field="grossAmt" 
-                                data-debit-index={index} 
-                                value={item.grossAmt} 
+                                data-debit-field="grossAmt"
+                                data-debit-index={index}
+                                value={item.grossAmt}
                                 onChange={(e) => updateDebitNoteItem(index, 'grossAmt', e.target.value)}
                                 style={{ width: '100%' }}
                               />
                             </td>
                             <tr>
-                              <input 
-                                className="erp-input numeric small" 
+                              <input
+                                className="erp-input numeric small"
                                 type="number"
-                                data-debit-field="bvDisc1" 
-                                data-debit-index={index} 
-                                value={item.bvDisc1} 
+                                data-debit-field="bvDisc1"
+                                data-debit-index={index}
+                                value={item.bvDisc1}
                                 onChange={(e) => updateDebitNoteItem(index, 'bvDisc1', e.target.value)}
                                 onKeyDown={(e) => handleDebitNoteKeyDown(e, index, 'bvDisc1')}
                                 style={{ width: '100%' }}
                               />
                             </tr>
                             <td>
-                              <input 
-                                className="erp-input numeric small" 
+                              <input
+                                className="erp-input numeric small"
                                 type="number"
-                                data-debit-field="bvDisc2" 
-                                data-debit-index={index} 
-                                value={item.bvDisc2} 
+                                data-debit-field="bvDisc2"
+                                data-debit-index={index}
+                                value={item.bvDisc2}
                                 onChange={(e) => updateDebitNoteItem(index, 'bvDisc2', e.target.value)}
                                 onKeyDown={(e) => handleDebitNoteKeyDown(e, index, 'bvDisc2')}
                                 style={{ width: '100%' }}
                               />
                             </td>
                             <td>
-                              <input 
-                                className="erp-input numeric small" 
+                              <input
+                                className="erp-input numeric small"
                                 type="number"
-                                data-debit-field="bvAdd1" 
-                                data-debit-index={index} 
-                                value={item.bvAdd1} 
+                                data-debit-field="bvAdd1"
+                                data-debit-index={index}
+                                value={item.bvAdd1}
                                 onChange={(e) => updateDebitNoteItem(index, 'bvAdd1', e.target.value)}
                                 onKeyDown={(e) => handleDebitNoteKeyDown(e, index, 'bvAdd1')}
                                 style={{ width: '100%' }}
                               />
                             </td>
                             <td>
-                              <input 
-                                className="erp-input numeric small" 
+                              <input
+                                className="erp-input numeric small"
                                 type="number"
-                                data-debit-field="bvAdd2" 
-                                data-debit-index={index} 
-                                value={item.bvAdd2} 
+                                data-debit-field="bvAdd2"
+                                data-debit-index={index}
+                                value={item.bvAdd2}
                                 onChange={(e) => updateDebitNoteItem(index, 'bvAdd2', e.target.value)}
                                 onKeyDown={(e) => handleDebitNoteKeyDown(e, index, 'bvAdd2')}
                                 style={{ width: '100%' }}
                               />
                             </td>
                             <td>
-                              <input 
-                                className="erp-input numeric" 
+                              <input
+                                className="erp-input numeric"
                                 type="number"
-                                data-debit-field="taxable" 
-                                data-debit-index={index} 
-                                value={item.taxable} 
+                                data-debit-field="taxable"
+                                data-debit-index={index}
+                                value={item.taxable}
                                 onChange={(e) => updateDebitNoteItem(index, 'taxable', e.target.value)}
                                 style={{ width: '100%' }}
                               />
                             </td>
                             <td>
-                              <input 
-                                className="erp-input numeric small" 
+                              <input
+                                className="erp-input numeric small"
                                 type="number"
-                                data-debit-field="gstPercent" 
-                                data-debit-index={index} 
-                                value={item.gstPercent} 
+                                data-debit-field="gstPercent"
+                                data-debit-index={index}
+                                value={item.gstPercent}
                                 onChange={(e) => updateDebitNoteItem(index, 'gstPercent', e.target.value)}
                                 onKeyDown={(e) => handleDebitNoteKeyDown(e, index, 'gstPercent')}
                                 style={{ width: '100%' }}
                               />
                             </td>
                             <td>
-                              <input 
-                                className="erp-input numeric" 
+                              <input
+                                className="erp-input numeric"
                                 type="number"
-                                data-debit-field="gstArt" 
-                                data-debit-index={index} 
-                                value={item.gstArt} 
+                                data-debit-field="gstArt"
+                                data-debit-index={index}
+                                value={item.gstArt}
                                 onChange={(e) => updateDebitNoteItem(index, 'gstArt', e.target.value)}
                                 style={{ width: '100%' }}
                               />
                             </td>
                             <tr>
-                              <input 
-                                className="erp-input numeric" 
+                              <input
+                                className="erp-input numeric"
                                 type="number"
-                                data-debit-field="avDisc1" 
-                                data-debit-index={index} 
-                                value={item.avDisc1} 
+                                data-debit-field="avDisc1"
+                                data-debit-index={index}
+                                value={item.avDisc1}
                                 onChange={(e) => updateDebitNoteItem(index, 'avDisc1', e.target.value)}
                                 style={{ width: '100%' }}
                               />
                             </tr>
                             <td>
-                              <input 
-                                className="erp-input numeric" 
+                              <input
+                                className="erp-input numeric"
                                 type="number"
-                                data-debit-field="avDisc2" 
-                                data-debit-index={index} 
-                                value={item.avDisc2} 
+                                data-debit-field="avDisc2"
+                                data-debit-index={index}
+                                value={item.avDisc2}
                                 onChange={(e) => updateDebitNoteItem(index, 'avDisc2', e.target.value)}
                                 style={{ width: '100%' }}
                               />
                             </td>
                             <td>
-                              <input 
-                                className="erp-input numeric" 
+                              <input
+                                className="erp-input numeric"
                                 type="number"
-                                data-debit-field="cgst" 
-                                data-debit-index={index} 
-                                value={item.cgst} 
+                                data-debit-field="cgst"
+                                data-debit-index={index}
+                                value={item.cgst}
                                 onChange={(e) => updateDebitNoteItem(index, 'cgst', e.target.value)}
                                 style={{ width: '100%' }}
                               />
                             </td>
                             <td>
-                              <input 
-                                className="erp-input numeric" 
+                              <input
+                                className="erp-input numeric"
                                 type="number"
-                                data-debit-field="sgst" 
-                                data-debit-index={index} 
-                                value={item.sgst} 
+                                data-debit-field="sgst"
+                                data-debit-index={index}
+                                value={item.sgst}
                                 onChange={(e) => updateDebitNoteItem(index, 'sgst', e.target.value)}
                                 style={{ width: '100%' }}
                               />
                             </td>
                             <td>
-                              <input 
-                                className="erp-input numeric" 
+                              <input
+                                className="erp-input numeric"
                                 type="number"
-                                data-debit-field="igst" 
-                                data-debit-index={index} 
-                                value={item.igst} 
+                                data-debit-field="igst"
+                                data-debit-index={index}
+                                value={item.igst}
                                 onChange={(e) => updateDebitNoteItem(index, 'igst', e.target.value)}
                                 style={{ width: '100%' }}
                               />
                             </td>
                             <td>
-                              <input 
-                                className="erp-input numeric small" 
+                              <input
+                                className="erp-input numeric small"
                                 type="number"
-                                data-debit-field="cessPercent" 
-                                data-debit-index={index} 
-                                value={item.cessPercent} 
+                                data-debit-field="cessPercent"
+                                data-debit-index={index}
+                                value={item.cessPercent}
                                 onChange={(e) => updateDebitNoteItem(index, 'cessPercent', e.target.value)}
                                 style={{ width: '100%' }}
                               />
                             </td>
                             <td>
-                              <input 
-                                className="erp-input numeric" 
+                              <input
+                                className="erp-input numeric"
                                 type="number"
-                                data-debit-field="cessAmt" 
-                                data-debit-index={index} 
-                                value={item.cessAmt} 
+                                data-debit-field="cessAmt"
+                                data-debit-index={index}
+                                value={item.cessAmt}
                                 onChange={(e) => updateDebitNoteItem(index, 'cessAmt', e.target.value)}
                                 style={{ width: '100%' }}
                               />
                             </td>
                             <td>
-                              <input 
-                                className="erp-input numeric" 
+                              <input
+                                className="erp-input numeric"
                                 type="number"
-                                data-debit-field="cessPerP" 
-                                data-debit-index={index} 
-                                value={item.cessPerP} 
+                                data-debit-field="cessPerP"
+                                data-debit-index={index}
+                                value={item.cessPerP}
                                 onChange={(e) => updateDebitNoteItem(index, 'cessPerP', e.target.value)}
                                 style={{ width: '100%' }}
                               />
@@ -4540,7 +4632,7 @@ const renderDataTable = (title, data, columns, masterType, onDelete) => {
                 <div className="summary-bar">
                   <div>Gross Amt: <span className="amount">₹{debitNoteSummary.grossAmt.toFixed(2)}</span></div>
                   <div>GST Amt: <span className="amount">+₹{debitNoteSummary.gstAmt.toFixed(2)}</span></div>
-                  <div className="tcs-field">TCS %: <input className="erp-input small" placeholder="0" value={debitNoteSummary.tcsPercent} onChange={(e) => setDebitNoteSummary({...debitNoteSummary, tcsPercent: e.target.value})} /> TCS Amt: ₹{debitNoteSummary.tcsAmt}</div>
+                  <div className="tcs-field">TCS %: <input className="erp-input small" placeholder="0" value={debitNoteSummary.tcsPercent} onChange={(e) => setDebitNoteSummary({ ...debitNoteSummary, tcsPercent: e.target.value })} /> TCS Amt: ₹{debitNoteSummary.tcsAmt}</div>
                   <div>Before Vat Disc Amt: <span className="amount">₹{debitNoteSummary.beforeVatDiscAmt.toFixed(2)}</span></div>
                   <div>Surcharge: <span className="amount">₹{debitNoteSummary.surcharge}</span></div>
                   <div>Rounding: <span className="amount">₹{debitNoteSummary.rounding}</span></div>
@@ -4562,7 +4654,7 @@ const renderDataTable = (title, data, columns, masterType, onDelete) => {
           {activeSubMenu === 'Area To Party' && (
             <div className="master-section">
               <div className="page-title-large">Area to Party Mapping</div>
-              
+
               <div className="form-row mb-4">
                 <label className="form-label">Select Company:</label>
                 <select className="form-select" value={areaToPartyCompany?.id || ''} onChange={(e) => handleAreaToPartyCompanySelect(companies.find(c => c.id == e.target.value))}>
@@ -4579,14 +4671,14 @@ const renderDataTable = (title, data, columns, masterType, onDelete) => {
                   </div>
                   <div className="data-table-container">
                     <table className="data-table">
-                      <thead><tr><th style={{width: '20%'}}>Account Code</th><th style={{width: '40%'}}>Account Name</th><th style={{width: '25%'}}>Area Name</th><th style={{width: '15%'}}>Status</th></tr></thead>
+                      <thead><tr><th style={{ width: '20%' }}>Account Code</th><th style={{ width: '40%' }}>Account Name</th><th style={{ width: '25%' }}>Area Name</th><th style={{ width: '15%' }}>Status</th></tr></thead>
                       <tbody>
                         {areaToPartyData.map((row, rowIndex) => (
                           <tr key={row.id} className={areaToPartyEditingRow === rowIndex ? 'editing-row' : ''}>
                             <td data-label="Account Code">{row.accountCode}</td>
                             <td data-label="Account Name">{row.accountName}</td>
                             <td data-atp-cell={`areaName_${rowIndex}`} data-label="Area Name" className={`editable-cell ${areaToPartyEditingCell === `areaName_${rowIndex}` ? 'editing' : ''}`} onClick={() => handleAreaToPartyCellClick(rowIndex, 'areaName')} tabIndex={0} onKeyDown={(e) => handleAreaToPartyKeyDown(e, rowIndex, 'areaName')}>
-                              {row.areaName ? row.areaName : <span className="placeholder" style={{color: '#999', fontStyle: 'italic'}}>Click to select area...</span>}
+                              {row.areaName ? row.areaName : <span className="placeholder" style={{ color: '#999', fontStyle: 'italic' }}>Click to select area...</span>}
                               {showAreaToPartyDropdown && areaToPartyEditingRow === rowIndex && (<div className="dropdown-overlay"><div className="dropdown-filter"><input type="text" placeholder="Search Area..." value={areaToPartyFilter} onChange={handleAreaToPartyFilterChange} autoFocus /></div><div className="dropdown-list">{filteredAreasForPartyMapping.length > 0 ? filteredAreasForPartyMapping.map(area => (<div key={area.id} className="dropdown-item" onClick={() => handleAreaToPartySelect(rowIndex, area)}><strong>{area.code}</strong> - {area.name}</div>)) : <div className="dropdown-item no-results">No areas found</div>}</div></div>)}
                             </td>
                             <td data-label="Status"><span className={`status-badge ${row.areaName ? 'complete' : 'pending'}`}>{row.areaName ? '✅ Complete' : '⏳ Pending'}</span></td>
