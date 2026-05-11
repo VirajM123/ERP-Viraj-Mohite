@@ -7,12 +7,31 @@ import './Dashboard.css';
 import logo from "./assets/images/Totalsolution.png";
 import SalesmanToAreaMapping from './SalesmanToAreaMapping';
 
+
+
 const Dashboard = () => {
   const [activeMenu, setActiveMenu] = useState(null);
   const [activeSubMenu, setActiveSubMenu] = useState(null);
   const [openFormFor, setOpenFormFor] = useState(null);
   const [accountActiveTab, setAccountActiveTab] = useState('basic');
   const [otherAccountActiveTab, setOtherAccountActiveTab] = useState('basic');
+  // Batch  State
+  const [batches, setBatches] = useState([]);
+  const [showBatchModal, setShowBatchModal] = useState(false);
+
+  const [currentBatchRow, setCurrentBatchRow] = useState(null);
+
+  const [batchForm, setBatchForm] = useState({
+    batchNo: '',
+    mfgDate: '',
+    expDate: '',
+    mrp: '',
+    purchaseRate: '',
+    salesRate: '',
+    stockQty: ''
+  });
+
+  const [batchMode, setBatchMode] = useState('new');
 
   // GoDown Master State
   const [godowns, setGodowns] = useState([
@@ -661,12 +680,30 @@ const Dashboard = () => {
     const newItem = {
       id: Date.now(),
       sr: purchaseItems.length + 1,
+
+      // PRODUCT
       product: '',
+      productId: '',
+
+      // BATCH
+      batchNo: '',
+      mfgDate: '',
+      expDate: '',
+
+      // UNIT
       unitId: 'PCS',
+
+      // STOCK
       quantity: '',
       free: '',
+      stockQty: '',
+
+      // RATES
       mrp: '',
       purRate: '',
+      salesRate: '',
+
+      // CALCULATIONS
       grossAmount: '',
       disc1: '',
       disc2: '',
@@ -919,30 +956,122 @@ const Dashboard = () => {
   };
 
   const handlePurchaseProductClick = (index) => {
+
+  setShowPurchaseProductList(false);
+
+  setTimeout(() => {
+
     setCurrentPurchaseProductIndex(index);
+
     setPurchaseProductListFilter('');
+
     setShowPurchaseProductList(true);
-  };
+
+  }, 50);
+
+};
 
   const handlePurchaseProductSelect = (index, product) => {
+
     updatePurchaseItem(index, 'product', `${product.code} - ${product.name}`);
+
+    // IMPORTANT FOR BATCH
+    updatePurchaseItem(index, 'productId', product.id);
+
     updatePurchaseItem(index, 'mrp', product.mrp || '');
+
     updatePurchaseItem(index, 'purRate', product.Rate_Per_Unit || '');
+
     updatePurchaseItem(index, 'tax', product.gst || '');
+
     updatePurchaseItem(index, 'unitId', product.basicUnit || 'PCS');
+
+    // OPTIONAL
+    updatePurchaseItem(index, 'salesRate', product.salesRate || '');
+
     setShowPurchaseProductList(false);
+
     setCurrentPurchaseProductIndex(-1);
+
     setTimeout(() => {
-      const qtyInput = document.querySelector(`[data-purchase-field="quantity"][data-purchase-index="${index}"]`);
+
+      openBatchModal(index);
+
+    }, 100);
+
+    setTimeout(() => {
+
+      const qtyInput = document.querySelector(
+        `[data-purchase-field="quantity"][data-purchase-index="${index}"]`
+      );
+
       if (qtyInput) qtyInput.focus();
+
     }, 50);
   };
+  const openBatchModal = (index) => {
+    console.log("BATCH BUTTON CLICKED");
+    setCurrentBatchRow(index);
+
+    setBatchForm({
+      batchNo: '',
+      mfgDate: '',
+      expDate: '',
+      mrp: '',
+      purchaseRate: '',
+      salesRate: '',
+      stockQty: ''
+    });
+
+    setShowBatchModal(true);
+  };
+
+  const saveBatchDetails = () => {
+
+    const updatedItems = [...purchaseItems];
+
+    updatedItems[currentBatchRow] = {
+      ...updatedItems[currentBatchRow],
+
+        selectedBatch: {
+  ...batchForm
+},
+
+      batchNo: batchForm.batchNo,
+      mfgDate: batchForm.mfgDate,
+      expDate: batchForm.expDate,
+      mrp: batchForm.mrp,
+      purRate: batchForm.purchaseRate,
+      salesRate: batchForm.salesRate,
+      stockQty: batchForm.stockQty
+    };
+
+    setPurchaseItems(updatedItems);
+
+    setBatches([
+      ...batches,
+      {
+        productId: updatedItems[currentBatchRow].productId,
+        product: updatedItems[currentBatchRow].product,
+        ...batchForm
+      }
+    ]);
+
+    setShowBatchModal(false);
+  };
+
 
   const savePurchase = () => {
     const purchaseData = { ...purchaseFormData, items: purchaseItems };
     console.log('Saving purchase:', purchaseData);
     alert('Purchase saved successfully!');
   };
+  const existingBatches = batches.filter(
+    b =>
+      b.productId === purchaseItems[currentBatchRow]?.productId
+  );
+
+
 
   // ==================== CREDIT NOTE FUNCTIONS ====================
   const handleCreditNoteInputChange = (e) => {
@@ -2311,7 +2440,9 @@ const Dashboard = () => {
   const renderDataTable = (title, data, columns, masterType, onDelete) => {
     const filteredData = data;
 
+
     return (
+
       <div className="master-section grid-section">
         <div className="grid-header">
           <h3>{title} ({filteredData.length})</h3>
@@ -3140,6 +3271,7 @@ const Dashboard = () => {
                                 style={{ width: '100%', minWidth: '150px', cursor: 'pointer' }}
                                 placeholder="Click to select product"
                               />
+                              
 
                               {/* Product Selection Dropdown */}
                               {showProductList && currentProductIndex === index &&
@@ -3157,57 +3289,103 @@ const Dashboard = () => {
                       <button onClick={() => setShowProductList(false)}>✕</button>
                     </div> */}
                                       <div className="dropdown-list">
-                                        {products
-                                          .filter(p => {
-                                            const search = productListFilter.trim().toLowerCase();
+                                        <table
+  style={{
+    width: '100%',
+    borderCollapse: 'collapse',
+    fontSize: '12px'
+  }}
+>
 
-                                            if (!search) return false;
+  <thead>
 
-                                            return (
-                                              p.name?.toLowerCase().startsWith(search) ||
-                                              p.code?.toLowerCase().startsWith(search)
-                                            );
-                                          })
-                                          .slice(0, 10)
-                                          .map(product => (
-                                            <div
-                                              key={product.id}
-                                              className="dropdown-item"
-                                              onClick={() => handleProductSelect(index, product)}
-                                              style={{
-                                                padding: '8px',
-                                                borderBottom: '1px solid #e5e7eb',
-                                                cursor: 'pointer',
-                                                fontSize: '13px'
-                                              }}
-                                            >
-                                              <div
-                                                style={{
-                                                  display: 'grid',
-                                                  gridTemplateColumns: '80px 1fr 80px 80px 60px 70px',
-                                                  gap: '10px',
-                                                  alignItems: 'center'
-                                                }}
-                                              >
-                                                <div>
-                                                  <strong>{product.code}</strong>
-                                                </div>
+    <tr
+      style={{
+        background: '#eff6ff',
+        position: 'sticky',
+        top: 0
+      }}
+    >
 
-                                                <div>{product.name}</div>
+      <th style={{ padding: '6px', textAlign: 'left' }}>
+        ID
+      </th>
 
-                                                <div>MRP: {product.mrp || 0}</div>
+      <th style={{ padding: '6px', textAlign: 'left' }}>
+        Name
+      </th>
 
-                                                <div>Rate: {product.Rate_Per_Unit || 0}</div>
+      <th style={{ padding: '6px', textAlign: 'left' }}>
+        MRP
+      </th>
 
-                                                <div>GST: {product.gst || 0}%</div>
+      <th style={{ padding: '6px', textAlign: 'left' }}>
+        Batch
+      </th>
 
-                                                <div>{product.basicUnit || 'PCS'}</div>
-                                              </div>
-                                            </div>
-                                          ))}
-                                        {products.length === 0 && (
-                                          <div className="dropdown-item no-results">No products found</div>
-                                        )}
+    </tr>
+
+  </thead>
+
+  <tbody>
+
+    {products
+      .filter(p =>
+        p.name.toLowerCase().includes(productListFilter.toLowerCase()) ||
+        p.code.toLowerCase().includes(productListFilter.toLowerCase())
+      )
+      .map(product => {
+
+        const productBatch = batches.find(
+          b => b.productId === product.id
+        );
+
+        return (
+
+          <tr
+            key={product.id}
+            onClick={() =>
+              handleProductSelect(currentProductIndex, {
+                ...product,
+                selectedBatch: productBatch
+              })
+            }
+            style={{
+              cursor: 'pointer',
+              borderBottom: '1px solid #eee'
+            }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.background = '#f8fafc';
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.background = 'white';
+            }}
+          >
+
+            <td style={{ padding: '6px' }}>
+              {product.code}
+            </td>
+
+            <td style={{ padding: '6px' }}>
+              {product.name}
+            </td>
+
+            <td style={{ padding: '6px' }}>
+              {product.mrp || 0}
+            </td>
+
+            <td style={{ padding: '6px' }}>
+              {productBatch?.batchNo || '-'}
+            </td>
+
+          </tr>
+
+        );
+      })}
+
+  </tbody>
+
+</table>
                                       </div>
                                     </div>
                                   </div>
@@ -3353,6 +3531,7 @@ const Dashboard = () => {
                         <tr>
                           <th style={{ position: 'sticky', left: 0, backgroundColor: '#f8fafc', zIndex: 20, minWidth: '50px' }}>SNL NO.</th>
                           <th style={{ minWidth: '180px' }}>PRODUCT NAME</th>
+                          {/* <th style={{ minWidth: '100px' }}>BATCH</th> */}
                           <th style={{ minWidth: '100px' }}>UNIT</th>
                           <th style={{ minWidth: '100px' }}>QUANTITY</th>
                           <th style={{ minWidth: '80px' }}>FREE</th>
@@ -3402,8 +3581,27 @@ const Dashboard = () => {
                                 onKeyDown={(e) => handlePurchaseKeyDown(e, index, 'product')}
                                 style={{ width: '100%', cursor: 'pointer' }}
                               />
+                             {/* {item.selectedBatch && (
+  <div
+    style={{
+      marginTop: '3px',
+      fontSize: '10px',
+      color: '#2563eb',
+      whiteSpace: 'nowrap',
+      overflow: 'hidden',
+      textOverflow: 'ellipsis'
+    }}
+  >
+    Batch: {item.selectedBatch.batchNo}
+    {' | '}
+    MRP: ₹{item.selectedBatch.mrp}
+    {' | '}
+    Exp: {item.selectedBatch.expDate}
+  </div>
+)} */}
                               {/* Product Selection Dropdown for Purchase */}
-                              {showPurchaseProductList && currentPurchaseProductIndex >= 0 && (
+                             {showPurchaseProductList &&
+ currentPurchaseProductIndex === index && (
                                 <div className="product-dropdown-overlay">
                                   <div className="product-dropdown">
                                     {/* <div className="dropdown-header">
@@ -3446,6 +3644,53 @@ const Dashboard = () => {
                                 </div>
                               )}
                             </td>
+                            {/* <td>
+
+  <div
+    style={{
+      display: 'flex',
+      flexDirection: 'column',
+      gap: '4px',
+      alignItems: 'center'
+    }}
+  >
+
+    <button
+      type="button"
+      className="batch-btn"
+      onMouseDown={(e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        openBatchModal(index);
+      }}
+      style={{
+        padding: '4px 10px',
+        background: '#2563eb',
+        color: 'white',
+        border: 'none',
+        borderRadius: '5px',
+        cursor: 'pointer',
+        fontSize: '12px'
+      }}
+    >
+      Batch
+    </button>
+
+    {item.batchNo && (
+      <span
+        style={{
+          fontSize: '11px',
+          color: '#2563eb',
+          fontWeight: '600'
+        }}
+      >
+        {item.batchNo}
+      </span>
+    )}
+
+  </div>
+
+</td> */}
                             <td>
                               <select
                                 data-purchase-field="unitId"
@@ -3736,6 +3981,145 @@ const Dashboard = () => {
                       )}
                     </div>
                   </div>
+                </div>
+
+              )}
+
+              {/* Batch Modal for Purchase */}
+              {showBatchModal && (
+                <div className="batch-modal-overlay" style={{
+                  position: 'fixed',
+                  top: '50%',
+                  left: '50%',
+                  transform: 'translate(-50%, -50%)',
+                  background: 'white',
+                  padding: '20px',
+                  border: '2px solid black',
+                  zIndex: 999999
+                }}>
+
+                  <div
+                    className="batch-modal"
+                    style={{
+                      width: '700px',
+                      background: 'white',
+                      padding: '20px',
+                      borderRadius: '10px',
+                      maxHeight: '90vh',
+                      overflowY: 'auto'
+                    }}
+                  >
+                    <div className="batch-header">
+
+                      <h3>Batch Details</h3>
+
+                      <button
+                        onClick={() => setShowBatchModal(false)}
+                      >
+                        ✕
+                      </button>
+
+                    </div>
+
+                    <div
+                      className="batch-form-grid"
+                      style={{
+                        display: 'grid',
+                        gridTemplateColumns: '1fr 1fr',
+                        gap: '15px'
+                      }}
+                    >
+
+                      <input
+                        type="text"
+                        placeholder="Batch No"
+                        value={batchForm.batchNo}
+                        onChange={(e) =>
+                          setBatchForm({
+                            ...batchForm,
+                            batchNo: e.target.value
+                          })
+                        }
+                      />
+
+                      <input
+                        type="date"
+                        value={batchForm.mfgDate}
+                        onChange={(e) =>
+                          setBatchForm({
+                            ...batchForm,
+                            mfgDate: e.target.value
+                          })
+                        }
+                      />
+
+                      <input
+                        type="date"
+                        value={batchForm.expDate}
+                        onChange={(e) =>
+                          setBatchForm({
+                            ...batchForm,
+                            expDate: e.target.value
+                          })
+                        }
+                      />
+
+                      <input
+                        type="number"
+                        placeholder="MRP"
+                        value={batchForm.mrp}
+                        onChange={(e) =>
+                          setBatchForm({
+                            ...batchForm,
+                            mrp: e.target.value
+                          })
+                        }
+                      />
+
+                    </div>
+                    {batchMode === 'new' && (
+                      <div
+                        style={{
+                          display: 'flex',
+                          justifyContent: 'flex-end',
+                          marginTop: '20px',
+                          gap: '10px'
+                        }}
+                      >
+
+                        <button
+                          type="button"
+                          onClick={() => setShowBatchModal(false)}
+                          style={{
+                            padding: '8px 16px',
+                            border: 'none',
+                            borderRadius: '6px',
+                            cursor: 'pointer'
+                          }}
+                        >
+                          Cancel
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={saveBatchDetails}
+                          style={{
+                            padding: '8px 16px',
+                            background: '#2563eb',
+                            color: 'white',
+                            border: 'none',
+                            borderRadius: '6px',
+                            cursor: 'pointer'
+                          }}
+                        >
+                          Save Batch
+                        </button>
+
+                      </div>
+                    )}
+
+                  </div>
+
                 </div>
               )}
 
@@ -4696,6 +5080,359 @@ const Dashboard = () => {
           )}
         </div>
       </main>
+
+
+      {/* batch mode show */}
+      {showBatchModal && (
+        <div
+          style={{
+            position: 'fixed',
+            inset: 0,
+            background: 'rgba(0,0,0,0.4)',
+            display: 'flex',
+            justifyContent: 'center',
+            alignItems: 'center',
+            zIndex: 999999
+          }}
+        >
+
+          <div
+            style={{
+              width: '700px',
+              background: 'white',
+              borderRadius: '10px',
+              padding: '20px'
+            }}
+          >
+
+            <div
+              style={{
+                display: 'flex',
+                justifyContent: 'space-between',
+                alignItems: 'center',
+                marginBottom: '20px'
+              }}
+            >
+
+              <h2>Batch Details</h2>
+
+              <button
+                onClick={() => setShowBatchModal(false)}
+              >
+                ✕
+              </button>
+
+            </div>
+            <div
+              style={{
+                display: 'flex',
+                gap: '10px',
+                marginBottom: '20px'
+              }}
+            >
+
+              <button
+                type="button"
+                onClick={() => setBatchMode('existing')}
+                style={{
+                  padding: '8px 14px',
+                  background: batchMode === 'existing' ? '#2563eb' : '#e5e7eb',
+                  color: batchMode === 'existing' ? 'white' : 'black',
+                  border: 'none',
+                  borderRadius: '6px',
+                  cursor: 'pointer'
+                }}
+              >
+                Existing Batch
+              </button>
+
+
+              <button
+                type="button"
+                onClick={() => setBatchMode('new')}
+                style={{
+                  padding: '8px 14px',
+                  background: batchMode === 'new' ? '#2563eb' : '#e5e7eb',
+                  color: batchMode === 'new' ? 'white' : 'black',
+                  border: 'none',
+                  borderRadius: '6px',
+                  cursor: 'pointer'
+                }}
+              >
+                New Batch
+              </button>
+
+
+            </div>
+            {batchMode === 'existing' && (
+
+              <div
+                style={{
+                  border: '1px solid #ddd',
+                  borderRadius: '8px',
+                  maxHeight: '250px',
+                  overflowY: 'auto',
+                  marginBottom: '20px'
+                }}
+              >
+
+                {existingBatches.length === 0 && (
+                  <div style={{ padding: '15px' }}>
+                    No Existing Batch Found
+                  </div>
+                )}
+
+                <table
+                  style={{
+                    width: '100%',
+                    borderCollapse: 'collapse'
+                  }}
+                >
+
+                  <thead>
+
+                    <tr
+                      style={{
+                        background: '#0ea5e9',
+                        color: 'white'
+                      }}
+                    >
+                      <th style={{ padding: '8px', border: '1px solid #ddd' }}>
+                        Select
+                      </th>
+                      <th style={{ padding: '8px', border: '1px solid #ddd' }}>
+                        Batch
+                      </th>
+
+                      <th style={{ padding: '8px', border: '1px solid #ddd' }}>
+                        MRP
+                      </th>
+
+                      <th style={{ padding: '8px', border: '1px solid #ddd' }}>
+                        MFG Date
+                      </th>
+
+                      <th style={{ padding: '8px', border: '1px solid #ddd' }}>
+                        Expiry
+                      </th>
+
+                      <th style={{ padding: '8px', border: '1px solid #ddd' }}>
+                        Stock
+                      </th>
+
+                      <th style={{ padding: '8px', border: '1px solid #ddd' }}>
+                        Sales Rate
+                      </th>
+
+                      <th style={{ padding: '8px', border: '1px solid #ddd' }}>
+                        Purchase Rate
+                      </th>
+
+                    </tr>
+
+                  </thead>
+
+                  <tbody>
+
+                    {existingBatches.map((batch, idx) => (
+
+                      <tr
+                        key={idx}
+                        onClick={() => {
+
+                          const updatedItems = [...purchaseItems];
+
+                          updatedItems[currentBatchRow] = {
+                            ...updatedItems[currentBatchRow],
+
+                            batchNo: batch.batchNo,
+                            mfgDate: batch.mfgDate,
+                            expDate: batch.expDate,
+
+                            mrp: batch.mrp,
+                            purRate: batch.purchaseRate,
+                            salesRate: batch.salesRate,
+
+                            quantity: 1,
+
+                            stockQty: batch.stockQty
+                          };
+
+                          setPurchaseItems(updatedItems);
+
+                          setShowBatchModal(false);
+
+                        }}
+                        style={{
+                          cursor: 'pointer',
+                          transition: '0.2s'
+                        }}
+                        onMouseEnter={(e) => {
+                          e.currentTarget.style.background = '#dbeafe';
+                        }}
+                        onMouseLeave={(e) => {
+                          e.currentTarget.style.background = 'white';
+                        }}
+                      >
+                        <td style={{ padding: '8px', border: '1px solid #ddd' }}>
+
+                          <button
+                            type="button"
+                            style={{
+                              background: '#2563eb',
+                              color: 'white',
+                              border: 'none',
+                              padding: '4px 10px',
+                              borderRadius: '4px',
+                              cursor: 'pointer'
+                            }}
+                          >
+                            Select
+                          </button>
+
+                        </td>
+                        <td style={{ padding: '8px', border: '1px solid #ddd' }}>
+                          {batch.batchNo}
+                        </td>
+
+                        <td style={{ padding: '8px', border: '1px solid #ddd' }}>
+                          {batch.mrp}
+                        </td>
+
+                        <td style={{ padding: '8px', border: '1px solid #ddd' }}>
+                          {batch.mfgDate}
+                        </td>
+
+                        <td style={{ padding: '8px', border: '1px solid #ddd' }}>
+                          {batch.expDate}
+                        </td>
+
+                        <td style={{ padding: '8px', border: '1px solid #ddd' }}>
+                          {batch.stockQty}
+                        </td>
+
+                        <td style={{ padding: '8px', border: '1px solid #ddd' }}>
+                          {batch.salesRate}
+                        </td>
+
+                        <td style={{ padding: '8px', border: '1px solid #ddd' }}>
+                          {batch.purchaseRate}
+                        </td>
+
+                      </tr>
+
+                    ))}
+
+                  </tbody>
+
+                </table>
+
+              </div>
+            )}
+            {batchMode === 'new' && (
+              <div
+                style={{
+                  display: 'grid',
+                  gridTemplateColumns: '1fr 1fr',
+                  gap: '15px'
+                }}
+              >
+
+                <input
+                  type="text"
+                  placeholder="Batch No"
+                  value={batchForm.batchNo}
+                  onChange={(e) =>
+                    setBatchForm({
+                      ...batchForm,
+                      batchNo: e.target.value
+                    })
+                  }
+                />
+
+                <input
+                  type="date"
+                  value={batchForm.mfgDate}
+                  onChange={(e) =>
+                    setBatchForm({
+                      ...batchForm,
+                      mfgDate: e.target.value
+                    })
+                  }
+                />
+
+                <input
+                  type="date"
+                  value={batchForm.expDate}
+                  onChange={(e) =>
+                    setBatchForm({
+                      ...batchForm,
+                      expDate: e.target.value
+                    })
+                  }
+                />
+
+                <input
+                  type="number"
+                  placeholder="MRP"
+                  value={batchForm.mrp}
+                  onChange={(e) =>
+                    setBatchForm({
+                      ...batchForm,
+                      mrp: e.target.value
+                    })
+                  }
+                />
+
+              </div>
+            )}
+
+            {batchMode === 'new' && (
+
+              <div
+                style={{
+                  display: 'flex',
+                  justifyContent: 'flex-end',
+                  gap: '10px',
+                  marginTop: '20px'
+                }}
+              >
+
+                <button
+                  type="button"
+                  onClick={() => setShowBatchModal(false)}
+                  style={{
+                    background: '#2563eb',
+                    color: 'white',
+                    border: 'none',
+                    padding: '8px 16px',
+                    borderRadius: '6px'
+                  }}
+                >
+                  Cancel
+                </button>
+
+                <button
+                  type="button"
+                  onClick={saveBatchDetails}
+                  style={{
+                    background: '#2563eb',
+                    color: 'white',
+                    border: 'none',
+                    padding: '8px 16px',
+                    borderRadius: '6px'
+                  }}
+                >
+                  Save Batch
+                </button>
+
+              </div>
+            )}
+          </div>
+
+        </div>
+      )}
+
     </div>
   );
 };

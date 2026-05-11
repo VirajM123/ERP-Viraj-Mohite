@@ -1154,6 +1154,38 @@ body {
   font-weight: 700;
 }
 
+/* batch modal design */
+
+.batch-modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.4);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 9999;
+}
+
+.batch-modal {
+  width: 600px;
+  background: white;
+  padding: 20px;
+  border-radius: 10px;
+}
+
+.batch-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 20px;
+}
+
+.batch-form-grid {
+  display: grid;
+  grid-template-columns: repeat(2,1fr);
+  gap: 15px;
+}
+
 /* Responsive Design */
 @media (max-width: 1024px) {
   .form-grid-4 {
@@ -1319,3 +1351,4 @@ body {
     max-height: none;
   }
 }
+
