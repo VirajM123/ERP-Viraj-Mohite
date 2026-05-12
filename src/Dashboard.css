@@ -312,6 +312,33 @@ body {
   margin-bottom: 24px;
 }
 
+/* Shared layout helpers for ALL master-form views (NO effect on voucher tabs) */
+.master-section .form-section {
+  margin-bottom: 20px;
+}
+
+.master-section .form-section:last-child {
+  margin-bottom: 0;
+}
+
+/* Shared master-form body spacing across all “simple” master forms
+   (Group/Category use form-row + form-actions, not form-section) */
+.master-section .form-row,
+.master-section .form-row-single,
+.master-section .form-grid-2,
+.master-section .form-grid-3,
+.master-section .form-grid-4 {
+  margin-bottom: 14px;
+}
+
+/* Normalize tabs block spacing used by Account/Other Account */
+.account-tabs {
+  margin: 0 0 20px 0;
+  padding: 0;
+}
+
+
+
 /* Form header */
 .form-header {
   display: flex;
@@ -1351,4 +1378,284 @@ body {
     max-height: none;
   }
 }
+<<<<<<< HEAD
+/* ============================================
+   UNIFIED MASTER FORM STYLES
+   Ensures all master forms have consistent layout
+   ============================================ */
 
+/* Master form container - consistent padding and spacing */
+.master-section.erp-master-form {
+  padding: 24px;
+  background: var(--card-bg);
+  border-radius: 16px;
+  border: 1px solid var(--border);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+}
+
+/* Form header - consistent across all masters */
+.master-section .form-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 24px;
+  padding-bottom: 16px;
+  border-bottom: 2px solid var(--border);
+}
+
+.master-section .form-header .page-title-large {
+  margin-bottom: 0;
+  font-size: 20px;
+  font-weight: 700;
+  color: #1e293b;
+}
+
+/* Form sections - consistent spacing */
+.master-section .form-section {
+  margin-bottom: 24px;
+}
+
+.master-section .form-section:last-child {
+  margin-bottom: 0;
+}
+
+/* Section headers - consistent styling */
+.master-section .section-header {
+  font-size: 14px;
+  font-weight: 600;
+  color: #1e293b;
+  margin-bottom: 16px;
+  padding-bottom: 8px;
+  border-bottom: 2px solid var(--accent);
+  display: inline-block;
+}
+
+/* Section subtitle for nested sections */
+.master-section .section-subtitle {
+  font-size: 13px;
+  font-weight: 600;
+  color: #475569;
+  margin: 20px 0 12px;
+  padding-bottom: 6px;
+  border-bottom: 1px solid var(--border);
+}
+
+/* Form grid layouts - consistent grid spacing */
+.master-section .form-grid-2,
+.master-section .form-grid-3,
+.master-section .form-grid-4 {
+  display: grid;
+  gap: 16px;
+  margin-bottom: 16px;
+}
+
+.master-section .form-grid-2 {
+  grid-template-columns: repeat(2, 1fr);
+}
+
+.master-section .form-grid-3 {
+  grid-template-columns: repeat(3, 1fr);
+}
+
+.master-section .form-grid-4 {
+  grid-template-columns: repeat(4, 1fr);
+}
+
+/* Form row for simple two-field layouts */
+.master-section .form-row {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+  gap: 16px;
+  margin-bottom: 16px;
+}
+
+/* Single row full width */
+.master-section .form-row-single {
+  margin-bottom: 16px;
+}
+
+/* Labeled input - consistent styling */
+.master-section .labeled-input {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.master-section .labeled-input label {
+  font-size: 12px;
+  font-weight: 600;
+  color: #475569;
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+}
+
+.master-section .labeled-input input,
+.master-section .labeled-input select,
+.master-section .labeled-input textarea {
+  padding: 8px 12px;
+  border: 1px solid #cbd5e1;
+  border-radius: 8px;
+  font-size: 13px;
+  transition: all 0.2s;
+  background: white;
+  width: 100%;
+  font-family: inherit;
+}
+
+.master-section .labeled-input textarea {
+  min-height: 70px;
+  resize: vertical;
+}
+
+.master-section .labeled-input input:focus,
+.master-section .labeled-input select:focus,
+.master-section .labeled-input textarea:focus {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+}
+
+/* Disabled input styling */
+.master-section .labeled-input input:disabled {
+  background: #f8fafc;
+  color: #94a3b8;
+  cursor: not-allowed;
+}
+
+/* Checkbox group */
+.master-section .checkbox-group {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  flex-wrap: wrap;
+  margin-top: 8px;
+}
+
+.master-section .checkbox-group label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+/* Form actions - consistent button placement */
+.master-section .form-actions {
+  display: flex;
+  gap: 12px;
+  margin-top: 24px;
+  padding-top: 20px;
+  border-top: 1px solid var(--border);
+}
+
+/* Button styling */
+.master-section .btn-primary,
+.master-section .btn-save {
+  background: linear-gradient(135deg, var(--accent), #2563eb);
+  color: white;
+  border: none;
+  padding: 10px 24px;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.master-section .btn-primary:hover,
+.master-section .btn-save:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(59, 130, 246, 0.3);
+}
+
+.master-section .btn-secondary,
+.master-section .btn-cancel {
+  background: #f1f5f9;
+  color: #475569;
+  border: 1px solid #cbd5e1;
+  padding: 10px 22px;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.master-section .btn-secondary:hover,
+.master-section .btn-cancel:hover {
+  background: #e2e8f0;
+}
+
+/* Tab styling for Account and Other Account */
+.master-section .account-tabs {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 24px;
+  border-bottom: 2px solid var(--border);
+  padding-bottom: 0;
+}
+
+.master-section .tab-btn {
+  padding: 10px 24px;
+  background: none;
+  border: none;
+  font-size: 13px;
+  font-weight: 500;
+  color: #64748b;
+  cursor: pointer;
+  transition: all 0.2s;
+  border-radius: 8px 8px 0 0;
+  position: relative;
+}
+
+.master-section .tab-btn:hover {
+  color: var(--accent);
+  background: #f1f5f9;
+}
+
+.master-section .tab-btn.active {
+  color: var(--accent);
+  background: #eff6ff;
+}
+
+.master-section .tab-btn.active::after {
+  content: '';
+  position: absolute;
+  bottom: -2px;
+  left: 0;
+  right: 0;
+  height: 2px;
+  background: var(--accent);
+}
+
+/* Small form for Group/Category simple masters */
+.master-section.simple-master {
+  max-width: 600px;
+}
+
+/* Responsive adjustments for master forms */
+@media (max-width: 768px) {
+  .master-section .form-grid-2,
+  .master-section .form-grid-3,
+  .master-section .form-grid-4 {
+    grid-template-columns: 1fr;
+    gap: 12px;
+  }
+  
+  .master-section .form-row {
+    grid-template-columns: 1fr;
+  }
+  
+  .master-section .form-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 12px;
+  }
+  
+  .master-section .account-tabs {
+    flex-wrap: wrap;
+  }
+}
+=======
+
+>>>>>>> db1818947e5ad97b598beb3540484e2bb92b7b3e
