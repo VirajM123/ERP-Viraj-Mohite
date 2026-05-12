@@ -445,234 +445,454 @@ const [batchForm, setBatchForm] = useState({
   };
 
   const addInvoiceItem = useCallback(() => {
-    const newItem = {
-      id: Date.now(),
-      sr: invoiceItems.length + 1,
-      product: '',
-      units: 'PCS',
-      qty: '',
-      free: '',
-      mrp: '',
-      rate: '',
-      rateGst: '',
-      tprPct: '',
-      tprAmt: '',
-      schemePct: '',
-      schemeAmt: '',
-      cdPct: '',
-      cdAmt: '',
-      starPct: '',
-      starAmt: '',
-      taxable: '',
-      gst: '',
-      weight: '',
-      cessAmt: '',
-      cessPcs: '',
-      cess: '',
-      wt: '',
-      amount: ''
-    };
-    setInvoiceItems([...invoiceItems, newItem]);
-    setActiveRow(invoiceItems.length);
-  }, [invoiceItems.length]);
+  const newItem = {
+    id: Date.now(),
+    sr: invoiceItems.length + 1,
+    product: '',
+    units: 'PCS',
+    qty: '',
+    free: '',
+    mrp: '',
+    rate: '',
+    rateGst: '',
+    tprAmt: '',           // Direct TPR amount (removed TPR%)
+    schemePct: '',        // Scheme percentage
+    schemeAmt: '',        // Scheme amount
+    cdPct: '',           // CD percentage  
+    cdAmt: '',           // CD amount
+    starPct: '',         // Star percentage
+    starAmt: '',         // Star amount
+    taxable: '',
+    gst: '',
+    sgst: '',            // Added SGST
+    cgst: '',            // Added CGST
+    amount: ''
+  };
+  setInvoiceItems([...invoiceItems, newItem]);
+  setActiveRow(invoiceItems.length);
+}, [invoiceItems.length]);
+const updateInvoiceItem = (index, field, value) => {
+  const newItems = [...invoiceItems];
+  newItems[index][field] = value;
 
-  const updateInvoiceItem = (index, field, value) => {
-    const newItems = [...invoiceItems];
-    newItems[index][field] = value;
+  if (field === 'qty' && value !== undefined) {
+    const item = newItems[index];
+    const qty = parseFloat(value) || 0;
+    const rate = parseFloat(item.rate) || 0;
+    const baseAmount = qty * rate;
+    item.amount = baseAmount.toFixed(2);
 
-    if (field === 'qty' && value) {
-      const item = newItems[index];
-      const qty = parseFloat(value) || 0;
-      const rate = parseFloat(item.rate) || 0;
-      item.amount = (qty * rate).toFixed(2);
-
-      if (item.tprPct) {
-        const tprPct = parseFloat(item.tprPct) || 0;
-        item.tprAmt = ((qty * rate) * tprPct / 100).toFixed(2);
-      }
-      if (item.schemePct) {
-        const schemePct = parseFloat(item.schemePct) || 0;
-        item.schemeAmt = ((qty * rate) * schemePct / 100).toFixed(2);
-      }
-      if (item.cdPct) {
-        const cdPct = parseFloat(item.cdPct) || 0;
-        item.cdAmt = ((qty * rate) * cdPct / 100).toFixed(2);
-      }
-      if (item.starPct) {
-        const starPct = parseFloat(item.starPct) || 0;
-        item.starAmt = ((qty * rate) * starPct / 100).toFixed(2);
-      }
-      const taxable = (qty * rate) - (parseFloat(item.tprAmt) || 0) - (parseFloat(item.schemeAmt) || 0);
-      item.taxable = taxable.toFixed(2);
-      if (item.gst) {
-        const gstPct = parseFloat(item.gst) || 0;
-        item.rateGst = (taxable * gstPct / 100).toFixed(2);
-      }
-
-      // Only add new row when qty is entered, not on any click
-      if (value && parseFloat(value) > 0 && index === newItems.length - 1) {
-        setTimeout(() => {
-          addInvoiceItem();
-          setTimeout(() => {
-            const nextProductInput = document.querySelector(`[data-product-index="${index + 1}"]`);
-            if (nextProductInput) nextProductInput.focus();
-          }, 50);
-        }, 100);
-      }
-    } else if (field === 'rate' && value) {
-      const item = newItems[index];
-      const qty = parseFloat(item.qty) || 0;
-      const rate = parseFloat(value) || 0;
-      item.amount = (qty * rate).toFixed(2);
-
-      if (item.tprPct) {
-        const tprPct = parseFloat(item.tprPct) || 0;
-        item.tprAmt = ((qty * rate) * tprPct / 100).toFixed(2);
-      }
-      if (item.schemePct) {
-        const schemePct = parseFloat(item.schemePct) || 0;
-        item.schemeAmt = ((qty * rate) * schemePct / 100).toFixed(2);
-      }
-      if (item.cdPct) {
-        const cdPct = parseFloat(item.cdPct) || 0;
-        item.cdAmt = ((qty * rate) * cdPct / 100).toFixed(2);
-      }
-      if (item.starPct) {
-        const starPct = parseFloat(item.starPct) || 0;
-        item.starAmt = ((qty * rate) * starPct / 100).toFixed(2);
-      }
-      const taxable = (qty * rate) - (parseFloat(item.tprAmt) || 0) - (parseFloat(item.schemeAmt) || 0);
-      item.taxable = taxable.toFixed(2);
-      if (item.gst) {
-        const gstPct = parseFloat(item.gst) || 0;
-        item.rateGst = (taxable * gstPct / 100).toFixed(2);
-      }
-    } else if (field === 'tprPct' && value) {
-      const item = newItems[index];
-      const qty = parseFloat(item.qty) || 0;
-      const rate = parseFloat(item.rate) || 0;
-      const tprPct = parseFloat(value) || 0;
-      item.tprAmt = ((qty * rate) * tprPct / 100).toFixed(2);
-      const taxable = (qty * rate) - (parseFloat(item.tprAmt) || 0) - (parseFloat(item.schemeAmt) || 0);
-      item.taxable = taxable.toFixed(2);
-      if (item.gst) {
-        const gstPct = parseFloat(item.gst) || 0;
-        item.rateGst = (taxable * gstPct / 100).toFixed(2);
-      }
-    } else if (field === 'schemePct' && value) {
-      const item = newItems[index];
-      const qty = parseFloat(item.qty) || 0;
-      const rate = parseFloat(item.rate) || 0;
-      const schemePct = parseFloat(value) || 0;
-      item.schemeAmt = ((qty * rate) * schemePct / 100).toFixed(2);
-      const taxable = (qty * rate) - (parseFloat(item.tprAmt) || 0) - (parseFloat(item.schemeAmt) || 0);
-      item.taxable = taxable.toFixed(2);
-      if (item.gst) {
-        const gstPct = parseFloat(item.gst) || 0;
-        item.rateGst = (taxable * gstPct / 100).toFixed(2);
-      }
-    } else if (field === 'cdPct' && value) {
-      const item = newItems[index];
-      const qty = parseFloat(item.qty) || 0;
-      const rate = parseFloat(item.rate) || 0;
-      const cdPct = parseFloat(value) || 0;
-      item.cdAmt = ((qty * rate) * cdPct / 100).toFixed(2);
-    } else if (field === 'starPct' && value) {
-      const item = newItems[index];
-      const qty = parseFloat(item.qty) || 0;
-      const rate = parseFloat(item.rate) || 0;
-      const starPct = parseFloat(value) || 0;
-      item.starAmt = ((qty * rate) * starPct / 100).toFixed(2);
-    } else if (field === 'gst' && value) {
-      const item = newItems[index];
-      const taxable = parseFloat(item.taxable) || 0;
-      const gstPct = parseFloat(value) || 0;
-      item.rateGst = (taxable * gstPct / 100).toFixed(2);
+    // Calculate TPR amount
+    let tprAmt = parseFloat(item.tprAmt) || 0;
+    
+    // Calculate Scheme amount from percentage or direct amount
+    let schemeAmt = 0;
+    if (item.schemePct) {
+      const schemePct = parseFloat(item.schemePct) || 0;
+      schemeAmt = (baseAmount * schemePct / 100);
+      item.schemeAmt = schemeAmt.toFixed(2);
+    } else if (item.schemeAmt) {
+      schemeAmt = parseFloat(item.schemeAmt) || 0;
+    }
+    
+    // Calculate CD amount from percentage or direct amount  
+    let cdAmt = 0;
+    if (item.cdPct) {
+      const cdPct = parseFloat(item.cdPct) || 0;
+      cdAmt = (baseAmount * cdPct / 100);
+      item.cdAmt = cdAmt.toFixed(2);
+    } else if (item.cdAmt) {
+      cdAmt = parseFloat(item.cdAmt) || 0;
+    }
+    
+    const starAmt = parseFloat(item.starAmt) || 0;
+    
+    // Taxable amount after all deductions
+    let taxable = baseAmount - tprAmt - schemeAmt - cdAmt - starAmt;
+    item.taxable = taxable.toFixed(2);
+    
+    // Calculate GST on taxable amount
+    if (item.gst && taxable > 0) {
+      const gstPct = parseFloat(item.gst) || 0;
+      const gstAmount = (taxable * gstPct / 100);
+      const halfGst = gstAmount / 2;
+      item.sgst = halfGst.toFixed(2);
+      item.cgst = halfGst.toFixed(2);
+      
+      const rateValue = parseFloat(item.rate) || 0;
+      const gstPerUnit = (rateValue * gstPct / 100);
+      item.rateGst = (rateValue + gstPerUnit).toFixed(2);
     }
 
-    calcInvoiceSummary(newItems);
-    setInvoiceItems(newItems);
-    setActiveRow(index);
-  };
+    // Final amount = taxable + GST amount
+    const gstAmount = (parseFloat(item.sgst) || 0) + (parseFloat(item.cgst) || 0);
+    const finalAmount = taxable + gstAmount;
+    item.amount = finalAmount.toFixed(2);
+  } 
+  else if (field === 'rate' && value !== undefined) {
+    const item = newItems[index];
+    const qty = parseFloat(item.qty) || 0;
+    const rate = parseFloat(value) || 0;
+    const baseAmount = qty * rate;
+    item.amount = baseAmount.toFixed(2);
+    
+    let schemeAmt = 0;
+    if (item.schemePct) {
+      const schemePct = parseFloat(item.schemePct) || 0;
+      schemeAmt = (baseAmount * schemePct / 100);
+      item.schemeAmt = schemeAmt.toFixed(2);
+    } else if (item.schemeAmt) {
+      schemeAmt = parseFloat(item.schemeAmt) || 0;
+    }
+    
+    let cdAmt = 0;
+    if (item.cdPct) {
+      const cdPct = parseFloat(item.cdPct) || 0;
+      cdAmt = (baseAmount * cdPct / 100);
+      item.cdAmt = cdAmt.toFixed(2);
+    } else if (item.cdAmt) {
+      cdAmt = parseFloat(item.cdAmt) || 0;
+    }
+    
+    const tprAmt = parseFloat(item.tprAmt) || 0;
+    const starAmt = parseFloat(item.starAmt) || 0;
+    
+    let taxable = baseAmount - tprAmt - schemeAmt - cdAmt - starAmt;
+    item.taxable = taxable.toFixed(2);
+    
+    if (item.gst && taxable > 0) {
+      const gstPct = parseFloat(item.gst) || 0;
+      const gstAmount = (taxable * gstPct / 100);
+      const halfGst = gstAmount / 2;
+      item.sgst = halfGst.toFixed(2);
+      item.cgst = halfGst.toFixed(2);
+      
+      const rateValue = parseFloat(value) || 0;
+      const gstPerUnit = (rateValue * gstPct / 100);
+      item.rateGst = (rateValue + gstPerUnit).toFixed(2);
+    }
+    
+    const gstAmount = (parseFloat(item.sgst) || 0) + (parseFloat(item.cgst) || 0);
+    const finalAmount = taxable + gstAmount;
+    item.amount = finalAmount.toFixed(2);
+  }
+  else if (field === 'tprAmt' && value !== undefined) {
+    const item = newItems[index];
+    const qty = parseFloat(item.qty) || 0;
+    const rate = parseFloat(item.rate) || 0;
+    const baseAmount = qty * rate;
+    const tprAmt = parseFloat(value) || 0;
+    
+    let schemeAmt = 0;
+    if (item.schemePct) {
+      const schemePct = parseFloat(item.schemePct) || 0;
+      schemeAmt = (baseAmount * schemePct / 100);
+      item.schemeAmt = schemeAmt.toFixed(2);
+    } else if (item.schemeAmt) {
+      schemeAmt = parseFloat(item.schemeAmt) || 0;
+    }
+    
+    let cdAmt = 0;
+    if (item.cdPct) {
+      const cdPct = parseFloat(item.cdPct) || 0;
+      cdAmt = (baseAmount * cdPct / 100);
+      item.cdAmt = cdAmt.toFixed(2);
+    } else if (item.cdAmt) {
+      cdAmt = parseFloat(item.cdAmt) || 0;
+    }
+    
+    const starAmt = parseFloat(item.starAmt) || 0;
+    let taxable = baseAmount - tprAmt - schemeAmt - cdAmt - starAmt;
+    item.taxable = taxable.toFixed(2);
+    
+    if (item.gst && taxable > 0) {
+      const gstPct = parseFloat(item.gst) || 0;
+      const gstAmount = (taxable * gstPct / 100);
+      const halfGst = gstAmount / 2;
+      item.sgst = halfGst.toFixed(2);
+      item.cgst = halfGst.toFixed(2);
+    }
+    
+    const gstAmount = (parseFloat(item.sgst) || 0) + (parseFloat(item.cgst) || 0);
+    const finalAmount = taxable + gstAmount;
+    item.amount = finalAmount.toFixed(2);
+  }
+  else if (field === 'schemePct' && value !== undefined) {
+    const item = newItems[index];
+    const qty = parseFloat(item.qty) || 0;
+    const rate = parseFloat(item.rate) || 0;
+    const baseAmount = qty * rate;
+    const schemePct = parseFloat(value) || 0;
+    
+    // Calculate scheme amount from percentage
+    const schemeAmt = (baseAmount * schemePct / 100);
+    item.schemeAmt = schemeAmt.toFixed(2);
+    item[field] = value;
+    
+    // Recalculate with new scheme amount
+    const tprAmt = parseFloat(item.tprAmt) || 0;
+    let cdAmt = 0;
+    if (item.cdPct) {
+      const cdPct = parseFloat(item.cdPct) || 0;
+      cdAmt = (baseAmount * cdPct / 100);
+      item.cdAmt = cdAmt.toFixed(2);
+    } else if (item.cdAmt) {
+      cdAmt = parseFloat(item.cdAmt) || 0;
+    }
+    const starAmt = parseFloat(item.starAmt) || 0;
+    
+    let taxable = baseAmount - tprAmt - schemeAmt - cdAmt - starAmt;
+    item.taxable = taxable.toFixed(2);
+    
+    if (item.gst && taxable > 0) {
+      const gstPct = parseFloat(item.gst) || 0;
+      const gstAmount = (taxable * gstPct / 100);
+      const halfGst = gstAmount / 2;
+      item.sgst = halfGst.toFixed(2);
+      item.cgst = halfGst.toFixed(2);
+    }
+    
+    const gstAmount = (parseFloat(item.sgst) || 0) + (parseFloat(item.cgst) || 0);
+    const finalAmount = taxable + gstAmount;
+    item.amount = finalAmount.toFixed(2);
+  }
+  else if (field === 'schemeAmt' && value !== undefined) {
+    const item = newItems[index];
+    const qty = parseFloat(item.qty) || 0;
+    const rate = parseFloat(item.rate) || 0;
+    const baseAmount = qty * rate;
+    const schemeAmt = parseFloat(value) || 0;
+    
+    // Clear percentage if direct amount is entered
+    if (schemeAmt > 0) {
+      item.schemePct = '';
+    }
+    item[field] = value;
+    
+    const tprAmt = parseFloat(item.tprAmt) || 0;
+    let cdAmt = 0;
+    if (item.cdPct) {
+      const cdPct = parseFloat(item.cdPct) || 0;
+      cdAmt = (baseAmount * cdPct / 100);
+      item.cdAmt = cdAmt.toFixed(2);
+    } else if (item.cdAmt) {
+      cdAmt = parseFloat(item.cdAmt) || 0;
+    }
+    const starAmt = parseFloat(item.starAmt) || 0;
+    
+    let taxable = baseAmount - tprAmt - schemeAmt - cdAmt - starAmt;
+    item.taxable = taxable.toFixed(2);
+    
+    if (item.gst && taxable > 0) {
+      const gstPct = parseFloat(item.gst) || 0;
+      const gstAmount = (taxable * gstPct / 100);
+      const halfGst = gstAmount / 2;
+      item.sgst = halfGst.toFixed(2);
+      item.cgst = halfGst.toFixed(2);
+    }
+    
+    const gstAmount = (parseFloat(item.sgst) || 0) + (parseFloat(item.cgst) || 0);
+    const finalAmount = taxable + gstAmount;
+    item.amount = finalAmount.toFixed(2);
+  }
+  else if (field === 'cdPct' && value !== undefined) {
+    const item = newItems[index];
+    const qty = parseFloat(item.qty) || 0;
+    const rate = parseFloat(item.rate) || 0;
+    const baseAmount = qty * rate;
+    const cdPct = parseFloat(value) || 0;
+    
+    // Calculate CD amount from percentage
+    const cdAmt = (baseAmount * cdPct / 100);
+    item.cdAmt = cdAmt.toFixed(2);
+    item[field] = value;
+    
+    const tprAmt = parseFloat(item.tprAmt) || 0;
+    let schemeAmt = 0;
+    if (item.schemePct) {
+      const schemePct = parseFloat(item.schemePct) || 0;
+      schemeAmt = (baseAmount * schemePct / 100);
+      item.schemeAmt = schemeAmt.toFixed(2);
+    } else if (item.schemeAmt) {
+      schemeAmt = parseFloat(item.schemeAmt) || 0;
+    }
+    const starAmt = parseFloat(item.starAmt) || 0;
+    
+    let taxable = baseAmount - tprAmt - schemeAmt - cdAmt - starAmt;
+    item.taxable = taxable.toFixed(2);
+    
+    if (item.gst && taxable > 0) {
+      const gstPct = parseFloat(item.gst) || 0;
+      const gstAmount = (taxable * gstPct / 100);
+      const halfGst = gstAmount / 2;
+      item.sgst = halfGst.toFixed(2);
+      item.cgst = halfGst.toFixed(2);
+    }
+    
+    const gstAmount = (parseFloat(item.sgst) || 0) + (parseFloat(item.cgst) || 0);
+    const finalAmount = taxable + gstAmount;
+    item.amount = finalAmount.toFixed(2);
+  }
+  else if (field === 'cdAmt' && value !== undefined) {
+    const item = newItems[index];
+    const qty = parseFloat(item.qty) || 0;
+    const rate = parseFloat(item.rate) || 0;
+    const baseAmount = qty * rate;
+    const cdAmt = parseFloat(value) || 0;
+    
+    // Clear percentage if direct amount is entered
+    if (cdAmt > 0) {
+      item.cdPct = '';
+    }
+    item[field] = value;
+    
+    const tprAmt = parseFloat(item.tprAmt) || 0;
+    let schemeAmt = 0;
+    if (item.schemePct) {
+      const schemePct = parseFloat(item.schemePct) || 0;
+      schemeAmt = (baseAmount * schemePct / 100);
+      item.schemeAmt = schemeAmt.toFixed(2);
+    } else if (item.schemeAmt) {
+      schemeAmt = parseFloat(item.schemeAmt) || 0;
+    }
+    const starAmt = parseFloat(item.starAmt) || 0;
+    
+    let taxable = baseAmount - tprAmt - schemeAmt - cdAmt - starAmt;
+    item.taxable = taxable.toFixed(2);
+    
+    if (item.gst && taxable > 0) {
+      const gstPct = parseFloat(item.gst) || 0;
+      const gstAmount = (taxable * gstPct / 100);
+      const halfGst = gstAmount / 2;
+      item.sgst = halfGst.toFixed(2);
+      item.cgst = halfGst.toFixed(2);
+    }
+    
+    const gstAmount = (parseFloat(item.sgst) || 0) + (parseFloat(item.cgst) || 0);
+    const finalAmount = taxable + gstAmount;
+    item.amount = finalAmount.toFixed(2);
+  }
+  else if (field === 'gst' && value !== undefined) {
+    const item = newItems[index];
+    const taxable = parseFloat(item.taxable) || 0;
+    const gstPct = parseFloat(value) || 0;
+    
+    if (taxable > 0) {
+      const gstAmount = (taxable * gstPct / 100);
+      const halfGst = gstAmount / 2;
+      item.sgst = halfGst.toFixed(2);
+      item.cgst = halfGst.toFixed(2);
+      
+      const rateValue = parseFloat(item.rate) || 0;
+      const gstPerUnit = (rateValue * gstPct / 100);
+      item.rateGst = (rateValue + gstPerUnit).toFixed(2);
+    }
+    
+    const gstAmount = (parseFloat(item.sgst) || 0) + (parseFloat(item.cgst) || 0);
+    const finalAmount = taxable + gstAmount;
+    item.amount = finalAmount.toFixed(2);
+  }
 
-  const deleteInvoiceItem = (index) => {
-    const newItems = invoiceItems.filter((_, i) => i !== index);
-    newItems.forEach((item, i) => { item.sr = i + 1; });
-    setInvoiceItems(newItems);
-    calcInvoiceSummary(newItems);
-  };
+  calcInvoiceSummary(newItems);
+  setInvoiceItems(newItems);
+  setActiveRow(index);
+};
 
-  const calcInvoiceSummary = (currentItems) => {
-    let gross = 0, tpr = 0, scheme = 0, cd = 0, star = 0, gst = 0;
-    currentItems.forEach(item => {
-      gross += parseFloat(item.amount || 0);
-      tpr += parseFloat(item.tprAmt || 0);
-      scheme += parseFloat(item.schemeAmt || 0);
-      cd += parseFloat(item.cdAmt || 0);
-      star += parseFloat(item.starAmt || 0);
-      gst += parseFloat(item.rateGst || 0);
-    });
-    const bottom = gross - tpr - scheme;
-    const net = bottom - star - cd + gst;
-    setInvoiceSummary({ gross, tpr, scheme, bottom, star, cd, gst, net: Math.round(net) });
-  };
+const deleteInvoiceItem = (index) => {
+  const newItems = invoiceItems.filter((_, i) => i !== index);
+  newItems.forEach((item, i) => { item.sr = i + 1; });
+  setInvoiceItems(newItems);
+  calcInvoiceSummary(newItems);
+};
 
-  const handleInvoiceKeyDown = (e, index, field) => {
-    if (e.key === 'Enter') {
-      e.preventDefault();
-      const fields = ['product', 'units', 'qty', 'free', 'mrp', 'rate', 'tprPct', 'schemePct', 'cdPct', 'starPct', 'gst'];
-      const nextFieldIndex = fields.indexOf(field) + 1;
-      if (nextFieldIndex < fields.length) {
-        const nextInput = document.querySelector(`[data-field="${fields[nextFieldIndex]}"][data-index="${index}"]`);
-        nextInput?.focus();
+const calcInvoiceSummary = (currentItems) => {
+  let gross = 0, tpr = 0, scheme = 0, cd = 0, star = 0, gst = 0;
+  currentItems.forEach(item => {
+    gross += parseFloat(item.amount || 0);
+    tpr += parseFloat(item.tprAmt || 0);
+    scheme += parseFloat(item.schemeAmt || 0);
+    cd += parseFloat(item.cdAmt || 0);
+    star += parseFloat(item.starAmt || 0);
+    gst += parseFloat(item.rateGst || 0);
+  });
+  const bottom = gross - tpr - scheme;
+  const net = bottom - star - cd + gst;
+  setInvoiceSummary({ gross, tpr, scheme, bottom, star, cd, gst, net: Math.round(net) });
+};
+
+const handleInvoiceKeyDown = (e, index, field) => {
+  if (e.key === 'Enter') {
+    e.preventDefault();
+    
+    const fields = ['product', 'units', 'qty', 'free', 'mrp', 'rate', 'tprAmt', 'schemePct', 'cdPct', 'starPct', 'gst'];
+    const nextFieldIndex = fields.indexOf(field) + 1;
+    
+    if (nextFieldIndex < fields.length) {
+      const nextInput = document.querySelector(`[data-field="${fields[nextFieldIndex]}"][data-index="${index}"]`);
+      if (nextInput) {
+        nextInput.focus();
+      } else if (field === 'qty') {
+        const nextField = fields[nextFieldIndex];
+        const nextFieldInput = document.querySelector(`[data-field="${nextField}"][data-index="${index}"]`);
+        if (nextFieldInput) nextFieldInput.focus();
+      }
+    } else {
+      if (field === 'gst') {
+        addInvoiceItem();
+        setTimeout(() => {
+          const nextProductInput = document.querySelector(`[data-product-index="${index + 1}"]`);
+          if (nextProductInput) nextProductInput.focus();
+        }, 100);
       } else {
         const nextProduct = document.querySelector(`[data-product-index="${index + 1}"]`);
         if (nextProduct) {
           nextProduct.focus();
-        } else {
-          addInvoiceItem();
-          setTimeout(() => {
-            const nextProductInput = document.querySelector(`[data-product-index="${index + 1}"]`);
-            if (nextProductInput) nextProductInput.focus();
-          }, 100);
         }
       }
-    } else if (e.key === 'Tab') {
     }
-  };
+  }
+};
 
-  const handleInvoiceProductClick = (index) => {
-    setActiveRow(index);
-    setCurrentProductIndex(index);
-    setProductListFilter('');
-    setShowProductList(true);
+const handleInvoiceProductClick = (index) => {
+  setActiveRow(index);
+  setCurrentProductIndex(index);
+  setProductListFilter('');
+  setShowProductList(true);
 
-    setTimeout(() => {
-      const currentInput = document.querySelector(
-        `[data-product-index="${index}"]`
-      );
+  setTimeout(() => {
+    const currentInput = document.querySelector(
+      `[data-product-index="${index}"]`
+    );
+    if (currentInput) {
+      currentInput.focus();
+    }
+  }, 0);
+};
 
-      if (currentInput) {
-        currentInput.focus();
-      }
-    }, 0);
-  };
-
-  const handleProductSelect = (index, product) => {
-    updateInvoiceItem(index, 'product', `${product.code} - ${product.name}`);
-    updateInvoiceItem(index, 'mrp', product.mrp || '');
-    updateInvoiceItem(index, 'rate', product.Rate_Per_Unit || '');
-    updateInvoiceItem(index, 'gst', product.gst || '');
-    updateInvoiceItem(index, 'units', product.basicUnit || 'PCS');
-    setShowProductList(false);
-    setCurrentProductIndex(-1);
-    // Focus on units field after selection
-    setTimeout(() => {
-      const unitsInput = document.querySelector(`[data-field="units"][data-index="${index}"]`);
-      if (unitsInput) unitsInput.focus();
-    }, 50);
-  };
-
+ const handleProductSelect = (index, product) => {
+  const selectedBatch = product.selectedBatch;
+  
+  updateInvoiceItem(index, 'product', `${product.code} - ${product.name}`);
+  updateInvoiceItem(index, 'mrp', selectedBatch?.mrp || product.mrp || '');
+  // Use sales rate from batch if available
+  const salesRate = selectedBatch?.salesRate || product.salesRate || product.mrp || '';
+  updateInvoiceItem(index, 'rate', salesRate);
+  updateInvoiceItem(index, 'gst', product.gst || '');
+  updateInvoiceItem(index, 'units', product.basicUnit || 'PCS');
+  
+  // Store batch info for calculation reference
+  updateInvoiceItem(index, 'selectedBatch', selectedBatch);
+  updateInvoiceItem(index, 'batchNo', selectedBatch?.batchNo || '');
+  
+  setShowProductList(false);
+  setCurrentProductIndex(-1);
+  
+  // Focus on units field after selection
+  setTimeout(() => {
+    const unitsInput = document.querySelector(`[data-field="units"][data-index="${index}"]`);
+    if (unitsInput) unitsInput.focus();
+  }, 50);
+};
   const saveInvoice = () => {
     const invoiceData = { ...invoiceFormData, items: invoiceItems, summary: invoiceSummary };
     console.log('Saving invoice:', invoiceData);
@@ -727,163 +947,99 @@ const [batchForm, setBatchForm] = useState({
   }, [purchaseItems.length]);
 
   const updatePurchaseItem = (index, field, value) => {
-    const newItems = [...purchaseItems];
-    newItems[index][field] = value;
+  const newItems = [...purchaseItems];
+  newItems[index][field] = value;
 
-    if (field === 'quantity' && value && parseFloat(value) > 0) {
-      const item = newItems[index];
-      const qty = parseFloat(item.quantity) || 0;
-      const rate = parseFloat(item.purRate) || 0;
-      const grossAmt = qty * rate;
-      item.grossAmount = grossAmt.toFixed(2);
+  if (field === 'quantity' && value !== undefined) {
+    const item = newItems[index];
+    const qty = parseFloat(value) || 0;
+    const rate = parseFloat(item.purRate) || parseFloat(item.selectedBatch?.purchaseRate) || 0;
+    const grossAmt = qty * rate;
+    item.grossAmount = grossAmt.toFixed(2);
 
-      let afterDisc1 = grossAmt;
-      if (parseFloat(item.disc1)) {
-        const disc1Amt = grossAmt * (parseFloat(item.disc1) / 100);
-        afterDisc1 = grossAmt - disc1Amt;
-      }
-      item.afterDisc1 = afterDisc1.toFixed(2);
+    let afterDisc1 = grossAmt;
+    if (parseFloat(item.disc1)) {
+      const disc1Amt = grossAmt * (parseFloat(item.disc1) / 100);
+      afterDisc1 = grossAmt - disc1Amt;
+    }
+    item.afterDisc1 = afterDisc1.toFixed(2);
 
-      let afterDisc2 = afterDisc1;
-      if (parseFloat(item.disc2)) {
-        const disc2Amt = afterDisc1 * (parseFloat(item.disc2) / 100);
-        afterDisc2 = afterDisc1 - disc2Amt;
-      }
-      item.afterDisc2 = afterDisc2.toFixed(2);
+    let afterDisc2 = afterDisc1;
+    if (parseFloat(item.disc2)) {
+      const disc2Amt = afterDisc1 * (parseFloat(item.disc2) / 100);
+      afterDisc2 = afterDisc1 - disc2Amt;
+    }
+    item.afterDisc2 = afterDisc2.toFixed(2);
 
-      let afterDisc3 = afterDisc2;
-      if (parseFloat(item.disc3)) {
-        const disc3Amt = afterDisc2 * (parseFloat(item.disc3) / 100);
-        afterDisc3 = afterDisc2 - disc3Amt;
-      }
-      item.afterDisc3 = afterDisc3.toFixed(2);
+    let afterDisc3 = afterDisc2;
+    if (parseFloat(item.disc3)) {
+      const disc3Amt = afterDisc2 * (parseFloat(item.disc3) / 100);
+      afterDisc3 = afterDisc2 - disc3Amt;
+    }
+    item.afterDisc3 = afterDisc3.toFixed(2);
 
-      let taxableVal = afterDisc3;
-      item.taxable = taxableVal.toFixed(2);
+    let taxableVal = afterDisc3;
+    item.taxable = taxableVal.toFixed(2);
 
-      if (parseFloat(item.tax)) {
-        const taxAmt = taxableVal * (parseFloat(item.tax) / 100);
-        const cgstAmt = taxAmt / 2;
-        const sgstAmt = taxAmt / 2;
-        item.cgst = cgstAmt.toFixed(2);
-        item.sgst = sgstAmt.toFixed(2);
-      }
-
-      const amount = taxableVal + (parseFloat(item.cgst) || 0) + (parseFloat(item.sgst) || 0);
-      item.amount = amount.toFixed(2);
-
-      let totalAmount = 0;
-      newItems.forEach(i => {
-        totalAmount += parseFloat(i.amount) || 0;
-      });
-
-      // Add new row only when quantity is entered and it's the last row
-      if (index === newItems.length - 1) {
-        setTimeout(() => {
-          addPurchaseItem();
-          setTimeout(() => {
-            const nextProductInput = document.querySelector(`[data-purchase-product-index="${index + 1}"]`);
-            if (nextProductInput) nextProductInput.focus();
-          }, 50);
-        }, 100);
-      }
-    } else if (field === 'purRate' && value) {
-      const item = newItems[index];
-      const qty = parseFloat(item.quantity) || 0;
-      const rate = parseFloat(value) || 0;
-      const grossAmt = qty * rate;
-      item.grossAmount = grossAmt.toFixed(2);
-
-      let afterDisc1 = grossAmt;
-      if (parseFloat(item.disc1)) {
-        const disc1Amt = grossAmt * (parseFloat(item.disc1) / 100);
-        afterDisc1 = grossAmt - disc1Amt;
-      }
-      item.afterDisc1 = afterDisc1.toFixed(2);
-
-      let afterDisc2 = afterDisc1;
-      if (parseFloat(item.disc2)) {
-        const disc2Amt = afterDisc1 * (parseFloat(item.disc2) / 100);
-        afterDisc2 = afterDisc1 - disc2Amt;
-      }
-      item.afterDisc2 = afterDisc2.toFixed(2);
-
-      let afterDisc3 = afterDisc2;
-      if (parseFloat(item.disc3)) {
-        const disc3Amt = afterDisc2 * (parseFloat(item.disc3) / 100);
-        afterDisc3 = afterDisc2 - disc3Amt;
-      }
-      item.afterDisc3 = afterDisc3.toFixed(2);
-
-      let taxableVal = afterDisc3;
-      item.taxable = taxableVal.toFixed(2);
-
-      if (parseFloat(item.tax)) {
-        const taxAmt = taxableVal * (parseFloat(item.tax) / 100);
-        const cgstAmt = taxAmt / 2;
-        const sgstAmt = taxAmt / 2;
-        item.cgst = cgstAmt.toFixed(2);
-        item.sgst = sgstAmt.toFixed(2);
-      }
-
-      const amount = taxableVal + (parseFloat(item.cgst) || 0) + (parseFloat(item.sgst) || 0);
-      item.amount = amount.toFixed(2);
-    } else if (field === 'disc1' || field === 'disc2' || field === 'disc3') {
-      const item = newItems[index];
-      const qty = parseFloat(item.quantity) || 0;
-      const rate = parseFloat(item.purRate) || 0;
-      const grossAmt = qty * rate;
-      item.grossAmount = grossAmt.toFixed(2);
-
-      let afterDisc1 = grossAmt;
-      if (parseFloat(item.disc1)) {
-        const disc1Amt = grossAmt * (parseFloat(item.disc1) / 100);
-        afterDisc1 = grossAmt - disc1Amt;
-      }
-      item.afterDisc1 = afterDisc1.toFixed(2);
-
-      let afterDisc2 = afterDisc1;
-      if (parseFloat(item.disc2)) {
-        const disc2Amt = afterDisc1 * (parseFloat(item.disc2) / 100);
-        afterDisc2 = afterDisc1 - disc2Amt;
-      }
-      item.afterDisc2 = afterDisc2.toFixed(2);
-
-      let afterDisc3 = afterDisc2;
-      if (parseFloat(item.disc3)) {
-        const disc3Amt = afterDisc2 * (parseFloat(item.disc3) / 100);
-        afterDisc3 = afterDisc2 - disc3Amt;
-      }
-      item.afterDisc3 = afterDisc3.toFixed(2);
-
-      let taxableVal = afterDisc3;
-      item.taxable = taxableVal.toFixed(2);
-
-      if (parseFloat(item.tax)) {
-        const taxAmt = taxableVal * (parseFloat(item.tax) / 100);
-        const cgstAmt = taxAmt / 2;
-        const sgstAmt = taxAmt / 2;
-        item.cgst = cgstAmt.toFixed(2);
-        item.sgst = sgstAmt.toFixed(2);
-      }
-
-      const amount = taxableVal + (parseFloat(item.cgst) || 0) + (parseFloat(item.sgst) || 0);
-      item.amount = amount.toFixed(2);
-    } else if (field === 'tax' && value) {
-      const item = newItems[index];
-      const taxableVal = parseFloat(item.taxable) || 0;
-      const taxAmt = taxableVal * (parseFloat(value) / 100);
+    if (parseFloat(item.tax)) {
+      const taxAmt = taxableVal * (parseFloat(item.tax) / 100);
       const cgstAmt = taxAmt / 2;
       const sgstAmt = taxAmt / 2;
       item.cgst = cgstAmt.toFixed(2);
       item.sgst = sgstAmt.toFixed(2);
-      const amount = taxableVal + cgstAmt + sgstAmt;
-      item.amount = amount.toFixed(2);
     }
 
-    setPurchaseItems(newItems);
-    setPurchaseActiveRow(index);
-  };
+    const amount = taxableVal + (parseFloat(item.cgst) || 0) + (parseFloat(item.sgst) || 0);
+    item.amount = amount.toFixed(2);
+
+    // Only add new row when ENTER key is pressed on quantity, not on every change
+    // This is handled by handlePurchaseKeyDown instead
+  } else if (field === 'purRate' && value) {
+    const item = newItems[index];
+    const qty = parseFloat(item.quantity) || 0;
+    const rate = parseFloat(value) || 0;
+    const grossAmt = qty * rate;
+    item.grossAmount = grossAmt.toFixed(2);
+
+    let afterDisc1 = grossAmt;
+    if (parseFloat(item.disc1)) {
+      const disc1Amt = grossAmt * (parseFloat(item.disc1) / 100);
+      afterDisc1 = grossAmt - disc1Amt;
+    }
+    item.afterDisc1 = afterDisc1.toFixed(2);
+
+    let afterDisc2 = afterDisc1;
+    if (parseFloat(item.disc2)) {
+      const disc2Amt = afterDisc1 * (parseFloat(item.disc2) / 100);
+      afterDisc2 = afterDisc1 - disc2Amt;
+    }
+    item.afterDisc2 = afterDisc2.toFixed(2);
+
+    let afterDisc3 = afterDisc2;
+    if (parseFloat(item.disc3)) {
+      const disc3Amt = afterDisc2 * (parseFloat(item.disc3) / 100);
+      afterDisc3 = afterDisc2 - disc3Amt;
+    }
+    item.afterDisc3 = afterDisc3.toFixed(2);
+
+    let taxableVal = afterDisc3;
+    item.taxable = taxableVal.toFixed(2);
+
+    if (parseFloat(item.tax)) {
+      const taxAmt = taxableVal * (parseFloat(item.tax) / 100);
+      const cgstAmt = taxAmt / 2;
+      const sgstAmt = taxAmt / 2;
+      item.cgst = cgstAmt.toFixed(2);
+      item.sgst = sgstAmt.toFixed(2);
+    }
+
+    const amount = taxableVal + (parseFloat(item.cgst) || 0) + (parseFloat(item.sgst) || 0);
+    item.amount = amount.toFixed(2);
+  }
+
+  setPurchaseItems(newItems);
+  setPurchaseActiveRow(index);
+};
 
   const deletePurchaseItem = (index) => {
     const newItems = purchaseItems.filter((_, i) => i !== index);
@@ -936,9 +1092,25 @@ const [batchForm, setBatchForm] = useState({
     setPurchaseFormData(updatedForm);
   };
 
-  const handlePurchaseKeyDown = (e, index, field) => {
-    if (e.key === 'Enter') {
-      e.preventDefault();
+ const handlePurchaseKeyDown = (e, index, field) => {
+  if (e.key === 'Enter') {
+    e.preventDefault();
+    
+    // If we're in the quantity field, trigger calculations and add new row
+    if (field === 'quantity') {
+      // Trigger the quantity update
+      const qtyValue = e.target.value;
+      if (qtyValue && parseFloat(qtyValue) > 0) {
+        // Add new row after quantity is entered
+        setTimeout(() => {
+          addPurchaseItem();
+          setTimeout(() => {
+            const nextProductInput = document.querySelector(`[data-purchase-product-index="${index + 1}"]`);
+            if (nextProductInput) nextProductInput.focus();
+          }, 50);
+        }, 100);
+      }
+    } else {
       const fields = ['product', 'unitId', 'quantity', 'free', 'mrp', 'purRate', 'disc1', 'disc2', 'disc3', 'tax'];
       const nextFieldIndex = fields.indexOf(field) + 1;
       if (nextFieldIndex < fields.length) {
@@ -957,8 +1129,8 @@ const [batchForm, setBatchForm] = useState({
         }
       }
     }
-  };
-
+  }
+};
   const handlePurchaseProductClick = (index) => {
 
   setShowPurchaseProductList(false);
@@ -975,44 +1147,51 @@ const [batchForm, setBatchForm] = useState({
 
 };
 
-  const handlePurchaseProductSelect = (index, product) => {
-
-    updatePurchaseItem(index, 'product', `${product.code} - ${product.name}`);
-
-    // IMPORTANT FOR BATCH
-    updatePurchaseItem(index, 'productId', product.id);
-
-    updatePurchaseItem(index, 'mrp', product.mrp || '');
-
-    updatePurchaseItem(index, 'purRate', product.Rate_Per_Unit || '');
-
-    updatePurchaseItem(index, 'tax', product.gst || '');
-
-    updatePurchaseItem(index, 'unitId', product.basicUnit || 'PCS');
-
-    // OPTIONAL
-    updatePurchaseItem(index, 'salesRate', product.salesRate || '');
-
-    setShowPurchaseProductList(false);
-
-    setCurrentPurchaseProductIndex(-1);
-
-    setTimeout(() => {
-
-      openBatchModal(index);
-
-    }, 100);
-
-    setTimeout(() => {
-
-      const qtyInput = document.querySelector(
-        `[data-purchase-field="quantity"][data-purchase-index="${index}"]`
-      );
-
-      if (qtyInput) qtyInput.focus();
-
-    }, 50);
-  };
+ const handlePurchaseProductSelect = (index, product) => {
+  updatePurchaseItem(index, 'product', `${product.code} - ${product.name}`);
+  updatePurchaseItem(index, 'productId', product.id);
+  updatePurchaseItem(index, 'mrp', product.mrp || '');
+  updatePurchaseItem(index, 'purRate', product.Rate_Per_Unit || '');
+  updatePurchaseItem(index, 'tax', product.gst || '');
+  updatePurchaseItem(index, 'unitId', product.basicUnit || 'PCS');
+  updatePurchaseItem(index, 'salesRate', product.salesRate || '');
+  
+  setShowPurchaseProductList(false);
+  setCurrentPurchaseProductIndex(-1);
+  
+  // Check if product has existing batches
+  const productBatches = batches.filter(b => b.productId === product.id);
+  
+  if (productBatches.length > 0) {
+    // Show existing batch modal
+    setBatchMode('existing');
+    setCurrentBatchRow(index);
+    setShowBatchModal(true);
+  } else {
+    // Show new batch modal
+    setBatchMode('new');
+    setCurrentBatchRow(index);
+    setBatchForm({
+      batchNo: '',
+      mfgDate: '',
+      expDate: '',
+      mrp: product.mrp || '',
+      purchaseRate: product.Rate_Per_Unit || '',
+      salesRate: product.salesRate || product.mrp || '',
+      stockQty: '',
+      boxPack: '1',
+      ratePerUnit: '1',
+      previousPurchaseRate: '',
+      quantity: '1'
+    });
+    setShowBatchModal(true);
+  }
+  
+  setTimeout(() => {
+    const qtyInput = document.querySelector(`[data-purchase-field="quantity"][data-purchase-index="${index}"]`);
+    if (qtyInput) qtyInput.focus();
+  }, 50);
+};
   const openBatchModal = (index) => {
     console.log("BATCH BUTTON CLICKED");
     setCurrentBatchRow(index);
@@ -3322,315 +3501,276 @@ const saveBatchDetails = () => {
           {/* Salesman To Area Mapping UI */}
           {activeSubMenu === 'Salesman To Area' && <SalesmanToAreaMapping />}
 
-          {/* Sales Invoice */}
-          {activeSubMenu === 'Sales' && (
-            <div className="master-section erp-master-form sales-invoice">
-              <div className="erp-header">
-                <div>
-                  <h2 className="erp-title">Sales Invoice</h2>
-                </div>
-              </div>
+        
+{activeSubMenu === 'Sales' && (
+  <div className="master-section erp-master-form sales-invoice">
+    <div className="erp-header">
+      <div>
+        <h2 className="erp-title">Sales Invoice</h2>
+      </div>
+    </div>
 
+    {/* Invoice Header - 4 col grid */}
+    <div className="form-section">
+      <h4 className="section-header">Invoice Header</h4>
+      <div className="invoice-header-grid">
+        <div className="labeled-input"><label>Bill Date *</label><input type="date" name="billDate" className="erp-input" value={invoiceFormData.billDate} onChange={handleInvoiceInputChange} /></div>
+        <div className="labeled-input"><label>Godown *</label>
+          <select name="godown" className="erp-select" value={invoiceFormData.godown} onChange={handleInvoiceInputChange}>
+            <option value="">Select</option>
+            {godowns.map(g => <option key={g.id} value={g.code}>{g.name}</option>)}
+          </select>
+        </div>
+        <div className="labeled-input"><label>Company</label>
+          <select name="company" className="erp-select" value={invoiceFormData.company} onChange={handleInvoiceInputChange}>
+            <option value="">Select</option>
+            {companies.map(c => <option key={c.id} value={c.name}>{c.name}</option>)}
+          </select>
+        </div>
+        <div className="labeled-input"><label>Area *</label>
+          <select name="area" className="erp-select" value={invoiceFormData.area} onChange={handleInvoiceInputChange}>
+            <option value="">Select</option>
+            {areas.map(a => <option key={a.id} value={a.name}>{a.name}</option>)}
+          </select>
+        </div>
 
+        <div className="labeled-input"><label>Party *</label>
+          <select name="party" className="erp-select" value={invoiceFormData.party} onChange={handleInvoiceInputChange}>
+            <option value="">Select</option>
+            {accounts.map(a => <option key={a.id} value={a.accountName}>{a.accountName}</option>)}
+          </select>
+        </div>
+        <div className="labeled-input"><label>BillSeries</label><input name="BillSeries" className="erp-input" value={invoiceFormData.BillSeries} onChange={handleInvoiceInputChange} /></div>
+        <div className="labeled-input"><label>Bill No</label><input name="billNo" className="erp-input" value={invoiceFormData.billNo} onChange={handleInvoiceInputChange} /></div>
+        <div className="labeled-input"><label>Bill Type *</label>
+          <select name="billType" className="erp-select" value={invoiceFormData.billType} onChange={handleInvoiceInputChange}>
+            <option>Cash</option><option>Credit</option>
+          </select>
+        </div>
+        <div className="labeled-input"><label>Due Date *</label><input type="date" name="dueDate" className="erp-input" value={invoiceFormData.dueDate} onChange={handleInvoiceInputChange} /></div>
+        <div className="labeled-input"><label>Sales Man *</label>
+          <select name="salesman" className="erp-select" value={invoiceFormData.salesman} onChange={handleInvoiceInputChange}>
+            <option value="">Select</option>
+            {salesmen.map(s => <option key={s.id} value={s.name}>{s.name}</option>)}
+          </select>
+        </div>
+        <div className="labeled-input narration-field"><label>Narration</label><textarea name="narration" className="erp-textarea" rows="2" value={invoiceFormData.narration} onChange={handleInvoiceInputChange} /></div>
+      </div>
+    </div>
 
-              {/* Invoice Header - 4 col grid */}
-              <div className="form-section">
-                <h4 className="section-header">Invoice Header</h4>
-                <div className="invoice-header-grid">
-                  <div className="labeled-input"><label>Bill Date *</label><input type="date" name="billDate" className="erp-input" value={invoiceFormData.billDate} onChange={handleInvoiceInputChange} /></div>
-                  <div className="labeled-input"><label>Godown *</label>
-                    <select name="godown" className="erp-select" value={invoiceFormData.godown} onChange={handleInvoiceInputChange}>
-                      <option value="">Select</option>
-                      {godowns.map(g => <option key={g.id} value={g.code}>{g.name}</option>)}
-                    </select>
-                  </div>
-                  <div className="labeled-input"><label>Company</label>
-                    <select name="company" className="erp-select" value={invoiceFormData.company} onChange={handleInvoiceInputChange}>
-                      <option value="">Select</option>
-                      {companies.map(c => <option key={c.id} value={c.name}>{c.name}</option>)}
-                    </select>
-                  </div>
-                  <div className="labeled-input"><label>Area *</label>
-                    <select name="area" className="erp-select" value={invoiceFormData.area} onChange={handleInvoiceInputChange}>
-                      <option value="">Select</option>
-                      {areas.map(a => <option key={a.id} value={a.name}>{a.name}</option>)}
-                    </select>
-                  </div>
-
-                  <div className="labeled-input"><label>Party *</label>
-                    <select name="party" className="erp-select" value={invoiceFormData.party} onChange={handleInvoiceInputChange}>
-                      <option value="">Select</option>
-                      {accounts.map(a => <option key={a.id} value={a.accountName}>{a.accountName}</option>)}
-                    </select>
-                  </div>
-                  <div className="labeled-input"><label>BillSeries</label><input name="BillSeries" className="erp-input" value={invoiceFormData.BillSeries} onChange={handleInvoiceInputChange} /></div>
-                  <div className="labeled-input"><label>Bill No</label><input name="billNo" className="erp-input" value={invoiceFormData.billNo} onChange={handleInvoiceInputChange} /></div>
-                  <div className="labeled-input"><label>Bill Type *</label>
-                    <select name="billType" className="erp-select" value={invoiceFormData.billType} onChange={handleInvoiceInputChange}>
-                      <option>Cash</option><option>Credit</option>
-                    </select>
-                  </div>
-                  <div className="labeled-input"><label>Due Date *</label><input type="date" name="dueDate" className="erp-input" value={invoiceFormData.dueDate} onChange={handleInvoiceInputChange} /></div>
-                  <div className="labeled-input"><label>Sales Man *</label>
-                    <select name="salesman" className="erp-select" value={invoiceFormData.salesman} onChange={handleInvoiceInputChange}>
-                      <option value="">Select</option>
-                      {salesmen.map(s => <option key={s.id} value={s.name}>{s.name}</option>)}
-                    </select>
-                  </div>
-                  <div className="labeled-input narration-field"><label>Narration</label><textarea name="narration" className="erp-textarea" rows="2" value={invoiceFormData.narration} onChange={handleInvoiceInputChange} /></div>
-                </div>
-              </div>
-
-              {/* Product Entry Grid */}
-              <div className="form-section">
-                <h4 className="section-header">Product Entry <button className="btn-secondary ml-auto" onClick={addInvoiceItem}>+ Add Product</button></h4>
-                <div className="product-entry-container" style={{ overflowX: 'auto', overflowY: 'auto', maxHeight: '500px' }}>
-                  <div className="erp-table-container" style={{ minWidth: '2000px' }}>
-                    <table className="product-entry-table" style={{ width: '100%', borderCollapse: 'collapse' }}>
-                      <thead style={{ position: 'sticky', top: 0, zIndex: 10 }}>
-                        <tr>
-                          <th style={{ position: 'sticky', left: 0, backgroundColor: '#f8fafc', zIndex: 20, minWidth: '50px' }}>Sr</th>
-                          <th style={{ minWidth: '180px' }}>Product</th>
-                          <th style={{ minWidth: '100px' }}>Units</th>
-                          <th style={{ minWidth: '100px' }}>Qty</th>
-                          <th style={{ minWidth: '100px' }}>Free</th>
-                          <th style={{ minWidth: '100px' }}>MRP</th>
-                          <th style={{ minWidth: '100px' }}>Rate</th>
-                          <th style={{ minWidth: '120px' }}>Rate GST</th>
-                          <th style={{ minWidth: '100px' }}>TPR %</th>
-                          <th style={{ minWidth: '120px' }}>TPR Amt</th>
-                          <th style={{ minWidth: '100px' }}>Scheme %</th>
-                          <th style={{ minWidth: '120px' }}>Scheme Amt</th>
-                          <th style={{ minWidth: '100px' }}>CD %</th>
-                          <th style={{ minWidth: '120px' }}>CD Amt</th>
-                          <th style={{ minWidth: '100px' }}>Star %</th>
-                          <th style={{ minWidth: '120px' }}>Star Amt</th>
-                          <th style={{ minWidth: '120px' }}>Taxable</th>
-                          <th style={{ minWidth: '100px' }}>GST</th>
-                          <th style={{ minWidth: '100px' }}>Weight</th>
-                          <th style={{ minWidth: '100px' }}>Cess Amt</th>
-                          <th style={{ minWidth: '100px' }}>Cess PCS</th>
-                          <th style={{ minWidth: '100px' }}>Cess</th>
-                          <th style={{ minWidth: '100px' }}>WT</th>
-                          <th style={{ minWidth: '120px' }}>Amount</th>
-                          <th style={{ position: 'sticky', right: 0, backgroundColor: '#f8fafc', zIndex: 20, minWidth: '70px' }}>Action</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {invoiceItems.map((item, index) => (
-                          <tr key={item.id} className={index === activeRow ? 'active-row' : ''}>
-                            <td style={{ position: 'sticky', left: 0, backgroundColor: index === activeRow ? '#eff6ff' : 'white', zIndex: 5, minWidth: '50px' }}>{item.sr}</td>
-                            <td style={{ position: 'relative' }}>
-                              <input
-                                data-product-index={index}
-                                className="erp-input product-search"
-                                value={item.product}
-                                onChange={(e) => {
-                                  const value = e.target.value;
-
-                                  updateInvoiceItem(index, 'product', value);
-
-                                  setCurrentProductIndex(index);
-
-                                  if (value.trim() !== '') {
-                                    setProductListFilter(value);
-                                    setShowProductList(true);
-                                  } else {
-                                    setShowProductList(false);
-                                  }
-                                }}
-                                // onClick={() => handleInvoiceProductClick(index)}
-                                onFocus={() => {
-                                  setActiveRow(index);
-
-                                  if (item.product) {
-                                    setProductListFilter(item.product);
-                                    setCurrentProductIndex(index);
-                                    setShowProductList(true);
-                                  }
-                                }}
-
-                                style={{ width: '100%', minWidth: '150px', cursor: 'pointer' }}
-                                placeholder="Click to select product"
-                              />
-                              
-
-                         {/* Product Selection Dropdown */}
-{showProductList && currentProductIndex === index &&
-  productListFilter.trim() !== '' && (
-    <div className="erlay">
-      <div className="product-dropdown">
-        <div className="dropdown-list">
-          <table
-            style={{
-              width: '100%',
-              borderCollapse: 'collapse',
-              fontSize: '12px'
-            }}
-          >
-            <thead>
-              <tr
-                style={{
-                  background: '#eff6ff',
-                  position: 'sticky',
-                  top: 0
-                }}
-              >
-                <th style={{ padding: '6px', textAlign: 'left' }}>
-                  Item Code
-                </th>
-                <th style={{ padding: '6px', textAlign: 'left' }}>
-                  Name
-                </th>
-                <th style={{ padding: '6px', textAlign: 'left' }}>
-                  Batch
-                </th>
-                <th style={{ padding: '6px', textAlign: 'left' }}>
-                  MRP
-                </th>
-                <th style={{ padding: '6px', textAlign: 'left' }}>
-                  Sales Rate
-                </th>
-                <th style={{ padding: '6px', textAlign: 'left' }}>
-                  Stock
-                </th>
+    {/* Product Entry Grid - MODIFIED */}
+    <div className="form-section">
+      <h4 className="section-header">Product Entry <button className="btn-secondary ml-auto" onClick={addInvoiceItem}>+ Add Product</button></h4>
+      <div className="product-entry-container" style={{ overflowX: 'auto', overflowY: 'auto', maxHeight: '500px' }}>
+        <div className="erp-table-container" style={{ minWidth: '2000px' }}>
+          <table className="product-entry-table" style={{ width: '100%', borderCollapse: 'collapse' }}>
+            <thead style={{ position: 'sticky', top: 0, zIndex: 10 }}>
+              <tr>
+                <th style={{ position: 'sticky', left: 0, backgroundColor: '#f8fafc', zIndex: 20, minWidth: '50px' }}>Sr</th>
+                <th style={{ minWidth: '180px' }}>Product</th>
+                <th style={{ minWidth: '100px' }}>Units</th>
+                <th style={{ minWidth: '100px' }}>Qty</th>
+                <th style={{ minWidth: '100px' }}>Free</th>
+                <th style={{ minWidth: '100px' }}>MRP</th>
+                <th style={{ minWidth: '100px' }}>Rate</th>
+                <th style={{ minWidth: '120px' }}>Rate GST</th>
+                {/* Removed TPR% column */}
+                {/* <th style={{ minWidth: '100px' }}>TPR %</th> */}
+                <th style={{ minWidth: '120px' }}>TPR Amt</th>
+                <th style={{ minWidth: '100px' }}>Scheme %</th>
+                <th style={{ minWidth: '120px' }}>Scheme Amt</th>
+                <th style={{ minWidth: '100px' }}>CD %</th>
+                <th style={{ minWidth: '120px' }}>CD Amt</th>
+                <th style={{ minWidth: '100px' }}>Star %</th>
+                <th style={{ minWidth: '120px' }}>Star Amt</th>
+                <th style={{ minWidth: '120px' }}>Taxable</th>
+                <th style={{ minWidth: '100px' }}>GST %</th>
+                {/* Added SGST and CGST columns */}
+                <th style={{ minWidth: '100px' }}>SGST</th>
+                <th style={{ minWidth: '100px' }}>CGST</th>
+                {/* Removed Weight, Cess Amt, Cess PCS, Cess, WT columns */}
+                <th style={{ minWidth: '120px' }}>Amount</th>
+                <th style={{ position: 'sticky', right: 0, backgroundColor: '#f8fafc', zIndex: 20, minWidth: '70px' }}>Action</th>
               </tr>
             </thead>
             <tbody>
-              {products
-                .filter(p =>
-                  p.name.toLowerCase().includes(productListFilter.toLowerCase()) ||
-                  p.code.toLowerCase().includes(productListFilter.toLowerCase())
-                )
-                .map(product => {
-                  const productBatch = batches.find(
-                    b => b.productId === product.id
-                  );
-                  
-                  return (
-                    <tr
-                      key={product.id}
-                      onClick={() =>
-                        handleProductSelect(currentProductIndex, {
-                          ...product,
-                          selectedBatch: productBatch
-                        })
-                      }
-                      style={{
-                        cursor: 'pointer',
-                        borderBottom: '1px solid #eee'
+              {invoiceItems.map((item, index) => (
+                <tr key={item.id} className={index === activeRow ? 'active-row' : ''}>
+                  <td style={{ position: 'sticky', left: 0, backgroundColor: index === activeRow ? '#eff6ff' : 'white', zIndex: 5, minWidth: '50px' }}>{item.sr}</td>
+                  <td style={{ position: 'relative' }}>
+                    <input
+                      data-product-index={index}
+                      className="erp-input product-search"
+                      value={item.product}
+                      onChange={(e) => {
+                        const value = e.target.value;
+                        updateInvoiceItem(index, 'product', value);
+                        setCurrentProductIndex(index);
+                        if (value.trim() !== '') {
+                          setProductListFilter(value);
+                          setShowProductList(true);
+                        } else {
+                          setShowProductList(false);
+                        }
                       }}
-                      onMouseEnter={(e) => {
-                        e.currentTarget.style.background = '#f8fafc';
+                      onFocus={() => {
+                        setActiveRow(index);
+                        if (item.product) {
+                          setProductListFilter(item.product);
+                          setCurrentProductIndex(index);
+                          setShowProductList(true);
+                        }
                       }}
-                      onMouseLeave={(e) => {
-                        e.currentTarget.style.background = 'white';
-                      }}
+                      style={{ width: '100%', minWidth: '150px', cursor: 'pointer' }}
+                      placeholder="Click to select product"
+                    />
+                    
+                    {showProductList && currentProductIndex === index && productListFilter.trim() !== '' && (
+                      <div className="erlay">
+                        <div className="product-dropdown">
+                          <div className="dropdown-list">
+                            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '12px' }}>
+                              <thead>
+                                <tr style={{ background: '#eff6ff', position: 'sticky', top: 0 }}>
+                                  <th style={{ padding: '6px', textAlign: 'left' }}>Item Code</th>
+                                  <th style={{ padding: '6px', textAlign: 'left' }}>Name</th>
+                                  <th style={{ padding: '6px', textAlign: 'left' }}>Batch</th>
+                                  <th style={{ padding: '6px', textAlign: 'right' }}>MRP</th>
+                                  <th style={{ padding: '6px', textAlign: 'right' }}>Sales Rate</th>
+                                  <th style={{ padding: '6px', textAlign: 'right' }}>Stock</th>
+                                </tr>
+                              </thead>
+                              <tbody>
+                                {products
+                                  .filter(p =>
+                                    p.name?.toLowerCase().includes(productListFilter.toLowerCase()) ||
+                                    p.code?.toLowerCase().includes(productListFilter.toLowerCase())
+                                  )
+                                  .map(product => {
+                                    const productBatches = batches.filter(b => b.productId === product.id);
+                                    const displayBatch = productBatches[0];
+                                    const totalStock = productBatches.reduce((sum, b) => sum + (parseFloat(b.stockQty) || 0), 0);
+                                    
+                                    return (
+                                      <tr
+                                        key={product.id}
+                                        onClick={() => {
+                                          if (productBatches.length > 1) {
+                                            setCurrentProductIndex(index);
+                                            setProductBatchesForSelection(productBatches);
+                                            setSelectedProductForBatch(product);
+                                            setShowBatchSelectionModal(true);
+                                          } else if (productBatches.length === 1) {
+                                            handleProductSelect(currentProductIndex, {
+                                              ...product,
+                                              selectedBatch: productBatches[0]
+                                            });
+                                          } else {
+                                            handleProductSelect(currentProductIndex, product);
+                                          }
+                                        }}
+                                        style={{ cursor: 'pointer', borderBottom: '1px solid #eee' }}
+                                        onMouseEnter={(e) => { e.currentTarget.style.background = '#f8fafc'; }}
+                                        onMouseLeave={(e) => { e.currentTarget.style.background = 'white'; }}
+                                      >
+                                        <td style={{ padding: '6px' }}>{product.code}</td>
+                                        <td style={{ padding: '6px' }}>{product.name}</td>
+                                        <td style={{ padding: '6px' }}>
+                                          {productBatches.length > 1 
+                                            ? `${productBatches.length} batches` 
+                                            : displayBatch?.batchNo || '-'}
+                                        </td>
+                                        <td style={{ padding: '6px', textAlign: 'right' }}>
+                                          ₹{displayBatch?.mrp || product.mrp || 0}
+                                        </td>
+                                        <td style={{ padding: '6px', textAlign: 'right' }}>
+                                          ₹{displayBatch?.salesRate || product.salesRate || product.mrp || 0}
+                                        </td>
+                                        <td style={{ padding: '6px', textAlign: 'right' }}>
+                                          {totalStock}
+                                        </td>
+                                      </tr>
+                                    );
+                                  })}
+                              </tbody>
+                            </table>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+                  </td>
+                  <td>
+                    <select
+                      className="erp-select"
+                      data-field="units"
+                      data-index={index}
+                      value={item.units}
+                      onChange={(e) => updateInvoiceItem(index, 'units', e.target.value)}
+                      onKeyDown={(e) => handleInvoiceKeyDown(e, index, 'units')}
+                      style={{ width: '100%' }}
                     >
-                      <td style={{ padding: '6px' }}>
-                        {product.code}
-                      </td>
-                      <td style={{ padding: '6px' }}>
-                        {product.name}
-                      </td>
-                      <td style={{ padding: '6px' }}>
-                        {productBatch?.batchNo || '-'}
-                      </td>
-                      <td style={{ padding: '6px' }}>
-                        {product.mrp || 0}
-                      </td>
-                      <td style={{ padding: '6px' }}>
-                        {product.salesRate || product.mrp || 0}
-                      </td>
-                      <td style={{ padding: '6px' }}>
-                        {productBatch?.stock || 0}
-                      </td>
-                    </tr>
-                  );
-                })}
+                      <option value="PCS">PCS</option>
+                      <option value="BOX">BOX</option>
+                      <option value="INBOX">INBOX</option>
+                      <option value="OUTER">OUTER</option>
+                      <option value="KG">KG</option>
+                      <option value="LTR">LTR</option>
+                    </select>
+                  </td>
+                  <td><input className="erp-input numeric" data-field="qty" data-index={index} value={item.qty} onChange={(e) => updateInvoiceItem(index, 'qty', e.target.value)} onKeyDown={(e) => handleInvoiceKeyDown(e, index, 'qty')} style={{ width: '100%' }} /></td>
+                  <td><input className="erp-input numeric" data-field="free" data-index={index} value={item.free} onChange={(e) => updateInvoiceItem(index, 'free', e.target.value)} onKeyDown={(e) => handleInvoiceKeyDown(e, index, 'free')} style={{ width: '100%' }} /></td>
+                  <td><input className="erp-input numeric" data-field="mrp" data-index={index} value={item.mrp} onChange={(e) => updateInvoiceItem(index, 'mrp', e.target.value)} onKeyDown={(e) => handleInvoiceKeyDown(e, index, 'mrp')} style={{ width: '100%' }} /></td>
+                  <td><input className="erp-input numeric" data-field="rate" data-index={index} value={item.rate} onChange={(e) => updateInvoiceItem(index, 'rate', e.target.value)} onKeyDown={(e) => handleInvoiceKeyDown(e, index, 'rate')} style={{ width: '100%' }} /></td>
+                  <td><input className="erp-input numeric" data-field="rateGst" data-index={index} value={item.rateGst} onChange={(e) => updateInvoiceItem(index, 'rateGst', e.target.value)} onKeyDown={(e) => handleInvoiceKeyDown(e, index, 'rateGst')} style={{ width: '100%' }} /></td>
+                  {/* Removed TPR% input */}
+                  <td><input className="erp-input numeric" data-field="tprAmt" data-index={index} value={item.tprAmt} onChange={(e) => updateInvoiceItem(index, 'tprAmt', e.target.value)} onKeyDown={(e) => handleInvoiceKeyDown(e, index, 'tprAmt')} style={{ width: '100%' }} /></td>
+                  <td><input className="erp-input numeric small" data-field="schemePct" data-index={index} value={item.schemePct} onChange={(e) => updateInvoiceItem(index, 'schemePct', e.target.value)} onKeyDown={(e) => handleInvoiceKeyDown(e, index, 'schemePct')} style={{ width: '100%' }} /></td>
+                  <td><input className="erp-input numeric" data-field="schemeAmt" data-index={index} value={item.schemeAmt} onChange={(e) => updateInvoiceItem(index, 'schemeAmt', e.target.value)} onKeyDown={(e) => handleInvoiceKeyDown(e, index, 'schemeAmt')} style={{ width: '100%' }} /></td>
+                  <td><input className="erp-input numeric small" data-field="cdPct" data-index={index} value={item.cdPct} onChange={(e) => updateInvoiceItem(index, 'cdPct', e.target.value)} onKeyDown={(e) => handleInvoiceKeyDown(e, index, 'cdPct')} style={{ width: '100%' }} /></td>
+                  <td><input className="erp-input numeric" data-field="cdAmt" data-index={index} value={item.cdAmt} onChange={(e) => updateInvoiceItem(index, 'cdAmt', e.target.value)} onKeyDown={(e) => handleInvoiceKeyDown(e, index, 'cdAmt')} style={{ width: '100%' }} /></td>
+                  <td><input className="erp-input numeric small" data-field="starPct" data-index={index} value={item.starPct} onChange={(e) => updateInvoiceItem(index, 'starPct', e.target.value)} onKeyDown={(e) => handleInvoiceKeyDown(e, index, 'starPct')} style={{ width: '100%' }} /></td>
+                  <td><input className="erp-input numeric" data-field="starAmt" data-index={index} value={item.starAmt} onChange={(e) => updateInvoiceItem(index, 'starAmt', e.target.value)} onKeyDown={(e) => handleInvoiceKeyDown(e, index, 'starAmt')} style={{ width: '100%' }} /></td>
+                  <td><input className="erp-input numeric" data-field="taxable" data-index={index} value={item.taxable} onChange={(e) => updateInvoiceItem(index, 'taxable', e.target.value)} onKeyDown={(e) => handleInvoiceKeyDown(e, index, 'taxable')} style={{ width: '100%' }} /></td>
+                  <td><input className="erp-input numeric small" data-field="gst" data-index={index} value={item.gst} onChange={(e) => updateInvoiceItem(index, 'gst', e.target.value)} onKeyDown={(e) => handleInvoiceKeyDown(e, index, 'gst')} style={{ width: '100%' }} /></td>
+                  {/* Added SGST and CGST fields */}
+                  <td><input className="erp-input numeric" data-field="sgst" data-index={index} value={item.sgst} onChange={(e) => updateInvoiceItem(index, 'sgst', e.target.value)} onKeyDown={(e) => handleInvoiceKeyDown(e, index, 'sgst')} style={{ width: '100%' }} /></td>
+                  <td><input className="erp-input numeric" data-field="cgst" data-index={index} value={item.cgst} onChange={(e) => updateInvoiceItem(index, 'cgst', e.target.value)} onKeyDown={(e) => handleInvoiceKeyDown(e, index, 'cgst')} style={{ width: '100%' }} /></td>
+                  {/* Removed: weight, cessAmt, cessPcs, cess, wt */}
+                  <td><input className="erp-input numeric font-bold" data-field="amount" data-index={index} value={item.amount} onChange={(e) => updateInvoiceItem(index, 'amount', e.target.value)} onKeyDown={(e) => handleInvoiceKeyDown(e, index, 'amount')} style={{ width: '100%', fontWeight: 'bold' }} /></td>
+                  <td style={{ position: 'sticky', right: 0, backgroundColor: index === activeRow ? '#eff6ff' : 'white', zIndex: 5 }}>
+                    <button className="btn-delete text-red-500" onClick={() => deleteInvoiceItem(index)} style={{ padding: '6px 12px', whiteSpace: 'nowrap' }}>🗑 Delete</button>
+                  </td>
+                </tr>
+              ))}
             </tbody>
           </table>
         </div>
       </div>
     </div>
-  )}
-                            </td>
-                            <td>
-                              <select
-                                className="erp-select"
-                                data-field="units"
-                                data-index={index}
-                                value={item.units}
-                                onChange={(e) => updateInvoiceItem(index, 'units', e.target.value)}
-                                onKeyDown={(e) => handleInvoiceKeyDown(e, index, 'units')}
-                                style={{ width: '100%' }}
-                              >
-                                <option value="PCS">PCS</option>
-                                <option value="BOX">BOX</option>
-                                <option value="INBOX">INBOX</option>
-                                <option value="OUTER">OUTER</option>
-                                <option value="KG">KG</option>
-                                <option value="LTR">LTR</option>
-                              </select>
-                            </td>
-                            <td><input className="erp-input numeric" data-field="qty" data-index={index} value={item.qty} onChange={(e) => updateInvoiceItem(index, 'qty', e.target.value)} onKeyDown={(e) => handleInvoiceKeyDown(e, index, 'qty')} style={{ width: '100%' }} /></td>
-                            <td><input className="erp-input numeric" data-field="free" data-index={index} value={item.free} onChange={(e) => updateInvoiceItem(index, 'free', e.target.value)} onKeyDown={(e) => handleInvoiceKeyDown(e, index, 'free')} style={{ width: '100%' }} /></td>
-                            <tr><input className="erp-input numeric" data-field="mrp" data-index={index} value={item.mrp} onChange={(e) => updateInvoiceItem(index, 'mrp', e.target.value)} onKeyDown={(e) => handleInvoiceKeyDown(e, index, 'mrp')} style={{ width: '100%' }} /></tr>
-                            <td><input className="erp-input numeric" data-field="rate" data-index={index} value={item.rate} onChange={(e) => updateInvoiceItem(index, 'rate', e.target.value)} onKeyDown={(e) => handleInvoiceKeyDown(e, index, 'rate')} style={{ width: '100%' }} /></td>
-                            <td><input className="erp-input numeric" data-field="rateGst" data-index={index} value={item.rateGst} onChange={(e) => updateInvoiceItem(index, 'rateGst', e.target.value)} onKeyDown={(e) => handleInvoiceKeyDown(e, index, 'rateGst')} style={{ width: '100%' }} /></td>
-                            <td><input className="erp-input numeric small" data-field="tprPct" data-index={index} value={item.tprPct} onChange={(e) => updateInvoiceItem(index, 'tprPct', e.target.value)} onKeyDown={(e) => handleInvoiceKeyDown(e, index, 'tprPct')} style={{ width: '100%' }} /></td>
-                            <td><input className="erp-input numeric" data-field="tprAmt" data-index={index} value={item.tprAmt} onChange={(e) => updateInvoiceItem(index, 'tprAmt', e.target.value)} onKeyDown={(e) => handleInvoiceKeyDown(e, index, 'tprAmt')} style={{ width: '100%' }} /></td>
-                            <td><input className="erp-input numeric small" data-field="schemePct" data-index={index} value={item.schemePct} onChange={(e) => updateInvoiceItem(index, 'schemePct', e.target.value)} onKeyDown={(e) => handleInvoiceKeyDown(e, index, 'schemePct')} style={{ width: '100%' }} /></td>
-                            <td><input className="erp-input numeric" data-field="schemeAmt" data-index={index} value={item.schemeAmt} onChange={(e) => updateInvoiceItem(index, 'schemeAmt', e.target.value)} onKeyDown={(e) => handleInvoiceKeyDown(e, index, 'schemeAmt')} style={{ width: '100%' }} /></td>
-                            <td><input className="erp-input numeric small" data-field="cdPct" data-index={index} value={item.cdPct} onChange={(e) => updateInvoiceItem(index, 'cdPct', e.target.value)} onKeyDown={(e) => handleInvoiceKeyDown(e, index, 'cdPct')} style={{ width: '100%' }} /></td>
-                            <td><input className="erp-input numeric" data-field="cdAmt" data-index={index} value={item.cdAmt} onChange={(e) => updateInvoiceItem(index, 'cdAmt', e.target.value)} onKeyDown={(e) => handleInvoiceKeyDown(e, index, 'cdAmt')} style={{ width: '100%' }} /></td>
-                            <td><input className="erp-input numeric small" data-field="starPct" data-index={index} value={item.starPct} onChange={(e) => updateInvoiceItem(index, 'starPct', e.target.value)} onKeyDown={(e) => handleInvoiceKeyDown(e, index, 'starPct')} style={{ width: '100%' }} /></td>
-                            <td><input className="erp-input numeric" data-field="starAmt" data-index={index} value={item.starAmt} onChange={(e) => updateInvoiceItem(index, 'starAmt', e.target.value)} onKeyDown={(e) => handleInvoiceKeyDown(e, index, 'starAmt')} style={{ width: '100%' }} /></td>
-                            <td><input className="erp-input numeric" data-field="taxable" data-index={index} value={item.taxable} onChange={(e) => updateInvoiceItem(index, 'taxable', e.target.value)} onKeyDown={(e) => handleInvoiceKeyDown(e, index, 'taxable')} style={{ width: '100%' }} /></td>
-                            <td><input className="erp-input numeric small" data-field="gst" data-index={index} value={item.gst} onChange={(e) => updateInvoiceItem(index, 'gst', e.target.value)} onKeyDown={(e) => handleInvoiceKeyDown(e, index, 'gst')} style={{ width: '100%' }} /></td>
-                            <td><input className="erp-input numeric" data-field="weight" data-index={index} value={item.weight} onChange={(e) => updateInvoiceItem(index, 'weight', e.target.value)} onKeyDown={(e) => handleInvoiceKeyDown(e, index, 'weight')} style={{ width: '100%' }} /></td>
-                            <td><input className="erp-input numeric" data-field="cessAmt" data-index={index} value={item.cessAmt} onChange={(e) => updateInvoiceItem(index, 'cessAmt', e.target.value)} onKeyDown={(e) => handleInvoiceKeyDown(e, index, 'cessAmt')} style={{ width: '100%' }} /></td>
-                            <td><input className="erp-input numeric" data-field="cessPcs" data-index={index} value={item.cessPcs} onChange={(e) => updateInvoiceItem(index, 'cessPcs', e.target.value)} onKeyDown={(e) => handleInvoiceKeyDown(e, index, 'cessPcs')} style={{ width: '100%' }} /></td>
-                            <td><input className="erp-input numeric" data-field="cess" data-index={index} value={item.cess} onChange={(e) => updateInvoiceItem(index, 'cess', e.target.value)} onKeyDown={(e) => handleInvoiceKeyDown(e, index, 'cess')} style={{ width: '100%' }} /></td>
-                            <td><input className="erp-input numeric" data-field="wt" data-index={index} value={item.wt} onChange={(e) => updateInvoiceItem(index, 'wt', e.target.value)} onKeyDown={(e) => handleInvoiceKeyDown(e, index, 'wt')} style={{ width: '100%' }} /></td>
-                            <td><input className="erp-input numeric font-bold" data-field="amount" data-index={index} value={item.amount} onChange={(e) => updateInvoiceItem(index, 'amount', e.target.value)} onKeyDown={(e) => handleInvoiceKeyDown(e, index, 'amount')} style={{ width: '100%', fontWeight: 'bold' }} /></td>
-                            <td style={{ position: 'sticky', right: 0, backgroundColor: index === activeRow ? '#eff6ff' : 'white', zIndex: 5 }}>
-                              <button className="btn-delete text-red-500" onClick={() => deleteInvoiceItem(index)} style={{ padding: '6px 12px', whiteSpace: 'nowrap' }}>🗑 Delete</button>
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                </div>
-              </div>
 
-              {/* Summary Bar */}
-              <div className="form-section">
-                <h4 className="section-header">Invoice Summary</h4>
-                <div className="summary-bar">
-                  <div>Gross Amount: <span className="amount">₹{invoiceSummary.gross.toFixed(2)}</span></div>
-                  <div>TPR Amount: <span className="amount">-₹{invoiceSummary.tpr.toFixed(2)}</span></div>
-                  <div>Scheme Amount: <span className="amount">-₹{invoiceSummary.scheme.toFixed(2)}</span></div>
-                  <div>Bottom Amount: <span className="amount">₹{invoiceSummary.bottom.toFixed(2)}</span></div>
-                  <div>Star Discount: <span className="amount">-₹{invoiceSummary.star.toFixed(2)}</span></div>
-                  <div>Cash Discount: <span className="amount">-₹{invoiceSummary.cd.toFixed(2)}</span></div>
-                  <div>GST Amount: <span className="amount">+₹{invoiceSummary.gst.toFixed(2)}</span></div>
-                  <div>Cess Amount: <span className="amount">₹0.00</span></div>
-                  <div className="tcs-field">TCS %: <input className="erp-input small" placeholder="0" /> TCS Amount: ₹0.00</div>
-                  <div>Rounding: <input className="erp-input small" placeholder="0" /> ₹0.00</div>
-                  <div className="net-amount">Net Amount: <strong>₹{invoiceSummary.net.toFixed(2)}</strong></div>
-                </div>
-              </div>
+    {/* Summary Bar - MODIFIED */}
+    <div className="form-section">
+      <h4 className="section-header">Invoice Summary</h4>
+      <div className="summary-bar">
+        <div>Gross Amount: <span className="amount">₹{invoiceSummary.gross.toFixed(2)}</span></div>
+        <div>TPR Amount: <span className="amount">-₹{invoiceSummary.tpr.toFixed(2)}</span></div>
+        <div>Scheme Amount: <span className="amount">-₹{invoiceSummary.scheme.toFixed(2)}</span></div>
+        <div>Bottom Amount: <span className="amount">₹{invoiceSummary.bottom.toFixed(2)}</span></div>
+        <div>Star Discount: <span className="amount">-₹{invoiceSummary.star.toFixed(2)}</span></div>
+        <div>Cash Discount: <span className="amount">-₹{invoiceSummary.cd.toFixed(2)}</span></div>
+        <div>GST Amount: <span className="amount">+₹{invoiceSummary.gst.toFixed(2)}</span></div>
+        <div className="net-amount">Net Amount: <strong>₹{invoiceSummary.net.toFixed(2)}</strong></div>
+      </div>
+    </div>
 
-              {/* Action Button */}
-              <div className="form-actions">
-                <button className="btn-add-invoice" onClick={saveInvoice}>
-                  💾 Add Invoice
-                </button>
-              </div>
-            </div>
-          )}
+    {/* Action Button */}
+    <div className="form-actions">
+      <button className="btn-add-invoice" onClick={saveInvoice}>
+        💾 Add Invoice
+      </button>
+    </div>
+  </div>
+)}
 
           {/* Purchase Invoice */}
           {activeSubMenu === 'Purchase' && (
