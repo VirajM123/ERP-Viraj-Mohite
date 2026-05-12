@@ -21,16 +21,20 @@ const Dashboard = () => {
 
   const [currentBatchRow, setCurrentBatchRow] = useState(null);
 
-  const [batchForm, setBatchForm] = useState({
-    batchNo: '',
-    mfgDate: '',
-    expDate: '',
-    mrp: '',
-    purchaseRate: '',
-    salesRate: '',
-    stockQty: ''
-  });
-
+  // Updated batchForm state (replace the existing batchForm state)
+const [batchForm, setBatchForm] = useState({
+  batchNo: '',
+  mfgDate: '',
+  expDate: '',
+  mrp: '',
+  purchaseRate: '',
+  salesRate: '',
+  stockQty: '',
+  boxPack: '1',
+  ratePerUnit: '1',
+  previousPurchaseRate: '',
+  quantity: '1'
+});
   const [batchMode, setBatchMode] = useState('new');
 
   // GoDown Master State
@@ -1026,40 +1030,35 @@ const Dashboard = () => {
     setShowBatchModal(true);
   };
 
-  const saveBatchDetails = () => {
 
-    const updatedItems = [...purchaseItems];
-
-    updatedItems[currentBatchRow] = {
-      ...updatedItems[currentBatchRow],
-
-        selectedBatch: {
-  ...batchForm
-},
-
-      batchNo: batchForm.batchNo,
-      mfgDate: batchForm.mfgDate,
-      expDate: batchForm.expDate,
-      mrp: batchForm.mrp,
-      purRate: batchForm.purchaseRate,
-      salesRate: batchForm.salesRate,
-      stockQty: batchForm.stockQty
-    };
-
-    setPurchaseItems(updatedItems);
-
-    setBatches([
-      ...batches,
-      {
-        productId: updatedItems[currentBatchRow].productId,
-        product: updatedItems[currentBatchRow].product,
-        ...batchForm
-      }
-    ]);
-
-    setShowBatchModal(false);
+const saveBatchDetails = () => {
+  const updatedItems = [...purchaseItems];
+  updatedItems[currentBatchRow] = {
+    ...updatedItems[currentBatchRow],
+    selectedBatch: { ...batchForm },
+    batchNo: batchForm.batchNo,
+    mfgDate: batchForm.mfgDate,
+    expDate: batchForm.expDate,
+    mrp: batchForm.mrp,
+    purRate: batchForm.purchaseRate,
+    salesRate: batchForm.salesRate,
+    stockQty: batchForm.stockQty,
+    boxPack: batchForm.boxPack,
+    ratePerUnit: batchForm.ratePerUnit,
+    previousPurchaseRate: batchForm.previousPurchaseRate,
+    quantity: batchForm.quantity
   };
-
+  setPurchaseItems(updatedItems);
+  setBatches([
+    ...batches,
+    {
+      productId: updatedItems[currentBatchRow].productId,
+      product: updatedItems[currentBatchRow].product,
+      ...batchForm
+    }
+  ]);
+  setShowBatchModal(false);
+};
 
   const savePurchase = () => {
     const purchaseData = { ...purchaseFormData, items: purchaseItems };
@@ -2560,48 +2559,47 @@ const Dashboard = () => {
         </header>
 
         <div className="content-body">
-          {/* GoDown Master - Form View */}
-          {activeSubMenu === 'GoDown Master' && openFormFor === 'GoDown Master' && (
-            <div className="master-section erp-master-form">
-              <div className="form-header">
-                <div className="page-title-large">{editGodownId ? 'Edit GoDown' : 'Add New GoDown'}</div>
-                <button className="close-form-btn" onClick={closeForm}>✕</button>
-              </div>
-              <form className="master-form" onSubmit={saveGodown}>
-                <div className="form-section">
-                  <h4 className="section-header">Basic Information</h4>
-                  <div className="form-grid-2">
-                    <div className="labeled-input">
-                      <label>GoDown Code *</label>
-                      <input name="code" placeholder="GoDown Code" value={godownForm.code} onChange={handleGodownInput} required />
-                    </div>
-                    <div className="labeled-input">
-                      <label>GoDown Name *</label>
-                      <input name="name" placeholder="GoDown Name" value={godownForm.name} onChange={handleGodownInput} required />
-                    </div>
-                  </div>
-                </div>
-                <div className="form-section">
-                  <h4 className="section-header">Location Details</h4>
-                  <div className="form-grid-2">
-                    <div className="labeled-input">
-                      <label>Address</label>
-                      <textarea name="address" className="erp-textarea" placeholder="Address" value={godownForm.address} onChange={handleGodownInput} rows="2" />
-                    </div>
-                    <div className="labeled-input">
-                      <label>Location</label>
-                      <input name="location" placeholder="Location" value={godownForm.location} onChange={handleGodownInput} />
-                    </div>
-                  </div>
-                </div>
-                <div className="form-actions">
-                  <button type="submit" className="btn-primary">{editGodownId ? 'Update' : 'Save GoDown'}</button>
-                  <button type="button" className="btn-secondary" onClick={closeForm}>Cancel</button>
-                </div>
-              </form>
-            </div>
-          )}
-
+        {/* GoDown Master - Form View */}
+{activeSubMenu === 'GoDown Master' && openFormFor === 'GoDown Master' && (
+  <div className="master-section erp-master-form">
+    <div className="form-header">
+      <div className="page-title-large">{editGodownId ? 'Edit GoDown' : 'Add New GoDown'}</div>
+      <button className="close-form-btn" onClick={closeForm}>✕</button>
+    </div>
+    <form className="master-form" onSubmit={saveGodown}>
+      <div className="form-section">
+        <h4 className="section-header">Basic Information</h4>
+        <div className="form-grid-2">
+          <div className="labeled-input">
+            <label>GoDown Code *</label>
+            <input name="code" placeholder="GoDown Code" value={godownForm.code} onChange={handleGodownInput} required />
+          </div>
+          <div className="labeled-input">
+            <label>GoDown Name *</label>
+            <input name="name" placeholder="GoDown Name" value={godownForm.name} onChange={handleGodownInput} required />
+          </div>
+        </div>
+      </div>
+      <div className="form-section">
+        <h4 className="section-header">Location Details</h4>
+        <div className="form-grid-2">
+          <div className="labeled-input">
+            <label>Address</label>
+            <textarea name="address" placeholder="Address" value={godownForm.address} onChange={handleGodownInput} rows="2" />
+          </div>
+          <div className="labeled-input">
+            <label>Location</label>
+            <input name="location" placeholder="Location" value={godownForm.location} onChange={handleGodownInput} />
+          </div>
+        </div>
+      </div>
+      <div className="form-actions">
+        <button type="submit" className="btn-primary">{editGodownId ? 'Update' : 'Save GoDown'}</button>
+        <button type="button" className="btn-secondary" onClick={closeForm}>Cancel</button>
+      </div>
+    </form>
+  </div>
+)}
           {/* GoDown Master - Grid View */}
           {activeSubMenu === 'GoDown Master' && openFormFor !== 'GoDown Master' && (
             renderDataTable('GoDowns List', getFilteredGodowns(), [
@@ -2612,48 +2610,47 @@ const Dashboard = () => {
             ], 'godown', deleteGodown)
           )}
 
-          {/* Company Master - Form View */}
-          {activeSubMenu === 'Company Master' && openFormFor === 'Company Master' && (
-            <div className="master-section erp-master-form">
-              <div className="form-header">
-                <div className="page-title-large">Add New Company</div>
-                <button className="close-form-btn" onClick={closeForm}>✕</button>
-              </div>
-              <form className="master-form" onSubmit={saveCompany}>
-                <div className="form-section">
-                  <h4 className="section-header">Basic Information</h4>
-                  <div className="form-grid-2">
-                    <div className="labeled-input">
-                      <label>Company Code *</label>
-                      <input name="code" data-type="code" placeholder="Comp Code" value={companyForm.code} onChange={handleCompanyInput} required />
-                    </div>
-                    <div className="labeled-input">
-                      <label>Company Name *</label>
-                      <input name="name" data-type="name" placeholder="Company Name" value={companyForm.name} onChange={handleCompanyInput} required />
-                    </div>
-                  </div>
-                </div>
-                <div className="form-section">
-                  <h4 className="section-header">Addresses</h4>
-                  <div className="form-grid-2">
-                    <div className="labeled-input">
-                      <label>Company Address</label>
-                      <textarea name="address" className="erp-textarea" placeholder="Company Address" value={companyForm.address} onChange={handleCompanyInput} />
-                    </div>
-                    <div className="labeled-input">
-                      <label>Branch/Office Address</label>
-                      <textarea name="branchAddress" className="erp-textarea" placeholder="Branch/Office Address" value={companyForm.branchAddress} onChange={handleCompanyInput} />
-                    </div>
-                  </div>
-                </div>
-                <div className="form-actions">
-                  <button type="submit" className="btn-primary">Save Company</button>
-                  <button type="button" className="btn-secondary" onClick={closeForm}>Cancel</button>
-                </div>
-              </form>
-            </div>
-          )}
-
+         {/* Company Master - Form View */}
+{activeSubMenu === 'Company Master' && openFormFor === 'Company Master' && (
+  <div className="master-section erp-master-form">
+    <div className="form-header">
+      <div className="page-title-large">Add New Company</div>
+      <button className="close-form-btn" onClick={closeForm}>✕</button>
+    </div>
+    <form className="master-form" onSubmit={saveCompany}>
+      <div className="form-section">
+        <h4 className="section-header">Basic Information</h4>
+        <div className="form-grid-2">
+          <div className="labeled-input">
+            <label>Company Code *</label>
+            <input name="code" placeholder="Company Code" value={companyForm.code} onChange={handleCompanyInput} required />
+          </div>
+          <div className="labeled-input">
+            <label>Company Name *</label>
+            <input name="name" placeholder="Company Name" value={companyForm.name} onChange={handleCompanyInput} required />
+          </div>
+        </div>
+      </div>
+      <div className="form-section">
+        <h4 className="section-header">Addresses</h4>
+        <div className="form-grid-2">
+          <div className="labeled-input">
+            <label>Company Address</label>
+            <textarea name="address" placeholder="Company Address" value={companyForm.address} onChange={handleCompanyInput} rows="2" />
+          </div>
+          <div className="labeled-input">
+            <label>Branch/Office Address</label>
+            <textarea name="branchAddress" placeholder="Branch/Office Address" value={companyForm.branchAddress} onChange={handleCompanyInput} rows="2" />
+          </div>
+        </div>
+      </div>
+      <div className="form-actions">
+        <button type="submit" className="btn-primary">Save Company</button>
+        <button type="button" className="btn-secondary" onClick={closeForm}>Cancel</button>
+      </div>
+    </form>
+  </div>
+)}
           {/* Company Master - Grid View */}
           {activeSubMenu === 'Company Master' && openFormFor !== 'Company Master' && (
             renderDataTable('Companies List', getFilteredCompanies(), [
@@ -2665,24 +2662,33 @@ const Dashboard = () => {
           )}
 
           {/* Group Master - Form View */}
-          {activeSubMenu === 'Group Master' && openFormFor === 'Group Master' && (
-            <div className="master-section">
-              <div className="form-header">
-                <div className="page-title-large">Add New Group</div>
-                <button className="close-form-btn" onClick={closeForm}>✕</button>
-              </div>
-              <form className="master-form" onSubmit={saveGroup}>
-                <div className="form-row">
-                  <input name="code" placeholder="Group Code" value={groupForm.code} onChange={handleGroupInput} required />
-                  <input name="name" placeholder="Group Name" value={groupForm.name} onChange={handleGroupInput} required />
-                </div>
-                <div className="form-actions">
-                  <button type="submit" className="btn-save">Save Group</button>
-                  <button type="button" className="btn-cancel" onClick={closeForm}>Close</button>
-                </div>
-              </form>
-            </div>
-          )}
+{activeSubMenu === 'Group Master' && openFormFor === 'Group Master' && (
+  <div className="master-section erp-master-form">
+    <div className="form-header">
+      <div className="page-title-large">Add New Group</div>
+      <button className="close-form-btn" onClick={closeForm}>✕</button>
+    </div>
+    <form className="master-form" onSubmit={saveGroup}>
+      <div className="form-section">
+        <h4 className="section-header">Basic Information</h4>
+        <div className="form-grid-2">
+          <div className="labeled-input">
+            <label>Group Code *</label>
+            <input name="code" placeholder="Group Code" value={groupForm.code} onChange={handleGroupInput} required />
+          </div>
+          <div className="labeled-input">
+            <label>Group Name *</label>
+            <input name="name" placeholder="Group Name" value={groupForm.name} onChange={handleGroupInput} required />
+          </div>
+        </div>
+      </div>
+      <div className="form-actions">
+        <button type="submit" className="btn-primary">Save Group</button>
+        <button type="button" className="btn-secondary" onClick={closeForm}>Cancel</button>
+      </div>
+    </form>
+  </div>
+)}
 
           {/* Group Master - Grid View */}
           {activeSubMenu === 'Group Master' && openFormFor !== 'Group Master' && (
@@ -2692,25 +2698,34 @@ const Dashboard = () => {
             ], 'group', deleteGroup)
           )}
 
-          {/* Category Master - Form View */}
-          {activeSubMenu === 'Category Master' && openFormFor === 'Category Master' && (
-            <div className="master-section">
-              <div className="form-header">
-                <div className="page-title-large">Add New Category</div>
-                <button className="close-form-btn" onClick={closeForm}>✕</button>
-              </div>
-              <form className="master-form" onSubmit={saveCategory}>
-                <div className="form-row">
-                  <input name="code" placeholder="Category Code" value={categoryForm.code} onChange={handleCategoryInput} required />
-                  <input name="name" placeholder="Category Name" value={categoryForm.name} onChange={handleCategoryInput} required />
-                </div>
-                <div className="form-actions">
-                  <button type="submit" className="btn-save">Save Category</button>
-                  <button type="button" className="btn-cancel" onClick={closeForm}>Close</button>
-                </div>
-              </form>
-            </div>
-          )}
+        {/* Category Master - Form View */}
+{activeSubMenu === 'Category Master' && openFormFor === 'Category Master' && (
+  <div className="master-section erp-master-form">
+    <div className="form-header">
+      <div className="page-title-large">Add New Category</div>
+      <button className="close-form-btn" onClick={closeForm}>✕</button>
+    </div>
+    <form className="master-form" onSubmit={saveCategory}>
+      <div className="form-section">
+        <h4 className="section-header">Basic Information</h4>
+        <div className="form-grid-2">
+          <div className="labeled-input">
+            <label>Category Code *</label>
+            <input name="code" placeholder="Category Code" value={categoryForm.code} onChange={handleCategoryInput} required />
+          </div>
+          <div className="labeled-input">
+            <label>Category Name *</label>
+            <input name="name" placeholder="Category Name" value={categoryForm.name} onChange={handleCategoryInput} required />
+          </div>
+        </div>
+      </div>
+      <div className="form-actions">
+        <button type="submit" className="btn-primary">Save Category</button>
+        <button type="button" className="btn-secondary" onClick={closeForm}>Cancel</button>
+      </div>
+    </form>
+  </div>
+)}
 
           {/* Category Master - Grid View */}
           {activeSubMenu === 'Category Master' && openFormFor !== 'Category Master' && (
@@ -2721,89 +2736,139 @@ const Dashboard = () => {
           )}
 
           {/* Product - Form View */}
-          {activeSubMenu === 'Product' && openFormFor === 'Product' && (
-            <div className="master-section">
-              <div className="form-header">
-                <div className="page-title-large">Add New Product</div>
-                <button className="close-form-btn" onClick={closeForm}>✕</button>
-              </div>
-              <form className="master-form" onSubmit={saveProduct}>
-                <div className="section-subtitle">Product Identification</div>
-                <div className="form-grid-3">
-                  <input name="code" placeholder="Product Code" value={productForm.code} onChange={handleProductInput} required />
-                  <input name="name" placeholder="Product Name" value={productForm.name} onChange={handleProductInput} required />
-                  <select name="companyId" value={productForm.companyId} onChange={handleProductInput}>
-                    <option value="">Select Company</option>
-                    {companies.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
-                  </select>
-                </div>
-                <div className="form-grid-3">
-                  <select name="group" value={productForm.group} onChange={handleProductInput}>
-                    <option value="">Select Group</option>
-                    {groupsState.map(g => <option key={g.id} value={g.name}>{g.name}</option>)}
-                  </select>
-                  <select name="category" value={productForm.category} onChange={handleProductInput}>
-                    <option value="">Select Category</option>
-                    {categoriesState.map(cat => <option key={cat.id} value={cat.name}>{cat.name}</option>)}
-                  </select>
-                  <select name="gst" value={productForm.gst} onChange={handleProductInput}>
-                    <option value="">GST %</option>
-                    {gstRates.map(rate => <option key={rate} value={rate}>{rate}%</option>)}
-                  </select>
-                </div>
-                <div className="form-row-single">
-                  <textarea name="description" placeholder="Product Description" value={productForm.description} onChange={handleProductInput} rows="2" />
-                </div>
-                <div className="section-subtitle">Logistics & Classification</div>
-                <div className="form-grid-4">
-                  <select name="basicUnit" value={productForm.basicUnit} onChange={handleProductInput}>
-                    <option value="PCS">PCS</option>
-                    <option value="BOX">BOX</option>
-                    <option value="INBOX">INBOX</option>
-                    <option value="KG">KG</option>
-                    <option value="LTR">LTR</option>
-                  </select>
-                  {(productForm.basicUnit === 'KG' || productForm.basicUnit === 'Litre') && (
-                    <div className="labeled-input">
-                      <label>Weight [Gms/Ltr]</label>
-                      <input name="weight" placeholder="100" value={productForm.weight} onChange={handleProductInput} type="number" />
-                    </div>
-                  )}
-                  <input name="inboxPack" placeholder="Inbox Pack" value={productForm.inboxPack} onChange={handleProductInput} type="number" />
-                  <input name="boxPack" placeholder="Box Pack" value={productForm.boxPack} onChange={handleProductInput} type="number" />
-                </div>
-                <div className="form-grid-4">
-                  <input name="retailerMargin" placeholder="Retailer Margin (%)" value={productForm.retailerMargin} onChange={handleProductInput} type="number" step="0.01" />
-                  <input name="distributorMargin" placeholder="Distributor Margin (%)" value={productForm.distributorMargin} onChange={handleProductInput} type="number" step="0.01" />
-                  <div className="labeled-input">
-                    <label>Rate Per Unit</label>
-                    <input name="Rate_Per_Unit" placeholder="0.00" value={productForm.Rate_Per_Unit} onChange={handleProductInput} type="number" step="0.01" />
-                  </div>
-                  <div className="checkbox-group">
-                    <label><input name="active" type="checkbox" checked={productForm.active} onChange={handleProductInput} /> Active</label>
-                    <label><input name="locked" type="checkbox" checked={productForm.locked} onChange={handleProductInput} /> Locked</label>
-                    <label><input name="allowFraction" type="checkbox" checked={productForm.allowFraction} onChange={handleProductInput} /> Allow Qty In Fraction</label>
-                  </div>
-                </div>
-                <div className="section-subtitle">Stock Management</div>
-                <div className="form-grid-2">
-                  <div className="labeled-input">
-                    <label>Min Stock Holding</label>
-                    <input name="Min_Stock_Holding" placeholder="0" value={productForm.Min_Stock_Holding} onChange={handleProductInput} type="number" />
-                  </div>
-                  <div className="labeled-input">
-                    <label>Reorder Level</label>
-                    <input name="Reorder_Level" placeholder="0" value={productForm.Reorder_Level} onChange={handleProductInput} type="number" />
-                  </div>
-                </div>
-                <div className="form-actions mt-4">
-                  <button type="submit" className="btn-save">Save Product</button>
-                  <button type="button" className="btn-cancel" onClick={closeForm}>Close</button>
-                </div>
-              </form>
+{activeSubMenu === 'Product' && openFormFor === 'Product' && (
+  <div className="master-section erp-master-form">
+    <div className="form-header">
+      <div className="page-title-large">Add New Product</div>
+      <button className="close-form-btn" onClick={closeForm}>✕</button>
+    </div>
+    <form className="master-form" onSubmit={saveProduct}>
+      <div className="form-section">
+        <h4 className="section-header">Product Identification</h4>
+        <div className="form-grid-3">
+          <div className="labeled-input">
+            <label>Product Code *</label>
+            <input name="code" placeholder="Product Code" value={productForm.code} onChange={handleProductInput} required />
+          </div>
+          <div className="labeled-input">
+            <label>Product Name *</label>
+            <input name="name" placeholder="Product Name" value={productForm.name} onChange={handleProductInput} required />
+          </div>
+          <div className="labeled-input">
+            <label>Company</label>
+            <select name="companyId" value={productForm.companyId} onChange={handleProductInput}>
+              <option value="">Select Company</option>
+              {companies.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+            </select>
+          </div>
+        </div>
+        <div className="form-grid-3">
+          <div className="labeled-input">
+            <label>Group</label>
+            <select name="group" value={productForm.group} onChange={handleProductInput}>
+              <option value="">Select Group</option>
+              {groupsState.map(g => <option key={g.id} value={g.name}>{g.name}</option>)}
+            </select>
+          </div>
+          <div className="labeled-input">
+            <label>Category</label>
+            <select name="category" value={productForm.category} onChange={handleProductInput}>
+              <option value="">Select Category</option>
+              {categoriesState.map(cat => <option key={cat.id} value={cat.name}>{cat.name}</option>)}
+            </select>
+          </div>
+          <div className="labeled-input">
+            <label>GST %</label>
+            <select name="gst" value={productForm.gst} onChange={handleProductInput}>
+              <option value="">Select GST %</option>
+              {gstRates.map(rate => <option key={rate} value={rate}>{rate}%</option>)}
+            </select>
+          </div>
+        </div>
+        <div className="form-row-single">
+          <div className="labeled-input">
+            <label>Product Description</label>
+            <textarea name="description" placeholder="Product Description" value={productForm.description} onChange={handleProductInput} rows="2" />
+          </div>
+        </div>
+      </div>
+
+      <div className="form-section">
+        <h4 className="section-header">Logistics & Classification</h4>
+        <div className="form-grid-4">
+          <div className="labeled-input">
+            <label>Basic Unit</label>
+            <select name="basicUnit" value={productForm.basicUnit} onChange={handleProductInput}>
+              <option value="PCS">PCS</option>
+              <option value="BOX">BOX</option>
+              <option value="INBOX">INBOX</option>
+              <option value="KG">KG</option>
+              <option value="LTR">LTR</option>
+            </select>
+          </div>
+          {(productForm.basicUnit === 'KG' || productForm.basicUnit === 'Litre') && (
+            <div className="labeled-input">
+              <label>Weight [Gms/Ltr]</label>
+              <input name="weight" placeholder="100" value={productForm.weight} onChange={handleProductInput} type="number" />
             </div>
           )}
+          <div className="labeled-input">
+            <label>Inbox Pack</label>
+            <input name="inboxPack" placeholder="Inbox Pack" value={productForm.inboxPack} onChange={handleProductInput} type="number" />
+          </div>
+          <div className="labeled-input">
+            <label>Box Pack</label>
+            <input name="boxPack" placeholder="Box Pack" value={productForm.boxPack} onChange={handleProductInput} type="number" />
+          </div>
+        </div>
+        <div className="form-grid-4">
+          <div className="labeled-input">
+            <label>Retailer Margin (%)</label>
+            <input name="retailerMargin" placeholder="Retailer Margin (%)" value={productForm.retailerMargin} onChange={handleProductInput} type="number" step="0.01" />
+          </div>
+          <div className="labeled-input">
+            <label>Distributor Margin (%)</label>
+            <input name="distributorMargin" placeholder="Distributor Margin (%)" value={productForm.distributorMargin} onChange={handleProductInput} type="number" step="0.01" />
+          </div>
+          <div className="labeled-input">
+            <label>Rate Per Unit</label>
+            <input name="Rate_Per_Unit" placeholder="0.00" value={productForm.Rate_Per_Unit} onChange={handleProductInput} type="number" step="0.01" />
+          </div>
+          <div className="checkbox-group">
+            <label>
+              <input name="active" type="checkbox" checked={productForm.active} onChange={handleProductInput} /> Active
+            </label>
+            <label>
+              <input name="locked" type="checkbox" checked={productForm.locked} onChange={handleProductInput} /> Locked
+            </label>
+            <label>
+              <input name="allowFraction" type="checkbox" checked={productForm.allowFraction} onChange={handleProductInput} /> Allow Qty In Fraction
+            </label>
+          </div>
+        </div>
+      </div>
 
+      <div className="form-section">
+        <h4 className="section-header">Stock Management</h4>
+        <div className="form-grid-2">
+          <div className="labeled-input">
+            <label>Min Stock Holding</label>
+            <input name="Min_Stock_Holding" placeholder="0" value={productForm.Min_Stock_Holding} onChange={handleProductInput} type="number" />
+          </div>
+          <div className="labeled-input">
+            <label>Reorder Level</label>
+            <input name="Reorder_Level" placeholder="0" value={productForm.Reorder_Level} onChange={handleProductInput} type="number" />
+          </div>
+        </div>
+      </div>
+
+      <div className="form-actions">
+        <button type="submit" className="btn-primary">Save Product</button>
+        <button type="button" className="btn-secondary" onClick={closeForm}>Cancel</button>
+      </div>
+    </form>
+  </div>
+)}
           {/* Product - Grid View */}
           {activeSubMenu === 'Product' && openFormFor !== 'Product' && (
             renderDataTable('Products List', getFilteredProducts(), [
@@ -2824,10 +2889,11 @@ const Dashboard = () => {
                 <button className="close-form-btn" onClick={closeForm}>✕</button>
               </div>
 
-              <div className="account-tabs">
-                <button className={`tab-btn ${accountActiveTab === 'basic' ? 'active' : ''}`} onClick={() => setAccountActiveTab('basic')}>Basic Information</button>
-                <button className={`tab-btn ${accountActiveTab === 'gst' ? 'active' : ''}`} onClick={() => setAccountActiveTab('gst')}>GST Details</button>
+              <div className="account-tabs" role="tablist">
+                <button className={`tab-btn ${accountActiveTab === 'basic' ? 'active' : ''}`} onClick={() => setAccountActiveTab('basic')} type="button">Basic Information</button>
+                <button className={`tab-btn ${accountActiveTab === 'gst' ? 'active' : ''}`} onClick={() => setAccountActiveTab('gst')} type="button">GST Details</button>
               </div>
+
 
               <form className="master-form" onSubmit={saveAccount}>
                 {accountActiveTab === 'basic' && (
@@ -2983,29 +3049,54 @@ const Dashboard = () => {
             ], 'otherAccount', deleteOtherAccount)
           )}
 
-          {/* GST Master - Form View */}
-          {activeSubMenu === 'GST Master' && openFormFor === 'GST Master' && (
-            <div className="master-section">
-              <div className="form-header">
-                <div className="page-title-large">{editGstId ? 'Edit GST Information' : 'Add VAT/GST Information'}</div>
-                <button className="close-form-btn" onClick={closeForm}>✕</button>
-              </div>
-              <form className="master-form" onSubmit={saveGst}>
-                <div className="form-row">
-                  <div className="labeled-input"><label>Code</label><input name="code" placeholder="Code" value={gstForm.code} onChange={handleGstInput} required /></div>
-                  <div className="labeled-input"><label>VAT %</label><input name="vat" type="number" step="0.01" placeholder="VAT %" value={gstForm.vat} onChange={handleGstInput} required /></div>
-                </div>
-                <div className="form-row">
-                  <div className="labeled-input"><label>Purchase Type</label><select name="purchaseType" value={gstForm.purchaseType} onChange={handleGstInput}><option value="VAT ON PURCHASE PRICE">VAT ON PURCHASE PRICE</option><option value="VAT ON MRP">VAT ON MRP</option><option value="OTHER STATE">OTHER STATE</option><option value="EXPT PURCHASE">EXPT PURCHASE</option><option value="VAT ON MARGIN">VAT ON MARGIN</option></select></div>
-                  <div className="labeled-input"><label>Sales Type</label><select name="salesType" value={gstForm.salesType} onChange={handleGstInput}><option value="VAT ON SALES PRICE">VAT ON SALES PRICE</option><option value="VAT ON MRP">VAT ON MRP</option><option value="OTHER STATE">OTHER STATE</option></select></div>
-                </div>
-                <div className="form-actions">
-                  <button type="submit" className="btn-save">{editGstId ? 'Update' : 'Save'}</button>
-                  <button type="button" className="btn-cancel" onClick={closeForm}>Cancel</button>
-                </div>
-              </form>
-            </div>
-          )}
+         {/* GST Master - Form View */}
+{activeSubMenu === 'GST Master' && openFormFor === 'GST Master' && (
+  <div className="master-section erp-master-form">
+    <div className="form-header">
+      <div className="page-title-large">{editGstId ? 'Edit GST Information' : 'Add VAT/GST Information'}</div>
+      <button className="close-form-btn" onClick={closeForm}>✕</button>
+    </div>
+    <form className="master-form" onSubmit={saveGst}>
+      <div className="form-section">
+        <h4 className="section-header">GST Details</h4>
+        <div className="form-grid-2">
+          <div className="labeled-input">
+            <label>Code *</label>
+            <input name="code" placeholder="Code" value={gstForm.code} onChange={handleGstInput} required />
+          </div>
+          <div className="labeled-input">
+            <label>VAT % *</label>
+            <input name="vat" type="number" step="0.01" placeholder="VAT %" value={gstForm.vat} onChange={handleGstInput} required />
+          </div>
+        </div>
+        <div className="form-grid-2">
+          <div className="labeled-input">
+            <label>Purchase Type</label>
+            <select name="purchaseType" value={gstForm.purchaseType} onChange={handleGstInput}>
+              <option value="VAT ON PURCHASE PRICE">VAT ON PURCHASE PRICE</option>
+              <option value="VAT ON MRP">VAT ON MRP</option>
+              <option value="OTHER STATE">OTHER STATE</option>
+              <option value="EXPT PURCHASE">EXPT PURCHASE</option>
+              <option value="VAT ON MARGIN">VAT ON MARGIN</option>
+            </select>
+          </div>
+          <div className="labeled-input">
+            <label>Sales Type</label>
+            <select name="salesType" value={gstForm.salesType} onChange={handleGstInput}>
+              <option value="VAT ON SALES PRICE">VAT ON SALES PRICE</option>
+              <option value="VAT ON MRP">VAT ON MRP</option>
+              <option value="OTHER STATE">OTHER STATE</option>
+            </select>
+          </div>
+        </div>
+      </div>
+      <div className="form-actions">
+        <button type="submit" className="btn-primary">{editGstId ? 'Update' : 'Save'}</button>
+        <button type="button" className="btn-secondary" onClick={closeForm}>Cancel</button>
+      </div>
+    </form>
+  </div>
+)}
 
           {/* GST Master - Grid View */}
           {activeSubMenu === 'GST Master' && openFormFor !== 'GST Master' && (
@@ -3018,25 +3109,34 @@ const Dashboard = () => {
             ], 'gst', deleteGst)
           )}
 
-          {/* Area Master - Form View */}
-          {activeSubMenu === 'Area' && openFormFor === 'Area' && (
-            <div className="master-section">
-              <div className="form-header">
-                <div className="page-title-large">{editAreaId ? 'Edit Area' : 'Add New Area'}</div>
-                <button className="close-form-btn" onClick={closeForm}>✕</button>
-              </div>
-              <form className="master-form" onSubmit={saveArea}>
-                <div className="form-row">
-                  <div className="labeled-input"><label>Area Code *</label><input name="code" placeholder="Area Code" value={areaForm.code} onChange={handleAreaInput} required /></div>
-                  <div className="labeled-input"><label>Area Name *</label><input name="name" placeholder="Area Name" value={areaForm.name} onChange={handleAreaInput} required /></div>
-                </div>
-                <div className="form-actions">
-                  <button type="submit" className="btn-save">{editAreaId ? 'Update' : 'Save Area'}</button>
-                  <button type="button" className="btn-cancel" onClick={closeForm}>Cancel</button>
-                </div>
-              </form>
-            </div>
-          )}
+         {/* Area Master - Form View */}
+{activeSubMenu === 'Area' && openFormFor === 'Area' && (
+  <div className="master-section erp-master-form">
+    <div className="form-header">
+      <div className="page-title-large">{editAreaId ? 'Edit Area' : 'Add New Area'}</div>
+      <button className="close-form-btn" onClick={closeForm}>✕</button>
+    </div>
+    <form className="master-form" onSubmit={saveArea}>
+      <div className="form-section">
+        <h4 className="section-header">Basic Information</h4>
+        <div className="form-grid-2">
+          <div className="labeled-input">
+            <label>Area Code *</label>
+            <input name="code" placeholder="Area Code" value={areaForm.code} onChange={handleAreaInput} required />
+          </div>
+          <div className="labeled-input">
+            <label>Area Name *</label>
+            <input name="name" placeholder="Area Name" value={areaForm.name} onChange={handleAreaInput} required />
+          </div>
+        </div>
+      </div>
+      <div className="form-actions">
+        <button type="submit" className="btn-primary">{editAreaId ? 'Update' : 'Save Area'}</button>
+        <button type="button" className="btn-secondary" onClick={closeForm}>Cancel</button>
+      </div>
+    </form>
+  </div>
+)}
 
           {/* Area Master - Grid View */}
           {activeSubMenu === 'Area' && openFormFor !== 'Area' && (
@@ -3046,31 +3146,60 @@ const Dashboard = () => {
             ], 'area', deleteArea)
           )}
 
-          {/* Service Master - Form View */}
-          {activeSubMenu === 'Service' && openFormFor === 'Service' && (
-            <div className="master-section">
-              <div className="form-header">
-                <div className="page-title-large">{editServiceId ? 'Edit Service Information' : 'Add Service Information'}</div>
-                <button className="close-form-btn" onClick={closeForm}>✕</button>
-              </div>
-              <form className="master-form" onSubmit={saveService}>
-                <div className="form-row">
-                  <div className="labeled-input"><label>Code *</label><input name="code" placeholder="Code" value={serviceForm.code} onChange={handleServiceInput} required /></div>
-                  <div className="labeled-input"><label>Name *</label><input name="name" placeholder="Service Name" value={serviceForm.name} onChange={handleServiceInput} required /></div>
-                </div>
-                <div className="form-row"><div className="labeled-input"><label>VAT % *</label><input name="vat" type="number" step="0.01" placeholder="VAT %" value={serviceForm.vat} onChange={handleServiceInput} required /></div></div>
-                <div className="form-row">
-                  <div className="labeled-input"><label>Purchase Type</label><select name="purchaseType" value={serviceForm.purchaseType} onChange={handleServiceInput}><option value="VAT ON PURCHASE PRICE">VAT ON PURCHASE PRICE</option><option value="VAT ON MRP">VAT ON MRP</option><option value="OTHER STATE">OTHER STATE</option><option value="EXPT PURCHASE">EXPT PURCHASE</option><option value="VAT ON MARGIN">VAT ON MARGIN</option></select></div>
-                  <div className="labeled-input"><label>Sales Type</label><select name="salesType" value={serviceForm.salesType} onChange={handleServiceInput}><option value="VAT ON SALES PRICE">VAT ON SALES PRICE</option><option value="VAT ON MRP">VAT ON MRP</option><option value="OTHER STATE">OTHER STATE</option></select></div>
-                </div>
-                <div className="form-actions">
-                  <button type="submit" className="btn-save">{editServiceId ? 'Update' : 'Save'}</button>
-                  <button type="button" className="btn-cancel" onClick={closeForm}>Cancel</button>
-                </div>
-              </form>
-            </div>
-          )}
-
+         {/* Service Master - Form View */}
+{activeSubMenu === 'Service' && openFormFor === 'Service' && (
+  <div className="master-section erp-master-form">
+    <div className="form-header">
+      <div className="page-title-large">{editServiceId ? 'Edit Service Information' : 'Add Service Information'}</div>
+      <button className="close-form-btn" onClick={closeForm}>✕</button>
+    </div>
+    <form className="master-form" onSubmit={saveService}>
+      <div className="form-section">
+        <h4 className="section-header">Service Details</h4>
+        <div className="form-grid-2">
+          <div className="labeled-input">
+            <label>Code *</label>
+            <input name="code" placeholder="Code" value={serviceForm.code} onChange={handleServiceInput} required />
+          </div>
+          <div className="labeled-input">
+            <label>Name *</label>
+            <input name="name" placeholder="Service Name" value={serviceForm.name} onChange={handleServiceInput} required />
+          </div>
+        </div>
+        <div className="form-grid-2">
+          <div className="labeled-input">
+            <label>VAT % *</label>
+            <input name="vat" type="number" step="0.01" placeholder="VAT %" value={serviceForm.vat} onChange={handleServiceInput} required />
+          </div>
+          <div className="labeled-input">
+            <label>Purchase Type</label>
+            <select name="purchaseType" value={serviceForm.purchaseType} onChange={handleServiceInput}>
+              <option value="VAT ON PURCHASE PRICE">VAT ON PURCHASE PRICE</option>
+              <option value="VAT ON MRP">VAT ON MRP</option>
+              <option value="OTHER STATE">OTHER STATE</option>
+              <option value="EXPT PURCHASE">EXPT PURCHASE</option>
+              <option value="VAT ON MARGIN">VAT ON MARGIN</option>
+            </select>
+          </div>
+        </div>
+        <div className="form-grid-2">
+          <div className="labeled-input">
+            <label>Sales Type</label>
+            <select name="salesType" value={serviceForm.salesType} onChange={handleServiceInput}>
+              <option value="VAT ON SALES PRICE">VAT ON SALES PRICE</option>
+              <option value="VAT ON MRP">VAT ON MRP</option>
+              <option value="OTHER STATE">OTHER STATE</option>
+            </select>
+          </div>
+        </div>
+      </div>
+      <div className="form-actions">
+        <button type="submit" className="btn-primary">{editServiceId ? 'Update' : 'Save'}</button>
+        <button type="button" className="btn-secondary" onClick={closeForm}>Cancel</button>
+      </div>
+    </form>
+  </div>
+)}
           {/* Service Master - Grid View */}
           {activeSubMenu === 'Service' && openFormFor !== 'Service' && (
             renderDataTable('Services List', getFilteredServices(), [
@@ -3084,48 +3213,101 @@ const Dashboard = () => {
           )}
 
           {/* Salesman Master - Form View */}
-          {activeSubMenu === 'Salesman' && openFormFor === 'Salesman' && (
-            <div className="master-section">
-              <div className="form-header">
-                <div className="page-title-large">{editSalesmanId ? 'Edit Salesman Information' : 'Add Salesman Information'}</div>
-                <button className="close-form-btn" onClick={closeForm}>✕</button>
-              </div>
-              <form className="master-form" onSubmit={saveSalesman}>
-                <div className="form-row">
-                  <div className="labeled-input"><label>SalesMan Code</label><input name="code" placeholder="SalesMan Code" value={salesmanForm.code} onChange={handleSalesmanInput} required /></div>
-                  <div className="labeled-input"><label>SalesMan Name</label><input name="name" placeholder="SalesMan Name" value={salesmanForm.name} onChange={handleSalesmanInput} required /></div>
-                </div>
-                <div className="form-row">
-                  <div className="labeled-input"><label>SalesMan Types</label><select name="type" value={salesmanForm.type} onChange={handleSalesmanInput}><option value="SALESMAN">SALESMAN</option><option value="DELIVERY BOY">DELIVERY BOY</option><option value="COLLECTION PERSON">COLLECTION PERSON</option></select></div>
-                  <div className="labeled-input"><label>Address</label><input name="address" placeholder="Address" value={salesmanForm.address} onChange={handleSalesmanInput} /></div>
-                </div>
-                <div className="form-grid-3">
-                  <div className="labeled-input"><label>Town</label><input name="town" placeholder="Town" value={salesmanForm.town} onChange={handleSalesmanInput} /></div>
-                  <div className="labeled-input"><label>Pin Code</label><input name="pinCode" placeholder="Pin Code" value={salesmanForm.pinCode} onChange={handleSalesmanInput} /></div>
-                  <div className="labeled-input"><label>State</label><input name="state" placeholder="State" value={salesmanForm.state} onChange={handleSalesmanInput} /></div>
-                </div>
-                <div className="form-grid-3">
-                  <div className="labeled-input"><label>Country</label><input name="country" placeholder="Country" value={salesmanForm.country} onChange={handleSalesmanInput} /></div>
-                  <div className="labeled-input"><label>Phone No.</label><input name="phoneNo" placeholder="Phone No." value={salesmanForm.phoneNo} onChange={handleSalesmanInput} /></div>
-                  <div className="labeled-input"><label>Mobile No.</label><input name="mobileNo" placeholder="Mobile No." value={salesmanForm.mobileNo} onChange={handleSalesmanInput} /></div>
-                </div>
-                <div className="form-grid-3">
-                  <div className="labeled-input"><label>EmailID</label><input name="emailId" placeholder="EmailID" value={salesmanForm.emailId} onChange={handleSalesmanInput} type="email" /></div>
-                  <div className="labeled-input"><label>Date Of Birth</label><input name="dateOfBirth" type="date" placeholder="Date Of Birth" value={salesmanForm.dateOfBirth} onChange={handleSalesmanInput} /></div>
-                  <div className="labeled-input"><label>Qualification</label><input name="qualification" placeholder="Qualification" value={salesmanForm.qualification} onChange={handleSalesmanInput} /></div>
-                </div>
-                <div className="form-grid-3">
-                  <div className="labeled-input"><label>Reference</label><input name="reference" placeholder="Reference" value={salesmanForm.reference} onChange={handleSalesmanInput} /></div>
-                  <div className="labeled-input"><label>IMEI No</label><input name="imeiNo" placeholder="IMEI No" value={salesmanForm.imeiNo} onChange={handleSalesmanInput} /></div>
-                </div>
-                <div className="form-actions">
-                  <button type="submit" className="btn-save">{editSalesmanId ? 'Update' : 'Save'}</button>
-                  <button type="button" className="btn-cancel" onClick={closeForm}>Cancel</button>
-                </div>
-              </form>
-            </div>
-          )}
-
+{activeSubMenu === 'Salesman' && openFormFor === 'Salesman' && (
+  <div className="master-section erp-master-form">
+    <div className="form-header">
+      <div className="page-title-large">{editSalesmanId ? 'Edit Salesman Information' : 'Add Salesman Information'}</div>
+      <button className="close-form-btn" onClick={closeForm}>✕</button>
+    </div>
+    <form className="master-form" onSubmit={saveSalesman}>
+      <div className="form-section">
+        <h4 className="section-header">Personal Information</h4>
+        <div className="form-grid-2">
+          <div className="labeled-input">
+            <label>SalesMan Code *</label>
+            <input name="code" placeholder="SalesMan Code" value={salesmanForm.code} onChange={handleSalesmanInput} required />
+          </div>
+          <div className="labeled-input">
+            <label>SalesMan Name *</label>
+            <input name="name" placeholder="SalesMan Name" value={salesmanForm.name} onChange={handleSalesmanInput} required />
+          </div>
+        </div>
+        <div className="form-grid-2">
+          <div className="labeled-input">
+            <label>SalesMan Type</label>
+            <select name="type" value={salesmanForm.type} onChange={handleSalesmanInput}>
+              <option value="SALESMAN">SALESMAN</option>
+              <option value="DELIVERY BOY">DELIVERY BOY</option>
+              <option value="COLLECTION PERSON">COLLECTION PERSON</option>
+            </select>
+          </div>
+          <div className="labeled-input">
+            <label>Date Of Birth</label>
+            <input name="dateOfBirth" type="date" value={salesmanForm.dateOfBirth} onChange={handleSalesmanInput} />
+          </div>
+        </div>
+        <div className="form-row-single">
+          <div className="labeled-input">
+            <label>Address</label>
+            <input name="address" placeholder="Address" value={salesmanForm.address} onChange={handleSalesmanInput} />
+          </div>
+        </div>
+        <div className="form-grid-3">
+          <div className="labeled-input">
+            <label>Town</label>
+            <input name="town" placeholder="Town" value={salesmanForm.town} onChange={handleSalesmanInput} />
+          </div>
+          <div className="labeled-input">
+            <label>Pin Code</label>
+            <input name="pinCode" placeholder="Pin Code" value={salesmanForm.pinCode} onChange={handleSalesmanInput} />
+          </div>
+          <div className="labeled-input">
+            <label>State</label>
+            <input name="state" placeholder="State" value={salesmanForm.state} onChange={handleSalesmanInput} />
+          </div>
+        </div>
+        <div className="form-grid-3">
+          <div className="labeled-input">
+            <label>Country</label>
+            <input name="country" placeholder="Country" value={salesmanForm.country} onChange={handleSalesmanInput} />
+          </div>
+          <div className="labeled-input">
+            <label>Phone No.</label>
+            <input name="phoneNo" placeholder="Phone No." value={salesmanForm.phoneNo} onChange={handleSalesmanInput} />
+          </div>
+          <div className="labeled-input">
+            <label>Mobile No.</label>
+            <input name="mobileNo" placeholder="Mobile No." value={salesmanForm.mobileNo} onChange={handleSalesmanInput} />
+          </div>
+        </div>
+        <div className="form-grid-3">
+          <div className="labeled-input">
+            <label>Email ID</label>
+            <input name="emailId" placeholder="Email ID" value={salesmanForm.emailId} onChange={handleSalesmanInput} type="email" />
+          </div>
+          <div className="labeled-input">
+            <label>Qualification</label>
+            <input name="qualification" placeholder="Qualification" value={salesmanForm.qualification} onChange={handleSalesmanInput} />
+          </div>
+          <div className="labeled-input">
+            <label>Reference</label>
+            <input name="reference" placeholder="Reference" value={salesmanForm.reference} onChange={handleSalesmanInput} />
+          </div>
+        </div>
+        <div className="form-grid-2">
+          <div className="labeled-input">
+            <label>IMEI No</label>
+            <input name="imeiNo" placeholder="IMEI No" value={salesmanForm.imeiNo} onChange={handleSalesmanInput} />
+          </div>
+        </div>
+      </div>
+      <div className="form-actions">
+        <button type="submit" className="btn-primary">{editSalesmanId ? 'Update' : 'Save'}</button>
+        <button type="button" className="btn-secondary" onClick={closeForm}>Cancel</button>
+      </div>
+    </form>
+  </div>
+)}
           {/* Salesman Master - Grid View */}
           {activeSubMenu === 'Salesman' && openFormFor !== 'Salesman' && (
             renderDataTable('Salesmen List', getFilteredSalesmen(), [
@@ -3273,123 +3455,105 @@ const Dashboard = () => {
                               />
                               
 
-                              {/* Product Selection Dropdown */}
-                              {showProductList && currentProductIndex === index &&
-                                productListFilter.trim() !== '' && (
-                                  <div className="erlay">
-                                    <div className="product-dropdown">
-                                      {/* <div className="dropdown-header">
-                      <input
-                        type="text"
-                        placeholder="Search products..."
-                        value={productListFilter}
-                        onChange={(e) => setProductListFilter(e.target.value)}
-                        autoFocus
-                      />
-                      <button onClick={() => setShowProductList(false)}>✕</button>
-                    </div> */}
-                                      <div className="dropdown-list">
-                                        <table
-  style={{
-    width: '100%',
-    borderCollapse: 'collapse',
-    fontSize: '12px'
-  }}
->
-
-  <thead>
-
-    <tr
-      style={{
-        background: '#eff6ff',
-        position: 'sticky',
-        top: 0
-      }}
-    >
-
-      <th style={{ padding: '6px', textAlign: 'left' }}>
-        ID
-      </th>
-
-      <th style={{ padding: '6px', textAlign: 'left' }}>
-        Name
-      </th>
-
-      <th style={{ padding: '6px', textAlign: 'left' }}>
-        MRP
-      </th>
-
-      <th style={{ padding: '6px', textAlign: 'left' }}>
-        Batch
-      </th>
-
-    </tr>
-
-  </thead>
-
-  <tbody>
-
-    {products
-      .filter(p =>
-        p.name.toLowerCase().includes(productListFilter.toLowerCase()) ||
-        p.code.toLowerCase().includes(productListFilter.toLowerCase())
-      )
-      .map(product => {
-
-        const productBatch = batches.find(
-          b => b.productId === product.id
-        );
-
-        return (
-
-          <tr
-            key={product.id}
-            onClick={() =>
-              handleProductSelect(currentProductIndex, {
-                ...product,
-                selectedBatch: productBatch
-              })
-            }
+                         {/* Product Selection Dropdown */}
+{showProductList && currentProductIndex === index &&
+  productListFilter.trim() !== '' && (
+    <div className="erlay">
+      <div className="product-dropdown">
+        <div className="dropdown-list">
+          <table
             style={{
-              cursor: 'pointer',
-              borderBottom: '1px solid #eee'
-            }}
-            onMouseEnter={(e) => {
-              e.currentTarget.style.background = '#f8fafc';
-            }}
-            onMouseLeave={(e) => {
-              e.currentTarget.style.background = 'white';
+              width: '100%',
+              borderCollapse: 'collapse',
+              fontSize: '12px'
             }}
           >
-
-            <td style={{ padding: '6px' }}>
-              {product.code}
-            </td>
-
-            <td style={{ padding: '6px' }}>
-              {product.name}
-            </td>
-
-            <td style={{ padding: '6px' }}>
-              {product.mrp || 0}
-            </td>
-
-            <td style={{ padding: '6px' }}>
-              {productBatch?.batchNo || '-'}
-            </td>
-
-          </tr>
-
-        );
-      })}
-
-  </tbody>
-
-</table>
-                                      </div>
-                                    </div>
-                                  </div>
-                                )}
+            <thead>
+              <tr
+                style={{
+                  background: '#eff6ff',
+                  position: 'sticky',
+                  top: 0
+                }}
+              >
+                <th style={{ padding: '6px', textAlign: 'left' }}>
+                  Item Code
+                </th>
+                <th style={{ padding: '6px', textAlign: 'left' }}>
+                  Name
+                </th>
+                <th style={{ padding: '6px', textAlign: 'left' }}>
+                  Batch
+                </th>
+                <th style={{ padding: '6px', textAlign: 'left' }}>
+                  MRP
+                </th>
+                <th style={{ padding: '6px', textAlign: 'left' }}>
+                  Sales Rate
+                </th>
+                <th style={{ padding: '6px', textAlign: 'left' }}>
+                  Stock
+                </th>
+              </tr>
+            </thead>
+            <tbody>
+              {products
+                .filter(p =>
+                  p.name.toLowerCase().includes(productListFilter.toLowerCase()) ||
+                  p.code.toLowerCase().includes(productListFilter.toLowerCase())
+                )
+                .map(product => {
+                  const productBatch = batches.find(
+                    b => b.productId === product.id
+                  );
+                  
+                  return (
+                    <tr
+                      key={product.id}
+                      onClick={() =>
+                        handleProductSelect(currentProductIndex, {
+                          ...product,
+                          selectedBatch: productBatch
+                        })
+                      }
+                      style={{
+                        cursor: 'pointer',
+                        borderBottom: '1px solid #eee'
+                      }}
+                      onMouseEnter={(e) => {
+                        e.currentTarget.style.background = '#f8fafc';
+                      }}
+                      onMouseLeave={(e) => {
+                        e.currentTarget.style.background = 'white';
+                      }}
+                    >
+                      <td style={{ padding: '6px' }}>
+                        {product.code}
+                      </td>
+                      <td style={{ padding: '6px' }}>
+                        {product.name}
+                      </td>
+                      <td style={{ padding: '6px' }}>
+                        {productBatch?.batchNo || '-'}
+                      </td>
+                      <td style={{ padding: '6px' }}>
+                        {product.mrp || 0}
+                      </td>
+                      <td style={{ padding: '6px' }}>
+                        {product.salesRate || product.mrp || 0}
+                      </td>
+                      <td style={{ padding: '6px' }}>
+                        {productBatch?.stock || 0}
+                      </td>
+                    </tr>
+                  );
+                })}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  )}
                             </td>
                             <td>
                               <select
@@ -5082,359 +5246,555 @@ const Dashboard = () => {
       </main>
 
 
-      {/* batch mode show */}
-      {showBatchModal && (
-        <div
+    {/* Batch Modal */}
+{showBatchModal && (
+  <div
+    style={{
+      position: 'fixed',
+      inset: 0,
+      background: 'rgba(0,0,0,0.4)',
+      display: 'flex',
+      justifyContent: 'center',
+      alignItems: 'center',
+      zIndex: 999999
+    }}
+    onClick={(e) => {
+      if (e.target === e.currentTarget) setShowBatchModal(false);
+    }}
+  >
+    <div
+      style={{
+        width: '800px',
+        background: 'white',
+        borderRadius: '10px',
+        padding: '20px',
+        maxHeight: '90vh',
+        overflowY: 'auto',
+        boxShadow: '0 20px 25px -5px rgba(0,0,0,0.1)'
+      }}
+    >
+      {/* Header */}
+      <div
+        style={{
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+          marginBottom: '20px',
+          paddingBottom: '15px',
+          borderBottom: '1px solid #e5e7eb'
+        }}
+      >
+        <h2 style={{ margin: 0, fontSize: '18px', fontWeight: '600' }}>Batch Details</h2>
+        <button
+          onClick={() => setShowBatchModal(false)}
           style={{
-            position: 'fixed',
-            inset: 0,
-            background: 'rgba(0,0,0,0.4)',
-            display: 'flex',
-            justifyContent: 'center',
-            alignItems: 'center',
-            zIndex: 999999
+            background: 'none',
+            border: 'none',
+            fontSize: '20px',
+            cursor: 'pointer',
+            padding: '4px 8px'
           }}
         >
+          ✕
+        </button>
+      </div>
+
+      {/* Existing / New Batch Tabs */}
+      <div
+        style={{
+          display: 'flex',
+          gap: '10px',
+          marginBottom: '20px',
+          borderBottom: '1px solid #e5e7eb',
+          paddingBottom: '10px'
+        }}
+      >
+        <button
+          type="button"
+          onClick={() => setBatchMode('existing')}
+          style={{
+            padding: '8px 20px',
+            background: batchMode === 'existing' ? '#2563eb' : '#f3f4f6',
+            color: batchMode === 'existing' ? 'white' : '#374151',
+            border: 'none',
+            borderRadius: '6px',
+            cursor: 'pointer',
+            fontWeight: '500',
+            transition: 'all 0.2s'
+          }}
+        >
+          Existing Batch
+        </button>
+
+        <button
+          type="button"
+          onClick={() => setBatchMode('new')}
+          style={{
+            padding: '8px 20px',
+            background: batchMode === 'new' ? '#2563eb' : '#f3f4f6',
+            color: batchMode === 'new' ? 'white' : '#374151',
+            border: 'none',
+            borderRadius: '6px',
+            cursor: 'pointer',
+            fontWeight: '500',
+            transition: 'all 0.2s'
+          }}
+        >
+          New Batch
+        </button>
+      </div>
+
+      {/* Existing Batch Mode */}
+      {batchMode === 'existing' && (
+        <>
+          <div
+            style={{
+              border: '1px solid #e5e7eb',
+              borderRadius: '8px',
+              maxHeight: '350px',
+              overflowY: 'auto',
+              marginBottom: '20px'
+            }}
+          >
+            {existingBatches.length === 0 && (
+              <div style={{ padding: '40px', textAlign: 'center', color: '#6b7280' }}>
+                No Existing Batch Found
+              </div>
+            )}
+
+            <table
+              style={{
+                width: '100%',
+                borderCollapse: 'collapse',
+                fontSize: '12px'
+              }}
+            >
+              <thead>
+                <tr
+                  style={{
+                    background: '#f8fafc',
+                    position: 'sticky',
+                    top: 0,
+                    borderBottom: '2px solid #e5e7eb'
+                  }}
+                >
+                  <th style={{ padding: '10px', textAlign: 'center', width: '60px' }}>Sl</th>
+                  <th style={{ padding: '10px', textAlign: 'left' }}>Batch</th>
+                  <th style={{ padding: '10px', textAlign: 'right' }}>MRP</th>
+                  <th style={{ padding: '10px', textAlign: 'center' }}>Mfg Date</th>
+                  <th style={{ padding: '10px', textAlign: 'center' }}>Expiry Date</th>
+                  <th style={{ padding: '10px', textAlign: 'right' }}>Stock</th>
+                  <th style={{ padding: '10px', textAlign: 'right' }}>Sales Rate</th>
+                  <th style={{ padding: '10px', textAlign: 'right' }}>Purchase Rate</th>
+                  <th style={{ padding: '10px', textAlign: 'center', width: '60px' }}>BoxPack</th>
+                 </tr>
+              </thead>
+              <tbody>
+                {existingBatches.map((batch, idx) => (
+                  <tr
+                    key={idx}
+                    onClick={() => {
+                      const updatedItems = [...purchaseItems];
+                      updatedItems[currentBatchRow] = {
+                        ...updatedItems[currentBatchRow],
+                        batchNo: batch.batchNo,
+                        mfgDate: batch.mfgDate,
+                        expDate: batch.expDate,
+                        mrp: batch.mrp,
+                        purRate: batch.purchaseRate,
+                        salesRate: batch.salesRate,
+                        quantity: updatedItems[currentBatchRow]?.quantity || 1,
+                        stockQty: batch.stockQty,
+                        boxPack: batch.boxPack || 1
+                      };
+                      setPurchaseItems(updatedItems);
+                      setShowBatchModal(false);
+                    }}
+                    style={{
+                      cursor: 'pointer',
+                      transition: '0.2s',
+                      borderBottom: '1px solid #f3f4f6'
+                    }}
+                    onMouseEnter={(e) => {
+                      e.currentTarget.style.background = '#eff6ff';
+                    }}
+                    onMouseLeave={(e) => {
+                      e.currentTarget.style.background = 'transparent';
+                    }}
+                  >
+                    <td style={{ padding: '8px', textAlign: 'center' }}>{idx + 1}</td>
+                    <td style={{ padding: '8px' }}>
+                      <span style={{ fontWeight: '500', color: '#2563eb' }}>{batch.batchNo}</span>
+                    </td>
+                    <td style={{ padding: '8px', textAlign: 'right' }}>₹{parseFloat(batch.mrp || 0).toFixed(2)}</td>
+                    <td style={{ padding: '8px', textAlign: 'center' }}>
+                      {batch.mfgDate !== '01/01/1900' && batch.mfgDate !== '1900-01-01' 
+                        ? batch.mfgDate 
+                        : '-'}
+                    </td>
+                    <td style={{ padding: '8px', textAlign: 'center' }}>
+                      {batch.expDate !== '01/01/1900' && batch.expDate !== '1900-01-01' 
+                        ? batch.expDate 
+                        : '-'}
+                    </td>
+                    <td style={{ padding: '8px', textAlign: 'right' }}>
+                      <span style={{ color: parseFloat(batch.stockQty) < 0 ? '#dc2626' : '#059669' }}>
+                        {parseFloat(batch.stockQty).toFixed(0)}
+                      </span>
+                    </td>
+                    <td style={{ padding: '8px', textAlign: 'right' }}>₹{parseFloat(batch.salesRate || 0).toFixed(2)}</td>
+                    <td style={{ padding: '8px', textAlign: 'right' }}>₹{parseFloat(batch.purchaseRate || 0).toFixed(2)}</td>
+                    <td style={{ padding: '8px', textAlign: 'center' }}>{batch.boxPack || 1}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
 
           <div
             style={{
-              width: '700px',
-              background: 'white',
-              borderRadius: '10px',
-              padding: '20px'
+              display: 'flex',
+              justifyContent: 'flex-end',
+              alignItems: 'center',
+              gap: '10px',
+              paddingTop: '10px',
+              borderTop: '1px solid #e5e7eb'
             }}
           >
-
-            <div
+            <div style={{ flex: 1, fontSize: '12px', color: '#6b7280' }}>
+              <strong>Total Batches:</strong> {existingBatches.length}
+            </div>
+            <button
+              type="button"
+              onClick={() => setShowBatchModal(false)}
               style={{
-                display: 'flex',
-                justifyContent: 'space-between',
-                alignItems: 'center',
-                marginBottom: '20px'
+                padding: '8px 20px',
+                background: '#6b7280',
+                color: 'white',
+                border: 'none',
+                borderRadius: '6px',
+                cursor: 'pointer'
               }}
             >
-
-              <h2>Batch Details</h2>
-
-              <button
-                onClick={() => setShowBatchModal(false)}
-              >
-                ✕
-              </button>
-
-            </div>
-            <div
-              style={{
-                display: 'flex',
-                gap: '10px',
-                marginBottom: '20px'
-              }}
-            >
-
-              <button
-                type="button"
-                onClick={() => setBatchMode('existing')}
-                style={{
-                  padding: '8px 14px',
-                  background: batchMode === 'existing' ? '#2563eb' : '#e5e7eb',
-                  color: batchMode === 'existing' ? 'white' : 'black',
-                  border: 'none',
-                  borderRadius: '6px',
-                  cursor: 'pointer'
-                }}
-              >
-                Existing Batch
-              </button>
-
-
-              <button
-                type="button"
-                onClick={() => setBatchMode('new')}
-                style={{
-                  padding: '8px 14px',
-                  background: batchMode === 'new' ? '#2563eb' : '#e5e7eb',
-                  color: batchMode === 'new' ? 'white' : 'black',
-                  border: 'none',
-                  borderRadius: '6px',
-                  cursor: 'pointer'
-                }}
-              >
-                New Batch
-              </button>
-
-
-            </div>
-            {batchMode === 'existing' && (
-
-              <div
-                style={{
-                  border: '1px solid #ddd',
-                  borderRadius: '8px',
-                  maxHeight: '250px',
-                  overflowY: 'auto',
-                  marginBottom: '20px'
-                }}
-              >
-
-                {existingBatches.length === 0 && (
-                  <div style={{ padding: '15px' }}>
-                    No Existing Batch Found
-                  </div>
-                )}
-
-                <table
-                  style={{
-                    width: '100%',
-                    borderCollapse: 'collapse'
-                  }}
-                >
-
-                  <thead>
-
-                    <tr
-                      style={{
-                        background: '#0ea5e9',
-                        color: 'white'
-                      }}
-                    >
-                      <th style={{ padding: '8px', border: '1px solid #ddd' }}>
-                        Select
-                      </th>
-                      <th style={{ padding: '8px', border: '1px solid #ddd' }}>
-                        Batch
-                      </th>
-
-                      <th style={{ padding: '8px', border: '1px solid #ddd' }}>
-                        MRP
-                      </th>
-
-                      <th style={{ padding: '8px', border: '1px solid #ddd' }}>
-                        MFG Date
-                      </th>
-
-                      <th style={{ padding: '8px', border: '1px solid #ddd' }}>
-                        Expiry
-                      </th>
-
-                      <th style={{ padding: '8px', border: '1px solid #ddd' }}>
-                        Stock
-                      </th>
-
-                      <th style={{ padding: '8px', border: '1px solid #ddd' }}>
-                        Sales Rate
-                      </th>
-
-                      <th style={{ padding: '8px', border: '1px solid #ddd' }}>
-                        Purchase Rate
-                      </th>
-
-                    </tr>
-
-                  </thead>
-
-                  <tbody>
-
-                    {existingBatches.map((batch, idx) => (
-
-                      <tr
-                        key={idx}
-                        onClick={() => {
-
-                          const updatedItems = [...purchaseItems];
-
-                          updatedItems[currentBatchRow] = {
-                            ...updatedItems[currentBatchRow],
-
-                            batchNo: batch.batchNo,
-                            mfgDate: batch.mfgDate,
-                            expDate: batch.expDate,
-
-                            mrp: batch.mrp,
-                            purRate: batch.purchaseRate,
-                            salesRate: batch.salesRate,
-
-                            quantity: 1,
-
-                            stockQty: batch.stockQty
-                          };
-
-                          setPurchaseItems(updatedItems);
-
-                          setShowBatchModal(false);
-
-                        }}
-                        style={{
-                          cursor: 'pointer',
-                          transition: '0.2s'
-                        }}
-                        onMouseEnter={(e) => {
-                          e.currentTarget.style.background = '#dbeafe';
-                        }}
-                        onMouseLeave={(e) => {
-                          e.currentTarget.style.background = 'white';
-                        }}
-                      >
-                        <td style={{ padding: '8px', border: '1px solid #ddd' }}>
-
-                          <button
-                            type="button"
-                            style={{
-                              background: '#2563eb',
-                              color: 'white',
-                              border: 'none',
-                              padding: '4px 10px',
-                              borderRadius: '4px',
-                              cursor: 'pointer'
-                            }}
-                          >
-                            Select
-                          </button>
-
-                        </td>
-                        <td style={{ padding: '8px', border: '1px solid #ddd' }}>
-                          {batch.batchNo}
-                        </td>
-
-                        <td style={{ padding: '8px', border: '1px solid #ddd' }}>
-                          {batch.mrp}
-                        </td>
-
-                        <td style={{ padding: '8px', border: '1px solid #ddd' }}>
-                          {batch.mfgDate}
-                        </td>
-
-                        <td style={{ padding: '8px', border: '1px solid #ddd' }}>
-                          {batch.expDate}
-                        </td>
-
-                        <td style={{ padding: '8px', border: '1px solid #ddd' }}>
-                          {batch.stockQty}
-                        </td>
-
-                        <td style={{ padding: '8px', border: '1px solid #ddd' }}>
-                          {batch.salesRate}
-                        </td>
-
-                        <td style={{ padding: '8px', border: '1px solid #ddd' }}>
-                          {batch.purchaseRate}
-                        </td>
-
-                      </tr>
-
-                    ))}
-
-                  </tbody>
-
-                </table>
-
-              </div>
-            )}
-            {batchMode === 'new' && (
-              <div
-                style={{
-                  display: 'grid',
-                  gridTemplateColumns: '1fr 1fr',
-                  gap: '15px'
-                }}
-              >
-
-                <input
-                  type="text"
-                  placeholder="Batch No"
-                  value={batchForm.batchNo}
-                  onChange={(e) =>
-                    setBatchForm({
-                      ...batchForm,
-                      batchNo: e.target.value
-                    })
-                  }
-                />
-
-                <input
-                  type="date"
-                  value={batchForm.mfgDate}
-                  onChange={(e) =>
-                    setBatchForm({
-                      ...batchForm,
-                      mfgDate: e.target.value
-                    })
-                  }
-                />
-
-                <input
-                  type="date"
-                  value={batchForm.expDate}
-                  onChange={(e) =>
-                    setBatchForm({
-                      ...batchForm,
-                      expDate: e.target.value
-                    })
-                  }
-                />
-
-                <input
-                  type="number"
-                  placeholder="MRP"
-                  value={batchForm.mrp}
-                  onChange={(e) =>
-                    setBatchForm({
-                      ...batchForm,
-                      mrp: e.target.value
-                    })
-                  }
-                />
-
-              </div>
-            )}
-
-            {batchMode === 'new' && (
-
-              <div
-                style={{
-                  display: 'flex',
-                  justifyContent: 'flex-end',
-                  gap: '10px',
-                  marginTop: '20px'
-                }}
-              >
-
-                <button
-                  type="button"
-                  onClick={() => setShowBatchModal(false)}
-                  style={{
-                    background: '#2563eb',
-                    color: 'white',
-                    border: 'none',
-                    padding: '8px 16px',
-                    borderRadius: '6px'
-                  }}
-                >
-                  Cancel
-                </button>
-
-                <button
-                  type="button"
-                  onClick={saveBatchDetails}
-                  style={{
-                    background: '#2563eb',
-                    color: 'white',
-                    border: 'none',
-                    padding: '8px 16px',
-                    borderRadius: '6px'
-                  }}
-                >
-                  Save Batch
-                </button>
-
-              </div>
-            )}
+              Cancel
+            </button>
           </div>
-
-        </div>
+        </>
       )}
 
+      {/* New Batch Mode - Reordered and with fields removed */}
+      {batchMode === 'new' && (
+        <>
+          {/* Row 1: Batch No, Mfg Date, Exp Date */}
+          <div
+            style={{
+              display: 'grid',
+              gridTemplateColumns: '1fr 1fr 1fr',
+              gap: '15px',
+              marginBottom: '20px'
+            }}
+          >
+            <div className="labeled-input">
+              <label style={{ fontSize: '12px', fontWeight: '500', marginBottom: '4px', display: 'block' }}>Batch No *</label>
+              <input
+                type="text"
+                placeholder="Enter Batch Number"
+                value={batchForm.batchNo}
+                onChange={(e) =>
+                  setBatchForm({
+                    ...batchForm,
+                    batchNo: e.target.value
+                  })
+                }
+                style={{
+                  width: '100%',
+                  padding: '8px 12px',
+                  border: '1px solid #e5e7eb',
+                  borderRadius: '6px',
+                  fontSize: '14px'
+                }}
+              />
+            </div>
+
+            <div className="labeled-input">
+              <label style={{ fontSize: '12px', fontWeight: '500', marginBottom: '4px', display: 'block' }}>Mfg Date</label>
+              <input
+                type="date"
+                value={batchForm.mfgDate}
+                onChange={(e) =>
+                  setBatchForm({
+                    ...batchForm,
+                    mfgDate: e.target.value
+                  })
+                }
+                style={{
+                  width: '100%',
+                  padding: '8px 12px',
+                  border: '1px solid #e5e7eb',
+                  borderRadius: '6px',
+                  fontSize: '14px'
+                }}
+              />
+            </div>
+
+            <div className="labeled-input">
+              <label style={{ fontSize: '12px', fontWeight: '500', marginBottom: '4px', display: 'block' }}>Expiry Date</label>
+              <input
+                type="date"
+                value={batchForm.expDate}
+                onChange={(e) =>
+                  setBatchForm({
+                    ...batchForm,
+                    expDate: e.target.value
+                  })
+                }
+                style={{
+                  width: '100%',
+                  padding: '8px 12px',
+                  border: '1px solid #e5e7eb',
+                  borderRadius: '6px',
+                  fontSize: '14px'
+                }}
+              />
+            </div>
+          </div>
+
+          {/* Row 2: MRP, Purchase Rate, Sales Rate */}
+          <div
+            style={{
+              display: 'grid',
+              gridTemplateColumns: '1fr 1fr 1fr',
+              gap: '15px',
+              marginBottom: '20px'
+            }}
+          >
+            <div className="labeled-input">
+              <label style={{ fontSize: '12px', fontWeight: '500', marginBottom: '4px', display: 'block' }}>MRP *</label>
+              <input
+                type="number"
+                placeholder="Enter MRP"
+                value={batchForm.mrp}
+                onChange={(e) =>
+                  setBatchForm({
+                    ...batchForm,
+                    mrp: e.target.value
+                  })
+                }
+                style={{
+                  width: '100%',
+                  padding: '8px 12px',
+                  border: '1px solid #e5e7eb',
+                  borderRadius: '6px',
+                  fontSize: '14px'
+                }}
+              />
+            </div>
+
+            <div className="labeled-input">
+              <label style={{ fontSize: '12px', fontWeight: '500', marginBottom: '4px', display: 'block' }}>Purchase Rate</label>
+              <input
+                type="number"
+                placeholder="Enter Purchase Rate"
+                value={batchForm.purchaseRate}
+                onChange={(e) =>
+                  setBatchForm({
+                    ...batchForm,
+                    purchaseRate: e.target.value
+                  })
+                }
+                style={{
+                  width: '100%',
+                  padding: '8px 12px',
+                  border: '1px solid #e5e7eb',
+                  borderRadius: '6px',
+                  fontSize: '14px'
+                }}
+              />
+            </div>
+
+            <div className="labeled-input">
+              <label style={{ fontSize: '12px', fontWeight: '500', marginBottom: '4px', display: 'block' }}>Sales Rate</label>
+              <input
+                type="number"
+                placeholder="Enter Sales Rate"
+                value={batchForm.salesRate}
+                onChange={(e) =>
+                  setBatchForm({
+                    ...batchForm,
+                    salesRate: e.target.value
+                  })
+                }
+                style={{
+                  width: '100%',
+                  padding: '8px 12px',
+                  border: '1px solid #e5e7eb',
+                  borderRadius: '6px',
+                  fontSize: '14px'
+                }}
+              />
+            </div>
+          </div>
+
+          {/* Row 3: Rate Per Unit (Default 1), Previous Purchase Rate */}
+          <div
+            style={{
+              display: 'grid',
+              gridTemplateColumns: '1fr 1fr',
+              gap: '15px',
+              marginBottom: '20px'
+            }}
+          >
+            <div className="labeled-input">
+              <label style={{ fontSize: '12px', fontWeight: '500', marginBottom: '4px', display: 'block' }}>Rate Per Unit</label>
+              <input
+                type="number"
+                step="0.01"
+                placeholder="Rate Per Unit"
+                value={batchForm.ratePerUnit || '1'}
+                onChange={(e) =>
+                  setBatchForm({
+                    ...batchForm,
+                    ratePerUnit: e.target.value
+                  })
+                }
+                style={{
+                  width: '100%',
+                  padding: '8px 12px',
+                  border: '1px solid #e5e7eb',
+                  borderRadius: '6px',
+                  fontSize: '14px'
+                }}
+              />
+              <div style={{ fontSize: '11px', color: '#6b7280', marginTop: '4px' }}>Default: 1</div>
+            </div>
+
+            <div className="labeled-input">
+              <label style={{ fontSize: '12px', fontWeight: '500', marginBottom: '4px', display: 'block' }}>Previous Purchase Rate</label>
+              <input
+                type="number"
+                step="0.01"
+                placeholder="Previous Purchase Rate"
+                value={batchForm.previousPurchaseRate}
+                onChange={(e) =>
+                  setBatchForm({
+                    ...batchForm,
+                    previousPurchaseRate: e.target.value
+                  })
+                }
+                style={{
+                  width: '100%',
+                  padding: '8px 12px',
+                  border: '1px solid #e5e7eb',
+                  borderRadius: '6px',
+                  fontSize: '14px'
+                }}
+              />
+            </div>
+          </div>
+
+          {/* Hidden/Additional fields (Stock Qty and Box Pack) - kept but can be hidden if needed */}
+          <div
+            style={{
+              display: 'grid',
+              gridTemplateColumns: '1fr 1fr',
+              gap: '15px',
+              marginBottom: '20px'
+            }}
+          >
+            <div className="labeled-input">
+              <label style={{ fontSize: '12px', fontWeight: '500', marginBottom: '4px', display: 'block' }}>Stock Quantity</label>
+              <input
+                type="number"
+                placeholder="Enter Stock Quantity"
+                value={batchForm.stockQty}
+                onChange={(e) =>
+                  setBatchForm({
+                    ...batchForm,
+                    stockQty: e.target.value
+                  })
+                }
+                style={{
+                  width: '100%',
+                  padding: '8px 12px',
+                  border: '1px solid #e5e7eb',
+                  borderRadius: '6px',
+                  fontSize: '14px'
+                }}
+              />
+            </div>
+
+            <div className="labeled-input">
+              <label style={{ fontSize: '12px', fontWeight: '500', marginBottom: '4px', display: 'block' }}>Box Pack</label>
+              <input
+                type="number"
+                placeholder="Box Pack"
+                value={batchForm.boxPack || 1}
+                onChange={(e) =>
+                  setBatchForm({
+                    ...batchForm,
+                    boxPack: e.target.value
+                  })
+                }
+                style={{
+                  width: '100%',
+                  padding: '8px 12px',
+                  border: '1px solid #e5e7eb',
+                  borderRadius: '6px',
+                  fontSize: '14px'
+                }}
+              />
+            </div>
+          </div>
+
+          {/* Action Buttons - Gross Amt and GST Amt removed */}
+          <div
+            style={{
+              display: 'flex',
+              justifyContent: 'flex-end',
+              gap: '10px',
+              marginTop: '10px',
+              paddingTop: '15px',
+              borderTop: '1px solid #e5e7eb'
+            }}
+          >
+            <button
+              type="button"
+              onClick={() => setShowBatchModal(false)}
+              style={{
+                padding: '10px 24px',
+                background: '#9ca3af',
+                color: 'white',
+                border: 'none',
+                borderRadius: '6px',
+                cursor: 'pointer',
+                fontWeight: '500'
+              }}
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              onClick={saveBatchDetails}
+              style={{
+                padding: '10px 24px',
+                background: '#2563eb',
+                color: 'white',
+                border: 'none',
+                borderRadius: '6px',
+                cursor: 'pointer',
+                fontWeight: '500'
+              }}
+            >
+              Save Batch
+            </button>
+          </div>
+        </>
+      )}
+    </div>
+  </div>
+)}
     </div>
   );
-};
+}
 
 export default Dashboard;
