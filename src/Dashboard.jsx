@@ -70,32 +70,34 @@ const [batchForm, setBatchForm] = useState({
   const [productListFilter, setProductListFilter] = useState('');
   const [currentProductIndex, setCurrentProductIndex] = useState(-1);
 
-  // Purchase Invoice State
   const [purchaseFormData, setPurchaseFormData] = useState({
-    supplier: '',
-    company: '',
-    storageLocation: '',
-    invoiceDate: new Date().toISOString().split('T')[0],
-    vno: '',
-    invoiceNumber: '',
-    narration: '',
-    discountPercent: '',
-    grossAmount: 0,
-    mrpTotal: 0,
-    tcbPercent: 0,
-    diBc1: 0,
-    afterDiBc1: 0,
-    groBsAmt: 0,
-    tcbAmount: 0,
-    diBc2: 0,
-    afterDiBc2: 0,
-    qbtAmt: 0,
-    rounding: 0,
-    diBc3: 0,
-    afterDiBc3: 0,
-    ceBsAmt: 0,
-    netAmt: 0
-  });
+  supplier: '',
+  company: '',
+  storageLocation: '',
+  invoiceDate: new Date().toISOString().split('T')[0],
+  vno: '',
+  invoiceNumber: '',
+  narration: '',
+  discountPercent: '',
+  grossAmount: 0, // Added - Gross amount at purchase rate
+  mrpTotal: 0,
+  tcbPercent: 0,
+  diBc1: 0,
+  afterDiBc1: 0,
+  groBsAmt: 0,
+  tcbAmount: 0,
+  diBc2: 0,
+  afterDiBc2: 0,
+  qbtAmt: 0, // Total GST amount
+  totalCgst: 0, // Added for total CGST
+  totalSgst: 0, // Added for total SGST
+  rounding: 0,
+  diBc3: 0,
+  afterDiBc3: 0,
+  ceBsAmt: 0,
+  netAmt: 0
+});
+
   const [purchaseItems, setPurchaseItems] = useState([]);
   const [purchaseActiveRow, setPurchaseActiveRow] = useState(-1);
   const [showPurchaseProductList, setShowPurchaseProductList] = useState(false);
@@ -805,19 +807,36 @@ const deleteInvoiceItem = (index) => {
   calcInvoiceSummary(newItems);
 };
 
+// Replace the calcInvoiceSummary function with this corrected version:
 const calcInvoiceSummary = (currentItems) => {
   let gross = 0, tpr = 0, scheme = 0, cd = 0, star = 0, gst = 0;
   currentItems.forEach(item => {
-    gross += parseFloat(item.amount || 0);
+    const baseAmount = (parseFloat(item.qty) || 0) * (parseFloat(item.rate) || 0);
+    gross += baseAmount;
     tpr += parseFloat(item.tprAmt || 0);
     scheme += parseFloat(item.schemeAmt || 0);
     cd += parseFloat(item.cdAmt || 0);
     star += parseFloat(item.starAmt || 0);
-    gst += parseFloat(item.rateGst || 0);
+    
+    // Calculate GST amount properly (sgst + cgst)
+    const sgst = parseFloat(item.sgst) || 0;
+    const cgst = parseFloat(item.cgst) || 0;
+    gst += (sgst + cgst);
   });
-  const bottom = gross - tpr - scheme;
-  const net = bottom - star - cd + gst;
-  setInvoiceSummary({ gross, tpr, scheme, bottom, star, cd, gst, net: Math.round(net) });
+  
+  const taxable = gross - tpr - scheme - star - cd;
+  const net = taxable + gst;
+  
+  setInvoiceSummary({ 
+    gross, 
+    tpr, 
+    scheme, 
+    bottom: taxable,  // Taxable value is now shown as bottom amount
+    star, 
+    cd, 
+    gst, 
+    net: Math.round(net * 100) / 100 
+  });
 };
 
 const handleInvoiceKeyDown = (e, index, field) => {
@@ -899,108 +918,57 @@ const handleInvoiceProductClick = (index) => {
     alert('Invoice saved successfully!');
   };
 
-  // Purchase Invoice Functions
   const addPurchaseItem = useCallback(() => {
-    const newItem = {
-      id: Date.now(),
-      sr: purchaseItems.length + 1,
+  const newItem = {
+    id: Date.now(),
+    sr: purchaseItems.length + 1,
+    product: '',
+    productId: '',
+    batchNo: '',
+    mfgDate: '',
+    expDate: '',
+    unitId: 'PCS',
+    quantity: '',
+    free: '',
+    stockQty: '',
+    mrp: '',
+    purRate: '',
+    salesRate: '',
+    grossAmount: '',
+    disc1: '',
+    disc2: '',
+    disc3: '',
+    taxable: '',
+    tax: '',
+    cgst: '',
+    sgst: '',
+    afterDisc1: '',
+    afterDisc2: '',
+    afterDisc3: '',
+    amount: '',
+    discountPercent: ''
+  };
+  setPurchaseItems([...purchaseItems, newItem]);
+  setPurchaseActiveRow(purchaseItems.length);
+  
+  // Note: Don't call calcPurchaseSummary here as it will be called when items change
+}, [purchaseItems.length]);
 
-      // PRODUCT
-      product: '',
-      productId: '',
-
-      // BATCH
-      batchNo: '',
-      mfgDate: '',
-      expDate: '',
-
-      // UNIT
-      unitId: 'PCS',
-
-      // STOCK
-      quantity: '',
-      free: '',
-      stockQty: '',
-
-      // RATES
-      mrp: '',
-      purRate: '',
-      salesRate: '',
-
-      // CALCULATIONS
-      grossAmount: '',
-      disc1: '',
-      disc2: '',
-      disc3: '',
-      taxable: '',
-      tax: '',
-      cgst: '',
-      sgst: '',
-      afterDisc1: '',
-      afterDisc2: '',
-      afterDisc3: '',
-      amount: '',
-      discountPercent: ''
-    };
-    setPurchaseItems([...purchaseItems, newItem]);
-    setPurchaseActiveRow(purchaseItems.length);
-  }, [purchaseItems.length]);
-
-  const updatePurchaseItem = (index, field, value) => {
+ const updatePurchaseItem = (index, field, value) => {
   const newItems = [...purchaseItems];
   newItems[index][field] = value;
 
-  if (field === 'quantity' && value !== undefined) {
-    const item = newItems[index];
-    const qty = parseFloat(value) || 0;
-    const rate = parseFloat(item.purRate) || parseFloat(item.selectedBatch?.purchaseRate) || 0;
-    const grossAmt = qty * rate;
-    item.grossAmount = grossAmt.toFixed(2);
-
-    let afterDisc1 = grossAmt;
-    if (parseFloat(item.disc1)) {
-      const disc1Amt = grossAmt * (parseFloat(item.disc1) / 100);
-      afterDisc1 = grossAmt - disc1Amt;
-    }
-    item.afterDisc1 = afterDisc1.toFixed(2);
-
-    let afterDisc2 = afterDisc1;
-    if (parseFloat(item.disc2)) {
-      const disc2Amt = afterDisc1 * (parseFloat(item.disc2) / 100);
-      afterDisc2 = afterDisc1 - disc2Amt;
-    }
-    item.afterDisc2 = afterDisc2.toFixed(2);
-
-    let afterDisc3 = afterDisc2;
-    if (parseFloat(item.disc3)) {
-      const disc3Amt = afterDisc2 * (parseFloat(item.disc3) / 100);
-      afterDisc3 = afterDisc2 - disc3Amt;
-    }
-    item.afterDisc3 = afterDisc3.toFixed(2);
-
-    let taxableVal = afterDisc3;
-    item.taxable = taxableVal.toFixed(2);
-
-    if (parseFloat(item.tax)) {
-      const taxAmt = taxableVal * (parseFloat(item.tax) / 100);
-      const cgstAmt = taxAmt / 2;
-      const sgstAmt = taxAmt / 2;
-      item.cgst = cgstAmt.toFixed(2);
-      item.sgst = sgstAmt.toFixed(2);
-    }
-
-    const amount = taxableVal + (parseFloat(item.cgst) || 0) + (parseFloat(item.sgst) || 0);
-    item.amount = amount.toFixed(2);
-
-    // Only add new row when ENTER key is pressed on quantity, not on every change
-    // This is handled by handlePurchaseKeyDown instead
-  } else if (field === 'purRate' && value) {
-    const item = newItems[index];
+  // Helper function to recalculate all values for an item
+  const recalculateItem = (item) => {
+    // Get quantity and purchase rate
     const qty = parseFloat(item.quantity) || 0;
-    const rate = parseFloat(value) || 0;
-    const grossAmt = qty * rate;
+    const purRate = parseFloat(item.purRate) || parseFloat(item.selectedBatch?.purchaseRate) || 0;
+    
+    // FIX 1: Gross Amount = PUR RATE * QTY (not MRP * qty)
+    const grossAmt = qty * purRate;
     item.grossAmount = grossAmt.toFixed(2);
 
+    // Apply disc1
     let afterDisc1 = grossAmt;
     if (parseFloat(item.disc1)) {
       const disc1Amt = grossAmt * (parseFloat(item.disc1) / 100);
@@ -1008,6 +976,7 @@ const handleInvoiceProductClick = (index) => {
     }
     item.afterDisc1 = afterDisc1.toFixed(2);
 
+    // Apply disc2
     let afterDisc2 = afterDisc1;
     if (parseFloat(item.disc2)) {
       const disc2Amt = afterDisc1 * (parseFloat(item.disc2) / 100);
@@ -1015,6 +984,7 @@ const handleInvoiceProductClick = (index) => {
     }
     item.afterDisc2 = afterDisc2.toFixed(2);
 
+    // Apply disc3
     let afterDisc3 = afterDisc2;
     if (parseFloat(item.disc3)) {
       const disc3Amt = afterDisc2 * (parseFloat(item.disc3) / 100);
@@ -1022,76 +992,134 @@ const handleInvoiceProductClick = (index) => {
     }
     item.afterDisc3 = afterDisc3.toFixed(2);
 
-    let taxableVal = afterDisc3;
+    // Taxable amount is the amount after all discounts
+    const taxableVal = afterDisc3;
     item.taxable = taxableVal.toFixed(2);
 
-    if (parseFloat(item.tax)) {
-      const taxAmt = taxableVal * (parseFloat(item.tax) / 100);
-      const cgstAmt = taxAmt / 2;
-      const sgstAmt = taxAmt / 2;
+    // FIX 2: Calculate CGST and SGST based on taxable amount and GST percentage
+    const taxPercentage = parseFloat(item.tax) || 0;
+    if (taxPercentage > 0 && taxableVal > 0) {
+      const totalTaxAmt = taxableVal * (taxPercentage / 100);
+      const cgstAmt = totalTaxAmt / 2;
+      const sgstAmt = totalTaxAmt / 2;
       item.cgst = cgstAmt.toFixed(2);
       item.sgst = sgstAmt.toFixed(2);
+    } else {
+      item.cgst = (0).toFixed(2);
+      item.sgst = (0).toFixed(2);
     }
 
+    // FIX 3: Calculate final amount = taxable + CGST + SGST
     const amount = taxableVal + (parseFloat(item.cgst) || 0) + (parseFloat(item.sgst) || 0);
     item.amount = amount.toFixed(2);
+  };
+
+  // Recalculate whenever any relevant field changes
+  if (['quantity', 'purRate', 'tax', 'disc1', 'disc2', 'disc3'].includes(field)) {
+    recalculateItem(newItems[index]);
   }
 
   setPurchaseItems(newItems);
   setPurchaseActiveRow(index);
+  
+  // Calculate summary after updating items
+  calcPurchaseSummary();
 };
 
-  const deletePurchaseItem = (index) => {
-    const newItems = purchaseItems.filter((_, i) => i !== index);
-    newItems.forEach((item, i) => { item.sr = i + 1; });
-    setPurchaseItems(newItems);
-  };
+const calcPurchaseSummary = useCallback(() => {
+  let totalMrp = 0;
+  let totalGrossAmount = 0;
+  let totalTaxable = 0;
+  let totalCgst = 0;
+  let totalSgst = 0;
+  let totalAmount = 0;
+  
+  purchaseItems.forEach(item => {
+    const qty = parseFloat(item.quantity) || 0;
+    const mrp = parseFloat(item.mrp) || 0;
+    const purRate = parseFloat(item.purRate) || 0;
+    
+    totalMrp += qty * mrp;
+    totalGrossAmount += qty * purRate; // Using purchase rate for gross amount
+    
+    const taxable = parseFloat(item.taxable) || 0;
+    const cgst = parseFloat(item.cgst) || 0;
+    const sgst = parseFloat(item.sgst) || 0;
+    const amount = parseFloat(item.amount) || 0;
+    
+    totalTaxable += taxable;
+    totalCgst += cgst;
+    totalSgst += sgst;
+    totalAmount += amount;
+  });
+  
+  // Calculate header-level discounts
+  const tcbPercent = parseFloat(purchaseFormData.tcbPercent) || 0;
+  const diBc1 = parseFloat(purchaseFormData.diBc1) || 0;
+  const diBc2 = parseFloat(purchaseFormData.diBc2) || 0;
+  const diBc3 = parseFloat(purchaseFormData.diBc3) || 0;
+  const rounding = parseFloat(purchaseFormData.rounding) || 0;
+  
+  // Calculate TCB Amount on MRP Total
+  const tcbAmount = totalMrp * tcbPercent / 100;
+  
+  // After DISC1 (direct discount)
+  const afterDiBc1 = totalMrp - diBc1;
+  
+  // Gross Amount = After DISC1 - TCB Amount
+  const groBsAmt = afterDiBc1 - tcbAmount;
+  
+  // After DISC2
+  const afterDiBc2 = groBsAmt - diBc2;
+  
+  // GST Amount on taxable value (total CGST + SGST from items)
+  const totalGst = totalCgst + totalSgst;
+  
+  // After DISC3 - This should be the net taxable amount
+  const afterDiBc3 = totalTaxable - diBc3;
+  
+  // CEBS Amount (taxable after discount)
+  const ceBsAmt = afterDiBc3;
+  
+  // Net Amount = Taxable + Total GST + Rounding
+  const netAmt = totalTaxable + totalGst + rounding;
+  
+  setPurchaseFormData(prev => ({
+    ...prev,
+    mrpTotal: totalMrp.toFixed(2),
+    grossAmount: totalGrossAmount.toFixed(2), // Added this field
+    tcbAmount: tcbAmount.toFixed(2),
+    afterDiBc1: afterDiBc1.toFixed(2),
+    groBsAmt: groBsAmt.toFixed(2),
+    afterDiBc2: afterDiBc2.toFixed(2),
+    qbtAmt: totalGst.toFixed(2), // GST Amount (sum of CGST+SGST)
+    totalCgst: totalCgst.toFixed(2), // Added total CGST
+    totalSgst: totalSgst.toFixed(2), // Added total SGST
+    afterDiBc3: afterDiBc3.toFixed(2),
+    ceBsAmt: ceBsAmt.toFixed(2),
+    netAmt: netAmt.toFixed(2)
+  }));
+}, [purchaseItems, purchaseFormData.tcbPercent, purchaseFormData.diBc1, purchaseFormData.diBc2, purchaseFormData.diBc3, purchaseFormData.rounding]);  
+const deletePurchaseItem = (index) => {
+  const newItems = purchaseItems.filter((_, i) => i !== index);
+  newItems.forEach((item, i) => { item.sr = i + 1; });
+  setPurchaseItems(newItems);
+  
+  // ADD THIS LINE - Calculate summary after deleting item
+  calcPurchaseSummary();
+};
 
   const handlePurchaseInputChange = (e) => {
-    const { name, value } = e.target;
-    let newValue = value;
-    let updatedForm = { ...purchaseFormData, [name]: value };
+  const { name, value } = e.target;
+  let updatedForm = { ...purchaseFormData, [name]: value };
 
-    if (name === 'mrpTotal' || name === 'tcbPercent' || name === 'diBc1' || name === 'diBc2' || name === 'diBc3') {
-      const mrpTotal = parseFloat(updatedForm.mrpTotal) || 0;
-      const tcbPercent = parseFloat(updatedForm.tcbPercent) || 0;
-      const diBc1 = parseFloat(updatedForm.diBc1) || 0;
-      const diBc2 = parseFloat(updatedForm.diBc2) || 0;
-      const diBc3 = parseFloat(updatedForm.diBc3) || 0;
-
-      const tcbAmount = mrpTotal * tcbPercent / 100;
-      updatedForm.tcbAmount = tcbAmount.toFixed(2);
-
-      const afterDiBc1 = mrpTotal - diBc1;
-      updatedForm.afterDiBc1 = afterDiBc1.toFixed(2);
-
-      const groBsAmt = afterDiBc1 - tcbAmount;
-      updatedForm.groBsAmt = groBsAmt.toFixed(2);
-
-      const afterDiBc2 = groBsAmt - diBc2;
-      updatedForm.afterDiBc2 = afterDiBc2.toFixed(2);
-
-      const qbtAmt = afterDiBc2;
-      updatedForm.qbtAmt = qbtAmt.toFixed(2);
-
-      const afterDiBc3 = qbtAmt - diBc3;
-      updatedForm.afterDiBc3 = afterDiBc3.toFixed(2);
-
-      const ceBsAmt = afterDiBc3;
-      updatedForm.ceBsAmt = ceBsAmt.toFixed(2);
-
-      const netAmt = ceBsAmt + (parseFloat(updatedForm.rounding) || 0);
-      updatedForm.netAmt = netAmt.toFixed(2);
-    }
-
-    if (name === 'rounding') {
-      const netAmt = (parseFloat(updatedForm.ceBsAmt) || 0) + (parseFloat(value) || 0);
-      updatedForm.netAmt = netAmt.toFixed(2);
-    }
-
+  if (name === 'tcbPercent' || name === 'diBc1' || name === 'diBc2' || name === 'diBc3' || name === 'rounding') {
     setPurchaseFormData(updatedForm);
-  };
-
+    setTimeout(() => calcPurchaseSummary(), 0);
+  } else {
+    setPurchaseFormData(updatedForm);
+  }
+};
  const handlePurchaseKeyDown = (e, index, field) => {
   if (e.key === 'Enter') {
     e.preventDefault();
@@ -1147,7 +1175,7 @@ const handleInvoiceProductClick = (index) => {
 
 };
 
- const handlePurchaseProductSelect = (index, product) => {
+const handlePurchaseProductSelect = (index, product) => {
   updatePurchaseItem(index, 'product', `${product.code} - ${product.name}`);
   updatePurchaseItem(index, 'productId', product.id);
   updatePurchaseItem(index, 'mrp', product.mrp || '');
@@ -1159,16 +1187,24 @@ const handleInvoiceProductClick = (index) => {
   setShowPurchaseProductList(false);
   setCurrentPurchaseProductIndex(-1);
   
+  // Force recalculation for this item
+  setTimeout(() => {
+    const updatedItems = [...purchaseItems];
+    const item = updatedItems[index];
+    if (item && item.quantity) {
+      // Trigger recalculation by calling updatePurchaseItem with quantity
+      updatePurchaseItem(index, 'quantity', item.quantity);
+    }
+  }, 100);
+  
   // Check if product has existing batches
   const productBatches = batches.filter(b => b.productId === product.id);
   
   if (productBatches.length > 0) {
-    // Show existing batch modal
     setBatchMode('existing');
     setCurrentBatchRow(index);
     setShowBatchModal(true);
   } else {
-    // Show new batch modal
     setBatchMode('new');
     setCurrentBatchRow(index);
     setBatchForm({
@@ -1186,6 +1222,7 @@ const handleInvoiceProductClick = (index) => {
     });
     setShowBatchModal(true);
   }
+
   
   setTimeout(() => {
     const qtyInput = document.querySelector(`[data-purchase-field="quantity"][data-purchase-index="${index}"]`);
@@ -1225,8 +1262,64 @@ const saveBatchDetails = () => {
     boxPack: batchForm.boxPack,
     ratePerUnit: batchForm.ratePerUnit,
     previousPurchaseRate: batchForm.previousPurchaseRate,
-    quantity: batchForm.quantity
+    quantity: batchForm.quantity || updatedItems[currentBatchRow]?.quantity || 1
   };
+  
+  // Force recalculation for the updated item
+  const index = currentBatchRow;
+  const item = updatedItems[index];
+  const qty = parseFloat(item.quantity) || 0;
+  const purRate = parseFloat(item.purRate) || 0;
+  
+  // Recalculate everything for this item
+  const grossAmt = qty * purRate;
+  item.grossAmount = grossAmt.toFixed(2);
+
+  // Apply disc1
+  let afterDisc1 = grossAmt;
+  if (parseFloat(item.disc1)) {
+    const disc1Amt = grossAmt * (parseFloat(item.disc1) / 100);
+    afterDisc1 = grossAmt - disc1Amt;
+  }
+  item.afterDisc1 = afterDisc1.toFixed(2);
+
+  // Apply disc2
+  let afterDisc2 = afterDisc1;
+  if (parseFloat(item.disc2)) {
+    const disc2Amt = afterDisc1 * (parseFloat(item.disc2) / 100);
+    afterDisc2 = afterDisc1 - disc2Amt;
+  }
+  item.afterDisc2 = afterDisc2.toFixed(2);
+
+  // Apply disc3
+  let afterDisc3 = afterDisc2;
+  if (parseFloat(item.disc3)) {
+    const disc3Amt = afterDisc2 * (parseFloat(item.disc3) / 100);
+    afterDisc3 = afterDisc2 - disc3Amt;
+  }
+  item.afterDisc3 = afterDisc3.toFixed(2);
+
+  // Taxable amount
+  const taxableVal = afterDisc3;
+  item.taxable = taxableVal.toFixed(2);
+
+  // Calculate CGST and SGST
+  const taxPercentage = parseFloat(item.tax) || 0;
+  if (taxPercentage > 0 && taxableVal > 0) {
+    const totalTaxAmt = taxableVal * (taxPercentage / 100);
+    const cgstAmt = totalTaxAmt / 2;
+    const sgstAmt = totalTaxAmt / 2;
+    item.cgst = cgstAmt.toFixed(2);
+    item.sgst = sgstAmt.toFixed(2);
+  } else {
+    item.cgst = (0).toFixed(2);
+    item.sgst = (0).toFixed(2);
+  }
+
+  // Final amount
+  const amount = taxableVal + (parseFloat(item.cgst) || 0) + (parseFloat(item.sgst) || 0);
+  item.amount = amount.toFixed(2);
+  
   setPurchaseItems(updatedItems);
   setBatches([
     ...batches,
@@ -1237,6 +1330,9 @@ const saveBatchDetails = () => {
     }
   ]);
   setShowBatchModal(false);
+  
+  // Calculate summary after updating
+  calcPurchaseSummary();
 };
 
   const savePurchase = () => {
@@ -3558,211 +3654,233 @@ const saveBatchDetails = () => {
       </div>
     </div>
 
-    {/* Product Entry Grid - MODIFIED */}
-    <div className="form-section">
-      <h4 className="section-header">Product Entry <button className="btn-secondary ml-auto" onClick={addInvoiceItem}>+ Add Product</button></h4>
-      <div className="product-entry-container" style={{ overflowX: 'auto', overflowY: 'auto', maxHeight: '500px' }}>
-        <div className="erp-table-container" style={{ minWidth: '2000px' }}>
-          <table className="product-entry-table" style={{ width: '100%', borderCollapse: 'collapse' }}>
-            <thead style={{ position: 'sticky', top: 0, zIndex: 10 }}>
-              <tr>
-                <th style={{ position: 'sticky', left: 0, backgroundColor: '#f8fafc', zIndex: 20, minWidth: '50px' }}>Sr</th>
-                <th style={{ minWidth: '180px' }}>Product</th>
-                <th style={{ minWidth: '100px' }}>Units</th>
-                <th style={{ minWidth: '100px' }}>Qty</th>
-                <th style={{ minWidth: '100px' }}>Free</th>
-                <th style={{ minWidth: '100px' }}>MRP</th>
-                <th style={{ minWidth: '100px' }}>Rate</th>
-                <th style={{ minWidth: '120px' }}>Rate GST</th>
-                {/* Removed TPR% column */}
-                {/* <th style={{ minWidth: '100px' }}>TPR %</th> */}
-                <th style={{ minWidth: '120px' }}>TPR Amt</th>
-                <th style={{ minWidth: '100px' }}>Scheme %</th>
-                <th style={{ minWidth: '120px' }}>Scheme Amt</th>
-                <th style={{ minWidth: '100px' }}>CD %</th>
-                <th style={{ minWidth: '120px' }}>CD Amt</th>
-                <th style={{ minWidth: '100px' }}>Star %</th>
-                <th style={{ minWidth: '120px' }}>Star Amt</th>
-                <th style={{ minWidth: '120px' }}>Taxable</th>
-                <th style={{ minWidth: '100px' }}>GST %</th>
-                {/* Added SGST and CGST columns */}
-                <th style={{ minWidth: '100px' }}>SGST</th>
-                <th style={{ minWidth: '100px' }}>CGST</th>
-                {/* Removed Weight, Cess Amt, Cess PCS, Cess, WT columns */}
-                <th style={{ minWidth: '120px' }}>Amount</th>
-                <th style={{ position: 'sticky', right: 0, backgroundColor: '#f8fafc', zIndex: 20, minWidth: '70px' }}>Action</th>
-              </tr>
-            </thead>
-            <tbody>
-              {invoiceItems.map((item, index) => (
-                <tr key={item.id} className={index === activeRow ? 'active-row' : ''}>
-                  <td style={{ position: 'sticky', left: 0, backgroundColor: index === activeRow ? '#eff6ff' : 'white', zIndex: 5, minWidth: '50px' }}>{item.sr}</td>
-                  <td style={{ position: 'relative' }}>
-                    <input
-                      data-product-index={index}
-                      className="erp-input product-search"
-                      value={item.product}
-                      onChange={(e) => {
-                        const value = e.target.value;
-                        updateInvoiceItem(index, 'product', value);
-                        setCurrentProductIndex(index);
-                        if (value.trim() !== '') {
-                          setProductListFilter(value);
-                          setShowProductList(true);
-                        } else {
-                          setShowProductList(false);
-                        }
-                      }}
-                      onFocus={() => {
-                        setActiveRow(index);
-                        if (item.product) {
-                          setProductListFilter(item.product);
-                          setCurrentProductIndex(index);
-                          setShowProductList(true);
-                        }
-                      }}
-                      style={{ width: '100%', minWidth: '150px', cursor: 'pointer' }}
-                      placeholder="Click to select product"
-                    />
-                    
-                    {showProductList && currentProductIndex === index && productListFilter.trim() !== '' && (
-                      <div className="erlay">
-                        <div className="product-dropdown">
-                          <div className="dropdown-list">
-                            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '12px' }}>
-                              <thead>
-                                <tr style={{ background: '#eff6ff', position: 'sticky', top: 0 }}>
-                                  <th style={{ padding: '6px', textAlign: 'left' }}>Item Code</th>
-                                  <th style={{ padding: '6px', textAlign: 'left' }}>Name</th>
-                                  <th style={{ padding: '6px', textAlign: 'left' }}>Batch</th>
-                                  <th style={{ padding: '6px', textAlign: 'right' }}>MRP</th>
-                                  <th style={{ padding: '6px', textAlign: 'right' }}>Sales Rate</th>
-                                  <th style={{ padding: '6px', textAlign: 'right' }}>Stock</th>
-                                </tr>
-                              </thead>
-                              <tbody>
-                                {products
-                                  .filter(p =>
-                                    p.name?.toLowerCase().includes(productListFilter.toLowerCase()) ||
-                                    p.code?.toLowerCase().includes(productListFilter.toLowerCase())
-                                  )
-                                  .map(product => {
-                                    const productBatches = batches.filter(b => b.productId === product.id);
-                                    const displayBatch = productBatches[0];
-                                    const totalStock = productBatches.reduce((sum, b) => sum + (parseFloat(b.stockQty) || 0), 0);
-                                    
-                                    return (
-                                      <tr
-                                        key={product.id}
-                                        onClick={() => {
-                                          if (productBatches.length > 1) {
-                                            setCurrentProductIndex(index);
-                                            setProductBatchesForSelection(productBatches);
-                                            setSelectedProductForBatch(product);
-                                            setShowBatchSelectionModal(true);
-                                          } else if (productBatches.length === 1) {
-                                            handleProductSelect(currentProductIndex, {
-                                              ...product,
-                                              selectedBatch: productBatches[0]
-                                            });
-                                          } else {
-                                            handleProductSelect(currentProductIndex, product);
-                                          }
-                                        }}
-                                        style={{ cursor: 'pointer', borderBottom: '1px solid #eee' }}
-                                        onMouseEnter={(e) => { e.currentTarget.style.background = '#f8fafc'; }}
-                                        onMouseLeave={(e) => { e.currentTarget.style.background = 'white'; }}
-                                      >
-                                        <td style={{ padding: '6px' }}>{product.code}</td>
-                                        <td style={{ padding: '6px' }}>{product.name}</td>
-                                        <td style={{ padding: '6px' }}>
-                                          {productBatches.length > 1 
-                                            ? `${productBatches.length} batches` 
-                                            : displayBatch?.batchNo || '-'}
-                                        </td>
-                                        <td style={{ padding: '6px', textAlign: 'right' }}>
-                                          ₹{displayBatch?.mrp || product.mrp || 0}
-                                        </td>
-                                        <td style={{ padding: '6px', textAlign: 'right' }}>
-                                          ₹{displayBatch?.salesRate || product.salesRate || product.mrp || 0}
-                                        </td>
-                                        <td style={{ padding: '6px', textAlign: 'right' }}>
-                                          {totalStock}
-                                        </td>
-                                      </tr>
-                                    );
-                                  })}
-                              </tbody>
-                            </table>
-                          </div>
-                        </div>
+   
+<div className="form-section">
+  <h4 className="section-header">Product Entry</h4>
+  <div className="product-entry-container" style={{ overflowX: 'auto', overflowY: 'auto', maxHeight: '500px' }}>
+    <div className="erp-table-container" style={{ minWidth: '2000px' }}>
+      <table className="product-entry-table" style={{ width: '100%', borderCollapse: 'collapse' }}>
+        <thead style={{ position: 'sticky', top: 0, zIndex: 10 }}>
+          <tr>
+            <th style={{ position: 'sticky', left: 0, backgroundColor: '#f8fafc', zIndex: 20, minWidth: '50px' }}>Sr</th>
+            <th style={{ minWidth: '180px' }}>Product</th>
+            <th style={{ minWidth: '100px' }}>Units</th>
+            <th style={{ minWidth: '100px' }}>Qty</th>
+            <th style={{ minWidth: '100px' }}>Free</th>
+            <th style={{ minWidth: '100px' }}>MRP</th>
+            <th style={{ minWidth: '100px' }}>Rate</th>
+            <th style={{ minWidth: '120px' }}>Rate GST</th>
+            <th style={{ minWidth: '120px' }}>TPR Amt</th>
+            <th style={{ minWidth: '100px' }}>Scheme %</th>
+            <th style={{ minWidth: '120px' }}>Scheme Amt</th>
+            <th style={{ minWidth: '100px' }}>CD %</th>
+            <th style={{ minWidth: '120px' }}>CD Amt</th>
+            <th style={{ minWidth: '100px' }}>Star %</th>
+            <th style={{ minWidth: '120px' }}>Star Amt</th>
+            <th style={{ minWidth: '120px' }}>Taxable</th>
+            <th style={{ minWidth: '100px' }}>GST %</th>
+            <th style={{ minWidth: '100px' }}>SGST</th>
+            <th style={{ minWidth: '100px' }}>CGST</th>
+            <th style={{ minWidth: '120px' }}>Amount</th>
+            <th style={{ position: 'sticky', right: 0, backgroundColor: '#f8fafc', zIndex: 20, minWidth: '70px' }}>Action</th>
+          </tr>
+        </thead>
+        <tbody>
+          {invoiceItems.map((item, index) => (
+            <tr key={item.id} className={index === activeRow ? 'active-row' : ''}>
+              <td style={{ position: 'sticky', left: 0, backgroundColor: index === activeRow ? '#eff6ff' : 'white', zIndex: 5, minWidth: '50px' }}>{item.sr}</td>
+              <td style={{ position: 'relative' }}>
+                <input
+                  data-product-index={index}
+                  className="erp-input product-search"
+                  value={item.product}
+                  onChange={(e) => {
+                    const value = e.target.value;
+                    updateInvoiceItem(index, 'product', value);
+                    setCurrentProductIndex(index);
+                    if (value.trim() !== '') {
+                      setProductListFilter(value);
+                      setShowProductList(true);
+                    } else {
+                      setShowProductList(false);
+                    }
+                  }}
+                  onFocus={() => {
+                    setActiveRow(index);
+                    if (item.product) {
+                      setProductListFilter(item.product);
+                      setCurrentProductIndex(index);
+                      setShowProductList(true);
+                    }
+                  }}
+                  style={{ width: '100%', minWidth: '150px', cursor: 'pointer' }}
+                  placeholder="Click to select product"
+                />
+                
+                {showProductList && currentProductIndex === index && productListFilter.trim() !== '' && (
+                  <div className="erlay">
+                    <div className="product-dropdown">
+                      <div className="dropdown-list">
+                        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '12px' }}>
+                          <thead>
+                            <tr style={{ background: '#eff6ff', position: 'sticky', top: 0 }}>
+                              <th style={{ padding: '6px', textAlign: 'left' }}>Item Code</th>
+                              <th style={{ padding: '6px', textAlign: 'left' }}>Name</th>
+                              <th style={{ padding: '6px', textAlign: 'left' }}>Batch</th>
+                              <th style={{ padding: '6px', textAlign: 'right' }}>MRP</th>
+                              <th style={{ padding: '6px', textAlign: 'right' }}>Sales Rate</th>
+                              <th style={{ padding: '6px', textAlign: 'right' }}>Stock</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {products
+                              .filter(p =>
+                                p.name?.toLowerCase().includes(productListFilter.toLowerCase()) ||
+                                p.code?.toLowerCase().includes(productListFilter.toLowerCase())
+                              )
+                              .map(product => {
+                                const productBatches = batches.filter(b => b.productId === product.id);
+                                const displayBatch = productBatches[0];
+                                const totalStock = productBatches.reduce((sum, b) => sum + (parseFloat(b.stockQty) || 0), 0);
+                                
+                                return (
+                                  <tr
+                                    key={product.id}
+                                    onClick={() => {
+                                      if (productBatches.length > 1) {
+                                        setCurrentProductIndex(index);
+                                        setProductBatchesForSelection(productBatches);
+                                        setSelectedProductForBatch(product);
+                                        setShowBatchSelectionModal(true);
+                                      } else if (productBatches.length === 1) {
+                                        handleProductSelect(currentProductIndex, {
+                                          ...product,
+                                          selectedBatch: productBatches[0]
+                                        });
+                                        // Auto-add new row after product selection (except for last row)
+                                        if (index === invoiceItems.length - 1) {
+                                          setTimeout(() => {
+                                            addInvoiceItem();
+                                            setTimeout(() => {
+                                              const nextProductInput = document.querySelector(`[data-product-index="${index + 1}"]`);
+                                              if (nextProductInput) nextProductInput.focus();
+                                            }, 50);
+                                          }, 150);
+                                        } else {
+                                          setTimeout(() => {
+                                            const nextProductInput = document.querySelector(`[data-product-index="${index + 1}"]`);
+                                            if (nextProductInput) nextProductInput.focus();
+                                          }, 50);
+                                        }
+                                      } else {
+                                        handleProductSelect(currentProductIndex, product);
+                                        // Auto-add new row after product selection (except for last row)
+                                        if (index === invoiceItems.length - 1) {
+                                          setTimeout(() => {
+                                            addInvoiceItem();
+                                            setTimeout(() => {
+                                              const nextProductInput = document.querySelector(`[data-product-index="${index + 1}"]`);
+                                              if (nextProductInput) nextProductInput.focus();
+                                            }, 50);
+                                          }, 150);
+                                        } else {
+                                          setTimeout(() => {
+                                            const nextProductInput = document.querySelector(`[data-product-index="${index + 1}"]`);
+                                            if (nextProductInput) nextProductInput.focus();
+                                          }, 50);
+                                        }
+                                      }
+                                    }}
+                                    style={{ cursor: 'pointer', borderBottom: '1px solid #eee' }}
+                                    onMouseEnter={(e) => { e.currentTarget.style.background = '#f8fafc'; }}
+                                    onMouseLeave={(e) => { e.currentTarget.style.background = 'white'; }}
+                                  >
+                                    <td style={{ padding: '6px' }}>{product.code}</td>
+                                    <td style={{ padding: '6px' }}>{product.name}</td>
+                                    <td style={{ padding: '6px' }}>
+                                      {productBatches.length > 1 
+                                        ? `${productBatches.length} batches` 
+                                        : displayBatch?.batchNo || '-'}
+                                    </td>
+                                    <td style={{ padding: '6px', textAlign: 'right' }}>
+                                      ₹{displayBatch?.mrp || product.mrp || 0}
+                                    </td>
+                                    <td style={{ padding: '6px', textAlign: 'right' }}>
+                                      ₹{displayBatch?.salesRate || product.salesRate || product.mrp || 0}
+                                    </td>
+                                    <td style={{ padding: '6px', textAlign: 'right' }}>
+                                      {totalStock}
+                                    </td>
+                                  </tr>
+                                );
+                              })}
+                          </tbody>
+                        </table>
                       </div>
-                    )}
-                  </td>
-                  <td>
-                    <select
-                      className="erp-select"
-                      data-field="units"
-                      data-index={index}
-                      value={item.units}
-                      onChange={(e) => updateInvoiceItem(index, 'units', e.target.value)}
-                      onKeyDown={(e) => handleInvoiceKeyDown(e, index, 'units')}
-                      style={{ width: '100%' }}
-                    >
-                      <option value="PCS">PCS</option>
-                      <option value="BOX">BOX</option>
-                      <option value="INBOX">INBOX</option>
-                      <option value="OUTER">OUTER</option>
-                      <option value="KG">KG</option>
-                      <option value="LTR">LTR</option>
-                    </select>
-                  </td>
-                  <td><input className="erp-input numeric" data-field="qty" data-index={index} value={item.qty} onChange={(e) => updateInvoiceItem(index, 'qty', e.target.value)} onKeyDown={(e) => handleInvoiceKeyDown(e, index, 'qty')} style={{ width: '100%' }} /></td>
-                  <td><input className="erp-input numeric" data-field="free" data-index={index} value={item.free} onChange={(e) => updateInvoiceItem(index, 'free', e.target.value)} onKeyDown={(e) => handleInvoiceKeyDown(e, index, 'free')} style={{ width: '100%' }} /></td>
-                  <td><input className="erp-input numeric" data-field="mrp" data-index={index} value={item.mrp} onChange={(e) => updateInvoiceItem(index, 'mrp', e.target.value)} onKeyDown={(e) => handleInvoiceKeyDown(e, index, 'mrp')} style={{ width: '100%' }} /></td>
-                  <td><input className="erp-input numeric" data-field="rate" data-index={index} value={item.rate} onChange={(e) => updateInvoiceItem(index, 'rate', e.target.value)} onKeyDown={(e) => handleInvoiceKeyDown(e, index, 'rate')} style={{ width: '100%' }} /></td>
-                  <td><input className="erp-input numeric" data-field="rateGst" data-index={index} value={item.rateGst} onChange={(e) => updateInvoiceItem(index, 'rateGst', e.target.value)} onKeyDown={(e) => handleInvoiceKeyDown(e, index, 'rateGst')} style={{ width: '100%' }} /></td>
-                  {/* Removed TPR% input */}
-                  <td><input className="erp-input numeric" data-field="tprAmt" data-index={index} value={item.tprAmt} onChange={(e) => updateInvoiceItem(index, 'tprAmt', e.target.value)} onKeyDown={(e) => handleInvoiceKeyDown(e, index, 'tprAmt')} style={{ width: '100%' }} /></td>
-                  <td><input className="erp-input numeric small" data-field="schemePct" data-index={index} value={item.schemePct} onChange={(e) => updateInvoiceItem(index, 'schemePct', e.target.value)} onKeyDown={(e) => handleInvoiceKeyDown(e, index, 'schemePct')} style={{ width: '100%' }} /></td>
-                  <td><input className="erp-input numeric" data-field="schemeAmt" data-index={index} value={item.schemeAmt} onChange={(e) => updateInvoiceItem(index, 'schemeAmt', e.target.value)} onKeyDown={(e) => handleInvoiceKeyDown(e, index, 'schemeAmt')} style={{ width: '100%' }} /></td>
-                  <td><input className="erp-input numeric small" data-field="cdPct" data-index={index} value={item.cdPct} onChange={(e) => updateInvoiceItem(index, 'cdPct', e.target.value)} onKeyDown={(e) => handleInvoiceKeyDown(e, index, 'cdPct')} style={{ width: '100%' }} /></td>
-                  <td><input className="erp-input numeric" data-field="cdAmt" data-index={index} value={item.cdAmt} onChange={(e) => updateInvoiceItem(index, 'cdAmt', e.target.value)} onKeyDown={(e) => handleInvoiceKeyDown(e, index, 'cdAmt')} style={{ width: '100%' }} /></td>
-                  <td><input className="erp-input numeric small" data-field="starPct" data-index={index} value={item.starPct} onChange={(e) => updateInvoiceItem(index, 'starPct', e.target.value)} onKeyDown={(e) => handleInvoiceKeyDown(e, index, 'starPct')} style={{ width: '100%' }} /></td>
-                  <td><input className="erp-input numeric" data-field="starAmt" data-index={index} value={item.starAmt} onChange={(e) => updateInvoiceItem(index, 'starAmt', e.target.value)} onKeyDown={(e) => handleInvoiceKeyDown(e, index, 'starAmt')} style={{ width: '100%' }} /></td>
-                  <td><input className="erp-input numeric" data-field="taxable" data-index={index} value={item.taxable} onChange={(e) => updateInvoiceItem(index, 'taxable', e.target.value)} onKeyDown={(e) => handleInvoiceKeyDown(e, index, 'taxable')} style={{ width: '100%' }} /></td>
-                  <td><input className="erp-input numeric small" data-field="gst" data-index={index} value={item.gst} onChange={(e) => updateInvoiceItem(index, 'gst', e.target.value)} onKeyDown={(e) => handleInvoiceKeyDown(e, index, 'gst')} style={{ width: '100%' }} /></td>
-                  {/* Added SGST and CGST fields */}
-                  <td><input className="erp-input numeric" data-field="sgst" data-index={index} value={item.sgst} onChange={(e) => updateInvoiceItem(index, 'sgst', e.target.value)} onKeyDown={(e) => handleInvoiceKeyDown(e, index, 'sgst')} style={{ width: '100%' }} /></td>
-                  <td><input className="erp-input numeric" data-field="cgst" data-index={index} value={item.cgst} onChange={(e) => updateInvoiceItem(index, 'cgst', e.target.value)} onKeyDown={(e) => handleInvoiceKeyDown(e, index, 'cgst')} style={{ width: '100%' }} /></td>
-                  {/* Removed: weight, cessAmt, cessPcs, cess, wt */}
-                  <td><input className="erp-input numeric font-bold" data-field="amount" data-index={index} value={item.amount} onChange={(e) => updateInvoiceItem(index, 'amount', e.target.value)} onKeyDown={(e) => handleInvoiceKeyDown(e, index, 'amount')} style={{ width: '100%', fontWeight: 'bold' }} /></td>
-                  <td style={{ position: 'sticky', right: 0, backgroundColor: index === activeRow ? '#eff6ff' : 'white', zIndex: 5 }}>
-                    <button className="btn-delete text-red-500" onClick={() => deleteInvoiceItem(index)} style={{ padding: '6px 12px', whiteSpace: 'nowrap' }}>🗑 Delete</button>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </div>
+                    </div>
+                  </div>
+                )}
+              </td>
+              <td>
+                <select
+                  className="erp-select"
+                  data-field="units"
+                  data-index={index}
+                  value={item.units}
+                  onChange={(e) => updateInvoiceItem(index, 'units', e.target.value)}
+                  onKeyDown={(e) => handleInvoiceKeyDown(e, index, 'units')}
+                  style={{ width: '100%' }}
+                >
+                  <option value="PCS">PCS</option>
+                  <option value="BOX">BOX</option>
+                  <option value="INBOX">INBOX</option>
+                  <option value="OUTER">OUTER</option>
+                  <option value="KG">KG</option>
+                  <option value="LTR">LTR</option>
+                </select>
+              </td>
+              <td><input className="erp-input numeric" data-field="qty" data-index={index} value={item.qty} onChange={(e) => updateInvoiceItem(index, 'qty', e.target.value)} onKeyDown={(e) => handleInvoiceKeyDown(e, index, 'qty')} style={{ width: '100%' }} /></td>
+              <td><input className="erp-input numeric" data-field="free" data-index={index} value={item.free} onChange={(e) => updateInvoiceItem(index, 'free', e.target.value)} onKeyDown={(e) => handleInvoiceKeyDown(e, index, 'free')} style={{ width: '100%' }} /></td>
+              <td><input className="erp-input numeric" data-field="mrp" data-index={index} value={item.mrp} onChange={(e) => updateInvoiceItem(index, 'mrp', e.target.value)} onKeyDown={(e) => handleInvoiceKeyDown(e, index, 'mrp')} style={{ width: '100%' }} /></td>
+              <td><input className="erp-input numeric" data-field="rate" data-index={index} value={item.rate} onChange={(e) => updateInvoiceItem(index, 'rate', e.target.value)} onKeyDown={(e) => handleInvoiceKeyDown(e, index, 'rate')} style={{ width: '100%' }} /></td>
+              <td><input className="erp-input numeric" data-field="rateGst" data-index={index} value={item.rateGst} onChange={(e) => updateInvoiceItem(index, 'rateGst', e.target.value)} onKeyDown={(e) => handleInvoiceKeyDown(e, index, 'rateGst')} style={{ width: '100%' }} /></td>
+              <td><input className="erp-input numeric" data-field="tprAmt" data-index={index} value={item.tprAmt} onChange={(e) => updateInvoiceItem(index, 'tprAmt', e.target.value)} onKeyDown={(e) => handleInvoiceKeyDown(e, index, 'tprAmt')} style={{ width: '100%' }} /></td>
+              <td><input className="erp-input numeric small" data-field="schemePct" data-index={index} value={item.schemePct} onChange={(e) => updateInvoiceItem(index, 'schemePct', e.target.value)} onKeyDown={(e) => handleInvoiceKeyDown(e, index, 'schemePct')} style={{ width: '100%' }} /></td>
+              <td><input className="erp-input numeric" data-field="schemeAmt" data-index={index} value={item.schemeAmt} onChange={(e) => updateInvoiceItem(index, 'schemeAmt', e.target.value)} onKeyDown={(e) => handleInvoiceKeyDown(e, index, 'schemeAmt')} style={{ width: '100%' }} /></td>
+              <td><input className="erp-input numeric small" data-field="cdPct" data-index={index} value={item.cdPct} onChange={(e) => updateInvoiceItem(index, 'cdPct', e.target.value)} onKeyDown={(e) => handleInvoiceKeyDown(e, index, 'cdPct')} style={{ width: '100%' }} /></td>
+              <td><input className="erp-input numeric" data-field="cdAmt" data-index={index} value={item.cdAmt} onChange={(e) => updateInvoiceItem(index, 'cdAmt', e.target.value)} onKeyDown={(e) => handleInvoiceKeyDown(e, index, 'cdAmt')} style={{ width: '100%' }} /></td>
+              <td><input className="erp-input numeric small" data-field="starPct" data-index={index} value={item.starPct} onChange={(e) => updateInvoiceItem(index, 'starPct', e.target.value)} onKeyDown={(e) => handleInvoiceKeyDown(e, index, 'starPct')} style={{ width: '100%' }} /></td>
+              <td><input className="erp-input numeric" data-field="starAmt" data-index={index} value={item.starAmt} onChange={(e) => updateInvoiceItem(index, 'starAmt', e.target.value)} onKeyDown={(e) => handleInvoiceKeyDown(e, index, 'starAmt')} style={{ width: '100%' }} /></td>
+              <td><input className="erp-input numeric" data-field="taxable" data-index={index} value={item.taxable} onChange={(e) => updateInvoiceItem(index, 'taxable', e.target.value)} onKeyDown={(e) => handleInvoiceKeyDown(e, index, 'taxable')} style={{ width: '100%' }} /></td>
+              <td><input className="erp-input numeric small" data-field="gst" data-index={index} value={item.gst} onChange={(e) => updateInvoiceItem(index, 'gst', e.target.value)} onKeyDown={(e) => handleInvoiceKeyDown(e, index, 'gst')} style={{ width: '100%' }} /></td>
+              <td><input className="erp-input numeric" data-field="sgst" data-index={index} value={item.sgst} onChange={(e) => updateInvoiceItem(index, 'sgst', e.target.value)} onKeyDown={(e) => handleInvoiceKeyDown(e, index, 'sgst')} style={{ width: '100%' }} /></td>
+              <td><input className="erp-input numeric" data-field="cgst" data-index={index} value={item.cgst} onChange={(e) => updateInvoiceItem(index, 'cgst', e.target.value)} onKeyDown={(e) => handleInvoiceKeyDown(e, index, 'cgst')} style={{ width: '100%' }} /></td>
+              <td><input className="erp-input numeric font-bold" data-field="amount" data-index={index} value={item.amount} onChange={(e) => updateInvoiceItem(index, 'amount', e.target.value)} onKeyDown={(e) => handleInvoiceKeyDown(e, index, 'amount')} style={{ width: '100%', fontWeight: 'bold' }} /></td>
+              <td style={{ position: 'sticky', right: 0, backgroundColor: index === activeRow ? '#eff6ff' : 'white', zIndex: 5 }}>
+                <button className="btn-delete text-red-500" onClick={() => deleteInvoiceItem(index)} style={{ padding: '6px 12px', whiteSpace: 'nowrap' }}>🗑 Delete</button>
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
     </div>
-
-    {/* Summary Bar - MODIFIED */}
-    <div className="form-section">
-      <h4 className="section-header">Invoice Summary</h4>
-      <div className="summary-bar">
-        <div>Gross Amount: <span className="amount">₹{invoiceSummary.gross.toFixed(2)}</span></div>
-        <div>TPR Amount: <span className="amount">-₹{invoiceSummary.tpr.toFixed(2)}</span></div>
-        <div>Scheme Amount: <span className="amount">-₹{invoiceSummary.scheme.toFixed(2)}</span></div>
-        <div>Bottom Amount: <span className="amount">₹{invoiceSummary.bottom.toFixed(2)}</span></div>
-        <div>Star Discount: <span className="amount">-₹{invoiceSummary.star.toFixed(2)}</span></div>
-        <div>Cash Discount: <span className="amount">-₹{invoiceSummary.cd.toFixed(2)}</span></div>
-        <div>GST Amount: <span className="amount">+₹{invoiceSummary.gst.toFixed(2)}</span></div>
-        <div className="net-amount">Net Amount: <strong>₹{invoiceSummary.net.toFixed(2)}</strong></div>
-      </div>
-    </div>
-
+  </div>
+</div>
+   
+<div className="form-section">
+  <h4 className="section-header">Invoice Summary</h4>
+  <div className="summary-bar">
+    <div>Gross Amount: <span className="amount">₹{invoiceSummary.gross.toFixed(2)}</span></div>
+    <div>TPR Amount: <span className="amount">-₹{invoiceSummary.tpr.toFixed(2)}</span></div>
+    <div>Scheme Amount: <span className="amount">-₹{invoiceSummary.scheme.toFixed(2)}</span></div>
+    <div>Star Discount: <span className="amount">-₹{invoiceSummary.star.toFixed(2)}</span></div>
+    <div>Cash Discount: <span className="amount">-₹{invoiceSummary.cd.toFixed(2)}</span></div>
+    <div className="taxable-value">Taxable Value: <span className="amount">₹{(invoiceSummary.gross - invoiceSummary.tpr - invoiceSummary.scheme - invoiceSummary.star - invoiceSummary.cd).toFixed(2)}</span></div>
+    <div>SGST Amount: <span className="amount">+₹{(invoiceSummary.gst / 2).toFixed(2)}</span></div>
+    <div>CGST Amount: <span className="amount">+₹{(invoiceSummary.gst / 2).toFixed(2)}</span></div>
+    <div className="net-amount">Net Amount: <strong>₹{((invoiceSummary.gross - invoiceSummary.tpr - invoiceSummary.scheme - invoiceSummary.star - invoiceSummary.cd) + invoiceSummary.gst).toFixed(2)}</strong></div>
+  </div>
+</div>
     {/* Action Button */}
     <div className="form-actions">
       <button className="btn-add-invoice" onClick={saveInvoice}>
@@ -3816,12 +3934,19 @@ const saveBatchDetails = () => {
                   <div className="labeled-input"><label>ENTER INVOICE NUMBER *</label>
                     <input type="text" name="invoiceNumber" className="erp-input" placeholder="Enter Invoice Number" value={purchaseFormData.invoiceNumber} onChange={handlePurchaseInputChange} required />
                   </div>
-                  <div className="labeled-input narration-field"><label>ENTER NARRATION</label>
-                    <textarea name="narration" className="erp-textarea" rows="2" placeholder="Enter Narration" value={purchaseFormData.narration} onChange={handlePurchaseInputChange} />
-                  </div>
-                  <div className="labeled-input"><label>DISCOUNT PERCENT ON GROSS AMOUNT</label>
-                    <input type="text" name="discountPercent" className="erp-input" placeholder="Discount %" value={purchaseFormData.discountPercent} onChange={handlePurchaseInputChange} />
-                  </div>
+                
+<div className="labeled-input narration-field" style={{ gridColumn: 'span 2' }}>
+  <label>Narration</label>
+  <textarea 
+    name="narration" 
+    className="erp-textarea" 
+    rows="2" 
+    style={{ width: '100%', minHeight: '60px', resize: 'vertical' }}
+    value={invoiceFormData.narration} 
+    onChange={handleInvoiceInputChange} 
+  />
+</div>
+                 
                 </div>
               </div>
 
@@ -4214,26 +4339,29 @@ const saveBatchDetails = () => {
                 </div>
               </div>
 
-              {/* Purchase Summary Section */}
-              <div className="form-section">
-                <h4 className="section-header">Invoice Summary</h4>
-                <div className="summary-bar">
-                  <div>MRP Total: <span className="amount">₹{purchaseFormData.mrpTotal || '0.00'}</span></div>
-                  <div>TCS %: <span className="amount">{purchaseFormData.tcbPercent || '0.00'}%</span></div>
-                  <div>TCS Amount: <span className="amount">-₹{purchaseFormData.tcbAmount || '0.00'}</span></div>
-                  <div>DISC1: <span className="amount">-₹{purchaseFormData.diBc1 || '0.00'}</span></div>
-                  <div>After DISC1: <span className="amount">₹{purchaseFormData.afterDiBc1 || '0.00'}</span></div>
-                  <div>Gross Amount: <span className="amount">₹{purchaseFormData.groBsAmt || '0.00'}</span></div>
-                  <div>DISC2: <span className="amount">-₹{purchaseFormData.diBc2 || '0.00'}</span></div>
-                  <div>After DISC2: <span className="amount">₹{purchaseFormData.afterDiBc2 || '0.00'}</span></div>
-                  <div>GST Amount: <span className="amount">+₹{purchaseFormData.qbtAmt || '0.00'}</span></div>
-                  <div>DISC3: <span className="amount">-₹{purchaseFormData.diBc3 || '0.00'}</span></div>
-                  <div>After DISC3: <span className="amount">₹{purchaseFormData.afterDiBc3 || '0.00'}</span></div>
-                  <div>Rounding: <span className="amount">₹{purchaseFormData.rounding || '0.00'}</span></div>
-                  <div className="net-amount">Net Amount: <strong>₹{purchaseFormData.netAmt || '0.00'}</strong></div>
-                </div>
-              </div>
-
+          {/* Purchase Summary Section */}
+<div className="form-section">
+  <h4 className="section-header">Invoice Summary</h4>
+  <div className="summary-bar">
+    <div>MRP Total: <span className="amount">₹{purchaseFormData.mrpTotal || '0.00'}</span></div>
+    <div>TCS %: <span className="amount">{purchaseFormData.tcbPercent || '0.00'}%</span></div>
+    <div>TCS Amount: <span className="amount">-₹{purchaseFormData.tcbAmount || '0.00'}</span></div>
+    <div>Taxable Value: <span className="amount">₹{purchaseFormData.afterDiBc3 || '0.00'}</span></div>
+    <div>Gross Amount: <span className="amount">₹{purchaseFormData.grossAmount || '0.00'}</span></div>
+    <div>SGST Amount: <span className="amount">+₹{purchaseFormData.totalSgst || '0.00'}</span></div>
+    <div>CGST Amount: <span className="amount">+₹{purchaseFormData.totalCgst || '0.00'}</span></div>
+    <div>Total GST Amount: <span className="amount">+₹{purchaseFormData.qbtAmt || '0.00'}</span></div>
+    {/* Discount Fields in Sequence */}
+    <div>DISC1: <span className="amount">-₹{purchaseFormData.diBc1 || '0.00'}</span></div>
+    <div>After DISC1: <span className="amount">₹{purchaseFormData.afterDiBc1 || '0.00'}</span></div>
+    <div>DISC2: <span className="amount">-₹{purchaseFormData.diBc2 || '0.00'}</span></div>
+    <div>After DISC2: <span className="amount">₹{purchaseFormData.afterDiBc2 || '0.00'}</span></div>
+    <div>DISC3: <span className="amount">-₹{purchaseFormData.diBc3 || '0.00'}</span></div>
+    <div>After DISC3: <span className="amount">₹{purchaseFormData.afterDiBc3 || '0.00'}</span></div>
+    <div>Rounding: <span className="amount">₹{purchaseFormData.rounding || '0.00'}</span></div>
+    <div className="net-amount">Net Amount: <strong>₹{purchaseFormData.netAmt || '0.00'}</strong></div>
+  </div>
+</div>
               <div className="form-actions">
                 <button className="btn-add-invoice" onClick={savePurchase}>
                   💾 Add Invoice
@@ -5531,25 +5659,80 @@ const saveBatchDetails = () => {
               </thead>
               <tbody>
                 {existingBatches.map((batch, idx) => (
-                  <tr
-                    key={idx}
-                    onClick={() => {
-                      const updatedItems = [...purchaseItems];
-                      updatedItems[currentBatchRow] = {
-                        ...updatedItems[currentBatchRow],
-                        batchNo: batch.batchNo,
-                        mfgDate: batch.mfgDate,
-                        expDate: batch.expDate,
-                        mrp: batch.mrp,
-                        purRate: batch.purchaseRate,
-                        salesRate: batch.salesRate,
-                        quantity: updatedItems[currentBatchRow]?.quantity || 1,
-                        stockQty: batch.stockQty,
-                        boxPack: batch.boxPack || 1
-                      };
-                      setPurchaseItems(updatedItems);
-                      setShowBatchModal(false);
-                    }}
+                 <tr
+  key={idx}
+  onClick={() => {
+    const updatedItems = [...purchaseItems];
+    const currentItem = updatedItems[currentBatchRow];
+    
+    // Update the item with selected batch data
+    updatedItems[currentBatchRow] = {
+      ...currentItem,
+      batchNo: batch.batchNo,
+      mfgDate: batch.mfgDate,
+      expDate: batch.expDate,
+      mrp: batch.mrp,
+      purRate: batch.purchaseRate,
+      salesRate: batch.salesRate,
+      quantity: currentItem?.quantity || 1,
+      stockQty: batch.stockQty,
+      boxPack: batch.boxPack || 1,
+      selectedBatch: batch
+    };
+    
+    // Force recalculation for this item
+    const index = currentBatchRow;
+    const item = updatedItems[index];
+    const qty = parseFloat(item.quantity) || 0;
+    const purRate = parseFloat(item.purRate) || 0;
+    
+    // Recalculate all values
+    const grossAmt = qty * purRate;
+    item.grossAmount = grossAmt.toFixed(2);
+
+    let afterDisc1 = grossAmt;
+    if (parseFloat(item.disc1)) {
+      const disc1Amt = grossAmt * (parseFloat(item.disc1) / 100);
+      afterDisc1 = grossAmt - disc1Amt;
+    }
+    item.afterDisc1 = afterDisc1.toFixed(2);
+
+    let afterDisc2 = afterDisc1;
+    if (parseFloat(item.disc2)) {
+      const disc2Amt = afterDisc1 * (parseFloat(item.disc2) / 100);
+      afterDisc2 = afterDisc1 - disc2Amt;
+    }
+    item.afterDisc2 = afterDisc2.toFixed(2);
+
+    let afterDisc3 = afterDisc2;
+    if (parseFloat(item.disc3)) {
+      const disc3Amt = afterDisc2 * (parseFloat(item.disc3) / 100);
+      afterDisc3 = afterDisc2 - disc3Amt;
+    }
+    item.afterDisc3 = afterDisc3.toFixed(2);
+
+    const taxableVal = afterDisc3;
+    item.taxable = taxableVal.toFixed(2);
+
+    const taxPercentage = parseFloat(item.tax) || 0;
+    if (taxPercentage > 0 && taxableVal > 0) {
+      const totalTaxAmt = taxableVal * (taxPercentage / 100);
+      const cgstAmt = totalTaxAmt / 2;
+      const sgstAmt = totalTaxAmt / 2;
+      item.cgst = cgstAmt.toFixed(2);
+      item.sgst = sgstAmt.toFixed(2);
+    } else {
+      item.cgst = (0).toFixed(2);
+      item.sgst = (0).toFixed(2);
+    }
+
+    const amount = taxableVal + (parseFloat(item.cgst) || 0) + (parseFloat(item.sgst) || 0);
+    item.amount = amount.toFixed(2);
+    
+    setPurchaseItems(updatedItems);
+    setShowBatchModal(false);
+    calcPurchaseSummary(); // Recalculate summary
+  }}
                     style={{
                       cursor: 'pointer',
                       transition: '0.2s',
