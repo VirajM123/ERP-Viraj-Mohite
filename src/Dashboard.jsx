@@ -70,34 +70,32 @@ const [batchForm, setBatchForm] = useState({
   const [productListFilter, setProductListFilter] = useState('');
   const [currentProductIndex, setCurrentProductIndex] = useState(-1);
 
+  // Purchase Invoice State
   const [purchaseFormData, setPurchaseFormData] = useState({
-  supplier: '',
-  company: '',
-  storageLocation: '',
-  invoiceDate: new Date().toISOString().split('T')[0],
-  vno: '',
-  invoiceNumber: '',
-  narration: '',
-  discountPercent: '',
-  grossAmount: 0, // Added - Gross amount at purchase rate
-  mrpTotal: 0,
-  tcbPercent: 0,
-  diBc1: 0,
-  afterDiBc1: 0,
-  groBsAmt: 0,
-  tcbAmount: 0,
-  diBc2: 0,
-  afterDiBc2: 0,
-  qbtAmt: 0, // Total GST amount
-  totalCgst: 0, // Added for total CGST
-  totalSgst: 0, // Added for total SGST
-  rounding: 0,
-  diBc3: 0,
-  afterDiBc3: 0,
-  ceBsAmt: 0,
-  netAmt: 0
-});
-
+    supplier: '',
+    company: '',
+    storageLocation: '',
+    invoiceDate: new Date().toISOString().split('T')[0],
+    vno: '',
+    invoiceNumber: '',
+    narration: '',
+    discountPercent: '',
+    grossAmount: 0,
+    mrpTotal: 0,
+    tcbPercent: 0,
+    diBc1: 0,
+    afterDiBc1: 0,
+    groBsAmt: 0,
+    tcbAmount: 0,
+    diBc2: 0,
+    afterDiBc2: 0,
+    qbtAmt: 0,
+    rounding: 0,
+    diBc3: 0,
+    afterDiBc3: 0,
+    ceBsAmt: 0,
+    netAmt: 0
+  });
   const [purchaseItems, setPurchaseItems] = useState([]);
   const [purchaseActiveRow, setPurchaseActiveRow] = useState(-1);
   const [showPurchaseProductList, setShowPurchaseProductList] = useState(false);
@@ -960,12 +958,12 @@ const handleInvoiceProductClick = (index) => {
 
   // Helper function to recalculate all values for an item
   const recalculateItem = (item) => {
-    // Get quantity and purchase rate
+    // Get quantity and rate
     const qty = parseFloat(item.quantity) || 0;
-    const purRate = parseFloat(item.purRate) || parseFloat(item.selectedBatch?.purchaseRate) || 0;
+    const rate = parseFloat(item.purRate) || parseFloat(item.selectedBatch?.purchaseRate) || 0;
     
-    // FIX 1: Gross Amount = PUR RATE * QTY (not MRP * qty)
-    const grossAmt = qty * purRate;
+    // Calculate gross amount
+    const grossAmt = qty * rate;
     item.grossAmount = grossAmt.toFixed(2);
 
     // Apply disc1
@@ -996,9 +994,9 @@ const handleInvoiceProductClick = (index) => {
     const taxableVal = afterDisc3;
     item.taxable = taxableVal.toFixed(2);
 
-    // FIX 2: Calculate CGST and SGST based on taxable amount and GST percentage
+    // Calculate CGST and SGST based on taxable amount and GST percentage
     const taxPercentage = parseFloat(item.tax) || 0;
-    if (taxPercentage > 0 && taxableVal > 0) {
+    if (taxPercentage > 0) {
       const totalTaxAmt = taxableVal * (taxPercentage / 100);
       const cgstAmt = totalTaxAmt / 2;
       const sgstAmt = totalTaxAmt / 2;
@@ -1009,7 +1007,7 @@ const handleInvoiceProductClick = (index) => {
       item.sgst = (0).toFixed(2);
     }
 
-    // FIX 3: Calculate final amount = taxable + CGST + SGST
+    // Calculate final amount = taxable + CGST + SGST
     const amount = taxableVal + (parseFloat(item.cgst) || 0) + (parseFloat(item.sgst) || 0);
     item.amount = amount.toFixed(2);
   };
@@ -1022,38 +1020,35 @@ const handleInvoiceProductClick = (index) => {
   setPurchaseItems(newItems);
   setPurchaseActiveRow(index);
   
-  // Calculate summary after updating items
+  // ADD THIS LINE - Calculate summary after updating items
   calcPurchaseSummary();
 };
-
+// Add this function - place it after the updatePurchaseItem function
 const calcPurchaseSummary = useCallback(() => {
   let totalMrp = 0;
   let totalGrossAmount = 0;
   let totalTaxable = 0;
   let totalCgst = 0;
   let totalSgst = 0;
-  let totalAmount = 0;
   
   purchaseItems.forEach(item => {
     const qty = parseFloat(item.quantity) || 0;
     const mrp = parseFloat(item.mrp) || 0;
-    const purRate = parseFloat(item.purRate) || 0;
+    const rate = parseFloat(item.purRate) || 0;
     
     totalMrp += qty * mrp;
-    totalGrossAmount += qty * purRate; // Using purchase rate for gross amount
+    totalGrossAmount += qty * rate;
     
     const taxable = parseFloat(item.taxable) || 0;
     const cgst = parseFloat(item.cgst) || 0;
     const sgst = parseFloat(item.sgst) || 0;
-    const amount = parseFloat(item.amount) || 0;
     
     totalTaxable += taxable;
     totalCgst += cgst;
     totalSgst += sgst;
-    totalAmount += amount;
   });
   
-  // Calculate header-level discounts
+  // Calculate header-level discounts (these are separate from item-level discounts)
   const tcbPercent = parseFloat(purchaseFormData.tcbPercent) || 0;
   const diBc1 = parseFloat(purchaseFormData.diBc1) || 0;
   const diBc2 = parseFloat(purchaseFormData.diBc2) || 0;
@@ -1072,34 +1067,34 @@ const calcPurchaseSummary = useCallback(() => {
   // After DISC2
   const afterDiBc2 = groBsAmt - diBc2;
   
-  // GST Amount on taxable value (total CGST + SGST from items)
-  const totalGst = totalCgst + totalSgst;
+  // QBT Amount (GST on taxable value) - this should be total taxable from items
+  // But since the purchase items already include GST in their calculations,
+  // we need to calculate QBT Amount properly
+  const qbtAmt = totalTaxable;
   
-  // After DISC3 - This should be the net taxable amount
-  const afterDiBc3 = totalTaxable - diBc3;
+  // After DISC3
+  const afterDiBc3 = qbtAmt - diBc3;
   
-  // CEBS Amount (taxable after discount)
+  // CEBS Amount
   const ceBsAmt = afterDiBc3;
   
-  // Net Amount = Taxable + Total GST + Rounding
-  const netAmt = totalTaxable + totalGst + rounding;
+  // Net Amount
+  const netAmt = ceBsAmt + rounding;
   
   setPurchaseFormData(prev => ({
     ...prev,
     mrpTotal: totalMrp.toFixed(2),
-    grossAmount: totalGrossAmount.toFixed(2), // Added this field
     tcbAmount: tcbAmount.toFixed(2),
     afterDiBc1: afterDiBc1.toFixed(2),
     groBsAmt: groBsAmt.toFixed(2),
     afterDiBc2: afterDiBc2.toFixed(2),
-    qbtAmt: totalGst.toFixed(2), // GST Amount (sum of CGST+SGST)
-    totalCgst: totalCgst.toFixed(2), // Added total CGST
-    totalSgst: totalSgst.toFixed(2), // Added total SGST
+    qbtAmt: qbtAmt.toFixed(2),
     afterDiBc3: afterDiBc3.toFixed(2),
     ceBsAmt: ceBsAmt.toFixed(2),
     netAmt: netAmt.toFixed(2)
   }));
-}, [purchaseItems, purchaseFormData.tcbPercent, purchaseFormData.diBc1, purchaseFormData.diBc2, purchaseFormData.diBc3, purchaseFormData.rounding]);  
+}, [purchaseItems, purchaseFormData.tcbPercent, purchaseFormData.diBc1, purchaseFormData.diBc2, purchaseFormData.diBc3, purchaseFormData.rounding]);
+  
 const deletePurchaseItem = (index) => {
   const newItems = purchaseItems.filter((_, i) => i !== index);
   newItems.forEach((item, i) => { item.sr = i + 1; });
@@ -1111,10 +1106,12 @@ const deletePurchaseItem = (index) => {
 
   const handlePurchaseInputChange = (e) => {
   const { name, value } = e.target;
+  let newValue = value;
   let updatedForm = { ...purchaseFormData, [name]: value };
 
   if (name === 'tcbPercent' || name === 'diBc1' || name === 'diBc2' || name === 'diBc3' || name === 'rounding') {
     setPurchaseFormData(updatedForm);
+    // ADD THIS - Trigger recalculation of summary when these fields change
     setTimeout(() => calcPurchaseSummary(), 0);
   } else {
     setPurchaseFormData(updatedForm);
@@ -1175,7 +1172,7 @@ const deletePurchaseItem = (index) => {
 
 };
 
-const handlePurchaseProductSelect = (index, product) => {
+ const handlePurchaseProductSelect = (index, product) => {
   updatePurchaseItem(index, 'product', `${product.code} - ${product.name}`);
   updatePurchaseItem(index, 'productId', product.id);
   updatePurchaseItem(index, 'mrp', product.mrp || '');
@@ -1187,24 +1184,16 @@ const handlePurchaseProductSelect = (index, product) => {
   setShowPurchaseProductList(false);
   setCurrentPurchaseProductIndex(-1);
   
-  // Force recalculation for this item
-  setTimeout(() => {
-    const updatedItems = [...purchaseItems];
-    const item = updatedItems[index];
-    if (item && item.quantity) {
-      // Trigger recalculation by calling updatePurchaseItem with quantity
-      updatePurchaseItem(index, 'quantity', item.quantity);
-    }
-  }, 100);
-  
   // Check if product has existing batches
   const productBatches = batches.filter(b => b.productId === product.id);
   
   if (productBatches.length > 0) {
+    // Show existing batch modal
     setBatchMode('existing');
     setCurrentBatchRow(index);
     setShowBatchModal(true);
   } else {
+    // Show new batch modal
     setBatchMode('new');
     setCurrentBatchRow(index);
     setBatchForm({
@@ -1222,7 +1211,6 @@ const handlePurchaseProductSelect = (index, product) => {
     });
     setShowBatchModal(true);
   }
-
   
   setTimeout(() => {
     const qtyInput = document.querySelector(`[data-purchase-field="quantity"][data-purchase-index="${index}"]`);
@@ -1262,64 +1250,8 @@ const saveBatchDetails = () => {
     boxPack: batchForm.boxPack,
     ratePerUnit: batchForm.ratePerUnit,
     previousPurchaseRate: batchForm.previousPurchaseRate,
-    quantity: batchForm.quantity || updatedItems[currentBatchRow]?.quantity || 1
+    quantity: batchForm.quantity
   };
-  
-  // Force recalculation for the updated item
-  const index = currentBatchRow;
-  const item = updatedItems[index];
-  const qty = parseFloat(item.quantity) || 0;
-  const purRate = parseFloat(item.purRate) || 0;
-  
-  // Recalculate everything for this item
-  const grossAmt = qty * purRate;
-  item.grossAmount = grossAmt.toFixed(2);
-
-  // Apply disc1
-  let afterDisc1 = grossAmt;
-  if (parseFloat(item.disc1)) {
-    const disc1Amt = grossAmt * (parseFloat(item.disc1) / 100);
-    afterDisc1 = grossAmt - disc1Amt;
-  }
-  item.afterDisc1 = afterDisc1.toFixed(2);
-
-  // Apply disc2
-  let afterDisc2 = afterDisc1;
-  if (parseFloat(item.disc2)) {
-    const disc2Amt = afterDisc1 * (parseFloat(item.disc2) / 100);
-    afterDisc2 = afterDisc1 - disc2Amt;
-  }
-  item.afterDisc2 = afterDisc2.toFixed(2);
-
-  // Apply disc3
-  let afterDisc3 = afterDisc2;
-  if (parseFloat(item.disc3)) {
-    const disc3Amt = afterDisc2 * (parseFloat(item.disc3) / 100);
-    afterDisc3 = afterDisc2 - disc3Amt;
-  }
-  item.afterDisc3 = afterDisc3.toFixed(2);
-
-  // Taxable amount
-  const taxableVal = afterDisc3;
-  item.taxable = taxableVal.toFixed(2);
-
-  // Calculate CGST and SGST
-  const taxPercentage = parseFloat(item.tax) || 0;
-  if (taxPercentage > 0 && taxableVal > 0) {
-    const totalTaxAmt = taxableVal * (taxPercentage / 100);
-    const cgstAmt = totalTaxAmt / 2;
-    const sgstAmt = totalTaxAmt / 2;
-    item.cgst = cgstAmt.toFixed(2);
-    item.sgst = sgstAmt.toFixed(2);
-  } else {
-    item.cgst = (0).toFixed(2);
-    item.sgst = (0).toFixed(2);
-  }
-
-  // Final amount
-  const amount = taxableVal + (parseFloat(item.cgst) || 0) + (parseFloat(item.sgst) || 0);
-  item.amount = amount.toFixed(2);
-  
   setPurchaseItems(updatedItems);
   setBatches([
     ...batches,
@@ -1330,9 +1262,6 @@ const saveBatchDetails = () => {
     }
   ]);
   setShowBatchModal(false);
-  
-  // Calculate summary after updating
-  calcPurchaseSummary();
 };
 
   const savePurchase = () => {
@@ -4339,29 +4268,26 @@ const saveBatchDetails = () => {
                 </div>
               </div>
 
-          {/* Purchase Summary Section */}
-<div className="form-section">
-  <h4 className="section-header">Invoice Summary</h4>
-  <div className="summary-bar">
-    <div>MRP Total: <span className="amount">₹{purchaseFormData.mrpTotal || '0.00'}</span></div>
-    <div>TCS %: <span className="amount">{purchaseFormData.tcbPercent || '0.00'}%</span></div>
-    <div>TCS Amount: <span className="amount">-₹{purchaseFormData.tcbAmount || '0.00'}</span></div>
-    <div>Taxable Value: <span className="amount">₹{purchaseFormData.afterDiBc3 || '0.00'}</span></div>
-    <div>Gross Amount: <span className="amount">₹{purchaseFormData.grossAmount || '0.00'}</span></div>
-    <div>SGST Amount: <span className="amount">+₹{purchaseFormData.totalSgst || '0.00'}</span></div>
-    <div>CGST Amount: <span className="amount">+₹{purchaseFormData.totalCgst || '0.00'}</span></div>
-    <div>Total GST Amount: <span className="amount">+₹{purchaseFormData.qbtAmt || '0.00'}</span></div>
-    {/* Discount Fields in Sequence */}
-    <div>DISC1: <span className="amount">-₹{purchaseFormData.diBc1 || '0.00'}</span></div>
-    <div>After DISC1: <span className="amount">₹{purchaseFormData.afterDiBc1 || '0.00'}</span></div>
-    <div>DISC2: <span className="amount">-₹{purchaseFormData.diBc2 || '0.00'}</span></div>
-    <div>After DISC2: <span className="amount">₹{purchaseFormData.afterDiBc2 || '0.00'}</span></div>
-    <div>DISC3: <span className="amount">-₹{purchaseFormData.diBc3 || '0.00'}</span></div>
-    <div>After DISC3: <span className="amount">₹{purchaseFormData.afterDiBc3 || '0.00'}</span></div>
-    <div>Rounding: <span className="amount">₹{purchaseFormData.rounding || '0.00'}</span></div>
-    <div className="net-amount">Net Amount: <strong>₹{purchaseFormData.netAmt || '0.00'}</strong></div>
-  </div>
-</div>
+              {/* Purchase Summary Section */}
+              <div className="form-section">
+                <h4 className="section-header">Invoice Summary</h4>
+                <div className="summary-bar">
+                  <div>MRP Total: <span className="amount">₹{purchaseFormData.mrpTotal || '0.00'}</span></div>
+                  <div>TCS %: <span className="amount">{purchaseFormData.tcbPercent || '0.00'}%</span></div>
+                  <div>TCS Amount: <span className="amount">-₹{purchaseFormData.tcbAmount || '0.00'}</span></div>
+                  <div>DISC1: <span className="amount">-₹{purchaseFormData.diBc1 || '0.00'}</span></div>
+                  <div>After DISC1: <span className="amount">₹{purchaseFormData.afterDiBc1 || '0.00'}</span></div>
+                  <div>Gross Amount: <span className="amount">₹{purchaseFormData.groBsAmt || '0.00'}</span></div>
+                  <div>DISC2: <span className="amount">-₹{purchaseFormData.diBc2 || '0.00'}</span></div>
+                  <div>After DISC2: <span className="amount">₹{purchaseFormData.afterDiBc2 || '0.00'}</span></div>
+                  <div>GST Amount: <span className="amount">+₹{purchaseFormData.qbtAmt || '0.00'}</span></div>
+                  <div>DISC3: <span className="amount">-₹{purchaseFormData.diBc3 || '0.00'}</span></div>
+                  <div>After DISC3: <span className="amount">₹{purchaseFormData.afterDiBc3 || '0.00'}</span></div>
+                  <div>Rounding: <span className="amount">₹{purchaseFormData.rounding || '0.00'}</span></div>
+                  <div className="net-amount">Net Amount: <strong>₹{purchaseFormData.netAmt || '0.00'}</strong></div>
+                </div>
+              </div>
+
               <div className="form-actions">
                 <button className="btn-add-invoice" onClick={savePurchase}>
                   💾 Add Invoice
@@ -5659,80 +5585,25 @@ const saveBatchDetails = () => {
               </thead>
               <tbody>
                 {existingBatches.map((batch, idx) => (
-                 <tr
-  key={idx}
-  onClick={() => {
-    const updatedItems = [...purchaseItems];
-    const currentItem = updatedItems[currentBatchRow];
-    
-    // Update the item with selected batch data
-    updatedItems[currentBatchRow] = {
-      ...currentItem,
-      batchNo: batch.batchNo,
-      mfgDate: batch.mfgDate,
-      expDate: batch.expDate,
-      mrp: batch.mrp,
-      purRate: batch.purchaseRate,
-      salesRate: batch.salesRate,
-      quantity: currentItem?.quantity || 1,
-      stockQty: batch.stockQty,
-      boxPack: batch.boxPack || 1,
-      selectedBatch: batch
-    };
-    
-    // Force recalculation for this item
-    const index = currentBatchRow;
-    const item = updatedItems[index];
-    const qty = parseFloat(item.quantity) || 0;
-    const purRate = parseFloat(item.purRate) || 0;
-    
-    // Recalculate all values
-    const grossAmt = qty * purRate;
-    item.grossAmount = grossAmt.toFixed(2);
-
-    let afterDisc1 = grossAmt;
-    if (parseFloat(item.disc1)) {
-      const disc1Amt = grossAmt * (parseFloat(item.disc1) / 100);
-      afterDisc1 = grossAmt - disc1Amt;
-    }
-    item.afterDisc1 = afterDisc1.toFixed(2);
-
-    let afterDisc2 = afterDisc1;
-    if (parseFloat(item.disc2)) {
-      const disc2Amt = afterDisc1 * (parseFloat(item.disc2) / 100);
-      afterDisc2 = afterDisc1 - disc2Amt;
-    }
-    item.afterDisc2 = afterDisc2.toFixed(2);
-
-    let afterDisc3 = afterDisc2;
-    if (parseFloat(item.disc3)) {
-      const disc3Amt = afterDisc2 * (parseFloat(item.disc3) / 100);
-      afterDisc3 = afterDisc2 - disc3Amt;
-    }
-    item.afterDisc3 = afterDisc3.toFixed(2);
-
-    const taxableVal = afterDisc3;
-    item.taxable = taxableVal.toFixed(2);
-
-    const taxPercentage = parseFloat(item.tax) || 0;
-    if (taxPercentage > 0 && taxableVal > 0) {
-      const totalTaxAmt = taxableVal * (taxPercentage / 100);
-      const cgstAmt = totalTaxAmt / 2;
-      const sgstAmt = totalTaxAmt / 2;
-      item.cgst = cgstAmt.toFixed(2);
-      item.sgst = sgstAmt.toFixed(2);
-    } else {
-      item.cgst = (0).toFixed(2);
-      item.sgst = (0).toFixed(2);
-    }
-
-    const amount = taxableVal + (parseFloat(item.cgst) || 0) + (parseFloat(item.sgst) || 0);
-    item.amount = amount.toFixed(2);
-    
-    setPurchaseItems(updatedItems);
-    setShowBatchModal(false);
-    calcPurchaseSummary(); // Recalculate summary
-  }}
+                  <tr
+                    key={idx}
+                    onClick={() => {
+                      const updatedItems = [...purchaseItems];
+                      updatedItems[currentBatchRow] = {
+                        ...updatedItems[currentBatchRow],
+                        batchNo: batch.batchNo,
+                        mfgDate: batch.mfgDate,
+                        expDate: batch.expDate,
+                        mrp: batch.mrp,
+                        purRate: batch.purchaseRate,
+                        salesRate: batch.salesRate,
+                        quantity: updatedItems[currentBatchRow]?.quantity || 1,
+                        stockQty: batch.stockQty,
+                        boxPack: batch.boxPack || 1
+                      };
+                      setPurchaseItems(updatedItems);
+                      setShowBatchModal(false);
+                    }}
                     style={{
                       cursor: 'pointer',
                       transition: '0.2s',
