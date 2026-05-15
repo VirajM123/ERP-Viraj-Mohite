@@ -1,0 +1,1157 @@
+/* Dashboard.css - Complete Styling for ERP Transaction System */
+
+/* ========================================
+   GLOBAL RESET & BASE STYLES
+   ======================================== */
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+body {
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', sans-serif;
+  background: #f1f5f9;
+  color: #1e293b;
+  line-height: 1.5;
+}
+
+/* ========================================
+   DASHBOARD LAYOUT
+   ======================================== */
+.dashboard-container {
+  display: flex;
+  min-height: 100vh;
+  background: #f1f5f9;
+}
+
+/* Sidebar Styles */
+.sidebar {
+  width: 280px;
+  background: linear-gradient(180deg, #0f172a 0%, #1e293b 100%);
+  color: #e2e8f0;
+  display: flex;
+  flex-direction: column;
+  position: fixed;
+  height: 100vh;
+  overflow-y: auto;
+  z-index: 100;
+  transition: all 0.3s ease;
+}
+
+.sidebar::-webkit-scrollbar {
+  width: 5px;
+}
+
+.sidebar::-webkit-scrollbar-track {
+  background: #334155;
+}
+
+.sidebar::-webkit-scrollbar-thumb {
+  background: #64748b;
+  border-radius: 3px;
+}
+
+.logo-section {
+  padding: 24px 20px;
+  border-bottom: 1px solid #334155;
+  text-align: center;
+}
+
+.logo-image {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
+.company-logo {
+  max-width: 180px;
+  height: auto;
+  filter: brightness(0) invert(1);
+}
+
+/* Navigation Menu */
+.nav-menu {
+  flex: 1;
+  padding: 20px 0;
+}
+
+.nav-item {
+  margin-bottom: 4px;
+}
+
+.nav-header {
+  display: flex;
+  align-items: center;
+  padding: 12px 20px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  border-radius: 8px;
+  margin: 0 8px;
+}
+
+.nav-header:hover {
+  background: #334155;
+}
+
+.nav-header.active {
+  background: #3b82f6;
+  color: white;
+}
+
+.nav-icon {
+  font-size: 20px;
+  margin-right: 12px;
+  width: 24px;
+}
+
+.nav-title {
+  flex: 1;
+  font-weight: 500;
+  font-size: 14px;
+}
+
+.nav-arrow {
+  font-size: 12px;
+  transition: transform 0.2s ease;
+}
+
+.nav-arrow.open {
+  transform: rotate(180deg);
+}
+
+.nav-submenu {
+  padding: 8px 0 8px 44px;
+}
+
+.nav-subitem-wrapper {
+  margin: 2px 0;
+}
+
+.nav-subitem {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 12px;
+  cursor: pointer;
+  border-radius: 6px;
+  transition: all 0.2s ease;
+  font-size: 13px;
+}
+
+.nav-subitem:hover {
+  background: #334155;
+}
+
+.nav-subitem.active {
+  background: #3b82f6;
+  color: white;
+}
+
+.submenu-text {
+  flex: 1;
+}
+
+.plus-icon {
+  opacity: 0;
+  transition: opacity 0.2s ease;
+  font-size: 16px;
+  font-weight: bold;
+  padding: 0 4px;
+}
+
+.nav-subitem:hover .plus-icon {
+  opacity: 1;
+}
+
+/* Main Content Area */
+.main-content {
+  flex: 1;
+  margin-left: 280px;
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+}
+
+/* Top Navigation */
+.top-nav {
+  background: white;
+  padding: 12px 24px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+  position: sticky;
+  top: 0;
+  z-index: 50;
+}
+
+.page-title {
+  font-size: 20px;
+  font-weight: 600;
+  color: #1e293b;
+}
+
+.nav-right {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+}
+
+.notification-bell {
+  font-size: 20px;
+  cursor: pointer;
+  position: relative;
+}
+
+.user-profile .avatar {
+  width: 40px;
+  height: 40px;
+  background: #3b82f6;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: white;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.content-body {
+  padding: 24px;
+  flex: 1;
+}
+
+/* ========================================
+   MASTER SECTION & FORM STYLES
+   ======================================== */
+.master-section {
+  background: white;
+  border-radius: 12px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+  overflow: hidden;
+}
+
+.erp-master-form {
+  padding: 24px;
+}
+
+.form-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 24px;
+  padding-bottom: 16px;
+  border-bottom: 2px solid #e2e8f0;
+}
+
+.page-title-large {
+  font-size: 24px;
+  font-weight: 600;
+  color: #1e293b;
+}
+
+.close-form-btn {
+  background: none;
+  border: none;
+  font-size: 24px;
+  cursor: pointer;
+  color: #64748b;
+  transition: color 0.2s;
+}
+
+.close-form-btn:hover {
+  color: #ef4444;
+}
+
+/* Form Sections */
+.form-section {
+  margin-bottom: 32px;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  padding: 20px;
+}
+
+.section-header {
+  font-size: 16px;
+  font-weight: 600;
+  color: #1e293b;
+  margin-bottom: 20px;
+  padding-bottom: 8px;
+  border-bottom: 2px solid #3b82f6;
+  display: inline-block;
+}
+
+/* Form Grids */
+.form-grid-2 {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 16px;
+  margin-bottom: 16px;
+}
+
+.form-grid-3 {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 16px;
+  margin-bottom: 16px;
+}
+
+.form-grid-4 {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 16px;
+  margin-bottom: 16px;
+}
+
+.form-row {
+  margin-bottom: 16px;
+}
+
+.form-row-single {
+  margin-bottom: 16px;
+}
+
+.labeled-input {
+  display: flex;
+  flex-direction: column;
+}
+
+.labeled-input label {
+  font-size: 12px;
+  font-weight: 500;
+  color: #475569;
+  margin-bottom: 6px;
+}
+
+.labeled-input input,
+.labeled-input select,
+.labeled-input textarea {
+  padding: 10px 12px;
+  border: 1px solid #cbd5e1;
+  border-radius: 8px;
+  font-size: 14px;
+  transition: all 0.2s;
+  font-family: inherit;
+}
+
+.labeled-input input:focus,
+.labeled-input select:focus,
+.labeled-input textarea:focus {
+  outline: none;
+  border-color: #3b82f6;
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+}
+
+.labeled-input input:hover,
+.labeled-input select:hover,
+.labeled-input textarea:hover {
+  border-color: #94a3b8;
+}
+
+/* Checkbox Group */
+.checkbox-group {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding-top: 8px;
+}
+
+.checkbox-group label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+/* Form Actions */
+.form-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
+  margin-top: 24px;
+  padding-top: 20px;
+  border-top: 1px solid #e2e8f0;
+}
+
+.btn-primary, .btn-save {
+  background: #3b82f6;
+  color: white;
+  border: none;
+  padding: 10px 24px;
+  border-radius: 8px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.btn-primary:hover, .btn-save:hover {
+  background: #2563eb;
+  transform: translateY(-1px);
+}
+
+.btn-secondary, .btn-cancel {
+  background: #f1f5f9;
+  color: #475569;
+  border: 1px solid #cbd5e1;
+  padding: 10px 24px;
+  border-radius: 8px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.btn-secondary:hover, .btn-cancel:hover {
+  background: #e2e8f0;
+}
+
+/* Account Tabs */
+.account-tabs {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 24px;
+  border-bottom: 1px solid #e2e8f0;
+  padding-bottom: 8px;
+}
+
+.tab-btn {
+  background: none;
+  border: none;
+  padding: 10px 20px;
+  font-size: 14px;
+  font-weight: 500;
+  color: #64748b;
+  cursor: pointer;
+  border-radius: 8px;
+  transition: all 0.2s;
+}
+
+.tab-btn:hover {
+  background: #f1f5f9;
+  color: #1e293b;
+}
+
+.tab-btn.active {
+  background: #3b82f6;
+  color: white;
+}
+
+/* ========================================
+   DATA TABLE STYLES (Grid View)
+   ======================================== */
+.grid-section {
+  background: white;
+  border-radius: 12px;
+  overflow: hidden;
+}
+
+.grid-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 20px 24px;
+  border-bottom: 1px solid #e2e8f0;
+  flex-wrap: wrap;
+  gap: 16px;
+}
+
+.grid-header h3 {
+  font-size: 18px;
+  font-weight: 600;
+  color: #1e293b;
+}
+
+.table-controls {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.filter-input {
+  padding: 8px 12px;
+  border: 1px solid #cbd5e1;
+  border-radius: 8px;
+  font-size: 14px;
+  width: 250px;
+}
+
+.filter-input:focus {
+  outline: none;
+  border-color: #3b82f6;
+  box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.1);
+}
+
+.btn-excel, .btn-pdf, .btn-add-new {
+  padding: 8px 16px;
+  border: none;
+  border-radius: 8px;
+  font-weight: 500;
+  font-size: 13px;
+  cursor: pointer;
+  transition: all 0.2s;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.btn-excel {
+  background: #10b981;
+  color: white;
+}
+
+.btn-excel:hover {
+  background: #059669;
+}
+
+.btn-pdf {
+  background: #ef4444;
+  color: white;
+}
+
+.btn-pdf:hover {
+  background: #dc2626;
+}
+
+.btn-add-new {
+  background: #3b82f6;
+  color: white;
+}
+
+.btn-add-new:hover {
+  background: #2563eb;
+}
+
+.data-table-container {
+  overflow-x: auto;
+  padding: 0 24px 24px 24px;
+}
+
+.data-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+
+.data-table thead th {
+  text-align: left;
+  padding: 12px;
+  background: #f8fafc;
+  font-weight: 600;
+  color: #475569;
+  border-bottom: 2px solid #e2e8f0;
+}
+
+.data-table tbody td {
+  padding: 12px;
+  border-bottom: 1px solid #f1f5f9;
+}
+
+.data-table tbody tr:hover {
+  background: #f8fafc;
+}
+
+.btn-edit, .btn-delete, .btn-view {
+  padding: 4px 10px;
+  margin: 0 4px;
+  border: none;
+  border-radius: 6px;
+  font-size: 12px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.btn-edit {
+  background: #3b82f6;
+  color: white;
+}
+
+.btn-edit:hover {
+  background: #2563eb;
+}
+
+.btn-delete {
+  background: #ef4444;
+  color: white;
+}
+
+.btn-delete:hover {
+  background: #dc2626;
+}
+
+.btn-view {
+  background: #10b981;
+  color: white;
+}
+
+.btn-view:hover {
+  background: #059669;
+}
+
+.empty-state {
+  text-align: center;
+  padding: 60px 20px;
+  color: #64748b;
+}
+
+.empty-state .empty-icon {
+  font-size: 48px;
+  margin-bottom: 16px;
+}
+
+.empty-state h4 {
+  font-size: 18px;
+  color: #1e293b;
+  margin-bottom: 8px;
+}
+
+/* ========================================
+   PRODUCT ENTRY TABLE (Invoice Style)
+   ======================================== */
+.product-entry-container {
+  overflow-x: auto;
+  overflow-y: auto;
+  max-height: 500px;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+}
+
+.erp-table-container {
+  min-width: 2000px;
+}
+
+.product-entry-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+}
+
+.product-entry-table thead th {
+  background: #f8fafc;
+  padding: 10px 8px;
+  text-align: left;
+  font-weight: 600;
+  color: #475569;
+  border-bottom: 2px solid #e2e8f0;
+  white-space: nowrap;
+}
+
+.product-entry-table tbody td {
+  padding: 8px;
+  border-bottom: 1px solid #f1f5f9;
+}
+
+.product-entry-table tbody tr:hover {
+  background: #f8fafc;
+}
+
+.product-entry-table tbody tr.active-row {
+  background: #eff6ff;
+}
+
+.erp-input {
+  width: 100%;
+  padding: 6px 8px;
+  border: 1px solid #cbd5e1;
+  border-radius: 6px;
+  font-size: 12px;
+  font-family: inherit;
+}
+
+.erp-input:focus {
+  outline: none;
+  border-color: #3b82f6;
+  box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.1);
+}
+
+.erp-input.numeric {
+  text-align: right;
+}
+
+.erp-input.font-bold {
+  font-weight: 600;
+  background: #fef3c7;
+}
+
+.erp-input.small {
+  width: 80px;
+}
+
+.erp-select {
+  width: 100%;
+  padding: 6px 8px;
+  border: 1px solid #cbd5e1;
+  border-radius: 6px;
+  font-size: 12px;
+  background: white;
+}
+
+.erp-textarea {
+  width: 100%;
+  padding: 8px;
+  border: 1px solid #cbd5e1;
+  border-radius: 6px;
+  font-size: 12px;
+  font-family: inherit;
+  resize: vertical;
+}
+
+/* Product Dropdown */
+.product-dropdown-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.3);
+  z-index: 1000;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
+.product-dropdown {
+  background: white;
+  border-radius: 12px;
+  box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1);
+  width: 600px;
+  max-height: 400px;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+.dropdown-header {
+  display: flex;
+  padding: 12px;
+  border-bottom: 1px solid #e2e8f0;
+  gap: 8px;
+}
+
+.dropdown-header input {
+  flex: 1;
+  padding: 8px 12px;
+  border: 1px solid #cbd5e1;
+  border-radius: 8px;
+}
+
+.dropdown-header button {
+  background: none;
+  border: none;
+  font-size: 20px;
+  cursor: pointer;
+}
+
+.dropdown-list {
+  overflow-y: auto;
+  max-height: 350px;
+}
+
+.dropdown-item {
+  padding: 12px;
+  cursor: pointer;
+  border-bottom: 1px solid #f1f5f9;
+  transition: background 0.2s;
+}
+
+.dropdown-item:hover {
+  background: #eff6ff;
+}
+
+.dropdown-item.no-results {
+  text-align: center;
+  color: #64748b;
+  cursor: default;
+}
+
+.dropdown-item.no-results:hover {
+  background: none;
+}
+
+/* ========================================
+   INVOICE HEADER GRID
+   ======================================== */
+.invoice-header-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 16px;
+  margin-bottom: 16px;
+}
+
+.narration-field {
+  grid-column: span 4;
+}
+
+.purchase-header-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 16px;
+  margin-bottom: 16px;
+}
+
+/* Summary Bar */
+.summary-bar {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 20px;
+  padding: 16px;
+  background: #f8fafc;
+  border-radius: 8px;
+  font-size: 13px;
+}
+
+.summary-bar > div {
+  padding: 4px 8px;
+}
+
+.summary-bar .amount {
+  font-weight: 600;
+  color: #1e293b;
+}
+
+.summary-bar .taxable-value {
+  background: #dbeafe;
+  border-radius: 6px;
+}
+
+.summary-bar .net-amount {
+  background: #3b82f6;
+  color: white;
+  border-radius: 6px;
+}
+
+.summary-bar .net-amount .amount,
+.summary-bar .net-amount strong {
+  color: white;
+}
+
+.tcs-field {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+/* ========================================
+   BATCH MODAL STYLES
+   ======================================== */
+.batch-modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 9999;
+}
+
+.batch-modal {
+  background: white;
+  border-radius: 16px;
+  width: 800px;
+  max-width: 90vw;
+  max-height: 90vh;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
+}
+
+.batch-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 20px 24px;
+  border-bottom: 1px solid #e2e8f0;
+}
+
+.batch-header h3 {
+  font-size: 18px;
+  font-weight: 600;
+  color: #1e293b;
+}
+
+.batch-header button {
+  background: none;
+  border: none;
+  font-size: 20px;
+  cursor: pointer;
+  color: #64748b;
+}
+
+.batch-form-grid {
+  padding: 24px;
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 16px;
+}
+
+/* ========================================
+   RECEIPT FORM STYLES
+   ======================================== */
+.receipt-form .receipt-tabs {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 24px;
+  border-bottom: 1px solid #e2e8f0;
+  padding-bottom: 8px;
+}
+
+.form-actions-header {
+  display: flex;
+  gap: 12px;
+}
+
+.btn-tab {
+  padding: 8px 20px;
+  background: #f1f5f9;
+  border: 1px solid #cbd5e1;
+  border-radius: 8px;
+  cursor: pointer;
+  font-weight: 500;
+  transition: all 0.2s;
+}
+
+.btn-tab.active {
+  background: #3b82f6;
+  color: white;
+  border-color: #3b82f6;
+}
+
+.receipt-view-container {
+  padding: 24px;
+}
+
+.receipt-header {
+  text-align: center;
+  margin-bottom: 24px;
+  padding-bottom: 16px;
+  border-bottom: 2px solid #e2e8f0;
+}
+
+.receipt-header h3 {
+  font-size: 20px;
+  font-weight: 600;
+  color: #1e293b;
+}
+
+.receipt-details-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 16px;
+  margin-bottom: 24px;
+  padding: 16px;
+  background: #f8fafc;
+  border-radius: 8px;
+}
+
+.receipt-items-table {
+  margin-top: 24px;
+}
+
+.receipt-items-table h4 {
+  margin-bottom: 16px;
+  font-size: 16px;
+  color: #1e293b;
+}
+
+.status-badge {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 20px;
+  font-size: 11px;
+  font-weight: 500;
+}
+
+.status-badge.complete {
+  background: #d1fae5;
+  color: #065f46;
+}
+
+.status-badge.pending {
+  background: #fef3c7;
+  color: #92400e;
+}
+
+.action-buttons {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+/* ========================================
+   MAPPING TABLE STYLES
+   ======================================== */
+.editable-cell {
+  cursor: pointer;
+  padding: 8px;
+  transition: background 0.2s;
+}
+
+.editable-cell:hover {
+  background: #eff6ff;
+}
+
+.editable-cell.editing {
+  background: #dbeafe;
+  outline: 2px solid #3b82f6;
+}
+
+.dropdown-overlay {
+  position: absolute;
+  background: white;
+  border: 1px solid #cbd5e1;
+  border-radius: 8px;
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+  z-index: 1000;
+  min-width: 200px;
+  max-height: 300px;
+  overflow-y: auto;
+}
+
+.dropdown-filter {
+  padding: 8px;
+  border-bottom: 1px solid #e2e8f0;
+}
+
+.dropdown-filter input {
+  width: 100%;
+  padding: 6px 8px;
+  border: 1px solid #cbd5e1;
+  border-radius: 6px;
+}
+
+.mapping-stats {
+  padding: 16px 24px;
+  background: #f8fafc;
+  border-radius: 8px;
+  margin-top: 16px;
+}
+
+.progress-count {
+  color: #3b82f6;
+  font-weight: 600;
+}
+
+/* ========================================
+   RESPONSIVE DESIGN
+   ======================================== */
+@media (max-width: 1200px) {
+  .sidebar {
+    width: 240px;
+  }
+  
+  .main-content {
+    margin-left: 240px;
+  }
+  
+  .invoice-header-grid,
+  .purchase-header-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+  
+  .narration-field {
+    grid-column: span 2;
+  }
+}
+
+@media (max-width: 768px) {
+  .sidebar {
+    transform: translateX(-100%);
+    position: fixed;
+    z-index: 200;
+  }
+  
+  .sidebar.open {
+    transform: translateX(0);
+  }
+  
+  .main-content {
+    margin-left: 0;
+  }
+  
+  .form-grid-2,
+  .form-grid-3,
+  .form-grid-4 {
+    grid-template-columns: 1fr;
+  }
+  
+  .invoice-header-grid,
+  .purchase-header-grid {
+    grid-template-columns: 1fr;
+  }
+  
+  .narration-field {
+    grid-column: span 1;
+  }
+  
+  .grid-header {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+  
+  .table-controls {
+    width: 100%;
+  }
+  
+  .filter-input {
+    flex: 1;
+  }
+  
+  .summary-bar {
+    flex-direction: column;
+    align-items: flex-end;
+  }
+  
+  .receipt-details-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* ========================================
+   UTILITY CLASSES
+   ======================================== */
+.mt-2 { margin-top: 8px; }
+.mt-3 { margin-top: 12px; }
+.mt-4 { margin-top: 16px; }
+.mb-2 { margin-bottom: 8px; }
+.mb-3 { margin-bottom: 12px; }
+.mb-4 { margin-bottom: 16px; }
+.ml-auto { margin-left: auto; }
+.mr-auto { margin-right: auto; }
+.text-center { text-align: center; }
+.text-right { text-align: right; }
+.text-red-500 { color: #ef4444; }
+.text-green-500 { color: #10b981; }
+.font-bold { font-weight: 600; }
+
+/* Print Styles */
+@media print {
+  .sidebar,
+  .top-nav,
+  .form-actions,
+  .btn-excel,
+  .btn-pdf,
+  .btn-add-new,
+  .close-form-btn {
+    display: none !important;
+  }
+  
+  .main-content {
+    margin-left: 0;
+    padding: 0;
+  }
+  
+  .content-body {
+    padding: 0;
+  }
+  
+  .master-section {
+    box-shadow: none;
+    border: 1px solid #ccc;
+  }
+}

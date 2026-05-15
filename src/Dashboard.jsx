@@ -6,6 +6,7 @@ import 'jspdf-autotable';
 import './Dashboard.css';
 import logo from "./assets/images/Totalsolution.png";
 import SalesmanToAreaMapping from './SalesmanToAreaMapping';
+import Transaction from './Transaction';
 
 
 
@@ -171,6 +172,35 @@ const [batchForm, setBatchForm] = useState({
   const [showDebitProductList, setShowDebitProductList] = useState(false);
   const [debitProductListFilter, setDebitProductListFilter] = useState('');
   const [currentDebitProductIndex, setCurrentDebitProductIndex] = useState(-1);
+
+  // Receipt State
+  const [receipts, setReceipts] = useState([]);
+  const [receiptFormData, setReceiptFormData] = useState({
+    receiptDate: new Date().toISOString().split('T')[0],
+    rNo: '',
+    billSeries: '',
+    salesman: '1 JVR',
+    partyName: '',
+    partyDrAmount: '',
+    narration: '',
+    bankCash: 'KOTAK',
+    bankAccount: 'KOTAK MAHINDRA BANK-8237881168',
+    bankDrAmount: '',
+    loadNo: '',
+    receiptAmt: '',
+    chqNo: '',
+    chqDate: '',
+    rLoadNo: '',
+    draweeBank: '',
+    micr: ''
+  });
+  const [receiptItems, setReceiptItems] = useState([]);
+  const [receiptActiveTab, setReceiptActiveTab] = useState('details');
+  const [showReceiptList, setShowReceiptList] = useState(false);
+  const [editingReceiptId, setEditingReceiptId] = useState(null);
+  const [viewingReceipt, setViewingReceipt] = useState(null);
+  const [receiptFilter, setReceiptFilter] = useState('');
+  const [selectedPartyBalance, setSelectedPartyBalance] = useState(0);
 
   // Filter states for each master
   const [filters, setFilters] = useState({
@@ -1875,6 +1905,177 @@ const saveBatchDetails = () => {
     alert('Debit Note saved successfully!');
   };
 
+  // Receipt Helper Functions
+  const getEmptyReceiptItem = () => ({
+    id: Date.now(),
+    trn: 'SAL',
+    trnSeries: '',
+    trnNo: '',
+    date: '',
+    amount: '',
+    adjustAmt: '',
+    balanceAmt: '',
+    nowAdjust: '',
+    discount: '',
+    discAccount: '',
+    remark: ''
+  });
+
+  const handleReceiptInputChange = (e) => {
+    const { name, value } = e.target;
+    setReceiptFormData({ ...receiptFormData, [name]: value });
+    
+    if (name === 'partyName') {
+      const selectedParty = accounts.find(acc => acc.accountName === value);
+      if (selectedParty) {
+        const openingBal = parseFloat(selectedParty.openingBal) || 0;
+        setSelectedPartyBalance(openingBal);
+        setReceiptFormData(prev => ({ 
+          ...prev, 
+          partyDrAmount: openingBal.toFixed(2),
+          [name]: value 
+        }));
+      } else {
+        setSelectedPartyBalance(0);
+      }
+    }
+  };
+
+  const addReceiptItem = () => {
+    setReceiptItems([...receiptItems, getEmptyReceiptItem()]);
+  };
+
+  const updateReceiptItem = (index, field, value) => {
+    const newItems = [...receiptItems];
+    newItems[index][field] = value;
+    
+    if (field === 'nowAdjust' && value) {
+      const item = newItems[index];
+      const adjustAmt = parseFloat(value) || 0;
+      item.adjustAmt = adjustAmt;
+      item.balanceAmt = (parseFloat(item.amount) - adjustAmt).toFixed(2);
+      
+      let totalAdjusted = 0;
+      newItems.forEach(i => {
+        totalAdjusted += parseFloat(i.nowAdjust) || 0;
+      });
+      setReceiptFormData(prev => ({ 
+        ...prev, 
+        receiptAmt: (parseFloat(prev.receiptAmt) - totalAdjusted).toFixed(2)
+      }));
+    }
+    
+    setReceiptItems(newItems);
+  };
+
+  const deleteReceiptItem = (index) => {
+    const newItems = receiptItems.filter((_, i) => i !== index);
+    setReceiptItems(newItems);
+  };
+
+  const calculateReceiptSummary = () => {
+    let totalAdjusted = 0;
+    receiptItems.forEach(item => {
+      totalAdjusted += parseFloat(item.nowAdjust) || 0;
+    });
+    const balanceAmt = parseFloat(receiptFormData.receiptAmt) - totalAdjusted;
+    return { totalAdjusted, balanceAmt };
+  };
+
+  const saveReceipt = () => {
+    if (!receiptFormData.partyName || !receiptFormData.receiptAmt) {
+      alert('Please fill required fields: Party Name and Receipt Amount');
+      return;
+    }
+    
+    const receiptData = {
+      id: editingReceiptId || Date.now(),
+      ...receiptFormData,
+      items: receiptItems,
+      createdAt: new Date().toISOString()
+    };
+    
+    if (editingReceiptId) {
+      setReceipts(receipts.map(r => r.id === editingReceiptId ? receiptData : r));
+      alert('Receipt updated successfully!');
+    } else {
+      setReceipts([...receipts, receiptData]);
+      alert('Receipt saved successfully!');
+    }
+    
+    resetReceiptForm();
+    setShowReceiptList(true);
+  };
+
+  const resetReceiptForm = () => {
+    setReceiptFormData({
+      receiptDate: new Date().toISOString().split('T')[0],
+      rNo: '',
+      billSeries: '',
+      salesman: '1 JVR',
+      partyName: '',
+      partyDrAmount: '',
+      narration: '',
+      bankCash: 'KOTAK',
+      bankAccount: 'KOTAK MAHINDRA BANK-8237881168',
+      bankDrAmount: '',
+      loadNo: '',
+      receiptAmt: '',
+      chqNo: '',
+      chqDate: '',
+      rLoadNo: '',
+      draweeBank: '',
+      micr: ''
+    });
+    setReceiptItems([]);
+    setEditingReceiptId(null);
+    setViewingReceipt(null);
+    setSelectedPartyBalance(0);
+  };
+
+  const editReceipt = (receipt) => {
+    setEditingReceiptId(receipt.id);
+    setReceiptFormData({
+      receiptDate: receipt.receiptDate,
+      rNo: receipt.rNo,
+      billSeries: receipt.billSeries,
+      salesman: receipt.salesman,
+      partyName: receipt.partyName,
+      partyDrAmount: receipt.partyDrAmount,
+      narration: receipt.narration,
+      bankCash: receipt.bankCash,
+      bankAccount: receipt.bankAccount,
+      bankDrAmount: receipt.bankDrAmount,
+      loadNo: receipt.loadNo,
+      receiptAmt: receipt.receiptAmt,
+      chqNo: receipt.chqNo,
+      chqDate: receipt.chqDate,
+      rLoadNo: receipt.rLoadNo,
+      draweeBank: receipt.draweeBank,
+      micr: receipt.micr
+    });
+    setReceiptItems(receipt.items || []);
+    setShowReceiptList(false);
+    setOpenFormFor('Receipt');
+  };
+
+  const deleteReceipt = (id) => {
+    if (window.confirm('Are you sure you want to delete this receipt?')) {
+      setReceipts(receipts.filter(r => r.id !== id));
+    }
+  };
+
+  const viewReceipt = (receipt) => {
+    setViewingReceipt(receipt);
+  };
+
+  const getFilteredReceipts = () => {
+    return receipts.filter(receipt =>
+      receipt.partyName?.toLowerCase().includes(receiptFilter.toLowerCase()) ||
+      receipt.rNo?.toLowerCase().includes(receiptFilter.toLowerCase())
+    );
+  };
+
   // Filter handler
   const handleFilterChange = (masterType, value) => {
     setFilters({ ...filters, [masterType]: value });
@@ -2081,6 +2282,13 @@ const saveBatchDetails = () => {
         surcharge: 0, rounding: 0, beforeVatAddAmt: 0, afterVatDiscAmt: 0, netAmt: 0
       });
       addDebitNoteItem();
+    }
+
+    if (item === 'Receipt') {
+      resetReceiptForm();
+      setShowReceiptList(true);
+      setReceiptActiveTab('details');
+      setReceiptFilter('');
     }
   };
 
@@ -2797,6 +3005,7 @@ const saveBatchDetails = () => {
             <img src={logo} alt="Company Logo" className="company-logo" />
           </div>
         </div>
+        
         <nav className="nav-menu">
           {Object.entries(menuItems).map(([key, menu]) => (
             <div key={key} className="nav-item">
@@ -4202,7 +4411,7 @@ const saveBatchDetails = () => {
                                 style={{ width: '100%' }}
                               />
                             </td>
-                            <td>
+                            <tr>
                               <input
                                 className="erp-input numeric"
                                 type="number"
@@ -4214,7 +4423,7 @@ const saveBatchDetails = () => {
                                 onKeyDown={(e) => handlePurchaseKeyDown(e, index, 'disc2')}
                                 style={{ width: '100%' }}
                               />
-                            </td>
+                            </tr>
                             <td>
                               <input
                                 className="erp-input numeric"
@@ -4744,7 +4953,7 @@ const saveBatchDetails = () => {
                                 style={{ width: '100%' }}
                               />
                             </td>
-                            <td>
+                            <tr>
                               <input
                                 className="erp-input numeric small"
                                 type="number"
@@ -4755,7 +4964,7 @@ const saveBatchDetails = () => {
                                 onKeyDown={(e) => handleCreditNoteKeyDown(e, index, 'schPercent')}
                                 style={{ width: '100%' }}
                               />
-                            </td>
+                            </tr>
                             <td>
                               <input
                                 className="erp-input numeric"
@@ -5466,6 +5675,249 @@ const saveBatchDetails = () => {
             </div>
           )}
 
+          {/* Receipt Section - ADD THIS ENTIRE BLOCK AFTER DEBIT NOTE */}
+          {activeSubMenu === 'Receipt' && (
+            <div className="master-section erp-master-form receipt-form">
+              <div className="erp-header">
+                <div>
+                  <h2 className="erp-title">Receipt Management</h2>
+                </div>
+                <div className="form-actions-header">
+                  <button 
+                    className={`btn-tab ${!showReceiptList ? 'active' : ''}`} 
+                    onClick={() => { setShowReceiptList(false); resetReceiptForm(); }}
+                  >
+                    + Add Receipt
+                  </button>
+                  <button 
+                    className={`btn-tab ${showReceiptList ? 'active' : ''}`} 
+                    onClick={() => setShowReceiptList(true)}
+                  >
+                    📋 Receipt List
+                  </button>
+                </div>
+              </div>
+
+              {/* Receipt List View */}
+              {showReceiptList ? (
+                <div className="master-section grid-section">
+                  <div className="grid-header">
+                    <h3>Receipts List ({getFilteredReceipts().length})</h3>
+                    <div className="table-controls">
+                      <input
+                        type="text"
+                        placeholder="Search by Party or Receipt No..."
+                        className="filter-input"
+                        value={receiptFilter}
+                        onChange={(e) => setReceiptFilter(e.target.value)}
+                      />
+                      <button className="btn-excel" onClick={() => exportToExcel(getFilteredReceipts(), 'Receipts', [
+                        { key: 'rNo', label: 'Receipt No' },
+                        { key: 'receiptDate', label: 'Date' },
+                        { key: 'partyName', label: 'Party Name' },
+                        { key: 'receiptAmt', label: 'Amount' },
+                        { key: 'bankCash', label: 'Bank/Cash' }
+                      ])}>
+                        📊 Export Excel
+                      </button>
+                      <button className="btn-pdf" onClick={() => exportToPDF(getFilteredReceipts(), 'Receipts', [
+                        { key: 'rNo', label: 'Receipt No' },
+                        { key: 'receiptDate', label: 'Date' },
+                        { key: 'partyName', label: 'Party Name' },
+                        { key: 'receiptAmt', label: 'Amount' }
+                      ])}>
+                        📄 Export PDF
+                      </button>
+                    </div>
+                  </div>
+                  {getFilteredReceipts().length > 0 ? (
+                    <div className="data-table-container">
+                      <table className="data-table">
+                        <thead>
+                          <tr>
+                            <th>Receipt No</th>
+                            <th>Date</th>
+                            <th>Party Name</th>
+                            <th>Amount</th>
+                            <th>Bank/Cash</th>
+                            <th>Cheque No</th>
+                            <th>Status</th>
+                            <th>Actions</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {getFilteredReceipts().map(receipt => (
+                            <tr key={receipt.id}>
+                              <td>{receipt.rNo || '-'}</td>
+                              <td>{receipt.receiptDate}</td>
+                              <td>{receipt.partyName}</td>
+                              <td>₹{parseFloat(receipt.receiptAmt || 0).toFixed(2)}</td>
+                              <td>{receipt.bankCash}</td>
+                              <td>{receipt.chqNo || '-'}</td>
+                              <td>
+                                <span className={`status-badge ${receipt.chqNo ? 'pending' : 'complete'}`}>
+                                  {receipt.chqNo ? 'Cheque' : 'Cash'}
+                                </span>
+                              </td>
+                              <td className="action-buttons">
+                                <button className="btn-view" onClick={() => viewReceipt(receipt)}>👁️ View</button>
+                                <button className="btn-edit" onClick={() => editReceipt(receipt)}>✏️ Edit</button>
+                                <button className="btn-delete" onClick={() => deleteReceipt(receipt.id)}>🗑 Delete</button>
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  ) : (
+                    <div className="empty-state">No receipts found. Click + Add Receipt to create one.</div>
+                  )}
+                </div>
+              ) : viewingReceipt ? (
+                <div className="master-section">
+                  <div className="form-header">
+                    <div className="page-title-large">Receipt Details - {viewingReceipt.rNo || 'New Receipt'}</div>
+                    <button className="close-form-btn" onClick={() => { setViewingReceipt(null); setShowReceiptList(true); }}>✕</button>
+                  </div>
+                  <div className="receipt-view-container">
+                    <div className="receipt-header">
+                      <h3>RATNAHIRA ENTERPRISES</h3>
+                      <p>Receipt Voucher</p>
+                    </div>
+                    <div className="receipt-details-grid">
+                      <div><strong>Receipt Date:</strong> {viewingReceipt.receiptDate}</div>
+                      <div><strong>Receipt No:</strong> {viewingReceipt.rNo || '-'}</div>
+                      <div><strong>Party Name:</strong> {viewingReceipt.partyName}</div>
+                      <div><strong>Salesman:</strong> {viewingReceipt.salesman}</div>
+                      <div><strong>Bank/Cash:</strong> {viewingReceipt.bankCash}</div>
+                      <div><strong>Bank Account:</strong> {viewingReceipt.bankAccount}</div>
+                      <div><strong>Receipt Amount:</strong> ₹{parseFloat(viewingReceipt.receiptAmt || 0).toFixed(2)}</div>
+                      <div><strong>Cheque No:</strong> {viewingReceipt.chqNo || '-'}</div>
+                      <div><strong>Cheque Date:</strong> {viewingReceipt.chqDate || '-'}</div>
+                      <div><strong>Drawee Bank:</strong> {viewingReceipt.draweeBank || '-'}</div>
+                      <div><strong>Narration:</strong> {viewingReceipt.narration || '-'}</div>
+                    </div>
+                    {viewingReceipt.items && viewingReceipt.items.length > 0 && (
+                      <div className="receipt-items-table">
+                        <h4>Adjusted Bills</h4>
+                        <table className="data-table">
+                          <thead>
+                            <tr><th>Trn</th><th>Series</th><th>Bill No</th><th>Date</th><th>Amount</th><th>Adjusted</th><th>Balance</th></tr>
+                          </thead>
+                          <tbody>
+                            {viewingReceipt.items.map((item, idx) => (
+                              <tr key={idx}>
+                                <td>{item.trn}</td><td>{item.trnSeries}</td><td>{item.trnNo}</td><td>{item.date}</td>
+                                <td>₹{parseFloat(item.amount || 0).toFixed(2)}</td><td>₹{parseFloat(item.nowAdjust || 0).toFixed(2)}</td>
+                                <td>₹{parseFloat(item.balanceAmt || 0).toFixed(2)}</td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    )}
+                    <div className="form-actions">
+                      <button className="btn-secondary" onClick={() => { setViewingReceipt(null); setShowReceiptList(true); }}>Back to List</button>
+                      <button className="btn-print" onClick={() => window.print()}>🖨️ Print</button>
+                    </div>
+                  </div>
+                </div>
+              ) : (
+                <div className="master-section">
+                  <div className="form-header">
+                    <div className="page-title-large">{editingReceiptId ? 'Edit Receipt' : 'Add New Receipt'}</div>
+                    <button className="close-form-btn" onClick={() => { resetReceiptForm(); setShowReceiptList(true); }}>✕</button>
+                  </div>
+                  <div className="receipt-tabs">
+                    <button className={`tab-btn ${receiptActiveTab === 'details' ? 'active' : ''}`} onClick={() => setReceiptActiveTab('details')}>Receipt Details</button>
+                    <button className={`tab-btn ${receiptActiveTab === 'items' ? 'active' : ''}`} onClick={() => setReceiptActiveTab('items')}>Bill Adjustment</button>
+                  </div>
+                  <form className="master-form" onSubmit={(e) => { e.preventDefault(); saveReceipt(); }}>
+                    {receiptActiveTab === 'details' && (
+                      <>
+                        <div className="form-section">
+                          <h4 className="section-header">Receipt Information</h4>
+                          <div className="form-grid-3">
+                            <div className="labeled-input"><label>Receipt Date *</label><input type="date" name="receiptDate" value={receiptFormData.receiptDate} onChange={handleReceiptInputChange} required /></div>
+                            <div className="labeled-input"><label>Receipt No.</label><input type="text" name="rNo" placeholder="Auto generated" value={receiptFormData.rNo} onChange={handleReceiptInputChange} /></div>
+                            <div className="labeled-input"><label>Bill Series No.</label><input type="text" name="billSeries" placeholder="Bill Series" value={receiptFormData.billSeries} onChange={handleReceiptInputChange} /></div>
+                          </div>
+                          <div className="form-grid-3">
+                            <div className="labeled-input"><label>Salesman</label><select name="salesman" value={receiptFormData.salesman} onChange={handleReceiptInputChange}><option value="1 JVR">1 JVR</option>{salesmen.map(s => <option key={s.id} value={s.name}>{s.name}</option>)}</select></div>
+                            <div className="labeled-input"><label>Party Name *</label><select name="partyName" value={receiptFormData.partyName} onChange={handleReceiptInputChange} required><option value="">Select Party</option>{accounts.map(acc => <option key={acc.id} value={acc.accountName}>{acc.accountName}</option>)}</select></div>
+                            <div className="labeled-input"><label>Party Dr. Amount</label><input type="number" name="partyDrAmount" value={receiptFormData.partyDrAmount} onChange={handleReceiptInputChange} readOnly /></div>
+                          </div>
+                          <div className="form-row-single"><div className="labeled-input"><label>Narration</label><textarea name="narration" rows="2" value={receiptFormData.narration} onChange={handleReceiptInputChange} /></div></div>
+                        </div>
+                        <div className="form-section">
+                          <h4 className="section-header">Payment Details</h4>
+                          <div className="form-grid-3">
+                            <div className="labeled-input"><label>Bank/Cash *</label><select name="bankCash" value={receiptFormData.bankCash} onChange={handleReceiptInputChange}><option value="KOTAK">KOTAK</option><option value="CASH">CASH IN HAND</option><option value="HDFC">HDFC BANK</option><option value="ICICI">ICICI BANK</option><option value="SBI">SBI BANK</option></select></div>
+                            <div className="labeled-input"><label>Bank Account</label><select name="bankAccount" value={receiptFormData.bankAccount} onChange={handleReceiptInputChange}><option value="KOTAK MAHINDRA BANK-8237881168">KOTAK MAHINDRA BANK-8237881168</option><option value="KOTAK MAHINDRA BANK PP">KOTAK MAHINDRA BANK PP</option><option value="KOTAK MAHINDRA BANK MB">KOTAK MAHINDRA BANK MB</option><option value="KOTAK MAHINDRA BANK NEFT">KOTAK MAHINDRA BANK NEFT</option></select></div>
+                            <div className="labeled-input"><label>Bank Dr. Amount</label><input type="number" name="bankDrAmount" placeholder="Bank Dr Amount" value={receiptFormData.bankDrAmount} onChange={handleReceiptInputChange} /></div>
+                          </div>
+                          <div className="form-grid-3">
+                            <div className="labeled-input"><label>Load No.</label><input type="text" name="loadNo" placeholder="Load No." value={receiptFormData.loadNo} onChange={handleReceiptInputChange} /></div>
+                            <div className="labeled-input"><label>Receipt Amount *</label><input type="number" name="receiptAmt" placeholder="Receipt Amount" value={receiptFormData.receiptAmt} onChange={handleReceiptInputChange} required /></div>
+                            <div className="labeled-input"><label>R Load No.</label><input type="text" name="rLoadNo" placeholder="R Load No." value={receiptFormData.rLoadNo} onChange={handleReceiptInputChange} /></div>
+                          </div>
+                          <div className="form-grid-3">
+                            <div className="labeled-input"><label>Cheque No.</label><input type="text" name="chqNo" placeholder="Cheque No." value={receiptFormData.chqNo} onChange={handleReceiptInputChange} /></div>
+                            <div className="labeled-input"><label>Cheque Date</label><input type="date" name="chqDate" value={receiptFormData.chqDate} onChange={handleReceiptInputChange} /></div>
+                            <div className="labeled-input"><label>Drawee Bank</label><input type="text" name="draweeBank" placeholder="Drawee Bank" value={receiptFormData.draweeBank} onChange={handleReceiptInputChange} /></div>
+                          </div>
+                          <div className="form-grid-3">
+                            <div className="labeled-input"><label>MICR</label><input type="text" name="micr" placeholder="MICR Code" value={receiptFormData.micr} onChange={handleReceiptInputChange} /></div>
+                          </div>
+                        </div>
+                      </>
+                    )}
+                    {receiptActiveTab === 'items' && (
+                      <div className="form-section">
+                        <h4 className="section-header">Bill Adjustment Details <button type="button" className="btn-secondary ml-auto" onClick={addReceiptItem}>+ Add Bill</button></h4>
+                        <div className="product-entry-container" style={{ overflowX: 'auto', maxHeight: '400px' }}>
+                          <div className="erp-table-container" style={{ minWidth: '1000px' }}>
+                            <table className="product-entry-table">
+                              <thead><tr><th>Sr.No.</th><th>Trn</th><th>Trn Series</th><th>Trn No</th><th>Date</th><th>Amount</th><th>Adjust Amt</th><th>Balance Amt</th><th>Now Adjust</th><th>Discount</th><th>Disc Account</th><th>Remark</th><th>Action</th></tr></thead>
+                              <tbody>
+                                {receiptItems.map((item, index) => (
+                                  <tr key={item.id}>
+                                    <td>{index + 1}</td>
+                                    <td><select className="erp-select small" value={item.trn} onChange={(e) => updateReceiptItem(index, 'trn', e.target.value)}><option value="SAL">SAL</option><option value="PUR">PUR</option><option value="CN">CN</option><option value="DN">DN</option></select></td>
+                                    <td><input className="erp-input" placeholder="Series" value={item.trnSeries} onChange={(e) => updateReceiptItem(index, 'trnSeries', e.target.value)} /></td>
+                                    <td><input className="erp-input" placeholder="Bill No" value={item.trnNo} onChange={(e) => updateReceiptItem(index, 'trnNo', e.target.value)} /></td>
+                                    <td><input type="date" className="erp-input" value={item.date} onChange={(e) => updateReceiptItem(index, 'date', e.target.value)} /></td>
+                                    <td><input type="number" className="erp-input numeric" placeholder="Amount" value={item.amount} onChange={(e) => updateReceiptItem(index, 'amount', e.target.value)} /></td>
+                                    <td><input type="number" className="erp-input numeric" placeholder="Adjust Amt" value={item.adjustAmt} onChange={(e) => updateReceiptItem(index, 'adjustAmt', e.target.value)} /></td>
+                                    <td><input type="number" className="erp-input numeric" placeholder="Balance" value={item.balanceAmt} readOnly /></td>
+                                    <td><input type="number" className="erp-input numeric" placeholder="Now Adjust" value={item.nowAdjust} onChange={(e) => updateReceiptItem(index, 'nowAdjust', e.target.value)} /></td>
+                                    <td><input type="number" className="erp-input numeric small" placeholder="Disc %" value={item.discount} onChange={(e) => updateReceiptItem(index, 'discount', e.target.value)} /></td>
+                                    <td><input className="erp-input" placeholder="Disc Account" value={item.discAccount} onChange={(e) => updateReceiptItem(index, 'discAccount', e.target.value)} /></td>
+                                    <td><input className="erp-input" placeholder="Remark" value={item.remark} onChange={(e) => updateReceiptItem(index, 'remark', e.target.value)} /></td>
+                                    <td><button type="button" className="btn-delete small" onClick={() => deleteReceiptItem(index)}>🗑</button></td>
+                                  </tr>
+                                ))}
+                              </tbody>
+                            </table>
+                          </div>
+                        </div>
+                        <div className="summary-bar mt-3">
+                          <div>Total Adjusted Amount: <strong>₹{calculateReceiptSummary().totalAdjusted.toFixed(2)}</strong></div>
+                          <div>Balance Amount: <strong>₹{calculateReceiptSummary().balanceAmt.toFixed(2)}</strong></div>
+                          <div>Total Discount Amt: <strong>₹0.00</strong></div>
+                        </div>
+                      </div>
+                    )}
+                    <div className="form-actions">
+                      <button type="submit" className="btn-primary">{editingReceiptId ? 'Update Receipt' : 'Save Receipt'}</button>
+                      <button type="button" className="btn-secondary" onClick={() => { resetReceiptForm(); setShowReceiptList(true); }}>Cancel</button>
+                    </div>
+                  </form>
+                </div>
+              )}
+            </div>
+          )}
+
           {/* Area To Party Mapping UI */}
           {activeSubMenu === 'Area To Party' && (
             <div className="master-section">
@@ -5655,7 +6107,7 @@ const saveBatchDetails = () => {
                   <th style={{ padding: '10px', textAlign: 'right' }}>Sales Rate</th>
                   <th style={{ padding: '10px', textAlign: 'right' }}>Purchase Rate</th>
                   <th style={{ padding: '10px', textAlign: 'center', width: '60px' }}>BoxPack</th>
-                 </tr>
+                </tr>
               </thead>
               <tbody>
                 {existingBatches.map((batch, idx) => (
