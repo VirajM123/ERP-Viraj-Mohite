@@ -281,7 +281,30 @@ const [batchForm, setBatchForm] = useState({
     });
     setEditServiceId(null);
   };
+// Customer Bank Master State
+const [customerBanks, setCustomerBanks] = useState([]);
+const [customerBankForm, setCustomerBankForm] = useState({
+  bankCode: '',
+  bankName: '',
+  accountNumber: '',
+  ifscCode: '',
+  branchName: '',
+  accountType: 'Savings', // Savings, Current, etc.
+  customerName: '',
+  customerCode: '',
+  mobileNo: '',
+  emailId: '',
+  upiId: '',
+  swiftCode: '',
+  micrCode: '',
+  panNumber: '',
+  beneficiaryName: '',
+  remarks: ''
+});
+const [editCustomerBankId, setEditCustomerBankId] = useState(null);
 
+// Filter for Customer Bank Master
+const [customerBankFilter, setCustomerBankFilter] = useState('');
   // Form states
   const [companyForm, setCompanyForm] = useState({ code: '', name: '', address: '', branchAddress: '' });
   const [productForm, setProductForm] = useState({
@@ -382,7 +405,7 @@ const [batchForm, setBatchForm] = useState({
   const [categoryForm, setCategoryForm] = useState({ code: '', name: '' });
 
   const menuItems = {
-    master: { title: 'Master', icon: '📊', items: ['Company Master', 'Group Master', 'Category Master', 'Product', 'Account', 'Other Account', 'GST Master', 'Salesman', 'Area', 'Service', 'GoDown Master', 'Scheme'] },
+    master: { title: 'Master', icon: '📊', items: ['Company Master', 'Group Master', 'Category Master', 'Product', 'Account', 'Other Account', 'GST Master', 'Salesman', 'Area', 'Service', 'GoDown Master', 'Scheme','Customer Bank Master'] },
     mapping: { title: 'Mapping', icon: '🔗', items: ['Salesman To Area', 'Area To Party'] },
     vouchers: { title: 'Vouchers', icon: '📄', items: ['Sales', 'Purchase', 'Credit Note', 'Debit Note'] },
     transactions: { title: 'Transactions', icon: '💰', items: ['Receipt', 'Expense', 'Cheque Bounce', 'PDC Docket', 'Journal Voucher', 'Contra'] },
@@ -438,7 +461,88 @@ const [batchForm, setBatchForm] = useState({
       godown.name?.toLowerCase().includes(filters.godown.toLowerCase())
     );
   };
+// Customer Bank Master Handlers
+const handleCustomerBankInput = (e) => {
+  setCustomerBankForm({ ...customerBankForm, [e.target.name]: e.target.value });
+};
 
+const saveCustomerBank = (e) => {
+  e.preventDefault();
+  if (!customerBankForm.bankCode || !customerBankForm.bankName || !customerBankForm.accountNumber) {
+    return alert('Bank Code, Bank Name and Account Number are required');
+  }
+
+  if (editCustomerBankId) {
+    setCustomerBanks(customerBanks.map(bank =>
+      bank.id === editCustomerBankId
+        ? { ...bank, ...customerBankForm }
+        : bank
+    ));
+    setEditCustomerBankId(null);
+  } else {
+    const newId = Math.max(...customerBanks.map(b => b.id), 0) + 1;
+    setCustomerBanks([...customerBanks, { id: newId, ...customerBankForm }]);
+  }
+  
+  // Reset form
+  setCustomerBankForm({
+    bankCode: '',
+    bankName: '',
+    accountNumber: '',
+    ifscCode: '',
+    branchName: '',
+    accountType: 'Savings',
+    customerName: '',
+    customerCode: '',
+    mobileNo: '',
+    emailId: '',
+    upiId: '',
+    swiftCode: '',
+    micrCode: '',
+    panNumber: '',
+    beneficiaryName: '',
+    remarks: ''
+  });
+  closeForm();
+};
+
+const editCustomerBank = (bank) => {
+  setEditCustomerBankId(bank.id);
+  setCustomerBankForm({
+    bankCode: bank.bankCode,
+    bankName: bank.bankName,
+    accountNumber: bank.accountNumber,
+    ifscCode: bank.ifscCode || '',
+    branchName: bank.branchName || '',
+    accountType: bank.accountType || 'Savings',
+    customerName: bank.customerName || '',
+    customerCode: bank.customerCode || '',
+    mobileNo: bank.mobileNo || '',
+    emailId: bank.emailId || '',
+    upiId: bank.upiId || '',
+    swiftCode: bank.swiftCode || '',
+    micrCode: bank.micrCode || '',
+    panNumber: bank.panNumber || '',
+    beneficiaryName: bank.beneficiaryName || '',
+    remarks: bank.remarks || ''
+  });
+  setOpenFormFor('Customer Bank Master');
+};
+
+const deleteCustomerBank = (id) => {
+  if (window.confirm('Are you sure you want to delete this bank account?')) {
+    setCustomerBanks(customerBanks.filter(b => b.id !== id));
+  }
+};
+
+const getFilteredCustomerBanks = () => {
+  return customerBanks.filter(bank =>
+    bank.bankCode?.toLowerCase().includes(customerBankFilter.toLowerCase()) ||
+    bank.bankName?.toLowerCase().includes(customerBankFilter.toLowerCase()) ||
+    bank.accountNumber?.toLowerCase().includes(customerBankFilter.toLowerCase()) ||
+    bank.customerName?.toLowerCase().includes(customerBankFilter.toLowerCase())
+  );
+};
   // Sales Invoice Functions
   const handleInvoiceInputChange = (e) => {
     setInvoiceFormData({ ...invoiceFormData, [e.target.name]: e.target.value });
@@ -2014,23 +2118,44 @@ const saveBatchDetails = () => {
   };
 
   const handlePlusClick = (item, e) => {
-    e.stopPropagation();
-    setActiveSubMenu(item);
-    setOpenFormFor(item);
-    setAccountActiveTab('basic');
-    setOtherAccountActiveTab('basic');
-    setEditGstId(null);
-    setEditSalesmanId(null);
-    setEditGodownId(null);
-    if (item === 'Service') {
-      resetServiceForm();
-    } else if (item === 'GoDown Master') {
-      setGodownForm({ code: '', name: '', address: '', location: '' });
-    } else {
-      setGstForm({ code: '', vat: '', purchaseType: 'VAT ON PURCHASE PRICE', salesType: 'VAT ON SALES PRICE' });
-      setSalesmanForm({ code: '', name: '', type: 'SALESMAN', address: '', town: '', pinCode: '', state: '', country: '', phoneNo: '', mobileNo: '', emailId: '', dateOfBirth: '', qualification: '', reference: '', imeiNo: '' });
-    }
-  };
+  e.stopPropagation();
+  setActiveSubMenu(item);
+  setOpenFormFor(item);
+  setAccountActiveTab('basic');
+  setOtherAccountActiveTab('basic');
+  setEditGstId(null);
+  setEditSalesmanId(null);
+  setEditGodownId(null);
+  setEditCustomerBankId(null); // Add this line
+  if (item === 'Service') {
+    resetServiceForm();
+  } else if (item === 'GoDown Master') {
+    setGodownForm({ code: '', name: '', address: '', location: '' });
+  } else if (item === 'Customer Bank Master') {
+    // Reset customer bank form when opening
+    setCustomerBankForm({
+      bankCode: '',
+      bankName: '',
+      accountNumber: '',
+      ifscCode: '',
+      branchName: '',
+      accountType: 'Savings',
+      customerName: '',
+      customerCode: '',
+      mobileNo: '',
+      emailId: '',
+      upiId: '',
+      swiftCode: '',
+      micrCode: '',
+      panNumber: '',
+      beneficiaryName: '',
+      remarks: ''
+    });
+  } else {
+    setGstForm({ code: '', vat: '', purchaseType: 'VAT ON PURCHASE PRICE', salesType: 'VAT ON SALES PRICE' });
+    setSalesmanForm({ code: '', name: '', type: 'SALESMAN', address: '', town: '', pinCode: '', state: '', country: '', phoneNo: '', mobileNo: '', emailId: '', dateOfBirth: '', qualification: '', reference: '', imeiNo: '' });
+  }
+};
 
   const closeForm = () => {
     setOpenFormFor(null);
@@ -2813,7 +2938,165 @@ const saveBatchDetails = () => {
               { key: 'location', label: 'Location' }
             ], 'godown', deleteGodown)
           )}
+{/* Customer Bank Master - Form View */}
+{activeSubMenu === 'Customer Bank Master' && openFormFor === 'Customer Bank Master' && (
+  <div className="master-section erp-master-form">
+    <div className="form-header">
+      <div className="page-title-large">{editCustomerBankId ? 'Edit Customer Bank Details' : 'Add Customer Bank Details'}</div>
+      <button className="close-form-btn" onClick={closeForm}>✕</button>
+    </div>
+    <form className="master-form" onSubmit={saveCustomerBank}>
+      <div className="form-section">
+        <h4 className="section-header">Basic Bank Information</h4>
+        <div className="form-grid-2">
+          <div className="labeled-input">
+            <label>Bank Code *</label>
+            <input name="bankCode" placeholder="Bank Code" value={customerBankForm.bankCode} onChange={handleCustomerBankInput} required />
+          </div>
+          <div className="labeled-input">
+            <label>Bank Name *</label>
+            <input name="bankName" placeholder="Bank Name" value={customerBankForm.bankName} onChange={handleCustomerBankInput} required />
+          </div>
+        </div>
+        <div className="form-grid-2">
+          <div className="labeled-input">
+            <label>Account Number *</label>
+            <input name="accountNumber" placeholder="Account Number" value={customerBankForm.accountNumber} onChange={handleCustomerBankInput} required />
+          </div>
+          <div className="labeled-input">
+            <label>IFSC Code</label>
+            <input name="ifscCode" placeholder="IFSC Code" value={customerBankForm.ifscCode} onChange={handleCustomerBankInput} />
+          </div>
+        </div>
+        <div className="form-grid-2">
+          <div className="labeled-input">
+            <label>Branch Name</label>
+            <input name="branchName" placeholder="Branch Name" value={customerBankForm.branchName} onChange={handleCustomerBankInput} />
+          </div>
+          <div className="labeled-input">
+            <label>Account Type</label>
+            <select name="accountType" value={customerBankForm.accountType} onChange={handleCustomerBankInput}>
+              <option value="Savings">Savings</option>
+              <option value="Current">Current</option>
+              <option value="Fixed Deposit">Fixed Deposit</option>
+              <option value="NRI">NRI</option>
+            </select>
+          </div>
+        </div>
+      </div>
 
+      
+
+      <div className="form-section">
+        <h4 className="section-header">Additional Details</h4>
+        <div className="form-grid-2">
+          <div className="labeled-input">
+            <label>SWIFT Code</label>
+            <input name="swiftCode" placeholder="SWIFT Code" value={customerBankForm.swiftCode} onChange={handleCustomerBankInput} />
+          </div>
+          <div className="labeled-input">
+            <label>MICR Code</label>
+            <input name="micrCode" placeholder="MICR Code" value={customerBankForm.micrCode} onChange={handleCustomerBankInput} />
+          </div>
+        </div>
+        <div className="form-grid-2">
+          <div className="labeled-input">
+            <label>PAN Number</label>
+            <input name="panNumber" placeholder="PAN Number" value={customerBankForm.panNumber} onChange={handleCustomerBankInput} />
+          </div>
+        </div>
+        <div className="form-row-single">
+          <div className="labeled-input">
+            <label>Remarks</label>
+            <textarea name="remarks" placeholder="Additional Remarks" value={customerBankForm.remarks} onChange={handleCustomerBankInput} rows="2" />
+          </div>
+        </div>
+      </div>
+
+      <div className="form-actions">
+        <button type="submit" className="btn-primary">{editCustomerBankId ? 'Update' : 'Save Bank Details'}</button>
+        <button type="button" className="btn-secondary" onClick={closeForm}>Cancel</button>
+      </div>
+    </form>
+  </div>
+)}
+
+{/* Customer Bank Master - Grid View */}
+{activeSubMenu === 'Customer Bank Master' && openFormFor !== 'Customer Bank Master' && (
+  <div className="master-section grid-section">
+    <div className="grid-header">
+      <h3>Customer Bank Details ({getFilteredCustomerBanks().length})</h3>
+      <div className="table-controls">
+        <input
+          type="text"
+          placeholder="Search by Bank/Account/Customer..."
+          className="filter-input"
+          value={customerBankFilter}
+          onChange={(e) => setCustomerBankFilter(e.target.value)}
+        />
+        <button className="btn-excel" onClick={() => exportToExcel(getFilteredCustomerBanks(), 'Customer_Bank_Master', [
+          { key: 'bankCode', label: 'Bank Code' },
+          { key: 'bankName', label: 'Bank Name' },
+          { key: 'accountNumber', label: 'Account Number' },
+          { key: 'customerName', label: 'Customer Name' },
+          { key: 'ifscCode', label: 'IFSC Code' },
+          { key: 'accountType', label: 'Account Type' }
+        ])}>
+          📊 Export Excel
+        </button>
+        <button className="btn-pdf" onClick={() => exportToPDF(getFilteredCustomerBanks(), 'Customer_Bank_Master', [
+          { key: 'bankCode', label: 'Bank Code' },
+          { key: 'bankName', label: 'Bank Name' },
+          { key: 'accountNumber', label: 'Account Number' },
+          { key: 'customerName', label: 'Customer Name' },
+          { key: 'ifscCode', label: 'IFSC Code' }
+        ])}>
+          📄 Export PDF
+        </button>
+        <button className="btn-add-new" onClick={() => setOpenFormFor('Customer Bank Master')}>
+          + Add New Bank
+        </button>
+      </div>
+    </div>
+    {getFilteredCustomerBanks().length > 0 ? (
+      <div className="data-table-container">
+        <table className="data-table">
+          <thead>
+            <tr>
+              <th>Bank Code</th>
+              <th>Bank Name</th>
+              <th>Account Number</th>
+              <th>Customer Name</th>
+              <th>IFSC Code</th>
+              <th>Account Type</th>
+              <th>UPI ID</th>
+              <th>Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            {getFilteredCustomerBanks().map(bank => (
+              <tr key={bank.id}>
+                <td>{bank.bankCode}</td>
+                <td>{bank.bankName}</td>
+                <td>{bank.accountNumber}</td>
+                <td>{bank.customerName || '-'}</td>
+                <td>{bank.ifscCode || '-'}</td>
+                <td>{bank.accountType}</td>
+                <td>{bank.upiId || '-'}</td>
+                <td>
+                  <button className="btn-edit" onClick={() => editCustomerBank(bank)}>✏️ Edit</button>
+                  <button className="btn-delete" onClick={() => deleteCustomerBank(bank.id)}>🗑 Delete</button>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    ) : (
+      <div className="empty-state">No bank details found. Click + Add New Bank to add customer bank information.</div>
+    )}
+  </div>
+)}
          {/* Company Master - Form View */}
 {activeSubMenu === 'Company Master' && openFormFor === 'Company Master' && (
   <div className="master-section erp-master-form">
@@ -2833,21 +3116,17 @@ const saveBatchDetails = () => {
             <label>Company Name *</label>
             <input name="name" placeholder="Company Name" value={companyForm.name} onChange={handleCompanyInput} required />
           </div>
-        </div>
-      </div>
-      <div className="form-section">
-        <h4 className="section-header">Addresses</h4>
-        <div className="form-grid-2">
-          <div className="labeled-input">
+           <div className="labeled-input">
             <label>Company Address</label>
             <textarea name="address" placeholder="Company Address" value={companyForm.address} onChange={handleCompanyInput} rows="2" />
           </div>
-          <div className="labeled-input">
+        </div>
+         <div className="labeled-input">
             <label>Branch/Office Address</label>
             <textarea name="branchAddress" placeholder="Branch/Office Address" value={companyForm.branchAddress} onChange={handleCompanyInput} rows="2" />
           </div>
-        </div>
       </div>
+     
       <div className="form-actions">
         <button type="submit" className="btn-primary">Save Company</button>
         <button type="button" className="btn-secondary" onClick={closeForm}>Cancel</button>
@@ -2995,9 +3274,8 @@ const saveBatchDetails = () => {
             <textarea name="description" placeholder="Product Description" value={productForm.description} onChange={handleProductInput} rows="2" />
           </div>
         </div>
-      </div>
 
-      <div className="form-section">
+ <div className="form-section">
         <h4 className="section-header">Logistics & Classification</h4>
         <div className="form-grid-4">
           <div className="labeled-input">
@@ -3009,6 +3287,10 @@ const saveBatchDetails = () => {
               <option value="KG">KG</option>
               <option value="LTR">LTR</option>
             </select>
+          </div>
+           <div className="labeled-input">
+            <label>Weight</label>
+            <input name="Weight" placeholder="Weight" value={productForm.boxPack} onChange={handleProductInput} type="number" />
           </div>
           {(productForm.basicUnit === 'KG' || productForm.basicUnit === 'Litre') && (
             <div className="labeled-input">
@@ -3024,9 +3306,27 @@ const saveBatchDetails = () => {
             <label>Box Pack</label>
             <input name="boxPack" placeholder="Box Pack" value={productForm.boxPack} onChange={handleProductInput} type="number" />
           </div>
-        </div>
-        <div className="form-grid-4">
+           <div className="labeled-input">
+            <label>HSN Code</label>
+            <input name="hsnCode" placeholder="HSN Code" value={productForm.hsnCode} onChange={handleProductInput} type="number" />
+          </div>
           <div className="labeled-input">
+            <label>Cess %</label>
+            <input name="cess" placeholder="Cess %" value={productForm.cess} onChange={handleProductInput} type="number" />
+          </div>
+          <div className="labeled-input">
+            <label>Cess Amt</label>
+            <input name="cessAmt" placeholder="Cess Amount" value={productForm.cessAmt} onChange={handleProductInput} type="number" />
+          </div>
+          <div className="labeled-input">
+            <label>Create</label>
+            <input name="Create" placeholder="Create" value={productForm.Create} onChange={handleProductInput} type="number" />
+          </div>
+          <div className="labeled-input">
+            <label>ExpDays</label>
+            <input name="ExpDays" placeholder="Exp Days" value={productForm.ExpDays} onChange={handleProductInput} type="number" />
+          </div>
+         <div className="labeled-input">
             <label>Retailer Margin (%)</label>
             <input name="retailerMargin" placeholder="Retailer Margin (%)" value={productForm.retailerMargin} onChange={handleProductInput} type="number" step="0.01" />
           </div>
@@ -3034,11 +3334,7 @@ const saveBatchDetails = () => {
             <label>Distributor Margin (%)</label>
             <input name="distributorMargin" placeholder="Distributor Margin (%)" value={productForm.distributorMargin} onChange={handleProductInput} type="number" step="0.01" />
           </div>
-          <div className="labeled-input">
-            <label>Rate Per Unit</label>
-            <input name="Rate_Per_Unit" placeholder="0.00" value={productForm.Rate_Per_Unit} onChange={handleProductInput} type="number" step="0.01" />
-          </div>
-          <div className="checkbox-group">
+           <div className="checkbox-group">
             <label>
               <input name="active" type="checkbox" checked={productForm.active} onChange={handleProductInput} /> Active
             </label>
@@ -3047,29 +3343,34 @@ const saveBatchDetails = () => {
             </label>
             <label>
               <input name="allowFraction" type="checkbox" checked={productForm.allowFraction} onChange={handleProductInput} /> Allow Qty In Fraction
-            </label>
-          </div>
+            </label> 
         </div>
-      </div>
-
-      <div className="form-section">
-        <h4 className="section-header">Stock Management</h4>
-        <div className="form-grid-2">
-          <div className="labeled-input">
+         <div className="labeled-input">
             <label>Min Stock Holding</label>
             <input name="Min_Stock_Holding" placeholder="0" value={productForm.Min_Stock_Holding} onChange={handleProductInput} type="number" />
           </div>
-          <div className="labeled-input">
+           <div className="labeled-input">
             <label>Reorder Level</label>
             <input name="Reorder_Level" placeholder="0" value={productForm.Reorder_Level} onChange={handleProductInput} type="number" />
           </div>
-        </div>
-      </div>
+     <div className="form-actions">
+  <button type="submit" className="btn-primary">Save Product</button>
 
-      <div className="form-actions">
-        <button type="submit" className="btn-primary">Save Product</button>
-        <button type="button" className="btn-secondary" onClick={closeForm}>Cancel</button>
+  <button
+    type="button"
+    className="btn-secondary"
+    onClick={closeForm}
+  >
+    Cancel
+  </button>
+
+  <a href="/product-mapping" className="link-mapping">
+    Product Mapping
+  </a>
+</div>
       </div>
+        </div>
+      </div>   
     </form>
   </div>
 )}
@@ -3193,7 +3494,51 @@ const saveBatchDetails = () => {
                       <div className="labeled-input"><label>Account Code *</label><input name="accountCode" placeholder="Account Code" value={otherAccountForm.accountCode} onChange={handleOtherAccountInput} required /></div>
                       <div className="labeled-input"><label>Account Name *</label><input name="accountName" placeholder="Account Name" value={otherAccountForm.accountName} onChange={handleOtherAccountInput} required /></div>
                     </div>
-                    <div className="form-row"><div className="labeled-input"><label>Account Group</label><select name="accountGroup" value={otherAccountForm.accountGroup} onChange={handleOtherAccountInput}><option value="INCOMES DIRECT">INCOMES DIRECT</option><option value="EXPENSES DIRECT">EXPENSES DIRECT</option><option value="INCOMES INDIRECT">INCOMES INDIRECT</option><option value="EXPENSES INDIRECT">EXPENSES INDIRECT</option><option value="ASSETS">ASSETS</option><option value="LIABILITIES">LIABILITIES</option></select></div></div>
+                   <div className="form-row">
+  <div className="labeled-input">
+    <label>Account Group</label>
+    <select name="accountGroup" value={otherAccountForm.accountGroup} onChange={handleOtherAccountInput}>
+      <option value="ASSETS">ASSETS</option>
+      <option value="LIABILITIES">LIABILITIES</option>
+      <option value="EXPENSES">EXPENSES</option>
+      <option value="INCOMES">INCOMES</option>
+      <option value="FIXED ASSETS">FIXED ASSETS</option>
+      <option value="INVESTMENT">INVESTMENT</option>
+      <option value="CURRENT ASSETS">CURRENT ASSETS</option>
+      <option value="LOANS GIVEN">LOANS GIVEN</option>
+      <option value="MISCELLANEOUS EXPENSES">MISCELLANEOUS EXPENSES</option>
+      <option value="LAND & BULDING">LAND & BULDING</option>
+      <option value="CASH IN HAND">CASH IN HAND</option>
+      <option value="BANK ACCOUNTS">BANK ACCOUNTS</option>
+      <option value="SUNDRY DEBTORS">SUNDRY DEBTORS</option>
+      <option value="CAPITAL ACCOUNTS">CAPITAL ACCOUNTS</option>
+      <option value="RESERVES & SURPLUS">RESERVES & SURPLUS</option>
+      <option value="SECURED LOANS">SECURED LOANS</option>
+      <option value="UNSECURED LOANS">UNSECURED LOANS</option>
+      <option value="CURRENT LIABILITIES">CURRENT LIABILITIES</option>
+      <option value="PROVISIONS (LIABILITIES)">PROVISIONS (LIABILITIES)</option>
+      <option value="SUNDRY CREDITORS">SUNDRY CREDITORS</option>
+      <option value="TAXES & DUTIES">TAXES & DUTIES</option>
+      <option value="EXPENSES DIRECT">EXPENSES DIRECT</option>
+      <option value="EXPENSES INDIRECT">EXPENSES INDIRECT</option>
+      <option value="TRADING EXPENSES">TRADING EXPENSES</option>
+      <option value="PROFIT & LOSS EXPENSES">PROFIT & LOSS EXPENSES</option>
+      <option value="INCOMES DIRECT">INCOMES DIRECT</option>
+      <option value="INCOMES INDIRECT">INCOMES INDIRECT</option>
+      <option value="PURCHASE ACCOUNTS">PURCHASE ACCOUNTS</option>
+      <option value="SALES ACCOUNTS">SALES ACCOUNTS</option>
+      <option value="OPENING STOCK">OPENING STOCK</option>
+      <option value="CLOSING STOCK">CLOSING STOCK</option>
+      <option value="BANK OVER DRAFT">BANK OVER DRAFT</option>
+      <option value="PROFIT&LOSS TRANSFER">PROFIT&LOSS TRANSFER</option>
+      <option value="COUPON ACCOUNTS">COUPON ACCOUNTS</option>
+      <option value="CASH DISCOUNT ACCOUNTS">CASH DISCOUNT ACCOUNTS</option>
+      <option value="DISPLAY ACCOUNTS">DISPLAY ACCOUNTS</option>
+      <option value="ADD LESS ACCOUNTS">ADD LESS ACCOUNTS</option>
+      <option value="SERVICE ACCOUNT">SERVICE ACCOUNT</option>
+    </select>
+  </div>
+</div>
                     <div className="form-row"><div className="labeled-input"><label>Address</label><textarea name="address" placeholder="Address" value={otherAccountForm.address} onChange={handleOtherAccountInput} rows="2" /></div></div>
                     <div className="form-grid-3">
                       <div className="labeled-input"><label>Town</label><input name="town" placeholder="Town" value={otherAccountForm.town} onChange={handleOtherAccountInput} /></div>
@@ -3236,7 +3581,7 @@ const saveBatchDetails = () => {
                   </>
                 )}
                 <div className="form-actions">
-                  <button type="submit" className="btn-save">Update</button>
+                  <button type="submit" className="btn-save">Save Account</button>
                   <button type="button" className="btn-cancel" onClick={closeForm}>Cancel</button>
                 </div>
               </form>
@@ -3827,12 +4172,21 @@ const saveBatchDetails = () => {
                   <h2 className="erp-title">Add Purchase</h2>
                 </div>
               </div>
-
+              
 
 
               {/* Purchase Header Fields */}
               <div className="form-section">
                 <div className="purchase-header-grid">
+                   <div className="labeled-input"><label>Date</label>
+                    <input type="date" name="invoiceDate" className="erp-input" value={purchaseFormData.invoiceDate} onChange={handlePurchaseInputChange} />
+                  </div>
+                  <div className="labeled-input"><label>Vou Ser</label>
+                    <input type="text" name="Vou Ser" className="erp-input" placeholder="Vou Ser" value={purchaseFormData.vno} onChange={handlePurchaseInputChange} />
+                  </div>
+                   <div className="labeled-input"><label>Vou No</label>
+                    <input type="text" name="Vou No" className="erp-input" placeholder="Vou No" value={purchaseFormData.vno} onChange={handlePurchaseInputChange} />
+                  </div>
                   <div className="labeled-input"><label>SUPPLIER *</label>
                     <select name="supplier" className="erp-select" value={purchaseFormData.supplier} onChange={handlePurchaseInputChange}>
                       <option value="">Select Supplier</option>
@@ -3851,7 +4205,7 @@ const saveBatchDetails = () => {
                       {godowns.map(g => <option key={g.id} value={g.name}>{g.name}</option>)}
                     </select>
                   </div>
-                  <div className="labeled-input"><label>INVOICE DATE *</label>
+                  <div className="labeled-input"><label>INVOICE DATE</label>
                     <input type="date" name="invoiceDate" className="erp-input" value={purchaseFormData.invoiceDate} onChange={handlePurchaseInputChange} />
                   </div>
                 </div>
