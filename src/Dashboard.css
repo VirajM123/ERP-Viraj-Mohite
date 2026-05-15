@@ -1378,7 +1378,7 @@ body {
     max-height: none;
   }
 }
-
+<<<<<<< HEAD
 /* ============================================
    UNIFIED MASTER FORM STYLES
    Ensures all master forms have consistent layout
@@ -1656,7 +1656,7 @@ body {
     flex-wrap: wrap;
   }
 }
-
+<<<<<<< HEAD
 /* Add these styles to your Dashboard.css file */
 
 .narration-field {
@@ -1689,5 +1689,73 @@ body {
   color: #2563eb;
   font-weight: 700;
 }
+=======
+>>>>>>> 255bd98a739e558b9d36117a84cabb7ea587f48d
 
 
+/* PRODUCT SEARCH DROPDOWN */
+
+.product-search-dropdown {
+  position: absolute;
+  top: 100%;
+  left: 0;
+
+  min-width: 900px;
+  max-width: 1200px;
+
+  background: #fff;
+  border: 1px solid #dcdfe6;
+
+  box-shadow: 0 4px 12px rgba(0,0,0,0.12);
+
+  z-index: 9999;
+
+  overflow-x: auto;
+  overflow-y: auto;
+
+  max-height: 300px;
+}
+
+.product-search-header,
+.product-search-row {
+  display: grid;
+
+  grid-template-columns:
+    100px
+    minmax(350px, 1fr)
+    100px
+    100px
+    120px
+    80px;
+
+  gap: 12px;
+
+  align-items: center;
+
+  padding: 8px 12px;
+
+  min-width: 950px;
+}
+
+.product-search-header {
+  background: #f5f7fa;
+  font-weight: 600;
+  border-bottom: 1px solid #dcdfe6;
+}
+
+.product-search-row {
+  cursor: pointer;
+  border-bottom: 1px solid #f1f5f9;
+}
+
+.product-search-row:hover {
+  background: #eff6ff;
+}
+
+.product-name {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+
+  max-width: 350px;
+}

@@ -6,7 +6,6 @@ import 'jspdf-autotable';
 import './Dashboard.css';
 import logo from "./assets/images/Totalsolution.png";
 import SalesmanToAreaMapping from './SalesmanToAreaMapping';
-import Transaction from "./Transaction";
 
 
 
@@ -23,19 +22,19 @@ const Dashboard = () => {
   const [currentBatchRow, setCurrentBatchRow] = useState(null);
 
   // Updated batchForm state (replace the existing batchForm state)
-const [batchForm, setBatchForm] = useState({
-  batchNo: '',
-  mfgDate: '',
-  expDate: '',
-  mrp: '',
-  purchaseRate: '',
-  salesRate: '',
-  stockQty: '',
-  boxPack: '1',
-  ratePerUnit: '1',
-  previousPurchaseRate: '',
-  quantity: '1'
-});
+  const [batchForm, setBatchForm] = useState({
+    batchNo: '',
+    mfgDate: '',
+    expDate: '',
+    mrp: '',
+    purchaseRate: '',
+    salesRate: '',
+    stockQty: '',
+    boxPack: '1',
+    ratePerUnit: '1',
+    previousPurchaseRate: '',
+    quantity: '1'
+  });
   const [batchMode, setBatchMode] = useState('new');
 
   // GoDown Master State
@@ -71,7 +70,6 @@ const [batchForm, setBatchForm] = useState({
   const [productListFilter, setProductListFilter] = useState('');
   const [currentProductIndex, setCurrentProductIndex] = useState(-1);
 
-  // Purchase Invoice State
   const [purchaseFormData, setPurchaseFormData] = useState({
     supplier: '',
     company: '',
@@ -81,7 +79,7 @@ const [batchForm, setBatchForm] = useState({
     invoiceNumber: '',
     narration: '',
     discountPercent: '',
-    grossAmount: 0,
+    grossAmount: 0, // Added - Gross amount at purchase rate
     mrpTotal: 0,
     tcbPercent: 0,
     diBc1: 0,
@@ -90,13 +88,16 @@ const [batchForm, setBatchForm] = useState({
     tcbAmount: 0,
     diBc2: 0,
     afterDiBc2: 0,
-    qbtAmt: 0,
+    qbtAmt: 0, // Total GST amount
+    totalCgst: 0, // Added for total CGST
+    totalSgst: 0, // Added for total SGST
     rounding: 0,
     diBc3: 0,
     afterDiBc3: 0,
     ceBsAmt: 0,
     netAmt: 0
   });
+
   const [purchaseItems, setPurchaseItems] = useState([]);
   const [purchaseActiveRow, setPurchaseActiveRow] = useState(-1);
   const [showPurchaseProductList, setShowPurchaseProductList] = useState(false);
@@ -283,6 +284,13 @@ const [batchForm, setBatchForm] = useState({
     setEditServiceId(null);
   };
 
+
+  const filteredProducts = products.filter((product) =>
+    `${product.code} ${product.name}`
+      .toLowerCase()
+      .includes(productListFilter.toLowerCase())
+  );
+
   // Form states
   const [companyForm, setCompanyForm] = useState({ code: '', name: '', address: '', branchAddress: '' });
   const [productForm, setProductForm] = useState({
@@ -446,471 +454,489 @@ const [batchForm, setBatchForm] = useState({
   };
 
   const addInvoiceItem = useCallback(() => {
-  const newItem = {
-    id: Date.now(),
-    sr: invoiceItems.length + 1,
-    product: '',
-    units: 'PCS',
-    qty: '',
-    free: '',
-    mrp: '',
-    rate: '',
-    rateGst: '',
-    tprAmt: '',           // Direct TPR amount (removed TPR%)
-    schemePct: '',        // Scheme percentage
-    schemeAmt: '',        // Scheme amount
-    cdPct: '',           // CD percentage  
-    cdAmt: '',           // CD amount
-    starPct: '',         // Star percentage
-    starAmt: '',         // Star amount
-    taxable: '',
-    gst: '',
-    sgst: '',            // Added SGST
-    cgst: '',            // Added CGST
-    amount: ''
-  };
-  setInvoiceItems([...invoiceItems, newItem]);
-  setActiveRow(invoiceItems.length);
-}, [invoiceItems.length]);
-const updateInvoiceItem = (index, field, value) => {
-  const newItems = [...invoiceItems];
-  newItems[index][field] = value;
+    const newItem = {
+      id: Date.now(),
+      sr: invoiceItems.length + 1,
+      product: '',
+      units: 'PCS',
+      qty: '',
+      free: '',
+      mrp: '',
+      rate: '',
+      rateGst: '',
+      tprAmt: '',           // Direct TPR amount (removed TPR%)
+      schemePct: '',        // Scheme percentage
+      schemeAmt: '',        // Scheme amount
+      cdPct: '',           // CD percentage  
+      cdAmt: '',           // CD amount
+      starPct: '',         // Star percentage
+      starAmt: '',         // Star amount
+      taxable: '',
+      gst: '',
+      sgst: '',            // Added SGST
+      cgst: '',            // Added CGST
+      amount: ''
+    };
+    setInvoiceItems([...invoiceItems, newItem]);
+    setActiveRow(invoiceItems.length);
+  }, [invoiceItems.length]);
 
-  if (field === 'qty' && value !== undefined) {
-    const item = newItems[index];
-    const qty = parseFloat(value) || 0;
-    const rate = parseFloat(item.rate) || 0;
-    const baseAmount = qty * rate;
-    item.amount = baseAmount.toFixed(2);
+  const updateInvoiceItem = (index, field, value) => {
+    const newItems = [...invoiceItems];
+    newItems[index][field] = value;
 
-    // Calculate TPR amount
-    let tprAmt = parseFloat(item.tprAmt) || 0;
-    
-    // Calculate Scheme amount from percentage or direct amount
-    let schemeAmt = 0;
-    if (item.schemePct) {
-      const schemePct = parseFloat(item.schemePct) || 0;
-      schemeAmt = (baseAmount * schemePct / 100);
-      item.schemeAmt = schemeAmt.toFixed(2);
-    } else if (item.schemeAmt) {
-      schemeAmt = parseFloat(item.schemeAmt) || 0;
-    }
-    
-    // Calculate CD amount from percentage or direct amount  
-    let cdAmt = 0;
-    if (item.cdPct) {
-      const cdPct = parseFloat(item.cdPct) || 0;
-      cdAmt = (baseAmount * cdPct / 100);
-      item.cdAmt = cdAmt.toFixed(2);
-    } else if (item.cdAmt) {
-      cdAmt = parseFloat(item.cdAmt) || 0;
-    }
-    
-    const starAmt = parseFloat(item.starAmt) || 0;
-    
-    // Taxable amount after all deductions
-    let taxable = baseAmount - tprAmt - schemeAmt - cdAmt - starAmt;
-    item.taxable = taxable.toFixed(2);
-    
-    // Calculate GST on taxable amount
-    if (item.gst && taxable > 0) {
-      const gstPct = parseFloat(item.gst) || 0;
-      const gstAmount = (taxable * gstPct / 100);
-      const halfGst = gstAmount / 2;
-      item.sgst = halfGst.toFixed(2);
-      item.cgst = halfGst.toFixed(2);
-      
-      const rateValue = parseFloat(item.rate) || 0;
-      const gstPerUnit = (rateValue * gstPct / 100);
-      item.rateGst = (rateValue + gstPerUnit).toFixed(2);
-    }
+    if (field === 'qty' && value !== undefined) {
+      const item = newItems[index];
+      const qty = parseFloat(value) || 0;
+      const rate = parseFloat(item.rate) || 0;
+      const baseAmount = qty * rate;
+      item.amount = baseAmount.toFixed(2);
 
-    // Final amount = taxable + GST amount
-    const gstAmount = (parseFloat(item.sgst) || 0) + (parseFloat(item.cgst) || 0);
-    const finalAmount = taxable + gstAmount;
-    item.amount = finalAmount.toFixed(2);
-  } 
-  else if (field === 'rate' && value !== undefined) {
-    const item = newItems[index];
-    const qty = parseFloat(item.qty) || 0;
-    const rate = parseFloat(value) || 0;
-    const baseAmount = qty * rate;
-    item.amount = baseAmount.toFixed(2);
-    
-    let schemeAmt = 0;
-    if (item.schemePct) {
-      const schemePct = parseFloat(item.schemePct) || 0;
-      schemeAmt = (baseAmount * schemePct / 100);
-      item.schemeAmt = schemeAmt.toFixed(2);
-    } else if (item.schemeAmt) {
-      schemeAmt = parseFloat(item.schemeAmt) || 0;
-    }
-    
-    let cdAmt = 0;
-    if (item.cdPct) {
-      const cdPct = parseFloat(item.cdPct) || 0;
-      cdAmt = (baseAmount * cdPct / 100);
-      item.cdAmt = cdAmt.toFixed(2);
-    } else if (item.cdAmt) {
-      cdAmt = parseFloat(item.cdAmt) || 0;
-    }
-    
-    const tprAmt = parseFloat(item.tprAmt) || 0;
-    const starAmt = parseFloat(item.starAmt) || 0;
-    
-    let taxable = baseAmount - tprAmt - schemeAmt - cdAmt - starAmt;
-    item.taxable = taxable.toFixed(2);
-    
-    if (item.gst && taxable > 0) {
-      const gstPct = parseFloat(item.gst) || 0;
-      const gstAmount = (taxable * gstPct / 100);
-      const halfGst = gstAmount / 2;
-      item.sgst = halfGst.toFixed(2);
-      item.cgst = halfGst.toFixed(2);
-      
-      const rateValue = parseFloat(value) || 0;
-      const gstPerUnit = (rateValue * gstPct / 100);
-      item.rateGst = (rateValue + gstPerUnit).toFixed(2);
-    }
-    
-    const gstAmount = (parseFloat(item.sgst) || 0) + (parseFloat(item.cgst) || 0);
-    const finalAmount = taxable + gstAmount;
-    item.amount = finalAmount.toFixed(2);
-  }
-  else if (field === 'tprAmt' && value !== undefined) {
-    const item = newItems[index];
-    const qty = parseFloat(item.qty) || 0;
-    const rate = parseFloat(item.rate) || 0;
-    const baseAmount = qty * rate;
-    const tprAmt = parseFloat(value) || 0;
-    
-    let schemeAmt = 0;
-    if (item.schemePct) {
-      const schemePct = parseFloat(item.schemePct) || 0;
-      schemeAmt = (baseAmount * schemePct / 100);
-      item.schemeAmt = schemeAmt.toFixed(2);
-    } else if (item.schemeAmt) {
-      schemeAmt = parseFloat(item.schemeAmt) || 0;
-    }
-    
-    let cdAmt = 0;
-    if (item.cdPct) {
-      const cdPct = parseFloat(item.cdPct) || 0;
-      cdAmt = (baseAmount * cdPct / 100);
-      item.cdAmt = cdAmt.toFixed(2);
-    } else if (item.cdAmt) {
-      cdAmt = parseFloat(item.cdAmt) || 0;
-    }
-    
-    const starAmt = parseFloat(item.starAmt) || 0;
-    let taxable = baseAmount - tprAmt - schemeAmt - cdAmt - starAmt;
-    item.taxable = taxable.toFixed(2);
-    
-    if (item.gst && taxable > 0) {
-      const gstPct = parseFloat(item.gst) || 0;
-      const gstAmount = (taxable * gstPct / 100);
-      const halfGst = gstAmount / 2;
-      item.sgst = halfGst.toFixed(2);
-      item.cgst = halfGst.toFixed(2);
-    }
-    
-    const gstAmount = (parseFloat(item.sgst) || 0) + (parseFloat(item.cgst) || 0);
-    const finalAmount = taxable + gstAmount;
-    item.amount = finalAmount.toFixed(2);
-  }
-  else if (field === 'schemePct' && value !== undefined) {
-    const item = newItems[index];
-    const qty = parseFloat(item.qty) || 0;
-    const rate = parseFloat(item.rate) || 0;
-    const baseAmount = qty * rate;
-    const schemePct = parseFloat(value) || 0;
-    
-    // Calculate scheme amount from percentage
-    const schemeAmt = (baseAmount * schemePct / 100);
-    item.schemeAmt = schemeAmt.toFixed(2);
-    item[field] = value;
-    
-    // Recalculate with new scheme amount
-    const tprAmt = parseFloat(item.tprAmt) || 0;
-    let cdAmt = 0;
-    if (item.cdPct) {
-      const cdPct = parseFloat(item.cdPct) || 0;
-      cdAmt = (baseAmount * cdPct / 100);
-      item.cdAmt = cdAmt.toFixed(2);
-    } else if (item.cdAmt) {
-      cdAmt = parseFloat(item.cdAmt) || 0;
-    }
-    const starAmt = parseFloat(item.starAmt) || 0;
-    
-    let taxable = baseAmount - tprAmt - schemeAmt - cdAmt - starAmt;
-    item.taxable = taxable.toFixed(2);
-    
-    if (item.gst && taxable > 0) {
-      const gstPct = parseFloat(item.gst) || 0;
-      const gstAmount = (taxable * gstPct / 100);
-      const halfGst = gstAmount / 2;
-      item.sgst = halfGst.toFixed(2);
-      item.cgst = halfGst.toFixed(2);
-    }
-    
-    const gstAmount = (parseFloat(item.sgst) || 0) + (parseFloat(item.cgst) || 0);
-    const finalAmount = taxable + gstAmount;
-    item.amount = finalAmount.toFixed(2);
-  }
-  else if (field === 'schemeAmt' && value !== undefined) {
-    const item = newItems[index];
-    const qty = parseFloat(item.qty) || 0;
-    const rate = parseFloat(item.rate) || 0;
-    const baseAmount = qty * rate;
-    const schemeAmt = parseFloat(value) || 0;
-    
-    // Clear percentage if direct amount is entered
-    if (schemeAmt > 0) {
-      item.schemePct = '';
-    }
-    item[field] = value;
-    
-    const tprAmt = parseFloat(item.tprAmt) || 0;
-    let cdAmt = 0;
-    if (item.cdPct) {
-      const cdPct = parseFloat(item.cdPct) || 0;
-      cdAmt = (baseAmount * cdPct / 100);
-      item.cdAmt = cdAmt.toFixed(2);
-    } else if (item.cdAmt) {
-      cdAmt = parseFloat(item.cdAmt) || 0;
-    }
-    const starAmt = parseFloat(item.starAmt) || 0;
-    
-    let taxable = baseAmount - tprAmt - schemeAmt - cdAmt - starAmt;
-    item.taxable = taxable.toFixed(2);
-    
-    if (item.gst && taxable > 0) {
-      const gstPct = parseFloat(item.gst) || 0;
-      const gstAmount = (taxable * gstPct / 100);
-      const halfGst = gstAmount / 2;
-      item.sgst = halfGst.toFixed(2);
-      item.cgst = halfGst.toFixed(2);
-    }
-    
-    const gstAmount = (parseFloat(item.sgst) || 0) + (parseFloat(item.cgst) || 0);
-    const finalAmount = taxable + gstAmount;
-    item.amount = finalAmount.toFixed(2);
-  }
-  else if (field === 'cdPct' && value !== undefined) {
-    const item = newItems[index];
-    const qty = parseFloat(item.qty) || 0;
-    const rate = parseFloat(item.rate) || 0;
-    const baseAmount = qty * rate;
-    const cdPct = parseFloat(value) || 0;
-    
-    // Calculate CD amount from percentage
-    const cdAmt = (baseAmount * cdPct / 100);
-    item.cdAmt = cdAmt.toFixed(2);
-    item[field] = value;
-    
-    const tprAmt = parseFloat(item.tprAmt) || 0;
-    let schemeAmt = 0;
-    if (item.schemePct) {
-      const schemePct = parseFloat(item.schemePct) || 0;
-      schemeAmt = (baseAmount * schemePct / 100);
-      item.schemeAmt = schemeAmt.toFixed(2);
-    } else if (item.schemeAmt) {
-      schemeAmt = parseFloat(item.schemeAmt) || 0;
-    }
-    const starAmt = parseFloat(item.starAmt) || 0;
-    
-    let taxable = baseAmount - tprAmt - schemeAmt - cdAmt - starAmt;
-    item.taxable = taxable.toFixed(2);
-    
-    if (item.gst && taxable > 0) {
-      const gstPct = parseFloat(item.gst) || 0;
-      const gstAmount = (taxable * gstPct / 100);
-      const halfGst = gstAmount / 2;
-      item.sgst = halfGst.toFixed(2);
-      item.cgst = halfGst.toFixed(2);
-    }
-    
-    const gstAmount = (parseFloat(item.sgst) || 0) + (parseFloat(item.cgst) || 0);
-    const finalAmount = taxable + gstAmount;
-    item.amount = finalAmount.toFixed(2);
-  }
-  else if (field === 'cdAmt' && value !== undefined) {
-    const item = newItems[index];
-    const qty = parseFloat(item.qty) || 0;
-    const rate = parseFloat(item.rate) || 0;
-    const baseAmount = qty * rate;
-    const cdAmt = parseFloat(value) || 0;
-    
-    // Clear percentage if direct amount is entered
-    if (cdAmt > 0) {
-      item.cdPct = '';
-    }
-    item[field] = value;
-    
-    const tprAmt = parseFloat(item.tprAmt) || 0;
-    let schemeAmt = 0;
-    if (item.schemePct) {
-      const schemePct = parseFloat(item.schemePct) || 0;
-      schemeAmt = (baseAmount * schemePct / 100);
-      item.schemeAmt = schemeAmt.toFixed(2);
-    } else if (item.schemeAmt) {
-      schemeAmt = parseFloat(item.schemeAmt) || 0;
-    }
-    const starAmt = parseFloat(item.starAmt) || 0;
-    
-    let taxable = baseAmount - tprAmt - schemeAmt - cdAmt - starAmt;
-    item.taxable = taxable.toFixed(2);
-    
-    if (item.gst && taxable > 0) {
-      const gstPct = parseFloat(item.gst) || 0;
-      const gstAmount = (taxable * gstPct / 100);
-      const halfGst = gstAmount / 2;
-      item.sgst = halfGst.toFixed(2);
-      item.cgst = halfGst.toFixed(2);
-    }
-    
-    const gstAmount = (parseFloat(item.sgst) || 0) + (parseFloat(item.cgst) || 0);
-    const finalAmount = taxable + gstAmount;
-    item.amount = finalAmount.toFixed(2);
-  }
-  else if (field === 'gst' && value !== undefined) {
-    const item = newItems[index];
-    const taxable = parseFloat(item.taxable) || 0;
-    const gstPct = parseFloat(value) || 0;
-    
-    if (taxable > 0) {
-      const gstAmount = (taxable * gstPct / 100);
-      const halfGst = gstAmount / 2;
-      item.sgst = halfGst.toFixed(2);
-      item.cgst = halfGst.toFixed(2);
-      
-      const rateValue = parseFloat(item.rate) || 0;
-      const gstPerUnit = (rateValue * gstPct / 100);
-      item.rateGst = (rateValue + gstPerUnit).toFixed(2);
-    }
-    
-    const gstAmount = (parseFloat(item.sgst) || 0) + (parseFloat(item.cgst) || 0);
-    const finalAmount = taxable + gstAmount;
-    item.amount = finalAmount.toFixed(2);
-  }
+      // Calculate TPR amount
+      let tprAmt = parseFloat(item.tprAmt) || 0;
 
-  calcInvoiceSummary(newItems);
-  setInvoiceItems(newItems);
-  setActiveRow(index);
-};
-
-const deleteInvoiceItem = (index) => {
-  const newItems = invoiceItems.filter((_, i) => i !== index);
-  newItems.forEach((item, i) => { item.sr = i + 1; });
-  setInvoiceItems(newItems);
-  calcInvoiceSummary(newItems);
-};
-
-// Replace the calcInvoiceSummary function with this corrected version:
-const calcInvoiceSummary = (currentItems) => {
-  let gross = 0, tpr = 0, scheme = 0, cd = 0, star = 0, gst = 0;
-  currentItems.forEach(item => {
-    const baseAmount = (parseFloat(item.qty) || 0) * (parseFloat(item.rate) || 0);
-    gross += baseAmount;
-    tpr += parseFloat(item.tprAmt || 0);
-    scheme += parseFloat(item.schemeAmt || 0);
-    cd += parseFloat(item.cdAmt || 0);
-    star += parseFloat(item.starAmt || 0);
-    
-    // Calculate GST amount properly (sgst + cgst)
-    const sgst = parseFloat(item.sgst) || 0;
-    const cgst = parseFloat(item.cgst) || 0;
-    gst += (sgst + cgst);
-  });
-  
-  const taxable = gross - tpr - scheme - star - cd;
-  const net = taxable + gst;
-  
-  setInvoiceSummary({ 
-    gross, 
-    tpr, 
-    scheme, 
-    bottom: taxable,  // Taxable value is now shown as bottom amount
-    star, 
-    cd, 
-    gst, 
-    net: Math.round(net * 100) / 100 
-  });
-};
-
-const handleInvoiceKeyDown = (e, index, field) => {
-  if (e.key === 'Enter') {
-    e.preventDefault();
-    
-    const fields = ['product', 'units', 'qty', 'free', 'mrp', 'rate', 'tprAmt', 'schemePct', 'cdPct', 'starPct', 'gst'];
-    const nextFieldIndex = fields.indexOf(field) + 1;
-    
-    if (nextFieldIndex < fields.length) {
-      const nextInput = document.querySelector(`[data-field="${fields[nextFieldIndex]}"][data-index="${index}"]`);
-      if (nextInput) {
-        nextInput.focus();
-      } else if (field === 'qty') {
-        const nextField = fields[nextFieldIndex];
-        const nextFieldInput = document.querySelector(`[data-field="${nextField}"][data-index="${index}"]`);
-        if (nextFieldInput) nextFieldInput.focus();
+      // Calculate Scheme amount from percentage or direct amount
+      let schemeAmt = 0;
+      if (item.schemePct) {
+        const schemePct = parseFloat(item.schemePct) || 0;
+        schemeAmt = (baseAmount * schemePct / 100);
+        item.schemeAmt = schemeAmt.toFixed(2);
+      } else if (item.schemeAmt) {
+        schemeAmt = parseFloat(item.schemeAmt) || 0;
       }
-    } else {
-      if (field === 'gst') {
-        addInvoiceItem();
-        setTimeout(() => {
-          const nextProductInput = document.querySelector(`[data-product-index="${index + 1}"]`);
-          if (nextProductInput) nextProductInput.focus();
-        }, 100);
+
+      // Calculate CD amount from percentage or direct amount  
+      let cdAmt = 0;
+      if (item.cdPct) {
+        const cdPct = parseFloat(item.cdPct) || 0;
+        cdAmt = (baseAmount * cdPct / 100);
+        item.cdAmt = cdAmt.toFixed(2);
+      } else if (item.cdAmt) {
+        cdAmt = parseFloat(item.cdAmt) || 0;
+      }
+
+      const starAmt = parseFloat(item.starAmt) || 0;
+
+      // Taxable amount after all deductions
+      let taxable = baseAmount - tprAmt - schemeAmt - cdAmt - starAmt;
+      item.taxable = taxable.toFixed(2);
+
+      // Calculate GST on taxable amount
+      if (item.gst && taxable > 0) {
+        const gstPct = parseFloat(item.gst) || 0;
+        const gstAmount = (taxable * gstPct / 100);
+        const halfGst = gstAmount / 2;
+        item.sgst = halfGst.toFixed(2);
+        item.cgst = halfGst.toFixed(2);
+
+        const rateValue = parseFloat(item.rate) || 0;
+        const gstPerUnit = (rateValue * gstPct / 100);
+        item.rateGst = (rateValue + gstPerUnit).toFixed(2);
+      }
+
+      // Final amount = taxable + GST amount
+      const gstAmount = (parseFloat(item.sgst) || 0) + (parseFloat(item.cgst) || 0);
+      const finalAmount = taxable + gstAmount;
+      item.amount = finalAmount.toFixed(2);
+    }
+    else if (field === 'rate' && value !== undefined) {
+      const item = newItems[index];
+      const qty = parseFloat(item.qty) || 0;
+      const rate = parseFloat(value) || 0;
+      const baseAmount = qty * rate;
+      item.amount = baseAmount.toFixed(2);
+
+      let schemeAmt = 0;
+      if (item.schemePct) {
+        const schemePct = parseFloat(item.schemePct) || 0;
+        schemeAmt = (baseAmount * schemePct / 100);
+        item.schemeAmt = schemeAmt.toFixed(2);
+      } else if (item.schemeAmt) {
+        schemeAmt = parseFloat(item.schemeAmt) || 0;
+      }
+
+      let cdAmt = 0;
+      if (item.cdPct) {
+        const cdPct = parseFloat(item.cdPct) || 0;
+        cdAmt = (baseAmount * cdPct / 100);
+        item.cdAmt = cdAmt.toFixed(2);
+      } else if (item.cdAmt) {
+        cdAmt = parseFloat(item.cdAmt) || 0;
+      }
+
+      const tprAmt = parseFloat(item.tprAmt) || 0;
+      const starAmt = parseFloat(item.starAmt) || 0;
+
+      let taxable = baseAmount - tprAmt - schemeAmt - cdAmt - starAmt;
+      item.taxable = taxable.toFixed(2);
+
+      if (item.gst && taxable > 0) {
+        const gstPct = parseFloat(item.gst) || 0;
+        const gstAmount = (taxable * gstPct / 100);
+        const halfGst = gstAmount / 2;
+        item.sgst = halfGst.toFixed(2);
+        item.cgst = halfGst.toFixed(2);
+
+        const rateValue = parseFloat(value) || 0;
+        const gstPerUnit = (rateValue * gstPct / 100);
+        item.rateGst = (rateValue + gstPerUnit).toFixed(2);
+      }
+
+      const gstAmount = (parseFloat(item.sgst) || 0) + (parseFloat(item.cgst) || 0);
+      const finalAmount = taxable + gstAmount;
+      item.amount = finalAmount.toFixed(2);
+    }
+    else if (field === 'tprAmt' && value !== undefined) {
+      const item = newItems[index];
+      const qty = parseFloat(item.qty) || 0;
+      const rate = parseFloat(item.rate) || 0;
+      const baseAmount = qty * rate;
+      const tprAmt = parseFloat(value) || 0;
+
+      let schemeAmt = 0;
+      if (item.schemePct) {
+        const schemePct = parseFloat(item.schemePct) || 0;
+        schemeAmt = (baseAmount * schemePct / 100);
+        item.schemeAmt = schemeAmt.toFixed(2);
+      } else if (item.schemeAmt) {
+        schemeAmt = parseFloat(item.schemeAmt) || 0;
+      }
+
+      let cdAmt = 0;
+      if (item.cdPct) {
+        const cdPct = parseFloat(item.cdPct) || 0;
+        cdAmt = (baseAmount * cdPct / 100);
+        item.cdAmt = cdAmt.toFixed(2);
+      } else if (item.cdAmt) {
+        cdAmt = parseFloat(item.cdAmt) || 0;
+      }
+
+      const starAmt = parseFloat(item.starAmt) || 0;
+      let taxable = baseAmount - tprAmt - schemeAmt - cdAmt - starAmt;
+      item.taxable = taxable.toFixed(2);
+
+      if (item.gst && taxable > 0) {
+        const gstPct = parseFloat(item.gst) || 0;
+        const gstAmount = (taxable * gstPct / 100);
+        const halfGst = gstAmount / 2;
+        item.sgst = halfGst.toFixed(2);
+        item.cgst = halfGst.toFixed(2);
+      }
+
+      const gstAmount = (parseFloat(item.sgst) || 0) + (parseFloat(item.cgst) || 0);
+      const finalAmount = taxable + gstAmount;
+      item.amount = finalAmount.toFixed(2);
+    }
+    else if (field === 'schemePct' && value !== undefined) {
+      const item = newItems[index];
+      const qty = parseFloat(item.qty) || 0;
+      const rate = parseFloat(item.rate) || 0;
+      const baseAmount = qty * rate;
+      const schemePct = parseFloat(value) || 0;
+
+      // Calculate scheme amount from percentage
+      const schemeAmt = (baseAmount * schemePct / 100);
+      item.schemeAmt = schemeAmt.toFixed(2);
+      item[field] = value;
+
+      // Recalculate with new scheme amount
+      const tprAmt = parseFloat(item.tprAmt) || 0;
+      let cdAmt = 0;
+      if (item.cdPct) {
+        const cdPct = parseFloat(item.cdPct) || 0;
+        cdAmt = (baseAmount * cdPct / 100);
+        item.cdAmt = cdAmt.toFixed(2);
+      } else if (item.cdAmt) {
+        cdAmt = parseFloat(item.cdAmt) || 0;
+      }
+      const starAmt = parseFloat(item.starAmt) || 0;
+
+      let taxable = baseAmount - tprAmt - schemeAmt - cdAmt - starAmt;
+      item.taxable = taxable.toFixed(2);
+
+      if (item.gst && taxable > 0) {
+        const gstPct = parseFloat(item.gst) || 0;
+        const gstAmount = (taxable * gstPct / 100);
+        const halfGst = gstAmount / 2;
+        item.sgst = halfGst.toFixed(2);
+        item.cgst = halfGst.toFixed(2);
+      }
+
+      const gstAmount = (parseFloat(item.sgst) || 0) + (parseFloat(item.cgst) || 0);
+      const finalAmount = taxable + gstAmount;
+      item.amount = finalAmount.toFixed(2);
+    }
+    else if (field === 'schemeAmt' && value !== undefined) {
+      const item = newItems[index];
+      const qty = parseFloat(item.qty) || 0;
+      const rate = parseFloat(item.rate) || 0;
+      const baseAmount = qty * rate;
+      const schemeAmt = parseFloat(value) || 0;
+
+      // Clear percentage if direct amount is entered
+      if (schemeAmt > 0) {
+        item.schemePct = '';
+      }
+      item[field] = value;
+
+      const tprAmt = parseFloat(item.tprAmt) || 0;
+      let cdAmt = 0;
+      if (item.cdPct) {
+        const cdPct = parseFloat(item.cdPct) || 0;
+        cdAmt = (baseAmount * cdPct / 100);
+        item.cdAmt = cdAmt.toFixed(2);
+      } else if (item.cdAmt) {
+        cdAmt = parseFloat(item.cdAmt) || 0;
+      }
+      const starAmt = parseFloat(item.starAmt) || 0;
+
+      let taxable = baseAmount - tprAmt - schemeAmt - cdAmt - starAmt;
+      item.taxable = taxable.toFixed(2);
+
+      if (item.gst && taxable > 0) {
+        const gstPct = parseFloat(item.gst) || 0;
+        const gstAmount = (taxable * gstPct / 100);
+        const halfGst = gstAmount / 2;
+        item.sgst = halfGst.toFixed(2);
+        item.cgst = halfGst.toFixed(2);
+      }
+
+      const gstAmount = (parseFloat(item.sgst) || 0) + (parseFloat(item.cgst) || 0);
+      const finalAmount = taxable + gstAmount;
+      item.amount = finalAmount.toFixed(2);
+    }
+    else if (field === 'cdPct' && value !== undefined) {
+      const item = newItems[index];
+      const qty = parseFloat(item.qty) || 0;
+      const rate = parseFloat(item.rate) || 0;
+      const baseAmount = qty * rate;
+      const cdPct = parseFloat(value) || 0;
+
+      // Calculate CD amount from percentage
+      const cdAmt = (baseAmount * cdPct / 100);
+      item.cdAmt = cdAmt.toFixed(2);
+      item[field] = value;
+
+      const tprAmt = parseFloat(item.tprAmt) || 0;
+      let schemeAmt = 0;
+      if (item.schemePct) {
+        const schemePct = parseFloat(item.schemePct) || 0;
+        schemeAmt = (baseAmount * schemePct / 100);
+        item.schemeAmt = schemeAmt.toFixed(2);
+      } else if (item.schemeAmt) {
+        schemeAmt = parseFloat(item.schemeAmt) || 0;
+      }
+      const starAmt = parseFloat(item.starAmt) || 0;
+
+      let taxable = baseAmount - tprAmt - schemeAmt - cdAmt - starAmt;
+      item.taxable = taxable.toFixed(2);
+
+      if (item.gst && taxable > 0) {
+        const gstPct = parseFloat(item.gst) || 0;
+        const gstAmount = (taxable * gstPct / 100);
+        const halfGst = gstAmount / 2;
+        item.sgst = halfGst.toFixed(2);
+        item.cgst = halfGst.toFixed(2);
+      }
+
+      const gstAmount = (parseFloat(item.sgst) || 0) + (parseFloat(item.cgst) || 0);
+      const finalAmount = taxable + gstAmount;
+      item.amount = finalAmount.toFixed(2);
+    }
+    else if (field === 'cdAmt' && value !== undefined) {
+      const item = newItems[index];
+      const qty = parseFloat(item.qty) || 0;
+      const rate = parseFloat(item.rate) || 0;
+      const baseAmount = qty * rate;
+      const cdAmt = parseFloat(value) || 0;
+
+      // Clear percentage if direct amount is entered
+      if (cdAmt > 0) {
+        item.cdPct = '';
+      }
+      item[field] = value;
+
+      const tprAmt = parseFloat(item.tprAmt) || 0;
+      let schemeAmt = 0;
+      if (item.schemePct) {
+        const schemePct = parseFloat(item.schemePct) || 0;
+        schemeAmt = (baseAmount * schemePct / 100);
+        item.schemeAmt = schemeAmt.toFixed(2);
+      } else if (item.schemeAmt) {
+        schemeAmt = parseFloat(item.schemeAmt) || 0;
+      }
+      const starAmt = parseFloat(item.starAmt) || 0;
+
+      let taxable = baseAmount - tprAmt - schemeAmt - cdAmt - starAmt;
+      item.taxable = taxable.toFixed(2);
+
+      if (item.gst && taxable > 0) {
+        const gstPct = parseFloat(item.gst) || 0;
+        const gstAmount = (taxable * gstPct / 100);
+        const halfGst = gstAmount / 2;
+        item.sgst = halfGst.toFixed(2);
+        item.cgst = halfGst.toFixed(2);
+      }
+
+      const gstAmount = (parseFloat(item.sgst) || 0) + (parseFloat(item.cgst) || 0);
+      const finalAmount = taxable + gstAmount;
+      item.amount = finalAmount.toFixed(2);
+    }
+    else if (field === 'gst' && value !== undefined) {
+      const item = newItems[index];
+      const taxable = parseFloat(item.taxable) || 0;
+      const gstPct = parseFloat(value) || 0;
+
+      if (taxable > 0) {
+        const gstAmount = (taxable * gstPct / 100);
+        const halfGst = gstAmount / 2;
+        item.sgst = halfGst.toFixed(2);
+        item.cgst = halfGst.toFixed(2);
+
+        const rateValue = parseFloat(item.rate) || 0;
+        const gstPerUnit = (rateValue * gstPct / 100);
+        item.rateGst = (rateValue + gstPerUnit).toFixed(2);
+      }
+
+      const gstAmount = (parseFloat(item.sgst) || 0) + (parseFloat(item.cgst) || 0);
+      const finalAmount = taxable + gstAmount;
+      item.amount = finalAmount.toFixed(2);
+    }
+
+    calcInvoiceSummary(newItems);
+    setInvoiceItems(newItems);
+    setActiveRow(index);
+  };
+
+  const deleteInvoiceItem = (index) => {
+    const newItems = invoiceItems.filter((_, i) => i !== index);
+    newItems.forEach((item, i) => { item.sr = i + 1; });
+    setInvoiceItems(newItems);
+    calcInvoiceSummary(newItems);
+  };
+
+  // Replace the calcInvoiceSummary function with this corrected version:
+  const calcInvoiceSummary = (currentItems) => {
+    let gross = 0, tpr = 0, scheme = 0, cd = 0, star = 0, gst = 0;
+    currentItems.forEach(item => {
+      const baseAmount = (parseFloat(item.qty) || 0) * (parseFloat(item.rate) || 0);
+      gross += baseAmount;
+      tpr += parseFloat(item.tprAmt || 0);
+      scheme += parseFloat(item.schemeAmt || 0);
+      cd += parseFloat(item.cdAmt || 0);
+      star += parseFloat(item.starAmt || 0);
+
+      // Calculate GST amount properly (sgst + cgst)
+      const sgst = parseFloat(item.sgst) || 0;
+      const cgst = parseFloat(item.cgst) || 0;
+      gst += (sgst + cgst);
+    });
+
+    const taxable = gross - tpr - scheme - star - cd;
+    const net = taxable + gst;
+
+    setInvoiceSummary({
+      gross,
+      tpr,
+      scheme,
+      bottom: taxable,  // Taxable value is now shown as bottom amount
+      star,
+      cd,
+      gst,
+      net: Math.round(net * 100) / 100
+    });
+  };
+
+  const handleInvoiceKeyDown = (e, index, field) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+
+      const fields = ['product', 'units', 'qty', 'free', 'mrp', 'rate', 'tprAmt', 'schemePct', 'cdPct', 'starPct', 'gst'];
+      const nextFieldIndex = fields.indexOf(field) + 1;
+
+      if (nextFieldIndex < fields.length) {
+        const nextInput = document.querySelector(`[data-field="${fields[nextFieldIndex]}"][data-index="${index}"]`);
+        if (nextInput) {
+          nextInput.focus();
+        } else if (field === 'qty') {
+          const nextField = fields[nextFieldIndex];
+          const nextFieldInput = document.querySelector(`[data-field="${nextField}"][data-index="${index}"]`);
+          if (nextFieldInput) nextFieldInput.focus();
+        }
       } else {
-        const nextProduct = document.querySelector(`[data-product-index="${index + 1}"]`);
-        if (nextProduct) {
-          nextProduct.focus();
+        if (field === 'gst') {
+          addInvoiceItem();
+          setTimeout(() => {
+            const nextProductInput = document.querySelector(`[data-product-index="${index + 1}"]`);
+            if (nextProductInput) nextProductInput.focus();
+          }, 100);
+        } else {
+          const nextProduct = document.querySelector(`[data-product-index="${index + 1}"]`);
+          if (nextProduct) {
+            nextProduct.focus();
+          }
         }
       }
     }
-  }
-};
+  };
 
-const handleInvoiceProductClick = (index) => {
-  setActiveRow(index);
-  setCurrentProductIndex(index);
-  setProductListFilter('');
-  setShowProductList(true);
+  const handleInvoiceProductClick = (index) => {
+    setActiveRow(index);
+    setCurrentProductIndex(index);
+    setProductListFilter('');
+    setShowProductList(true);
 
-  setTimeout(() => {
-    const currentInput = document.querySelector(
-      `[data-product-index="${index}"]`
+    setTimeout(() => {
+      const currentInput = document.querySelector(
+        `[data-product-index="${index}"]`
+      );
+      if (currentInput) {
+        currentInput.focus();
+      }
+    }, 0);
+  };
+
+  const handleProductSelect = (index, product) => {
+
+
+    console.log("Selected Product:", product);
+    console.log("All Batches:", batches);
+
+
+    // Find batch from batches state
+    const productBatch = batches.find(
+      b => String(b.productId) === String(product.id)
     );
-    if (currentInput) {
-      currentInput.focus();
-    }
-  }, 0);
-};
 
- const handleProductSelect = (index, product) => {
-  const selectedBatch = product.selectedBatch;
-  
-  updateInvoiceItem(index, 'product', `${product.code} - ${product.name}`);
-  updateInvoiceItem(index, 'mrp', selectedBatch?.mrp || product.mrp || '');
-  // Use sales rate from batch if available
-  const salesRate = selectedBatch?.salesRate || product.salesRate || product.mrp || '';
-  updateInvoiceItem(index, 'rate', salesRate);
-  updateInvoiceItem(index, 'gst', product.gst || '');
-  updateInvoiceItem(index, 'units', product.basicUnit || 'PCS');
-  
-  // Store batch info for calculation reference
-  updateInvoiceItem(index, 'selectedBatch', selectedBatch);
-  updateInvoiceItem(index, 'batchNo', selectedBatch?.batchNo || '');
-  
-  setShowProductList(false);
-  setCurrentProductIndex(-1);
-  
-  // Focus on units field after selection
-  setTimeout(() => {
-    const unitsInput = document.querySelector(`[data-field="units"][data-index="${index}"]`);
-    if (unitsInput) unitsInput.focus();
-  }, 50);
-};
+    console.log("Matched Batch:", productBatch);
+    updateInvoiceItem(index, 'product', `${product.code} - ${product.name}`);
+
+    // Batch values
+    updateInvoiceItem(index, 'mrp', productBatch?.mrp || '');
+    updateInvoiceItem(index, 'rate', productBatch?.salesRate || '');
+    updateInvoiceItem(index, 'gst', product.gst || '');
+    updateInvoiceItem(index, 'units', product.basicUnit || 'PCS');
+
+    // Store batch info
+    updateInvoiceItem(index, 'selectedBatch', productBatch || {});
+    updateInvoiceItem(index, 'batchNo', productBatch?.batchNo || '');
+    updateInvoiceItem(index, 'stockQty', productBatch?.stockQty || '');
+
+    setShowProductList(false);
+    setCurrentProductIndex(-1);
+
+
+    setTimeout(() => {
+      const unitsInput = document.querySelector(
+        `[data-field="units"][data-index="${index}"]`
+      );
+
+      if (unitsInput) unitsInput.focus();
+    }, 50);
+
+    updateInvoiceItem(index, 'qty', item.qty || 1);
+    updateInvoiceItem(index, 'qty', '1');
+  };
   const saveInvoice = () => {
     const invoiceData = { ...invoiceFormData, items: invoiceItems, summary: invoiceSummary };
     console.log('Saving invoice:', invoiceData);
@@ -918,53 +944,364 @@ const handleInvoiceProductClick = (index) => {
   };
 
   const addPurchaseItem = useCallback(() => {
-  const newItem = {
-    id: Date.now(),
-    sr: purchaseItems.length + 1,
-    product: '',
-    productId: '',
-    batchNo: '',
-    mfgDate: '',
-    expDate: '',
-    unitId: 'PCS',
-    quantity: '',
-    free: '',
-    stockQty: '',
-    mrp: '',
-    purRate: '',
-    salesRate: '',
-    grossAmount: '',
-    disc1: '',
-    disc2: '',
-    disc3: '',
-    taxable: '',
-    tax: '',
-    cgst: '',
-    sgst: '',
-    afterDisc1: '',
-    afterDisc2: '',
-    afterDisc3: '',
-    amount: '',
-    discountPercent: ''
+    const newItem = {
+      id: Date.now(),
+      sr: purchaseItems.length + 1,
+      product: '',
+      productId: '',
+      batchNo: '',
+      mfgDate: '',
+      expDate: '',
+      unitId: 'PCS',
+      quantity: '',
+      free: '',
+      stockQty: '',
+      mrp: '',
+      purRate: '',
+      salesRate: '',
+      grossAmount: '',
+      disc1: '',
+      disc2: '',
+      disc3: '',
+      taxable: '',
+      tax: '',
+      cgst: '',
+      sgst: '',
+      afterDisc1: '',
+      afterDisc2: '',
+      afterDisc3: '',
+      amount: '',
+      discountPercent: ''
+    };
+    setPurchaseItems([...purchaseItems, newItem]);
+    setPurchaseActiveRow(purchaseItems.length);
+
+    // Note: Don't call calcPurchaseSummary here as it will be called when items change
+  }, [purchaseItems.length]);
+
+  const updatePurchaseItem = (index, field, value) => {
+    const newItems = [...purchaseItems];
+    newItems[index][field] = value;
+
+    // Helper function to recalculate all values for an item
+    const recalculateItem = (item) => {
+      // Get quantity and purchase rate
+      const qty = parseFloat(item.quantity) || 0;
+      const purRate = parseFloat(item.purRate) || parseFloat(item.selectedBatch?.purchaseRate) || 0;
+
+      // FIX 1: Gross Amount = PUR RATE * QTY (not MRP * qty)
+      const grossAmt = qty * purRate;
+      item.grossAmount = grossAmt.toFixed(2);
+
+      // Apply disc1
+      let afterDisc1 = grossAmt;
+      if (parseFloat(item.disc1)) {
+        const disc1Amt = grossAmt * (parseFloat(item.disc1) / 100);
+        afterDisc1 = grossAmt - disc1Amt;
+      }
+      item.afterDisc1 = afterDisc1.toFixed(2);
+
+      // Apply disc2
+      let afterDisc2 = afterDisc1;
+      if (parseFloat(item.disc2)) {
+        const disc2Amt = afterDisc1 * (parseFloat(item.disc2) / 100);
+        afterDisc2 = afterDisc1 - disc2Amt;
+      }
+      item.afterDisc2 = afterDisc2.toFixed(2);
+
+      // Apply disc3
+      let afterDisc3 = afterDisc2;
+      if (parseFloat(item.disc3)) {
+        const disc3Amt = afterDisc2 * (parseFloat(item.disc3) / 100);
+        afterDisc3 = afterDisc2 - disc3Amt;
+      }
+      item.afterDisc3 = afterDisc3.toFixed(2);
+
+      // Taxable amount is the amount after all discounts
+      const taxableVal = afterDisc3;
+      item.taxable = taxableVal.toFixed(2);
+
+      // FIX 2: Calculate CGST and SGST based on taxable amount and GST percentage
+      const taxPercentage = parseFloat(item.tax) || 0;
+      if (taxPercentage > 0 && taxableVal > 0) {
+        const totalTaxAmt = taxableVal * (taxPercentage / 100);
+        const cgstAmt = totalTaxAmt / 2;
+        const sgstAmt = totalTaxAmt / 2;
+        item.cgst = cgstAmt.toFixed(2);
+        item.sgst = sgstAmt.toFixed(2);
+      } else {
+        item.cgst = (0).toFixed(2);
+        item.sgst = (0).toFixed(2);
+      }
+
+      // FIX 3: Calculate final amount = taxable + CGST + SGST
+      const amount = taxableVal + (parseFloat(item.cgst) || 0) + (parseFloat(item.sgst) || 0);
+      item.amount = amount.toFixed(2);
+    };
+
+    // Recalculate whenever any relevant field changes
+    if (['quantity', 'purRate', 'tax', 'disc1', 'disc2', 'disc3'].includes(field)) {
+      recalculateItem(newItems[index]);
+    }
+
+    setPurchaseItems(newItems);
+    setPurchaseActiveRow(index);
+
+    // Calculate summary after updating items
+    calcPurchaseSummary();
   };
-  setPurchaseItems([...purchaseItems, newItem]);
-  setPurchaseActiveRow(purchaseItems.length);
-  
-  // Note: Don't call calcPurchaseSummary here as it will be called when items change
-}, [purchaseItems.length]);
 
- const updatePurchaseItem = (index, field, value) => {
-  const newItems = [...purchaseItems];
-  newItems[index][field] = value;
+  const calcPurchaseSummary = useCallback(() => {
+    let totalMrp = 0;
+    let totalGrossAmount = 0;
+    let totalTaxable = 0;
+    let totalCgst = 0;
+    let totalSgst = 0;
+    let totalAmount = 0;
 
-  // Helper function to recalculate all values for an item
-  const recalculateItem = (item) => {
-    // Get quantity and rate
+    purchaseItems.forEach(item => {
+      const qty = parseFloat(item.quantity) || 0;
+      const mrp = parseFloat(item.mrp) || 0;
+      const purRate = parseFloat(item.purRate) || 0;
+
+      totalMrp += qty * mrp;
+      totalGrossAmount += qty * purRate; // Using purchase rate for gross amount
+
+      const taxable = parseFloat(item.taxable) || 0;
+      const cgst = parseFloat(item.cgst) || 0;
+      const sgst = parseFloat(item.sgst) || 0;
+      const amount = parseFloat(item.amount) || 0;
+
+      totalTaxable += taxable;
+      totalCgst += cgst;
+      totalSgst += sgst;
+      totalAmount += amount;
+    });
+
+    // Calculate header-level discounts
+    const tcbPercent = parseFloat(purchaseFormData.tcbPercent) || 0;
+    const diBc1 = parseFloat(purchaseFormData.diBc1) || 0;
+    const diBc2 = parseFloat(purchaseFormData.diBc2) || 0;
+    const diBc3 = parseFloat(purchaseFormData.diBc3) || 0;
+    const rounding = parseFloat(purchaseFormData.rounding) || 0;
+
+    // Calculate TCB Amount on MRP Total
+    const tcbAmount = totalMrp * tcbPercent / 100;
+
+    // After DISC1 (direct discount)
+    const afterDiBc1 = totalMrp - diBc1;
+
+    // Gross Amount = After DISC1 - TCB Amount
+    const groBsAmt = afterDiBc1 - tcbAmount;
+
+    // After DISC2
+    const afterDiBc2 = groBsAmt - diBc2;
+
+    // GST Amount on taxable value (total CGST + SGST from items)
+    const totalGst = totalCgst + totalSgst;
+
+    // After DISC3 - This should be the net taxable amount
+    const afterDiBc3 = totalTaxable - diBc3;
+
+    // CEBS Amount (taxable after discount)
+    const ceBsAmt = afterDiBc3;
+
+    // Net Amount = Taxable + Total GST + Rounding
+    const netAmt = totalTaxable + totalGst + rounding;
+
+    setPurchaseFormData(prev => ({
+      ...prev,
+      mrpTotal: totalMrp.toFixed(2),
+      grossAmount: totalGrossAmount.toFixed(2), // Added this field
+      tcbAmount: tcbAmount.toFixed(2),
+      afterDiBc1: afterDiBc1.toFixed(2),
+      groBsAmt: groBsAmt.toFixed(2),
+      afterDiBc2: afterDiBc2.toFixed(2),
+      qbtAmt: totalGst.toFixed(2), // GST Amount (sum of CGST+SGST)
+      totalCgst: totalCgst.toFixed(2), // Added total CGST
+      totalSgst: totalSgst.toFixed(2), // Added total SGST
+      afterDiBc3: afterDiBc3.toFixed(2),
+      ceBsAmt: ceBsAmt.toFixed(2),
+      netAmt: netAmt.toFixed(2)
+    }));
+  }, [purchaseItems, purchaseFormData.tcbPercent, purchaseFormData.diBc1, purchaseFormData.diBc2, purchaseFormData.diBc3, purchaseFormData.rounding]);
+  const deletePurchaseItem = (index) => {
+    const newItems = purchaseItems.filter((_, i) => i !== index);
+    newItems.forEach((item, i) => { item.sr = i + 1; });
+    setPurchaseItems(newItems);
+
+    // ADD THIS LINE - Calculate summary after deleting item
+    calcPurchaseSummary();
+  };
+
+  const handlePurchaseInputChange = (e) => {
+    const { name, value } = e.target;
+    let updatedForm = { ...purchaseFormData, [name]: value };
+
+    if (name === 'tcbPercent' || name === 'diBc1' || name === 'diBc2' || name === 'diBc3' || name === 'rounding') {
+      setPurchaseFormData(updatedForm);
+      setTimeout(() => calcPurchaseSummary(), 0);
+    } else {
+      setPurchaseFormData(updatedForm);
+    }
+  };
+  const handlePurchaseKeyDown = (e, index, field) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+
+      // If we're in the quantity field, trigger calculations and add new row
+      if (field === 'quantity') {
+        // Trigger the quantity update
+        const qtyValue = e.target.value;
+        if (qtyValue && parseFloat(qtyValue) > 0) {
+          // Add new row after quantity is entered
+          setTimeout(() => {
+            addPurchaseItem();
+            setTimeout(() => {
+              const nextProductInput = document.querySelector(`[data-purchase-product-index="${index + 1}"]`);
+              if (nextProductInput) nextProductInput.focus();
+            }, 50);
+          }, 100);
+        }
+      } else {
+        const fields = ['product', 'unitId', 'quantity', 'free', 'mrp', 'purRate', 'disc1', 'disc2', 'disc3', 'tax'];
+        const nextFieldIndex = fields.indexOf(field) + 1;
+        if (nextFieldIndex < fields.length) {
+          const nextInput = document.querySelector(`[data-purchase-field="${fields[nextFieldIndex]}"][data-purchase-index="${index}"]`);
+          nextInput?.focus();
+        } else {
+          const nextProduct = document.querySelector(`[data-purchase-product-index="${index + 1}"]`);
+          if (nextProduct) {
+            nextProduct.focus();
+          } else {
+            addPurchaseItem();
+            setTimeout(() => {
+              const nextProductInput = document.querySelector(`[data-purchase-product-index="${index + 1}"]`);
+              if (nextProductInput) nextProductInput.focus();
+            }, 100);
+          }
+        }
+      }
+    }
+  };
+  const handlePurchaseProductClick = (index) => {
+
+    setShowPurchaseProductList(false);
+
+    setTimeout(() => {
+
+      setCurrentPurchaseProductIndex(index);
+
+      setPurchaseProductListFilter('');
+
+      setShowPurchaseProductList(true);
+
+    }, 50);
+
+  };
+
+  const handlePurchaseProductSelect = (index, product) => {
+    updatePurchaseItem(index, 'product', `${product.code} - ${product.name}`);
+    updatePurchaseItem(index, 'productId', product.id);
+    updatePurchaseItem(index, 'mrp', product.mrp || '');
+    updatePurchaseItem(index, 'purRate', product.Rate_Per_Unit || '');
+    updatePurchaseItem(index, 'tax', product.gst || '');
+    updatePurchaseItem(index, 'unitId', product.basicUnit || 'PCS');
+    updatePurchaseItem(index, 'salesRate', product.salesRate || '');
+
+    setShowPurchaseProductList(false);
+    setCurrentPurchaseProductIndex(-1);
+
+    // Force recalculation for this item
+    setTimeout(() => {
+      const updatedItems = [...purchaseItems];
+      const item = updatedItems[index];
+      if (item && item.quantity) {
+        // Trigger recalculation by calling updatePurchaseItem with quantity
+        updatePurchaseItem(index, 'quantity', item.quantity);
+      }
+    }, 100);
+
+    // Check if product has existing batches
+    const productBatches = batches.filter(b => b.productId === product.id);
+
+    if (productBatches.length > 0) {
+      setBatchMode('existing');
+      setCurrentBatchRow(index);
+      setShowBatchModal(true);
+    } else {
+      setBatchMode('new');
+      setCurrentBatchRow(index);
+      setBatchForm({
+        batchNo: '',
+        mfgDate: '',
+        expDate: '',
+        mrp: product.mrp || '',
+        purchaseRate: product.Rate_Per_Unit || '',
+        salesRate: product.salesRate || product.mrp || '',
+        stockQty: '',
+        boxPack: '1',
+        ratePerUnit: '1',
+        previousPurchaseRate: '',
+        quantity: '1'
+      });
+      setShowBatchModal(true);
+    }
+
+
+    setTimeout(() => {
+      const qtyInput = document.querySelector(`[data-purchase-field="quantity"][data-purchase-index="${index}"]`);
+      if (qtyInput) qtyInput.focus();
+    }, 50);
+  };
+  const openBatchModal = (index) => {
+    console.log("BATCH BUTTON CLICKED");
+    setCurrentBatchRow(index);
+
+    setBatchForm({
+      batchNo: '',
+      mfgDate: '',
+      expDate: '',
+      mrp: '',
+      purchaseRate: '',
+      salesRate: '',
+      stockQty: ''
+    });
+
+    setShowBatchModal(true);
+  };
+
+
+  const saveBatchDetails = () => {
+    const updatedItems = [...purchaseItems];
+
+
+    updatedItems[currentBatchRow] = {
+      ...updatedItems[currentBatchRow],
+      selectedBatch: { ...batchForm },
+      batchNo: batchForm.batchNo,
+      mfgDate: batchForm.mfgDate,
+      expDate: batchForm.expDate,
+      mrp: batchForm.mrp,
+      purRate: batchForm.purchaseRate,
+      salesRate: batchForm.salesRate,
+      stockQty: batchForm.stockQty,
+      boxPack: batchForm.boxPack,
+      ratePerUnit: batchForm.ratePerUnit,
+      previousPurchaseRate: batchForm.previousPurchaseRate,
+      quantity: batchForm.quantity || updatedItems[currentBatchRow]?.quantity || 1
+
+
+    };
+
+    // Force recalculation for the updated item
+    const index = currentBatchRow;
+    const item = updatedItems[index];
     const qty = parseFloat(item.quantity) || 0;
-    const rate = parseFloat(item.purRate) || parseFloat(item.selectedBatch?.purchaseRate) || 0;
-    
-    // Calculate gross amount
-    const grossAmt = qty * rate;
+    const purRate = parseFloat(item.purRate) || 0;
+
+    // Recalculate everything for this item
+    const grossAmt = qty * purRate;
     item.grossAmount = grossAmt.toFixed(2);
 
     // Apply disc1
@@ -991,13 +1328,13 @@ const handleInvoiceProductClick = (index) => {
     }
     item.afterDisc3 = afterDisc3.toFixed(2);
 
-    // Taxable amount is the amount after all discounts
+    // Taxable amount
     const taxableVal = afterDisc3;
     item.taxable = taxableVal.toFixed(2);
 
-    // Calculate CGST and SGST based on taxable amount and GST percentage
+    // Calculate CGST and SGST
     const taxPercentage = parseFloat(item.tax) || 0;
-    if (taxPercentage > 0) {
+    if (taxPercentage > 0 && taxableVal > 0) {
       const totalTaxAmt = taxableVal * (taxPercentage / 100);
       const cgstAmt = totalTaxAmt / 2;
       const sgstAmt = totalTaxAmt / 2;
@@ -1008,262 +1345,28 @@ const handleInvoiceProductClick = (index) => {
       item.sgst = (0).toFixed(2);
     }
 
-    // Calculate final amount = taxable + CGST + SGST
+    // Final amount
     const amount = taxableVal + (parseFloat(item.cgst) || 0) + (parseFloat(item.sgst) || 0);
     item.amount = amount.toFixed(2);
-  };
 
-  // Recalculate whenever any relevant field changes
-  if (['quantity', 'purRate', 'tax', 'disc1', 'disc2', 'disc3'].includes(field)) {
-    recalculateItem(newItems[index]);
-  }
-
-  setPurchaseItems(newItems);
-  setPurchaseActiveRow(index);
-  
-  // ADD THIS LINE - Calculate summary after updating items
-  calcPurchaseSummary();
-};
-// Add this function - place it after the updatePurchaseItem function
-const calcPurchaseSummary = useCallback(() => {
-  let totalMrp = 0;
-  let totalGrossAmount = 0;
-  let totalTaxable = 0;
-  let totalCgst = 0;
-  let totalSgst = 0;
-  
-  purchaseItems.forEach(item => {
-    const qty = parseFloat(item.quantity) || 0;
-    const mrp = parseFloat(item.mrp) || 0;
-    const rate = parseFloat(item.purRate) || 0;
-    
-    totalMrp += qty * mrp;
-    totalGrossAmount += qty * rate;
-    
-    const taxable = parseFloat(item.taxable) || 0;
-    const cgst = parseFloat(item.cgst) || 0;
-    const sgst = parseFloat(item.sgst) || 0;
-    
-    totalTaxable += taxable;
-    totalCgst += cgst;
-    totalSgst += sgst;
-  });
-  
-  // Calculate header-level discounts (these are separate from item-level discounts)
-  const tcbPercent = parseFloat(purchaseFormData.tcbPercent) || 0;
-  const diBc1 = parseFloat(purchaseFormData.diBc1) || 0;
-  const diBc2 = parseFloat(purchaseFormData.diBc2) || 0;
-  const diBc3 = parseFloat(purchaseFormData.diBc3) || 0;
-  const rounding = parseFloat(purchaseFormData.rounding) || 0;
-  
-  // Calculate TCB Amount on MRP Total
-  const tcbAmount = totalMrp * tcbPercent / 100;
-  
-  // After DISC1 (direct discount)
-  const afterDiBc1 = totalMrp - diBc1;
-  
-  // Gross Amount = After DISC1 - TCB Amount
-  const groBsAmt = afterDiBc1 - tcbAmount;
-  
-  // After DISC2
-  const afterDiBc2 = groBsAmt - diBc2;
-  
-  // QBT Amount (GST on taxable value) - this should be total taxable from items
-  // But since the purchase items already include GST in their calculations,
-  // we need to calculate QBT Amount properly
-  const qbtAmt = totalTaxable;
-  
-  // After DISC3
-  const afterDiBc3 = qbtAmt - diBc3;
-  
-  // CEBS Amount
-  const ceBsAmt = afterDiBc3;
-  
-  // Net Amount
-  const netAmt = ceBsAmt + rounding;
-  
-  setPurchaseFormData(prev => ({
-    ...prev,
-    mrpTotal: totalMrp.toFixed(2),
-    tcbAmount: tcbAmount.toFixed(2),
-    afterDiBc1: afterDiBc1.toFixed(2),
-    groBsAmt: groBsAmt.toFixed(2),
-    afterDiBc2: afterDiBc2.toFixed(2),
-    qbtAmt: qbtAmt.toFixed(2),
-    afterDiBc3: afterDiBc3.toFixed(2),
-    ceBsAmt: ceBsAmt.toFixed(2),
-    netAmt: netAmt.toFixed(2)
-  }));
-}, [purchaseItems, purchaseFormData.tcbPercent, purchaseFormData.diBc1, purchaseFormData.diBc2, purchaseFormData.diBc3, purchaseFormData.rounding]);
-  
-const deletePurchaseItem = (index) => {
-  const newItems = purchaseItems.filter((_, i) => i !== index);
-  newItems.forEach((item, i) => { item.sr = i + 1; });
-  setPurchaseItems(newItems);
-  
-  // ADD THIS LINE - Calculate summary after deleting item
-  calcPurchaseSummary();
-};
-
-  const handlePurchaseInputChange = (e) => {
-  const { name, value } = e.target;
-  let newValue = value;
-  let updatedForm = { ...purchaseFormData, [name]: value };
-
-  if (name === 'tcbPercent' || name === 'diBc1' || name === 'diBc2' || name === 'diBc3' || name === 'rounding') {
-    setPurchaseFormData(updatedForm);
-    // ADD THIS - Trigger recalculation of summary when these fields change
-    setTimeout(() => calcPurchaseSummary(), 0);
-  } else {
-    setPurchaseFormData(updatedForm);
-  }
-};
- const handlePurchaseKeyDown = (e, index, field) => {
-  if (e.key === 'Enter') {
-    e.preventDefault();
-    
-    // If we're in the quantity field, trigger calculations and add new row
-    if (field === 'quantity') {
-      // Trigger the quantity update
-      const qtyValue = e.target.value;
-      if (qtyValue && parseFloat(qtyValue) > 0) {
-        // Add new row after quantity is entered
-        setTimeout(() => {
-          addPurchaseItem();
-          setTimeout(() => {
-            const nextProductInput = document.querySelector(`[data-purchase-product-index="${index + 1}"]`);
-            if (nextProductInput) nextProductInput.focus();
-          }, 50);
-        }, 100);
+    setPurchaseItems(updatedItems);
+    setBatches([
+      ...batches,
+      {
+        productId: updatedItems[currentBatchRow].productId,
+        product: updatedItems[currentBatchRow].product,
+        ...batchForm
       }
-    } else {
-      const fields = ['product', 'unitId', 'quantity', 'free', 'mrp', 'purRate', 'disc1', 'disc2', 'disc3', 'tax'];
-      const nextFieldIndex = fields.indexOf(field) + 1;
-      if (nextFieldIndex < fields.length) {
-        const nextInput = document.querySelector(`[data-purchase-field="${fields[nextFieldIndex]}"][data-purchase-index="${index}"]`);
-        nextInput?.focus();
-      } else {
-        const nextProduct = document.querySelector(`[data-purchase-product-index="${index + 1}"]`);
-        if (nextProduct) {
-          nextProduct.focus();
-        } else {
-          addPurchaseItem();
-          setTimeout(() => {
-            const nextProductInput = document.querySelector(`[data-purchase-product-index="${index + 1}"]`);
-            if (nextProductInput) nextProductInput.focus();
-          }, 100);
-        }
-      }
-    }
-  }
-};
-  const handlePurchaseProductClick = (index) => {
+    ]);
+    setShowBatchModal(false);
 
-  setShowPurchaseProductList(false);
-
-  setTimeout(() => {
-
-    setCurrentPurchaseProductIndex(index);
-
-    setPurchaseProductListFilter('');
-
-    setShowPurchaseProductList(true);
-
-  }, 50);
-
-};
-
- const handlePurchaseProductSelect = (index, product) => {
-  updatePurchaseItem(index, 'product', `${product.code} - ${product.name}`);
-  updatePurchaseItem(index, 'productId', product.id);
-  updatePurchaseItem(index, 'mrp', product.mrp || '');
-  updatePurchaseItem(index, 'purRate', product.Rate_Per_Unit || '');
-  updatePurchaseItem(index, 'tax', product.gst || '');
-  updatePurchaseItem(index, 'unitId', product.basicUnit || 'PCS');
-  updatePurchaseItem(index, 'salesRate', product.salesRate || '');
-  
-  setShowPurchaseProductList(false);
-  setCurrentPurchaseProductIndex(-1);
-  
-  // Check if product has existing batches
-  const productBatches = batches.filter(b => b.productId === product.id);
-  
-  if (productBatches.length > 0) {
-    // Show existing batch modal
-    setBatchMode('existing');
-    setCurrentBatchRow(index);
-    setShowBatchModal(true);
-  } else {
-    // Show new batch modal
-    setBatchMode('new');
-    setCurrentBatchRow(index);
-    setBatchForm({
-      batchNo: '',
-      mfgDate: '',
-      expDate: '',
-      mrp: product.mrp || '',
-      purchaseRate: product.Rate_Per_Unit || '',
-      salesRate: product.salesRate || product.mrp || '',
-      stockQty: '',
-      boxPack: '1',
-      ratePerUnit: '1',
-      previousPurchaseRate: '',
-      quantity: '1'
-    });
-    setShowBatchModal(true);
-  }
-  
-  setTimeout(() => {
-    const qtyInput = document.querySelector(`[data-purchase-field="quantity"][data-purchase-index="${index}"]`);
-    if (qtyInput) qtyInput.focus();
-  }, 50);
-};
-  const openBatchModal = (index) => {
-    console.log("BATCH BUTTON CLICKED");
-    setCurrentBatchRow(index);
-
-    setBatchForm({
-      batchNo: '',
-      mfgDate: '',
-      expDate: '',
-      mrp: '',
-      purchaseRate: '',
-      salesRate: '',
-      stockQty: ''
-    });
-
-    setShowBatchModal(true);
-  };
-
-
-const saveBatchDetails = () => {
-  const updatedItems = [...purchaseItems];
-  updatedItems[currentBatchRow] = {
-    ...updatedItems[currentBatchRow],
-    selectedBatch: { ...batchForm },
-    batchNo: batchForm.batchNo,
-    mfgDate: batchForm.mfgDate,
-    expDate: batchForm.expDate,
-    mrp: batchForm.mrp,
-    purRate: batchForm.purchaseRate,
-    salesRate: batchForm.salesRate,
-    stockQty: batchForm.stockQty,
-    boxPack: batchForm.boxPack,
-    ratePerUnit: batchForm.ratePerUnit,
-    previousPurchaseRate: batchForm.previousPurchaseRate,
-    quantity: batchForm.quantity
-  };
-  setPurchaseItems(updatedItems);
-  setBatches([
-    ...batches,
-    {
+    // Calculate summary after updating
+    calcPurchaseSummary();
+    console.log({
       productId: updatedItems[currentBatchRow].productId,
-      product: updatedItems[currentBatchRow].product,
-      ...batchForm
-    }
-  ]);
-  setShowBatchModal(false);
-};
+      batchForm
+    });
+  };
 
   const savePurchase = () => {
     const purchaseData = { ...purchaseFormData, items: purchaseItems };
@@ -2764,47 +2867,47 @@ const saveBatchDetails = () => {
         </header>
 
         <div className="content-body">
-        {/* GoDown Master - Form View */}
-{activeSubMenu === 'GoDown Master' && openFormFor === 'GoDown Master' && (
-  <div className="master-section erp-master-form">
-    <div className="form-header">
-      <div className="page-title-large">{editGodownId ? 'Edit GoDown' : 'Add New GoDown'}</div>
-      <button className="close-form-btn" onClick={closeForm}>✕</button>
-    </div>
-    <form className="master-form" onSubmit={saveGodown}>
-      <div className="form-section">
-        <h4 className="section-header">Basic Information</h4>
-        <div className="form-grid-2">
-          <div className="labeled-input">
-            <label>GoDown Code *</label>
-            <input name="code" placeholder="GoDown Code" value={godownForm.code} onChange={handleGodownInput} required />
-          </div>
-          <div className="labeled-input">
-            <label>GoDown Name *</label>
-            <input name="name" placeholder="GoDown Name" value={godownForm.name} onChange={handleGodownInput} required />
-          </div>
-        </div>
-      </div>
-      <div className="form-section">
-        <h4 className="section-header">Location Details</h4>
-        <div className="form-grid-2">
-          <div className="labeled-input">
-            <label>Address</label>
-            <textarea name="address" placeholder="Address" value={godownForm.address} onChange={handleGodownInput} rows="2" />
-          </div>
-          <div className="labeled-input">
-            <label>Location</label>
-            <input name="location" placeholder="Location" value={godownForm.location} onChange={handleGodownInput} />
-          </div>
-        </div>
-      </div>
-      <div className="form-actions">
-        <button type="submit" className="btn-primary">{editGodownId ? 'Update' : 'Save GoDown'}</button>
-        <button type="button" className="btn-secondary" onClick={closeForm}>Cancel</button>
-      </div>
-    </form>
-  </div>
-)}
+          {/* GoDown Master - Form View */}
+          {activeSubMenu === 'GoDown Master' && openFormFor === 'GoDown Master' && (
+            <div className="master-section erp-master-form">
+              <div className="form-header">
+                <div className="page-title-large">{editGodownId ? 'Edit GoDown' : 'Add New GoDown'}</div>
+                <button className="close-form-btn" onClick={closeForm}>✕</button>
+              </div>
+              <form className="master-form" onSubmit={saveGodown}>
+                <div className="form-section">
+                  <h4 className="section-header">Basic Information</h4>
+                  <div className="form-grid-2">
+                    <div className="labeled-input">
+                      <label>GoDown Code *</label>
+                      <input name="code" placeholder="GoDown Code" value={godownForm.code} onChange={handleGodownInput} required />
+                    </div>
+                    <div className="labeled-input">
+                      <label>GoDown Name *</label>
+                      <input name="name" placeholder="GoDown Name" value={godownForm.name} onChange={handleGodownInput} required />
+                    </div>
+                  </div>
+                </div>
+                <div className="form-section">
+                  <h4 className="section-header">Location Details</h4>
+                  <div className="form-grid-2">
+                    <div className="labeled-input">
+                      <label>Address</label>
+                      <textarea name="address" placeholder="Address" value={godownForm.address} onChange={handleGodownInput} rows="2" />
+                    </div>
+                    <div className="labeled-input">
+                      <label>Location</label>
+                      <input name="location" placeholder="Location" value={godownForm.location} onChange={handleGodownInput} />
+                    </div>
+                  </div>
+                </div>
+                <div className="form-actions">
+                  <button type="submit" className="btn-primary">{editGodownId ? 'Update' : 'Save GoDown'}</button>
+                  <button type="button" className="btn-secondary" onClick={closeForm}>Cancel</button>
+                </div>
+              </form>
+            </div>
+          )}
           {/* GoDown Master - Grid View */}
           {activeSubMenu === 'GoDown Master' && openFormFor !== 'GoDown Master' && (
             renderDataTable('GoDowns List', getFilteredGodowns(), [
@@ -2815,47 +2918,47 @@ const saveBatchDetails = () => {
             ], 'godown', deleteGodown)
           )}
 
-         {/* Company Master - Form View */}
-{activeSubMenu === 'Company Master' && openFormFor === 'Company Master' && (
-  <div className="master-section erp-master-form">
-    <div className="form-header">
-      <div className="page-title-large">Add New Company</div>
-      <button className="close-form-btn" onClick={closeForm}>✕</button>
-    </div>
-    <form className="master-form" onSubmit={saveCompany}>
-      <div className="form-section">
-        <h4 className="section-header">Basic Information</h4>
-        <div className="form-grid-2">
-          <div className="labeled-input">
-            <label>Company Code *</label>
-            <input name="code" placeholder="Company Code" value={companyForm.code} onChange={handleCompanyInput} required />
-          </div>
-          <div className="labeled-input">
-            <label>Company Name *</label>
-            <input name="name" placeholder="Company Name" value={companyForm.name} onChange={handleCompanyInput} required />
-          </div>
-        </div>
-      </div>
-      <div className="form-section">
-        <h4 className="section-header">Addresses</h4>
-        <div className="form-grid-2">
-          <div className="labeled-input">
-            <label>Company Address</label>
-            <textarea name="address" placeholder="Company Address" value={companyForm.address} onChange={handleCompanyInput} rows="2" />
-          </div>
-          <div className="labeled-input">
-            <label>Branch/Office Address</label>
-            <textarea name="branchAddress" placeholder="Branch/Office Address" value={companyForm.branchAddress} onChange={handleCompanyInput} rows="2" />
-          </div>
-        </div>
-      </div>
-      <div className="form-actions">
-        <button type="submit" className="btn-primary">Save Company</button>
-        <button type="button" className="btn-secondary" onClick={closeForm}>Cancel</button>
-      </div>
-    </form>
-  </div>
-)}
+          {/* Company Master - Form View */}
+          {activeSubMenu === 'Company Master' && openFormFor === 'Company Master' && (
+            <div className="master-section erp-master-form">
+              <div className="form-header">
+                <div className="page-title-large">Add New Company</div>
+                <button className="close-form-btn" onClick={closeForm}>✕</button>
+              </div>
+              <form className="master-form" onSubmit={saveCompany}>
+                <div className="form-section">
+                  <h4 className="section-header">Basic Information</h4>
+                  <div className="form-grid-2">
+                    <div className="labeled-input">
+                      <label>Company Code *</label>
+                      <input name="code" placeholder="Company Code" value={companyForm.code} onChange={handleCompanyInput} required />
+                    </div>
+                    <div className="labeled-input">
+                      <label>Company Name *</label>
+                      <input name="name" placeholder="Company Name" value={companyForm.name} onChange={handleCompanyInput} required />
+                    </div>
+                  </div>
+                </div>
+                <div className="form-section">
+                  <h4 className="section-header">Addresses</h4>
+                  <div className="form-grid-2">
+                    <div className="labeled-input">
+                      <label>Company Address</label>
+                      <textarea name="address" placeholder="Company Address" value={companyForm.address} onChange={handleCompanyInput} rows="2" />
+                    </div>
+                    <div className="labeled-input">
+                      <label>Branch/Office Address</label>
+                      <textarea name="branchAddress" placeholder="Branch/Office Address" value={companyForm.branchAddress} onChange={handleCompanyInput} rows="2" />
+                    </div>
+                  </div>
+                </div>
+                <div className="form-actions">
+                  <button type="submit" className="btn-primary">Save Company</button>
+                  <button type="button" className="btn-secondary" onClick={closeForm}>Cancel</button>
+                </div>
+              </form>
+            </div>
+          )}
           {/* Company Master - Grid View */}
           {activeSubMenu === 'Company Master' && openFormFor !== 'Company Master' && (
             renderDataTable('Companies List', getFilteredCompanies(), [
@@ -2867,33 +2970,33 @@ const saveBatchDetails = () => {
           )}
 
           {/* Group Master - Form View */}
-{activeSubMenu === 'Group Master' && openFormFor === 'Group Master' && (
-  <div className="master-section erp-master-form">
-    <div className="form-header">
-      <div className="page-title-large">Add New Group</div>
-      <button className="close-form-btn" onClick={closeForm}>✕</button>
-    </div>
-    <form className="master-form" onSubmit={saveGroup}>
-      <div className="form-section">
-        <h4 className="section-header">Basic Information</h4>
-        <div className="form-grid-2">
-          <div className="labeled-input">
-            <label>Group Code *</label>
-            <input name="code" placeholder="Group Code" value={groupForm.code} onChange={handleGroupInput} required />
-          </div>
-          <div className="labeled-input">
-            <label>Group Name *</label>
-            <input name="name" placeholder="Group Name" value={groupForm.name} onChange={handleGroupInput} required />
-          </div>
-        </div>
-      </div>
-      <div className="form-actions">
-        <button type="submit" className="btn-primary">Save Group</button>
-        <button type="button" className="btn-secondary" onClick={closeForm}>Cancel</button>
-      </div>
-    </form>
-  </div>
-)}
+          {activeSubMenu === 'Group Master' && openFormFor === 'Group Master' && (
+            <div className="master-section erp-master-form">
+              <div className="form-header">
+                <div className="page-title-large">Add New Group</div>
+                <button className="close-form-btn" onClick={closeForm}>✕</button>
+              </div>
+              <form className="master-form" onSubmit={saveGroup}>
+                <div className="form-section">
+                  <h4 className="section-header">Basic Information</h4>
+                  <div className="form-grid-2">
+                    <div className="labeled-input">
+                      <label>Group Code *</label>
+                      <input name="code" placeholder="Group Code" value={groupForm.code} onChange={handleGroupInput} required />
+                    </div>
+                    <div className="labeled-input">
+                      <label>Group Name *</label>
+                      <input name="name" placeholder="Group Name" value={groupForm.name} onChange={handleGroupInput} required />
+                    </div>
+                  </div>
+                </div>
+                <div className="form-actions">
+                  <button type="submit" className="btn-primary">Save Group</button>
+                  <button type="button" className="btn-secondary" onClick={closeForm}>Cancel</button>
+                </div>
+              </form>
+            </div>
+          )}
 
           {/* Group Master - Grid View */}
           {activeSubMenu === 'Group Master' && openFormFor !== 'Group Master' && (
@@ -2903,35 +3006,34 @@ const saveBatchDetails = () => {
             ], 'group', deleteGroup)
           )}
 
-        {/* Category Master - Form View */}
-{activeSubMenu === 'Category Master' && openFormFor === 'Category Master' && (
-  <div className="master-section erp-master-form">
-    <div className="form-header">
-      <div className="page-title-large">Add New Category</div>
-      <button className="close-form-btn" onClick={closeForm}>✕</button>
-    </div>
-    <form className="master-form" onSubmit={saveCategory}>
-      <div className="form-section">
-        <h4 className="section-header">Basic Information</h4>
-        <div className="form-grid-2">
-          <div className="labeled-input">
-            <label>Category Code *</label>
-            <input name="code" placeholder="Category Code" value={categoryForm.code} onChange={handleCategoryInput} required />
-          </div>
-          <div className="labeled-input">
-            <label>Category Name *</label>
-            <input name="name" placeholder="Category Name" value={categoryForm.name} onChange={handleCategoryInput} required />
-          </div>
-        </div>
-      </div>
-      <div className="form-actions">
-        <button type="submit" className="btn-primary">Save Category</button>
-        <button type="button" className="btn-secondary" onClick={closeForm}>Cancel</button>
-      </div>
-    </form>
-  </div>
-)}
-
+          {/* Category Master - Form View */}
+          {activeSubMenu === 'Category Master' && openFormFor === 'Category Master' && (
+            <div className="master-section erp-master-form">
+              <div className="form-header">
+                <div className="page-title-large">Add New Category</div>
+                <button className="close-form-btn" onClick={closeForm}>✕</button>
+              </div>
+              <form className="master-form" onSubmit={saveCategory}>
+                <div className="form-section">
+                  <h4 className="section-header">Basic Information</h4>
+                  <div className="form-grid-2">
+                    <div className="labeled-input">
+                      <label>Category Code *</label>
+                      <input name="code" placeholder="Category Code" value={categoryForm.code} onChange={handleCategoryInput} required />
+                    </div>
+                    <div className="labeled-input">
+                      <label>Category Name *</label>
+                      <input name="name" placeholder="Category Name" value={categoryForm.name} onChange={handleCategoryInput} required />
+                    </div>
+                  </div>
+                </div>
+                <div className="form-actions">
+                  <button type="submit" className="btn-primary">Save Category</button>
+                  <button type="button" className="btn-secondary" onClick={closeForm}>Cancel</button>
+                </div>
+              </form>
+            </div>
+          )}
 
           {/* Category Master - Grid View */}
           {activeSubMenu === 'Category Master' && openFormFor !== 'Category Master' && (
@@ -2942,143 +3044,139 @@ const saveBatchDetails = () => {
           )}
 
           {/* Product - Form View */}
-{activeSubMenu === 'Product' && openFormFor === 'Product' && (
-  <div className="master-section erp-master-form">
-    <div className="form-header">
-      <div className="page-title-large">Add New Product</div>
-      <button className="close-form-btn" onClick={closeForm}>✕</button>
-    </div>
-    <form className="master-form" onSubmit={saveProduct}>
-      <div className="form-section">
-        <h4 className="section-header">Product Identification</h4>
-        <div className="form-grid-3">
-          <div className="labeled-input">
-            <label>Product Code *</label>
-            <input name="code" placeholder="Product Code" value={productForm.code} onChange={handleProductInput} required />
-          </div>
-          <div className="labeled-input">
-            <label>Product Name *</label>
-            <input name="name" placeholder="Product Name" value={productForm.name} onChange={handleProductInput} required />
-          </div>
-          <div className="labeled-input">
-            <label>Company</label>
-            <select name="companyId" value={productForm.companyId} onChange={handleProductInput}>
-              <option value="">Select Company</option>
-              {companies.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
-            </select>
-          </div>
-        </div>
-        <div className="form-grid-3">
-          <div className="labeled-input">
-            <label>Group</label>
-            <select name="group" value={productForm.group} onChange={handleProductInput}>
-              <option value="">Select Group</option>
-              {groupsState.map(g => <option key={g.id} value={g.name}>{g.name}</option>)}
-            </select>
-          </div>
-          <div className="labeled-input">
-            <label>Category</label>
-            <select name="category" value={productForm.category} onChange={handleProductInput}>
-              <option value="">Select Category</option>
-              {categoriesState.map(cat => <option key={cat.id} value={cat.name}>{cat.name}</option>)}
-            </select>
-          </div>
-          <div className="labeled-input">
-            <label>GST %</label>
-            <select name="gst" value={productForm.gst} onChange={handleProductInput}>
-              <option value="">Select GST %</option>
-              {gstRates.map(rate => <option key={rate} value={rate}>{rate}%</option>)}
-            </select>
-          </div>
-        </div>
-        <div className="form-row-single">
-          <div className="labeled-input">
-            <label>Product Description</label>
-            <textarea name="description" placeholder="Product Description" value={productForm.description} onChange={handleProductInput} rows="2" />
-          </div>
-        </div>
-      </div>
+          {activeSubMenu === 'Product' && openFormFor === 'Product' && (
+            <div className="master-section erp-master-form">
+              <div className="form-header">
+                <div className="page-title-large">Add New Product</div>
+                <button className="close-form-btn" onClick={closeForm}>✕</button>
+              </div>
+              <form className="master-form" onSubmit={saveProduct}>
+                <div className="form-section">
+                  <h4 className="section-header">Product Identification</h4>
+                  <div className="form-grid-3">
+                    <div className="labeled-input">
+                      <label>Product Code *</label>
+                      <input name="code" placeholder="Product Code" value={productForm.code} onChange={handleProductInput} required />
+                    </div>
+                    <div className="labeled-input">
+                      <label>Product Name *</label>
+                      <input name="name" placeholder="Product Name" value={productForm.name} onChange={handleProductInput} required />
+                    </div>
+                    <div className="labeled-input">
+                      <label>Company</label>
+                      <select name="companyId" value={productForm.companyId} onChange={handleProductInput}>
+                        <option value="">Select Company</option>
+                        {companies.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                      </select>
+                    </div>
+                  </div>
+                  <div className="form-grid-3">
+                    <div className="labeled-input">
+                      <label>Group</label>
+                      <select name="group" value={productForm.group} onChange={handleProductInput}>
+                        <option value="">Select Group</option>
+                        {groupsState.map(g => <option key={g.id} value={g.name}>{g.name}</option>)}
+                      </select>
+                    </div>
+                    <div className="labeled-input">
+                      <label>Category</label>
+                      <select name="category" value={productForm.category} onChange={handleProductInput}>
+                        <option value="">Select Category</option>
+                        {categoriesState.map(cat => <option key={cat.id} value={cat.name}>{cat.name}</option>)}
+                      </select>
+                    </div>
+                    <div className="labeled-input">
+                      <label>GST %</label>
+                      <select name="gst" value={productForm.gst} onChange={handleProductInput}>
+                        <option value="">Select GST %</option>
+                        {gstRates.map(rate => <option key={rate} value={rate}>{rate}%</option>)}
+                      </select>
+                    </div>
+                  </div>
+                  <div className="form-row-single">
+                    <div className="labeled-input">
+                      <label>Product Description</label>
+                      <textarea name="description" placeholder="Product Description" value={productForm.description} onChange={handleProductInput} rows="2" />
+                    </div>
+                  </div>
+                </div>
 
-      <div className="form-section">
-        <h4 className="section-header">Logistics & Classification</h4>
-        <div className="form-grid-4">
-          <div className="labeled-input">
-            <label>Basic Unit</label>
-            <select name="basicUnit" value={productForm.basicUnit} onChange={handleProductInput}>
-              <option value="PCS">PCS</option>
-              <option value="BOX">BOX</option>
-              <option value="INBOX">INBOX</option>
-              <option value="KG">KG</option>
-              <option value="LTR">LTR</option>
-            </select>
-          </div>
-          {(productForm.basicUnit === 'KG' || productForm.basicUnit === 'Litre') && (
-            <div className="labeled-input">
-              <label>Weight [Gms/Ltr]</label>
-              <input name="weight" placeholder="100" value={productForm.weight} onChange={handleProductInput} type="number" />
+                <div className="form-section">
+                  <h4 className="section-header">Logistics & Classification</h4>
+                  <div className="form-grid-4">
+                    <div className="labeled-input">
+                      <label>Basic Unit</label>
+                      <select name="basicUnit" value={productForm.basicUnit} onChange={handleProductInput}>
+                        <option value="PCS">PCS</option>
+                        <option value="BOX">BOX</option>
+                        <option value="INBOX">INBOX</option>
+                        <option value="KG">KG</option>
+                        <option value="LTR">LTR</option>
+                      </select>
+                    </div>
+                    {(productForm.basicUnit === 'KG' || productForm.basicUnit === 'Litre') && (
+                      <div className="labeled-input">
+                        <label>Weight [Gms/Ltr]</label>
+                        <input name="weight" placeholder="100" value={productForm.weight} onChange={handleProductInput} type="number" />
+                      </div>
+                    )}
+                    <div className="labeled-input">
+                      <label>Inbox Pack</label>
+                      <input name="inboxPack" placeholder="Inbox Pack" value={productForm.inboxPack} onChange={handleProductInput} type="number" />
+                    </div>
+                    <div className="labeled-input">
+                      <label>Box Pack</label>
+                      <input name="boxPack" placeholder="Box Pack" value={productForm.boxPack} onChange={handleProductInput} type="number" />
+                    </div>
+                  </div>
+                  <div className="form-grid-4">
+                    <div className="labeled-input">
+                      <label>Retailer Margin (%)</label>
+                      <input name="retailerMargin" placeholder="Retailer Margin (%)" value={productForm.retailerMargin} onChange={handleProductInput} type="number" step="0.01" />
+                    </div>
+                    <div className="labeled-input">
+                      <label>Distributor Margin (%)</label>
+                      <input name="distributorMargin" placeholder="Distributor Margin (%)" value={productForm.distributorMargin} onChange={handleProductInput} type="number" step="0.01" />
+                    </div>
+                    <div className="labeled-input">
+                      <label>Rate Per Unit</label>
+                      <input name="Rate_Per_Unit" placeholder="0.00" value={productForm.Rate_Per_Unit} onChange={handleProductInput} type="number" step="0.01" />
+                    </div>
+                    <div className="checkbox-group">
+                      <label>
+                        <input name="active" type="checkbox" checked={productForm.active} onChange={handleProductInput} /> Active
+                      </label>
+                      <label>
+                        <input name="locked" type="checkbox" checked={productForm.locked} onChange={handleProductInput} /> Locked
+                      </label>
+                      <label>
+                        <input name="allowFraction" type="checkbox" checked={productForm.allowFraction} onChange={handleProductInput} /> Allow Qty In Fraction
+                      </label>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="form-section">
+                  <h4 className="section-header">Stock Management</h4>
+                  <div className="form-grid-2">
+                    <div className="labeled-input">
+                      <label>Min Stock Holding</label>
+                      <input name="Min_Stock_Holding" placeholder="0" value={productForm.Min_Stock_Holding} onChange={handleProductInput} type="number" />
+                    </div>
+                    <div className="labeled-input">
+                      <label>Reorder Level</label>
+                      <input name="Reorder_Level" placeholder="0" value={productForm.Reorder_Level} onChange={handleProductInput} type="number" />
+                    </div>
+                  </div>
+                </div>
+
+                <div className="form-actions">
+                  <button type="submit" className="btn-primary">Save Product</button>
+                  <button type="button" className="btn-secondary" onClick={closeForm}>Cancel</button>
+                </div>
+              </form>
             </div>
           )}
-          <div className="labeled-input">
-            <label>Inbox Pack</label>
-            <input name="inboxPack" placeholder="Inbox Pack" value={productForm.inboxPack} onChange={handleProductInput} type="number" />
-          </div>
-          <div className="labeled-input">
-            <label>Box Pack</label>
-            <input name="boxPack" placeholder="Box Pack" value={productForm.boxPack} onChange={handleProductInput} type="number" />
-          </div>
-        </div>
-        <div className="form-grid-4">
-          <div className="labeled-input">
-            <label>Retailer Margin (%)</label>
-            <input name="retailerMargin" placeholder="Retailer Margin (%)" value={productForm.retailerMargin} onChange={handleProductInput} type="number" step="0.01" />
-          </div>
-          <div className="labeled-input">
-            <label>Distributor Margin (%)</label>
-            <input name="distributorMargin" placeholder="Distributor Margin (%)" value={productForm.distributorMargin} onChange={handleProductInput} type="number" step="0.01" />
-          </div>
-          <div className="labeled-input">
-            <label>Rate Per Unit</label>
-            <input name="Rate_Per_Unit" placeholder="0.00" value={productForm.Rate_Per_Unit} onChange={handleProductInput} type="number" step="0.01" />
-          </div>
-          <div className="checkbox-group">
-            <label>
-              <input name="active" type="checkbox" checked={productForm.active} onChange={handleProductInput} /> Active
-            </label>
-            <label>
-              <input name="locked" type="checkbox" checked={productForm.locked} onChange={handleProductInput} /> Locked
-            </label>
-            <label>
-              <input name="allowFraction" type="checkbox" checked={productForm.allowFraction} onChange={handleProductInput} /> Allow Qty In Fraction
-            </label>
-          </div>
-        </div>
-      </div>
-
-      <div className="form-section">
-        <h4 className="section-header">Stock Management</h4>
-        <div className="form-grid-2">
-          <div className="labeled-input">
-            <label>Min Stock Holding</label>
-            <input name="Min_Stock_Holding" placeholder="0" value={productForm.Min_Stock_Holding} onChange={handleProductInput} type="number" />
-          </div>
-          <div className="labeled-input">
-            <label>Reorder Level</label>
-            <input name="Reorder_Level" placeholder="0" value={productForm.Reorder_Level} onChange={handleProductInput} type="number" />
-          </div>
-        </div>
-      </div>
-
-      <div className="form-actions">
-        <button type="submit" className="btn-primary">Save Product</button>
-        <button type="button" className="btn-secondary" onClick={closeForm}>Cancel</button>
-      </div>
-    </form>
-  </div>
-)}
-{/* Receipt Transaction */}
-{activeSubMenu === 'Receipt' && openFormFor === 'Receipt' && (
-  <Transaction />
-)}
           {/* Product - Grid View */}
           {activeSubMenu === 'Product' && openFormFor !== 'Product' && (
             renderDataTable('Products List', getFilteredProducts(), [
@@ -3259,54 +3357,54 @@ const saveBatchDetails = () => {
             ], 'otherAccount', deleteOtherAccount)
           )}
 
-         {/* GST Master - Form View */}
-{activeSubMenu === 'GST Master' && openFormFor === 'GST Master' && (
-  <div className="master-section erp-master-form">
-    <div className="form-header">
-      <div className="page-title-large">{editGstId ? 'Edit GST Information' : 'Add VAT/GST Information'}</div>
-      <button className="close-form-btn" onClick={closeForm}>✕</button>
-    </div>
-    <form className="master-form" onSubmit={saveGst}>
-      <div className="form-section">
-        <h4 className="section-header">GST Details</h4>
-        <div className="form-grid-2">
-          <div className="labeled-input">
-            <label>Code *</label>
-            <input name="code" placeholder="Code" value={gstForm.code} onChange={handleGstInput} required />
-          </div>
-          <div className="labeled-input">
-            <label>VAT % *</label>
-            <input name="vat" type="number" step="0.01" placeholder="VAT %" value={gstForm.vat} onChange={handleGstInput} required />
-          </div>
-        </div>
-        <div className="form-grid-2">
-          <div className="labeled-input">
-            <label>Purchase Type</label>
-            <select name="purchaseType" value={gstForm.purchaseType} onChange={handleGstInput}>
-              <option value="VAT ON PURCHASE PRICE">VAT ON PURCHASE PRICE</option>
-              <option value="VAT ON MRP">VAT ON MRP</option>
-              <option value="OTHER STATE">OTHER STATE</option>
-              <option value="EXPT PURCHASE">EXPT PURCHASE</option>
-              <option value="VAT ON MARGIN">VAT ON MARGIN</option>
-            </select>
-          </div>
-          <div className="labeled-input">
-            <label>Sales Type</label>
-            <select name="salesType" value={gstForm.salesType} onChange={handleGstInput}>
-              <option value="VAT ON SALES PRICE">VAT ON SALES PRICE</option>
-              <option value="VAT ON MRP">VAT ON MRP</option>
-              <option value="OTHER STATE">OTHER STATE</option>
-            </select>
-          </div>
-        </div>
-      </div>
-      <div className="form-actions">
-        <button type="submit" className="btn-primary">{editGstId ? 'Update' : 'Save'}</button>
-        <button type="button" className="btn-secondary" onClick={closeForm}>Cancel</button>
-      </div>
-    </form>
-  </div>
-)}
+          {/* GST Master - Form View */}
+          {activeSubMenu === 'GST Master' && openFormFor === 'GST Master' && (
+            <div className="master-section erp-master-form">
+              <div className="form-header">
+                <div className="page-title-large">{editGstId ? 'Edit GST Information' : 'Add VAT/GST Information'}</div>
+                <button className="close-form-btn" onClick={closeForm}>✕</button>
+              </div>
+              <form className="master-form" onSubmit={saveGst}>
+                <div className="form-section">
+                  <h4 className="section-header">GST Details</h4>
+                  <div className="form-grid-2">
+                    <div className="labeled-input">
+                      <label>Code *</label>
+                      <input name="code" placeholder="Code" value={gstForm.code} onChange={handleGstInput} required />
+                    </div>
+                    <div className="labeled-input">
+                      <label>VAT % *</label>
+                      <input name="vat" type="number" step="0.01" placeholder="VAT %" value={gstForm.vat} onChange={handleGstInput} required />
+                    </div>
+                  </div>
+                  <div className="form-grid-2">
+                    <div className="labeled-input">
+                      <label>Purchase Type</label>
+                      <select name="purchaseType" value={gstForm.purchaseType} onChange={handleGstInput}>
+                        <option value="VAT ON PURCHASE PRICE">VAT ON PURCHASE PRICE</option>
+                        <option value="VAT ON MRP">VAT ON MRP</option>
+                        <option value="OTHER STATE">OTHER STATE</option>
+                        <option value="EXPT PURCHASE">EXPT PURCHASE</option>
+                        <option value="VAT ON MARGIN">VAT ON MARGIN</option>
+                      </select>
+                    </div>
+                    <div className="labeled-input">
+                      <label>Sales Type</label>
+                      <select name="salesType" value={gstForm.salesType} onChange={handleGstInput}>
+                        <option value="VAT ON SALES PRICE">VAT ON SALES PRICE</option>
+                        <option value="VAT ON MRP">VAT ON MRP</option>
+                        <option value="OTHER STATE">OTHER STATE</option>
+                      </select>
+                    </div>
+                  </div>
+                </div>
+                <div className="form-actions">
+                  <button type="submit" className="btn-primary">{editGstId ? 'Update' : 'Save'}</button>
+                  <button type="button" className="btn-secondary" onClick={closeForm}>Cancel</button>
+                </div>
+              </form>
+            </div>
+          )}
 
           {/* GST Master - Grid View */}
           {activeSubMenu === 'GST Master' && openFormFor !== 'GST Master' && (
@@ -3319,34 +3417,34 @@ const saveBatchDetails = () => {
             ], 'gst', deleteGst)
           )}
 
-         {/* Area Master - Form View */}
-{activeSubMenu === 'Area' && openFormFor === 'Area' && (
-  <div className="master-section erp-master-form">
-    <div className="form-header">
-      <div className="page-title-large">{editAreaId ? 'Edit Area' : 'Add New Area'}</div>
-      <button className="close-form-btn" onClick={closeForm}>✕</button>
-    </div>
-    <form className="master-form" onSubmit={saveArea}>
-      <div className="form-section">
-        <h4 className="section-header">Basic Information</h4>
-        <div className="form-grid-2">
-          <div className="labeled-input">
-            <label>Area Code *</label>
-            <input name="code" placeholder="Area Code" value={areaForm.code} onChange={handleAreaInput} required />
-          </div>
-          <div className="labeled-input">
-            <label>Area Name *</label>
-            <input name="name" placeholder="Area Name" value={areaForm.name} onChange={handleAreaInput} required />
-          </div>
-        </div>
-      </div>
-      <div className="form-actions">
-        <button type="submit" className="btn-primary">{editAreaId ? 'Update' : 'Save Area'}</button>
-        <button type="button" className="btn-secondary" onClick={closeForm}>Cancel</button>
-      </div>
-    </form>
-  </div>
-)}
+          {/* Area Master - Form View */}
+          {activeSubMenu === 'Area' && openFormFor === 'Area' && (
+            <div className="master-section erp-master-form">
+              <div className="form-header">
+                <div className="page-title-large">{editAreaId ? 'Edit Area' : 'Add New Area'}</div>
+                <button className="close-form-btn" onClick={closeForm}>✕</button>
+              </div>
+              <form className="master-form" onSubmit={saveArea}>
+                <div className="form-section">
+                  <h4 className="section-header">Basic Information</h4>
+                  <div className="form-grid-2">
+                    <div className="labeled-input">
+                      <label>Area Code *</label>
+                      <input name="code" placeholder="Area Code" value={areaForm.code} onChange={handleAreaInput} required />
+                    </div>
+                    <div className="labeled-input">
+                      <label>Area Name *</label>
+                      <input name="name" placeholder="Area Name" value={areaForm.name} onChange={handleAreaInput} required />
+                    </div>
+                  </div>
+                </div>
+                <div className="form-actions">
+                  <button type="submit" className="btn-primary">{editAreaId ? 'Update' : 'Save Area'}</button>
+                  <button type="button" className="btn-secondary" onClick={closeForm}>Cancel</button>
+                </div>
+              </form>
+            </div>
+          )}
 
           {/* Area Master - Grid View */}
           {activeSubMenu === 'Area' && openFormFor !== 'Area' && (
@@ -3356,60 +3454,60 @@ const saveBatchDetails = () => {
             ], 'area', deleteArea)
           )}
 
-         {/* Service Master - Form View */}
-{activeSubMenu === 'Service' && openFormFor === 'Service' && (
-  <div className="master-section erp-master-form">
-    <div className="form-header">
-      <div className="page-title-large">{editServiceId ? 'Edit Service Information' : 'Add Service Information'}</div>
-      <button className="close-form-btn" onClick={closeForm}>✕</button>
-    </div>
-    <form className="master-form" onSubmit={saveService}>
-      <div className="form-section">
-        <h4 className="section-header">Service Details</h4>
-        <div className="form-grid-2">
-          <div className="labeled-input">
-            <label>Code *</label>
-            <input name="code" placeholder="Code" value={serviceForm.code} onChange={handleServiceInput} required />
-          </div>
-          <div className="labeled-input">
-            <label>Name *</label>
-            <input name="name" placeholder="Service Name" value={serviceForm.name} onChange={handleServiceInput} required />
-          </div>
-        </div>
-        <div className="form-grid-2">
-          <div className="labeled-input">
-            <label>VAT % *</label>
-            <input name="vat" type="number" step="0.01" placeholder="VAT %" value={serviceForm.vat} onChange={handleServiceInput} required />
-          </div>
-          <div className="labeled-input">
-            <label>Purchase Type</label>
-            <select name="purchaseType" value={serviceForm.purchaseType} onChange={handleServiceInput}>
-              <option value="VAT ON PURCHASE PRICE">VAT ON PURCHASE PRICE</option>
-              <option value="VAT ON MRP">VAT ON MRP</option>
-              <option value="OTHER STATE">OTHER STATE</option>
-              <option value="EXPT PURCHASE">EXPT PURCHASE</option>
-              <option value="VAT ON MARGIN">VAT ON MARGIN</option>
-            </select>
-          </div>
-        </div>
-        <div className="form-grid-2">
-          <div className="labeled-input">
-            <label>Sales Type</label>
-            <select name="salesType" value={serviceForm.salesType} onChange={handleServiceInput}>
-              <option value="VAT ON SALES PRICE">VAT ON SALES PRICE</option>
-              <option value="VAT ON MRP">VAT ON MRP</option>
-              <option value="OTHER STATE">OTHER STATE</option>
-            </select>
-          </div>
-        </div>
-      </div>
-      <div className="form-actions">
-        <button type="submit" className="btn-primary">{editServiceId ? 'Update' : 'Save'}</button>
-        <button type="button" className="btn-secondary" onClick={closeForm}>Cancel</button>
-      </div>
-    </form>
-  </div>
-)}
+          {/* Service Master - Form View */}
+          {activeSubMenu === 'Service' && openFormFor === 'Service' && (
+            <div className="master-section erp-master-form">
+              <div className="form-header">
+                <div className="page-title-large">{editServiceId ? 'Edit Service Information' : 'Add Service Information'}</div>
+                <button className="close-form-btn" onClick={closeForm}>✕</button>
+              </div>
+              <form className="master-form" onSubmit={saveService}>
+                <div className="form-section">
+                  <h4 className="section-header">Service Details</h4>
+                  <div className="form-grid-2">
+                    <div className="labeled-input">
+                      <label>Code *</label>
+                      <input name="code" placeholder="Code" value={serviceForm.code} onChange={handleServiceInput} required />
+                    </div>
+                    <div className="labeled-input">
+                      <label>Name *</label>
+                      <input name="name" placeholder="Service Name" value={serviceForm.name} onChange={handleServiceInput} required />
+                    </div>
+                  </div>
+                  <div className="form-grid-2">
+                    <div className="labeled-input">
+                      <label>VAT % *</label>
+                      <input name="vat" type="number" step="0.01" placeholder="VAT %" value={serviceForm.vat} onChange={handleServiceInput} required />
+                    </div>
+                    <div className="labeled-input">
+                      <label>Purchase Type</label>
+                      <select name="purchaseType" value={serviceForm.purchaseType} onChange={handleServiceInput}>
+                        <option value="VAT ON PURCHASE PRICE">VAT ON PURCHASE PRICE</option>
+                        <option value="VAT ON MRP">VAT ON MRP</option>
+                        <option value="OTHER STATE">OTHER STATE</option>
+                        <option value="EXPT PURCHASE">EXPT PURCHASE</option>
+                        <option value="VAT ON MARGIN">VAT ON MARGIN</option>
+                      </select>
+                    </div>
+                  </div>
+                  <div className="form-grid-2">
+                    <div className="labeled-input">
+                      <label>Sales Type</label>
+                      <select name="salesType" value={serviceForm.salesType} onChange={handleServiceInput}>
+                        <option value="VAT ON SALES PRICE">VAT ON SALES PRICE</option>
+                        <option value="VAT ON MRP">VAT ON MRP</option>
+                        <option value="OTHER STATE">OTHER STATE</option>
+                      </select>
+                    </div>
+                  </div>
+                </div>
+                <div className="form-actions">
+                  <button type="submit" className="btn-primary">{editServiceId ? 'Update' : 'Save'}</button>
+                  <button type="button" className="btn-secondary" onClick={closeForm}>Cancel</button>
+                </div>
+              </form>
+            </div>
+          )}
           {/* Service Master - Grid View */}
           {activeSubMenu === 'Service' && openFormFor !== 'Service' && (
             renderDataTable('Services List', getFilteredServices(), [
@@ -3423,101 +3521,101 @@ const saveBatchDetails = () => {
           )}
 
           {/* Salesman Master - Form View */}
-{activeSubMenu === 'Salesman' && openFormFor === 'Salesman' && (
-  <div className="master-section erp-master-form">
-    <div className="form-header">
-      <div className="page-title-large">{editSalesmanId ? 'Edit Salesman Information' : 'Add Salesman Information'}</div>
-      <button className="close-form-btn" onClick={closeForm}>✕</button>
-    </div>
-    <form className="master-form" onSubmit={saveSalesman}>
-      <div className="form-section">
-        <h4 className="section-header">Personal Information</h4>
-        <div className="form-grid-2">
-          <div className="labeled-input">
-            <label>SalesMan Code *</label>
-            <input name="code" placeholder="SalesMan Code" value={salesmanForm.code} onChange={handleSalesmanInput} required />
-          </div>
-          <div className="labeled-input">
-            <label>SalesMan Name *</label>
-            <input name="name" placeholder="SalesMan Name" value={salesmanForm.name} onChange={handleSalesmanInput} required />
-          </div>
-        </div>
-        <div className="form-grid-2">
-          <div className="labeled-input">
-            <label>SalesMan Type</label>
-            <select name="type" value={salesmanForm.type} onChange={handleSalesmanInput}>
-              <option value="SALESMAN">SALESMAN</option>
-              <option value="DELIVERY BOY">DELIVERY BOY</option>
-              <option value="COLLECTION PERSON">COLLECTION PERSON</option>
-            </select>
-          </div>
-          <div className="labeled-input">
-            <label>Date Of Birth</label>
-            <input name="dateOfBirth" type="date" value={salesmanForm.dateOfBirth} onChange={handleSalesmanInput} />
-          </div>
-        </div>
-        <div className="form-row-single">
-          <div className="labeled-input">
-            <label>Address</label>
-            <input name="address" placeholder="Address" value={salesmanForm.address} onChange={handleSalesmanInput} />
-          </div>
-        </div>
-        <div className="form-grid-3">
-          <div className="labeled-input">
-            <label>Town</label>
-            <input name="town" placeholder="Town" value={salesmanForm.town} onChange={handleSalesmanInput} />
-          </div>
-          <div className="labeled-input">
-            <label>Pin Code</label>
-            <input name="pinCode" placeholder="Pin Code" value={salesmanForm.pinCode} onChange={handleSalesmanInput} />
-          </div>
-          <div className="labeled-input">
-            <label>State</label>
-            <input name="state" placeholder="State" value={salesmanForm.state} onChange={handleSalesmanInput} />
-          </div>
-        </div>
-        <div className="form-grid-3">
-          <div className="labeled-input">
-            <label>Country</label>
-            <input name="country" placeholder="Country" value={salesmanForm.country} onChange={handleSalesmanInput} />
-          </div>
-          <div className="labeled-input">
-            <label>Phone No.</label>
-            <input name="phoneNo" placeholder="Phone No." value={salesmanForm.phoneNo} onChange={handleSalesmanInput} />
-          </div>
-          <div className="labeled-input">
-            <label>Mobile No.</label>
-            <input name="mobileNo" placeholder="Mobile No." value={salesmanForm.mobileNo} onChange={handleSalesmanInput} />
-          </div>
-        </div>
-        <div className="form-grid-3">
-          <div className="labeled-input">
-            <label>Email ID</label>
-            <input name="emailId" placeholder="Email ID" value={salesmanForm.emailId} onChange={handleSalesmanInput} type="email" />
-          </div>
-          <div className="labeled-input">
-            <label>Qualification</label>
-            <input name="qualification" placeholder="Qualification" value={salesmanForm.qualification} onChange={handleSalesmanInput} />
-          </div>
-          <div className="labeled-input">
-            <label>Reference</label>
-            <input name="reference" placeholder="Reference" value={salesmanForm.reference} onChange={handleSalesmanInput} />
-          </div>
-        </div>
-        <div className="form-grid-2">
-          <div className="labeled-input">
-            <label>IMEI No</label>
-            <input name="imeiNo" placeholder="IMEI No" value={salesmanForm.imeiNo} onChange={handleSalesmanInput} />
-          </div>
-        </div>
-      </div>
-      <div className="form-actions">
-        <button type="submit" className="btn-primary">{editSalesmanId ? 'Update' : 'Save'}</button>
-        <button type="button" className="btn-secondary" onClick={closeForm}>Cancel</button>
-      </div>
-    </form>
-  </div>
-)}
+          {activeSubMenu === 'Salesman' && openFormFor === 'Salesman' && (
+            <div className="master-section erp-master-form">
+              <div className="form-header">
+                <div className="page-title-large">{editSalesmanId ? 'Edit Salesman Information' : 'Add Salesman Information'}</div>
+                <button className="close-form-btn" onClick={closeForm}>✕</button>
+              </div>
+              <form className="master-form" onSubmit={saveSalesman}>
+                <div className="form-section">
+                  <h4 className="section-header">Personal Information</h4>
+                  <div className="form-grid-2">
+                    <div className="labeled-input">
+                      <label>SalesMan Code *</label>
+                      <input name="code" placeholder="SalesMan Code" value={salesmanForm.code} onChange={handleSalesmanInput} required />
+                    </div>
+                    <div className="labeled-input">
+                      <label>SalesMan Name *</label>
+                      <input name="name" placeholder="SalesMan Name" value={salesmanForm.name} onChange={handleSalesmanInput} required />
+                    </div>
+                  </div>
+                  <div className="form-grid-2">
+                    <div className="labeled-input">
+                      <label>SalesMan Type</label>
+                      <select name="type" value={salesmanForm.type} onChange={handleSalesmanInput}>
+                        <option value="SALESMAN">SALESMAN</option>
+                        <option value="DELIVERY BOY">DELIVERY BOY</option>
+                        <option value="COLLECTION PERSON">COLLECTION PERSON</option>
+                      </select>
+                    </div>
+                    <div className="labeled-input">
+                      <label>Date Of Birth</label>
+                      <input name="dateOfBirth" type="date" value={salesmanForm.dateOfBirth} onChange={handleSalesmanInput} />
+                    </div>
+                  </div>
+                  <div className="form-row-single">
+                    <div className="labeled-input">
+                      <label>Address</label>
+                      <input name="address" placeholder="Address" value={salesmanForm.address} onChange={handleSalesmanInput} />
+                    </div>
+                  </div>
+                  <div className="form-grid-3">
+                    <div className="labeled-input">
+                      <label>Town</label>
+                      <input name="town" placeholder="Town" value={salesmanForm.town} onChange={handleSalesmanInput} />
+                    </div>
+                    <div className="labeled-input">
+                      <label>Pin Code</label>
+                      <input name="pinCode" placeholder="Pin Code" value={salesmanForm.pinCode} onChange={handleSalesmanInput} />
+                    </div>
+                    <div className="labeled-input">
+                      <label>State</label>
+                      <input name="state" placeholder="State" value={salesmanForm.state} onChange={handleSalesmanInput} />
+                    </div>
+                  </div>
+                  <div className="form-grid-3">
+                    <div className="labeled-input">
+                      <label>Country</label>
+                      <input name="country" placeholder="Country" value={salesmanForm.country} onChange={handleSalesmanInput} />
+                    </div>
+                    <div className="labeled-input">
+                      <label>Phone No.</label>
+                      <input name="phoneNo" placeholder="Phone No." value={salesmanForm.phoneNo} onChange={handleSalesmanInput} />
+                    </div>
+                    <div className="labeled-input">
+                      <label>Mobile No.</label>
+                      <input name="mobileNo" placeholder="Mobile No." value={salesmanForm.mobileNo} onChange={handleSalesmanInput} />
+                    </div>
+                  </div>
+                  <div className="form-grid-3">
+                    <div className="labeled-input">
+                      <label>Email ID</label>
+                      <input name="emailId" placeholder="Email ID" value={salesmanForm.emailId} onChange={handleSalesmanInput} type="email" />
+                    </div>
+                    <div className="labeled-input">
+                      <label>Qualification</label>
+                      <input name="qualification" placeholder="Qualification" value={salesmanForm.qualification} onChange={handleSalesmanInput} />
+                    </div>
+                    <div className="labeled-input">
+                      <label>Reference</label>
+                      <input name="reference" placeholder="Reference" value={salesmanForm.reference} onChange={handleSalesmanInput} />
+                    </div>
+                  </div>
+                  <div className="form-grid-2">
+                    <div className="labeled-input">
+                      <label>IMEI No</label>
+                      <input name="imeiNo" placeholder="IMEI No" value={salesmanForm.imeiNo} onChange={handleSalesmanInput} />
+                    </div>
+                  </div>
+                </div>
+                <div className="form-actions">
+                  <button type="submit" className="btn-primary">{editSalesmanId ? 'Update' : 'Save'}</button>
+                  <button type="button" className="btn-secondary" onClick={closeForm}>Cancel</button>
+                </div>
+              </form>
+            </div>
+          )}
           {/* Salesman Master - Grid View */}
           {activeSubMenu === 'Salesman' && openFormFor !== 'Salesman' && (
             renderDataTable('Salesmen List', getFilteredSalesmen(), [
@@ -3532,298 +3630,254 @@ const saveBatchDetails = () => {
           {/* Salesman To Area Mapping UI */}
           {activeSubMenu === 'Salesman To Area' && <SalesmanToAreaMapping />}
 
-        
-{activeSubMenu === 'Sales' && (
-  <div className="master-section erp-master-form sales-invoice">
-    <div className="erp-header">
-      <div>
-        <h2 className="erp-title">Sales Invoice</h2>
-      </div>
-    </div>
 
-    {/* Invoice Header - 4 col grid */}
-    <div className="form-section">
-      <h4 className="section-header">Invoice Header</h4>
-      <div className="invoice-header-grid">
-        <div className="labeled-input"><label>Bill Date *</label><input type="date" name="billDate" className="erp-input" value={invoiceFormData.billDate} onChange={handleInvoiceInputChange} /></div>
-        <div className="labeled-input"><label>Godown *</label>
-          <select name="godown" className="erp-select" value={invoiceFormData.godown} onChange={handleInvoiceInputChange}>
-            <option value="">Select</option>
-            {godowns.map(g => <option key={g.id} value={g.code}>{g.name}</option>)}
-          </select>
-        </div>
-        <div className="labeled-input"><label>Company</label>
-          <select name="company" className="erp-select" value={invoiceFormData.company} onChange={handleInvoiceInputChange}>
-            <option value="">Select</option>
-            {companies.map(c => <option key={c.id} value={c.name}>{c.name}</option>)}
-          </select>
-        </div>
-        <div className="labeled-input"><label>Area *</label>
-          <select name="area" className="erp-select" value={invoiceFormData.area} onChange={handleInvoiceInputChange}>
-            <option value="">Select</option>
-            {areas.map(a => <option key={a.id} value={a.name}>{a.name}</option>)}
-          </select>
-        </div>
+          {activeSubMenu === 'Sales' && (
+            <div className="master-section erp-master-form sales-invoice">
+              <div className="erp-header">
+                <div>
+                  <h2 className="erp-title">Sales Invoice</h2>
+                </div>
+              </div>
 
-        <div className="labeled-input"><label>Party *</label>
-          <select name="party" className="erp-select" value={invoiceFormData.party} onChange={handleInvoiceInputChange}>
-            <option value="">Select</option>
-            {accounts.map(a => <option key={a.id} value={a.accountName}>{a.accountName}</option>)}
-          </select>
-        </div>
-        <div className="labeled-input"><label>BillSeries</label><input name="BillSeries" className="erp-input" value={invoiceFormData.BillSeries} onChange={handleInvoiceInputChange} /></div>
-        <div className="labeled-input"><label>Bill No</label><input name="billNo" className="erp-input" value={invoiceFormData.billNo} onChange={handleInvoiceInputChange} /></div>
-        <div className="labeled-input"><label>Bill Type *</label>
-          <select name="billType" className="erp-select" value={invoiceFormData.billType} onChange={handleInvoiceInputChange}>
-            <option>Cash</option><option>Credit</option>
-          </select>
-        </div>
-        <div className="labeled-input"><label>Due Date *</label><input type="date" name="dueDate" className="erp-input" value={invoiceFormData.dueDate} onChange={handleInvoiceInputChange} /></div>
-        <div className="labeled-input"><label>Sales Man *</label>
-          <select name="salesman" className="erp-select" value={invoiceFormData.salesman} onChange={handleInvoiceInputChange}>
-            <option value="">Select</option>
-            {salesmen.map(s => <option key={s.id} value={s.name}>{s.name}</option>)}
-          </select>
-        </div>
-        <div className="labeled-input narration-field"><label>Narration</label><textarea name="narration" className="erp-textarea" rows="2" value={invoiceFormData.narration} onChange={handleInvoiceInputChange} /></div>
-      </div>
-    </div>
-
-   
-<div className="form-section">
-  <h4 className="section-header">Product Entry</h4>
-  <div className="product-entry-container" style={{ overflowX: 'auto', overflowY: 'auto', maxHeight: '500px' }}>
-    <div className="erp-table-container" style={{ minWidth: '2000px' }}>
-      <table className="product-entry-table" style={{ width: '100%', borderCollapse: 'collapse' }}>
-        <thead style={{ position: 'sticky', top: 0, zIndex: 10 }}>
-          <tr>
-            <th style={{ position: 'sticky', left: 0, backgroundColor: '#f8fafc', zIndex: 20, minWidth: '50px' }}>Sr</th>
-            <th style={{ minWidth: '180px' }}>Product</th>
-            <th style={{ minWidth: '100px' }}>Units</th>
-            <th style={{ minWidth: '100px' }}>Qty</th>
-            <th style={{ minWidth: '100px' }}>Free</th>
-            <th style={{ minWidth: '100px' }}>MRP</th>
-            <th style={{ minWidth: '100px' }}>Rate</th>
-            <th style={{ minWidth: '120px' }}>Rate GST</th>
-            <th style={{ minWidth: '120px' }}>TPR Amt</th>
-            <th style={{ minWidth: '100px' }}>Scheme %</th>
-            <th style={{ minWidth: '120px' }}>Scheme Amt</th>
-            <th style={{ minWidth: '100px' }}>CD %</th>
-            <th style={{ minWidth: '120px' }}>CD Amt</th>
-            <th style={{ minWidth: '100px' }}>Star %</th>
-            <th style={{ minWidth: '120px' }}>Star Amt</th>
-            <th style={{ minWidth: '120px' }}>Taxable</th>
-            <th style={{ minWidth: '100px' }}>GST %</th>
-            <th style={{ minWidth: '100px' }}>SGST</th>
-            <th style={{ minWidth: '100px' }}>CGST</th>
-            <th style={{ minWidth: '120px' }}>Amount</th>
-            <th style={{ position: 'sticky', right: 0, backgroundColor: '#f8fafc', zIndex: 20, minWidth: '70px' }}>Action</th>
-          </tr>
-        </thead>
-        <tbody>
-          {invoiceItems.map((item, index) => (
-            <tr key={item.id} className={index === activeRow ? 'active-row' : ''}>
-              <td style={{ position: 'sticky', left: 0, backgroundColor: index === activeRow ? '#eff6ff' : 'white', zIndex: 5, minWidth: '50px' }}>{item.sr}</td>
-              <td style={{ position: 'relative' }}>
-                <input
-                  data-product-index={index}
-                  className="erp-input product-search"
-                  value={item.product}
-                  onChange={(e) => {
-                    const value = e.target.value;
-                    updateInvoiceItem(index, 'product', value);
-                    setCurrentProductIndex(index);
-                    if (value.trim() !== '') {
-                      setProductListFilter(value);
-                      setShowProductList(true);
-                    } else {
-                      setShowProductList(false);
-                    }
-                  }}
-                  onFocus={() => {
-                    setActiveRow(index);
-                    if (item.product) {
-                      setProductListFilter(item.product);
-                      setCurrentProductIndex(index);
-                      setShowProductList(true);
-                    }
-                  }}
-                  style={{ width: '100%', minWidth: '150px', cursor: 'pointer' }}
-                  placeholder="Click to select product"
-                />
-                
-                {showProductList && currentProductIndex === index && productListFilter.trim() !== '' && (
-                  <div className="erlay">
-                    <div className="product-dropdown">
-                      <div className="dropdown-list">
-                        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '12px' }}>
-                          <thead>
-                            <tr style={{ background: '#eff6ff', position: 'sticky', top: 0 }}>
-                              <th style={{ padding: '6px', textAlign: 'left' }}>Item Code</th>
-                              <th style={{ padding: '6px', textAlign: 'left' }}>Name</th>
-                              <th style={{ padding: '6px', textAlign: 'left' }}>Batch</th>
-                              <th style={{ padding: '6px', textAlign: 'right' }}>MRP</th>
-                              <th style={{ padding: '6px', textAlign: 'right' }}>Sales Rate</th>
-                              <th style={{ padding: '6px', textAlign: 'right' }}>Stock</th>
-                            </tr>
-                          </thead>
-                          <tbody>
-                            {products
-                              .filter(p =>
-                                p.name?.toLowerCase().includes(productListFilter.toLowerCase()) ||
-                                p.code?.toLowerCase().includes(productListFilter.toLowerCase())
-                              )
-                              .map(product => {
-                                const productBatches = batches.filter(b => b.productId === product.id);
-                                const displayBatch = productBatches[0];
-                                const totalStock = productBatches.reduce((sum, b) => sum + (parseFloat(b.stockQty) || 0), 0);
-                                
-                                return (
-                                  <tr
-                                    key={product.id}
-                                    onClick={() => {
-                                      if (productBatches.length > 1) {
-                                        setCurrentProductIndex(index);
-                                        setProductBatchesForSelection(productBatches);
-                                        setSelectedProductForBatch(product);
-                                        setShowBatchSelectionModal(true);
-                                      } else if (productBatches.length === 1) {
-                                        handleProductSelect(currentProductIndex, {
-                                          ...product,
-                                          selectedBatch: productBatches[0]
-                                        });
-                                        // Auto-add new row after product selection (except for last row)
-                                        if (index === invoiceItems.length - 1) {
-                                          setTimeout(() => {
-                                            addInvoiceItem();
-                                            setTimeout(() => {
-                                              const nextProductInput = document.querySelector(`[data-product-index="${index + 1}"]`);
-                                              if (nextProductInput) nextProductInput.focus();
-                                            }, 50);
-                                          }, 150);
-                                        } else {
-                                          setTimeout(() => {
-                                            const nextProductInput = document.querySelector(`[data-product-index="${index + 1}"]`);
-                                            if (nextProductInput) nextProductInput.focus();
-                                          }, 50);
-                                        }
-                                      } else {
-                                        handleProductSelect(currentProductIndex, product);
-                                        // Auto-add new row after product selection (except for last row)
-                                        if (index === invoiceItems.length - 1) {
-                                          setTimeout(() => {
-                                            addInvoiceItem();
-                                            setTimeout(() => {
-                                              const nextProductInput = document.querySelector(`[data-product-index="${index + 1}"]`);
-                                              if (nextProductInput) nextProductInput.focus();
-                                            }, 50);
-                                          }, 150);
-                                        } else {
-                                          setTimeout(() => {
-                                            const nextProductInput = document.querySelector(`[data-product-index="${index + 1}"]`);
-                                            if (nextProductInput) nextProductInput.focus();
-                                          }, 50);
-                                        }
-                                      }
-                                    }}
-                                    style={{ cursor: 'pointer', borderBottom: '1px solid #eee' }}
-                                    onMouseEnter={(e) => { e.currentTarget.style.background = '#f8fafc'; }}
-                                    onMouseLeave={(e) => { e.currentTarget.style.background = 'white'; }}
-                                  >
-                                    <td style={{ padding: '6px' }}>{product.code}</td>
-                                    <td style={{ padding: '6px' }}>{product.name}</td>
-                                    <td style={{ padding: '6px' }}>
-                                      {productBatches.length > 1 
-                                        ? `${productBatches.length} batches` 
-                                        : displayBatch?.batchNo || '-'}
-                                    </td>
-                                    <td style={{ padding: '6px', textAlign: 'right' }}>
-                                      ₹{displayBatch?.mrp || product.mrp || 0}
-                                    </td>
-                                    <td style={{ padding: '6px', textAlign: 'right' }}>
-                                      ₹{displayBatch?.salesRate || product.salesRate || product.mrp || 0}
-                                    </td>
-                                    <td style={{ padding: '6px', textAlign: 'right' }}>
-                                      {totalStock}
-                                    </td>
-                                  </tr>
-                                );
-                              })}
-                          </tbody>
-                        </table>
-                      </div>
-                    </div>
+              {/* Invoice Header - 4 col grid */}
+              <div className="form-section">
+                <h4 className="section-header">Invoice Header</h4>
+                <div className="invoice-header-grid">
+                  <div className="labeled-input"><label>Bill Date *</label><input type="date" name="billDate" className="erp-input" value={invoiceFormData.billDate} onChange={handleInvoiceInputChange} /></div>
+                  <div className="labeled-input"><label>Godown *</label>
+                    <select name="godown" className="erp-select" value={invoiceFormData.godown} onChange={handleInvoiceInputChange}>
+                      <option value="">Select</option>
+                      {godowns.map(g => <option key={g.id} value={g.code}>{g.name}</option>)}
+                    </select>
                   </div>
-                )}
-              </td>
-              <td>
-                <select
-                  className="erp-select"
-                  data-field="units"
-                  data-index={index}
-                  value={item.units}
-                  onChange={(e) => updateInvoiceItem(index, 'units', e.target.value)}
-                  onKeyDown={(e) => handleInvoiceKeyDown(e, index, 'units')}
-                  style={{ width: '100%' }}
-                >
-                  <option value="PCS">PCS</option>
-                  <option value="BOX">BOX</option>
-                  <option value="INBOX">INBOX</option>
-                  <option value="OUTER">OUTER</option>
-                  <option value="KG">KG</option>
-                  <option value="LTR">LTR</option>
-                </select>
-              </td>
-              <td><input className="erp-input numeric" data-field="qty" data-index={index} value={item.qty} onChange={(e) => updateInvoiceItem(index, 'qty', e.target.value)} onKeyDown={(e) => handleInvoiceKeyDown(e, index, 'qty')} style={{ width: '100%' }} /></td>
-              <td><input className="erp-input numeric" data-field="free" data-index={index} value={item.free} onChange={(e) => updateInvoiceItem(index, 'free', e.target.value)} onKeyDown={(e) => handleInvoiceKeyDown(e, index, 'free')} style={{ width: '100%' }} /></td>
-              <td><input className="erp-input numeric" data-field="mrp" data-index={index} value={item.mrp} onChange={(e) => updateInvoiceItem(index, 'mrp', e.target.value)} onKeyDown={(e) => handleInvoiceKeyDown(e, index, 'mrp')} style={{ width: '100%' }} /></td>
-              <td><input className="erp-input numeric" data-field="rate" data-index={index} value={item.rate} onChange={(e) => updateInvoiceItem(index, 'rate', e.target.value)} onKeyDown={(e) => handleInvoiceKeyDown(e, index, 'rate')} style={{ width: '100%' }} /></td>
-              <td><input className="erp-input numeric" data-field="rateGst" data-index={index} value={item.rateGst} onChange={(e) => updateInvoiceItem(index, 'rateGst', e.target.value)} onKeyDown={(e) => handleInvoiceKeyDown(e, index, 'rateGst')} style={{ width: '100%' }} /></td>
-              <td><input className="erp-input numeric" data-field="tprAmt" data-index={index} value={item.tprAmt} onChange={(e) => updateInvoiceItem(index, 'tprAmt', e.target.value)} onKeyDown={(e) => handleInvoiceKeyDown(e, index, 'tprAmt')} style={{ width: '100%' }} /></td>
-              <td><input className="erp-input numeric small" data-field="schemePct" data-index={index} value={item.schemePct} onChange={(e) => updateInvoiceItem(index, 'schemePct', e.target.value)} onKeyDown={(e) => handleInvoiceKeyDown(e, index, 'schemePct')} style={{ width: '100%' }} /></td>
-              <td><input className="erp-input numeric" data-field="schemeAmt" data-index={index} value={item.schemeAmt} onChange={(e) => updateInvoiceItem(index, 'schemeAmt', e.target.value)} onKeyDown={(e) => handleInvoiceKeyDown(e, index, 'schemeAmt')} style={{ width: '100%' }} /></td>
-              <td><input className="erp-input numeric small" data-field="cdPct" data-index={index} value={item.cdPct} onChange={(e) => updateInvoiceItem(index, 'cdPct', e.target.value)} onKeyDown={(e) => handleInvoiceKeyDown(e, index, 'cdPct')} style={{ width: '100%' }} /></td>
-              <td><input className="erp-input numeric" data-field="cdAmt" data-index={index} value={item.cdAmt} onChange={(e) => updateInvoiceItem(index, 'cdAmt', e.target.value)} onKeyDown={(e) => handleInvoiceKeyDown(e, index, 'cdAmt')} style={{ width: '100%' }} /></td>
-              <td><input className="erp-input numeric small" data-field="starPct" data-index={index} value={item.starPct} onChange={(e) => updateInvoiceItem(index, 'starPct', e.target.value)} onKeyDown={(e) => handleInvoiceKeyDown(e, index, 'starPct')} style={{ width: '100%' }} /></td>
-              <td><input className="erp-input numeric" data-field="starAmt" data-index={index} value={item.starAmt} onChange={(e) => updateInvoiceItem(index, 'starAmt', e.target.value)} onKeyDown={(e) => handleInvoiceKeyDown(e, index, 'starAmt')} style={{ width: '100%' }} /></td>
-              <td><input className="erp-input numeric" data-field="taxable" data-index={index} value={item.taxable} onChange={(e) => updateInvoiceItem(index, 'taxable', e.target.value)} onKeyDown={(e) => handleInvoiceKeyDown(e, index, 'taxable')} style={{ width: '100%' }} /></td>
-              <td><input className="erp-input numeric small" data-field="gst" data-index={index} value={item.gst} onChange={(e) => updateInvoiceItem(index, 'gst', e.target.value)} onKeyDown={(e) => handleInvoiceKeyDown(e, index, 'gst')} style={{ width: '100%' }} /></td>
-              <td><input className="erp-input numeric" data-field="sgst" data-index={index} value={item.sgst} onChange={(e) => updateInvoiceItem(index, 'sgst', e.target.value)} onKeyDown={(e) => handleInvoiceKeyDown(e, index, 'sgst')} style={{ width: '100%' }} /></td>
-              <td><input className="erp-input numeric" data-field="cgst" data-index={index} value={item.cgst} onChange={(e) => updateInvoiceItem(index, 'cgst', e.target.value)} onKeyDown={(e) => handleInvoiceKeyDown(e, index, 'cgst')} style={{ width: '100%' }} /></td>
-              <td><input className="erp-input numeric font-bold" data-field="amount" data-index={index} value={item.amount} onChange={(e) => updateInvoiceItem(index, 'amount', e.target.value)} onKeyDown={(e) => handleInvoiceKeyDown(e, index, 'amount')} style={{ width: '100%', fontWeight: 'bold' }} /></td>
-              <td style={{ position: 'sticky', right: 0, backgroundColor: index === activeRow ? '#eff6ff' : 'white', zIndex: 5 }}>
-                <button className="btn-delete text-red-500" onClick={() => deleteInvoiceItem(index)} style={{ padding: '6px 12px', whiteSpace: 'nowrap' }}>🗑 Delete</button>
-              </td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    </div>
-  </div>
-</div>
-   
-<div className="form-section">
-  <h4 className="section-header">Invoice Summary</h4>
-  <div className="summary-bar">
-    <div>Gross Amount: <span className="amount">₹{invoiceSummary.gross.toFixed(2)}</span></div>
-    <div>TPR Amount: <span className="amount">-₹{invoiceSummary.tpr.toFixed(2)}</span></div>
-    <div>Scheme Amount: <span className="amount">-₹{invoiceSummary.scheme.toFixed(2)}</span></div>
-    <div>Star Discount: <span className="amount">-₹{invoiceSummary.star.toFixed(2)}</span></div>
-    <div>Cash Discount: <span className="amount">-₹{invoiceSummary.cd.toFixed(2)}</span></div>
-    <div className="taxable-value">Taxable Value: <span className="amount">₹{(invoiceSummary.gross - invoiceSummary.tpr - invoiceSummary.scheme - invoiceSummary.star - invoiceSummary.cd).toFixed(2)}</span></div>
-    <div>SGST Amount: <span className="amount">+₹{(invoiceSummary.gst / 2).toFixed(2)}</span></div>
-    <div>CGST Amount: <span className="amount">+₹{(invoiceSummary.gst / 2).toFixed(2)}</span></div>
-    <div className="net-amount">Net Amount: <strong>₹{((invoiceSummary.gross - invoiceSummary.tpr - invoiceSummary.scheme - invoiceSummary.star - invoiceSummary.cd) + invoiceSummary.gst).toFixed(2)}</strong></div>
-  </div>
-</div>
-    {/* Action Button */}
-    <div className="form-actions">
-      <button className="btn-add-invoice" onClick={saveInvoice}>
-        💾 Add Invoice
-      </button>
-    </div>
-  </div>
-)}
+                  <div className="labeled-input"><label>Company</label>
+                    <select name="company" className="erp-select" value={invoiceFormData.company} onChange={handleInvoiceInputChange}>
+                      <option value="">Select</option>
+                      {companies.map(c => <option key={c.id} value={c.name}>{c.name}</option>)}
+                    </select>
+                  </div>
+                  <div className="labeled-input"><label>Area *</label>
+                    <select name="area" className="erp-select" value={invoiceFormData.area} onChange={handleInvoiceInputChange}>
+                      <option value="">Select</option>
+                      {areas.map(a => <option key={a.id} value={a.name}>{a.name}</option>)}
+                    </select>
+                  </div>
+
+                  <div className="labeled-input"><label>Party *</label>
+                    <select name="party" className="erp-select" value={invoiceFormData.party} onChange={handleInvoiceInputChange}>
+                      <option value="">Select</option>
+                      {accounts.map(a => <option key={a.id} value={a.accountName}>{a.accountName}</option>)}
+                    </select>
+                  </div>
+                  <div className="labeled-input"><label>BillSeries</label><input name="BillSeries" className="erp-input" value={invoiceFormData.BillSeries} onChange={handleInvoiceInputChange} /></div>
+                  <div className="labeled-input"><label>Bill No</label><input name="billNo" className="erp-input" value={invoiceFormData.billNo} onChange={handleInvoiceInputChange} /></div>
+                  <div className="labeled-input"><label>Bill Type *</label>
+                    <select name="billType" className="erp-select" value={invoiceFormData.billType} onChange={handleInvoiceInputChange}>
+                      <option>Cash</option><option>Credit</option>
+                    </select>
+                  </div>
+                  <div className="labeled-input"><label>Due Date *</label><input type="date" name="dueDate" className="erp-input" value={invoiceFormData.dueDate} onChange={handleInvoiceInputChange} /></div>
+                  <div className="labeled-input"><label>Sales Man *</label>
+                    <select name="salesman" className="erp-select" value={invoiceFormData.salesman} onChange={handleInvoiceInputChange}>
+                      <option value="">Select</option>
+                      {salesmen.map(s => <option key={s.id} value={s.name}>{s.name}</option>)}
+                    </select>
+                  </div>
+                  <div className="labeled-input narration-field"><label>Narration</label><textarea name="narration" className="erp-textarea" rows="2" value={invoiceFormData.narration} onChange={handleInvoiceInputChange} /></div>
+                </div>
+              </div>
+
+
+              <div className="form-section">
+                <h4 className="section-header">Product Entry</h4>
+                <div className="product-entry-container" style={{ overflowX: 'auto', overflowY: 'auto', maxHeight: '500px' }}>
+                  <div className="erp-table-container" style={{ minWidth: '2000px' }}>
+                    <table className="product-entry-table" style={{ width: '100%', borderCollapse: 'collapse' }}>
+                      <thead style={{ position: 'sticky', top: 0, zIndex: 10 }}>
+                        <tr>
+                          <th style={{ position: 'sticky', left: 0, backgroundColor: '#f8fafc', zIndex: 20, minWidth: '50px' }}>Sr</th>
+                          <th style={{ minWidth: '180px' }}>Product</th>
+                          <th style={{ minWidth: '100px' }}>Units</th>
+                          <th style={{ minWidth: '100px' }}>Qty</th>
+                          <th style={{ minWidth: '100px' }}>Free</th>
+                          <th style={{ minWidth: '100px' }}>MRP</th>
+                          <th style={{ minWidth: '100px' }}>Rate</th>
+                          <th style={{ minWidth: '120px' }}>Rate GST</th>
+                          <th style={{ minWidth: '120px' }}>TPR Amt</th>
+                          <th style={{ minWidth: '100px' }}>Scheme %</th>
+                          <th style={{ minWidth: '120px' }}>Scheme Amt</th>
+                          <th style={{ minWidth: '100px' }}>CD %</th>
+                          <th style={{ minWidth: '120px' }}>CD Amt</th>
+                          <th style={{ minWidth: '100px' }}>Star %</th>
+                          <th style={{ minWidth: '120px' }}>Star Amt</th>
+                          <th style={{ minWidth: '120px' }}>Taxable</th>
+                          <th style={{ minWidth: '100px' }}>GST %</th>
+                          <th style={{ minWidth: '100px' }}>SGST</th>
+                          <th style={{ minWidth: '100px' }}>CGST</th>
+                          <th style={{ minWidth: '120px' }}>Amount</th>
+                          <th style={{ position: 'sticky', right: 0, backgroundColor: '#f8fafc', zIndex: 20, minWidth: '70px' }}>Action</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {invoiceItems.map((item, index) => (
+                          <tr key={item.id} className={index === activeRow ? 'active-row' : ''}>
+                            <td style={{ position: 'sticky', left: 0, backgroundColor: index === activeRow ? '#eff6ff' : 'white', zIndex: 5, minWidth: '50px' }}>{item.sr}</td>
+                            <td style={{ position: 'relative' }}>
+                              <input
+                                data-product-index={index}
+                                className="erp-input product-search"
+                                value={item.product}
+                                onChange={(e) => {
+                                  const value = e.target.value;
+                                  updateInvoiceItem(index, 'product', value);
+                                  setCurrentProductIndex(index);
+                                  if (value.trim() !== '') {
+                                    setProductListFilter(value);
+                                    setShowProductList(true);
+                                  } else {
+                                    setShowProductList(false);
+                                  }
+                                }}
+                                onFocus={() => {
+                                  setActiveRow(index);
+                                  if (item.product) {
+                                    setProductListFilter(item.product);
+                                    setCurrentProductIndex(index);
+                                    setShowProductList(true);
+                                  }
+                                }}
+                                style={{ width: '100%', minWidth: '150px', cursor: 'pointer' }}
+                                placeholder="Click to select product"
+                              />
+
+                              {showProductList && currentProductIndex === index && productListFilter.trim() !== '' && (
+                                <div className="erlay">
+                                  <div className="product-dropdown">
+                                    <div className="dropdown-list">
+                                      <div className="product-search-dropdown">
+
+                                        <div className="product-search-header">
+                                          <span>Item Code</span>
+                                          <span>Name</span>
+                                          <span>Batch</span>
+                                          <span>MRP</span>
+                                          <span>Sales Rate</span>
+                                          <span>Stock</span>
+                                        </div>
+
+                                        {
+                                          filteredProducts.map((product, idx) => {
+
+                                            const batch = batches.find(
+                                              b => String(b.productId) === String(product.id)
+                                            );
+
+                                            return (
+                                              <div
+                                                key={idx}
+                                                className="product-search-row"
+                                                onClick={() => handleProductSelect(currentProductIndex, product)}
+                                              >
+                                                <span>{product.code}</span>
+
+                                                <span className="product-name">
+                                                  {product.name}
+                                                </span>
+
+                                                <span>
+                                                  {batch?.batchNo || '-'}
+                                                </span>
+
+                                                <span>
+                                                  ₹{batch?.mrp || 0}
+                                                </span>
+
+                                                <span>
+                                                  ₹{batch?.salesRate || 0}
+                                                </span>
+
+                                                <span>
+                                                  {batch?.stockQty || 0}
+                                                </span>
+                                              </div>
+                                            );
+                                          })
+                                        }
+                                      </div>
+                                    </div>
+                                  </div>
+                                </div>
+                              )}
+                            </td>
+                            <td>
+                              <select
+                                className="erp-select"
+                                data-field="units"
+                                data-index={index}
+                                value={item.units}
+                                onChange={(e) => updateInvoiceItem(index, 'units', e.target.value)}
+                                onKeyDown={(e) => handleInvoiceKeyDown(e, index, 'units')}
+                                style={{ width: '100%' }}
+                              >
+                                <option value="PCS">PCS</option>
+                                <option value="BOX">BOX</option>
+                                <option value="INBOX">INBOX</option>
+                                <option value="OUTER">OUTER</option>
+                                <option value="KG">KG</option>
+                                <option value="LTR">LTR</option>
+                              </select>
+                            </td>
+                            <td><input className="erp-input numeric" data-field="qty" data-index={index} value={item.qty} onChange={(e) => updateInvoiceItem(index, 'qty', e.target.value)} onKeyDown={(e) => handleInvoiceKeyDown(e, index, 'qty')} style={{ width: '100%' }} /></td>
+                            <td><input className="erp-input numeric" data-field="free" data-index={index} value={item.free} onChange={(e) => updateInvoiceItem(index, 'free', e.target.value)} onKeyDown={(e) => handleInvoiceKeyDown(e, index, 'free')} style={{ width: '100%' }} /></td>
+                            <td><input className="erp-input numeric" data-field="mrp" data-index={index} value={item.mrp} onChange={(e) => updateInvoiceItem(index, 'mrp', e.target.value)} onKeyDown={(e) => handleInvoiceKeyDown(e, index, 'mrp')} style={{ width: '100%' }} /></td>
+                            <td><input className="erp-input numeric" data-field="rate" data-index={index} value={item.rate} onChange={(e) => updateInvoiceItem(index, 'rate', e.target.value)} onKeyDown={(e) => handleInvoiceKeyDown(e, index, 'rate')} style={{ width: '100%' }} /></td>
+                            <td><input className="erp-input numeric" data-field="rateGst" data-index={index} value={item.rateGst} onChange={(e) => updateInvoiceItem(index, 'rateGst', e.target.value)} onKeyDown={(e) => handleInvoiceKeyDown(e, index, 'rateGst')} style={{ width: '100%' }} /></td>
+                            <td><input className="erp-input numeric" data-field="tprAmt" data-index={index} value={item.tprAmt} onChange={(e) => updateInvoiceItem(index, 'tprAmt', e.target.value)} onKeyDown={(e) => handleInvoiceKeyDown(e, index, 'tprAmt')} style={{ width: '100%' }} /></td>
+                            <td><input className="erp-input numeric small" data-field="schemePct" data-index={index} value={item.schemePct} onChange={(e) => updateInvoiceItem(index, 'schemePct', e.target.value)} onKeyDown={(e) => handleInvoiceKeyDown(e, index, 'schemePct')} style={{ width: '100%' }} /></td>
+                            <td><input className="erp-input numeric" data-field="schemeAmt" data-index={index} value={item.schemeAmt} onChange={(e) => updateInvoiceItem(index, 'schemeAmt', e.target.value)} onKeyDown={(e) => handleInvoiceKeyDown(e, index, 'schemeAmt')} style={{ width: '100%' }} /></td>
+                            <td><input className="erp-input numeric small" data-field="cdPct" data-index={index} value={item.cdPct} onChange={(e) => updateInvoiceItem(index, 'cdPct', e.target.value)} onKeyDown={(e) => handleInvoiceKeyDown(e, index, 'cdPct')} style={{ width: '100%' }} /></td>
+                            <td><input className="erp-input numeric" data-field="cdAmt" data-index={index} value={item.cdAmt} onChange={(e) => updateInvoiceItem(index, 'cdAmt', e.target.value)} onKeyDown={(e) => handleInvoiceKeyDown(e, index, 'cdAmt')} style={{ width: '100%' }} /></td>
+                            <td><input className="erp-input numeric small" data-field="starPct" data-index={index} value={item.starPct} onChange={(e) => updateInvoiceItem(index, 'starPct', e.target.value)} onKeyDown={(e) => handleInvoiceKeyDown(e, index, 'starPct')} style={{ width: '100%' }} /></td>
+                            <td><input className="erp-input numeric" data-field="starAmt" data-index={index} value={item.starAmt} onChange={(e) => updateInvoiceItem(index, 'starAmt', e.target.value)} onKeyDown={(e) => handleInvoiceKeyDown(e, index, 'starAmt')} style={{ width: '100%' }} /></td>
+                            <td><input className="erp-input numeric" data-field="taxable" data-index={index} value={item.taxable} onChange={(e) => updateInvoiceItem(index, 'taxable', e.target.value)} onKeyDown={(e) => handleInvoiceKeyDown(e, index, 'taxable')} style={{ width: '100%' }} /></td>
+                            <td><input className="erp-input numeric small" data-field="gst" data-index={index} value={item.gst} onChange={(e) => updateInvoiceItem(index, 'gst', e.target.value)} onKeyDown={(e) => handleInvoiceKeyDown(e, index, 'gst')} style={{ width: '100%' }} /></td>
+                            <td><input className="erp-input numeric" data-field="sgst" data-index={index} value={item.sgst} onChange={(e) => updateInvoiceItem(index, 'sgst', e.target.value)} onKeyDown={(e) => handleInvoiceKeyDown(e, index, 'sgst')} style={{ width: '100%' }} /></td>
+                            <td><input className="erp-input numeric" data-field="cgst" data-index={index} value={item.cgst} onChange={(e) => updateInvoiceItem(index, 'cgst', e.target.value)} onKeyDown={(e) => handleInvoiceKeyDown(e, index, 'cgst')} style={{ width: '100%' }} /></td>
+                            <td><input className="erp-input numeric font-bold" data-field="amount" data-index={index} value={item.amount} onChange={(e) => updateInvoiceItem(index, 'amount', e.target.value)} onKeyDown={(e) => handleInvoiceKeyDown(e, index, 'amount')} style={{ width: '100%', fontWeight: 'bold' }} /></td>
+                            <td style={{ position: 'sticky', right: 0, backgroundColor: index === activeRow ? '#eff6ff' : 'white', zIndex: 5 }}>
+                              <button className="btn-delete text-red-500" onClick={() => deleteInvoiceItem(index)} style={{ padding: '6px 12px', whiteSpace: 'nowrap' }}>🗑 Delete</button>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              </div>
+
+              <div className="form-section">
+                <h4 className="section-header">Invoice Summary</h4>
+                <div className="summary-bar">
+                  <div>Gross Amount: <span className="amount">₹{invoiceSummary.gross.toFixed(2)}</span></div>
+                  <div>TPR Amount: <span className="amount">-₹{invoiceSummary.tpr.toFixed(2)}</span></div>
+                  <div>Scheme Amount: <span className="amount">-₹{invoiceSummary.scheme.toFixed(2)}</span></div>
+                  <div>Star Discount: <span className="amount">-₹{invoiceSummary.star.toFixed(2)}</span></div>
+                  <div>Cash Discount: <span className="amount">-₹{invoiceSummary.cd.toFixed(2)}</span></div>
+                  <div className="taxable-value">Taxable Value: <span className="amount">₹{(invoiceSummary.gross - invoiceSummary.tpr - invoiceSummary.scheme - invoiceSummary.star - invoiceSummary.cd).toFixed(2)}</span></div>
+                  <div>SGST Amount: <span className="amount">+₹{(invoiceSummary.gst / 2).toFixed(2)}</span></div>
+                  <div>CGST Amount: <span className="amount">+₹{(invoiceSummary.gst / 2).toFixed(2)}</span></div>
+                  <div className="net-amount">Net Amount: <strong>₹{((invoiceSummary.gross - invoiceSummary.tpr - invoiceSummary.scheme - invoiceSummary.star - invoiceSummary.cd) + invoiceSummary.gst).toFixed(2)}</strong></div>
+                </div>
+              </div>
+              {/* Action Button */}
+              <div className="form-actions">
+                <button className="btn-add-invoice" onClick={saveInvoice}>
+                  💾 Add Invoice
+                </button>
+              </div>
+            </div>
+          )}
+
 
           {/* Purchase Invoice */}
           {activeSubMenu === 'Purchase' && (
@@ -3869,19 +3923,19 @@ const saveBatchDetails = () => {
                   <div className="labeled-input"><label>ENTER INVOICE NUMBER *</label>
                     <input type="text" name="invoiceNumber" className="erp-input" placeholder="Enter Invoice Number" value={purchaseFormData.invoiceNumber} onChange={handlePurchaseInputChange} required />
                   </div>
-                
-<div className="labeled-input narration-field" style={{ gridColumn: 'span 2' }}>
-  <label>Narration</label>
-  <textarea 
-    name="narration" 
-    className="erp-textarea" 
-    rows="2" 
-    style={{ width: '100%', minHeight: '60px', resize: 'vertical' }}
-    value={invoiceFormData.narration} 
-    onChange={handleInvoiceInputChange} 
-  />
-</div>
-                 
+
+                  <div className="labeled-input narration-field" style={{ gridColumn: 'span 2' }}>
+                    <label>Narration</label>
+                    <textarea
+                      name="narration"
+                      className="erp-textarea"
+                      rows="2"
+                      style={{ width: '100%', minHeight: '60px', resize: 'vertical' }}
+                      value={invoiceFormData.narration}
+                      onChange={handleInvoiceInputChange}
+                    />
+                  </div>
+
                 </div>
               </div>
 
@@ -3945,116 +3999,116 @@ const saveBatchDetails = () => {
                                 onKeyDown={(e) => handlePurchaseKeyDown(e, index, 'product')}
                                 style={{ width: '100%', cursor: 'pointer' }}
                               />
-                             {/* {item.selectedBatch && (
-  <div
-    style={{
-      marginTop: '3px',
-      fontSize: '10px',
-      color: '#2563eb',
-      whiteSpace: 'nowrap',
-      overflow: 'hidden',
-      textOverflow: 'ellipsis'
-    }}
-  >
-    Batch: {item.selectedBatch.batchNo}
-    {' | '}
-    MRP: ₹{item.selectedBatch.mrp}
-    {' | '}
-    Exp: {item.selectedBatch.expDate}
-  </div>
-)} */}
+                              {/* {item.selectedBatch && (
+    <div
+      style={{
+        marginTop: '3px',
+        fontSize: '10px',
+        color: '#2563eb',
+        whiteSpace: 'nowrap',
+        overflow: 'hidden',
+        textOverflow: 'ellipsis'
+      }}
+    >
+      Batch: {item.selectedBatch.batchNo}
+      {' | '}
+      MRP: ₹{item.selectedBatch.mrp}
+      {' | '}
+      Exp: {item.selectedBatch.expDate}
+    </div>
+  )} */}
                               {/* Product Selection Dropdown for Purchase */}
-                             {showPurchaseProductList &&
- currentPurchaseProductIndex === index && (
-                                <div className="product-dropdown-overlay">
-                                  <div className="product-dropdown">
-                                    {/* <div className="dropdown-header">
-                      <input
-                        type="text"
-                        placeholder="Search products..."
-                        value={purchaseProductListFilter}
-                        onChange={(e) => setPurchaseProductListFilter(e.target.value)}
-                        autoFocus
-                      />
-                      <button onClick={() => setShowPurchaseProductList(false)}>✕</button>
-                    </div> */}
-                                    <div className="dropdown-list">
-                                      {products
-                                        .filter(p => {
-                                          const search = purchaseProductListFilter.trim().toLowerCase();
+                              {showPurchaseProductList &&
+                                currentPurchaseProductIndex === index && (
+                                  <div className="product-dropdown-overlay">
+                                    <div className="product-dropdown">
+                                      {/* <div className="dropdown-header">
+                        <input
+                          type="text"
+                          placeholder="Search products..."
+                          value={purchaseProductListFilter}
+                          onChange={(e) => setPurchaseProductListFilter(e.target.value)}
+                          autoFocus
+                        />
+                        <button onClick={() => setShowPurchaseProductList(false)}>✕</button>
+                      </div> */}
+                                      <div className="dropdown-list">
+                                        {products
+                                          .filter(p => {
+                                            const search = purchaseProductListFilter.trim().toLowerCase();
 
-                                          if (!search) return false;
+                                            if (!search) return false;
 
-                                          return (
-                                            p.name?.toLowerCase().startsWith(search) ||
-                                            p.code?.toLowerCase().startsWith(search)
-                                          );
-                                        })
-                                        .slice(0, 10)
-                                        .map(product => (
-                                          <div
-                                            key={product.id}
-                                            className="dropdown-item"
-                                            onClick={() => handlePurchaseProductSelect(currentPurchaseProductIndex, product)}
-                                          >
-                                            <strong>{product.code}</strong> - {product.name}
-                                          </div>
-                                        ))}
-                                      {products.length === 0 && (
-                                        <div className="dropdown-item no-results">No products found</div>
-                                      )}
+                                            return (
+                                              p.name?.toLowerCase().startsWith(search) ||
+                                              p.code?.toLowerCase().startsWith(search)
+                                            );
+                                          })
+                                          .slice(0, 10)
+                                          .map(product => (
+                                            <div
+                                              key={product.id}
+                                              className="dropdown-item"
+                                              onClick={() => handlePurchaseProductSelect(currentPurchaseProductIndex, product)}
+                                            >
+                                              <strong>{product.code}</strong> - {product.name}
+                                            </div>
+                                          ))}
+                                        {products.length === 0 && (
+                                          <div className="dropdown-item no-results">No products found</div>
+                                        )}
+                                      </div>
                                     </div>
                                   </div>
-                                </div>
-                              )}
+                                )}
                             </td>
                             {/* <td>
 
-  <div
-    style={{
-      display: 'flex',
-      flexDirection: 'column',
-      gap: '4px',
-      alignItems: 'center'
-    }}
-  >
-
-    <button
-      type="button"
-      className="batch-btn"
-      onMouseDown={(e) => {
-        e.preventDefault();
-        e.stopPropagation();
-        openBatchModal(index);
-      }}
+    <div
       style={{
-        padding: '4px 10px',
-        background: '#2563eb',
-        color: 'white',
-        border: 'none',
-        borderRadius: '5px',
-        cursor: 'pointer',
-        fontSize: '12px'
+        display: 'flex',
+        flexDirection: 'column',
+        gap: '4px',
+        alignItems: 'center'
       }}
     >
-      Batch
-    </button>
 
-    {item.batchNo && (
-      <span
+      <button
+        type="button"
+        className="batch-btn"
+        onMouseDown={(e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          openBatchModal(index);
+        }}
         style={{
-          fontSize: '11px',
-          color: '#2563eb',
-          fontWeight: '600'
+          padding: '4px 10px',
+          background: '#2563eb',
+          color: 'white',
+          border: 'none',
+          borderRadius: '5px',
+          cursor: 'pointer',
+          fontSize: '12px'
         }}
       >
-        {item.batchNo}
-      </span>
-    )}
+        Batch
+      </button>
 
-  </div>
+      {item.batchNo && (
+        <span
+          style={{
+            fontSize: '11px',
+            color: '#2563eb',
+            fontWeight: '600'
+          }}
+        >
+          {item.batchNo}
+        </span>
+      )}
 
-</td> */}
+    </div>
+
+  </td> */}
                             <td>
                               <select
                                 data-purchase-field="unitId"
@@ -4281,19 +4335,22 @@ const saveBatchDetails = () => {
                   <div>MRP Total: <span className="amount">₹{purchaseFormData.mrpTotal || '0.00'}</span></div>
                   <div>TCS %: <span className="amount">{purchaseFormData.tcbPercent || '0.00'}%</span></div>
                   <div>TCS Amount: <span className="amount">-₹{purchaseFormData.tcbAmount || '0.00'}</span></div>
+                  <div>Taxable Value: <span className="amount">₹{purchaseFormData.afterDiBc3 || '0.00'}</span></div>
+                  <div>Gross Amount: <span className="amount">₹{purchaseFormData.grossAmount || '0.00'}</span></div>
+                  <div>SGST Amount: <span className="amount">+₹{purchaseFormData.totalSgst || '0.00'}</span></div>
+                  <div>CGST Amount: <span className="amount">+₹{purchaseFormData.totalCgst || '0.00'}</span></div>
+                  <div>Total GST Amount: <span className="amount">+₹{purchaseFormData.qbtAmt || '0.00'}</span></div>
+                  {/* Discount Fields in Sequence */}
                   <div>DISC1: <span className="amount">-₹{purchaseFormData.diBc1 || '0.00'}</span></div>
                   <div>After DISC1: <span className="amount">₹{purchaseFormData.afterDiBc1 || '0.00'}</span></div>
-                  <div>Gross Amount: <span className="amount">₹{purchaseFormData.groBsAmt || '0.00'}</span></div>
                   <div>DISC2: <span className="amount">-₹{purchaseFormData.diBc2 || '0.00'}</span></div>
                   <div>After DISC2: <span className="amount">₹{purchaseFormData.afterDiBc2 || '0.00'}</span></div>
-                  <div>GST Amount: <span className="amount">+₹{purchaseFormData.qbtAmt || '0.00'}</span></div>
                   <div>DISC3: <span className="amount">-₹{purchaseFormData.diBc3 || '0.00'}</span></div>
                   <div>After DISC3: <span className="amount">₹{purchaseFormData.afterDiBc3 || '0.00'}</span></div>
                   <div>Rounding: <span className="amount">₹{purchaseFormData.rounding || '0.00'}</span></div>
                   <div className="net-amount">Net Amount: <strong>₹{purchaseFormData.netAmt || '0.00'}</strong></div>
                 </div>
               </div>
-
               <div className="form-actions">
                 <button className="btn-add-invoice" onClick={savePurchase}>
                   💾 Add Invoice
@@ -4310,45 +4367,6 @@ const saveBatchDetails = () => {
                   <h2 className="erp-title">Credit Note</h2>
                 </div>
               </div>
-
-              {/* Product Selection Dropdown for Credit Note */}
-              {showCreditProductList && currentCreditProductIndex >= 0 && (
-                <div className="product-dropdown-overlay">
-                  <div className="product-dropdown">
-                    <div className="dropdown-header">
-                      <input
-                        type="text"
-                        placeholder="Search products..."
-                        value={creditProductListFilter}
-                        onChange={(e) => setCreditProductListFilter(e.target.value)}
-                        autoFocus
-                      />
-                      <button onClick={() => setShowCreditProductList(false)}>✕</button>
-                    </div>
-                    <div className="dropdown-list">
-                      {products
-                        .filter(p =>
-                          p.name.toLowerCase().includes(creditProductListFilter.toLowerCase()) ||
-                          p.code.toLowerCase().includes(creditProductListFilter.toLowerCase())
-                        )
-                        .map(product => (
-                          <div
-                            key={product.id}
-                            className="dropdown-item"
-                            onClick={() => handleCreditProductSelect(currentCreditProductIndex, product)}
-                          >
-                            <strong>{product.code}</strong> - {product.name}
-                          </div>
-                        ))}
-                      {products.length === 0 && (
-                        <div className="dropdown-item no-results">No products found</div>
-                      )}
-                    </div>
-                  </div>
-                </div>
-
-              )}
-
               {/* Batch Modal for Purchase */}
               {showBatchModal && (
                 <div className="batch-modal-overlay" style={{
@@ -4487,6 +4505,47 @@ const saveBatchDetails = () => {
                 </div>
               )}
 
+
+              {/* Product Selection Dropdown for Credit Note */}
+              {/* {showCreditProductList && currentCreditProductIndex >= 0 && (
+                    <div className="product-dropdown-overlay">
+                      <div className="product-dropdown">
+                        <div className="dropdown-header">
+                          <input
+                            type="text"
+                            placeholder="Search products..."
+                            value={creditProductListFilter}
+                            onChange={(e) => setCreditProductListFilter(e.target.value)}
+                            autoFocus
+                          />
+                          <button onClick={() => setShowCreditProductList(false)}>✕</button>
+                        </div>
+                        <div className="dropdown-list">
+                          {products
+                            .filter(p =>
+                              p.name.toLowerCase().includes(creditProductListFilter.toLowerCase()) ||
+                              p.code.toLowerCase().includes(creditProductListFilter.toLowerCase())
+                            )
+                            .map(product => (
+                              <div
+                                key={product.id}
+                                className="dropdown-item"
+                                onClick={() => handleCreditProductSelect(currentCreditProductIndex, product)}
+                              >
+                                <strong>{product.code}</strong> - {product.name}
+                              </div>
+                            ))}
+                          {products.length === 0 && (
+                            <div className="dropdown-item no-results">No products found</div>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+
+                  )} */}
+
+
+
               {/* Credit Note Header */}
               <div className="form-section">
                 <h4 className="section-header">Credit Note Information</h4>
@@ -4594,12 +4653,125 @@ const saveBatchDetails = () => {
                                 data-credit-field="itemCode"
                                 data-credit-index={index}
                                 value={item.itemCode}
-                                onChange={(e) => updateCreditNoteItem(index, 'itemCode', e.target.value)}
+                                onChange={(e) => {
+
+                                  updateCreditNoteItem(
+                                    index,
+                                    'itemCode',
+                                    e.target.value
+                                  );
+
+                                  setCreditProductListFilter(
+                                    e.target.value
+                                  );
+
+                                  setCurrentCreditProductIndex(index);
+
+                                  setShowCreditProductList(
+                                    e.target.value.length > 0
+                                  );
+                                }}
                                 onClick={() => handleCreditProductClick(index)}
                                 onKeyDown={(e) => handleCreditNoteKeyDown(e, index, 'itemCode')}
                                 style={{ width: '100%', cursor: 'pointer' }}
                                 placeholder="Click to select"
                               />
+
+
+                              {showCreditProductList &&
+                                currentCreditProductIndex === index && (
+
+                                  <div className="product-search-dropdown">
+                                    {/* 
+        <div className="product-search-header">
+
+          <input
+            type="text"
+            placeholder="Search products..."
+            value={creditProductListFilter}
+            onChange={(e) =>
+              setCreditProductListFilter(e.target.value)
+            }
+            autoFocus
+          />
+
+          <button
+            onClick={() =>
+              setShowCreditProductList(false)
+            }
+          >
+            ✕
+          </button>
+
+        </div> */}
+
+                                    <div className="product-search-list">
+
+                                      {products
+                                        .filter(
+                                          (p) =>
+                                            creditProductListFilter &&
+                                            (
+                                              p.name.toLowerCase().includes(
+                                                creditProductListFilter.toLowerCase()
+                                              ) ||
+                                              p.code.toLowerCase().includes(
+                                                creditProductListFilter.toLowerCase()
+                                              )
+                                            )
+                                        )
+                                        .map((product, idx) => {
+
+                                          const batch = batches.find(
+                                            (b) =>
+                                              String(b.productId) ===
+                                              String(product.id)
+                                          );
+
+                                          return (
+                                            <div
+                                              key={idx}
+                                              className="product-search-row"
+                                              onClick={() =>
+                                                handleCreditProductSelect(
+                                                  index,
+                                                  product
+                                                )
+                                              }
+                                            >
+
+                                              <span>{product.code}</span>
+
+                                              <span className="product-name">
+                                                {product.name}
+                                              </span>
+
+                                              <span>
+                                                {batch?.batchNo || '-'}
+                                              </span>
+
+                                              <span>
+                                                ₹{batch?.mrp || 0}
+                                              </span>
+
+                                              <span>
+                                                ₹{batch?.salesRate || 0}
+                                              </span>
+
+                                              <span>
+                                                {batch?.stockQty || 0}
+                                              </span>
+
+                                            </div>
+                                          );
+                                        })}
+
+                                    </div>
+
+                                  </div>
+                                )}
+
+
                             </td>
                             <td>
                               <input
@@ -4636,7 +4808,13 @@ const saveBatchDetails = () => {
                                 data-credit-field="qty"
                                 data-credit-index={index}
                                 value={item.qty}
-                                onChange={(e) => updateCreditNoteItem(index, 'qty', e.target.value)}
+                                onChange={(e) =>
+                                  updateCreditNoteItem(
+                                    index,
+                                    'qty',
+                                    e.target.value
+                                  )
+                                }
                                 onKeyDown={(e) => handleCreditNoteKeyDown(e, index, 'qty')}
                                 style={{ width: '100%' }}
                               />
@@ -4982,41 +5160,41 @@ const saveBatchDetails = () => {
               </div>
 
               {/* Product Selection Dropdown for Debit Note */}
-              {showDebitProductList && currentDebitProductIndex >= 0 && (
-                <div className="product-dropdown-overlay">
-                  <div className="product-dropdown">
-                    <div className="dropdown-header">
-                      <input
-                        type="text"
-                        placeholder="Search products..."
-                        value={debitProductListFilter}
-                        onChange={(e) => setDebitProductListFilter(e.target.value)}
-                        autoFocus
-                      />
-                      <button onClick={() => setShowDebitProductList(false)}>✕</button>
+              {/* {showDebitProductList && currentDebitProductIndex >= 0 && (
+                    <div className="product-dropdown-overlay">
+                      <div className="product-dropdown">
+                        <div className="dropdown-header">
+                          <input
+                            type="text"
+                            placeholder="Search products..."
+                            value={debitProductListFilter}
+                            onChange={(e) => setDebitProductListFilter(e.target.value)}
+                            autoFocus
+                          />
+                          <button onClick={() => setShowDebitProductList(false)}>✕</button>
+                        </div>
+                        <div className="dropdown-list">
+                          {products
+                            .filter(p =>
+                              p.name.toLowerCase().includes(debitProductListFilter.toLowerCase()) ||
+                              p.code.toLowerCase().includes(debitProductListFilter.toLowerCase())
+                            )
+                            .map(product => (
+                              <div
+                                key={product.id}
+                                className="dropdown-item"
+                                onClick={() => handleDebitProductSelect(currentDebitProductIndex, product)}
+                              >
+                                <strong>{product.code}</strong> - {product.name}
+                              </div>
+                            ))}
+                          {products.length === 0 && (
+                            <div className="dropdown-item no-results">No products found</div>
+                          )}
+                        </div>
+                      </div>
                     </div>
-                    <div className="dropdown-list">
-                      {products
-                        .filter(p =>
-                          p.name.toLowerCase().includes(debitProductListFilter.toLowerCase()) ||
-                          p.code.toLowerCase().includes(debitProductListFilter.toLowerCase())
-                        )
-                        .map(product => (
-                          <div
-                            key={product.id}
-                            className="dropdown-item"
-                            onClick={() => handleDebitProductSelect(currentDebitProductIndex, product)}
-                          >
-                            <strong>{product.code}</strong> - {product.name}
-                          </div>
-                        ))}
-                      {products.length === 0 && (
-                        <div className="dropdown-item no-results">No products found</div>
-                      )}
-                    </div>
-                  </div>
-                </div>
-              )}
+                  )} */}
 
               {/* Debit Note Header */}
               <div className="form-section">
@@ -5111,12 +5289,114 @@ const saveBatchDetails = () => {
                                 data-debit-field="itemCode"
                                 data-debit-index={index}
                                 value={item.itemCode}
-                                onChange={(e) => updateDebitNoteItem(index, 'itemCode', e.target.value)}
+                                onChange={(e) => {
+
+                                  updateDebitNoteItem(
+                                    index,
+                                    'itemCode',
+                                    e.target.value
+                                  );
+
+                                  setDebitProductListFilter(
+                                    e.target.value
+                                  );
+
+                                  setCurrentDebitProductIndex(index);
+
+                                  setShowDebitProductList(
+                                    e.target.value.length > 0
+                                  );
+                                }}
                                 onClick={() => handleDebitProductClick(index)}
                                 onKeyDown={(e) => handleDebitNoteKeyDown(e, index, 'itemCode')}
                                 style={{ width: '100%', cursor: 'pointer' }}
                                 placeholder="Click to select"
                               />
+                              {showDebitProductList &&
+                                currentDebitProductIndex === index &&
+                                debitProductListFilter.trim() !== '' && (
+
+                                  <div className="product-search-dropdown">
+
+                                    <div className="product-search-header">
+
+                                      <span>Item Code</span>
+                                      <span>Name</span>
+                                      <span>Batch</span>
+                                      <span>MRP</span>
+                                      <span>Sales Rate</span>
+                                      <span>Stock</span>
+
+                                    </div>
+
+                                    <div className="product-search-list">
+
+                                      {products
+                                        .filter(
+                                          (p) =>
+                                            debitProductListFilter &&
+                                            (
+                                              p.name.toLowerCase().includes(
+                                                debitProductListFilter.toLowerCase()
+                                              ) ||
+                                              p.code.toLowerCase().includes(
+                                                debitProductListFilter.toLowerCase()
+                                              )
+                                            )
+                                        )
+                                        .map((product, idx) => {
+
+                                          const batch = batches.find(
+                                            (b) =>
+                                              String(b.productId) ===
+                                              String(product.id)
+                                          );
+
+                                          return (
+                                            <div
+                                              key={idx}
+                                              className="product-search-row"
+                                              onClick={() =>
+                                                handleDebitProductSelect(
+                                                  index,
+                                                  product
+                                                )
+                                              }
+                                            >
+
+                                              <span>{product.code}</span>
+
+                                              <span
+                                                className="product-name"
+                                                title={product.name}
+                                              >
+                                                {product.name}
+                                              </span>
+
+                                              <span>
+                                                {batch?.batchNo || '-'}
+                                              </span>
+
+                                              <span>
+                                                ₹{batch?.mrp || 0}
+                                              </span>
+
+                                              <span>
+                                                ₹{batch?.salesRate || 0}
+                                              </span>
+
+                                              <span>
+                                                {batch?.stockQty || 0}
+                                              </span>
+
+                                            </div>
+                                          );
+                                        })}
+
+                                    </div>
+
+                                  </div>
+                                )}
                             </td>
                             <td>
                               <input
@@ -5153,7 +5433,13 @@ const saveBatchDetails = () => {
                                 data-debit-field="qty"
                                 data-debit-index={index}
                                 value={item.qty}
-                                onChange={(e) => updateDebitNoteItem(index, 'qty', e.target.value)}
+                                onChange={(e) =>
+                                  updateDebitNoteItem(
+                                    index,
+                                    'qty',
+                                    e.target.value
+                                  )
+                                }
                                 onKeyDown={(e) => handleDebitNoteKeyDown(e, index, 'qty')}
                                 style={{ width: '100%' }}
                               />
@@ -5446,553 +5732,608 @@ const saveBatchDetails = () => {
       </main>
 
 
-    {/* Batch Modal */}
-{showBatchModal && (
-  <div
-    style={{
-      position: 'fixed',
-      inset: 0,
-      background: 'rgba(0,0,0,0.4)',
-      display: 'flex',
-      justifyContent: 'center',
-      alignItems: 'center',
-      zIndex: 999999
-    }}
-    onClick={(e) => {
-      if (e.target === e.currentTarget) setShowBatchModal(false);
-    }}
-  >
-    <div
-      style={{
-        width: '800px',
-        background: 'white',
-        borderRadius: '10px',
-        padding: '20px',
-        maxHeight: '90vh',
-        overflowY: 'auto',
-        boxShadow: '0 20px 25px -5px rgba(0,0,0,0.1)'
-      }}
-    >
-      {/* Header */}
-      <div
-        style={{
-          display: 'flex',
-          justifyContent: 'space-between',
-          alignItems: 'center',
-          marginBottom: '20px',
-          paddingBottom: '15px',
-          borderBottom: '1px solid #e5e7eb'
-        }}
-      >
-        <h2 style={{ margin: 0, fontSize: '18px', fontWeight: '600' }}>Batch Details</h2>
-        <button
-          onClick={() => setShowBatchModal(false)}
+      {/* Batch Modal */}
+      {showBatchModal && (
+        <div
           style={{
-            background: 'none',
-            border: 'none',
-            fontSize: '20px',
-            cursor: 'pointer',
-            padding: '4px 8px'
+            position: 'fixed',
+            inset: 0,
+            background: 'rgba(0,0,0,0.4)',
+            display: 'flex',
+            justifyContent: 'center',
+            alignItems: 'center',
+            zIndex: 999999
+          }}
+          onClick={(e) => {
+            if (e.target === e.currentTarget) setShowBatchModal(false);
           }}
         >
-          ✕
-        </button>
-      </div>
-
-      {/* Existing / New Batch Tabs */}
-      <div
-        style={{
-          display: 'flex',
-          gap: '10px',
-          marginBottom: '20px',
-          borderBottom: '1px solid #e5e7eb',
-          paddingBottom: '10px'
-        }}
-      >
-        <button
-          type="button"
-          onClick={() => setBatchMode('existing')}
-          style={{
-            padding: '8px 20px',
-            background: batchMode === 'existing' ? '#2563eb' : '#f3f4f6',
-            color: batchMode === 'existing' ? 'white' : '#374151',
-            border: 'none',
-            borderRadius: '6px',
-            cursor: 'pointer',
-            fontWeight: '500',
-            transition: 'all 0.2s'
-          }}
-        >
-          Existing Batch
-        </button>
-
-        <button
-          type="button"
-          onClick={() => setBatchMode('new')}
-          style={{
-            padding: '8px 20px',
-            background: batchMode === 'new' ? '#2563eb' : '#f3f4f6',
-            color: batchMode === 'new' ? 'white' : '#374151',
-            border: 'none',
-            borderRadius: '6px',
-            cursor: 'pointer',
-            fontWeight: '500',
-            transition: 'all 0.2s'
-          }}
-        >
-          New Batch
-        </button>
-      </div>
-
-      {/* Existing Batch Mode */}
-      {batchMode === 'existing' && (
-        <>
           <div
             style={{
-              border: '1px solid #e5e7eb',
-              borderRadius: '8px',
-              maxHeight: '350px',
+              width: '800px',
+              background: 'white',
+              borderRadius: '10px',
+              padding: '20px',
+              maxHeight: '90vh',
               overflowY: 'auto',
-              marginBottom: '20px'
+              boxShadow: '0 20px 25px -5px rgba(0,0,0,0.1)'
             }}
           >
-            {existingBatches.length === 0 && (
-              <div style={{ padding: '40px', textAlign: 'center', color: '#6b7280' }}>
-                No Existing Batch Found
-              </div>
-            )}
-
-            <table
+            {/* Header */}
+            <div
               style={{
-                width: '100%',
-                borderCollapse: 'collapse',
-                fontSize: '12px'
+                display: 'flex',
+                justifyContent: 'space-between',
+                alignItems: 'center',
+                marginBottom: '20px',
+                paddingBottom: '15px',
+                borderBottom: '1px solid #e5e7eb'
               }}
             >
-              <thead>
-                <tr
+              <h2 style={{ margin: 0, fontSize: '18px', fontWeight: '600' }}>Batch Details</h2>
+              <button
+                onClick={() => setShowBatchModal(false)}
+                style={{
+                  background: 'none',
+                  border: 'none',
+                  fontSize: '20px',
+                  cursor: 'pointer',
+                  padding: '4px 8px'
+                }}
+              >
+                ✕
+              </button>
+            </div>
+
+            {/* Existing / New Batch Tabs */}
+            <div
+              style={{
+                display: 'flex',
+                gap: '10px',
+                marginBottom: '20px',
+                borderBottom: '1px solid #e5e7eb',
+                paddingBottom: '10px'
+              }}
+            >
+              <button
+                type="button"
+                onClick={() => setBatchMode('existing')}
+                style={{
+                  padding: '8px 20px',
+                  background: batchMode === 'existing' ? '#2563eb' : '#f3f4f6',
+                  color: batchMode === 'existing' ? 'white' : '#374151',
+                  border: 'none',
+                  borderRadius: '6px',
+                  cursor: 'pointer',
+                  fontWeight: '500',
+                  transition: 'all 0.2s'
+                }}
+              >
+                Existing Batch
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setBatchMode('new')}
+                style={{
+                  padding: '8px 20px',
+                  background: batchMode === 'new' ? '#2563eb' : '#f3f4f6',
+                  color: batchMode === 'new' ? 'white' : '#374151',
+                  border: 'none',
+                  borderRadius: '6px',
+                  cursor: 'pointer',
+                  fontWeight: '500',
+                  transition: 'all 0.2s'
+                }}
+              >
+                New Batch
+              </button>
+            </div>
+
+            {/* Existing Batch Mode */}
+            {batchMode === 'existing' && (
+              <>
+                <div
                   style={{
-                    background: '#f8fafc',
-                    position: 'sticky',
-                    top: 0,
-                    borderBottom: '2px solid #e5e7eb'
+                    border: '1px solid #e5e7eb',
+                    borderRadius: '8px',
+                    maxHeight: '350px',
+                    overflowY: 'auto',
+                    marginBottom: '20px'
                   }}
                 >
-                  <th style={{ padding: '10px', textAlign: 'center', width: '60px' }}>Sl</th>
-                  <th style={{ padding: '10px', textAlign: 'left' }}>Batch</th>
-                  <th style={{ padding: '10px', textAlign: 'right' }}>MRP</th>
-                  <th style={{ padding: '10px', textAlign: 'center' }}>Mfg Date</th>
-                  <th style={{ padding: '10px', textAlign: 'center' }}>Expiry Date</th>
-                  <th style={{ padding: '10px', textAlign: 'right' }}>Stock</th>
-                  <th style={{ padding: '10px', textAlign: 'right' }}>Sales Rate</th>
-                  <th style={{ padding: '10px', textAlign: 'right' }}>Purchase Rate</th>
-                  <th style={{ padding: '10px', textAlign: 'center', width: '60px' }}>BoxPack</th>
-                 </tr>
-              </thead>
-              <tbody>
-                {existingBatches.map((batch, idx) => (
-                  <tr
-                    key={idx}
-                    onClick={() => {
-                      const updatedItems = [...purchaseItems];
-                      updatedItems[currentBatchRow] = {
-                        ...updatedItems[currentBatchRow],
-                        batchNo: batch.batchNo,
-                        mfgDate: batch.mfgDate,
-                        expDate: batch.expDate,
-                        mrp: batch.mrp,
-                        purRate: batch.purchaseRate,
-                        salesRate: batch.salesRate,
-                        quantity: updatedItems[currentBatchRow]?.quantity || 1,
-                        stockQty: batch.stockQty,
-                        boxPack: batch.boxPack || 1
-                      };
-                      setPurchaseItems(updatedItems);
-                      setShowBatchModal(false);
-                    }}
+                  {existingBatches.length === 0 && (
+                    <div style={{ padding: '40px', textAlign: 'center', color: '#6b7280' }}>
+                      No Existing Batch Found
+                    </div>
+                  )}
+
+                  <table
                     style={{
-                      cursor: 'pointer',
-                      transition: '0.2s',
-                      borderBottom: '1px solid #f3f4f6'
-                    }}
-                    onMouseEnter={(e) => {
-                      e.currentTarget.style.background = '#eff6ff';
-                    }}
-                    onMouseLeave={(e) => {
-                      e.currentTarget.style.background = 'transparent';
+                      width: '100%',
+                      borderCollapse: 'collapse',
+                      fontSize: '12px'
                     }}
                   >
-                    <td style={{ padding: '8px', textAlign: 'center' }}>{idx + 1}</td>
-                    <td style={{ padding: '8px' }}>
-                      <span style={{ fontWeight: '500', color: '#2563eb' }}>{batch.batchNo}</span>
-                    </td>
-                    <td style={{ padding: '8px', textAlign: 'right' }}>₹{parseFloat(batch.mrp || 0).toFixed(2)}</td>
-                    <td style={{ padding: '8px', textAlign: 'center' }}>
-                      {batch.mfgDate !== '01/01/1900' && batch.mfgDate !== '1900-01-01' 
-                        ? batch.mfgDate 
-                        : '-'}
-                    </td>
-                    <td style={{ padding: '8px', textAlign: 'center' }}>
-                      {batch.expDate !== '01/01/1900' && batch.expDate !== '1900-01-01' 
-                        ? batch.expDate 
-                        : '-'}
-                    </td>
-                    <td style={{ padding: '8px', textAlign: 'right' }}>
-                      <span style={{ color: parseFloat(batch.stockQty) < 0 ? '#dc2626' : '#059669' }}>
-                        {parseFloat(batch.stockQty).toFixed(0)}
-                      </span>
-                    </td>
-                    <td style={{ padding: '8px', textAlign: 'right' }}>₹{parseFloat(batch.salesRate || 0).toFixed(2)}</td>
-                    <td style={{ padding: '8px', textAlign: 'right' }}>₹{parseFloat(batch.purchaseRate || 0).toFixed(2)}</td>
-                    <td style={{ padding: '8px', textAlign: 'center' }}>{batch.boxPack || 1}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+                    <thead>
+                      <tr
+                        style={{
+                          background: '#f8fafc',
+                          position: 'sticky',
+                          top: 0,
+                          borderBottom: '2px solid #e5e7eb'
+                        }}
+                      >
+                        <th style={{ padding: '10px', textAlign: 'center', width: '60px' }}>Sl</th>
+                        <th style={{ padding: '10px', textAlign: 'left' }}>Batch</th>
+                        <th style={{ padding: '10px', textAlign: 'right' }}>MRP</th>
+                        <th style={{ padding: '10px', textAlign: 'center' }}>Mfg Date</th>
+                        <th style={{ padding: '10px', textAlign: 'center' }}>Expiry Date</th>
+                        <th style={{ padding: '10px', textAlign: 'right' }}>Stock</th>
+                        <th style={{ padding: '10px', textAlign: 'right' }}>Sales Rate</th>
+                        <th style={{ padding: '10px', textAlign: 'right' }}>Purchase Rate</th>
+                        <th style={{ padding: '10px', textAlign: 'center', width: '60px' }}>BoxPack</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {existingBatches.map((batch, idx) => (
+                        <tr
+                          key={idx}
+                          onClick={() => {
+                            const updatedItems = [...purchaseItems];
+                            const currentItem = updatedItems[currentBatchRow];
 
-          <div
-            style={{
-              display: 'flex',
-              justifyContent: 'flex-end',
-              alignItems: 'center',
-              gap: '10px',
-              paddingTop: '10px',
-              borderTop: '1px solid #e5e7eb'
-            }}
-          >
-            <div style={{ flex: 1, fontSize: '12px', color: '#6b7280' }}>
-              <strong>Total Batches:</strong> {existingBatches.length}
-            </div>
-            <button
-              type="button"
-              onClick={() => setShowBatchModal(false)}
-              style={{
-                padding: '8px 20px',
-                background: '#6b7280',
-                color: 'white',
-                border: 'none',
-                borderRadius: '6px',
-                cursor: 'pointer'
-              }}
-            >
-              Cancel
-            </button>
+                            // Update the item with selected batch data
+                            updatedItems[currentBatchRow] = {
+                              ...currentItem,
+                              batchNo: batch.batchNo,
+                              mfgDate: batch.mfgDate,
+                              expDate: batch.expDate,
+                              mrp: batch.mrp,
+                              purRate: batch.purchaseRate,
+                              salesRate: batch.salesRate,
+                              quantity: currentItem?.quantity || 1,
+                              stockQty: batch.stockQty,
+                              boxPack: batch.boxPack || 1,
+                              selectedBatch: batch
+                            };
+
+                            // Force recalculation for this item
+                            const index = currentBatchRow;
+                            const item = updatedItems[index];
+                            const qty = parseFloat(item.quantity) || 0;
+                            const purRate = parseFloat(item.purRate) || 0;
+
+                            // Recalculate all values
+                            const grossAmt = qty * purRate;
+                            item.grossAmount = grossAmt.toFixed(2);
+
+                            let afterDisc1 = grossAmt;
+                            if (parseFloat(item.disc1)) {
+                              const disc1Amt = grossAmt * (parseFloat(item.disc1) / 100);
+                              afterDisc1 = grossAmt - disc1Amt;
+                            }
+                            item.afterDisc1 = afterDisc1.toFixed(2);
+
+                            let afterDisc2 = afterDisc1;
+                            if (parseFloat(item.disc2)) {
+                              const disc2Amt = afterDisc1 * (parseFloat(item.disc2) / 100);
+                              afterDisc2 = afterDisc1 - disc2Amt;
+                            }
+                            item.afterDisc2 = afterDisc2.toFixed(2);
+
+                            let afterDisc3 = afterDisc2;
+                            if (parseFloat(item.disc3)) {
+                              const disc3Amt = afterDisc2 * (parseFloat(item.disc3) / 100);
+                              afterDisc3 = afterDisc2 - disc3Amt;
+                            }
+                            item.afterDisc3 = afterDisc3.toFixed(2);
+
+                            const taxableVal = afterDisc3;
+                            item.taxable = taxableVal.toFixed(2);
+
+                            const taxPercentage = parseFloat(item.tax) || 0;
+                            if (taxPercentage > 0 && taxableVal > 0) {
+                              const totalTaxAmt = taxableVal * (taxPercentage / 100);
+                              const cgstAmt = totalTaxAmt / 2;
+                              const sgstAmt = totalTaxAmt / 2;
+                              item.cgst = cgstAmt.toFixed(2);
+                              item.sgst = sgstAmt.toFixed(2);
+                            } else {
+                              item.cgst = (0).toFixed(2);
+                              item.sgst = (0).toFixed(2);
+                            }
+
+                            const amount = taxableVal + (parseFloat(item.cgst) || 0) + (parseFloat(item.sgst) || 0);
+                            item.amount = amount.toFixed(2);
+
+                            setPurchaseItems(updatedItems);
+                            setShowBatchModal(false);
+                            calcPurchaseSummary(); // Recalculate summary
+                          }}
+                          style={{
+                            cursor: 'pointer',
+                            transition: '0.2s',
+                            borderBottom: '1px solid #f3f4f6'
+                          }}
+                          onMouseEnter={(e) => {
+                            e.currentTarget.style.background = '#eff6ff';
+                          }}
+                          onMouseLeave={(e) => {
+                            e.currentTarget.style.background = 'transparent';
+                          }}
+                        >
+                          <td style={{ padding: '8px', textAlign: 'center' }}>{idx + 1}</td>
+                          <td style={{ padding: '8px' }}>
+                            <span style={{ fontWeight: '500', color: '#2563eb' }}>{batch.batchNo}</span>
+                          </td>
+                          <td style={{ padding: '8px', textAlign: 'right' }}>₹{parseFloat(batch.mrp || 0).toFixed(2)}</td>
+                          <td style={{ padding: '8px', textAlign: 'center' }}>
+                            {batch.mfgDate !== '01/01/1900' && batch.mfgDate !== '1900-01-01'
+                              ? batch.mfgDate
+                              : '-'}
+                          </td>
+                          <td style={{ padding: '8px', textAlign: 'center' }}>
+                            {batch.expDate !== '01/01/1900' && batch.expDate !== '1900-01-01'
+                              ? batch.expDate
+                              : '-'}
+                          </td>
+                          <td style={{ padding: '8px', textAlign: 'right' }}>
+                            <span style={{ color: parseFloat(batch.stockQty) < 0 ? '#dc2626' : '#059669' }}>
+                              {parseFloat(batch.stockQty).toFixed(0)}
+                            </span>
+                          </td>
+                          <td style={{ padding: '8px', textAlign: 'right' }}>₹{parseFloat(batch.salesRate || 0).toFixed(2)}</td>
+                          <td style={{ padding: '8px', textAlign: 'right' }}>₹{parseFloat(batch.purchaseRate || 0).toFixed(2)}</td>
+                          <td style={{ padding: '8px', textAlign: 'center' }}>{batch.boxPack || 1}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+
+                <div
+                  style={{
+                    display: 'flex',
+                    justifyContent: 'flex-end',
+                    alignItems: 'center',
+                    gap: '10px',
+                    paddingTop: '10px',
+                    borderTop: '1px solid #e5e7eb'
+                  }}
+                >
+                  <div style={{ flex: 1, fontSize: '12px', color: '#6b7280' }}>
+                    <strong>Total Batches:</strong> {existingBatches.length}
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setShowBatchModal(false)}
+                    style={{
+                      padding: '8px 20px',
+                      background: '#6b7280',
+                      color: 'white',
+                      border: 'none',
+                      borderRadius: '6px',
+                      cursor: 'pointer'
+                    }}
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </>
+            )}
+
+            {/* New Batch Mode - Reordered and with fields removed */}
+            {batchMode === 'new' && (
+              <>
+                {/* Row 1: Batch No, Mfg Date, Exp Date */}
+                <div
+                  style={{
+                    display: 'grid',
+                    gridTemplateColumns: '1fr 1fr 1fr',
+                    gap: '15px',
+                    marginBottom: '20px'
+                  }}
+                >
+                  <div className="labeled-input">
+                    <label style={{ fontSize: '12px', fontWeight: '500', marginBottom: '4px', display: 'block' }}>Batch No *</label>
+                    <input
+                      type="text"
+                      placeholder="Enter Batch Number"
+                      value={batchForm.batchNo}
+                      onChange={(e) =>
+                        setBatchForm({
+                          ...batchForm,
+                          batchNo: e.target.value
+                        })
+                      }
+                      style={{
+                        width: '100%',
+                        padding: '8px 12px',
+                        border: '1px solid #e5e7eb',
+                        borderRadius: '6px',
+                        fontSize: '14px'
+                      }}
+                    />
+                  </div>
+
+                  <div className="labeled-input">
+                    <label style={{ fontSize: '12px', fontWeight: '500', marginBottom: '4px', display: 'block' }}>Mfg Date</label>
+                    <input
+                      type="date"
+                      value={batchForm.mfgDate}
+                      onChange={(e) =>
+                        setBatchForm({
+                          ...batchForm,
+                          mfgDate: e.target.value
+                        })
+                      }
+                      style={{
+                        width: '100%',
+                        padding: '8px 12px',
+                        border: '1px solid #e5e7eb',
+                        borderRadius: '6px',
+                        fontSize: '14px'
+                      }}
+                    />
+                  </div>
+
+                  <div className="labeled-input">
+                    <label style={{ fontSize: '12px', fontWeight: '500', marginBottom: '4px', display: 'block' }}>Expiry Date</label>
+                    <input
+                      type="date"
+                      value={batchForm.expDate}
+                      onChange={(e) =>
+                        setBatchForm({
+                          ...batchForm,
+                          expDate: e.target.value
+                        })
+                      }
+                      style={{
+                        width: '100%',
+                        padding: '8px 12px',
+                        border: '1px solid #e5e7eb',
+                        borderRadius: '6px',
+                        fontSize: '14px'
+                      }}
+                    />
+                  </div>
+                </div>
+
+                {/* Row 2: MRP, Purchase Rate, Sales Rate */}
+                <div
+                  style={{
+                    display: 'grid',
+                    gridTemplateColumns: '1fr 1fr 1fr',
+                    gap: '15px',
+                    marginBottom: '20px'
+                  }}
+                >
+                  <div className="labeled-input">
+                    <label style={{ fontSize: '12px', fontWeight: '500', marginBottom: '4px', display: 'block' }}>MRP *</label>
+                    <input
+                      type="number"
+                      placeholder="Enter MRP"
+                      value={batchForm.mrp}
+                      onChange={(e) =>
+                        setBatchForm({
+                          ...batchForm,
+                          mrp: e.target.value
+                        })
+                      }
+                      style={{
+                        width: '100%',
+                        padding: '8px 12px',
+                        border: '1px solid #e5e7eb',
+                        borderRadius: '6px',
+                        fontSize: '14px'
+                      }}
+                    />
+                  </div>
+
+                  <div className="labeled-input">
+                    <label style={{ fontSize: '12px', fontWeight: '500', marginBottom: '4px', display: 'block' }}>Purchase Rate</label>
+                    <input
+                      type="number"
+                      placeholder="Enter Purchase Rate"
+                      value={batchForm.purchaseRate}
+                      onChange={(e) =>
+                        setBatchForm({
+                          ...batchForm,
+                          purchaseRate: e.target.value
+                        })
+                      }
+                      style={{
+                        width: '100%',
+                        padding: '8px 12px',
+                        border: '1px solid #e5e7eb',
+                        borderRadius: '6px',
+                        fontSize: '14px'
+                      }}
+                    />
+                  </div>
+
+                  <div className="labeled-input">
+                    <label style={{ fontSize: '12px', fontWeight: '500', marginBottom: '4px', display: 'block' }}>Sales Rate</label>
+                    <input
+                      type="number"
+                      placeholder="Enter Sales Rate"
+                      value={batchForm.salesRate}
+                      onChange={(e) =>
+                        setBatchForm({
+                          ...batchForm,
+                          salesRate: e.target.value
+                        })
+                      }
+                      style={{
+                        width: '100%',
+                        padding: '8px 12px',
+                        border: '1px solid #e5e7eb',
+                        borderRadius: '6px',
+                        fontSize: '14px'
+                      }}
+                    />
+                  </div>
+                </div>
+
+                {/* Row 3: Rate Per Unit (Default 1), Previous Purchase Rate */}
+                <div
+                  style={{
+                    display: 'grid',
+                    gridTemplateColumns: '1fr 1fr',
+                    gap: '15px',
+                    marginBottom: '20px'
+                  }}
+                >
+                  <div className="labeled-input">
+                    <label style={{ fontSize: '12px', fontWeight: '500', marginBottom: '4px', display: 'block' }}>Rate Per Unit</label>
+                    <input
+                      type="number"
+                      step="0.01"
+                      placeholder="Rate Per Unit"
+                      value={batchForm.ratePerUnit || '1'}
+                      onChange={(e) =>
+                        setBatchForm({
+                          ...batchForm,
+                          ratePerUnit: e.target.value
+                        })
+                      }
+                      style={{
+                        width: '100%',
+                        padding: '8px 12px',
+                        border: '1px solid #e5e7eb',
+                        borderRadius: '6px',
+                        fontSize: '14px'
+                      }}
+                    />
+                    <div style={{ fontSize: '11px', color: '#6b7280', marginTop: '4px' }}>Default: 1</div>
+                  </div>
+
+                  <div className="labeled-input">
+                    <label style={{ fontSize: '12px', fontWeight: '500', marginBottom: '4px', display: 'block' }}>Previous Purchase Rate</label>
+                    <input
+                      type="number"
+                      step="0.01"
+                      placeholder="Previous Purchase Rate"
+                      value={batchForm.previousPurchaseRate}
+                      onChange={(e) =>
+                        setBatchForm({
+                          ...batchForm,
+                          previousPurchaseRate: e.target.value
+                        })
+                      }
+                      style={{
+                        width: '100%',
+                        padding: '8px 12px',
+                        border: '1px solid #e5e7eb',
+                        borderRadius: '6px',
+                        fontSize: '14px'
+                      }}
+                    />
+                  </div>
+                </div>
+
+                {/* Hidden/Additional fields (Stock Qty and Box Pack) - kept but can be hidden if needed */}
+                <div
+                  style={{
+                    display: 'grid',
+                    gridTemplateColumns: '1fr 1fr',
+                    gap: '15px',
+                    marginBottom: '20px'
+                  }}
+                >
+                  <div className="labeled-input">
+                    <label style={{ fontSize: '12px', fontWeight: '500', marginBottom: '4px', display: 'block' }}>Stock Quantity</label>
+                    <input
+                      type="number"
+                      placeholder="Enter Stock Quantity"
+                      value={batchForm.stockQty}
+                      onChange={(e) =>
+                        setBatchForm({
+                          ...batchForm,
+                          stockQty: e.target.value
+                        })
+                      }
+                      style={{
+                        width: '100%',
+                        padding: '8px 12px',
+                        border: '1px solid #e5e7eb',
+                        borderRadius: '6px',
+                        fontSize: '14px'
+                      }}
+                    />
+                  </div>
+
+                  <div className="labeled-input">
+                    <label style={{ fontSize: '12px', fontWeight: '500', marginBottom: '4px', display: 'block' }}>Box Pack</label>
+                    <input
+                      type="number"
+                      placeholder="Box Pack"
+                      value={batchForm.boxPack || 1}
+                      onChange={(e) =>
+                        setBatchForm({
+                          ...batchForm,
+                          boxPack: e.target.value
+                        })
+                      }
+                      style={{
+                        width: '100%',
+                        padding: '8px 12px',
+                        border: '1px solid #e5e7eb',
+                        borderRadius: '6px',
+                        fontSize: '14px'
+                      }}
+                    />
+                  </div>
+                </div>
+
+                {/* Action Buttons - Gross Amt and GST Amt removed */}
+                <div
+                  style={{
+                    display: 'flex',
+                    justifyContent: 'flex-end',
+                    gap: '10px',
+                    marginTop: '10px',
+                    paddingTop: '15px',
+                    borderTop: '1px solid #e5e7eb'
+                  }}
+                >
+                  <button
+                    type="button"
+                    onClick={() => setShowBatchModal(false)}
+                    style={{
+                      padding: '10px 24px',
+                      background: '#9ca3af',
+                      color: 'white',
+                      border: 'none',
+                      borderRadius: '6px',
+                      cursor: 'pointer',
+                      fontWeight: '500'
+                    }}
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="button"
+                    onClick={saveBatchDetails}
+                    style={{
+                      padding: '10px 24px',
+                      background: '#2563eb',
+                      color: 'white',
+                      border: 'none',
+                      borderRadius: '6px',
+                      cursor: 'pointer',
+                      fontWeight: '500'
+                    }}
+                  >
+                    Save Batch
+                  </button>
+                </div>
+              </>
+            )}
           </div>
-        </>
+        </div>
       )}
-
-      {/* New Batch Mode - Reordered and with fields removed */}
-      {batchMode === 'new' && (
-        <>
-          {/* Row 1: Batch No, Mfg Date, Exp Date */}
-          <div
-            style={{
-              display: 'grid',
-              gridTemplateColumns: '1fr 1fr 1fr',
-              gap: '15px',
-              marginBottom: '20px'
-            }}
-          >
-            <div className="labeled-input">
-              <label style={{ fontSize: '12px', fontWeight: '500', marginBottom: '4px', display: 'block' }}>Batch No *</label>
-              <input
-                type="text"
-                placeholder="Enter Batch Number"
-                value={batchForm.batchNo}
-                onChange={(e) =>
-                  setBatchForm({
-                    ...batchForm,
-                    batchNo: e.target.value
-                  })
-                }
-                style={{
-                  width: '100%',
-                  padding: '8px 12px',
-                  border: '1px solid #e5e7eb',
-                  borderRadius: '6px',
-                  fontSize: '14px'
-                }}
-              />
-            </div>
-
-            <div className="labeled-input">
-              <label style={{ fontSize: '12px', fontWeight: '500', marginBottom: '4px', display: 'block' }}>Mfg Date</label>
-              <input
-                type="date"
-                value={batchForm.mfgDate}
-                onChange={(e) =>
-                  setBatchForm({
-                    ...batchForm,
-                    mfgDate: e.target.value
-                  })
-                }
-                style={{
-                  width: '100%',
-                  padding: '8px 12px',
-                  border: '1px solid #e5e7eb',
-                  borderRadius: '6px',
-                  fontSize: '14px'
-                }}
-              />
-            </div>
-
-            <div className="labeled-input">
-              <label style={{ fontSize: '12px', fontWeight: '500', marginBottom: '4px', display: 'block' }}>Expiry Date</label>
-              <input
-                type="date"
-                value={batchForm.expDate}
-                onChange={(e) =>
-                  setBatchForm({
-                    ...batchForm,
-                    expDate: e.target.value
-                  })
-                }
-                style={{
-                  width: '100%',
-                  padding: '8px 12px',
-                  border: '1px solid #e5e7eb',
-                  borderRadius: '6px',
-                  fontSize: '14px'
-                }}
-              />
-            </div>
-          </div>
-
-          {/* Row 2: MRP, Purchase Rate, Sales Rate */}
-          <div
-            style={{
-              display: 'grid',
-              gridTemplateColumns: '1fr 1fr 1fr',
-              gap: '15px',
-              marginBottom: '20px'
-            }}
-          >
-            <div className="labeled-input">
-              <label style={{ fontSize: '12px', fontWeight: '500', marginBottom: '4px', display: 'block' }}>MRP *</label>
-              <input
-                type="number"
-                placeholder="Enter MRP"
-                value={batchForm.mrp}
-                onChange={(e) =>
-                  setBatchForm({
-                    ...batchForm,
-                    mrp: e.target.value
-                  })
-                }
-                style={{
-                  width: '100%',
-                  padding: '8px 12px',
-                  border: '1px solid #e5e7eb',
-                  borderRadius: '6px',
-                  fontSize: '14px'
-                }}
-              />
-            </div>
-
-            <div className="labeled-input">
-              <label style={{ fontSize: '12px', fontWeight: '500', marginBottom: '4px', display: 'block' }}>Purchase Rate</label>
-              <input
-                type="number"
-                placeholder="Enter Purchase Rate"
-                value={batchForm.purchaseRate}
-                onChange={(e) =>
-                  setBatchForm({
-                    ...batchForm,
-                    purchaseRate: e.target.value
-                  })
-                }
-                style={{
-                  width: '100%',
-                  padding: '8px 12px',
-                  border: '1px solid #e5e7eb',
-                  borderRadius: '6px',
-                  fontSize: '14px'
-                }}
-              />
-            </div>
-
-            <div className="labeled-input">
-              <label style={{ fontSize: '12px', fontWeight: '500', marginBottom: '4px', display: 'block' }}>Sales Rate</label>
-              <input
-                type="number"
-                placeholder="Enter Sales Rate"
-                value={batchForm.salesRate}
-                onChange={(e) =>
-                  setBatchForm({
-                    ...batchForm,
-                    salesRate: e.target.value
-                  })
-                }
-                style={{
-                  width: '100%',
-                  padding: '8px 12px',
-                  border: '1px solid #e5e7eb',
-                  borderRadius: '6px',
-                  fontSize: '14px'
-                }}
-              />
-            </div>
-          </div>
-
-          {/* Row 3: Rate Per Unit (Default 1), Previous Purchase Rate */}
-          <div
-            style={{
-              display: 'grid',
-              gridTemplateColumns: '1fr 1fr',
-              gap: '15px',
-              marginBottom: '20px'
-            }}
-          >
-            <div className="labeled-input">
-              <label style={{ fontSize: '12px', fontWeight: '500', marginBottom: '4px', display: 'block' }}>Rate Per Unit</label>
-              <input
-                type="number"
-                step="0.01"
-                placeholder="Rate Per Unit"
-                value={batchForm.ratePerUnit || '1'}
-                onChange={(e) =>
-                  setBatchForm({
-                    ...batchForm,
-                    ratePerUnit: e.target.value
-                  })
-                }
-                style={{
-                  width: '100%',
-                  padding: '8px 12px',
-                  border: '1px solid #e5e7eb',
-                  borderRadius: '6px',
-                  fontSize: '14px'
-                }}
-              />
-              <div style={{ fontSize: '11px', color: '#6b7280', marginTop: '4px' }}>Default: 1</div>
-            </div>
-
-            <div className="labeled-input">
-              <label style={{ fontSize: '12px', fontWeight: '500', marginBottom: '4px', display: 'block' }}>Previous Purchase Rate</label>
-              <input
-                type="number"
-                step="0.01"
-                placeholder="Previous Purchase Rate"
-                value={batchForm.previousPurchaseRate}
-                onChange={(e) =>
-                  setBatchForm({
-                    ...batchForm,
-                    previousPurchaseRate: e.target.value
-                  })
-                }
-                style={{
-                  width: '100%',
-                  padding: '8px 12px',
-                  border: '1px solid #e5e7eb',
-                  borderRadius: '6px',
-                  fontSize: '14px'
-                }}
-              />
-            </div>
-          </div>
-
-          {/* Hidden/Additional fields (Stock Qty and Box Pack) - kept but can be hidden if needed */}
-          <div
-            style={{
-              display: 'grid',
-              gridTemplateColumns: '1fr 1fr',
-              gap: '15px',
-              marginBottom: '20px'
-            }}
-          >
-            <div className="labeled-input">
-              <label style={{ fontSize: '12px', fontWeight: '500', marginBottom: '4px', display: 'block' }}>Stock Quantity</label>
-              <input
-                type="number"
-                placeholder="Enter Stock Quantity"
-                value={batchForm.stockQty}
-                onChange={(e) =>
-                  setBatchForm({
-                    ...batchForm,
-                    stockQty: e.target.value
-                  })
-                }
-                style={{
-                  width: '100%',
-                  padding: '8px 12px',
-                  border: '1px solid #e5e7eb',
-                  borderRadius: '6px',
-                  fontSize: '14px'
-                }}
-              />
-            </div>
-
-            <div className="labeled-input">
-              <label style={{ fontSize: '12px', fontWeight: '500', marginBottom: '4px', display: 'block' }}>Box Pack</label>
-              <input
-                type="number"
-                placeholder="Box Pack"
-                value={batchForm.boxPack || 1}
-                onChange={(e) =>
-                  setBatchForm({
-                    ...batchForm,
-                    boxPack: e.target.value
-                  })
-                }
-                style={{
-                  width: '100%',
-                  padding: '8px 12px',
-                  border: '1px solid #e5e7eb',
-                  borderRadius: '6px',
-                  fontSize: '14px'
-                }}
-              />
-            </div>
-          </div>
-
-          {/* Action Buttons - Gross Amt and GST Amt removed */}
-          <div
-            style={{
-              display: 'flex',
-              justifyContent: 'flex-end',
-              gap: '10px',
-              marginTop: '10px',
-              paddingTop: '15px',
-              borderTop: '1px solid #e5e7eb'
-            }}
-          >
-            <button
-              type="button"
-              onClick={() => setShowBatchModal(false)}
-              style={{
-                padding: '10px 24px',
-                background: '#9ca3af',
-                color: 'white',
-                border: 'none',
-                borderRadius: '6px',
-                cursor: 'pointer',
-                fontWeight: '500'
-              }}
-            >
-              Cancel
-            </button>
-            <button
-              type="button"
-              onClick={saveBatchDetails}
-              style={{
-                padding: '10px 24px',
-                background: '#2563eb',
-                color: 'white',
-                border: 'none',
-                borderRadius: '6px',
-                cursor: 'pointer',
-                fontWeight: '500'
-              }}
-            >
-              Save Batch
-            </button>
-          </div>
-        </>
-      )}
-    </div>
-  </div>
-)}
     </div>
   );
 }
