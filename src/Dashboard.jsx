@@ -6,6 +6,7 @@ import 'jspdf-autotable';
 import './Dashboard.css';
 import logo from "./assets/images/Totalsolution.png";
 import SalesmanToAreaMapping from './SalesmanToAreaMapping';
+import Transaction from "./Transaction";
 
 
 
@@ -2931,6 +2932,7 @@ const saveBatchDetails = () => {
   </div>
 )}
 
+
           {/* Category Master - Grid View */}
           {activeSubMenu === 'Category Master' && openFormFor !== 'Category Master' && (
             renderDataTable('Categories List', getFilteredCategories(), [
@@ -3072,6 +3074,10 @@ const saveBatchDetails = () => {
       </div>
     </form>
   </div>
+)}
+{/* Receipt Transaction */}
+{activeSubMenu === 'Receipt' && openFormFor === 'Receipt' && (
+  <Transaction />
 )}
           {/* Product - Grid View */}
           {activeSubMenu === 'Product' && openFormFor !== 'Product' && (
