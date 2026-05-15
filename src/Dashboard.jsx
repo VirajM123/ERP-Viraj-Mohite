@@ -6,6 +6,7 @@ import 'jspdf-autotable';
 import './Dashboard.css';
 import logo from "./assets/images/Totalsolution.png";
 import SalesmanToAreaMapping from './SalesmanToAreaMapping';
+import Transaction from './Transaction';
 
 
 
@@ -3042,6 +3043,11 @@ const Dashboard = () => {
               { key: 'name', label: 'Name' }
             ], 'category', deleteCategory)
           )}
+
+           {openFormFor === 'Receipt' && (
+    <Transaction />
+  )}
+
 
           {/* Product - Form View */}
           {activeSubMenu === 'Product' && openFormFor === 'Product' && (
