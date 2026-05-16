@@ -4,7 +4,8 @@ import * as XLSX from 'xlsx';
 import jsPDF from 'jspdf';
 import 'jspdf-autotable';
 import './Dashboard.css';
-import logo from "./assets/images/Totalsolution.png";
+// Replace the import with:
+import logo from "/src/assets/images/Totalsolution.png";
 import SalesmanToAreaMapping from './SalesmanToAreaMapping';
 
 
@@ -20,6 +21,51 @@ const Dashboard = () => {
   const [showBatchModal, setShowBatchModal] = useState(false);
 
   const [currentBatchRow, setCurrentBatchRow] = useState(null);
+
+  // Add these with other state declarations (around line 50)
+const [showBatchSelectionModal, setShowBatchSelectionModal] = useState(false);
+const [productBatchesForSelection, setProductBatchesForSelection] = useState([]);
+const [selectedProductForBatch, setSelectedProductForBatch] = useState(null);
+
+// VOUCHER LIST STATE VARIABLES
+const [showSalesList, setShowSalesList] = useState(false);
+const [showPurchaseList, setShowPurchaseList] = useState(false);
+const [showCreditNoteList, setShowCreditNoteList] = useState(false);
+const [showDebitNoteList, setShowDebitNoteList] = useState(false);
+const [showViewModal, setShowViewModal] = useState(false);
+const [viewData, setViewData] = useState(null);
+const [viewType, setViewType] = useState('');
+
+// Sample saved data for voucher lists (replace with your actual saved data)
+const [salesListData, setSalesListData] = useState([]);
+const [purchaseListData, setPurchaseListData] = useState([]);
+const [creditNoteListData, setCreditNoteListData] = useState([]);
+const [debitNoteListData, setDebitNoteListData] = useState([]);
+
+
+
+// Bill Print State
+const [billPrintFormData, setBillPrintFormData] = useState({
+  invoiceNumber: '',
+  printType: 'original' // original, duplicate, triplicate
+});
+const [billPrintData, setBillPrintData] = useState(null);
+const [showBillPrintPreview, setShowBillPrintPreview] = useState(false);
+
+// Print Load State
+const [printLoadFormData, setPrintLoadFormData] = useState({
+  loadSeries: '',
+  loadNo: '',
+  reportLevel: '',
+  printOn: '',
+  areaWise: 'N',
+  salesmanWise: 'N',
+  printLayout: 'portrait',
+  orderBy: 'product_wise'
+});
+
+const [printLoadItems, setPrintLoadItems] = useState([]);
+const [showPrintPreview, setShowPrintPreview] = useState(false);
 
   // Updated batchForm state (replace the existing batchForm state)
 const [batchForm, setBatchForm] = useState({
@@ -404,6 +450,22 @@ const [customerBankFilter, setCustomerBankFilter] = useState('');
     gstClsDate: '',
     allowInPurchase: 'N'
   });
+// Create Load State
+const [createLoadFormData, setCreateLoadFormData] = useState({
+  loadSeries: '',
+  loadNo: '',
+  loadDate: new Date().toISOString().split('T')[0],
+  company: '',
+  deliverBoy: '',
+  selectedSalesman: '',
+  billFromDate: new Date().toISOString().split('T')[0],
+  billToDate: new Date().toISOString().split('T')[0],
+  narration: '',
+  deliveryBy: ''
+});
+const [createLoadItems, setCreateLoadItems] = useState([]);
+
+
 
   // Other Account Form State
   const [otherAccountForm, setOtherAccountForm] = useState({
@@ -446,11 +508,12 @@ const [customerBankFilter, setCustomerBankFilter] = useState('');
   const [groupForm, setGroupForm] = useState({ code: '', name: '' });
   const [categoryForm, setCategoryForm] = useState({ code: '', name: '' });
 
-  const menuItems = {
+const menuItems = {
   dashboard: { title: 'Dashboard', icon: '📊', items: ['Firm Creation', 'User Creation'] },
   master: { title: 'Master', icon: '📊', items: ['Company Master', 'Group Master', 'Category Master', 'Product', 'Account', 'Other Account', 'GST Master', 'Salesman', 'Area', 'Service', 'GoDown Master', 'Scheme','Customer Bank Master'] },
   mapping: { title: 'Mapping', icon: '🔗', items: ['Salesman To Area', 'Area To Party'] },
-  vouchers: { title: 'Vouchers', icon: '📄', items: ['Sales', 'Purchase', 'Credit Note', 'Debit Note'] },
+  sales: { title: 'Sales', icon: '💰', items: ['Billing', 'Quotation', 'Create Load', 'Print Load', 'Settle Load', 'Bill Print'] },
+  vouchers: { title: 'Vouchers', icon: '📄', items: ['Purchase', 'Credit Note', 'Debit Note'] },
   transactions: { title: 'Transactions', icon: '💰', items: ['Receipt', 'Expense', 'Cheque Bounce', 'PDC Docket', 'Journal Voucher', 'Contra'] },
   reports: { title: 'Reports', icon: '📈', items: ['Sales', 'Purchase', 'Stock Reports', 'GST Reports'] },
   tools: { title: 'Tools', icon: '⚙️', items: ['General Setup', 'Security Setup'] },
@@ -461,6 +524,547 @@ const [customerBankFilter, setCustomerBankFilter] = useState('');
   const handleGodownInput = (e) => {
     setGodownForm({ ...godownForm, [e.target.name]: e.target.value });
   };
+
+// Bill Print Handlers
+const handleBillPrintInputChange = (e) => {
+  setBillPrintFormData({ ...billPrintFormData, [e.target.name]: e.target.value });
+};
+
+const generateBillPrint = (e) => {
+  if (e) e.preventDefault();
+  
+  // REMOVED: Invoice number validation - now generates without requiring invoice number
+  
+  // Generate a random invoice number if none provided
+  const invoiceNumber = billPrintFormData.invoiceNumber || `INV-${Date.now()}`;
+  
+  // Sample invoice data - In real implementation, fetch from backend/database
+  const sampleInvoice = {
+    // Company Header
+    company: {
+      name: 'TOTAL SOLUTION DISTRIBUTORS PVT LTD',
+      address: '123, Business Park, Andheri East, Mumbai - 400093',
+      phone: '+91 22 1234 5678',
+      email: 'info@totalsolution.com',
+      gstin: '27AAACT1234A1Z',
+      fssai: '10021021001234',
+      invoiceTitle: 'TAX INVOICE'
+    },
+    
+    // Invoice Information
+    invoice: {
+      number: invoiceNumber,
+      date: new Date().toLocaleDateString('en-GB'),
+      orderNumber: 'PO-2026-001234',
+      deliveryDate: new Date(Date.now() + 3*24*60*60*1000).toLocaleDateString('en-GB'),
+      route: 'Route A - Western Suburbs',
+      salesman: 'Krishna Patil',
+      vehicleNumber: 'MH-01-AB-1234',
+      beat: 'Andheri East Beat'
+    },
+    
+    // Customer Information (Sample - can be modified)
+    customer: {
+      code: 'CUST-001234',
+      name: 'M/S SHREEJI GENERAL STORE',
+      billingAddress: 'Shop No. 5, Sai Plaza, MG Road, Andheri East, Mumbai - 400093',
+      shippingAddress: 'Shop No. 5, Sai Plaza, MG Road, Andheri East, Mumbai - 400093',
+      mobile: '+91 98765 43210',
+      gstin: '27AAACF1234A1Z'
+    },
+    
+    // Products
+    products: [
+      { sr: 1, code: 'P001', name: 'Parle G Biscuit', batch: 'BATCH-001', expiry: '12/2026', qty: 50, free: 2, rate: 12.00, mrp: 15.00, disc: 5, gst: 18, taxable: 570.00, total: 672.60 },
+      { sr: 2, code: 'P002', name: 'Lay\'s Classic Salted', batch: 'BATCH-002', expiry: '11/2026', qty: 30, free: 1, rate: 18.00, mrp: 20.00, disc: 5, gst: 18, taxable: 513.00, total: 605.34 },
+      { sr: 3, code: 'P003', name: 'Coca Cola 2L', batch: 'BATCH-003', expiry: '10/2026', qty: 20, free: 0, rate: 75.00, mrp: 85.00, disc: 8, gst: 18, taxable: 1500.00, total: 1770.00 }
+    ],
+    
+    // Scheme Information
+    schemes: [
+      { name: 'Buy 10 Get 1 Free - Parle G', discount: 0, freeItem: '2 Pcs Parle G' },
+      { name: 'Buy 5 Get 5% Extra - Lay\'s', discount: 5, freeItem: '1 Pc Extra' }
+    ],
+    
+    // Summary
+    summary: {
+      totalQty: 100,
+      totalFree: 3,
+      grossAmount: 3465.00,
+      discountAmount: 243.25,
+      taxableAmount: 2583.00,
+      cgst: 232.47,
+      sgst: 232.47,
+      igst: 0,
+      roundOff: 0.06,
+      netAmount: 3048.00
+    },
+    
+    // Payment Information
+    payment: {
+      mode: 'Credit',
+      creditDays: 30,
+      dueDate: new Date(Date.now() + 30*24*60*60*1000).toLocaleDateString('en-GB'),
+      outstandingBalance: 15000.00
+    },
+    
+    // Logistics
+    logistics: {
+      transport: 'VRL Logistics',
+      lrNumber: 'LR-2026-001234',
+      deliveredBy: 'Rajesh Kumar',
+      vehicleNumber: 'MH-01-AB-1234',
+      receivedBy: 'Mahesh Patel'
+    },
+    
+    // Footer
+    footer: {
+      terms: '1. Goods once sold will not be taken back.\n2. Interest @ 18% p.a. will be charged on overdue payments.\n3. Subject to Mumbai jurisdiction.',
+      thankYou: 'Thank you for your business!',
+      software: 'Total Solution ERP v2.0',
+      pageNumber: 1
+    }
+  };
+  
+  setBillPrintData(sampleInvoice);
+  setShowBillPrintPreview(true);
+};
+const handlePrintBill = () => {
+  // Direct print without popup that might affect sidebar
+  const printWindow = window.open('', '_blank', 'width=800,height=600');
+  printWindow.document.write(getBillPrintHTML());
+  printWindow.document.close();
+  setTimeout(() => {
+    printWindow.print();
+  }, 100);
+};
+const getBillPrintHTML = () => {
+  if (!billPrintData) return '';
+  
+  const data = billPrintData;
+  
+  return `<!DOCTYPE html>
+  <html>
+  <head>
+    <title>Invoice - ${data.invoice.number}</title>
+    <style>
+      /* Use !important and specific selectors to prevent style leakage */
+      .bill-print-wrapper * {
+        all: revert;
+      }
+      
+      .bill-print-wrapper {
+        font-family: 'Courier New', 'Segoe UI', Arial, sans-serif !important;
+        background: #e2e8f0 !important;
+        padding: 20px !important;
+        font-size: 11px !important;
+        max-width: 1100px !important;
+        margin: 0 auto !important;
+      }
+      
+      .bill-print-wrapper .invoice-container {
+        max-width: 1100px;
+        margin: 0 auto;
+        background: white;
+        box-shadow: 0 10px 25px rgba(0,0,0,0.1);
+      }
+      
+      .bill-print-wrapper .invoice {
+        padding: 15px 20px;
+        background: white;
+      }
+      
+      .bill-print-wrapper .company-header {
+        text-align: center;
+        border-bottom: 2px solid #1e3a8a;
+        padding-bottom: 12px;
+        margin-bottom: 12px;
+      }
+      
+      .bill-print-wrapper .company-name {
+        font-size: 22px;
+        font-weight: bold;
+        color: #1e3a8a;
+        margin-bottom: 5px;
+        letter-spacing: 1px;
+      }
+      
+      .bill-print-wrapper .company-details {
+        font-size: 10px;
+        color: #4b5563;
+        line-height: 1.4;
+      }
+      
+      .bill-print-wrapper .gst-fssai {
+        display: flex;
+        justify-content: center;
+        gap: 20px;
+        margin-top: 6px;
+        font-size: 9px;
+        font-weight: bold;
+      }
+      
+      .bill-print-wrapper .invoice-title {
+        text-align: center;
+        font-size: 16px;
+        font-weight: bold;
+        background: #1e3a8a;
+        color: white;
+        padding: 6px;
+        margin: 10px 0;
+        letter-spacing: 2px;
+      }
+      
+      .bill-print-wrapper .info-grid {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 12px;
+        margin-bottom: 12px;
+      }
+      
+      .bill-print-wrapper .info-box {
+        border: 1px solid #d1d5db;
+        padding: 8px 10px;
+        background: #f9fafb;
+      }
+      
+      .bill-print-wrapper .info-title {
+        font-weight: bold;
+        font-size: 10px;
+        background: #e5e7eb;
+        padding: 3px 6px;
+        margin-bottom: 6px;
+        display: inline-block;
+      }
+      
+      .bill-print-wrapper .info-row {
+        display: flex;
+        justify-content: space-between;
+        margin-bottom: 4px;
+        font-size: 10px;
+        line-height: 1.3;
+      }
+      
+      .bill-print-wrapper .info-label {
+        font-weight: 600;
+        min-width: 90px;
+      }
+      
+      .bill-print-wrapper .product-table {
+        width: 100%;
+        border-collapse: collapse;
+        margin: 12px 0;
+        font-size: 9px;
+      }
+      
+      .bill-print-wrapper .product-table th {
+        background: #1e3a8a;
+        color: white;
+        padding: 6px 3px;
+        border: 1px solid #2563eb;
+        font-weight: bold;
+        text-align: center;
+      }
+      
+      .bill-print-wrapper .product-table td {
+        border: 1px solid #d1d5db;
+        padding: 5px 3px;
+        text-align: center;
+      }
+      
+      .bill-print-wrapper .scheme-section {
+        background: #fef3c7;
+        border: 1px solid #f59e0b;
+        padding: 6px 10px;
+        margin: 10px 0;
+        font-size: 9px;
+      }
+      
+      .bill-print-wrapper .scheme-title {
+        font-weight: bold;
+        color: #92400e;
+        margin-bottom: 4px;
+      }
+      
+      .bill-print-wrapper .summary-grid {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 12px;
+        margin: 12px 0;
+      }
+      
+      .bill-print-wrapper .summary-box {
+        border: 1px solid #d1d5db;
+        padding: 8px;
+      }
+      
+      .bill-print-wrapper .summary-row {
+        display: flex;
+        justify-content: space-between;
+        margin-bottom: 4px;
+        font-size: 10px;
+      }
+      
+      .bill-print-wrapper .net-amount {
+        font-size: 14px;
+        font-weight: bold;
+        color: #1e3a8a;
+        border-top: 2px solid #1e3a8a;
+        padding-top: 6px;
+        margin-top: 6px;
+      }
+      
+      .bill-print-wrapper .signature-section {
+        display: flex;
+        justify-content: space-between;
+        margin: 15px 0 10px;
+        padding-top: 10px;
+      }
+      
+      .bill-print-wrapper .signature-box {
+        width: 45%;
+        text-align: center;
+      }
+      
+      .bill-print-wrapper .signature-line {
+        border-top: 1px solid #000;
+        margin-top: 25px;
+        padding-top: 5px;
+        font-size: 9px;
+      }
+      
+      .bill-print-wrapper .footer {
+        margin-top: 15px;
+        padding-top: 8px;
+        border-top: 1px solid #d1d5db;
+        font-size: 8px;
+        text-align: center;
+        color: #6b7280;
+      }
+      
+      .bill-print-wrapper .terms {
+        font-size: 8px;
+        margin-top: 8px;
+        padding: 6px;
+        background: #f3f4f6;
+      }
+      
+      .bill-print-wrapper .col-sr { width: 4%; }
+      .bill-print-wrapper .col-code { width: 8%; }
+      .bill-print-wrapper .col-name { width: 20%; }
+      .bill-print-wrapper .col-batch { width: 8%; }
+      .bill-print-wrapper .col-expiry { width: 6%; }
+      .bill-print-wrapper .col-qty { width: 5%; }
+      .bill-print-wrapper .col-free { width: 5%; }
+      .bill-print-wrapper .col-rate { width: 6%; }
+      .bill-print-wrapper .col-mrp { width: 6%; }
+      .bill-print-wrapper .col-disc { width: 5%; }
+      .bill-print-wrapper .col-gst { width: 5%; }
+      .bill-print-wrapper .col-taxable { width: 8%; }
+      .bill-print-wrapper .col-total { width: 9%; }
+      
+      .bill-print-wrapper .no-print {
+        text-align: center;
+        margin-top: 20px;
+      }
+      
+      .bill-print-wrapper .no-print button {
+        padding: 10px 20px;
+        margin: 10px;
+        background: #1e3a8a;
+        color: white;
+        border: none;
+        border-radius: 5px;
+        cursor: pointer;
+      }
+      
+      @media print {
+        .bill-print-wrapper .no-print {
+          display: none;
+        }
+      }
+    </style>
+  </head>
+  <body style="margin: 0; padding: 0; background: #e2e8f0;">
+    <div class="bill-print-wrapper">
+      <div class="invoice-container">
+        <div class="invoice">
+          <!-- Company Header -->
+          <div class="company-header">
+            <div class="company-name">${data.company.name}</div>
+            <div class="company-details">${data.company.address}</div>
+            <div class="company-details">📞 ${data.company.phone} | ✉ ${data.company.email}</div>
+            <div class="gst-fssai">
+              <span>GSTIN: ${data.company.gstin}</span>
+              <span>FSSAI: ${data.company.fssai}</span>
+            </div>
+          </div>
+          
+          <div class="invoice-title">${data.company.invoiceTitle} - ${billPrintFormData.printType.toUpperCase()}</div>
+          
+          <!-- Invoice & Customer Info -->
+          <div class="info-grid">
+            <div class="info-box">
+              <div class="info-title">📄 INVOICE INFORMATION</div>
+              <div class="info-row"><span class="info-label">Invoice No:</span><span>${data.invoice.number}</span></div>
+              <div class="info-row"><span class="info-label">Invoice Date:</span><span>${data.invoice.date}</span></div>
+              <div class="info-row"><span class="info-label">Order No:</span><span>${data.invoice.orderNumber}</span></div>
+              <div class="info-row"><span class="info-label">Delivery Date:</span><span>${data.invoice.deliveryDate}</span></div>
+              <div class="info-row"><span class="info-label">Route:</span><span>${data.invoice.route}</span></div>
+              <div class="info-row"><span class="info-label">Salesman:</span><span>${data.invoice.salesman}</span></div>
+              <div class="info-row"><span class="info-label">Vehicle No:</span><span>${data.invoice.vehicleNumber}</span></div>
+              <div class="info-row"><span class="info-label">Beat/Area:</span><span>${data.invoice.beat}</span></div>
+            </div>
+            
+            <div class="info-box">
+              <div class="info-title">👤 CUSTOMER INFORMATION</div>
+              <div class="info-row"><span class="info-label">Customer Code:</span><span>${data.customer.code}</span></div>
+              <div class="info-row"><span class="info-label">Customer Name:</span><span>${data.customer.name}</span></div>
+              <div class="info-row"><span class="info-label">Billing Address:</span><span>${data.customer.billingAddress}</span></div>
+              <div class="info-row"><span class="info-label">Shipping Address:</span><span>${data.customer.shippingAddress}</span></div>
+              <div class="info-row"><span class="info-label">Mobile No:</span><span>${data.customer.mobile}</span></div>
+              <div class="info-row"><span class="info-label">GSTIN:</span><span>${data.customer.gstin}</span></div>
+            </div>
+          </div>
+          
+          <!-- Product Table -->
+          <table class="product-table">
+            <thead>
+              <tr>
+                <th class="col-sr">Sr</th>
+                <th class="col-code">Code</th>
+                <th class="col-name">Product Name</th>
+                <th class="col-batch">Batch</th>
+                <th class="col-expiry">Expiry</th>
+                <th class="col-qty">Qty</th>
+                <th class="col-free">Free</th>
+                <th class="col-rate">Rate</th>
+                <th class="col-mrp">MRP</th>
+                <th class="col-disc">Disc%</th>
+                <th class="col-gst">GST%</th>
+                <th class="col-taxable">Taxable</th>
+                <th class="col-total">Total</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${data.products.map(p => `
+                <tr>
+                  <td class="col-sr">${p.sr}</td>
+                  <td class="col-code">${p.code}</td>
+                  <td class="col-name" style="text-align:left">${p.name}</td>
+                  <td class="col-batch">${p.batch}</td>
+                  <td class="col-expiry">${p.expiry}</td>
+                  <td class="col-qty">${p.qty}</td>
+                  <td class="col-free">${p.free}</td>
+                  <td class="col-rate">₹${p.rate}</td>
+                  <td class="col-mrp">₹${p.mrp}</td>
+                  <td class="col-disc">${p.disc}%</td>
+                  <td class="col-gst">${p.gst}%</td>
+                  <td class="col-taxable">₹${p.taxable.toFixed(2)}</td>
+                  <td class="col-total">₹${p.total.toFixed(2)}</td>
+                </tr>
+              `).join('')}
+            </tbody>
+          </table>
+          
+          <!-- Scheme Section -->
+          <div class="scheme-section">
+            <div class="scheme-title">🎯 SCHEME / OFFER DETAILS</div>
+            ${data.schemes.map(s => `
+              <div>• ${s.name} | Discount: ${s.discount > 0 ? s.discount + '%' : 'N/A'} | Free: ${s.freeItem}</div>
+            `).join('')}
+          </div>
+          
+          <!-- Summary & Payment -->
+          <div class="summary-grid">
+            <div class="summary-box">
+              <div class="info-title">💰 BILL SUMMARY</div>
+              <div class="summary-row"><span>Total Quantity:</span><span>${data.summary.totalQty} Pcs</span></div>
+              <div class="summary-row"><span>Free Quantity:</span><span>${data.summary.totalFree} Pcs</span></div>
+              <div class="summary-row"><span>Gross Amount:</span><span>₹${data.summary.grossAmount.toFixed(2)}</span></div>
+              <div class="summary-row"><span>Discount Amount:</span><span>-₹${data.summary.discountAmount.toFixed(2)}</span></div>
+              <div class="summary-row"><span>Taxable Amount:</span><span>₹${data.summary.taxableAmount.toFixed(2)}</span></div>
+              <div class="summary-row"><span>CGST (9%):</span><span>+₹${data.summary.cgst.toFixed(2)}</span></div>
+              <div class="summary-row"><span>SGST (9%):</span><span>+₹${data.summary.sgst.toFixed(2)}</span></div>
+              <div class="summary-row"><span>Round Off:</span><span>₹${data.summary.roundOff.toFixed(2)}</span></div>
+              <div class="net-amount summary-row"><span>NET AMOUNT:</span><span>₹${data.summary.netAmount.toFixed(2)}</span></div>
+            </div>
+            
+            <div class="summary-box">
+              <div class="info-title">💳 PAYMENT INFORMATION</div>
+              <div class="summary-row"><span>Payment Mode:</span><span>${data.payment.mode}</span></div>
+              <div class="summary-row"><span>Credit Days:</span><span>${data.payment.creditDays} Days</span></div>
+              <div class="summary-row"><span>Due Date:</span><span>${data.payment.dueDate}</span></div>
+              <div class="summary-row"><span>Outstanding Balance:</span><span>₹${data.payment.outstandingBalance.toFixed(2)}</span></div>
+            </div>
+          </div>
+          
+          <!-- Logistics Details -->
+          <div class="info-box" style="margin-bottom: 12px;">
+            <div class="info-title">🚚 LOGISTICS / DELIVERY DETAILS</div>
+            <div style="display: flex; justify-content: space-between; flex-wrap: wrap;">
+              <span>Transport: ${data.logistics.transport}</span>
+              <span>LR No: ${data.logistics.lrNumber}</span>
+              <span>Delivered By: ${data.logistics.deliveredBy}</span>
+              <span>Vehicle No: ${data.logistics.vehicleNumber}</span>
+              <span>Received By: ${data.logistics.receivedBy}</span>
+            </div>
+          </div>
+          
+          <!-- Signature Section -->
+          <div class="signature-section">
+            <div class="signature-box">
+              <div class="signature-line">Customer Signature</div>
+            </div>
+            <div class="signature-box">
+              <div class="signature-line">Authorised Signatory</div>
+            </div>
+          </div>
+          
+          <!-- Footer -->
+          <div class="footer">
+            <div class="terms">
+              <strong>Terms & Conditions:</strong><br>
+              ${data.footer.terms.replace(/\n/g, '<br>')}
+            </div>
+            <div style="margin-top: 8px;">
+              ${data.footer.thankYou}<br>
+              ${data.footer.software} | Page ${data.footer.pageNumber}
+            </div>
+          </div>
+        </div>
+      </div>
+      
+      <div class="no-print">
+        <button onclick="window.print()">🖨️ Print</button>
+        <button onclick="window.close()">❌ Close</button>
+      </div>
+    </div>
+  </body>
+  </html>`;
+};
+
+const closeBillPrint = () => {
+  setShowBillPrintPreview(false);
+  setBillPrintData(null);
+  setBillPrintFormData({ 
+    LoadSeries: '',
+    Trnseries: '',
+    FromTrnno: '',
+    Totrnno: '',
+    NoOfCopies: '',
+    loadNo: '',
+    Goodsreturn: 'N',
+    damageReturn: 'original',
+    SchemeSummary: 'Y',
+    VatSummary: 'Y',
+    HSNSummary: 'Y',
+    printType: 'original',
+    invoiceNumber: `INV-${Date.now()}`
+  });
+  // Keep the form open by not changing activeSubMenu or openFormFor
+  // This ensures the user returns to the bill print form
+};
 // Firm Creation Handlers
 const handleFirmInput = (e) => {
   setFirmData({ ...firmData, [e.target.name]: e.target.value });
@@ -1176,12 +1780,25 @@ const handleInvoiceProductClick = (index) => {
     if (unitsInput) unitsInput.focus();
   }, 50);
 };
-  const saveInvoice = () => {
-    const invoiceData = { ...invoiceFormData, items: invoiceItems, summary: invoiceSummary };
-    console.log('Saving invoice:', invoiceData);
-    alert('Invoice saved successfully!');
+// Update saveInvoice function
+const saveInvoice = () => {
+  const invoiceData = { 
+    ...invoiceFormData, 
+    items: invoiceItems, 
+    summary: invoiceSummary,
+    amount: invoiceSummary.net,
+    partyName: invoiceFormData.party,
+    partyCode: invoiceFormData.party?.substring(0, 10),
+    branchName: invoiceFormData.area
   };
-
+  console.log('Saving invoice:', invoiceData);
+  
+  // Add to sales list
+  saveVoucherToList('Sales', invoiceData);
+  
+  alert('Invoice saved successfully!');
+  closeForm();
+};
   const addPurchaseItem = useCallback(() => {
   const newItem = {
     id: Date.now(),
@@ -1530,16 +2147,24 @@ const saveBatchDetails = () => {
   setShowBatchModal(false);
 };
 
-  const savePurchase = () => {
-    const purchaseData = { ...purchaseFormData, items: purchaseItems };
-    console.log('Saving purchase:', purchaseData);
-    alert('Purchase saved successfully!');
+ // Update savePurchase function
+const savePurchase = () => {
+  const purchaseData = { 
+    ...purchaseFormData, 
+    items: purchaseItems,
+    amount: purchaseFormData.netAmt,
+    partyName: purchaseFormData.supplier,
+    partyCode: purchaseFormData.supplier?.substring(0, 10),
+    branchName: purchaseFormData.storageLocation
   };
-  const existingBatches = batches.filter(
-    b =>
-      b.productId === purchaseItems[currentBatchRow]?.productId
-  );
-
+  console.log('Saving purchase:', purchaseData);
+  
+  // Add to purchase list
+  saveVoucherToList('Purchase', purchaseData);
+  
+  alert('Purchase saved successfully!');
+  closeForm();
+};
 
 
   // ==================== CREDIT NOTE FUNCTIONS ====================
@@ -1807,12 +2432,23 @@ const saveBatchDetails = () => {
     }, 50);
   };
 
-  const saveCreditNote = () => {
-    const creditNoteData = { ...creditNoteFormData, items: creditNoteItems, summary: creditNoteSummary };
-    console.log('Saving credit note:', creditNoteData);
-    alert('Credit Note saved successfully!');
+ // Update saveCreditNote function
+const saveCreditNote = () => {
+  const creditNoteData = { 
+    ...creditNoteFormData, 
+    items: creditNoteItems, 
+    summary: creditNoteSummary,
+    amount: creditNoteSummary.netAmt,
+    partyName: creditNoteFormData.party
   };
-
+  console.log('Saving credit note:', creditNoteData);
+  
+  // Add to credit note list
+  saveVoucherToList('Credit Note', creditNoteData);
+  
+  alert('Credit Note saved successfully!');
+  closeForm();
+};
   // ==================== DEBIT NOTE FUNCTIONS ====================
   const handleDebitNoteInputChange = (e) => {
     setDebitNoteFormData({ ...debitNoteFormData, [e.target.name]: e.target.value });
@@ -2064,12 +2700,61 @@ const saveBatchDetails = () => {
     }, 50);
   };
 
-  const saveDebitNote = () => {
-    const debitNoteData = { ...debitNoteFormData, items: debitNoteItems, summary: debitNoteSummary };
-    console.log('Saving debit note:', debitNoteData);
-    alert('Debit Note saved successfully!');
+// Update saveDebitNote function
+const saveDebitNote = () => {
+  const debitNoteData = { 
+    ...debitNoteFormData, 
+    items: debitNoteItems, 
+    summary: debitNoteSummary,
+    amount: debitNoteSummary.netAmt,
+    partyName: debitNoteFormData.supplier
   };
+  console.log('Saving debit note:', debitNoteData);
+  
+  // Add to debit note list
+  saveVoucherToList('Debit Note', debitNoteData);
+  
+  alert('Debit Note saved successfully!');
+  closeForm();
+};
+// Create Load Handlers
+const handleCreateLoadInputChange = (e) => {
+  setCreateLoadFormData({ ...createLoadFormData, [e.target.name]: e.target.value });
+};
 
+const addCreateLoadItem = () => {
+  const newItem = {
+    id: Date.now(),
+    sr: createLoadItems.length + 1,
+    partyCode: '',
+    partyName: '',
+    billSeries: '',
+    billNo: '',
+    billDate: '',
+    salesman: '',
+    area: '',
+    amount: ''
+  };
+  setCreateLoadItems([...createLoadItems, newItem]);
+};
+
+const updateCreateLoadItem = (index, field, value) => {
+  const newItems = [...createLoadItems];
+  newItems[index][field] = value;
+  setCreateLoadItems(newItems);
+};
+
+const deleteCreateLoadItem = (index) => {
+  const newItems = createLoadItems.filter((_, i) => i !== index);
+  newItems.forEach((item, i) => { item.sr = i + 1; });
+  setCreateLoadItems(newItems);
+};
+
+const saveCreateLoad = () => {
+  const createLoadData = { ...createLoadFormData, items: createLoadItems };
+  console.log('Saving create load:', createLoadData);
+  alert('Load created successfully!');
+};
   // Filter handler
   const handleFilterChange = (masterType, value) => {
     setFilters({ ...filters, [masterType]: value });
@@ -2176,8 +2861,126 @@ const saveBatchDetails = () => {
   const handleMenuClick = (menuKey) => {
     setActiveMenu(activeMenu === menuKey ? null : menuKey);
   };
+// Print Load Handlers
+const handlePrintLoadInputChange = (e) => {
+  setPrintLoadFormData({ ...printLoadFormData, [e.target.name]: e.target.value });
+};
 
-  const handleSubMenuClick = (item) => {
+const handlePrintLoadSubmit = (e) => {
+  e.preventDefault();
+  
+  // Validate required fields
+  if (!printLoadFormData.loadSeries || !printLoadFormData.loadNo) {
+    alert('Please fill Load Series and Load No');
+    return;
+  }
+  
+  // Here you would fetch the load data from your backend/state
+  // For demo, we'll use sample data
+  const sampleLoadData = {
+    loadInfo: {
+      series: printLoadFormData.loadSeries,
+      number: printLoadFormData.loadNo,
+      date: new Date().toISOString().split('T')[0],
+      company: 'Sample Company',
+      salesman: 'John Doe'
+    },
+    invoices: [
+      { sr: 1, partyName: 'Party A', billNo: 'INV-001', amount: 5000, area: 'Area 1', salesman: 'John Doe' },
+      { sr: 2, partyName: 'Party B', billNo: 'INV-002', amount: 7500, area: 'Area 2', salesman: 'Jane Smith' },
+      { sr: 3, partyName: 'Party C', billNo: 'INV-003', amount: 3000, area: 'Area 1', salesman: 'John Doe' }
+    ]
+  };
+  
+  setPrintLoadItems(sampleLoadData.invoices);
+  setShowPrintPreview(true);
+  alert('Load data loaded successfully!');
+};
+
+const generatePrintLayout = () => {
+  let sortedData = [...printLoadItems];
+  
+  // Sort based on order by selection
+  if (printLoadFormData.orderBy === 'product_wise') {
+    sortedData.sort((a, b) => a.partyName?.localeCompare(b.partyName || ''));
+  } else if (printLoadFormData.orderBy === 'product_code_wise') {
+    sortedData.sort((a, b) => (a.partyCode || '').localeCompare(b.partyCode || ''));
+  } else if (printLoadFormData.orderBy === 'short_code_wise') {
+    sortedData.sort((a, b) => (a.shortCode || '').localeCompare(b.shortCode || ''));
+  }
+  
+  // Filter by area if area-wise is Yes
+  if (printLoadFormData.areaWise === 'Y') {
+    // Group by area logic would go here
+    console.log('Area wise filtering enabled');
+  }
+  
+  // Filter by salesman if salesman-wise is Yes
+  if (printLoadFormData.salesmanWise === 'Y') {
+    // Group by salesman logic would go here
+    console.log('Salesman wise filtering enabled');
+  }
+  
+  return sortedData;
+};
+
+const handlePrint = () => {
+  const printContent = document.getElementById('print-load-content');
+  const originalContents = document.body.innerHTML;
+  
+  const printWindow = window.open('', '_blank');
+  printWindow.document.write(`
+    <html>
+      <head>
+        <title>Print Load - ${printLoadFormData.loadSeries} ${printLoadFormData.loadNo}</title>
+        <style>
+          body { font-family: Arial, sans-serif; margin: 20px; }
+          .print-header { text-align: center; margin-bottom: 30px; }
+          .print-header h1 { margin: 0; color: #333; }
+          .print-header p { margin: 5px 0; color: #666; }
+          .load-info { margin-bottom: 20px; padding: 10px; background: #f5f5f5; border-radius: 5px; }
+          .load-info table { width: 100%; }
+          .load-info td { padding: 5px; }
+          table.data-table { width: 100%; border-collapse: collapse; margin-top: 20px; }
+          table.data-table th, table.data-table td { border: 1px solid #ddd; padding: 8px; text-align: left; }
+          table.data-table th { background-color: #4CAF50; color: white; }
+          .footer { margin-top: 30px; text-align: center; font-size: 12px; color: #666; }
+          @media print {
+            body { margin: 0; }
+            .no-print { display: none; }
+          }
+        </style>
+      </head>
+      <body>
+        ${printContent}
+        <div class="footer">
+          Printed on: ${new Date().toLocaleString()}
+        </div>
+      </body>
+    </html>
+  `);
+  printWindow.document.close();
+  printWindow.print();
+};
+
+const handleExportToExcel = () => {
+  const sortedData = generatePrintLayout();
+  const exportData = sortedData.map((item, index) => ({
+    'Sr No': index + 1,
+    'Party Name': item.partyName,
+    'Bill No': item.billNo,
+    'Amount': item.amount,
+    'Area': item.area,
+    'Salesman': item.salesman
+  }));
+  
+  const worksheet = XLSX.utils.json_to_sheet(exportData);
+  const workbook = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(workbook, worksheet, 'Print Load');
+  XLSX.writeFile(workbook, `Print_Load_${printLoadFormData.loadSeries}_${printLoadFormData.loadNo}.xlsx`);
+};
+ 
+const handleSubMenuClick = (item) => {
   setActiveSubMenu(item);
   setOpenFormFor(null);
   setAccountActiveTab('basic');
@@ -2206,7 +3009,142 @@ const saveBatchDetails = () => {
     calculateDashboardPerformance();
   }
 
-  // Rest of your existing code...
+  // Handle Quotation
+  if (item === 'Quotation') {
+    // Don't open form automatically - only when + is clicked
+    return;
+  }
+  
+  // Handle Create Load - Don't open form automatically
+  if (item === 'Create Load') {
+    return;
+  }
+  
+  if (item === 'Print Load') {
+  // Don't open form automatically - only when + is clicked
+  return;
+}
+  
+  // Handle Settle Load
+  if (item === 'Settle Load') {
+    alert('Settle Load feature coming soon!');
+  }
+if (item === 'Bill Print') {
+  setBillPrintFormData({
+    LoadSeries: '',
+    Trnseries: '',
+    FromTrnno: '',
+    Totrnno: '',
+    NoOfCopies: '',
+    loadNo: '',
+    Goodsreturn: 'N',
+    damageReturn: 'original',
+    SchemeSummary: 'Y',
+    VatSummary: 'Y',
+    HSNSummary: 'Y',
+    printType: 'original',
+    invoiceNumber: `INV-${Date.now()}` // Auto-generate invoice number
+  });
+  setShowBillPrintPreview(false);
+  setBillPrintData(null);
+  setOpenFormFor('Bill Print'); // Ensure form is opened
+}
+  // Handle Purchase (moved to Vouchers)
+  if (item === 'Purchase') {
+    setPurchaseItems([]);
+    setPurchaseFormData({
+      supplier: '',
+      company: '',
+      storageLocation: '',
+      invoiceDate: new Date().toISOString().split('T')[0],
+      vno: '',
+      invoiceNumber: '',
+      narration: '',
+      discountPercent: '',
+      grossAmount: 0,
+      mrpTotal: 0,
+      tcbPercent: 0,
+      diBc1: 0,
+      afterDiBc1: 0,
+      groBsAmt: 0,
+      tcbAmount: 0,
+      diBc2: 0,
+      afterDiBc2: 0,
+      qbtAmt: 0,
+      rounding: 0,
+      diBc3: 0,
+      afterDiBc3: 0,
+      ceBsAmt: 0,
+      netAmt: 0
+    });
+    addPurchaseItem();
+  }
+
+  if (item === 'Credit Note') {
+    setCreditNoteItems([]);
+    setCreditNoteFormData({
+      vDate: new Date().toISOString().split('T')[0],
+      vNo: '',
+      party: '',
+      godown: 'G1',
+      salesman: '',
+      tinNo: '',
+      company: '',
+      narr: '',
+      billSeries: '',
+      billNo: '',
+      full: '',
+      refNo: '',
+      refDate: ''
+    });
+    setCreditNoteSummary({
+      grossAmt: 0, schemeAmt: 0, tprAmt: 0, cashDisc: 0, gstAmt: 0, starAmt: 0, starPercent: 0,
+      addLess: 0, display: 0, coupon: 0, rounding: 0, cessAmt: 0, tcsPercent: 0, tcsAmt: 0, billBalAmt: 0, netAmt: 0
+    });
+    addCreditNoteItem();
+  }
+
+  if (item === 'Debit Note') {
+    setDebitNoteItems([]);
+    setDebitNoteFormData({
+      vDate: new Date().toISOString().split('T')[0],
+      vNo: '',
+      godown: 'G1',
+      company: '',
+      narr: '',
+      supplier: '',
+      igst: 'N'
+    });
+    setDebitNoteSummary({
+      grossAmt: 0, gstAmt: 0, tcsPercent: 0, tcsAmt: 0, beforeVatDiscAmt: 0,
+      surcharge: 0, rounding: 0, beforeVatAddAmt: 0, afterVatDiscAmt: 0, netAmt: 0
+    });
+    addDebitNoteItem();
+  }
+};
+
+const handlePlusClick = (item, e) => {
+  e.stopPropagation();
+  
+  // Reset ALL list views FIRST
+  setShowSalesList(false);
+  setShowPurchaseList(false);
+  setShowCreditNoteList(false);
+  setShowDebitNoteList(false);
+  
+  // Set active submenu and open form
+  setActiveSubMenu(item);
+  setOpenFormFor(item);
+  
+  // Reset tabs and edit states
+  setAccountActiveTab('basic');
+  setOtherAccountActiveTab('basic');
+  setEditGstId(null);
+  setEditSalesmanId(null);
+  setEditGodownId(null);
+  setEditCustomerBankId(null);
+  
+  // ========== VOUCHERS MODULE: INITIALIZE FORM ==========
   if (item === 'Sales') {
     setInvoiceItems([]);
     setInvoiceFormData({
@@ -2226,97 +3164,77 @@ const saveBatchDetails = () => {
       gross: 0, tpr: 0, scheme: 0, bottom: 0, star: 0, cd: 0, gst: 0, cess: 0, tcs: 0, rounding: 0, net: 0
     });
     addInvoiceItem();
-  }
-
-    if (item === 'Purchase') {
-      setPurchaseItems([]);
-      setPurchaseFormData({
-        supplier: '',
-        company: '',
-        storageLocation: '',
-        invoiceDate: new Date().toISOString().split('T')[0],
-        vno: '',
-        invoiceNumber: '',
-        narration: '',
-        discountPercent: '',
-        grossAmount: 0,
-        mrpTotal: 0,
-        tcbPercent: 0,
-        diBc1: 0,
-        afterDiBc1: 0,
-        groBsAmt: 0,
-        tcbAmount: 0,
-        diBc2: 0,
-        afterDiBc2: 0,
-        qbtAmt: 0,
-        rounding: 0,
-        diBc3: 0,
-        afterDiBc3: 0,
-        ceBsAmt: 0,
-        netAmt: 0
-      });
-      addPurchaseItem();
-    }
-
-    if (item === 'Credit Note') {
-      setCreditNoteItems([]);
-      setCreditNoteFormData({
-        vDate: new Date().toISOString().split('T')[0],
-        vNo: '',
-        party: '',
-        godown: 'G1',
-        salesman: '',
-        tinNo: '',
-        company: '',
-        narr: '',
-        billSeries: '',
-        billNo: '',
-        full: '',
-        refNo: '',
-        refDate: ''
-      });
-      setCreditNoteSummary({
-        grossAmt: 0, schemeAmt: 0, tprAmt: 0, cashDisc: 0, gstAmt: 0, starAmt: 0, starPercent: 0,
-        addLess: 0, display: 0, coupon: 0, rounding: 0, cessAmt: 0, tcsPercent: 0, tcsAmt: 0, billBalAmt: 0, netAmt: 0
-      });
-      addCreditNoteItem();
-    }
-
-    if (item === 'Debit Note') {
-      setDebitNoteItems([]);
-      setDebitNoteFormData({
-        vDate: new Date().toISOString().split('T')[0],
-        vNo: '',
-        godown: 'G1',
-        company: '',
-        narr: '',
-        supplier: '',
-        igst: 'N'
-      });
-      setDebitNoteSummary({
-        grossAmt: 0, gstAmt: 0, tcsPercent: 0, tcsAmt: 0, beforeVatDiscAmt: 0,
-        surcharge: 0, rounding: 0, beforeVatAddAmt: 0, afterVatDiscAmt: 0, netAmt: 0
-      });
-      addDebitNoteItem();
-    }
-  };
-
-  const handlePlusClick = (item, e) => {
-  e.stopPropagation();
-  setActiveSubMenu(item);
-  setOpenFormFor(item);
-  setAccountActiveTab('basic');
-  setOtherAccountActiveTab('basic');
-  setEditGstId(null);
-  setEditSalesmanId(null);
-  setEditGodownId(null);
-  setEditCustomerBankId(null); // Add this line
-  if (item === 'Service') {
+  } else if (item === 'Purchase') {
+    setPurchaseItems([]);
+    setPurchaseFormData({
+      supplier: '',
+      company: '',
+      storageLocation: '',
+      invoiceDate: new Date().toISOString().split('T')[0],
+      vno: '',
+      invoiceNumber: '',
+      narration: '',
+      discountPercent: '',
+      grossAmount: 0,
+      mrpTotal: 0,
+      tcbPercent: 0,
+      diBc1: 0,
+      afterDiBc1: 0,
+      groBsAmt: 0,
+      tcbAmount: 0,
+      diBc2: 0,
+      afterDiBc2: 0,
+      qbtAmt: 0,
+      rounding: 0,
+      diBc3: 0,
+      afterDiBc3: 0,
+      ceBsAmt: 0,
+      netAmt: 0
+    });
+    addPurchaseItem();
+  } else if (item === 'Credit Note') {
+    setCreditNoteItems([]);
+    setCreditNoteFormData({
+      vDate: new Date().toISOString().split('T')[0],
+      vNo: '',
+      party: '',
+      godown: 'G1',
+      salesman: '',
+      tinNo: '',
+      company: '',
+      narr: '',
+      billSeries: '',
+      billNo: '',
+      full: '',
+      refNo: '',
+      refDate: ''
+    });
+    setCreditNoteSummary({
+      grossAmt: 0, schemeAmt: 0, tprAmt: 0, cashDisc: 0, gstAmt: 0, starAmt: 0, starPercent: 0,
+      addLess: 0, display: 0, coupon: 0, rounding: 0, cessAmt: 0, tcsPercent: 0, tcsAmt: 0, billBalAmt: 0, netAmt: 0
+    });
+    addCreditNoteItem();
+  } else if (item === 'Debit Note') {
+    setDebitNoteItems([]);
+    setDebitNoteFormData({
+      vDate: new Date().toISOString().split('T')[0],
+      vNo: '',
+      godown: 'G1',
+      company: '',
+      narr: '',
+      supplier: '',
+      igst: 'N'
+    });
+    setDebitNoteSummary({
+      grossAmt: 0, gstAmt: 0, tcsPercent: 0, tcsAmt: 0, beforeVatDiscAmt: 0,
+      surcharge: 0, rounding: 0, beforeVatAddAmt: 0, afterVatDiscAmt: 0, netAmt: 0
+    });
+    addDebitNoteItem();
+  } else if (item === 'Service') {
     resetServiceForm();
   } else if (item === 'GoDown Master') {
     setGodownForm({ code: '', name: '', address: '', location: '' });
   } else if (item === 'Customer Bank Master') {
-    // Reset customer bank form when opening
     setCustomerBankForm({
       bankCode: '',
       bankName: '',
@@ -2340,29 +3258,27 @@ const saveBatchDetails = () => {
     setSalesmanForm({ code: '', name: '', type: 'SALESMAN', address: '', town: '', pinCode: '', state: '', country: '', phoneNo: '', mobileNo: '', emailId: '', dateOfBirth: '', qualification: '', reference: '', imeiNo: '' });
   }
 };
-
-  const closeForm = () => {
+ const closeForm = () => {
     setOpenFormFor(null);
     setEditGstId(null);
     setEditSalesmanId(null);
     setEditGodownId(null);
   };
 
-  useEffect(() => {
-    if (activeSubMenu === 'Sales' && invoiceItems.length === 0) {
-      addInvoiceItem();
-    }
-    if (activeSubMenu === 'Purchase' && purchaseItems.length === 0) {
-      addPurchaseItem();
-    }
-    if (activeSubMenu === 'Credit Note' && creditNoteItems.length === 0) {
-      addCreditNoteItem();
-    }
-    if (activeSubMenu === 'Debit Note' && debitNoteItems.length === 0) {
-      addDebitNoteItem();
-    }
-  }, [activeSubMenu, invoiceItems.length, addInvoiceItem, purchaseItems.length, addPurchaseItem, creditNoteItems.length, addCreditNoteItem, debitNoteItems.length, addDebitNoteItem]);
-
+useEffect(() => {
+  if (activeSubMenu === 'Billing' && invoiceItems.length === 0) {
+    addInvoiceItem();
+  }
+  if (activeSubMenu === 'Purchase' && purchaseItems.length === 0) {
+    addPurchaseItem();
+  }
+  if (activeSubMenu === 'Credit Note' && creditNoteItems.length === 0) {
+    addCreditNoteItem();
+  }
+  if (activeSubMenu === 'Debit Note' && debitNoteItems.length === 0) {
+    addDebitNoteItem();
+  }
+}, [activeSubMenu, invoiceItems.length, addInvoiceItem, purchaseItems.length, addPurchaseItem, creditNoteItems.length, addCreditNoteItem, debitNoteItems.length, addDebitNoteItem]);
   // GST Master Handlers
   const handleGstInput = (e) => {
     setGstForm({ ...gstForm, [e.target.name]: e.target.value });
@@ -3026,6 +3942,284 @@ const saveBatchDetails = () => {
       </div>
     );
   };
+const renderVoucherList = (title, data, columns) => {
+  const standardColumns = [
+    { key: 'date', label: 'Date' },
+    { key: 'billSeries', label: 'Bill Series' },
+    { key: 'billNumber', label: 'Bill Number' },
+    { key: 'billType', label: 'Bill Type' },
+    { key: 'partyCode', label: 'Party Code' },
+    { key: 'partyName', label: 'Party Name' },
+    { key: 'branchName', label: 'Branch Name' },
+    { key: 'amount', label: 'Amount (₹)' },
+    { key: 'loadSeries', label: 'Load Series' },
+    { key: 'loadNumber', label: 'Load Number' },
+    { key: 'status', label: 'Status' },
+    { key: 'actions', label: 'Actions' }
+  ];
+const handleEditVoucher = (type, item) => {
+  console.log(`Editing ${type}:`, item);
+  
+  setShowSalesList(false);
+  setShowPurchaseList(false);
+  setShowCreditNoteList(false);
+  setShowDebitNoteList(false);
+  
+  if (type === 'Sales') {
+    setInvoiceFormData({
+      billDate: item.billDate || new Date().toISOString().split('T')[0],
+      godown: item.godown || 'G1',
+      company: item.company || '',
+      area: item.area || '',
+      party: item.partyName || '',
+      BillSeries: item.billSeries || '',
+      billNo: item.billNo || '',
+      billType: item.billType || 'Credit',
+      dueDate: item.dueDate || '',
+      salesman: item.salesman || '',
+      narration: item.narration || ''
+    });
+    setInvoiceItems(item.items || []);
+    setInvoiceSummary(item.summary || { gross: 0, tpr: 0, scheme: 0, bottom: 0, star: 0, cd: 0, gst: 0, cess: 0, tcs: 0, rounding: 0, net: 0 });
+    setOpenFormFor('Sales');
+  } else if (type === 'Purchase') {
+    setPurchaseFormData({
+      supplier: item.partyName || '',
+      company: item.company || '',
+      storageLocation: item.godown || '',
+      invoiceDate: item.invoiceDate || item.billDate || new Date().toISOString().split('T')[0],
+      vno: item.vno || '',
+      invoiceNumber: item.invoiceNumber || item.billNo || '',
+      narration: item.narration || '',
+      discountPercent: item.discountPercent || '',
+      grossAmount: item.grossAmount || 0,
+      mrpTotal: item.summary?.mrpTotal || 0,
+      tcbPercent: item.tcbPercent || 0,
+      diBc1: item.diBc1 || 0,
+      afterDiBc1: item.afterDiBc1 || 0,
+      groBsAmt: item.summary?.groBsAmt || 0,
+      tcbAmount: item.tcbAmount || 0,
+      diBc2: item.diBc2 || 0,
+      afterDiBc2: item.afterDiBc2 || 0,
+      qbtAmt: item.qbtAmt || 0,
+      rounding: item.rounding || 0,
+      diBc3: item.diBc3 || 0,
+      afterDiBc3: item.afterDiBc3 || 0,
+      ceBsAmt: item.ceBsAmt || 0,
+      netAmt: item.summary?.netAmt || 0
+    });
+    setPurchaseItems(item.items || []);
+    setOpenFormFor('Purchase');
+  } else if (type === 'Credit Note') {
+    setCreditNoteFormData({
+      vDate: item.vDate || item.billDate || new Date().toISOString().split('T')[0],
+      vNo: item.vNo || item.billNo || '',
+      party: item.partyName || '',
+      godown: item.godown || 'G1',
+      salesman: item.salesman || '',
+      tinNo: item.tinNo || '',
+      company: item.company || '',
+      narr: item.narr || '',
+      billSeries: item.billSeries || '',
+      billNo: item.billNo || '',
+      full: item.full || '',
+      refNo: item.refNo || '',
+      refDate: item.refDate || ''
+    });
+    setCreditNoteItems(item.items || []);
+    setCreditNoteSummary(item.summary || { grossAmt: 0, schemeAmt: 0, tprAmt: 0, cashDisc: 0, gstAmt: 0, starAmt: 0, starPercent: 0, addLess: 0, display: 0, coupon: 0, rounding: 0, cessAmt: 0, tcsPercent: 0, tcsAmt: 0, billBalAmt: 0, netAmt: 0 });
+    setOpenFormFor('Credit Note');
+  } else if (type === 'Debit Note') {
+    setDebitNoteFormData({
+      vDate: item.vDate || item.billDate || new Date().toISOString().split('T')[0],
+      vNo: item.vNo || item.billNo || '',
+      godown: item.godown || 'G1',
+      company: item.company || '',
+      narr: item.narr || '',
+      supplier: item.partyName || '',
+      igst: item.igst || 'N'
+    });
+    setDebitNoteItems(item.items || []);
+    setDebitNoteSummary(item.summary || { grossAmt: 0, gstAmt: 0, tcsPercent: 0, tcsAmt: 0, beforeVatDiscAmt: 0, surcharge: 0, rounding: 0, beforeVatAddAmt: 0, afterVatDiscAmt: 0, netAmt: 0 });
+    setOpenFormFor('Debit Note');
+  }
+};
+
+const handleViewVoucher = (type, item) => {
+  setViewData(item);
+  setViewType(type);
+  setShowViewModal(true);
+};
+
+const handleDeleteVoucher = (type, id) => {
+  if (window.confirm(`Are you sure you want to delete this ${type}?`)) {
+    if (type === 'Sales') {
+      setSalesListData(salesListData.filter(item => item.id !== id));
+    } else if (type === 'Purchase') {
+      setPurchaseListData(purchaseListData.filter(item => item.id !== id));
+    } else if (type === 'Credit Note') {
+      setCreditNoteListData(creditNoteListData.filter(item => item.id !== id));
+    } else if (type === 'Debit Note') {
+      setDebitNoteListData(debitNoteListData.filter(item => item.id !== id));
+    }
+    alert(`${type} deleted successfully!`);
+  }
+};
+
+// Function to save voucher data to list (call this after saving a new voucher)
+const saveVoucherToList = (type, data) => {
+  const newVoucher = {
+    id: Date.now(),
+    ...data,
+    status: 'Pending'
+  };
+  
+  if (type === 'Sales') {
+    setSalesListData(prev => [newVoucher, ...prev]);
+  } else if (type === 'Purchase') {
+    setPurchaseListData(prev => [newVoucher, ...prev]);
+  } else if (type === 'Credit Note') {
+    setCreditNoteListData(prev => [newVoucher, ...prev]);
+  } else if (type === 'Debit Note') {
+    setDebitNoteListData(prev => [newVoucher, ...prev]);
+  }
+};
+
+
+
+  const transformedData = data.map(item => ({
+    id: item.id,
+    date: item.billDate || item.invoiceDate || item.vDate || item.date || '-',
+    billSeries: item.billSeries || item.BillSeries || '-',
+    billNumber: item.billNo || item.invoiceNumber || item.vNo || '-',
+    billType: item.billType || '-',
+    partyCode: item.partyCode || item.supplierCode || '-',
+    partyName: item.party || item.supplier || item.partyName || '-',
+    branchName: item.branchName || '-',
+    amount: parseFloat(item.amount) || 0,
+    loadSeries: item.loadSeries || '-',
+    loadNumber: item.loadNumber || '-',
+    status: item.status || (item.amount ? 'Pending' : 'Draft'),
+    originalItem: item
+  }));
+
+  const getStatusBadgeClass = (status) => {
+    const statusLower = (status || '').toLowerCase();
+    if (statusLower === 'paid' || statusLower === 'approved' || statusLower === 'received') {
+      return 'status-badge status-success';
+    } else if (statusLower === 'pending' || statusLower === 'draft') {
+      return 'status-badge status-warning';
+    } else if (statusLower === 'cancelled' || statusLower === 'rejected') {
+      return 'status-badge status-danger';
+    }
+    return 'status-badge status-info';
+  };
+
+  const getType = () => {
+    if (title.includes('Sales')) return 'Sales';
+    if (title.includes('Purchase')) return 'Purchase';
+    if (title.includes('Credit Note')) return 'Credit Note';
+    if (title.includes('Debit Note')) return 'Debit Note';
+    return title;
+  };
+  const type = getType();
+
+  return (
+    <div className="master-section grid-section">
+      <div className="grid-header">
+        <h3>{title} List ({transformedData.length})</h3>
+        <div className="table-controls">
+          <input
+            type="text"
+            placeholder="Search..."
+            className="filter-input"
+            value={filters[type.toLowerCase()] || ''}
+            onChange={(e) => setFilters({...filters, [type.toLowerCase()]: e.target.value})}
+          />
+          <button className="btn-excel" onClick={() => exportToExcel(transformedData.filter(d => 
+            d.partyName?.toLowerCase().includes((filters[type.toLowerCase()] || '').toLowerCase()) ||
+            d.billNumber?.toLowerCase().includes((filters[type.toLowerCase()] || '').toLowerCase())
+          ), title, standardColumns.filter(c => c.key !== 'actions'))}>
+            📊 Export Excel
+          </button>
+          <button className="btn-pdf" onClick={() => exportToPDF(transformedData.filter(d => 
+            d.partyName?.toLowerCase().includes((filters[type.toLowerCase()] || '').toLowerCase()) ||
+            d.billNumber?.toLowerCase().includes((filters[type.toLowerCase()] || '').toLowerCase())
+          ), title, standardColumns.filter(c => c.key !== 'actions'))}>
+            📄 Export PDF
+          </button>
+        </div>
+      </div>
+      {transformedData.length > 0 ? (
+        <div className="data-table-container" style={{ overflowX: 'auto' }}>
+          <table className="data-table" style={{ minWidth: '1200px' }}>
+            <thead>
+              <tr>
+                {standardColumns.map(col => (
+                  <th key={col.key} style={col.key === 'actions' ? { textAlign: 'center', width: '160px' } : {}}>
+                    {col.label}
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {transformedData
+                .filter(d => 
+                  d.partyName?.toLowerCase().includes((filters[type.toLowerCase()] || '').toLowerCase()) ||
+                  d.billNumber?.toLowerCase().includes((filters[type.toLowerCase()] || '').toLowerCase())
+                )
+                .map((item, index) => (
+                <tr key={index}>
+                  <td>{item.date}</td>
+                  <td>{item.billSeries}</td>
+                  <td>{item.billNumber}</td>
+                  <td>{item.billType}</td>
+                  <td>{item.partyCode}</td>
+                  <td>{item.partyName}</td>
+                  <td>{item.branchName}</td>
+                  <td className="amount-cell">₹{item.amount.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                  <td>{item.loadSeries}</td>
+                  <td>{item.loadNumber}</td>
+                  <td><span className={getStatusBadgeClass(item.status)}>{item.status}</span></td>
+                  <td className="action-buttons" style={{ whiteSpace: 'nowrap' }}>
+                    <button 
+                      className="btn-view" 
+                      onClick={() => handleViewVoucher(type, item.originalItem)} 
+                      title="View" 
+                      style={{ background: '#10b981', color: 'white', border: 'none', borderRadius: '4px', padding: '4px 8px', margin: '0 2px', cursor: 'pointer' }}
+                    >
+                      👁️ View
+                    </button>
+                    <button 
+                      className="btn-edit" 
+                      onClick={() => handleEditVoucher(type, item.originalItem)} 
+                      title="Edit" 
+                      style={{ background: '#3b82f6', color: 'white', border: 'none', borderRadius: '4px', padding: '4px 8px', margin: '0 2px', cursor: 'pointer' }}
+                    >
+                      ✏️ Edit
+                    </button>
+                    <button 
+                      className="btn-delete" 
+                      onClick={() => handleDeleteVoucher(type, item.id)} 
+                      title="Delete" 
+                      style={{ background: '#ef4444', color: 'white', border: 'none', borderRadius: '4px', padding: '4px 8px', margin: '0 2px', cursor: 'pointer' }}
+                    >
+                      🗑 Delete
+                    </button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      ) : (
+        <div className="empty-state">No data found. Click + Add New to create one.</div>
+      )}
+    </div>
+  );
+};
+
+
 
   return (
     <div className="dashboard-container">
@@ -3122,6 +4316,1130 @@ const saveBatchDetails = () => {
               { key: 'location', label: 'Location' }
             ], 'godown', deleteGodown)
           )}
+
+{/* Bill Print Form */}
+{activeSubMenu === 'Bill Print' && !showBillPrintPreview && (
+  <div className="master-section erp-master-form">
+    <div className="erp-header">
+      <div>
+        <h2 className="erp-title">Bill Print</h2>
+      </div>
+      <button className="close-form-btn" onClick={() => {
+        setActiveSubMenu(null);
+        setOpenFormFor(null);
+      }}>✕</button>
+    </div>
+
+    <form className="master-form" onSubmit={generateBillPrint}>
+      <div className="form-section">
+        <h4 className="section-header">Invoice Information</h4>
+        
+        <div className="form-grid-6">
+          <div className="labeled-input">
+            <label>Load Series</label>
+            <input 
+              type="text" 
+              name="LoadSeries" 
+              className="erp-input" 
+              placeholder="Enter Load Series" 
+              value={billPrintFormData.LoadSeries || ''} 
+              onChange={handleBillPrintInputChange} 
+              style={{ fontSize: '14px' }}
+            />
+          </div>     
+          
+          <div className="labeled-input">
+            <label>Trnseries</label>
+            <input 
+              type="text" 
+              name="Trnseries" 
+              className="erp-input" 
+              placeholder="Enter Trnseries" 
+              value={billPrintFormData.Trnseries || ''} 
+              onChange={handleBillPrintInputChange} 
+              style={{ fontSize: '14px' }}
+            />
+          </div>
+          
+          <div className="labeled-input">
+            <label>From Trnno</label>
+            <input 
+              type="text" 
+              name="FromTrnno" 
+              className="erp-input" 
+              placeholder="Enter From Trnno" 
+              value={billPrintFormData.FromTrnno || ''} 
+              onChange={handleBillPrintInputChange} 
+              style={{ fontSize: '14px' }}
+            />
+          </div>
+          
+          <div className="labeled-input">
+            <label>To Trnno</label>
+            <input 
+              type="text" 
+              name="Totrnno" 
+              className="erp-input" 
+              placeholder="Enter To Trnno" 
+              value={billPrintFormData.Totrnno || ''} 
+              onChange={handleBillPrintInputChange} 
+              style={{ fontSize: '14px' }}
+            />
+          </div>
+          
+          <div className="labeled-input">
+            <label>No Of Copies</label>
+            <input 
+              type="text" 
+              name="NoOfCopies" 
+              className="erp-input" 
+              placeholder="Enter No Of Copies" 
+              value={billPrintFormData.NoOfCopies || ''} 
+              onChange={handleBillPrintInputChange} 
+              style={{ fontSize: '14px' }}
+            />
+          </div>
+          
+          <div className="labeled-input">
+            <label>Load No</label>
+            <input 
+              type="text" 
+              name="loadNo" 
+              className="erp-input" 
+              placeholder="Enter Load Number" 
+              value={billPrintFormData.loadNo || ''} 
+              onChange={handleBillPrintInputChange} 
+              style={{ fontSize: '14px' }}
+            />
+          </div>
+          
+          <div className="labeled-input">
+            <label>Goods Return</label>
+            <select 
+              name="Goodsreturn" 
+              className="erp-select" 
+              value={billPrintFormData.Goodsreturn || 'N'} 
+              onChange={handleBillPrintInputChange}
+            >
+              <option value="Y">Y</option>
+              <option value="N">N</option>
+            </select>
+          </div>
+          
+          <div className="labeled-input">
+            <label>Damage Return</label>
+            <select 
+              name="damageReturn" 
+              className="erp-select" 
+              value={billPrintFormData.damageReturn || 'original'} 
+              onChange={handleBillPrintInputChange}
+            >
+              <option value="original">Original Copy</option>
+              <option value="duplicate">Duplicate Copy</option>
+              <option value="triplicate">Triplicate Copy</option>
+            </select>
+          </div>
+          
+          <div className="labeled-input">
+            <label>Scheme Summary</label>
+            <select 
+              name="SchemeSummary" 
+              className="erp-select" 
+              value={billPrintFormData.SchemeSummary || 'Y'} 
+              onChange={handleBillPrintInputChange}
+            >
+              <option value="Y">Y</option>
+              <option value="N">N</option>
+            </select>
+          </div>
+          
+          <div className="labeled-input">
+            <label>Vat Summary</label>
+            <select 
+              name="VatSummary" 
+              className="erp-select" 
+              value={billPrintFormData.VatSummary || 'Y'} 
+              onChange={handleBillPrintInputChange}
+            >
+              <option value="Y">Y</option>
+              <option value="N">N</option>
+            </select>
+          </div>
+          
+          <div className="labeled-input">
+            <label>HSN Summary</label>
+            <select 
+              name="HSNSummary" 
+              className="erp-select" 
+              value={billPrintFormData.HSNSummary || 'Y'} 
+              onChange={handleBillPrintInputChange}
+            >
+              <option value="Y">Y</option>
+              <option value="N">N</option>
+            </select>
+          </div>
+          
+          <div className="labeled-input">
+            <label>Print Type</label>
+            <select 
+              name="printType" 
+              className="erp-select" 
+              value={billPrintFormData.printType || 'original'} 
+              onChange={handleBillPrintInputChange}
+            >
+              <option value="original">Original Copy</option>
+              <option value="duplicate">Duplicate Copy</option>
+              <option value="triplicate">Triplicate Copy</option>
+            </select>
+          </div>
+        </div>
+      </div>
+
+      <div className="form-actions">
+        <button 
+          type="button" 
+          className="btn-primary"
+          onClick={(e) => {
+            e.preventDefault();
+            generateBillPrint(e);
+          }}
+          style={{ fontSize: '14px', fontWeight: 'normal' }}
+        >
+          Print
+        </button>
+        <button 
+          type="button" 
+          className="btn-primary"
+          onClick={(e) => {
+            e.preventDefault();
+            generateBillPrint(e);
+          }}
+          style={{ fontSize: '14px', fontWeight: 'normal' }}
+        >
+          Preview
+        </button>
+        <button 
+          type="button" 
+          className="btn-primary"
+          onClick={(e) => {
+            e.preventDefault();
+            generateBillPrint(e);
+          }}
+          style={{ fontSize: '14px', fontWeight: 'normal' }}
+        >
+          PDF
+        </button>
+        <button type="button" className="btn-secondary" onClick={() => {
+          setActiveSubMenu(null);
+          setOpenFormFor(null);
+        }}>
+          Cancel
+        </button>
+      </div>
+    </form>
+  </div>
+)}
+{/* Bill Print Preview */}
+{showBillPrintPreview && billPrintData && (
+  <div className="master-section" style={{ padding: 0, background: '#f1f5f9', overflow: 'auto' }}>
+    <div 
+      style={{ 
+        background: '#f1f5f9',
+        minHeight: '100vh'
+      }}
+      dangerouslySetInnerHTML={{ __html: getBillPrintHTML() }} 
+    />
+    {/* Add a close button overlay for better UX */}
+    <div style={{ 
+      position: 'fixed', 
+      bottom: '20px', 
+      right: '20px', 
+      zIndex: 9999,
+      display: 'flex',
+      gap: '10px'
+    }}>
+      <button 
+        onClick={closeBillPrint}
+        style={{
+          padding: '10px 20px',
+          background: '#dc2626',
+          color: 'white',
+          border: 'none',
+          borderRadius: '5px',
+          cursor: 'pointer',
+          fontWeight: 'bold',
+          fontSize: '14px'
+        }}
+      >
+        ❌ Close Preview & Return to Bill Print
+      </button>
+    </div>
+  </div>
+)}
+
+          {/* Quotation Form - Same as Sales Invoice but with Quotation title */}
+{activeSubMenu === 'Quotation' && openFormFor === 'Quotation' && (
+  <div className="master-section erp-master-form sales-invoice">
+    <div className="erp-header">
+      <div>
+        <h2 className="erp-title">Quotation</h2>
+      </div>
+      <button className="close-form-btn" onClick={closeForm}>✕</button>
+    </div>
+
+    {/* Invoice Header - 4 col grid */}
+    <div className="form-section">
+      <h4 className="section-header">Quotation Header</h4>
+      <div className="invoice-header-grid">
+        <div className="labeled-input"><label>Bill Date *</label><input type="date" name="billDate" className="erp-input" value={invoiceFormData.billDate} onChange={handleInvoiceInputChange} /></div>
+        <div className="labeled-input"><label>Godown *</label>
+          <select name="godown" className="erp-select" value={invoiceFormData.godown} onChange={handleInvoiceInputChange}>
+            <option value="">Select</option>
+            {godowns.map(g => <option key={g.id} value={g.code}>{g.name}</option>)}
+          </select>
+        </div>
+        <div className="labeled-input"><label>Company</label>
+          <select name="company" className="erp-select" value={invoiceFormData.company} onChange={handleInvoiceInputChange}>
+            <option value="">Select</option>
+            {companies.map(c => <option key={c.id} value={c.name}>{c.name}</option>)}
+          </select>
+        </div>
+        <div className="labeled-input"><label>Area *</label>
+          <select name="area" className="erp-select" value={invoiceFormData.area} onChange={handleInvoiceInputChange}>
+            <option value="">Select</option>
+            {areas.map(a => <option key={a.id} value={a.name}>{a.name}</option>)}
+          </select>
+        </div>
+
+        <div className="labeled-input"><label>Party *</label>
+          <select name="party" className="erp-select" value={invoiceFormData.party} onChange={handleInvoiceInputChange}>
+            <option value="">Select</option>
+            {accounts.map(a => <option key={a.id} value={a.accountName}>{a.accountName}</option>)}
+          </select>
+        </div>
+        <div className="labeled-input"><label>BillSeries</label><input name="BillSeries" className="erp-input" value={invoiceFormData.BillSeries} onChange={handleInvoiceInputChange} /></div>
+        <div className="labeled-input"><label>Bill No</label><input name="billNo" className="erp-input" value={invoiceFormData.billNo} onChange={handleInvoiceInputChange} /></div>
+        <div className="labeled-input"><label>Bill Type *</label>
+          <select name="billType" className="erp-select" value={invoiceFormData.billType} onChange={handleInvoiceInputChange}>
+            <option>Cash</option><option>Credit</option>
+          </select>
+        </div>
+        <div className="labeled-input"><label>Due Date *</label><input type="date" name="dueDate" className="erp-input" value={invoiceFormData.dueDate} onChange={handleInvoiceInputChange} /></div>
+        <div className="labeled-input"><label>Sales Man *</label>
+          <select name="salesman" className="erp-select" value={invoiceFormData.salesman} onChange={handleInvoiceInputChange}>
+            <option value="">Select</option>
+            {salesmen.map(s => <option key={s.id} value={s.name}>{s.name}</option>)}
+          </select>
+        </div>
+        <div className="labeled-input narration-field"><label>Narration</label><textarea name="narration" className="erp-textarea" rows="2" value={invoiceFormData.narration} onChange={handleInvoiceInputChange} /></div>
+      </div>
+    </div>
+
+    {/* Product Entry Table - Same as Sales Invoice */}
+    <div className="form-section">
+      <h4 className="section-header">Product Entry</h4>
+      <div className="product-entry-container" style={{ overflowX: 'auto', overflowY: 'auto', maxHeight: '500px' }}>
+        <div className="erp-table-container" style={{ minWidth: '2000px' }}>
+          <table className="product-entry-table" style={{ width: '100%', borderCollapse: 'collapse' }}>
+            <thead style={{ position: 'sticky', top: 0, zIndex: 10 }}>
+              <tr>
+                <th style={{ position: 'sticky', left: 0, backgroundColor: '#f8fafc', zIndex: 20, minWidth: '50px' }}>Sr</th>
+                <th style={{ minWidth: '180px' }}>Product</th>
+                <th style={{ minWidth: '100px' }}>Units</th>
+                <th style={{ minWidth: '100px' }}>Qty</th>
+                <th style={{ minWidth: '100px' }}>Free</th>
+                <th style={{ minWidth: '100px' }}>MRP</th>
+                <th style={{ minWidth: '100px' }}>Rate</th>
+                <th style={{ minWidth: '120px' }}>Rate GST</th>
+                <th style={{ minWidth: '120px' }}>TPR Amt</th>
+                <th style={{ minWidth: '100px' }}>Scheme %</th>
+                <th style={{ minWidth: '120px' }}>Scheme Amt</th>
+                <th style={{ minWidth: '100px' }}>CD %</th>
+                <th style={{ minWidth: '120px' }}>CD Amt</th>
+                <th style={{ minWidth: '100px' }}>Star %</th>
+                <th style={{ minWidth: '120px' }}>Star Amt</th>
+                <th style={{ minWidth: '120px' }}>Taxable</th>
+                <th style={{ minWidth: '100px' }}>GST %</th>
+                <th style={{ minWidth: '100px' }}>SGST</th>
+                <th style={{ minWidth: '100px' }}>CGST</th>
+                <th style={{ minWidth: '120px' }}>Amount</th>
+                <th style={{ position: 'sticky', right: 0, backgroundColor: '#f8fafc', zIndex: 20, minWidth: '70px' }}>Action</th>
+              </tr>
+            </thead>
+            <tbody>
+              {invoiceItems.map((item, index) => (
+                <tr key={item.id} className={index === activeRow ? 'active-row' : ''}>
+                  <td style={{ position: 'sticky', left: 0, backgroundColor: index === activeRow ? '#eff6ff' : 'white', zIndex: 5, minWidth: '50px' }}>{item.sr}</td>
+                  <td style={{ position: 'relative' }}>
+                    <input
+                      data-product-index={index}
+                      className="erp-input product-search"
+                      value={item.product}
+                      onChange={(e) => {
+                        const value = e.target.value;
+                        updateInvoiceItem(index, 'product', value);
+                        setCurrentProductIndex(index);
+                        if (value.trim() !== '') {
+                          setProductListFilter(value);
+                          setShowProductList(true);
+                        } else {
+                          setShowProductList(false);
+                        }
+                      }}
+                      onFocus={() => {
+                        setActiveRow(index);
+                        if (item.product) {
+                          setProductListFilter(item.product);
+                          setCurrentProductIndex(index);
+                          setShowProductList(true);
+                        }
+                      }}
+                      style={{ width: '100%', minWidth: '150px', cursor: 'pointer' }}
+                      placeholder="Click to select product"
+                    />
+                    
+                    {showProductList && currentProductIndex === index && productListFilter.trim() !== '' && (
+                      <div className="erlay">
+                        <div className="product-dropdown">
+                          <div className="dropdown-list">
+                            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '12px' }}>
+                              <thead>
+                                <tr style={{ background: '#eff6ff', position: 'sticky', top: 0 }}>
+                                  <th style={{ padding: '6px', textAlign: 'left' }}>Item Code</th>
+                                  <th style={{ padding: '6px', textAlign: 'left' }}>Name</th>
+                                  <th style={{ padding: '6px', textAlign: 'left' }}>Batch</th>
+                                  <th style={{ padding: '6px', textAlign: 'right' }}>MRP</th>
+                                  <th style={{ padding: '6px', textAlign: 'right' }}>Sales Rate</th>
+                                  <th style={{ padding: '6px', textAlign: 'right' }}>Stock</th>
+                                </tr>
+                              </thead>
+                              <tbody>
+                                {products
+                                  .filter(p =>
+                                    p.name?.toLowerCase().includes(productListFilter.toLowerCase()) ||
+                                    p.code?.toLowerCase().includes(productListFilter.toLowerCase())
+                                  )
+                                  .map(product => {
+                                    const productBatches = batches.filter(b => b.productId === product.id);
+                                    const displayBatch = productBatches[0];
+                                    const totalStock = productBatches.reduce((sum, b) => sum + (parseFloat(b.stockQty) || 0), 0);
+                                    
+                                    return (
+                                      <tr
+                                        key={product.id}
+                                        onClick={() => {
+                                          if (productBatches.length > 1) {
+                                            setCurrentProductIndex(index);
+                                            setShowBatchSelectionModal(true);
+                                          } else if (productBatches.length === 1) {
+                                            handleProductSelect(currentProductIndex, {
+                                              ...product,
+                                              selectedBatch: productBatches[0]
+                                            });
+                                            if (index === invoiceItems.length - 1) {
+                                              setTimeout(() => {
+                                                addInvoiceItem();
+                                                setTimeout(() => {
+                                                  const nextProductInput = document.querySelector(`[data-product-index="${index + 1}"]`);
+                                                  if (nextProductInput) nextProductInput.focus();
+                                                }, 50);
+                                              }, 150);
+                                            } else {
+                                              setTimeout(() => {
+                                                const nextProductInput = document.querySelector(`[data-product-index="${index + 1}"]`);
+                                                if (nextProductInput) nextProductInput.focus();
+                                              }, 50);
+                                            }
+                                          } else {
+                                            handleProductSelect(currentProductIndex, product);
+                                            if (index === invoiceItems.length - 1) {
+                                              setTimeout(() => {
+                                                addInvoiceItem();
+                                                setTimeout(() => {
+                                                  const nextProductInput = document.querySelector(`[data-product-index="${index + 1}"]`);
+                                                  if (nextProductInput) nextProductInput.focus();
+                                                }, 50);
+                                              }, 150);
+                                            } else {
+                                              setTimeout(() => {
+                                                const nextProductInput = document.querySelector(`[data-product-index="${index + 1}"]`);
+                                                if (nextProductInput) nextProductInput.focus();
+                                              }, 50);
+                                            }
+                                          }
+                                        }}
+                                        style={{ cursor: 'pointer', borderBottom: '1px solid #eee' }}
+                                        onMouseEnter={(e) => { e.currentTarget.style.background = '#f8fafc'; }}
+                                        onMouseLeave={(e) => { e.currentTarget.style.background = 'white'; }}
+                                      >
+                                        <td style={{ padding: '6px' }}>{product.code}</td>
+                                        <td style={{ padding: '6px' }}>{product.name}</td>
+                                        <td style={{ padding: '6px' }}>
+                                          {productBatches.length > 1 
+                                            ? `${productBatches.length} batches` 
+                                            : displayBatch?.batchNo || '-'}
+                                        </td>
+                                        <td style={{ padding: '6px', textAlign: 'right' }}>
+                                          ₹{displayBatch?.mrp || product.mrp || 0}
+                                        </td>
+                                        <td style={{ padding: '6px', textAlign: 'right' }}>
+                                          ₹{displayBatch?.salesRate || product.salesRate || product.mrp || 0}
+                                        </td>
+                                        <td style={{ padding: '6px', textAlign: 'right' }}>
+                                          {totalStock}
+                                        </td>
+                                      </tr>
+                                    );
+                                  })}
+                              </tbody>
+                            </table>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+                  </td>
+                  <td>
+                    <select
+                      className="erp-select"
+                      data-field="units"
+                      data-index={index}
+                      value={item.units}
+                      onChange={(e) => updateInvoiceItem(index, 'units', e.target.value)}
+                      onKeyDown={(e) => handleInvoiceKeyDown(e, index, 'units')}
+                      style={{ width: '100%' }}
+                    >
+                      <option value="PCS">PCS</option>
+                      <option value="BOX">BOX</option>
+                      <option value="INBOX">INBOX</option>
+                      <option value="OUTER">OUTER</option>
+                      <option value="KG">KG</option>
+                      <option value="LTR">LTR</option>
+                    </select>
+                  </td>
+                  <td><input className="erp-input numeric" data-field="qty" data-index={index} value={item.qty} onChange={(e) => updateInvoiceItem(index, 'qty', e.target.value)} onKeyDown={(e) => handleInvoiceKeyDown(e, index, 'qty')} style={{ width: '100%' }} /></td>
+                  <td><input className="erp-input numeric" data-field="free" data-index={index} value={item.free} onChange={(e) => updateInvoiceItem(index, 'free', e.target.value)} onKeyDown={(e) => handleInvoiceKeyDown(e, index, 'free')} style={{ width: '100%' }} /></td>
+                  <td><input className="erp-input numeric" data-field="mrp" data-index={index} value={item.mrp} onChange={(e) => updateInvoiceItem(index, 'mrp', e.target.value)} onKeyDown={(e) => handleInvoiceKeyDown(e, index, 'mrp')} style={{ width: '100%' }} /></td>
+                  <td><input className="erp-input numeric" data-field="rate" data-index={index} value={item.rate} onChange={(e) => updateInvoiceItem(index, 'rate', e.target.value)} onKeyDown={(e) => handleInvoiceKeyDown(e, index, 'rate')} style={{ width: '100%' }} /></td>
+                  <td><input className="erp-input numeric" data-field="rateGst" data-index={index} value={item.rateGst} onChange={(e) => updateInvoiceItem(index, 'rateGst', e.target.value)} onKeyDown={(e) => handleInvoiceKeyDown(e, index, 'rateGst')} style={{ width: '100%' }} /></td>
+                  <td><input className="erp-input numeric" data-field="tprAmt" data-index={index} value={item.tprAmt} onChange={(e) => updateInvoiceItem(index, 'tprAmt', e.target.value)} onKeyDown={(e) => handleInvoiceKeyDown(e, index, 'tprAmt')} style={{ width: '100%' }} /></td>
+                  <td><input className="erp-input numeric small" data-field="schemePct" data-index={index} value={item.schemePct} onChange={(e) => updateInvoiceItem(index, 'schemePct', e.target.value)} onKeyDown={(e) => handleInvoiceKeyDown(e, index, 'schemePct')} style={{ width: '100%' }} /></td>
+                  <td><input className="erp-input numeric" data-field="schemeAmt" data-index={index} value={item.schemeAmt} onChange={(e) => updateInvoiceItem(index, 'schemeAmt', e.target.value)} onKeyDown={(e) => handleInvoiceKeyDown(e, index, 'schemeAmt')} style={{ width: '100%' }} /></td>
+                  <td><input className="erp-input numeric small" data-field="cdPct" data-index={index} value={item.cdPct} onChange={(e) => updateInvoiceItem(index, 'cdPct', e.target.value)} onKeyDown={(e) => handleInvoiceKeyDown(e, index, 'cdPct')} style={{ width: '100%' }} /></td>
+                  <td><input className="erp-input numeric" data-field="cdAmt" data-index={index} value={item.cdAmt} onChange={(e) => updateInvoiceItem(index, 'cdAmt', e.target.value)} onKeyDown={(e) => handleInvoiceKeyDown(e, index, 'cdAmt')} style={{ width: '100%' }} /></td>
+                  <td><input className="erp-input numeric small" data-field="starPct" data-index={index} value={item.starPct} onChange={(e) => updateInvoiceItem(index, 'starPct', e.target.value)} onKeyDown={(e) => handleInvoiceKeyDown(e, index, 'starPct')} style={{ width: '100%' }} /></td>
+                  <td><input className="erp-input numeric" data-field="starAmt" data-index={index} value={item.starAmt} onChange={(e) => updateInvoiceItem(index, 'starAmt', e.target.value)} onKeyDown={(e) => handleInvoiceKeyDown(e, index, 'starAmt')} style={{ width: '100%' }} /></td>
+                  <td><input className="erp-input numeric" data-field="taxable" data-index={index} value={item.taxable} onChange={(e) => updateInvoiceItem(index, 'taxable', e.target.value)} onKeyDown={(e) => handleInvoiceKeyDown(e, index, 'taxable')} style={{ width: '100%' }} /></td>
+                  <td><input className="erp-input numeric small" data-field="gst" data-index={index} value={item.gst} onChange={(e) => updateInvoiceItem(index, 'gst', e.target.value)} onKeyDown={(e) => handleInvoiceKeyDown(e, index, 'gst')} style={{ width: '100%' }} /></td>
+                  <td><input className="erp-input numeric" data-field="sgst" data-index={index} value={item.sgst} onChange={(e) => updateInvoiceItem(index, 'sgst', e.target.value)} onKeyDown={(e) => handleInvoiceKeyDown(e, index, 'sgst')} style={{ width: '100%' }} /></td>
+                  <td><input className="erp-input numeric" data-field="cgst" data-index={index} value={item.cgst} onChange={(e) => updateInvoiceItem(index, 'cgst', e.target.value)} onKeyDown={(e) => handleInvoiceKeyDown(e, index, 'cgst')} style={{ width: '100%' }} /></td>
+                  <td><input className="erp-input numeric font-bold" data-field="amount" data-index={index} value={item.amount} onChange={(e) => updateInvoiceItem(index, 'amount', e.target.value)} onKeyDown={(e) => handleInvoiceKeyDown(e, index, 'amount')} style={{ width: '100%', fontWeight: 'bold' }} /></td>
+                  <td style={{ position: 'sticky', right: 0, backgroundColor: index === activeRow ? '#eff6ff' : 'white', zIndex: 5 }}>
+                    <button className="btn-delete text-red-500" onClick={() => deleteInvoiceItem(index)} style={{ padding: '6px 12px', whiteSpace: 'nowrap' }}>🗑 Delete</button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+   
+    <div className="form-section">
+      <h4 className="section-header">Quotation Summary</h4>
+      <div className="summary-bar">
+        <div>Gross Amount: <span className="amount">₹{invoiceSummary.gross.toFixed(2)}</span></div>
+        <div>TPR Amount: <span className="amount">-₹{invoiceSummary.tpr.toFixed(2)}</span></div>
+        <div>Scheme Amount: <span className="amount">-₹{invoiceSummary.scheme.toFixed(2)}</span></div>
+        <div>Star Discount: <span className="amount">-₹{invoiceSummary.star.toFixed(2)}</span></div>
+        <div>Cash Discount: <span className="amount">-₹{invoiceSummary.cd.toFixed(2)}</span></div>
+        <div className="taxable-value">Taxable Value: <span className="amount">₹{(invoiceSummary.gross - invoiceSummary.tpr - invoiceSummary.scheme - invoiceSummary.star - invoiceSummary.cd).toFixed(2)}</span></div>
+        <div>SGST Amount: <span className="amount">+₹{(invoiceSummary.gst / 2).toFixed(2)}</span></div>
+        <div>CGST Amount: <span className="amount">+₹{(invoiceSummary.gst / 2).toFixed(2)}</span></div>
+        <div className="net-amount">Net Amount: <strong>₹{((invoiceSummary.gross - invoiceSummary.tpr - invoiceSummary.scheme - invoiceSummary.star - invoiceSummary.cd) + invoiceSummary.gst).toFixed(2)}</strong></div>
+      </div>
+    </div>
+    
+    {/* Action Button */}
+    <div className="form-actions">
+      <button className="btn-add-invoice" onClick={saveInvoice}>
+        💾 Save Quotation
+      </button>
+      <button type="button" className="btn-secondary" onClick={closeForm}>
+        Cancel
+      </button>
+    </div>
+  </div>
+)}
+
+
+{/* Create Load Form */}
+{activeSubMenu === 'Create Load' && openFormFor === 'Create Load' && (
+  <div className="master-section erp-master-form">
+    <div className="erp-header">
+      <div>
+        <h2 className="erp-title">Create Load</h2>
+      </div>
+      <button className="close-form-btn" onClick={closeForm}>✕</button>
+    </div>
+
+    <form className="master-form" onSubmit={(e) => { e.preventDefault(); saveCreateLoad(); }}>
+      <div className="form-section">
+        <h4 className="section-header">Load Information</h4>
+        {/* Row 1: 5 fields */}
+        <div className="form-grid-5">
+          <div className="labeled-input">
+            <label>Load Series *</label>
+            <input 
+              type="text" 
+              name="loadSeries" 
+              className="erp-input" 
+              placeholder="Load Series" 
+              value={createLoadFormData.loadSeries} 
+              onChange={handleCreateLoadInputChange} 
+              required 
+            />
+          </div>
+          <div className="labeled-input">
+            <label>Load No *</label>
+            <input 
+              type="text" 
+              name="loadNo" 
+              className="erp-input" 
+              placeholder="Load Number" 
+              value={createLoadFormData.loadNo} 
+              onChange={handleCreateLoadInputChange} 
+              required 
+            />
+          </div>
+          <div className="labeled-input">
+            <label>Load Date *</label>
+            <input 
+              type="date" 
+              name="loadDate" 
+              className="erp-input" 
+              value={createLoadFormData.loadDate} 
+              onChange={handleCreateLoadInputChange} 
+              required 
+            />
+          </div>
+          <div className="labeled-input">
+            <label>Company *</label>
+            <select 
+              name="company" 
+              className="erp-select" 
+              value={createLoadFormData.company} 
+              onChange={handleCreateLoadInputChange} 
+              required
+            >
+              <option value="">Select Company</option>
+              {companies.map(c => <option key={c.id} value={c.name}>{c.name}</option>)}
+            </select>
+          </div>
+          <div className="labeled-input">
+            <label>Delivery By *</label>
+            <input 
+              type="text" 
+              name="deliveryBy" 
+              className="erp-input" 
+              placeholder="Delivery By" 
+              value={createLoadFormData.deliveryBy} 
+              onChange={handleCreateLoadInputChange} 
+              required 
+            />
+          </div>
+        </div>
+
+        {/* Row 2: 5 fields */}
+        <div className="form-grid-5">
+          <div className="labeled-input">
+            <label>Delivery Boy *</label>
+            <select 
+              name="deliverBoy" 
+              className="erp-select" 
+              value={createLoadFormData.deliverBoy} 
+              onChange={handleCreateLoadInputChange} 
+              required
+            >
+              <option value="db">DB</option>
+              <option value="other">Other</option>
+            </select>
+          </div>
+          <div className="labeled-input">
+            <label>Salesman Selection</label>
+            <select 
+              name="selectedSalesman" 
+              className="erp-select" 
+              value={createLoadFormData.selectedSalesman} 
+              onChange={handleCreateLoadInputChange}
+              multiple
+              size="3"
+              style={{ height: 'auto', minHeight: '80px' }}
+            >
+              {salesmen.filter(s => s.type === 'SALESMAN').map(s => (
+                <option key={s.id} value={s.name}>{s.name}</option>
+              ))}
+            </select>
+            <small style={{ fontSize: '11px', color: '#666' }}>Hold Ctrl/Cmd to select multiple</small>
+          </div>
+          <div className="labeled-input">
+            <label>Bill From Date *</label>
+            <input 
+              type="date" 
+              name="billFromDate" 
+              className="erp-input" 
+              value={createLoadFormData.billFromDate} 
+              onChange={handleCreateLoadInputChange} 
+              required 
+            />
+          </div>
+          <div className="labeled-input">
+            <label>Bill To Date *</label>
+            <input 
+              type="date" 
+              name="billToDate" 
+              className="erp-input" 
+              value={createLoadFormData.billToDate} 
+              onChange={handleCreateLoadInputChange} 
+              required 
+            />
+          </div>
+          <div className="labeled-input narration-field">
+            <label>Narration</label>
+            <textarea 
+              name="narration" 
+              className="erp-textarea" 
+              rows="2" 
+              placeholder="Enter narration..." 
+              value={createLoadFormData.narration} 
+              onChange={handleCreateLoadInputChange} 
+            />
+          </div>
+        </div>
+      </div>
+
+      <div className="form-section">
+        <h4 className="section-header">Invoices Grid</h4>
+        
+        {/* Removed Add Invoice button - only grid is shown */}
+        
+        <div className="data-table-container" style={{ overflowX: 'auto', overflowY: 'auto', maxHeight: '400px' }}>
+          <table className="data-table" style={{ minWidth: '1200px' }}>
+            <thead style={{ position: 'sticky', top: 0, zIndex: 10 }}>
+              <tr>
+                <th style={{ position: 'sticky', left: 0, backgroundColor: '#f8fafc', zIndex: 20, width: '50px' }}>Sl No</th>
+                <th style={{ width: '100px' }}>Select</th>
+                <th style={{ width: '120px' }}>Party Code</th>
+                <th style={{ width: '180px' }}>Party Name</th>
+                <th style={{ width: '100px' }}>Bill Series</th>
+                <th style={{ width: '100px' }}>Bill No</th>
+                <th style={{ width: '110px' }}>Bill Date</th>
+                <th style={{ width: '120px' }}>Salesman</th>
+                <th style={{ width: '120px' }}>Area</th>
+                <th style={{ width: '120px' }}>Amount</th>
+                <th style={{ position: 'sticky', right: 0, backgroundColor: '#f8fafc', zIndex: 20, width: '80px' }}>Action</th>
+              </tr>
+            </thead>
+            <tbody>
+              {createLoadItems.map((item, index) => (
+                <tr key={item.id}>
+                  <td style={{ position: 'sticky', left: 0, backgroundColor: 'white', zIndex: 5 }}>{item.sr}</td>
+                  <td style={{ textAlign: 'center' }}>
+                    <input 
+                      type="checkbox"
+                      checked={item.selected || false}
+                      onChange={(e) => updateCreateLoadItem(index, 'selected', e.target.checked)}
+                      style={{ width: '20px', height: '20px', cursor: 'pointer' }}
+                    />
+                  </td>
+                  <td>
+                    <input 
+                      type="text" 
+                      className="erp-input" 
+                      value={item.partyCode} 
+                      onChange={(e) => updateCreateLoadItem(index, 'partyCode', e.target.value)} 
+                      placeholder="Party Code"
+                      style={{ width: '100%' }}
+                    />
+                  </td>
+                  <td>
+                    <input 
+                      type="text" 
+                      className="erp-input" 
+                      value={item.partyName} 
+                      onChange={(e) => updateCreateLoadItem(index, 'partyName', e.target.value)} 
+                      placeholder="Party Name"
+                      style={{ width: '100%' }}
+                    />
+                  </td>
+                  <td>
+                    <input 
+                      type="text" 
+                      className="erp-input" 
+                      value={item.billSeries} 
+                      onChange={(e) => updateCreateLoadItem(index, 'billSeries', e.target.value)} 
+                      placeholder="Series"
+                      style={{ width: '100%' }}
+                    />
+                  </td>
+                  <td>
+                    <input 
+                      type="text" 
+                      className="erp-input" 
+                      value={item.billNo} 
+                      onChange={(e) => updateCreateLoadItem(index, 'billNo', e.target.value)} 
+                      placeholder="Bill No"
+                      style={{ width: '100%' }}
+                    />
+                  </td>
+                  <td>
+                    <input 
+                      type="date" 
+                      className="erp-input" 
+                      value={item.billDate} 
+                      onChange={(e) => updateCreateLoadItem(index, 'billDate', e.target.value)} 
+                      style={{ width: '100%' }}
+                    />
+                  </td>
+                  <td>
+                    <select 
+                      className="erp-select" 
+                      value={item.salesman} 
+                      onChange={(e) => updateCreateLoadItem(index, 'salesman', e.target.value)} 
+                      style={{ width: '100%' }}
+                    >
+                      <option value="">Select</option>
+                      {salesmen.map(s => <option key={s.id} value={s.name}>{s.name}</option>)}
+                    </select>
+                  </td>
+                  <td>
+                    <select 
+                      className="erp-select" 
+                      value={item.area} 
+                      onChange={(e) => updateCreateLoadItem(index, 'area', e.target.value)} 
+                      style={{ width: '100%' }}
+                    >
+                      <option value="">Select</option>
+                      {areas.map(a => <option key={a.id} value={a.name}>{a.name}</option>)}
+                    </select>
+                  </td>
+                  <td>
+                    <input 
+                      type="number" 
+                      className="erp-input numeric" 
+                      value={item.amount} 
+                      onChange={(e) => updateCreateLoadItem(index, 'amount', e.target.value)} 
+                      placeholder="Amount"
+                      style={{ width: '100%' }}
+                    />
+                  </td>
+                  <td>
+                    <button 
+                      type="button" 
+                      className="btn-delete" 
+                      onClick={() => deleteCreateLoadItem(index)}
+                      style={{ whiteSpace: 'nowrap' }}
+                    >
+                      🗑 Delete
+                    </button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          {createLoadItems.length === 0 && (
+            <div className="empty-state" style={{ padding: '40px', textAlign: 'center' }}>
+              No invoices added.
+            </div>
+          )}
+        </div>
+      </div>
+
+      <div className="form-actions">
+        <button type="submit" className="btn-primary">
+          💾 Create Load
+        </button>
+        <button type="button" className="btn-secondary" onClick={closeForm}>
+          Cancel
+        </button>
+      </div>
+    </form>
+  </div>
+)}
+{/* Print Load Form */}
+{activeSubMenu === 'Print Load' && openFormFor === 'Print Load' && (
+  <div className="master-section erp-master-form">
+    <div className="erp-header">
+      <div>
+        <h2 className="erp-title">Print Load</h2>
+      </div>
+      <button className="close-form-btn" onClick={closeForm}>✕</button>
+    </div>
+
+    <form className="master-form" onSubmit={handlePrintLoadSubmit}>
+      <div className="form-section">
+        <h4 className="section-header">Load Information</h4>
+        
+        {/* Row 1: 5 fields */}
+        <div className="form-grid-5">
+          <div className="labeled-input">
+            <label>Load Series *</label>
+            <select 
+              name="loadSeries" 
+              className="erp-select" 
+              value={printLoadFormData.loadSeries} 
+              onChange={handlePrintLoadInputChange} 
+              required
+            >
+              <option value="">Select Load Series</option>
+              <option value="LS-001">LS-001</option>
+              <option value="LS-002">LS-002</option>
+              <option value="LS-003">LS-003</option>
+            </select>
+          </div>
+          <div className="labeled-input">
+            <label>Load No *</label>
+            <input 
+              type="text" 
+              name="loadNo" 
+              className="erp-input" 
+              placeholder="Enter Load Number" 
+              value={printLoadFormData.loadNo} 
+              onChange={handlePrintLoadInputChange} 
+              required 
+            />
+          </div>
+          <div className="labeled-input">
+            <label>Report Level</label>
+            <select 
+              name="reportLevel" 
+              className="erp-select" 
+              value={printLoadFormData.reportLevel} 
+              onChange={handlePrintLoadInputChange}
+            >
+              <option value="">Select Report Level</option>
+              <option value="summary">Summary</option>
+              <option value="detailed">Detailed</option>
+              <option value="consolidated">Consolidated</option>
+            </select>
+          </div>
+          <div className="labeled-input">
+            <label>Print On</label>
+            <select 
+              name="printOn" 
+              className="erp-select" 
+              value={printLoadFormData.printOn} 
+              onChange={handlePrintLoadInputChange}
+            >
+              <option value="">Select Print Option</option>
+              <option value="printer">Printer</option>
+              <option value="pdf">PDF</option>
+              <option value="email">Email</option>
+            </select>
+          </div>
+          <div className="labeled-input">
+            <label>Print Layout</label>
+            <select 
+              name="printLayout" 
+              className="erp-select" 
+              value={printLoadFormData.printLayout} 
+              onChange={handlePrintLoadInputChange}
+            >
+              <option value="portrait">Portrait</option>
+              <option value="landscape">Landscape</option>
+            </select>
+          </div>
+        </div>
+
+        {/* Row 2: 5 fields */}
+        <div className="form-grid-5">
+          <div className="labeled-input">
+            <label>Area Wise</label>
+            <select 
+              name="areaWise" 
+              className="erp-select" 
+              value={printLoadFormData.areaWise} 
+              onChange={handlePrintLoadInputChange}
+            >
+              <option value="N">No</option>
+              <option value="Y">Yes</option>
+            </select>
+          </div>
+          <div className="labeled-input">
+            <label>Salesman Wise</label>
+            <select 
+              name="salesmanWise" 
+              className="erp-select" 
+              value={printLoadFormData.salesmanWise} 
+              onChange={handlePrintLoadInputChange}
+            >
+              <option value="N">No</option>
+              <option value="Y">Yes</option>
+            </select>
+          </div>
+          <div className="labeled-input">
+            <label>Order By</label>
+            <select 
+              name="orderBy" 
+              className="erp-select" 
+              value={printLoadFormData.orderBy} 
+              onChange={handlePrintLoadInputChange}
+            >
+              <option value="product_wise">Product Wise</option>
+              <option value="product_code_wise">Product Code Wise</option>
+              <option value="short_code_wise">Short Code Wise</option>
+            </select>
+          </div>
+          <div className="labeled-input">
+            <label>Select Load</label>
+            <select className="erp-select">
+              <option value="">Select Load</option>
+              <option value="load1">Load 1</option>
+              <option value="load2">Load 2</option>
+            </select>
+          </div>
+          <div className="labeled-input">
+            <label>Filter By</label>
+            <select className="erp-select">
+              <option value="">All</option>
+              <option value="date">Date Range</option>
+              <option value="party">Party Wise</option>
+            </select>
+          </div>
+        </div>
+      </div>
+
+      <div className="form-actions">
+        <button type="submit" className="btn-primary">
+          🔍 Load Data
+        </button>
+        <button type="button" className="btn-secondary" onClick={closeForm}>
+          Cancel
+        </button>
+      </div>
+    </form>
+
+    {/* Print Preview Section with Scrollable Grid */}
+    {showPrintPreview && (
+      <div className="form-section" style={{ marginTop: '30px' }}>
+        <h4 className="section-header">Print Preview - Selection Grid</h4>
+        
+        <div className="form-actions" style={{ marginBottom: '20px' }}>
+          <button type="button" className="btn-primary" onClick={handlePrint}>
+            🖨️ Print Selected
+          </button>
+          <button type="button" className="btn-excel" onClick={handleExportToExcel}>
+            📊 Export to Excel
+          </button>
+        </div>
+
+        <div id="print-load-content">
+          <div className="print-header">
+            <h1>Load Report</h1>
+            <p>Load Series: {printLoadFormData.loadSeries} | Load No: {printLoadFormData.loadNo}</p>
+            <p>Date: {new Date().toLocaleDateString()}</p>
+          </div>
+
+          {/* Scrollable Grid with Checkboxes */}
+          <div className="data-table-container" style={{ 
+            overflowX: 'auto', 
+            overflowY: 'auto', 
+            maxHeight: '500px',
+            border: '1px solid #e5e7eb',
+            borderRadius: '8px'
+          }}>
+            <table className="data-table" style={{ 
+              width: '100%', 
+              borderCollapse: 'collapse',
+              fontSize: '13px'
+            }}>
+              <thead style={{ position: 'sticky', top: 0, zIndex: 10 }}>
+                <tr style={{ backgroundColor: '#4CAF50', color: 'white' }}>
+                  <th style={{ padding: '10px', border: '1px solid #ddd', textAlign: 'center', width: '50px' }}>
+                    <input 
+                      type="checkbox"
+                      onChange={(e) => {
+                        const isChecked = e.target.checked;
+                        const updatedItems = generatePrintLayout().map((item, idx) => ({
+                          ...item,
+                          selected: isChecked
+                        }));
+                        setPrintLoadItems(updatedItems);
+                      }}
+                      style={{ cursor: 'pointer' }}
+                    />
+                  </th>
+                  <th style={{ padding: '10px', border: '1px solid #ddd', textAlign: 'center', width: '50px' }}>Sr No</th>
+                  <th style={{ padding: '10px', border: '1px solid #ddd', textAlign: 'left' }}>Party Name</th>
+                  <th style={{ padding: '10px', border: '1px solid #ddd', textAlign: 'left' }}>Bill No</th>
+                  <th style={{ padding: '10px', border: '1px solid #ddd', textAlign: 'right' }}>Amount (₹)</th>
+                  <th style={{ padding: '10px', border: '1px solid #ddd', textAlign: 'left' }}>Area</th>
+                  <th style={{ padding: '10px', border: '1px solid #ddd', textAlign: 'left' }}>Salesman</th>
+                  <th style={{ padding: '10px', border: '1px solid #ddd', textAlign: 'left' }}>Bill Date</th>
+                  <th style={{ padding: '10px', border: '1px solid #ddd', textAlign: 'left' }}>Party Code</th>
+                </tr>
+              </thead>
+              <tbody>
+                {generatePrintLayout().map((item, index) => (
+                  <tr key={index}>
+                    <td style={{ padding: '8px', border: '1px solid #ddd', textAlign: 'center' }}>
+                      <input 
+                        type="checkbox"
+                        checked={item.selected || false}
+                        onChange={(e) => {
+                          const updatedItems = [...printLoadItems];
+                          updatedItems[index].selected = e.target.checked;
+                          setPrintLoadItems(updatedItems);
+                        }}
+                        style={{ cursor: 'pointer' }}
+                      />
+                    </td>
+                    <td style={{ padding: '8px', border: '1px solid #ddd', textAlign: 'center' }}>{index + 1}</td>
+                    <td style={{ padding: '8px', border: '1px solid #ddd' }}>{item.partyName}</td>
+                    <td style={{ padding: '8px', border: '1px solid #ddd' }}>{item.billNo}</td>
+                    <td style={{ padding: '8px', border: '1px solid #ddd', textAlign: 'right' }}>
+                      ₹{item.amount.toFixed(2)}
+                    </td>
+                    <td style={{ padding: '8px', border: '1px solid #ddd' }}>{item.area}</td>
+                    <td style={{ padding: '8px', border: '1px solid #ddd' }}>{item.salesman}</td>
+                    <td style={{ padding: '8px', border: '1px solid #ddd' }}>{item.billDate || '-'}</td>
+                    <td style={{ padding: '8px', border: '1px solid #ddd' }}>{item.partyCode || '-'}</td>
+                  </tr>
+                ))}
+              </tbody>
+              <tfoot>
+                <tr style={{ backgroundColor: '#f5f5f5', fontWeight: 'bold' }}>
+                  <td colSpan="4" style={{ padding: '10px', border: '1px solid #ddd', textAlign: 'right' }}>
+                    Total Selected:
+                  </td>
+                  <td style={{ padding: '10px', border: '1px solid #ddd', textAlign: 'right' }}>
+                    ₹{generatePrintLayout()
+                      .filter(item => item.selected)
+                      .reduce((sum, item) => sum + item.amount, 0)
+                      .toFixed(2)}
+                  </td>
+                  <td colSpan="4" style={{ padding: '10px', border: '1px solid #ddd' }}>
+                    ({generatePrintLayout().filter(item => item.selected).length} items selected)
+                  </td>
+                </tr>
+                <tr style={{ backgroundColor: '#e5e7eb', fontWeight: 'bold' }}>
+                  <td colSpan="4" style={{ padding: '10px', border: '1px solid #ddd', textAlign: 'right' }}>
+                    Grand Total:
+                  </td>
+                  <td style={{ padding: '10px', border: '1px solid #ddd', textAlign: 'right' }}>
+                    ₹{generatePrintLayout().reduce((sum, item) => sum + item.amount, 0).toFixed(2)}
+                  </td>
+                  <td colSpan="4" style={{ padding: '10px', border: '1px solid #ddd' }}>
+                    ({generatePrintLayout().length} total items)
+                  </td>
+                </tr>
+              </tfoot>
+            </table>
+          </div>
+        </div>
+      </div>
+    )}
+  </div>
+)}
           {/* Dashboard Performance View */}
 {activeSubMenu === 'Dashboard' && openFormFor !== 'Firm Creation' && openFormFor !== 'User Creation' && (
   <div className="master-section">
@@ -4547,12 +6865,14 @@ const saveBatchDetails = () => {
           {activeSubMenu === 'Salesman To Area' && <SalesmanToAreaMapping />}
 
         
-{activeSubMenu === 'Sales' && (
+{/* Sales Invoice (Billing) Form */}
+{activeSubMenu === 'Billing' && openFormFor === 'Billing' && (
   <div className="master-section erp-master-form sales-invoice">
     <div className="erp-header">
       <div>
-        <h2 className="erp-title">Sales Invoice</h2>
+        <h2 className="erp-title">Sales Invoice (Billing)</h2>
       </div>
+      <button className="close-form-btn" onClick={closeForm}>✕</button>
     </div>
 
     {/* Invoice Header - 4 col grid */}
@@ -4603,237 +6923,237 @@ const saveBatchDetails = () => {
       </div>
     </div>
 
-   
-<div className="form-section">
-  <h4 className="section-header">Product Entry</h4>
-  <div className="product-entry-container" style={{ overflowX: 'auto', overflowY: 'auto', maxHeight: '500px' }}>
-    <div className="erp-table-container" style={{ minWidth: '2000px' }}>
-      <table className="product-entry-table" style={{ width: '100%', borderCollapse: 'collapse' }}>
-        <thead style={{ position: 'sticky', top: 0, zIndex: 10 }}>
-          <tr>
-            <th style={{ position: 'sticky', left: 0, backgroundColor: '#f8fafc', zIndex: 20, minWidth: '50px' }}>Sr</th>
-            <th style={{ minWidth: '180px' }}>Product</th>
-            <th style={{ minWidth: '100px' }}>Units</th>
-            <th style={{ minWidth: '100px' }}>Qty</th>
-            <th style={{ minWidth: '100px' }}>Free</th>
-            <th style={{ minWidth: '100px' }}>MRP</th>
-            <th style={{ minWidth: '100px' }}>Rate</th>
-            <th style={{ minWidth: '120px' }}>Rate GST</th>
-            <th style={{ minWidth: '120px' }}>TPR Amt</th>
-            <th style={{ minWidth: '100px' }}>Scheme %</th>
-            <th style={{ minWidth: '120px' }}>Scheme Amt</th>
-            <th style={{ minWidth: '100px' }}>CD %</th>
-            <th style={{ minWidth: '120px' }}>CD Amt</th>
-            <th style={{ minWidth: '100px' }}>Star %</th>
-            <th style={{ minWidth: '120px' }}>Star Amt</th>
-            <th style={{ minWidth: '120px' }}>Taxable</th>
-            <th style={{ minWidth: '100px' }}>GST %</th>
-            <th style={{ minWidth: '100px' }}>SGST</th>
-            <th style={{ minWidth: '100px' }}>CGST</th>
-            <th style={{ minWidth: '120px' }}>Amount</th>
-            <th style={{ position: 'sticky', right: 0, backgroundColor: '#f8fafc', zIndex: 20, minWidth: '70px' }}>Action</th>
-          </tr>
-        </thead>
-        <tbody>
-          {invoiceItems.map((item, index) => (
-            <tr key={item.id} className={index === activeRow ? 'active-row' : ''}>
-              <td style={{ position: 'sticky', left: 0, backgroundColor: index === activeRow ? '#eff6ff' : 'white', zIndex: 5, minWidth: '50px' }}>{item.sr}</td>
-              <td style={{ position: 'relative' }}>
-                <input
-                  data-product-index={index}
-                  className="erp-input product-search"
-                  value={item.product}
-                  onChange={(e) => {
-                    const value = e.target.value;
-                    updateInvoiceItem(index, 'product', value);
-                    setCurrentProductIndex(index);
-                    if (value.trim() !== '') {
-                      setProductListFilter(value);
-                      setShowProductList(true);
-                    } else {
-                      setShowProductList(false);
-                    }
-                  }}
-                  onFocus={() => {
-                    setActiveRow(index);
-                    if (item.product) {
-                      setProductListFilter(item.product);
-                      setCurrentProductIndex(index);
-                      setShowProductList(true);
-                    }
-                  }}
-                  style={{ width: '100%', minWidth: '150px', cursor: 'pointer' }}
-                  placeholder="Click to select product"
-                />
-                
-                {showProductList && currentProductIndex === index && productListFilter.trim() !== '' && (
-                  <div className="erlay">
-                    <div className="product-dropdown">
-                      <div className="dropdown-list">
-                        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '12px' }}>
-                          <thead>
-                            <tr style={{ background: '#eff6ff', position: 'sticky', top: 0 }}>
-                              <th style={{ padding: '6px', textAlign: 'left' }}>Item Code</th>
-                              <th style={{ padding: '6px', textAlign: 'left' }}>Name</th>
-                              <th style={{ padding: '6px', textAlign: 'left' }}>Batch</th>
-                              <th style={{ padding: '6px', textAlign: 'right' }}>MRP</th>
-                              <th style={{ padding: '6px', textAlign: 'right' }}>Sales Rate</th>
-                              <th style={{ padding: '6px', textAlign: 'right' }}>Stock</th>
-                            </tr>
-                          </thead>
-                          <tbody>
-                            {products
-                              .filter(p =>
-                                p.name?.toLowerCase().includes(productListFilter.toLowerCase()) ||
-                                p.code?.toLowerCase().includes(productListFilter.toLowerCase())
-                              )
-                              .map(product => {
-                                const productBatches = batches.filter(b => b.productId === product.id);
-                                const displayBatch = productBatches[0];
-                                const totalStock = productBatches.reduce((sum, b) => sum + (parseFloat(b.stockQty) || 0), 0);
-                                
-                                return (
-                                  <tr
-                                    key={product.id}
-                                    onClick={() => {
-                                      if (productBatches.length > 1) {
-                                        setCurrentProductIndex(index);
-                                        setProductBatchesForSelection(productBatches);
-                                        setSelectedProductForBatch(product);
-                                        setShowBatchSelectionModal(true);
-                                      } else if (productBatches.length === 1) {
-                                        handleProductSelect(currentProductIndex, {
-                                          ...product,
-                                          selectedBatch: productBatches[0]
-                                        });
-                                        // Auto-add new row after product selection (except for last row)
-                                        if (index === invoiceItems.length - 1) {
-                                          setTimeout(() => {
-                                            addInvoiceItem();
-                                            setTimeout(() => {
-                                              const nextProductInput = document.querySelector(`[data-product-index="${index + 1}"]`);
-                                              if (nextProductInput) nextProductInput.focus();
-                                            }, 50);
-                                          }, 150);
-                                        } else {
-                                          setTimeout(() => {
-                                            const nextProductInput = document.querySelector(`[data-product-index="${index + 1}"]`);
-                                            if (nextProductInput) nextProductInput.focus();
-                                          }, 50);
-                                        }
-                                      } else {
-                                        handleProductSelect(currentProductIndex, product);
-                                        // Auto-add new row after product selection (except for last row)
-                                        if (index === invoiceItems.length - 1) {
-                                          setTimeout(() => {
-                                            addInvoiceItem();
-                                            setTimeout(() => {
-                                              const nextProductInput = document.querySelector(`[data-product-index="${index + 1}"]`);
-                                              if (nextProductInput) nextProductInput.focus();
-                                            }, 50);
-                                          }, 150);
-                                        } else {
-                                          setTimeout(() => {
-                                            const nextProductInput = document.querySelector(`[data-product-index="${index + 1}"]`);
-                                            if (nextProductInput) nextProductInput.focus();
-                                          }, 50);
-                                        }
-                                      }
-                                    }}
-                                    style={{ cursor: 'pointer', borderBottom: '1px solid #eee' }}
-                                    onMouseEnter={(e) => { e.currentTarget.style.background = '#f8fafc'; }}
-                                    onMouseLeave={(e) => { e.currentTarget.style.background = 'white'; }}
-                                  >
-                                    <td style={{ padding: '6px' }}>{product.code}</td>
-                                    <td style={{ padding: '6px' }}>{product.name}</td>
-                                    <td style={{ padding: '6px' }}>
-                                      {productBatches.length > 1 
-                                        ? `${productBatches.length} batches` 
-                                        : displayBatch?.batchNo || '-'}
-                                    </td>
-                                    <td style={{ padding: '6px', textAlign: 'right' }}>
-                                      ₹{displayBatch?.mrp || product.mrp || 0}
-                                    </td>
-                                    <td style={{ padding: '6px', textAlign: 'right' }}>
-                                      ₹{displayBatch?.salesRate || product.salesRate || product.mrp || 0}
-                                    </td>
-                                    <td style={{ padding: '6px', textAlign: 'right' }}>
-                                      {totalStock}
-                                    </td>
-                                  </tr>
-                                );
-                              })}
-                          </tbody>
-                        </table>
+    {/* Product Entry Table - Keep the existing product entry table code */}
+    <div className="form-section">
+      <h4 className="section-header">Product Entry</h4>
+      <div className="product-entry-container" style={{ overflowX: 'auto', overflowY: 'auto', maxHeight: '500px' }}>
+        <div className="erp-table-container" style={{ minWidth: '2000px' }}>
+          <table className="product-entry-table" style={{ width: '100%', borderCollapse: 'collapse' }}>
+            <thead style={{ position: 'sticky', top: 0, zIndex: 10 }}>
+              <tr>
+                <th style={{ position: 'sticky', left: 0, backgroundColor: '#f8fafc', zIndex: 20, minWidth: '50px' }}>Sr</th>
+                <th style={{ minWidth: '180px' }}>Product</th>
+                <th style={{ minWidth: '100px' }}>Units</th>
+                <th style={{ minWidth: '100px' }}>Qty</th>
+                <th style={{ minWidth: '100px' }}>Free</th>
+                <th style={{ minWidth: '100px' }}>MRP</th>
+                <th style={{ minWidth: '100px' }}>Rate</th>
+                <th style={{ minWidth: '120px' }}>Rate GST</th>
+                <th style={{ minWidth: '120px' }}>TPR Amt</th>
+                <th style={{ minWidth: '100px' }}>Scheme %</th>
+                <th style={{ minWidth: '120px' }}>Scheme Amt</th>
+                <th style={{ minWidth: '100px' }}>CD %</th>
+                <th style={{ minWidth: '120px' }}>CD Amt</th>
+                <th style={{ minWidth: '100px' }}>Star %</th>
+                <th style={{ minWidth: '120px' }}>Star Amt</th>
+                <th style={{ minWidth: '120px' }}>Taxable</th>
+                <th style={{ minWidth: '100px' }}>GST %</th>
+                <th style={{ minWidth: '100px' }}>SGST</th>
+                <th style={{ minWidth: '100px' }}>CGST</th>
+                <th style={{ minWidth: '120px' }}>Amount</th>
+                <th style={{ position: 'sticky', right: 0, backgroundColor: '#f8fafc', zIndex: 20, minWidth: '70px' }}>Action</th>
+              </tr>
+            </thead>
+            <tbody>
+              {invoiceItems.map((item, index) => (
+                <tr key={item.id} className={index === activeRow ? 'active-row' : ''}>
+                  <td style={{ position: 'sticky', left: 0, backgroundColor: index === activeRow ? '#eff6ff' : 'white', zIndex: 5, minWidth: '50px' }}>{item.sr}</td>
+                  <td style={{ position: 'relative' }}>
+                    <input
+                      data-product-index={index}
+                      className="erp-input product-search"
+                      value={item.product}
+                      onChange={(e) => {
+                        const value = e.target.value;
+                        updateInvoiceItem(index, 'product', value);
+                        setCurrentProductIndex(index);
+                        if (value.trim() !== '') {
+                          setProductListFilter(value);
+                          setShowProductList(true);
+                        } else {
+                          setShowProductList(false);
+                        }
+                      }}
+                      onFocus={() => {
+                        setActiveRow(index);
+                        if (item.product) {
+                          setProductListFilter(item.product);
+                          setCurrentProductIndex(index);
+                          setShowProductList(true);
+                        }
+                      }}
+                      style={{ width: '100%', minWidth: '150px', cursor: 'pointer' }}
+                      placeholder="Click to select product"
+                    />
+                    
+                    {showProductList && currentProductIndex === index && productListFilter.trim() !== '' && (
+                      <div className="erlay">
+                        <div className="product-dropdown">
+                          <div className="dropdown-list">
+                            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '12px' }}>
+                              <thead>
+                                <tr style={{ background: '#eff6ff', position: 'sticky', top: 0 }}>
+                                  <th style={{ padding: '6px', textAlign: 'left' }}>Item Code</th>
+                                  <th style={{ padding: '6px', textAlign: 'left' }}>Name</th>
+                                  <th style={{ padding: '6px', textAlign: 'left' }}>Batch</th>
+                                  <th style={{ padding: '6px', textAlign: 'right' }}>MRP</th>
+                                  <th style={{ padding: '6px', textAlign: 'right' }}>Sales Rate</th>
+                                  <th style={{ padding: '6px', textAlign: 'right' }}>Stock</th>
+                                </tr>
+                              </thead>
+                              <tbody>
+                                {products
+                                  .filter(p =>
+                                    p.name?.toLowerCase().includes(productListFilter.toLowerCase()) ||
+                                    p.code?.toLowerCase().includes(productListFilter.toLowerCase())
+                                  )
+                                  .map(product => {
+                                    const productBatches = batches.filter(b => b.productId === product.id);
+                                    const displayBatch = productBatches[0];
+                                    const totalStock = productBatches.reduce((sum, b) => sum + (parseFloat(b.stockQty) || 0), 0);
+                                    
+                                    return (
+                                      <tr
+                                        key={product.id}
+                                        onClick={() => {
+                                          if (productBatches.length > 1) {
+                                            setCurrentProductIndex(index);
+                                            setShowBatchSelectionModal(true);
+                                          } else if (productBatches.length === 1) {
+                                            handleProductSelect(currentProductIndex, {
+                                              ...product,
+                                              selectedBatch: productBatches[0]
+                                            });
+                                            if (index === invoiceItems.length - 1) {
+                                              setTimeout(() => {
+                                                addInvoiceItem();
+                                                setTimeout(() => {
+                                                  const nextProductInput = document.querySelector(`[data-product-index="${index + 1}"]`);
+                                                  if (nextProductInput) nextProductInput.focus();
+                                                }, 50);
+                                              }, 150);
+                                            } else {
+                                              setTimeout(() => {
+                                                const nextProductInput = document.querySelector(`[data-product-index="${index + 1}"]`);
+                                                if (nextProductInput) nextProductInput.focus();
+                                              }, 50);
+                                            }
+                                          } else {
+                                            handleProductSelect(currentProductIndex, product);
+                                            if (index === invoiceItems.length - 1) {
+                                              setTimeout(() => {
+                                                addInvoiceItem();
+                                                setTimeout(() => {
+                                                  const nextProductInput = document.querySelector(`[data-product-index="${index + 1}"]`);
+                                                  if (nextProductInput) nextProductInput.focus();
+                                                }, 50);
+                                              }, 150);
+                                            } else {
+                                              setTimeout(() => {
+                                                const nextProductInput = document.querySelector(`[data-product-index="${index + 1}"]`);
+                                                if (nextProductInput) nextProductInput.focus();
+                                              }, 50);
+                                            }
+                                          }
+                                        }}
+                                        style={{ cursor: 'pointer', borderBottom: '1px solid #eee' }}
+                                        onMouseEnter={(e) => { e.currentTarget.style.background = '#f8fafc'; }}
+                                        onMouseLeave={(e) => { e.currentTarget.style.background = 'white'; }}
+                                      >
+                                        <td style={{ padding: '6px' }}>{product.code}</td>
+                                        <td style={{ padding: '6px' }}>{product.name}</td>
+                                        <td style={{ padding: '6px' }}>
+                                          {productBatches.length > 1 
+                                            ? `${productBatches.length} batches` 
+                                            : displayBatch?.batchNo || '-'}
+                                        </td>
+                                        <td style={{ padding: '6px', textAlign: 'right' }}>
+                                          ₹{displayBatch?.mrp || product.mrp || 0}
+                                        </td>
+                                        <td style={{ padding: '6px', textAlign: 'right' }}>
+                                          ₹{displayBatch?.salesRate || product.salesRate || product.mrp || 0}
+                                        </td>
+                                        <td style={{ padding: '6px', textAlign: 'right' }}>
+                                          {totalStock}
+                                        </td>
+                                      </tr>
+                                    );
+                                  })}
+                              </tbody>
+                            </table>
+                          </div>
+                        </div>
                       </div>
-                    </div>
-                  </div>
-                )}
-              </td>
-              <td>
-                <select
-                  className="erp-select"
-                  data-field="units"
-                  data-index={index}
-                  value={item.units}
-                  onChange={(e) => updateInvoiceItem(index, 'units', e.target.value)}
-                  onKeyDown={(e) => handleInvoiceKeyDown(e, index, 'units')}
-                  style={{ width: '100%' }}
-                >
-                  <option value="PCS">PCS</option>
-                  <option value="BOX">BOX</option>
-                  <option value="INBOX">INBOX</option>
-                  <option value="OUTER">OUTER</option>
-                  <option value="KG">KG</option>
-                  <option value="LTR">LTR</option>
-                </select>
-              </td>
-              <td><input className="erp-input numeric" data-field="qty" data-index={index} value={item.qty} onChange={(e) => updateInvoiceItem(index, 'qty', e.target.value)} onKeyDown={(e) => handleInvoiceKeyDown(e, index, 'qty')} style={{ width: '100%' }} /></td>
-              <td><input className="erp-input numeric" data-field="free" data-index={index} value={item.free} onChange={(e) => updateInvoiceItem(index, 'free', e.target.value)} onKeyDown={(e) => handleInvoiceKeyDown(e, index, 'free')} style={{ width: '100%' }} /></td>
-              <td><input className="erp-input numeric" data-field="mrp" data-index={index} value={item.mrp} onChange={(e) => updateInvoiceItem(index, 'mrp', e.target.value)} onKeyDown={(e) => handleInvoiceKeyDown(e, index, 'mrp')} style={{ width: '100%' }} /></td>
-              <td><input className="erp-input numeric" data-field="rate" data-index={index} value={item.rate} onChange={(e) => updateInvoiceItem(index, 'rate', e.target.value)} onKeyDown={(e) => handleInvoiceKeyDown(e, index, 'rate')} style={{ width: '100%' }} /></td>
-              <td><input className="erp-input numeric" data-field="rateGst" data-index={index} value={item.rateGst} onChange={(e) => updateInvoiceItem(index, 'rateGst', e.target.value)} onKeyDown={(e) => handleInvoiceKeyDown(e, index, 'rateGst')} style={{ width: '100%' }} /></td>
-              <td><input className="erp-input numeric" data-field="tprAmt" data-index={index} value={item.tprAmt} onChange={(e) => updateInvoiceItem(index, 'tprAmt', e.target.value)} onKeyDown={(e) => handleInvoiceKeyDown(e, index, 'tprAmt')} style={{ width: '100%' }} /></td>
-              <td><input className="erp-input numeric small" data-field="schemePct" data-index={index} value={item.schemePct} onChange={(e) => updateInvoiceItem(index, 'schemePct', e.target.value)} onKeyDown={(e) => handleInvoiceKeyDown(e, index, 'schemePct')} style={{ width: '100%' }} /></td>
-              <td><input className="erp-input numeric" data-field="schemeAmt" data-index={index} value={item.schemeAmt} onChange={(e) => updateInvoiceItem(index, 'schemeAmt', e.target.value)} onKeyDown={(e) => handleInvoiceKeyDown(e, index, 'schemeAmt')} style={{ width: '100%' }} /></td>
-              <td><input className="erp-input numeric small" data-field="cdPct" data-index={index} value={item.cdPct} onChange={(e) => updateInvoiceItem(index, 'cdPct', e.target.value)} onKeyDown={(e) => handleInvoiceKeyDown(e, index, 'cdPct')} style={{ width: '100%' }} /></td>
-              <td><input className="erp-input numeric" data-field="cdAmt" data-index={index} value={item.cdAmt} onChange={(e) => updateInvoiceItem(index, 'cdAmt', e.target.value)} onKeyDown={(e) => handleInvoiceKeyDown(e, index, 'cdAmt')} style={{ width: '100%' }} /></td>
-              <td><input className="erp-input numeric small" data-field="starPct" data-index={index} value={item.starPct} onChange={(e) => updateInvoiceItem(index, 'starPct', e.target.value)} onKeyDown={(e) => handleInvoiceKeyDown(e, index, 'starPct')} style={{ width: '100%' }} /></td>
-              <td><input className="erp-input numeric" data-field="starAmt" data-index={index} value={item.starAmt} onChange={(e) => updateInvoiceItem(index, 'starAmt', e.target.value)} onKeyDown={(e) => handleInvoiceKeyDown(e, index, 'starAmt')} style={{ width: '100%' }} /></td>
-              <td><input className="erp-input numeric" data-field="taxable" data-index={index} value={item.taxable} onChange={(e) => updateInvoiceItem(index, 'taxable', e.target.value)} onKeyDown={(e) => handleInvoiceKeyDown(e, index, 'taxable')} style={{ width: '100%' }} /></td>
-              <td><input className="erp-input numeric small" data-field="gst" data-index={index} value={item.gst} onChange={(e) => updateInvoiceItem(index, 'gst', e.target.value)} onKeyDown={(e) => handleInvoiceKeyDown(e, index, 'gst')} style={{ width: '100%' }} /></td>
-              <td><input className="erp-input numeric" data-field="sgst" data-index={index} value={item.sgst} onChange={(e) => updateInvoiceItem(index, 'sgst', e.target.value)} onKeyDown={(e) => handleInvoiceKeyDown(e, index, 'sgst')} style={{ width: '100%' }} /></td>
-              <td><input className="erp-input numeric" data-field="cgst" data-index={index} value={item.cgst} onChange={(e) => updateInvoiceItem(index, 'cgst', e.target.value)} onKeyDown={(e) => handleInvoiceKeyDown(e, index, 'cgst')} style={{ width: '100%' }} /></td>
-              <td><input className="erp-input numeric font-bold" data-field="amount" data-index={index} value={item.amount} onChange={(e) => updateInvoiceItem(index, 'amount', e.target.value)} onKeyDown={(e) => handleInvoiceKeyDown(e, index, 'amount')} style={{ width: '100%', fontWeight: 'bold' }} /></td>
-              <td style={{ position: 'sticky', right: 0, backgroundColor: index === activeRow ? '#eff6ff' : 'white', zIndex: 5 }}>
-                <button className="btn-delete text-red-500" onClick={() => deleteInvoiceItem(index)} style={{ padding: '6px 12px', whiteSpace: 'nowrap' }}>🗑 Delete</button>
-              </td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
+                    )}
+                  </td>
+                  <td>
+                    <select
+                      className="erp-select"
+                      data-field="units"
+                      data-index={index}
+                      value={item.units}
+                      onChange={(e) => updateInvoiceItem(index, 'units', e.target.value)}
+                      onKeyDown={(e) => handleInvoiceKeyDown(e, index, 'units')}
+                      style={{ width: '100%' }}
+                    >
+                      <option value="PCS">PCS</option>
+                      <option value="BOX">BOX</option>
+                      <option value="INBOX">INBOX</option>
+                      <option value="OUTER">OUTER</option>
+                      <option value="KG">KG</option>
+                      <option value="LTR">LTR</option>
+                    </select>
+                  </td>
+                  <td><input className="erp-input numeric" data-field="qty" data-index={index} value={item.qty} onChange={(e) => updateInvoiceItem(index, 'qty', e.target.value)} onKeyDown={(e) => handleInvoiceKeyDown(e, index, 'qty')} style={{ width: '100%' }} /></td>
+                  <td><input className="erp-input numeric" data-field="free" data-index={index} value={item.free} onChange={(e) => updateInvoiceItem(index, 'free', e.target.value)} onKeyDown={(e) => handleInvoiceKeyDown(e, index, 'free')} style={{ width: '100%' }} /></td>
+                  <td><input className="erp-input numeric" data-field="mrp" data-index={index} value={item.mrp} onChange={(e) => updateInvoiceItem(index, 'mrp', e.target.value)} onKeyDown={(e) => handleInvoiceKeyDown(e, index, 'mrp')} style={{ width: '100%' }} /></td>
+                  <td><input className="erp-input numeric" data-field="rate" data-index={index} value={item.rate} onChange={(e) => updateInvoiceItem(index, 'rate', e.target.value)} onKeyDown={(e) => handleInvoiceKeyDown(e, index, 'rate')} style={{ width: '100%' }} /></td>
+                  <td><input className="erp-input numeric" data-field="rateGst" data-index={index} value={item.rateGst} onChange={(e) => updateInvoiceItem(index, 'rateGst', e.target.value)} onKeyDown={(e) => handleInvoiceKeyDown(e, index, 'rateGst')} style={{ width: '100%' }} /></td>
+                  <td><input className="erp-input numeric" data-field="tprAmt" data-index={index} value={item.tprAmt} onChange={(e) => updateInvoiceItem(index, 'tprAmt', e.target.value)} onKeyDown={(e) => handleInvoiceKeyDown(e, index, 'tprAmt')} style={{ width: '100%' }} /></td>
+                  <td><input className="erp-input numeric small" data-field="schemePct" data-index={index} value={item.schemePct} onChange={(e) => updateInvoiceItem(index, 'schemePct', e.target.value)} onKeyDown={(e) => handleInvoiceKeyDown(e, index, 'schemePct')} style={{ width: '100%' }} /></td>
+                  <td><input className="erp-input numeric" data-field="schemeAmt" data-index={index} value={item.schemeAmt} onChange={(e) => updateInvoiceItem(index, 'schemeAmt', e.target.value)} onKeyDown={(e) => handleInvoiceKeyDown(e, index, 'schemeAmt')} style={{ width: '100%' }} /></td>
+                  <td><input className="erp-input numeric small" data-field="cdPct" data-index={index} value={item.cdPct} onChange={(e) => updateInvoiceItem(index, 'cdPct', e.target.value)} onKeyDown={(e) => handleInvoiceKeyDown(e, index, 'cdPct')} style={{ width: '100%' }} /></td>
+                  <td><input className="erp-input numeric" data-field="cdAmt" data-index={index} value={item.cdAmt} onChange={(e) => updateInvoiceItem(index, 'cdAmt', e.target.value)} onKeyDown={(e) => handleInvoiceKeyDown(e, index, 'cdAmt')} style={{ width: '100%' }} /></td>
+                  <td><input className="erp-input numeric small" data-field="starPct" data-index={index} value={item.starPct} onChange={(e) => updateInvoiceItem(index, 'starPct', e.target.value)} onKeyDown={(e) => handleInvoiceKeyDown(e, index, 'starPct')} style={{ width: '100%' }} /></td>
+                  <td><input className="erp-input numeric" data-field="starAmt" data-index={index} value={item.starAmt} onChange={(e) => updateInvoiceItem(index, 'starAmt', e.target.value)} onKeyDown={(e) => handleInvoiceKeyDown(e, index, 'starAmt')} style={{ width: '100%' }} /></td>
+                  <td><input className="erp-input numeric" data-field="taxable" data-index={index} value={item.taxable} onChange={(e) => updateInvoiceItem(index, 'taxable', e.target.value)} onKeyDown={(e) => handleInvoiceKeyDown(e, index, 'taxable')} style={{ width: '100%' }} /></td>
+                  <td><input className="erp-input numeric small" data-field="gst" data-index={index} value={item.gst} onChange={(e) => updateInvoiceItem(index, 'gst', e.target.value)} onKeyDown={(e) => handleInvoiceKeyDown(e, index, 'gst')} style={{ width: '100%' }} /></td>
+                  <td><input className="erp-input numeric" data-field="sgst" data-index={index} value={item.sgst} onChange={(e) => updateInvoiceItem(index, 'sgst', e.target.value)} onKeyDown={(e) => handleInvoiceKeyDown(e, index, 'sgst')} style={{ width: '100%' }} /></td>
+                  <td><input className="erp-input numeric" data-field="cgst" data-index={index} value={item.cgst} onChange={(e) => updateInvoiceItem(index, 'cgst', e.target.value)} onKeyDown={(e) => handleInvoiceKeyDown(e, index, 'cgst')} style={{ width: '100%' }} /></td>
+                  <td><input className="erp-input numeric font-bold" data-field="amount" data-index={index} value={item.amount} onChange={(e) => updateInvoiceItem(index, 'amount', e.target.value)} onKeyDown={(e) => handleInvoiceKeyDown(e, index, 'amount')} style={{ width: '100%', fontWeight: 'bold' }} /></td>
+                  <td style={{ position: 'sticky', right: 0, backgroundColor: index === activeRow ? '#eff6ff' : 'white', zIndex: 5 }}>
+                    <button className="btn-delete text-red-500" onClick={() => deleteInvoiceItem(index)} style={{ padding: '6px 12px', whiteSpace: 'nowrap' }}>🗑 Delete</button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
     </div>
-  </div>
-</div>
    
-<div className="form-section">
-  <h4 className="section-header">Invoice Summary</h4>
-  <div className="summary-bar">
-    <div>Gross Amount: <span className="amount">₹{invoiceSummary.gross.toFixed(2)}</span></div>
-    <div>TPR Amount: <span className="amount">-₹{invoiceSummary.tpr.toFixed(2)}</span></div>
-    <div>Scheme Amount: <span className="amount">-₹{invoiceSummary.scheme.toFixed(2)}</span></div>
-    <div>Star Discount: <span className="amount">-₹{invoiceSummary.star.toFixed(2)}</span></div>
-    <div>Cash Discount: <span className="amount">-₹{invoiceSummary.cd.toFixed(2)}</span></div>
-    <div className="taxable-value">Taxable Value: <span className="amount">₹{(invoiceSummary.gross - invoiceSummary.tpr - invoiceSummary.scheme - invoiceSummary.star - invoiceSummary.cd).toFixed(2)}</span></div>
-    <div>SGST Amount: <span className="amount">+₹{(invoiceSummary.gst / 2).toFixed(2)}</span></div>
-    <div>CGST Amount: <span className="amount">+₹{(invoiceSummary.gst / 2).toFixed(2)}</span></div>
-    <div className="net-amount">Net Amount: <strong>₹{((invoiceSummary.gross - invoiceSummary.tpr - invoiceSummary.scheme - invoiceSummary.star - invoiceSummary.cd) + invoiceSummary.gst).toFixed(2)}</strong></div>
-  </div>
-</div>
+    <div className="form-section">
+      <h4 className="section-header">Invoice Summary</h4>
+      <div className="summary-bar">
+        <div>Gross Amount: <span className="amount">₹{invoiceSummary.gross.toFixed(2)}</span></div>
+        <div>TPR Amount: <span className="amount">-₹{invoiceSummary.tpr.toFixed(2)}</span></div>
+        <div>Scheme Amount: <span className="amount">-₹{invoiceSummary.scheme.toFixed(2)}</span></div>
+        <div>Star Discount: <span className="amount">-₹{invoiceSummary.star.toFixed(2)}</span></div>
+        <div>Cash Discount: <span className="amount">-₹{invoiceSummary.cd.toFixed(2)}</span></div>
+        <div className="taxable-value">Taxable Value: <span className="amount">₹{(invoiceSummary.gross - invoiceSummary.tpr - invoiceSummary.scheme - invoiceSummary.star - invoiceSummary.cd).toFixed(2)}</span></div>
+        <div>SGST Amount: <span className="amount">+₹{(invoiceSummary.gst / 2).toFixed(2)}</span></div>
+        <div>CGST Amount: <span className="amount">+₹{(invoiceSummary.gst / 2).toFixed(2)}</span></div>
+        <div className="net-amount">Net Amount: <strong>₹{((invoiceSummary.gross - invoiceSummary.tpr - invoiceSummary.scheme - invoiceSummary.star - invoiceSummary.cd) + invoiceSummary.gst).toFixed(2)}</strong></div>
+      </div>
+    </div>
+    
     {/* Action Button */}
     <div className="form-actions">
       <button className="btn-add-invoice" onClick={saveInvoice}>
         💾 Add Invoice
+      </button>
+      <button type="button" className="btn-secondary" onClick={closeForm}>
+        Cancel
       </button>
     </div>
   </div>
