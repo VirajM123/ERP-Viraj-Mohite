@@ -170,20 +170,21 @@ const [batchForm, setBatchForm] = useState({
   const [debitProductListFilter, setDebitProductListFilter] = useState('');
   const [currentDebitProductIndex, setCurrentDebitProductIndex] = useState(-1);
 
-  // Filter states for each master
   const [filters, setFilters] = useState({
-    company: '',
-    group: '',
-    category: '',
-    product: '',
-    account: '',
-    otherAccount: '',
-    gst: '',
-    salesman: '',
-    area: '',
-    service: '',
-    godown: ''
-  });
+  company: '',
+  group: '',
+  category: '',
+  product: '',
+  account: '',
+  otherAccount: '',
+  gst: '',
+  salesman: '',
+  area: '',
+  service: '',
+  godown: '',
+  firm: '',      // Add this
+  user: ''       // Add this
+});
 
   // Master data state
   const [companies, setCompanies] = useState([]);
@@ -303,6 +304,47 @@ const [customerBankForm, setCustomerBankForm] = useState({
 });
 const [editCustomerBankId, setEditCustomerBankId] = useState(null);
 
+// Dashboard Performance State
+const [dashboardPerformance, setDashboardPerformance] = useState({
+  sales: { total: 0, count: 0, recent: [] },
+  purchase: { total: 0, count: 0, recent: [] },
+  creditNote: { total: 0, count: 0, recent: [] },
+  debitNote: { total: 0, count: 0, recent: [] }
+});
+
+// Firm Creation State
+const [firmData, setFirmData] = useState({
+  firmCode: '',
+  firmName: '',
+  address1: '',
+  address2: '',
+  city: '',
+  pinCode: '',
+  state: '',
+  country: '',
+  phoneNo: '',
+  mobileNo: '',
+  tinNo: '',
+  regNo: '',
+  gstNo: '',
+  drugLicNo: '',
+  foodLicenceNo: '',
+  distributorId: '',
+  apiKey: ''
+});
+
+// User Creation State
+const [userData, setUserData] = useState({
+  userName: '',
+  oldPassword: '',
+  password: '',
+  reEnterPassword: ''
+});
+
+const [firms, setFirms] = useState([]);
+const [users, setUsers] = useState([{ userName: 'ADMIN', password: 'admin123' }]);
+const [currentUser, setCurrentUser] = useState('ADMIN');
+
 // Filter for Customer Bank Master
 const [customerBankFilter, setCustomerBankFilter] = useState('');
   // Form states
@@ -405,19 +447,100 @@ const [customerBankFilter, setCustomerBankFilter] = useState('');
   const [categoryForm, setCategoryForm] = useState({ code: '', name: '' });
 
   const menuItems = {
-    master: { title: 'Master', icon: '📊', items: ['Company Master', 'Group Master', 'Category Master', 'Product', 'Account', 'Other Account', 'GST Master', 'Salesman', 'Area', 'Service', 'GoDown Master', 'Scheme','Customer Bank Master'] },
-    mapping: { title: 'Mapping', icon: '🔗', items: ['Salesman To Area', 'Area To Party'] },
-    vouchers: { title: 'Vouchers', icon: '📄', items: ['Sales', 'Purchase', 'Credit Note', 'Debit Note'] },
-    transactions: { title: 'Transactions', icon: '💰', items: ['Receipt', 'Expense', 'Cheque Bounce', 'PDC Docket', 'Journal Voucher', 'Contra'] },
-    reports: { title: 'Reports', icon: '📈', items: ['Sales', 'Purchase', 'Stock Reports', 'GST Reports'] },
-    tools: { title: 'Tools', icon: '⚙️', items: ['General Setup', 'Security Setup'] }
-  };
+  dashboard: { title: 'Dashboard', icon: '📊', items: ['Firm Creation', 'User Creation'] },
+  master: { title: 'Master', icon: '📊', items: ['Company Master', 'Group Master', 'Category Master', 'Product', 'Account', 'Other Account', 'GST Master', 'Salesman', 'Area', 'Service', 'GoDown Master', 'Scheme','Customer Bank Master'] },
+  mapping: { title: 'Mapping', icon: '🔗', items: ['Salesman To Area', 'Area To Party'] },
+  vouchers: { title: 'Vouchers', icon: '📄', items: ['Sales', 'Purchase', 'Credit Note', 'Debit Note'] },
+  transactions: { title: 'Transactions', icon: '💰', items: ['Receipt', 'Expense', 'Cheque Bounce', 'PDC Docket', 'Journal Voucher', 'Contra'] },
+  reports: { title: 'Reports', icon: '📈', items: ['Sales', 'Purchase', 'Stock Reports', 'GST Reports'] },
+  tools: { title: 'Tools', icon: '⚙️', items: ['General Setup', 'Security Setup'] },
+  logout: { title: 'Logout', icon: '🚪', items: [] }
+};
 
   // GoDown Master Handlers
   const handleGodownInput = (e) => {
     setGodownForm({ ...godownForm, [e.target.name]: e.target.value });
   };
+// Firm Creation Handlers
+const handleFirmInput = (e) => {
+  setFirmData({ ...firmData, [e.target.name]: e.target.value });
+};
 
+const saveFirm = (e) => {
+  e.preventDefault();
+  if (!firmData.firmCode || !firmData.firmName) {
+    return alert('Firm Code and Firm Name are required');
+  }
+  
+  const newFirm = { id: Date.now(), ...firmData };
+  setFirms([...firms, newFirm]);
+  alert('Firm created successfully!');
+  
+  // Reset form
+  setFirmData({
+    firmCode: '',
+    firmName: '',
+    address1: '',
+    address2: '',
+    city: '',
+    pinCode: '',
+    state: '',
+    country: '',
+    phoneNo: '',
+    mobileNo: '',
+    tinNo: '',
+    regNo: '',
+    gstNo: '',
+    drugLicNo: '',
+    foodLicenceNo: '',
+    distributorId: '',
+    apiKey: ''
+  });
+  closeForm();
+};
+
+// User Creation Handlers
+const handleUserInput = (e) => {
+  setUserData({ ...userData, [e.target.name]: e.target.value });
+};
+
+const saveUser = (e) => {
+  e.preventDefault();
+  if (!userData.userName) {
+    return alert('User Name is required');
+  }
+  if (userData.password !== userData.reEnterPassword) {
+    return alert('Password and Re-enter Password do not match');
+  }
+  
+  // Check if user already exists
+  if (users.find(u => u.userName === userData.userName)) {
+    return alert('User already exists!');
+  }
+  
+  const newUser = { userName: userData.userName, password: userData.password };
+  setUsers([...users, newUser]);
+  alert('User created successfully!');
+  
+  // Reset form
+  setUserData({
+    userName: '',
+    oldPassword: '',
+    password: '',
+    reEnterPassword: ''
+  });
+  closeForm();
+};
+
+// Logout Handler
+const handleLogout = () => {
+  if (window.confirm('Are you sure you want to logout?')) {
+    setCurrentUser(null);
+    setActiveMenu(null);
+    setActiveSubMenu(null);
+    alert('Logged out successfully!');
+  }
+};
   const saveGodown = (e) => {
     e.preventDefault();
     if (!godownForm.code || !godownForm.name) return alert('Code and Name required');
@@ -543,6 +666,45 @@ const getFilteredCustomerBanks = () => {
     bank.customerName?.toLowerCase().includes(customerBankFilter.toLowerCase())
   );
 };
+// Calculate Dashboard Performance
+const calculateDashboardPerformance = useCallback(() => {
+  // Calculate from sales invoices
+  const salesTotal = invoiceItems.reduce((sum, item) => sum + (parseFloat(item.amount) || 0), 0);
+  
+  // Calculate from purchase invoices
+  const purchaseTotal = purchaseItems.reduce((sum, item) => sum + (parseFloat(item.amount) || 0), 0);
+  
+  // Calculate from credit notes
+  const creditTotal = creditNoteItems.reduce((sum, item) => sum + (parseFloat(item.grossAmt) || 0), 0);
+  
+  // Calculate from debit notes
+  const debitTotal = debitNoteItems.reduce((sum, item) => sum + (parseFloat(item.grossAmt) || 0), 0);
+  
+  setDashboardPerformance({
+    sales: { 
+      total: salesTotal, 
+      count: invoiceItems.length,
+      recent: invoiceItems.slice(-5)
+    },
+    purchase: { 
+      total: purchaseTotal, 
+      count: purchaseItems.length,
+      recent: purchaseItems.slice(-5)
+    },
+    creditNote: { 
+      total: creditTotal, 
+      count: creditNoteItems.length,
+      recent: creditNoteItems.slice(-5)
+    },
+    debitNote: { 
+      total: debitTotal, 
+      count: debitNoteItems.length,
+      recent: debitNoteItems.slice(-5)
+    }
+  });
+}, [invoiceItems, purchaseItems, creditNoteItems, debitNoteItems]);
+
+
   // Sales Invoice Functions
   const handleInvoiceInputChange = (e) => {
     setInvoiceFormData({ ...invoiceFormData, [e.target.name]: e.target.value });
@@ -2016,33 +2178,55 @@ const saveBatchDetails = () => {
   };
 
   const handleSubMenuClick = (item) => {
-    setActiveSubMenu(item);
-    setOpenFormFor(null);
-    setAccountActiveTab('basic');
-    setOtherAccountActiveTab('basic');
-    setEditGstId(null);
-    setEditSalesmanId(null);
+  setActiveSubMenu(item);
+  setOpenFormFor(null);
+  setAccountActiveTab('basic');
+  setOtherAccountActiveTab('basic');
+  setEditGstId(null);
+  setEditSalesmanId(null);
+  
+  // Handle Logout
+  if (item === 'Logout') {
+    handleLogout();
+    return;
+  }
+  
+  // Handle Dashboard items
+  if (item === 'Firm Creation') {
+    setOpenFormFor('Firm Creation');
+    return;
+  }
+  if (item === 'User Creation') {
+    setOpenFormFor('User Creation');
+    return;
+  }
+  
+  // Calculate performance when showing Dashboard view
+  if (item === 'Dashboard') {
+    calculateDashboardPerformance();
+  }
 
-    if (item === 'Sales') {
-      setInvoiceItems([]);
-      setInvoiceFormData({
-        billDate: new Date().toISOString().split('T')[0],
-        godown: 'G1',
-        company: '',
-        area: '',
-        party: '',
-        BillSeries: '',
-        billNo: '',
-        billType: 'Credit',
-        dueDate: '',
-        salesman: '',
-        narration: ''
-      });
-      setInvoiceSummary({
-        gross: 0, tpr: 0, scheme: 0, bottom: 0, star: 0, cd: 0, gst: 0, cess: 0, tcs: 0, rounding: 0, net: 0
-      });
-      addInvoiceItem();
-    }
+  // Rest of your existing code...
+  if (item === 'Sales') {
+    setInvoiceItems([]);
+    setInvoiceFormData({
+      billDate: new Date().toISOString().split('T')[0],
+      godown: 'G1',
+      company: '',
+      area: '',
+      party: '',
+      BillSeries: '',
+      billNo: '',
+      billType: 'Credit',
+      dueDate: '',
+      salesman: '',
+      narration: ''
+    });
+    setInvoiceSummary({
+      gross: 0, tpr: 0, scheme: 0, bottom: 0, star: 0, cd: 0, gst: 0, cess: 0, tcs: 0, rounding: 0, net: 0
+    });
+    addInvoiceItem();
+  }
 
     if (item === 'Purchase') {
       setPurchaseItems([]);
@@ -2938,6 +3122,497 @@ const saveBatchDetails = () => {
               { key: 'location', label: 'Location' }
             ], 'godown', deleteGodown)
           )}
+          {/* Dashboard Performance View */}
+{activeSubMenu === 'Dashboard' && openFormFor !== 'Firm Creation' && openFormFor !== 'User Creation' && (
+  <div className="master-section">
+    <div className="page-title-large">Performance Dashboard</div>
+    
+    {/* Summary Cards */}
+    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '20px', marginBottom: '30px' }}>
+      <div className="performance-card" style={{ background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)', padding: '20px', borderRadius: '12px', color: 'white' }}>
+        <h3>Sales</h3>
+        <div style={{ fontSize: '32px', fontWeight: 'bold' }}>₹{dashboardPerformance.sales.total.toFixed(2)}</div>
+        <div>Total Invoices: {dashboardPerformance.sales.count}</div>
+      </div>
+      
+      <div className="performance-card" style={{ background: 'linear-gradient(135deg, #f093fb 0%, #f5576c 100%)', padding: '20px', borderRadius: '12px', color: 'white' }}>
+        <h3>Purchase</h3>
+        <div style={{ fontSize: '32px', fontWeight: 'bold' }}>₹{dashboardPerformance.purchase.total.toFixed(2)}</div>
+        <div>Total Invoices: {dashboardPerformance.purchase.count}</div>
+      </div>
+      
+      <div className="performance-card" style={{ background: 'linear-gradient(135deg, #4facfe 0%, #00f2fe 100%)', padding: '20px', borderRadius: '12px', color: 'white' }}>
+        <h3>Credit Note</h3>
+        <div style={{ fontSize: '32px', fontWeight: 'bold' }}>₹{dashboardPerformance.creditNote.total.toFixed(2)}</div>
+        <div>Total Notes: {dashboardPerformance.creditNote.count}</div>
+      </div>
+      
+      <div className="performance-card" style={{ background: 'linear-gradient(135deg, #fa709a 0%, #fee140 100%)', padding: '20px', borderRadius: '12px', color: 'white' }}>
+        <h3>Debit Note</h3>
+        <div style={{ fontSize: '32px', fontWeight: 'bold' }}>₹{dashboardPerformance.debitNote.total.toFixed(2)}</div>
+        <div>Total Notes: {dashboardPerformance.debitNote.count}</div>
+      </div>
+    </div>
+    
+    {/* Chart Section */}
+    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px', marginBottom: '30px' }}>
+      <div className="chart-card" style={{ background: 'white', padding: '20px', borderRadius: '12px', boxShadow: '0 1px 3px rgba(0,0,0,0.1)' }}>
+        <h3>Revenue Overview</h3>
+        <div style={{ marginTop: '20px' }}>
+          <div><strong>Total Sales:</strong> ₹{dashboardPerformance.sales.total.toFixed(2)}</div>
+          <div><strong>Total Purchase:</strong> ₹{dashboardPerformance.purchase.total.toFixed(2)}</div>
+          <div><strong>Net Profit:</strong> ₹{(dashboardPerformance.sales.total - dashboardPerformance.purchase.total).toFixed(2)}</div>
+          <div><strong>Credit Notes:</strong> ₹{dashboardPerformance.creditNote.total.toFixed(2)}</div>
+          <div><strong>Debit Notes:</strong> ₹{dashboardPerformance.debitNote.total.toFixed(2)}</div>
+        </div>
+      </div>
+      
+      <div className="stats-card" style={{ background: 'white', padding: '20px', borderRadius: '12px', boxShadow: '0 1px 3px rgba(0,0,0,0.1)' }}>
+        <h3>Quick Stats</h3>
+        <div style={{ marginTop: '20px' }}>
+          <div>📊 Total Transactions: {dashboardPerformance.sales.count + dashboardPerformance.purchase.count + dashboardPerformance.creditNote.count + dashboardPerformance.debitNote.count}</div>
+          <div>💰 Average Sale Value: ₹{(dashboardPerformance.sales.total / (dashboardPerformance.sales.count || 1)).toFixed(2)}</div>
+          <div>📦 Average Purchase Value: ₹{(dashboardPerformance.purchase.total / (dashboardPerformance.purchase.count || 1)).toFixed(2)}</div>
+        </div>
+      </div>
+    </div>
+    
+    {/* Recent Activity */}
+    <div style={{ background: 'white', padding: '20px', borderRadius: '12px', boxShadow: '0 1px 3px rgba(0,0,0,0.1)' }}>
+      <h3>Recent Activity</h3>
+      <div style={{ marginTop: '15px' }}>
+        <div><strong>Recent Sales:</strong> {dashboardPerformance.sales.count > 0 ? `${dashboardPerformance.sales.count} invoices` : 'No sales yet'}</div>
+        <div><strong>Recent Purchases:</strong> {dashboardPerformance.purchase.count > 0 ? `${dashboardPerformance.purchase.count} invoices` : 'No purchases yet'}</div>
+        <div><strong>Recent Credit Notes:</strong> {dashboardPerformance.creditNote.count > 0 ? `${dashboardPerformance.creditNote.count} notes` : 'No credit notes yet'}</div>
+        <div><strong>Recent Debit Notes:</strong> {dashboardPerformance.debitNote.count > 0 ? `${dashboardPerformance.debitNote.count} notes` : 'No debit notes yet'}</div>
+      </div>
+    </div>
+  </div>
+)}
+{/* Firm Creation Form */}
+{activeSubMenu === 'Firm Creation' && openFormFor === 'Firm Creation' && (
+  <div className="master-section erp-master-form">
+    <div className="form-header">
+      <div className="page-title-large">New Firm Creation</div>
+      <button className="close-form-btn" onClick={closeForm}>✕</button>
+    </div>
+    <form className="master-form" onSubmit={saveFirm}>
+      <div className="form-section">
+        <h4 className="section-header">Firm Basic Information</h4>
+        <div className="form-grid-2">
+          <div className="labeled-input">
+            <label>Firm Code *</label>
+            <input name="firmCode" placeholder="Firm Code" value={firmData.firmCode} onChange={handleFirmInput} required />
+          </div>
+          <div className="labeled-input">
+            <label>Firm Name *</label>
+            <input name="firmName" placeholder="Firm Name" value={firmData.firmName} onChange={handleFirmInput} required />
+          </div>
+        </div>
+      </div>
+      
+      <div className="form-section">
+        <h4 className="section-header">Address Information</h4>
+        <div className="form-grid-2">
+          <div className="labeled-input">
+            <label>Address Line 1</label>
+            <input name="address1" placeholder="Address Line 1" value={firmData.address1} onChange={handleFirmInput} />
+          </div>
+          <div className="labeled-input">
+            <label>Address Line 2</label>
+            <input name="address2" placeholder="Address Line 2" value={firmData.address2} onChange={handleFirmInput} />
+          </div>
+        </div>
+        <div className="form-grid-3">
+          <div className="labeled-input">
+            <label>City</label>
+            <input name="city" placeholder="City" value={firmData.city} onChange={handleFirmInput} />
+          </div>
+          <div className="labeled-input">
+            <label>Pin Code</label>
+            <input name="pinCode" placeholder="Pin Code" value={firmData.pinCode} onChange={handleFirmInput} />
+          </div>
+          <div className="labeled-input">
+            <label>State</label>
+            <input name="state" placeholder="State" value={firmData.state} onChange={handleFirmInput} />
+          </div>
+        </div>
+        <div className="form-grid-3">
+          <div className="labeled-input">
+            <label>Country</label>
+            <input name="country" placeholder="Country" value={firmData.country} onChange={handleFirmInput} />
+          </div>
+          <div className="labeled-input">
+            <label>Phone No.</label>
+            <input name="phoneNo" placeholder="Phone No." value={firmData.phoneNo} onChange={handleFirmInput} />
+          </div>
+          <div className="labeled-input">
+            <label>Mobile No.</label>
+            <input name="mobileNo" placeholder="Mobile No." value={firmData.mobileNo} onChange={handleFirmInput} />
+          </div>
+        </div>
+      </div>
+      
+      <div className="form-section">
+        <h4 className="section-header">Tax & Registration Information</h4>
+        <div className="form-grid-2">
+          <div className="labeled-input">
+            <label>Tin No.</label>
+            <input name="tinNo" placeholder="Tin No." value={firmData.tinNo} onChange={handleFirmInput} />
+          </div>
+          <div className="labeled-input">
+            <label>Registration No.</label>
+            <input name="regNo" placeholder="Registration No." value={firmData.regNo} onChange={handleFirmInput} />
+          </div>
+        </div>
+        <div className="form-grid-2">
+          <div className="labeled-input">
+            <label>GST No.</label>
+            <input name="gstNo" placeholder="GST No." value={firmData.gstNo} onChange={handleFirmInput} />
+          </div>
+          <div className="labeled-input">
+            <label>Drug License No.</label>
+            <input name="drugLicNo" placeholder="Drug License No." value={firmData.drugLicNo} onChange={handleFirmInput} />
+          </div>
+        </div>
+        <div className="form-grid-2">
+          <div className="labeled-input">
+            <label>Food License No.</label>
+            <input name="foodLicenceNo" placeholder="Food License No." value={firmData.foodLicenceNo} onChange={handleFirmInput} />
+          </div>
+          <div className="labeled-input">
+            <label>Distributor ID</label>
+            <input name="distributorId" placeholder="Distributor ID" value={firmData.distributorId} onChange={handleFirmInput} />
+          </div>
+        </div>
+        <div className="form-grid-2">
+          <div className="labeled-input">
+            <label>API Key</label>
+            <input name="apiKey" placeholder="API Key" value={firmData.apiKey} onChange={handleFirmInput} />
+          </div>
+        </div>
+      </div>
+      
+      <div className="form-actions">
+        <button type="submit" className="btn-primary">Create Firm</button>
+        <button type="button" className="btn-secondary" onClick={closeForm}>Cancel</button>
+      </div>
+    </form>
+  </div>
+)}
+{/* Firm Details Grid - Show all saved firms */}
+{activeSubMenu === 'Firm Creation' && openFormFor !== 'Firm Creation' && (
+  <div className="master-section grid-section">
+    <div className="grid-header">
+      <h3>Firms List ({firms.length})</h3>
+      <div className="table-controls">
+        <input
+          type="text"
+          placeholder="Search firms..."
+          className="filter-input"
+          value={filters.firm || ''}
+          onChange={(e) => setFilters({...filters, firm: e.target.value})}
+        />
+        <button className="btn-excel" onClick={() => exportToExcel(
+          firms.filter(f => 
+            f.firmName?.toLowerCase().includes((filters.firm || '').toLowerCase()) ||
+            f.firmCode?.toLowerCase().includes((filters.firm || '').toLowerCase())
+          ), 
+          'Firms_List', 
+          [
+            { key: 'firmCode', label: 'Firm Code' },
+            { key: 'firmName', label: 'Firm Name' },
+            { key: 'city', label: 'City' },
+            { key: 'state', label: 'State' },
+            { key: 'mobileNo', label: 'Mobile No.' },
+            { key: 'gstNo', label: 'GST No.' }
+          ]
+        )}>
+          📊 Export Excel
+        </button>
+        <button className="btn-pdf" onClick={() => exportToPDF(
+          firms.filter(f => 
+            f.firmName?.toLowerCase().includes((filters.firm || '').toLowerCase()) ||
+            f.firmCode?.toLowerCase().includes((filters.firm || '').toLowerCase())
+          ), 
+          'Firms_List', 
+          [
+            { key: 'firmCode', label: 'Firm Code' },
+            { key: 'firmName', label: 'Firm Name' },
+            { key: 'city', label: 'City' },
+            { key: 'state', label: 'State' },
+            { key: 'mobileNo', label: 'Mobile No.' }
+          ]
+        )}>
+          📄 Export PDF
+        </button>
+        <button className="btn-add-new" onClick={() => setOpenFormFor('Firm Creation')}>
+          + Add New Firm
+        </button>
+      </div>
+    </div>
+    {firms.filter(f => 
+      f.firmName?.toLowerCase().includes((filters.firm || '').toLowerCase()) ||
+      f.firmCode?.toLowerCase().includes((filters.firm || '').toLowerCase())
+    ).length > 0 ? (
+      <div className="data-table-container">
+        <table className="data-table">
+          <thead>
+            <tr>
+              <th>Firm Code</th>
+              <th>Firm Name</th>
+              <th>Address</th>
+              <th>City</th>
+              <th>State</th>
+              <th>Mobile No.</th>
+              <th>GST No.</th>
+              <th>Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            {firms
+              .filter(f => 
+                f.firmName?.toLowerCase().includes((filters.firm || '').toLowerCase()) ||
+                f.firmCode?.toLowerCase().includes((filters.firm || '').toLowerCase())
+              )
+              .map(firm => (
+                <tr key={firm.id}>
+                  <td>{firm.firmCode}</td>
+                  <td>{firm.firmName}</td>
+                  <td>{firm.address1 || '-'}</td>
+                  <td>{firm.city || '-'}</td>
+                  <td>{firm.state || '-'}</td>
+                  <td>{firm.mobileNo || '-'}</td>
+                  <td>{firm.gstNo || '-'}</td>
+                  <td>
+                    <button 
+                      className="btn-edit" 
+                      onClick={() => {
+                        setFirmData({
+                          firmCode: firm.firmCode,
+                          firmName: firm.firmName,
+                          address1: firm.address1 || '',
+                          address2: firm.address2 || '',
+                          city: firm.city || '',
+                          pinCode: firm.pinCode || '',
+                          state: firm.state || '',
+                          country: firm.country || '',
+                          phoneNo: firm.phoneNo || '',
+                          mobileNo: firm.mobileNo || '',
+                          tinNo: firm.tinNo || '',
+                          regNo: firm.regNo || '',
+                          gstNo: firm.gstNo || '',
+                          drugLicNo: firm.drugLicNo || '',
+                          foodLicenceNo: firm.foodLicenceNo || '',
+                          distributorId: firm.distributorId || '',
+                          apiKey: firm.apiKey || ''
+                        });
+                        setOpenFormFor('Firm Creation');
+                      }}
+                    >
+                      ✏️ Edit
+                    </button>
+                    <button 
+                      className="btn-delete" 
+                      onClick={() => {
+                        if (window.confirm('Are you sure you want to delete this firm?')) {
+                          setFirms(firms.filter(f => f.id !== firm.id));
+                        }
+                      }}
+                    >
+                      🗑 Delete
+                    </button>
+                  </td>
+                </tr>
+              ))}
+          </tbody>
+        </table>
+      </div>
+    ) : (
+      <div className="empty-state">No firms found. Click + Add New Firm to create one.</div>
+    )}
+  </div>
+)}
+
+{/* User Creation Form */}
+{activeSubMenu === 'User Creation' && openFormFor === 'User Creation' && (
+  <div className="master-section erp-master-form">
+    <div className="form-header">
+      <div className="page-title-large">Create New User</div>
+      <button className="close-form-btn" onClick={closeForm}>✕</button>
+    </div>
+    <form className="master-form" onSubmit={saveUser}>
+      <div className="form-section">
+        <h4 className="section-header">User Information</h4>
+        
+        <div className="form-grid-2">
+          <div className="labeled-input">
+            <label>User Name *</label>
+            <input 
+              type="text" 
+              name="userName" 
+              placeholder="Enter username" 
+              value={userData.userName} 
+              onChange={handleUserInput} 
+              required 
+            />
+          </div>
+          <div className="labeled-input">
+            <label>Old Password (For existing users)</label>
+            <input 
+              type="password" 
+              name="oldPassword" 
+              placeholder="Enter old password" 
+              value={userData.oldPassword} 
+              onChange={handleUserInput} 
+            />
+          </div>
+        </div>
+
+        <div className="form-grid-2">
+          <div className="labeled-input">
+            <label>Password *</label>
+            <input 
+              type="password" 
+              name="password" 
+              placeholder="Enter password" 
+              value={userData.password} 
+              onChange={handleUserInput} 
+              required 
+            />
+          </div>
+          <div className="labeled-input">
+            <label>Re-enter Password *</label>
+            <input 
+              type="password" 
+              name="reEnterPassword" 
+              placeholder="Re-enter password" 
+              value={userData.reEnterPassword} 
+              onChange={handleUserInput} 
+              required 
+            />
+          </div>
+        </div>
+
+        <div className="info-message" style={{ 
+          background: '#e0f2fe', 
+          padding: '10px', 
+          borderRadius: '6px', 
+          marginTop: '15px',
+          fontSize: '13px',
+          color: '#0369a1'
+        }}>
+          <strong>Note:</strong> Password must be at least 6 characters long. The ADMIN user is system default.
+        </div>
+      </div>
+
+      <div className="form-actions">
+        <button type="submit" className="btn-primary">Create User</button>
+        <button type="button" className="btn-secondary" onClick={closeForm}>Cancel</button>
+      </div>
+    </form>
+  </div>
+)}
+
+{/* Users List Grid - Show all created users */}
+{activeSubMenu === 'User Creation' && openFormFor !== 'User Creation' && (
+  <div className="master-section grid-section">
+    <div className="grid-header">
+      <h3>Users List ({users.length})</h3>
+      <div className="table-controls">
+        <input
+          type="text"
+          placeholder="Search users..."
+          className="filter-input"
+          value={filters.user || ''}
+          onChange={(e) => setFilters({...filters, user: e.target.value})}
+        />
+        <button className="btn-excel" onClick={() => exportToExcel(
+          users.filter(u => 
+            u.userName?.toLowerCase().includes((filters.user || '').toLowerCase())
+          ),
+          'Users_List',
+          [
+            { key: 'userName', label: 'User Name' }
+          ]
+        )}>
+          📊 Export Excel
+        </button>
+        <button className="btn-pdf" onClick={() => exportToPDF(
+          users.filter(u => 
+            u.userName?.toLowerCase().includes((filters.user || '').toLowerCase())
+          ),
+          'Users_List',
+          [
+            { key: 'userName', label: 'User Name' }
+          ]
+        )}>
+          📄 Export PDF
+        </button>
+        <button className="btn-add-new" onClick={() => setOpenFormFor('User Creation')}>
+          + Add New User
+        </button>
+      </div>
+    </div>
+    {users.filter(u => 
+      u.userName?.toLowerCase().includes((filters.user || '').toLowerCase())
+    ).length > 0 ? (
+      <div className="data-table-container">
+        <table className="data-table">
+          <thead>
+            <tr>
+              <th>S.No</th>
+              <th>User Name</th>
+              <th>Role</th>
+              <th>Status</th>
+              <th>Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            {users
+              .filter(u => 
+                u.userName?.toLowerCase().includes((filters.user || '').toLowerCase())
+              )
+              .map((user, index) => (
+                <tr key={index}>
+                  <td>{index + 1}</td>
+                  <td>{user.userName}</td>
+                  <td>{user.userName === 'ADMIN' ? 'Administrator' : 'User'}</td>
+                  <td>
+                    <span style={{ 
+                      color: user.userName === currentUser ? '#059669' : '#6b7280',
+                      fontWeight: '500'
+                    }}>
+                      {user.userName === currentUser ? '✅ Current Session' : 'Inactive'}
+                    </span>
+                  </td>
+                  <td>
+                    {user.userName !== 'ADMIN' && (
+                      <button 
+                        className="btn-delete" 
+                        onClick={() => {
+                          if (window.confirm(`Are you sure you want to delete user "${user.userName}"?`)) {
+                            setUsers(users.filter(u => u.userName !== user.userName));
+                          }
+                        }}
+                      >
+                        🗑 Delete
+                      </button>
+                    )}
+                    {user.userName === 'ADMIN' && (
+                      <span style={{ fontSize: '12px', color: '#9ca3af' }}>System User</span>
+                    )}
+                  </td>
+                </tr>
+              ))}
+          </tbody>
+        </table>
+      </div>
+    ) : (
+      <div className="empty-state">No users found. Click + Add New User to create one.</div>
+    )}
+  </div>
+)}
 {/* Customer Bank Master - Form View */}
 {activeSubMenu === 'Customer Bank Master' && openFormFor === 'Customer Bank Master' && (
   <div className="master-section erp-master-form">
