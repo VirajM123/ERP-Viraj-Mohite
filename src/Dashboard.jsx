@@ -5,7 +5,7 @@
   import 'jspdf-autotable';
   import './Dashboard.css';
   // Change this at the top of Dashboard.jsx:
-  import logo from "./assets/images/Gemini_Generated_Image_m3jkatm3jkatm3jk.png"; 
+  import logo from "./assets/images/Totalsolution.PNG"; 
   // Note: Adjust the "../" or "./" depending on exactly where Dashboard.jsx sits relative to assets
   import SalesmanToAreaMapping from './SalesmanToAreaMapping';
 
