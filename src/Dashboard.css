@@ -2210,3 +2210,28 @@ textarea {
 .action-buttons .btn-delete:hover {
   background: #dc2626 !important;
 }
+.btn-settle {
+  background: #8b5cf6;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  padding: 4px 8px;
+  margin: 0 2px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.btn-settle:hover {
+  background: #7c3aed;
+  transform: translateY(-1px);
+}
+
+.status-badge.status-success {
+  background: #d1fae5;
+  color: #065f46;
+}
+
+.status-badge.status-warning {
+  background: #fed7aa;
+  color: #9a3412;
+}
