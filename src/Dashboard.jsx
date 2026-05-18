@@ -27,6 +27,7 @@
   const [showBatchSelectionModal, setShowBatchSelectionModal] = useState(false);
   const [productBatchesForSelection, setProductBatchesForSelection] = useState([]);
   const [selectedProductForBatch, setSelectedProductForBatch] = useState(null);
+  
 
   // VOUCHER LIST STATE VARIABLES
   const [showSalesList, setShowSalesList] = useState(false);
@@ -45,9 +46,41 @@
   // Create Load List State
   const [showCreateLoadList, setShowCreateLoadList] = useState(false);
   const [createLoadListData, setCreateLoadListData] = useState([]);
-  
+  const [originalSettleLoadItems, setOriginalSettleLoadItems] = useState([]);
+// Add this state with other state declarations (around line 50-60)
+const [showReceiptModal, setShowReceiptModal] = useState(false);
+const [currentReceiptItem, setCurrentReceiptItem] = useState(null);
+const [receiptFormData, setReceiptFormData] = useState({
+  ourBankAccount: '',
+  bankName: '',
+  chequeNo: '',
+  chequeDate: '',
+  billAmount: 0,
+  receiptAmount: 0,
+  discount: 0,
+  salesman: '',
+  receiptSeries: '',  // ADD THIS
+  receiptNo: ''       // ADD THIS
+});
+const [showOtherBillsModal, setShowOtherBillsModal] = useState(false);
+const [otherPendingBills, setOtherPendingBills] = useState([]);
 
-
+// Add this function to get salesman mapping for customer
+const getSalesmanForCustomer = (partyCode, partyName) => {
+  // Find salesman mapped to this customer from area to party mapping
+  const partyMapping = areaToPartyData.find(
+    mapping => mapping.accountCode === partyCode || mapping.accountName === partyName
+  );
+  if (partyMapping && partyMapping.areaName) {
+    const areaMapping = mappingData.find(
+      m => m.areaName === partyMapping.areaName
+    );
+    if (areaMapping && areaMapping.salesmanName) {
+      return areaMapping.salesmanName;
+    }
+  }
+  return '';
+};
 
   // Bill Print State
   const [billPrintFormData, setBillPrintFormData] = useState({
@@ -323,6 +356,526 @@
     const [areaToPartyEditingCell, setAreaToPartyEditingCell] = useState('');
     const [areaToPartyFilter, setAreaToPartyFilter] = useState('');
 
+    // ==================== SETTLE LOAD STATE VARIABLES ====================
+// Add these with other state declarations
+const [showSettleLoad, setShowSettleLoad] = useState(false);
+const [settleLoadData, setSettleLoadData] = useState(null);
+const [settleLoadFormData, setSettleLoadFormData] = useState({
+  loadNo: '',
+  loadDate: new Date().toISOString().split('T')[0],
+  settleLoadDate: new Date().toISOString().split('T')[0],
+  narration: ''
+});
+const [settleLoadItems, setSettleLoadItems] = useState([]);
+const [settleLoadSummary, setSettleLoadSummary] = useState({
+  // Left Summary Fields
+  totalBills: 0,
+  totalCashBills: 0,
+  totalCreditBills: 0,
+  totalRecAdjBills: 0,
+  totalPendingBills: 0,
+  totalCancelBills: 0,
+  previousCollection: 0,
+  // Right Summary Fields
+  totalAmt: 0,
+  totalCashAmt: 0,
+  totalCreditAmt: 0,
+  totalChequeAmt: 0,
+  totalPendingAmt: 0,
+  totalCancelAmt: 0
+});
+const [settleLoadOptions, setSettleLoadOptions] = useState({
+  loadLock: false,
+  report: false
+});
+// Add this function where other handler functions are defined
+const handleSettleLoad = (loadData) => {
+  console.log('Settling Load:', loadData);
+  
+  if (!loadData || !loadData.items || loadData.items.length === 0) {
+    alert('No items found in this load to settle');
+    return;
+  }
+// Replace the updateSettleLoadItem function with this improved version:
+const updateSettleLoadItem = (index, field, value) => {
+  const newItems = [...settleLoadItems];
+  newItems[index][field] = value;
+  
+  if (field === 'adjust') {
+    const billAmount = parseFloat(newItems[index].billAmount) || 0;
+    if (value === 'Y') {
+      newItems[index].receiptAmount = billAmount;
+      newItems[index].pending = 'N';
+      newItems[index].cancel = 'N';
+      newItems[index].status = 'Settled';
+    } else {
+      newItems[index].receiptAmount = 0;
+      newItems[index].status = 'Pending';
+    }
+  } else if (field === 'pending') {
+    if (value === 'Y') {
+      newItems[index].receiptAmount = 0;
+      newItems[index].adjust = 'N';
+      newItems[index].cancel = 'N';
+      newItems[index].status = 'Pending';
+    }
+  } else if (field === 'cancel') {
+    if (value === 'Y') {
+      newItems[index].receiptAmount = 0;
+      newItems[index].adjust = 'N';
+      newItems[index].pending = 'N';
+      newItems[index].status = 'Cancelled';
+    } else {
+      newItems[index].status = 'Pending';
+    }
+  }
+  
+  setSettleLoadItems(newItems);
+  calculateSettleLoadSummary(newItems);
+};
+// Handle receipt submission - Make sure this is defined at the component level, not inside another function
+const handleReceiptSubmit = () => {
+  if (currentReceiptItem) {
+    const { index, item } = currentReceiptItem;
+    let receiptAmount = parseFloat(receiptFormData.receiptAmount);
+    const billAmount = parseFloat(item.billAmount);
+    const discount = parseFloat(receiptFormData.discount) || 0;
+    
+    // Apply discount if any
+    if (discount > 0 && receiptAmount <= billAmount) {
+      receiptAmount = receiptAmount - discount;
+    }
+    
+    const newItems = [...settleLoadItems];
+    
+    // Update receipt series and number
+    newItems[index].receiptSeries = receiptFormData.receiptSeries || '';
+    newItems[index].receiptNo = receiptFormData.receiptNo || '';
+    newItems[index].receiptAmount = receiptAmount;
+    newItems[index].receiptMode = receiptFormData.ourBankAccount === 'cash' ? 'Cash' : 'Bank';
+    
+    if (receiptFormData.ourBankAccount !== 'cash') {
+      newItems[index].chequeNo = receiptFormData.chequeNo;
+      newItems[index].chequeDate = receiptFormData.chequeDate;
+      newItems[index].bankName = receiptFormData.bankName || receiptFormData.ourBankAccount;
+    }
+    
+    // Update status based on receipt amount
+    if (receiptAmount >= billAmount && billAmount > 0) {
+      newItems[index].adjust = 'Y';
+      newItems[index].pending = 'N';
+      newItems[index].cancel = 'N';
+      newItems[index].status = 'Settled';
+    } else if (receiptAmount > 0 && receiptAmount < billAmount) {
+      newItems[index].adjust = 'N';
+      newItems[index].pending = 'Y';
+      newItems[index].cancel = 'N';
+      newItems[index].status = 'Partial';
+    }
+    
+    setSettleLoadItems(newItems);
+    calculateSettleLoadSummary(newItems);
+    
+    // Check if receipt amount exceeds bill amount and show other pending bills
+    if (receiptAmount > billAmount) {
+      const excessAmount = receiptAmount - billAmount;
+      const otherBills = settleLoadItems.filter((_, i) => 
+        i !== index && 
+        parseFloat(settleLoadItems[i].billAmount) > parseFloat(settleLoadItems[i].receiptAmount) &&
+        settleLoadItems[i].status !== 'Settled' &&
+        settleLoadItems[i].cancel !== 'Y'
+      ).map(bill => ({
+        ...bill,
+        pendingAmount: parseFloat(bill.billAmount) - parseFloat(bill.receiptAmount),
+        selectedAmount: 0
+      }));
+      
+      if (otherBills.length > 0) {
+        setOtherPendingBills(otherBills);
+        setShowOtherBillsModal(true);
+      }
+    }
+    
+    setShowReceiptModal(false);
+    setCurrentReceiptItem(null);
+  }
+};
+
+// Handle applying excess amount to other bills
+const applyExcessToOtherBills = () => {
+  if (currentReceiptItem && otherPendingBills.length > 0) {
+    const excessAmount = parseFloat(receiptFormData.receiptAmount) - parseFloat(currentReceiptItem.item.billAmount);
+    let remainingExcess = excessAmount;
+    const updatedOtherBills = [...otherPendingBills];
+    const adjustedBills = [];
+    
+    for (let i = 0; i < updatedOtherBills.length && remainingExcess > 0; i++) {
+      const bill = updatedOtherBills[i];
+      const pendingAmount = bill.pendingAmount;
+      const applyAmount = Math.min(remainingExcess, pendingAmount);
+      
+      if (applyAmount > 0) {
+        bill.selectedAmount = applyAmount;
+        remainingExcess -= applyAmount;
+        adjustedBills.push({ index: bill.originalIndex, amount: applyAmount });
+      }
+    }
+    
+    // Update the main settleLoadItems with adjustments to other bills
+    const newItems = [...settleLoadItems];
+    adjustedBills.forEach(adj => {
+      if (newItems[adj.index]) {
+        const newReceiptAmount = (parseFloat(newItems[adj.index].receiptAmount) || 0) + adj.amount;
+        newItems[adj.index].receiptAmount = newReceiptAmount;
+        const billAmt = parseFloat(newItems[adj.index].billAmount) || 0;
+        
+        if (newReceiptAmount >= billAmt) {
+          newItems[adj.index].adjust = 'Y';
+          newItems[adj.index].pending = 'N';
+          newItems[adj.index].status = 'Settled';
+        } else if (newReceiptAmount > 0) {
+          newItems[adj.index].adjust = 'N';
+          newItems[adj.index].pending = 'Y';
+          newItems[adj.index].status = 'Partial';
+        }
+      }
+    });
+    
+    setSettleLoadItems(newItems);
+    calculateSettleLoadSummary(newItems);
+    setShowOtherBillsModal(false);
+    alert(`Excess amount of ₹${excessAmount.toFixed(2)} applied to ${adjustedBills.length} other bill(s).`);
+  }
+};
+const calculateSettleLoadSummary = (items) => {
+  let totalBills = items.length;
+  let totalCashBills = 0;
+  let totalCreditBills = 0;
+  let totalRecAdjBills = 0;
+  let totalPendingBills = 0;
+  let totalCancelBills = 0;
+  let previousCollection = 0;
+  
+  let totalAmt = 0;
+  let totalCashAmt = 0;
+  let totalCreditAmt = 0;
+  let totalChequeAmt = 0;
+  let totalPendingAmt = 0;
+  let totalCancelAmt = 0;
+  
+  items.forEach(item => {
+    const billAmount = parseFloat(item.billAmount) || 0;
+    const receiptAmount = parseFloat(item.receiptAmount) || 0;
+    
+    totalAmt += billAmount;
+    
+    if (item.billType === 'Cash') {
+      totalCashBills++;
+      totalCashAmt += billAmount;
+    } else if (item.billType === 'Credit') {
+      totalCreditBills++;
+      totalCreditAmt += billAmount;
+    }
+    
+    if (item.adjust === 'Y') {
+      totalRecAdjBills++;
+      totalChequeAmt += receiptAmount;
+    } else if (item.pending === 'Y') {
+      totalPendingBills++;
+      totalPendingAmt += (billAmount - receiptAmount);
+    } else if (item.cancel === 'Y') {
+      totalCancelBills++;
+      totalCancelAmt += billAmount;
+    }
+  });
+  
+  setSettleLoadSummary({
+    totalBills,
+    totalCashBills,
+    totalCreditBills,
+    totalRecAdjBills,
+    totalPendingBills,
+    totalCancelBills,
+    previousCollection,
+    totalAmt,
+    totalCashAmt,
+    totalCreditAmt,
+    totalChequeAmt,
+    totalPendingAmt,
+    totalCancelAmt
+  });
+};
+
+const handleSettleLoadInputChange = (e) => {
+  setSettleLoadFormData({ ...settleLoadFormData, [e.target.name]: e.target.value });
+};
+
+const handleSettleLoadOptionChange = (option) => {
+  setSettleLoadOptions({ ...settleLoadOptions, [option]: !settleLoadOptions[option] });
+};
+
+const exportSettleLoadToExcel = () => {
+  const exportData = settleLoadItems.map(item => ({
+    'Sr No': item.sr,
+    'Adjust': item.adjust === 'Y' ? 'Yes' : 'No',
+    'Pending': item.pending === 'Y' ? 'Yes' : 'No',
+    'Cancel': item.cancel === 'Y' ? 'Yes' : 'No',
+    'Receipt': item.receiptAmount,
+    'Status': item.status,
+    'Bill Type': item.billType,
+    'Bill Date': item.billDate,
+    'Bill Series': item.billSeries,
+    'Bill No': item.billNo,
+    'Party Code': item.partyCode,
+    'Party Name': item.partyName,
+    'Bill Amount': item.billAmount,
+    'Receipt Amount': item.receiptAmount
+  }));
+  
+  const worksheet = XLSX.utils.json_to_sheet(exportData);
+  const workbook = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(workbook, worksheet, 'Settle Load');
+  XLSX.writeFile(workbook, `Settle_Load_${settleLoadFormData.loadNo}.xlsx`);
+};
+
+const saveSettleLoad = () => {
+  const settledData = {
+    ...settleLoadData,
+    settlementDate: settleLoadFormData.settleLoadDate,
+    narration: settleLoadFormData.narration,
+    settledItems: settleLoadItems,
+    summary: settleLoadSummary,
+    options: settleLoadOptions,
+    status: 'Settled'
+  };
+  
+  console.log('Saving settled load:', settledData);
+  
+  setCreateLoadListData(prevData => 
+    prevData.map(load => 
+      load.id === settleLoadData?.id 
+        ? { ...load, status: 'Settled', settlementData: settledData }
+        : load
+    )
+  );
+  
+  alert('Load settled successfully!');
+  setShowSettleLoad(false);
+  setSettleLoadData(null);
+  setSettleLoadItems([]);
+};
+  // Transform load data to settle load grid format
+  const transformedItems = (loadData.items || []).map((item, index) => ({
+    id: item.id || Date.now() + index,
+    sr: index + 1,
+    adjust: 'N',
+    pending: 'N',
+    cancel: 'N',
+    receipt: '',
+    status: 'Pending',
+    billType: item.billType || 'Credit',
+    billDate: item.billDate || loadData.billFromDate || new Date().toISOString().split('T')[0],
+    billSeries: item.billSeries || loadData.loadSeries || '',
+    billNo: item.billNo || '',
+    partyCode: item.partyCode || '',
+    partyName: item.partyName || '',
+    billAmount: parseFloat(item.amount) || 0,
+    receiptAmount: 0
+  }));
+  
+  setSettleLoadItems(transformedItems);
+  setSettleLoadFormData({
+    loadNo: loadData.loadNo || '',
+    loadDate: loadData.loadDate || new Date().toISOString().split('T')[0],
+    settleLoadDate: new Date().toISOString().split('T')[0],
+    narration: ''
+  });
+  setSettleLoadData(loadData);
+  setShowSettleLoad(true);
+  setShowCreateLoadList(false); // Hide the list view when showing form
+  
+  // Calculate initial summary
+  calculateSettleLoadSummary(transformedItems);
+};
+const updateSettleLoadItem = (index, field, value) => {
+  const newItems = [...settleLoadItems];
+  newItems[index][field] = value;
+  
+  // Update receipt amount when adjust, pending, cancel are toggled
+  if (field === 'adjust') {
+    const billAmount = parseFloat(newItems[index].billAmount) || 0;
+    if (value === 'Y') {
+      newItems[index].receiptAmount = billAmount;
+      newItems[index].pending = 'N';
+      newItems[index].cancel = 'N';
+      newItems[index].status = 'Adjusted';
+    } else {
+      newItems[index].receiptAmount = 0;
+      newItems[index].status = 'Pending';
+    }
+  } else if (field === 'pending') {
+    if (value === 'Y') {
+      newItems[index].receiptAmount = 0;
+      newItems[index].adjust = 'N';
+      newItems[index].cancel = 'N';
+      newItems[index].status = 'Pending';
+    }
+  } else if (field === 'cancel') {
+    if (value === 'Y') {
+      newItems[index].receiptAmount = 0;
+      newItems[index].adjust = 'N';
+      newItems[index].pending = 'N';
+      newItems[index].status = 'Cancelled';
+    }
+  } else if (field === 'receiptAmount') {
+    const receiptAmt = parseFloat(value) || 0;
+    const billAmount = parseFloat(newItems[index].billAmount) || 0;
+    newItems[index][field] = receiptAmt;
+    
+    if (receiptAmt >= billAmount && billAmount > 0) {
+      newItems[index].adjust = 'Y';
+      newItems[index].pending = 'N';
+      newItems[index].cancel = 'N';
+      newItems[index].status = 'Adjusted';
+    } else if (receiptAmt > 0 && receiptAmt < billAmount) {
+      newItems[index].adjust = 'N';
+      newItems[index].pending = 'Y';
+      newItems[index].cancel = 'N';
+      newItems[index].status = 'Partial';
+    } else {
+      newItems[index].adjust = 'N';
+      newItems[index].pending = 'N';
+      newItems[index].cancel = 'N';
+      newItems[index].status = 'Pending';
+    }
+  }
+  
+  setSettleLoadItems(newItems);
+  calculateSettleLoadSummary(newItems);
+};
+
+const calculateSettleLoadSummary = (items) => {
+  let totalBills = items.length;
+  let totalCashBills = 0;
+  let totalCreditBills = 0;
+  let totalRecAdjBills = 0;
+  let totalPendingBills = 0;
+  let totalCancelBills = 0;
+  let previousCollection = 0;
+  
+  let totalAmt = 0;
+  let totalCashAmt = 0;
+  let totalCreditAmt = 0;
+  let totalChequeAmt = 0;
+  let totalPendingAmt = 0;
+  let totalCancelAmt = 0;
+  
+  items.forEach(item => {
+    const billAmount = parseFloat(item.billAmount) || 0;
+    const receiptAmount = parseFloat(item.receiptAmount) || 0;
+    
+    totalAmt += billAmount;
+    
+    // Bill type counting
+    if (item.billType === 'Cash') {
+      totalCashBills++;
+      totalCashAmt += billAmount;
+    } else if (item.billType === 'Credit') {
+      totalCreditBills++;
+      totalCreditAmt += billAmount;
+    }
+    
+    // Status counting
+    if (item.adjust === 'Y') {
+      totalRecAdjBills++;
+      totalChequeAmt += receiptAmount;
+    } else if (item.pending === 'Y') {
+      totalPendingBills++;
+      totalPendingAmt += (billAmount - receiptAmount);
+    } else if (item.cancel === 'Y') {
+      totalCancelBills++;
+      totalCancelAmt += billAmount;
+    }
+  });
+  
+  setSettleLoadSummary({
+    totalBills,
+    totalCashBills,
+    totalCreditBills,
+    totalRecAdjBills,
+    totalPendingBills,
+    totalCancelBills,
+    previousCollection,
+    totalAmt,
+    totalCashAmt,
+    totalCreditAmt,
+    totalChequeAmt,
+    totalPendingAmt,
+    totalCancelAmt
+  });
+};
+
+const handleSettleLoadInputChange = (e) => {
+  setSettleLoadFormData({ ...settleLoadFormData, [e.target.name]: e.target.value });
+};
+
+const handleSettleLoadOptionChange = (option) => {
+  setSettleLoadOptions({ ...settleLoadOptions, [option]: !settleLoadOptions[option] });
+};
+
+const exportSettleLoadToExcel = () => {
+  const exportData = settleLoadItems.map(item => ({
+    'Sr No': item.sr,
+    'Adjust': item.adjust,
+    'Pending': item.pending,
+    'Cancel': item.cancel,
+    'Receipt': item.receiptAmount,
+    'Status': item.status,
+    'Bill Type': item.billType,
+    'Bill Date': item.billDate,
+    'Bill Series': item.billSeries,
+    'Bill No': item.billNo,
+    'Party Code': item.partyCode,
+    'Party Name': item.partyName,
+    'Bill Amount': item.billAmount,
+    'Receipt Amount': item.receiptAmount
+  }));
+  
+  const worksheet = XLSX.utils.json_to_sheet(exportData);
+  const workbook = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(workbook, worksheet, 'Settle Load');
+  XLSX.writeFile(workbook, `Settle_Load_${settleLoadFormData.loadNo}.xlsx`);
+};
+
+const saveSettleLoad = () => {
+  const settledData = {
+    ...settleLoadData,
+    settlementDate: settleLoadFormData.settleLoadDate,
+    narration: settleLoadFormData.narration,
+    settledItems: settleLoadItems,
+    summary: settleLoadSummary,
+    options: settleLoadOptions,
+    status: 'Settled'
+  };
+  
+  console.log('Saving settled load:', settledData);
+  
+  // Update the load status in createLoadListData
+  setCreateLoadListData(prevData => 
+    prevData.map(load => 
+      load.id === settleLoadData?.id 
+        ? { ...load, status: 'Settled', settlementData: settledData }
+        : load
+    )
+  );
+  
+  alert('Load settled successfully!');
+  setShowSettleLoad(false);
+  setSettleLoadData(null);
+  setSettleLoadItems([]);
+};
+
+
     const resetServiceForm = () => {
       setServiceForm({
         code: '',
@@ -512,24 +1065,26 @@
     // Group/Category forms
     const [groupForm, setGroupForm] = useState({ code: '', name: '' });
     const [categoryForm, setCategoryForm] = useState({ code: '', name: '' });
-  const menuItems = {
-    // Dashboard icon
-    dashboard: { title: 'Dashboard', icon: '⚛️', items: ['Firm Creation', 'User Creation'] },
-    
-    // Changed master icon to 📁 to avoid duplicate chart icons
-    master: { title: 'Master', icon: '📁', items: ['Company Master', 'Group Master', 'Category Master', 'Product', 'Account', 'Other Account', 'GST Master', 'Salesman', 'Area', 'Service', 'GoDown Master', 'Scheme','Customer Bank Master'] },
-    mapping: { title: 'Mapping', icon: '🔗', items: ['Salesman To Area', 'Area To Party'] },
-    
-    // Changed sales icon to 📊 to match your statistics/sales icon image
-    sales: { title: 'Sales', icon: '📊', items: ['Billing', 'Quotation', 'Create Load', 'Print Load', 'Settle Load', 'Bill Print'] },
-    
-    vouchers: { title: 'Vouchers', icon: '📄', items: ['Purchase', 'Credit Note', 'Debit Note'] },
-    // Swapped out the money bag icon '💰' for the credit card icon '💳'
-    transactions: { title: 'Transactions', icon: '💳', items: ['Receipt', 'Expense', 'Cheque Bounce', 'PDC Docket', 'Journal Voucher', 'Contra'] },
-    reports: { title: 'Reports', icon: '📈', items: ['Sales', 'Purchase', 'Stock Reports', 'GST Reports'] },
-    tools: { title: 'Tools', icon: '⚙️', items: ['General Setup', 'Security Setup'] },
-    logout: { title: 'Logout', icon: '🚪', items: [] }
-  };
+ const menuItems = {
+  // Dashboard icon
+  dashboard: { title: 'Dashboard', icon: '⚛️', items: ['Firm Creation', 'User Creation'] },
+  
+  // Changed master icon to 📁 to avoid duplicate chart icons
+  master: { title: 'Master', icon: '📁', items: ['Company Master', 'Group Master', 'Category Master', 'Product', 'Account', 'Other Account', 'GST Master', 'Salesman', 'Area', 'Service', 'GoDown Master', 'Scheme','Customer Bank Master'] },
+  mapping: { title: 'Mapping', icon: '🔗', items: ['Salesman To Area', 'Area To Party'] },
+  
+  // Changed sales icon to 📊 to match your statistics/sales icon image
+  sales: { title: 'Sales', icon: '📊', items: ['Billing', 'Quotation', 'Create Load', 'Print Load', 'Settle Load', 'Bill Print','Load Transfer'] },
+  
+  vouchers: { title: 'Vouchers', icon: '📄', items: ['Purchase', 'Credit Note', 'Debit Note'] },
+  
+  // MODIFIED: Added 'Payment' and 'Collection voucher' to Transactions menu
+  transactions: { title: 'Transactions', icon: '💳', items: ['Receipt', 'Cheque Bounce', 'PDC Docket', 'Journal Voucher', 'Contra', 'Payment', 'Collection voucher'] },
+  
+  reports: { title: 'Reports', icon: '📈', items: ['Sales', 'Purchase', 'Stock Reports', 'GST Reports'] },
+  tools: { title: 'Tools', icon: '⚙️', items: ['General Setup', 'Security Setup'] },
+  logout: { title: 'Logout', icon: '🚪', items: [] }
+};
     // GoDown Master Handlers
     const handleGodownInput = (e) => {
       setGodownForm({ ...godownForm, [e.target.name]: e.target.value });
@@ -1317,6 +1872,236 @@
       }
     });
   }, [invoiceItems, purchaseItems, creditNoteItems, debitNoteItems]);
+// Dashboard State for KPI metrics
+  const [dashboardMetrics, setDashboardMetrics] = useState({
+    totalSales: 1245680,
+    totalSalesChange: 8.6,
+    totalOrders: 256,
+    totalOrdersChange: 11.3,
+    totalCustomers: 1245,
+    totalCustomersChange: 5.4,
+    totalOutstanding: 875230,
+    totalOutstandingChange: -3.2
+  });
+
+  // Sales Trend Data (Weekly)
+  const [salesTrend, setSalesTrend] = useState([
+    { day: 'Mon 20', sales: 125000 },
+    { day: 'Tue 21', sales: 142000 },
+    { day: 'Wed 22', sales: 138000 },
+    { day: 'Thu 23', sales: 165000 },
+    { day: 'Fri 24', sales: 189000 },
+    { day: 'Sat 25', sales: 210000 },
+    { day: 'Sun 26', sales: 176680 }
+  ]);
+
+  // Sales by Category
+  const [salesByCategory, setSalesByCategory] = useState([
+    { name: 'Beverages', amount: 325400, percentage: 26 },
+    { name: 'Snacks', amount: 285750, percentage: 23 },
+    { name: 'Personal Care', amount: 210300, percentage: 17 },
+    { name: 'Home Care', amount: 175500, percentage: 14 },
+    { name: 'Others', amount: 148730, percentage: 12 }
+  ]);
+
+  // Top 5 Customers
+  const [topCustomers, setTopCustomers] = useState([
+    { rank: 1, name: 'Sai Retailers', amount: 125430 },
+    { rank: 2, name: 'Om Super Store', amount: 98750 },
+    { rank: 3, name: 'Patil Traders', amount: 88600 },
+    { rank: 4, name: 'Shree Ganesh Provision Store', amount: 75230 },
+    { rank: 5, name: 'New India Mart', amount: 68940 }
+  ]);
+
+  // Outstanding Summary by Days
+  const [outstandingSummary, setOutstandingSummary] = useState([
+    { days: '0 - 30 Days', amount: 345120 },
+    { days: '31 - 60 Days', amount: 265340 },
+    { days: '61 - 90 Days', amount: 180450 },
+    { days: 'Above 90 Days', amount: 84320 }
+  ]);
+
+  // Low Stock Alerts
+  const [lowStockAlerts, setLowStockAlerts] = useState([
+    { product: 'Tata Tea 1kg', stock: 12, unit: 'Units' },
+    { product: 'Parle-G Biscuit 400g', stock: 18, unit: 'Units' },
+    { product: 'Surf Excel 2kg', stock: 8, unit: 'Units' },
+    { product: 'Colgate Strong Teeth 200g', stock: 15, unit: 'Units' }
+  ]);
+
+  // Add this function to render the dashboard view
+  const renderDashboard = () => {
+    // Calculate total from salesByCategory for chart bar widths
+    const maxCategoryAmount = Math.max(...salesByCategory.map(c => c.amount));
+    
+    return (
+      <div className="dashboard-view">
+        {/* KPI Cards Row */}
+        <div className="dashboard-kpi-row">
+          <div className="kpi-card">
+            <div className="kpi-card-header">
+              <span className="kpi-icon">💰</span>
+              <span className="kpi-title">Total Sales</span>
+            </div>
+            <div className="kpi-value">₹{dashboardMetrics.totalSales.toLocaleString('en-IN')}</div>
+            <div className={`kpi-change ${dashboardMetrics.totalSalesChange > 0 ? 'positive' : 'negative'}`}>
+              {dashboardMetrics.totalSalesChange > 0 ? '↑' : '↓'} {Math.abs(dashboardMetrics.totalSalesChange)}% vs last week
+            </div>
+          </div>
+
+          <div className="kpi-card">
+            <div className="kpi-card-header">
+              <span className="kpi-icon">📦</span>
+              <span className="kpi-title">Total Orders</span>
+            </div>
+            <div className="kpi-value">{dashboardMetrics.totalOrders.toLocaleString('en-IN')}</div>
+            <div className={`kpi-change ${dashboardMetrics.totalOrdersChange > 0 ? 'positive' : 'negative'}`}>
+              {dashboardMetrics.totalOrdersChange > 0 ? '↑' : '↓'} {Math.abs(dashboardMetrics.totalOrdersChange)}% vs last week
+            </div>
+          </div>
+
+          <div className="kpi-card">
+            <div className="kpi-card-header">
+              <span className="kpi-icon">👥</span>
+              <span className="kpi-title">Total Customers</span>
+            </div>
+            <div className="kpi-value">{dashboardMetrics.totalCustomers.toLocaleString('en-IN')}</div>
+            <div className={`kpi-change ${dashboardMetrics.totalCustomersChange > 0 ? 'positive' : 'negative'}`}>
+              {dashboardMetrics.totalCustomersChange > 0 ? '↑' : '↓'} {Math.abs(dashboardMetrics.totalCustomersChange)}% vs last week
+            </div>
+          </div>
+
+          <div className="kpi-card">
+            <div className="kpi-card-header">
+              <span className="kpi-icon">💸</span>
+              <span className="kpi-title">Total Outstanding</span>
+            </div>
+            <div className="kpi-value">₹{dashboardMetrics.totalOutstanding.toLocaleString('en-IN')}</div>
+            <div className={`kpi-change ${dashboardMetrics.totalOutstandingChange > 0 ? 'positive' : 'negative'}`}>
+              {dashboardMetrics.totalOutstandingChange > 0 ? '↑' : '↓'} {Math.abs(dashboardMetrics.totalOutstandingChange)}% vs last week
+            </div>
+          </div>
+        </div>
+
+        {/* Two Column Layout */}
+        <div className="dashboard-two-columns">
+          {/* Left Column - Sales Trend Chart */}
+          <div className="dashboard-card">
+            <div className="card-header">
+              <h3>Sales Trend</h3>
+              <select className="week-selector">
+                <option>This Week ▼</option>
+                <option>Last Week</option>
+                <option>This Month</option>
+              </select>
+            </div>
+            <div className="sales-trend-chart">
+              {salesTrend.map((day, index) => {
+                const barHeight = (day.sales / Math.max(...salesTrend.map(d => d.sales))) * 150;
+                return (
+                  <div key={index} className="trend-bar-container">
+                    <div className="trend-bar" style={{ height: `${barHeight}px` }}></div>
+                    <div className="trend-label">{day.day}</div>
+                    <div className="trend-value">₹{(day.sales / 1000).toFixed(0)}k</div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* Right Column - Sales by Category */}
+          <div className="dashboard-card">
+            <div className="card-header">
+              <h3>Sales by Category</h3>
+            </div>
+            <div className="category-list">
+              {salesByCategory.map((category, index) => (
+                <div key={index} className="category-item">
+                  <div className="category-info">
+                    <span className="category-name">{category.name}</span>
+                    <span className="category-amount">₹{category.amount.toLocaleString('en-IN')}</span>
+                  </div>
+                  <div className="category-bar-container">
+                    <div 
+                      className="category-bar" 
+                      style={{ width: `${(category.amount / maxCategoryAmount) * 100}%` }}
+                    ></div>
+                    <span className="category-percentage">{category.percentage}%</span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+
+        {/* Third Row - Top Customers Table */}
+        <div className="dashboard-card full-width">
+          <div className="card-header">
+            <h3>Top 5 Customers by Sales</h3>
+          </div>
+          <div className="top-customers-table-container">
+            <table className="top-customers-table">
+              <thead>
+                <tr>
+                  <th>Rank</th>
+                  <th>Customer Name</th>
+                  <th>This Month</th>
+                </tr>
+              </thead>
+              <tbody>
+                {topCustomers.map((customer) => (
+                  <tr key={customer.rank}>
+                    <td className="rank-cell">{customer.rank}</td>
+                    <td>{customer.name}</td>
+                    <td className="amount-cell">₹{customer.amount.toLocaleString('en-IN')}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        {/* Fourth Row - Two Column Layout for Outstanding Summary and Low Stock */}
+        <div className="dashboard-two-columns">
+          {/* Outstanding Summary */}
+          <div className="dashboard-card">
+            <div className="card-header">
+              <h3>Outstanding Summary</h3>
+            </div>
+            <div className="outstanding-list">
+              {outstandingSummary.map((item, index) => (
+                <div key={index} className="outstanding-item">
+                  <span className="outstanding-days">{item.days}</span>
+                  <span className="outstanding-amount">₹{item.amount.toLocaleString('en-IN')}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Low Stock Alerts */}
+          <div className="dashboard-card">
+            <div className="card-header">
+              <h3>Low Stock Alerts</h3>
+            </div>
+            <div className="low-stock-list">
+              {lowStockAlerts.map((item, index) => (
+                <div key={index} className="low-stock-item">
+                  <div className="stock-product-info">
+                    <span className="stock-product">{item.product}</span>
+                    <span className="stock-status">⚠️ Low Stock</span>
+                  </div>
+                  <div className="stock-quantity">
+                    Current Stock: {item.stock} {item.unit}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  };
+
 
 
     // Sales Invoice Functions
@@ -3006,7 +3791,211 @@
     XLSX.utils.book_append_sheet(workbook, worksheet, 'Print Load');
     XLSX.writeFile(workbook, `Print_Load_${printLoadFormData.loadSeries}_${printLoadFormData.loadNo}.xlsx`);
   };
-  
+  // Add this with other state declarations (around line 50-60)
+const [settleLoadDummyData, setSettleLoadDummyData] = useState([
+  {
+    id: 1,
+    loadSeries: 'LD-SER-001',
+    loadNo: 'LD-2026-001',
+    loadDate: '2026-05-15',
+    settleLoadDate: '2026-05-18',
+    narration: 'Monthly settlement for May 2026',
+    items: [
+      {
+        id: 101,
+        sr: 1,
+        billType: 'Credit',
+        billDate: '2026-05-10',
+        billSeries: 'INV',
+        billNo: 'INV-001',
+        partyCode: 'CUST-001',
+        partyName: 'M/S Shreeji General Store',
+        billAmount: 12500.00,
+        receiptAmount: 0,
+        receiptSeries: '',
+        receiptNo: '',
+        adjust: 'N',
+        pending: 'N',
+        cancel: 'N',
+        status: 'Pending'
+      },
+      {
+        id: 102,
+        sr: 2,
+        billType: 'Cash',
+        billDate: '2026-05-11',
+        billSeries: 'INV',
+        billNo: 'INV-002',
+        partyCode: 'CUST-002',
+        partyName: 'Sharma Enterprises',
+        billAmount: 8750.50,
+        receiptAmount: 0,
+        receiptSeries: '',
+        receiptNo: '',
+        adjust: 'N',
+        pending: 'N',
+        cancel: 'N',
+        status: 'Pending'
+      },
+      {
+        id: 103,
+        sr: 3,
+        billType: 'Credit',
+        billDate: '2026-05-12',
+        billSeries: 'INV',
+        billNo: 'INV-003',
+        partyCode: 'CUST-003',
+        partyName: 'ABC Traders',
+        billAmount: 5600.00,
+        receiptAmount: 0,
+        receiptSeries: '',
+        receiptNo: '',
+        adjust: 'N',
+        pending: 'N',
+        cancel: 'N',
+        status: 'Pending'
+      },
+      {
+        id: 104,
+        sr: 4,
+        billType: 'Credit',
+        billDate: '2026-05-13',
+        billSeries: 'INV',
+        billNo: 'INV-004',
+        partyCode: 'CUST-004',
+        partyName: 'Patel Medical Store',
+        billAmount: 3200.00,
+        receiptAmount: 0,
+        receiptSeries: '',
+        receiptNo: '',
+        adjust: 'N',
+        pending: 'N',
+        cancel: 'N',
+        status: 'Pending'
+      },
+      {
+        id: 105,
+        sr: 5,
+        billType: 'Cash',
+        billDate: '2026-05-14',
+        billSeries: 'INV',
+        billNo: 'INV-005',
+        partyCode: 'CUST-005',
+        partyName: 'Gupta Kirana Store',
+        billAmount: 4500.00,
+        receiptAmount: 0,
+        receiptSeries: '',
+        receiptNo: '',
+        adjust: 'N',
+        pending: 'N',
+        cancel: 'N',
+        status: 'Pending'
+      }
+    ],
+    summary: {
+      totalBills: 5,
+      totalCashBills: 2,
+      totalCreditBills: 3,
+      totalRecAdjBills: 0,
+      totalPendingBills: 5,
+      totalCancelBills: 0,
+      totalAmt: 34550.50,
+      totalCashAmt: 13250.50,
+      totalCreditAmt: 21300.00,
+      totalChequeAmt: 0,
+      totalPendingAmt: 34550.50,
+      totalCancelAmt: 0
+    },
+    options: {
+      loadLock: false,
+      report: false
+    },
+    status: 'Pending'
+  },
+  {
+    id: 2,
+    loadSeries: 'LD-SER-002',
+    loadNo: 'LD-2026-002',
+    loadDate: '2026-05-10',
+    settleLoadDate: '2026-05-12',
+    narration: 'Partial settlement for early May',
+    items: [
+      {
+        id: 201,
+        sr: 1,
+        billType: 'Credit',
+        billDate: '2026-05-05',
+        billSeries: 'INV',
+        billNo: 'INV-101',
+        partyCode: 'CUST-006',
+        partyName: 'Singh Electricals',
+        billAmount: 15000.00,
+        receiptAmount: 10000.00,
+        receiptSeries: 'REC',
+        receiptNo: 'REC-001',
+        adjust: 'N',
+        pending: 'Y',
+        cancel: 'N',
+        status: 'Partial'
+      },
+      {
+        id: 202,
+        sr: 2,
+        billType: 'Credit',
+        billDate: '2026-05-06',
+        billSeries: 'INV',
+        billNo: 'INV-102',
+        partyCode: 'CUST-007',
+        partyName: 'Joshi Distributors',
+        billAmount: 22500.00,
+        receiptAmount: 22500.00,
+        receiptSeries: 'REC',
+        receiptNo: 'REC-002',
+        adjust: 'Y',
+        pending: 'N',
+        cancel: 'N',
+        status: 'Settled'
+      },
+      {
+        id: 203,
+        sr: 3,
+        billType: 'Cash',
+        billDate: '2026-05-07',
+        billSeries: 'INV',
+        billNo: 'INV-103',
+        partyCode: 'CUST-008',
+        partyName: 'Mehta Traders',
+        billAmount: 8500.00,
+        receiptAmount: 0,
+        receiptSeries: '',
+        receiptNo: '',
+        adjust: 'N',
+        pending: 'N',
+        cancel: 'Y',
+        status: 'Cancelled'
+      }
+    ],
+    summary: {
+      totalBills: 3,
+      totalCashBills: 1,
+      totalCreditBills: 2,
+      totalRecAdjBills: 1,
+      totalPendingBills: 1,
+      totalCancelBills: 1,
+      totalAmt: 46000.00,
+      totalCashAmt: 8500.00,
+      totalCreditAmt: 37500.00,
+      totalChequeAmt: 32500.00,
+      totalPendingAmt: 5000.00,
+      totalCancelAmt: 8500.00
+    },
+    options: {
+      loadLock: true,
+      report: false
+    },
+    status: 'Settled'
+  }
+]);
   const handleSubMenuClick = (item) => {
     setActiveSubMenu(item);
     setOpenFormFor(null);
@@ -3029,16 +4018,12 @@
       return;
     }
     
-    // Handle Dashboard items
-    if (item === 'Firm Creation') {
-      alert('Click the + button to create a new firm');
-      return;
-    }
-    if (item === 'User Creation') {
-      alert('Click the + button to create a new user');
-      return;
-    }
-    
+     if (item === 'Dashboard') {
+    // Clear any open forms and show dashboard
+    setOpenFormFor(null);
+    calculateDashboardPerformance(); // Calculate performance data
+    return; // Exit early to prevent any other processing
+  }
     // Calculate performance when showing Dashboard view
     if (item === 'Dashboard') {
       calculateDashboardPerformance();
@@ -3315,247 +4300,374 @@ if (item === 'Debit Note') {
     if (item === 'Bill Print') {
       return;
     }
-    
-    if (item === 'Settle Load') {
-      alert('Settle Load feature coming soon! Click + button to create new settlement');
-      return;
-    }
+
+  // Inside handleSubMenuClick function, update the Settle Load case:
+
+if (item === 'Settle Load') {
+  // Open the settle load form directly
+  setActiveSubMenu(item);
+  setOpenFormFor(item);
+  setShowSettleLoad(true);
+  
+  // Load dummy data or existing data
+  if (settleLoadDummyData[0] && settleLoadDummyData[0].items) {
+    const transformedItems = settleLoadDummyData[0].items.map((item, index) => ({
+      id: item.id || Date.now() + index,
+      sr: index + 1,
+      adjust: item.adjust || 'N',
+      pending: item.pending || 'N',
+      cancel: item.cancel || 'N',
+      receiptSeries: item.receiptSeries || '',
+      receiptNo: item.receiptNo || '',
+      status: item.status || 'Pending',
+      billType: item.billType || 'Credit',
+      billDate: item.billDate || settleLoadDummyData[0].loadDate,
+      billSeries: item.billSeries || '',
+      billNo: item.billNo || '',
+      partyCode: item.partyCode || '',
+      partyName: item.partyName || '',
+      billAmount: parseFloat(item.billAmount) || 0,
+      receiptAmount: parseFloat(item.receiptAmount) || 0,
+      chequeNo: item.chequeNo || '',
+      chequeDate: item.chequeDate || '',
+      bankName: item.bankName || '',
+      receiptMode: item.receiptMode || ''
+    }));
+    setSettleLoadItems(transformedItems);
+    setOriginalSettleLoadItems(JSON.parse(JSON.stringify(transformedItems))); // Store deep copy for search reset
+    calculateSettleLoadSummary(transformedItems);
+  } else {
+    setSettleLoadItems([]);
+    setOriginalSettleLoadItems([]);
+  }
+  
+  setSettleLoadFormData({
+    loadNo: settleLoadDummyData[0]?.loadNo || '',
+    loadDate: settleLoadDummyData[0]?.loadDate || new Date().toISOString().split('T')[0],
+    settleLoadDate: new Date().toISOString().split('T')[0],
+    narration: settleLoadDummyData[0]?.narration || ''
+  });
+  
+  setSettleLoadOptions({
+    loadLock: false,
+    report: false
+  });
+  return;
+}
     
     // For all master items - show message to click plus button
     if (item !== 'Billing' && item !== 'Quotation' && item !== 'Create Load' && 
         item !== 'Purchase' && item !== 'Credit Note' && item !== 'Debit Note' &&
         item !== 'Print Load' && item !== 'Settle Load' && item !== 'Bill Print' &&
         item !== 'Dashboard' && item !== 'Firm Creation' && item !== 'User Creation') {
-      alert(`Click the + button to add new ${item}`);
+      
       return;
     }
   };
-  const handlePlusClick = (item, e) => {
-    if (e) e.stopPropagation();
-    
-    // Reset ALL list views FIRST
-    setShowSalesList(false);
-    setShowPurchaseList(false);
-    setShowCreditNoteList(false);
-    setShowDebitNoteList(false);
-    setShowCreateLoadList(false);
+const handlePlusClick = (item, e) => {
+  if (e) e.stopPropagation();
+  
+  // Reset ALL list views FIRST
+  setShowSalesList(false);
+  setShowPurchaseList(false);
+  setShowCreditNoteList(false);
+  setShowDebitNoteList(false);
+  setShowCreateLoadList(false);
+  setShowPrintPreview(false);
+  
+  // Set active submenu and open form
+  setActiveSubMenu(item);
+  setOpenFormFor(item);
+  
+  // Reset tabs and edit states
+  setAccountActiveTab('basic');
+  setOtherAccountActiveTab('basic');
+  setEditGstId(null);
+  setEditSalesmanId(null);
+  setEditGodownId(null);
+  setEditCustomerBankId(null);
+  
+ if (item === 'Settle Load') {
+  // Load dummy data when plus button is clicked
+  setSettleLoadFormData({
+    loadNo: settleLoadDummyData[0]?.loadNo || '',
+    loadDate: settleLoadDummyData[0]?.loadDate || new Date().toISOString().split('T')[0],
+    settleLoadDate: new Date().toISOString().split('T')[0],
+    narration: settleLoadDummyData[0]?.narration || ''
+  });
+  
+  // Transform dummy data to settle load items
+  if (settleLoadDummyData[0]?.items) {
+    const transformedItems = settleLoadDummyData[0].items.map((item, index) => ({
+      id: item.id || Date.now() + index,
+      sr: index + 1,
+      adjust: item.adjust || 'N',
+      pending: item.pending || 'N',
+      cancel: item.cancel || 'N',
+      receiptSeries: item.receiptSeries || '',
+      receiptNo: item.receiptNo || '',
+      status: item.status || 'Pending',
+      billType: item.billType || 'Credit',
+      billDate: item.billDate || settleLoadDummyData[0].loadDate,
+      billSeries: item.billSeries || '',
+      billNo: item.billNo || '',
+      partyCode: item.partyCode || '',
+      partyName: item.partyName || '',
+      billAmount: parseFloat(item.billAmount) || 0,
+      receiptAmount: parseFloat(item.receiptAmount) || 0,
+      chequeNo: item.chequeNo || '',
+      chequeDate: item.chequeDate || '',
+      bankName: item.bankName || '',
+      receiptMode: item.receiptMode || ''
+    }));
+    setSettleLoadItems(transformedItems);
+    calculateSettleLoadSummary(transformedItems);
+  } else {
+    setSettleLoadItems([]);
+    setSettleLoadSummary({
+      totalBills: 0,
+      totalCashBills: 0,
+      totalCreditBills: 0,
+      totalRecAdjBills: 0,
+      totalPendingBills: 0,
+      totalCancelBills: 0,
+      previousCollection: 0,
+      totalAmt: 0,
+      totalCashAmt: 0,
+      totalCreditAmt: 0,
+      totalChequeAmt: 0,
+      totalPendingAmt: 0,
+      totalCancelAmt: 0
+    });
+  }
+  
+  setSettleLoadOptions({
+    loadLock: false,
+    report: false
+  });
+  setShowSettleLoad(true);
+  return;
+}
+  // ========== REST OF YOUR EXISTING CODE ==========
+  if (item === 'Billing') {
+    setInvoiceItems([]);
+    setInvoiceFormData({
+      billDate: new Date().toISOString().split('T')[0],
+      godown: 'G1',
+      company: '',
+      area: '',
+      party: '',
+      BillSeries: '',
+      billNo: '',
+      billType: 'Credit',
+      dueDate: '',
+      salesman: '',
+      narration: ''
+    });
+    setInvoiceSummary({
+      gross: 0, tpr: 0, scheme: 0, bottom: 0, star: 0, cd: 0, gst: 0, cess: 0, tcs: 0, rounding: 0, net: 0
+    });
+    addInvoiceItem();
+  } 
+  else if (item === 'Quotation') {
+    setInvoiceItems([]);
+    setInvoiceFormData({
+      billDate: new Date().toISOString().split('T')[0],
+      godown: 'G1',
+      company: '',
+      area: '',
+      party: '',
+      BillSeries: '',
+      billNo: '',
+      billType: 'Credit',
+      dueDate: '',
+      salesman: '',
+      narration: ''
+    });
+    setInvoiceSummary({
+      gross: 0, tpr: 0, scheme: 0, bottom: 0, star: 0, cd: 0, gst: 0, cess: 0, tcs: 0, rounding: 0, net: 0
+    });
+    addInvoiceItem();
+  } 
+  else if (item === 'Create Load') {
+    setCreateLoadItems([]);
+    setCreateLoadFormData({
+      loadSeries: '',
+      loadNo: '',
+      loadDate: new Date().toISOString().split('T')[0],
+      company: '',
+      deliverBoy: '',
+      selectedSalesman: '',
+      billFromDate: new Date().toISOString().split('T')[0],
+      billToDate: new Date().toISOString().split('T')[0],
+      narration: '',
+      deliveryBy: ''
+    });
+  } 
+  else if (item === 'Purchase') {
+    setPurchaseItems([]);
+    setPurchaseFormData({
+      supplier: '',
+      company: '',
+      storageLocation: '',
+      invoiceDate: new Date().toISOString().split('T')[0],
+      vno: '',
+      invoiceNumber: '',
+      narration: '',
+      discountPercent: '',
+      grossAmount: 0,
+      mrpTotal: 0,
+      tcbPercent: 0,
+      diBc1: 0,
+      afterDiBc1: 0,
+      groBsAmt: 0,
+      tcbAmount: 0,
+      diBc2: 0,
+      afterDiBc2: 0,
+      qbtAmt: 0,
+      rounding: 0,
+      diBc3: 0,
+      afterDiBc3: 0,
+      ceBsAmt: 0,
+      netAmt: 0
+    });
+    addPurchaseItem();
+  } 
+  else if (item === 'Credit Note') {
+    setCreditNoteItems([]);
+    setCreditNoteFormData({
+      vDate: new Date().toISOString().split('T')[0],
+      vNo: '',
+      party: '',
+      godown: 'G1',
+      salesman: '',
+      tinNo: '',
+      company: '',
+      narr: '',
+      billSeries: '',
+      billNo: '',
+      full: '',
+      refNo: '',
+      refDate: ''
+    });
+    setCreditNoteSummary({
+      grossAmt: 0, schemeAmt: 0, tprAmt: 0, cashDisc: 0, gstAmt: 0, starAmt: 0, starPercent: 0,
+      addLess: 0, display: 0, coupon: 0, rounding: 0, cessAmt: 0, tcsPercent: 0, tcsAmt: 0, billBalAmt: 0, netAmt: 0
+    });
+    addCreditNoteItem();
+  } 
+  else if (item === 'Debit Note') {
+    setDebitNoteItems([]);
+    setDebitNoteFormData({
+      vDate: new Date().toISOString().split('T')[0],
+      vNo: '',
+      godown: 'G1',
+      company: '',
+      narr: '',
+      supplier: '',
+      igst: 'N'
+    });
+    setDebitNoteSummary({
+      grossAmt: 0, gstAmt: 0, tcsPercent: 0, tcsAmt: 0, beforeVatDiscAmt: 0,
+      surcharge: 0, rounding: 0, beforeVatAddAmt: 0, afterVatDiscAmt: 0, netAmt: 0
+    });
+    addDebitNoteItem();
+  } 
+  else if (item === 'Print Load') {
+    setPrintLoadFormData({
+      loadSeries: '',
+      loadNo: '',
+      reportLevel: '',
+      printOn: '',
+      areaWise: 'N',
+      salesmanWise: 'N',
+      printLayout: 'portrait',
+      orderBy: 'product_wise'
+    });
+    setPrintLoadItems([]);
     setShowPrintPreview(false);
-    
-    // Set active submenu and open form
-    setActiveSubMenu(item);
-    setOpenFormFor(item);
-    
-    // Reset tabs and edit states
-    setAccountActiveTab('basic');
-    setOtherAccountActiveTab('basic');
-    setEditGstId(null);
-    setEditSalesmanId(null);
-    setEditGodownId(null);
-    setEditCustomerBankId(null);
-    
-    // ========== VOUCHERS MODULE: INITIALIZE FORM ==========
-    if (item === 'Billing') {
-      setInvoiceItems([]);
-      setInvoiceFormData({
-        billDate: new Date().toISOString().split('T')[0],
-        godown: 'G1',
-        company: '',
-        area: '',
-        party: '',
-        BillSeries: '',
-        billNo: '',
-        billType: 'Credit',
-        dueDate: '',
-        salesman: '',
-        narration: ''
-      });
-      setInvoiceSummary({
-        gross: 0, tpr: 0, scheme: 0, bottom: 0, star: 0, cd: 0, gst: 0, cess: 0, tcs: 0, rounding: 0, net: 0
-      });
-      addInvoiceItem();
-    } 
-    else if (item === 'Quotation') {
-      setInvoiceItems([]);
-      setInvoiceFormData({
-        billDate: new Date().toISOString().split('T')[0],
-        godown: 'G1',
-        company: '',
-        area: '',
-        party: '',
-        BillSeries: '',
-        billNo: '',
-        billType: 'Credit',
-        dueDate: '',
-        salesman: '',
-        narration: ''
-      });
-      setInvoiceSummary({
-        gross: 0, tpr: 0, scheme: 0, bottom: 0, star: 0, cd: 0, gst: 0, cess: 0, tcs: 0, rounding: 0, net: 0
-      });
-      addInvoiceItem();
-    } 
-    else if (item === 'Create Load') {
-      setCreateLoadItems([]);
-      setCreateLoadFormData({
-        loadSeries: '',
-        loadNo: '',
-        loadDate: new Date().toISOString().split('T')[0],
-        company: '',
-        deliverBoy: '',
-        selectedSalesman: '',
-        billFromDate: new Date().toISOString().split('T')[0],
-        billToDate: new Date().toISOString().split('T')[0],
-        narration: '',
-        deliveryBy: ''
-      });
-    } 
-    else if (item === 'Purchase') {
-      setPurchaseItems([]);
-      setPurchaseFormData({
-        supplier: '',
-        company: '',
-        storageLocation: '',
-        invoiceDate: new Date().toISOString().split('T')[0],
-        vno: '',
-        invoiceNumber: '',
-        narration: '',
-        discountPercent: '',
-        grossAmount: 0,
-        mrpTotal: 0,
-        tcbPercent: 0,
-        diBc1: 0,
-        afterDiBc1: 0,
-        groBsAmt: 0,
-        tcbAmount: 0,
-        diBc2: 0,
-        afterDiBc2: 0,
-        qbtAmt: 0,
-        rounding: 0,
-        diBc3: 0,
-        afterDiBc3: 0,
-        ceBsAmt: 0,
-        netAmt: 0
-      });
-      addPurchaseItem();
-    } 
-    else if (item === 'Credit Note') {
-      setCreditNoteItems([]);
-      setCreditNoteFormData({
-        vDate: new Date().toISOString().split('T')[0],
-        vNo: '',
-        party: '',
-        godown: 'G1',
-        salesman: '',
-        tinNo: '',
-        company: '',
-        narr: '',
-        billSeries: '',
-        billNo: '',
-        full: '',
-        refNo: '',
-        refDate: ''
-      });
-      setCreditNoteSummary({
-        grossAmt: 0, schemeAmt: 0, tprAmt: 0, cashDisc: 0, gstAmt: 0, starAmt: 0, starPercent: 0,
-        addLess: 0, display: 0, coupon: 0, rounding: 0, cessAmt: 0, tcsPercent: 0, tcsAmt: 0, billBalAmt: 0, netAmt: 0
-      });
-      addCreditNoteItem();
-    } 
-    else if (item === 'Debit Note') {
-      setDebitNoteItems([]);
-      setDebitNoteFormData({
-        vDate: new Date().toISOString().split('T')[0],
-        vNo: '',
-        godown: 'G1',
-        company: '',
-        narr: '',
-        supplier: '',
-        igst: 'N'
-      });
-      setDebitNoteSummary({
-        grossAmt: 0, gstAmt: 0, tcsPercent: 0, tcsAmt: 0, beforeVatDiscAmt: 0,
-        surcharge: 0, rounding: 0, beforeVatAddAmt: 0, afterVatDiscAmt: 0, netAmt: 0
-      });
-      addDebitNoteItem();
-    } 
-    else if (item === 'Print Load') {
-      // Initialize Print Load form
-      setPrintLoadFormData({
-        loadSeries: '',
-        loadNo: '',
-        // Add other print load fields as needed
-      });
-    } 
-    else if (item === 'Bill Print') {
-      setBillPrintFormData({
-        LoadSeries: '',
-        Trnseries: '',
-        FromTrnno: '',
-        Totrnno: '',
-        NoOfCopies: '',
-        loadNo: '',
-        Goodsreturn: 'N',
-        damageReturn: 'original',
-        SchemeSummary: 'Y',
-        VatSummary: 'Y',
-        HSNSummary: 'Y',
-        printType: 'original',
-        invoiceNumber: `INV-${Date.now()}`
-      });
-      setShowBillPrintPreview(false);
-      setBillPrintData(null);
-    } 
-    else if (item === 'Service') {
-      resetServiceForm();
-    } 
-    else if (item === 'GoDown Master') {
-      setGodownForm({ code: '', name: '', address: '', location: '' });
-    } 
-    else if (item === 'Customer Bank Master') {
-      setCustomerBankForm({
-        bankCode: '',
-        bankName: '',
-        accountNumber: '',
-        ifscCode: '',
-        branchName: '',
-        accountType: 'Savings',
-        customerName: '',
-        customerCode: '',
-        mobileNo: '',
-        emailId: '',
-        upiId: '',
-        swiftCode: '',
-        micrCode: '',
-        panNumber: '',
-        beneficiaryName: '',
-        remarks: ''
-      });
-    } 
-    else if (item === 'GST Master') {
-      setGstForm({ code: '', vat: '', purchaseType: 'VAT ON PURCHASE PRICE', salesType: 'VAT ON SALES PRICE' });
-    } 
-    else if (item === 'Salesman Master') {
-      setSalesmanForm({ code: '', name: '', type: 'SALESMAN', address: '', town: '', pinCode: '', state: '', country: '', phoneNo: '', mobileNo: '', emailId: '', dateOfBirth: '', qualification: '', reference: '', imeiNo: '' });
-    }
-    else if (item === 'Firm Creation') {
-      // Initialize Firm Creation form
-      setFirmFormData({
-        firmName: '',
-        gstNo: '',
-        address: '',
-        // Add other firm fields as needed
-      });
-    }
-    else if (item === 'User Creation') {
-      // Initialize User Creation form
-      setUserFormData({
-        username: '',
-        email: '',
-        role: '',
-        // Add other user fields as needed
-      });
-    }
-  };
+  } 
+  else if (item === 'Bill Print') {
+    setBillPrintFormData({
+      LoadSeries: '',
+      Trnseries: '',
+      FromTrnno: '',
+      Totrnno: '',
+      NoOfCopies: '',
+      loadNo: '',
+      Goodsreturn: 'N',
+      damageReturn: 'original',
+      SchemeSummary: 'Y',
+      VatSummary: 'Y',
+      HSNSummary: 'Y',
+      printType: 'original',
+      invoiceNumber: `INV-${Date.now()}`
+    });
+    setShowBillPrintPreview(false);
+    setBillPrintData(null);
+  } 
+  else if (item === 'Service') {
+    resetServiceForm();
+  } 
+  else if (item === 'GoDown Master') {
+    setGodownForm({ code: '', name: '', address: '', location: '' });
+  } 
+  else if (item === 'Customer Bank Master') {
+    setCustomerBankForm({
+      bankCode: '',
+      bankName: '',
+      accountNumber: '',
+      ifscCode: '',
+      branchName: '',
+      accountType: 'Savings',
+      customerName: '',
+      customerCode: '',
+      mobileNo: '',
+      emailId: '',
+      upiId: '',
+      swiftCode: '',
+      micrCode: '',
+      panNumber: '',
+      beneficiaryName: '',
+      remarks: ''
+    });
+  } 
+  else if (item === 'GST Master') {
+    setGstForm({ code: '', vat: '', purchaseType: 'VAT ON PURCHASE PRICE', salesType: 'VAT ON SALES PRICE' });
+  } 
+  else if (item === 'Salesman') {
+    setSalesmanForm({ code: '', name: '', type: 'SALESMAN', address: '', town: '', pinCode: '', state: '', country: '', phoneNo: '', mobileNo: '', emailId: '', dateOfBirth: '', qualification: '', reference: '', imeiNo: '' });
+  }
+  else if (item === 'Firm Creation') {
+    setFirmData({
+      firmCode: '',
+      firmName: '',
+      address1: '',
+      address2: '',
+      city: '',
+      pinCode: '',
+      state: '',
+      country: '',
+      phoneNo: '',
+      mobileNo: '',
+      tinNo: '',
+      regNo: '',
+      gstNo: '',
+      drugLicNo: '',
+      foodLicenceNo: '',
+      distributorId: '',
+      apiKey: ''
+    });
+  }
+  else if (item === 'User Creation') {
+    setUserData({
+      userName: '',
+      oldPassword: '',
+      password: '',
+      reEnterPassword: ''
+    });
+  }
+};
   const closeForm = () => {
       setOpenFormFor(null);
       setEditGstId(null);
@@ -4161,60 +5273,87 @@ if (item === 'Debit Note') {
       setAreaToPartyEditingCell('');
       setShowAreaToPartyDropdown(false);
     };
+// Replace the existing renderDataTable function with this modified version:
 
-    // Render data table with filters and export buttons
-    const renderDataTable = (title, data, columns, masterType, onDelete) => {
-      const filteredData = data;
+const renderDataTable = (title, data, columns, masterType, onDelete) => {
+  const filteredData = data;
 
-
-      return (
-
-        <div className="master-section grid-section">
-          <div className="grid-header">
-            <h3>{title} ({filteredData.length})</h3>
-            <div className="table-controls">
-              <input
-                type="text"
-                placeholder="Search..."
-                className="filter-input"
-                value={filters[masterType]}
-                onChange={(e) => handleFilterChange(masterType, e.target.value)}
-              />
-              <button className="btn-excel" onClick={() => exportToExcel(filteredData, title, columns)}>
-                📊 Export Excel
-              </button>
-              <button className="btn-pdf" onClick={() => exportToPDF(filteredData, title, columns)}>
-                📄 Export PDF
-              </button>
-              <button className="btn-add-new" onClick={() => setOpenFormFor(masterType === 'company' ? 'Company Master' :
-                masterType === 'group' ? 'Group Master' :
-                  masterType === 'category' ? 'Category Master' :
-                    masterType === 'product' ? 'Product' :
-                      masterType === 'account' ? 'Account' :
-                        masterType === 'otherAccount' ? 'Other Account' :
-                          masterType === 'gst' ? 'GST Master' :
-                            masterType === 'salesman' ? 'Salesman' :
-                              masterType === 'area' ? 'Area' :
-                                masterType === 'godown' ? 'GoDown Master' : 'Service')}>
-                + Add New
-              </button>
-            </div>
-          </div>
-          {filteredData.length > 0 ? (
-            <div className="data-table-container">
-              <table className="data-table">
-                <thead>
-                  <tr>
-                    {columns.map(col => <th key={col.key}>{col.label}</th>)}
-                    <th>Actions</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {filteredData.map(item => (
-                    <tr key={item.id}>
-                      {columns.map(col => <td key={col.key}>{item[col.key] || '-'}</td>)}
-                      <td>
-                        <button className="btn-edit" onClick={() => {
+  return (
+    <div className="master-section grid-section">
+      <div className="grid-header">
+        <h3>{title} ({filteredData.length})</h3>
+        <div className="table-controls">
+          <input
+            type="text"
+            placeholder="Search..."
+            className="filter-input"
+            value={filters[masterType]}
+            onChange={(e) => handleFilterChange(masterType, e.target.value)}
+          />
+          <button className="btn-excel" onClick={() => exportToExcel(filteredData, title, columns)}>
+            📊 Export Excel
+          </button>
+          <button className="btn-pdf" onClick={() => exportToPDF(filteredData, title, columns)}>
+            📄 Export PDF
+          </button>
+          <button className="btn-add-new" onClick={() => setOpenFormFor(masterType === 'company' ? 'Company Master' :
+            masterType === 'group' ? 'Group Master' :
+              masterType === 'category' ? 'Category Master' :
+                masterType === 'product' ? 'Product' :
+                  masterType === 'account' ? 'Account' :
+                    masterType === 'otherAccount' ? 'Other Account' :
+                      masterType === 'gst' ? 'GST Master' :
+                        masterType === 'salesman' ? 'Salesman' :
+                          masterType === 'area' ? 'Area' :
+                            masterType === 'godown' ? 'GoDown Master' : 'Service')}>
+            + Add New
+          </button>
+        </div>
+      </div>
+      {filteredData.length > 0 ? (
+        <div className="data-table-container">
+          <table className="data-table">
+            <thead>
+              <tr>
+                {columns.map(col => <th key={col.key}>{col.label}</th>)}
+                <th className="actions-header">Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {filteredData.map(item => (
+                <tr key={item.id}>
+                  {columns.map(col => <td key={col.key}>{item[col.key] || '-'}</td>)}
+                  <td className="action-buttons-cell">
+                    <div className="action-buttons-wrapper" style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                      <button 
+                        className="action-btn action-btn-view" 
+                        onClick={() => {
+                          // View action - can be implemented as needed
+                          alert(`View ${title} item: ${item.name || item.code || item.accountName || 'details'}`);
+                        }}
+                        title="View"
+                        style={{
+                          background: '#10b981',
+                          color: 'white',
+                          border: 'none',
+                          borderRadius: '4px',
+                          padding: '6px 12px',
+                          cursor: 'pointer',
+                          fontSize: '12px',
+                          fontWeight: '500',
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          gap: '4px',
+                          transition: 'all 0.2s ease'
+                        }}
+                        onMouseEnter={(e) => e.currentTarget.style.background = '#059669'}
+                        onMouseLeave={(e) => e.currentTarget.style.background = '#10b981'}
+                      >
+                        👁️ View
+                      </button>
+                      <button 
+                        className="action-btn action-btn-edit" 
+                        onClick={() => {
                           if (masterType === 'company') editCompany?.(item);
                           else if (masterType === 'group') editGroup?.(item);
                           else if (masterType === 'category') editCategory?.(item);
@@ -4226,184 +5365,242 @@ if (item === 'Debit Note') {
                           else if (masterType === 'area') editArea(item);
                           else if (masterType === 'godown') editGodown(item);
                           else if (masterType === 'service') editService(item);
-                        }}>✏️ Edit</button>
-                        <button className="btn-delete" onClick={() => onDelete(item.id)}>🗑 Delete</button>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          ) : (
-            <div className="empty-state">No data found. Click + Add New to create one.</div>
-          )}
-        </div>
-      );
-    };
-  const renderVoucherList = (title, data, columns) => {
-    const standardColumns = [
-      { key: 'date', label: 'Date' },
-      { key: 'billSeries', label: 'Bill Series' },
-      { key: 'billNumber', label: 'Bill Number' },
-      { key: 'billType', label: 'Bill Type' },
-      { key: 'partyCode', label: 'Party Code' },
-      { key: 'partyName', label: 'Party Name' },
-      { key: 'branchName', label: 'Branch Name' },
-      { key: 'amount', label: 'Amount (₹)' },
-      { key: 'loadSeries', label: 'Load Series' },
-      { key: 'loadNumber', label: 'Load Number' },
-      { key: 'status', label: 'Status' },
-      { key: 'actions', label: 'Actions' }
-    ];
-
-    const transformedData = data.map(item => ({
-      id: item.id,
-      date: item.billDate || item.invoiceDate || item.vDate || item.date || '-',
-      billSeries: item.billSeries || item.BillSeries || '-',
-      billNumber: item.billNo || item.invoiceNumber || item.vNo || '-',
-      billType: item.billType || '-',
-      partyCode: item.partyCode || item.supplierCode || '-',
-      partyName: item.party || item.supplier || item.partyName || '-',
-      branchName: item.branchName || item.area || item.storageLocation || '-',
-      amount: parseFloat(item.amount) || parseFloat(item.netAmt) || parseFloat(item.totalAmount) || 0,
-      loadSeries: item.loadSeries || '-',
-      loadNumber: item.loadNumber || '-',
-      status: item.status || (item.amount ? 'Pending' : 'Draft'),
-      originalItem: item
-    }));
-
-    const getStatusBadgeClass = (status) => {
-      const statusLower = (status || '').toLowerCase();
-      if (statusLower === 'paid' || statusLower === 'approved' || statusLower === 'received' || statusLower === 'settled') {
-        return 'status-badge status-success';
-      } else if (statusLower === 'pending' || statusLower === 'draft') {
-        return 'status-badge status-warning';
-      } else if (statusLower === 'cancelled' || statusLower === 'rejected') {
-        return 'status-badge status-danger';
-      }
-      return 'status-badge status-info';
-    };
-
-    const getType = () => {
-      if (title.includes('Sales')) return 'Sales';
-      if (title.includes('Purchase')) return 'Purchase';
-      if (title.includes('Credit Note')) return 'Credit Note';
-      if (title.includes('Debit Note')) return 'Debit Note';
-      return title;
-    };
-    
-    const type = getType();
-
-    return (
-      <div className="master-section grid-section">
-        <div className="grid-header">
-          <h3>{title} List ({transformedData.length})</h3>
-          <div className="table-controls">
-            <input
-              type="text"
-              placeholder="Search..."
-              className="filter-input"
-              value={filters[type.toLowerCase()] || ''}
-              onChange={(e) => setFilters({...filters, [type.toLowerCase()]: e.target.value})}
-            />
-            <button className="btn-excel" onClick={() => exportToExcel(transformedData.filter(d => 
-              d.partyName?.toLowerCase().includes((filters[type.toLowerCase()] || '').toLowerCase()) ||
-              d.billNumber?.toLowerCase().includes((filters[type.toLowerCase()] || '').toLowerCase())
-            ), title, standardColumns.filter(c => c.key !== 'actions'))}>
-              📊 Export Excel
-            </button>
-            <button className="btn-pdf" onClick={() => exportToPDF(transformedData.filter(d => 
-              d.partyName?.toLowerCase().includes((filters[type.toLowerCase()] || '').toLowerCase()) ||
-              d.billNumber?.toLowerCase().includes((filters[type.toLowerCase()] || '').toLowerCase())
-            ), title, standardColumns.filter(c => c.key !== 'actions'))}>
-              📄 Export PDF
-            </button>
-            <button className="btn-add-new" onClick={() => handlePlusClick(type, new Event('click'))}>
-              + Add New {type}
-            </button>
-          </div>
-        </div>
-        {transformedData.length > 0 ? (
-          <div className="data-table-container" style={{ overflowX: 'auto' }}>
-            <table className="data-table" style={{ minWidth: '1200px' }}>
-              <thead>
-                <tr>
-                  {standardColumns.map(col => (
-                    <th key={col.key} style={col.key === 'actions' ? { textAlign: 'center', width: '160px' } : {}}>
-                      {col.label}
-                    </th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {transformedData
-                  .filter(d => 
-                    d.partyName?.toLowerCase().includes((filters[type.toLowerCase()] || '').toLowerCase()) ||
-                    d.billNumber?.toLowerCase().includes((filters[type.toLowerCase()] || '').toLowerCase())
-                  )
-                  .map((item, index) => (
-                  <tr key={index}>
-                    <td>{item.date}</td>
-                    <td>{item.billSeries}</td>
-                    <td>{item.billNumber}</td>
-                    <td>{item.billType}</td>
-                    <td>{item.partyCode}</td>
-                    <td>{item.partyName}</td>
-                    <td>{item.branchName}</td>
-                    <td className="amount-cell">₹{item.amount.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
-                    <td>{item.loadSeries}</td>
-                    <td>{item.loadNumber}</td>
-                    <td><span className={getStatusBadgeClass(item.status)}>{item.status}</span></td>
-                    <td className="action-buttons" style={{ whiteSpace: 'nowrap' }}>
-                      <button 
-                        className="btn-view" 
-                        onClick={() => handleViewVoucher(type, item.originalItem)} 
-                        title="View" 
-                        style={{ background: '#10b981', color: 'white', border: 'none', borderRadius: '4px', padding: '4px 8px', margin: '0 2px', cursor: 'pointer' }}
-                      >
-                        👁️ View
-                      </button>
-                      <button 
-                        className="btn-edit" 
-                        onClick={() => handleEditVoucher(type, item.originalItem)} 
-                        title="Edit" 
-                        style={{ background: '#3b82f6', color: 'white', border: 'none', borderRadius: '4px', padding: '4px 8px', margin: '0 2px', cursor: 'pointer' }}
+                        }}
+                        title="Edit"
+                        style={{
+                          background: '#3b82f6',
+                          color: 'white',
+                          border: 'none',
+                          borderRadius: '4px',
+                          padding: '6px 12px',
+                          cursor: 'pointer',
+                          fontSize: '12px',
+                          fontWeight: '500',
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          gap: '4px',
+                          transition: 'all 0.2s ease'
+                        }}
+                        onMouseEnter={(e) => e.currentTarget.style.background = '#2563eb'}
+                        onMouseLeave={(e) => e.currentTarget.style.background = '#3b82f6'}
                       >
                         ✏️ Edit
                       </button>
                       <button 
-                        className="btn-delete" 
-                        onClick={() => handleDeleteVoucher(type, item.id)} 
-                        title="Delete" 
-                        style={{ background: '#ef4444', color: 'white', border: 'none', borderRadius: '4px', padding: '4px 8px', margin: '0 2px', cursor: 'pointer' }}
+                        className="action-btn action-btn-delete" 
+                        onClick={() => onDelete(item.id)}
+                        title="Delete"
+                        style={{
+                          background: '#ef4444',
+                          color: 'white',
+                          border: 'none',
+                          borderRadius: '4px',
+                          padding: '6px 12px',
+                          cursor: 'pointer',
+                          fontSize: '12px',
+                          fontWeight: '500',
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          gap: '4px',
+                          transition: 'all 0.2s ease'
+                        }}
+                        onMouseEnter={(e) => e.currentTarget.style.background = '#dc2626'}
+                        onMouseLeave={(e) => e.currentTarget.style.background = '#ef4444'}
                       >
                         🗑 Delete
                       </button>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        ) : (
-          <div className="empty-state">No data found. Click + Add New to create one.</div>
-        )}
-      </div>
-    );
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      ) : (
+        <div className="empty-state">No data found. Click + Add New to create one.</div>
+      )}
+    </div>
+  );
+};
+const renderVoucherList = (title, data, columns) => {
+  const standardColumns = [
+    { key: 'date', label: 'Date' },
+    { key: 'billSeries', label: 'Bill Series' },
+    { key: 'billNumber', label: 'Bill Number' },
+    { key: 'billType', label: 'Bill Type' },
+    { key: 'partyCode', label: 'Party Code' },
+    { key: 'partyName', label: 'Party Name' },
+    { key: 'branchName', label: 'Branch Name' },
+    { key: 'amount', label: 'Amount (₹)' },
+    { key: 'loadSeries', label: 'Load Series' },
+    { key: 'loadNumber', label: 'Load Number' },
+    { key: 'status', label: 'Status' },
+    { key: 'actions', label: 'Actions' }
+  ];
+
+  const transformedData = data.map(item => ({
+    id: item.id,
+    date: item.billDate || item.invoiceDate || item.vDate || item.date || '-',
+    billSeries: item.billSeries || item.BillSeries || '-',
+    billNumber: item.billNo || item.invoiceNumber || item.vNo || '-',
+    billType: item.billType || '-',
+    partyCode: item.partyCode || item.supplierCode || '-',
+    partyName: item.party || item.supplier || item.partyName || '-',
+    branchName: item.branchName || item.area || item.storageLocation || '-',
+    amount: parseFloat(item.amount) || parseFloat(item.netAmt) || parseFloat(item.totalAmount) || 0,
+    loadSeries: item.loadSeries || '-',
+    loadNumber: item.loadNumber || '-',
+    status: item.status || (item.amount ? 'Pending' : 'Draft'),
+    originalItem: item
+  }));
+
+  const getStatusBadgeClass = (status) => {
+    const statusLower = (status || '').toLowerCase();
+    if (statusLower === 'paid' || statusLower === 'approved' || statusLower === 'received' || statusLower === 'settled') {
+      return 'status-badge status-success';
+    } else if (statusLower === 'pending' || statusLower === 'draft') {
+      return 'status-badge status-warning';
+    } else if (statusLower === 'cancelled' || statusLower === 'rejected') {
+      return 'status-badge status-danger';
+    }
+    return 'status-badge status-info';
   };
+
+  const getType = () => {
+    if (title.includes('Sales')) return 'Sales';
+    if (title.includes('Purchase')) return 'Purchase';
+    if (title.includes('Credit Note')) return 'Credit Note';
+    if (title.includes('Debit Note')) return 'Debit Note';
+    return title;
+  };
+  
+  const type = getType();
+
+  return (
+    <div className="master-section grid-section">
+      <div className="grid-header">
+        <h3>{title} List ({transformedData.length})</h3>
+        <div className="table-controls">
+          <input
+            type="text"
+            placeholder="Search..."
+            className="filter-input"
+            value={filters[type.toLowerCase()] || ''}
+            onChange={(e) => setFilters({...filters, [type.toLowerCase()]: e.target.value})}
+          />
+          <button className="btn-excel" onClick={() => exportToExcel(transformedData.filter(d => 
+            d.partyName?.toLowerCase().includes((filters[type.toLowerCase()] || '').toLowerCase()) ||
+            d.billNumber?.toLowerCase().includes((filters[type.toLowerCase()] || '').toLowerCase())
+          ), title, standardColumns.filter(c => c.key !== 'actions'))}>
+            📊 Export Excel
+          </button>
+          <button className="btn-pdf" onClick={() => exportToPDF(transformedData.filter(d => 
+            d.partyName?.toLowerCase().includes((filters[type.toLowerCase()] || '').toLowerCase()) ||
+            d.billNumber?.toLowerCase().includes((filters[type.toLowerCase()] || '').toLowerCase())
+          ), title, standardColumns.filter(c => c.key !== 'actions'))}>
+            📄 Export PDF
+          </button>
+          <button className="btn-add-new" onClick={() => handlePlusClick(type, new Event('click'))}>
+            + Add New {type}
+          </button>
+        </div>
+      </div>
+      {transformedData.length > 0 ? (
+        <div className="data-table-container" style={{ overflowX: 'auto' }}>
+          <table className="data-table" style={{ minWidth: '1200px' }}>
+            <thead>
+              <tr>
+                {standardColumns.map(col => (
+                  <th key={col.key} style={col.key === 'actions' ? { 
+                    textAlign: 'center', 
+                    width: '160px',
+                    position: 'sticky',
+                    right: 0,
+                    backgroundColor: '#f8fafc',
+                    zIndex: 15
+                  } : {}}>
+                    {col.label}
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {transformedData
+                .filter(d => 
+                  d.partyName?.toLowerCase().includes((filters[type.toLowerCase()] || '').toLowerCase()) ||
+                  d.billNumber?.toLowerCase().includes((filters[type.toLowerCase()] || '').toLowerCase())
+                )
+                .map((item, index) => (
+                <tr key={index}>
+                  <td>{item.date}</td>
+                  <td>{item.billSeries}</td>
+                  <td>{item.billNumber}</td>
+                  <td>{item.billType}</td>
+                  <td>{item.partyCode}</td>
+                  <td>{item.partyName}</td>
+                  <td>{item.branchName}</td>
+                  <td className="amount-cell">₹{item.amount.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                  <td>{item.loadSeries}</td>
+                  <td>{item.loadNumber}</td>
+                  <td><span className={getStatusBadgeClass(item.status)}>{item.status}</span></td>
+                  <td className="action-buttons" style={{ 
+                    whiteSpace: 'nowrap',
+                    position: 'sticky',
+                    right: 0,
+                    backgroundColor: '#ffffff',
+                    zIndex: 10,
+                    boxShadow: '-2px 0 5px -2px rgba(0,0,0,0.1)'
+                  }}>
+                    <button 
+                      className="btn-view" 
+                      onClick={() => handleViewVoucher(type, item.originalItem)} 
+                      title="View" 
+                      style={{ background: '#10b981', color: 'white', border: 'none', borderRadius: '4px', padding: '4px 8px', margin: '0 2px', cursor: 'pointer' }}
+                    >
+                      👁️ View
+                    </button>
+                    <button 
+                      className="btn-edit" 
+                      onClick={() => handleEditVoucher(type, item.originalItem)} 
+                      title="Edit" 
+                      style={{ background: '#3b82f6', color: 'white', border: 'none', borderRadius: '4px', padding: '4px 8px', margin: '0 2px', cursor: 'pointer' }}
+                    >
+                      ✏️ Edit
+                    </button>
+                    <button 
+                      className="btn-delete" 
+                      onClick={() => handleDeleteVoucher(type, item.id)} 
+                      title="Delete" 
+                      style={{ background: '#ef4444', color: 'white', border: 'none', borderRadius: '4px', padding: '4px 8px', margin: '0 2px', cursor: 'pointer' }}
+                    >
+                      🗑 Delete
+                    </button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      ) : (
+        <div className="empty-state">No data found. Click + Add New to create one.</div>
+      )}
+    </div>
+  );
+};
   const renderLoadList = (title, data) => {
-    const loadColumns = [
-      { key: 'date', label: 'Load Date' },
-      { key: 'loadSeries', label: 'Load Series' },
-      { key: 'loadNumber', label: 'Load Number' },
-      { key: 'company', label: 'Company' },
-      { key: 'deliveryBy', label: 'Delivery By' },
-      { key: 'selectedSalesman', label: 'Salesman' },
-      { key: 'totalAmount', label: 'Total Amount (₹)' },
-      { key: 'itemCount', label: 'Items' },
-      { key: 'status', label: 'Status' },
-      { key: 'actions', label: 'Actions' }
-    ];
+  const loadColumns = [
+    { key: 'date', label: 'Load Date' },
+    { key: 'loadSeries', label: 'Load Series' },
+    { key: 'loadNumber', label: 'Load Number' },
+    { key: 'company', label: 'Company' },
+    { key: 'deliveryBy', label: 'Delivery By' },
+    { key: 'selectedSalesman', label: 'Salesman' },
+    { key: 'totalAmount', label: 'Total Amount (₹)' },
+    { key: 'itemCount', label: 'Items' },
+    { key: 'status', label: 'Status' },
+    { key: 'actions', label: 'Actions' }
+  ];
+
   const handleViewLoad = (item) => {
     setViewData(item);
     setViewType('Create Load');
@@ -4415,7 +5612,6 @@ if (item === 'Debit Note') {
     
     setShowCreateLoadList(false);
     
-    // Populate form with load data
     setCreateLoadFormData({
       loadSeries: item.loadSeries || '',
       loadNo: item.loadNo || '',
@@ -4438,142 +5634,155 @@ if (item === 'Debit Note') {
       alert('Load deleted successfully!');
     }
   };
-    const transformedData = data.map(item => ({
-      id: item.id,
-      date: item.loadDate || item.date || '-',
-      loadSeries: item.loadSeries || '-',
-      loadNumber: item.loadNo || item.loadNumber || '-',
-      company: item.company || '-',
-      deliveryBy: item.deliveryBy || '-',
-      selectedSalesman: item.selectedSalesman || '-',
-      totalAmount: parseFloat(item.totalAmount) || parseFloat(item.amount) || 0,
-      itemCount: item.items?.length || 0,
-      status: item.status || 'Pending',
-      originalItem: item
-    }));
 
-    const getStatusBadgeClass = (status) => {
-      const statusLower = (status || '').toLowerCase();
-      if (statusLower === 'settled') {
-        return 'status-badge status-success';
-      } else if (statusLower === 'pending') {
-        return 'status-badge status-warning';
-      }
-      return 'status-badge status-info';
-    };
+  const transformedData = data.map(item => ({
+    id: item.id,
+    date: item.loadDate || item.date || '-',
+    loadSeries: item.loadSeries || '-',
+    loadNumber: item.loadNo || item.loadNumber || '-',
+    company: item.company || '-',
+    deliveryBy: item.deliveryBy || '-',
+    selectedSalesman: item.selectedSalesman || '-',
+    totalAmount: parseFloat(item.totalAmount) || parseFloat(item.amount) || 0,
+    itemCount: item.items?.length || 0,
+    status: item.status || 'Pending',
+    originalItem: item
+  }));
 
-    return (
-      <div className="master-section grid-section">
-        <div className="grid-header">
-          <h3>{title} ({transformedData.length})</h3>
-          <div className="table-controls">
-            <input
-              type="text"
-              placeholder="Search..."
-              className="filter-input"
-              value={filters['load'] || ''}
-              onChange={(e) => setFilters({...filters, load: e.target.value})}
-            />
-            <button className="btn-excel" onClick={() => exportToExcel(
-              transformedData.filter(d => 
-                d.loadSeries?.toLowerCase().includes((filters['load'] || '').toLowerCase()) ||
-                d.loadNumber?.toLowerCase().includes((filters['load'] || '').toLowerCase())
-              ), 
-              title, 
-              loadColumns.filter(c => c.key !== 'actions')
-            )}>
-              📊 Export Excel
-            </button>
-            <button className="btn-pdf" onClick={() => exportToPDF(
-              transformedData.filter(d => 
-                d.loadSeries?.toLowerCase().includes((filters['load'] || '').toLowerCase()) ||
-                d.loadNumber?.toLowerCase().includes((filters['load'] || '').toLowerCase())
-              ), 
-              title, 
-              loadColumns.filter(c => c.key !== 'actions')
-            )}>
-              📄 Export PDF
-            </button>
-          </div>
-        </div>
-        {transformedData.length > 0 ? (
-          <div className="data-table-container" style={{ overflowX: 'auto' }}>
-            <table className="data-table" style={{ minWidth: '1000px' }}>
-              <thead>
-                <tr>
-                  {loadColumns.map(col => (
-                    <th key={col.key} style={col.key === 'actions' ? { textAlign: 'center', width: '200px' } : {}}>
-                      {col.label}
-                    </th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {transformedData
-                  .filter(d => 
-                    d.loadSeries?.toLowerCase().includes((filters['load'] || '').toLowerCase()) ||
-                    d.loadNumber?.toLowerCase().includes((filters['load'] || '').toLowerCase())
-                  )
-                  .map((item, index) => (
-                  <tr key={index}>
-                    <td>{item.date}</td>
-                    <td>{item.loadSeries}</td>
-                    <td>{item.loadNumber}</td>
-                    <td>{item.company}</td>
-                    <td>{item.deliveryBy}</td>
-                    <td>{item.selectedSalesman}</td>
-                    <td className="amount-cell">₹{item.totalAmount.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
-                    <td>{item.itemCount}</td>
-                    <td><span className={getStatusBadgeClass(item.status)}>{item.status}</span></td>
-                    <td className="action-buttons" style={{ whiteSpace: 'nowrap' }}>
-                      <button 
-                        className="btn-view" 
-                        onClick={() => handleViewLoad(item.originalItem)} 
-                        title="View" 
-                        style={{ background: '#10b981', color: 'white', border: 'none', borderRadius: '4px', padding: '4px 8px', margin: '0 2px', cursor: 'pointer' }}
-                      >
-                        👁️ View
-                      </button>
-                      <button 
-                        className="btn-edit" 
-                        onClick={() => handleEditLoad(item.originalItem)} 
-                        title="Edit" 
-                        style={{ background: '#3b82f6', color: 'white', border: 'none', borderRadius: '4px', padding: '4px 8px', margin: '0 2px', cursor: 'pointer' }}
-                      >
-                        ✏️ Edit
-                      </button>
-                      {item.status !== 'Settled' && (
-                        <button 
-                          className="btn-settle" 
-                          onClick={() => handleSettleLoad(item.originalItem)} 
-                          title="Settle Load" 
-                          style={{ background: '#8b5cf6', color: 'white', border: 'none', borderRadius: '4px', padding: '4px 8px', margin: '0 2px', cursor: 'pointer' }}
-                        >
-                          ✅ Settle
-                        </button>
-                      )}
-                      <button 
-                        className="btn-delete" 
-                        onClick={() => handleDeleteLoad(item.id)} 
-                        title="Delete" 
-                        style={{ background: '#ef4444', color: 'white', border: 'none', borderRadius: '4px', padding: '4px 8px', margin: '0 2px', cursor: 'pointer' }}
-                      >
-                        🗑 Delete
-                      </button>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        ) : (
-          <div className="empty-state">No loads found. Click + Add New to create one.</div>
-        )}
-      </div>
-    );
+  const getStatusBadgeClass = (status) => {
+    const statusLower = (status || '').toLowerCase();
+    if (statusLower === 'settled') {
+      return 'status-badge status-success';
+    } else if (statusLower === 'pending') {
+      return 'status-badge status-warning';
+    }
+    return 'status-badge status-info';
   };
 
-
+  return (
+    <div className="master-section grid-section">
+      <div className="grid-header">
+        <h3>{title} ({transformedData.length})</h3>
+        <div className="table-controls">
+          <input
+            type="text"
+            placeholder="Search..."
+            className="filter-input"
+            value={filters['load'] || ''}
+            onChange={(e) => setFilters({...filters, load: e.target.value})}
+          />
+          <button className="btn-excel" onClick={() => exportToExcel(
+            transformedData.filter(d => 
+              d.loadSeries?.toLowerCase().includes((filters['load'] || '').toLowerCase()) ||
+              d.loadNumber?.toLowerCase().includes((filters['load'] || '').toLowerCase())
+            ), 
+            title, 
+            loadColumns.filter(c => c.key !== 'actions')
+          )}>
+            📊 Export Excel
+          </button>
+          <button className="btn-pdf" onClick={() => exportToPDF(
+            transformedData.filter(d => 
+              d.loadSeries?.toLowerCase().includes((filters['load'] || '').toLowerCase()) ||
+              d.loadNumber?.toLowerCase().includes((filters['load'] || '').toLowerCase())
+            ), 
+            title, 
+            loadColumns.filter(c => c.key !== 'actions')
+          )}>
+            📄 Export PDF
+          </button>
+        </div>
+      </div>
+      {transformedData.length > 0 ? (
+        <div className="data-table-container" style={{ overflowX: 'auto' }}>
+          <table className="data-table" style={{ minWidth: '1000px' }}>
+            <thead>
+              <tr>
+                {loadColumns.map(col => (
+                  <th key={col.key} style={col.key === 'actions' ? { 
+                    textAlign: 'center', 
+                    width: '200px',
+                    position: 'sticky',
+                    right: 0,
+                    backgroundColor: '#f8fafc',
+                    zIndex: 15
+                  } : {}}>
+                    {col.label}
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {transformedData
+                .filter(d => 
+                  d.loadSeries?.toLowerCase().includes((filters['load'] || '').toLowerCase()) ||
+                  d.loadNumber?.toLowerCase().includes((filters['load'] || '').toLowerCase())
+                )
+                .map((item, index) => (
+                <tr key={index}>
+                  <td>{item.date}</td>
+                  <td>{item.loadSeries}</td>
+                  <td>{item.loadNumber}</td>
+                  <td>{item.company}</td>
+                  <td>{item.deliveryBy}</td>
+                  <td>{item.selectedSalesman}</td>
+                  <td className="amount-cell">₹{item.totalAmount.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                  <td>{item.itemCount}</td>
+                  <td><span className={getStatusBadgeClass(item.status)}>{item.status}</span></td>
+                  <td className="action-buttons" style={{ 
+                    whiteSpace: 'nowrap',
+                    position: 'sticky',
+                    right: 0,
+                    backgroundColor: '#ffffff',
+                    zIndex: 10,
+                    boxShadow: '-2px 0 5px -2px rgba(0,0,0,0.1)'
+                  }}>
+                    <button 
+                      className="btn-view" 
+                      onClick={() => handleViewLoad(item.originalItem)} 
+                      title="View" 
+                      style={{ background: '#10b981', color: 'white', border: 'none', borderRadius: '4px', padding: '4px 8px', margin: '0 2px', cursor: 'pointer' }}
+                    >
+                      👁️ View
+                    </button>
+                    <button 
+                      className="btn-edit" 
+                      onClick={() => handleEditLoad(item.originalItem)} 
+                      title="Edit" 
+                      style={{ background: '#3b82f6', color: 'white', border: 'none', borderRadius: '4px', padding: '4px 8px', margin: '0 2px', cursor: 'pointer' }}
+                    >
+                      ✏️ Edit
+                    </button>
+                    {item.status !== 'Settled' && (
+                      <button 
+                        className="btn-settle" 
+                        onClick={() => handleSettleLoad(item.originalItem)} 
+                        title="Settle Load" 
+                        style={{ background: '#8b5cf6', color: 'white', border: 'none', borderRadius: '4px', padding: '4px 8px', margin: '0 2px', cursor: 'pointer' }}
+                      >
+                        ✅ Settle
+                      </button>
+                    )}
+                    <button 
+                      className="btn-delete" 
+                      onClick={() => handleDeleteLoad(item.id)} 
+                      title="Delete" 
+                      style={{ background: '#ef4444', color: 'white', border: 'none', borderRadius: '4px', padding: '4px 8px', margin: '0 2px', cursor: 'pointer' }}
+                    >
+                      🗑 Delete
+                    </button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      ) : (
+        <div className="empty-state">No loads found. Click + Add New to create one.</div>
+      )}
+    </div>
+  );
+};
     return (
       <div className="dashboard-container">
         <aside className="sidebar">
@@ -4671,7 +5880,759 @@ if (item === 'Debit Note') {
               ], 'godown', deleteGodown)
             )}
 
-  {/* Bill Print Form */}
+
+  {(activeSubMenu === 'Settle Load' && showSettleLoad) && (
+  <div className="master-section erp-master-form settle-load-form" style={{ maxWidth: '1400px', margin: '0 auto' }}>
+    <div className="erp-header">
+      <div>
+        <h2 className="erp-title">Settle Load</h2>
+        <p style={{ fontSize: '13px', color: '#6b7280', marginTop: '4px' }}>
+          Create a new settlement
+        </p>
+      </div>
+      <button className="close-form-btn" onClick={() => {
+        setShowSettleLoad(false);
+        setOpenFormFor(null);
+        setActiveSubMenu(null);
+      }}>✕</button>
+    </div>
+
+    {/* Header Fields - Added Load Series */}
+    <div className="form-section" style={{ marginBottom: '20px', paddingBottom: '10px' }}>
+      <h4 className="section-header">Settlement Information</h4>
+      <div className="form-grid-3">
+        <div className="labeled-input">
+          <label>Load Series</label>
+          <input 
+            type="text" 
+            name="loadSeries" 
+            className="erp-input" 
+            placeholder="Enter Load Series"
+            value={settleLoadFormData.loadSeries || ''} 
+            onChange={handleSettleLoadInputChange}
+          />
+        </div>
+        <div className="labeled-input">
+          <label>Load No *</label>
+          <input 
+            type="text" 
+            name="loadNo" 
+            className="erp-input" 
+            placeholder="Enter Load Number"
+            value={settleLoadFormData.loadNo} 
+            onChange={handleSettleLoadInputChange}
+            required
+          />
+        </div>
+        <div className="labeled-input">
+          <label>Load Date</label>
+          <input 
+            type="date" 
+            name="loadDate" 
+            className="erp-input" 
+            value={settleLoadFormData.loadDate} 
+            onChange={handleSettleLoadInputChange}
+          />
+        </div>
+        <div className="labeled-input">
+          <label>Settle Load Date *</label>
+          <input 
+            type="date" 
+            name="settleLoadDate" 
+            className="erp-input" 
+            value={settleLoadFormData.settleLoadDate} 
+            onChange={handleSettleLoadInputChange}
+            required
+          />
+        </div>
+        <div className="labeled-input">
+          <label>Narration</label>
+          <input 
+            type="text"
+            name="narration" 
+            className="erp-input" 
+            placeholder="Enter settlement narration..." 
+            value={settleLoadFormData.narration} 
+            onChange={handleSettleLoadInputChange}
+          />
+        </div>
+      </div>
+    </div>
+
+    {/* Add Invoice Button */}
+    <div style={{ 
+      display: 'flex', 
+      justifyContent: 'flex-end', 
+      marginBottom: '12px',
+      paddingRight: '16px'
+    }}>
+      <button 
+        className="btn-primary" 
+        onClick={() => {
+          const newItem = {
+            id: Date.now(),
+            sr: settleLoadItems.length + 1,
+            adjust: 'N',
+            pending: 'N',
+            cancel: 'N',
+            receipt: '',
+            receiptSeries: '',
+            receiptNo: '',
+            status: 'Pending',
+            billType: 'Credit',
+            billDate: new Date().toISOString().split('T')[0],
+            billSeries: '',
+            billNo: '',
+            partyCode: '',
+            partyName: '',
+            billAmount: 0,
+            receiptAmount: 0
+          };
+          setSettleLoadItems([...settleLoadItems, newItem]);
+        }}
+        style={{ background: '#3b82f6', padding: '8px 20px', fontSize: '13px' }}
+      >
+        + Add Invoice
+      </button>
+    </div>
+{/* Invoices Table Section - MODIFIED WITH PROPER BUTTON HEADERS */}
+<div className="form-section" style={{ marginTop: '0', paddingTop: '0' }}>
+  <h4 className="section-header" style={{ marginBottom: '12px' }}>Invoices for Settlement</h4>
+
+  {/* Search Bar */}
+  <div style={{ 
+    display: 'flex', 
+    justifyContent: 'flex-end', 
+    marginBottom: '12px',
+    paddingRight: '16px',
+    gap: '10px'
+  }}>
+    <input
+      type="text"
+      placeholder="🔍 Search by Bill No, Party Name, Party Code, Amount..."
+      className="erp-input"
+      onChange={(e) => {
+        const searchTerm = e.target.value.toLowerCase();
+        if (searchTerm === '') {
+          setSettleLoadItems(originalSettleLoadItems);
+          calculateSettleLoadSummary(originalSettleLoadItems);
+        } else {
+          const filteredItems = originalSettleLoadItems.filter(item => 
+            (item.billNo && item.billNo.toLowerCase().includes(searchTerm)) ||
+            (item.partyName && item.partyName.toLowerCase().includes(searchTerm)) ||
+            (item.partyCode && item.partyCode.toLowerCase().includes(searchTerm)) ||
+            (item.billAmount && item.billAmount.toString().includes(searchTerm))
+          );
+          setSettleLoadItems(filteredItems);
+          calculateSettleLoadSummary(filteredItems);
+        }
+      }}
+      style={{ 
+        width: '300px', 
+        padding: '8px 12px',
+        fontSize: '13px',
+        borderRadius: '6px',
+        border: '1px solid #e2e8f0'
+      }}
+    />
+    <button 
+      onClick={() => {
+        setSettleLoadItems(originalSettleLoadItems);
+        calculateSettleLoadSummary(originalSettleLoadItems);
+        const searchInput = document.querySelector('.settle-load-search');
+        if (searchInput) searchInput.value = '';
+      }}
+      style={{
+        padding: '8px 16px',
+        fontSize: '13px',
+        borderRadius: '6px',
+        border: '1px solid #e2e8f0',
+        background: '#f3f4f6',
+        cursor: 'pointer'
+      }}
+    >
+      🔄 Reset
+    </button>
+  </div>
+
+  <div className="data-table-container" style={{ 
+    overflowX: 'auto', 
+    overflowY: 'auto', 
+    maxHeight: '500px', 
+    border: '1px solid #e5e7eb', 
+    borderRadius: '8px',
+    position: 'relative'
+  }}>
+    <table className="data-table" style={{ 
+      minWidth: '1400px', 
+      fontSize: '12px', 
+      fontFamily: 'system-ui, -apple-system, sans-serif',
+      borderCollapse: 'collapse',
+      width: '100%',
+      margin: 0,
+      padding: 0
+    }}>
+      <thead style={{ position: 'sticky', top: 0, zIndex: 20, backgroundColor: '#f8fafc' }}>
+        {/* Main Headers Row */}
+        <tr style={{ background: '#f8fafc', borderBottom: '1px solid #e2e8f0' }}>
+          <th style={{ 
+            padding: '10px 8px', 
+            textAlign: 'center', 
+            fontWeight: '600',
+            fontSize: '12px',
+            color: '#1e293b',
+            borderRight: '1px solid #e2e8f0',
+            position: 'sticky',
+            left: 0,
+            backgroundColor: '#f8fafc',
+            zIndex: 30,
+            width: '50px'
+          }}>Sr</th>
+          <th style={{ padding: '10px 8px', textAlign: 'left', fontWeight: '600', fontSize: '12px', color: '#1e293b', borderRight: '1px solid #e2e8f0' }}>Bill Series</th>
+          <th style={{ padding: '10px 8px', textAlign: 'left', fontWeight: '600', fontSize: '12px', color: '#1e293b', borderRight: '1px solid #e2e8f0' }}>Bill No</th>
+          <th style={{ padding: '10px 8px', textAlign: 'left', fontWeight: '600', fontSize: '12px', color: '#1e293b', borderRight: '1px solid #e2e8f0' }}>Bill Type</th>
+          <th style={{ padding: '10px 8px', textAlign: 'left', fontWeight: '600', fontSize: '12px', color: '#1e293b', borderRight: '1px solid #e2e8f0' }}>Party Code</th>
+          <th style={{ padding: '10px 8px', textAlign: 'left', fontWeight: '600', fontSize: '12px', color: '#1e293b', borderRight: '1px solid #e2e8f0' }}>Party Name</th>
+          <th style={{ padding: '10px 8px', textAlign: 'right', fontWeight: '600', fontSize: '12px', color: '#1e293b', borderRight: '1px solid #e2e8f0' }}>Bill Amt</th>
+          <th style={{ padding: '10px 8px', textAlign: 'left', fontWeight: '600', fontSize: '12px', color: '#1e293b', borderRight: '1px solid #e2e8f0' }}>Rec Series</th>
+          <th style={{ padding: '10px 8px', textAlign: 'left', fontWeight: '600', fontSize: '12px', color: '#1e293b', borderRight: '1px solid #e2e8f0' }}>Rec No</th>
+          <th style={{ 
+            padding: '10px 8px', 
+            textAlign: 'center', 
+            fontWeight: '600',
+            fontSize: '12px',
+            color: '#1e293b',
+            position: 'sticky',
+            right: 0,
+            backgroundColor: '#f8fafc',
+            zIndex: 30,
+            minWidth: '280px'
+          }}>Actions</th>
+        </tr>
+      </thead>
+      <tbody>
+        {settleLoadItems.map((item, index) => (
+          <tr key={item.id} style={{ borderBottom: '1px solid #e2e8f0' }}>
+            {/* Sticky Sr No */}
+            <td style={{ 
+              position: 'sticky', 
+              left: 0, 
+              backgroundColor: 'white',
+              zIndex: 10,
+              padding: '8px 4px',
+              textAlign: 'center',
+              fontWeight: '500',
+              color: '#475569',
+              borderRight: '1px solid #e2e8f0',
+              fontSize: '11px'
+            }}>
+              {item.sr}
+            </td>
+            
+            <td style={{ padding: '8px 4px', borderRight: '1px solid #e2e8f0' }}>
+              <div style={{ 
+                background: '#f1f5f9', 
+                padding: '4px 6px', 
+                borderRadius: '4px',
+                fontSize: '11px',
+                color: '#1e293b'
+              }}>
+                {item.billSeries || '-'}
+              </div>
+            </td>
+            
+            <td style={{ padding: '8px 4px', borderRight: '1px solid #e2e8f0' }}>
+              <div style={{ 
+                background: '#f1f5f9', 
+                padding: '4px 6px', 
+                borderRadius: '4px',
+                fontSize: '11px',
+                color: '#1e293b'
+              }}>
+                {item.billNo || '-'}
+              </div>
+            </td>
+            
+            <td style={{ padding: '8px 4px', borderRight: '1px solid #e2e8f0' }}>
+              <span className={`badge ${item.billType === 'Credit' ? 'badge-info' : 'badge-success'}`} style={{
+                display: 'inline-block',
+                padding: '2px 8px',
+                borderRadius: '10px',
+                fontSize: '10px',
+                fontWeight: '500',
+                background: item.billType === 'Credit' ? '#dbeafe' : '#d1fae5',
+                color: item.billType === 'Credit' ? '#1e40af' : '#065f46'
+              }}>
+                {item.billType}
+              </span>
+            </td>
+            
+            <td style={{ padding: '8px 4px', borderRight: '1px solid #e2e8f0' }}>
+              <div style={{ fontSize: '11px', color: '#475569' }}>
+                {item.partyCode || '-'}
+              </div>
+            </td>
+            
+            <td style={{ padding: '8px 4px', borderRight: '1px solid #e2e8f0' }}>
+              <div style={{ fontSize: '11px', fontWeight: '500', color: '#1e293b' }}>
+                {item.partyName || '-'}
+              </div>
+            </td>
+            
+            <td style={{ padding: '8px 4px', textAlign: 'right', borderRight: '1px solid #e2e8f0' }}>
+              <div style={{ fontWeight: '600', color: '#059669', fontSize: '11px' }}>
+                ₹{parseFloat(item.billAmount).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+              </div>
+            </td>
+            
+            <td style={{ padding: '8px 4px', borderRight: '1px solid #e2e8f0' }}>
+              <input 
+                type="text" 
+                className="erp-input" 
+                value={item.receiptSeries || ''} 
+                onChange={(e) => updateSettleLoadItem(index, 'receiptSeries', e.target.value)}
+                style={{ 
+                  width: '100%', 
+                  fontSize: '11px', 
+                  padding: '4px 6px',
+                  border: '1px solid #e2e8f0',
+                  borderRadius: '4px',
+                  background: item.status === 'Settled' || item.status === 'Cancelled' ? '#f1f5f9' : 'white'
+                }}
+                placeholder="Series"
+                disabled={item.status === 'Settled' || item.status === 'Cancelled'}
+              />
+            </td>
+            
+            <td style={{ padding: '8px 4px', borderRight: '1px solid #e2e8f0' }}>
+              <input 
+                type="text" 
+                className="erp-input" 
+                value={item.receiptNo || ''} 
+                onChange={(e) => updateSettleLoadItem(index, 'receiptNo', e.target.value)}
+                style={{ 
+                  width: '100%', 
+                  fontSize: '11px', 
+                  padding: '4px 6px',
+                  border: '1px solid #e2e8f0',
+                  borderRadius: '4px',
+                  background: item.status === 'Settled' || item.status === 'Cancelled' ? '#f1f5f9' : 'white'
+                }}
+                placeholder="Receipt No"
+                disabled={item.status === 'Settled' || item.status === 'Cancelled'}
+              />
+            </td>
+            
+            {/* STICKY BUTTONS GROUP */}
+            <td style={{ 
+              position: 'sticky', 
+              right: 0, 
+              backgroundColor: 'white', 
+              zIndex: 10,
+              padding: '8px 4px',
+              boxShadow: '-2px 0 5px -2px rgba(0,0,0,0.05)'
+            }}>
+              <div style={{ display: 'flex', gap: '6px', justifyContent: 'flex-start', alignItems: 'center' }}>
+                {/* Adjust Button */}
+                <button 
+                  className={`action-btn ${item.adjust === 'Y' ? 'btn-success' : 'btn-secondary'}`}
+                  onClick={() => {
+                    if (item.billNo && item.billSeries) {
+                      const originalInvoice = salesListData.find(
+                        inv => inv.billNo === item.billNo && inv.billSeries === item.billSeries
+                      );
+                      
+                      if (originalInvoice) {
+                        setInvoiceFormData({
+                          billDate: originalInvoice.billDate || new Date().toISOString().split('T')[0],
+                          godown: originalInvoice.godown || 'G1',
+                          company: originalInvoice.company || '',
+                          area: originalInvoice.area || '',
+                          party: originalInvoice.party || originalInvoice.partyName || '',
+                          BillSeries: originalInvoice.billSeries || '',
+                          billNo: originalInvoice.billNo || '',
+                          billType: originalInvoice.billType || 'Credit',
+                          dueDate: originalInvoice.dueDate || '',
+                          salesman: originalInvoice.salesman || '',
+                          narration: originalInvoice.narration || ''
+                        });
+                        
+                        setInvoiceItems(originalInvoice.items || []);
+                        setInvoiceSummary(originalInvoice.summary || {
+                          gross: 0, tpr: 0, scheme: 0, bottom: 0, star: 0, cd: 0, gst: 0, cess: 0, tcs: 0, rounding: 0, net: 0
+                        });
+                        
+                        setShowSettleLoad(false);
+                        setOpenFormFor('Billing');
+                        setActiveSubMenu('Billing');
+                        
+                        alert(`Opening invoice ${item.billNo} for editing...`);
+                      } else {
+                        alert('Invoice data not found. Please check the invoice details.');
+                      }
+                    } else {
+                      updateSettleLoadItem(index, 'adjust', item.adjust === 'Y' ? 'N' : 'Y');
+                    }
+                  }}
+                  style={{ 
+                    padding: '6px 10px', 
+                    fontSize: '11px',
+                    minWidth: '65px',
+                    background: item.adjust === 'Y' ? '#10b981' : '#e2e8f0',
+                    color: item.adjust === 'Y' ? 'white' : '#475569',
+                    border: 'none',
+                    borderRadius: '4px',
+                    cursor: item.status === 'Settled' || item.status === 'Cancelled' ? 'not-allowed' : 'pointer',
+                    opacity: item.status === 'Settled' || item.status === 'Cancelled' ? 0.5 : 1,
+                    fontWeight: '500'
+                  }}
+                  disabled={item.status === 'Settled' || item.status === 'Cancelled'}
+                  title={item.billNo ? "Click to edit invoice" : "Toggle adjust status"}
+                >
+                  {item.adjust === 'Y' ? '✓ Adj' : 'Adjust'}
+                </button>
+                
+                {/* Pending Button */}
+                <button 
+                  className={`action-btn ${item.pending === 'Y' ? 'btn-warning' : 'btn-secondary'}`}
+                  onClick={() => updateSettleLoadItem(index, 'pending', item.pending === 'Y' ? 'N' : 'Y')}
+                  style={{ 
+                    padding: '6px 10px', 
+                    fontSize: '11px',
+                    minWidth: '65px',
+                    background: item.pending === 'Y' ? '#f59e0b' : '#e2e8f0',
+                    color: item.pending === 'Y' ? 'white' : '#475569',
+                    border: 'none',
+                    borderRadius: '4px',
+                    cursor: item.status === 'Settled' || item.status === 'Cancelled' ? 'not-allowed' : 'pointer',
+                    opacity: item.status === 'Settled' || item.status === 'Cancelled' ? 0.5 : 1,
+                    fontWeight: '500'
+                  }}
+                  disabled={item.status === 'Settled' || item.status === 'Cancelled'}
+                >
+                  {item.pending === 'Y' ? '⏳ Pend' : 'Pending'}
+                </button>
+                
+                {/* Cancel Button */}
+                <button 
+                  className={`action-btn ${item.cancel === 'Y' ? 'btn-danger' : 'btn-secondary'}`}
+                  onClick={() => updateSettleLoadItem(index, 'cancel', item.cancel === 'Y' ? 'N' : 'Y')}
+                  style={{ 
+                    padding: '6px 10px', 
+                    fontSize: '11px',
+                    minWidth: '65px',
+                    background: item.cancel === 'Y' ? '#ef4444' : '#e2e8f0',
+                    color: item.cancel === 'Y' ? 'white' : '#475569',
+                    border: 'none',
+                    borderRadius: '4px',
+                    cursor: item.status === 'Settled' ? 'not-allowed' : 'pointer',
+                    opacity: item.status === 'Settled' ? 0.5 : 1,
+                    fontWeight: '500'
+                  }}
+                  disabled={item.status === 'Settled'}
+                >
+                  {item.cancel === 'Y' ? '✗ Can' : 'Cancel'}
+                </button>
+                
+            {/* Receipt Button - FIXED to open receipt modal */}
+<button 
+  className="btn-receipt"
+  onClick={(e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (item.cancel !== 'Y') {
+      console.log('Opening receipt modal for:', item);
+      setCurrentReceiptItem({ index, item });
+      setReceiptFormData({
+        ourBankAccount: item.receiptMode === 'Cash' ? 'cash' : (item.bankName || ''),
+        bankName: item.bankName || '',
+        chequeNo: item.chequeNo || '',
+        chequeDate: item.chequeDate || '',
+        billAmount: parseFloat(item.billAmount) || 0,
+        receiptAmount: parseFloat(item.receiptAmount) || 0,
+        discount: 0,
+        salesman: getSalesmanForCustomer(item.partyCode, item.partyName),
+        receiptSeries: item.receiptSeries || '',  // ADD THIS
+        receiptNo: item.receiptNo || ''           // ADD THIS
+      });
+      setShowReceiptModal(true);
+    } else {
+      alert('Cannot take receipt for cancelled bill');
+    }
+  }}
+  style={{ 
+    background: '#8b5cf6', 
+    color: 'white', 
+    border: 'none', 
+    borderRadius: '4px', 
+    padding: '6px 10px',
+    minWidth: '65px',
+    cursor: item.cancel === 'Y' ? 'not-allowed' : 'pointer',
+    fontSize: '11px',
+    opacity: item.cancel === 'Y' ? 0.5 : 1,
+    fontWeight: '500'
+  }}
+  disabled={item.cancel === 'Y'}
+>
+  💰 Receipt
+</button>
+                
+                {/* Delete Button */}
+                <button 
+                  className="btn-delete" 
+                  onClick={() => {
+                    const newItems = settleLoadItems.filter((_, i) => i !== index);
+                    newItems.forEach((item, i) => { item.sr = i + 1; });
+                    setSettleLoadItems(newItems);
+                    calculateSettleLoadSummary(newItems);
+                  }}
+                  style={{ 
+                    padding: '6px 10px', 
+                    fontSize: '11px',
+                    minWidth: '65px',
+                    background: '#ef4444',
+                    color: 'white',
+                    border: 'none',
+                    borderRadius: '4px',
+                    cursor: item.status === 'Settled' ? 'not-allowed' : 'pointer',
+                    opacity: item.status === 'Settled' ? 0.5 : 1,
+                    fontWeight: '500'
+                  }}
+                  disabled={item.status === 'Settled'}
+                >
+                  🗑 Delete
+                </button>
+              </div>
+            </td>
+          </tr>
+        ))}
+      </tbody>
+    </table>
+    
+    {settleLoadItems.length === 0 && (
+      <div className="empty-state" style={{ padding: '40px', textAlign: 'center', color: '#9ca3af' }}>
+        <div style={{ fontSize: '36px', marginBottom: '12px' }}>📋</div>
+        <div style={{ fontSize: '12px' }}>No invoices added. Click "Add Invoice" to add rows.</div>
+      </div>
+    )}
+  </div>
+</div>
+    {/* Summary Fields - Bottom Summary */}
+    <div className="form-section" style={{ marginTop: '20px' }}>
+      <h4 className="section-header">Settlement Summary</h4>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '15px' }}>
+        <div style={{ background: '#f9fafb', padding: '12px', borderRadius: '8px', textAlign: 'center' }}>
+          <div style={{ fontSize: '12px', color: '#6b7280' }}>Total Bills</div>
+          <div style={{ fontSize: '24px', fontWeight: 'bold', color: '#374151' }}>{settleLoadSummary.totalBills}</div>
+        </div>
+        <div style={{ background: '#f9fafb', padding: '12px', borderRadius: '8px', textAlign: 'center' }}>
+          <div style={{ fontSize: '12px', color: '#6b7280' }}>Total Settled Bills</div>
+          <div style={{ fontSize: '24px', fontWeight: 'bold', color: '#10b981' }}>{settleLoadSummary.totalRecAdjBills}</div>
+        </div>
+        <div style={{ background: '#f9fafb', padding: '12px', borderRadius: '8px', textAlign: 'center' }}>
+          <div style={{ fontSize: '12px', color: '#6b7280' }}>Total Collection</div>
+          <div style={{ fontSize: '24px', fontWeight: 'bold', color: '#059669' }}>
+            ₹{settleLoadSummary.totalChequeAmt.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+          </div>
+        </div>
+        <div style={{ background: '#f9fafb', padding: '12px', borderRadius: '8px', textAlign: 'center' }}>
+          <div style={{ fontSize: '12px', color: '#6b7280' }}>Total Cancel Bills</div>
+          <div style={{ fontSize: '24px', fontWeight: 'bold', color: '#ef4444' }}>{settleLoadSummary.totalCancelBills}</div>
+        </div>
+      </div>
+    </div>
+
+    {/* Action Buttons */}
+    <div className="form-actions" style={{ marginTop: '20px' }}>
+      <button className="btn-excel" onClick={exportSettleLoadToExcel} style={{ background: '#10b981' }}>
+        📊 Export
+      </button>
+      <button className="btn-primary" onClick={saveSettleLoad} style={{ background: '#3b82f6' }}>
+        💾 Save
+      </button>
+      <button className="btn-secondary" onClick={() => {
+        setShowSettleLoad(false);
+        setOpenFormFor(null);
+        setActiveSubMenu(null);
+      }}>
+        Cancel
+      </button>
+    </div>
+  </div>
+)}
+
+{/* Receipt Modal - Place this BEFORE the Batch Modal */}
+{showReceiptModal && currentReceiptItem && (
+  <div
+    style={{
+      position: 'fixed',
+      top: 0,
+      left: 0,
+      right: 0,
+      bottom: 0,
+      backgroundColor: 'rgba(0, 0, 0, 0.5)',
+      display: 'flex',
+      justifyContent: 'center',
+      alignItems: 'center',
+      zIndex: 999999
+    }}
+    onClick={(e) => {
+      if (e.target === e.currentTarget) setShowReceiptModal(false);
+    }}
+  >
+    <div
+      style={{
+        backgroundColor: 'white',
+        borderRadius: '12px',
+        padding: '24px',
+        width: '500px',
+        maxWidth: '90%',
+        maxHeight: '90vh',
+        overflowY: 'auto',
+        boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.1)'
+      }}
+    >
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
+        <h3 style={{ margin: 0, fontSize: '18px', fontWeight: '600' }}>Receipt Details</h3>
+        <button 
+          onClick={() => setShowReceiptModal(false)} 
+          style={{ background: 'none', border: 'none', fontSize: '20px', cursor: 'pointer' }}
+        >
+          ✕
+        </button>
+      </div>
+
+      <div style={{ marginBottom: '15px' }}>
+        <label style={{ display: 'block', fontSize: '13px', fontWeight: '500', marginBottom: '5px' }}>Our Bank Account *</label>
+        <select
+          style={{ width: '100%', padding: '8px', borderRadius: '6px', border: '1px solid #ddd' }}
+          value={receiptFormData.ourBankAccount}
+          onChange={(e) => {
+            const value = e.target.value;
+            setReceiptFormData({ 
+              ...receiptFormData, 
+              ourBankAccount: value,
+              bankName: value !== 'cash' ? value : '',
+              chequeNo: '',
+              chequeDate: ''
+            });
+          }}
+        >
+          <option value="">Select Account</option>
+          <option value="cash">Cash In Hand</option>
+          {customerBanks.map(bank => (
+            <option key={bank.id} value={bank.bankName}>
+              {bank.bankName} - {bank.accountNumber}
+            </option>
+          ))}
+        </select>
+      </div>
+
+      {receiptFormData.ourBankAccount !== 'cash' && receiptFormData.ourBankAccount !== '' && (
+        <>
+          <div style={{ marginBottom: '15px' }}>
+            <label style={{ display: 'block', fontSize: '13px', fontWeight: '500', marginBottom: '5px' }}>Cheque No *</label>
+            <input
+              type="text"
+              style={{ width: '100%', padding: '8px', borderRadius: '6px', border: '1px solid #ddd' }}
+              value={receiptFormData.chequeNo}
+              onChange={(e) => setReceiptFormData({ ...receiptFormData, chequeNo: e.target.value })}
+              placeholder="Enter Cheque Number"
+            />
+          </div>
+          <div style={{ marginBottom: '15px' }}>
+            <label style={{ display: 'block', fontSize: '13px', fontWeight: '500', marginBottom: '5px' }}>Cheque Date *</label>
+            <input
+              type="date"
+              style={{ width: '100%', padding: '8px', borderRadius: '6px', border: '1px solid #ddd' }}
+              value={receiptFormData.chequeDate}
+              onChange={(e) => setReceiptFormData({ ...receiptFormData, chequeDate: e.target.value })}
+            />
+          </div>
+        </>
+      )}
+
+      <div style={{ marginBottom: '15px' }}>
+        <label style={{ display: 'block', fontSize: '13px', fontWeight: '500', marginBottom: '5px' }}>Receipt Series</label>
+        <input
+          type="text"
+          style={{ width: '100%', padding: '8px', borderRadius: '6px', border: '1px solid #ddd' }}
+          value={receiptFormData.receiptSeries || ''}
+          onChange={(e) => setReceiptFormData({ ...receiptFormData, receiptSeries: e.target.value })}
+          placeholder="Receipt Series"
+        />
+      </div>
+
+      <div style={{ marginBottom: '15px' }}>
+        <label style={{ display: 'block', fontSize: '13px', fontWeight: '500', marginBottom: '5px' }}>Receipt No</label>
+        <input
+          type="text"
+          style={{ width: '100%', padding: '8px', borderRadius: '6px', border: '1px solid #ddd' }}
+          value={receiptFormData.receiptNo || ''}
+          onChange={(e) => setReceiptFormData({ ...receiptFormData, receiptNo: e.target.value })}
+          placeholder="Receipt Number"
+        />
+      </div>
+
+      <div style={{ marginBottom: '15px' }}>
+        <label style={{ display: 'block', fontSize: '13px', fontWeight: '500', marginBottom: '5px' }}>Bill Amount</label>
+        <input
+          type="number"
+          style={{ width: '100%', padding: '8px', borderRadius: '6px', border: '1px solid #ddd', background: '#f3f4f6' }}
+          value={receiptFormData.billAmount}
+          readOnly
+        />
+      </div>
+
+      <div style={{ marginBottom: '15px' }}>
+        <label style={{ display: 'block', fontSize: '13px', fontWeight: '500', marginBottom: '5px' }}>Receipt Amount *</label>
+        <input
+          type="number"
+          style={{ width: '100%', padding: '8px', borderRadius: '6px', border: '1px solid #ddd' }}
+          value={receiptFormData.receiptAmount}
+          onChange={(e) => setReceiptFormData({ ...receiptFormData, receiptAmount: parseFloat(e.target.value) || 0 })}
+          placeholder="Enter Receipt Amount"
+        />
+      </div>
+
+      <div style={{ marginBottom: '15px' }}>
+        <label style={{ display: 'block', fontSize: '13px', fontWeight: '500', marginBottom: '5px' }}>Discount</label>
+        <input
+          type="number"
+          style={{ width: '100%', padding: '8px', borderRadius: '6px', border: '1px solid #ddd' }}
+          value={receiptFormData.discount}
+          onChange={(e) => setReceiptFormData({ ...receiptFormData, discount: parseFloat(e.target.value) || 0 })}
+          placeholder="Enter Discount"
+        />
+      </div>
+
+      <div style={{ marginBottom: '20px' }}>
+        <label style={{ display: 'block', fontSize: '13px', fontWeight: '500', marginBottom: '5px' }}>Salesman</label>
+        <input
+          type="text"
+          style={{ width: '100%', padding: '8px', borderRadius: '6px', border: '1px solid #ddd', background: '#f3f4f6' }}
+          value={receiptFormData.salesman}
+          readOnly
+        />
+      </div>
+
+      <div style={{ display: 'flex', gap: '10px', justifyContent: 'flex-end' }}>
+        <button
+          onClick={() => setShowReceiptModal(false)}
+          style={{ padding: '8px 20px', background: '#9ca3af', color: 'white', border: 'none', borderRadius: '6px', cursor: 'pointer' }}
+        >
+          Cancel
+        </button>
+        <button
+          onClick={handleReceiptSubmit}
+          style={{ padding: '8px 20px', background: '#3b82f6', color: 'white', border: 'none', borderRadius: '6px', cursor: 'pointer' }}
+        >
+          Submit Receipt
+        </button>
+      </div>
+    </div>
+  </div>
+)}  {/* Bill Print Form */}
   {activeSubMenu === 'Bill Print' && !showBillPrintPreview && (
     <div className="master-section erp-master-form">
       <div className="erp-header">
@@ -5519,348 +7480,319 @@ if (item === 'Debit Note') {
       </form>
     </div>
   )}
-  {/* Print Load Form */}
-  {activeSubMenu === 'Print Load' && openFormFor === 'Print Load' && (
-    <div className="master-section erp-master-form">
-      <div className="erp-header">
-        <div>
-          <h2 className="erp-title">Print Load</h2>
+ {/* Print Load Form */}
+{activeSubMenu === 'Print Load' && openFormFor === 'Print Load' && (
+  <div className="master-section erp-master-form">
+    <div className="erp-header">
+      <div>
+        <h2 className="erp-title">Print Load</h2>
+      </div>
+      <button className="close-form-btn" onClick={closeForm}>✕</button>
+    </div>
+
+    <form className="master-form" onSubmit={handlePrintLoadSubmit}>
+      <div className="form-section">
+        <h4 className="section-header">Load Information</h4>
+        
+        {/* Row 1: 5 fields */}
+        <div className="form-grid-5">
+          <div className="labeled-input">
+            <label>Load Series *</label>
+            <select 
+              name="loadSeries" 
+              className="erp-select" 
+              value={printLoadFormData.loadSeries} 
+              onChange={handlePrintLoadInputChange} 
+              required
+            >
+              <option value="">Select Load Series</option>
+              <option value="LS-001">LS-001</option>
+              <option value="LS-002">LS-002</option>
+              <option value="LS-003">LS-003</option>
+            </select>
+          </div>
+          <div className="labeled-input">
+            <label>Load No *</label>
+            <input 
+              type="text" 
+              name="loadNo" 
+              className="erp-input" 
+              placeholder="Enter Load Number" 
+              value={printLoadFormData.loadNo} 
+              onChange={handlePrintLoadInputChange} 
+              required 
+            />
+          </div>
+          <div className="labeled-input">
+            <label>Report Level</label>
+            <select 
+              name="reportLevel" 
+              className="erp-select" 
+              value={printLoadFormData.reportLevel} 
+              onChange={handlePrintLoadInputChange}
+            >
+              <option value="">Select Report Level</option>
+              <option value="summary">Summary</option>
+              <option value="detailed">Detailed</option>
+              <option value="consolidated">Consolidated</option>
+            </select>
+          </div>
+          <div className="labeled-input">
+            <label>Print On</label>
+            <select 
+              name="printOn" 
+              className="erp-select" 
+              value={printLoadFormData.printOn} 
+              onChange={handlePrintLoadInputChange}
+            >
+              <option value="">Select Print Option</option>
+              <option value="printer">Printer</option>
+              <option value="pdf">PDF</option>
+              <option value="email">Email</option>
+            </select>
+          </div>
+          <div className="labeled-input">
+            <label>Print Layout</label>
+            <select 
+              name="printLayout" 
+              className="erp-select" 
+              value={printLoadFormData.printLayout} 
+              onChange={handlePrintLoadInputChange}
+            >
+              <option value="portrait">Portrait</option>
+              <option value="landscape">Landscape</option>
+            </select>
+          </div>
         </div>
-        <button className="close-form-btn" onClick={closeForm}>✕</button>
+
+        {/* Row 2: 5 fields */}
+        <div className="form-grid-5">
+          <div className="labeled-input">
+            <label>Area Wise</label>
+            <select 
+              name="areaWise" 
+              className="erp-select" 
+              value={printLoadFormData.areaWise} 
+              onChange={handlePrintLoadInputChange}
+            >
+              <option value="N">No</option>
+              <option value="Y">Yes</option>
+            </select>
+          </div>
+          <div className="labeled-input">
+            <label>Salesman Wise</label>
+            <select 
+              name="salesmanWise" 
+              className="erp-select" 
+              value={printLoadFormData.salesmanWise} 
+              onChange={handlePrintLoadInputChange}
+            >
+              <option value="N">No</option>
+              <option value="Y">Yes</option>
+            </select>
+          </div>
+          <div className="labeled-input">
+            <label>Order By</label>
+            <select 
+              name="orderBy" 
+              className="erp-select" 
+              value={printLoadFormData.orderBy} 
+              onChange={handlePrintLoadInputChange}
+            >
+              <option value="product_wise">Product Wise</option>
+              <option value="product_code_wise">Product Code Wise</option>
+              <option value="short_code_wise">Short Code Wise</option>
+            </select>
+          </div>
+          <div className="labeled-input">
+            <label>Select Load</label>
+            <select className="erp-select">
+              <option value="">Select Load</option>
+              <option value="load1">Load 1</option>
+              <option value="load2">Load 2</option>
+            </select>
+          </div>
+          <div className="labeled-input">
+            <label>Filter By</label>
+            <select className="erp-select">
+              <option value="">All</option>
+              <option value="date">Date Range</option>
+              <option value="party">Party Wise</option>
+            </select>
+          </div>
+        </div>
       </div>
 
-      <form className="master-form" onSubmit={handlePrintLoadSubmit}>
-        <div className="form-section">
-          <h4 className="section-header">Load Information</h4>
+      <div className="form-actions">
+        <button type="submit" className="btn-primary">
+          🔍 Load Data
+        </button>
+        <button type="button" className="btn-secondary" onClick={closeForm}>
+          Cancel
+        </button>
+      </div>
+    </form>
+
+    {/* Print Preview Section with Scrollable Grid - MODIFIED VERSION */}
+    {showPrintPreview && (
+      <div className="form-section" style={{ marginTop: '30px' }}>
+        {/* Header with title and buttons in corner */}
+        <div className="print-preview-header" style={{ 
+          display: 'flex', 
+          justifyContent: 'space-between', 
+          alignItems: 'center',
+          marginBottom: '15px',
+          paddingBottom: '10px',
+          borderBottom: '2px solid #e5e7eb',
           
-          {/* Row 1: 5 fields */}
-          <div className="form-grid-5">
-            <div className="labeled-input">
-              <label>Load Series *</label>
-              <select 
-                name="loadSeries" 
-                className="erp-select" 
-                value={printLoadFormData.loadSeries} 
-                onChange={handlePrintLoadInputChange} 
-                required
-              >
-                <option value="">Select Load Series</option>
-                <option value="LS-001">LS-001</option>
-                <option value="LS-002">LS-002</option>
-                <option value="LS-003">LS-003</option>
-              </select>
-            </div>
-            <div className="labeled-input">
-              <label>Load No *</label>
-              <input 
-                type="text" 
-                name="loadNo" 
-                className="erp-input" 
-                placeholder="Enter Load Number" 
-                value={printLoadFormData.loadNo} 
-                onChange={handlePrintLoadInputChange} 
-                required 
-              />
-            </div>
-            <div className="labeled-input">
-              <label>Report Level</label>
-              <select 
-                name="reportLevel" 
-                className="erp-select" 
-                value={printLoadFormData.reportLevel} 
-                onChange={handlePrintLoadInputChange}
-              >
-                <option value="">Select Report Level</option>
-                <option value="summary">Summary</option>
-                <option value="detailed">Detailed</option>
-                <option value="consolidated">Consolidated</option>
-              </select>
-            </div>
-            <div className="labeled-input">
-              <label>Print On</label>
-              <select 
-                name="printOn" 
-                className="erp-select" 
-                value={printLoadFormData.printOn} 
-                onChange={handlePrintLoadInputChange}
-              >
-                <option value="">Select Print Option</option>
-                <option value="printer">Printer</option>
-                <option value="pdf">PDF</option>
-                <option value="email">Email</option>
-              </select>
-            </div>
-            <div className="labeled-input">
-              <label>Print Layout</label>
-              <select 
-                name="printLayout" 
-                className="erp-select" 
-                value={printLoadFormData.printLayout} 
-                onChange={handlePrintLoadInputChange}
-              >
-                <option value="portrait">Portrait</option>
-                <option value="landscape">Landscape</option>
-              </select>
-            </div>
-          </div>
-
-          {/* Row 2: 5 fields */}
-          <div className="form-grid-5">
-            <div className="labeled-input">
-              <label>Area Wise</label>
-              <select 
-                name="areaWise" 
-                className="erp-select" 
-                value={printLoadFormData.areaWise} 
-                onChange={handlePrintLoadInputChange}
-              >
-                <option value="N">No</option>
-                <option value="Y">Yes</option>
-              </select>
-            </div>
-            <div className="labeled-input">
-              <label>Salesman Wise</label>
-              <select 
-                name="salesmanWise" 
-                className="erp-select" 
-                value={printLoadFormData.salesmanWise} 
-                onChange={handlePrintLoadInputChange}
-              >
-                <option value="N">No</option>
-                <option value="Y">Yes</option>
-              </select>
-            </div>
-            <div className="labeled-input">
-              <label>Order By</label>
-              <select 
-                name="orderBy" 
-                className="erp-select" 
-                value={printLoadFormData.orderBy} 
-                onChange={handlePrintLoadInputChange}
-              >
-                <option value="product_wise">Product Wise</option>
-                <option value="product_code_wise">Product Code Wise</option>
-                <option value="short_code_wise">Short Code Wise</option>
-              </select>
-            </div>
-            <div className="labeled-input">
-              <label>Select Load</label>
-              <select className="erp-select">
-                <option value="">Select Load</option>
-                <option value="load1">Load 1</option>
-                <option value="load2">Load 2</option>
-              </select>
-            </div>
-            <div className="labeled-input">
-              <label>Filter By</label>
-              <select className="erp-select">
-                <option value="">All</option>
-                <option value="date">Date Range</option>
-                <option value="party">Party Wise</option>
-              </select>
-            </div>
-          </div>
-        </div>
-
-        <div className="form-actions">
-          <button type="submit" className="btn-primary">
-            🔍 Load Data
-          </button>
-          <button type="button" className="btn-secondary" onClick={closeForm}>
-            Cancel
-          </button>
-        </div>
-      </form>
-
-      {/* Print Preview Section with Scrollable Grid */}
-      {showPrintPreview && (
-        <div className="form-section" style={{ marginTop: '30px' }}>
-          <h4 className="section-header">Print Preview - Selection Grid</h4>
+        }}>
           
-          <div className="form-actions" style={{ marginBottom: '20px' }}>
-            <button type="button" className="btn-primary" onClick={handlePrint}>
+          <h4 className="section-header" style={{ marginBottom: 0 }}>Print Preview</h4>
+          <div className="print-preview-actions" style={{ display: 'flex', gap: '12px' }}>
+            <button 
+              type="button" 
+              className="btn-primary" 
+              onClick={handlePrint}
+              style={{
+                background: '#3b82f6',
+                padding: '8px 20px',
+                fontSize: '13px',
+                fontWeight: '500',
+                borderRadius: '6px'
+              }}
+            >
               🖨️ Print Selected
             </button>
-            <button type="button" className="btn-excel" onClick={handleExportToExcel}>
-              📊 Export to Excel
+            <button 
+              type="button" 
+              className="btn-excel" 
+              onClick={handleExportToExcel}
+              style={{
+                background: '#10b981',
+                color: 'white',
+                padding: '8px 20px',
+                fontSize: '13px',
+                fontWeight: '500',
+                borderRadius: '6px',
+                border: 'none',
+                cursor: 'pointer'
+              }}
+            >
+              📊 Export Excel
             </button>
           </div>
+        </div>
 
-          <div id="print-load-content">
-            <div className="print-header">
-              <h1>Load Report</h1>
-              <p>Load Series: {printLoadFormData.loadSeries} | Load No: {printLoadFormData.loadNo}</p>
-              <p>Date: {new Date().toLocaleDateString()}</p>
-            </div>
-
-            {/* Scrollable Grid with Checkboxes */}
-            <div className="data-table-container" style={{ 
-              overflowX: 'auto', 
-              overflowY: 'auto', 
-              maxHeight: '500px',
-              border: '1px solid #e5e7eb',
-              borderRadius: '8px'
+        {/* Scrollable Grid with proper styling */}
+        <div id="print-load-content">
+          <div className="data-table-container" style={{ 
+            overflowX: 'auto', 
+            overflowY: 'auto', 
+            maxHeight: '500px',
+            border: '1px solid #e5e7eb',
+            borderRadius: '8px',
+            background: 'white'
+          }}>
+            <table className="data-table" style={{ 
+              width: '100%', 
+              borderCollapse: 'collapse',
+              fontSize: '13px',
+              fontFamily: 'inherit'
             }}>
-              <table className="data-table" style={{ 
-                width: '100%', 
-                borderCollapse: 'collapse',
-                fontSize: '13px'
-              }}>
-                <thead style={{ position: 'sticky', top: 0, zIndex: 10 }}>
-                  <tr style={{ backgroundColor: '#4CAF50', color: 'white' }}>
-                    <th style={{ padding: '10px', border: '1px solid #ddd', textAlign: 'center', width: '50px' }}>
+              <thead style={{ position: 'sticky', top: 0, zIndex: 10, background: '#f8fafc' }}>
+                <tr style={{ backgroundColor: '#4CAF50', color: 'white' }}>
+                  <th style={{ padding: '12px 10px', border: '1px solid #ddd', textAlign: 'center', width: '50px' }}>
+                    <input 
+                      type="checkbox"
+                      onChange={(e) => {
+                        const isChecked = e.target.checked;
+                        const updatedItems = generatePrintLayout().map((item, idx) => ({
+                          ...item,
+                          selected: isChecked
+                        }));
+                        setPrintLoadItems(updatedItems);
+                      }}
+                      style={{ cursor: 'pointer', width: '18px', height: '18px' }}
+                    />
+                  </th>
+                  <th style={{ padding: '12px 10px', border: '1px solid #ddd', textAlign: 'center', width: '60px' }}>Sr No</th>
+                  <th style={{ padding: '12px 10px', border: '1px solid #ddd', textAlign: 'left' }}>Party Name</th>
+                  <th style={{ padding: '12px 10px', border: '1px solid #ddd', textAlign: 'left' }}>Bill No</th>
+                  <th style={{ padding: '12px 10px', border: '1px solid #ddd', textAlign: 'right' }}>Amount (₹)</th>
+                  <th style={{ padding: '12px 10px', border: '1px solid #ddd', textAlign: 'left' }}>Area</th>
+                  <th style={{ padding: '12px 10px', border: '1px solid #ddd', textAlign: 'left' }}>Salesman</th>
+                  <th style={{ padding: '12px 10px', border: '1px solid #ddd', textAlign: 'left' }}>Bill Date</th>
+                  <th style={{ padding: '12px 10px', border: '1px solid #ddd', textAlign: 'left' }}>Party Code</th>
+                </tr>
+              </thead>
+              <tbody>
+                {generatePrintLayout().map((item, index) => (
+                  <tr key={index} style={{ borderBottom: '1px solid #e5e7eb' }}>
+                    <td style={{ padding: '10px', border: '1px solid #ddd', textAlign: 'center' }}>
                       <input 
                         type="checkbox"
+                        checked={item.selected || false}
                         onChange={(e) => {
-                          const isChecked = e.target.checked;
-                          const updatedItems = generatePrintLayout().map((item, idx) => ({
-                            ...item,
-                            selected: isChecked
-                          }));
+                          const updatedItems = [...printLoadItems];
+                          updatedItems[index].selected = e.target.checked;
                           setPrintLoadItems(updatedItems);
                         }}
-                        style={{ cursor: 'pointer' }}
+                        style={{ cursor: 'pointer', width: '18px', height: '18px' }}
                       />
-                    </th>
-                    <th style={{ padding: '10px', border: '1px solid #ddd', textAlign: 'center', width: '50px' }}>Sr No</th>
-                    <th style={{ padding: '10px', border: '1px solid #ddd', textAlign: 'left' }}>Party Name</th>
-                    <th style={{ padding: '10px', border: '1px solid #ddd', textAlign: 'left' }}>Bill No</th>
-                    <th style={{ padding: '10px', border: '1px solid #ddd', textAlign: 'right' }}>Amount (₹)</th>
-                    <th style={{ padding: '10px', border: '1px solid #ddd', textAlign: 'left' }}>Area</th>
-                    <th style={{ padding: '10px', border: '1px solid #ddd', textAlign: 'left' }}>Salesman</th>
-                    <th style={{ padding: '10px', border: '1px solid #ddd', textAlign: 'left' }}>Bill Date</th>
-                    <th style={{ padding: '10px', border: '1px solid #ddd', textAlign: 'left' }}>Party Code</th>
+                    </td>
+                    <td style={{ padding: '10px', border: '1px solid #ddd', textAlign: 'center' }}>{index + 1}</td>
+                    <td style={{ padding: '10px', border: '1px solid #ddd', fontWeight: '500' }}>{item.partyName}</td>
+                    <td style={{ padding: '10px', border: '1px solid #ddd' }}>{item.billNo}</td>
+                    <td style={{ padding: '10px', border: '1px solid #ddd', textAlign: 'right', fontWeight: '600', color: '#059669' }}>
+                      ₹{item.amount.toFixed(2)}
+                    </td>
+                    <td style={{ padding: '10px', border: '1px solid #ddd' }}>{item.area}</td>
+                    <td style={{ padding: '10px', border: '1px solid #ddd' }}>{item.salesman}</td>
+                    <td style={{ padding: '10px', border: '1px solid #ddd' }}>{item.billDate || '-'}</td>
+                    <td style={{ padding: '10px', border: '1px solid #ddd' }}>{item.partyCode || '-'}</td>
                   </tr>
-                </thead>
-                <tbody>
-                  {generatePrintLayout().map((item, index) => (
-                    <tr key={index}>
-                      <td style={{ padding: '8px', border: '1px solid #ddd', textAlign: 'center' }}>
-                        <input 
-                          type="checkbox"
-                          checked={item.selected || false}
-                          onChange={(e) => {
-                            const updatedItems = [...printLoadItems];
-                            updatedItems[index].selected = e.target.checked;
-                            setPrintLoadItems(updatedItems);
-                          }}
-                          style={{ cursor: 'pointer' }}
-                        />
-                      </td>
-                      <td style={{ padding: '8px', border: '1px solid #ddd', textAlign: 'center' }}>{index + 1}</td>
-                      <td style={{ padding: '8px', border: '1px solid #ddd' }}>{item.partyName}</td>
-                      <td style={{ padding: '8px', border: '1px solid #ddd' }}>{item.billNo}</td>
-                      <td style={{ padding: '8px', border: '1px solid #ddd', textAlign: 'right' }}>
-                        ₹{item.amount.toFixed(2)}
-                      </td>
-                      <td style={{ padding: '8px', border: '1px solid #ddd' }}>{item.area}</td>
-                      <td style={{ padding: '8px', border: '1px solid #ddd' }}>{item.salesman}</td>
-                      <td style={{ padding: '8px', border: '1px solid #ddd' }}>{item.billDate || '-'}</td>
-                      <td style={{ padding: '8px', border: '1px solid #ddd' }}>{item.partyCode || '-'}</td>
-                    </tr>
-                  ))}
-                </tbody>
-                <tfoot>
-                  <tr style={{ backgroundColor: '#f5f5f5', fontWeight: 'bold' }}>
-                    <td colSpan="4" style={{ padding: '10px', border: '1px solid #ddd', textAlign: 'right' }}>
-                      Total Selected:
-                    </td>
-                    <td style={{ padding: '10px', border: '1px solid #ddd', textAlign: 'right' }}>
-                      ₹{generatePrintLayout()
-                        .filter(item => item.selected)
-                        .reduce((sum, item) => sum + item.amount, 0)
-                        .toFixed(2)}
-                    </td>
-                    <td colSpan="4" style={{ padding: '10px', border: '1px solid #ddd' }}>
-                      ({generatePrintLayout().filter(item => item.selected).length} items selected)
-                    </td>
-                  </tr>
-                  <tr style={{ backgroundColor: '#e5e7eb', fontWeight: 'bold' }}>
-                    <td colSpan="4" style={{ padding: '10px', border: '1px solid #ddd', textAlign: 'right' }}>
-                      Grand Total:
-                    </td>
-                    <td style={{ padding: '10px', border: '1px solid #ddd', textAlign: 'right' }}>
-                      ₹{generatePrintLayout().reduce((sum, item) => sum + item.amount, 0).toFixed(2)}
-                    </td>
-                    <td colSpan="4" style={{ padding: '10px', border: '1px solid #ddd' }}>
-                      ({generatePrintLayout().length} total items)
-                    </td>
-                  </tr>
-                </tfoot>
-              </table>
-            </div>
+                ))}
+              </tbody>
+              <tfoot>
+                <tr style={{ backgroundColor: '#f9fafb', fontWeight: 'bold', borderTop: '2px solid #e5e7eb' }}>
+                  <td colSpan="4" style={{ padding: '12px', border: '1px solid #ddd', textAlign: 'right', background: '#f9fafb' }}>
+                    Total Selected:
+                  </td>
+                  <td style={{ padding: '12px', border: '1px solid #ddd', textAlign: 'right', background: '#f9fafb', fontWeight: 'bold', color: '#059669' }}>
+                    ₹{generatePrintLayout()
+                      .filter(item => item.selected)
+                      .reduce((sum, item) => sum + item.amount, 0)
+                      .toFixed(2)}
+                  </td>
+                  <td colSpan="4" style={{ padding: '12px', border: '1px solid #ddd', background: '#f9fafb' }}>
+                    ({generatePrintLayout().filter(item => item.selected).length} items selected)
+                  </td>
+                </tr>
+                <tr style={{ backgroundColor: '#f3f4f6', fontWeight: 'bold' }}>
+                  <td colSpan="4" style={{ padding: '12px', border: '1px solid #ddd', textAlign: 'right', background: '#f3f4f6' }}>
+                    Grand Total:
+                  </td>
+                  <td style={{ padding: '12px', border: '1px solid #ddd', textAlign: 'right', background: '#f3f4f6', fontWeight: 'bold', color: '#059669' }}>
+                    ₹{generatePrintLayout().reduce((sum, item) => sum + item.amount, 0).toFixed(2)}
+                  </td>
+                  <td colSpan="4" style={{ padding: '12px', border: '1px solid #ddd', background: '#f3f4f6' }}>
+                    ({generatePrintLayout().length} total items)
+                  </td>
+                </tr>
+              </tfoot>
+            </table>
           </div>
         </div>
-      )}
-    </div>
-  )}
-            {/* Dashboard Performance View */}
+      </div>
+    )}
+  </div>
+)}     
+
+       {/* Dashboard Performance View */}
   {activeSubMenu === 'Dashboard' && openFormFor !== 'Firm Creation' && openFormFor !== 'User Creation' && (
-    <div className="master-section">
-      <div className="page-title-large">Performance Dashboard</div>
-      
-      {/* Summary Cards */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '20px', marginBottom: '30px' }}>
-        <div className="performance-card" style={{ background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)', padding: '20px', borderRadius: '12px', color: 'white' }}>
-          <h3>Sales</h3>
-          <div style={{ fontSize: '32px', fontWeight: 'bold' }}>₹{dashboardPerformance.sales.total.toFixed(2)}</div>
-          <div>Total Invoices: {dashboardPerformance.sales.count}</div>
-        </div>
-        
-        <div className="performance-card" style={{ background: 'linear-gradient(135deg, #f093fb 0%, #f5576c 100%)', padding: '20px', borderRadius: '12px', color: 'white' }}>
-          <h3>Purchase</h3>
-          <div style={{ fontSize: '32px', fontWeight: 'bold' }}>₹{dashboardPerformance.purchase.total.toFixed(2)}</div>
-          <div>Total Invoices: {dashboardPerformance.purchase.count}</div>
-        </div>
-        
-        <div className="performance-card" style={{ background: 'linear-gradient(135deg, #4facfe 0%, #00f2fe 100%)', padding: '20px', borderRadius: '12px', color: 'white' }}>
-          <h3>Credit Note</h3>
-          <div style={{ fontSize: '32px', fontWeight: 'bold' }}>₹{dashboardPerformance.creditNote.total.toFixed(2)}</div>
-          <div>Total Notes: {dashboardPerformance.creditNote.count}</div>
-        </div>
-        
-        <div className="performance-card" style={{ background: 'linear-gradient(135deg, #fa709a 0%, #fee140 100%)', padding: '20px', borderRadius: '12px', color: 'white' }}>
-          <h3>Debit Note</h3>
-          <div style={{ fontSize: '32px', fontWeight: 'bold' }}>₹{dashboardPerformance.debitNote.total.toFixed(2)}</div>
-          <div>Total Notes: {dashboardPerformance.debitNote.count}</div>
-        </div>
-      </div>
-      
-      {/* Chart Section */}
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px', marginBottom: '30px' }}>
-        <div className="chart-card" style={{ background: 'white', padding: '20px', borderRadius: '12px', boxShadow: '0 1px 3px rgba(0,0,0,0.1)' }}>
-          <h3>Revenue Overview</h3>
-          <div style={{ marginTop: '20px' }}>
-            <div><strong>Total Sales:</strong> ₹{dashboardPerformance.sales.total.toFixed(2)}</div>
-            <div><strong>Total Purchase:</strong> ₹{dashboardPerformance.purchase.total.toFixed(2)}</div>
-            <div><strong>Net Profit:</strong> ₹{(dashboardPerformance.sales.total - dashboardPerformance.purchase.total).toFixed(2)}</div>
-            <div><strong>Credit Notes:</strong> ₹{dashboardPerformance.creditNote.total.toFixed(2)}</div>
-            <div><strong>Debit Notes:</strong> ₹{dashboardPerformance.debitNote.total.toFixed(2)}</div>
-          </div>
-        </div>
-        
-        <div className="stats-card" style={{ background: 'white', padding: '20px', borderRadius: '12px', boxShadow: '0 1px 3px rgba(0,0,0,0.1)' }}>
-          <h3>Quick Stats</h3>
-          <div style={{ marginTop: '20px' }}>
-            <div>📊 Total Transactions: {dashboardPerformance.sales.count + dashboardPerformance.purchase.count + dashboardPerformance.creditNote.count + dashboardPerformance.debitNote.count}</div>
-            <div>💰 Average Sale Value: ₹{(dashboardPerformance.sales.total / (dashboardPerformance.sales.count || 1)).toFixed(2)}</div>
-            <div>📦 Average Purchase Value: ₹{(dashboardPerformance.purchase.total / (dashboardPerformance.purchase.count || 1)).toFixed(2)}</div>
-          </div>
-        </div>
-      </div>
-      
-      {/* Recent Activity */}
-      <div style={{ background: 'white', padding: '20px', borderRadius: '12px', boxShadow: '0 1px 3px rgba(0,0,0,0.1)' }}>
-        <h3>Recent Activity</h3>
-        <div style={{ marginTop: '15px' }}>
-          <div><strong>Recent Sales:</strong> {dashboardPerformance.sales.count > 0 ? `${dashboardPerformance.sales.count} invoices` : 'No sales yet'}</div>
-          <div><strong>Recent Purchases:</strong> {dashboardPerformance.purchase.count > 0 ? `${dashboardPerformance.purchase.count} invoices` : 'No purchases yet'}</div>
-          <div><strong>Recent Credit Notes:</strong> {dashboardPerformance.creditNote.count > 0 ? `${dashboardPerformance.creditNote.count} notes` : 'No credit notes yet'}</div>
-          <div><strong>Recent Debit Notes:</strong> {dashboardPerformance.debitNote.count > 0 ? `${dashboardPerformance.debitNote.count} notes` : 'No debit notes yet'}</div>
-        </div>
-      </div>
-    </div>
+    renderDashboard()
   )}
+  
   {/* Firm Creation Form */}
   {activeSubMenu === 'Firm Creation' && openFormFor === 'Firm Creation' && (
     <div className="master-section erp-master-form">
@@ -5973,92 +7905,118 @@ if (item === 'Debit Note') {
     </div>
   )}
   {/* Firm Details Grid - Show all saved firms */}
-  {activeSubMenu === 'Firm Creation' && openFormFor !== 'Firm Creation' && (
-    <div className="master-section grid-section">
-      <div className="grid-header">
-        <h3>Firms List ({firms.length})</h3>
-        <div className="table-controls">
-          <input
-            type="text"
-            placeholder="Search firms..."
-            className="filter-input"
-            value={filters.firm || ''}
-            onChange={(e) => setFilters({...filters, firm: e.target.value})}
-          />
-          <button className="btn-excel" onClick={() => exportToExcel(
-            firms.filter(f => 
-              f.firmName?.toLowerCase().includes((filters.firm || '').toLowerCase()) ||
-              f.firmCode?.toLowerCase().includes((filters.firm || '').toLowerCase())
-            ), 
-            'Firms_List', 
-            [
-              { key: 'firmCode', label: 'Firm Code' },
-              { key: 'firmName', label: 'Firm Name' },
-              { key: 'city', label: 'City' },
-              { key: 'state', label: 'State' },
-              { key: 'mobileNo', label: 'Mobile No.' },
-              { key: 'gstNo', label: 'GST No.' }
-            ]
-          )}>
-            📊 Export Excel
-          </button>
-          <button className="btn-pdf" onClick={() => exportToPDF(
-            firms.filter(f => 
-              f.firmName?.toLowerCase().includes((filters.firm || '').toLowerCase()) ||
-              f.firmCode?.toLowerCase().includes((filters.firm || '').toLowerCase())
-            ), 
-            'Firms_List', 
-            [
-              { key: 'firmCode', label: 'Firm Code' },
-              { key: 'firmName', label: 'Firm Name' },
-              { key: 'city', label: 'City' },
-              { key: 'state', label: 'State' },
-              { key: 'mobileNo', label: 'Mobile No.' }
-            ]
-          )}>
-            📄 Export PDF
-          </button>
-          <button className="btn-add-new" onClick={() => setOpenFormFor('Firm Creation')}>
-            + Add New Firm
-          </button>
-        </div>
+{activeSubMenu === 'Firm Creation' && openFormFor !== 'Firm Creation' && (
+  <div className="master-section grid-section">
+    <div className="grid-header">
+      <h3>Firms List ({firms.length})</h3>
+      <div className="table-controls">
+        <input
+          type="text"
+          placeholder="Search firms..."
+          className="filter-input"
+          value={filters.firm || ''}
+          onChange={(e) => setFilters({...filters, firm: e.target.value})}
+        />
+        <button className="btn-excel" onClick={() => exportToExcel(
+          firms.filter(f => 
+            f.firmName?.toLowerCase().includes((filters.firm || '').toLowerCase()) ||
+            f.firmCode?.toLowerCase().includes((filters.firm || '').toLowerCase())
+          ), 
+          'Firms_List', 
+          [
+            { key: 'firmCode', label: 'Firm Code' },
+            { key: 'firmName', label: 'Firm Name' },
+            { key: 'city', label: 'City' },
+            { key: 'state', label: 'State' },
+            { key: 'mobileNo', label: 'Mobile No.' },
+            { key: 'gstNo', label: 'GST No.' }
+          ]
+        )}>
+          📊 Export Excel
+        </button>
+        <button className="btn-pdf" onClick={() => exportToPDF(
+          firms.filter(f => 
+            f.firmName?.toLowerCase().includes((filters.firm || '').toLowerCase()) ||
+            f.firmCode?.toLowerCase().includes((filters.firm || '').toLowerCase())
+          ), 
+          'Firms_List', 
+          [
+            { key: 'firmCode', label: 'Firm Code' },
+            { key: 'firmName', label: 'Firm Name' },
+            { key: 'city', label: 'City' },
+            { key: 'state', label: 'State' },
+            { key: 'mobileNo', label: 'Mobile No.' }
+          ]
+        )}>
+          📄 Export PDF
+        </button>
+        <button className="btn-add-new" onClick={() => setOpenFormFor('Firm Creation')}>
+          + Add New Firm
+        </button>
       </div>
-      {firms.filter(f => 
-        f.firmName?.toLowerCase().includes((filters.firm || '').toLowerCase()) ||
-        f.firmCode?.toLowerCase().includes((filters.firm || '').toLowerCase())
-      ).length > 0 ? (
-        <div className="data-table-container">
-          <table className="data-table">
-            <thead>
-              <tr>
-                <th>Firm Code</th>
-                <th>Firm Name</th>
-                <th>Address</th>
-                <th>City</th>
-                <th>State</th>
-                <th>Mobile No.</th>
-                <th>GST No.</th>
-                <th>Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {firms
-                .filter(f => 
-                  f.firmName?.toLowerCase().includes((filters.firm || '').toLowerCase()) ||
-                  f.firmCode?.toLowerCase().includes((filters.firm || '').toLowerCase())
-                )
-                .map(firm => (
-                  <tr key={firm.id}>
-                    <td>{firm.firmCode}</td>
-                    <td>{firm.firmName}</td>
-                    <td>{firm.address1 || '-'}</td>
-                    <td>{firm.city || '-'}</td>
-                    <td>{firm.state || '-'}</td>
-                    <td>{firm.mobileNo || '-'}</td>
-                    <td>{firm.gstNo || '-'}</td>
-                    <td>
+    </div>
+    {firms.filter(f => 
+      f.firmName?.toLowerCase().includes((filters.firm || '').toLowerCase()) ||
+      f.firmCode?.toLowerCase().includes((filters.firm || '').toLowerCase())
+    ).length > 0 ? (
+      <div className="data-table-container">
+        <table className="data-table">
+          <thead>
+            <tr>
+              <th>Firm Code</th>
+              <th>Firm Name</th>
+              <th>Address</th>
+              <th>City</th>
+              <th>State</th>
+              <th>Mobile No.</th>
+              <th>GST No.</th>
+              <th className="actions-header">Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            {firms
+              .filter(f => 
+                f.firmName?.toLowerCase().includes((filters.firm || '').toLowerCase()) ||
+                f.firmCode?.toLowerCase().includes((filters.firm || '').toLowerCase())
+              )
+              .map(firm => (
+                <tr key={firm.id}>
+                  <td>{firm.firmCode}</td>
+                  <td>{firm.firmName}</td>
+                  <td>{firm.address1 || '-'} {firm.address2 || ''}</td>
+                  <td>{firm.city || '-'}</td>
+                  <td>{firm.state || '-'}</td>
+                  <td>{firm.mobileNo || '-'}</td>
+                  <td>{firm.gstNo || '-'}</td>
+                  <td className="action-buttons-cell">
+                    <div className="action-buttons-wrapper" style={{ display: 'flex', gap: '8px', alignItems: 'center', justifyContent: 'center' }}>
                       <button 
-                        className="btn-edit" 
+                        className="action-btn action-btn-view" 
+                        onClick={() => {
+                          alert(`View Firm:\n\nCode: ${firm.firmCode}\nName: ${firm.firmName}\nAddress: ${firm.address1 || 'N/A'}\nCity: ${firm.city || 'N/A'}\nState: ${firm.state || 'N/A'}\nMobile: ${firm.mobileNo || 'N/A'}\nGST: ${firm.gstNo || 'N/A'}`);
+                        }}
+                        title="View"
+                        style={{
+                          background: '#10b981',
+                          color: 'white',
+                          border: 'none',
+                          borderRadius: '4px',
+                          padding: '6px 12px',
+                          cursor: 'pointer',
+                          fontSize: '12px',
+                          fontWeight: '500',
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          gap: '4px',
+                          transition: 'all 0.2s ease'
+                        }}
+                        onMouseEnter={(e) => e.currentTarget.style.background = '#059669'}
+                        onMouseLeave={(e) => e.currentTarget.style.background = '#10b981'}
+                      >
+                        👁️ View
+                      </button>
+                      <button 
+                        className="action-btn action-btn-edit" 
                         onClick={() => {
                           setFirmData({
                             firmCode: firm.firmCode,
@@ -6081,30 +8039,65 @@ if (item === 'Debit Note') {
                           });
                           setOpenFormFor('Firm Creation');
                         }}
+                        title="Edit"
+                        style={{
+                          background: '#3b82f6',
+                          color: 'white',
+                          border: 'none',
+                          borderRadius: '4px',
+                          padding: '6px 12px',
+                          cursor: 'pointer',
+                          fontSize: '12px',
+                          fontWeight: '500',
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          gap: '4px',
+                          transition: 'all 0.2s ease'
+                        }}
+                        onMouseEnter={(e) => e.currentTarget.style.background = '#2563eb'}
+                        onMouseLeave={(e) => e.currentTarget.style.background = '#3b82f6'}
                       >
                         ✏️ Edit
                       </button>
                       <button 
-                        className="btn-delete" 
+                        className="action-btn action-btn-delete" 
                         onClick={() => {
                           if (window.confirm('Are you sure you want to delete this firm?')) {
                             setFirms(firms.filter(f => f.id !== firm.id));
                           }
                         }}
+                        title="Delete"
+                        style={{
+                          background: '#ef4444',
+                          color: 'white',
+                          border: 'none',
+                          borderRadius: '4px',
+                          padding: '6px 12px',
+                          cursor: 'pointer',
+                          fontSize: '12px',
+                          fontWeight: '500',
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          gap: '4px',
+                          transition: 'all 0.2s ease'
+                        }}
+                        onMouseEnter={(e) => e.currentTarget.style.background = '#dc2626'}
+                        onMouseLeave={(e) => e.currentTarget.style.background = '#ef4444'}
                       >
                         🗑 Delete
                       </button>
-                    </td>
-                  </tr>
-                ))}
-            </tbody>
-          </table>
-        </div>
-      ) : (
-        <div className="empty-state">No firms found. Click + Add New Firm to create one.</div>
-      )}
-    </div>
-  )}
+                    </div>
+                  </td>
+                </tr>
+              ))}
+          </tbody>
+        </table>
+      </div>
+    ) : (
+      <div className="empty-state">No firms found. Click + Add New Firm to create one.</div>
+    )}
+  </div>
+)}
 
   {/* User Creation Form */}
   {activeSubMenu === 'User Creation' && openFormFor === 'User Creation' && (
@@ -6187,104 +8180,189 @@ if (item === 'Debit Note') {
   )}
 
   {/* Users List Grid - Show all created users */}
-  {activeSubMenu === 'User Creation' && openFormFor !== 'User Creation' && (
-    <div className="master-section grid-section">
-      <div className="grid-header">
-        <h3>Users List ({users.length})</h3>
-        <div className="table-controls">
-          <input
-            type="text"
-            placeholder="Search users..."
-            className="filter-input"
-            value={filters.user || ''}
-            onChange={(e) => setFilters({...filters, user: e.target.value})}
-          />
-          <button className="btn-excel" onClick={() => exportToExcel(
-            users.filter(u => 
-              u.userName?.toLowerCase().includes((filters.user || '').toLowerCase())
-            ),
-            'Users_List',
-            [
-              { key: 'userName', label: 'User Name' }
-            ]
-          )}>
-            📊 Export Excel
-          </button>
-          <button className="btn-pdf" onClick={() => exportToPDF(
-            users.filter(u => 
-              u.userName?.toLowerCase().includes((filters.user || '').toLowerCase())
-            ),
-            'Users_List',
-            [
-              { key: 'userName', label: 'User Name' }
-            ]
-          )}>
-            📄 Export PDF
-          </button>
-          <button className="btn-add-new" onClick={() => setOpenFormFor('User Creation')}>
-            + Add New User
-          </button>
-        </div>
+{activeSubMenu === 'User Creation' && openFormFor !== 'User Creation' && (
+  <div className="master-section grid-section">
+    <div className="grid-header">
+      <h3>Users List ({users.length})</h3>
+      <div className="table-controls">
+        <input
+          type="text"
+          placeholder="Search users..."
+          className="filter-input"
+          value={filters.user || ''}
+          onChange={(e) => setFilters({...filters, user: e.target.value})}
+        />
+        <button className="btn-excel" onClick={() => exportToExcel(
+          users.filter(u => 
+            u.userName?.toLowerCase().includes((filters.user || '').toLowerCase())
+          ),
+          'Users_List',
+          [
+            { key: 'userName', label: 'User Name' },
+            { key: 'role', label: 'Role' },
+            { key: 'status', label: 'Status' }
+          ]
+        )}>
+          📊 Export Excel
+        </button>
+        <button className="btn-pdf" onClick={() => exportToPDF(
+          users.filter(u => 
+            u.userName?.toLowerCase().includes((filters.user || '').toLowerCase())
+          ),
+          'Users_List',
+          [
+            { key: 'userName', label: 'User Name' },
+            { key: 'role', label: 'Role' }
+          ]
+        )}>
+          📄 Export PDF
+        </button>
+        <button className="btn-add-new" onClick={() => setOpenFormFor('User Creation')}>
+          + Add New User
+        </button>
       </div>
-      {users.filter(u => 
-        u.userName?.toLowerCase().includes((filters.user || '').toLowerCase())
-      ).length > 0 ? (
-        <div className="data-table-container">
-          <table className="data-table">
-            <thead>
-              <tr>
-                <th>S.No</th>
-                <th>User Name</th>
-                <th>Role</th>
-                <th>Status</th>
-                <th>Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {users
-                .filter(u => 
-                  u.userName?.toLowerCase().includes((filters.user || '').toLowerCase())
-                )
-                .map((user, index) => (
-                  <tr key={index}>
-                    <td>{index + 1}</td>
-                    <td>{user.userName}</td>
-                    <td>{user.userName === 'ADMIN' ? 'Administrator' : 'User'}</td>
-                    <td>
-                      <span style={{ 
-                        color: user.userName === currentUser ? '#059669' : '#6b7280',
-                        fontWeight: '500'
-                      }}>
-                        {user.userName === currentUser ? '✅ Current Session' : 'Inactive'}
-                      </span>
-                    </td>
-                    <td>
-                      {user.userName !== 'ADMIN' && (
-                        <button 
-                          className="btn-delete" 
-                          onClick={() => {
-                            if (window.confirm(`Are you sure you want to delete user "${user.userName}"?`)) {
-                              setUsers(users.filter(u => u.userName !== user.userName));
-                            }
-                          }}
-                        >
-                          🗑 Delete
-                        </button>
-                      )}
-                      {user.userName === 'ADMIN' && (
-                        <span style={{ fontSize: '12px', color: '#9ca3af' }}>System User</span>
-                      )}
-                    </td>
-                  </tr>
-                ))}
-            </tbody>
-          </table>
-        </div>
-      ) : (
-        <div className="empty-state">No users found. Click + Add New User to create one.</div>
-      )}
     </div>
-  )}
+    {users.filter(u => 
+      u.userName?.toLowerCase().includes((filters.user || '').toLowerCase())
+    ).length > 0 ? (
+      <div className="data-table-container">
+        <table className="data-table">
+          <thead>
+            <tr>
+              <th>S.No</th>
+              <th>User Name</th>
+              <th>Role</th>
+              <th>Status</th>
+              <th className="actions-header">Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            {users
+              .filter(u => 
+                u.userName?.toLowerCase().includes((filters.user || '').toLowerCase())
+              )
+              .map((user, index) => (
+                <tr key={index}>
+                  <td>{index + 1}</td>
+                  <td>{user.userName}</td>
+                  <td>{user.userName === 'ADMIN' ? 'Administrator' : 'User'}</td>
+                  <td>
+                    <span style={{ 
+                      display: 'inline-block',
+                      padding: '4px 8px',
+                      borderRadius: '4px',
+                      fontSize: '11px',
+                      fontWeight: '500',
+                      background: user.userName === currentUser ? '#d1fae5' : '#f3f4f6',
+                      color: user.userName === currentUser ? '#059669' : '#6b7280'
+                    }}>
+                      {user.userName === currentUser ? '✅ Current Session' : 'Inactive'}
+                    </span>
+                  </td>
+                  <td className="action-buttons-cell">
+                    <div className="action-buttons-wrapper" style={{ display: 'flex', gap: '8px', alignItems: 'center', justifyContent: 'center' }}>
+                      <button 
+                        className="action-btn action-btn-view" 
+                        onClick={() => {
+                          alert(`View User:\n\nUsername: ${user.userName}\nRole: ${user.userName === 'ADMIN' ? 'Administrator' : 'User'}\nStatus: ${user.userName === currentUser ? 'Active Session' : 'Inactive'}`);
+                        }}
+                        title="View"
+                        style={{
+                          background: '#10b981',
+                          color: 'white',
+                          border: 'none',
+                          borderRadius: '4px',
+                          padding: '6px 12px',
+                          cursor: 'pointer',
+                          fontSize: '12px',
+                          fontWeight: '500',
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          gap: '4px',
+                          transition: 'all 0.2s ease'
+                        }}
+                        onMouseEnter={(e) => e.currentTarget.style.background = '#059669'}
+                        onMouseLeave={(e) => e.currentTarget.style.background = '#10b981'}
+                      >
+                        👁️ View
+                      </button>
+                      {user.userName !== 'ADMIN' ? (
+                        <>
+                          <button 
+                            className="action-btn action-btn-edit" 
+                            onClick={() => {
+                              setUserData({
+                                userName: user.userName,
+                                oldPassword: '',
+                                password: '',
+                                reEnterPassword: ''
+                              });
+                              setOpenFormFor('User Creation');
+                            }}
+                            title="Edit"
+                            style={{
+                              background: '#3b82f6',
+                              color: 'white',
+                              border: 'none',
+                              borderRadius: '4px',
+                              padding: '6px 12px',
+                              cursor: 'pointer',
+                              fontSize: '12px',
+                              fontWeight: '500',
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              gap: '4px',
+                              transition: 'all 0.2s ease'
+                            }}
+                            onMouseEnter={(e) => e.currentTarget.style.background = '#2563eb'}
+                            onMouseLeave={(e) => e.currentTarget.style.background = '#3b82f6'}
+                          >
+                            ✏️ Edit
+                          </button>
+                          <button 
+                            className="action-btn action-btn-delete" 
+                            onClick={() => {
+                              if (window.confirm(`Are you sure you want to delete user "${user.userName}"?`)) {
+                                setUsers(users.filter(u => u.userName !== user.userName));
+                                alert(`User "${user.userName}" deleted successfully!`);
+                              }
+                            }}
+                            title="Delete"
+                            style={{
+                              background: '#ef4444',
+                              color: 'white',
+                              border: 'none',
+                              borderRadius: '4px',
+                              padding: '6px 12px',
+                              cursor: 'pointer',
+                              fontSize: '12px',
+                              fontWeight: '500',
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              gap: '4px',
+                              transition: 'all 0.2s ease'
+                            }}
+                            onMouseEnter={(e) => e.currentTarget.style.background = '#dc2626'}
+                            onMouseLeave={(e) => e.currentTarget.style.background = '#ef4444'}
+                          >
+                            🗑 Delete
+                          </button>
+                        </>
+                      ) : (
+                        <span style={{ fontSize: '12px', color: '#9ca3af', padding: '6px 12px' }}>System User</span>
+                      )}
+                    </div>
+                   </td>
+                 </tr>
+              ))}
+          </tbody>
+        </table>
+      </div>
+    ) : (
+      <div className="empty-state">No users found. Click + Add New User to create one.</div>
+    )}
+  </div>
+)}
   {/* Customer Bank Master - Form View */}
   {activeSubMenu === 'Customer Bank Master' && openFormFor === 'Customer Bank Master' && (
     <div className="master-section erp-master-form">
