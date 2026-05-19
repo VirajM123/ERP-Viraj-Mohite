@@ -21,7 +21,8 @@
 body {
   font-family: 'Inter', 'Segoe UI', 'Roboto', sans-serif;
   background: var(--main-bg);
-  overflow: hidden;
+   overflow-x: hidden;
+  overflow-y: auto;
 }
 
 .dashboard-container {
@@ -29,7 +30,8 @@ body {
   height: 100vh;
   width: 100%;
   background: var(--main-bg);
-  overflow: hidden;
+  overflow-x: hidden;
+overflow-y: auto;
 }
 
 /* SIDEBAR */
@@ -40,7 +42,7 @@ body {
   color: #f8fafc;
   display: flex;
   flex-direction: column;
-  height: 100vh;
+  min-height: 100vh;
   border-right: 1px solid rgba(255, 255, 255, 0.1);
   box-shadow: 4px 0 20px rgba(0, 0, 0, 0.08);
   transition: all 0.3s ease;
@@ -215,6 +217,7 @@ body {
   display: flex;
   flex-direction: column;
   height: 100vh;
+   min-width: 0;
   overflow: hidden;
 }
 
@@ -2651,9 +2654,12 @@ textarea {
 
 .dashboard-main-grid {
   display: grid !important;
-  grid-template-columns: 2fr 1.05fr !important;
-  gap: 24px !important;
-  margin-bottom: 24px !important;
+  grid-template-columns:
+    minmax(0, 2.5fr)
+    minmax(300px, 0.9fr) !important;
+
+  gap: 20px !important;
+  align-items: stretch;
 }
 
 .dashboard-bottom-grid {
@@ -2673,10 +2679,11 @@ textarea {
 
 .sales-trend-card {
   height: 330px !important;
+   min-width: 0 !important;
 }
 
 .category-card {
-  height: 330px !important;
+  min-width: 280px !important;
 }
 
 .card-header {
@@ -2990,4 +2997,357 @@ textarea {
 /* Remove fixed KPI width issue */
 .pro-dashboard .pro-kpi-card {
   width: auto !important;
+}
+
+/* =========================================
+   RESPONSIVE DESIGN
+========================================= */
+
+/* Large Laptop */
+@media (max-width: 1400px) {
+
+  .invoice-header-grid,
+  .purchase-header-grid,
+  .form-grid-4 {
+    grid-template-columns: repeat(3, 1fr);
+  }
+
+  .sales-invoice,
+  .purchase-invoice,
+  .credit-note,
+  .debit-note {
+    max-width: 100%;
+  }
+}
+
+
+/* Medium Laptop / Small Desktop */
+@media (max-width: 1200px) {
+
+  .content-body {
+    padding: 18px;
+  }
+
+  .form-grid-4,
+  .invoice-header-grid,
+  .purchase-header-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  .form-grid-3 {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  .dashboard-cards,
+  .stats-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+
+/* Tablet */
+@media (max-width: 992px) {
+
+  .dashboard-container {
+    flex-direction: column;
+  }
+
+  .sidebar {
+    width: 100%;
+    min-width: 100%;
+    height: auto;
+    max-height: 300px;
+    overflow-y: auto;
+  }
+
+  .main-content {
+    width: 100%;
+    height: auto;
+  }
+
+  .top-nav {
+    padding: 0 16px;
+  }
+
+  .content-body {
+    padding: 14px;
+  }
+
+  .form-grid-2,
+  .form-grid-3,
+  .form-grid-4,
+  .invoice-header-grid,
+  .purchase-header-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .grid-header {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .table-controls {
+    width: 100%;
+    justify-content: space-between;
+  }
+
+  .filter-input {
+    width: 100%;
+  }
+
+  .product-entry-container {
+    overflow-x: auto;
+  }
+
+  .erp-table-container {
+    min-width: 1400px;
+  }
+}
+
+
+/* Mobile */
+@media (max-width: 768px) {
+
+  .top-nav {
+    height: auto;
+    padding: 12px;
+    flex-wrap: wrap;
+    gap: 10px;
+  }
+
+  .page-title {
+    font-size: 18px;
+  }
+
+  .nav-right {
+    gap: 12px;
+  }
+
+ .dashboard-cards,
+.stats-grid {
+  display: grid;
+  gap: 16px;
+  grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+}
+
+  .master-section {
+    padding: 14px;
+  }
+
+  .page-title-large {
+    font-size: 20px;
+  }
+
+  .form-actions {
+    flex-direction: column;
+  }
+
+  .form-actions button {
+    width: 100%;
+  }
+
+  .data-table th,
+  .data-table td {
+    font-size: 12px;
+    padding: 8px;
+  }
+
+  .product-entry-table th,
+  .product-entry-table td {
+    font-size: 10px;
+    padding: 6px;
+  }
+
+  .company-logo {
+    max-width: 140px;
+  }
+}
+
+
+/* Small Mobile */
+@media (max-width: 480px) {
+
+  .content-body {
+    padding: 10px;
+  }
+
+  .master-section {
+    padding: 10px;
+    border-radius: 10px;
+  }
+
+  .page-title-large {
+    font-size: 18px;
+  }
+
+  .labeled-input input,
+  .labeled-input select,
+  .labeled-input textarea {
+    font-size: 12px;
+    padding: 6px 8px;
+  }
+
+  .btn-save,
+  .btn-primary,
+  .btn-cancel,
+  .btn-secondary {
+    width: 100%;
+  }
+
+  .avatar {
+    width: 34px;
+    height: 34px;
+    font-size: 12px;
+  }
+}
+
+.recharts-responsive-container {
+  width: 100% !important;
+}
+
+
+/* =========================================
+   FINAL DASHBOARD RESPONSIVE FIX
+========================================= */
+
+/* Large laptops */
+@media (max-width: 1400px) {
+
+  .dashboard-kpi-row {
+    grid-template-columns: repeat(2, 1fr) !important;
+  }
+
+  .dashboard-main-grid {
+    grid-template-columns: 1fr !important;
+  }
+
+  .dashboard-bottom-grid {
+    grid-template-columns: 1fr !important;
+  }
+
+  .category-card,
+  .sales-trend-card {
+    height: auto !important;
+  }
+}
+
+
+/* Medium laptops */
+@media (max-width: 1200px) {
+
+  .sidebar {
+    width: 240px !important;
+    min-width: 240px !important;
+  }
+
+  .content-body {
+    padding: 18px !important;
+  }
+
+  .dashboard-kpi-row {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  }
+
+  .dashboard-main-grid {
+    grid-template-columns: 1fr !important;
+  }
+
+  .dashboard-bottom-grid {
+    grid-template-columns: 1fr !important;
+  }
+
+  .pro-kpi-card {
+    height: auto !important;
+    min-height: 170px !important;
+  }
+}
+
+
+/* Tablets */
+@media (max-width: 992px) {
+
+  .dashboard-container {
+    flex-direction: column !important;
+  }
+
+  .sidebar {
+    width: 100% !important;
+    min-width: 100% !important;
+    height: auto !important;
+    max-height: 300px;
+  }
+
+  .main-content {
+    width: 100%;
+  }
+
+  .dashboard-kpi-row {
+    grid-template-columns: 1fr !important;
+  }
+
+  .dashboard-main-grid,
+  .dashboard-bottom-grid {
+    grid-template-columns: 1fr !important;
+  }
+
+  .category-chart-wrapper {
+    flex-direction: column !important;
+    align-items: center !important;
+    height: auto !important;
+  }
+
+  .donut-box {
+    width: 170px !important;
+    height: 170px !important;
+  }
+}
+
+
+/* Mobile */
+@media (max-width: 768px) {
+
+  .content-body {
+    padding: 12px !important;
+  }
+
+  .pro-dashboard {
+    padding: 14px !important;
+  }
+
+  .dashboard-page-head {
+    flex-direction: column;
+    gap: 10px;
+  }
+
+  .dashboard-page-head h1 {
+    font-size: 22px !important;
+  }
+
+  .pro-kpi-card {
+    grid-template-columns: 50px 1fr !important;
+    padding: 16px !important;
+  }
+
+  .pro-kpi-card .kpi-value {
+    font-size: 20px !important;
+  }
+
+  .dashboard-card {
+    padding: 16px !important;
+  }
+
+  .card-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 10px;
+  }
+
+  .category-chart-wrapper {
+   gap: 14px !important;
+  }
+
+  .donut-box {
+    width: 160px !important;
+    height: 160px !important;
+  }
 }
