@@ -8,7 +8,20 @@
   import logo from "./assets/images/Totalsolution.PNG"; 
   // Note: Adjust the "../" or "./" depending on exactly where Dashboard.jsx sits relative to assets
   import SalesmanToAreaMapping from './SalesmanToAreaMapping';
+import {
+  LineChart,
+  Line,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  ResponsiveContainer,
+  PieChart,
+  Pie,
+  Cell
+} from "recharts";
 
+import { ShoppingBag, Package, Users, Wallet } from "lucide-react";
 
 
   const Dashboard = () => {
@@ -28,7 +41,7 @@
   const [productBatchesForSelection, setProductBatchesForSelection] = useState([]);
   const [selectedProductForBatch, setSelectedProductForBatch] = useState(null);
   
-
+const [showDashboard, setShowDashboard] = useState(true); // Set to true by default
   // VOUCHER LIST STATE VARIABLES
   const [showSalesList, setShowSalesList] = useState(false);
   const [showPurchaseList, setShowPurchaseList] = useState(false);
@@ -1895,14 +1908,14 @@ const saveSettleLoad = () => {
     { day: 'Sun 26', sales: 176680 }
   ]);
 
-  // Sales by Category
-  const [salesByCategory, setSalesByCategory] = useState([
-    { name: 'Beverages', amount: 325400, percentage: 26 },
-    { name: 'Snacks', amount: 285750, percentage: 23 },
-    { name: 'Personal Care', amount: 210300, percentage: 17 },
-    { name: 'Home Care', amount: 175500, percentage: 14 },
-    { name: 'Others', amount: 148730, percentage: 12 }
-  ]);
+const salesByCategory = [
+  { name: "Beverages", amount: 325400, color: "#3b82f6" },
+  { name: "Snacks", amount: 285750, color: "#10b981" },
+  { name: "Personal Care", amount: 210300, color: "#f59e0b" },
+  { name: "Home Care", amount: 175500, color: "#ef4444" },
+  { name: "Others", amount: 148730, color: "#8b5cf6" }
+];
+
 
   // Top 5 Customers
   const [topCustomers, setTopCustomers] = useState([
@@ -1928,182 +1941,292 @@ const saveSettleLoad = () => {
     { product: 'Surf Excel 2kg', stock: 8, unit: 'Units' },
     { product: 'Colgate Strong Teeth 200g', stock: 15, unit: 'Units' }
   ]);
+  const todaySales = {
+  bills: 42,
+  amount: 125430
+}
 
-  // Add this function to render the dashboard view
-  const renderDashboard = () => {
-    // Calculate total from salesByCategory for chart bar widths
-    const maxCategoryAmount = Math.max(...salesByCategory.map(c => c.amount));
-    
-    return (
-      <div className="dashboard-view">
-        {/* KPI Cards Row */}
-        <div className="dashboard-kpi-row">
-          <div className="kpi-card">
-            <div className="kpi-card-header">
-              <span className="kpi-icon">💰</span>
-              <span className="kpi-title">Total Sales</span>
-            </div>
-            <div className="kpi-value">₹{dashboardMetrics.totalSales.toLocaleString('en-IN')}</div>
-            <div className={`kpi-change ${dashboardMetrics.totalSalesChange > 0 ? 'positive' : 'negative'}`}>
-              {dashboardMetrics.totalSalesChange > 0 ? '↑' : '↓'} {Math.abs(dashboardMetrics.totalSalesChange)}% vs last week
-            </div>
-          </div>
+const todayCollection = {
+  received: 80000,
+  pending: 45430
+}
 
-          <div className="kpi-card">
-            <div className="kpi-card-header">
-              <span className="kpi-icon">📦</span>
-              <span className="kpi-title">Total Orders</span>
-            </div>
-            <div className="kpi-value">{dashboardMetrics.totalOrders.toLocaleString('en-IN')}</div>
-            <div className={`kpi-change ${dashboardMetrics.totalOrdersChange > 0 ? 'positive' : 'negative'}`}>
-              {dashboardMetrics.totalOrdersChange > 0 ? '↑' : '↓'} {Math.abs(dashboardMetrics.totalOrdersChange)}% vs last week
-            </div>
-          </div>
+const salesmanPerformance = [
+  { name: "Ramesh", amount: 45000 },
+  { name: "Ajay", amount: 32000 },
+  { name: "Vikas", amount: 27000 }
+]
 
-          <div className="kpi-card">
-            <div className="kpi-card-header">
-              <span className="kpi-icon">👥</span>
-              <span className="kpi-title">Total Customers</span>
-            </div>
-            <div className="kpi-value">{dashboardMetrics.totalCustomers.toLocaleString('en-IN')}</div>
-            <div className={`kpi-change ${dashboardMetrics.totalCustomersChange > 0 ? 'positive' : 'negative'}`}>
-              {dashboardMetrics.totalCustomersChange > 0 ? '↑' : '↓'} {Math.abs(dashboardMetrics.totalCustomersChange)}% vs last week
-            </div>
-          </div>
+const recentBills = [
+  { billNo: "INV-1024", customer: "Raj Traders", amount: 2500 },
+  { billNo: "INV-1025", customer: "Om Stores", amount: 1800 },
+  { billNo: "INV-1026", customer: "Shree Mart", amount: 3200 }
+]
 
-          <div className="kpi-card">
-            <div className="kpi-card-header">
-              <span className="kpi-icon">💸</span>
-              <span className="kpi-title">Total Outstanding</span>
-            </div>
-            <div className="kpi-value">₹{dashboardMetrics.totalOutstanding.toLocaleString('en-IN')}</div>
-            <div className={`kpi-change ${dashboardMetrics.totalOutstandingChange > 0 ? 'positive' : 'negative'}`}>
-              {dashboardMetrics.totalOutstandingChange > 0 ? '↑' : '↓'} {Math.abs(dashboardMetrics.totalOutstandingChange)}% vs last week
-            </div>
-          </div>
-        </div>
+const renderDashboard = () => {
+  const salesTrendData = [
+    { day: "Mon 20", sales: 115000 },
+    { day: "Tue 21", sales: 132000 },
+    { day: "Wed 22", sales: 126000 },
+    { day: "Thu 23", sales: 150000 },
+    { day: "Fri 24", sales: 175000 },
+    { day: "Sat 25", sales: 202000 },
+    { day: "Sun 26", sales: 165000 }
+  ];
 
-        {/* Two Column Layout */}
-        <div className="dashboard-two-columns">
-          {/* Left Column - Sales Trend Chart */}
-          <div className="dashboard-card">
-            <div className="card-header">
-              <h3>Sales Trend</h3>
-              <select className="week-selector">
-                <option>This Week ▼</option>
-                <option>Last Week</option>
-                <option>This Month</option>
-              </select>
-            </div>
-            <div className="sales-trend-chart">
-              {salesTrend.map((day, index) => {
-                const barHeight = (day.sales / Math.max(...salesTrend.map(d => d.sales))) * 150;
-                return (
-                  <div key={index} className="trend-bar-container">
-                    <div className="trend-bar" style={{ height: `${barHeight}px` }}></div>
-                    <div className="trend-label">{day.day}</div>
-                    <div className="trend-value">₹{(day.sales / 1000).toFixed(0)}k</div>
-                  </div>
-                );
-              })}
-            </div>
-          </div>
+  const categoryData = [
+    { name: "Beverage", value: 25, amount: 286500, color: "#3b64f4" },
+    { name: "Home Care", value: 15, amount: 171900, color: "#ff3030" },
+    { name: "Personal Care", value: 18, amount: 206280, color: "#ff9f0a" },
+    { name: "Food", value: 22, amount: 252120, color: "#10a86b" },
+    { name: "Others", value: 20, amount: 229200, color: "#7c3aed" }
+  ];
 
-          {/* Right Column - Sales by Category */}
-          <div className="dashboard-card">
-            <div className="card-header">
-              <h3>Sales by Category</h3>
-            </div>
-            <div className="category-list">
-              {salesByCategory.map((category, index) => (
-                <div key={index} className="category-item">
-                  <div className="category-info">
-                    <span className="category-name">{category.name}</span>
-                    <span className="category-amount">₹{category.amount.toLocaleString('en-IN')}</span>
-                  </div>
-                  <div className="category-bar-container">
-                    <div 
-                      className="category-bar" 
-                      style={{ width: `${(category.amount / maxCategoryAmount) * 100}%` }}
-                    ></div>
-                    <span className="category-percentage">{category.percentage}%</span>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-        </div>
+  const topProducts = [
+    { name: "Product A", sales: 125430 },
+    { name: "Product B", sales: 95230 },
+    { name: "Product C", sales: 78450 },
+    { name: "Product D", sales: 50120 },
+    { name: "Product E", sales: 35600 }
+  ];
 
-        {/* Third Row - Top Customers Table */}
-        <div className="dashboard-card full-width">
-          <div className="card-header">
-            <h3>Top 5 Customers by Sales</h3>
-          </div>
-          <div className="top-customers-table-container">
-            <table className="top-customers-table">
-              <thead>
-                <tr>
-                  <th>Rank</th>
-                  <th>Customer Name</th>
-                  <th>This Month</th>
-                </tr>
-              </thead>
-              <tbody>
-                {topCustomers.map((customer) => (
-                  <tr key={customer.rank}>
-                    <td className="rank-cell">{customer.rank}</td>
-                    <td>{customer.name}</td>
-                    <td className="amount-cell">₹{customer.amount.toLocaleString('en-IN')}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </div>
+  const recentTransactions = [
+    { invoice: "INV-1001", customer: "Rahul Enterprises", amount: 12450, status: "Paid" },
+    { invoice: "INV-1002", customer: "Sharma Stores", amount: 8750, status: "Paid" },
+    { invoice: "INV-1003", customer: "Kumar Super Mart", amount: 15230, status: "Pending" },
+    { invoice: "INV-1004", customer: "Patel Distributors", amount: 9850, status: "Paid" },
+    { invoice: "INV-1005", customer: "Gupta Traders", amount: 6500, status: "Overdue" }
+  ];
 
-        {/* Fourth Row - Two Column Layout for Outstanding Summary and Low Stock */}
-        <div className="dashboard-two-columns">
-          {/* Outstanding Summary */}
-          <div className="dashboard-card">
-            <div className="card-header">
-              <h3>Outstanding Summary</h3>
-            </div>
-            <div className="outstanding-list">
-              {outstandingSummary.map((item, index) => (
-                <div key={index} className="outstanding-item">
-                  <span className="outstanding-days">{item.days}</span>
-                  <span className="outstanding-amount">₹{item.amount.toLocaleString('en-IN')}</span>
-                </div>
-              ))}
-            </div>
-          </div>
+  const kpis = [
+    {
+      title: "TOTAL SALES",
+      value: "₹12,45,680",
+      change: "8.6% vs last week",
+      trend: "positive",
+      icon: <ShoppingBag size={22} />,
+      color: "blue",
+      spark: "M5 42 L35 35 L65 36 L95 18 L125 22 L155 29 L185 20 L215 26 L245 15 L275 21"
+    },
+    {
+      title: "TOTAL ORDERS",
+      value: "256",
+      change: "11.3% vs last week",
+      trend: "positive",
+      icon: <Package size={22} />,
+      color: "green",
+      spark: "M5 42 L35 30 L65 35 L95 12 L125 28 L155 27 L185 26 L215 35 L245 18 L275 15"
+    },
+    {
+      title: "TOTAL CUSTOMERS",
+      value: "1245",
+      change: "5.4% vs last week",
+      trend: "positive",
+      icon: <Users size={22} />,
+      color: "orange",
+      spark: "M5 38 L35 24 L65 27 L95 16 L125 28 L155 25 L185 26 L215 15 L245 21 L275 14"
+    },
+    {
+      title: "TOTAL OUTSTANDING",
+      value: "₹8,75,230",
+      change: "3.2% vs last week",
+      trend: "negative",
+      icon: <Wallet size={22} />,
+      color: "purple",
+      spark: "M5 40 L35 22 L65 26 L95 12 L125 24 L155 18 L185 20 L215 35 L245 14 L275 18"
+    }
+  ];
 
-          {/* Low Stock Alerts */}
-          <div className="dashboard-card">
-            <div className="card-header">
-              <h3>Low Stock Alerts</h3>
-            </div>
-            <div className="low-stock-list">
-              {lowStockAlerts.map((item, index) => (
-                <div key={index} className="low-stock-item">
-                  <div className="stock-product-info">
-                    <span className="stock-product">{item.product}</span>
-                    <span className="stock-status">⚠️ Low Stock</span>
-                  </div>
-                  <div className="stock-quantity">
-                    Current Stock: {item.stock} {item.unit}
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
+  return (
+    <div className="dashboard-view pro-dashboard">
+      <div className="dashboard-page-head">
+        <div>
+          <h1>Dashboard</h1>
+          <p>Welcome back! Here's what's happening with your business today.</p>
         </div>
       </div>
-    );
-  };
 
+      <div className="dashboard-kpi-row">
+        {kpis.map((item, index) => (
+          <div className="kpi-card pro-kpi-card" key={index}>
+            <div className={`kpi-icon-bg ${item.color}`}>{item.icon}</div>
 
+            <div className="kpi-content">
+              <div className="kpi-title">{item.title}</div>
+              <div className="kpi-value">{item.value}</div>
+              <div className={`kpi-change ${item.trend}`}>
+                {item.trend === "positive" ? "▲" : "▼"} {item.change}
+              </div>
+            </div>
 
+           <svg className={`kpi-sparkline ${item.color}`} viewBox="0 0 280 55" preserveAspectRatio="none">
+  <path d={item.spark} strokeWidth="3.2" />
+</svg>
+          </div>
+        ))}
+      </div>
+
+      <div className="dashboard-main-grid">
+        <div className="dashboard-card sales-trend-card">
+          <div className="card-header">
+            <h3>Sales Trend</h3>
+            <select className="week-selector">
+              <option>This Week</option>
+              <option>Last Week</option>
+              <option>This Month</option>
+            </select>
+          </div>
+
+          <ResponsiveContainer width="100%" height={245}>
+            <LineChart data={salesTrendData}>
+              <CartesianGrid strokeDasharray="4 4" stroke="#e5e7eb" />
+              <XAxis dataKey="day" tick={{ fontSize: 12, fill: "#64748b" }} />
+              <YAxis tick={{ fontSize: 12, fill: "#64748b" }} tickFormatter={(v) => `${v / 1000}K`} />
+              <Tooltip formatter={(v) => `₹${v.toLocaleString("en-IN")}`} />
+              <Line
+                type="monotone"
+                dataKey="sales"
+                stroke="#5b46ff"
+                strokeWidth={4}
+                dot={{ r: 5, strokeWidth: 3, fill: "#fff", stroke: "#5b46ff" }}
+              />
+            </LineChart>
+          </ResponsiveContainer>
+
+          <div className="chart-tip">⚡ Tip: Sales peak on Sat. Plan offers accordingly!</div>
+        </div>
+
+        <div className="dashboard-card category-card">
+          <div className="card-header">
+            <h3>Sales by Category</h3>
+          </div>
+
+          <div className="category-chart-wrapper">
+            <div className="donut-box">
+              <ResponsiveContainer width="100%" height={230}>
+                <PieChart>
+                  <Pie data={categoryData} dataKey="value" innerRadius={62} outerRadius={92} paddingAngle={2}>
+                    {categoryData.map((entry, index) => (
+                      <Cell key={index} fill={entry.color} />
+                    ))}
+                  </Pie>
+                </PieChart>
+              </ResponsiveContainer>
+              <div className="donut-center">
+                <span>Total</span>
+                <strong>₹1146K</strong>
+              </div>
+            </div>
+
+            <div className="category-legend">
+              {categoryData.map((cat, index) => (
+                <div className="legend-item" key={index}>
+                  <span className="legend-left">
+                    <i style={{ background: cat.color }}></i>
+                    {cat.name} ({cat.value}%)
+                  </span>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          <div className="card-footer-link">View full report →</div>
+        </div>
+      </div>
+
+      <div className="dashboard-bottom-grid">
+        <div className="dashboard-card">
+          <h3 className="mini-card-title">Key Metrics</h3>
+
+          <div className="metric-row">
+            <div className="metric-icon blue">♙</div>
+            <div>
+              <span>Today's Sales</span>
+              <strong>₹1,25,430</strong>
+            </div>
+            <em className="up">▲ 6.2%</em>
+          </div>
+
+          <div className="metric-row">
+            <div className="metric-icon green">⏱</div>
+            <div>
+              <span>Today's Collection</span>
+              <strong className="green-text">₹80,000</strong>
+            </div>
+            <em className="up">▲ 8.1%</em>
+          </div>
+
+          <div className="metric-row">
+            <div className="metric-icon red">▣</div>
+            <div>
+              <span>Today's Outstanding</span>
+              <strong className="red-text">₹45,430</strong>
+            </div>
+            <em className="down">▼ 2.4%</em>
+          </div>
+
+          <div className="card-footer-link">View all metrics →</div>
+        </div>
+
+        <div className="dashboard-card">
+          <h3 className="mini-card-title">Top Products</h3>
+
+          <div className="product-table-head">
+            <span>Product</span>
+            <span>Sales (₹)</span>
+          </div>
+
+          {topProducts.map((p, index) => (
+            <div className="product-row" key={index}>
+              <span>{p.name}</span>
+              <div className="product-bar">
+                <i style={{ width: `${(p.sales / 125430) * 100}%` }}></i>
+              </div>
+              <strong>{p.sales.toLocaleString("en-IN")}</strong>
+            </div>
+          ))}
+
+          <div className="card-footer-link">View all products →</div>
+        </div>
+
+        <div className="dashboard-card transaction-card">
+          <div className="card-header">
+            <h3>Recent Transactions</h3>
+            <span className="view-link">View all →</span>
+          </div>
+
+          <table className="recent-table">
+            <thead>
+              <tr>
+                <th>Invoice</th>
+                <th>Customer</th>
+                <th>Amount</th>
+                <th>Status</th>
+              </tr>
+            </thead>
+            <tbody>
+              {recentTransactions.map((t, index) => (
+                <tr key={index}>
+                  <td>{t.invoice}</td>
+                  <td>{t.customer}</td>
+                  <td>₹{t.amount.toLocaleString("en-IN")}</td>
+                  <td>
+                    <span className={`status-pill ${t.status.toLowerCase()}`}>{t.status}</span>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <div className="dashboard-footer">
+        <span>© 2025 Billing Software. All rights reserved.</span>
+        <span>Last updated: 2:23:34 PM <b></b></span>
+      </div>
+    </div>
+  );
+};
     // Sales Invoice Functions
     const handleInvoiceInputChange = (e) => {
       setInvoiceFormData({ ...invoiceFormData, [e.target.name]: e.target.value });
@@ -3997,37 +4120,37 @@ const [settleLoadDummyData, setSettleLoadDummyData] = useState([
   }
 ]);
   const handleSubMenuClick = (item) => {
-    setActiveSubMenu(item);
-    setOpenFormFor(null);
-    setAccountActiveTab('basic');
-    setOtherAccountActiveTab('basic');
-    setEditGstId(null);
-    setEditSalesmanId(null);
-    
-    // Reset ALL list views FIRST
-    setShowSalesList(false);
-    setShowPurchaseList(false);
-    setShowCreditNoteList(false);
-    setShowDebitNoteList(false);
-    setShowCreateLoadList(false);
-    setShowPrintPreview(false);
+  setShowDashboard(false); // Hide dashboard when any menu is clicked
+  setActiveSubMenu(item);
+  setOpenFormFor(null);
+  setAccountActiveTab('basic');
+  setOtherAccountActiveTab('basic');
+  setEditGstId(null);
+  setEditSalesmanId(null);
+  
+  // Reset ALL list views FIRST
+  setShowSalesList(false);
+  setShowPurchaseList(false);
+  setShowCreditNoteList(false);
+  setShowDebitNoteList(false);
+  setShowCreateLoadList(false);
+  setShowPrintPreview(false);
+  
     
     // Handle Logout
-    if (item === 'Logout') {
-      handleLogout();
-      return;
-    }
-    
-     if (item === 'Dashboard') {
-    // Clear any open forms and show dashboard
-    setOpenFormFor(null);
-    calculateDashboardPerformance(); // Calculate performance data
-    return; // Exit early to prevent any other processing
+  if (item === 'Logout') {
+    handleLogout();
+    return;
   }
-    // Calculate performance when showing Dashboard view
-    if (item === 'Dashboard') {
-      calculateDashboardPerformance();
-    }
+    
+ // Handle Dashboard
+  if (item === 'Dashboard') {
+    setOpenFormFor(null);
+    setActiveSubMenu(null);
+    setShowDashboard(true);
+    calculateDashboardPerformance();
+    return;
+  }
 
     // ========== SHOW LIST VIEWS (NOT FORMS) ==========
     
@@ -4693,7 +4816,13 @@ const handlePlusClick = (item, e) => {
     const handleGstInput = (e) => {
       setGstForm({ ...gstForm, [e.target.name]: e.target.value });
     };
-
+// Add this useEffect to set Dashboard as default when component mounts
+useEffect(() => {
+  // Set Dashboard as default active view on login
+  setActiveSubMenu(null);
+ setShowDashboard(false);
+  calculateDashboardPerformance();
+}, []);
     const saveGst = (e) => {
       e.preventDefault();
       if (!gstForm.code || !gstForm.vat === '') return alert('Code and VAT % required');
@@ -5818,14 +5947,44 @@ const renderVoucherList = (title, data, columns) => {
 
         <main className="main-content">
           <header className="top-nav">
-            <div className="page-title">{activeSubMenu ? `${activeSubMenu} - Management` : 'Dashboard'}</div>
-            <div className="nav-right">
-              <div className="notification-bell">🔔</div>
-              <div className="user-profile">
-                <div className="avatar">MK</div>
-              </div>
-            </div>
-          </header>
+  <div className="page-title">{activeSubMenu ? `${activeSubMenu} - Management` : 'Dashboard'}</div>
+  <div className="nav-right">
+    <button 
+      onClick={() => {
+        setActiveSubMenu(null);
+        setOpenFormFor(null);
+        setShowDashboard(true);
+        setShowSalesList(false);
+        setShowPurchaseList(false);
+        setShowCreditNoteList(false);
+        setShowDebitNoteList(false);
+        setShowCreateLoadList(false);
+        setShowPrintPreview(false);
+        calculateDashboardPerformance();
+      }}
+      style={{
+        background: showDashboard && !activeSubMenu ? '#3b82f6' : '#f3f4f6',
+        color: showDashboard && !activeSubMenu ? 'white' : '#374151',
+        border: 'none',
+        borderRadius: '6px',
+        padding: '6px 12px',
+        marginRight: '12px',
+        cursor: 'pointer',
+        fontSize: '13px',
+        fontWeight: '500',
+        display: 'flex',
+        alignItems: 'center',
+        gap: '6px'
+      }}
+    >
+      📊 Dashboard
+    </button>
+    <div className="notification-bell">🔔</div>
+    <div className="user-profile">
+      <div className="avatar">MK</div>
+    </div>
+  </div>
+</header>
 
           <div className="content-body">
           {/* GoDown Master - Form View */}
@@ -7788,11 +7947,12 @@ const renderVoucherList = (title, data, columns) => {
   </div>
 )}     
 
-       {/* Dashboard Performance View */}
-  {activeSubMenu === 'Dashboard' && openFormFor !== 'Firm Creation' && openFormFor !== 'User Creation' && (
-    renderDashboard()
-  )}
-  
+ {/* Dashboard Performance View - Show when no other menu is active or when explicitly set */}
+{((!activeSubMenu && showDashboard) || (activeSubMenu === 'Dashboard')) && 
+ openFormFor !== 'Firm Creation' && 
+ openFormFor !== 'User Creation' && (
+  renderDashboard()
+)}
   {/* Firm Creation Form */}
   {activeSubMenu === 'Firm Creation' && openFormFor === 'Firm Creation' && (
     <div className="master-section erp-master-form">
