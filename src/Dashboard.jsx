@@ -63,6 +63,7 @@ const Dashboard = () => {
   // Create Load List State
   const [showCreateLoadList, setShowCreateLoadList] = useState(false);
   const [createLoadListData, setCreateLoadListData] = useState([]);
+  const [editingInvoiceId, setEditingInvoiceId] = useState(null);
   const [originalSettleLoadItems, setOriginalSettleLoadItems] = useState([]);
   // Add this state with other state declarations (around line 50-60)
   const [showReceiptModal, setShowReceiptModal] = useState(false);
@@ -289,7 +290,13 @@ const Dashboard = () => {
 
   // Master data state
   const [companies, setCompanies] = useState([]);
-  const [products, setProducts] = useState([]);
+  const [products, setProducts] = useState([
+  { id: 1, code: 'P001', name: 'Parle G Biscuit', basicUnit: 'PCS', mrp: 15, gst: 18, Rate_Per_Unit: 12, salesRate: 12 },
+  { id: 2, code: 'P002', name: 'Lays Classic Salted', basicUnit: 'PCS', mrp: 20, gst: 18, Rate_Per_Unit: 18, salesRate: 18 },
+  { id: 3, code: 'P003', name: 'Coca Cola 2L', basicUnit: 'LTR', mrp: 85, gst: 18, Rate_Per_Unit: 75, salesRate: 75 },
+  { id: 4, code: 'P004', name: 'Tata Tea 1kg', basicUnit: 'KG', mrp: 250, gst: 5, Rate_Per_Unit: 220, salesRate: 220 },
+  { id: 5, code: 'P005', name: 'Surf Excel 2kg', basicUnit: 'KG', mrp: 450, gst: 18, Rate_Per_Unit: 380, salesRate: 380 },
+]);
   const [groupsState, setGroupsState] = useState([]);
   const [categoriesState, setCategoriesState] = useState([]);
   const [accounts, setAccounts] = useState([]);
@@ -2702,6 +2709,76 @@ const Dashboard = () => {
       if (unitsInput) unitsInput.focus();
     }, 50);
   };
+
+  // ========== DECLARATION OF saveInvoice FUNCTION BECAUSE BELOW WE ARE CALLING THIS FUNCTION ==========
+const saveVoucherToList = (type, data) => {
+  console.log(`Saving ${type}:`, data);
+  
+  const newEntry = {
+    id: editingInvoiceId || Date.now(),  // Use existing ID if editing
+    ...data,
+    savedAt: new Date().toISOString()
+  };
+
+  if (type === 'Sales' || type === 'Billing' || type === 'Quotation') {
+    if (editingInvoiceId) {
+      // UPDATE existing entry
+      setSalesListData(prev => prev.map(item => 
+        item.id === editingInvoiceId ? newEntry : item
+      ));
+      alert('Invoice updated successfully!');
+    } else {
+      // ADD new entry
+      setSalesListData(prev => [...prev, newEntry]);
+      alert('Invoice saved successfully!');
+    }
+  } else if (type === 'Purchase') {
+    if (editingInvoiceId) {
+      setPurchaseListData(prev => prev.map(item => 
+        item.id === editingInvoiceId ? newEntry : item
+      ));
+      alert('Purchase updated successfully!');
+    } else {
+      setPurchaseListData(prev => [...prev, newEntry]);
+      alert('Purchase saved successfully!');
+    }
+  } else if (type === 'Credit Note') {
+    if (editingInvoiceId) {
+      setCreditNoteListData(prev => prev.map(item => 
+        item.id === editingInvoiceId ? newEntry : item
+      ));
+      alert('Credit Note updated successfully!');
+    } else {
+      setCreditNoteListData(prev => [...prev, newEntry]);
+      alert('Credit Note saved successfully!');
+    }
+  } else if (type === 'Debit Note') {
+    if (editingInvoiceId) {
+      setDebitNoteListData(prev => prev.map(item => 
+        item.id === editingInvoiceId ? newEntry : item
+      ));
+      alert('Debit Note updated successfully!');
+    } else {
+      setDebitNoteListData(prev => [...prev, newEntry]);
+      alert('Debit Note saved successfully!');
+    }
+  } else if (type === 'Create Load') {
+    if (editingInvoiceId) {
+      setCreateLoadListData(prev => prev.map(item => 
+        item.id === editingInvoiceId ? newEntry : item
+      ));
+      alert('Load updated successfully!');
+    } else {
+      setCreateLoadListData(prev => [...prev, newEntry]);
+      alert('Load created successfully!');
+    }
+  }
+  
+  // Reset editing mode after save
+  setEditingInvoiceId(null);
+  return true;
+};
+// ========== END OF ADDED FUNCTION ==========
   const saveInvoice = () => {
     const invoiceData = {
       ...invoiceFormData,
@@ -4495,6 +4572,7 @@ const Dashboard = () => {
     if (e) e.stopPropagation();
 
     // Reset ALL list views FIRST
+     setEditingInvoiceId(null);
     setShowSalesList(false);
     setShowPurchaseList(false);
     setShowCreditNoteList(false);
@@ -4796,11 +4874,12 @@ const Dashboard = () => {
     }
   };
   const closeForm = () => {
-    setOpenFormFor(null);
-    setEditGstId(null);
-    setEditSalesmanId(null);
-    setEditGodownId(null);
-  };
+  setOpenFormFor(null);
+  setEditGstId(null);
+  setEditSalesmanId(null);
+  setEditGodownId(null);
+  setEditingInvoiceId(null);  // ADD THIS LINE
+};
 
   useEffect(() => {
     if (activeSubMenu === 'Billing' && invoiceItems.length === 0) {
@@ -5738,201 +5817,364 @@ const Dashboard = () => {
     );
   };
   const renderLoadList = (title, data) => {
-    const loadColumns = [
-      { key: 'date', label: 'Load Date' },
-      { key: 'loadSeries', label: 'Load Series' },
-      { key: 'loadNumber', label: 'Load Number' },
-      { key: 'company', label: 'Company' },
-      { key: 'deliveryBy', label: 'Delivery By' },
-      { key: 'selectedSalesman', label: 'Salesman' },
-      { key: 'totalAmount', label: 'Total Amount (₹)' },
-      { key: 'itemCount', label: 'Items' },
-      { key: 'status', label: 'Status' },
-      { key: 'actions', label: 'Actions' }
-    ];
+  const loadColumns = [
+    { key: 'date', label: 'Load Date' },
+    { key: 'loadSeries', label: 'Load Series' },
+    { key: 'loadNumber', label: 'Load Number' },
+    { key: 'company', label: 'Company' },
+    { key: 'deliveryBy', label: 'Delivery By' },
+    { key: 'selectedSalesman', label: 'Salesman' },
+    { key: 'totalAmount', label: 'Total Amount (₹)' },
+    { key: 'itemCount', label: 'Items' },
+    { key: 'status', label: 'Status' },
+    { key: 'actions', label: 'Actions' }
+  ];
 
-    const handleViewLoad = (item) => {
-      setViewData(item);
-      setViewType('Create Load');
-      setShowViewModal(true);
-    };
+  const handleViewLoad = (item) => {
+    setViewData(item);
+    setViewType('Create Load');
+    setShowViewModal(true);
+  };
 
-    const handleEditLoad = (item) => {
-      console.log('Editing Load:', item);
+  const handleEditLoad = (item) => {
+    console.log('Editing Load:', item);
 
-      setShowCreateLoadList(false);
+    setShowCreateLoadList(false);
 
-      setCreateLoadFormData({
-        loadSeries: item.loadSeries || '',
-        loadNo: item.loadNo || '',
-        loadDate: item.loadDate || new Date().toISOString().split('T')[0],
-        company: item.company || '',
-        deliverBoy: item.deliverBoy || '',
-        selectedSalesman: item.selectedSalesman || '',
-        billFromDate: item.billFromDate || new Date().toISOString().split('T')[0],
-        billToDate: item.billToDate || new Date().toISOString().split('T')[0],
-        narration: item.narration || '',
-        deliveryBy: item.deliveryBy || ''
-      });
-      setCreateLoadItems(item.items || []);
-      setOpenFormFor('Create Load');
-    };
+    setCreateLoadFormData({
+      loadSeries: item.loadSeries || '',
+      loadNo: item.loadNo || '',
+      loadDate: item.loadDate || new Date().toISOString().split('T')[0],
+      company: item.company || '',
+      deliverBoy: item.deliverBoy || '',
+      selectedSalesman: item.selectedSalesman || '',
+      billFromDate: item.billFromDate || new Date().toISOString().split('T')[0],
+      billToDate: item.billToDate || new Date().toISOString().split('T')[0],
+      narration: item.narration || '',
+      deliveryBy: item.deliveryBy || ''
+    });
+    setCreateLoadItems(item.items || []);
+    setOpenFormFor('Create Load');
+  };
 
-    const handleDeleteLoad = (id) => {
-      if (window.confirm('Are you sure you want to delete this Load?')) {
-        setCreateLoadListData(createLoadListData.filter(item => item.id !== id));
-        alert('Load deleted successfully!');
-      }
-    };
+  const handleDeleteLoad = (id) => {
+    if (window.confirm('Are you sure you want to delete this Load?')) {
+      setCreateLoadListData(createLoadListData.filter(item => item.id !== id));
+      alert('Load deleted successfully!');
+    }
+  };
 
-    const transformedData = data.map(item => ({
-      id: item.id,
-      date: item.loadDate || item.date || '-',
-      loadSeries: item.loadSeries || '-',
-      loadNumber: item.loadNo || item.loadNumber || '-',
-      company: item.company || '-',
-      deliveryBy: item.deliveryBy || '-',
-      selectedSalesman: item.selectedSalesman || '-',
-      totalAmount: parseFloat(item.totalAmount) || parseFloat(item.amount) || 0,
-      itemCount: item.items?.length || 0,
-      status: item.status || 'Pending',
-      originalItem: item
-    }));
+  const transformedData = data.map(item => ({
+    id: item.id,
+    date: item.loadDate || item.date || '-',
+    loadSeries: item.loadSeries || '-',
+    loadNumber: item.loadNo || item.loadNumber || '-',
+    company: item.company || '-',
+    deliveryBy: item.deliveryBy || '-',
+    selectedSalesman: item.selectedSalesman || '-',
+    totalAmount: parseFloat(item.totalAmount) || parseFloat(item.amount) || 0,
+    itemCount: item.items?.length || 0,
+    status: item.status || 'Pending',
+    originalItem: item
+  }));
 
-    const getStatusBadgeClass = (status) => {
-      const statusLower = (status || '').toLowerCase();
-      if (statusLower === 'settled') {
-        return 'status-badge status-success';
-      } else if (statusLower === 'pending') {
-        return 'status-badge status-warning';
-      }
-      return 'status-badge status-info';
-    };
+  const getStatusBadgeClass = (status) => {
+    const statusLower = (status || '').toLowerCase();
+    if (statusLower === 'settled') {
+      return 'status-badge status-success';
+    } else if (statusLower === 'pending') {
+      return 'status-badge status-warning';
+    }
+    return 'status-badge status-info';
+  };
 
-    return (
-      <div className="master-section grid-section">
-        <div className="grid-header">
-          <h3>{title} ({transformedData.length})</h3>
-          <div className="table-controls">
-            <input
-              type="text"
-              placeholder="Search..."
-              className="filter-input"
-              value={filters['load'] || ''}
-              onChange={(e) => setFilters({ ...filters, load: e.target.value })}
-            />
-            <button className="btn-excel" onClick={() => exportToExcel(
-              transformedData.filter(d =>
-                d.loadSeries?.toLowerCase().includes((filters['load'] || '').toLowerCase()) ||
-                d.loadNumber?.toLowerCase().includes((filters['load'] || '').toLowerCase())
-              ),
-              title,
-              loadColumns.filter(c => c.key !== 'actions')
-            )}>
-              📊 Export Excel
-            </button>
-            <button className="btn-pdf" onClick={() => exportToPDF(
-              transformedData.filter(d =>
-                d.loadSeries?.toLowerCase().includes((filters['load'] || '').toLowerCase()) ||
-                d.loadNumber?.toLowerCase().includes((filters['load'] || '').toLowerCase())
-              ),
-              title,
-              loadColumns.filter(c => c.key !== 'actions')
-            )}>
-              📄 Export PDF
-            </button>
-          </div>
+  return (
+    <div className="master-section grid-section">
+      <div className="grid-header">
+        <h3>{title} ({transformedData.length})</h3>
+        <div className="table-controls">
+          <input
+            type="text"
+            placeholder="Search..."
+            className="filter-input"
+            value={filters['load'] || ''}
+            onChange={(e) => setFilters({ ...filters, load: e.target.value })}
+          />
+          <button className="btn-excel" onClick={() => exportToExcel(
+            transformedData.filter(d =>
+              d.loadSeries?.toLowerCase().includes((filters['load'] || '').toLowerCase()) ||
+              d.loadNumber?.toLowerCase().includes((filters['load'] || '').toLowerCase())
+            ),
+            title,
+            loadColumns.filter(c => c.key !== 'actions')
+          )}>
+            📊 Export Excel
+          </button>
+          <button className="btn-pdf" onClick={() => exportToPDF(
+            transformedData.filter(d =>
+              d.loadSeries?.toLowerCase().includes((filters['load'] || '').toLowerCase()) ||
+              d.loadNumber?.toLowerCase().includes((filters['load'] || '').toLowerCase())
+            ),
+            title,
+            loadColumns.filter(c => c.key !== 'actions')
+          )}>
+            📄 Export PDF
+          </button>
         </div>
-        {transformedData.length > 0 ? (
-          <div className="data-table-container" style={{ overflowX: 'auto' }}>
-            <table className="data-table" style={{ minWidth: '1000px' }}>
-              <thead>
-                <tr>
-                  {loadColumns.map(col => (
-                    <th key={col.key} style={col.key === 'actions' ? {
-                      textAlign: 'center',
-                      width: '200px',
+      </div>
+      {transformedData.length > 0 ? (
+        <div className="data-table-container" style={{ overflowX: 'auto' }}>
+          <table className="data-table" style={{ minWidth: '1000px' }}>
+            <thead>
+              <tr>
+                {loadColumns.map(col => (
+                  <th key={col.key} style={col.key === 'actions' ? {
+                    textAlign: 'center',
+                    width: '200px',
+                    position: 'sticky',
+                    right: 0,
+                    backgroundColor: '#f8fafc',
+                    zIndex: 15
+                  } : {}}>
+                    {col.label}
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {transformedData
+                .filter(d =>
+                  d.loadSeries?.toLowerCase().includes((filters['load'] || '').toLowerCase()) ||
+                  d.loadNumber?.toLowerCase().includes((filters['load'] || '').toLowerCase())
+                )
+                .map((item, index) => (
+                  <tr key={index}>
+                    <td>{item.date}</td>
+                    <td>{item.loadSeries}</td>
+                    <td>{item.loadNumber}</td>
+                    <td>{item.company}</td>
+                    <td>{item.deliveryBy}</td>
+                    <td>{item.selectedSalesman}</td>
+                    <td className="amount-cell">₹{item.totalAmount.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                    <td>{item.itemCount}</td>
+                    <td><span className={getStatusBadgeClass(item.status)}>{item.status}</span></td>
+                    <td className="action-buttons" style={{
+                      whiteSpace: 'nowrap',
                       position: 'sticky',
                       right: 0,
-                      backgroundColor: '#f8fafc',
-                      zIndex: 15
-                    } : {}}>
-                      {col.label}
-                    </th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {transformedData
-                  .filter(d =>
-                    d.loadSeries?.toLowerCase().includes((filters['load'] || '').toLowerCase()) ||
-                    d.loadNumber?.toLowerCase().includes((filters['load'] || '').toLowerCase())
-                  )
-                  .map((item, index) => (
-                    <tr key={index}>
-                      <td>{item.date}</td>
-                      <td>{item.loadSeries}</td>
-                      <td>{item.loadNumber}</td>
-                      <td>{item.company}</td>
-                      <td>{item.deliveryBy}</td>
-                      <td>{item.selectedSalesman}</td>
-                      <td className="amount-cell">₹{item.totalAmount.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
-                      <td>{item.itemCount}</td>
-                      <td><span className={getStatusBadgeClass(item.status)}>{item.status}</span></td>
-                      <td className="action-buttons" style={{
-                        whiteSpace: 'nowrap',
-                        position: 'sticky',
-                        right: 0,
-                        backgroundColor: '#ffffff',
-                        zIndex: 10,
-                        boxShadow: '-2px 0 5px -2px rgba(0,0,0,0.1)'
-                      }}>
+                      backgroundColor: '#ffffff',
+                      zIndex: 10,
+                      boxShadow: '-2px 0 5px -2px rgba(0,0,0,0.1)'
+                    }}>
+                      <button
+                        className="btn-view"
+                        onClick={() => handleViewLoad(item.originalItem)}
+                        title="View"
+                        style={{ background: '#10b981', color: 'white', border: 'none', borderRadius: '4px', padding: '4px 8px', margin: '0 2px', cursor: 'pointer' }}
+                      >
+                        👁️ View
+                      </button>
+                      <button
+                        className="btn-edit"
+                        onClick={() => handleEditLoad(item.originalItem)}
+                        title="Edit"
+                        style={{ background: '#3b82f6', color: 'white', border: 'none', borderRadius: '4px', padding: '4px 8px', margin: '0 2px', cursor: 'pointer' }}
+                      >
+                        ✏️ Edit
+                      </button>
+                      {item.status !== 'Settled' && (
                         <button
-                          className="btn-view"
-                          onClick={() => handleViewLoad(item.originalItem)}
-                          title="View"
-                          style={{ background: '#10b981', color: 'white', border: 'none', borderRadius: '4px', padding: '4px 8px', margin: '0 2px', cursor: 'pointer' }}
+                          className="btn-settle"
+                          onClick={() => handleSettleLoad(item.originalItem)}
+                          title="Settle Load"
+                          style={{ background: '#8b5cf6', color: 'white', border: 'none', borderRadius: '4px', padding: '4px 8px', margin: '0 2px', cursor: 'pointer' }}
                         >
-                          👁️ View
+                          ✅ Settle
                         </button>
-                        <button
-                          className="btn-edit"
-                          onClick={() => handleEditLoad(item.originalItem)}
-                          title="Edit"
-                          style={{ background: '#3b82f6', color: 'white', border: 'none', borderRadius: '4px', padding: '4px 8px', margin: '0 2px', cursor: 'pointer' }}
-                        >
-                          ✏️ Edit
-                        </button>
-                        {item.status !== 'Settled' && (
-                          <button
-                            className="btn-settle"
-                            onClick={() => handleSettleLoad(item.originalItem)}
-                            title="Settle Load"
-                            style={{ background: '#8b5cf6', color: 'white', border: 'none', borderRadius: '4px', padding: '4px 8px', margin: '0 2px', cursor: 'pointer' }}
-                          >
-                            ✅ Settle
-                          </button>
-                        )}
-                        <button
-                          className="btn-delete"
-                          onClick={() => handleDeleteLoad(item.id)}
-                          title="Delete"
-                          style={{ background: '#ef4444', color: 'white', border: 'none', borderRadius: '4px', padding: '4px 8px', margin: '0 2px', cursor: 'pointer' }}
-                        >
-                          🗑 Delete
-                        </button>
-                      </td>
-                    </tr>
-                  ))}
-              </tbody>
-            </table>
-          </div>
-        ) : (
-          <div className="empty-state">No loads found. Click + Add New to create one.</div>
-        )}
-      </div>
-    );
-  };
+                      )}
+                      <button
+                        className="btn-delete"
+                        onClick={() => handleDeleteLoad(item.id)}
+                        title="Delete"
+                        style={{ background: '#ef4444', color: 'white', border: 'none', borderRadius: '4px', padding: '4px 8px', margin: '0 2px', cursor: 'pointer' }}
+                      >
+                        🗑 Delete
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+            </tbody>
+          </table>
+        </div>
+      ) : (
+        <div className="empty-state">No loads found. Click + Add New to create one.</div>
+      )}
+    </div>
+  );
+};
+
+// ========== VIEW, EDIT, DELETE HANDLERS FOR ALL VOUCHERS ==========
+
+const handleViewVoucher = (type, item) => {
+  setViewData(item);
+  setViewType(type);
+  setShowViewModal(true);
+};
+
+const handleEditVoucher = (type, item) => {
+  console.log('Editing voucher:', type, item);
+  
+  // Close the list view
+    setEditingInvoiceId(item.id);
+  if (type === 'Sales' || type === 'Billing' || type === 'Quotation') {
+    setShowSalesList(false);
+  } else if (type === 'Purchase') {
+    setShowPurchaseList(false);
+  } else if (type === 'Credit Note') {
+    setShowCreditNoteList(false);
+  } else if (type === 'Debit Note') {
+    setShowDebitNoteList(false);
+  } else if (type === 'Create Load') {
+    setShowCreateLoadList(false);
+  }
+  
+  // Populate the form based on type
+  if (type === 'Sales' || type === 'Billing') {
+    setInvoiceFormData({
+      billDate: item.billDate || new Date().toISOString().split('T')[0],
+      godown: item.godown || 'G1',
+      company: item.company || '',
+      area: item.area || '',
+      party: item.party || item.partyName || '',
+      BillSeries: item.billSeries || '',
+      billNo: item.billNo || '',
+      billType: item.billType || 'Credit',
+      dueDate: item.dueDate || '',
+      salesman: item.salesman || '',
+      narration: item.narration || ''
+    });
+    setInvoiceItems(item.items || []);
+    setInvoiceSummary(item.summary || { gross: 0, tpr: 0, scheme: 0, bottom: 0, star: 0, cd: 0, gst: 0, cess: 0, tcs: 0, rounding: 0, net: 0 });
+    setOpenFormFor('Billing');
+    setActiveSubMenu('Billing');
+  } 
+  else if (type === 'Quotation') {
+    setInvoiceFormData({
+      billDate: item.billDate || new Date().toISOString().split('T')[0],
+      godown: item.godown || 'G1',
+      company: item.company || '',
+      area: item.area || '',
+      party: item.party || item.partyName || '',
+      BillSeries: item.billSeries || '',
+      billNo: item.billNo || '',
+      billType: item.billType || 'Credit',
+      dueDate: item.dueDate || '',
+      salesman: item.salesman || '',
+      narration: item.narration || ''
+    });
+    setInvoiceItems(item.items || []);
+    setInvoiceSummary(item.summary || { gross: 0, tpr: 0, scheme: 0, bottom: 0, star: 0, cd: 0, gst: 0, cess: 0, tcs: 0, rounding: 0, net: 0 });
+    setOpenFormFor('Quotation');
+    setActiveSubMenu('Quotation');
+  }
+  else if (type === 'Purchase') {
+    setPurchaseFormData({
+      supplier: item.supplier || item.partyName || '',
+      company: item.company || '',
+      storageLocation: item.storageLocation || item.branchName || '',
+      invoiceDate: item.invoiceDate || item.billDate || new Date().toISOString().split('T')[0],
+      vno: item.vno || '',
+      invoiceNumber: item.invoiceNumber || item.billNo || '',
+      narration: item.narration || '',
+      discountPercent: item.discountPercent || '',
+      grossAmount: item.grossAmount || 0,
+      mrpTotal: item.mrpTotal || 0,
+      tcbPercent: item.tcbPercent || 0,
+      diBc1: item.diBc1 || 0,
+      afterDiBc1: item.afterDiBc1 || 0,
+      groBsAmt: item.groBsAmt || 0,
+      tcbAmount: item.tcbAmount || 0,
+      diBc2: item.diBc2 || 0,
+      afterDiBc2: item.afterDiBc2 || 0,
+      qbtAmt: item.qbtAmt || 0,
+      rounding: item.rounding || 0,
+      diBc3: item.diBc3 || 0,
+      afterDiBc3: item.afterDiBc3 || 0,
+      ceBsAmt: item.ceBsAmt || 0,
+      netAmt: item.netAmt || item.amount || 0
+    });
+    setPurchaseItems(item.items || []);
+    setOpenFormFor('Purchase');
+    setActiveSubMenu('Purchase');
+  }
+  else if (type === 'Credit Note') {
+    setCreditNoteFormData({
+      vDate: item.vDate || item.billDate || new Date().toISOString().split('T')[0],
+      vNo: item.vNo || item.billNo || '',
+      party: item.party || item.partyName || '',
+      godown: item.godown || 'G1',
+      salesman: item.salesman || '',
+      tinNo: item.tinNo || '',
+      company: item.company || '',
+      narr: item.narr || item.narration || '',
+      billSeries: item.billSeries || '',
+      billNo: item.billNo || '',
+      full: item.full || '',
+      refNo: item.refNo || '',
+      refDate: item.refDate || ''
+    });
+    setCreditNoteItems(item.items || []);
+    setCreditNoteSummary(item.summary || { grossAmt: 0, schemeAmt: 0, tprAmt: 0, cashDisc: 0, gstAmt: 0, starAmt: 0, starPercent: 0, addLess: 0, display: 0, coupon: 0, rounding: 0, cessAmt: 0, tcsPercent: 0, tcsAmt: 0, billBalAmt: 0, netAmt: 0 });
+    setOpenFormFor('Credit Note');
+    setActiveSubMenu('Credit Note');
+  }
+  else if (type === 'Debit Note') {
+    setDebitNoteFormData({
+      vDate: item.vDate || item.billDate || new Date().toISOString().split('T')[0],
+      vNo: item.vNo || item.billNo || '',
+      godown: item.godown || 'G1',
+      company: item.company || '',
+      narr: item.narr || item.narration || '',
+      supplier: item.supplier || item.partyName || '',
+      igst: item.igst || 'N'
+    });
+    setDebitNoteItems(item.items || []);
+    setDebitNoteSummary(item.summary || { grossAmt: 0, gstAmt: 0, tcsPercent: 0, tcsAmt: 0, beforeVatDiscAmt: 0, surcharge: 0, rounding: 0, beforeVatAddAmt: 0, afterVatDiscAmt: 0, netAmt: 0 });
+    setOpenFormFor('Debit Note');
+    setActiveSubMenu('Debit Note');
+  }
+  
+  // Add a default row if items are empty
+  if ((type === 'Sales' || type === 'Billing' || type === 'Quotation') && invoiceItems.length === 0) {
+    addInvoiceItem();
+  }
+  if (type === 'Purchase' && purchaseItems.length === 0) {
+    addPurchaseItem();
+  }
+  if (type === 'Credit Note' && creditNoteItems.length === 0) {
+    addCreditNoteItem();
+  }
+  if (type === 'Debit Note' && debitNoteItems.length === 0) {
+    addDebitNoteItem();
+  }
+};
+
+const handleDeleteVoucher = (type, id) => {
+  if (window.confirm(`Are you sure you want to delete this ${type}?`)) {
+    if (type === 'Sales' || type === 'Billing' || type === 'Quotation') {
+      setSalesListData(salesListData.filter(item => item.id !== id));
+    } else if (type === 'Purchase') {
+      setPurchaseListData(purchaseListData.filter(item => item.id !== id));
+    } else if (type === 'Credit Note') {
+      setCreditNoteListData(creditNoteListData.filter(item => item.id !== id));
+    } else if (type === 'Debit Note') {
+      setDebitNoteListData(debitNoteListData.filter(item => item.id !== id));
+    } else if (type === 'Create Load') {
+      setCreateLoadListData(createLoadListData.filter(item => item.id !== id));
+    }
+    alert(`${type} deleted successfully!`);
+  }
+};
   return (
     <div className="dashboard-container">
       <aside className="sidebar">
@@ -6083,9 +6325,9 @@ const Dashboard = () => {
           )}
 
 
-         {activeSubMenu === 'Settle Load' && (
+             {activeSubMenu === 'Settle Load' && (
             <div className="master-section erp-master-form settle-load-form" style={{ maxWidth: '1400px', margin: '0 auto' }}>
-              <div className="erp-header">
+              <div className="erp-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                 <div>
                   <h2 className="erp-title">Settle Load</h2>
                   <p style={{ fontSize: '13px', color: '#6b7280', marginTop: '4px' }}>
@@ -6834,10 +7076,12 @@ const Dashboard = () => {
                 </div>
               </div>
             </div>
-          )}  {/* Bill Print Form */}
+          )}  
+                   {/* Bill Print Form */}
+
           {activeSubMenu === 'Bill Print' && !showBillPrintPreview && (
             <div className="master-section erp-master-form">
-              <div className="erp-header">
+              <div className="erp-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                 <div>
                   <h2 className="erp-title">Bill Print</h2>
                 </div>
@@ -7095,9 +7339,10 @@ const Dashboard = () => {
           )}
 
           {/* Quotation Form - Same as Sales Invoice but with Quotation title */}
+          {/* Quotation Form */}
           {activeSubMenu === 'Quotation' && openFormFor === 'Quotation' && (
             <div className="master-section erp-master-form sales-invoice">
-              <div className="erp-header">
+              <div className="erp-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                 <div>
                   <h2 className="erp-title">Quotation</h2>
                 </div>
@@ -7390,9 +7635,10 @@ const Dashboard = () => {
 
 
           {/* Create Load Form */}
+            {/* Create Load Form */}
           {activeSubMenu === 'Create Load' && openFormFor === 'Create Load' && (
             <div className="master-section erp-master-form">
-              <div className="erp-header">
+              <div className="erp-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                 <div>
                   <h2 className="erp-title">Create Load</h2>
                 </div>
@@ -7682,10 +7928,10 @@ const Dashboard = () => {
               </form>
             </div>
           )}
-          {/* Print Load Form */}
+                    {/* Print Load Form */}
           {activeSubMenu === 'Print Load' && openFormFor === 'Print Load' && (
             <div className="master-section erp-master-form">
-              <div className="erp-header">
+              <div className="erp-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                 <div>
                   <h2 className="erp-title">Print Load</h2>
                 </div>
@@ -9517,11 +9763,10 @@ const Dashboard = () => {
           {/* Salesman To Area Mapping UI */}
           {activeSubMenu === 'Salesman To Area' && <SalesmanToAreaMapping />}
 
-
-          {/* Sales Invoice (Billing) Form */}
+            {/* Sales Invoice (Billing) Form */}
           {activeSubMenu === 'Billing' && openFormFor === 'Billing' && (
             <div className="master-section erp-master-form sales-invoice">
-              <div className="erp-header">
+              <div className="erp-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                 <div>
                   <h2 className="erp-title">Sales Invoice (Billing)</h2>
                 </div>
@@ -9612,133 +9857,133 @@ const Dashboard = () => {
                           <tr key={item.id} className={index === activeRow ? 'active-row' : ''}>
                             <td style={{ position: 'sticky', left: 0, backgroundColor: index === activeRow ? '#eff6ff' : 'white', zIndex: 5, minWidth: '50px' }}>{item.sr}</td>
                             <td style={{ position: 'relative' }}>
-                              <input
-                                data-product-index={index}
-                                className="erp-input product-search"
-                                value={item.product}
-                                onChange={(e) => {
-                                  const value = e.target.value;
-                                  updateInvoiceItem(index, 'product', value);
+                            <input
+                              data-product-index={index}
+                              className="erp-input product-search"
+                              value={item.product}
+                              onChange={(e) => {
+                                const value = e.target.value;
+                                updateInvoiceItem(index, 'product', value);
+                                setCurrentProductIndex(index);
+                                if (value.trim() !== '') {
+                                  setProductListFilter(value);
+                                  setShowProductList(true);
+                                } else {
+                                  setShowProductList(false);
+                                }
+                              }}
+                              onFocus={() => {
+                                setActiveRow(index);
+                                if (item.product) {
+                                  setProductListFilter(item.product);
                                   setCurrentProductIndex(index);
-                                  if (value.trim() !== '') {
-                                    setProductListFilter(value);
-                                    setShowProductList(true);
-                                  } else {
-                                    setShowProductList(false);
-                                  }
-                                }}
-                                onFocus={() => {
-                                  setActiveRow(index);
-                                  if (item.product) {
-                                    setProductListFilter(item.product);
-                                    setCurrentProductIndex(index);
-                                    setShowProductList(true);
-                                  }
-                                }}
-                                style={{ width: '100%', minWidth: '150px', cursor: 'pointer' }}
-                                placeholder="Click to select product"
-                              />
+                                  setShowProductList(true);
+                                }
+                              }}
+                              style={{ width: '100%', minWidth: '150px', cursor: 'pointer' }}
+                              placeholder="Click to select product"
+                            />
 
-                              {showProductList && currentProductIndex === index && productListFilter.trim() !== '' && (
-                                <div className="erlay">
-                                  <div className="product-dropdown">
-                                    <div className="dropdown-list">
-                                      <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '12px' }}>
-                                        <thead>
-                                          <tr style={{ background: '#eff6ff', position: 'sticky', top: 0 }}>
-                                            <th style={{ padding: '6px', textAlign: 'left' }}>Item Code</th>
-                                            <th style={{ padding: '6px', textAlign: 'left' }}>Name</th>
-                                            <th style={{ padding: '6px', textAlign: 'left' }}>Batch</th>
-                                            <th style={{ padding: '6px', textAlign: 'right' }}>MRP</th>
-                                            <th style={{ padding: '6px', textAlign: 'right' }}>Sales Rate</th>
-                                            <th style={{ padding: '6px', textAlign: 'right' }}>Stock</th>
-                                          </tr>
-                                        </thead>
-                                        <tbody>
-                                          {products
-                                            .filter(p =>
-                                              p.name?.toLowerCase().includes(productListFilter.toLowerCase()) ||
-                                              p.code?.toLowerCase().includes(productListFilter.toLowerCase())
-                                            )
-                                            .map(product => {
-                                              const productBatches = batches.filter(b => b.productId === product.id);
-                                              const displayBatch = productBatches[0];
-                                              const totalStock = productBatches.reduce((sum, b) => sum + (parseFloat(b.stockQty) || 0), 0);
+                            {showProductList && currentProductIndex === index && productListFilter.trim() !== '' && (
+                              <div className="erlay">
+                                <div className="product-dropdown">
+                                  <div className="dropdown-list">
+                                    <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '12px' }}>
+                                      <thead>
+                                        <tr style={{ background: '#eff6ff', position: 'sticky', top: 0 }}>
+                                          <th style={{ padding: '6px', textAlign: 'left' }}>Item Code</th>
+                                          <th style={{ padding: '6px', textAlign: 'left' }}>Name</th>
+                                          <th style={{ padding: '6px', textAlign: 'left' }}>Batch</th>
+                                          <th style={{ padding: '6px', textAlign: 'right' }}>MRP</th>
+                                          <th style={{ padding: '6px', textAlign: 'right' }}>Sales Rate</th>
+                                          <th style={{ padding: '6px', textAlign: 'right' }}>Stock</th>
+                                        </tr>
+                                      </thead>
+                                      <tbody>
+                                        {products
+                                          .filter(p =>
+                                            p.name?.toLowerCase().includes(productListFilter.toLowerCase()) ||
+                                            p.code?.toLowerCase().includes(productListFilter.toLowerCase())
+                                          )
+                                          .map(product => {
+                                            const productBatches = batches.filter(b => b.productId === product.id);
+                                            const displayBatch = productBatches[0];
+                                            const totalStock = productBatches.reduce((sum, b) => sum + (parseFloat(b.stockQty) || 0), 0);
 
-                                              return (
-                                                <tr
-                                                  key={product.id}
-                                                  onClick={() => {
-                                                    if (productBatches.length > 1) {
-                                                      setCurrentProductIndex(index);
-                                                      setShowBatchSelectionModal(true);
-                                                    } else if (productBatches.length === 1) {
-                                                      handleProductSelect(currentProductIndex, {
-                                                        ...product,
-                                                        selectedBatch: productBatches[0]
-                                                      });
-                                                      if (index === invoiceItems.length - 1) {
-                                                        setTimeout(() => {
-                                                          addInvoiceItem();
-                                                          setTimeout(() => {
-                                                            const nextProductInput = document.querySelector(`[data-product-index="${index + 1}"]`);
-                                                            if (nextProductInput) nextProductInput.focus();
-                                                          }, 50);
-                                                        }, 150);
-                                                      } else {
+                                            return (
+                                              <tr
+                                                key={product.id}
+                                                onClick={() => {
+                                                  if (productBatches.length > 1) {
+                                                    setCurrentProductIndex(index);
+                                                    setShowBatchSelectionModal(true);
+                                                  } else if (productBatches.length === 1) {
+                                                    handleProductSelect(currentProductIndex, {
+                                                      ...product,
+                                                      selectedBatch: productBatches[0]
+                                                    });
+                                                    if (index === invoiceItems.length - 1) {
+                                                      setTimeout(() => {
+                                                        addInvoiceItem();
                                                         setTimeout(() => {
                                                           const nextProductInput = document.querySelector(`[data-product-index="${index + 1}"]`);
                                                           if (nextProductInput) nextProductInput.focus();
                                                         }, 50);
-                                                      }
+                                                      }, 150);
                                                     } else {
-                                                      handleProductSelect(currentProductIndex, product);
-                                                      if (index === invoiceItems.length - 1) {
-                                                        setTimeout(() => {
-                                                          addInvoiceItem();
-                                                          setTimeout(() => {
-                                                            const nextProductInput = document.querySelector(`[data-product-index="${index + 1}"]`);
-                                                            if (nextProductInput) nextProductInput.focus();
-                                                          }, 50);
-                                                        }, 150);
-                                                      } else {
+                                                      setTimeout(() => {
+                                                        const nextProductInput = document.querySelector(`[data-product-index="${index + 1}"]`);
+                                                        if (nextProductInput) nextProductInput.focus();
+                                                      }, 50);
+                                                    }
+                                                  } else {
+                                                    handleProductSelect(currentProductIndex, product);
+                                                    if (index === invoiceItems.length - 1) {
+                                                      setTimeout(() => {
+                                                        addInvoiceItem();
                                                         setTimeout(() => {
                                                           const nextProductInput = document.querySelector(`[data-product-index="${index + 1}"]`);
                                                           if (nextProductInput) nextProductInput.focus();
                                                         }, 50);
-                                                      }
+                                                      }, 150);
+                                                    } else {
+                                                      setTimeout(() => {
+                                                        const nextProductInput = document.querySelector(`[data-product-index="${index + 1}"]`);
+                                                        if (nextProductInput) nextProductInput.focus();
+                                                      }, 50);
                                                     }
-                                                  }}
-                                                  style={{ cursor: 'pointer', borderBottom: '1px solid #eee' }}
-                                                  onMouseEnter={(e) => { e.currentTarget.style.background = '#f8fafc'; }}
-                                                  onMouseLeave={(e) => { e.currentTarget.style.background = 'white'; }}
-                                                >
-                                                  <td style={{ padding: '6px' }}>{product.code}</td>
-                                                  <td style={{ padding: '6px' }}>{product.name}</td>
-                                                  <td style={{ padding: '6px' }}>
-                                                    {productBatches.length > 1
-                                                      ? `${productBatches.length} batches`
-                                                      : displayBatch?.batchNo || '-'}
-                                                  </td>
-                                                  <td style={{ padding: '6px', textAlign: 'right' }}>
-                                                    ₹{displayBatch?.mrp || product.mrp || 0}
-                                                  </td>
-                                                  <td style={{ padding: '6px', textAlign: 'right' }}>
-                                                    ₹{displayBatch?.salesRate || product.salesRate || product.mrp || 0}
-                                                  </td>
-                                                  <td style={{ padding: '6px', textAlign: 'right' }}>
-                                                    {totalStock}
-                                                  </td>
-                                                </tr>
-                                              );
-                                            })}
-                                        </tbody>
-                                      </table>
-                                    </div>
+                                                  }
+                                                }}
+                                                style={{ cursor: 'pointer', borderBottom: '1px solid #eee' }}
+                                                onMouseEnter={(e) => { e.currentTarget.style.background = '#f8fafc'; }}
+                                                onMouseLeave={(e) => { e.currentTarget.style.background = 'white'; }}
+                                              >
+                                                <td style={{ padding: '6px' }}>{product.code}</td>
+                                                <td style={{ padding: '6px' }}>{product.name}</td>
+                                                <td style={{ padding: '6px' }}>
+                                                  {productBatches.length > 1
+                                                    ? `${productBatches.length} batches`
+                                                    : displayBatch?.batchNo || '-'}
+                                                </td>
+                                                <td style={{ padding: '6px', textAlign: 'right' }}>
+                                                  ₹{displayBatch?.mrp || product.mrp || 0}
+                                                </td>
+                                                <td style={{ padding: '6px', textAlign: 'right' }}>
+                                                  ₹{displayBatch?.salesRate || product.salesRate || product.mrp || 0}
+                                                </td>
+                                                <td style={{ padding: '6px', textAlign: 'right' }}>
+                                                  {totalStock}
+                                                </td>
+                                              </tr>
+                                            );
+                                          })}
+                                      </tbody>
+                                    </table>
                                   </div>
                                 </div>
-                              )}
-                            </td>
+                              </div>
+                            )}
+                          </td>
                             <td>
                               <select
                                 className="erp-select"
@@ -11788,9 +12033,132 @@ const Dashboard = () => {
                 </div>
               </>
             )}
+                    </div>
+        </div>
+      )}
+
+      {/* View Modal */}
+      {showViewModal && viewData && (
+        <div
+          style={{
+            position: 'fixed',
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            backgroundColor: 'rgba(0, 0, 0, 0.5)',
+            display: 'flex',
+            justifyContent: 'center',
+            alignItems: 'center',
+            zIndex: 999999
+          }}
+          onClick={(e) => {
+            if (e.target === e.currentTarget) setShowViewModal(false);
+          }}
+        >
+          <div
+            style={{
+              backgroundColor: 'white',
+              borderRadius: '12px',
+              padding: '24px',
+              width: '600px',
+              maxWidth: '90%',
+              maxHeight: '80vh',
+              overflowY: 'auto',
+              boxShadow: '0 20px 25px -5px rgba(0,0,0,0.1)'
+            }}
+          >
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px', paddingBottom: '10px', borderBottom: '1px solid #e5e7eb' }}>
+              <h3 style={{ margin: 0, fontSize: '18px', fontWeight: '600' }}>View {viewType} Details</h3>
+              <button
+                onClick={() => setShowViewModal(false)}
+                style={{ background: 'none', border: 'none', fontSize: '20px', cursor: 'pointer' }}
+              >
+                ✕
+              </button>
+            </div>
+
+            <div style={{ marginBottom: '15px' }}>
+              <strong>Date:</strong> {viewData.billDate || viewData.invoiceDate || viewData.vDate || '-'}
+            </div>
+            <div style={{ marginBottom: '15px' }}>
+              <strong>Bill Series:</strong> {viewData.billSeries || '-'}
+            </div>
+            <div style={{ marginBottom: '15px' }}>
+              <strong>Bill Number:</strong> {viewData.billNo || viewData.invoiceNumber || viewData.vNo || '-'}
+            </div>
+            <div style={{ marginBottom: '15px' }}>
+              <strong>Bill Type:</strong> {viewData.billType || '-'}
+            </div>
+            <div style={{ marginBottom: '15px' }}>
+              <strong>Party Name:</strong> {viewData.party || viewData.partyName || viewData.supplier || '-'}
+            </div>
+            <div style={{ marginBottom: '15px' }}>
+              <strong>Party Code:</strong> {viewData.partyCode || '-'}
+            </div>
+            <div style={{ marginBottom: '15px' }}>
+              <strong>Branch/Area:</strong> {viewData.area || viewData.branchName || viewData.storageLocation || '-'}
+            </div>
+            <div style={{ marginBottom: '15px' }}>
+              <strong>Amount:</strong> <span style={{ fontWeight: 'bold', color: '#059669' }}>₹{parseFloat(viewData.amount || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
+            </div>
+            <div style={{ marginBottom: '15px' }}>
+              <strong>Status:</strong> <span style={{ padding: '2px 8px', borderRadius: '4px', fontSize: '12px', background: viewData.status === 'Paid' || viewData.status === 'Approved' ? '#d1fae5' : '#fef3c7', color: viewData.status === 'Paid' || viewData.status === 'Approved' ? '#065f46' : '#92400e' }}>{viewData.status || 'Pending'}</span>
+            </div>
+            {viewData.narration && (
+              <div style={{ marginBottom: '15px' }}>
+                <strong>Narration:</strong> {viewData.narration}
+              </div>
+            )}
+
+            {viewData.items && viewData.items.length > 0 && (
+              <>
+                <h4 style={{ marginTop: '20px', marginBottom: '10px' }}>Products/Items</h4>
+                <div style={{ overflowX: 'auto' }}>
+                  <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '12px' }}>
+                    <thead>
+                      <tr style={{ background: '#f3f4f6' }}>
+                        <th style={{ padding: '8px', border: '1px solid #e5e7eb' }}>Sr</th>
+                        <th style={{ padding: '8px', border: '1px solid #e5e7eb' }}>Product</th>
+                        <th style={{ padding: '8px', border: '1px solid #e5e7eb' }}>Qty</th>
+                        <th style={{ padding: '8px', border: '1px solid #e5e7eb' }}>Rate</th>
+                        <th style={{ padding: '8px', border: '1px solid #e5e7eb' }}>Amount</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {viewData.items.map((item, idx) => (
+                        <tr key={idx}>
+                          <td style={{ padding: '8px', border: '1px solid #e5e7eb', textAlign: 'center' }}>{item.sr || idx + 1}</td>
+                          <td style={{ padding: '8px', border: '1px solid #e5e7eb' }}>{item.product || item.itemName || '-'}</td>
+                          <td style={{ padding: '8px', border: '1px solid #e5e7eb', textAlign: 'center' }}>{item.qty || item.quantity || '-'}</td>
+                          <td style={{ padding: '8px', border: '1px solid #e5e7eb', textAlign: 'right' }}>₹{parseFloat(item.rate || 0).toFixed(2)}</td>
+                          <td style={{ padding: '8px', border: '1px solid #e5e7eb', textAlign: 'right' }}>₹{parseFloat(item.amount || 0).toFixed(2)}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                    <tfoot>
+                      <tr style={{ background: '#f9fafb', fontWeight: 'bold' }}>
+                        <td colSpan="4" style={{ padding: '8px', border: '1px solid #e5e7eb', textAlign: 'right' }}>Total:</td>
+                        <td style={{ padding: '8px', border: '1px solid #e5e7eb', textAlign: 'right' }}>₹{parseFloat(viewData.amount || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
+                      </tr>
+                    </tfoot>
+                  </table>
+                </div>
+              </>
+            )}
+
+            <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '20px' }}>
+              <button
+                onClick={() => setShowViewModal(false)}
+                style={{ padding: '8px 20px', background: '#3b82f6', color: 'white', border: 'none', borderRadius: '6px', cursor: 'pointer' }}
+              >
+                Close
+              </button>
+            </div>
           </div>
         </div>
       )}
+
     </div>
   );
 }
