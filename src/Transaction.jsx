@@ -8,7 +8,13 @@ const Transaction = ({
   accounts = [],
   customerBanks = [],
   activeTransaction,
-  openFormFor
+  showReceiptForm,
+  setShowReceiptForm,
+  openFormFor,
+  transactionFormMode,
+  setActiveTransaction,
+  setTransactionFormMode
+
 }) => {
   const { state, dispatch } = useERP();
 
@@ -25,7 +31,7 @@ const Transaction = ({
   // =========================
   // RECEIPT STATES
   // =========================
-  const [showReceiptForm, setShowReceiptForm] = useState(false);
+  // const [showReceiptForm, setShowReceiptForm] = useState(false);
   const [editReceiptId, setEditReceiptId] = useState(null);
   const [partySuggestions, setPartySuggestions] = useState([]);
   const [receiptFormData, setReceiptFormData] = useState({
@@ -56,7 +62,7 @@ const Transaction = ({
   // =========================
   // PAYMENT STATES
   // =========================
-  const [showPaymentForm, setShowPaymentForm] = useState(false);
+  // const [showPaymentForm, setShowPaymentForm] = useState(false);
   const [paymentPartySuggestions, setPaymentPartySuggestions] = useState([]);
   const [paymentFormData, setPaymentFormData] = useState({
     vDate: new Date().toISOString().split("T")[0],
@@ -97,7 +103,7 @@ const Transaction = ({
   // =========================
   // JOURNAL STATES
   // =========================
-  const [showJournalForm, setShowJournalForm] = useState(false);
+  // const [showJournalForm, setShowJournalForm] = useState(false);
   const [accountSuggestions, setAccountSuggestions] = useState([]);
   const [activeAccountRow, setActiveAccountRow] = useState(null);
   const [journalFormData, setJournalFormData] = useState({
@@ -119,7 +125,7 @@ const Transaction = ({
   // =========================
   // CHEQUE BOUNCE STATES
   // =========================
-  const [showChequeBounceForm, setShowChequeBounceForm] = useState(false);
+  // const [showChequeBounceForm, setShowChequeBounceForm] = useState(false);
   const [editChequeBounceId, setEditChequeBounceId] = useState(null);
   const [chequeBounceFormData, setChequeBounceFormData] = useState({
     chqBounceDate: new Date().toISOString().split("T")[0],
@@ -139,7 +145,7 @@ const Transaction = ({
   // =========================
   // PDC DOCKET STATES
   // =========================
-  const [showPDCDocketForm, setShowPDCDocketForm] = useState(false);
+  // const [showPDCDocketForm, setShowPDCDocketForm] = useState(false);
   const [editPDCDocketId, setEditPDCDocketId] = useState(null);
   const [pdcDocketFormData, setPDCDocketFormData] = useState({
     depositDate: new Date().toISOString().split("T")[0],
@@ -158,7 +164,7 @@ const Transaction = ({
   // =========================
   // CONTRA STATES
   // =========================
-  const [showContraForm, setShowContraForm] = useState(false);
+  // const [showContraForm, setShowContraForm] = useState(false);
   const [editContraId, setEditContraId] = useState(null);
   const [contraFormData, setContraFormData] = useState({
     transactionDate: new Date().toISOString().split("T")[0],
@@ -171,7 +177,7 @@ const Transaction = ({
   // =========================
   // COLLECTION VOUCHER STATES
   // =========================
-  const [showCollectionVoucherForm, setShowCollectionVoucherForm] = useState(false);
+  // const [showCollectionVoucherForm, setShowCollectionVoucherForm] = useState(false);
   const [editCollectionVoucherId, setEditCollectionVoucherId] = useState(null);
   const [collectionVoucherFormData, setCollectionVoucherFormData] = useState({
     collectionDate: new Date().toISOString().split("T")[0],
@@ -179,7 +185,7 @@ const Transaction = ({
     narration: "",
     collectionType: "Bill wise"
   });
-  
+
   const [totalCollectionAmount, setTotalCollectionAmount] = useState(0);
   const [totalCashCollection, setTotalCashCollection] = useState(0);
   const [totalChequeCollection, setTotalChequeCollection] = useState(0);
@@ -382,7 +388,7 @@ const Transaction = ({
             <h3>Select Pending Bills</h3>
             <button className="modal-close-btn" onClick={onClose}>×</button>
           </div>
-          
+
           <div className="modal-body">
             <div className="modal-toolbar">
               <button className="btn-select-all-modal" onClick={handleSelectAll}>
@@ -392,14 +398,14 @@ const Transaction = ({
                 <span>Selected: {selectedBills.length} / {bills.length} bills</span>
               </div>
             </div>
-            
+
             <div className="modal-table-container">
               <table className="modal-bills-table">
                 <thead>
                   <tr>
                     <th style={{ width: "40px" }}>
-                      <input 
-                        type="checkbox" 
+                      <input
+                        type="checkbox"
                         checked={selectAll}
                         onChange={handleSelectAll}
                       />
@@ -422,8 +428,8 @@ const Transaction = ({
                     bills.map((bill) => (
                       <tr key={bill.id}>
                         <td className="text-center">
-                          <input 
-                            type="checkbox" 
+                          <input
+                            type="checkbox"
                             checked={selectedBills.includes(bill.id)}
                             onChange={() => handleBillSelect(bill.id)}
                           />
@@ -442,7 +448,7 @@ const Transaction = ({
               </table>
             </div>
           </div>
-          
+
           <div className="modal-footer">
             <button className="btn-modal-confirm" onClick={handleConfirm}>Confirm Selection</button>
             <button className="btn-modal-cancel" onClick={onClose}>Cancel</button>
@@ -503,7 +509,7 @@ const Transaction = ({
             <h3>Select Salesmen</h3>
             <button className="modal-close-btn" onClick={onClose}>×</button>
           </div>
-          
+
           <div className="modal-body">
             <div className="modal-toolbar">
               <button className="btn-select-all-modal" onClick={handleSelectAll}>
@@ -513,14 +519,14 @@ const Transaction = ({
                 <span>Selected: {selectedSalesmen.length} / {salesmen.length} salesmen</span>
               </div>
             </div>
-            
+
             <div className="modal-table-container">
               <table className="modal-bills-table">
                 <thead>
                   <tr>
                     <th style={{ width: "40px" }}>
-                      <input 
-                        type="checkbox" 
+                      <input
+                        type="checkbox"
                         checked={selectAll}
                         onChange={handleSelectAll}
                       />
@@ -540,8 +546,8 @@ const Transaction = ({
                     salesmen.map((salesman) => (
                       <tr key={salesman.code}>
                         <td className="text-center">
-                          <input 
-                            type="checkbox" 
+                          <input
+                            type="checkbox"
                             checked={selectedSalesmen.includes(salesman.code)}
                             onChange={() => handleSalesmanSelect(salesman.code)}
                           />
@@ -559,7 +565,7 @@ const Transaction = ({
               </table>
             </div>
           </div>
-          
+
           <div className="modal-footer">
             <button className="btn-modal-confirm" onClick={handleConfirm}>Confirm Selection</button>
             <button className="btn-modal-cancel" onClick={onClose}>Cancel</button>
@@ -620,7 +626,7 @@ const Transaction = ({
             <h3>Select Areas</h3>
             <button className="modal-close-btn" onClick={onClose}>×</button>
           </div>
-          
+
           <div className="modal-body">
             <div className="modal-toolbar">
               <button className="btn-select-all-modal" onClick={handleSelectAll}>
@@ -630,14 +636,14 @@ const Transaction = ({
                 <span>Selected: {selectedAreas.length} / {areas.length} areas</span>
               </div>
             </div>
-            
+
             <div className="modal-table-container">
               <table className="modal-bills-table">
                 <thead>
                   <tr>
                     <th style={{ width: "40px" }}>
-                      <input 
-                        type="checkbox" 
+                      <input
+                        type="checkbox"
                         checked={selectAll}
                         onChange={handleSelectAll}
                       />
@@ -657,8 +663,8 @@ const Transaction = ({
                     areas.map((area) => (
                       <tr key={area.code}>
                         <td className="text-center">
-                          <input 
-                            type="checkbox" 
+                          <input
+                            type="checkbox"
                             checked={selectedAreas.includes(area.code)}
                             onChange={() => handleAreaSelect(area.code)}
                           />
@@ -676,7 +682,7 @@ const Transaction = ({
               </table>
             </div>
           </div>
-          
+
           <div className="modal-footer">
             <button className="btn-modal-confirm" onClick={handleConfirm}>Confirm Selection</button>
             <button className="btn-modal-cancel" onClick={onClose}>Cancel</button>
@@ -928,7 +934,7 @@ const Transaction = ({
     const filtered = accounts.filter((acc) => {
       const search = value.toLowerCase();
       return acc.accountName?.toLowerCase().includes(search) ||
-             acc.accountCode?.toString().toLowerCase().includes(search);
+        acc.accountCode?.toString().toLowerCase().includes(search);
     });
     setAccountSuggestions(filtered);
   };
@@ -1301,8 +1307,15 @@ const Transaction = ({
     <div className="master-section">
       <div className="grid-header">
         <h3>Receipt Management</h3>
-        <button className="btn-add-new" onClick={() => { setShowReceiptForm(true); if (receiptItems.length === 0) addReceiptItem(); }}>
-          + Add Receipt
+        <button
+          className="btn-add-new"
+          onClick={() => {
+            window.dispatchEvent(
+              new CustomEvent("openSettleLoad")
+            );
+          }}
+        >
+          Settle Load
         </button>
       </div>
       <div className="table-responsive">
@@ -1318,7 +1331,84 @@ const Transaction = ({
                   <td>{receipt.header.receiptDate}</td>
                   <td>{receipt.header.partyName}</td>
                   <td>{receipt.summary.totalAdjusted}</td>
-                  <td><button className="btn-edit" onClick={() => editReceipt(receipt)}>Edit</button><button className="btn-delete" onClick={() => deleteReceipt(receipt.id)}>Delete</button></td>
+                   <td
+  className="action-buttons"
+  style={{
+    whiteSpace: 'nowrap',
+    position: 'sticky',
+    right: 0,
+    backgroundColor: '#ffffff',
+    zIndex: 10,
+    boxShadow: '-2px 0 5px -2px rgba(0,0,0,0.1)'
+  }}
+>
+
+  <button
+    className="btn-view"
+    onClick={() => {
+      setTransactionFormMode(prev => ({
+        ...prev,
+        Receipt: true
+      }));
+
+      editReceipt(receipt);
+    }}
+    title="View"
+    style={{
+      background: '#10b981',
+      color: 'white',
+      border: 'none',
+      borderRadius: '4px',
+      padding: '4px 8px',
+      margin: '0 2px',
+      cursor: 'pointer'
+    }}
+  >
+    👁️ View
+  </button>
+
+  <button
+    className="btn-edit"
+    onClick={() => {
+      setTransactionFormMode(prev => ({
+        ...prev,
+        Receipt: true
+      }));
+
+      editReceipt(receipt);
+    }}
+    title="Edit"
+    style={{
+      background: '#3b82f6',
+      color: 'white',
+      border: 'none',
+      borderRadius: '4px',
+      padding: '4px 8px',
+      margin: '0 2px',
+      cursor: 'pointer'
+    }}
+  >
+    ✏️ Edit
+  </button>
+
+  <button
+    className="btn-delete"
+    onClick={() => deleteReceipt(receipt.id)}
+    title="Delete"
+    style={{
+      background: '#ef4444',
+      color: 'white',
+      border: 'none',
+      borderRadius: '4px',
+      padding: '4px 8px',
+      margin: '0 2px',
+      cursor: 'pointer'
+    }}
+  >
+    🗑 Delete
+  </button>
+
+</td>
                 </tr>
               ))
             )}
@@ -1359,11 +1449,11 @@ const Transaction = ({
       <div className="form-section"><div className="grid-header"><h3 className="section-header">Receipt Bills</h3><button className="btn-add-new" onClick={addReceiptItem}>+ Add Row</button></div>
         <div className="table-responsive"><table className="erp-table"><thead><tr><th>SrNo</th><th>TrnSeries</th><th>TrnNo</th><th>TrnDate</th><th>Amount</th><th>Adjust Amt</th><th>Balance Amt</th><th>Now Adjust</th><th>Discount %</th><th>Disc Amt</th><th>Remark</th></tr></thead>
           <tbody>{receiptItems.map((item, index) => (<tr key={item.id}><td>{item.srNo}</td><td>{item.trnSeries}</td><td>{item.trnNo}</td><td>{item.trnDate}</td><td className="amount-cell">₹ {Number(item.amount).toFixed(2)}</td><td className="amount-cell">₹ {Number(item.adjustAmt).toFixed(2)}</td>
-          <td><input type="number" value={item.balanceAmt} onChange={(e) => updateReceiptItem(index, "balanceAmt", e.target.value)} /></td>
-          <td><input type="number" value={item.nowAdjust} onChange={(e) => updateReceiptItem(index, "nowAdjust", e.target.value)} /></td>
-          <td><input type="number" value={item.discount} onChange={(e) => updateReceiptItem(index, "discount", e.target.value)} /></td>
-          <td className="amount-cell">₹ {Number(item.discAmount).toFixed(2)}</td>
-          <td><input className="remark-input" value={item.remark} onChange={(e) => updateReceiptItem(index, "remark", e.target.value)} /></td></tr>))}</tbody></table></div></div>
+            <td><input type="number" value={item.balanceAmt} onChange={(e) => updateReceiptItem(index, "balanceAmt", e.target.value)} /></td>
+            <td><input type="number" value={item.nowAdjust} onChange={(e) => updateReceiptItem(index, "nowAdjust", e.target.value)} /></td>
+            <td><input type="number" value={item.discount} onChange={(e) => updateReceiptItem(index, "discount", e.target.value)} /></td>
+            <td className="amount-cell">₹ {Number(item.discAmount).toFixed(2)}</td>
+            <td><input className="remark-input" value={item.remark} onChange={(e) => updateReceiptItem(index, "remark", e.target.value)} /></td></tr>))}</tbody></table></div></div>
       <div className="form-section"><h3 className="section-header">Summary</h3><div className="receipt-summary-grid"><div className="summary-card"><label>Total Adjusted</label><h3>₹{receiptSummary.totalAdjusted.toFixed(2)}</h3></div><div className="summary-card"><label>Total Discount</label><h3>₹{receiptSummary.totalDiscount.toFixed(2)}</h3></div><div className="summary-card"><label>Balance Amount</label><h3>₹{receiptSummary.balanceAmount.toFixed(2)}</h3></div></div></div>
       <div className="form-actions"><button className="btn-save" onClick={saveReceipt}>Save Receipt</button><button className="btn-cancel" onClick={() => setShowReceiptForm(false)}>Cancel</button></div>
     </div>
@@ -1372,8 +1462,87 @@ const Transaction = ({
   // Journal List
   const renderJournalList = () => (
     <div className="master-section"><div className="grid-header"><h3>Journal Voucher Management</h3><button className="btn-add-new" onClick={() => { setShowJournalForm(true); if (journalItems.length === 0) addJournalRow(); }}>+ Add Journal Voucher</button></div>
-      <div className="table-responsive"><table className="erp-table"><thead><tr><th>VNo</th><th>VDate</th><th>Narration</th><th>Total Dr</th><th>Total Cr</th></tr></thead>
-        <tbody>{state.journals.length === 0 ? (<tr><td colSpan="5">No Journal Vouchers Added</td></tr>) : (state.journals.map((journal) => (<tr key={journal.id}><td>{journal.header.vNo}</td><td>{journal.header.vDate}</td><td>{journal.header.narr}</td><td>₹ {journal.summary.totalDr.toFixed(2)}</td><td>₹ {journal.summary.totalCr.toFixed(2)}</td></tr>)))}</tbody></table></div></div>
+      <div className="table-responsive"><table className="erp-table"><thead><tr><th>VNo</th><th>VDate</th><th>Narration</th><th>Total Dr</th><th>Total Cr</th><th>Actions</th></tr></thead>
+        <tbody>{state.journals.length === 0 ? (<tr><td colSpan="5">No Journal Vouchers Added</td></tr>) : (state.journals.map((journal) => (<tr key={journal.id}><td>{journal.header.vNo}</td><td>{journal.header.vDate}</td><td>{journal.header.narr}</td><td>₹ {journal.summary.totalDr.toFixed(2)}</td><td>₹ {journal.summary.totalCr.toFixed(2)}</td>
+         <td
+  className="action-buttons"
+  style={{
+    whiteSpace: 'nowrap',
+    position: 'sticky',
+    right: 0,
+    backgroundColor: '#ffffff',
+    zIndex: 10,
+    boxShadow: '-2px 0 5px -2px rgba(0,0,0,0.1)'
+  }}
+>
+
+  <button
+    className="btn-view"
+    onClick={() => {
+      setTransactionFormMode(prev => ({
+        ...prev,
+        ["Journal Voucher"]: true
+      }));
+
+      editJournal(journal);
+    }}
+    title="View"
+    style={{
+      background: '#10b981',
+      color: 'white',
+      border: 'none',
+      borderRadius: '4px',
+      padding: '4px 8px',
+      margin: '0 2px',
+      cursor: 'pointer'
+    }}
+  >
+    👁️ View
+  </button>
+
+  <button
+    className="btn-edit"
+    onClick={() => {
+      setTransactionFormMode(prev => ({
+        ...prev,
+        ["Journal Voucher"]: true
+      }));
+
+      editJournal(journal);
+    }}
+    title="Edit"
+    style={{
+      background: '#3b82f6',
+      color: 'white',
+      border: 'none',
+      borderRadius: '4px',
+      padding: '4px 8px',
+      margin: '0 2px',
+      cursor: 'pointer'
+    }}
+  >
+    ✏️ Edit
+  </button>
+
+  <button
+    className="btn-delete"
+    onClick={() => deleteJournal(journal.id)}
+    title="Delete"
+    style={{
+      background: '#ef4444',
+      color: 'white',
+      border: 'none',
+      borderRadius: '4px',
+      padding: '4px 8px',
+      margin: '0 2px',
+      cursor: 'pointer'
+    }}
+  >
+    🗑 Delete
+  </button>
+
+</td>
+</tr>)))}</tbody></table></div></div>
   );
 
   // Journal Form
@@ -1384,10 +1553,10 @@ const Transaction = ({
       <div className="form-section"><div className="grid-header"><h3 className="section-header">Journal Entries</h3><button className="btn-add-new" onClick={addJournalRow}>+ Add Row</button></div>
         <div className="table-responsive"><table className="erp-table journal-table"><thead><tr><th>SeqNo</th><th>Account Code</th><th>Account Name</th><th>Dr Amount</th><th>Cr Amount</th></tr></thead>
           <tbody>{journalItems.map((item, index) => (<tr key={item.id}><td>{item.seqNo}</td><td><input value={item.accountCode} onChange={(e) => updateJournalItem(index, "accountCode", e.target.value)} /></td>
-          <td style={{ width: "300px", minWidth: "300px" }}><div className="live-search-box"><input type="text" placeholder="Search Account" value={item.accountName || ""} onChange={(e) => handleAccountSearch(index, e.target.value)} />
-          {activeAccountRow === index && (<div className="live-dropdown">{accountSuggestions.length > 0 ? (accountSuggestions.map((acc) => (<div key={acc.id} className="live-item" onClick={() => selectAccount(index, acc)}>{acc.accountCode} - {acc.accountName}</div>))) : (<div className="live-item">No Accounts Found</div>)}</div>)}</div></td>
-          <td><input type="number" value={item.drAmount} onChange={(e) => updateJournalItem(index, "drAmount", e.target.value)} /></td>
-          <td><input type="number" value={item.crAmount} onChange={(e) => updateJournalItem(index, "crAmount", e.target.value)} /></td></tr>))}</tbody></table></div></div>
+            <td style={{ width: "300px", minWidth: "300px" }}><div className="live-search-box"><input type="text" placeholder="Search Account" value={item.accountName || ""} onChange={(e) => handleAccountSearch(index, e.target.value)} />
+              {activeAccountRow === index && (<div className="live-dropdown">{accountSuggestions.length > 0 ? (accountSuggestions.map((acc) => (<div key={acc.id} className="live-item" onClick={() => selectAccount(index, acc)}>{acc.accountCode} - {acc.accountName}</div>))) : (<div className="live-item">No Accounts Found</div>)}</div>)}</div></td>
+            <td><input type="number" value={item.drAmount} onChange={(e) => updateJournalItem(index, "drAmount", e.target.value)} /></td>
+            <td><input type="number" value={item.crAmount} onChange={(e) => updateJournalItem(index, "crAmount", e.target.value)} /></td></tr>))}</tbody></table></div></div>
       <div className="form-section"><h3 className="section-header">Summary</h3><div className="receipt-summary-grid"><div className="summary-card"><label>Total Dr</label><h3>₹ {journalSummary.totalDr.toFixed(2)}</h3></div><div className="summary-card"><label>Total Cr</label><h3>₹ {journalSummary.totalCr.toFixed(2)}</h3></div></div></div>
       <div className="form-actions"><button className="btn-save" onClick={saveJournalVoucher}>Save Journal</button><button className="btn-cancel" onClick={() => setShowJournalForm(false)}>Cancel</button></div>
     </div>
@@ -1396,35 +1565,113 @@ const Transaction = ({
   // Payment List
   const renderPaymentList = () => (
     <div className="master-section"><div className="grid-header"><h3>Payment Management</h3><button className="btn-add-new" onClick={() => setShowPaymentForm(true)}>+ Add Payment</button></div>
-      <div className="table-responsive"><table className="erp-table"><thead><tr><th>VNo</th><th>Date</th><th>Party</th><th>Dr Amt</th><th>Cr Amt</th></tr></thead>
-        <tbody>{(state.payments || []).length === 0 ? (<tr><td colSpan="5">No Payments Added</td></tr>) : ((state.payments || []).map((payment) => (<tr key={payment.id}><td>{payment.header.vNo}</td><td>{payment.header.vDate}</td><td>{payment.header.partyName}</td><td>{payment.header.drAmt}</td><td>{payment.header.crAmt}</td></tr>)))}</tbody></table></div></div>
+      <div className="table-responsive"><table className="erp-table"><thead><tr><th>VNo</th><th>Date</th><th>Party</th><th>Dr Amt</th><th>Cr Amt</th><th>Actions</th></tr></thead>
+        <tbody>{(state.payments || []).length === 0 ? (<tr><td colSpan="5">No Payments Added</td></tr>) : ((state.payments || []).map((payment) => (<tr key={payment.id}><td>{payment.header.vNo}</td><td>{payment.header.vDate}</td><td>{payment.header.partyName}</td><td>{payment.header.drAmt}</td><td>{payment.header.crAmt}</td>
+        <td
+  className="action-buttons"
+  style={{
+    whiteSpace: 'nowrap',
+    position: 'sticky',
+    right: 0,
+    backgroundColor: '#ffffff',
+    zIndex: 10,
+    boxShadow: '-2px 0 5px -2px rgba(0,0,0,0.1)'
+  }}
+>
+
+  <button
+    className="btn-view"
+    onClick={() => {
+      setTransactionFormMode(prev => ({
+        ...prev,
+        Payment: true
+      }));
+
+      editPayment(payment);
+    }}
+    title="View"
+    style={{
+      background: '#10b981',
+      color: 'white',
+      border: 'none',
+      borderRadius: '4px',
+      padding: '4px 8px',
+      margin: '0 2px',
+      cursor: 'pointer'
+    }}
+  >
+    👁️ View
+  </button>
+
+  <button
+    className="btn-edit"
+    onClick={() => {
+      setTransactionFormMode(prev => ({
+        ...prev,
+        Payment: true
+      }));
+
+      editPayment(payment);
+    }}
+    title="Edit"
+    style={{
+      background: '#3b82f6',
+      color: 'white',
+      border: 'none',
+      borderRadius: '4px',
+      padding: '4px 8px',
+      margin: '0 2px',
+      cursor: 'pointer'
+    }}
+  >
+    ✏️ Edit
+  </button>
+
+  <button
+    className="btn-delete"
+    onClick={() => deletePayment(payment.id)}
+    title="Delete"
+    style={{
+      background: '#ef4444',
+      color: 'white',
+      border: 'none',
+      borderRadius: '4px',
+      padding: '4px 8px',
+      margin: '0 2px',
+      cursor: 'pointer'
+    }}
+  >
+    🗑 Delete
+  </button>
+
+</td></tr>)))}</tbody></table></div></div>
   );
 
   // Payment Form
   const renderPaymentForm = () => (
     <div className="payment-section"><div className="form-section"><div className="section-header">Add Payment Information</div>
       <div className="payment-header-grid"><div className="labeled-input"><label>VDate</label><input type="date" name="vDate" value={paymentFormData.vDate} onChange={handlePaymentInput} /></div>
-      <div className="labeled-input"><label>VNo</label><input name="vNo" value={paymentFormData.vNo} onChange={handlePaymentInput} /></div>
-      <div className="labeled-input payment-narration"><label>Narr</label><input name="narr" value={paymentFormData.narr} onChange={handlePaymentInput} /></div>
-      <div className="labeled-input"><label>Party Name</label><div className="live-search-box"><input value={paymentFormData.partyName} onChange={(e) => { const value = e.target.value; setPaymentFormData(prev => ({ ...prev, partyName: value })); if (!value.trim()) { setPaymentPartySuggestions([]); return; } const matches = pendingPurchaseBills.filter((bill) => bill.party?.toLowerCase().includes(value.toLowerCase())).map((bill) => bill.party); setPaymentPartySuggestions([...new Set(matches)]); }} />
-      {paymentPartySuggestions.length > 0 && (<div className="live-dropdown">{paymentPartySuggestions.map((party, idx) => (<div key={idx} className="live-item" onClick={() => selectPaymentParty(party)}>{party}</div>))}</div>)}</div></div>
-      <div className="labeled-input"><label>Dr Amt</label><input name="drAmt" value={paymentFormData.drAmt} onChange={handlePaymentInput} /></div>
-      <div className="labeled-input"><label>Chq No</label><input name="chqNo" value={paymentFormData.chqNo} onChange={handlePaymentInput} /></div>
-      <div className="labeled-input"><label>Bank/Cash</label><select name="bankCash" value={paymentFormData.bankCash} onChange={handlePaymentInput}><option value="">Select</option><option value="Cash">Cash</option><option value="Bank">Bank</option></select></div>
-      <div className="labeled-input"><label>Cr Amt</label><input name="crAmt" value={paymentFormData.crAmt} onChange={handlePaymentInput} /></div>
-      <div className="labeled-input"><label>Chq Date</label><input type="date" name="chqDate" value={paymentFormData.chqDate} onChange={handlePaymentInput} /></div>
-      <div className="labeled-input"><label>Adjusted Ac1</label><input name="adjustedAc1" value={paymentFormData.adjustedAc1} onChange={handlePaymentInput} /></div>
-      <div className="labeled-input"><label>Dr/Cr</label><select name="drCr1" value={paymentFormData.drCr1} onChange={handlePaymentInput}><option>Dr</option><option>Cr</option></select></div>
-      <div className="labeled-input"><label>Clearing Date</label><input type="date" name="clearingDate" value={paymentFormData.clearingDate} onChange={handlePaymentInput} /></div>
-      <div className="labeled-input"><label>Adjusted Ac2</label><input name="adjustedAc2" value={paymentFormData.adjustedAc2} onChange={handlePaymentInput} /></div>
-      <div className="labeled-input"><label>Dr/Cr</label><select name="drCr2" value={paymentFormData.drCr2} onChange={handlePaymentInput}><option>Dr</option><option>Cr</option></select></div></div></div>
+        <div className="labeled-input"><label>VNo</label><input name="vNo" value={paymentFormData.vNo} onChange={handlePaymentInput} /></div>
+        <div className="labeled-input payment-narration"><label>Narr</label><input name="narr" value={paymentFormData.narr} onChange={handlePaymentInput} /></div>
+        <div className="labeled-input"><label>Party Name</label><div className="live-search-box"><input value={paymentFormData.partyName} onChange={(e) => { const value = e.target.value; setPaymentFormData(prev => ({ ...prev, partyName: value })); if (!value.trim()) { setPaymentPartySuggestions([]); return; } const matches = pendingPurchaseBills.filter((bill) => bill.party?.toLowerCase().includes(value.toLowerCase())).map((bill) => bill.party); setPaymentPartySuggestions([...new Set(matches)]); }} />
+          {paymentPartySuggestions.length > 0 && (<div className="live-dropdown">{paymentPartySuggestions.map((party, idx) => (<div key={idx} className="live-item" onClick={() => selectPaymentParty(party)}>{party}</div>))}</div>)}</div></div>
+        <div className="labeled-input"><label>Dr Amt</label><input name="drAmt" value={paymentFormData.drAmt} onChange={handlePaymentInput} /></div>
+        <div className="labeled-input"><label>Chq No</label><input name="chqNo" value={paymentFormData.chqNo} onChange={handlePaymentInput} /></div>
+        <div className="labeled-input"><label>Bank/Cash</label><select name="bankCash" value={paymentFormData.bankCash} onChange={handlePaymentInput}><option value="">Select</option><option value="Cash">Cash</option><option value="Bank">Bank</option></select></div>
+        <div className="labeled-input"><label>Cr Amt</label><input name="crAmt" value={paymentFormData.crAmt} onChange={handlePaymentInput} /></div>
+        <div className="labeled-input"><label>Chq Date</label><input type="date" name="chqDate" value={paymentFormData.chqDate} onChange={handlePaymentInput} /></div>
+        <div className="labeled-input"><label>Adjusted Ac1</label><input name="adjustedAc1" value={paymentFormData.adjustedAc1} onChange={handlePaymentInput} /></div>
+        <div className="labeled-input"><label>Dr/Cr</label><select name="drCr1" value={paymentFormData.drCr1} onChange={handlePaymentInput}><option>Dr</option><option>Cr</option></select></div>
+        <div className="labeled-input"><label>Clearing Date</label><input type="date" name="clearingDate" value={paymentFormData.clearingDate} onChange={handlePaymentInput} /></div>
+        <div className="labeled-input"><label>Adjusted Ac2</label><input name="adjustedAc2" value={paymentFormData.adjustedAc2} onChange={handlePaymentInput} /></div>
+        <div className="labeled-input"><label>Dr/Cr</label><select name="drCr2" value={paymentFormData.drCr2} onChange={handlePaymentInput}><option>Dr</option><option>Cr</option></select></div></div></div>
       <div className="form-section"><div className="section-header">Bill Wise Adjustment</div><div className="table-responsive"><table className="erp-table payment-table"><thead><tr><th>SrNo</th><th>Trn</th><th>TRNSERIES</th><th>Voucher No</th><th>Amount</th><th>Adjusted Amt</th><th>Balance Amt</th><th>New Adjusted</th></tr></thead>
         <tbody>{paymentItems.map((item, index) => (<tr key={item.id}><td>{item.srNo}</td><td><input value={item.trn} onChange={(e) => updatePaymentItem(index, "trn", e.target.value)} /></td><td><input value={item.trnSeries} onChange={(e) => updatePaymentItem(index, "trnSeries", e.target.value)} /></td>
-        <td><input value={item.voucherNo} onChange={(e) => updatePaymentItem(index, "voucherNo", e.target.value)} /></td><td><input value={item.amount} onChange={(e) => updatePaymentItem(index, "amount", e.target.value)} /></td>
-        <td><input value={item.adjustedAmt} onChange={(e) => updatePaymentItem(index, "adjustedAmt", e.target.value)} /></td><td><input value={item.balanceAmt} readOnly /></td>
-        <td><input value={item.newAdjusted} onChange={(e) => updatePaymentItem(index, "newAdjusted", e.target.value)} /></td></tr>))}</tbody></table></div><button className="btn-secondary" onClick={addPaymentRow} style={{ marginTop: "10px" }}>+ Add Row</button></div>
+          <td><input value={item.voucherNo} onChange={(e) => updatePaymentItem(index, "voucherNo", e.target.value)} /></td><td><input value={item.amount} onChange={(e) => updatePaymentItem(index, "amount", e.target.value)} /></td>
+          <td><input value={item.adjustedAmt} onChange={(e) => updatePaymentItem(index, "adjustedAmt", e.target.value)} /></td><td><input value={item.balanceAmt} readOnly /></td>
+          <td><input value={item.newAdjusted} onChange={(e) => updatePaymentItem(index, "newAdjusted", e.target.value)} /></td></tr>))}</tbody></table></div><button className="btn-secondary" onClick={addPaymentRow} style={{ marginTop: "10px" }}>+ Add Row</button></div>
       <div className="payment-bottom-grid"><div className="payment-rtgs-card"><h4>For RTGS Only</h4><div className="payment-rtgs-grid"><div className="labeled-input"><label>Party Bank Name</label><input name="partyBankName" value={paymentFormData.partyBankName} onChange={handlePaymentInput} /></div><div className="labeled-input"><label>Bank Account No</label><input name="bankAccountNo" value={paymentFormData.bankAccountNo} onChange={handlePaymentInput} /></div></div></div>
-      <div className="payment-summary-grid"><div className="summary-card"><label>Adjusted Amt</label><h3>{paymentSummary.adjustedAmt}</h3></div><div className="summary-card"><label>Balance Amt</label><h3>{paymentSummary.balanceAmt}</h3></div><div className="summary-card"><label>Total Dr Amt</label><h3>{paymentSummary.totalDrAmt}</h3></div><div className="summary-card"><label>Total Cr Amt</label><h3>{paymentSummary.totalCrAmt}</h3></div></div></div>
+        <div className="payment-summary-grid"><div className="summary-card"><label>Adjusted Amt</label><h3>{paymentSummary.adjustedAmt}</h3></div><div className="summary-card"><label>Balance Amt</label><h3>{paymentSummary.balanceAmt}</h3></div><div className="summary-card"><label>Total Dr Amt</label><h3>{paymentSummary.totalDrAmt}</h3></div><div className="summary-card"><label>Total Cr Amt</label><h3>{paymentSummary.totalCrAmt}</h3></div></div></div>
       <div className="form-actions"><button className="btn-primary" onClick={savePayment}>Save</button><button className="btn-secondary" onClick={() => setShowPaymentForm(false)}>Cancel</button></div>
     </div>
   );
@@ -1433,15 +1680,93 @@ const Transaction = ({
   const renderChequeBounceList = () => (
     <div className="master-section"><div className="grid-header"><h3>Cheque Bounce Management</h3><button className="btn-add-new btn-cheque-bounce" onClick={() => { resetChequeBounceForm(); setShowChequeBounceForm(true); }}>+ Add Cheque Bounce</button></div>
       <div className="table-responsive"><table className="erp-table"><thead><tr><th>Chq Bounce No.</th><th>Chq Bounce Date</th><th>Party Name</th><th>Cheque No.</th><th>Cheque Amount</th><th>Total Amount</th><th>Actions</th></tr></thead>
-        <tbody>{state.chequeBounces?.length === 0 ? (<tr><td colSpan="7" className="no-data">No Cheque Bounce Records Added</td></tr>) : (state.chequeBounces?.map((chequeBounce) => (<tr key={chequeBounce.id}><td>{chequeBounce.chqBounceNo || '-'}</td><td>{chequeBounce.chqBounceDate}</td><td>{chequeBounce.partyName}</td><td>{chequeBounce.chequeNo}</td><td>₹{parseFloat(chequeBounce.chequeAmt || 0).toFixed(2)}</td><td>₹{parseFloat(chequeBounce.totalAmt || 0).toFixed(2)}</td><td><button className="btn-edit" onClick={() => editChequeBounce(chequeBounce)}>Edit</button><button className="btn-delete" onClick={() => deleteChequeBounce(chequeBounce.id)}>Delete</button></td></tr>)))}</tbody></table></div></div>
+        <tbody>{state.chequeBounces?.length === 0 ? (<tr><td colSpan="7" className="no-data">No Cheque Bounce Records Added</td></tr>) : (state.chequeBounces?.map((chequeBounce) => (<tr key={chequeBounce.id}><td>{chequeBounce.chqBounceNo || '-'}</td><td>{chequeBounce.chqBounceDate}</td><td>{chequeBounce.partyName}</td><td>{chequeBounce.chequeNo}</td><td>₹{parseFloat(chequeBounce.chequeAmt || 0).toFixed(2)}</td><td>₹{parseFloat(chequeBounce.totalAmt || 0).toFixed(2)}</td> 
+       <td
+  className="action-buttons"
+  style={{
+    whiteSpace: 'nowrap',
+    position: 'sticky',
+    right: 0,
+    backgroundColor: '#ffffff',
+    zIndex: 10,
+    boxShadow: '-2px 0 5px -2px rgba(0,0,0,0.1)'
+  }}
+>
+
+  <button
+    className="btn-view"
+    onClick={() => {
+      setTransactionFormMode(prev => ({
+        ...prev,
+        ["Cheque Bounce"]: true
+      }));
+
+      editChequeBounce(chequeBounce);
+    }}
+    title="View"
+    style={{
+      background: '#10b981',
+      color: 'white',
+      border: 'none',
+      borderRadius: '4px',
+      padding: '4px 8px',
+      margin: '0 2px',
+      cursor: 'pointer'
+    }}
+  >
+    👁️ View
+  </button>
+
+  <button
+    className="btn-edit"
+    onClick={() => {
+      setTransactionFormMode(prev => ({
+        ...prev,
+        ["Cheque Bounce"]: true
+      }));
+
+      editChequeBounce(chequeBounce);
+    }}
+    title="Edit"
+    style={{
+      background: '#3b82f6',
+      color: 'white',
+      border: 'none',
+      borderRadius: '4px',
+      padding: '4px 8px',
+      margin: '0 2px',
+      cursor: 'pointer'
+    }}
+  >
+    ✏️ Edit
+  </button>
+
+  <button
+    className="btn-delete"
+    onClick={() => deleteChequeBounce(chequeBounce.id)}
+    title="Delete"
+    style={{
+      background: '#ef4444',
+      color: 'white',
+      border: 'none',
+      borderRadius: '4px',
+      padding: '4px 8px',
+      margin: '0 2px',
+      cursor: 'pointer'
+    }}
+  >
+    🗑 Delete
+  </button>
+
+</td> </tr>)))}</tbody></table></div></div>
   );
 
   // Cheque Bounce Form
   const renderChequeBounceForm = () => (
     <div className="master-section cheque-bounce-section"><div className="form-header"><h2 className="page-title-large">{editChequeBounceId ? 'Edit Cheque Bounce' : 'Cheque Bounce Entry'}</h2><button className="close-form-btn" onClick={() => { resetChequeBounceForm(); setShowChequeBounceForm(false); }}>×</button></div>
       <div className="form-section"><div className="cheque-bounce-form"><div className="form-row-4"><div className="form-field"><label>Chq Bounce Date :</label><input type="date" name="chqBounceDate" value={chequeBounceFormData.chqBounceDate} onChange={handleChequeBounceInput} /></div><div className="form-field"><label>Chq Bounce No. :</label><input type="text" name="chqBounceNo" value={chequeBounceFormData.chqBounceNo} onChange={handleChequeBounceInput} placeholder="Enter bounce number" /></div><div className="form-field"><label>Party Name :</label><select name="partyName" value={chequeBounceFormData.partyName} onChange={handleChequeBounceInput}><option value="">Select Party</option><option value="JV-21">JV-21</option><option value="ABC MEDICAL">ABC MEDICAL</option><option value="RATNAHIRA ENTERPRISES">RATNAHIRA ENTERPRISES</option></select></div><div className="form-field"><label>Cheque No. :</label><input type="text" name="chequeNo" value={chequeBounceFormData.chequeNo} onChange={handleChequeBounceInput} placeholder="Enter cheque number" /></div></div>
-      <div className="form-row-4"><div className="form-field"><label>Cheque Date :</label><input type="date" name="chequeDate" value={chequeBounceFormData.chequeDate} onChange={handleChequeBounceInput} /></div><div className="form-field"><label>Cheque Amt :</label><input type="number" name="chequeAmt" value={chequeBounceFormData.chequeAmt} onChange={handleChequeBounceInput} step="0.01" placeholder="Enter cheque amount" /></div><div className="form-field"><label>Chq Bounce Charges :</label><input type="number" name="chqBounceCharges" value={chequeBounceFormData.chqBounceCharges} onChange={handleChequeBounceInput} step="0.01" /></div><div className="form-field"><label>Total Amt :</label><input type="text" name="totalAmt" value={chequeBounceFormData.totalAmt} readOnly className="total-amount-field" /></div></div>
-      <div className="form-row-4"><div className="form-field"><label>Clearing Date :</label><input type="date" name="clearingDate" value={chequeBounceFormData.clearingDate} onChange={handleChequeBounceInput} /></div><div className="form-field"><label>Receipt No. :</label><input type="text" name="receiptNo" value={chequeBounceFormData.receiptNo} onChange={handleChequeBounceInput} placeholder="Enter receipt number" /></div><div className="form-field"><label>Bank Name :</label><select name="bankName" value={chequeBounceFormData.bankName} onChange={handleChequeBounceInput}><option value="">Select Bank</option><option value="HDFC BANK">HDFC BANK</option><option value="ICICI BANK">ICICI BANK</option><option value="SBI BANK">SBI BANK</option><option value="AXIS BANK">AXIS BANK</option><option value="YES BANK">YES BANK</option><option value="KOTAK BANK">KOTAK BANK</option><option value="PNB BANK">PNB BANK</option><option value="BOB BANK">BOB BANK</option><option value="CANARA BANK">CANARA BANK</option><option value="UNION BANK">UNION BANK</option></select></div><div className="form-field"><label>Narration :</label><input type="text" name="narration" value={chequeBounceFormData.narration} onChange={handleChequeBounceInput} placeholder="Enter narration details..." /></div></div></div></div>
+        <div className="form-row-4"><div className="form-field"><label>Cheque Date :</label><input type="date" name="chequeDate" value={chequeBounceFormData.chequeDate} onChange={handleChequeBounceInput} /></div><div className="form-field"><label>Cheque Amt :</label><input type="number" name="chequeAmt" value={chequeBounceFormData.chequeAmt} onChange={handleChequeBounceInput} step="0.01" placeholder="Enter cheque amount" /></div><div className="form-field"><label>Chq Bounce Charges :</label><input type="number" name="chqBounceCharges" value={chequeBounceFormData.chqBounceCharges} onChange={handleChequeBounceInput} step="0.01" /></div><div className="form-field"><label>Total Amt :</label><input type="text" name="totalAmt" value={chequeBounceFormData.totalAmt} readOnly className="total-amount-field" /></div></div>
+        <div className="form-row-4"><div className="form-field"><label>Clearing Date :</label><input type="date" name="clearingDate" value={chequeBounceFormData.clearingDate} onChange={handleChequeBounceInput} /></div><div className="form-field"><label>Receipt No. :</label><input type="text" name="receiptNo" value={chequeBounceFormData.receiptNo} onChange={handleChequeBounceInput} placeholder="Enter receipt number" /></div><div className="form-field"><label>Bank Name :</label><select name="bankName" value={chequeBounceFormData.bankName} onChange={handleChequeBounceInput}><option value="">Select Bank</option><option value="HDFC BANK">HDFC BANK</option><option value="ICICI BANK">ICICI BANK</option><option value="SBI BANK">SBI BANK</option><option value="AXIS BANK">AXIS BANK</option><option value="YES BANK">YES BANK</option><option value="KOTAK BANK">KOTAK BANK</option><option value="PNB BANK">PNB BANK</option><option value="BOB BANK">BOB BANK</option><option value="CANARA BANK">CANARA BANK</option><option value="UNION BANK">UNION BANK</option></select></div><div className="form-field"><label>Narration :</label><input type="text" name="narration" value={chequeBounceFormData.narration} onChange={handleChequeBounceInput} placeholder="Enter narration details..." /></div></div></div></div>
       <div className="form-actions"><button className="btn-save" onClick={saveChequeBounce}>{editChequeBounceId ? 'Update Cheque Bounce' : 'Save Cheque Bounce'}</button><button className="btn-cancel" onClick={() => { resetChequeBounceForm(); setShowChequeBounceForm(false); }}>Cancel</button></div>
     </div>
   );
@@ -1451,16 +1776,93 @@ const Transaction = ({
     <div className="master-section"><div className="grid-header"><h3>PDC Docket Management</h3><button className="btn-add-new btn-pdc-docket" onClick={() => { resetPDCDocketForm(); setShowPDCDocketForm(true); }}>+ Add PDC Docket</button></div>
       <div className="table-responsive"><table className="erp-table"><thead><tr><th>Doc VNo.</th><th>Deposit Date</th><th>From Date</th><th>To Date</th><th>Total Amount</th><th>Total Cheques</th><th>Actions</th></tr></thead>
         <tbody>{state.pdcDockets?.length === 0 ? (<tr><td colSpan="7" className="no-data">No PDC Dockets Added</td></tr>) : (state.pdcDockets?.map((docket) => (<tr key={docket.id}><td>{docket.header.docVNo || '-'}</td><td>{docket.header.depositDate}</td><td>{docket.header.fromDate}</td><td>{docket.header.toDate}</td><td>₹{parseFloat(docket.header.totalAmount || 0).toFixed(2)}</td><td>{docket.header.totalCheques}</td>
-        <td><button className="btn-edit" onClick={() => editPDCDocket(docket)}>Edit</button><button className="btn-delete" onClick={() => deletePDCDocket(docket.id)}>Delete</button></td></tr>)))}</tbody></table></div></div>
+           <td
+  className="action-buttons"
+  style={{
+    whiteSpace: 'nowrap',
+    position: 'sticky',
+    right: 0,
+    backgroundColor: '#ffffff',
+    zIndex: 10,
+    boxShadow: '-2px 0 5px -2px rgba(0,0,0,0.1)'
+  }}
+>
+
+  <button
+    className="btn-view"
+    onClick={() => {
+      setTransactionFormMode(prev => ({
+        ...prev,
+        ["PDC Docket"]: true
+      }));
+
+      editPDCDocket(docket);
+    }}
+    title="View"
+    style={{
+      background: '#10b981',
+      color: 'white',
+      border: 'none',
+      borderRadius: '4px',
+      padding: '4px 8px',
+      margin: '0 2px',
+      cursor: 'pointer'
+    }}
+  >
+    👁️ View
+  </button>
+
+  <button
+    className="btn-edit"
+    onClick={() => {
+      setTransactionFormMode(prev => ({
+        ...prev,
+        ["PDC Docket"]: true
+      }));
+
+      editPDCDocket(docket);
+    }}
+    title="Edit"
+    style={{
+      background: '#3b82f6',
+      color: 'white',
+      border: 'none',
+      borderRadius: '4px',
+      padding: '4px 8px',
+      margin: '0 2px',
+      cursor: 'pointer'
+    }}
+  >
+    ✏️ Edit
+  </button>
+
+  <button
+    className="btn-delete"
+    onClick={() => deletePDCDocket(docket.id)}
+    title="Delete"
+    style={{
+      background: '#ef4444',
+      color: 'white',
+      border: 'none',
+      borderRadius: '4px',
+      padding: '4px 8px',
+      margin: '0 2px',
+      cursor: 'pointer'
+    }}
+  >
+    🗑 Delete
+  </button>
+
+</td></tr>)))}</tbody></table></div></div>
   );
 
   // PDC Docket Form
   const renderPDCDocketForm = () => (
     <div className="master-section pdc-docket-section"><div className="form-header"><h2 className="page-title-large">{editPDCDocketId ? 'Edit PDC Docket' : 'Add PDC Docket'}</h2><button className="close-form-btn" onClick={() => { resetPDCDocketForm(); setShowPDCDocketForm(false); }}>×</button></div>
       <div className="form-section"><div className="pdc-header-grid"><div className="pdc-header-left"><div className="info-group"><label>Deposit Date:</label><input type="date" name="depositDate" value={pdcDocketFormData.depositDate} onChange={handlePDCDocketInput} /></div><div className="info-group"><label>Doc VNo.:</label><input type="text" name="docVNo" value={pdcDocketFormData.docVNo} onChange={handlePDCDocketInput} placeholder="Enter document number" /></div><div className="info-group"><label>From Date:</label><input type="date" name="fromDate" value={pdcDocketFormData.fromDate} onChange={handlePDCDocketInput} /></div><div className="info-group"><label>To Date:</label><input type="date" name="toDate" value={pdcDocketFormData.toDate} onChange={handlePDCDocketInput} /></div></div>
-      <div className="pdc-header-right"><div className="info-group"><label>House Bank:</label><select name="houseBank" value={pdcDocketFormData.houseBank} onChange={handlePDCDocketInput}><option value="SYG">SYG</option><option value="HDFC">HDFC</option><option value="ICICI">ICICI</option><option value="SBI">SBI</option></select></div><div className="info-group"><label>Bank Name:</label><input type="text" name="bankName" value={pdcDocketFormData.bankName} onChange={handlePDCDocketInput} placeholder="Enter bank name" /></div><div className="info-group full-width"><label>Narr:</label><textarea name="narration" value={pdcDocketFormData.narration} onChange={handlePDCDocketInput} rows="2" placeholder="Enter narration..." /></div></div></div>
-      <div className="pdc-clearing-grid"><div className="info-group"><label>Clearing Type:</label><select name="clearingType" value={pdcDocketFormData.clearingType} onChange={handlePDCDocketInput}><option value="SAME BANK">SAME BANK</option><option value="OTHER BANK">OTHER BANK</option><option value="OUTSTATION">OUTSTATION</option></select></div><div className="info-group"><label>Clearing Date:</label><input type="date" name="clearingDate" value={pdcDocketFormData.clearingDate} onChange={handlePDCDocketInput} /></div></div>
-      <div className="pdc-summary"><div className="summary-item"><label>Total Amount:</label><h3>₹{pdcDocketFormData.totalAmount}</h3></div><div className="summary-item"><label>Total Cheques:</label><h3>{pdcDocketFormData.totalCheques}</h3></div></div></div>
+        <div className="pdc-header-right"><div className="info-group"><label>House Bank:</label><select name="houseBank" value={pdcDocketFormData.houseBank} onChange={handlePDCDocketInput}><option value="SYG">SYG</option><option value="HDFC">HDFC</option><option value="ICICI">ICICI</option><option value="SBI">SBI</option></select></div><div className="info-group"><label>Bank Name:</label><input type="text" name="bankName" value={pdcDocketFormData.bankName} onChange={handlePDCDocketInput} placeholder="Enter bank name" /></div><div className="info-group full-width"><label>Narr:</label><textarea name="narration" value={pdcDocketFormData.narration} onChange={handlePDCDocketInput} rows="2" placeholder="Enter narration..." /></div></div></div>
+        <div className="pdc-clearing-grid"><div className="info-group"><label>Clearing Type:</label><select name="clearingType" value={pdcDocketFormData.clearingType} onChange={handlePDCDocketInput}><option value="SAME BANK">SAME BANK</option><option value="OTHER BANK">OTHER BANK</option><option value="OUTSTATION">OUTSTATION</option></select></div><div className="info-group"><label>Clearing Date:</label><input type="date" name="clearingDate" value={pdcDocketFormData.clearingDate} onChange={handlePDCDocketInput} /></div></div>
+        <div className="pdc-summary"><div className="summary-item"><label>Total Amount:</label><h3>₹{pdcDocketFormData.totalAmount}</h3></div><div className="summary-item"><label>Total Cheques:</label><h3>{pdcDocketFormData.totalCheques}</h3></div></div></div>
       <div className="form-actions"><button className="btn-save" onClick={savePDCDocket}>Save</button><button className="btn-cancel" onClick={() => { resetPDCDocketForm(); setShowPDCDocketForm(false); }}>Cancel</button></div>
     </div>
   );
@@ -1470,14 +1872,91 @@ const Transaction = ({
     <div className="master-section"><div className="grid-header"><h3>Bank Deposit/Withdrawal</h3><button className="btn-add-new btn-contra" onClick={() => { resetContraForm(); setShowContraForm(true); }}>+ Add Transaction</button></div>
       <div className="table-responsive"><table className="erp-table"><thead><tr><th>Tran VNo.</th><th>Date</th><th>Type</th><th>Amount</th><th>Narration</th><th>Actions</th></tr></thead>
         <tbody>{state.contra?.length === 0 ? (<tr><td colSpan="6" className="no-data">No Transactions Added</td></tr>) : (state.contra?.map((transaction) => (<tr key={transaction.id}><td>{transaction.tranVNo || '-'}</td><td>{transaction.transactionDate}</td><td>{transaction.transactionType}</td><td>₹{parseFloat(transaction.amount || 0).toFixed(2)}</td><td>{transaction.narration || '-'}</td>
-        <td><button className="btn-edit" onClick={() => editContra(transaction)}>Edit</button><button className="btn-delete" onClick={() => deleteContra(transaction.id)}>Delete</button></td></tr>)))}</tbody></table></div></div>
+           <td
+  className="action-buttons"
+  style={{
+    whiteSpace: 'nowrap',
+    position: 'sticky',
+    right: 0,
+    backgroundColor: '#ffffff',
+    zIndex: 10,
+    boxShadow: '-2px 0 5px -2px rgba(0,0,0,0.1)'
+  }}
+>
+
+  <button
+    className="btn-view"
+    onClick={() => {
+      setTransactionFormMode(prev => ({
+        ...prev,
+        Contra: true
+      }));
+
+      editContra(transaction);
+    }}
+    title="View"
+    style={{
+      background: '#10b981',
+      color: 'white',
+      border: 'none',
+      borderRadius: '4px',
+      padding: '4px 8px',
+      margin: '0 2px',
+      cursor: 'pointer'
+    }}
+  >
+    👁️ View
+  </button>
+
+  <button
+    className="btn-edit"
+    onClick={() => {
+      setTransactionFormMode(prev => ({
+        ...prev,
+        Contra: true
+      }));
+
+      editContra(transaction);
+    }}
+    title="Edit"
+    style={{
+      background: '#3b82f6',
+      color: 'white',
+      border: 'none',
+      borderRadius: '4px',
+      padding: '4px 8px',
+      margin: '0 2px',
+      cursor: 'pointer'
+    }}
+  >
+    ✏️ Edit
+  </button>
+
+  <button
+    className="btn-delete"
+    onClick={() => deleteContra(transaction.id)}
+    title="Delete"
+    style={{
+      background: '#ef4444',
+      color: 'white',
+      border: 'none',
+      borderRadius: '4px',
+      padding: '4px 8px',
+      margin: '0 2px',
+      cursor: 'pointer'
+    }}
+  >
+    🗑 Delete
+  </button>
+
+</td></tr>)))}</tbody></table></div></div>
   );
 
   // Contra Form
   const renderContraForm = () => (
     <div className="master-section contra-section"><div className="form-header"><h2 className="page-title-large">{editContraId ? 'Edit Bank Deposit/Withdrawal' : 'Add Bank Deposit/Withdrawal'}</h2><button className="close-form-btn" onClick={() => { resetContraForm(); setShowContraForm(false); }}>×</button></div>
       <div className="form-section"><div className="contra-form"><div className="form-row-3"><div className="form-field"><label>Transaction Date :</label><input type="date" name="transactionDate" value={contraFormData.transactionDate} onChange={handleContraInput} /></div><div className="form-field"><label>Tran VNo. :</label><input type="text" name="tranVNo" value={contraFormData.tranVNo} onChange={handleContraInput} placeholder="Enter number" /></div><div className="form-field"><label>Transaction Type :</label><select name="transactionType" value={contraFormData.transactionType} onChange={handleContraInput}><option value="CASH DEPOSIT">CASH DEPOSIT</option><option value="CASH WITHDRAWAL">CASH WITHDRAWAL</option><option value="CHEQUE DEPOSIT">CHEQUE DEPOSIT</option><option value="CHEQUE WITHDRAWAL">CHEQUE WITHDRAWAL</option><option value="TRANSFER">TRANSFER</option></select></div></div>
-      <div className="form-row-3"><div className="form-field"><label>Amount :</label><input type="number" name="amount" value={contraFormData.amount} onChange={handleContraInput} step="0.01" placeholder="Enter amount" /></div><div className="form-field"><label>Narration :</label><input type="text" name="narration" value={contraFormData.narration} onChange={handleContraInput} placeholder="Enter narration" /></div><div className="form-field"></div></div></div></div>
+        <div className="form-row-3"><div className="form-field"><label>Amount :</label><input type="number" name="amount" value={contraFormData.amount} onChange={handleContraInput} step="0.01" placeholder="Enter amount" /></div><div className="form-field"><label>Narration :</label><input type="text" name="narration" value={contraFormData.narration} onChange={handleContraInput} placeholder="Enter narration" /></div><div className="form-field"></div></div></div></div>
       <div className="form-actions"><button className="btn-save" onClick={saveContra}>{editContraId ? 'Update' : 'Save'}</button><button className="btn-cancel" onClick={() => { resetContraForm(); setShowContraForm(false); }}>Cancel</button></div>
     </div>
   );
@@ -1487,7 +1966,84 @@ const Transaction = ({
     <div className="master-section"><div className="grid-header"><h3>Collection Voucher</h3><button className="btn-add-new btn-collection-voucher" onClick={() => { resetCollectionVoucherForm(); setShowCollectionVoucherForm(true); }}>+ Add Collection Voucher</button></div>
       <div className="table-responsive"><table className="erp-table"><thead><tr><th>Col VNo.</th><th>Collection Date</th><th>Collection Type</th><th>Total Amount</th><th>Total Bills</th><th>Actions</th></tr></thead>
         <tbody>{state.collectionVouchers?.length === 0 ? (<tr><td colSpan="6" className="no-data">No Collection Vouchers Added</td></tr>) : (state.collectionVouchers?.map((voucher) => (<tr key={voucher.id}><td>{voucher.colVNo || '-'}</td><td>{voucher.collectionDate}</td><td>{voucher.collectionType}</td><td>₹{parseFloat(voucher.totalCollectionAmount || 0).toFixed(2)}</td><td>{voucher.totalBills || 0}</td>
-        <td><button className="btn-edit" onClick={() => editCollectionVoucher(voucher)}>Edit</button><button className="btn-delete" onClick={() => deleteCollectionVoucher(voucher.id)}>Delete</button></td></tr>)))}</tbody></table></div></div>
+          <td
+  className="action-buttons"
+  style={{
+    whiteSpace: 'nowrap',
+    position: 'sticky',
+    right: 0,
+    backgroundColor: '#ffffff',
+    zIndex: 10,
+    boxShadow: '-2px 0 5px -2px rgba(0,0,0,0.1)'
+  }}
+>
+
+  <button
+    className="btn-view"
+    onClick={() => {
+      setTransactionFormMode(prev => ({
+        ...prev,
+        ["Collection Voucher"]: true
+      }));
+
+      editCollectionVoucher(voucher);
+    }}
+    title="View"
+    style={{
+      background: '#10b981',
+      color: 'white',
+      border: 'none',
+      borderRadius: '4px',
+      padding: '4px 8px',
+      margin: '0 2px',
+      cursor: 'pointer'
+    }}
+  >
+    👁️ View
+  </button>
+
+  <button
+    className="btn-edit"
+    onClick={() => {
+      setTransactionFormMode(prev => ({
+        ...prev,
+        ["Collection Voucher"]: true
+      }));
+
+      editCollectionVoucher(voucher);
+    }}
+    title="Edit"
+    style={{
+      background: '#3b82f6',
+      color: 'white',
+      border: 'none',
+      borderRadius: '4px',
+      padding: '4px 8px',
+      margin: '0 2px',
+      cursor: 'pointer'
+    }}
+  >
+    ✏️ Edit
+  </button>
+
+  <button
+    className="btn-delete"
+    onClick={() => deleteCollectionVoucher(voucher.id)}
+    title="Delete"
+    style={{
+      background: '#ef4444',
+      color: 'white',
+      border: 'none',
+      borderRadius: '4px',
+      padding: '4px 8px',
+      margin: '0 2px',
+      cursor: 'pointer'
+    }}
+  >
+    🗑 Delete
+  </button>
+
+</td></tr>)))}</tbody></table></div></div>
   );
 
   // Collection Voucher Form
@@ -1526,12 +2082,12 @@ const Transaction = ({
                 </div>
               </div>
               <div className="select-bills-button-wrapper">
-                <button 
+                <button
                   className="btn-select-bills-modal"
                   onClick={() => openSelectionModal(collectionVoucherFormData.collectionType)}
                 >
-                  Select {collectionVoucherFormData.collectionType === "Bill wise" ? "Bills" : 
-                           collectionVoucherFormData.collectionType === "Salesman wise" ? "Salesmen" : "Areas"}
+                  Select {collectionVoucherFormData.collectionType === "Bill wise" ? "Bills" :
+                    collectionVoucherFormData.collectionType === "Salesman wise" ? "Salesmen" : "Areas"}
                 </button>
               </div>
             </div>
@@ -1579,10 +2135,10 @@ const Transaction = ({
                               <td className="amount-cell">₹{item.oldCollection.toFixed(2)}</td>
                               <td className="amount-cell">₹{item.balance.toFixed(2)}</td>
                               <td>
-                                <input 
-                                  type="number" 
+                                <input
+                                  type="number"
                                   className="collection-input"
-                                  value={item.collectionAmt || 0} 
+                                  value={item.collectionAmt || 0}
                                   onChange={(e) => {
                                     const newBillItems = [...billItems];
                                     newBillItems[originalIndex].collectionAmt = parseFloat(e.target.value) || 0;
@@ -1593,10 +2149,10 @@ const Transaction = ({
                                 />
                               </td>
                               <td>
-                                <input 
-                                  type="number" 
+                                <input
+                                  type="number"
                                   className="discount-input"
-                                  value={item.discount || 0} 
+                                  value={item.discount || 0}
                                   onChange={(e) => {
                                     const newBillItems = [...billItems];
                                     newBillItems[originalIndex].discount = parseFloat(e.target.value) || 0;
@@ -1607,17 +2163,17 @@ const Transaction = ({
                                 />
                               </td>
                               <td>
-                                <input 
-                                  type="text" 
-                                  className="rec-input" 
-                                  placeholder="Series" 
+                                <input
+                                  type="text"
+                                  className="rec-input"
+                                  placeholder="Series"
                                 />
                               </td>
                               <td>
-                                <input 
-                                  type="text" 
-                                  className="rec-input" 
-                                  placeholder="VNo" 
+                                <input
+                                  type="text"
+                                  className="rec-input"
+                                  placeholder="VNo"
                                 />
                               </td>
                             </tr>
@@ -1675,10 +2231,10 @@ const Transaction = ({
                             <td className="amount-cell">₹{item.oldCollection.toFixed(2)}</td>
                             <td className="amount-cell">₹{item.balance.toFixed(2)}</td>
                             <td>
-                              <input 
-                                type="number" 
+                              <input
+                                type="number"
                                 className="collection-input"
-                                value={item.collectionAmt || 0} 
+                                value={item.collectionAmt || 0}
                                 onChange={(e) => {
                                   const newBillItems = [...billItems];
                                   newBillItems[index].collectionAmt = parseFloat(e.target.value) || 0;
@@ -1689,10 +2245,10 @@ const Transaction = ({
                               />
                             </td>
                             <td>
-                              <input 
-                                type="number" 
+                              <input
+                                type="number"
                                 className="discount-input"
-                                value={item.discount || 0} 
+                                value={item.discount || 0}
                                 onChange={(e) => {
                                   const newBillItems = [...billItems];
                                   newBillItems[index].discount = parseFloat(e.target.value) || 0;
@@ -1703,17 +2259,17 @@ const Transaction = ({
                               />
                             </td>
                             <td>
-                              <input 
-                                type="text" 
-                                className="rec-input" 
-                                placeholder="Series" 
+                              <input
+                                type="text"
+                                className="rec-input"
+                                placeholder="Series"
                               />
                             </td>
                             <td>
-                              <input 
-                                type="text" 
-                                className="rec-input" 
-                                placeholder="VNo" 
+                              <input
+                                type="text"
+                                className="rec-input"
+                                placeholder="VNo"
                               />
                             </td>
                           </tr>
@@ -1770,10 +2326,10 @@ const Transaction = ({
                             <td className="amount-cell">₹{item.oldCollection.toFixed(2)}</td>
                             <td className="amount-cell">₹{item.balance.toFixed(2)}</td>
                             <td>
-                              <input 
-                                type="number" 
+                              <input
+                                type="number"
                                 className="collection-input"
-                                value={item.collectionAmt || 0} 
+                                value={item.collectionAmt || 0}
                                 onChange={(e) => {
                                   const newBillItems = [...billItems];
                                   newBillItems[index].collectionAmt = parseFloat(e.target.value) || 0;
@@ -1784,10 +2340,10 @@ const Transaction = ({
                               />
                             </td>
                             <td>
-                              <input 
-                                type="number" 
+                              <input
+                                type="number"
                                 className="discount-input"
-                                value={item.discount || 0} 
+                                value={item.discount || 0}
                                 onChange={(e) => {
                                   const newBillItems = [...billItems];
                                   newBillItems[index].discount = parseFloat(e.target.value) || 0;
@@ -1798,17 +2354,17 @@ const Transaction = ({
                               />
                             </td>
                             <td>
-                              <input 
-                                type="text" 
-                                className="rec-input" 
-                                placeholder="Series" 
+                              <input
+                                type="text"
+                                className="rec-input"
+                                placeholder="Series"
                               />
                             </td>
                             <td>
-                              <input 
-                                type="text" 
-                                className="rec-input" 
-                                placeholder="VNo" 
+                              <input
+                                type="text"
+                                className="rec-input"
+                                placeholder="VNo"
                               />
                             </td>
                           </tr>
@@ -1849,30 +2405,30 @@ const Transaction = ({
           <button className="btn-cancel" onClick={() => { resetCollectionVoucherForm(); setShowCollectionVoucherForm(false); }}>Cancel</button>
         </div>
       </div>
-      
+
       {/* Bill Selection Modal - Only show for Bill wise */}
       {collectionVoucherFormData.collectionType === "Bill wise" && (
-        <BillSelectionModal 
+        <BillSelectionModal
           isOpen={showBillSelectionModal}
           onClose={closeSelectionModal}
           bills={getDummyBillsData()}
           onConfirm={handleBillSelectionConfirm}
         />
       )}
-      
+
       {/* Salesman Selection Modal */}
       {collectionVoucherFormData.collectionType === "Salesman wise" && (
-        <SalesmanSelectionModal 
+        <SalesmanSelectionModal
           isOpen={showSalesmanSelectionModal}
           onClose={closeSelectionModal}
           salesmen={getUniqueSalesmen()}
           onConfirm={handleSalesmanSelectionConfirm}
         />
       )}
-      
+
       {/* Area Selection Modal */}
       {collectionVoucherFormData.collectionType === "Area wise" && (
-        <AreaSelectionModal 
+        <AreaSelectionModal
           isOpen={showAreaSelectionModal}
           onClose={closeSelectionModal}
           areas={getUniqueAreas()}
@@ -1885,20 +2441,49 @@ const Transaction = ({
   // Main Render
   return (
     <div className="transaction-page">
-      {activeTransaction === "Receipt" && !showReceiptForm && renderReceiptList()}
-      {activeTransaction === "Receipt" && showReceiptForm && renderReceiptForm()}
-      {activeTransaction === "Payment" && !showPaymentForm && renderPaymentList()}
-      {activeTransaction === "Payment" && showPaymentForm && renderPaymentForm()}
-      {activeTransaction === "Journal Voucher" && !showJournalForm && renderJournalList()}
-      {activeTransaction === "Journal Voucher" && showJournalForm && renderJournalForm()}
-      {activeTransaction === "Cheque Bounce" && !showChequeBounceForm && renderChequeBounceList()}
-      {activeTransaction === "Cheque Bounce" && showChequeBounceForm && renderChequeBounceForm()}
-      {activeTransaction === "PDC Docket" && !showPDCDocketForm && renderPDCDocketList()}
-      {activeTransaction === "PDC Docket" && showPDCDocketForm && renderPDCDocketForm()}
-      {activeTransaction === "Contra" && !showContraForm && renderContraList()}
-      {activeTransaction === "Contra" && showContraForm && renderContraForm()}
-      {activeTransaction === "Collection Voucher" && !showCollectionVoucherForm && renderCollectionVoucherList()}
-      {activeTransaction === "Collection Voucher" && showCollectionVoucherForm && renderCollectionVoucherForm()}
+
+      {activeTransaction === "Receipt" &&
+        (transactionFormMode["Receipt"]
+          ? renderReceiptForm()
+          : renderReceiptList())
+      }
+
+      {activeTransaction === "Payment" &&
+        (transactionFormMode["Payment"]
+          ? renderPaymentForm()
+          : renderPaymentList())
+      }
+
+      {activeTransaction === "Journal Voucher" &&
+        (transactionFormMode["Journal Voucher"]
+          ? renderJournalForm()
+          : renderJournalList())
+      }
+
+      {activeTransaction === "Cheque Bounce" &&
+        (transactionFormMode["Cheque Bounce"]
+          ? renderChequeBounceForm()
+          : renderChequeBounceList())
+      }
+
+      {activeTransaction === "PDC Docket" &&
+        (transactionFormMode["PDC Docket"]
+          ? renderPDCDocketForm()
+          : renderPDCDocketList())
+      }
+
+      {activeTransaction === "Contra" &&
+        (transactionFormMode["Contra"]
+          ? renderContraForm()
+          : renderContraList())
+      }
+
+      {activeTransaction === "Collection Voucher" &&
+        (transactionFormMode["Collection Voucher"]
+          ? renderCollectionVoucherForm()
+          : renderCollectionVoucherList())
+      }
+
     </div>
   );
 };
