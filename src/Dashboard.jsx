@@ -37,6 +37,7 @@ const Dashboard = () => {
   // Batch  State
   const [batches, setBatches] = useState([]);
   const [showBatchModal, setShowBatchModal] = useState(false);
+  const [existingBatches, setExistingBatches] = useState([]);
 
   const [currentBatchRow, setCurrentBatchRow] = useState(null);
 
@@ -3058,51 +3059,52 @@ const saveVoucherToList = (type, data) => {
 
   };
 
-  const handlePurchaseProductSelect = (index, product) => {
-    updatePurchaseItem(index, 'product', `${product.code} - ${product.name}`);
-    updatePurchaseItem(index, 'productId', product.id);
-    updatePurchaseItem(index, 'mrp', product.mrp || '');
-    updatePurchaseItem(index, 'purRate', product.Rate_Per_Unit || '');
-    updatePurchaseItem(index, 'tax', product.gst || '');
-    updatePurchaseItem(index, 'unitId', product.basicUnit || 'PCS');
-    updatePurchaseItem(index, 'salesRate', product.salesRate || '');
+ const handlePurchaseProductSelect = (index, product) => {
+  updatePurchaseItem(index, 'product', `${product.code} - ${product.name}`);
+  updatePurchaseItem(index, 'productId', product.id);
+  updatePurchaseItem(index, 'mrp', product.mrp || '');
+  updatePurchaseItem(index, 'purRate', product.Rate_Per_Unit || '');
+  updatePurchaseItem(index, 'tax', product.gst || '');
+  updatePurchaseItem(index, 'unitId', product.basicUnit || 'PCS');
+  updatePurchaseItem(index, 'salesRate', product.salesRate || '');
 
-    setShowPurchaseProductList(false);
-    setCurrentPurchaseProductIndex(-1);
+  setShowPurchaseProductList(false);
+  setCurrentPurchaseProductIndex(-1);
 
-    // Check if product has existing batches
-    const productBatches = batches.filter(b => b.productId === product.id);
+  // Check if product has existing batches
+  const productBatches = batches.filter(b => b.productId === product.id);
 
-    if (productBatches.length > 0) {
-      // Show existing batch modal
-      setBatchMode('existing');
-      setCurrentBatchRow(index);
-      setShowBatchModal(true);
-    } else {
-      // Show new batch modal
-      setBatchMode('new');
-      setCurrentBatchRow(index);
-      setBatchForm({
-        batchNo: '',
-        mfgDate: '',
-        expDate: '',
-        mrp: product.mrp || '',
-        purchaseRate: product.Rate_Per_Unit || '',
-        salesRate: product.salesRate || product.mrp || '',
-        stockQty: '',
-        boxPack: '1',
-        ratePerUnit: '1',
-        previousPurchaseRate: '',
-        quantity: '1'
-      });
-      setShowBatchModal(true);
-    }
+  if (productBatches.length > 0) {
+    // Show existing batch modal with proper data
+    setBatchMode('existing');
+    setCurrentBatchRow(index);
+    setExistingBatches(productBatches); // Store the batches for display
+    setShowBatchModal(true);
+  } else {
+    // Show new batch modal
+    setBatchMode('new');
+    setCurrentBatchRow(index);
+    setBatchForm({
+      batchNo: '',
+      mfgDate: '',
+      expDate: '',
+      mrp: product.mrp || '',
+      purchaseRate: product.Rate_Per_Unit || '',
+      salesRate: product.salesRate || product.mrp || '',
+      stockQty: '',
+      boxPack: '1',
+      ratePerUnit: '1',
+      previousPurchaseRate: '',
+      quantity: '1'
+    });
+    setShowBatchModal(true);
+  }
 
-    setTimeout(() => {
-      const qtyInput = document.querySelector(`[data-purchase-field="quantity"][data-purchase-index="${index}"]`);
-      if (qtyInput) qtyInput.focus();
-    }, 50);
-  };
+  setTimeout(() => {
+    const qtyInput = document.querySelector(`[data-purchase-field="quantity"][data-purchase-index="${index}"]`);
+    if (qtyInput) qtyInput.focus();
+  }, 50);
+};
   const openBatchModal = (index) => {
     console.log("BATCH BUTTON CLICKED");
     setCurrentBatchRow(index);
@@ -3150,25 +3152,29 @@ const saveVoucherToList = (type, data) => {
     setShowBatchModal(false);
   };
 
-  // Update savePurchase function
   const savePurchase = () => {
-    const purchaseData = {
-      ...purchaseFormData,
-      items: purchaseItems,
-      amount: purchaseFormData.netAmt,
-      partyName: purchaseFormData.supplier,
-      partyCode: purchaseFormData.supplier?.substring(0, 10),
-      branchName: purchaseFormData.storageLocation
-    };
-    console.log('Saving purchase:', purchaseData);
-
-    // Add to purchase list
-    saveVoucherToList('Purchase', purchaseData);
-
-    alert('Purchase saved successfully!');
-    closeForm();
+  const selectedSupplier = otherAccounts.find(acc => 
+    acc.accountName === purchaseFormData.supplier && 
+    acc.accountGroup === 'SUNDRY CREDITORS'
+  );
+  
+  const purchaseData = {
+    ...purchaseFormData,
+    items: purchaseItems,
+    amount: purchaseFormData.netAmt,
+    partyName: purchaseFormData.supplier,
+    partyCode: selectedSupplier?.accountCode || purchaseFormData.supplier?.substring(0, 10),
+    partyGroup: 'SUNDRY CREDITORS', // Add this to identify supplier type
+    branchName: purchaseFormData.storageLocation
   };
+  console.log('Saving purchase:', purchaseData);
 
+  // Add to purchase list
+  saveVoucherToList('Purchase', purchaseData);
+
+  alert('Purchase saved successfully!');
+  closeForm();
+};
 
   // ==================== CREDIT NOTE FUNCTIONS ====================
   const handleCreditNoteInputChange = (e) => {
@@ -5651,171 +5657,734 @@ const saveVoucherToList = (type, data) => {
       </div>
     );
   };
-  const renderVoucherList = (title, data, columns) => {
-    const standardColumns = [
-      { key: 'date', label: 'Date' },
-      { key: 'billSeries', label: 'Bill Series' },
-      { key: 'billNumber', label: 'Bill Number' },
-      { key: 'billType', label: 'Bill Type' },
-      { key: 'partyCode', label: 'Party Code' },
-      { key: 'partyName', label: 'Party Name' },
-      { key: 'branchName', label: 'Branch Name' },
-      { key: 'amount', label: 'Amount (₹)' },
-      { key: 'loadSeries', label: 'Load Series' },
-      { key: 'loadNumber', label: 'Load Number' },
-      { key: 'status', label: 'Status' },
-      { key: 'actions', label: 'Actions' }
-    ];
+const renderVoucherList = (title, data, columns) => {
+  // Calculate maximum content width for each column dynamically
+  const calculateColumnWidths = (items) => {
+    const widths = {
+      date: { min: 100, max: 120 },
+      billSeries: { min: 90, max: 110 },
+      billNumber: { min: 100, max: 140 },
+      billType: { min: 80, max: 100 },
+      partyCode: { min: 110, max: 180 },
+      partyName: { min: 180, max: 350 },
+      branchName: { min: 160, max: 300 },
+      amount: { min: 120, max: 150 },
+      loadSeries: { min: 90, max: 110 },
+      loadNumber: { min: 100, max: 140 },
+      status: { min: 100, max: 120 },
+      actions: { width: 300 } // Fixed width for actions
+    };
 
-    const transformedData = data.map(item => ({
-      id: item.id,
-      date: item.billDate || item.invoiceDate || item.vDate || item.date || '-',
-      billSeries: item.billSeries || item.BillSeries || '-',
-      billNumber: item.billNo || item.invoiceNumber || item.vNo || '-',
-      billType: item.billType || '-',
-      partyCode: item.partyCode || item.supplierCode || '-',
-      partyName: item.party || item.supplier || item.partyName || '-',
-      branchName: item.branchName || item.area || item.storageLocation || '-',
-      amount: parseFloat(item.amount) || parseFloat(item.netAmt) || parseFloat(item.totalAmount) || 0,
-      loadSeries: item.loadSeries || '-',
-      loadNumber: item.loadNumber || '-',
-      status: item.status || (item.amount ? 'Pending' : 'Draft'),
-      originalItem: item
-    }));
+    // Calculate actual widths based on content
+    items.forEach(item => {
+      if (widths.date && item.date && item.date.length * 8 > widths.date.max) widths.date.max = item.date.length * 8;
+      if (widths.billSeries && item.billSeries !== '-' && item.billSeries.length * 8 > widths.billSeries.max) widths.billSeries.max = item.billSeries.length * 8;
+      if (widths.billNumber && item.billNumber !== '-' && item.billNumber.length * 8 > widths.billNumber.max) widths.billNumber.max = item.billNumber.length * 8;
+      if (widths.partyCode && item.partyCode !== '-' && item.partyCode.length * 8 > widths.partyCode.max) widths.partyCode.max = item.partyCode.length * 8;
+      if (widths.partyName && item.partyName !== '-' && item.partyName.length * 9 > widths.partyName.max) widths.partyName.max = Math.min(item.partyName.length * 9, 450);
+      if (widths.branchName && item.branchName !== '-' && item.branchName.length * 9 > widths.branchName.max) widths.branchName.max = Math.min(item.branchName.length * 9, 380);
+      if (widths.amount && item.amount.toString().length * 10 > widths.amount.max) widths.amount.max = item.amount.toString().length * 10;
+    });
 
-    const getStatusBadgeClass = (status) => {
-      const statusLower = (status || '').toLowerCase();
-      if (statusLower === 'paid' || statusLower === 'approved' || statusLower === 'received' || statusLower === 'settled') {
-        return 'status-badge status-success';
-      } else if (statusLower === 'pending' || statusLower === 'draft') {
-        return 'status-badge status-warning';
-      } else if (statusLower === 'cancelled' || statusLower === 'rejected') {
-        return 'status-badge status-danger';
+    return widths;
+  };
+
+  const standardColumns = [
+    { key: 'date', label: 'Date' },
+    { key: 'billSeries', label: 'Bill Series' },
+    { key: 'billNumber', label: 'Bill Number' },
+    { key: 'billType', label: 'Bill Type' },
+    { key: 'partyCode', label: 'Party Code' },
+    { key: 'partyName', label: 'Party Name' },
+    { key: 'branchName', label: 'Branch Name' },
+    { key: 'amount', label: 'Amount (₹)' },
+    { key: 'loadSeries', label: 'Load Series' },
+    { key: 'loadNumber', label: 'Load Number' },
+    { key: 'status', label: 'Status' },
+    { key: 'actions', label: 'Actions' }
+  ];
+
+  const transformedData = data.map(item => ({
+    id: item.id,
+    date: item.billDate || item.invoiceDate || item.vDate || item.date || '-',
+    billSeries: item.billSeries || item.BillSeries || '-',
+    billNumber: item.billNo || item.invoiceNumber || item.vNo || '-',
+    billType: item.billType || '-',
+    partyCode: item.partyCode || item.supplierCode || '-',
+    partyName: item.party || item.supplier || item.partyName || '-',
+    branchName: item.branchName || item.area || item.storageLocation || '-',
+    amount: parseFloat(item.amount) || parseFloat(item.netAmt) || parseFloat(item.totalAmount) || 0,
+    loadSeries: item.loadSeries || '-',
+    loadNumber: item.loadNumber || '-',
+    status: item.status || (item.amount ? 'Pending' : 'Draft'),
+    originalItem: item
+  }));
+
+  // Calculate dynamic column widths
+  const columnWidths = calculateColumnWidths(transformedData);
+
+  const getStatusBadgeClass = (status) => {
+    const statusLower = (status || '').toLowerCase();
+    if (statusLower === 'paid' || statusLower === 'approved' || statusLower === 'received' || statusLower === 'settled') {
+      return 'status-badge status-success';
+    } else if (statusLower === 'pending' || statusLower === 'draft') {
+      return 'status-badge status-warning';
+    } else if (statusLower === 'cancelled' || statusLower === 'rejected') {
+      return 'status-badge status-danger';
+    }
+    return 'status-badge status-info';
+  };
+
+  const getType = () => {
+    if (title.includes('Sales')) return 'Sales';
+    if (title.includes('Purchase')) return 'Purchase';
+    if (title.includes('Credit Note')) return 'Credit Note';
+    if (title.includes('Debit Note')) return 'Debit Note';
+    return title;
+  };
+
+  const type = getType();
+
+  // Generate professional invoice preview HTML for A4 Portrait
+  const generateInvoicePreviewHTML = (item) => {
+    const data = item.originalItem;
+    
+    // Invoice data structure based on the provided image
+    const invoiceData = {
+      firmDetails: {
+        name: "RAJKUMAR PENURKAR",
+        address: "S NO 58 SAI NAGAR GALLI NO 4 NEAR SHANKAR MANDIR GOUKLNAGER KONDHWA",
+        phone: "9011585811 / 9011585811",
+        gstin: "27BCRPS8746P1Z7",
+        fssai: "11518035000600"
+      },
+      receiverDetails: {
+        name: "CHITAMANI MEDICAL",
+        address: "SHOP NO 15 GROUND FLOOR HEERABAUG BUSINESS CENTRE",
+        gstin: "27AA0FC4285D1ZB",
+        state: "MAHARASHTRA STATE CODE:27",
+        city: "SHUKRWAR PETH PUNE 2",
+        phone: "9011585811"
+      },
+      consigneeDetails: {
+        name: "CHITAMANI MEDICAL",
+        address: "SHOP NO 15 GROUND FLOOR HEERABAUG BUSINESS CENTRE",
+        gstin: "27AA0FC4285D1ZB",
+        state: "MAHARASHTRA STATE CODE:27",
+        city: "SHUKRWAR PETH PUNE 2"
+      },
+      invoiceInfo: {
+        number: data.billNo || data.invoiceNumber || "Satur2771",
+        date: data.billDate || data.invoiceDate || "28/09/2021 22:18",
+        poNumber: "Font Style",
+        foodLicNo: "Single box, double",
+        beat: "GANJPETH"
+      },
+      products: [
+        { sr: 1, name: "Aqua Yellow", hsn: "155.54", mrp: 42, unit: "Pcs", qty: 2, rate: 701.78, taxableAmt: 1403.56, cgst: 126.32, sgst: 126.32, netAmt: 1656.20 },
+        { sr: 2, name: "Yellow Green", hsn: "258.44", mrp: 310, unit: "Pcs", qty: 1, rate: 701.78, taxableAmt: 701.78, cgst: 63.16, sgst: 63.16, netAmt: 828.10 },
+        { sr: 3, name: "Olive Purple", hsn: "217.94", mrp: 148, unit: "Pcs", qty: 1, rate: 478.14, taxableAmt: 478.14, cgst: 43.04, sgst: 43.04, netAmt: 564.21 },
+        { sr: 4, name: "Silver Fuchsia", hsn: "213.42", mrp: 64, unit: "Pcs", qty: 6, rate: 520.55, taxableAmt: 3123.30, cgst: 281.10, sgst: 281.10, netAmt: 3685.49 },
+        { sr: 5, name: "Aqua Navy", hsn: "245.86", mrp: 300, unit: "Pcs", qty: 1, rate: 520.55, taxableAmt: 520.55, cgst: 46.86, sgst: 46.86, netAmt: 614.27 }
+      ],
+      summary: {
+        grossAmt: 6227.33,
+        taxableAmt: -628.05,
+        scheDisc: 589.73,
+        cgstAmt: 44.88,
+        sgstAmt: 44.88,
+        starDisc: 502.71,
+        tcsAmt: 55.57,
+        rounding: 212.83,
+        netAmount: 263.17
+      },
+      bankDetails: {
+        accountNo: "00160010921",
+        ifsc: "COSB0000001",
+        branch: "PARVATI DARSHAN, PUNE",
+        accountType: "CC"
       }
-      return 'status-badge status-info';
     };
 
-    const getType = () => {
-      if (title.includes('Sales')) return 'Sales';
-      if (title.includes('Purchase')) return 'Purchase';
-      if (title.includes('Credit Note')) return 'Credit Note';
-      if (title.includes('Debit Note')) return 'Debit Note';
-      return title;
-    };
-
-    const type = getType();
-
-    return (
-      <div className="master-section grid-section">
-        <div className="grid-header">
-          <h3>{title} List ({transformedData.length})</h3>
-          <div className="table-controls">
-            <input
-              type="text"
-              placeholder="Search..."
-              className="filter-input"
-              value={filters[type.toLowerCase()] || ''}
-              onChange={(e) => setFilters({ ...filters, [type.toLowerCase()]: e.target.value })}
-            />
-            <button className="btn-excel" onClick={() => exportToExcel(transformedData.filter(d =>
-              d.partyName?.toLowerCase().includes((filters[type.toLowerCase()] || '').toLowerCase()) ||
-              d.billNumber?.toLowerCase().includes((filters[type.toLowerCase()] || '').toLowerCase())
-            ), title, standardColumns.filter(c => c.key !== 'actions'))}>
-              📊 Export Excel
-            </button>
-            <button className="btn-pdf" onClick={() => exportToPDF(transformedData.filter(d =>
-              d.partyName?.toLowerCase().includes((filters[type.toLowerCase()] || '').toLowerCase()) ||
-              d.billNumber?.toLowerCase().includes((filters[type.toLowerCase()] || '').toLowerCase())
-            ), title, standardColumns.filter(c => c.key !== 'actions'))}>
-              📄 Export PDF
-            </button>
-            <button className="btn-add-new" onClick={() => handlePlusClick(type, new Event('click'))}>
-              + Add New {type}
-            </button>
+    return `<!DOCTYPE html>
+    <html>
+    <head>
+      <meta charset="UTF-8">
+      <title>TAX INVOICE - ${invoiceData.invoiceInfo.number}</title>
+      <style>
+        * {
+          margin: 0;
+          padding: 0;
+          box-sizing: border-box;
+        }
+        
+        body {
+          font-family: 'Courier New', 'Segoe UI', Arial, sans-serif;
+          background: #e2e8f0;
+          padding: 20px;
+          font-size: 10px;
+        }
+        
+        /* A4 Portrait Layout */
+        .invoice-wrapper {
+          max-width: 210mm;
+          width: 210mm;
+          margin: 0 auto;
+          background: white;
+          box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+          min-height: 297mm;
+        }
+        
+        .invoice {
+          padding: 15px 20px;
+          background: white;
+        }
+        
+        /* Header Section */
+        .header-section {
+          border-bottom: 2px solid #000;
+          padding-bottom: 10px;
+          margin-bottom: 12px;
+        }
+        
+        .firm-details {
+          text-align: center;
+          margin-bottom: 10px;
+        }
+        
+        .firm-name {
+          font-size: 18px;
+          font-weight: bold;
+          text-transform: uppercase;
+          letter-spacing: 1px;
+          margin-bottom: 4px;
+        }
+        
+        .firm-address {
+          font-size: 9px;
+          line-height: 1.3;
+          color: #333;
+        }
+        
+        .firm-contact {
+          font-size: 9px;
+          margin-top: 3px;
+        }
+        
+        .gst-fssai {
+          font-size: 8px;
+          margin-top: 2px;
+          color: #555;
+        }
+        
+        /* Horizontal Layout for all sections */
+        .details-section {
+          display: flex;
+          gap: 15px;
+          margin-bottom: 20px;
+          flex-wrap: wrap;
+        }
+        
+        .info-card {
+          flex: 1;
+          min-width: 200px;
+          border: 1px solid #ddd;
+          padding: 10px;
+          background: #fff;
+        }
+        
+        .info-title {
+          font-weight: bold;
+          font-size: 10px;
+          margin-bottom: 8px;
+          padding-bottom: 4px;
+          border-bottom: 1px solid #ccc;
+          background: none;
+          padding: 0 0 4px 0;
+        }
+        
+        .info-row {
+          margin-bottom: 4px;
+          font-size: 9px;
+          line-height: 1.3;
+        }
+        
+        .info-label {
+          font-weight: 600;
+          min-width: 90px;
+          display: inline-block;
+        }
+        
+        /* Invoice Title */
+        .invoice-title-section {
+          text-align: center;
+          margin: 10px 0;
+        }
+        
+        .invoice-title {
+          font-size: 16px;
+          font-weight: bold;
+          letter-spacing: 2px;
+          background: #f0f0f0;
+          display: inline-block;
+          padding: 4px 20px;
+        }
+        
+        .invoice-subtitle {
+          display: flex;
+          justify-content: center;
+          gap: 30px;
+          margin-top: 6px;
+          font-size: 9px;
+        }
+        
+        /* Product Table - Compact for A4 */
+        .product-table {
+          width: 100%;
+          border-collapse: collapse;
+          margin: 10px 0;
+          font-size: 8px;
+        }
+        
+        .product-table th {
+          background: #e8e8e8;
+          border: 1px solid #999;
+          padding: 5px 2px;
+          font-weight: bold;
+          text-align: center;
+          font-size: 8px;
+        }
+        
+        .product-table td {
+          border: 1px solid #999;
+          padding: 4px 2px;
+          text-align: center;
+          font-size: 8px;
+        }
+        
+        .product-table td:first-child,
+        .product-table th:first-child {
+          text-align: center;
+        }
+        
+        .product-table td:nth-child(2) {
+          text-align: left;
+        }
+        
+        /* Summary Section - Clean horizontal layout without boxes */
+        .summary-section {
+          margin: 15px 0;
+          padding: 10px 0;
+          border-top: 1px solid #ccc;
+          border-bottom: 1px solid #ccc;
+        }
+        
+        .summary-grid {
+          display: flex;
+          justify-content: space-between;
+          align-items: center;
+          flex-wrap: wrap;
+          gap: 15px;
+        }
+        
+        .summary-item {
+          display: flex;
+          justify-content: space-between;
+          align-items: center;
+          min-width: 150px;
+          padding: 5px 10px;
+        }
+        
+        .summary-label {
+          font-weight: 600;
+          margin-right: 10px;
+        }
+        
+        .summary-value {
+          font-weight: 500;
+        }
+        
+        .net-amount-item {
+          font-weight: bold;
+          font-size: 12px;
+          background: #f0f0f0;
+          padding: 8px 15px;
+          border-radius: 4px;
+        }
+        
+        /* Bank Details - Clean style */
+        .bank-details {
+          margin: 10px 0;
+          padding: 8px 0;
+          font-size: 8px;
+        }
+        
+        .bank-grid {
+          display: flex;
+          gap: 20px;
+          flex-wrap: wrap;
+        }
+        
+        /* Footer */
+        .footer-section {
+          margin-top: 15px;
+          padding-top: 10px;
+          border-top: 1px solid #ccc;
+        }
+        
+        .declaration {
+          font-size: 8px;
+          font-style: italic;
+          margin-bottom: 8px;
+        }
+        
+        .signature-row {
+          display: flex;
+          justify-content: space-between;
+          margin-top: 15px;
+        }
+        
+        .signature-line {
+          border-top: 1px solid #000;
+          width: 200px;
+          padding-top: 4px;
+          font-size: 8px;
+          text-align: center;
+        }
+        
+        .total-words {
+          font-size: 8px;
+          margin: 8px 0;
+          font-weight: bold;
+        }
+        
+        .no-print {
+          text-align: center;
+          margin-top: 20px;
+        }
+        
+        .no-print button {
+          padding: 8px 16px;
+          margin: 5px;
+          background: #1e3a8a;
+          color: white;
+          border: none;
+          border-radius: 4px;
+          cursor: pointer;
+          font-size: 12px;
+        }
+        
+        .no-print button:hover {
+          background: #1e40af;
+        }
+        
+        @media print {
+          body {
+            background: white;
+            padding: 0;
+            margin: 0;
+          }
+          .no-print {
+            display: none;
+          }
+          .invoice-wrapper {
+            box-shadow: none;
+            width: 100%;
+            max-width: 210mm;
+            margin: 0;
+            padding: 0;
+          }
+          .invoice {
+            padding: 10px;
+          }
+        }
+        
+        @page {
+          size: A4;
+          margin: 10mm;
+        }
+      </style>
+    </head>
+    <body>
+      <div class="invoice-wrapper">
+        <div class="invoice">
+          <!-- Firm Header -->
+          <div class="header-section">
+            <div class="firm-details">
+              <div class="firm-name">${invoiceData.firmDetails.name}</div>
+              <div class="firm-address">${invoiceData.firmDetails.address}</div>
+              <div class="firm-contact">📞 ${invoiceData.firmDetails.phone}</div>
+              <div class="gst-fssai">GSTIN: ${invoiceData.firmDetails.gstin} | FSSAI: ${invoiceData.firmDetails.fssai}</div>
+            </div>
+          </div>
+          
+          <!-- TAX INVOICE Title -->
+          <div class="invoice-title-section">
+            <div class="invoice-title">TAX INVOICE</div>
+            <div class="invoice-subtitle">
+              <span>INVOICE NO: ${invoiceData.invoiceInfo.number}</span>
+              <span>INVOICE DATE: ${invoiceData.invoiceInfo.date}</span>
+              <span>PO NUMBER: ${invoiceData.invoiceInfo.poNumber}</span>
+            </div>
+          </div>
+          
+          <!-- Three Column Horizontal Layout for Details (one beside each other) -->
+          <div class="details-section">
+            <div class="info-card">
+              <div class="info-title">DETAILS OF CONSIGNEE (SHIPPED TO)</div>
+              <div class="info-row"><strong>${invoiceData.consigneeDetails.name}</strong></div>
+              <div class="info-row">${invoiceData.consigneeDetails.address}</div>
+              <div class="info-row">GSTIN/UNIQUE ID: ${invoiceData.consigneeDetails.gstin}</div>
+              <div class="info-row">STATE: ${invoiceData.consigneeDetails.state}</div>
+              <div class="info-row">${invoiceData.consigneeDetails.city}</div>
+            </div>
+            
+            <div class="info-card">
+              <div class="info-title">DETAILS OF RECEIVER (BILLED TO)</div>
+              <div class="info-row"><strong>${invoiceData.receiverDetails.name}</strong></div>
+              <div class="info-row">${invoiceData.receiverDetails.address}</div>
+              <div class="info-row">GSTIN/UNIQUE ID: ${invoiceData.receiverDetails.gstin}</div>
+              <div class="info-row">STATE: ${invoiceData.receiverDetails.state}</div>
+              <div class="info-row">${invoiceData.receiverDetails.city}</div>
+              <div class="info-row">Phone: ${invoiceData.receiverDetails.phone}</div>
+            </div>
+            
+            <div class="info-card">
+              <div class="info-title">INVOICE DETAILS</div>
+              <div class="info-row"><span class="info-label">Firm Food Lic No:</span> ${invoiceData.invoiceInfo.foodLicNo}</div>
+              <div class="info-row"><span class="info-label">Beat:</span> ${invoiceData.invoiceInfo.beat}</div>
+            </div>
+          </div>
+          
+          <!-- Product Table -->
+          <table class="product-table">
+            <thead>
+              <tr>
+                <th>SR</th>
+                <th>Product Name</th>
+                <th>HSN</th>
+                <th>MRP</th>
+                <th>Unit</th>
+                <th>Qty</th>
+                <th>Fr.</th>
+                <th>Rate</th>
+                <th>Taxable Amt</th>
+                <th>CGST</th>
+                <th>SGST</th>
+                <th>Net Amt</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${invoiceData.products.map(product => `
+                <tr>
+                  <td>${product.sr}</td>
+                  <td style="text-align:left">${product.name}</td>
+                  <td>${product.hsn}</td>
+                  <td>${product.mrp}</td>
+                  <td>${product.unit}</td>
+                  <td>${product.qty}</td>
+                  <td>-</td>
+                  <td>${product.rate.toFixed(2)}</td>
+                  <td>${product.taxableAmt.toFixed(2)}</td>
+                  <td>${product.cgst.toFixed(2)}</td>
+                  <td>${product.sgst.toFixed(2)}</td>
+                  <td>${product.netAmt.toFixed(2)}</td>
+                </tr>
+              `).join('')}
+            </tbody>
+            <tfoot>
+              <tr style="background: #f0f0f0;">
+                <td colspan="8" style="text-align:right; font-weight:bold;">Total</td>
+                <td style="font-weight:bold;">₹${invoiceData.products.reduce((sum, p) => sum + p.taxableAmt, 0).toFixed(2)}</td>
+                <td style="font-weight:bold;">₹${invoiceData.products.reduce((sum, p) => sum + p.cgst, 0).toFixed(2)}</td>
+                <td style="font-weight:bold;">₹${invoiceData.products.reduce((sum, p) => sum + p.sgst, 0).toFixed(2)}</td>
+                <td style="font-weight:bold;">₹${invoiceData.products.reduce((sum, p) => sum + p.netAmt, 0).toFixed(2)}</td>
+              </tr>
+            </tfoot>
+          </table>
+          
+          <!-- Summary Section - Clean without boxes, horizontal layout -->
+          <div class="summary-section">
+            <div class="summary-grid">
+              <div class="summary-item">
+                <span class="summary-label">TAXABLE AMT:</span>
+                <span class="summary-value">₹${invoiceData.summary.taxableAmt.toFixed(2)}</span>
+              </div>
+              <div class="summary-item">
+                <span class="summary-label">Sche/Cash:</span>
+                <span class="summary-value">₹${invoiceData.summary.scheDisc.toFixed(2)}</span>
+              </div>
+              <div class="summary-item">
+                <span class="summary-label">CGST AMT:</span>
+                <span class="summary-value">₹${invoiceData.summary.cgstAmt.toFixed(2)}</span>
+              </div>
+              <div class="summary-item">
+                <span class="summary-label">SGST AMT:</span>
+                <span class="summary-value">₹${invoiceData.summary.sgstAmt.toFixed(2)}</span>
+              </div>
+              <div class="summary-item">
+                <span class="summary-label">CN/STAR/DIS:</span>
+                <span class="summary-value">₹${invoiceData.summary.starDisc.toFixed(2)}</span>
+              </div>
+              <div class="summary-item">
+                <span class="summary-label">TCS Amt:</span>
+                <span class="summary-value">₹${invoiceData.summary.tcsAmt.toFixed(2)}</span>
+              </div>
+              <div class="summary-item">
+                <span class="summary-label">ROUNDING:</span>
+                <span class="summary-value">₹${invoiceData.summary.rounding.toFixed(2)}</span>
+              </div>
+              <div class="summary-item net-amount-item">
+                <span class="summary-label"><strong>NET AMOUNT:</strong></span>
+                <span class="summary-value"><strong>₹${invoiceData.summary.netAmount.toFixed(2)}</strong></span>
+              </div>
+            </div>
+          </div>
+          
+          <!-- Total in Words -->
+          <div class="total-words">
+            <strong>Tot Value (Words):</strong> RS. Two Hundred Sixty-Three And Seventeen Paisa Only
+          </div>
+          
+          <!-- Bank Details - Clean without box -->
+          <div class="bank-details">
+            <div class="bank-grid">
+              <span><strong>A/c No:</strong> ${invoiceData.bankDetails.accountNo}</span>
+              <span><strong>IFSC:</strong> ${invoiceData.bankDetails.ifsc}</span>
+              <span><strong>Branch:</strong> ${invoiceData.bankDetails.branch}</span>
+              <span><strong>A/c Type:</strong> ${invoiceData.bankDetails.accountType}</span>
+            </div>
+          </div>
+          
+          <!-- Declaration and Signature -->
+          <div class="footer-section">
+            <div class="declaration">
+              Declaration: Certified that the particulars given above are true and correct and the amount indicated.
+            </div>
+            
+            <div class="signature-row">
+              <div>
+                <div class="signature-line">Receiver's Stamp & Sign.</div>
+              </div>
+              <div>
+                <div class="signature-line">FOR RAJKUMAR PENURKAR</div>
+                <div style="font-size:8px; text-align:center; margin-top:3px">Authorised Signatory</div>
+              </div>
+            </div>
           </div>
         </div>
-        {transformedData.length > 0 ? (
-          <div className="data-table-container" style={{ overflowX: 'auto' }}>
-            <table className="data-table" style={{ minWidth: '1200px' }}>
-              <thead>
-                <tr>
-                  {standardColumns.map(col => (
-                    <th key={col.key} style={col.key === 'actions' ? {
-                      textAlign: 'center',
-                      width: '160px',
-                      position: 'sticky',
-                      right: 0,
-                      backgroundColor: '#f8fafc',
-                      zIndex: 15
-                    } : {}}>
-                      {col.label}
-                    </th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {transformedData
-                  .filter(d =>
-                    d.partyName?.toLowerCase().includes((filters[type.toLowerCase()] || '').toLowerCase()) ||
-                    d.billNumber?.toLowerCase().includes((filters[type.toLowerCase()] || '').toLowerCase())
-                  )
-                  .map((item, index) => (
-                    <tr key={index}>
-                      <td>{item.date}</td>
-                      <td>{item.billSeries}</td>
-                      <td>{item.billNumber}</td>
-                      <td>{item.billType}</td>
-                      <td>{item.partyCode}</td>
-                      <td>{item.partyName}</td>
-                      <td>{item.branchName}</td>
-                      <td className="amount-cell">₹{item.amount.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
-                      <td>{item.loadSeries}</td>
-                      <td>{item.loadNumber}</td>
-                      <td><span className={getStatusBadgeClass(item.status)}>{item.status}</span></td>
-                      <td className="action-buttons" style={{
-                        whiteSpace: 'nowrap',
-                        position: 'sticky',
-                        right: 0,
-                        backgroundColor: '#ffffff',
-                        zIndex: 10,
-                        boxShadow: '-2px 0 5px -2px rgba(0,0,0,0.1)'
-                      }}>
-                        <button
-                          className="btn-view"
-                          onClick={() => handleViewVoucher(type, item.originalItem)}
-                          title="View"
-                          style={{ background: '#10b981', color: 'white', border: 'none', borderRadius: '4px', padding: '4px 8px', margin: '0 2px', cursor: 'pointer' }}
-                        >
-                          👁️ View
-                        </button>
-                        <button
-                          className="btn-edit"
-                          onClick={() => handleEditVoucher(type, item.originalItem)}
-                          title="Edit"
-                          style={{ background: '#3b82f6', color: 'white', border: 'none', borderRadius: '4px', padding: '4px 8px', margin: '0 2px', cursor: 'pointer' }}
-                        >
-                          ✏️ Edit
-                        </button>
-                        <button
-                          className="btn-delete"
-                          onClick={() => handleDeleteVoucher(type, item.id)}
-                          title="Delete"
-                          style={{ background: '#ef4444', color: 'white', border: 'none', borderRadius: '4px', padding: '4px 8px', margin: '0 2px', cursor: 'pointer' }}
-                        >
-                          🗑 Delete
-                        </button>
-                      </td>
-                    </tr>
-                  ))}
-              </tbody>
-            </table>
-          </div>
-        ) : (
-          <div className="empty-state">No data found. Click + Add New to create one.</div>
-        )}
       </div>
-    );
+      
+      <div class="no-print">
+        <button onclick="window.print()">🖨️ Print Invoice (A4)</button>
+        <button onclick="window.close()">❌ Close</button>
+      </div>
+    </body>
+    </html>`;
   };
+
+  // Handle Print
+  const handlePrintVoucher = (item) => {
+    const printWindow = window.open('', '_blank', 'width=900,height=700');
+    printWindow.document.write(generateInvoicePreviewHTML(item));
+    printWindow.document.close();
+    setTimeout(() => {
+      printWindow.print();
+    }, 100);
+  };
+
+  // Handle Preview
+  const handlePreviewVoucher = (item) => {
+    const previewWindow = window.open('', '_blank', 'width=900,height=700');
+    previewWindow.document.write(generateInvoicePreviewHTML(item));
+    previewWindow.document.close();
+  };
+
+  return (
+    <div className="master-section grid-section">
+      <div className="grid-header">
+        <h3>{title} List ({transformedData.length})</h3>
+        <div className="table-controls">
+          <input
+            type="text"
+            placeholder="Search..."
+            className="filter-input"
+            value={filters[type.toLowerCase()] || ''}
+            onChange={(e) => setFilters({ ...filters, [type.toLowerCase()]: e.target.value })}
+          />
+          <button className="btn-excel" onClick={() => exportToExcel(transformedData.filter(d =>
+            d.partyName?.toLowerCase().includes((filters[type.toLowerCase()] || '').toLowerCase()) ||
+            d.billNumber?.toLowerCase().includes((filters[type.toLowerCase()] || '').toLowerCase())
+          ), title, standardColumns.filter(c => c.key !== 'actions'))}>
+            📊 Export Excel
+          </button>
+          <button className="btn-pdf" onClick={() => exportToPDF(transformedData.filter(d =>
+            d.partyName?.toLowerCase().includes((filters[type.toLowerCase()] || '').toLowerCase()) ||
+            d.billNumber?.toLowerCase().includes((filters[type.toLowerCase()] || '').toLowerCase())
+          ), title, standardColumns.filter(c => c.key !== 'actions'))}>
+            📄 Export PDF
+          </button>
+          <button className="btn-add-new" onClick={() => handlePlusClick(type, new Event('click'))}>
+            + Add New {type}
+          </button>
+        </div>
+      </div>
+      {transformedData.length > 0 ? (
+        <div className="data-table-container" style={{ overflowX: 'auto' }}>
+          <table className="data-table" style={{ minWidth: '100%', width: '100%', tableLayout: 'auto' }}>
+            <thead>
+              <tr>
+                <th style={{ whiteSpace: 'nowrap', width: `${columnWidths.date?.max || 110}px`, minWidth: `${columnWidths.date?.min || 100}px` }}>Date</th>
+                <th style={{ whiteSpace: 'nowrap', width: `${columnWidths.billSeries?.max || 100}px`, minWidth: `${columnWidths.billSeries?.min || 90}px` }}>Bill Series</th>
+                <th style={{ whiteSpace: 'nowrap', width: `${columnWidths.billNumber?.max || 120}px`, minWidth: `${columnWidths.billNumber?.min || 100}px` }}>Bill Number</th>
+                <th style={{ whiteSpace: 'nowrap', width: `${columnWidths.billType?.max || 90}px`, minWidth: `${columnWidths.billType?.min || 80}px` }}>Bill Type</th>
+                <th style={{ whiteSpace: 'nowrap', width: `${columnWidths.partyCode?.max || 150}px`, minWidth: `${columnWidths.partyCode?.min || 110}px` }}>Party Code</th>
+                <th style={{ whiteSpace: 'nowrap', width: `${columnWidths.partyName?.max || 250}px`, minWidth: `${columnWidths.partyName?.min || 180}px`, maxWidth: '450px' }}>Party Name</th>
+                <th style={{ whiteSpace: 'nowrap', width: `${columnWidths.branchName?.max || 220}px`, minWidth: `${columnWidths.branchName?.min || 160}px`, maxWidth: '380px' }}>Branch Name</th>
+                <th style={{ whiteSpace: 'nowrap', width: `${columnWidths.amount?.max || 130}px`, minWidth: `${columnWidths.amount?.min || 120}px`, textAlign: 'right' }}>Amount (₹)</th>
+                <th style={{ whiteSpace: 'nowrap', width: `${columnWidths.loadSeries?.max || 100}px`, minWidth: `${columnWidths.loadSeries?.min || 90}px` }}>Load Series</th>
+                <th style={{ whiteSpace: 'nowrap', width: `${columnWidths.loadNumber?.max || 120}px`, minWidth: `${columnWidths.loadNumber?.min || 100}px` }}>Load Number</th>
+                <th style={{ whiteSpace: 'nowrap', width: `${columnWidths.status?.max || 110}px`, minWidth: `${columnWidths.status?.min || 100}px` }}>Status</th>
+                <th style={{ whiteSpace: 'nowrap', width: '300px', minWidth: '300px', position: 'sticky', right: 0, backgroundColor: '#f8fafc', zIndex: 15, textAlign: 'center' }}>Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {transformedData
+                .filter(d =>
+                  d.partyName?.toLowerCase().includes((filters[type.toLowerCase()] || '').toLowerCase()) ||
+                  d.billNumber?.toLowerCase().includes((filters[type.toLowerCase()] || '').toLowerCase())
+                )
+                .map((item, index) => (
+                  <tr key={index}>
+                    <td style={{ whiteSpace: 'nowrap' }}>{item.date}</td>
+                    <td style={{ whiteSpace: 'nowrap' }}>{item.billSeries}</td>
+                    <td style={{ whiteSpace: 'nowrap' }}>{item.billNumber}</td>
+                    <td style={{ whiteSpace: 'nowrap' }}>{item.billType}</td>
+                    <td style={{ whiteSpace: 'nowrap' }}>{item.partyCode}</td>
+                    <td style={{ whiteSpace: 'nowrap', maxWidth: '450px', overflow: 'hidden', textOverflow: 'ellipsis' }} title={item.partyName}>{item.partyName}</td>
+                    <td style={{ whiteSpace: 'nowrap', maxWidth: '380px', overflow: 'hidden', textOverflow: 'ellipsis' }} title={item.branchName}>{item.branchName}</td>
+                    <td className="amount-cell" style={{ whiteSpace: 'nowrap', textAlign: 'right' }}>₹{item.amount.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                    <td style={{ whiteSpace: 'nowrap' }}>{item.loadSeries}</td>
+                    <td style={{ whiteSpace: 'nowrap' }}>{item.loadNumber}</td>
+                    <td style={{ whiteSpace: 'nowrap' }}><span className={getStatusBadgeClass(item.status)}>{item.status}</span></td>
+                    <td className="action-buttons" style={{ whiteSpace: 'nowrap', position: 'sticky', right: 0, backgroundColor: '#ffffff', zIndex: 10, boxShadow: '-2px 0 5px -2px rgba(0,0,0,0.1)' }}>
+                      <button className="btn-view" onClick={() => handleViewVoucher(type, item.originalItem)} title="View" style={{ background: '#10b981', color: 'white', border: 'none', borderRadius: '4px', padding: '4px 8px', margin: '0 2px', cursor: 'pointer' }}>👁️ View</button>
+                      <button className="btn-edit" onClick={() => handleEditVoucher(type, item.originalItem)} title="Edit" style={{ background: '#3b82f6', color: 'white', border: 'none', borderRadius: '4px', padding: '4px 8px', margin: '0 2px', cursor: 'pointer' }}>✏️ Edit</button>
+                      <button className="btn-print" onClick={() => handlePrintVoucher(item)} title="Print" style={{ background: '#f59e0b', color: 'white', border: 'none', borderRadius: '4px', padding: '4px 8px', margin: '0 2px', cursor: 'pointer' }}>🖨️ Print</button>
+                      <button className="btn-preview" onClick={() => handlePreviewVoucher(item)} title="Preview" style={{ background: '#8b5cf6', color: 'white', border: 'none', borderRadius: '4px', padding: '4px 8px', margin: '0 2px', cursor: 'pointer' }}>👁️ Preview</button>
+                      <button className="btn-delete" onClick={() => handleDeleteVoucher(type, item.id)} title="Delete" style={{ background: '#ef4444', color: 'white', border: 'none', borderRadius: '4px', padding: '4px 8px', margin: '0 2px', cursor: 'pointer' }}>🗑 Delete</button>
+                    </td>
+                  </tr>
+                ))}
+            </tbody>
+          </table>
+        </div>
+      ) : (
+        <div className="empty-state">No data found. Click + Add New to create one.</div>
+      )}
+    </div>
+  );
+};
   const renderLoadList = (title, data) => {
   const loadColumns = [
     { key: 'date', label: 'Load Date' },
@@ -10079,12 +10648,15 @@ const handleDeleteVoucher = (type, id) => {
                   <div className="labeled-input"><label>Vou No</label>
                     <input type="text" name="Vou No" className="erp-input" placeholder="Vou No" value={purchaseFormData.vno} onChange={handlePurchaseInputChange} />
                   </div>
-                  <div className="labeled-input"><label>SUPPLIER *</label>
-                    <select name="supplier" className="erp-select" value={purchaseFormData.supplier} onChange={handlePurchaseInputChange}>
-                      <option value="">Select Supplier</option>
-                      {accounts.map(acc => <option key={acc.id} value={acc.accountName}>{acc.accountName}</option>)}
-                    </select>
-                  </div>
+                <div className="labeled-input">
+  <label>SUPPLIER *</label>
+  <select name="supplier" className="erp-select" value={purchaseFormData.supplier} onChange={handlePurchaseInputChange}>
+    <option value="">Select Supplier</option>
+    {otherAccounts
+      .filter(acc => acc.accountGroup === 'SUNDRY CREDITORS')
+      .map(acc => <option key={acc.id} value={acc.accountName}>{acc.accountName}</option>)}
+  </select>
+</div>
                   <div className="labeled-input"><label>COMPANY *</label>
                     <select name="company" className="erp-select" value={purchaseFormData.company} onChange={handlePurchaseInputChange}>
                       <option value="">Select Company</option>
@@ -11637,22 +12209,25 @@ const handleDeleteVoucher = (type, id) => {
                         <tr
                           key={idx}
                           onClick={() => {
-                            const updatedItems = [...purchaseItems];
-                            updatedItems[currentBatchRow] = {
-                              ...updatedItems[currentBatchRow],
-                              batchNo: batch.batchNo,
-                              mfgDate: batch.mfgDate,
-                              expDate: batch.expDate,
-                              mrp: batch.mrp,
-                              purRate: batch.purchaseRate,
-                              salesRate: batch.salesRate,
-                              quantity: updatedItems[currentBatchRow]?.quantity || 1,
-                              stockQty: batch.stockQty,
-                              boxPack: batch.boxPack || 1
-                            };
-                            setPurchaseItems(updatedItems);
-                            setShowBatchModal(false);
-                          }}
+  const updatedItems = [...purchaseItems];
+  updatedItems[currentBatchRow] = {
+    ...updatedItems[currentBatchRow],
+    selectedBatch: { ...batch },
+    batchNo: batch.batchNo,
+    mfgDate: batch.mfgDate,
+    expDate: batch.expDate,
+    mrp: batch.mrp,
+    purRate: batch.purchaseRate,
+    salesRate: batch.salesRate,
+    stockQty: batch.stockQty,
+    boxPack: batch.boxPack || 1,
+    ratePerUnit: batch.ratePerUnit || 1,
+    previousPurchaseRate: batch.previousPurchaseRate || '',
+    quantity: updatedItems[currentBatchRow]?.quantity || 1
+  };
+  setPurchaseItems(updatedItems);
+  setShowBatchModal(false);
+}}
                           style={{
                             cursor: 'pointer',
                             transition: '0.2s',
