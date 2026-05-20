@@ -1010,3 +1010,413 @@
 .btn-delete {
   background: #ef4444;
 }
+/* ===== RECEIPT LIST EXACT SALES-LIST SIZE FIX ===== */
+
+.receipt-sales-list-section {
+  background: #ffffff;
+  border-radius: 14px;
+  padding: 24px;
+  box-shadow: 0 1px 5px rgba(15, 23, 42, 0.15);
+  max-width: 100%;
+}
+
+.receipt-sales-list-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding-bottom: 16px;
+  margin-bottom: 22px;
+  border-bottom: 1px solid #dbe3ee;
+}
+
+.receipt-sales-list-header h3 {
+  margin: 0;
+  color: #020617;
+  font-size: 19px;
+  font-weight: 700;
+}
+
+.receipt-sales-list-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.receipt-sales-search {
+  width: 240px !important;
+  height: 34px !important;
+  min-height: 34px !important;
+  padding: 0 10px !important;
+  border: 1px solid #cbd5e1;
+  border-radius: 6px;
+  font-size: 13px !important;
+}
+
+.receipt-export-excel,
+.receipt-export-pdf,
+.receipt-settle-load-btn {
+  height: 34px !important;
+  min-height: 34px !important;
+  padding: 0 14px !important;
+  border: none;
+  border-radius: 6px;
+  color: #ffffff;
+  font-size: 13px !important;
+  font-weight: 500 !important;
+  cursor: pointer;
+  white-space: nowrap;
+  line-height: 34px !important;
+}
+
+.receipt-export-excel {
+  background: #10b981;
+}
+
+.receipt-export-pdf {
+  background: #ef4444;
+}
+
+.receipt-settle-load-btn {
+  background: #2563eb;
+}
+
+.receipt-sales-table-wrap {
+  width: 100%;
+  overflow-x: auto;
+  border: 1px solid #dbe3ee;
+  border-radius: 10px;
+  background: #ffffff;
+}
+
+.receipt-sales-table {
+  width: 100%;
+  min-width: 1250px;
+  border-collapse: collapse;
+  background: #ffffff;
+  table-layout: fixed;
+}
+
+.receipt-sales-table th {
+  background: #f8fafc;
+  color: #020617;
+  font-size: 14px;
+  font-weight: 700;
+  padding: 12px 14px;
+  text-align: left;
+  border-bottom: 1px solid #dbe3ee;
+  white-space: nowrap;
+}
+
+.receipt-sales-table td {
+  background: #ffffff;
+  color: #0f172a;
+  font-size: 13px;
+  font-weight: 400;
+  padding: 9px 14px;
+  border-bottom: 1px solid #eef2f7;
+  vertical-align: middle;
+  white-space: nowrap;
+}
+
+.receipt-sales-table tbody tr:hover td {
+  background: #f9fbfd;
+}
+
+/* Sticky Action Column */
+.receipt-sticky-action-head,
+.receipt-sticky-action-cell {
+  position: sticky;
+  right: 0;
+  text-align: center;
+  box-shadow: -4px 0 8px -6px rgba(0, 0, 0, 0.35);
+}
+
+.receipt-sticky-action-head {
+  background: #f8fafc !important;
+  z-index: 30;
+  width: 245px !important;
+  min-width: 245px !important;
+}
+
+.receipt-sticky-action-cell {
+  background: #ffffff !important;
+  z-index: 20;
+  width: 245px !important;
+  min-width: 245px !important;
+}
+
+.receipt-sales-table tbody tr:hover .receipt-sticky-action-cell {
+  background: #f9fbfd !important;
+}
+
+.receipt-action-buttons {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+}
+
+.receipt-action-buttons .btn-view,
+.receipt-action-buttons .btn-edit,
+.receipt-action-buttons .btn-delete {
+  height: 31px !important;
+  min-height: 31px !important;
+  padding: 0 11px !important;
+  border: none;
+  border-radius: 5px;
+  color: #ffffff !important;
+  font-size: 12px !important;
+  font-weight: 500 !important;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  white-space: nowrap;
+  line-height: 31px !important;
+  transform: none !important;
+  box-shadow: none !important;
+}
+
+.receipt-action-buttons .btn-view {
+  background: #10b981 !important;
+}
+
+.receipt-action-buttons .btn-edit {
+  background: #3b82f6 !important;
+}
+
+.receipt-action-buttons .btn-delete {
+  background: #ef4444 !important;
+}
+/* ===== RECEIPT FINAL POLISHING ===== */
+
+.receipt-sales-list-section {
+  margin: 0 auto;
+  padding: 24px 24px 22px !important;
+}
+
+.receipt-sales-list-header {
+  margin-bottom: 20px !important;
+}
+
+.receipt-sales-list-actions {
+  gap: 10px !important;
+}
+
+.receipt-sales-search {
+  width: 230px !important;
+}
+
+.receipt-export-excel,
+.receipt-export-pdf,
+.receipt-settle-load-btn {
+  height: 32px !important;
+  min-height: 32px !important;
+  line-height: 32px !important;
+  padding: 0 13px !important;
+  font-size: 12.5px !important;
+  border-radius: 5px !important;
+}
+
+.receipt-sales-table {
+  min-width: 1180px !important;
+  table-layout: auto !important;
+}
+
+.receipt-sales-table th {
+  padding: 11px 14px !important;
+  font-size: 13.5px !important;
+  line-height: 1.25 !important;
+}
+
+.receipt-sales-table td {
+  padding: 8px 14px !important;
+  font-size: 13px !important;
+  line-height: 1.35 !important;
+}
+
+.receipt-sales-table th:nth-child(1),
+.receipt-sales-table td:nth-child(1) {
+  width: 130px;
+}
+
+.receipt-sales-table th:nth-child(2),
+.receipt-sales-table td:nth-child(2) {
+  width: 95px;
+}
+
+.receipt-sales-table th:nth-child(3),
+.receipt-sales-table td:nth-child(3) {
+  width: 110px;
+}
+
+.receipt-sales-table th:nth-child(4),
+.receipt-sales-table td:nth-child(4) {
+  width: 110px;
+}
+
+.receipt-sales-table th:nth-child(5),
+.receipt-sales-table td:nth-child(5) {
+  width: 120px;
+}
+
+.receipt-sales-table th:nth-child(6),
+.receipt-sales-table td:nth-child(6) {
+  width: 180px;
+}
+
+.receipt-sales-table th:nth-child(7),
+.receipt-sales-table td:nth-child(7) {
+  width: 120px;
+}
+
+.receipt-sales-table th:nth-child(8),
+.receipt-sales-table td:nth-child(8) {
+  width: 130px;
+}
+
+.receipt-sticky-action-head,
+.receipt-sticky-action-cell {
+  width: 250px !important;
+  min-width: 250px !important;
+}
+
+.receipt-action-buttons {
+  gap: 7px !important;
+}
+
+.receipt-action-buttons .btn-view,
+.receipt-action-buttons .btn-edit,
+.receipt-action-buttons .btn-delete {
+  height: 30px !important;
+  min-height: 30px !important;
+  line-height: 30px !important;
+  padding: 0 10px !important;
+  font-size: 12px !important;
+  border-radius: 5px !important;
+}
+.pdc-print-btn {
+  background: #475569 !important;
+  color: #ffffff !important;
+  border: none !important;
+  border-radius: 4px;
+  padding: 4px 8px;
+  margin: 0 2px;
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 600;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.pdc-print-btn:hover {
+  background: #3e71b8 !important;
+}
+
+.pdc-print-icon {
+  font-size: 14px;
+  line-height: 1;
+}
+.collection-voucher-top-grid {
+  display: grid;
+  grid-template-columns: 220px 220px 280px 1fr 180px;
+  gap: 14px;
+  align-items: end;
+  margin-bottom: 18px;
+}
+
+.collection-voucher-top-grid .form-field {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.collection-voucher-top-grid label {
+  font-weight: 700;
+  font-size: 14px;
+  color: #111827;
+}
+
+.collection-voucher-top-grid input,
+.collection-voucher-top-grid select {
+  height: 34px;
+  border: 1px solid #9ca3af;
+  border-radius: 4px;
+  padding: 5px 8px;
+  font-size: 14px;
+  background: #fff;
+}
+
+.narration-field input {
+  width: 100%;
+}
+
+.selection-btn-area {
+  display: flex;
+  align-items: end;
+  justify-content: flex-end;
+}
+
+.btn-select-bills-modal {
+  height: 34px;
+  padding: 0 16px;
+  border: 1px solid #0891b2;
+  border-radius: 4px;
+  background: linear-gradient(#67e8f9, #06b6d4);
+  color: #111827;
+  font-weight: 700;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.bills-table th:first-child,
+.bills-table td:first-child {
+  width: 38px;
+  text-align: center;
+}
+
+.bills-table input[type="checkbox"] {
+  width: 15px;
+  height: 15px;
+  cursor: pointer;
+}
+
+.collection-input,
+.discount-input,
+.rec-input {
+  width: 100%;
+  min-width: 90px;
+  height: 28px;
+  border: 1px solid #cbd5e1;
+  border-radius: 3px;
+  padding: 3px 6px;
+  font-size: 13px;
+}
+
+.collection-input {
+  background: #fff;
+}
+
+.collection-input:focus {
+  background: #ffe4e6;
+  border-color: #ef4444;
+  outline: none;
+}
+
+@media (max-width: 1200px) {
+  .collection-voucher-top-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  .narration-field,
+  .selection-btn-area {
+    grid-column: span 2;
+  }
+
+  .selection-btn-area {
+    justify-content: flex-start;
+  }
+}
