@@ -30,8 +30,10 @@ const Dashboard = () => {
   const [activeMenu, setActiveMenu] = useState(null);
   const [activeSubMenu, setActiveSubMenu] = useState(null);
   const [openFormFor, setOpenFormFor] = useState(null);
+  const [showReceiptForm, setShowReceiptForm] = useState(false);
   const [accountActiveTab, setAccountActiveTab] = useState('basic');
   const [otherAccountActiveTab, setOtherAccountActiveTab] = useState('basic');
+  const [transactionFormMode, setTransactionFormMode] = useState({});
   // Batch  State
   const [batches, setBatches] = useState([]);
   const [showBatchModal, setShowBatchModal] = useState(false);
@@ -4814,6 +4816,23 @@ const Dashboard = () => {
       addDebitNoteItem();
     }
   }, [activeSubMenu, invoiceItems.length, addInvoiceItem, purchaseItems.length, addPurchaseItem, creditNoteItems.length, addCreditNoteItem, debitNoteItems.length, addDebitNoteItem]);
+
+
+  useEffect(() => {
+  const handleOpenSettleLoad = () => {
+    setActiveMenu("sales");
+    setActiveSubMenu("Settle Load");
+    setShowDashboard(false);
+    setShowSettleLoad(true);
+    setOpenFormFor(null);
+  };
+
+  window.addEventListener("openSettleLoad", handleOpenSettleLoad);
+
+  return () => {
+    window.removeEventListener("openSettleLoad", handleOpenSettleLoad);
+  };
+}, []);
   // GST Master Handlers
   const handleGstInput = (e) => {
     setGstForm({ ...gstForm, [e.target.name]: e.target.value });
@@ -5935,8 +5954,30 @@ const Dashboard = () => {
                   {menu.items.map((item, idx) => (
                     <div key={idx} className="nav-subitem-wrapper">
                       <div className={`nav-subitem ${activeSubMenu === item ? 'active' : ''}`}>
-                        <span className="submenu-text" onClick={() => handleSubMenuClick(item)}>{item}</span>
-                        <span className="plus-icon" onClick={(e) => handlePlusClick(item, e)}>+</span>
+                        <span
+                          className="submenu-text"
+                          onClick={() => {
+                            handleSubMenuClick(item);
+
+                            setTransactionFormMode(prev => ({
+                              ...prev,
+                              [item]: false
+                            }));
+                          }}
+                        >{item}</span>
+                        <span
+                          className="plus-icon"
+                          onClick={(e) => {
+                            e.stopPropagation();
+
+                            handlePlusClick(item, e);
+
+                            setTransactionFormMode(prev => ({
+                              ...prev,
+                              [item]: true
+                            }));
+                          }}
+                        >+</span>
                       </div>
                     </div>
                   ))}
@@ -6042,7 +6083,7 @@ const Dashboard = () => {
           )}
 
 
-          {(activeSubMenu === 'Settle Load' && showSettleLoad) && (
+         {activeSubMenu === 'Settle Load' && (
             <div className="master-section erp-master-form settle-load-form" style={{ maxWidth: '1400px', margin: '0 auto' }}>
               <div className="erp-header">
                 <div>
@@ -8814,6 +8855,12 @@ const Dashboard = () => {
               customerBanks={customerBanks}
               activeTransaction={activeSubMenu}
               openFormFor={openFormFor}
+              showReceiptForm={showReceiptForm}
+              setShowReceiptForm={setShowReceiptForm}
+              transactionFormMode={transactionFormMode}
+              setTransactionFormMode={setTransactionFormMode}
+              setActiveTransaction={setOpenFormFor}
+
             />
           )}
 
