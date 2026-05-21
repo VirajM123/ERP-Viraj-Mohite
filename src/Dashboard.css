@@ -767,8 +767,8 @@ overflow-y: auto;
 .invoice-header-grid {
   display: grid;
   grid-template-columns: repeat(4, 1fr);
-  gap: 12px;
-  margin-bottom: 16px;
+  gap: 8px;
+  margin-bottom: 8px;
 }
 
 /* Purchase Invoice Styles */
@@ -807,7 +807,7 @@ overflow-y: auto;
 /* Product Entry Table - With Horizontal and Vertical Scrollbars */
 .product-entry-container {
   overflow: auto;
-  margin-top: 12px;
+  margin-top: 4px;
   max-height: 450px;
   border: 1px solid var(--border);
   border-radius: 8px;
@@ -942,8 +942,8 @@ overflow-y: auto;
 .summary-bar {
   display: flex;
   flex-wrap: wrap;
-  gap: 10px;
-  padding: 12px;
+  gap: 6px;
+  padding: 8px;
   background: #f8fafc;
   border-radius: 10px;
   border: 1px solid var(--border);
@@ -1428,7 +1428,7 @@ overflow-y: auto;
 
 /* Form sections - consistent spacing */
 .master-section .form-section {
-  margin-bottom: 24px;
+  margin-bottom: 8px;  /* Changed from 24px to 8px */
 }
 
 .master-section .form-section:last-child {
@@ -1440,7 +1440,7 @@ overflow-y: auto;
   font-size: 14px;
   font-weight: 600;
   color: #1e293b;
-  margin-bottom: 16px;
+  margin-bottom: 8px;
   padding-bottom: 8px;
   border-bottom: 2px solid var(--accent);
   display: inline-block;
@@ -1559,8 +1559,8 @@ overflow-y: auto;
 .master-section .form-actions {
   display: flex;
   gap: 12px;
-  margin-top: 24px;
-  padding-top: 20px;
+  margin-top: 12px;
+  padding-top: 10px;
   border-top: 1px solid var(--border);
   position: relative;
   z-index: 1;

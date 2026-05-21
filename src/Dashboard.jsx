@@ -2343,35 +2343,48 @@ const saveCustomerBank = (e) => {
 };
 
   const addInvoiceItem = useCallback(() => {
-    const newItem = {
-      id: Date.now(),
-      sr: invoiceItems.length + 1,
-      product: '',
-      units: 'PCS',
-      qty: '',
-      free: '',
-      mrp: '',
-      rate: '',
-      rateGst: '',
-      tprAmt: '',           // Direct TPR amount (removed TPR%)
-      schemePct: '',        // Scheme percentage
-      schemeAmt: '',        // Scheme amount
-      cdPct: '',           // CD percentage  
-      cdAmt: '',           // CD amount
-      starPct: '',         // Star percentage
-      starAmt: '',         // Star amount
-      taxable: '',
-      gst: '',
-      sgst: '',            // Added SGST
-      cgst: '',            // Added CGST
-      amount: ''
-    };
-    setInvoiceItems([...invoiceItems, newItem]);
-    setActiveRow(invoiceItems.length);
-  }, [invoiceItems.length]);
+  const newItem = {
+    id: Date.now(),
+    sr: invoiceItems.length + 1,
+    product: '',
+    units: 'PCS',
+    qty: '1',           // Default: 1
+    free: '0',          // Default: 0
+    mrp: '',
+    rate: '',
+    rateGst: '',        // NON-EDITABLE
+    tprAmt: '0',        // EDITABLE - Default 0
+    schemePct: '0',     // Default: 0
+    schemeAmt: '0',     // NON-EDITABLE - calculated
+    cdPct: '0',         // Default: 0
+    cdAmt: '0',         // NON-EDITABLE - calculated
+    starPct: '0',       // Default: 0
+    starAmt: '0',       // Default: 0
+    taxable: '',        // NON-EDITABLE
+    gst: '',
+    sgst: '',           // NON-EDITABLE
+    cgst: '',           // NON-EDITABLE
+    amount: ''          // NON-EDITABLE
+  };
+  setInvoiceItems([...invoiceItems, newItem]);
+  setActiveRow(invoiceItems.length);
+}, [invoiceItems.length]);
+
   const updateInvoiceItem = (index, field, value) => {
-    const newItems = [...invoiceItems];
-    newItems[index][field] = value;
+  // List of non-editable fields - prevent manual changes
+  // REMOVED: 'mrp', 'tprAmt' (now editable)
+  // ADDED: 'schemeAmt', 'cdAmt' (now non-editable)
+  const nonEditableFields = ['rateGst', 'taxable', 'sgst', 'cgst', 'amount', 'schemeAmt', 'cdAmt'];
+  
+  // Block manual editing of non-editable fields
+  if (nonEditableFields.includes(field)) {
+    return;
+  }
+  
+  const newItems = [...invoiceItems];
+  newItems[index][field] = value;
+  
+  // ... rest of your existing code remains exactly the same from here
 
     if (field === 'qty' && value !== undefined) {
       const item = newItems[index];
@@ -8287,21 +8300,21 @@ const handleDeleteVoucher = (type, id) => {
                             </td>
                             <td><input className="erp-input numeric" data-field="qty" data-index={index} value={item.qty} onChange={(e) => updateInvoiceItem(index, 'qty', e.target.value)} onKeyDown={(e) => handleInvoiceKeyDown(e, index, 'qty')} style={{ width: '100%' }} /></td>
                             <td><input className="erp-input numeric" data-field="free" data-index={index} value={item.free} onChange={(e) => updateInvoiceItem(index, 'free', e.target.value)} onKeyDown={(e) => handleInvoiceKeyDown(e, index, 'free')} style={{ width: '100%' }} /></td>
-                            <td><input className="erp-input numeric" data-field="mrp" data-index={index} value={item.mrp} onChange={(e) => updateInvoiceItem(index, 'mrp', e.target.value)} onKeyDown={(e) => handleInvoiceKeyDown(e, index, 'mrp')} style={{ width: '100%' }} /></td>
+                            <td><input className="erp-input numeric" data-field="mrp" data-index={index} value={item.mrp} readOnly style={{ width: '100%', backgroundColor: '#f3f4f6' }} /></td>
                             <td><input className="erp-input numeric" data-field="rate" data-index={index} value={item.rate} onChange={(e) => updateInvoiceItem(index, 'rate', e.target.value)} onKeyDown={(e) => handleInvoiceKeyDown(e, index, 'rate')} style={{ width: '100%' }} /></td>
-                            <td><input className="erp-input numeric" data-field="rateGst" data-index={index} value={item.rateGst} onChange={(e) => updateInvoiceItem(index, 'rateGst', e.target.value)} onKeyDown={(e) => handleInvoiceKeyDown(e, index, 'rateGst')} style={{ width: '100%' }} /></td>
+                            <td><input className="erp-input numeric" data-field="rateGst" data-index={index} value={item.rateGst} readOnly style={{ width: '100%', backgroundColor: '#f3f4f6' }} /></td>
                             <td><input className="erp-input numeric" data-field="tprAmt" data-index={index} value={item.tprAmt} onChange={(e) => updateInvoiceItem(index, 'tprAmt', e.target.value)} onKeyDown={(e) => handleInvoiceKeyDown(e, index, 'tprAmt')} style={{ width: '100%' }} /></td>
                             <td><input className="erp-input numeric small" data-field="schemePct" data-index={index} value={item.schemePct} onChange={(e) => updateInvoiceItem(index, 'schemePct', e.target.value)} onKeyDown={(e) => handleInvoiceKeyDown(e, index, 'schemePct')} style={{ width: '100%' }} /></td>
-                            <td><input className="erp-input numeric" data-field="schemeAmt" data-index={index} value={item.schemeAmt} onChange={(e) => updateInvoiceItem(index, 'schemeAmt', e.target.value)} onKeyDown={(e) => handleInvoiceKeyDown(e, index, 'schemeAmt')} style={{ width: '100%' }} /></td>
+                            <td><input className="erp-input numeric" data-field="schemeAmt" data-index={index} value={item.schemeAmt} readOnly style={{ width: '100%', backgroundColor: '#f3f4f6' }} /></td>
                             <td><input className="erp-input numeric small" data-field="cdPct" data-index={index} value={item.cdPct} onChange={(e) => updateInvoiceItem(index, 'cdPct', e.target.value)} onKeyDown={(e) => handleInvoiceKeyDown(e, index, 'cdPct')} style={{ width: '100%' }} /></td>
-                            <td><input className="erp-input numeric" data-field="cdAmt" data-index={index} value={item.cdAmt} onChange={(e) => updateInvoiceItem(index, 'cdAmt', e.target.value)} onKeyDown={(e) => handleInvoiceKeyDown(e, index, 'cdAmt')} style={{ width: '100%' }} /></td>
+                            <td><input className="erp-input numeric" data-field="cdAmt" data-index={index} value={item.cdAmt} readOnly style={{ width: '100%', backgroundColor: '#f3f4f6' }} /></td>
                             <td><input className="erp-input numeric small" data-field="starPct" data-index={index} value={item.starPct} onChange={(e) => updateInvoiceItem(index, 'starPct', e.target.value)} onKeyDown={(e) => handleInvoiceKeyDown(e, index, 'starPct')} style={{ width: '100%' }} /></td>
                             <td><input className="erp-input numeric" data-field="starAmt" data-index={index} value={item.starAmt} onChange={(e) => updateInvoiceItem(index, 'starAmt', e.target.value)} onKeyDown={(e) => handleInvoiceKeyDown(e, index, 'starAmt')} style={{ width: '100%' }} /></td>
-                            <td><input className="erp-input numeric" data-field="taxable" data-index={index} value={item.taxable} onChange={(e) => updateInvoiceItem(index, 'taxable', e.target.value)} onKeyDown={(e) => handleInvoiceKeyDown(e, index, 'taxable')} style={{ width: '100%' }} /></td>
+                            <td><input className="erp-input numeric" data-field="taxable" data-index={index} value={item.taxable} readOnly style={{ width: '100%', backgroundColor: '#f3f4f6' }} /></td>
                             <td><input className="erp-input numeric small" data-field="gst" data-index={index} value={item.gst} onChange={(e) => updateInvoiceItem(index, 'gst', e.target.value)} onKeyDown={(e) => handleInvoiceKeyDown(e, index, 'gst')} style={{ width: '100%' }} /></td>
-                            <td><input className="erp-input numeric" data-field="sgst" data-index={index} value={item.sgst} onChange={(e) => updateInvoiceItem(index, 'sgst', e.target.value)} onKeyDown={(e) => handleInvoiceKeyDown(e, index, 'sgst')} style={{ width: '100%' }} /></td>
-                            <td><input className="erp-input numeric" data-field="cgst" data-index={index} value={item.cgst} onChange={(e) => updateInvoiceItem(index, 'cgst', e.target.value)} onKeyDown={(e) => handleInvoiceKeyDown(e, index, 'cgst')} style={{ width: '100%' }} /></td>
-                            <td><input className="erp-input numeric font-bold" data-field="amount" data-index={index} value={item.amount} onChange={(e) => updateInvoiceItem(index, 'amount', e.target.value)} onKeyDown={(e) => handleInvoiceKeyDown(e, index, 'amount')} style={{ width: '100%', fontWeight: 'bold' }} /></td>
+                            <td><input className="erp-input numeric" data-field="sgst" data-index={index} value={item.sgst} readOnly style={{ width: '100%', backgroundColor: '#f3f4f6' }} /></td>
+                            <td><input className="erp-input numeric" data-field="cgst" data-index={index} value={item.cgst} readOnly style={{ width: '100%', backgroundColor: '#f3f4f6' }} /></td>
+                            <td><input className="erp-input numeric font-bold" data-field="amount" data-index={index} value={item.amount} readOnly style={{ width: '100%', fontWeight: 'bold', backgroundColor: '#f3f4f6' }} /></td>
                             <td style={{ position: 'sticky', right: 0, backgroundColor: index === activeRow ? '#eff6ff' : 'white', zIndex: 5 }}>
                               <button className="btn-delete text-red-500" onClick={() => deleteInvoiceItem(index)} style={{ padding: '6px 12px', whiteSpace: 'nowrap' }}>🗑 Delete</button>
                             </td>
@@ -10713,21 +10726,21 @@ const handleDeleteVoucher = (type, id) => {
                             </td>
                             <td><input className="erp-input numeric" data-field="qty" data-index={index} value={item.qty} onChange={(e) => updateInvoiceItem(index, 'qty', e.target.value)} onKeyDown={(e) => handleInvoiceKeyDown(e, index, 'qty')} style={{ width: '100%' }} /></td>
                             <td><input className="erp-input numeric" data-field="free" data-index={index} value={item.free} onChange={(e) => updateInvoiceItem(index, 'free', e.target.value)} onKeyDown={(e) => handleInvoiceKeyDown(e, index, 'free')} style={{ width: '100%' }} /></td>
-                            <td><input className="erp-input numeric" data-field="mrp" data-index={index} value={item.mrp} onChange={(e) => updateInvoiceItem(index, 'mrp', e.target.value)} onKeyDown={(e) => handleInvoiceKeyDown(e, index, 'mrp')} style={{ width: '100%' }} /></td>
+                            <td><input className="erp-input numeric" data-field="mrp" data-index={index} value={item.mrp} readOnly style={{ width: '100%', backgroundColor: '#f3f4f6' }} /></td>
                             <td><input className="erp-input numeric" data-field="rate" data-index={index} value={item.rate} onChange={(e) => updateInvoiceItem(index, 'rate', e.target.value)} onKeyDown={(e) => handleInvoiceKeyDown(e, index, 'rate')} style={{ width: '100%' }} /></td>
-                            <td><input className="erp-input numeric" data-field="rateGst" data-index={index} value={item.rateGst} onChange={(e) => updateInvoiceItem(index, 'rateGst', e.target.value)} onKeyDown={(e) => handleInvoiceKeyDown(e, index, 'rateGst')} style={{ width: '100%' }} /></td>
+                            <td><input className="erp-input numeric" data-field="rateGst" data-index={index} value={item.rateGst} readOnly style={{ width: '100%', backgroundColor: '#f3f4f6' }} /></td>
                             <td><input className="erp-input numeric" data-field="tprAmt" data-index={index} value={item.tprAmt} onChange={(e) => updateInvoiceItem(index, 'tprAmt', e.target.value)} onKeyDown={(e) => handleInvoiceKeyDown(e, index, 'tprAmt')} style={{ width: '100%' }} /></td>
                             <td><input className="erp-input numeric small" data-field="schemePct" data-index={index} value={item.schemePct} onChange={(e) => updateInvoiceItem(index, 'schemePct', e.target.value)} onKeyDown={(e) => handleInvoiceKeyDown(e, index, 'schemePct')} style={{ width: '100%' }} /></td>
-                            <td><input className="erp-input numeric" data-field="schemeAmt" data-index={index} value={item.schemeAmt} onChange={(e) => updateInvoiceItem(index, 'schemeAmt', e.target.value)} onKeyDown={(e) => handleInvoiceKeyDown(e, index, 'schemeAmt')} style={{ width: '100%' }} /></td>
+                            <td><input className="erp-input numeric" data-field="schemeAmt" data-index={index} value={item.schemeAmt} readOnly style={{ width: '100%', backgroundColor: '#f3f4f6' }} /></td>
                             <td><input className="erp-input numeric small" data-field="cdPct" data-index={index} value={item.cdPct} onChange={(e) => updateInvoiceItem(index, 'cdPct', e.target.value)} onKeyDown={(e) => handleInvoiceKeyDown(e, index, 'cdPct')} style={{ width: '100%' }} /></td>
-                            <td><input className="erp-input numeric" data-field="cdAmt" data-index={index} value={item.cdAmt} onChange={(e) => updateInvoiceItem(index, 'cdAmt', e.target.value)} onKeyDown={(e) => handleInvoiceKeyDown(e, index, 'cdAmt')} style={{ width: '100%' }} /></td>
+                            <td><input className="erp-input numeric" data-field="cdAmt" data-index={index} value={item.cdAmt} readOnly style={{ width: '100%', backgroundColor: '#f3f4f6' }} /></td>
                             <td><input className="erp-input numeric small" data-field="starPct" data-index={index} value={item.starPct} onChange={(e) => updateInvoiceItem(index, 'starPct', e.target.value)} onKeyDown={(e) => handleInvoiceKeyDown(e, index, 'starPct')} style={{ width: '100%' }} /></td>
                             <td><input className="erp-input numeric" data-field="starAmt" data-index={index} value={item.starAmt} onChange={(e) => updateInvoiceItem(index, 'starAmt', e.target.value)} onKeyDown={(e) => handleInvoiceKeyDown(e, index, 'starAmt')} style={{ width: '100%' }} /></td>
-                            <td><input className="erp-input numeric" data-field="taxable" data-index={index} value={item.taxable} onChange={(e) => updateInvoiceItem(index, 'taxable', e.target.value)} onKeyDown={(e) => handleInvoiceKeyDown(e, index, 'taxable')} style={{ width: '100%' }} /></td>
+                            <td><input className="erp-input numeric" data-field="taxable" data-index={index} value={item.taxable} readOnly style={{ width: '100%', backgroundColor: '#f3f4f6' }} /></td>
                             <td><input className="erp-input numeric small" data-field="gst" data-index={index} value={item.gst} onChange={(e) => updateInvoiceItem(index, 'gst', e.target.value)} onKeyDown={(e) => handleInvoiceKeyDown(e, index, 'gst')} style={{ width: '100%' }} /></td>
-                            <td><input className="erp-input numeric" data-field="sgst" data-index={index} value={item.sgst} onChange={(e) => updateInvoiceItem(index, 'sgst', e.target.value)} onKeyDown={(e) => handleInvoiceKeyDown(e, index, 'sgst')} style={{ width: '100%' }} /></td>
-                            <td><input className="erp-input numeric" data-field="cgst" data-index={index} value={item.cgst} onChange={(e) => updateInvoiceItem(index, 'cgst', e.target.value)} onKeyDown={(e) => handleInvoiceKeyDown(e, index, 'cgst')} style={{ width: '100%' }} /></td>
-                            <td><input className="erp-input numeric font-bold" data-field="amount" data-index={index} value={item.amount} onChange={(e) => updateInvoiceItem(index, 'amount', e.target.value)} onKeyDown={(e) => handleInvoiceKeyDown(e, index, 'amount')} style={{ width: '100%', fontWeight: 'bold' }} /></td>
+                            <td><input className="erp-input numeric" data-field="sgst" data-index={index} value={item.sgst} readOnly style={{ width: '100%', backgroundColor: '#f3f4f6' }} /></td>
+                            <td><input className="erp-input numeric" data-field="cgst" data-index={index} value={item.cgst} readOnly style={{ width: '100%', backgroundColor: '#f3f4f6' }} /></td>
+                            <td><input className="erp-input numeric font-bold" data-field="amount" data-index={index} value={item.amount} readOnly style={{ width: '100%', fontWeight: 'bold', backgroundColor: '#f3f4f6' }} /></td>
                             <td style={{ position: 'sticky', right: 0, backgroundColor: index === activeRow ? '#eff6ff' : 'white', zIndex: 5 }}>
                               <button className="btn-delete text-red-500" onClick={() => deleteInvoiceItem(index)} style={{ padding: '6px 12px', whiteSpace: 'nowrap' }}>🗑 Delete</button>
                             </td>
