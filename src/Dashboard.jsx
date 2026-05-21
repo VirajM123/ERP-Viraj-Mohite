@@ -413,6 +413,75 @@ const Dashboard = () => {
     loadLock: false,
     report: false
   });
+// ================= COMMON REGEX VALIDATION =================
+const numericFields = [
+  'mobileNo', 'phoneNo', 'pinCode', 'accountNumber', 'chequeNo',
+  'billNo', 'vNo', 'loadNo', 'invoiceNumber', 'creditDays',
+  'creditBills', 'lockDays', 'seqNo', 'qty', 'free', 'mrp',
+  'rate', 'gst', 'vat', 'amount', 'openingBal', 'creditAmt',
+  'distKm', 'boxPack', 'inboxPack', 'weight', 'hsnCode',
+  'cess', 'cessAmt', 'ExpDays', 'tcsPercent'
+];
+
+const emailFields = ['emailId', 'email'];
+
+const regexInputValue = (name, value) => {
+  if (emailFields.includes(name)) {
+    return value.replace(/[^a-zA-Z0-9@._-]/g, '');
+  }
+// HSN CODE -> ONLY 8 DIGITS
+  if (name === 'hsn' || name === 'hsnCode') {
+    return value.replace(/\D/g, '').slice(0, 8);
+  }
+  if (name === 'mobileNo') {
+    return value.replace(/\D/g, '').slice(0, 10);
+  }
+
+  if (name === 'phoneNo') {
+    return value.replace(/\D/g, '').slice(0, 10);
+  }
+
+  if (name === 'pinCode') {
+    return value.replace(/\D/g, '').slice(0, 6);
+  }
+
+  if (numericFields.includes(name)) {
+    return value.replace(/[^0-9.]/g, '');
+  }
+
+  return value;
+};
+
+const isValidEmail = (email) => {
+  if (!email) return true;
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+};
+
+const validateFormRegex = (formData) => {
+  if (formData.emailId && !isValidEmail(formData.emailId)) {
+    alert('Please enter valid Email ID');
+    return false;
+  }
+
+  if (formData.mobileNo && formData.mobileNo.length !== 10) {
+    alert('Mobile No must be 10 digits');
+    return false;
+  }
+
+  if (formData.pinCode && formData.pinCode.length !== 6) {
+    alert('Pin Code must be 6 digits');
+    return false;
+  }
+if (formData.hsn && formData.hsn.length > 8) {
+  alert('HSN Code cannot exceed 8 digits');
+  return false;
+}
+  return true;
+};
+
+
+
+
   // Add this function where other handler functions are defined
   const handleSettleLoad = (loadData) => {
     console.log('Settling Load:', loadData);
@@ -631,9 +700,11 @@ const Dashboard = () => {
       });
     };
 
-    const handleSettleLoadInputChange = (e) => {
-      setSettleLoadFormData({ ...settleLoadFormData, [e.target.name]: e.target.value });
-    };
+    
+const handleSettleLoadInputChange = (e) => {
+  const { name, value } = e.target;
+  setSettleLoadFormData({ ...settleLoadFormData, [name]: regexInputValue(name, value) });
+};
 
     const handleSettleLoadOptionChange = (option) => {
       setSettleLoadOptions({ ...settleLoadOptions, [option]: !settleLoadOptions[option] });
@@ -978,12 +1049,32 @@ const Dashboard = () => {
   const [customerBankFilter, setCustomerBankFilter] = useState('');
   // Form states
   const [companyForm, setCompanyForm] = useState({ code: '', name: '', address: '', branchAddress: '' });
-  const [productForm, setProductForm] = useState({
-    code: '', name: '', companyId: '', group: '', category: '', description: '',
-    gst: '', basicUnit: 'PCS', boxPack: '', inboxPack: '', retailerMargin: '',
-    distributorMargin: '', active: true, locked: false, hsn: '', weight: '0', allowFraction: false,
-    Rate_Per_Unit: '1', Reorder_Level: '0', Min_Stock_Holding: '0'
-  });
+const [productForm, setProductForm] = useState({
+  code: '',
+  name: '',
+  companyId: '',
+  group: '',
+  category: '',
+  description: '',
+  gst: '0',
+  basicUnit: 'PCS',
+  boxPack: '0',
+  inboxPack: '0',
+  retailerMargin: '0',
+  distributorMargin: '0',
+  hsn: '0',
+  weight: '0',
+  Rate_Per_Unit: '0',
+  Reorder_Level: '0',
+  Min_Stock_Holding: '0',
+  cess: '0',
+  cessAmt: '0',
+  ExpDays: '0',
+  create: '0',
+  active: true,
+  locked: false,
+  allowFraction: false
+});
 
   // Account Form State
   const [accountForm, setAccountForm] = useState({
@@ -1110,10 +1201,10 @@ const Dashboard = () => {
     tools: { title: 'Tools', icon: '⚙️', items: ['General Setup', 'Security Setup'] },
     logout: { title: 'Logout', icon: '🚪', items: [] }
   };
-  // GoDown Master Handlers
   const handleGodownInput = (e) => {
-    setGodownForm({ ...godownForm, [e.target.name]: e.target.value });
-  };
+  const { name, value } = e.target;
+  setGodownForm({ ...godownForm, [name]: regexInputValue(name, value) });
+};
 
   // Bill Print Handlers
   const handleBillPrintInputChange = (e) => {
@@ -1655,43 +1746,46 @@ const Dashboard = () => {
     // Keep the form open by not changing activeSubMenu or openFormFor
     // This ensures the user returns to the bill print form
   };
-  // Firm Creation Handlers
-  const handleFirmInput = (e) => {
-    setFirmData({ ...firmData, [e.target.name]: e.target.value });
-  };
+ const handleFirmInput = (e) => {
+  const { name, value } = e.target;
+  setFirmData({ ...firmData, [name]: regexInputValue(name, value) });
+};
 
-  const saveFirm = (e) => {
-    e.preventDefault();
-    if (!firmData.firmCode || !firmData.firmName) {
-      return alert('Firm Code and Firm Name are required');
-    }
+ const saveFirm = (e) => {
+  e.preventDefault();
 
-    const newFirm = { id: Date.now(), ...firmData };
-    setFirms([...firms, newFirm]);
-    alert('Firm created successfully!');
+  if (!validateFormRegex(firmData)) return;
 
-    // Reset form
-    setFirmData({
-      firmCode: '',
-      firmName: '',
-      address1: '',
-      address2: '',
-      city: '',
-      pinCode: '',
-      state: '',
-      country: '',
-      phoneNo: '',
-      mobileNo: '',
-      tinNo: '',
-      regNo: '',
-      gstNo: '',
-      drugLicNo: '',
-      foodLicenceNo: '',
-      distributorId: '',
-      apiKey: ''
-    });
-    closeForm();
-  };
+  if (!firmData.firmCode || !firmData.firmName) {
+    return alert('Firm Code and Firm Name are required');
+  }
+
+  const newFirm = { id: Date.now(), ...firmData };
+  setFirms([...firms, newFirm]);
+  alert('Firm created successfully!');
+
+  setFirmData({
+    firmCode: '',
+    firmName: '',
+    address1: '',
+    address2: '',
+    city: '',
+    pinCode: '',
+    state: '',
+    country: '',
+    phoneNo: '',
+    mobileNo: '',
+    tinNo: '',
+    regNo: '',
+    gstNo: '',
+    drugLicNo: '',
+    foodLicenceNo: '',
+    distributorId: '',
+    apiKey: ''
+  });
+
+  closeForm();
+};
 
   // User Creation Handlers
   const handleUserInput = (e) => {
@@ -1778,50 +1872,54 @@ const Dashboard = () => {
       godown.name?.toLowerCase().includes(filters.godown.toLowerCase())
     );
   };
-  // Customer Bank Master Handlers
-  const handleCustomerBankInput = (e) => {
-    setCustomerBankForm({ ...customerBankForm, [e.target.name]: e.target.value });
-  };
+ 
+const handleCustomerBankInput = (e) => {
+  const { name, value } = e.target;
+  setCustomerBankForm({ ...customerBankForm, [name]: regexInputValue(name, value) });
+};
 
-  const saveCustomerBank = (e) => {
-    e.preventDefault();
-    if (!customerBankForm.bankCode || !customerBankForm.bankName || !customerBankForm.accountNumber) {
-      return alert('Bank Code, Bank Name and Account Number are required');
-    }
+const saveCustomerBank = (e) => {
+  e.preventDefault();
 
-    if (editCustomerBankId) {
-      setCustomerBanks(customerBanks.map(bank =>
-        bank.id === editCustomerBankId
-          ? { ...bank, ...customerBankForm }
-          : bank
-      ));
-      setEditCustomerBankId(null);
-    } else {
-      const newId = Math.max(...customerBanks.map(b => b.id), 0) + 1;
-      setCustomerBanks([...customerBanks, { id: newId, ...customerBankForm }]);
-    }
+  if (!validateFormRegex(customerBankForm)) return;
 
-    // Reset form
-    setCustomerBankForm({
-      bankCode: '',
-      bankName: '',
-      accountNumber: '',
-      ifscCode: '',
-      branchName: '',
-      accountType: 'Savings',
-      customerName: '',
-      customerCode: '',
-      mobileNo: '',
-      emailId: '',
-      upiId: '',
-      swiftCode: '',
-      micrCode: '',
-      panNumber: '',
-      beneficiaryName: '',
-      remarks: ''
-    });
-    closeForm();
-  };
+  if (!customerBankForm.bankCode || !customerBankForm.bankName || !customerBankForm.accountNumber) {
+    return alert('Bank Code, Bank Name and Account Number are required');
+  }
+
+  if (editCustomerBankId) {
+    setCustomerBanks(customerBanks.map(bank =>
+      bank.id === editCustomerBankId
+        ? { ...bank, ...customerBankForm }
+        : bank
+    ));
+    setEditCustomerBankId(null);
+  } else {
+    const newId = Math.max(...customerBanks.map(b => b.id), 0) + 1;
+    setCustomerBanks([...customerBanks, { id: newId, ...customerBankForm }]);
+  }
+
+  setCustomerBankForm({
+    bankCode: '',
+    bankName: '',
+    accountNumber: '',
+    ifscCode: '',
+    branchName: '',
+    accountType: 'Savings',
+    customerName: '',
+    customerCode: '',
+    mobileNo: '',
+    emailId: '',
+    upiId: '',
+    swiftCode: '',
+    micrCode: '',
+    panNumber: '',
+    beneficiaryName: '',
+    remarks: ''
+  });
+
+  closeForm();
+};
 
   const editCustomerBank = (bank) => {
     setEditCustomerBankId(bank.id);
@@ -2239,10 +2337,10 @@ const Dashboard = () => {
       </div>
     );
   };
-  // Sales Invoice Functions
-  const handleInvoiceInputChange = (e) => {
-    setInvoiceFormData({ ...invoiceFormData, [e.target.name]: e.target.value });
-  };
+ const handleInvoiceInputChange = (e) => {
+  const { name, value } = e.target;
+  setInvoiceFormData({ ...invoiceFormData, [name]: regexInputValue(name, value) });
+};
 
   const addInvoiceItem = useCallback(() => {
     const newItem = {
@@ -2990,20 +3088,19 @@ const saveVoucherToList = (type, data) => {
     // ADD THIS LINE - Calculate summary after deleting item
     calcPurchaseSummary();
   };
+const handlePurchaseInputChange = (e) => {
+  const { name, value } = e.target;
+  const cleanValue = regexInputValue(name, value);
 
-  const handlePurchaseInputChange = (e) => {
-    const { name, value } = e.target;
-    let newValue = value;
-    let updatedForm = { ...purchaseFormData, [name]: value };
+  const updatedForm = { ...purchaseFormData, [name]: cleanValue };
 
-    if (name === 'tcbPercent' || name === 'diBc1' || name === 'diBc2' || name === 'diBc3' || name === 'rounding') {
-      setPurchaseFormData(updatedForm);
-      // ADD THIS - Trigger recalculation of summary when these fields change
-      setTimeout(() => calcPurchaseSummary(), 0);
-    } else {
-      setPurchaseFormData(updatedForm);
-    }
-  };
+  if (['tcbPercent', 'diBc1', 'diBc2', 'diBc3', 'rounding'].includes(name)) {
+    setPurchaseFormData(updatedForm);
+    setTimeout(() => calcPurchaseSummary(), 0);
+  } else {
+    setPurchaseFormData(updatedForm);
+  }
+};
   const handlePurchaseKeyDown = (e, index, field) => {
     if (e.key === 'Enter') {
       e.preventDefault();
@@ -3176,10 +3273,11 @@ const saveVoucherToList = (type, data) => {
   closeForm();
 };
 
-  // ==================== CREDIT NOTE FUNCTIONS ====================
-  const handleCreditNoteInputChange = (e) => {
-    setCreditNoteFormData({ ...creditNoteFormData, [e.target.name]: e.target.value });
-  };
+ 
+const handleCreditNoteInputChange = (e) => {
+  const { name, value } = e.target;
+  setCreditNoteFormData({ ...creditNoteFormData, [name]: regexInputValue(name, value) });
+};
 
   const addCreditNoteItem = useCallback(() => {
     const newItem = {
@@ -3458,10 +3556,10 @@ const saveVoucherToList = (type, data) => {
     alert('Credit Note saved successfully!');
     closeForm();
   };
-  // ==================== DEBIT NOTE FUNCTIONS ====================
-  const handleDebitNoteInputChange = (e) => {
-    setDebitNoteFormData({ ...debitNoteFormData, [e.target.name]: e.target.value });
-  };
+ const handleDebitNoteInputChange = (e) => {
+  const { name, value } = e.target;
+  setDebitNoteFormData({ ...debitNoteFormData, [name]: regexInputValue(name, value) });
+};
 
   const addDebitNoteItem = useCallback(() => {
     const newItem = {
@@ -3726,10 +3824,10 @@ const saveVoucherToList = (type, data) => {
     alert('Debit Note saved successfully!');
     closeForm();
   };
-  // Create Load Handlers
-  const handleCreateLoadInputChange = (e) => {
-    setCreateLoadFormData({ ...createLoadFormData, [e.target.name]: e.target.value });
-  };
+const handleCreateLoadInputChange = (e) => {
+  const { name, value } = e.target;
+  setCreateLoadFormData({ ...createLoadFormData, [name]: regexInputValue(name, value) });
+};
 
   const addCreateLoadItem = () => {
     const newItem = {
@@ -3883,10 +3981,10 @@ const saveVoucherToList = (type, data) => {
   const handleMenuClick = (menuKey) => {
     setActiveMenu(activeMenu === menuKey ? null : menuKey);
   };
-  // Print Load Handlers
-  const handlePrintLoadInputChange = (e) => {
-    setPrintLoadFormData({ ...printLoadFormData, [e.target.name]: e.target.value });
-  };
+const handlePrintLoadInputChange = (e) => {
+  const { name, value } = e.target;
+  setPrintLoadFormData({ ...printLoadFormData, [name]: regexInputValue(name, value) });
+};
 
   const handlePrintLoadSubmit = (e) => {
     e.preventDefault();
@@ -4918,10 +5016,10 @@ const saveVoucherToList = (type, data) => {
     window.removeEventListener("openSettleLoad", handleOpenSettleLoad);
   };
 }, []);
-  // GST Master Handlers
-  const handleGstInput = (e) => {
-    setGstForm({ ...gstForm, [e.target.name]: e.target.value });
-  };
+ const handleGstInput = (e) => {
+  const { name, value } = e.target;
+  setGstForm({ ...gstForm, [name]: regexInputValue(name, value) });
+};
   // Add this useEffect to set Dashboard as default when component mounts
   useEffect(() => {
     // Set Dashboard as default active view on login
@@ -4966,29 +5064,52 @@ const saveVoucherToList = (type, data) => {
     }
   };
 
-  // Salesman Master Handlers
-  const handleSalesmanInput = (e) => {
-    setSalesmanForm({ ...salesmanForm, [e.target.name]: e.target.value });
-  };
+const handleSalesmanInput = (e) => {
+  const { name, value } = e.target;
+  setSalesmanForm({ ...salesmanForm, [name]: regexInputValue(name, value) });
+};
 
   const saveSalesman = (e) => {
-    e.preventDefault();
-    if (!salesmanForm.code || !salesmanForm.name) return alert('Code and Name required');
+  e.preventDefault();
 
-    if (editSalesmanId) {
-      setSalesmen(salesmen.map(sm =>
-        sm.id === editSalesmanId
-          ? { ...sm, ...salesmanForm }
-          : sm
-      ));
-      setEditSalesmanId(null);
-    } else {
-      const newId = Math.max(...salesmen.map(s => s.id), 0) + 1;
-      setSalesmen([...salesmen, { id: newId, ...salesmanForm }]);
-    }
-    setSalesmanForm({ code: '', name: '', type: 'SALESMAN', address: '', town: '', pinCode: '', state: '', country: '', phoneNo: '', mobileNo: '', emailId: '', dateOfBirth: '', qualification: '', reference: '', imeiNo: '' });
-    closeForm();
-  };
+  if (!validateFormRegex(salesmanForm)) return;
+
+  if (!salesmanForm.code || !salesmanForm.name) {
+    return alert('Code and Name required');
+  }
+
+  if (editSalesmanId) {
+    setSalesmen(salesmen.map(sm =>
+      sm.id === editSalesmanId
+        ? { ...sm, ...salesmanForm }
+        : sm
+    ));
+    setEditSalesmanId(null);
+  } else {
+    const newId = Math.max(...salesmen.map(s => s.id), 0) + 1;
+    setSalesmen([...salesmen, { id: newId, ...salesmanForm }]);
+  }
+
+  setSalesmanForm({
+    code: '',
+    name: '',
+    type: 'SALESMAN',
+    address: '',
+    town: '',
+    pinCode: '',
+    state: '',
+    country: '',
+    phoneNo: '',
+    mobileNo: '',
+    emailId: '',
+    dateOfBirth: '',
+    qualification: '',
+    reference: '',
+    imeiNo: ''
+  });
+
+  closeForm();
+};
 
   const editSalesman = (salesman) => {
     setEditSalesmanId(salesman.id);
@@ -5097,10 +5218,10 @@ const saveVoucherToList = (type, data) => {
     }
   };
 
-  const handleCompanyInput = (e) => {
-    setCompanyForm({ ...companyForm, [e.target.name]: e.target.value });
-  };
-
+const handleCompanyInput = (e) => {
+  const { name, value } = e.target;
+  setCompanyForm({ ...companyForm, [name]: regexInputValue(name, value) });
+};
   const saveCompany = (e) => {
     e.preventDefault();
     if (!companyForm.code || !companyForm.name) return alert('Code and Name required');
@@ -5113,10 +5234,13 @@ const saveVoucherToList = (type, data) => {
     setCompanies(companies.filter(c => c.id !== id));
   };
 
-  const handleProductInput = (e) => {
-    const { name, value, type, checked } = e.target;
-    setProductForm({ ...productForm, [name]: type === 'checkbox' ? checked : value });
-  };
+ const handleProductInput = (e) => {
+  const { name, value, type, checked } = e.target;
+  setProductForm({
+    ...productForm,
+    [name]: type === 'checkbox' ? checked : regexInputValue(name, value)
+  });
+};
 
   const saveProduct = (e) => {
     e.preventDefault();
@@ -5135,118 +5259,132 @@ const saveVoucherToList = (type, data) => {
     setProducts(products.filter(p => p.id !== id));
   };
 
-  // Account Handlers
-  const handleAccountInput = (e) => {
-    const { name, value, type, checked } = e.target;
-    setAccountForm({ ...accountForm, [name]: type === 'checkbox' ? checked : value });
-  };
+ const handleAccountInput = (e) => {
+  const { name, value, type, checked } = e.target;
+  setAccountForm({
+    ...accountForm,
+    [name]: type === 'checkbox' ? checked : regexInputValue(name, value)
+  });
+};
+const saveAccount = (e) => {
+  e.preventDefault();
 
-  const saveAccount = (e) => {
-    e.preventDefault();
-    if (!accountForm.accountCode || !accountForm.accountName) return alert('Account Code and Name required');
-    setAccounts([...accounts, { id: Date.now(), ...accountForm }]);
-    setAccountForm({
-      accountCode: '',
-      accountName: '',
-      address: '',
-      town: 'Pune',
-      state: 'MAHARASHTRA',
-      pinCode: '',
-      phoneNo: '',
-      mobileNo: '',
-      emailId: '',
-      tinNo: '',
-      openingBal: '0.00',
-      openingBalType: 'Dr',
-      dlNo1: '',
-      dlExp1: '',
-      dlNo2: '',
-      dlExp2: '',
-      birthDate: '',
-      contactPerson: '',
-      commonCode: '',
-      commonName: '',
-      billType: 'CREDIT',
-      invType: 'TAXABLE',
-      taxOn: 'SRATE',
-      tradeDisc: 'YES',
-      tradePercent: '0.00',
-      creditDays: '0',
-      creditBills: '0',
-      lockDays: '0',
-      creditAmt: '0.00',
-      weeklyOff: 'NONE',
-      blackListed: 'NO',
-      distKm: '0.00',
-      closeTime: '',
-      seqNo: '0',
-      panNo: '',
-      foodLicense: '',
-      gstNo: '',
-      billToAdd1: '',
-      tcsPercent: '0.0000',
-      tanNo: '',
-      gstType: 'Unregistered',
-      gstDate: '',
-      add2: '',
-      gstClsDate: '',
-      allowInPurchase: 'N'
-    });
-    closeForm();
-  };
+  if (!validateFormRegex(accountForm)) return;
+
+  if (!accountForm.accountCode || !accountForm.accountName) {
+    return alert('Account Code and Name required');
+  }
+
+  setAccounts([...accounts, { id: Date.now(), ...accountForm }]);
+
+  setAccountForm({
+    accountCode: '',
+    accountName: '',
+    address: '',
+    town: 'Pune',
+    state: 'MAHARASHTRA',
+    pinCode: '',
+    phoneNo: '',
+    mobileNo: '',
+    emailId: '',
+    tinNo: '',
+    openingBal: '0.00',
+    openingBalType: 'Dr',
+    dlNo1: '',
+    dlExp1: '',
+    dlNo2: '',
+    dlExp2: '',
+    birthDate: '',
+    contactPerson: '',
+    commonCode: '',
+    commonName: '',
+    billType: 'CREDIT',
+    invType: 'TAXABLE',
+    taxOn: 'SRATE',
+    tradeDisc: 'YES',
+    tradePercent: '0.00',
+    creditDays: '0',
+    creditBills: '0',
+    lockDays: '0',
+    creditAmt: '0.00',
+    weeklyOff: 'NONE',
+    blackListed: 'NO',
+    distKm: '0.00',
+    closeTime: '',
+    seqNo: '0',
+    panNo: '',
+    foodLicense: '',
+    gstNo: '',
+    billToAdd1: '',
+    tcsPercent: '0.0000',
+    tanNo: '',
+    gstType: 'Unregistered',
+    gstDate: '',
+    add2: '',
+    gstClsDate: '',
+    allowInPurchase: 'N'
+  });
+
+  closeForm();
+};
 
   const deleteAccount = (id) => {
     setAccounts(accounts.filter(a => a.id !== id));
   };
 
-  // Other Account Handlers
   const handleOtherAccountInput = (e) => {
-    const { name, value } = e.target;
-    setOtherAccountForm({ ...otherAccountForm, [name]: value });
-  };
+  const { name, value } = e.target;
+  setOtherAccountForm({ ...otherAccountForm, [name]: regexInputValue(name, value) });
+};
+const saveOtherAccount = (e) => {
+  e.preventDefault();
 
-  const saveOtherAccount = (e) => {
-    e.preventDefault();
-    if (!otherAccountForm.accountCode || !otherAccountForm.accountName) return alert('Account Code and Name required');
-    setOtherAccounts([...otherAccounts, { id: Date.now(), ...otherAccountForm }]);
-    setOtherAccountForm({
-      accountCode: '',
-      accountName: '',
-      accountGroup: 'INCOMES DIRECT',
-      address: '',
-      town: '',
-      state: '',
-      country: '',
-      pinCode: '',
-      phoneNo: '',
-      mobileNo: '',
-      emailId: '',
-      tinNo: '',
-      openingBal: '0.00',
-      openingBalType: 'Dr',
-      dlNo1: '',
-      dlExp1: '',
-      dlNo2: '',
-      dlExp2: '',
-      invType: 'CST',
-      taxOn: 'SRATE',
-      commonCode: '',
-      commonName: '',
-      panNo: '',
-      foodLicense: '',
-      gstNo: '',
-      billToAdd1: '',
-      remark: '',
-      tcsPercent: '',
-      tanNo: '',
-      gstType: 'Unregistered',
-      gstDate: '',
-      add2: '',
-      gstClsDate: ''
-    });
-    closeForm();
-  };
+  if (!validateFormRegex(otherAccountForm)) return;
 
+  if (!otherAccountForm.accountCode || !otherAccountForm.accountName) {
+    return alert('Account Code and Name required');
+  }
+
+  setOtherAccounts([...otherAccounts, { id: Date.now(), ...otherAccountForm }]);
+
+  setOtherAccountForm({
+    accountCode: '',
+    accountName: '',
+    accountGroup: 'INCOMES DIRECT',
+    address: '',
+    town: '',
+    state: '',
+    country: '',
+    pinCode: '',
+    phoneNo: '',
+    mobileNo: '',
+    emailId: '',
+    tinNo: '',
+    openingBal: '0.00',
+    openingBalType: 'Dr',
+    dlNo1: '',
+    dlExp1: '',
+    dlNo2: '',
+    dlExp2: '',
+    invType: 'CST',
+    taxOn: 'SRATE',
+    commonCode: '',
+    commonName: '',
+    panNo: '',
+    foodLicense: '',
+    gstNo: '',
+    billToAdd1: '',
+    remark: '',
+    tcsPercent: '',
+    tanNo: '',
+    gstType: 'Unregistered',
+    gstDate: '',
+    add2: '',
+    gstClsDate: ''
+  });
+
+  closeForm();
+};
   const deleteOtherAccount = (id) => {
     setOtherAccounts(otherAccounts.filter(oa => oa.id !== id));
   };
@@ -9814,21 +9952,23 @@ const handleDeleteVoucher = (type, id) => {
                         <label>Reorder Level</label>
                         <input name="Reorder_Level" placeholder="0" value={productForm.Reorder_Level} onChange={handleProductInput} type="number" />
                       </div>
-                      <div className="form-actions">
-                        <button type="submit" className="btn-primary">Save Product</button>
+                      <div className="form-actions-left">
+  <button type="submit" className="btn-primary">
+    Save Product
+  </button>
 
-                        <button
-                          type="button"
-                          className="btn-secondary"
-                          onClick={closeForm}
-                        >
-                          Cancel
-                        </button>
+  <button
+    type="button"
+    className="btn-secondary"
+    onClick={closeForm}
+  >
+    Cancel
+  </button>
 
-                        <a href="/product-mapping" className="link-mapping">
-                          Product Mapping
-                        </a>
-                      </div>
+  <a href="/product-mapping" className="link-mapping">
+    Product Mapping
+  </a>
+</div>
                     </div>
                   </div>
                 </div>
