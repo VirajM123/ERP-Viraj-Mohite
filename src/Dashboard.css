@@ -3351,3 +3351,65 @@ textarea {
     height: 160px !important;
   }
 }
+/* ===== FORM ACTION BUTTONS LEFT ALIGN ===== */
+
+.form-actions-left {
+  display: flex;
+  justify-content: flex-start;
+  align-items: center;
+  gap: 12px;
+  margin-top: 20px;
+  flex-wrap: wrap;
+}
+
+/* Save Button */
+.form-actions-left .btn-primary {
+  background: #2563eb;
+  color: #ffffff;
+  border: none;
+  padding: 10px 18px;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.form-actions-left .btn-primary:hover {
+  background: #1d4ed8;
+}
+
+/* Cancel Button */
+.form-actions-left .btn-secondary {
+  background: #e2e8f0;
+  color: #1e293b;
+  border: none;
+  padding: 10px 18px;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.form-actions-left .btn-secondary:hover {
+  background: #cbd5e1;
+}
+
+/* Product Mapping Link Button */
+.form-actions-left .link-mapping {
+  background: #0f766e;
+  color: #ffffff;
+  text-decoration: none;
+  padding: 10px 18px;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 600;
+  transition: all 0.2s ease;
+  display: inline-flex;
+  align-items: center;
+}
+
+.form-actions-left .link-mapping:hover {
+  background: #115e59;
+}
