@@ -2,20 +2,20 @@
   import "./Transaction.css";
   import { useERP } from "./context/ERPContext";
 
-  const Transaction = ({
-    salesInvoices = [],
-    salesmen = [],
-    accounts = [],
-    customerBanks = [],
-    activeTransaction,
-    showReceiptForm,
-    setShowReceiptForm,
-    openFormFor,
-    transactionFormMode,
-    setActiveTransaction,
-    setTransactionFormMode
-
-  }) => {
+const Transaction = ({
+  salesInvoices = [],
+  salesmen = [],
+  accounts = [],
+  otherAccounts = [],
+  customerBanks = [],
+  activeTransaction,
+  showReceiptForm,
+  setShowReceiptForm,
+  openFormFor,
+  transactionFormMode,
+  setActiveTransaction,
+  setTransactionFormMode
+}) => {
     const { state, dispatch } = useERP();
 
     const [billItems, setBillItems] = useState([]);
@@ -27,7 +27,7 @@
     const [showSalesmanSelectionModal, setShowSalesmanSelectionModal] = useState(false);
     const [showAreaSelectionModal, setShowAreaSelectionModal] = useState(false);
     const [currentSelectionType, setCurrentSelectionType] = useState("");
-
+   const [pdcDocketItems, setPDCDocketItems] = useState([]);
     // =========================
     // RECEIPT STATES
     // =========================
@@ -120,7 +120,12 @@
       drAmount: 0,
       crAmount: 0
     }]);
-    const [journalSummary, setJournalSummary] = useState({ totalDr: 0, totalCr: 0 });
+  const [journalSummary, setJournalSummary] = useState({
+  totalDr: 0,
+  totalCr: 0,
+  difference: 0,
+  totalEntries: 0
+});
 
     // =========================
     // CHEQUE BOUNCE STATES
@@ -148,18 +153,19 @@
     // const [showPDCDocketForm, setShowPDCDocketForm] = useState(false);
     const [editPDCDocketId, setEditPDCDocketId] = useState(null);
     const [pdcDocketFormData, setPDCDocketFormData] = useState({
-      depositDate: new Date().toISOString().split("T")[0],
-      docVNo: "",
-      fromDate: new Date().toISOString().split("T")[0],
-      toDate: new Date().toISOString().split("T")[0],
-      houseBank: "SYG",
-      bankName: "SURNAYUG CO OP BANK",
-      narration: "",
-      clearingType: "SAME BANK",
-      clearingDate: "",
-      totalAmount: "0.00",
-      totalCheques: "0"
-    });
+  depositDate: new Date().toISOString().split("T")[0],
+  docSeries: "PDC",
+  docVNo: (state.pdcDockets?.length || 0) + 1,
+  fromDate: new Date().toISOString().split("T")[0],
+  toDate: new Date().toISOString().split("T")[0],
+  houseBank: "",
+  bankName: "",
+  narration: "",
+  clearingType: "SAME BANK",
+  clearingDate: "",
+  totalAmount: "0.00",
+  totalCheques: "0"
+});
 
     // =========================
     // CONTRA STATES
@@ -695,18 +701,106 @@
     // =========================
     // HELPER DATA
     // =========================
-    const pendingBills = (salesInvoices || []).map((invoice, index) => ({
+    const clean = (v) => String(v ?? "").trim().toLowerCase();
+
+const pickValue = (...values) => {
+  for (const v of values) {
+    if (v !== undefined && v !== null && String(v).trim() !== "") return v;
+  }
+  return "";
+};
+
+const getReceiptAdjustedAmount = (billSeries, billNo) => {
+  return (state.receipts || []).reduce((sum, receipt) => {
+    return sum + (receipt.items || [])
+      .filter(i =>
+        clean(i.trnSeries) === clean(billSeries) &&
+        clean(i.trnNo) === clean(billNo)
+      )
+      .reduce(
+        (s, i) =>
+          s + (Number(i.nowAdjust) || 0) + (Number(i.discAmount) || 0),
+        0
+      );
+  }, 0);
+};
+
+const pendingBills = (salesInvoices || [])
+  .map((invoice, index) => {
+    const header = invoice.header || {};
+    const summary = invoice.summary || {};
+
+    const billSeries = pickValue(
+      invoice.billSeries,
+      invoice.BillSeries,
+      invoice.trnSeries,
+      header.billSeries,
+      header.BillSeries,
+      header.trnSeries,
+      header.series,
+      "INV"
+    );
+
+    const billNo = pickValue(
+      invoice.billNo,
+      invoice.billNumber,
+      invoice.BillNo,
+      invoice.trnNo,
+      header.billNo,
+      header.billNumber,
+      header.BillNo,
+      header.trnNo
+    );
+
+    const amount = Number(
+      pickValue(
+        invoice.amount,
+        invoice.netAmount,
+        invoice.billAmount,
+        invoice.grandTotal,
+        summary.net,
+        summary.netAmount,
+        summary.grandTotal,
+        summary.totalAmount
+      )
+    ) || 0;
+
+    const adjusted = getReceiptAdjustedAmount(billSeries, billNo);
+    const balance = Math.max(amount - adjusted, 0);
+
+    return {
       id: invoice.id || index + 1,
-      billSeries: invoice.billSeries || invoice.header?.billSeries || "INV",
-      billNo: invoice.billNumber || invoice.billNo || invoice.header?.billNumber || `INV-00${index + 1}`,
-      trnNo: invoice.billNumber || invoice.billNo || index + 1,
-      trnDate: invoice.date || invoice.billDate || invoice.header?.billDate || "",
-      amount: parseFloat(invoice.amount || invoice.summary?.net || 0),
-      adjusted: 0,
-      balance: parseFloat(invoice.amount || invoice.summary?.net || 0),
-      party: invoice.party || invoice.partyName || invoice.header?.party || "",
-      salesman: invoice.salesman || invoice.header?.salesman || ""
-    }));
+      billSeries,
+      billNo,
+      trnNo: billNo,
+      trnDate: pickValue(
+        invoice.billDate,
+        invoice.date,
+        invoice.trnDate,
+        header.billDate,
+        header.date,
+        header.trnDate
+      ),
+      amount,
+      adjusted,
+      balance,
+      party: pickValue(
+        invoice.partyName,
+        invoice.party,
+        invoice.customerName,
+        header.partyName,
+        header.party,
+        header.customerName
+      ),
+      salesman: pickValue(
+        invoice.salesman,
+        invoice.salesmanName,
+        header.salesman,
+        header.salesmanName
+      )
+    };
+  })
+  .filter(bill => bill.billNo && bill.balance > 0);
 
     const pendingPurchaseBills = [
       { party: "SURYAJUG CO OP BANK", billSeries: "PUR", billNo: "PUR-001", amount: 50000, adjusted: 0, balance: 50000 },
@@ -774,15 +868,21 @@
     // =========================
     // RECEIPT FUNCTIONS
     // =========================
-    const calculateReceiptSummary = (items) => {
-      let totalAdjusted = 0, totalDiscount = 0, totalBalance = 0;
-      items.forEach((item) => {
-        totalAdjusted += parseFloat(item.nowAdjust) || 0;
-        totalDiscount += parseFloat(item.discAmount) || 0;
-        totalBalance += parseFloat(item.balanceAmt) || 0;
-      });
-      setReceiptSummary({ totalAdjusted, totalDiscount, balanceAmount: totalBalance });
-    };
+  const calculateReceiptSummary = (items) => {
+  let totalAdjusted = 0, totalDiscount = 0, totalBalance = 0;
+
+  items.forEach((item) => {
+    totalAdjusted += Number(item.nowAdjust) || 0;
+    totalDiscount += Number(item.discAmount) || 0;
+    totalBalance += Number(item.balanceAmt) || 0;
+  });
+
+  setReceiptSummary({
+    totalAdjusted,
+    totalDiscount,
+    balanceAmount: totalBalance
+  });
+};
 
     const addReceiptItem = () => {
       setReceiptItems([...receiptItems, {
@@ -793,31 +893,175 @@
       }]);
     };
 
-    const updateReceiptItem = (index, field, value) => {
-      const items = [...receiptItems];
-      items[index][field] = value;
-      const amount = parseFloat(items[index].amount) || 0;
-      const adjusted = parseFloat(items[index].adjustAmt) || 0;
-      const nowAdjust = parseFloat(items[index].nowAdjust) || 0;
-      const discount = parseFloat(items[index].discount) || 0;
-      const discAmount = (nowAdjust * discount) / 100;
-      items[index].discAmount = discAmount.toFixed(2);
-      items[index].balanceAmt = (amount - adjusted - nowAdjust - discAmount).toFixed(2);
-      setReceiptItems(items);
-      calculateReceiptSummary(items);
-    };
+  const updateReceiptItem = (index, field, value) => {
+  const receiptLimit = Number(receiptFormData.receiptAmount) || 0;
+  const items = [...receiptItems];
 
-    const handleReceiptInput = (e) => {
-      const { name, value } = e.target;
-      let updatedData = { ...receiptFormData, [name]: value };
-      if (name === "bankCash" && value === "Cash") {
-        updatedData.chequeNo = "";
-        updatedData.chequeDate = "";
-        updatedData.drawerBank = "";
-        updatedData.micr = "";
-      }
-      setReceiptFormData(updatedData);
+  if (field === "nowAdjust") {
+    const enteredValue = Math.max(Number(value) || 0, 0);
+
+    const otherRowsTotal = items.reduce((sum, item, i) => {
+      if (i === index) return sum;
+      return sum + (Number(item.nowAdjust) || 0);
+    }, 0);
+
+    const remainingReceiptAmount = Math.max(receiptLimit - otherRowsTotal, 0);
+    const rowBalance = Number(items[index].balanceAmt) || Number(items[index].amount) || 0;
+
+    items[index].nowAdjust = Math.min(enteredValue, remainingReceiptAmount, rowBalance);
+  } else {
+    items[index][field] = value;
+  }
+
+  const amount = Number(items[index].amount) || 0;
+  const adjusted = Number(items[index].adjustAmt) || 0;
+  const nowAdjust = Number(items[index].nowAdjust) || 0;
+  const discount = Number(items[index].discount) || 0;
+
+  const discAmount = (nowAdjust * discount) / 100;
+
+  items[index].discAmount = discAmount.toFixed(2);
+  items[index].balanceAmt = Math.max(
+    amount - adjusted - nowAdjust - discAmount,
+    0
+  ).toFixed(2);
+
+  setReceiptItems(items);
+  calculateReceiptSummary(items);
+};
+
+ 
+
+const getAlreadyAdjustedAmount = (billSeries, billNo) => {
+  return (state.receipts || []).reduce((sum, r) => {
+    const matched = (r.items || []).filter(
+      (i) =>
+        clean(i.trnSeries) === clean(billSeries) &&
+        clean(i.trnNo) === clean(billNo)
+    );
+
+    const adj = matched.reduce(
+      (s, i) => s + (Number(i.nowAdjust) || 0) + (Number(i.discAmount) || 0),
+      0
+    );
+
+    return sum + adj;
+  }, 0);
+};
+const distributeReceiptAmountToBills = (bills, receiptAmount) => {
+  let remainingAmount = Number(receiptAmount) || 0;
+
+  return bills.map((bill, index) => {
+    const billBalance = Number(bill.balance) || 0;
+    const nowAdjust = Math.min(billBalance, remainingAmount);
+
+    remainingAmount -= nowAdjust;
+
+    return {
+      id: Date.now() + index,
+      srNo: index + 1,
+      trnSeries: bill.billSeries,
+      trnNo: bill.billNo,
+      trnDate: bill.trnDate,
+      amount: bill.amount,
+      adjustAmt: bill.adjusted,
+      balanceAmt: billBalance - nowAdjust,
+      nowAdjust,
+      discount: 0,
+      discAmount: 0,
+      remark: ""
     };
+  });
+};
+const loadReceiptBillBySeriesNo = (billSeries, billNo, baseData = receiptFormData) => {
+  if (!billSeries || !billNo) return false;
+
+  const selectedBill = pendingBills.find(
+    (b) =>
+      clean(b.billSeries) === clean(billSeries) &&
+      clean(b.billNo) === clean(billNo)
+  );
+
+  if (!selectedBill) {
+    setReceiptItems([]);
+    setReceiptSummary({ totalAdjusted: 0, balanceAmount: 0, totalDiscount: 0 });
+    return false;
+  }
+
+  const partyBills = pendingBills.filter(
+    (b) => clean(b.party) === clean(selectedBill.party)
+  );
+
+  const orderedBills = [
+    selectedBill,
+    ...partyBills.filter(
+      (b) =>
+        !(
+          clean(b.billSeries) === clean(selectedBill.billSeries) &&
+          clean(b.billNo) === clean(selectedBill.billNo)
+        )
+    )
+  ];
+
+  // IMPORTANT: when bill is entered, receipt amount should become entered bill balance
+  const receiptAmt = Number(selectedBill.balance) || 0;
+
+  const billRows = distributeReceiptAmountToBills(orderedBills, receiptAmt);
+
+  setReceiptItems(billRows);
+
+  setReceiptFormData({
+    ...baseData,
+    billSeries: selectedBill.billSeries,
+    billNo: selectedBill.billNo,
+    partyName: selectedBill.party,
+    salesman: selectedBill.salesman,
+    receiptAmount: receiptAmt
+  });
+
+  calculateReceiptSummary(billRows);
+
+  setTimeout(() => {
+    const firstNowAdjust = document.querySelector(
+      ".receipt-entry-table tbody tr:first-child input[type='number']"
+    );
+    if (firstNowAdjust) {
+      firstNowAdjust.focus();
+      firstNowAdjust.select();
+    }
+  }, 100);
+
+  return true;
+};
+
+const handleReceiptInput = (e) => {
+  const { name, value } = e.target;
+
+  const updatedData = {
+    ...receiptFormData,
+    [name]: value
+  };
+
+  if (name === "bankCash" && value === "Cash") {
+    updatedData.chequeNo = "";
+    updatedData.chequeDate = "";
+    updatedData.drawerBank = "";
+    updatedData.micr = "";
+  }
+
+  setReceiptFormData(updatedData);
+
+  if (name === "billSeries" || name === "billNo") {
+    const nextSeries = name === "billSeries" ? value : updatedData.billSeries;
+    const nextBillNo = name === "billNo" ? value : updatedData.billNo;
+
+    if (nextSeries && nextBillNo) {
+      setTimeout(() => {
+        loadReceiptBillBySeriesNo(nextSeries, nextBillNo, updatedData);
+      }, 0);
+    }
+  }
+};
 
     const handlePartyTyping = (e) => {
       const value = e.target.value;
@@ -851,46 +1095,114 @@
       calculateReceiptSummary(billRows);
     };
 
-    const saveReceipt = () => {
-      const payload = { id: editReceiptId || Date.now(), header: receiptFormData, items: receiptItems, summary: receiptSummary };
-      if (editReceiptId) {
-        const updatedReceipts = state.receipts.map(r => r.id === editReceiptId ? payload : r);
-        dispatch({ type: "SET_RECEIPTS", payload: updatedReceipts });
-        alert("Receipt Updated Successfully");
-      } else {
-        dispatch({ type: "ADD_RECEIPT", payload });
-        alert("Receipt Saved Successfully");
-      }
-      resetReceiptForm();
-      setShowReceiptForm(false);
-    };
+const saveReceipt = () => {
+  if (!receiptItems.length) {
+    alert("No pending bill selected.");
+    return;
+  }
 
-    const resetReceiptForm = () => {
-      setEditReceiptId(null);
-      setReceiptFormData({
-        receiptDate: new Date().toISOString().split("T")[0], rno: state.receipts.length + 2,
-        billSeries: "", billNo: "", salesman: "", partyName: "", narration: "",
-        bankCash: "", loadNo: "", receiptAmount: "", chequeNo: "", chequeDate: "",
-        rloadNo: "", drawerBank: "", micr: "", pdcType: "LOCAL BANK"
-      });
-      setReceiptItems([]);
-      setReceiptSummary({ totalAdjusted: 0, balanceAmount: 0, totalDiscount: 0 });
-    };
+  const hasAmount = receiptItems.some(i => Number(i.nowAdjust) > 0);
+  if (!hasAmount) {
+    alert("Please enter Now Adjust amount.");
+    return;
+  }
 
-    const editReceipt = (receipt) => {
-      setEditReceiptId(receipt.id);
-      setReceiptFormData(receipt.header);
-      setReceiptItems(receipt.items);
-      setReceiptSummary(receipt.summary);
-      setShowReceiptForm(true);
-    };
+  const payload = {
+    id: editReceiptId || Date.now(),
+    header: { ...receiptFormData },
+    items: receiptItems.map(i => ({ ...i })),
+    summary: { ...receiptSummary }
+  };
 
-    const deleteReceipt = (id) => {
-      if (window.confirm("Are you sure you want to delete?")) {
-        dispatch({ type: "DELETE_RECEIPT", payload: id });
-      }
-    };
+  if (editReceiptId) {
+    const updatedReceipts = state.receipts.map(r =>
+      r.id === editReceiptId ? payload : r
+    );
+    dispatch({ type: "SET_RECEIPTS", payload: updatedReceipts });
+    alert("Receipt Updated Successfully");
+  } else {
+    dispatch({ type: "ADD_RECEIPT", payload });
+    alert("Receipt Saved Successfully");
+  }
 
+  resetReceiptForm();
+
+  setTransactionFormMode(prev => ({
+  ...prev,
+  Receipt: true
+}));
+};
+const resetReceiptForm = () => {
+  setEditReceiptId(null);
+
+  setReceiptFormData({
+    receiptDate: new Date().toISOString().split("T")[0],
+    rno: (state.receipts?.length || 0) + 1,
+    billSeries: "",
+    billNo: "",
+    salesman: "",
+    partyName: "",
+    narration: "",
+    bankCash: "",
+    loadNo: "",
+    receiptAmount: "",
+    chequeNo: "",
+    chequeDate: "",
+    rloadNo: "",
+    drawerBank: "",
+    micr: "",
+    pdcType: "LOCAL BANK"
+  });
+
+  setReceiptItems([]);
+  setPartySuggestions([]);
+  setReceiptSummary({
+    totalAdjusted: 0,
+    balanceAmount: 0,
+    totalDiscount: 0
+  });
+};
+  const editReceipt = (receipt) => {
+  setEditReceiptId(receipt.id);
+
+  setReceiptFormData({
+    ...receipt.header
+  });
+
+  setReceiptItems((receipt.items || []).map((item, index) => ({
+    ...item,
+    srNo: index + 1
+  })));
+
+  setReceiptSummary({
+    totalAdjusted: Number(receipt.summary?.totalAdjusted) || 0,
+    balanceAmount: Number(receipt.summary?.balanceAmount) || 0,
+    totalDiscount: Number(receipt.summary?.totalDiscount) || 0
+  });
+
+  setPartySuggestions([]);
+
+  setTransactionFormMode(prev => ({
+    ...prev,
+    Receipt: true
+  }));
+};
+const deleteReceipt = (id) => {
+  if (!window.confirm("Are you sure you want to delete this receipt?")) return;
+
+  const updatedReceipts = (state.receipts || []).filter(r => r.id !== id);
+
+  dispatch({
+    type: "SET_RECEIPTS",
+    payload: updatedReceipts
+  });
+
+  if (editReceiptId === id) {
+    resetReceiptForm();
+  }
+
+  alert("Receipt Deleted Successfully");
+};
     // =========================
     // JOURNAL FUNCTIONS
     // =========================
@@ -907,53 +1219,100 @@
     };
 
     const updateJournalItem = (index, field, value) => {
-      const items = [...journalItems];
-      items[index][field] = value;
-      setJournalItems(items);
-      calculateJournalSummary(items);
-    };
+  const items = [...journalItems];
+
+  if (field === "drAmount") {
+    items[index].drAmount = value;
+    if (Number(value) > 0) items[index].crAmount = 0;
+  } else if (field === "crAmount") {
+    items[index].crAmount = value;
+    if (Number(value) > 0) items[index].drAmount = 0;
+  } else {
+    items[index][field] = value;
+  }
+
+  setJournalItems(items);
+  calculateJournalSummary(items);
+};
 
     const calculateJournalSummary = (items) => {
-      let totalDr = 0, totalCr = 0;
-      items.forEach((item) => {
-        totalDr += parseFloat(item.drAmount) || 0;
-        totalCr += parseFloat(item.crAmount) || 0;
-      });
-      setJournalSummary({ totalDr, totalCr });
-    };
+  const totalDr = items.reduce((sum, i) => sum + (Number(i.drAmount) || 0), 0);
+  const totalCr = items.reduce((sum, i) => sum + (Number(i.crAmount) || 0), 0);
 
-    const handleAccountSearch = (index, value) => {
-      const updated = [...journalItems];
-      updated[index].accountName = value;
-      setJournalItems(updated);
-      setActiveAccountRow(index);
-      if (!value.trim()) {
-        setAccountSuggestions([]);
-        return;
-      }
-      const filtered = accounts.filter((acc) => {
-        const search = value.toLowerCase();
-        return acc.accountName?.toLowerCase().includes(search) ||
-          acc.accountCode?.toString().toLowerCase().includes(search);
-      });
-      setAccountSuggestions(filtered);
-    };
+  setJournalSummary({
+    totalDr,
+    totalCr,
+    difference: totalDr - totalCr,
+    totalEntries: items.filter(i => i.accountName).length
+  });
+};
+const getAccountName = (acc) =>
+  acc.accountName || acc.acName || acc.AcName || acc.name || acc.partyName || "";
+
+const getAccountCode = (acc) =>
+  acc.accountCode || acc.acCode || acc.AcCode || acc.code || acc.id || "";
+
+const allJournalAccounts = [
+  ...(accounts || []),
+  ...(otherAccounts || [])
+].filter((acc, index, self) => {
+  const name = getAccountName(acc).toLowerCase().trim();
+  const code = String(getAccountCode(acc)).toLowerCase().trim();
+
+  return (
+    name &&
+    index === self.findIndex(
+      (a) =>
+        getAccountName(a).toLowerCase().trim() === name ||
+        String(getAccountCode(a)).toLowerCase().trim() === code
+    )
+  );
+});
+   const handleAccountSearch = (index, value) => {
+  const updated = [...journalItems];
+  updated[index].accountName = value;
+  setJournalItems(updated);
+  setActiveAccountRow(index);
+
+  const search = value.toLowerCase().trim();
+
+  const filtered = allJournalAccounts.filter((acc) => {
+    const name = getAccountName(acc).toLowerCase();
+    const code = String(getAccountCode(acc)).toLowerCase();
+
+    return !search || name.includes(search) || code.includes(search);
+  });
+
+  setAccountSuggestions(filtered);
+};
 
     const selectAccount = (index, account) => {
-      const updated = [...journalItems];
-      updated[index] = { ...updated[index], accountCode: account.accountCode, accountName: account.accountName };
-      setJournalItems(updated);
-      setAccountSuggestions([]);
-      setActiveAccountRow(null);
-    };
+  const updated = [...journalItems];
 
-    const saveJournalVoucher = () => {
-      const payload = { id: Date.now(), header: journalFormData, items: journalItems, summary: journalSummary };
-      dispatch({ type: "ADD_JOURNAL", payload });
-      alert("Journal Voucher Saved");
-      setShowJournalForm(false);
-      resetJournalForm();
-    };
+  updated[index] = {
+    ...updated[index],
+    accountCode: getAccountCode(account),
+    accountName: getAccountName(account)
+  };
+
+  setJournalItems(updated);
+  setAccountSuggestions([]);
+  setActiveAccountRow(null);
+};
+   const saveJournalVoucher = () => {
+  const validItems = journalItems.filter(
+    i => i.accountName && ((Number(i.drAmount) || 0) > 0 || (Number(i.crAmount) || 0) > 0)
+  );
+
+  if (validItems.length < 2) {
+    alert("Please enter at least 2 journal rows.");
+    return;
+  }
+
+  if (Number(journalSummary.totalDr) !== Number(journalSummary.totalCr)) {
+    alert("Debit and Credit total must be equal.");
+    return;
+  }
 
     const resetJournalForm = () => {
       setJournalFormData({
@@ -961,7 +1320,12 @@
         vNo: state.journals?.length + 2 || 1, narr: "", isGst: "N"
       });
       setJournalItems([{ id: Date.now(), seqNo: 1, accountCode: "", accountName: "", drAmount: 0, crAmount: 0 }]);
-      setJournalSummary({ totalDr: 0, totalCr: 0 });
+     setJournalSummary({
+  totalDr: 0,
+  totalCr: 0,
+  difference: 0,
+  totalEntries: 0
+});
     };
 
     // =========================
@@ -1023,7 +1387,24 @@
       resetPaymentForm();
       setShowPaymentForm(false);
     };
+ const payload = {
+    id: Date.now(),
+    header: journalFormData,
+    items: validItems,
+    summary: journalSummary,
+    affectsOutstanding: true
+  };
 
+  dispatch({ type: "ADD_JOURNAL", payload });
+
+  alert("Journal Voucher Saved Successfully");
+  resetJournalForm();
+
+  setTransactionFormMode(prev => ({
+    ...prev,
+    ["Journal Voucher"]: true
+  }));
+};
     const resetPaymentForm = () => {
       setPaymentFormData({
         vDate: new Date().toISOString().split("T")[0], vNo: state.payments.length + 2, narr: "", partyName: "",
@@ -1037,93 +1418,256 @@
     // =========================
     // CHEQUE BOUNCE FUNCTIONS
     // =========================
-    const handleChequeBounceInput = (e) => {
-      const { name, value } = e.target;
-      let updatedData = { ...chequeBounceFormData, [name]: value };
-      if (name === "chqBounceCharges") {
-        const charges = parseFloat(value) || 0;
-        const chequeAmt = parseFloat(chequeBounceFormData.chequeAmt) || 0;
-        updatedData.totalAmt = (chequeAmt + charges).toFixed(2);
-      }
-      if (name === "chequeAmt") {
-        const chequeAmt = parseFloat(value) || 0;
-        const charges = parseFloat(chequeBounceFormData.chqBounceCharges) || 0;
-        updatedData.totalAmt = (chequeAmt + charges).toFixed(2);
-      }
-      setChequeBounceFormData(updatedData);
-    };
+const chequeBounceParties = [
+  ...new Set(
+    (state.receipts || [])
+      .map(r => r.header?.partyName)
+      .filter(Boolean)
+  )
+];
 
-    const saveChequeBounce = () => {
-      const payload = { id: editChequeBounceId || Date.now(), ...chequeBounceFormData };
-      if (editChequeBounceId) {
-        const updated = state.chequeBounces.map(cb => cb.id === editChequeBounceId ? payload : cb);
-        dispatch({ type: "SET_CHEQUE_BOUNCES", payload: updated });
-        alert("Cheque Bounce Updated Successfully");
-      } else {
-        dispatch({ type: "ADD_CHEQUE_BOUNCE", payload });
-        alert("Cheque Bounce Saved Successfully");
-      }
-      resetChequeBounceForm();
-      setShowChequeBounceForm(false);
-    };
+const findReceiptByCheque = (partyName, chequeNo) => {
+  return (state.receipts || []).find(r => {
+    const h = r.header || {};
+    return (
+      clean(h.chequeNo) === clean(chequeNo) &&
+      (!partyName || clean(h.partyName) === clean(partyName))
+    );
+  });
+};
 
-    const resetChequeBounceForm = () => {
-      setChequeBounceFormData({
-        chqBounceDate: new Date().toISOString().split("T")[0], chqBounceNo: "", narration: "",
-        partyName: "", chqBounceCharges: "0.00", chequeNo: "", chequeDate: "", chequeAmt: "",
-        clearingDate: "", receiptNo: "", bankName: "", totalAmt: ""
-      });
-      setEditChequeBounceId(null);
-    };
+const calculateChequeBounceTotal = (chequeAmt, charges) => {
+  return (
+    (Number(chequeAmt) || 0) +
+    (Number(charges) || 0)
+  ).toFixed(2);
+};
+const loadChequeBounceReceiptDetails = (partyName, chequeNo, baseData = chequeBounceFormData) => {
+  if (!chequeNo) return baseData;
 
-    const editChequeBounce = (chequeBounce) => {
-      setEditChequeBounceId(chequeBounce.id);
-      setChequeBounceFormData(chequeBounce);
-      setShowChequeBounceForm(true);
-    };
+  const receipt = findReceiptByCheque(partyName, chequeNo);
 
-    const deleteChequeBounce = (id) => {
-      if (window.confirm("Are you sure you want to delete this Cheque Bounce record?")) {
-        dispatch({ type: "DELETE_CHEQUE_BOUNCE", payload: id });
-      }
+  if (!receipt) {
+    return {
+      ...baseData,
+      chequeNo,
+      chequeDate: "",
+      chequeAmt: "",
+      clearingDate: "",
+      receiptNo: "",
+      recNo: "",
+      recSeries: "",
+      bankName: "",
+      totalAmt: ""
     };
+  }
 
+  const h = receipt.header || {};
+  const chequeAmt = Number(receipt.summary?.totalAdjusted || h.receiptAmount || 0);
+  const charges = Number(baseData.chqBounceCharges || 0);
+
+  return {
+    ...baseData,
+    partyName: h.partyName || partyName,
+    chequeNo: h.chequeNo || chequeNo,
+    chequeDate: h.chequeDate || "",
+    clearingDate: h.clearingDate || h.receiptDate || "",
+    chequeAmt: chequeAmt.toFixed(2),
+    receiptNo: h.rno || "",
+    recNo: h.rno || "",
+    recSeries: h.billSeries || "REC",
+   bankName: h.bankCash && h.bankCash !== "Cash"
+  ? h.bankCash
+  : "",
+   totalAmt: calculateChequeBounceTotal(chequeAmt, charges)
+  };
+};
+
+const handleChequeBounceInput = (e) => {
+  const { name, value } = e.target;
+
+  let updatedData = {
+    ...chequeBounceFormData,
+    [name]: value
+  };
+
+  if (name === "partyName") {
+    updatedData = loadChequeBounceReceiptDetails(value, updatedData.chequeNo, updatedData);
+  }
+
+  if (name === "chequeNo") {
+    updatedData = loadChequeBounceReceiptDetails(updatedData.partyName, value, updatedData);
+  }
+
+  updatedData.totalAmt = calculateChequeBounceTotal(
+    updatedData.chequeAmt,
+    updatedData.chqBounceCharges
+  );
+
+  setChequeBounceFormData(updatedData);
+};
+
+const saveChequeBounce = () => {
+  if (!chequeBounceFormData.partyName || !chequeBounceFormData.chequeNo) {
+    alert("Please select Party Name and Cheque No.");
+    return;
+  }
+
+  const payload = {
+    id: editChequeBounceId || Date.now(),
+    ...chequeBounceFormData,
+    accountNameDr: chequeBounceFormData.partyName,
+    accountNameCr: chequeBounceFormData.bankName,
+    recNo: chequeBounceFormData.recNo || chequeBounceFormData.receiptNo,
+    recSeries: chequeBounceFormData.recSeries || "REC",
+    updatedAt: new Date().toISOString()
+  };
+
+  if (editChequeBounceId) {
+    dispatch({
+      type: "SET_CHEQUE_BOUNCES",
+      payload: (state.chequeBounces || []).map(cb =>
+        cb.id === editChequeBounceId ? payload : cb
+      )
+    });
+
+    alert("Cheque Bounce Updated Successfully");
+  } else {
+    dispatch({ type: "ADD_CHEQUE_BOUNCE", payload });
+    alert("Cheque Bounce Saved Successfully");
+  }
+
+  resetChequeBounceForm();
+  setTransactionFormMode(prev => ({
+  ...prev,
+  ["Cheque Bounce"]: true
+}));
+};
+const getNextChequeBounceNo = () => {
+  return (state.chequeBounces?.length || 0) + 1;
+};
+
+const resetChequeBounceForm = () => {
+  setEditChequeBounceId(null);
+
+  setChequeBounceFormData({
+    chqBounceDate: new Date().toISOString().split("T")[0],
+    chqBounceNo: getNextChequeBounceNo(),
+    narration: "",
+    partyName: "",
+    chqBounceCharges: "0.00",
+    chequeNo: "",
+    chequeDate: "",
+    chequeAmt: "",
+    clearingDate: "",
+    receiptNo: "",
+    recNo: "",
+    recSeries: "REC",
+    bankName: "",
+    totalAmt: ""
+  });
+};
+const editChequeBounce = (chequeBounce) => {
+  setEditChequeBounceId(chequeBounce.id);
+
+  setChequeBounceFormData({
+    chqBounceDate: chequeBounce.chqBounceDate || chequeBounce.trndate || new Date().toISOString().split("T")[0],
+    chqBounceNo: chequeBounce.chqBounceNo || chequeBounce.trnno || "",
+    narration: chequeBounce.narration || "",
+    partyName: chequeBounce.partyName || chequeBounce.accountNameDr || "",
+    chqBounceCharges: chequeBounce.chqBounceCharges || "0.00",
+    chequeNo: chequeBounce.chequeNo || "",
+    chequeDate: chequeBounce.chequeDate || "",
+    chequeAmt: chequeBounce.chequeAmt || "",
+    clearingDate: chequeBounce.clearingDate || "",
+    receiptNo: chequeBounce.receiptNo || chequeBounce.recNo || "",
+    recNo: chequeBounce.recNo || chequeBounce.receiptNo || "",
+    recSeries: chequeBounce.recSeries || "REC",
+    bankName: chequeBounce.bankName || chequeBounce.accountNameCr || "",
+    totalAmt: chequeBounce.totalAmt || ""
+  });
+
+  setShowChequeBounceForm(true);
+};
+
+const deleteChequeBounce = (id) => {
+  if (window.confirm("Are you sure you want to delete this Cheque Bounce record?")) {
+    dispatch({ type: "DELETE_CHEQUE_BOUNCE", payload: id });
+  }
+};
     // =========================
     // PDC DOCKET FUNCTIONS
     // =========================
-    const handlePDCDocketInput = (e) => {
-      const { name, value } = e.target;
-      setPDCDocketFormData({ ...pdcDocketFormData, [name]: value });
-    };
+ const handlePDCDocketInput = (e) => {
+  const { name, value } = e.target;
 
-    const savePDCDocket = () => {
-      const payload = { id: editPDCDocketId || Date.now(), header: pdcDocketFormData, createdAt: new Date().toISOString() };
-      if (editPDCDocketId) {
-        const updated = state.pdcDockets?.map(d => d.id === editPDCDocketId ? payload : d) || [payload];
-        dispatch({ type: "SET_PDC_DOCKETS", payload: updated });
-        alert("PDC Docket Updated Successfully");
-      } else {
-        dispatch({ type: "ADD_PDC_DOCKET", payload });
-        alert("PDC Docket Saved Successfully");
-      }
-      resetPDCDocketForm();
-      setShowPDCDocketForm(false);
-    };
+  let updatedData = {
+    ...pdcDocketFormData,
+    [name]: value
+  };
 
-    const resetPDCDocketForm = () => {
-      setPDCDocketFormData({
-        depositDate: new Date().toISOString().split("T")[0], docVNo: "", fromDate: new Date().toISOString().split("T")[0],
-        toDate: new Date().toISOString().split("T")[0], houseBank: "SYG", bankName: "SURNAYUG CO OP BANK",
-        narration: "", clearingType: "SAME BANK", clearingDate: "", totalAmount: "0.00", totalCheques: "0"
-      });
-      setEditPDCDocketId(null);
-    };
+  if (name === "houseBank") {
+    updatedData.bankName = value;
+  }
 
-    const editPDCDocket = (docket) => {
-      setEditPDCDocketId(docket.id);
-      setPDCDocketFormData(docket.header);
-      setShowPDCDocketForm(true);
-    };
+  setPDCDocketFormData(updatedData);
+
+  if (["houseBank", "fromDate", "toDate", "clearingType", "clearingDate"].includes(name)) {
+    setTimeout(() => loadPDCDocketGrid(updatedData), 0);
+  }
+};
+
+   const savePDCDocket = () => {
+  const payload = {
+    id: editPDCDocketId || Date.now(),
+    header: pdcDocketFormData,
+    items: pdcDocketItems,
+    createdAt: new Date().toISOString()
+  };
+
+  if (editPDCDocketId) {
+    dispatch({
+      type: "SET_PDC_DOCKETS",
+      payload: (state.pdcDockets || []).map(d =>
+        d.id === editPDCDocketId ? payload : d
+      )
+    });
+    alert("PDC Docket Updated Successfully");
+  } else {
+    dispatch({ type: "ADD_PDC_DOCKET", payload });
+    alert("PDC Docket Saved Successfully");
+  }
+
+  resetPDCDocketForm();
+  setShowPDCDocketForm(false);
+};
+
+   const resetPDCDocketForm = () => {
+  setPDCDocketFormData({
+    depositDate: new Date().toISOString().split("T")[0],
+    docSeries: "PDC",
+    docVNo: (state.pdcDockets?.length || 0) + 1,
+    fromDate: new Date().toISOString().split("T")[0],
+    toDate: new Date().toISOString().split("T")[0],
+    houseBank: "",
+    bankName: "",
+    narration: "",
+    clearingType: "SAME BANK",
+    clearingDate: "",
+    totalAmount: "0.00",
+    totalCheques: "0"
+  });
+
+  setPDCDocketItems([]);
+  setEditPDCDocketId(null);
+};
+
+const editPDCDocket = (docket) => {
+  setEditPDCDocketId(docket.id);
+  setPDCDocketFormData(docket.header);
+  setPDCDocketItems(docket.items || []);
+  setShowPDCDocketForm(true);
+};
 
     const deletePDCDocket = (id) => {
       if (window.confirm("Are you sure you want to delete this PDC Docket?")) {
@@ -1394,6 +1938,238 @@
     </div>
   </div>
 );
+
+const getCustomerBankName = (bank) =>
+  bank.bankName || bank.BankName || bank.name || bank.accountName || "";
+
+const getCustomerBankParty = (bank) =>
+  bank.partyName || bank.customerName || bank.accountName || bank.party || "";
+
+const filteredCustomerBanks = customerBanks.filter((bank) => {
+  const bankParty = String(getCustomerBankParty(bank)).trim().toLowerCase();
+  const selectedParty = String(receiptFormData.partyName).trim().toLowerCase();
+
+  return !selectedParty || !bankParty || bankParty === selectedParty;
+});
+
+const selectedPartyName = clean(receiptFormData.partyName);
+
+const selectedPartyPendingBills = pendingBills.filter(
+  (b) => clean(b.party) === selectedPartyName
+);
+
+const selectedPartyReceipts = (state.receipts || []).filter(
+  (r) => clean(r.header?.partyName) === selectedPartyName
+);
+
+const lastSelectedPartyReceipt =
+  selectedPartyReceipts[selectedPartyReceipts.length - 1];
+
+const receiptBottomSummary = {
+  totalPendingAmount: selectedPartyPendingBills.reduce(
+    (sum, b) => sum + (Number(b.balance) || 0),
+    0
+  ),
+
+  totalCollectedAmount: selectedPartyReceipts.reduce(
+    (sum, r) =>
+      sum +
+      (Number(r.summary?.totalAdjusted) ||
+        Number(r.header?.receiptAmount) ||
+        0),
+    0
+  ),
+
+  totalPendingBills: selectedPartyPendingBills.length,
+
+  lastCollectionAmount: Number(
+    lastSelectedPartyReceipt?.summary?.totalAdjusted || 0
+  ),
+
+  lastCollectionDate:
+    lastSelectedPartyReceipt?.header?.receiptDate || "-",
+
+  lastPaymentAgainstBillNo:
+    lastSelectedPartyReceipt?.items?.[0]?.trnNo || "-"
+};
+  // REPLACE your isBankAccount/getBankAccountName/bankCashAccounts block with this
+
+const normalize = (v) => String(v || "").trim().toLowerCase();
+
+const getBankAccountName = (acc) =>
+  acc.accountName ||
+  acc.acName ||
+  acc.AcName ||
+  acc.name ||
+  acc.bankName ||
+  "";
+
+const isBankAccount = (acc) => {
+  const group = normalize(
+    acc.accountGroup ||
+    acc.accountGroupName ||
+    acc.groupName ||
+    acc.acGroup ||
+    acc.AcGroup ||
+    acc.group ||
+    ""
+  );
+
+  return group === "bank accounts" || group === "bank account";
+};
+
+const bankCashAccounts = [
+  ...(otherAccounts || []),
+  ...(accounts || []),
+  ...(state.receipts || [])
+    .map(r => ({
+      accountName: r.header?.bankCash,
+      accountGroup: "Bank Accounts"
+    }))
+    .filter(r => r.accountName && r.accountName !== "Cash")
+]
+  .filter(isBankAccount)
+  .filter((acc, index, self) => {
+    const name = normalize(getBankAccountName(acc));
+    return name && index === self.findIndex(
+      (a) => normalize(getBankAccountName(a)) === name
+    );
+  });
+const getPdcDateValue = (dateValue) => {
+  if (!dateValue) return "";
+  const d = new Date(dateValue);
+  if (Number.isNaN(d.getTime())) return "";
+  return d.toISOString().split("T")[0];
+};
+// ADD this helper before getPDCDocketReceipts
+
+const getCustomerBankBranch = (partyName, bankName) => {
+  const party = clean(partyName);
+  const bank = clean(bankName);
+
+  const matchedBank = (customerBanks || []).find((b) => {
+    const bParty = clean(
+      b.partyName ||
+      b.customerName ||
+      b.customer ||
+      b.accountName ||
+      b.party ||
+      b.partyNameInput ||
+      ""
+    );
+
+    const bBank = clean(
+      b.bankName ||
+      b.BankName ||
+      b.bank ||
+      b.name ||
+      b.customerBankName ||
+      ""
+    );
+
+    return bParty === party && bBank === bank;
+  });
+
+  return (
+    matchedBank?.branchName ||
+    matchedBank?.bankBranch ||
+    matchedBank?.branch ||
+    matchedBank?.Branch ||
+    matchedBank?.branchNameInput ||
+    matchedBank?.bankBranchName ||
+    ""
+  );
+};
+
+const getPDCDocketReceipts = (formData = pdcDocketFormData) => {
+  const fromDate = getPdcDateValue(formData.fromDate);
+  const toDate = getPdcDateValue(formData.toDate);
+  const selectedHouseBank = clean(formData.houseBank || formData.bankName);
+  const clearingType = clean(formData.clearingType).replace(/\s+/g, " ");
+
+  if (!selectedHouseBank || !fromDate || !toDate) return [];
+
+  return (state.receipts || [])
+    .filter((receipt) => {
+      const h = receipt.header || {};
+
+      if (!h.chequeNo) return false;
+      if (!h.bankCash || clean(h.bankCash) === "cash") return false;
+
+      const chequeDate = getPdcDateValue(h.chequeDate);
+      if (!chequeDate) return false;
+
+      if (chequeDate < fromDate || chequeDate > toDate) return false;
+
+      const distributorBank = clean(h.bankCash);
+      const customerBank = clean(h.drawerBank);
+
+      if (clearingType === "same bank") {
+        return (
+          distributorBank === selectedHouseBank &&
+          customerBank === selectedHouseBank
+        );
+      }
+
+      if (clearingType === "local bank") {
+        return (
+          distributorBank === selectedHouseBank &&
+          customerBank !== selectedHouseBank
+        );
+      }
+
+      if (clearingType === "outside bank") {
+        return distributorBank !== selectedHouseBank;
+      }
+
+      return distributorBank === selectedHouseBank;
+    })
+    .map((receipt, index) => {
+      const h = receipt.header || {};
+      const amount = Number(
+        receipt.summary?.totalAdjusted || h.receiptAmount || 0
+      );
+
+     return {
+  id: receipt.id,
+  selected: true,
+  srNo: index + 1,
+  chequeNo: h.chequeNo || "",
+  chequeDate: h.chequeDate || "",
+  amount,
+  clearingDate: formData.clearingDate || h.chequeDate || "",
+  recSeries: h.billSeries || "REC",
+  recNo: h.rno || "",
+
+  // CUSTOMER BANK should load here, not distributor bank
+  recTrnBank: h.drawerBank || "",
+
+  // BRANCH from Customer Bank Details
+  branch: getCustomerBankBranch(h.partyName, h.drawerBank),
+
+  partyCode: h.partyCode || "",
+  partyName: h.partyName || ""
+};
+    });
+};
+
+const loadPDCDocketGrid = (formData = pdcDocketFormData) => {
+  const rows = getPDCDocketReceipts(formData);
+
+  const totalAmount = rows.reduce(
+    (sum, row) => sum + (Number(row.amount) || 0),
+    0
+  );
+
+  setPDCDocketItems(rows);
+
+  setPDCDocketFormData((prev) => ({
+    ...prev,
+    ...formData,
+    totalAmount: totalAmount.toFixed(2),
+    totalCheques: rows.length
+  }));
+};
     // Receipt Form
     const renderReceiptForm = () => (
       <div className="master-section receipt-section">
@@ -1411,26 +2187,159 @@
               {partySuggestions.length > 0 && (<div className="party-suggestion-dropdown">{partySuggestions.map((party, idx) => (<div key={idx} className="party-suggestion-item" onClick={() => selectParty(party)}>{party}</div>))}</div>)}
             </div>
             <div className="labeled-input"><label>Salesman</label><select name="salesman" value={receiptFormData.salesman} onChange={handleReceiptInput}><option value="">Select Salesman</option>{salesmen.map((s) => (<option key={s.id} value={s.name}>{s.name}</option>))}</select></div>
-            <div className="labeled-input"><label>Bank/Cash</label><select name="bankCash" value={receiptFormData.bankCash} onChange={handleReceiptInput}><option value="">Select</option><option value="Cash">Cash</option><option value="HDFC BANK">HDFC BANK</option></select></div>
+            <div className="labeled-input">
+  <label>Bank/Cash</label>
+  <select
+    name="bankCash"
+    value={receiptFormData.bankCash}
+    onChange={handleReceiptInput}
+  >
+    <option value="">Select</option>
+    <option value="Cash">Cash</option>
+
+    {bankCashAccounts.map((acc, index) => {
+      const bankName = getBankAccountName(acc);
+
+      return (
+        <option key={acc.id || acc.accountCode || index} value={bankName}>
+          {bankName}
+        </option>
+      );
+    })}
+  </select>
+</div>
             <div className="labeled-input"><label>Receipt Amount</label><input type="number" name="receiptAmount" value={receiptFormData.receiptAmount} onChange={handleReceiptInput} /></div>
           </div>
           <div className="form-grid-4">
             <div className="labeled-input"><label>Cheque No</label><input type="text" name="chequeNo" value={receiptFormData.chequeNo} onChange={handleReceiptInput} disabled={receiptFormData.bankCash === "Cash"} /></div>
             <div className="labeled-input"><label>Cheque Date</label><input type="date" name="chequeDate" value={receiptFormData.chequeDate} onChange={handleReceiptInput} disabled={receiptFormData.bankCash === "Cash"} /></div>
-            <div className="labeled-input"><label>Drawer Bank</label><select name="drawerBank" value={receiptFormData.drawerBank} onChange={handleReceiptInput} disabled={receiptFormData.bankCash === "Cash"}><option value="">Select Bank</option>{customerBanks.map((bank) => (<option key={bank.id} value={bank.bankName}>{bank.bankName}</option>))}</select></div>
+           <div className="labeled-input">
+  <label>Drawer Bank</label>
+  <select
+    name="drawerBank"
+    value={receiptFormData.drawerBank}
+    onChange={handleReceiptInput}
+    disabled={receiptFormData.bankCash === "Cash"}
+  >
+    <option value="">Select Customer Bank</option>
+    {filteredCustomerBanks.map((bank, index) => {
+      const bankName = getCustomerBankName(bank);
+      return (
+        <option key={bank.id || index} value={bankName}>
+          {bankName}
+        </option>
+      );
+    })}
+  </select>
+</div>
             <div className="labeled-input"><label>MICR</label><input type="text" name="micr" value={receiptFormData.micr} onChange={handleReceiptInput} disabled={receiptFormData.bankCash === "Cash"} /></div>
           </div>
           <div className="form-row-single"><div className="labeled-input narration-field"><label>Narration</label><textarea name="narration" value={receiptFormData.narration} onChange={handleReceiptInput} /></div></div>
         </div>
-        <div className="form-section"><div className="grid-header"><h3 className="section-header">Receipt Bills</h3><button className="btn-add-new" onClick={addReceiptItem}>+ Add Row</button></div>
-          <div className="table-responsive"><table className="erp-table"><thead><tr><th>SrNo</th><th>TrnSeries</th><th>TrnNo</th><th>TrnDate</th><th>Amount</th><th>Adjust Amt</th><th>Balance Amt</th><th>Now Adjust</th><th>Discount %</th><th>Disc Amt</th><th>Remark</th></tr></thead>
-            <tbody>{receiptItems.map((item, index) => (<tr key={item.id}><td>{item.srNo}</td><td>{item.trnSeries}</td><td>{item.trnNo}</td><td>{item.trnDate}</td><td className="amount-cell">₹ {Number(item.amount).toFixed(2)}</td><td className="amount-cell">₹ {Number(item.adjustAmt).toFixed(2)}</td>
-              <td><input type="number" value={item.balanceAmt} onChange={(e) => updateReceiptItem(index, "balanceAmt", e.target.value)} /></td>
-              <td><input type="number" value={item.nowAdjust} onChange={(e) => updateReceiptItem(index, "nowAdjust", e.target.value)} /></td>
-              <td><input type="number" value={item.discount} onChange={(e) => updateReceiptItem(index, "discount", e.target.value)} /></td>
-              <td className="amount-cell">₹ {Number(item.discAmount).toFixed(2)}</td>
-              <td><input className="remark-input" value={item.remark} onChange={(e) => updateReceiptItem(index, "remark", e.target.value)} /></td></tr>))}</tbody></table></div></div>
-        <div className="form-section"><h3 className="section-header">Summary</h3><div className="receipt-summary-grid"><div className="summary-card"><label>Total Adjusted</label><h3>₹{receiptSummary.totalAdjusted.toFixed(2)}</h3></div><div className="summary-card"><label>Total Discount</label><h3>₹{receiptSummary.totalDiscount.toFixed(2)}</h3></div><div className="summary-card"><label>Balance Amount</label><h3>₹{receiptSummary.balanceAmount.toFixed(2)}</h3></div></div></div>
+        <div className="form-section">
+  <div className="grid-header">
+    <h3 className="section-header">Receipt Bills</h3>
+  </div>
+
+  <div className="receipt-grid-wrap">
+    <table className="receipt-entry-table">
+      <thead>
+        <tr>
+          <th>Sr</th>
+          <th>Trn Series</th>
+          <th>Trn No</th>
+          <th>Trn Date</th>
+          <th>Amount</th>
+          <th>Adjust Amt</th>
+          <th>Balance Amt</th>
+          <th>Now Adjust</th>
+          <th>Discount %</th>
+          <th>Disc Amt</th>
+          <th>Remark</th>
+        </tr>
+      </thead>
+
+      <tbody>
+        {receiptItems.length === 0 ? (
+          <tr>
+            <td colSpan="11" className="no-data">
+              Enter Bill Series and Bill No to load pending bill
+            </td>
+          </tr>
+        ) : (
+          receiptItems.map((item, index) => (
+            <tr key={item.id}>
+              <td>{index + 1}</td>
+              <td>{item.trnSeries}</td>
+              <td>{item.trnNo}</td>
+              <td>{item.trnDate}</td>
+              <td className="amount-cell">₹{Number(item.amount || 0).toFixed(2)}</td>
+              <td className="amount-cell">₹{Number(item.adjustAmt || 0).toFixed(2)}</td>
+              <td className="amount-cell">₹{Number(item.balanceAmt || 0).toFixed(2)}</td>
+
+              <td>
+                <input
+                  type="number"
+                  value={item.nowAdjust}
+                  onChange={(e) => updateReceiptItem(index, "nowAdjust", e.target.value)}
+                />
+              </td>
+
+              <td>
+                <input
+                  type="number"
+                  value={item.discount}
+                  onChange={(e) => updateReceiptItem(index, "discount", e.target.value)}
+                />
+              </td>
+
+              <td className="amount-cell">₹{Number(item.discAmount || 0).toFixed(2)}</td>
+
+              <td>
+                <input
+                  className="remark-input"
+                  value={item.remark}
+                  onChange={(e) => updateReceiptItem(index, "remark", e.target.value)}
+                />
+              </td>
+            </tr>
+          ))
+        )}
+      </tbody>
+    </table>
+  </div>
+</div>
+<div className="receipt-bottom-summary">
+  <div className="receipt-summary-pill">
+    <span>Total Pending Amount</span>
+    <b>₹{receiptBottomSummary.totalPendingAmount.toFixed(2)}</b>
+  </div>
+
+  <div className="receipt-summary-pill">
+    <span>Total Collected Amount</span>
+    <b>₹{receiptBottomSummary.totalCollectedAmount.toFixed(2)}</b>
+  </div>
+
+  <div className="receipt-summary-pill">
+    <span>Total Pending Bills</span>
+    <b>{receiptBottomSummary.totalPendingBills}</b>
+  </div>
+
+  <div className="receipt-summary-pill">
+    <span>Last Collection Amount</span>
+    <b>₹{receiptBottomSummary.lastCollectionAmount.toFixed(2)}</b>
+  </div>
+
+  <div className="receipt-summary-pill">
+    <span>Last Collection Date</span>
+    <b>{receiptBottomSummary.lastCollectionDate}</b>
+  </div>
+
+  <div className="receipt-summary-pill">
+    <span>Last Payment Against Bill No</span>
+    <b>{receiptBottomSummary.lastPaymentAgainstBillNo}</b>
+  </div>
+</div>
         <div className="form-actions"><button className="btn-save" onClick={saveReceipt}>Save Receipt</button><button className="btn-cancel" onClick={() => setShowReceiptForm(false)}>Cancel</button></div>
       </div>
     );
@@ -1521,22 +2430,134 @@
   </tr>)))}</tbody></table></div></div>
     );
 
-    // Journal Form
-    const renderJournalForm = () => (
-      <div className="master-section journal-section"><div className="form-header"><h2 className="page-title-large">Journal Voucher Entry</h2><button className="close-form-btn" onClick={() => setShowJournalForm(false)}>×</button></div>
-        <div className="form-section"><h3 className="section-header">Journal Information</h3><div className="journal-header-grid"><div className="labeled-input"><label>VDate</label><input type="date" name="vDate" value={journalFormData.vDate} onChange={handleJournalInput} /></div><div className="labeled-input"><label>VNo</label><input type="text" name="vNo" value={journalFormData.vNo} onChange={handleJournalInput} /></div><div className="labeled-input"><label>Is Gst</label><select name="isGst" value={journalFormData.isGst} onChange={handleJournalInput}><option value="N">N</option><option value="Y">Y</option></select></div></div>
-          <div className="journal-narration-row"><div className="labeled-input narration-field"><label>Narration</label><textarea name="narr" value={journalFormData.narr} onChange={handleJournalInput} /></div></div></div>
-        <div className="form-section"><div className="grid-header"><h3 className="section-header">Journal Entries</h3><button className="btn-add-new" onClick={addJournalRow}>+ Add Row</button></div>
-          <div className="table-responsive"><table className="erp-table journal-table"><thead><tr><th>SeqNo</th><th>Account Code</th><th>Account Name</th><th>Dr Amount</th><th>Cr Amount</th></tr></thead>
-            <tbody>{journalItems.map((item, index) => (<tr key={item.id}><td>{item.seqNo}</td><td><input value={item.accountCode} onChange={(e) => updateJournalItem(index, "accountCode", e.target.value)} /></td>
-              <td style={{ width: "300px", minWidth: "300px" }}><div className="live-search-box"><input type="text" placeholder="Search Account" value={item.accountName || ""} onChange={(e) => handleAccountSearch(index, e.target.value)} />
-                {activeAccountRow === index && (<div className="live-dropdown">{accountSuggestions.length > 0 ? (accountSuggestions.map((acc) => (<div key={acc.id} className="live-item" onClick={() => selectAccount(index, acc)}>{acc.accountCode} - {acc.accountName}</div>))) : (<div className="live-item">No Accounts Found</div>)}</div>)}</div></td>
-              <td><input type="number" value={item.drAmount} onChange={(e) => updateJournalItem(index, "drAmount", e.target.value)} /></td>
-              <td><input type="number" value={item.crAmount} onChange={(e) => updateJournalItem(index, "crAmount", e.target.value)} /></td></tr>))}</tbody></table></div></div>
-        <div className="form-section"><h3 className="section-header">Summary</h3><div className="receipt-summary-grid"><div className="summary-card"><label>Total Dr</label><h3>₹ {journalSummary.totalDr.toFixed(2)}</h3></div><div className="summary-card"><label>Total Cr</label><h3>₹ {journalSummary.totalCr.toFixed(2)}</h3></div></div></div>
-        <div className="form-actions"><button className="btn-save" onClick={saveJournalVoucher}>Save Journal</button><button className="btn-cancel" onClick={() => setShowJournalForm(false)}>Cancel</button></div>
+   // Journal Form
+const renderJournalForm = () => (
+  <div className="master-section journal-section">
+    <div className="form-header">
+      <h2 className="page-title-large">Journal Voucher Entry</h2>
+      <button className="close-form-btn" onClick={() => setShowJournalForm(false)}>×</button>
+    </div>
+
+    <div className="form-section">
+      <h3 className="section-header">Journal Information</h3>
+
+      <div className="journal-header-grid">
+        <div className="labeled-input">
+          <label>VDate</label>
+          <input type="date" name="vDate" value={journalFormData.vDate} onChange={handleJournalInput} />
+        </div>
+
+        <div className="labeled-input">
+          <label>VNo</label>
+          <input type="text" name="vNo" value={journalFormData.vNo} onChange={handleJournalInput} />
+        </div>
+
+        <div className="labeled-input">
+          <label>Is Gst</label>
+          <select name="isGst" value={journalFormData.isGst} onChange={handleJournalInput}>
+            <option value="N">N</option>
+            <option value="Y">Y</option>
+          </select>
+        </div>
       </div>
-    );
+
+      <div className="journal-narration-row">
+        <div className="labeled-input narration-field">
+          <label>Narration</label>
+          <textarea name="narr" value={journalFormData.narr} onChange={handleJournalInput} />
+        </div>
+      </div>
+    </div>
+
+    <div className="form-section">
+      <div className="grid-header">
+        <h3 className="section-header">Journal Entries</h3>
+      </div>
+
+      <div className="receipt-grid-wrap">
+        <table className="receipt-entry-table">
+          <thead>
+            <tr>
+              <th>Seq No</th>
+              <th>Account Code</th>
+              <th>Account Name</th>
+              <th>Debit Amount</th>
+              <th>Credit Amount</th>
+            </tr>
+          </thead>
+
+          <tbody>
+            {journalItems.map((item, index) => (
+              <tr key={item.id || index}>
+                <td>{index + 1}</td>
+
+                <td>
+                  <input type="text" value={item.accountCode} readOnly />
+                </td>
+
+              <td className="account-search-cell">
+  <input
+    type="text"
+    value={item.accountName || ""}
+    onChange={(e) => handleAccountSearch(index, e.target.value)}
+    onFocus={() => handleAccountSearch(index, item.accountName || "")}
+    placeholder="Search Account"
+    autoComplete="off"
+  />
+
+  {activeAccountRow === index && accountSuggestions.length > 0 && (
+    <div className="party-suggestion-box">
+      {accountSuggestions.map((acc, i) => (
+        <div
+          key={getAccountCode(acc) || acc.id || i}
+          className="party-suggestion-item"
+          onMouseDown={() => selectAccount(index, acc)}
+        >
+          {getAccountCode(acc)} - {getAccountName(acc)}
+        </div>
+      ))}
+    </div>
+  )}
+</td>
+                <td>
+                  <input
+                    type="number"
+                    value={item.drAmount}
+                    onChange={(e) => updateJournalItem(index, "drAmount", e.target.value)}
+                  />
+                </td>
+
+                <td>
+                  <input
+                    type="number"
+                    value={item.crAmount}
+                    onChange={(e) => updateJournalItem(index, "crAmount", e.target.value)}
+                  />
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+
+      <button className="btn-add-row" onClick={addJournalRow}>
+        + Add Row
+      </button>
+
+      <div className="receipt-bottom-summary">
+        <span>Total Debit : ₹{Number(journalSummary.totalDr || 0).toFixed(2)}</span>
+        <span>Total Credit : ₹{Number(journalSummary.totalCr || 0).toFixed(2)}</span>
+        <span>Difference : ₹{Number(journalSummary.difference || 0).toFixed(2)}</span>
+        <span>Total Entries : {journalSummary.totalEntries || 0}</span>
+      </div>
+    </div>
+
+    <div className="form-actions">
+      <button className="btn-save" onClick={saveJournalVoucher}>Save Journal</button>
+      <button className="btn-cancel" onClick={() => setShowJournalForm(false)}>Cancel</button>
+    </div>
+  </div>
+);
 
     // Payment List
     const renderPaymentList = () => (
@@ -1653,6 +2674,7 @@
     );
 
    // Cheque Bounce List
+// Cheque Bounce List
 const renderChequeBounceList = () => (
   <div className="receipt-sales-list-section">
     <div className="receipt-sales-list-header">
@@ -1690,6 +2712,7 @@ const renderChequeBounceList = () => (
             <th>Cheque Date</th>
             <th>Cheque Amount</th>
             <th>Chq Bounce Charges Amt</th>
+            <th>Total Amount</th>
             <th>Rec Series</th>
             <th>Rec No</th>
             <th>Narration</th>
@@ -1700,16 +2723,16 @@ const renderChequeBounceList = () => (
         <tbody>
           {(state.chequeBounces || []).length === 0 ? (
             <tr>
-              <td colSpan="13" className="no-data">
+              <td colSpan="14" className="no-data">
                 No Cheque Bounce Records Added
               </td>
             </tr>
           ) : (
             (state.chequeBounces || []).map((chequeBounce) => (
               <tr key={chequeBounce.id}>
-                <td>{chequeBounce.trndate || chequeBounce.chqBounceDate || "-"}</td>
-                <td>{chequeBounce.trnseries || chequeBounce.chqBounceSeries || "CHB"}</td>
-                <td>{chequeBounce.trnno || chequeBounce.chqBounceNo || "-"}</td>
+                <td>{chequeBounce.chqBounceDate || "-"}</td>
+                <td>{chequeBounce.trnSeries || "CHB"}</td>
+                <td>{chequeBounce.chqBounceNo || "-"}</td>
                 <td>{chequeBounce.accountNameDr || chequeBounce.partyName || "-"}</td>
                 <td>{chequeBounce.accountNameCr || chequeBounce.bankName || "-"}</td>
                 <td>{chequeBounce.chequeNo || "-"}</td>
@@ -1729,46 +2752,47 @@ const renderChequeBounceList = () => (
                   })}
                 </td>
 
-                <td>{chequeBounce.recSeries || chequeBounce.receiptSeries || "-"}</td>
+                <td className="amount-cell">
+                  ₹{Number(
+                    chequeBounce.totalAmt ||
+                    ((Number(chequeBounce.chequeAmt) || 0) +
+                      (Number(chequeBounce.chqBounceCharges) || 0))
+                  ).toLocaleString("en-IN", {
+                    minimumFractionDigits: 2,
+                    maximumFractionDigits: 2
+                  })}
+                </td>
+
+                <td>{chequeBounce.recSeries || "REC"}</td>
                 <td>{chequeBounce.recNo || chequeBounce.receiptNo || "-"}</td>
                 <td>{chequeBounce.narration || "-"}</td>
 
-                <td className="receipt-sticky-action-cell">
-                  <div className="receipt-action-buttons">
-                    <button
-                      className="btn-view"
-                      onClick={() => {
-                        setTransactionFormMode(prev => ({
-                          ...prev,
-                          ["Cheque Bounce"]: true
-                        }));
-                        editChequeBounce(chequeBounce);
-                      }}
-                    >
-                      👁️ View
-                    </button>
+               <td className="receipt-sticky-action-cell">
+  <div className="receipt-action-buttons">
+    
+    <button
+      className="btn-view"
+      onClick={() => editChequeBounce(chequeBounce)}
+    >
+      👁️ View
+    </button>
 
-                    <button
-                      className="btn-edit"
-                      onClick={() => {
-                        setTransactionFormMode(prev => ({
-                          ...prev,
-                          ["Cheque Bounce"]: true
-                        }));
-                        editChequeBounce(chequeBounce);
-                      }}
-                    >
-                      ✏️ Edit
-                    </button>
+    <button
+      className="btn-edit"
+      onClick={() => editChequeBounce(chequeBounce)}
+    >
+      ✏️ Edit
+    </button>
 
-                    <button
-                      className="btn-delete"
-                      onClick={() => deleteChequeBounce(chequeBounce.id)}
-                    >
-                      🗑 Delete
-                    </button>
-                  </div>
-                </td>
+    <button
+      className="btn-delete"
+      onClick={() => deleteChequeBounce(chequeBounce.id)}
+    >
+      🗑 Delete
+    </button>
+
+  </div>
+</td>
               </tr>
             ))
           )}
@@ -1777,15 +2801,200 @@ const renderChequeBounceList = () => (
     </div>
   </div>
 );
-    // Cheque Bounce Form
-    const renderChequeBounceForm = () => (
-      <div className="master-section cheque-bounce-section"><div className="form-header"><h2 className="page-title-large">{editChequeBounceId ? 'Edit Cheque Bounce' : 'Cheque Bounce Entry'}</h2><button className="close-form-btn" onClick={() => { resetChequeBounceForm(); setShowChequeBounceForm(false); }}>×</button></div>
-        <div className="form-section"><div className="cheque-bounce-form"><div className="form-row-4"><div className="form-field"><label>Chq Bounce Date :</label><input type="date" name="chqBounceDate" value={chequeBounceFormData.chqBounceDate} onChange={handleChequeBounceInput} /></div><div className="form-field"><label>Chq Bounce No. :</label><input type="text" name="chqBounceNo" value={chequeBounceFormData.chqBounceNo} onChange={handleChequeBounceInput} placeholder="Enter bounce number" /></div><div className="form-field"><label>Party Name :</label><select name="partyName" value={chequeBounceFormData.partyName} onChange={handleChequeBounceInput}><option value="">Select Party</option><option value="JV-21">JV-21</option><option value="ABC MEDICAL">ABC MEDICAL</option><option value="RATNAHIRA ENTERPRISES">RATNAHIRA ENTERPRISES</option></select></div><div className="form-field"><label>Cheque No. :</label><input type="text" name="chequeNo" value={chequeBounceFormData.chequeNo} onChange={handleChequeBounceInput} placeholder="Enter cheque number" /></div></div>
-          <div className="form-row-4"><div className="form-field"><label>Cheque Date :</label><input type="date" name="chequeDate" value={chequeBounceFormData.chequeDate} onChange={handleChequeBounceInput} /></div><div className="form-field"><label>Cheque Amt :</label><input type="number" name="chequeAmt" value={chequeBounceFormData.chequeAmt} onChange={handleChequeBounceInput} step="0.01" placeholder="Enter cheque amount" /></div><div className="form-field"><label>Chq Bounce Charges :</label><input type="number" name="chqBounceCharges" value={chequeBounceFormData.chqBounceCharges} onChange={handleChequeBounceInput} step="0.01" /></div><div className="form-field"><label>Total Amt :</label><input type="text" name="totalAmt" value={chequeBounceFormData.totalAmt} readOnly className="total-amount-field" /></div></div>
-          <div className="form-row-4"><div className="form-field"><label>Clearing Date :</label><input type="date" name="clearingDate" value={chequeBounceFormData.clearingDate} onChange={handleChequeBounceInput} /></div><div className="form-field"><label>Receipt No. :</label><input type="text" name="receiptNo" value={chequeBounceFormData.receiptNo} onChange={handleChequeBounceInput} placeholder="Enter receipt number" /></div><div className="form-field"><label>Bank Name :</label><select name="bankName" value={chequeBounceFormData.bankName} onChange={handleChequeBounceInput}><option value="">Select Bank</option><option value="HDFC BANK">HDFC BANK</option><option value="ICICI BANK">ICICI BANK</option><option value="SBI BANK">SBI BANK</option><option value="AXIS BANK">AXIS BANK</option><option value="YES BANK">YES BANK</option><option value="KOTAK BANK">KOTAK BANK</option><option value="PNB BANK">PNB BANK</option><option value="BOB BANK">BOB BANK</option><option value="CANARA BANK">CANARA BANK</option><option value="UNION BANK">UNION BANK</option></select></div><div className="form-field"><label>Narration :</label><input type="text" name="narration" value={chequeBounceFormData.narration} onChange={handleChequeBounceInput} placeholder="Enter narration details..." /></div></div></div></div>
-        <div className="form-actions"><button className="btn-save" onClick={saveChequeBounce}>{editChequeBounceId ? 'Update Cheque Bounce' : 'Save Cheque Bounce'}</button><button className="btn-cancel" onClick={() => { resetChequeBounceForm(); setShowChequeBounceForm(false); }}>Cancel</button></div>
+   // Cheque Bounce Form
+const renderChequeBounceForm = () => (
+  <div className="master-section cheque-bounce-section">
+    <div className="form-header">
+      <h2 className="page-title-large">
+        {editChequeBounceId ? "Edit Cheque Bounce" : "Cheque Bounce Entry"}
+      </h2>
+
+      <button
+        className="close-form-btn"
+        onClick={() => {
+          resetChequeBounceForm();
+          setShowChequeBounceForm(false);
+        }}
+      >
+        ×
+      </button>
+    </div>
+
+    <div className="form-section">
+      <div className="cheque-bounce-form">
+        <div className="form-row-4">
+          <div className="form-field">
+            <label>Chq Bounce Date :</label>
+            <input
+              type="date"
+              name="chqBounceDate"
+              value={chequeBounceFormData.chqBounceDate}
+              onChange={handleChequeBounceInput}
+            />
+          </div>
+
+          <div className="form-field">
+            <label>Chq Bounce No. :</label>
+            <input
+              type="text"
+              name="chqBounceNo"
+              value={chequeBounceFormData.chqBounceNo}
+              onChange={handleChequeBounceInput}
+              placeholder="Enter bounce number"
+            />
+          </div>
+
+          <div className="form-field">
+            <label>Party Name :</label>
+            <select
+              name="partyName"
+              value={chequeBounceFormData.partyName}
+              onChange={handleChequeBounceInput}
+            >
+              <option value="">Select Party</option>
+              {chequeBounceParties.map((party, index) => (
+                <option key={index} value={party}>
+                  {party}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div className="form-field">
+            <label>Cheque No. :</label>
+            <input
+              type="text"
+              name="chequeNo"
+              value={chequeBounceFormData.chequeNo}
+              onChange={handleChequeBounceInput}
+              placeholder="Enter cheque no"
+            />
+          </div>
+        </div>
+
+        <div className="form-row-4">
+          <div className="form-field">
+            <label>Cheque Date :</label>
+            <input
+              type="date"
+              name="chequeDate"
+              value={chequeBounceFormData.chequeDate}
+              readOnly
+            />
+          </div>
+
+          <div className="form-field">
+            <label>Cheque Amt :</label>
+            <input
+              type="number"
+              name="chequeAmt"
+              value={chequeBounceFormData.chequeAmt}
+              readOnly
+              step="0.01"
+            />
+          </div>
+
+          <div className="form-field">
+            <label>Chq Bounce Charges :</label>
+            <input
+              type="number"
+              name="chqBounceCharges"
+              value={chequeBounceFormData.chqBounceCharges}
+              onChange={handleChequeBounceInput}
+              step="0.01"
+            />
+          </div>
+
+          <div className="form-field">
+            <label>Total Amt :</label>
+            <input
+              type="text"
+              name="totalAmt"
+              value={chequeBounceFormData.totalAmt}
+              readOnly
+              className="total-amount-field"
+            />
+          </div>
+        </div>
+
+        <div className="form-row-4">
+          <div className="form-field">
+            <label>Clearing Date :</label>
+            <input
+              type="date"
+              name="clearingDate"
+              value={chequeBounceFormData.clearingDate}
+              readOnly
+            />
+          </div>
+
+          <div className="form-field">
+            <label>Receipt No. :</label>
+            <input
+              type="text"
+              name="receiptNo"
+              value={chequeBounceFormData.receiptNo}
+              readOnly
+            />
+          </div>
+
+          <div className="form-field">
+            <label>Bank Name :</label>
+            <select
+              name="bankName"
+              value={chequeBounceFormData.bankName}
+              onChange={handleChequeBounceInput}
+            >
+              <option value="">Select Bank</option>
+              {bankCashAccounts.map((acc, index) => {
+                const bankName = getBankAccountName(acc);
+
+                return (
+                  <option
+                    key={acc.id || acc.accountCode || index}
+                    value={bankName}
+                  >
+                    {bankName}
+                  </option>
+                );
+              })}
+            </select>
+          </div>
+
+          <div className="form-field">
+            <label>Narration :</label>
+            <input
+              type="text"
+              name="narration"
+              value={chequeBounceFormData.narration}
+              onChange={handleChequeBounceInput}
+              placeholder="Enter narration details..."
+            />
+          </div>
+        </div>
       </div>
-    );
+    </div>
+
+    <div className="form-actions">
+      <button className="btn-save" onClick={saveChequeBounce}>
+        {editChequeBounceId ? "Update Cheque Bounce" : "Save Cheque Bounce"}
+      </button>
+
+      <button
+        className="btn-cancel"
+        onClick={() => {
+          resetChequeBounceForm();
+          setTransactionFormMode(prev => ({
+  ...prev,
+  ["Cheque Bounce"]: false
+}));
+        }}
+      >
+        Cancel
+      </button>
+    </div>
+  </div>
+);
 
    // PDC Docket Print
 const printPDCDocket = (docket) => {
@@ -2050,16 +3259,152 @@ const renderPDCDocketList = () => (
       </table>
     </div>
   </div>
-);    // PDC Docket Form
-    const renderPDCDocketForm = () => (
-      <div className="master-section pdc-docket-section"><div className="form-header"><h2 className="page-title-large">{editPDCDocketId ? 'Edit PDC Docket' : 'Add PDC Docket'}</h2><button className="close-form-btn" onClick={() => { resetPDCDocketForm(); setShowPDCDocketForm(false); }}>×</button></div>
-        <div className="form-section"><div className="pdc-header-grid"><div className="pdc-header-left"><div className="info-group"><label>Deposit Date:</label><input type="date" name="depositDate" value={pdcDocketFormData.depositDate} onChange={handlePDCDocketInput} /></div><div className="info-group"><label>Doc VNo.:</label><input type="text" name="docVNo" value={pdcDocketFormData.docVNo} onChange={handlePDCDocketInput} placeholder="Enter document number" /></div><div className="info-group"><label>From Date:</label><input type="date" name="fromDate" value={pdcDocketFormData.fromDate} onChange={handlePDCDocketInput} /></div><div className="info-group"><label>To Date:</label><input type="date" name="toDate" value={pdcDocketFormData.toDate} onChange={handlePDCDocketInput} /></div></div>
-          <div className="pdc-header-right"><div className="info-group"><label>House Bank:</label><select name="houseBank" value={pdcDocketFormData.houseBank} onChange={handlePDCDocketInput}><option value="SYG">SYG</option><option value="HDFC">HDFC</option><option value="ICICI">ICICI</option><option value="SBI">SBI</option></select></div><div className="info-group"><label>Bank Name:</label><input type="text" name="bankName" value={pdcDocketFormData.bankName} onChange={handlePDCDocketInput} placeholder="Enter bank name" /></div><div className="info-group full-width"><label>Narr:</label><textarea name="narration" value={pdcDocketFormData.narration} onChange={handlePDCDocketInput} rows="2" placeholder="Enter narration..." /></div></div></div>
-          <div className="pdc-clearing-grid"><div className="info-group"><label>Clearing Type:</label><select name="clearingType" value={pdcDocketFormData.clearingType} onChange={handlePDCDocketInput}><option value="SAME BANK">SAME BANK</option><option value="OTHER BANK">OTHER BANK</option><option value="OUTSTATION">OUTSTATION</option></select></div><div className="info-group"><label>Clearing Date:</label><input type="date" name="clearingDate" value={pdcDocketFormData.clearingDate} onChange={handlePDCDocketInput} /></div></div>
-          <div className="pdc-summary"><div className="summary-item"><label>Total Amount:</label><h3>₹{pdcDocketFormData.totalAmount}</h3></div><div className="summary-item"><label>Total Cheques:</label><h3>{pdcDocketFormData.totalCheques}</h3></div></div></div>
-        <div className="form-actions"><button className="btn-save" onClick={savePDCDocket}>Save</button><button className="btn-cancel" onClick={() => { resetPDCDocketForm(); setShowPDCDocketForm(false); }}>Cancel</button></div>
+);  
+  const renderPDCDocketForm = () => (
+  <div className="master-section pdc-docket-section">
+    <div className="form-header">
+      <h2 className="page-title-large">
+        {editPDCDocketId ? "Edit PDC Docket" : "Add PDC Docket"}
+      </h2>
+      <button className="close-form-btn" onClick={() => {
+        resetPDCDocketForm();
+        setShowPDCDocketForm(false);
+      }}>×</button>
+    </div>
+
+    <div className="form-section">
+      <div className="form-grid-4">
+        <div className="labeled-input">
+          <label>Deposit Date</label>
+          <input type="date" name="depositDate" value={pdcDocketFormData.depositDate} onChange={handlePDCDocketInput} />
+        </div>
+
+        <div className="labeled-input">
+          <label>Doc Series</label>
+          <input type="text" name="docSeries" value={pdcDocketFormData.docSeries} onChange={handlePDCDocketInput} />
+        </div>
+
+        <div className="labeled-input">
+          <label>Doc VNo</label>
+          <input type="text" name="docVNo" value={pdcDocketFormData.docVNo} onChange={handlePDCDocketInput} />
+        </div>
+
+        <div className="labeled-input">
+          <label>House Bank</label>
+          <select name="houseBank" value={pdcDocketFormData.houseBank} onChange={handlePDCDocketInput}>
+            <option value="">Select Bank</option>
+            {bankCashAccounts.map((acc, index) => {
+              const bankName = getBankAccountName(acc);
+              return (
+                <option key={acc.id || acc.accountCode || index} value={bankName}>
+                  {bankName}
+                </option>
+              );
+            })}
+          </select>
+        </div>
       </div>
-    );
+
+      <div className="form-grid-4">
+        <div className="labeled-input">
+          <label>From Date</label>
+          <input type="date" name="fromDate" value={pdcDocketFormData.fromDate} onChange={handlePDCDocketInput} />
+        </div>
+
+        <div className="labeled-input">
+          <label>To Date</label>
+          <input type="date" name="toDate" value={pdcDocketFormData.toDate} onChange={handlePDCDocketInput} />
+        </div>
+
+        <div className="labeled-input">
+          <label>Clearing Type</label>
+          <select
+  name="clearingType"
+  value={pdcDocketFormData.clearingType}
+  onChange={handlePDCDocketInput}
+>
+  <option value="SAME BANK">Same Bank</option>
+  <option value="LOCAL BANK">Local Bank</option>
+  <option value="OUTSIDE BANK">Outside Bank</option>
+</select>
+        </div>
+
+        <div className="labeled-input">
+          <label>Clearing Date</label>
+          <input type="date" name="clearingDate" value={pdcDocketFormData.clearingDate} onChange={handlePDCDocketInput} />
+        </div>
+      </div>
+
+      <div className="form-row-single">
+        <div className="labeled-input narration-field">
+          <label>Narration</label>
+          <textarea name="narration" value={pdcDocketFormData.narration} onChange={handlePDCDocketInput} />
+        </div>
+      </div>
+    </div>
+
+    <div className="form-section">
+      <div className="receipt-grid-wrap">
+        <table className="receipt-entry-table">
+          <thead>
+            <tr>
+              <th>Sr</th>
+              <th>Cheque No</th>
+              <th>Cheque Date</th>
+              <th>Amount</th>
+              <th>Clearing Date</th>
+              <th>Rec Series</th>
+              <th>Rec No</th>
+              <th>Rec Trn Bank</th>
+              <th>Branch</th>
+              <th>Party Code</th>
+              <th>Party Name</th>
+            </tr>
+          </thead>
+
+          <tbody>
+            {pdcDocketItems.length === 0 ? (
+              <tr>
+                <td colSpan="11" className="no-data">
+                  Select House Bank, Clearing Type, From Date and To Date to load cheques
+                </td>
+              </tr>
+            ) : (
+              pdcDocketItems.map((item, index) => (
+                <tr key={item.id || index}>
+                  <td>{index + 1}</td>
+                  <td>{item.chequeNo}</td>
+                  <td>{item.chequeDate}</td>
+                  <td className="amount-cell">₹{Number(item.amount || 0).toFixed(2)}</td>
+                  <td>{item.clearingDate}</td>
+                  <td>{item.recSeries}</td>
+                  <td>{item.recNo}</td>
+                  <td>{item.recTrnBank}</td>
+                       <td>{item.branch || "-"}</td>
+                  <td>{item.partyCode}</td>
+                  <td>{item.partyName}</td>
+                </tr>
+              ))
+            )}
+          </tbody>
+        </table>
+      </div>
+
+      <div className="receipt-bottom-summary">
+        <span>Total Amount : ₹{Number(pdcDocketFormData.totalAmount || 0).toFixed(2)}</span>
+        <span>Total Cheques : {pdcDocketFormData.totalCheques}</span>
+      </div>
+    </div>
+
+    <div className="form-actions">
+      <button className="btn-save" onClick={savePDCDocket}>Save</button>
+      <button className="btn-cancel" onClick={() => {
+        resetPDCDocketForm();
+        setShowPDCDocketForm(false);
+      }}>Cancel</button>
+    </div>
+  </div>
+);
 
     // Contra List
     const renderContraList = () => (
