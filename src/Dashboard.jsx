@@ -2879,28 +2879,35 @@ const saveVoucherToList = (type, data) => {
 };
 // ========== END OF ADDED FUNCTION ==========
   const saveInvoice = () => {
-    const invoiceData = {
-      ...invoiceFormData,
-      items: invoiceItems,
-      summary: invoiceSummary,
-      amount: invoiceSummary.net,
-      partyName: invoiceFormData.party,
-      partyCode: invoiceFormData.party?.substring(0, 10),
-      branchName: invoiceFormData.area,
-      type: activeSubMenu === 'Quotation' ? 'Quotation' : 'Invoice'
-    };
-    console.log('Saving invoice:', invoiceData);
+  const invoiceData = {
+    ...invoiceFormData,
 
-    if (activeSubMenu === 'Sales' || activeSubMenu === 'Billing') {
-      saveVoucherToList('Sales', invoiceData);
-      alert('Invoice saved successfully!');
-    } else if (activeSubMenu === 'Quotation') {
-      saveVoucherToList('Quotation', invoiceData);
-      alert('Quotation saved successfully!');
-    }
+    billSeries: invoiceFormData.BillSeries,
+    BillSeries: invoiceFormData.BillSeries,
+    billNo: invoiceFormData.billNo,
 
-    closeForm();
+    billDate: invoiceFormData.billDate,
+    party: invoiceFormData.party,
+    partyName: invoiceFormData.party,
+    salesman: invoiceFormData.salesman,
+
+    items: invoiceItems,
+    summary: invoiceSummary,
+    amount: invoiceSummary.net,
+
+    partyCode: invoiceFormData.party?.substring(0, 10),
+    branchName: invoiceFormData.area,
+    type: activeSubMenu === 'Quotation' ? 'Quotation' : 'Invoice'
   };
+
+  if (activeSubMenu === 'Sales' || activeSubMenu === 'Billing') {
+    saveVoucherToList('Sales', invoiceData);
+  } else if (activeSubMenu === 'Quotation') {
+    saveVoucherToList('Quotation', invoiceData);
+  }
+
+  closeForm();
+};
   const addPurchaseItem = useCallback(() => {
     const newItem = {
       id: Date.now(),
@@ -9802,19 +9809,19 @@ const handleDeleteVoucher = (type, id) => {
           {activeMenu === "transactions" && (
 
             <Transaction
-              salesInvoices={salesListData}
-              salesmen={salesmen}
-              accounts={accounts}
-              customerBanks={customerBanks}
-              activeTransaction={activeSubMenu}
-              openFormFor={openFormFor}
-              showReceiptForm={showReceiptForm}
-              setShowReceiptForm={setShowReceiptForm}
-              transactionFormMode={transactionFormMode}
-              setTransactionFormMode={setTransactionFormMode}
-              setActiveTransaction={setOpenFormFor}
-
-            />
+  salesInvoices={salesListData}
+  salesmen={salesmen}
+  accounts={accounts}
+  otherAccounts={otherAccounts}
+  customerBanks={customerBanks}
+  activeTransaction={activeSubMenu}
+  openFormFor={openFormFor}
+  showReceiptForm={showReceiptForm}
+  setShowReceiptForm={setShowReceiptForm}
+  transactionFormMode={transactionFormMode}
+  setTransactionFormMode={setTransactionFormMode}
+  setActiveTransaction={setOpenFormFor}
+/>
           )}
 
           {/* Product - Form View */}
