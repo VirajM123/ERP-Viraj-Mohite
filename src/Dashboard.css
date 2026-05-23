@@ -3413,3 +3413,161 @@ textarea {
 .form-actions-left .link-mapping:hover {
   background: #115e59;
 }
+.create-load-section .erp-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.create-load-card {
+  margin-bottom: 8px;
+}
+
+.create-load-grid-5 {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 10px;
+  align-items: end;
+  margin-bottom: 8px;
+}
+
+.create-load-grid-5 .labeled-input label {
+  font-size: 12px;
+  font-weight: 600;
+  margin-bottom: 4px;
+}
+
+.create-load-grid-5 .erp-input,
+.create-load-grid-5 .erp-select,
+.create-load-salesman-btn {
+  height: 34px;
+  width: 100%;
+  font-size: 13px;
+}
+
+.create-load-salesman-cell {
+  position: relative;
+}
+
+.create-load-salesman-btn {
+  text-align: left;
+  background: #fff;
+  border: 1px solid #cbd5e1;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.create-load-salesman-dropdown {
+  position: absolute;
+  top: 58px;
+  left: 0;
+  right: 0;
+  background: #fff;
+  border: 1px solid #cbd5e1;
+  border-radius: 6px;
+  max-height: 190px;
+  overflow-y: auto;
+  z-index: 999;
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.12);
+  padding: 6px;
+}
+
+.create-load-check-row {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 5px 6px;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.create-load-check-row:hover {
+  background: #f1f5f9;
+}
+
+.create-load-btn-cell .btn-primary {
+  width: 100%;
+  height: 34px;
+}
+
+.create-load-grid-wrap {
+  margin-top: 6px;
+  max-height: 420px;
+  overflow: auto;
+  border: 1px solid #cbd5e1;
+  border-radius: 6px;
+}
+
+.create-load-entry-table {
+  width: 100%;
+  min-width: 1100px;
+  border-collapse: collapse;
+}
+
+.create-load-entry-table th,
+.create-load-entry-table td {
+  border: 1px solid #d1d5db;
+  padding: 6px 8px;
+  font-size: 13px;
+  white-space: nowrap;
+}
+
+.create-load-entry-table th {
+  background: #f8fafc;
+  font-weight: 700;
+  position: sticky;
+  top: 0;
+  z-index: 2;
+}
+
+.create-load-entry-table .amount-cell {
+  text-align: right;
+  font-weight: 600;
+}
+
+@media (max-width: 1200px) {
+  .create-load-grid-5 {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+.create-load-salesman-cell {
+  position: relative;
+}
+
+.create-load-salesman-btn {
+  width: 100%;
+  text-align: left;
+}
+
+.create-load-salesman-dropdown {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  width: 360px;
+  min-width: 360px;
+  max-height: 260px;
+  overflow-y: auto;
+  background: #fff;
+  border: 1px solid #cbd5e1;
+  border-radius: 6px;
+  z-index: 9999;
+  box-shadow: 0 8px 18px rgba(0, 0, 0, 0.15);
+  padding: 8px;
+}
+
+.create-load-check-row {
+  display: grid;
+  grid-template-columns: 28px 1fr;
+  align-items: center;
+  gap: 10px;
+  min-height: 34px;
+  padding: 6px 8px;
+  font-size: 13px;
+  line-height: 18px;
+  white-space: normal;
+  cursor: pointer;
+}
+
+.create-load-check-row input {
+  margin: 0;
+}
