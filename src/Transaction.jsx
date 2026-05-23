@@ -5,6 +5,7 @@
 const Transaction = ({
   salesInvoices = [],
   salesmen = [],
+  areas = [],
   accounts = [],
   otherAccounts = [],
   customerBanks = [],
@@ -191,7 +192,8 @@ const Transaction = ({
       narration: "",
       collectionType: "Bill wise"
     });
-
+    const [showCollectionReceiptModal, setShowCollectionReceiptModal] = useState(false);
+const [collectionReceiptBillId, setCollectionReceiptBillId] = useState(null);
     const [totalCollectionAmount, setTotalCollectionAmount] = useState(0);
     const [totalCashCollection, setTotalCashCollection] = useState(0);
     const [totalChequeCollection, setTotalChequeCollection] = useState(0);
@@ -200,145 +202,121 @@ const Transaction = ({
     // =========================
     // DUMMY DATA FOR COLLECTION VOUCHER MODALS
     // =========================
-    const getDummyBillsData = () => {
-      return [
-        {
-          id: 1,
-          billSeries: "26-27",
-          billNo: "INV-001",
-          billDate: "2024-01-15",
-          partyCode: "P001",
-          partyName: "ABC Medical Store",
-          billAmt: 50000,
-          oldCollection: 10000,
-          balance: 40000,
-          salesmanCode: "SM001",
-          salesmanName: "Rajesh Kumar",
-          areaCode: "AR001",
-          areaName: "North Zone",
-          selected: false,
-          collectionAmt: 0,
-          discount: 0,
-          recSeries: "",
-          recVNo: ""
-        },
-        {
-          id: 2,
-          billSeries: "26-27",
-          billNo: "INV-002",
-          billDate: "2024-01-20",
-          partyCode: "P002",
-          partyName: "Ratnahira Enterprises",
-          billAmt: 75000,
-          oldCollection: 25000,
-          balance: 50000,
-          salesmanCode: "SM002",
-          salesmanName: "Priya Sharma",
-          areaCode: "AR002",
-          areaName: "South Zone",
-          selected: false,
-          collectionAmt: 0,
-          discount: 0,
-          recSeries: "",
-          recVNo: ""
-        },
-        {
-          id: 3,
-          billSeries: "26-27",
-          billNo: "INV-003",
-          billDate: "2024-01-25",
-          partyCode: "P003",
-          partyName: "MediCare Solutions",
-          billAmt: 60000,
-          oldCollection: 15000,
-          balance: 45000,
-          salesmanCode: "SM001",
-          salesmanName: "Rajesh Kumar",
-          areaCode: "AR001",
-          areaName: "North Zone",
-          selected: false,
-          collectionAmt: 0,
-          discount: 0,
-          recSeries: "",
-          recVNo: ""
-        },
-        {
-          id: 4,
-          billSeries: "26-27",
-          billNo: "INV-004",
-          billDate: "2024-02-01",
-          partyCode: "P004",
-          partyName: "HealthCare Plus",
-          billAmt: 85000,
-          oldCollection: 35000,
-          balance: 50000,
-          salesmanCode: "SM003",
-          salesmanName: "Amit Patel",
-          areaCode: "AR003",
-          areaName: "East Zone",
-          selected: false,
-          collectionAmt: 0,
-          discount: 0,
-          recSeries: "",
-          recVNo: ""
-        },
-        {
-          id: 5,
-          billSeries: "26-27",
-          billNo: "INV-005",
-          billDate: "2024-02-05",
-          partyCode: "P005",
-          partyName: "City Medicals",
-          billAmt: 45000,
-          oldCollection: 5000,
-          balance: 40000,
-          salesmanCode: "SM002",
-          salesmanName: "Priya Sharma",
-          areaCode: "AR002",
-          areaName: "South Zone",
-          selected: false,
-          collectionAmt: 0,
-          discount: 0,
-          recSeries: "",
-          recVNo: ""
-        }
-      ];
-    };
+  const getCollectionPendingBills = () => {
+  return (pendingBills || []).map((bill, index) => {
+    const areaValue = pickValue(
+      bill.areaCode,
+      bill.areaName,
+      bill.area,
+      bill.header?.areaCode,
+      bill.header?.areaName,
+      bill.header?.area
+    );
 
-    const getUniqueSalesmen = () => {
-      const bills = getDummyBillsData();
-      const salesmanMap = new Map();
-      bills.forEach(bill => {
-        if (!salesmanMap.has(bill.salesmanCode)) {
-          salesmanMap.set(bill.salesmanCode, {
-            code: bill.salesmanCode,
-            name: bill.salesmanName,
-            selected: false,
-            bills: []
-          });
-        }
-        salesmanMap.get(bill.salesmanCode).bills.push(bill);
+    const salesmanValue = pickValue(
+      bill.salesmanCode,
+      bill.salesmanName,
+      bill.salesman,
+      bill.header?.salesmanCode,
+      bill.header?.salesmanName,
+      bill.header?.salesman
+    );
+
+    return {
+      id: `${bill.billSeries}-${bill.billNo}-${index}`,
+      billSeries: bill.billSeries || "",
+      billNo: bill.billNo || "",
+      billDate: bill.trnDate || bill.billDate || "",
+      partyCode: bill.partyCode || "",
+      partyName: bill.party || bill.partyName || "",
+      billAmt: Number(bill.amount) || 0,
+      oldCollection: Number(bill.adjusted) || 0,
+      balance: Number(bill.balance) || 0,
+
+      salesmanCode: salesmanValue,
+      salesmanName: salesmanValue,
+
+      areaCode: areaValue,
+      areaName: areaValue,
+
+      selected: false,
+      collectionAmt: 0,
+      discount: 0,
+      recSeries: "",
+      recVNo: ""
+    };
+  });
+};
+ const getUniqueSalesmen = () => {
+  const bills = getCollectionPendingBills();
+  const salesmanMap = new Map();
+
+  (salesmen || []).forEach((s) => {
+    const code = String(s.code || s.salesmanCode || s.id || "").trim();
+    const name = String(s.name || s.salesmanName || s.salesman || code).trim();
+
+    if (!code && !name) return;
+
+    const key = clean(name || code);
+
+    salesmanMap.set(key, {
+      code: code || name,
+      name: name || code,
+      selected: false,
+      bills: []
+    });
+  });
+
+  bills.forEach((bill) => {
+    const billSalesmanKey = clean(bill.salesmanName || bill.salesmanCode);
+
+    if (salesmanMap.has(billSalesmanKey)) {
+      salesmanMap.get(billSalesmanKey).bills.push(bill);
+    }
+  });
+
+  return Array.from(salesmanMap.values());
+};
+
+
+const getUniqueAreas = () => {
+  const bills = getCollectionPendingBills();
+  const areaMap = new Map();
+
+  (areas || []).forEach((a) => {
+    const code = String(a.code || a.areaCode || a.id || "").trim();
+    const name = String(a.name || a.areaName || a.area || code).trim();
+
+    if (!code && !name) return;
+
+    const key = clean(name || code);
+
+    areaMap.set(key, {
+      code: code || name,
+      name: name || code,
+      selected: false,
+      bills: []
+    });
+  });
+
+  bills.forEach((bill) => {
+    const billAreaKey = clean(bill.areaName || bill.areaCode);
+
+    if (areaMap.has(billAreaKey)) {
+      areaMap.get(billAreaKey).bills.push(bill);
+    } else if (bill.areaName || bill.areaCode) {
+      const areaName = bill.areaName || bill.areaCode;
+      areaMap.set(clean(areaName), {
+        code: areaName,
+        name: areaName,
+        selected: false,
+        bills: [bill]
       });
-      return Array.from(salesmanMap.values());
-    };
+    }
+  });
 
-    const getUniqueAreas = () => {
-      const bills = getDummyBillsData();
-      const areaMap = new Map();
-      bills.forEach(bill => {
-        if (!areaMap.has(bill.areaCode)) {
-          areaMap.set(bill.areaCode, {
-            code: bill.areaCode,
-            name: bill.areaName,
-            selected: false,
-            bills: []
-          });
-        }
-        areaMap.get(bill.areaCode).bills.push(bill);
-      });
-      return Array.from(areaMap.values());
-    };
-
+  return Array.from(areaMap.values());
+};
     // =========================
     // MODAL COMPONENTS
     // =========================
@@ -409,13 +387,14 @@ const Transaction = ({
                 <table className="modal-bills-table">
                   <thead>
                     <tr>
-                      <th style={{ width: "40px" }}>
-                        <input
-                          type="checkbox"
-                          checked={selectAll}
-                          onChange={handleSelectAll}
-                        />
-                      </th>
+                     <th>
+  <input
+    type="checkbox"
+    checked={allCollectionBillsSelected}
+    onChange={(e) => handleSelectAllCollectionBills(e.target.checked)}
+  />{" "}
+  All
+</th>
                       <th>Bill Series</th>
                       <th>Bill No</th>
                       <th>Bill Date</th>
@@ -752,18 +731,19 @@ const pendingBills = (salesInvoices || [])
       header.trnNo
     );
 
-    const amount = Number(
-      pickValue(
-        invoice.amount,
-        invoice.netAmount,
-        invoice.billAmount,
-        invoice.grandTotal,
-        summary.net,
-        summary.netAmount,
-        summary.grandTotal,
-        summary.totalAmount
-      )
-    ) || 0;
+    const amount =
+      Number(
+        pickValue(
+          invoice.amount,
+          invoice.netAmount,
+          invoice.billAmount,
+          invoice.grandTotal,
+          summary.net,
+          summary.netAmount,
+          summary.grandTotal,
+          summary.totalAmount
+        )
+      ) || 0;
 
     const adjusted = getReceiptAdjustedAmount(billSeries, billNo);
     const balance = Math.max(amount - adjusted, 0);
@@ -784,6 +764,7 @@ const pendingBills = (salesInvoices || [])
       amount,
       adjusted,
       balance,
+
       party: pickValue(
         invoice.partyName,
         invoice.party,
@@ -792,15 +773,54 @@ const pendingBills = (salesInvoices || [])
         header.party,
         header.customerName
       ),
+
       salesman: pickValue(
         invoice.salesman,
         invoice.salesmanName,
+        invoice.salesmanCode,
+        header.salesman,
+        header.salesmanName,
+        header.salesmanCode
+      ),
+
+      areaCode: pickValue(
+        invoice.areaCode,
+        invoice.area,
+        invoice.areaName,
+        header.areaCode,
+        header.area,
+        header.areaName
+      ),
+
+      areaName: pickValue(
+        invoice.areaName,
+        invoice.area,
+        invoice.areaCode,
+        header.areaName,
+        header.area,
+        header.areaCode
+      ),
+
+      salesmanCode: pickValue(
+        invoice.salesmanCode,
+        invoice.salesman,
+        invoice.salesmanName,
+        header.salesmanCode,
         header.salesman,
         header.salesmanName
+      ),
+
+      salesmanName: pickValue(
+        invoice.salesmanName,
+        invoice.salesman,
+        invoice.salesmanCode,
+        header.salesmanName,
+        header.salesman,
+        header.salesmanCode
       )
     };
   })
-  .filter(bill => bill.billNo && bill.balance > 0);
+  .filter((bill) => bill.billNo && bill.balance > 0);
 
     const pendingPurchaseBills = [
       { party: "SURYAJUG CO OP BANK", billSeries: "PUR", billNo: "PUR-001", amount: 50000, adjusted: 0, balance: 50000 },
@@ -828,43 +848,63 @@ const pendingBills = (salesInvoices || [])
       setShowAreaSelectionModal(false);
       setCurrentSelectionType("");
     };
+       const allCollectionBillsSelected =
+  billItems.length > 0 && billItems.every((item) => item.selected);
 
-    const handleBillSelectionConfirm = (selectedBillsData) => {
-      setBillItems(selectedBillsData);
-    };
+const handleSelectAllCollectionBills = (checked) => {
+  setBillItems((prev) =>
+    prev.map((item) => ({
+      ...item,
+      selected: checked,
+      collectionAmt: checked ? Number(item.balance) || 0 : 0
+    }))
+  );
+};
+   const handleBillSelectionConfirm = (selectedBillsData) => {
+  setBillItems(
+    selectedBillsData.map((bill) => ({
+      ...bill,
+      collectionAmt: 0,
+      selected: bill.selected || false
+    }))
+  );
+};
 
-    const handleSalesmanSelectionConfirm = (selectedSalesmenData) => {
-      const allBills = [];
-      selectedSalesmenData.forEach(salesman => {
-        if (salesman.selected) {
-          salesman.bills.forEach(bill => {
-            allBills.push({
-              ...bill,
-              selected: true,
-              collectionAmt: bill.balance
-            });
-          });
-        }
+ const handleSalesmanSelectionConfirm = (selectedSalesmenData) => {
+  const allBills = [];
+
+  selectedSalesmenData.forEach((salesman) => {
+    if (salesman.selected) {
+      (salesman.bills || []).forEach((bill) => {
+        allBills.push({
+          ...bill,
+          selected: true,
+          collectionAmt: 0
+        });
       });
-      setBillItems(allBills);
-    };
+    }
+  });
 
-    const handleAreaSelectionConfirm = (selectedAreasData) => {
-      const allBills = [];
-      selectedAreasData.forEach(area => {
-        if (area.selected) {
-          area.bills.forEach(bill => {
-            allBills.push({
-              ...bill,
-              selected: true,
-              collectionAmt: bill.balance
-            });
-          });
-        }
+  setBillItems(allBills);
+};
+
+const handleAreaSelectionConfirm = (selectedAreasData) => {
+  const allBills = [];
+
+  selectedAreasData.forEach((area) => {
+    if (area.selected) {
+      (area.bills || []).forEach((bill) => {
+        allBills.push({
+          ...bill,
+          selected: true,
+          collectionAmt: 0
+        });
       });
-      setBillItems(allBills);
-    };
+    }
+  });
 
+  setBillItems(allBills);
+};
     // =========================
     // RECEIPT FUNCTIONS
     // =========================
@@ -1124,7 +1164,28 @@ const saveReceipt = () => {
     dispatch({ type: "ADD_RECEIPT", payload });
     alert("Receipt Saved Successfully");
   }
+if (collectionReceiptBillId) {
+  const savedReceiptNo = receiptFormData.rno;
+  const savedReceiptSeries = receiptFormData.billSeries || "REC";
+  const savedAmount = Number(receiptSummary.totalAdjusted || receiptFormData.receiptAmount || 0);
 
+  setBillItems((prev) =>
+    prev.map((item) =>
+      item.id === collectionReceiptBillId
+        ? {
+            ...item,
+            selected: true,
+            collectionAmt: savedAmount,
+            recSeries: savedReceiptSeries,
+            recVNo: savedReceiptNo
+          }
+        : item
+    )
+  );
+
+  setCollectionReceiptBillId(null);
+  setShowCollectionReceiptModal(false);
+}
   resetReceiptForm();
 
   setTransactionFormMode(prev => ({
@@ -1598,7 +1659,7 @@ const deleteChequeBounce = (id) => {
     // =========================
     // PDC DOCKET FUNCTIONS
     // =========================
- const handlePDCDocketInput = (e) => {
+const handlePDCDocketInput = (e) => {
   const { name, value } = e.target;
 
   let updatedData = {
@@ -1607,7 +1668,14 @@ const deleteChequeBounce = (id) => {
   };
 
   if (name === "houseBank") {
-    updatedData.bankName = value;
+    const selectedBank = bankCashAccounts.find(
+      acc => normalize(getBankAccountName(acc)) === normalize(value)
+    );
+
+    updatedData.bankName = getBankAccountName(selectedBank || {});
+    updatedData.houseBankAccountNo = getBankAccountNo(selectedBank || {});
+    updatedData.houseBankIFSC = getBankIFSC(selectedBank || {});
+    updatedData.houseBankBranch = getBankBranch(selectedBank || {});
   }
 
   setPDCDocketFormData(updatedData);
@@ -1655,7 +1723,10 @@ const deleteChequeBounce = (id) => {
     clearingType: "SAME BANK",
     clearingDate: "",
     totalAmount: "0.00",
-    totalCheques: "0"
+    totalCheques: "0",
+    houseBankAccountNo: "",
+houseBankIFSC: "",
+houseBankBranch: ""
   });
 
   setPDCDocketItems([]);
@@ -1723,22 +1794,18 @@ const editPDCDocket = (docket) => {
     // =========================
     // COLLECTION VOUCHER FUNCTIONS
     // =========================
-    const handleCollectionVoucherInput = (e) => {
-      const { name, value } = e.target;
-      setCollectionVoucherFormData({ ...collectionVoucherFormData, [name]: value });
-    };
+  const handleCollectionVoucherInput = (e) => {
+  const { name, value } = e.target;
 
-    // Load bills when collection type changes to Bill wise
-    useEffect(() => {
-      const dummyBills = getDummyBillsData();
-      if (collectionVoucherFormData.collectionType === "Bill wise") {
-        setBillItems(dummyBills);
-      } else if (collectionVoucherFormData.collectionType === "Salesman wise") {
-        setBillItems([]);
-      } else if (collectionVoucherFormData.collectionType === "Area wise") {
-        setBillItems([]);
-      }
-    }, [collectionVoucherFormData.collectionType]);
+  setCollectionVoucherFormData((prev) => ({
+    ...prev,
+    [name]: value
+  }));
+
+  if (name === "collectionType") {
+    setBillItems(value === "Bill wise" ? getCollectionPendingBills() : []);
+  }
+};
 
     useEffect(() => {
       let total = 0, billCount = 0;
@@ -1762,23 +1829,72 @@ const editPDCDocket = (docket) => {
       setTotalChequeCollection(0);
       setTotalBills(billCount);
     }, [billItems, collectionVoucherFormData.collectionType]);
+const handleBillSelect = (index, selected) => {
+  const newBillItems = [...billItems];
 
-    const handleBillSelect = (index, selected) => {
-      const newBillItems = [...billItems];
-      newBillItems[index].selected = selected;
-      if (!selected) {
-        newBillItems[index].collectionAmt = 0;
-      } else {
-        newBillItems[index].collectionAmt = newBillItems[index].balance;
-      }
-      setBillItems(newBillItems);
-    };
+  newBillItems[index].selected = selected;
+  newBillItems[index].collectionAmt = 0;
 
-    const handleCollectionAmtChange = (index, value) => {
-      const newBillItems = [...billItems];
-      newBillItems[index].collectionAmt = parseFloat(value) || 0;
-      setBillItems(newBillItems);
-    };
+  setBillItems(newBillItems);
+};
+
+   const openReceiptFromCollectionBill = (bill) => {
+  if (!bill) return;
+
+  const receiptAmt = Number(bill.balance) || 0;
+
+  const receiptRow = {
+    id: Date.now(),
+    srNo: 1,
+    trnSeries: bill.billSeries,
+    trnNo: bill.billNo,
+    trnDate: bill.billDate,
+    amount: Number(bill.billAmt) || 0,
+    adjustAmt: Number(bill.oldCollection) || 0,
+    balanceAmt: 0,
+    nowAdjust: receiptAmt,
+    discount: 0,
+    discAmount: 0,
+    remark: ""
+  };
+
+  const nextReceiptData = {
+    ...receiptFormData,
+    receiptDate: collectionVoucherFormData.collectionDate || new Date().toISOString().split("T")[0],
+    rno: (state.receipts?.length || 0) + 1,
+    billSeries: bill.billSeries || "",
+    billNo: bill.billNo || "",
+    partyName: bill.partyName || "",
+    partyCode: bill.partyCode || "",
+    salesman: bill.salesmanName || bill.salesmanCode || "",
+    receiptAmount: receiptAmt
+  };
+
+  setReceiptFormData(nextReceiptData);
+  setReceiptItems([receiptRow]);
+  setReceiptSummary({
+    totalAdjusted: receiptAmt,
+    balanceAmount: 0,
+    totalDiscount: 0
+  });
+
+  setCollectionReceiptBillId(bill.id);
+  setShowCollectionReceiptModal(true);
+};
+
+const handleCollectionAmtChange = (index) => {
+  const bill = billItems[index];
+
+  if (!bill?.selected) {
+    alert("Please select this bill first.");
+    return;
+  }
+
+  const ok = window.confirm("Do you want to Create Receipt!");
+  if (!ok) return;
+
+  openReceiptFromCollectionBill(bill);
+};
 
     const handleDiscountChange = (index, value) => {
       const newBillItems = [...billItems];
@@ -1997,12 +2113,16 @@ const receiptBottomSummary = {
 const normalize = (v) => String(v || "").trim().toLowerCase();
 
 const getBankAccountName = (acc) =>
-  acc.accountName ||
-  acc.acName ||
-  acc.AcName ||
-  acc.name ||
-  acc.bankName ||
-  "";
+  acc.accountName || acc.acName || acc.AcName || acc.name || acc.bankName || "";
+
+const getBankAccountNo = (acc) =>
+  acc.bankAccountNo || acc.accountNumber || acc.bankAcNo || acc.acNo || "";
+
+const getBankIFSC = (acc) =>
+  acc.ifscCode || acc.ifsc || acc.IFSC || "";
+
+const getBankBranch = (acc) =>
+  acc.branchName || acc.branch || acc.bankBranch || "";
 
 const isBankAccount = (acc) => {
   const group = normalize(
@@ -2020,20 +2140,12 @@ const isBankAccount = (acc) => {
 
 const bankCashAccounts = [
   ...(otherAccounts || []),
-  ...(accounts || []),
-  ...(state.receipts || [])
-    .map(r => ({
-      accountName: r.header?.bankCash,
-      accountGroup: "Bank Accounts"
-    }))
-    .filter(r => r.accountName && r.accountName !== "Cash")
+  ...(accounts || [])
 ]
   .filter(isBankAccount)
   .filter((acc, index, self) => {
     const name = normalize(getBankAccountName(acc));
-    return name && index === self.findIndex(
-      (a) => normalize(getBankAccountName(a)) === name
-    );
+    return name && index === self.findIndex(a => normalize(getBankAccountName(a)) === name);
   });
 const getPdcDateValue = (dateValue) => {
   if (!dateValue) return "";
@@ -2197,15 +2309,15 @@ const loadPDCDocketGrid = (formData = pdcDocketFormData) => {
     <option value="">Select</option>
     <option value="Cash">Cash</option>
 
-    {bankCashAccounts.map((acc, index) => {
-      const bankName = getBankAccountName(acc);
+   {bankCashAccounts.map((acc, index) => {
+  const bankName = getBankAccountName(acc);
 
-      return (
-        <option key={acc.id || acc.accountCode || index} value={bankName}>
-          {bankName}
-        </option>
-      );
-    })}
+  return (
+    <option key={acc.id || acc.accountCode || index} value={bankName}>
+      {bankName}
+    </option>
+  );
+})}
   </select>
 </div>
             <div className="labeled-input"><label>Receipt Amount</label><input type="number" name="receiptAmount" value={receiptFormData.receiptAmount} onChange={handleReceiptInput} /></div>
@@ -2996,10 +3108,22 @@ const renderChequeBounceForm = () => (
   </div>
 );
 
-   // PDC Docket Print
+  // PDC Docket Print
 const printPDCDocket = (docket) => {
-  const h = docket.header || {};
+  const h = docket.header || docket || {};
   const rows = docket.cheques || docket.details || [];
+
+  const houseBankName =
+    h.bankName || h.houseBankName || h.houseBank || "-";
+
+  const houseBankAccountNo =
+    h.houseBankAccountNo || h.bankAccountNo || h.accountNumber || h.bankCode || "-";
+
+  const houseBankIFSC =
+    h.houseBankIFSC || h.ifscCode || h.ifsc || "-";
+
+  const houseBankBranch =
+    h.houseBankBranch || h.branchName || h.branch || "-";
 
   const printWindow = window.open("", "_blank", "width=900,height=650");
 
@@ -3071,8 +3195,10 @@ const printPDCDocket = (docket) => {
             <div class="info-line">DOCKET NO : ${h.pdcNo || h.docVNo || "-"}</div>
             <div class="info-line">TOTAL CHEQUES : ${h.totalCheques || 0}</div>
             <div class="info-line">DOCKET VALUE : ${parseFloat(h.totalAmount || 0).toFixed(2)}</div>
-            <div class="info-line">BANK NAME : ${h.houseBankName || "-"}</div>
-            <div class="info-line">Bank A/c Code : ${h.bankCode || "-"}</div>
+            <div class="info-line">BANK NAME : ${houseBankName}</div>
+            <div class="info-line">BANK A/C NO : ${houseBankAccountNo}</div>
+            <div class="info-line">IFSC CODE : ${houseBankIFSC}</div>
+            <div class="info-line">BRANCH : ${houseBankBranch}</div>
           </div>
 
           <div>
@@ -3123,7 +3249,6 @@ const printPDCDocket = (docket) => {
   printWindow.document.close();
 };
 
-
 // PDC Docket List
 const renderPDCDocketList = () => (
   <div className="receipt-sales-list-section">
@@ -3154,9 +3279,9 @@ const renderPDCDocketList = () => (
             <th>Deposit Date</th>
             <th>PDC Series</th>
             <th>PDC No</th>
-            <th>House Bank Name</th>
-            <th>From Chq No</th>
-            <th>To Chq No</th>
+            <th>House Bank</th>
+            <th>From Cheq Date</th>
+            <th>To Date</th>
             <th>PDC Type</th>
             <th>Total Amount</th>
             <th>Total Cheques</th>
@@ -3186,10 +3311,10 @@ const renderPDCDocketList = () => (
                   <td>{h.depositDate || "-"}</td>
                   <td>{h.pdcSeries || h.series || "-"}</td>
                   <td>{h.pdcNo || h.docVNo || "-"}</td>
-                  <td>{h.houseBankName || "-"}</td>
-                  <td>{h.fromChqNo || "-"}</td>
-                  <td>{h.toChqNo || "-"}</td>
-                  <td>{h.pdcType || "-"}</td>
+                  <td>{h.houseBank || h.bankName || h.houseBankName || "-"}</td>
+<td>{h.fromDate || "-"}</td>
+<td>{h.toDate || "-"}</td>
+<td>{h.clearingType || h.pdcType || "-"}</td>
 
                   <td className="amount-cell">
                     ₹{Number(h.totalAmount || 0).toLocaleString("en-IN", {
@@ -3212,9 +3337,9 @@ const renderPDCDocketList = () => (
                         className="btn-view"
                         onClick={() => {
                           setTransactionFormMode(prev => ({
-                            ...prev,
-                            ["PDC Docket"]: true
-                          }));
+  ...prev,
+  ["PDC Docket"]: true
+}));
                           editPDCDocket(docket);
                         }}
                       >
@@ -3584,43 +3709,238 @@ const renderPDCDocketList = () => (
 
   </td></tr>)))}</tbody></table></div></div>
     );
+const renderCollectionReceiptModalForm = () => (
+  <div className="collection-receipt-small-form">
+    <h3 className="section-header">Receipt Information</h3>
 
+    <div className="collection-receipt-grid-6">
+      <div className="labeled-input">
+        <label>Receipt Date</label>
+        <input
+          type="date"
+          name="receiptDate"
+          value={receiptFormData.receiptDate}
+          onChange={handleReceiptInput}
+        />
+      </div>
+
+      <div className="labeled-input">
+        <label>RNo</label>
+        <input
+          type="text"
+          name="rno"
+          value={receiptFormData.rno}
+          onChange={handleReceiptInput}
+        />
+      </div>
+
+      <div className="labeled-input">
+        <label>Bill Series</label>
+        <input
+          type="text"
+          name="billSeries"
+          value={receiptFormData.billSeries}
+          readOnly
+        />
+      </div>
+
+      <div className="labeled-input">
+        <label>Bill No</label>
+        <input
+          type="text"
+          name="billNo"
+          value={receiptFormData.billNo}
+          readOnly
+        />
+      </div>
+
+      <div className="labeled-input">
+        <label>Party Name</label>
+        <input
+          type="text"
+          name="partyName"
+          value={receiptFormData.partyName}
+          readOnly
+        />
+      </div>
+
+      <div className="labeled-input">
+        <label>Salesman</label>
+        <select
+          name="salesman"
+          value={receiptFormData.salesman}
+          onChange={handleReceiptInput}
+        >
+          <option value="">Select Salesman</option>
+          {salesmen.map((s, i) => (
+            <option key={i} value={s.name || s.salesmanName || s.code}>
+              {s.name || s.salesmanName || s.code}
+            </option>
+          ))}
+        </select>
+      </div>
+
+      <div className="labeled-input">
+        <label>Bank/Cash</label>
+        <select
+          name="bankCash"
+          value={receiptFormData.bankCash}
+          onChange={handleReceiptInput}
+        >
+          <option value="">Select</option>
+          <option value="Cash">Cash</option>
+          {bankCashAccounts.map((acc, i) => (
+            <option key={i} value={getBankAccountName(acc)}>
+              {getBankAccountName(acc)}
+            </option>
+          ))}
+        </select>
+      </div>
+
+      <div className="labeled-input">
+        <label>Receipt Amount</label>
+        <input
+          type="number"
+          name="receiptAmount"
+          value={receiptFormData.receiptAmount}
+          onChange={handleReceiptInput}
+        />
+      </div>
+
+      <div className="labeled-input">
+  <label>Cheque No</label>
+  <input
+    type="text"
+    name="chequeNo"
+    value={receiptFormData.chequeNo}
+    onChange={handleReceiptInput}
+    disabled={receiptFormData.bankCash === "Cash"}
+  />
+</div>
+
+<div className="labeled-input">
+  <label>Cheque Date</label>
+  <input
+    type="date"
+    name="chequeDate"
+    value={receiptFormData.chequeDate}
+    onChange={handleReceiptInput}
+    disabled={receiptFormData.bankCash === "Cash"}
+  />
+</div>
+<div className="labeled-input">
+  <label>Drawer Bank</label>
+  <select
+    name="drawerBank"
+    value={receiptFormData.drawerBank}
+    onChange={handleReceiptInput}
+    disabled={receiptFormData.bankCash === "Cash"}
+  >
+    <option value="">Select Customer Bank</option>
+    {filteredCustomerBanks.map((bank, i) => (
+      <option key={i} value={getCustomerBankName(bank)}>
+        {getCustomerBankName(bank)}
+      </option>
+    ))}
+  </select>
+</div>
+
+      <div className="labeled-input">
+        <label>MICR</label>
+        <input
+          type="text"
+          name="micr"
+          value={receiptFormData.micr}
+          onChange={handleReceiptInput}
+        />
+      </div>
+    </div>
+
+    <div className="collection-receipt-actions">
+      <button className="btn-save" onClick={saveReceipt}>
+        Save Receipt
+      </button>
+
+      <button
+        className="btn-cancel"
+        onClick={() => {
+          setShowCollectionReceiptModal(false);
+          setCollectionReceiptBillId(null);
+        }}
+      >
+        Cancel
+      </button>
+    </div>
+  </div>
+);
    // Collection Voucher Form
 const renderCollectionVoucherForm = () => {
-  const selectedBills = billItems.filter(item => item.selected);
+  const selectedBills = billItems.filter((item) => item.selected);
 
-  const handleSelectedBillCheck = (id) => {
-    setBillItems(prev =>
-      prev.map(item =>
-        item.id === id ? { ...item, selected: !item.selected } : item
-      )
-    );
-  };
+  const formatAmt = (v) =>
+    Number(v || 0).toLocaleString("en-IN", {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2
+    });
+const allBillsSelected =
+  billItems.length > 0 && billItems.every((item) => item.selected);
 
-  const handleCollectionAmtFocus = (itemId) => {
-    const ok = window.confirm("Do you want to Create Receipt!");
-    if (ok) {
-      setShowReceiptForm(true); // change this to your receipt modal/form state name if different
-    }
-  };
+const handleSelectAllCollectionBills = (checked) => {
+  setBillItems((prev) =>
+    prev.map((item) => ({
+      ...item,
+      selected: checked,
+      collectionAmt: checked ? Number(item.balance) || 0 : 0
+    }))
+  );
+};
 
-  const updateBillItem = (id, field, value) => {
-    setBillItems(prev =>
-      prev.map(item =>
+const handleSelectedBillCheck = (id) => {
+    setBillItems((prev) =>
+      prev.map((item) =>
         item.id === id
-          ? { ...item, [field]: value }
+          ? {
+              ...item,
+              selected: !item.selected,
+              collectionAmt: !item.selected ? item.balance : 0
+            }
           : item
       )
     );
   };
+const handleCollectionAmtFocus = (itemId, e) => {
+  e?.target?.blur();
 
-  return (
+  const bill = billItems.find((item) => item.id === itemId);
+  if (!bill) return;
+
+  if (!bill.selected) {
+    alert("Please select this bill first.");
+    return;
+  }
+
+  if (showCollectionReceiptModal || collectionReceiptBillId === bill.id) return;
+
+  openReceiptFromCollectionBill(bill);
+};
+const updateBillItem = (id, field, value) => {
+    setBillItems(prev =>
+      prev.map(item =>
+        item.id === id ? { ...item, [field]: value } : item
+      )
+    );
+  };
+
+    return (
     <>
       <div className="master-section collection-voucher-section">
         <div className="form-header">
           <h2 className="page-title-large">
-            {editCollectionVoucherId ? "Edit Collection Voucher" : "Add Collection Voucher"}
+            {editCollectionVoucherId
+              ? "Edit Collection Voucher"
+              : "Add Collection Voucher"}
           </h2>
+
           <button
             className="close-form-btn"
             onClick={() => {
@@ -3632,239 +3952,192 @@ const renderCollectionVoucherForm = () => {
           </button>
         </div>
 
-        <div className="form-section">
-          <div className="collection-voucher-form">
+        <div className="collection-voucher-card">
+          <div className="collection-voucher-header-grid">
+            <div className="collection-field">
+              <label>Collection Date :</label>
+              <input
+                type="date"
+                name="collectionDate"
+                value={collectionVoucherFormData.collectionDate}
+                onChange={handleCollectionVoucherInput}
+              />
+            </div>
 
-            {/* Header Area */}
-            <div className="collection-voucher-top-grid">
-              <div className="form-field">
-                <label>Collection Date :</label>
-                <input
-                  type="date"
-                  name="collectionDate"
-                  value={collectionVoucherFormData.collectionDate}
-                  onChange={handleCollectionVoucherInput}
-                />
-              </div>
+            <div className="collection-field">
+              <label>Col VNo. :</label>
+              <input
+                type="text"
+                name="colVNo"
+                value={collectionVoucherFormData.colVNo}
+                onChange={handleCollectionVoucherInput}
+                placeholder="Col VNo"
+              />
+            </div>
 
-              <div className="form-field">
-                <label>Col VNo. :</label>
-                <input
-                  type="text"
-                  name="colVNo"
-                  value={collectionVoucherFormData.colVNo}
-                  onChange={handleCollectionVoucherInput}
-                  placeholder="Col VNo"
-                />
-              </div>
+            <div className="collection-field">
+              <label>Collection Type :</label>
+              <select
+                name="collectionType"
+                value={collectionVoucherFormData.collectionType}
+                onChange={handleCollectionVoucherInput}
+              >
+                <option value="Bill wise">Bill wise</option>
+                <option value="Salesman wise">Salesman wise</option>
+                <option value="Area wise">Area wise</option>
+              </select>
+            </div>
 
-              <div className="form-field collection-type-field">
-                <label>Collection Type :</label>
-                <select
-                  name="collectionType"
-                  value={collectionVoucherFormData.collectionType}
-                  onChange={handleCollectionVoucherInput}
-                >
-                  <option value="Bill wise">Bill wise</option>
-                  <option value="Salesman wise">Salesman wise</option>
-                  <option value="Area wise">Area wise</option>
-                </select>
-              </div>
-
-              <div className="form-field narration-field">
-                <label>Narr :</label>
+            <div className="collection-field collection-narr-field">
+              <label>Narr :</label>
+              <div className="collection-narr-row">
                 <input
                   type="text"
                   name="narration"
                   value={collectionVoucherFormData.narration}
                   onChange={handleCollectionVoucherInput}
-                  placeholder="Enter narration..."
+                  placeholder="Enter narration"
                 />
-              </div>
 
-              <div className="selection-btn-area">
                 <button
                   type="button"
-                  className="btn-select-bills-modal"
-                  onClick={() => openSelectionModal(collectionVoucherFormData.collectionType)}
+                  className="collection-select-btn"
+                  onClick={() =>
+                    openSelectionModal(collectionVoucherFormData.collectionType)
+                  }
                 >
                   Select{" "}
                   {collectionVoucherFormData.collectionType === "Bill wise"
                     ? "Bills"
-                    : collectionVoucherFormData.collectionType === "Salesman wise"
+                    : collectionVoucherFormData.collectionType ===
+                      "Salesman wise"
                     ? "Salesmen"
                     : "Areas"}
                 </button>
               </div>
             </div>
+          </div>
 
-            {/* Selected Bills Table */}
-            <div className="bills-table-container">
-              <div className="table-header">
-                <h3>
-                  {collectionVoucherFormData.collectionType === "Bill wise"
-                    ? "Selected Bills"
-                    : collectionVoucherFormData.collectionType === "Salesman wise"
-                    ? "Selected Salesman Bills"
-                    : "Selected Area Bills"}
-                </h3>
-              </div>
+          <div className="receipt-grid-wrap collection-grid-wrap">
+            <table className="receipt-entry-table collection-voucher-table">
+              <thead>
+                <tr>
+                  <th>Sel</th>
+                  <th>Bill Series</th>
+                  <th>Bill No</th>
+                  <th>Bill Date</th>
+                  <th>Party Code</th>
+                  <th>Party Name</th>
+                  <th>Bill Amt</th>
+                  <th>Old Collection</th>
+                  <th>Balance</th>
+                  <th>Collection Amt</th>
+                  <th>Discount</th>
+                  <th>REC Series</th>
+                  <th>REC VNo</th>
+                </tr>
+              </thead>
 
-              <div className="table-responsive">
-                <table className="bills-table">
-                  <thead>
-                    <tr>
-                      <th>
+              <tbody>
+                {billItems.length === 0 ? (
+                  <tr>
+                    <td colSpan="13" className="receipt-empty-row">
+                      Click Select button to load collection bills
+                    </td>
+                  </tr>
+                ) : (
+                  billItems.map((item) => (
+                    <tr key={item.id}>
+                      <td>
                         <input
                           type="checkbox"
-                          checked={billItems.length > 0 && billItems.every(item => item.selected)}
-                          onChange={(e) => {
-                            const checked = e.target.checked;
-                            setBillItems(prev => prev.map(item => ({ ...item, selected: checked })));
-                          }}
+                          checked={!!item.selected}
+                          onChange={() => handleSelectedBillCheck(item.id)}
                         />
-                      </th>
-                      <th>Bill Series</th>
-                      <th>Bill No</th>
-                      <th>Bill Date</th>
-                      <th>Party Code</th>
-                      <th>Party Name</th>
-                      <th>Bill Amt</th>
+                      </td>
 
-                      {collectionVoucherFormData.collectionType !== "Bill wise" && (
-                        <>
-                          <th>Existing Salesman</th>
-                          <th>Area Name</th>
-                        </>
-                      )}
+                      <td>{item.billSeries || "-"}</td>
+                      <td>{item.billNo || "-"}</td>
+                      <td>{item.billDate || "-"}</td>
+                      <td>{item.partyCode || "-"}</td>
+                      <td>{item.partyName || "-"}</td>
+                      <td className="amount-cell">₹{formatAmt(item.billAmt)}</td>
+                      <td className="amount-cell">
+                        ₹{formatAmt(item.oldCollection)}
+                      </td>
+                      <td className="amount-cell">₹{formatAmt(item.balance)}</td>
 
-                      <th>Old Collection</th>
-                      <th>Balance</th>
-                      <th>Collection Amt</th>
-                      <th>Discount</th>
-                      <th>REC Series</th>
-                      <th>REC VNo</th>
+                      <td>
+                        <input
+  type="number"
+  value={item.collectionAmt || ""}
+  readOnly
+  onMouseDown={(e) => e.preventDefault()}
+  onClick={(e) => handleCollectionAmtFocus(item.id, e)}
+  className="collection-amt-input"
+/>
+                      </td>
+
+                      <td>
+                        <input
+                          type="number"
+                          className="table-input"
+                          value={item.discount ?? ""}
+                          onChange={(e) =>
+                            updateBillItem(
+                              item.id,
+                              "discount",
+                              Number(e.target.value) || 0
+                            )
+                          }
+                          step="0.01"
+                          placeholder="0.00"
+                        />
+                      </td>
+
+                      <td>
+                        <input
+                          type="text"
+                          className="table-input"
+                          value={item.recSeries || ""}
+                          onChange={(e) =>
+                            updateBillItem(item.id, "recSeries", e.target.value)
+                          }
+                          placeholder="Series"
+                        />
+                      </td>
+
+                      <td>
+                        <input
+                          type="text"
+                          className="table-input"
+                          value={item.recVNo || ""}
+                          onChange={(e) =>
+                            updateBillItem(item.id, "recVNo", e.target.value)
+                          }
+                          placeholder="VNo"
+                        />
+                      </td>
                     </tr>
-                  </thead>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
 
-                  <tbody>
-                    {billItems.length === 0 ? (
-                      <tr>
-                        <td
-                          colSpan={collectionVoucherFormData.collectionType === "Bill wise" ? "13" : "15"}
-                          className="no-data"
-                        >
-                          No records selected. Click selection button to choose records.
-                        </td>
-                      </tr>
-                    ) : (
-                      billItems.map((item) => (
-                        <tr key={item.id}>
-                          <td>
-                            <input
-                              type="checkbox"
-                              checked={!!item.selected}
-                              onChange={() => handleSelectedBillCheck(item.id)}
-                            />
-                          </td>
-
-                          <td>{item.billSeries}</td>
-                          <td>{item.billNo}</td>
-                          <td>{item.billDate}</td>
-                          <td>{item.partyCode}</td>
-                          <td>{item.partyName}</td>
-                          <td className="amount-cell">₹{Number(item.billAmt || 0).toFixed(2)}</td>
-
-                          {collectionVoucherFormData.collectionType !== "Bill wise" && (
-                            <>
-                              <td>{item.salesmanName}</td>
-                              <td>{item.areaName}</td>
-                            </>
-                          )}
-
-                          <td className="amount-cell">₹{Number(item.oldCollection || 0).toFixed(2)}</td>
-                          <td className="amount-cell">₹{Number(item.balance || 0).toFixed(2)}</td>
-
-                          <td>
-                            <input
-                              type="number"
-                              className="collection-input"
-                              value={item.collectionAmt ?? 0}
-                              onFocus={() => handleCollectionAmtFocus(item.id)}
-                              onChange={(e) =>
-                                updateBillItem(item.id, "collectionAmt", parseFloat(e.target.value) || 0)
-                              }
-                              step="0.01"
-                              placeholder="0.00"
-                            />
-                          </td>
-
-                          <td>
-                            <input
-                              type="number"
-                              className="discount-input"
-                              value={item.discount ?? 0}
-                              onChange={(e) =>
-                                updateBillItem(item.id, "discount", parseFloat(e.target.value) || 0)
-                              }
-                              step="0.01"
-                              placeholder="0.00"
-                            />
-                          </td>
-
-                          <td>
-                            <input
-                              type="text"
-                              className="rec-input"
-                              value={item.recSeries || ""}
-                              onChange={(e) =>
-                                updateBillItem(item.id, "recSeries", e.target.value)
-                              }
-                              placeholder="Series"
-                            />
-                          </td>
-
-                          <td>
-                            <input
-                              type="text"
-                              className="rec-input"
-                              value={item.recVNo || ""}
-                              onChange={(e) =>
-                                updateBillItem(item.id, "recVNo", e.target.value)
-                              }
-                              placeholder="VNo"
-                            />
-                          </td>
-                        </tr>
-                      ))
-                    )}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-
-            {/* Summary */}
-            <div className="collection-summary">
-              <div className="summary-grid">
-                <div className="summary-card">
-                  <label>Total Collection Amount</label>
-                  <h3>₹{totalCollectionAmount.toFixed(2)}</h3>
-                </div>
-                <div className="summary-card">
-                  <label>Total Cash Collection</label>
-                  <h3>₹{totalCashCollection.toFixed(2)}</h3>
-                </div>
-                <div className="summary-card">
-                  <label>Total Cheque Collection</label>
-                  <h3>₹{totalChequeCollection.toFixed(2)}</h3>
-                </div>
-                <div className="summary-card">
-                  <label>Total Bills</label>
-                  <h3>{selectedBills.length}</h3>
-                </div>
-              </div>
-            </div>
-
+          <div className="collection-bottom-summary">
+            <span>
+              Total Collection Amount <b>₹{formatAmt(totalCollectionAmount)}</b>
+            </span>
+            <span>
+              Total Cash Collection <b>₹{formatAmt(totalCashCollection)}</b>
+            </span>
+            <span>
+              Total Cheque Collection <b>₹{formatAmt(totalChequeCollection)}</b>
+            </span>
+            <span>
+              Total Bills <b>{selectedBills.length}</b>
+            </span>
           </div>
         </div>
 
@@ -3872,6 +4145,7 @@ const renderCollectionVoucherForm = () => {
           <button className="btn-save" onClick={saveCollectionVoucher}>
             {editCollectionVoucherId ? "Update" : "Save"}
           </button>
+
           <button
             className="btn-cancel"
             onClick={() => {
@@ -3885,17 +4159,12 @@ const renderCollectionVoucherForm = () => {
       </div>
 
       {collectionVoucherFormData.collectionType === "Bill wise" && (
-        <BillSelectionModal
-          isOpen={showBillSelectionModal}
-          onClose={closeSelectionModal}
-          bills={getDummyBillsData().map(b => ({
-            ...b,
-            selected: b.selected ?? true,
-            collectionAmt: b.collectionAmt ?? 0,
-            discount: b.discount ?? 0
-          }))}
-          onConfirm={handleBillSelectionConfirm}
-        />
+       <BillSelectionModal
+  isOpen={showBillSelectionModal}
+  onClose={closeSelectionModal}
+  bills={getCollectionPendingBills()}
+  onConfirm={handleBillSelectionConfirm}
+/>
       )}
 
       {collectionVoucherFormData.collectionType === "Salesman wise" && (
@@ -3907,18 +4176,35 @@ const renderCollectionVoucherForm = () => {
         />
       )}
 
-      {collectionVoucherFormData.collectionType === "Area wise" && (
-        <AreaSelectionModal
-          isOpen={showAreaSelectionModal}
-          onClose={closeSelectionModal}
-          areas={getUniqueAreas()}
-          onConfirm={handleAreaSelectionConfirm}
-        />
-      )}
-    </>
+     {collectionVoucherFormData.collectionType === "Area wise" && (
+  <AreaSelectionModal
+    isOpen={showAreaSelectionModal}
+    onClose={closeSelectionModal}
+    areas={getUniqueAreas()}
+    onConfirm={handleAreaSelectionConfirm}
+  />
+)}
+
+{showCollectionReceiptModal && (
+  <div className="modal-overlay">
+    <div className="collection-receipt-compact-modal">
+      <button
+        className="modal-close-btn"
+        onClick={() => {
+          setShowCollectionReceiptModal(false);
+          setCollectionReceiptBillId(null);
+        }}
+      >
+        ×
+      </button>
+
+      {renderCollectionReceiptModalForm()}
+    </div>
+  </div>
+)}
+</>
   );
 };
-
     // Main Render
     return (
       <div className="transaction-page">
