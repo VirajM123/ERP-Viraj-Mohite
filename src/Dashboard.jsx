@@ -66,6 +66,8 @@ const Dashboard = () => {
   const [createLoadListData, setCreateLoadListData] = useState([]);
   const [editingInvoiceId, setEditingInvoiceId] = useState(null);
   const [originalSettleLoadItems, setOriginalSettleLoadItems] = useState([]);
+
+  const [createLoadDateRangeChanged, setCreateLoadDateRangeChanged] = useState(false);
   // Add this state with other state declarations (around line 50-60)
   const [showReceiptModal, setShowReceiptModal] = useState(false);
   const [currentReceiptItem, setCurrentReceiptItem] = useState(null);
@@ -493,9 +495,6 @@ if (formData.hsn && formData.hsn.length > 8) {
   return true;
 };
 
-
-
-
   // Add this function where other handler functions are defined
   const handleSettleLoad = (loadData) => {
     console.log('Settling Load:', loadData);
@@ -713,16 +712,141 @@ if (formData.hsn && formData.hsn.length > 8) {
         totalCancelAmt
       });
     };
+const loadSettleLoadBySeriesNo = (series, no) => {
+  const enteredSeries = String(series || "").trim().toLowerCase();
+  const enteredNo = String(no || "").trim();
 
-    
+  const load = createLoadListData.find((l) => {
+    const savedSeries = String(l.loadSeries || "").trim().toLowerCase();
+    const savedNo = String(l.loadNo || l.loadNumber || "").trim();
+
+    return savedSeries === enteredSeries && savedNo === enteredNo;
+  });
+
+  if (!load) {
+    setSettleLoadData(null);
+    setSettleLoadItems([]);
+    setOriginalSettleLoadItems([]);
+    calculateSettleLoadSummary([]);
+    return;
+  }
+
+  const transformedItems = (load.items || []).map((item, index) => ({
+    id: item.id || `${load.loadSeries}-${load.loadNo}-${index}`,
+    sr: index + 1,
+    adjust: item.adjust || "N",
+    pending: item.pending || "N",
+    cancel: item.cancel || "N",
+    receiptSeries: item.receiptSeries || "",
+    receiptNo: item.receiptNo || "",
+    status: item.status || "Pending",
+
+    billType: item.billType || "Credit",
+    billDate: item.billDate || item.date || load.loadDate || "",
+    billSeries: item.billSeries || item.BillSeries || item.series || "",
+    billNo: item.billNo || item.BillNo || "",
+
+    partyCode: item.partyCode || item.accountCode || "",
+    partyName: item.partyName || item.accountName || "",
+    salesman: item.salesman || item.salesmanName || "",
+    area: item.area || "",
+
+    billAmount: Number(item.billAmount || item.amount || item.netAmount || 0),
+    receiptAmount: Number(item.receiptAmount || 0),
+
+    chequeNo: item.chequeNo || "",
+    chequeDate: item.chequeDate || "",
+    bankName: item.bankName || "",
+    receiptMode: item.receiptMode || ""
+  }));
+
+  setSettleLoadData(load);
+  setSettleLoadItems(transformedItems);
+  setOriginalSettleLoadItems(JSON.parse(JSON.stringify(transformedItems)));
+  calculateSettleLoadSummary(transformedItems);
+
+  setSettleLoadFormData((prev) => ({
+    ...prev,
+    loadSeries: load.loadSeries || "",
+    loadNo: load.loadNo || load.loadNumber || "",
+    loadDate: load.loadDate || new Date().toISOString().split("T")[0],
+    settleLoadDate: prev.settleLoadDate || new Date().toISOString().split("T")[0],
+    narration: load.narration || ""
+  }));
+};    
 const handleSettleLoadInputChange = (e) => {
   const { name, value } = e.target;
-  setSettleLoadFormData({ ...settleLoadFormData, [name]: regexInputValue(name, value) });
+  const cleanValue = regexInputValue(name, value);
+
+  const updatedForm = {
+    ...settleLoadFormData,
+    [name]: cleanValue
+  };
+
+  setSettleLoadFormData(updatedForm);
+
+  if (name === "loadSeries" || name === "loadNo") {
+    const series = name === "loadSeries" ? cleanValue : updatedForm.loadSeries;
+    const no = name === "loadNo" ? cleanValue : updatedForm.loadNo;
+
+    if (String(series).trim() && String(no).trim()) {
+      setTimeout(() => {
+        loadSettleLoadBySeriesNo(series, no);
+      }, 0);
+    } else {
+      setSettleLoadData(null);
+      setSettleLoadItems([]);
+      setOriginalSettleLoadItems([]);
+      calculateSettleLoadSummary([]);
+    }
+  }
 };
 
-    const handleSettleLoadOptionChange = (option) => {
-      setSettleLoadOptions({ ...settleLoadOptions, [option]: !settleLoadOptions[option] });
-    };
+    const handleSettleLoad = (loadData) => {
+  if (!loadData || !loadData.items || loadData.items.length === 0) {
+    alert("No items found in this load to settle");
+    return;
+  }
+
+  const transformedItems = (loadData.items || []).map((item, index) => ({
+    id: item.id || Date.now() + index,
+    sr: index + 1,
+    adjust: item.adjust || "N",
+    pending: item.pending || "N",
+    cancel: item.cancel || "N",
+    receiptSeries: item.receiptSeries || "",
+    receiptNo: item.receiptNo || "",
+    status: item.status || "Pending",
+    billType: item.billType || "Credit",
+    billDate: item.billDate || loadData.billFromDate || loadData.loadDate || "",
+    billSeries: item.billSeries || item.BillSeries || "",
+    billNo: item.billNo || item.BillNo || "",
+    partyCode: item.partyCode || "",
+    partyName: item.partyName || "",
+    billAmount: parseFloat(item.billAmount || item.amount || item.netAmount || 0),
+    receiptAmount: parseFloat(item.receiptAmount || 0),
+    chequeNo: item.chequeNo || "",
+    chequeDate: item.chequeDate || "",
+    bankName: item.bankName || "",
+    receiptMode: item.receiptMode || ""
+  }));
+
+  setSettleLoadItems(transformedItems);
+  setOriginalSettleLoadItems(JSON.parse(JSON.stringify(transformedItems)));
+  calculateSettleLoadSummary(transformedItems);
+
+  setSettleLoadFormData({
+    loadSeries: loadData.loadSeries || "",
+    loadNo: loadData.loadNo || "",
+    loadDate: loadData.loadDate || new Date().toISOString().split("T")[0],
+    settleLoadDate: new Date().toISOString().split("T")[0],
+    narration: loadData.narration || ""
+  });
+
+  setSettleLoadData(loadData);
+  setShowSettleLoad(true);
+  setShowCreateLoadList(false);
+};
 
     const exportSettleLoadToExcel = () => {
       const exportData = settleLoadItems.map(item => ({
@@ -926,8 +1050,30 @@ const handleSettleLoadInputChange = (e) => {
   };
 
   const handleSettleLoadInputChange = (e) => {
-    setSettleLoadFormData({ ...settleLoadFormData, [e.target.name]: e.target.value });
+  const { name, value } = e.target;
+  const cleanValue = regexInputValue(name, value);
+
+  const updatedForm = {
+    ...settleLoadFormData,
+    [name]: cleanValue
   };
+
+  setSettleLoadFormData(updatedForm);
+
+  if (name === "loadSeries" || name === "loadNo") {
+    const series = name === "loadSeries" ? cleanValue : updatedForm.loadSeries;
+    const no = name === "loadNo" ? cleanValue : updatedForm.loadNo;
+
+    if (series && no) {
+      loadSettleLoadBySeriesNo(series, no);
+    } else {
+      setSettleLoadData(null);
+      setSettleLoadItems([]);
+      setOriginalSettleLoadItems([]);
+      calculateSettleLoadSummary([]);
+    }
+  }
+};
 
   const handleSettleLoadOptionChange = (option) => {
     setSettleLoadOptions({ ...settleLoadOptions, [option]: !settleLoadOptions[option] });
@@ -1138,19 +1284,29 @@ const [productForm, setProductForm] = useState({
     gstClsDate: '',
     allowInPurchase: 'N'
   });
- const [createLoadFormData, setCreateLoadFormData] = useState({
+const getCurrentYearAprilFirst = () => {
+  const today = new Date();
+
+  const year =
+    today.getMonth() >= 3
+      ? today.getFullYear()
+      : today.getFullYear() - 1;
+
+  return `${year}-04-01`;
+};
+
+const [createLoadFormData, setCreateLoadFormData] = useState({
   loadSeries: "",
   loadNo: "",
   loadDate: new Date().toISOString().split("T")[0],
   company: "",
   deliverBoy: "",
   selectedSalesman: [],
-  billFromDate: new Date().toISOString().split("T")[0],
+  billFromDate: getCurrentYearAprilFirst(), // IMPORTANT
   billToDate: new Date().toISOString().split("T")[0],
   narration: "",
   deliveryBy: ""
 });
-
 const [showCreateLoadSalesmanBox, setShowCreateLoadSalesmanBox] = useState(false);
 const [createLoadItems, setCreateLoadItems] = useState([]);
 
@@ -3650,6 +3806,7 @@ const pickFirst = (...values) => {
   }
   return "";
 };
+
 const getBillUniqueKey = (bill) => {
   const h = bill.header || {};
   return [
@@ -3665,138 +3822,141 @@ const getSelectedSalesmanText = () => {
     : [];
 
   if (!selected.length) return "Select Salesman";
-  if (selected.length === 1) return selected[0];
-  return `${selected.length} Salesmen Selected`;
-};
-const toggleCreateLoadSalesman = (salesmanName) => {
-  setCreateLoadFormData((prev) => {
-    const selected = Array.isArray(prev.selectedSalesman) ? prev.selectedSalesman : [];
-    const exists = selected.includes(salesmanName);
-
-    return {
-      ...prev,
-      selectedSalesman: exists
-        ? selected.filter((x) => x !== salesmanName)
-        : [...selected, salesmanName]
-    };
-  });
+  if (selected.length === 1) return "Selected";
+  return `${selected.length} Selected`;
 };
 
-const toggleAllCreateLoadSalesmen = (checked) => {
-  const allSalesmen = salesmen
-    .filter((s) => s.type === "SALESMAN")
-    .map((s) => s.name);
+const loadCreateLoadBills = useCallback(
+  (showAlert = false, formData = createLoadFormData) => {
+    const selectedSalesmen = Array.isArray(formData.selectedSalesman)
+      ? formData.selectedSalesman
+      : [];
 
-  setCreateLoadFormData((prev) => ({
-    ...prev,
-    selectedSalesman: checked ? allSalesmen : []
-  }));
-};
-const loadCreateLoadBills = (showAlert = true, formData = createLoadFormData) => {
-  const selectedSalesmen = Array.isArray(formData.selectedSalesman)
-    ? formData.selectedSalesman
-    : [];
+    if (!formData.company || !selectedSalesmen.length || !formData.billFromDate || !formData.billToDate) {
+      setCreateLoadItems([]);
+      return;
+    }
 
-  if (!formData.company || !selectedSalesmen.length || !formData.billFromDate || !formData.billToDate) {
-    setCreateLoadItems([]);
-    return;
-  }
+    const selectedSalesmanSet = new Set(selectedSalesmen.map(cleanText));
+    const selectedCompany = cleanText(formData.company);
 
-  const selectedSalesmanSet = new Set(selectedSalesmen.map(cleanText));
-  const selectedCompany = cleanText(formData.company);
+    const alreadyLoadedBillKeys = new Set(
+      (createLoadListData || [])
+        .flatMap((load) => load.items || [])
+        .map(getBillUniqueKey)
+    );
 
-  const alreadyLoadedBillKeys = new Set(
-    (createLoadListData || [])
-      .flatMap((load) => load.items || [])
-      .map(getBillUniqueKey)
-  );
+    const currentLoadKeys = new Set();
 
-  const currentLoadKeys = new Set();
+    const loadedBills = (salesListData || [])
+      .filter((invoice) => {
+        const header = invoice.header || {};
 
-  const loadedBills = (salesListData || [])
-    .filter((invoice) => {
-      const header = invoice.header || {};
+        const billDate = pickFirst(invoice.billDate, invoice.trnDate, invoice.date, header.billDate, header.trnDate, header.date);
+        const company = cleanText(pickFirst(invoice.company, header.company));
 
-      const billDate = pickFirst(
-        invoice.billDate,
-        invoice.trnDate,
-        invoice.date,
-        header.billDate,
-        header.trnDate,
-        header.date
-      );
-
-      const company = cleanText(pickFirst(invoice.company, header.company));
-
-      const salesman = cleanText(
-        pickFirst(
+        const invoiceSalesmanValues = [
           invoice.salesman,
           invoice.salesmanName,
           invoice.salesmanCode,
           header.salesman,
           header.salesmanName,
           header.salesmanCode
-        )
-      );
+        ].map(cleanText).filter(Boolean);
 
-      const billKey = getBillUniqueKey(invoice);
-      if (alreadyLoadedBillKeys.has(billKey)) return false;
-      if (currentLoadKeys.has(billKey)) return false;
+        const billKey = getBillUniqueKey(invoice);
 
-      const isValid =
-        company === selectedCompany &&
-        selectedSalesmanSet.has(salesman) &&
-        billDate >= formData.billFromDate &&
-        billDate <= formData.billToDate;
+        if (alreadyLoadedBillKeys.has(billKey)) return false;
+        if (currentLoadKeys.has(billKey)) return false;
 
-      if (isValid) currentLoadKeys.add(billKey);
-      return isValid;
-    })
-    .map((invoice, index) => {
-      const header = invoice.header || {};
-      const summary = invoice.summary || {};
+        const salesmanMatched = invoiceSalesmanValues.some((v) =>
+          selectedSalesmanSet.has(v)
+        );
 
-      return {
-        id: getBillUniqueKey(invoice),
-        sr: index + 1,
-        selected: true,
-        partyCode: pickFirst(invoice.partyCode, header.partyCode),
-        partyName: pickFirst(invoice.partyName, invoice.party, header.partyName, header.party),
-        billSeries: pickFirst(invoice.billSeries, invoice.BillSeries, header.billSeries, header.BillSeries, "INV"),
-        billNo: pickFirst(invoice.billNo, invoice.BillNo, header.billNo, header.BillNo),
-        billDate,
-        salesman: pickFirst(invoice.salesman, invoice.salesmanName, header.salesman, header.salesmanName),
-        area: pickFirst(invoice.area, invoice.areaName, header.area, header.areaName, invoice.branchName),
-        amount: Number(pickFirst(invoice.amount, invoice.netAmount, invoice.billAmount, summary.net, summary.netAmount)) || 0
-      };
-    });
+        const isValid =
+          company === selectedCompany &&
+          salesmanMatched &&
+          billDate >= formData.billFromDate &&
+          billDate <= formData.billToDate;
 
-  setCreateLoadItems(loadedBills);
+        if (isValid) currentLoadKeys.add(billKey);
+        return isValid;
+      })
+      .map((invoice, index) => {
+        const header = invoice.header || {};
+        const summary = invoice.summary || {};
 
-  if (showAlert && !loadedBills.length) {
-    alert("No new bills found. Bills already added in another load will not repeat.");
-  }
-};
+        return {
+          id: getBillUniqueKey(invoice),
+          sr: index + 1,
+          selected: true,
+          partyCode: pickFirst(invoice.partyCode, header.partyCode),
+          partyName: pickFirst(invoice.partyName, invoice.party, header.partyName, header.party),
+          billSeries: pickFirst(invoice.billSeries, invoice.BillSeries, header.billSeries, header.BillSeries, "INV"),
+          billNo: pickFirst(invoice.billNo, invoice.BillNo, header.billNo, header.BillNo),
+          billDate: pickFirst(invoice.billDate, invoice.trnDate, invoice.date, header.billDate, header.trnDate, header.date),
+          salesman: pickFirst(invoice.salesman, invoice.salesmanName, invoice.salesmanCode, header.salesman, header.salesmanName, header.salesmanCode),
+          area: pickFirst(invoice.area, invoice.areaName, header.area, header.areaName, invoice.branchName),
+          amount: Number(pickFirst(invoice.amount, invoice.netAmount, invoice.billAmount, summary.net, summary.netAmount)) || 0
+        };
+      });
+
+    setCreateLoadItems(loadedBills);
+
+    if (showAlert && !loadedBills.length) {
+      alert("No new bills found.");
+    }
+  },
+  [createLoadFormData, salesListData, createLoadListData]
+);
 
 useEffect(() => {
-  loadCreateLoadBills(false);
+  const hasSalesman =
+    Array.isArray(createLoadFormData.selectedSalesman) &&
+    createLoadFormData.selectedSalesman.length > 0;
+
+  if (
+    createLoadFormData.company &&
+    hasSalesman &&
+    createLoadFormData.billFromDate &&
+    createLoadFormData.billToDate &&
+    createLoadDateRangeChanged
+  ) {
+    loadCreateLoadBills(false, createLoadFormData);
+  } else {
+    setCreateLoadItems([]);
+  }
 }, [
   createLoadFormData.company,
+  createLoadFormData.selectedSalesman,
   createLoadFormData.billFromDate,
   createLoadFormData.billToDate,
-  createLoadFormData.selectedSalesman,
+  createLoadDateRangeChanged,
   salesListData,
-  createLoadListData
+  createLoadListData,
+  loadCreateLoadBills
 ]);
 const handleCreateLoadInputChange = (e) => {
   const { name, value } = e.target;
+  const cleanValue = regexInputValue(name, value);
 
-  setCreateLoadFormData((prev) => ({
-    ...prev,
-    [name]: regexInputValue(name, value)
-  }));
+  const updatedForm = {
+    ...createLoadFormData,
+    [name]: cleanValue
+  };
+
+  setCreateLoadFormData(updatedForm);
+
+  if (name === "company") {
+    setCreateLoadItems([]);
+    setCreateLoadDateRangeChanged(false);
+    return;
+  }
+
+  if (name === "billFromDate" || name === "billToDate") {
+    setCreateLoadDateRangeChanged(true);
+  }
 };
-
   
 const updateCreateLoadItem = (index, field, value) => {
   const newItems = [...createLoadItems];
@@ -3809,25 +3969,61 @@ const updateCreateLoadItem = (index, field, value) => {
     newItems.forEach((item, i) => { item.sr = i + 1; });
     setCreateLoadItems(newItems);
   };
-  const saveCreateLoad = () => {
-    // Calculate total amount from items
-    const totalAmount = createLoadItems.reduce((sum, item) => sum + (parseFloat(item.amount) || 0), 0);
+ const saveCreateLoad = () => {
+  if (!createLoadFormData.loadSeries || !createLoadFormData.loadNo) {
+    alert("Load Series and Load No are required");
+    return;
+  }
 
-    const createLoadData = {
-      ...createLoadFormData,
-      items: createLoadItems,
-      amount: totalAmount,
-      totalAmount: totalAmount,
-      status: 'Pending'
-    };
-    console.log('Saving create load:', createLoadData);
+  const selectedItems = createLoadItems.filter((item) => item.selected !== false);
 
-    // Add to create load list
-    saveVoucherToList('Create Load', createLoadData);
+  if (!selectedItems.length) {
+    alert("Please select at least one bill to create load");
+    return;
+  }
 
-    alert('Load created successfully!');
-    closeForm();
-  };
+  const selectedSalesmen = Array.isArray(createLoadFormData.selectedSalesman)
+    ? createLoadFormData.selectedSalesman
+    : [];
+
+  const salesmanDisplayName =
+    selectedSalesmen.length > 1
+      ? "MIX"
+      : selectedSalesmen[0] || "";
+
+  const totalAmount = selectedItems.reduce(
+    (sum, item) => sum + (parseFloat(item.amount || item.billAmount) || 0),
+    0
+  );
+
+ const createLoadData = {
+  id: Date.now(),
+  ...createLoadFormData,
+
+  loadSeries: createLoadFormData.loadSeries,
+  loadNo: createLoadFormData.loadNo,
+  loadNumber: createLoadFormData.loadNo,
+
+  selectedSalesman: salesmanDisplayName,
+  selectedSalesmanList: selectedSalesmen,
+
+  items: selectedItems.map((item, index) => ({
+    ...item,
+    sr: index + 1,
+    loadSeries: createLoadFormData.loadSeries,
+    loadNo: createLoadFormData.loadNo,
+    loadNumber: createLoadFormData.loadNo
+  })),
+
+  amount: totalAmount,
+  totalAmount,
+  status: "Pending"
+};
+  setCreateLoadListData((prev) => [...prev, createLoadData]);
+
+  alert("Load created successfully!");
+  closeForm();
+};
   // Filter handler
   const handleFilterChange = (masterType, value) => {
     setFilters({ ...filters, [masterType]: value });
@@ -4562,60 +4758,34 @@ const handlePrintLoadInputChange = (e) => {
       return;
     }
 
+
     // Inside handleSubMenuClick function, update the Settle Load case:
 
-    if (item === 'Settle Load') {
-      // Open the settle load form directly
-      setActiveSubMenu(item);
-      setOpenFormFor(item);
-      setShowSettleLoad(true);
+  if (item === "Settle Load") {
+  setActiveSubMenu(item);
+  setOpenFormFor(item);
+  setShowSettleLoad(true);
 
-      // Load dummy data or existing data
-      if (settleLoadDummyData[0] && settleLoadDummyData[0].items) {
-        const transformedItems = settleLoadDummyData[0].items.map((item, index) => ({
-          id: item.id || Date.now() + index,
-          sr: index + 1,
-          adjust: item.adjust || 'N',
-          pending: item.pending || 'N',
-          cancel: item.cancel || 'N',
-          receiptSeries: item.receiptSeries || '',
-          receiptNo: item.receiptNo || '',
-          status: item.status || 'Pending',
-          billType: item.billType || 'Credit',
-          billDate: item.billDate || settleLoadDummyData[0].loadDate,
-          billSeries: item.billSeries || '',
-          billNo: item.billNo || '',
-          partyCode: item.partyCode || '',
-          partyName: item.partyName || '',
-          billAmount: parseFloat(item.billAmount) || 0,
-          receiptAmount: parseFloat(item.receiptAmount) || 0,
-          chequeNo: item.chequeNo || '',
-          chequeDate: item.chequeDate || '',
-          bankName: item.bankName || '',
-          receiptMode: item.receiptMode || ''
-        }));
-        setSettleLoadItems(transformedItems);
-        setOriginalSettleLoadItems(JSON.parse(JSON.stringify(transformedItems))); // Store deep copy for search reset
-        calculateSettleLoadSummary(transformedItems);
-      } else {
-        setSettleLoadItems([]);
-        setOriginalSettleLoadItems([]);
-      }
+  setSettleLoadFormData({
+    loadSeries: "",
+    loadNo: "",
+    loadDate: new Date().toISOString().split("T")[0],
+    settleLoadDate: new Date().toISOString().split("T")[0],
+    narration: ""
+  });
 
-      setSettleLoadFormData({
-        loadNo: settleLoadDummyData[0]?.loadNo || '',
-        loadDate: settleLoadDummyData[0]?.loadDate || new Date().toISOString().split('T')[0],
-        settleLoadDate: new Date().toISOString().split('T')[0],
-        narration: settleLoadDummyData[0]?.narration || ''
-      });
+  setSettleLoadData(null);
+  setSettleLoadItems([]);
+  setOriginalSettleLoadItems([]);
+  calculateSettleLoadSummary([]);
 
-      setSettleLoadOptions({
-        loadLock: false,
-        report: false
-      });
-      return;
-    }
+  setSettleLoadOptions({
+    loadLock: false,
+    report: false
+  });
 
+  return;
+}
     // For all master items - show message to click plus button
     if (item !== 'Billing' && item !== 'Quotation' && item !== 'Create Load' &&
       item !== 'Purchase' && item !== 'Credit Note' && item !== 'Debit Note' &&
@@ -4760,7 +4930,7 @@ const handlePrintLoadInputChange = (e) => {
         company: '',
         deliverBoy: '',
         selectedSalesman: '',
-        billFromDate: new Date().toISOString().split('T')[0],
+        billFromDate: getCurrentYearAprilFirst(),
         billToDate: new Date().toISOString().split('T')[0],
         narration: '',
         deliveryBy: ''
@@ -6511,8 +6681,14 @@ const renderVoucherList = (title, data, columns) => {
       loadDate: item.loadDate || new Date().toISOString().split('T')[0],
       company: item.company || '',
       deliverBoy: item.deliverBoy || '',
-      selectedSalesman: item.selectedSalesman || '',
-      billFromDate: item.billFromDate || new Date().toISOString().split('T')[0],
+      selectedSalesman: Array.isArray(item.selectedSalesmanList)
+  ? item.selectedSalesmanList
+  : Array.isArray(item.selectedSalesman)
+    ? item.selectedSalesman
+    : item.selectedSalesman && item.selectedSalesman !== "MIX"
+      ? [item.selectedSalesman]
+      : [],
+      billFromDate: item.billFromDate || getCurrentYearAprilFirst(),
       billToDate: item.billToDate || new Date().toISOString().split('T')[0],
       narration: item.narration || '',
       deliveryBy: item.deliveryBy || ''
@@ -8388,27 +8564,26 @@ const handleDeleteVoucher = (type, id) => {
         </div>
 
         <div className="create-load-grid-5">
-         <div className="labeled-input create-load-salesman-cell">
+       <div className="labeled-input create-load-salesman-cell">
   <label>Salesman Selection *</label>
 
   <button
     type="button"
     className="erp-input create-load-salesman-btn"
-    onClick={() =>
-      setShowCreateLoadSalesmanBox((prev) => !prev)
-    }
+    onClick={(e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      setShowCreateLoadSalesmanBox((prev) => !prev);
+    }}
   >
-   {createLoadFormData.selectedSalesman?.length > 0
-  ? "Selected"
-  : "Select Salesman"}
+    {getSelectedSalesmanText()}
   </button>
 
   {showCreateLoadSalesmanBox && (
     <div
       className="create-load-salesman-dropdown"
-      onMouseLeave={() => setShowCreateLoadSalesmanBox(false)}
+      onClick={(e) => e.stopPropagation()}
     >
-      {/* ALL SALESMAN OPTION */}
       <label className="create-load-check-row">
         <input
           type="checkbox"
@@ -8417,34 +8592,30 @@ const handleDeleteVoucher = (type, id) => {
             createLoadFormData.selectedSalesman.length === salesmen.length
           }
           onChange={(e) => {
-            const checked = e.target.checked;
+            e.stopPropagation();
 
-            const updatedSalesmen = checked
-              ? salesmen.map(
-                  (s) => s.name || s.salesmanName || s.code
-                )
-              : [];
+            const checked = e.target.checked;
 
             setCreateLoadFormData((prev) => ({
               ...prev,
-              selectedSalesman: updatedSalesmen
+              selectedSalesman: checked
+  ? salesmen.flatMap((s) =>
+      [s.name, s.salesmanName, s.code, s.salesmanCode].filter(Boolean)
+    )
+  : []
             }));
 
-            setTimeout(() => {
-              setShowCreateLoadSalesmanBox(false);
-            }, 150);
+            setCreateLoadItems([]);
+setCreateLoadDateRangeChanged(false);
+setShowCreateLoadSalesmanBox(false);
           }}
         />
-
         <span>ALL SALESMAN</span>
       </label>
 
-      {/* SALESMAN LIST */}
       {salesmen.map((salesman, index) => {
         const salesmanValue =
-          salesman.name ||
-          salesman.salesmanName ||
-          salesman.code;
+          salesman.name || salesman.salesmanName || salesman.code;
 
         return (
           <label
@@ -8453,38 +8624,38 @@ const handleDeleteVoucher = (type, id) => {
           >
             <input
               type="checkbox"
-              checked={createLoadFormData.selectedSalesman.includes(
+              checked={(createLoadFormData.selectedSalesman || []).includes(
                 salesmanValue
               )}
-              onChange={() => {
-                let updatedSalesmen = [];
+             onChange={(e) => {
+  e.stopPropagation();
 
-                if (
-                  createLoadFormData.selectedSalesman.includes(
-                    salesmanValue
-                  )
-                ) {
-                  updatedSalesmen =
-                    createLoadFormData.selectedSalesman.filter(
-                      (s) => s !== salesmanValue
-                    );
-                } else {
-                  updatedSalesmen = [
-                    ...createLoadFormData.selectedSalesman,
-                    salesmanValue
-                  ];
-                }
+  setCreateLoadFormData((prev) => {
+    const oldSalesmen = prev.selectedSalesman || [];
 
-                setCreateLoadFormData((prev) => ({
-                  ...prev,
-                  selectedSalesman: updatedSalesmen
-                }));
+    const salesmanValues = [
+      salesman.name,
+      salesman.salesmanName,
+      salesman.code,
+      salesman.salesmanCode
+    ].filter(Boolean);
 
-                // AUTO CLOSE DROPDOWN
-                setTimeout(() => {
-                  setShowCreateLoadSalesmanBox(false);
-                }, 150);
-              }}
+    const alreadySelected = salesmanValues.some((v) =>
+      oldSalesmen.includes(v)
+    );
+
+    const updatedSalesmen = alreadySelected
+      ? oldSalesmen.filter((s) => !salesmanValues.includes(s))
+      : [...oldSalesmen, ...salesmanValues];
+
+    return {
+      ...prev,
+      selectedSalesman: updatedSalesmen
+    };
+  });
+
+  setShowCreateLoadSalesmanBox(false);
+}}
             />
 
             <span>
@@ -8496,7 +8667,6 @@ const handleDeleteVoucher = (type, id) => {
     </div>
   )}
 </div>
-
           <div className="labeled-input">
             <label>Bill From Date *</label>
             <input type="date" className="erp-input" name="billFromDate" value={createLoadFormData.billFromDate} onChange={handleCreateLoadInputChange} required />
@@ -8512,63 +8682,63 @@ const handleDeleteVoucher = (type, id) => {
             <input className="erp-input" name="narration" value={createLoadFormData.narration} onChange={handleCreateLoadInputChange} placeholder="Narration" />
           </div>
 
-          <div className="labeled-input create-load-btn-cell">
-            <label>&nbsp;</label>
-            <button type="button" className="btn-primary" onClick={loadCreateLoadBills}>
-              Load Bills
-            </button>
-          </div>
+          
         </div>
       </div>
 
-      <div className="create-load-grid-wrap">
-        <table className="receipt-entry-table create-load-entry-table">
-          <thead>
-            <tr>
-              <th>Sl</th>
-              <th>Select</th>
-              <th>Party Code</th>
-              <th>Party Name</th>
-              <th>Bill Series</th>
-              <th>Bill No</th>
-              <th>Bill Date</th>
-              <th>Salesman</th>
-              <th>Area</th>
-              <th>Amount</th>
-            </tr>
-          </thead>
+    <div className="receipt-sales-table-wrap create-load-grid-wrap">
+  <table className="receipt-sales-table create-load-entry-table">
+    <thead>
+      <tr>
+        <th>Sl</th>
+        <th>Select</th>
+        <th>Bill Date</th>
+        <th>Series</th>
+        <th>Bill No</th>
+        <th>Party Code</th>
+        <th>Party Name</th>
+        <th>Salesman</th>
+        <th>Area</th>
+        <th>Amount</th>
+      </tr>
+    </thead>
 
-          <tbody>
-            {createLoadItems.length === 0 ? (
-              <tr>
-                <td colSpan="10" className="no-data">No bills loaded</td>
-              </tr>
-            ) : (
-              createLoadItems.map((item, index) => (
-                <tr key={item.id}>
-                  <td>{index + 1}</td>
-                  <td>
-                    <input
-                      type="checkbox"
-                      checked={item.selected || false}
-                      onChange={(e) => updateCreateLoadItem(index, "selected", e.target.checked)}
-                    />
-                  </td>
-                  <td>{item.partyCode}</td>
-                  <td>{item.partyName}</td>
-                  <td>{item.billSeries}</td>
-                  <td>{item.billNo}</td>
-                  <td>{item.billDate}</td>
-                  <td>{item.salesman}</td>
-                  <td>{item.area}</td>
-                  <td className="amount-cell">₹{Number(item.amount || 0).toFixed(2)}</td>
-                </tr>
-              ))
-            )}
-          </tbody>
-        </table>
-      </div>
-
+    <tbody>
+      {createLoadItems.length === 0 ? (
+        <tr>
+          <td colSpan="10" className="no-data">
+            Select salesman and date range to load bills
+          </td>
+        </tr>
+      ) : (
+        createLoadItems.map((item, index) => (
+          <tr key={item.id || index}>
+            <td>{index + 1}</td>
+            <td>
+              <input
+                type="checkbox"
+                checked={item.selected !== false}
+                onChange={(e) =>
+                  updateCreateLoadItem(index, "selected", e.target.checked)
+                }
+              />
+            </td>
+            <td>{item.billDate || "-"}</td>
+            <td>{item.billSeries || "-"}</td>
+            <td>{item.billNo || "-"}</td>
+            <td>{item.partyCode || "-"}</td>
+            <td>{item.partyName || "-"}</td>
+            <td>{item.salesman || "-"}</td>
+            <td>{item.area || "-"}</td>
+            <td className="amount-cell">
+              ₹{Number(item.amount || item.billAmount || 0).toFixed(2)}
+            </td>
+          </tr>
+        ))
+      )}
+    </tbody>
+  </table>
+</div>
       <div className="form-actions">
         <button type="submit" className="btn-primary">💾 Create Load</button>
         <button type="button" className="btn-secondary" onClick={closeForm}>Cancel</button>
