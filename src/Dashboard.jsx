@@ -9,6 +9,7 @@ import logo from "./assets/images/Totalsolution.PNG";
 // Note: Adjust the "../" or "./" depending on exactly where Dashboard.jsx sits relative to assets
 import SalesmanToAreaMapping from './SalesmanToAreaMapping';
 import Transaction from "./Transaction";
+const API_URL = "http://localhost:5000/api";
 
 import {
   LineChart,
@@ -26,7 +27,7 @@ import {
 import { ShoppingBag, Package, Users, Wallet } from "lucide-react";
 
 
-const Dashboard = () => {
+const Dashboard = ({ onLogout }) => {
   const [activeMenu, setActiveMenu] = useState(null);
   const [activeSubMenu, setActiveSubMenu] = useState(null);
   const [openFormFor, setOpenFormFor] = useState(null);
@@ -40,6 +41,9 @@ const Dashboard = () => {
   const [existingBatches, setExistingBatches] = useState([]);
 
   const [currentBatchRow, setCurrentBatchRow] = useState(null);
+
+  const [loggedUserName, setLoggedUserName] = useState("");
+const [loggedFirmName, setLoggedFirmName] = useState("");
 
   // Add these with other state declarations (around line 50)
   const [showBatchSelectionModal, setShowBatchSelectionModal] = useState(false);
@@ -1205,6 +1209,47 @@ const handleSettleLoadInputChange = (e) => {
   const [users, setUsers] = useState([{ userName: 'ADMIN', password: 'admin123' }]);
   const [currentUser, setCurrentUser] = useState('ADMIN');
 
+const loadFirms = async () => {
+  try {
+    const distributorId = localStorage.getItem("distributorId");
+
+    if (!distributorId) {
+      setFirms([]);
+      return;
+    }
+
+    const response = await fetch(
+      `${API_URL}/firms?distributorId=${distributorId}`
+    );
+
+    const result = await response.json();
+
+    if (!response.ok) {
+      alert(result.message || "Failed to load firms");
+      return;
+    }
+
+    setFirms(result.firms || []);
+  } catch (error) {
+    console.error(error);
+    alert("Server not connected. Failed to load firms.");
+  }
+};
+
+useEffect(() => {
+  loadFirms();
+}, []);
+useEffect(() => {
+  const savedUser = JSON.parse(localStorage.getItem("loggedInUser") || "{}");
+
+  setLoggedUserName(
+    savedUser.userName || localStorage.getItem("userName") || "User"
+  );
+
+  setLoggedFirmName(
+    savedUser.firmName || localStorage.getItem("firmName") || ""
+  );
+}, []);
   // Filter for Customer Bank Master
   const [customerBankFilter, setCustomerBankFilter] = useState('');
   // Form states
@@ -1923,47 +1968,84 @@ const [otherAccountForm, setOtherAccountForm] = useState({
     // Keep the form open by not changing activeSubMenu or openFormFor
     // This ensures the user returns to the bill print form
   };
- const handleFirmInput = (e) => {
+const handleFirmInput = (e) => {
   const { name, value } = e.target;
-  setFirmData({ ...firmData, [name]: regexInputValue(name, value) });
-};
 
- const saveFirm = (e) => {
+  setFirmData({
+    ...firmData,
+    [name]: regexInputValue(name, value),
+  });
+};
+const saveFirm = async (e) => {
   e.preventDefault();
 
   if (!validateFormRegex(firmData)) return;
 
   if (!firmData.firmCode || !firmData.firmName) {
-    return alert('Firm Code and Firm Name are required');
+    return alert("Firm Code and Firm Name are required");
   }
 
-  const newFirm = { id: Date.now(), ...firmData };
-  setFirms([...firms, newFirm]);
-  alert('Firm created successfully!');
+  const distributorId = localStorage.getItem("distributorId");
 
-  setFirmData({
-    firmCode: '',
-    firmName: '',
-    address1: '',
-    address2: '',
-    city: '',
-    pinCode: '',
-    state: '',
-    country: '',
-    phoneNo: '',
-    mobileNo: '',
-    tinNo: '',
-    regNo: '',
-    gstNo: '',
-    drugLicNo: '',
-    foodLicenceNo: '',
-    distributorId: '',
-    apiKey: ''
-  });
+  if (!distributorId) {
+    alert("Distributor not found. Please login again.");
+    return;
+  }
 
-  closeForm();
+  try {
+    const response = await fetch(`${API_URL}/firms`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        ...firmData,
+        distributorId,
+        firmCode: firmData.firmCode.trim(),
+        firmName: firmData.firmName.trim(),
+      }),
+    });
+
+    const result = await response.json();
+
+    if (!response.ok) {
+      alert(result.message || "Firm creation failed");
+      return;
+    }
+
+    await loadFirms();
+
+    alert(
+      `Firm created successfully!\nDistributor ID: ${result.data.distributorId}\nFirm ID: ${result.data.firmId}`
+    );
+
+    setFirmData({
+      firmCode: "",
+      firmName: "",
+      address1: "",
+      address2: "",
+      city: "",
+      pinCode: "",
+      state: "",
+      country: "India",
+      phoneNo: "",
+      mobileNo: "",
+      tinNo: "",
+      regNo: "",
+      gstNo: "",
+      drugLicNo: "",
+      foodLicenceNo: "",
+      distributorId: "",
+      apiKey: "",
+      email: "",
+    });
+
+    closeForm();
+  } catch (error) {
+    console.error(error);
+    alert("Server not connected. Firm creation failed.");
+  }
 };
-
   // User Creation Handlers
   const handleUserInput = (e) => {
     setUserData({ ...userData, [e.target.name]: e.target.value });
@@ -1997,15 +2079,22 @@ const [otherAccountForm, setOtherAccountForm] = useState({
     closeForm();
   };
 
-  // Logout Handler
   const handleLogout = () => {
-    if (window.confirm('Are you sure you want to logout?')) {
-      setCurrentUser(null);
-      setActiveMenu(null);
-      setActiveSubMenu(null);
-      alert('Logged out successfully!');
+  if (window.confirm("Are you sure you want to logout?")) {
+    localStorage.removeItem("token");
+    localStorage.removeItem("distributorId");
+    localStorage.removeItem("userName");
+    localStorage.removeItem("firms");
+
+    setCurrentUser(null);
+    setActiveMenu(null);
+    setActiveSubMenu(null);
+
+    if (onLogout) {
+      onLogout();
     }
-  };
+  }
+};
   const saveGodown = (e) => {
     e.preventDefault();
     if (!godownForm.code || !godownForm.name) return alert('Code and Name required');
@@ -2508,7 +2597,7 @@ const saveCustomerBank = (e) => {
         </div>
 
         <div className="dashboard-footer">
-          <span>© 2025 Billing Software. All rights reserved.</span>
+          <span>© 2025 Billing Software. All rights reserved.Developed by Viraaj Mohite</span>
           <span>Last updated: 2:23:34 PM <b></b></span>
         </div>
       </div>
@@ -7104,10 +7193,18 @@ const handleDeleteVoucher = (type, id) => {
             >
               📊 Dashboard
             </button>
+            
             <div className="notification-bell">🔔</div>
-            <div className="user-profile">
-              <div className="avatar">MK</div>
-            </div>
+
+<div className="logged-user-name">
+  {loggedUserName}
+</div>
+
+<div className="user-profile">
+  <div className="avatar">
+    {loggedUserName ? loggedUserName.substring(0, 2).toUpperCase() : "US"}
+  </div>
+</div>
           </div>
         </header>
 
@@ -9240,124 +9337,171 @@ setShowCreateLoadSalesmanBox(false);
                         <th className="actions-header">Actions</th>
                       </tr>
                     </thead>
-                    <tbody>
-                      {firms
-                        .filter(f =>
-                          f.firmName?.toLowerCase().includes((filters.firm || '').toLowerCase()) ||
-                          f.firmCode?.toLowerCase().includes((filters.firm || '').toLowerCase())
-                        )
-                        .map(firm => (
-                          <tr key={firm.id}>
-                            <td>{firm.firmCode}</td>
-                            <td>{firm.firmName}</td>
-                            <td>{firm.address1 || '-'} {firm.address2 || ''}</td>
-                            <td>{firm.city || '-'}</td>
-                            <td>{firm.state || '-'}</td>
-                            <td>{firm.mobileNo || '-'}</td>
-                            <td>{firm.gstNo || '-'}</td>
-                            <td className="action-buttons-cell">
-                              <div className="action-buttons-wrapper" style={{ display: 'flex', gap: '8px', alignItems: 'center', justifyContent: 'center' }}>
-                                <button
-                                  className="action-btn action-btn-view"
-                                  onClick={() => {
-                                    alert(`View Firm:\n\nCode: ${firm.firmCode}\nName: ${firm.firmName}\nAddress: ${firm.address1 || 'N/A'}\nCity: ${firm.city || 'N/A'}\nState: ${firm.state || 'N/A'}\nMobile: ${firm.mobileNo || 'N/A'}\nGST: ${firm.gstNo || 'N/A'}`);
-                                  }}
-                                  title="View"
-                                  style={{
-                                    background: '#10b981',
-                                    color: 'white',
-                                    border: 'none',
-                                    borderRadius: '4px',
-                                    padding: '6px 12px',
-                                    cursor: 'pointer',
-                                    fontSize: '12px',
-                                    fontWeight: '500',
-                                    display: 'inline-flex',
-                                    alignItems: 'center',
-                                    gap: '4px',
-                                    transition: 'all 0.2s ease'
-                                  }}
-                                  onMouseEnter={(e) => e.currentTarget.style.background = '#059669'}
-                                  onMouseLeave={(e) => e.currentTarget.style.background = '#10b981'}
-                                >
-                                  👁️ View
-                                </button>
-                                <button
-                                  className="action-btn action-btn-edit"
-                                  onClick={() => {
-                                    setFirmData({
-                                      firmCode: firm.firmCode,
-                                      firmName: firm.firmName,
-                                      address1: firm.address1 || '',
-                                      address2: firm.address2 || '',
-                                      city: firm.city || '',
-                                      pinCode: firm.pinCode || '',
-                                      state: firm.state || '',
-                                      country: firm.country || '',
-                                      phoneNo: firm.phoneNo || '',
-                                      mobileNo: firm.mobileNo || '',
-                                      tinNo: firm.tinNo || '',
-                                      regNo: firm.regNo || '',
-                                      gstNo: firm.gstNo || '',
-                                      drugLicNo: firm.drugLicNo || '',
-                                      foodLicenceNo: firm.foodLicenceNo || '',
-                                      distributorId: firm.distributorId || '',
-                                      apiKey: firm.apiKey || ''
-                                    });
-                                    setOpenFormFor('Firm Creation');
-                                  }}
-                                  title="Edit"
-                                  style={{
-                                    background: '#3b82f6',
-                                    color: 'white',
-                                    border: 'none',
-                                    borderRadius: '4px',
-                                    padding: '6px 12px',
-                                    cursor: 'pointer',
-                                    fontSize: '12px',
-                                    fontWeight: '500',
-                                    display: 'inline-flex',
-                                    alignItems: 'center',
-                                    gap: '4px',
-                                    transition: 'all 0.2s ease'
-                                  }}
-                                  onMouseEnter={(e) => e.currentTarget.style.background = '#2563eb'}
-                                  onMouseLeave={(e) => e.currentTarget.style.background = '#3b82f6'}
-                                >
-                                  ✏️ Edit
-                                </button>
-                                <button
-                                  className="action-btn action-btn-delete"
-                                  onClick={() => {
-                                    if (window.confirm('Are you sure you want to delete this firm?')) {
-                                      setFirms(firms.filter(f => f.id !== firm.id));
-                                    }
-                                  }}
-                                  title="Delete"
-                                  style={{
-                                    background: '#ef4444',
-                                    color: 'white',
-                                    border: 'none',
-                                    borderRadius: '4px',
-                                    padding: '6px 12px',
-                                    cursor: 'pointer',
-                                    fontSize: '12px',
-                                    fontWeight: '500',
-                                    display: 'inline-flex',
-                                    alignItems: 'center',
-                                    gap: '4px',
-                                    transition: 'all 0.2s ease'
-                                  }}
-                                  onMouseEnter={(e) => e.currentTarget.style.background = '#dc2626'}
-                                  onMouseLeave={(e) => e.currentTarget.style.background = '#ef4444'}
-                                >
-                                  🗑 Delete
-                                </button>
-                              </div>
-                            </td>
-                          </tr>
-                        ))}
-                    </tbody>
+                   <tbody>
+  {firms
+    .filter((f) =>
+      f.firmName?.toLowerCase().includes((filters.firm || "").toLowerCase()) ||
+      f.firmCode?.toLowerCase().includes((filters.firm || "").toLowerCase())
+    )
+    .map((firm) => (
+      <tr key={firm._id || firm.firmId}>
+        <td>{firm.firmCode}</td>
+        <td>{firm.firmName}</td>
+        <td>
+          {firm.address1 || "-"} {firm.address2 || ""}
+        </td>
+        <td>{firm.city || "-"}</td>
+        <td>{firm.state || "-"}</td>
+        <td>{firm.mobileNo || "-"}</td>
+        <td>{firm.gstNo || "-"}</td>
+
+        <td className="action-buttons-cell">
+          <div
+            className="action-buttons-wrapper"
+            style={{
+              display: "flex",
+              gap: "8px",
+              alignItems: "center",
+              justifyContent: "center",
+            }}
+          >
+            <button
+              className="action-btn action-btn-view"
+              onClick={() => {
+                alert(
+                  `View Firm:\n\nFirm ID: ${firm.firmId || "N/A"}\nDistributor ID: ${firm.distributorId || "N/A"}\nCode: ${firm.firmCode}\nName: ${firm.firmName}\nAddress: ${firm.address1 || "N/A"} ${firm.address2 || ""}\nCity: ${firm.city || "N/A"}\nState: ${firm.state || "N/A"}\nMobile: ${firm.mobileNo || "N/A"}\nGST: ${firm.gstNo || "N/A"}`
+                );
+              }}
+              title="View"
+              style={{
+                background: "#10b981",
+                color: "white",
+                border: "none",
+                borderRadius: "4px",
+                padding: "6px 12px",
+                cursor: "pointer",
+                fontSize: "12px",
+                fontWeight: "500",
+                display: "inline-flex",
+                alignItems: "center",
+                gap: "4px",
+                transition: "all 0.2s ease",
+              }}
+              onMouseEnter={(e) =>
+                (e.currentTarget.style.background = "#059669")
+              }
+              onMouseLeave={(e) =>
+                (e.currentTarget.style.background = "#10b981")
+              }
+            >
+              👁️ View
+            </button>
+
+            <button
+              className="action-btn action-btn-edit"
+              onClick={() => {
+                setFirmData({
+                  firmCode: firm.firmCode || "",
+                  firmName: firm.firmName || "",
+                  address1: firm.address1 || "",
+                  address2: firm.address2 || "",
+                  city: firm.city || "",
+                  pinCode: firm.pinCode || "",
+                  state: firm.state || "",
+                  country: firm.country || "India",
+                  phoneNo: firm.phoneNo || "",
+                  mobileNo: firm.mobileNo || "",
+                  tinNo: firm.tinNo || "",
+                  regNo: firm.regNo || "",
+                  gstNo: firm.gstNo || "",
+                  drugLicNo: firm.drugLicNo || "",
+                  foodLicenceNo: firm.foodLicenceNo || "",
+                  distributorId: firm.distributorId || "",
+                  apiKey: firm.apiKey || "",
+                });
+
+                setOpenFormFor("Firm Creation");
+              }}
+              title="Edit"
+              style={{
+                background: "#3b82f6",
+                color: "white",
+                border: "none",
+                borderRadius: "4px",
+                padding: "6px 12px",
+                cursor: "pointer",
+                fontSize: "12px",
+                fontWeight: "500",
+                display: "inline-flex",
+                alignItems: "center",
+                gap: "4px",
+                transition: "all 0.2s ease",
+              }}
+              onMouseEnter={(e) =>
+                (e.currentTarget.style.background = "#2563eb")
+              }
+              onMouseLeave={(e) =>
+                (e.currentTarget.style.background = "#3b82f6")
+              }
+            >
+              ✏️ Edit
+            </button>
+
+            <button
+              className="action-btn action-btn-delete"
+              onClick={() => {
+                alert(
+                  "Delete from database is not added yet. This button will only remove from screen."
+                );
+
+                setFirms((prev) =>
+                  prev.filter(
+                    (f) =>
+                      (f._id || f.firmId) !== (firm._id || firm.firmId)
+                  )
+                );
+              }}
+              title="Delete"
+              style={{
+                background: "#ef4444",
+                color: "white",
+                border: "none",
+                borderRadius: "4px",
+                padding: "6px 12px",
+                cursor: "pointer",
+                fontSize: "12px",
+                fontWeight: "500",
+                display: "inline-flex",
+                alignItems: "center",
+                gap: "4px",
+                transition: "all 0.2s ease",
+              }}
+              onMouseEnter={(e) =>
+                (e.currentTarget.style.background = "#dc2626")
+              }
+              onMouseLeave={(e) =>
+                (e.currentTarget.style.background = "#ef4444")
+              }
+            >
+              🗑 Delete
+            </button>
+          </div>
+        </td>
+      </tr>
+    ))}
+
+  {firms.filter(
+    (f) =>
+      f.firmName?.toLowerCase().includes((filters.firm || "").toLowerCase()) ||
+      f.firmCode?.toLowerCase().includes((filters.firm || "").toLowerCase())
+  ).length === 0 && (
+    <tr>
+      <td colSpan="8" style={{ textAlign: "center", padding: "14px" }}>
+        No firms found
+      </td>
+    </tr>
+  )}
+</tbody>
                   </table>
                 </div>
               ) : (
@@ -13154,9 +13298,12 @@ setShowCreateLoadSalesmanBox(false);
           </div>
         </div>
       )}
-
+{loggedFirmName && (
+  <div className="logged-firm-footer">
+    Firm: <strong>{loggedFirmName}</strong>
+  </div>
+)}
     </div>
   );
 }
-
 export default Dashboard;

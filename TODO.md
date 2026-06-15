@@ -1,2 +1,5 @@
-# Billing Software Fix - Forms Not Showing\nStatus: ✅ **Plan Approved** | In Progress\n\n## Breakdown of Approved Plan\n1. **✅** Create TODO.md (this file) to track progress\n2. **✅** Fix CSS `@import` in `src/Dashboard.css` (moved to top after `* { ... }`)\n3. **[TODO]** Validate fix: restart dev server, test form rendering\n4. **[TODO]** Complete task with `attempt_completion`\n\n## Next Action\n1. Kill dev server (Ctrl+C)\n2. Run `npm run dev`\n3. Navigate to **Master > Company Master** or **Mapping > Salesman To Area** → verify forms render with ERP styles.\n4. No CSS errors in terminal.\n\n**Progress**: 2/4 Complete**
+# TODO
+
+- [ ] Update `backend/server.js` success logs to print: `mongodb connected succesfully` and the DB name `Total_Solution`.
+- [ ] Run `node backend/server.js` (from backend folder) and verify logs.
 

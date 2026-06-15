@@ -1,14 +1,9 @@
-import React from 'react'
-import ReactDOM from 'react-dom/client'
-import Dashboard from './Dashboard.jsx'
-import './Dashboard.css'
-import { ERPProvider } from './context/ERPContext'
+import React from "react";
+import ReactDOM from "react-dom/client";
+import App from "./App";
 
-ReactDOM.createRoot(document.getElementById('root')).render(
+ReactDOM.createRoot(document.getElementById("root")).render(
   <React.StrictMode>
-    <ERPProvider>
-      <Dashboard />
-    </ERPProvider>
-  </React.StrictMode>,
-)
-
+    <App />
+  </React.StrictMode>
+);
