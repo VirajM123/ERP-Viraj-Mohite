@@ -9,6 +9,7 @@ import logo from "./assets/images/Totalsolution.PNG";
 // Note: Adjust the "../" or "./" depending on exactly where Dashboard.jsx sits relative to assets
 import SalesmanToAreaMapping from './SalesmanToAreaMapping';
 import Transaction from "./Transaction";
+const API_URL = "http://localhost:5000/api";
 
 import {
   LineChart,
@@ -26,7 +27,7 @@ import {
 import { ShoppingBag, Package, Users, Wallet } from "lucide-react";
 
 
-const Dashboard = () => {
+const Dashboard = ({ onLogout }) => {
   const [activeMenu, setActiveMenu] = useState(null);
   const [activeSubMenu, setActiveSubMenu] = useState(null);
   const [openFormFor, setOpenFormFor] = useState(null);
@@ -37,8 +38,12 @@ const Dashboard = () => {
   // Batch  State
   const [batches, setBatches] = useState([]);
   const [showBatchModal, setShowBatchModal] = useState(false);
+  const [existingBatches, setExistingBatches] = useState([]);
 
   const [currentBatchRow, setCurrentBatchRow] = useState(null);
+
+  const [loggedUserName, setLoggedUserName] = useState("");
+const [loggedFirmName, setLoggedFirmName] = useState("");
 
   // Add these with other state declarations (around line 50)
   const [showBatchSelectionModal, setShowBatchSelectionModal] = useState(false);
@@ -63,7 +68,10 @@ const Dashboard = () => {
   // Create Load List State
   const [showCreateLoadList, setShowCreateLoadList] = useState(false);
   const [createLoadListData, setCreateLoadListData] = useState([]);
+  const [editingInvoiceId, setEditingInvoiceId] = useState(null);
   const [originalSettleLoadItems, setOriginalSettleLoadItems] = useState([]);
+
+  const [createLoadDateRangeChanged, setCreateLoadDateRangeChanged] = useState(false);
   // Add this state with other state declarations (around line 50-60)
   const [showReceiptModal, setShowReceiptModal] = useState(false);
   const [currentReceiptItem, setCurrentReceiptItem] = useState(null);
@@ -162,8 +170,21 @@ const Dashboard = () => {
   });
   const [invoiceItems, setInvoiceItems] = useState([]);
   const [invoiceSummary, setInvoiceSummary] = useState({
-    gross: 0, tpr: 0, scheme: 0, bottom: 0, star: 0, cd: 0, gst: 0, cess: 0, tcs: 0, rounding: 0, net: 0
-  });
+  gross: 0,
+  tpr: 0,
+  scheme: 0,
+  bottom: 0,
+  star: 0,
+  cd: 0,
+  cgst: 0,
+  sgst: 0,
+  igst: 0,
+  gst: 0,
+  cess: 0,
+  tcs: 0,
+  rounding: 0,
+  net: 0
+});
   const [activeRow, setActiveRow] = useState(-1);
   const tableRef = useRef(null);
   const productInputRef = useRef(null);
@@ -289,7 +310,13 @@ const Dashboard = () => {
 
   // Master data state
   const [companies, setCompanies] = useState([]);
-  const [products, setProducts] = useState([]);
+  const [products, setProducts] = useState([
+  { id: 1, code: 'P001', name: 'Parle G Biscuit', basicUnit: 'PCS', mrp: 15, gst: 18, Rate_Per_Unit: 12, salesRate: 12 },
+  { id: 2, code: 'P002', name: 'Lays Classic Salted', basicUnit: 'PCS', mrp: 20, gst: 18, Rate_Per_Unit: 18, salesRate: 18 },
+  { id: 3, code: 'P003', name: 'Coca Cola 2L', basicUnit: 'LTR', mrp: 85, gst: 18, Rate_Per_Unit: 75, salesRate: 75 },
+  { id: 4, code: 'P004', name: 'Tata Tea 1kg', basicUnit: 'KG', mrp: 250, gst: 5, Rate_Per_Unit: 220, salesRate: 220 },
+  { id: 5, code: 'P005', name: 'Surf Excel 2kg', basicUnit: 'KG', mrp: 450, gst: 18, Rate_Per_Unit: 380, salesRate: 380 },
+]);
   const [groupsState, setGroupsState] = useState([]);
   const [categoriesState, setCategoriesState] = useState([]);
   const [accounts, setAccounts] = useState([]);
@@ -378,11 +405,12 @@ const Dashboard = () => {
   const [showSettleLoad, setShowSettleLoad] = useState(false);
   const [settleLoadData, setSettleLoadData] = useState(null);
   const [settleLoadFormData, setSettleLoadFormData] = useState({
-    loadNo: '',
-    loadDate: new Date().toISOString().split('T')[0],
-    settleLoadDate: new Date().toISOString().split('T')[0],
-    narration: ''
-  });
+  loadSeries: '',
+  loadNo: '',
+  loadDate: new Date().toISOString().split('T')[0],
+  settleLoadDate: new Date().toISOString().split('T')[0],
+  narration: ''
+});
   const [settleLoadItems, setSettleLoadItems] = useState([]);
   const [settleLoadSummary, setSettleLoadSummary] = useState({
     // Left Summary Fields
@@ -405,6 +433,72 @@ const Dashboard = () => {
     loadLock: false,
     report: false
   });
+// ================= COMMON REGEX VALIDATION =================
+const numericFields = [
+  'mobileNo', 'phoneNo', 'pinCode', 'accountNumber', 'chequeNo',
+  'billNo', 'vNo', 'loadNo', 'invoiceNumber', 'creditDays',
+  'creditBills', 'lockDays', 'seqNo', 'qty', 'free', 'mrp',
+  'rate', 'gst', 'vat', 'amount', 'openingBal', 'creditAmt',
+  'distKm', 'boxPack', 'inboxPack', 'weight', 'hsnCode',
+  'cess', 'cessAmt', 'ExpDays', 'tcsPercent'
+];
+
+const emailFields = ['emailId', 'email'];
+
+const regexInputValue = (name, value) => {
+  if (emailFields.includes(name)) {
+    return value.replace(/[^a-zA-Z0-9@._-]/g, '');
+  }
+// HSN CODE -> ONLY 8 DIGITS
+  if (name === 'hsn' || name === 'hsnCode') {
+    return value.replace(/\D/g, '').slice(0, 8);
+  }
+  if (name === 'mobileNo') {
+    return value.replace(/\D/g, '').slice(0, 10);
+  }
+
+  if (name === 'phoneNo') {
+    return value.replace(/\D/g, '').slice(0, 10);
+  }
+
+  if (name === 'pinCode') {
+    return value.replace(/\D/g, '').slice(0, 6);
+  }
+
+  if (numericFields.includes(name)) {
+    return value.replace(/[^0-9.]/g, '');
+  }
+
+  return value;
+};
+
+const isValidEmail = (email) => {
+  if (!email) return true;
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+};
+
+const validateFormRegex = (formData) => {
+  if (formData.emailId && !isValidEmail(formData.emailId)) {
+    alert('Please enter valid Email ID');
+    return false;
+  }
+
+  if (formData.mobileNo && formData.mobileNo.length !== 10) {
+    alert('Mobile No must be 10 digits');
+    return false;
+  }
+
+  if (formData.pinCode && formData.pinCode.length !== 6) {
+    alert('Pin Code must be 6 digits');
+    return false;
+  }
+if (formData.hsn && formData.hsn.length > 8) {
+  alert('HSN Code cannot exceed 8 digits');
+  return false;
+}
+  return true;
+};
+
   // Add this function where other handler functions are defined
   const handleSettleLoad = (loadData) => {
     console.log('Settling Load:', loadData);
@@ -622,14 +716,141 @@ const Dashboard = () => {
         totalCancelAmt
       });
     };
+const loadSettleLoadBySeriesNo = (series, no) => {
+  const enteredSeries = String(series || "").trim().toLowerCase();
+  const enteredNo = String(no || "").trim();
 
-    const handleSettleLoadInputChange = (e) => {
-      setSettleLoadFormData({ ...settleLoadFormData, [e.target.name]: e.target.value });
-    };
+  const load = createLoadListData.find((l) => {
+    const savedSeries = String(l.loadSeries || "").trim().toLowerCase();
+    const savedNo = String(l.loadNo || l.loadNumber || "").trim();
 
-    const handleSettleLoadOptionChange = (option) => {
-      setSettleLoadOptions({ ...settleLoadOptions, [option]: !settleLoadOptions[option] });
-    };
+    return savedSeries === enteredSeries && savedNo === enteredNo;
+  });
+
+  if (!load) {
+    setSettleLoadData(null);
+    setSettleLoadItems([]);
+    setOriginalSettleLoadItems([]);
+    calculateSettleLoadSummary([]);
+    return;
+  }
+
+  const transformedItems = (load.items || []).map((item, index) => ({
+    id: item.id || `${load.loadSeries}-${load.loadNo}-${index}`,
+    sr: index + 1,
+    adjust: item.adjust || "N",
+    pending: item.pending || "N",
+    cancel: item.cancel || "N",
+    receiptSeries: item.receiptSeries || "",
+    receiptNo: item.receiptNo || "",
+    status: item.status || "Pending",
+
+    billType: item.billType || "Credit",
+    billDate: item.billDate || item.date || load.loadDate || "",
+    billSeries: item.billSeries || item.BillSeries || item.series || "",
+    billNo: item.billNo || item.BillNo || "",
+
+    partyCode: item.partyCode || item.accountCode || "",
+    partyName: item.partyName || item.accountName || "",
+    salesman: item.salesman || item.salesmanName || "",
+    area: item.area || "",
+
+    billAmount: Number(item.billAmount || item.amount || item.netAmount || 0),
+    receiptAmount: Number(item.receiptAmount || 0),
+
+    chequeNo: item.chequeNo || "",
+    chequeDate: item.chequeDate || "",
+    bankName: item.bankName || "",
+    receiptMode: item.receiptMode || ""
+  }));
+
+  setSettleLoadData(load);
+  setSettleLoadItems(transformedItems);
+  setOriginalSettleLoadItems(JSON.parse(JSON.stringify(transformedItems)));
+  calculateSettleLoadSummary(transformedItems);
+
+  setSettleLoadFormData((prev) => ({
+    ...prev,
+    loadSeries: load.loadSeries || "",
+    loadNo: load.loadNo || load.loadNumber || "",
+    loadDate: load.loadDate || new Date().toISOString().split("T")[0],
+    settleLoadDate: prev.settleLoadDate || new Date().toISOString().split("T")[0],
+    narration: load.narration || ""
+  }));
+};    
+const handleSettleLoadInputChange = (e) => {
+  const { name, value } = e.target;
+  const cleanValue = regexInputValue(name, value);
+
+  const updatedForm = {
+    ...settleLoadFormData,
+    [name]: cleanValue
+  };
+
+  setSettleLoadFormData(updatedForm);
+
+  if (name === "loadSeries" || name === "loadNo") {
+    const series = name === "loadSeries" ? cleanValue : updatedForm.loadSeries;
+    const no = name === "loadNo" ? cleanValue : updatedForm.loadNo;
+
+    if (String(series).trim() && String(no).trim()) {
+      setTimeout(() => {
+        loadSettleLoadBySeriesNo(series, no);
+      }, 0);
+    } else {
+      setSettleLoadData(null);
+      setSettleLoadItems([]);
+      setOriginalSettleLoadItems([]);
+      calculateSettleLoadSummary([]);
+    }
+  }
+};
+
+    const handleSettleLoad = (loadData) => {
+  if (!loadData || !loadData.items || loadData.items.length === 0) {
+    alert("No items found in this load to settle");
+    return;
+  }
+
+  const transformedItems = (loadData.items || []).map((item, index) => ({
+    id: item.id || Date.now() + index,
+    sr: index + 1,
+    adjust: item.adjust || "N",
+    pending: item.pending || "N",
+    cancel: item.cancel || "N",
+    receiptSeries: item.receiptSeries || "",
+    receiptNo: item.receiptNo || "",
+    status: item.status || "Pending",
+    billType: item.billType || "Credit",
+    billDate: item.billDate || loadData.billFromDate || loadData.loadDate || "",
+    billSeries: item.billSeries || item.BillSeries || "",
+    billNo: item.billNo || item.BillNo || "",
+    partyCode: item.partyCode || "",
+    partyName: item.partyName || "",
+    billAmount: parseFloat(item.billAmount || item.amount || item.netAmount || 0),
+    receiptAmount: parseFloat(item.receiptAmount || 0),
+    chequeNo: item.chequeNo || "",
+    chequeDate: item.chequeDate || "",
+    bankName: item.bankName || "",
+    receiptMode: item.receiptMode || ""
+  }));
+
+  setSettleLoadItems(transformedItems);
+  setOriginalSettleLoadItems(JSON.parse(JSON.stringify(transformedItems)));
+  calculateSettleLoadSummary(transformedItems);
+
+  setSettleLoadFormData({
+    loadSeries: loadData.loadSeries || "",
+    loadNo: loadData.loadNo || "",
+    loadDate: loadData.loadDate || new Date().toISOString().split("T")[0],
+    settleLoadDate: new Date().toISOString().split("T")[0],
+    narration: loadData.narration || ""
+  });
+
+  setSettleLoadData(loadData);
+  setShowSettleLoad(true);
+  setShowCreateLoadList(false);
+};
 
     const exportSettleLoadToExcel = () => {
       const exportData = settleLoadItems.map(item => ({
@@ -833,8 +1054,30 @@ const Dashboard = () => {
   };
 
   const handleSettleLoadInputChange = (e) => {
-    setSettleLoadFormData({ ...settleLoadFormData, [e.target.name]: e.target.value });
+  const { name, value } = e.target;
+  const cleanValue = regexInputValue(name, value);
+
+  const updatedForm = {
+    ...settleLoadFormData,
+    [name]: cleanValue
   };
+
+  setSettleLoadFormData(updatedForm);
+
+  if (name === "loadSeries" || name === "loadNo") {
+    const series = name === "loadSeries" ? cleanValue : updatedForm.loadSeries;
+    const no = name === "loadNo" ? cleanValue : updatedForm.loadNo;
+
+    if (series && no) {
+      loadSettleLoadBySeriesNo(series, no);
+    } else {
+      setSettleLoadData(null);
+      setSettleLoadItems([]);
+      setOriginalSettleLoadItems([]);
+      calculateSettleLoadSummary([]);
+    }
+  }
+};
 
   const handleSettleLoadOptionChange = (option) => {
     setSettleLoadOptions({ ...settleLoadOptions, [option]: !settleLoadOptions[option] });
@@ -966,16 +1209,77 @@ const Dashboard = () => {
   const [users, setUsers] = useState([{ userName: 'ADMIN', password: 'admin123' }]);
   const [currentUser, setCurrentUser] = useState('ADMIN');
 
+const loadFirms = async () => {
+  try {
+    const distributorId = localStorage.getItem("distributorId");
+
+    if (!distributorId) {
+      setFirms([]);
+      return;
+    }
+
+    const response = await fetch(
+      `${API_URL}/firms?distributorId=${distributorId}`
+    );
+
+    const result = await response.json();
+
+    if (!response.ok) {
+      alert(result.message || "Failed to load firms");
+      return;
+    }
+
+    setFirms(result.firms || []);
+  } catch (error) {
+    console.error(error);
+    alert("Server not connected. Failed to load firms.");
+  }
+};
+
+useEffect(() => {
+  loadFirms();
+}, []);
+useEffect(() => {
+  const savedUser = JSON.parse(localStorage.getItem("loggedInUser") || "{}");
+
+  setLoggedUserName(
+    savedUser.userName || localStorage.getItem("userName") || "User"
+  );
+
+  setLoggedFirmName(
+    savedUser.firmName || localStorage.getItem("firmName") || ""
+  );
+}, []);
   // Filter for Customer Bank Master
   const [customerBankFilter, setCustomerBankFilter] = useState('');
   // Form states
   const [companyForm, setCompanyForm] = useState({ code: '', name: '', address: '', branchAddress: '' });
-  const [productForm, setProductForm] = useState({
-    code: '', name: '', companyId: '', group: '', category: '', description: '',
-    gst: '', basicUnit: 'PCS', boxPack: '', inboxPack: '', retailerMargin: '',
-    distributorMargin: '', active: true, locked: false, hsn: '', weight: '0', allowFraction: false,
-    Rate_Per_Unit: '1', Reorder_Level: '0', Min_Stock_Holding: '0'
-  });
+const [productForm, setProductForm] = useState({
+  code: '',
+  name: '',
+  companyId: '',
+  group: '',
+  category: '',
+  description: '',
+  gst: '0',
+  basicUnit: 'PCS',
+  boxPack: '0',
+  inboxPack: '0',
+  retailerMargin: '0',
+  distributorMargin: '0',
+  hsn: '0',
+  weight: '0',
+  Rate_Per_Unit: '0',
+  Reorder_Level: '0',
+  Min_Stock_Holding: '0',
+  cess: '0',
+  cessAmt: '0',
+  ExpDays: '0',
+  create: '0',
+  active: true,
+  locked: false,
+  allowFraction: false
+});
 
   // Account Form State
   const [accountForm, setAccountForm] = useState({
@@ -1025,59 +1329,76 @@ const Dashboard = () => {
     gstClsDate: '',
     allowInPurchase: 'N'
   });
-  // Create Load State
-  const [createLoadFormData, setCreateLoadFormData] = useState({
-    loadSeries: '',
-    loadNo: '',
-    loadDate: new Date().toISOString().split('T')[0],
-    company: '',
-    deliverBoy: '',
-    selectedSalesman: '',
-    billFromDate: new Date().toISOString().split('T')[0],
-    billToDate: new Date().toISOString().split('T')[0],
-    narration: '',
-    deliveryBy: ''
-  });
-  const [createLoadItems, setCreateLoadItems] = useState([]);
+const getCurrentYearAprilFirst = () => {
+  const today = new Date();
+
+  const year =
+    today.getMonth() >= 3
+      ? today.getFullYear()
+      : today.getFullYear() - 1;
+
+  return `${year}-04-01`;
+};
+
+const [createLoadFormData, setCreateLoadFormData] = useState({
+  loadSeries: "",
+  loadNo: "",
+  loadDate: new Date().toISOString().split("T")[0],
+  company: "",
+  deliverBoy: "",
+  selectedSalesman: [],
+  billFromDate: getCurrentYearAprilFirst(), // IMPORTANT
+  billToDate: new Date().toISOString().split("T")[0],
+  narration: "",
+  deliveryBy: ""
+});
+const [showCreateLoadSalesmanBox, setShowCreateLoadSalesmanBox] = useState(false);
+const [createLoadItems, setCreateLoadItems] = useState([]);
 
 
 
-  // Other Account Form State
-  const [otherAccountForm, setOtherAccountForm] = useState({
-    accountCode: '',
-    accountName: '',
-    accountGroup: 'INCOMES DIRECT',
-    address: '',
-    town: '',
-    state: '',
-    country: '',
-    pinCode: '',
-    phoneNo: '',
-    mobileNo: '',
-    emailId: '',
-    tinNo: '',
-    openingBal: '0.00',
-    openingBalType: 'Dr',
-    dlNo1: '',
-    dlExp1: '',
-    dlNo2: '',
-    dlExp2: '',
-    invType: 'CST',
-    taxOn: 'SRATE',
-    commonCode: '',
-    commonName: '',
-    panNo: '',
-    foodLicense: '',
-    gstNo: '',
-    billToAdd1: '',
-    remark: '',
-    tcsPercent: '',
-    tanNo: '',
-    gstType: 'Unregistered',
-    gstDate: '',
-    add2: '',
-    gstClsDate: ''
-  });
+const [otherAccountForm, setOtherAccountForm] = useState({
+  accountCode: '',
+  accountName: '',
+  accountGroup: 'INCOMES DIRECT',
+
+  bankAccountNo: '',
+  ifscCode: '',
+  branchName: '',
+
+  address: '',
+  town: '',
+  state: '',
+  country: '',
+  pinCode: '',
+  phoneNo: '',
+  mobileNo: '',
+  emailId: '',
+  tinNo: '',
+  openingBal: '0.00',
+  openingBalType: 'Dr',
+  dlNo1: '',
+  dlExp1: '',
+  dlNo2: '',
+  dlExp2: '',
+
+  invType: 'TAXABLE',
+  taxOn: 'SRATE',
+
+  commonCode: '',
+  commonName: '',
+  panNo: '',
+  foodLicense: '',
+  gstNo: '',
+  billToAdd1: '',
+  remark: '',
+  tcsPercent: '',
+  tanNo: '',
+  gstType: 'Unregistered',
+  gstDate: '',
+  add2: '',
+  gstClsDate: ''
+});
 
   // Group/Category forms
   const [groupForm, setGroupForm] = useState({ code: '', name: '' });
@@ -1102,10 +1423,10 @@ const Dashboard = () => {
     tools: { title: 'Tools', icon: '⚙️', items: ['General Setup', 'Security Setup'] },
     logout: { title: 'Logout', icon: '🚪', items: [] }
   };
-  // GoDown Master Handlers
   const handleGodownInput = (e) => {
-    setGodownForm({ ...godownForm, [e.target.name]: e.target.value });
-  };
+  const { name, value } = e.target;
+  setGodownForm({ ...godownForm, [name]: regexInputValue(name, value) });
+};
 
   // Bill Print Handlers
   const handleBillPrintInputChange = (e) => {
@@ -1647,44 +1968,84 @@ const Dashboard = () => {
     // Keep the form open by not changing activeSubMenu or openFormFor
     // This ensures the user returns to the bill print form
   };
-  // Firm Creation Handlers
-  const handleFirmInput = (e) => {
-    setFirmData({ ...firmData, [e.target.name]: e.target.value });
-  };
+const handleFirmInput = (e) => {
+  const { name, value } = e.target;
 
-  const saveFirm = (e) => {
-    e.preventDefault();
-    if (!firmData.firmCode || !firmData.firmName) {
-      return alert('Firm Code and Firm Name are required');
+  setFirmData({
+    ...firmData,
+    [name]: regexInputValue(name, value),
+  });
+};
+const saveFirm = async (e) => {
+  e.preventDefault();
+
+  if (!validateFormRegex(firmData)) return;
+
+  if (!firmData.firmCode || !firmData.firmName) {
+    return alert("Firm Code and Firm Name are required");
+  }
+
+  const distributorId = localStorage.getItem("distributorId");
+
+  if (!distributorId) {
+    alert("Distributor not found. Please login again.");
+    return;
+  }
+
+  try {
+    const response = await fetch(`${API_URL}/firms`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        ...firmData,
+        distributorId,
+        firmCode: firmData.firmCode.trim(),
+        firmName: firmData.firmName.trim(),
+      }),
+    });
+
+    const result = await response.json();
+
+    if (!response.ok) {
+      alert(result.message || "Firm creation failed");
+      return;
     }
 
-    const newFirm = { id: Date.now(), ...firmData };
-    setFirms([...firms, newFirm]);
-    alert('Firm created successfully!');
+    await loadFirms();
 
-    // Reset form
+    alert(
+      `Firm created successfully!\nDistributor ID: ${result.data.distributorId}\nFirm ID: ${result.data.firmId}`
+    );
+
     setFirmData({
-      firmCode: '',
-      firmName: '',
-      address1: '',
-      address2: '',
-      city: '',
-      pinCode: '',
-      state: '',
-      country: '',
-      phoneNo: '',
-      mobileNo: '',
-      tinNo: '',
-      regNo: '',
-      gstNo: '',
-      drugLicNo: '',
-      foodLicenceNo: '',
-      distributorId: '',
-      apiKey: ''
+      firmCode: "",
+      firmName: "",
+      address1: "",
+      address2: "",
+      city: "",
+      pinCode: "",
+      state: "",
+      country: "India",
+      phoneNo: "",
+      mobileNo: "",
+      tinNo: "",
+      regNo: "",
+      gstNo: "",
+      drugLicNo: "",
+      foodLicenceNo: "",
+      distributorId: "",
+      apiKey: "",
+      email: "",
     });
-    closeForm();
-  };
 
+    closeForm();
+  } catch (error) {
+    console.error(error);
+    alert("Server not connected. Firm creation failed.");
+  }
+};
   // User Creation Handlers
   const handleUserInput = (e) => {
     setUserData({ ...userData, [e.target.name]: e.target.value });
@@ -1718,15 +2079,22 @@ const Dashboard = () => {
     closeForm();
   };
 
-  // Logout Handler
   const handleLogout = () => {
-    if (window.confirm('Are you sure you want to logout?')) {
-      setCurrentUser(null);
-      setActiveMenu(null);
-      setActiveSubMenu(null);
-      alert('Logged out successfully!');
+  if (window.confirm("Are you sure you want to logout?")) {
+    localStorage.removeItem("token");
+    localStorage.removeItem("distributorId");
+    localStorage.removeItem("userName");
+    localStorage.removeItem("firms");
+
+    setCurrentUser(null);
+    setActiveMenu(null);
+    setActiveSubMenu(null);
+
+    if (onLogout) {
+      onLogout();
     }
-  };
+  }
+};
   const saveGodown = (e) => {
     e.preventDefault();
     if (!godownForm.code || !godownForm.name) return alert('Code and Name required');
@@ -1770,50 +2138,54 @@ const Dashboard = () => {
       godown.name?.toLowerCase().includes(filters.godown.toLowerCase())
     );
   };
-  // Customer Bank Master Handlers
-  const handleCustomerBankInput = (e) => {
-    setCustomerBankForm({ ...customerBankForm, [e.target.name]: e.target.value });
-  };
+ 
+const handleCustomerBankInput = (e) => {
+  const { name, value } = e.target;
+  setCustomerBankForm({ ...customerBankForm, [name]: regexInputValue(name, value) });
+};
 
-  const saveCustomerBank = (e) => {
-    e.preventDefault();
-    if (!customerBankForm.bankCode || !customerBankForm.bankName || !customerBankForm.accountNumber) {
-      return alert('Bank Code, Bank Name and Account Number are required');
-    }
+const saveCustomerBank = (e) => {
+  e.preventDefault();
 
-    if (editCustomerBankId) {
-      setCustomerBanks(customerBanks.map(bank =>
-        bank.id === editCustomerBankId
-          ? { ...bank, ...customerBankForm }
-          : bank
-      ));
-      setEditCustomerBankId(null);
-    } else {
-      const newId = Math.max(...customerBanks.map(b => b.id), 0) + 1;
-      setCustomerBanks([...customerBanks, { id: newId, ...customerBankForm }]);
-    }
+  if (!validateFormRegex(customerBankForm)) return;
 
-    // Reset form
-    setCustomerBankForm({
-      bankCode: '',
-      bankName: '',
-      accountNumber: '',
-      ifscCode: '',
-      branchName: '',
-      accountType: 'Savings',
-      customerName: '',
-      customerCode: '',
-      mobileNo: '',
-      emailId: '',
-      upiId: '',
-      swiftCode: '',
-      micrCode: '',
-      panNumber: '',
-      beneficiaryName: '',
-      remarks: ''
-    });
-    closeForm();
-  };
+  if (!customerBankForm.bankCode || !customerBankForm.bankName || !customerBankForm.accountNumber) {
+    return alert('Bank Code, Bank Name and Account Number are required');
+  }
+
+  if (editCustomerBankId) {
+    setCustomerBanks(customerBanks.map(bank =>
+      bank.id === editCustomerBankId
+        ? { ...bank, ...customerBankForm }
+        : bank
+    ));
+    setEditCustomerBankId(null);
+  } else {
+    const newId = Math.max(...customerBanks.map(b => b.id), 0) + 1;
+    setCustomerBanks([...customerBanks, { id: newId, ...customerBankForm }]);
+  }
+
+  setCustomerBankForm({
+    bankCode: '',
+    bankName: '',
+    accountNumber: '',
+    ifscCode: '',
+    branchName: '',
+    accountType: 'Savings',
+    customerName: '',
+    customerCode: '',
+    mobileNo: '',
+    emailId: '',
+    upiId: '',
+    swiftCode: '',
+    micrCode: '',
+    panNumber: '',
+    beneficiaryName: '',
+    remarks: ''
+  });
+
+  closeForm();
+};
 
   const editCustomerBank = (bank) => {
     setEditCustomerBankId(bank.id);
@@ -2225,16 +2597,16 @@ const Dashboard = () => {
         </div>
 
         <div className="dashboard-footer">
-          <span>© 2025 Billing Software. All rights reserved.</span>
+          <span>© 2025 Billing Software. All rights reserved.Developed by Viraaj Mohite</span>
           <span>Last updated: 2:23:34 PM <b></b></span>
         </div>
       </div>
     );
   };
-  // Sales Invoice Functions
-  const handleInvoiceInputChange = (e) => {
-    setInvoiceFormData({ ...invoiceFormData, [e.target.name]: e.target.value });
-  };
+ const handleInvoiceInputChange = (e) => {
+  const { name, value } = e.target;
+  setInvoiceFormData({ ...invoiceFormData, [name]: regexInputValue(name, value) });
+};
 
   const addInvoiceItem = useCallback(() => {
     const newItem = {
@@ -2247,348 +2619,129 @@ const Dashboard = () => {
       mrp: '',
       rate: '',
       rateGst: '',
-      tprAmt: '',           // Direct TPR amount (removed TPR%)
-      schemePct: '',        // Scheme percentage
-      schemeAmt: '',        // Scheme amount
-      cdPct: '',           // CD percentage  
-      cdAmt: '',           // CD amount
-      starPct: '',         // Star percentage
-      starAmt: '',         // Star amount
+      tprAmt: '',          
+      schemePct: '',       
+      schemeAmt: '',       
+      cdPct: '',           
+      cdAmt: '',          
+      starPct: '',        
+      starAmt: '',         
       taxable: '',
-      gst: '',
-      sgst: '',            // Added SGST
-      cgst: '',            // Added CGST
-      amount: ''
+     gst: '',
+sgst: '',
+cgst: '',
+igst: '',
+amount: ''
     };
     setInvoiceItems([...invoiceItems, newItem]);
     setActiveRow(invoiceItems.length);
   }, [invoiceItems.length]);
-  const updateInvoiceItem = (index, field, value) => {
-    const newItems = [...invoiceItems];
-    newItems[index][field] = value;
+  
+ const updateInvoiceItem = (index, field, value) => {
+  const newItems = [...invoiceItems];
+  newItems[index][field] = value;
 
-    if (field === 'qty' && value !== undefined) {
-      const item = newItems[index];
-      const qty = parseFloat(value) || 0;
-      const rate = parseFloat(item.rate) || 0;
-      const baseAmount = qty * rate;
-      item.amount = baseAmount.toFixed(2);
+  const customerAccount = accounts.find(
+    (acc) =>
+      acc.accountName === invoiceFormData.party ||
+      acc.accountCode === invoiceFormData.party ||
+      `${acc.accountCode} - ${acc.accountName}` === invoiceFormData.party
+  );
 
-      // Calculate TPR amount
-      let tprAmt = parseFloat(item.tprAmt) || 0;
+  const invType = (
+    customerAccount?.invType ||
+    customerAccount?.taxType ||
+    "TAXABLE"
+  ).toUpperCase();
 
-      // Calculate Scheme amount from percentage or direct amount
-      let schemeAmt = 0;
-      if (item.schemePct) {
-        const schemePct = parseFloat(item.schemePct) || 0;
-        schemeAmt = (baseAmount * schemePct / 100);
-        item.schemeAmt = schemeAmt.toFixed(2);
-      } else if (item.schemeAmt) {
-        schemeAmt = parseFloat(item.schemeAmt) || 0;
-      }
+  const isIGST =
+    invType === "CST" ||
+    invType === "IGST" ||
+    invType === "INTERSTATE" ||
+    invType.includes("CST") ||
+    invType.includes("IGST");
 
-      // Calculate CD amount from percentage or direct amount  
-      let cdAmt = 0;
-      if (item.cdPct) {
-        const cdPct = parseFloat(item.cdPct) || 0;
-        cdAmt = (baseAmount * cdPct / 100);
-        item.cdAmt = cdAmt.toFixed(2);
-      } else if (item.cdAmt) {
-        cdAmt = parseFloat(item.cdAmt) || 0;
-      }
+  const recalculateSalesItem = (item) => {
+    const qty = parseFloat(item.qty) || 0;
+    const rate = parseFloat(item.rate) || 0;
+    const gstPct = parseFloat(item.gst) || 0;
 
-      const starAmt = parseFloat(item.starAmt) || 0;
+    const baseAmount = qty * rate;
 
-      // Taxable amount after all deductions
-      let taxable = baseAmount - tprAmt - schemeAmt - cdAmt - starAmt;
-      item.taxable = taxable.toFixed(2);
+    const tprAmt = parseFloat(item.tprAmt) || 0;
 
-      // Calculate GST on taxable amount
-      if (item.gst && taxable > 0) {
-        const gstPct = parseFloat(item.gst) || 0;
-        const gstAmount = (taxable * gstPct / 100);
-        const halfGst = gstAmount / 2;
-        item.sgst = halfGst.toFixed(2);
-        item.cgst = halfGst.toFixed(2);
-
-        const rateValue = parseFloat(item.rate) || 0;
-        const gstPerUnit = (rateValue * gstPct / 100);
-        item.rateGst = (rateValue + gstPerUnit).toFixed(2);
-      }
-
-      // Final amount = taxable + GST amount
-      const gstAmount = (parseFloat(item.sgst) || 0) + (parseFloat(item.cgst) || 0);
-      const finalAmount = taxable + gstAmount;
-      item.amount = finalAmount.toFixed(2);
-    }
-    else if (field === 'rate' && value !== undefined) {
-      const item = newItems[index];
-      const qty = parseFloat(item.qty) || 0;
-      const rate = parseFloat(value) || 0;
-      const baseAmount = qty * rate;
-      item.amount = baseAmount.toFixed(2);
-
-      let schemeAmt = 0;
-      if (item.schemePct) {
-        const schemePct = parseFloat(item.schemePct) || 0;
-        schemeAmt = (baseAmount * schemePct / 100);
-        item.schemeAmt = schemeAmt.toFixed(2);
-      } else if (item.schemeAmt) {
-        schemeAmt = parseFloat(item.schemeAmt) || 0;
-      }
-
-      let cdAmt = 0;
-      if (item.cdPct) {
-        const cdPct = parseFloat(item.cdPct) || 0;
-        cdAmt = (baseAmount * cdPct / 100);
-        item.cdAmt = cdAmt.toFixed(2);
-      } else if (item.cdAmt) {
-        cdAmt = parseFloat(item.cdAmt) || 0;
-      }
-
-      const tprAmt = parseFloat(item.tprAmt) || 0;
-      const starAmt = parseFloat(item.starAmt) || 0;
-
-      let taxable = baseAmount - tprAmt - schemeAmt - cdAmt - starAmt;
-      item.taxable = taxable.toFixed(2);
-
-      if (item.gst && taxable > 0) {
-        const gstPct = parseFloat(item.gst) || 0;
-        const gstAmount = (taxable * gstPct / 100);
-        const halfGst = gstAmount / 2;
-        item.sgst = halfGst.toFixed(2);
-        item.cgst = halfGst.toFixed(2);
-
-        const rateValue = parseFloat(value) || 0;
-        const gstPerUnit = (rateValue * gstPct / 100);
-        item.rateGst = (rateValue + gstPerUnit).toFixed(2);
-      }
-
-      const gstAmount = (parseFloat(item.sgst) || 0) + (parseFloat(item.cgst) || 0);
-      const finalAmount = taxable + gstAmount;
-      item.amount = finalAmount.toFixed(2);
-    }
-    else if (field === 'tprAmt' && value !== undefined) {
-      const item = newItems[index];
-      const qty = parseFloat(item.qty) || 0;
-      const rate = parseFloat(item.rate) || 0;
-      const baseAmount = qty * rate;
-      const tprAmt = parseFloat(value) || 0;
-
-      let schemeAmt = 0;
-      if (item.schemePct) {
-        const schemePct = parseFloat(item.schemePct) || 0;
-        schemeAmt = (baseAmount * schemePct / 100);
-        item.schemeAmt = schemeAmt.toFixed(2);
-      } else if (item.schemeAmt) {
-        schemeAmt = parseFloat(item.schemeAmt) || 0;
-      }
-
-      let cdAmt = 0;
-      if (item.cdPct) {
-        const cdPct = parseFloat(item.cdPct) || 0;
-        cdAmt = (baseAmount * cdPct / 100);
-        item.cdAmt = cdAmt.toFixed(2);
-      } else if (item.cdAmt) {
-        cdAmt = parseFloat(item.cdAmt) || 0;
-      }
-
-      const starAmt = parseFloat(item.starAmt) || 0;
-      let taxable = baseAmount - tprAmt - schemeAmt - cdAmt - starAmt;
-      item.taxable = taxable.toFixed(2);
-
-      if (item.gst && taxable > 0) {
-        const gstPct = parseFloat(item.gst) || 0;
-        const gstAmount = (taxable * gstPct / 100);
-        const halfGst = gstAmount / 2;
-        item.sgst = halfGst.toFixed(2);
-        item.cgst = halfGst.toFixed(2);
-      }
-
-      const gstAmount = (parseFloat(item.sgst) || 0) + (parseFloat(item.cgst) || 0);
-      const finalAmount = taxable + gstAmount;
-      item.amount = finalAmount.toFixed(2);
-    }
-    else if (field === 'schemePct' && value !== undefined) {
-      const item = newItems[index];
-      const qty = parseFloat(item.qty) || 0;
-      const rate = parseFloat(item.rate) || 0;
-      const baseAmount = qty * rate;
-      const schemePct = parseFloat(value) || 0;
-
-      // Calculate scheme amount from percentage
-      const schemeAmt = (baseAmount * schemePct / 100);
+    let schemeAmt = 0;
+    if (item.schemePct) {
+      schemeAmt = baseAmount * ((parseFloat(item.schemePct) || 0) / 100);
       item.schemeAmt = schemeAmt.toFixed(2);
-      item[field] = value;
-
-      // Recalculate with new scheme amount
-      const tprAmt = parseFloat(item.tprAmt) || 0;
-      let cdAmt = 0;
-      if (item.cdPct) {
-        const cdPct = parseFloat(item.cdPct) || 0;
-        cdAmt = (baseAmount * cdPct / 100);
-        item.cdAmt = cdAmt.toFixed(2);
-      } else if (item.cdAmt) {
-        cdAmt = parseFloat(item.cdAmt) || 0;
-      }
-      const starAmt = parseFloat(item.starAmt) || 0;
-
-      let taxable = baseAmount - tprAmt - schemeAmt - cdAmt - starAmt;
-      item.taxable = taxable.toFixed(2);
-
-      if (item.gst && taxable > 0) {
-        const gstPct = parseFloat(item.gst) || 0;
-        const gstAmount = (taxable * gstPct / 100);
-        const halfGst = gstAmount / 2;
-        item.sgst = halfGst.toFixed(2);
-        item.cgst = halfGst.toFixed(2);
-      }
-
-      const gstAmount = (parseFloat(item.sgst) || 0) + (parseFloat(item.cgst) || 0);
-      const finalAmount = taxable + gstAmount;
-      item.amount = finalAmount.toFixed(2);
+    } else {
+      schemeAmt = parseFloat(item.schemeAmt) || 0;
     }
-    else if (field === 'schemeAmt' && value !== undefined) {
-      const item = newItems[index];
-      const qty = parseFloat(item.qty) || 0;
-      const rate = parseFloat(item.rate) || 0;
-      const baseAmount = qty * rate;
-      const schemeAmt = parseFloat(value) || 0;
 
-      // Clear percentage if direct amount is entered
-      if (schemeAmt > 0) {
-        item.schemePct = '';
-      }
-      item[field] = value;
-
-      const tprAmt = parseFloat(item.tprAmt) || 0;
-      let cdAmt = 0;
-      if (item.cdPct) {
-        const cdPct = parseFloat(item.cdPct) || 0;
-        cdAmt = (baseAmount * cdPct / 100);
-        item.cdAmt = cdAmt.toFixed(2);
-      } else if (item.cdAmt) {
-        cdAmt = parseFloat(item.cdAmt) || 0;
-      }
-      const starAmt = parseFloat(item.starAmt) || 0;
-
-      let taxable = baseAmount - tprAmt - schemeAmt - cdAmt - starAmt;
-      item.taxable = taxable.toFixed(2);
-
-      if (item.gst && taxable > 0) {
-        const gstPct = parseFloat(item.gst) || 0;
-        const gstAmount = (taxable * gstPct / 100);
-        const halfGst = gstAmount / 2;
-        item.sgst = halfGst.toFixed(2);
-        item.cgst = halfGst.toFixed(2);
-      }
-
-      const gstAmount = (parseFloat(item.sgst) || 0) + (parseFloat(item.cgst) || 0);
-      const finalAmount = taxable + gstAmount;
-      item.amount = finalAmount.toFixed(2);
-    }
-    else if (field === 'cdPct' && value !== undefined) {
-      const item = newItems[index];
-      const qty = parseFloat(item.qty) || 0;
-      const rate = parseFloat(item.rate) || 0;
-      const baseAmount = qty * rate;
-      const cdPct = parseFloat(value) || 0;
-
-      // Calculate CD amount from percentage
-      const cdAmt = (baseAmount * cdPct / 100);
+    let cdAmt = 0;
+    if (item.cdPct) {
+      cdAmt = baseAmount * ((parseFloat(item.cdPct) || 0) / 100);
       item.cdAmt = cdAmt.toFixed(2);
-      item[field] = value;
-
-      const tprAmt = parseFloat(item.tprAmt) || 0;
-      let schemeAmt = 0;
-      if (item.schemePct) {
-        const schemePct = parseFloat(item.schemePct) || 0;
-        schemeAmt = (baseAmount * schemePct / 100);
-        item.schemeAmt = schemeAmt.toFixed(2);
-      } else if (item.schemeAmt) {
-        schemeAmt = parseFloat(item.schemeAmt) || 0;
-      }
-      const starAmt = parseFloat(item.starAmt) || 0;
-
-      let taxable = baseAmount - tprAmt - schemeAmt - cdAmt - starAmt;
-      item.taxable = taxable.toFixed(2);
-
-      if (item.gst && taxable > 0) {
-        const gstPct = parseFloat(item.gst) || 0;
-        const gstAmount = (taxable * gstPct / 100);
-        const halfGst = gstAmount / 2;
-        item.sgst = halfGst.toFixed(2);
-        item.cgst = halfGst.toFixed(2);
-      }
-
-      const gstAmount = (parseFloat(item.sgst) || 0) + (parseFloat(item.cgst) || 0);
-      const finalAmount = taxable + gstAmount;
-      item.amount = finalAmount.toFixed(2);
-    }
-    else if (field === 'cdAmt' && value !== undefined) {
-      const item = newItems[index];
-      const qty = parseFloat(item.qty) || 0;
-      const rate = parseFloat(item.rate) || 0;
-      const baseAmount = qty * rate;
-      const cdAmt = parseFloat(value) || 0;
-
-      // Clear percentage if direct amount is entered
-      if (cdAmt > 0) {
-        item.cdPct = '';
-      }
-      item[field] = value;
-
-      const tprAmt = parseFloat(item.tprAmt) || 0;
-      let schemeAmt = 0;
-      if (item.schemePct) {
-        const schemePct = parseFloat(item.schemePct) || 0;
-        schemeAmt = (baseAmount * schemePct / 100);
-        item.schemeAmt = schemeAmt.toFixed(2);
-      } else if (item.schemeAmt) {
-        schemeAmt = parseFloat(item.schemeAmt) || 0;
-      }
-      const starAmt = parseFloat(item.starAmt) || 0;
-
-      let taxable = baseAmount - tprAmt - schemeAmt - cdAmt - starAmt;
-      item.taxable = taxable.toFixed(2);
-
-      if (item.gst && taxable > 0) {
-        const gstPct = parseFloat(item.gst) || 0;
-        const gstAmount = (taxable * gstPct / 100);
-        const halfGst = gstAmount / 2;
-        item.sgst = halfGst.toFixed(2);
-        item.cgst = halfGst.toFixed(2);
-      }
-
-      const gstAmount = (parseFloat(item.sgst) || 0) + (parseFloat(item.cgst) || 0);
-      const finalAmount = taxable + gstAmount;
-      item.amount = finalAmount.toFixed(2);
-    }
-    else if (field === 'gst' && value !== undefined) {
-      const item = newItems[index];
-      const taxable = parseFloat(item.taxable) || 0;
-      const gstPct = parseFloat(value) || 0;
-
-      if (taxable > 0) {
-        const gstAmount = (taxable * gstPct / 100);
-        const halfGst = gstAmount / 2;
-        item.sgst = halfGst.toFixed(2);
-        item.cgst = halfGst.toFixed(2);
-
-        const rateValue = parseFloat(item.rate) || 0;
-        const gstPerUnit = (rateValue * gstPct / 100);
-        item.rateGst = (rateValue + gstPerUnit).toFixed(2);
-      }
-
-      const gstAmount = (parseFloat(item.sgst) || 0) + (parseFloat(item.cgst) || 0);
-      const finalAmount = taxable + gstAmount;
-      item.amount = finalAmount.toFixed(2);
+    } else {
+      cdAmt = parseFloat(item.cdAmt) || 0;
     }
 
-    calcInvoiceSummary(newItems);
-    setInvoiceItems(newItems);
-    setActiveRow(index);
+    const starAmt = parseFloat(item.starAmt) || 0;
+
+    const taxable = baseAmount - tprAmt - schemeAmt - cdAmt - starAmt;
+    item.taxable = taxable.toFixed(2);
+
+    const gstAmount = taxable > 0 ? taxable * (gstPct / 100) : 0;
+
+    if (isIGST) {
+      item.igst = gstAmount.toFixed(2);
+      item.cgst = "0.00";
+      item.sgst = "0.00";
+    } else {
+      item.igst = "0.00";
+      item.cgst = (gstAmount / 2).toFixed(2);
+      item.sgst = (gstAmount / 2).toFixed(2);
+    }
+
+    const rateValue = parseFloat(item.rate) || 0;
+    item.rateGst = (rateValue + rateValue * (gstPct / 100)).toFixed(2);
+
+    item.amount = (
+      taxable +
+      (parseFloat(item.cgst) || 0) +
+      (parseFloat(item.sgst) || 0) +
+      (parseFloat(item.igst) || 0)
+    ).toFixed(2);
   };
+
+  if (
+    [
+      "qty",
+      "rate",
+      "tprAmt",
+      "schemePct",
+      "schemeAmt",
+      "cdPct",
+      "cdAmt",
+      "starAmt",
+      "gst"
+    ].includes(field)
+  ) {
+    if (field === "schemeAmt" && parseFloat(value) > 0) {
+      newItems[index].schemePct = "";
+    }
+
+    if (field === "cdAmt" && parseFloat(value) > 0) {
+      newItems[index].cdPct = "";
+    }
+
+    recalculateSalesItem(newItems[index]);
+  }
+
+  calcInvoiceSummary(newItems);
+  setInvoiceItems(newItems);
+  setActiveRow(index);
+};
 
   const deleteInvoiceItem = (index) => {
     const newItems = invoiceItems.filter((_, i) => i !== index);
@@ -2597,43 +2750,73 @@ const Dashboard = () => {
     calcInvoiceSummary(newItems);
   };
 
-  // Replace the calcInvoiceSummary function with this corrected version:
-  const calcInvoiceSummary = (currentItems) => {
-    let gross = 0, tpr = 0, scheme = 0, cd = 0, star = 0, gst = 0;
-    currentItems.forEach(item => {
-      const baseAmount = (parseFloat(item.qty) || 0) * (parseFloat(item.rate) || 0);
-      gross += baseAmount;
-      tpr += parseFloat(item.tprAmt || 0);
-      scheme += parseFloat(item.schemeAmt || 0);
-      cd += parseFloat(item.cdAmt || 0);
-      star += parseFloat(item.starAmt || 0);
+const calcInvoiceSummary = (currentItems) => {
+  let gross = 0;
+  let tpr = 0;
+  let scheme = 0;
+  let cd = 0;
+  let star = 0;
+  let cgst = 0;
+  let sgst = 0;
+  let igst = 0;
 
-      // Calculate GST amount properly (sgst + cgst)
-      const sgst = parseFloat(item.sgst) || 0;
-      const cgst = parseFloat(item.cgst) || 0;
-      gst += (sgst + cgst);
-    });
+  currentItems.forEach((item) => {
+    const baseAmount =
+      (parseFloat(item.qty) || 0) * (parseFloat(item.rate) || 0);
 
-    const taxable = gross - tpr - scheme - star - cd;
-    const net = taxable + gst;
+    gross += baseAmount;
+    tpr += parseFloat(item.tprAmt) || 0;
+    scheme += parseFloat(item.schemeAmt) || 0;
+    cd += parseFloat(item.cdAmt) || 0;
+    star += parseFloat(item.starAmt) || 0;
+    cgst += parseFloat(item.cgst) || 0;
+    sgst += parseFloat(item.sgst) || 0;
+    igst += parseFloat(item.igst) || 0;
+  });
 
-    setInvoiceSummary({
-      gross,
-      tpr,
-      scheme,
-      bottom: taxable,  // Taxable value is now shown as bottom amount
-      star,
-      cd,
-      gst,
-      net: Math.round(net * 100) / 100
-    });
-  };
+  const taxable = gross - tpr - scheme - star - cd;
+  const gst = cgst + sgst + igst;
+  const net = taxable + gst;
 
+  setInvoiceSummary({
+    gross,
+    tpr,
+    scheme,
+    bottom: taxable,
+    star,
+    cd,
+    cgst,
+    sgst,
+    igst,
+    gst,
+    cess: 0,
+    tcs: 0,
+    rounding: 0,
+    net: Math.round(net * 100) / 100
+  });
+};
   const handleInvoiceKeyDown = (e, index, field) => {
     if (e.key === 'Enter') {
       e.preventDefault();
 
-      const fields = ['product', 'units', 'qty', 'free', 'mrp', 'rate', 'tprAmt', 'schemePct', 'cdPct', 'starPct', 'gst'];
+     const fields = [
+  "product",
+  "units",
+  "qty",
+  "free",
+  "mrp",
+  "rate",
+  "tprAmt",
+  "schemePct",
+  "cdPct",
+  "starPct",
+  "taxable",
+  "gst",
+  "sgst",
+  "cgst",
+  "igst",
+  "amount"
+];
       const nextFieldIndex = fields.indexOf(field) + 1;
 
       if (nextFieldIndex < fields.length) {
@@ -2702,29 +2885,106 @@ const Dashboard = () => {
       if (unitsInput) unitsInput.focus();
     }, 50);
   };
-  const saveInvoice = () => {
-    const invoiceData = {
-      ...invoiceFormData,
-      items: invoiceItems,
-      summary: invoiceSummary,
-      amount: invoiceSummary.net,
-      partyName: invoiceFormData.party,
-      partyCode: invoiceFormData.party?.substring(0, 10),
-      branchName: invoiceFormData.area,
-      type: activeSubMenu === 'Quotation' ? 'Quotation' : 'Invoice'
-    };
-    console.log('Saving invoice:', invoiceData);
 
-    if (activeSubMenu === 'Sales' || activeSubMenu === 'Billing') {
-      saveVoucherToList('Sales', invoiceData);
-      alert('Invoice saved successfully!');
-    } else if (activeSubMenu === 'Quotation') {
-      saveVoucherToList('Quotation', invoiceData);
-      alert('Quotation saved successfully!');
-    }
-
-    closeForm();
+  // ========== DECLARATION OF saveInvoice FUNCTION BECAUSE BELOW WE ARE CALLING THIS FUNCTION ==========
+const saveVoucherToList = (type, data) => {
+  console.log(`Saving ${type}:`, data);
+  
+  const newEntry = {
+    id: editingInvoiceId || Date.now(),  // Use existing ID if editing
+    ...data,
+    savedAt: new Date().toISOString()
   };
+
+  if (type === 'Sales' || type === 'Billing' || type === 'Quotation') {
+    if (editingInvoiceId) {
+      // UPDATE existing entry
+      setSalesListData(prev => prev.map(item => 
+        item.id === editingInvoiceId ? newEntry : item
+      ));
+      alert('Invoice updated successfully!');
+    } else {
+      // ADD new entry
+      setSalesListData(prev => [...prev, newEntry]);
+      alert('Invoice saved successfully!');
+    }
+  } else if (type === 'Purchase') {
+    if (editingInvoiceId) {
+      setPurchaseListData(prev => prev.map(item => 
+        item.id === editingInvoiceId ? newEntry : item
+      ));
+      alert('Purchase updated successfully!');
+    } else {
+      setPurchaseListData(prev => [...prev, newEntry]);
+      alert('Purchase saved successfully!');
+    }
+  } else if (type === 'Credit Note') {
+    if (editingInvoiceId) {
+      setCreditNoteListData(prev => prev.map(item => 
+        item.id === editingInvoiceId ? newEntry : item
+      ));
+      alert('Credit Note updated successfully!');
+    } else {
+      setCreditNoteListData(prev => [...prev, newEntry]);
+      alert('Credit Note saved successfully!');
+    }
+  } else if (type === 'Debit Note') {
+    if (editingInvoiceId) {
+      setDebitNoteListData(prev => prev.map(item => 
+        item.id === editingInvoiceId ? newEntry : item
+      ));
+      alert('Debit Note updated successfully!');
+    } else {
+      setDebitNoteListData(prev => [...prev, newEntry]);
+      alert('Debit Note saved successfully!');
+    }
+  } else if (type === 'Create Load') {
+    if (editingInvoiceId) {
+      setCreateLoadListData(prev => prev.map(item => 
+        item.id === editingInvoiceId ? newEntry : item
+      ));
+      alert('Load updated successfully!');
+    } else {
+      setCreateLoadListData(prev => [...prev, newEntry]);
+      alert('Load created successfully!');
+    }
+  }
+  
+  // Reset editing mode after save
+  setEditingInvoiceId(null);
+  return true;
+};
+// ========== END OF ADDED FUNCTION ==========
+  const saveInvoice = () => {
+  const invoiceData = {
+    ...invoiceFormData,
+
+    billSeries: invoiceFormData.BillSeries,
+    BillSeries: invoiceFormData.BillSeries,
+    billNo: invoiceFormData.billNo,
+
+    billDate: invoiceFormData.billDate,
+    party: invoiceFormData.party,
+    partyName: invoiceFormData.party,
+    salesman: invoiceFormData.salesman,
+
+    items: invoiceItems,
+    summary: invoiceSummary,
+    amount: invoiceSummary.net,
+
+    partyCode: invoiceFormData.party?.substring(0, 10),
+    branchName: invoiceFormData.area,
+    type: activeSubMenu === 'Quotation' ? 'Quotation' : 'Invoice'
+  };
+
+  if (activeSubMenu === 'Sales' || activeSubMenu === 'Billing') {
+    saveVoucherToList('Sales', invoiceData);
+  } else if (activeSubMenu === 'Quotation') {
+    saveVoucherToList('Quotation', invoiceData);
+  }
+
+  closeForm();
+};
   const addPurchaseItem = useCallback(() => {
     const newItem = {
       id: Date.now(),
@@ -2748,7 +3008,8 @@ const Dashboard = () => {
       taxable: '',
       tax: '',
       cgst: '',
-      sgst: '',
+sgst: '',
+igst: '',
       afterDisc1: '',
       afterDisc2: '',
       afterDisc3: '',
@@ -2762,148 +3023,126 @@ const Dashboard = () => {
   }, [purchaseItems.length]);
 
   const updatePurchaseItem = (index, field, value) => {
-    const newItems = [...purchaseItems];
-    newItems[index][field] = value;
+  const newItems = [...purchaseItems];
+  newItems[index][field] = value;
 
-    // Helper function to recalculate all values for an item
-    const recalculateItem = (item) => {
-      // Get quantity and rate
-      const qty = parseFloat(item.quantity) || 0;
-      const rate = parseFloat(item.purRate) || parseFloat(item.selectedBatch?.purchaseRate) || 0;
+  const supplierAccount = otherAccounts.find(
+    (acc) =>
+      acc.accountName === purchaseFormData.supplier ||
+      acc.accountCode === purchaseFormData.supplier
+  );
 
-      // Calculate gross amount
-      const grossAmt = qty * rate;
-      item.grossAmount = grossAmt.toFixed(2);
+  const invType = (supplierAccount?.invType || 'TAXABLE').toUpperCase();
+  const taxOn = (supplierAccount?.taxOn || 'SRATE').toUpperCase();
 
-      // Apply disc1
-      let afterDisc1 = grossAmt;
-      if (parseFloat(item.disc1)) {
-        const disc1Amt = grossAmt * (parseFloat(item.disc1) / 100);
-        afterDisc1 = grossAmt - disc1Amt;
-      }
-      item.afterDisc1 = afterDisc1.toFixed(2);
+  const recalculateItem = (item) => {
+    const qty = parseFloat(item.quantity) || 0;
+    const taxPercentage = parseFloat(item.tax) || 0;
 
-      // Apply disc2
-      let afterDisc2 = afterDisc1;
-      if (parseFloat(item.disc2)) {
-        const disc2Amt = afterDisc1 * (parseFloat(item.disc2) / 100);
-        afterDisc2 = afterDisc1 - disc2Amt;
-      }
-      item.afterDisc2 = afterDisc2.toFixed(2);
+    const purRate = parseFloat(item.purRate) || parseFloat(item.selectedBatch?.purchaseRate) || 0;
+    const mrp = parseFloat(item.mrp) || 0;
 
-      // Apply disc3
-      let afterDisc3 = afterDisc2;
-      if (parseFloat(item.disc3)) {
-        const disc3Amt = afterDisc2 * (parseFloat(item.disc3) / 100);
-        afterDisc3 = afterDisc2 - disc3Amt;
-      }
-      item.afterDisc3 = afterDisc3.toFixed(2);
+    const baseRate = taxOn === 'MRP' ? mrp : purRate;
+    const grossAmt = qty * baseRate;
 
-      // Taxable amount is the amount after all discounts
-      const taxableVal = afterDisc3;
-      item.taxable = taxableVal.toFixed(2);
+    item.grossAmount = grossAmt.toFixed(2);
 
-      // Calculate CGST and SGST based on taxable amount and GST percentage
-      const taxPercentage = parseFloat(item.tax) || 0;
-      if (taxPercentage > 0) {
-        const totalTaxAmt = taxableVal * (taxPercentage / 100);
-        const cgstAmt = totalTaxAmt / 2;
-        const sgstAmt = totalTaxAmt / 2;
-        item.cgst = cgstAmt.toFixed(2);
-        item.sgst = sgstAmt.toFixed(2);
-      } else {
-        item.cgst = (0).toFixed(2);
-        item.sgst = (0).toFixed(2);
-      }
+    let afterDisc1 = grossAmt;
+    if (parseFloat(item.disc1)) afterDisc1 -= grossAmt * (parseFloat(item.disc1) / 100);
+    item.afterDisc1 = afterDisc1.toFixed(2);
 
-      // Calculate final amount = taxable + CGST + SGST
-      const amount = taxableVal + (parseFloat(item.cgst) || 0) + (parseFloat(item.sgst) || 0);
-      item.amount = amount.toFixed(2);
-    };
+    let afterDisc2 = afterDisc1;
+    if (parseFloat(item.disc2)) afterDisc2 -= afterDisc1 * (parseFloat(item.disc2) / 100);
+    item.afterDisc2 = afterDisc2.toFixed(2);
 
-    // Recalculate whenever any relevant field changes
-    if (['quantity', 'purRate', 'tax', 'disc1', 'disc2', 'disc3'].includes(field)) {
-      recalculateItem(newItems[index]);
+    let afterDisc3 = afterDisc2;
+    if (parseFloat(item.disc3)) afterDisc3 -= afterDisc2 * (parseFloat(item.disc3) / 100);
+    item.afterDisc3 = afterDisc3.toFixed(2);
+
+    const taxableVal = afterDisc3;
+    item.taxable = taxableVal.toFixed(2);
+
+    const totalTaxAmt = taxableVal * (taxPercentage / 100);
+
+    if (invType === 'CST') {
+      item.igst = totalTaxAmt.toFixed(2);
+      item.cgst = '0.00';
+      item.sgst = '0.00';
+    } else {
+      item.igst = '0.00';
+      item.cgst = (totalTaxAmt / 2).toFixed(2);
+      item.sgst = (totalTaxAmt / 2).toFixed(2);
     }
 
-    setPurchaseItems(newItems);
-    setPurchaseActiveRow(index);
-
-    // ADD THIS LINE - Calculate summary after updating items
-    calcPurchaseSummary();
+    item.amount = (
+      taxableVal +
+      (parseFloat(item.cgst) || 0) +
+      (parseFloat(item.sgst) || 0) +
+      (parseFloat(item.igst) || 0)
+    ).toFixed(2);
   };
-  // Add this function - place it after the updatePurchaseItem function
-  const calcPurchaseSummary = useCallback(() => {
-    let totalMrp = 0;
-    let totalGrossAmount = 0;
-    let totalTaxable = 0;
-    let totalCgst = 0;
-    let totalSgst = 0;
 
-    purchaseItems.forEach(item => {
-      const qty = parseFloat(item.quantity) || 0;
-      const mrp = parseFloat(item.mrp) || 0;
-      const rate = parseFloat(item.purRate) || 0;
+  if (['quantity', 'purRate', 'mrp', 'tax', 'disc1', 'disc2', 'disc3'].includes(field)) {
+    recalculateItem(newItems[index]);
+  }
 
-      totalMrp += qty * mrp;
-      totalGrossAmount += qty * rate;
+  setPurchaseItems(newItems);
+  setPurchaseActiveRow(index);
+  calcPurchaseSummary(newItems);
+};
+ const calcPurchaseSummary = useCallback((items = purchaseItems) => {
+  let totalMrp = 0;
+  let totalGrossAmount = 0;
+  let totalTaxable = 0;
+  let totalCgst = 0;
+  let totalSgst = 0;
+  let totalIgst = 0;
 
-      const taxable = parseFloat(item.taxable) || 0;
-      const cgst = parseFloat(item.cgst) || 0;
-      const sgst = parseFloat(item.sgst) || 0;
+  items.forEach(item => {
+    const qty = parseFloat(item.quantity) || 0;
+    const mrp = parseFloat(item.mrp) || 0;
+    const rate = parseFloat(item.purRate) || 0;
 
-      totalTaxable += taxable;
-      totalCgst += cgst;
-      totalSgst += sgst;
-    });
+    totalMrp += qty * mrp;
+    totalGrossAmount += qty * rate;
+    totalTaxable += parseFloat(item.taxable) || 0;
+    totalCgst += parseFloat(item.cgst) || 0;
+    totalSgst += parseFloat(item.sgst) || 0;
+    totalIgst += parseFloat(item.igst) || 0;
+  });
 
-    // Calculate header-level discounts (these are separate from item-level discounts)
-    const tcbPercent = parseFloat(purchaseFormData.tcbPercent) || 0;
-    const diBc1 = parseFloat(purchaseFormData.diBc1) || 0;
-    const diBc2 = parseFloat(purchaseFormData.diBc2) || 0;
-    const diBc3 = parseFloat(purchaseFormData.diBc3) || 0;
-    const rounding = parseFloat(purchaseFormData.rounding) || 0;
+  const tcbPercent = parseFloat(purchaseFormData.tcbPercent) || 0;
+  const diBc1 = parseFloat(purchaseFormData.diBc1) || 0;
+  const diBc2 = parseFloat(purchaseFormData.diBc2) || 0;
+  const diBc3 = parseFloat(purchaseFormData.diBc3) || 0;
+  const rounding = parseFloat(purchaseFormData.rounding) || 0;
 
-    // Calculate TCB Amount on MRP Total
-    const tcbAmount = totalMrp * tcbPercent / 100;
+  const tcbAmount = totalMrp * tcbPercent / 100;
+  const afterDiBc1 = totalMrp - diBc1;
+  const groBsAmt = afterDiBc1 - tcbAmount;
+  const afterDiBc2 = groBsAmt - diBc2;
+  const qbtAmt = totalTaxable + totalCgst + totalSgst + totalIgst;
+  const afterDiBc3 = qbtAmt - diBc3;
+  const ceBsAmt = afterDiBc3;
+  const netAmt = ceBsAmt + rounding;
 
-    // After DISC1 (direct discount)
-    const afterDiBc1 = totalMrp - diBc1;
-
-    // Gross Amount = After DISC1 - TCB Amount
-    const groBsAmt = afterDiBc1 - tcbAmount;
-
-    // After DISC2
-    const afterDiBc2 = groBsAmt - diBc2;
-
-    // QBT Amount (GST on taxable value) - this should be total taxable from items
-    // But since the purchase items already include GST in their calculations,
-    // we need to calculate QBT Amount properly
-    const qbtAmt = totalTaxable;
-
-    // After DISC3
-    const afterDiBc3 = qbtAmt - diBc3;
-
-    // CEBS Amount
-    const ceBsAmt = afterDiBc3;
-
-    // Net Amount
-    const netAmt = ceBsAmt + rounding;
-
-    setPurchaseFormData(prev => ({
-      ...prev,
-      mrpTotal: totalMrp.toFixed(2),
-      tcbAmount: tcbAmount.toFixed(2),
-      afterDiBc1: afterDiBc1.toFixed(2),
-      groBsAmt: groBsAmt.toFixed(2),
-      afterDiBc2: afterDiBc2.toFixed(2),
-      qbtAmt: qbtAmt.toFixed(2),
-      afterDiBc3: afterDiBc3.toFixed(2),
-      ceBsAmt: ceBsAmt.toFixed(2),
-      netAmt: netAmt.toFixed(2)
-    }));
-  }, [purchaseItems, purchaseFormData.tcbPercent, purchaseFormData.diBc1, purchaseFormData.diBc2, purchaseFormData.diBc3, purchaseFormData.rounding]);
-
+  setPurchaseFormData(prev => ({
+    ...prev,
+    mrpTotal: totalMrp.toFixed(2),
+    grossAmount: totalGrossAmount.toFixed(2),
+    tcbAmount: tcbAmount.toFixed(2),
+    afterDiBc1: afterDiBc1.toFixed(2),
+    groBsAmt: groBsAmt.toFixed(2),
+    afterDiBc2: afterDiBc2.toFixed(2),
+    qbtAmt: qbtAmt.toFixed(2),
+    afterDiBc3: afterDiBc3.toFixed(2),
+    ceBsAmt: ceBsAmt.toFixed(2),
+    cgstAmt: totalCgst.toFixed(2),
+    sgstAmt: totalSgst.toFixed(2),
+    igstAmt: totalIgst.toFixed(2),
+    netAmt: netAmt.toFixed(2)
+  }));
+}, [purchaseItems, purchaseFormData]);
   const deletePurchaseItem = (index) => {
     const newItems = purchaseItems.filter((_, i) => i !== index);
     newItems.forEach((item, i) => { item.sr = i + 1; });
@@ -2912,20 +3151,19 @@ const Dashboard = () => {
     // ADD THIS LINE - Calculate summary after deleting item
     calcPurchaseSummary();
   };
+const handlePurchaseInputChange = (e) => {
+  const { name, value } = e.target;
+  const cleanValue = regexInputValue(name, value);
 
-  const handlePurchaseInputChange = (e) => {
-    const { name, value } = e.target;
-    let newValue = value;
-    let updatedForm = { ...purchaseFormData, [name]: value };
+  const updatedForm = { ...purchaseFormData, [name]: cleanValue };
 
-    if (name === 'tcbPercent' || name === 'diBc1' || name === 'diBc2' || name === 'diBc3' || name === 'rounding') {
-      setPurchaseFormData(updatedForm);
-      // ADD THIS - Trigger recalculation of summary when these fields change
-      setTimeout(() => calcPurchaseSummary(), 0);
-    } else {
-      setPurchaseFormData(updatedForm);
-    }
-  };
+  if (['tcbPercent', 'diBc1', 'diBc2', 'diBc3', 'rounding'].includes(name)) {
+    setPurchaseFormData(updatedForm);
+    setTimeout(() => calcPurchaseSummary(), 0);
+  } else {
+    setPurchaseFormData(updatedForm);
+  }
+};
   const handlePurchaseKeyDown = (e, index, field) => {
     if (e.key === 'Enter') {
       e.preventDefault();
@@ -2981,51 +3219,52 @@ const Dashboard = () => {
 
   };
 
-  const handlePurchaseProductSelect = (index, product) => {
-    updatePurchaseItem(index, 'product', `${product.code} - ${product.name}`);
-    updatePurchaseItem(index, 'productId', product.id);
-    updatePurchaseItem(index, 'mrp', product.mrp || '');
-    updatePurchaseItem(index, 'purRate', product.Rate_Per_Unit || '');
-    updatePurchaseItem(index, 'tax', product.gst || '');
-    updatePurchaseItem(index, 'unitId', product.basicUnit || 'PCS');
-    updatePurchaseItem(index, 'salesRate', product.salesRate || '');
+ const handlePurchaseProductSelect = (index, product) => {
+  updatePurchaseItem(index, 'product', `${product.code} - ${product.name}`);
+  updatePurchaseItem(index, 'productId', product.id);
+  updatePurchaseItem(index, 'mrp', product.mrp || '');
+  updatePurchaseItem(index, 'purRate', product.Rate_Per_Unit || '');
+  updatePurchaseItem(index, 'tax', product.gst || '');
+  updatePurchaseItem(index, 'unitId', product.basicUnit || 'PCS');
+  updatePurchaseItem(index, 'salesRate', product.salesRate || '');
 
-    setShowPurchaseProductList(false);
-    setCurrentPurchaseProductIndex(-1);
+  setShowPurchaseProductList(false);
+  setCurrentPurchaseProductIndex(-1);
 
-    // Check if product has existing batches
-    const productBatches = batches.filter(b => b.productId === product.id);
+  // Check if product has existing batches
+  const productBatches = batches.filter(b => b.productId === product.id);
 
-    if (productBatches.length > 0) {
-      // Show existing batch modal
-      setBatchMode('existing');
-      setCurrentBatchRow(index);
-      setShowBatchModal(true);
-    } else {
-      // Show new batch modal
-      setBatchMode('new');
-      setCurrentBatchRow(index);
-      setBatchForm({
-        batchNo: '',
-        mfgDate: '',
-        expDate: '',
-        mrp: product.mrp || '',
-        purchaseRate: product.Rate_Per_Unit || '',
-        salesRate: product.salesRate || product.mrp || '',
-        stockQty: '',
-        boxPack: '1',
-        ratePerUnit: '1',
-        previousPurchaseRate: '',
-        quantity: '1'
-      });
-      setShowBatchModal(true);
-    }
+  if (productBatches.length > 0) {
+    // Show existing batch modal with proper data
+    setBatchMode('existing');
+    setCurrentBatchRow(index);
+    setExistingBatches(productBatches); // Store the batches for display
+    setShowBatchModal(true);
+  } else {
+    // Show new batch modal
+    setBatchMode('new');
+    setCurrentBatchRow(index);
+    setBatchForm({
+      batchNo: '',
+      mfgDate: '',
+      expDate: '',
+      mrp: product.mrp || '',
+      purchaseRate: product.Rate_Per_Unit || '',
+      salesRate: product.salesRate || product.mrp || '',
+      stockQty: '',
+      boxPack: '1',
+      ratePerUnit: '1',
+      previousPurchaseRate: '',
+      quantity: '1'
+    });
+    setShowBatchModal(true);
+  }
 
-    setTimeout(() => {
-      const qtyInput = document.querySelector(`[data-purchase-field="quantity"][data-purchase-index="${index}"]`);
-      if (qtyInput) qtyInput.focus();
-    }, 50);
-  };
+  setTimeout(() => {
+    const qtyInput = document.querySelector(`[data-purchase-field="quantity"][data-purchase-index="${index}"]`);
+    if (qtyInput) qtyInput.focus();
+  }, 50);
+};
   const openBatchModal = (index) => {
     console.log("BATCH BUTTON CLICKED");
     setCurrentBatchRow(index);
@@ -3073,30 +3312,35 @@ const Dashboard = () => {
     setShowBatchModal(false);
   };
 
-  // Update savePurchase function
   const savePurchase = () => {
-    const purchaseData = {
-      ...purchaseFormData,
-      items: purchaseItems,
-      amount: purchaseFormData.netAmt,
-      partyName: purchaseFormData.supplier,
-      partyCode: purchaseFormData.supplier?.substring(0, 10),
-      branchName: purchaseFormData.storageLocation
-    };
-    console.log('Saving purchase:', purchaseData);
-
-    // Add to purchase list
-    saveVoucherToList('Purchase', purchaseData);
-
-    alert('Purchase saved successfully!');
-    closeForm();
+  const selectedSupplier = otherAccounts.find(acc => 
+    acc.accountName === purchaseFormData.supplier && 
+    acc.accountGroup === 'SUNDRY CREDITORS'
+  );
+  
+  const purchaseData = {
+    ...purchaseFormData,
+    items: purchaseItems,
+    amount: purchaseFormData.netAmt,
+    partyName: purchaseFormData.supplier,
+    partyCode: selectedSupplier?.accountCode || purchaseFormData.supplier?.substring(0, 10),
+    partyGroup: 'SUNDRY CREDITORS', // Add this to identify supplier type
+    branchName: purchaseFormData.storageLocation
   };
+  console.log('Saving purchase:', purchaseData);
 
+  // Add to purchase list
+  saveVoucherToList('Purchase', purchaseData);
 
-  // ==================== CREDIT NOTE FUNCTIONS ====================
-  const handleCreditNoteInputChange = (e) => {
-    setCreditNoteFormData({ ...creditNoteFormData, [e.target.name]: e.target.value });
-  };
+  alert('Purchase saved successfully!');
+  closeForm();
+};
+
+ 
+const handleCreditNoteInputChange = (e) => {
+  const { name, value } = e.target;
+  setCreditNoteFormData({ ...creditNoteFormData, [name]: regexInputValue(name, value) });
+};
 
   const addCreditNoteItem = useCallback(() => {
     const newItem = {
@@ -3375,10 +3619,10 @@ const Dashboard = () => {
     alert('Credit Note saved successfully!');
     closeForm();
   };
-  // ==================== DEBIT NOTE FUNCTIONS ====================
-  const handleDebitNoteInputChange = (e) => {
-    setDebitNoteFormData({ ...debitNoteFormData, [e.target.name]: e.target.value });
-  };
+ const handleDebitNoteInputChange = (e) => {
+  const { name, value } = e.target;
+  setDebitNoteFormData({ ...debitNoteFormData, [name]: regexInputValue(name, value) });
+};
 
   const addDebitNoteItem = useCallback(() => {
     const newItem = {
@@ -3643,57 +3887,232 @@ const Dashboard = () => {
     alert('Debit Note saved successfully!');
     closeForm();
   };
-  // Create Load Handlers
-  const handleCreateLoadInputChange = (e) => {
-    setCreateLoadFormData({ ...createLoadFormData, [e.target.name]: e.target.value });
+const cleanText = (v) => String(v || "").trim().toLowerCase();
+
+const pickFirst = (...values) => {
+  for (const v of values) {
+    if (v !== undefined && v !== null && String(v).trim() !== "") return v;
+  }
+  return "";
+};
+
+const getBillUniqueKey = (bill) => {
+  const h = bill.header || {};
+  return [
+    pickFirst(bill.billSeries, bill.BillSeries, h.billSeries, h.BillSeries, "INV"),
+    pickFirst(bill.billNo, bill.BillNo, h.billNo, h.BillNo),
+    pickFirst(bill.partyCode, h.partyCode, bill.partyName, h.partyName),
+    pickFirst(bill.billDate, bill.trnDate, bill.date, h.billDate, h.trnDate, h.date)
+  ].map(cleanText).join("|");
+};
+const getSelectedSalesmanText = () => {
+  const selected = Array.isArray(createLoadFormData.selectedSalesman)
+    ? createLoadFormData.selectedSalesman
+    : [];
+
+  if (!selected.length) return "Select Salesman";
+  if (selected.length === 1) return "Selected";
+  return `${selected.length} Selected`;
+};
+
+const loadCreateLoadBills = useCallback(
+  (showAlert = false, formData = createLoadFormData) => {
+    const selectedSalesmen = Array.isArray(formData.selectedSalesman)
+      ? formData.selectedSalesman
+      : [];
+
+    if (!formData.company || !selectedSalesmen.length || !formData.billFromDate || !formData.billToDate) {
+      setCreateLoadItems([]);
+      return;
+    }
+
+    const selectedSalesmanSet = new Set(selectedSalesmen.map(cleanText));
+    const selectedCompany = cleanText(formData.company);
+
+    const alreadyLoadedBillKeys = new Set(
+      (createLoadListData || [])
+        .flatMap((load) => load.items || [])
+        .map(getBillUniqueKey)
+    );
+
+    const currentLoadKeys = new Set();
+
+    const loadedBills = (salesListData || [])
+      .filter((invoice) => {
+        const header = invoice.header || {};
+
+        const billDate = pickFirst(invoice.billDate, invoice.trnDate, invoice.date, header.billDate, header.trnDate, header.date);
+        const company = cleanText(pickFirst(invoice.company, header.company));
+
+        const invoiceSalesmanValues = [
+          invoice.salesman,
+          invoice.salesmanName,
+          invoice.salesmanCode,
+          header.salesman,
+          header.salesmanName,
+          header.salesmanCode
+        ].map(cleanText).filter(Boolean);
+
+        const billKey = getBillUniqueKey(invoice);
+
+        if (alreadyLoadedBillKeys.has(billKey)) return false;
+        if (currentLoadKeys.has(billKey)) return false;
+
+        const salesmanMatched = invoiceSalesmanValues.some((v) =>
+          selectedSalesmanSet.has(v)
+        );
+
+        const isValid =
+          company === selectedCompany &&
+          salesmanMatched &&
+          billDate >= formData.billFromDate &&
+          billDate <= formData.billToDate;
+
+        if (isValid) currentLoadKeys.add(billKey);
+        return isValid;
+      })
+      .map((invoice, index) => {
+        const header = invoice.header || {};
+        const summary = invoice.summary || {};
+
+        return {
+          id: getBillUniqueKey(invoice),
+          sr: index + 1,
+          selected: true,
+          partyCode: pickFirst(invoice.partyCode, header.partyCode),
+          partyName: pickFirst(invoice.partyName, invoice.party, header.partyName, header.party),
+          billSeries: pickFirst(invoice.billSeries, invoice.BillSeries, header.billSeries, header.BillSeries, "INV"),
+          billNo: pickFirst(invoice.billNo, invoice.BillNo, header.billNo, header.BillNo),
+          billDate: pickFirst(invoice.billDate, invoice.trnDate, invoice.date, header.billDate, header.trnDate, header.date),
+          salesman: pickFirst(invoice.salesman, invoice.salesmanName, invoice.salesmanCode, header.salesman, header.salesmanName, header.salesmanCode),
+          area: pickFirst(invoice.area, invoice.areaName, header.area, header.areaName, invoice.branchName),
+          amount: Number(pickFirst(invoice.amount, invoice.netAmount, invoice.billAmount, summary.net, summary.netAmount)) || 0
+        };
+      });
+
+    setCreateLoadItems(loadedBills);
+
+    if (showAlert && !loadedBills.length) {
+      alert("No new bills found.");
+    }
+  },
+  [createLoadFormData, salesListData, createLoadListData]
+);
+
+useEffect(() => {
+  const hasSalesman =
+    Array.isArray(createLoadFormData.selectedSalesman) &&
+    createLoadFormData.selectedSalesman.length > 0;
+
+  if (
+    createLoadFormData.company &&
+    hasSalesman &&
+    createLoadFormData.billFromDate &&
+    createLoadFormData.billToDate &&
+    createLoadDateRangeChanged
+  ) {
+    loadCreateLoadBills(false, createLoadFormData);
+  } else {
+    setCreateLoadItems([]);
+  }
+}, [
+  createLoadFormData.company,
+  createLoadFormData.selectedSalesman,
+  createLoadFormData.billFromDate,
+  createLoadFormData.billToDate,
+  createLoadDateRangeChanged,
+  salesListData,
+  createLoadListData,
+  loadCreateLoadBills
+]);
+const handleCreateLoadInputChange = (e) => {
+  const { name, value } = e.target;
+  const cleanValue = regexInputValue(name, value);
+
+  const updatedForm = {
+    ...createLoadFormData,
+    [name]: cleanValue
   };
 
-  const addCreateLoadItem = () => {
-    const newItem = {
-      id: Date.now(),
-      sr: createLoadItems.length + 1,
-      partyCode: '',
-      partyName: '',
-      billSeries: '',
-      billNo: '',
-      billDate: '',
-      salesman: '',
-      area: '',
-      amount: ''
-    };
-    setCreateLoadItems([...createLoadItems, newItem]);
-  };
+  setCreateLoadFormData(updatedForm);
 
-  const updateCreateLoadItem = (index, field, value) => {
-    const newItems = [...createLoadItems];
-    newItems[index][field] = value;
-    setCreateLoadItems(newItems);
-  };
+  if (name === "company") {
+    setCreateLoadItems([]);
+    setCreateLoadDateRangeChanged(false);
+    return;
+  }
+
+  if (name === "billFromDate" || name === "billToDate") {
+    setCreateLoadDateRangeChanged(true);
+  }
+};
+  
+const updateCreateLoadItem = (index, field, value) => {
+  const newItems = [...createLoadItems];
+  newItems[index][field] = value;
+  setCreateLoadItems(newItems);
+};
 
   const deleteCreateLoadItem = (index) => {
     const newItems = createLoadItems.filter((_, i) => i !== index);
     newItems.forEach((item, i) => { item.sr = i + 1; });
     setCreateLoadItems(newItems);
   };
-  const saveCreateLoad = () => {
-    // Calculate total amount from items
-    const totalAmount = createLoadItems.reduce((sum, item) => sum + (parseFloat(item.amount) || 0), 0);
+ const saveCreateLoad = () => {
+  if (!createLoadFormData.loadSeries || !createLoadFormData.loadNo) {
+    alert("Load Series and Load No are required");
+    return;
+  }
 
-    const createLoadData = {
-      ...createLoadFormData,
-      items: createLoadItems,
-      amount: totalAmount,
-      totalAmount: totalAmount,
-      status: 'Pending'
-    };
-    console.log('Saving create load:', createLoadData);
+  const selectedItems = createLoadItems.filter((item) => item.selected !== false);
 
-    // Add to create load list
-    saveVoucherToList('Create Load', createLoadData);
+  if (!selectedItems.length) {
+    alert("Please select at least one bill to create load");
+    return;
+  }
 
-    alert('Load created successfully!');
-    closeForm();
-  };
+  const selectedSalesmen = Array.isArray(createLoadFormData.selectedSalesman)
+    ? createLoadFormData.selectedSalesman
+    : [];
+
+  const salesmanDisplayName =
+    selectedSalesmen.length > 1
+      ? "MIX"
+      : selectedSalesmen[0] || "";
+
+  const totalAmount = selectedItems.reduce(
+    (sum, item) => sum + (parseFloat(item.amount || item.billAmount) || 0),
+    0
+  );
+
+ const createLoadData = {
+  id: Date.now(),
+  ...createLoadFormData,
+
+  loadSeries: createLoadFormData.loadSeries,
+  loadNo: createLoadFormData.loadNo,
+  loadNumber: createLoadFormData.loadNo,
+
+  selectedSalesman: salesmanDisplayName,
+  selectedSalesmanList: selectedSalesmen,
+
+  items: selectedItems.map((item, index) => ({
+    ...item,
+    sr: index + 1,
+    loadSeries: createLoadFormData.loadSeries,
+    loadNo: createLoadFormData.loadNo,
+    loadNumber: createLoadFormData.loadNo
+  })),
+
+  amount: totalAmount,
+  totalAmount,
+  status: "Pending"
+};
+  setCreateLoadListData((prev) => [...prev, createLoadData]);
+
+  alert("Load created successfully!");
+  closeForm();
+};
   // Filter handler
   const handleFilterChange = (masterType, value) => {
     setFilters({ ...filters, [masterType]: value });
@@ -3800,10 +4219,10 @@ const Dashboard = () => {
   const handleMenuClick = (menuKey) => {
     setActiveMenu(activeMenu === menuKey ? null : menuKey);
   };
-  // Print Load Handlers
-  const handlePrintLoadInputChange = (e) => {
-    setPrintLoadFormData({ ...printLoadFormData, [e.target.name]: e.target.value });
-  };
+const handlePrintLoadInputChange = (e) => {
+  const { name, value } = e.target;
+  setPrintLoadFormData({ ...printLoadFormData, [name]: regexInputValue(name, value) });
+};
 
   const handlePrintLoadSubmit = (e) => {
     e.preventDefault();
@@ -4428,60 +4847,34 @@ const Dashboard = () => {
       return;
     }
 
+
     // Inside handleSubMenuClick function, update the Settle Load case:
 
-    if (item === 'Settle Load') {
-      // Open the settle load form directly
-      setActiveSubMenu(item);
-      setOpenFormFor(item);
-      setShowSettleLoad(true);
+  if (item === "Settle Load") {
+  setActiveSubMenu(item);
+  setOpenFormFor(item);
+  setShowSettleLoad(true);
 
-      // Load dummy data or existing data
-      if (settleLoadDummyData[0] && settleLoadDummyData[0].items) {
-        const transformedItems = settleLoadDummyData[0].items.map((item, index) => ({
-          id: item.id || Date.now() + index,
-          sr: index + 1,
-          adjust: item.adjust || 'N',
-          pending: item.pending || 'N',
-          cancel: item.cancel || 'N',
-          receiptSeries: item.receiptSeries || '',
-          receiptNo: item.receiptNo || '',
-          status: item.status || 'Pending',
-          billType: item.billType || 'Credit',
-          billDate: item.billDate || settleLoadDummyData[0].loadDate,
-          billSeries: item.billSeries || '',
-          billNo: item.billNo || '',
-          partyCode: item.partyCode || '',
-          partyName: item.partyName || '',
-          billAmount: parseFloat(item.billAmount) || 0,
-          receiptAmount: parseFloat(item.receiptAmount) || 0,
-          chequeNo: item.chequeNo || '',
-          chequeDate: item.chequeDate || '',
-          bankName: item.bankName || '',
-          receiptMode: item.receiptMode || ''
-        }));
-        setSettleLoadItems(transformedItems);
-        setOriginalSettleLoadItems(JSON.parse(JSON.stringify(transformedItems))); // Store deep copy for search reset
-        calculateSettleLoadSummary(transformedItems);
-      } else {
-        setSettleLoadItems([]);
-        setOriginalSettleLoadItems([]);
-      }
+  setSettleLoadFormData({
+    loadSeries: "",
+    loadNo: "",
+    loadDate: new Date().toISOString().split("T")[0],
+    settleLoadDate: new Date().toISOString().split("T")[0],
+    narration: ""
+  });
 
-      setSettleLoadFormData({
-        loadNo: settleLoadDummyData[0]?.loadNo || '',
-        loadDate: settleLoadDummyData[0]?.loadDate || new Date().toISOString().split('T')[0],
-        settleLoadDate: new Date().toISOString().split('T')[0],
-        narration: settleLoadDummyData[0]?.narration || ''
-      });
+  setSettleLoadData(null);
+  setSettleLoadItems([]);
+  setOriginalSettleLoadItems([]);
+  calculateSettleLoadSummary([]);
 
-      setSettleLoadOptions({
-        loadLock: false,
-        report: false
-      });
-      return;
-    }
+  setSettleLoadOptions({
+    loadLock: false,
+    report: false
+  });
 
+  return;
+}
     // For all master items - show message to click plus button
     if (item !== 'Billing' && item !== 'Quotation' && item !== 'Create Load' &&
       item !== 'Purchase' && item !== 'Credit Note' && item !== 'Debit Note' &&
@@ -4495,6 +4888,7 @@ const Dashboard = () => {
     if (e) e.stopPropagation();
 
     // Reset ALL list views FIRST
+     setEditingInvoiceId(null);
     setShowSalesList(false);
     setShowPurchaseList(false);
     setShowCreditNoteList(false);
@@ -4625,7 +5019,7 @@ const Dashboard = () => {
         company: '',
         deliverBoy: '',
         selectedSalesman: '',
-        billFromDate: new Date().toISOString().split('T')[0],
+        billFromDate: getCurrentYearAprilFirst(),
         billToDate: new Date().toISOString().split('T')[0],
         narration: '',
         deliveryBy: ''
@@ -4796,11 +5190,12 @@ const Dashboard = () => {
     }
   };
   const closeForm = () => {
-    setOpenFormFor(null);
-    setEditGstId(null);
-    setEditSalesmanId(null);
-    setEditGodownId(null);
-  };
+  setOpenFormFor(null);
+  setEditGstId(null);
+  setEditSalesmanId(null);
+  setEditGodownId(null);
+  setEditingInvoiceId(null);  // ADD THIS LINE
+};
 
   useEffect(() => {
     if (activeSubMenu === 'Billing' && invoiceItems.length === 0) {
@@ -4833,10 +5228,10 @@ const Dashboard = () => {
     window.removeEventListener("openSettleLoad", handleOpenSettleLoad);
   };
 }, []);
-  // GST Master Handlers
-  const handleGstInput = (e) => {
-    setGstForm({ ...gstForm, [e.target.name]: e.target.value });
-  };
+ const handleGstInput = (e) => {
+  const { name, value } = e.target;
+  setGstForm({ ...gstForm, [name]: regexInputValue(name, value) });
+};
   // Add this useEffect to set Dashboard as default when component mounts
   useEffect(() => {
     // Set Dashboard as default active view on login
@@ -4881,29 +5276,52 @@ const Dashboard = () => {
     }
   };
 
-  // Salesman Master Handlers
-  const handleSalesmanInput = (e) => {
-    setSalesmanForm({ ...salesmanForm, [e.target.name]: e.target.value });
-  };
+const handleSalesmanInput = (e) => {
+  const { name, value } = e.target;
+  setSalesmanForm({ ...salesmanForm, [name]: regexInputValue(name, value) });
+};
 
   const saveSalesman = (e) => {
-    e.preventDefault();
-    if (!salesmanForm.code || !salesmanForm.name) return alert('Code and Name required');
+  e.preventDefault();
 
-    if (editSalesmanId) {
-      setSalesmen(salesmen.map(sm =>
-        sm.id === editSalesmanId
-          ? { ...sm, ...salesmanForm }
-          : sm
-      ));
-      setEditSalesmanId(null);
-    } else {
-      const newId = Math.max(...salesmen.map(s => s.id), 0) + 1;
-      setSalesmen([...salesmen, { id: newId, ...salesmanForm }]);
-    }
-    setSalesmanForm({ code: '', name: '', type: 'SALESMAN', address: '', town: '', pinCode: '', state: '', country: '', phoneNo: '', mobileNo: '', emailId: '', dateOfBirth: '', qualification: '', reference: '', imeiNo: '' });
-    closeForm();
-  };
+  if (!validateFormRegex(salesmanForm)) return;
+
+  if (!salesmanForm.code || !salesmanForm.name) {
+    return alert('Code and Name required');
+  }
+
+  if (editSalesmanId) {
+    setSalesmen(salesmen.map(sm =>
+      sm.id === editSalesmanId
+        ? { ...sm, ...salesmanForm }
+        : sm
+    ));
+    setEditSalesmanId(null);
+  } else {
+    const newId = Math.max(...salesmen.map(s => s.id), 0) + 1;
+    setSalesmen([...salesmen, { id: newId, ...salesmanForm }]);
+  }
+
+  setSalesmanForm({
+    code: '',
+    name: '',
+    type: 'SALESMAN',
+    address: '',
+    town: '',
+    pinCode: '',
+    state: '',
+    country: '',
+    phoneNo: '',
+    mobileNo: '',
+    emailId: '',
+    dateOfBirth: '',
+    qualification: '',
+    reference: '',
+    imeiNo: ''
+  });
+
+  closeForm();
+};
 
   const editSalesman = (salesman) => {
     setEditSalesmanId(salesman.id);
@@ -5012,10 +5430,10 @@ const Dashboard = () => {
     }
   };
 
-  const handleCompanyInput = (e) => {
-    setCompanyForm({ ...companyForm, [e.target.name]: e.target.value });
-  };
-
+const handleCompanyInput = (e) => {
+  const { name, value } = e.target;
+  setCompanyForm({ ...companyForm, [name]: regexInputValue(name, value) });
+};
   const saveCompany = (e) => {
     e.preventDefault();
     if (!companyForm.code || !companyForm.name) return alert('Code and Name required');
@@ -5028,10 +5446,13 @@ const Dashboard = () => {
     setCompanies(companies.filter(c => c.id !== id));
   };
 
-  const handleProductInput = (e) => {
-    const { name, value, type, checked } = e.target;
-    setProductForm({ ...productForm, [name]: type === 'checkbox' ? checked : value });
-  };
+ const handleProductInput = (e) => {
+  const { name, value, type, checked } = e.target;
+  setProductForm({
+    ...productForm,
+    [name]: type === 'checkbox' ? checked : regexInputValue(name, value)
+  });
+};
 
   const saveProduct = (e) => {
     e.preventDefault();
@@ -5050,118 +5471,135 @@ const Dashboard = () => {
     setProducts(products.filter(p => p.id !== id));
   };
 
-  // Account Handlers
-  const handleAccountInput = (e) => {
-    const { name, value, type, checked } = e.target;
-    setAccountForm({ ...accountForm, [name]: type === 'checkbox' ? checked : value });
-  };
+ const handleAccountInput = (e) => {
+  const { name, value, type, checked } = e.target;
+  setAccountForm({
+    ...accountForm,
+    [name]: type === 'checkbox' ? checked : regexInputValue(name, value)
+  });
+};
+const saveAccount = (e) => {
+  e.preventDefault();
 
-  const saveAccount = (e) => {
-    e.preventDefault();
-    if (!accountForm.accountCode || !accountForm.accountName) return alert('Account Code and Name required');
-    setAccounts([...accounts, { id: Date.now(), ...accountForm }]);
-    setAccountForm({
-      accountCode: '',
-      accountName: '',
-      address: '',
-      town: 'Pune',
-      state: 'MAHARASHTRA',
-      pinCode: '',
-      phoneNo: '',
-      mobileNo: '',
-      emailId: '',
-      tinNo: '',
-      openingBal: '0.00',
-      openingBalType: 'Dr',
-      dlNo1: '',
-      dlExp1: '',
-      dlNo2: '',
-      dlExp2: '',
-      birthDate: '',
-      contactPerson: '',
-      commonCode: '',
-      commonName: '',
-      billType: 'CREDIT',
-      invType: 'TAXABLE',
-      taxOn: 'SRATE',
-      tradeDisc: 'YES',
-      tradePercent: '0.00',
-      creditDays: '0',
-      creditBills: '0',
-      lockDays: '0',
-      creditAmt: '0.00',
-      weeklyOff: 'NONE',
-      blackListed: 'NO',
-      distKm: '0.00',
-      closeTime: '',
-      seqNo: '0',
-      panNo: '',
-      foodLicense: '',
-      gstNo: '',
-      billToAdd1: '',
-      tcsPercent: '0.0000',
-      tanNo: '',
-      gstType: 'Unregistered',
-      gstDate: '',
-      add2: '',
-      gstClsDate: '',
-      allowInPurchase: 'N'
-    });
-    closeForm();
-  };
+  if (!validateFormRegex(accountForm)) return;
+
+  if (!accountForm.accountCode || !accountForm.accountName) {
+    return alert('Account Code and Name required');
+  }
+
+  setAccounts([...accounts, { id: Date.now(), ...accountForm }]);
+
+  setAccountForm({
+    accountCode: '',
+    accountName: '',
+    address: '',
+    town: 'Pune',
+    state: 'MAHARASHTRA',
+    pinCode: '',
+    phoneNo: '',
+    mobileNo: '',
+    emailId: '',
+    tinNo: '',
+    openingBal: '0.00',
+    openingBalType: 'Dr',
+    dlNo1: '',
+    dlExp1: '',
+    dlNo2: '',
+    dlExp2: '',
+    birthDate: '',
+    contactPerson: '',
+    commonCode: '',
+    commonName: '',
+    billType: 'CREDIT',
+    invType: 'TAXABLE',
+    taxOn: 'SRATE',
+    tradeDisc: 'YES',
+    tradePercent: '0.00',
+    creditDays: '0',
+    creditBills: '0',
+    lockDays: '0',
+    creditAmt: '0.00',
+    weeklyOff: 'NONE',
+    blackListed: 'NO',
+    distKm: '0.00',
+    closeTime: '',
+    seqNo: '0',
+    panNo: '',
+    foodLicense: '',
+    gstNo: '',
+    billToAdd1: '',
+    tcsPercent: '0.0000',
+    tanNo: '',
+    gstType: 'Unregistered',
+    gstDate: '',
+    add2: '',
+    gstClsDate: '',
+    allowInPurchase: 'N'
+  });
+
+  closeForm();
+};
 
   const deleteAccount = (id) => {
     setAccounts(accounts.filter(a => a.id !== id));
   };
 
-  // Other Account Handlers
   const handleOtherAccountInput = (e) => {
-    const { name, value } = e.target;
-    setOtherAccountForm({ ...otherAccountForm, [name]: value });
-  };
+  const { name, value } = e.target;
+  setOtherAccountForm({ ...otherAccountForm, [name]: regexInputValue(name, value) });
+};
+const saveOtherAccount = (e) => {
+  e.preventDefault();
 
-  const saveOtherAccount = (e) => {
-    e.preventDefault();
-    if (!otherAccountForm.accountCode || !otherAccountForm.accountName) return alert('Account Code and Name required');
-    setOtherAccounts([...otherAccounts, { id: Date.now(), ...otherAccountForm }]);
-    setOtherAccountForm({
-      accountCode: '',
-      accountName: '',
-      accountGroup: 'INCOMES DIRECT',
-      address: '',
-      town: '',
-      state: '',
-      country: '',
-      pinCode: '',
-      phoneNo: '',
-      mobileNo: '',
-      emailId: '',
-      tinNo: '',
-      openingBal: '0.00',
-      openingBalType: 'Dr',
-      dlNo1: '',
-      dlExp1: '',
-      dlNo2: '',
-      dlExp2: '',
-      invType: 'CST',
-      taxOn: 'SRATE',
-      commonCode: '',
-      commonName: '',
-      panNo: '',
-      foodLicense: '',
-      gstNo: '',
-      billToAdd1: '',
-      remark: '',
-      tcsPercent: '',
-      tanNo: '',
-      gstType: 'Unregistered',
-      gstDate: '',
-      add2: '',
-      gstClsDate: ''
-    });
-    closeForm();
-  };
+  if (!validateFormRegex(otherAccountForm)) return;
 
+  if (!otherAccountForm.accountCode || !otherAccountForm.accountName) {
+    return alert('Account Code and Name required');
+  }
+
+  setOtherAccounts([...otherAccounts, { id: Date.now(), ...otherAccountForm }]);
+
+ setOtherAccountForm({
+  accountCode: '',
+  accountName: '',
+  accountGroup: 'INCOMES DIRECT',
+  bankAccountNo: '',
+  ifscCode: '',
+  branchName: '',
+  address: '',
+  town: '',
+  state: '',
+  country: '',
+  pinCode: '',
+  phoneNo: '',
+  mobileNo: '',
+  emailId: '',
+  tinNo: '',
+  openingBal: '0.00',
+  openingBalType: 'Dr',
+  dlNo1: '',
+  dlExp1: '',
+  dlNo2: '',
+  dlExp2: '',
+  invType: 'TAXABLE',
+  taxOn: 'SRATE',
+  commonCode: '',
+  commonName: '',
+  panNo: '',
+  foodLicense: '',
+  gstNo: '',
+  billToAdd1: '',
+  remark: '',
+  tcsPercent: '',
+  tanNo: '',
+  gstType: 'Unregistered',
+  gstDate: '',
+  add2: '',
+  gstClsDate: ''
+});
+
+  closeForm();
+};
   const deleteOtherAccount = (id) => {
     setOtherAccounts(otherAccounts.filter(oa => oa.id !== id));
   };
@@ -5572,367 +6010,1100 @@ const Dashboard = () => {
       </div>
     );
   };
-  const renderVoucherList = (title, data, columns) => {
-    const standardColumns = [
-      { key: 'date', label: 'Date' },
-      { key: 'billSeries', label: 'Bill Series' },
-      { key: 'billNumber', label: 'Bill Number' },
-      { key: 'billType', label: 'Bill Type' },
-      { key: 'partyCode', label: 'Party Code' },
-      { key: 'partyName', label: 'Party Name' },
-      { key: 'branchName', label: 'Branch Name' },
-      { key: 'amount', label: 'Amount (₹)' },
-      { key: 'loadSeries', label: 'Load Series' },
-      { key: 'loadNumber', label: 'Load Number' },
-      { key: 'status', label: 'Status' },
-      { key: 'actions', label: 'Actions' }
-    ];
+const renderVoucherList = (title, data, columns) => {
+  // Calculate maximum content width for each column dynamically
+  const calculateColumnWidths = (items) => {
+    const widths = {
+      date: { min: 100, max: 120 },
+      billSeries: { min: 90, max: 110 },
+      billNumber: { min: 100, max: 140 },
+      billType: { min: 80, max: 100 },
+      partyCode: { min: 110, max: 180 },
+      partyName: { min: 180, max: 350 },
+      branchName: { min: 160, max: 300 },
+      amount: { min: 120, max: 150 },
+      loadSeries: { min: 90, max: 110 },
+      loadNumber: { min: 100, max: 140 },
+      status: { min: 100, max: 120 },
+      actions: { width: 300 } // Fixed width for actions
+    };
 
-    const transformedData = data.map(item => ({
-      id: item.id,
-      date: item.billDate || item.invoiceDate || item.vDate || item.date || '-',
-      billSeries: item.billSeries || item.BillSeries || '-',
-      billNumber: item.billNo || item.invoiceNumber || item.vNo || '-',
-      billType: item.billType || '-',
-      partyCode: item.partyCode || item.supplierCode || '-',
-      partyName: item.party || item.supplier || item.partyName || '-',
-      branchName: item.branchName || item.area || item.storageLocation || '-',
-      amount: parseFloat(item.amount) || parseFloat(item.netAmt) || parseFloat(item.totalAmount) || 0,
-      loadSeries: item.loadSeries || '-',
-      loadNumber: item.loadNumber || '-',
-      status: item.status || (item.amount ? 'Pending' : 'Draft'),
-      originalItem: item
-    }));
+    // Calculate actual widths based on content
+    items.forEach(item => {
+      if (widths.date && item.date && item.date.length * 8 > widths.date.max) widths.date.max = item.date.length * 8;
+      if (widths.billSeries && item.billSeries !== '-' && item.billSeries.length * 8 > widths.billSeries.max) widths.billSeries.max = item.billSeries.length * 8;
+      if (widths.billNumber && item.billNumber !== '-' && item.billNumber.length * 8 > widths.billNumber.max) widths.billNumber.max = item.billNumber.length * 8;
+      if (widths.partyCode && item.partyCode !== '-' && item.partyCode.length * 8 > widths.partyCode.max) widths.partyCode.max = item.partyCode.length * 8;
+      if (widths.partyName && item.partyName !== '-' && item.partyName.length * 9 > widths.partyName.max) widths.partyName.max = Math.min(item.partyName.length * 9, 450);
+      if (widths.branchName && item.branchName !== '-' && item.branchName.length * 9 > widths.branchName.max) widths.branchName.max = Math.min(item.branchName.length * 9, 380);
+      if (widths.amount && item.amount.toString().length * 10 > widths.amount.max) widths.amount.max = item.amount.toString().length * 10;
+    });
 
-    const getStatusBadgeClass = (status) => {
-      const statusLower = (status || '').toLowerCase();
-      if (statusLower === 'paid' || statusLower === 'approved' || statusLower === 'received' || statusLower === 'settled') {
-        return 'status-badge status-success';
-      } else if (statusLower === 'pending' || statusLower === 'draft') {
-        return 'status-badge status-warning';
-      } else if (statusLower === 'cancelled' || statusLower === 'rejected') {
-        return 'status-badge status-danger';
+    return widths;
+  };
+
+  const standardColumns = [
+    { key: 'date', label: 'Date' },
+    { key: 'billSeries', label: 'Bill Series' },
+    { key: 'billNumber', label: 'Bill Number' },
+    { key: 'billType', label: 'Bill Type' },
+    { key: 'partyCode', label: 'Party Code' },
+    { key: 'partyName', label: 'Party Name' },
+    { key: 'branchName', label: 'Branch Name' },
+    { key: 'amount', label: 'Amount (₹)' },
+    { key: 'loadSeries', label: 'Load Series' },
+    { key: 'loadNumber', label: 'Load Number' },
+    { key: 'status', label: 'Status' },
+    { key: 'actions', label: 'Actions' }
+  ];
+
+  const transformedData = data.map(item => ({
+    id: item.id,
+    date: item.billDate || item.invoiceDate || item.vDate || item.date || '-',
+    billSeries: item.billSeries || item.BillSeries || '-',
+    billNumber: item.billNo || item.invoiceNumber || item.vNo || '-',
+    billType: item.billType || '-',
+    partyCode: item.partyCode || item.supplierCode || '-',
+    partyName: item.party || item.supplier || item.partyName || '-',
+    branchName: item.branchName || item.area || item.storageLocation || '-',
+    amount: parseFloat(item.amount) || parseFloat(item.netAmt) || parseFloat(item.totalAmount) || 0,
+    loadSeries: item.loadSeries || '-',
+    loadNumber: item.loadNumber || '-',
+    status: item.status || (item.amount ? 'Pending' : 'Draft'),
+    originalItem: item
+  }));
+
+  // Calculate dynamic column widths
+  const columnWidths = calculateColumnWidths(transformedData);
+
+  const getStatusBadgeClass = (status) => {
+    const statusLower = (status || '').toLowerCase();
+    if (statusLower === 'paid' || statusLower === 'approved' || statusLower === 'received' || statusLower === 'settled') {
+      return 'status-badge status-success';
+    } else if (statusLower === 'pending' || statusLower === 'draft') {
+      return 'status-badge status-warning';
+    } else if (statusLower === 'cancelled' || statusLower === 'rejected') {
+      return 'status-badge status-danger';
+    }
+    return 'status-badge status-info';
+  };
+
+  const getType = () => {
+    if (title.includes('Sales')) return 'Sales';
+    if (title.includes('Purchase')) return 'Purchase';
+    if (title.includes('Credit Note')) return 'Credit Note';
+    if (title.includes('Debit Note')) return 'Debit Note';
+    return title;
+  };
+
+  const type = getType();
+
+  // Generate professional invoice preview HTML for A4 Portrait
+  const generateInvoicePreviewHTML = (item) => {
+    const data = item.originalItem;
+    
+    // Invoice data structure based on the provided image
+    const invoiceData = {
+      firmDetails: {
+        name: "RAJKUMAR PENURKAR",
+        address: "S NO 58 SAI NAGAR GALLI NO 4 NEAR SHANKAR MANDIR GOUKLNAGER KONDHWA",
+        phone: "9011585811 / 9011585811",
+        gstin: "27BCRPS8746P1Z7",
+        fssai: "11518035000600"
+      },
+      receiverDetails: {
+        name: "CHITAMANI MEDICAL",
+        address: "SHOP NO 15 GROUND FLOOR HEERABAUG BUSINESS CENTRE",
+        gstin: "27AA0FC4285D1ZB",
+        state: "MAHARASHTRA STATE CODE:27",
+        city: "SHUKRWAR PETH PUNE 2",
+        phone: "9011585811"
+      },
+      consigneeDetails: {
+        name: "CHITAMANI MEDICAL",
+        address: "SHOP NO 15 GROUND FLOOR HEERABAUG BUSINESS CENTRE",
+        gstin: "27AA0FC4285D1ZB",
+        state: "MAHARASHTRA STATE CODE:27",
+        city: "SHUKRWAR PETH PUNE 2"
+      },
+      invoiceInfo: {
+        number: data.billNo || data.invoiceNumber || "Satur2771",
+        date: data.billDate || data.invoiceDate || "28/09/2021 22:18",
+        poNumber: "Font Style",
+        foodLicNo: "Single box, double",
+        beat: "GANJPETH"
+      },
+      products: [
+        { sr: 1, name: "Aqua Yellow", hsn: "155.54", mrp: 42, unit: "Pcs", qty: 2, rate: 701.78, taxableAmt: 1403.56, cgst: 126.32, sgst: 126.32, netAmt: 1656.20 },
+        { sr: 2, name: "Yellow Green", hsn: "258.44", mrp: 310, unit: "Pcs", qty: 1, rate: 701.78, taxableAmt: 701.78, cgst: 63.16, sgst: 63.16, netAmt: 828.10 },
+        { sr: 3, name: "Olive Purple", hsn: "217.94", mrp: 148, unit: "Pcs", qty: 1, rate: 478.14, taxableAmt: 478.14, cgst: 43.04, sgst: 43.04, netAmt: 564.21 },
+        { sr: 4, name: "Silver Fuchsia", hsn: "213.42", mrp: 64, unit: "Pcs", qty: 6, rate: 520.55, taxableAmt: 3123.30, cgst: 281.10, sgst: 281.10, netAmt: 3685.49 },
+        { sr: 5, name: "Aqua Navy", hsn: "245.86", mrp: 300, unit: "Pcs", qty: 1, rate: 520.55, taxableAmt: 520.55, cgst: 46.86, sgst: 46.86, netAmt: 614.27 }
+      ],
+      summary: {
+        grossAmt: 6227.33,
+        taxableAmt: -628.05,
+        scheDisc: 589.73,
+        cgstAmt: 44.88,
+        sgstAmt: 44.88,
+        starDisc: 502.71,
+        tcsAmt: 55.57,
+        rounding: 212.83,
+        netAmount: 263.17
+      },
+      bankDetails: {
+        accountNo: "00160010921",
+        ifsc: "COSB0000001",
+        branch: "PARVATI DARSHAN, PUNE",
+        accountType: "CC"
       }
-      return 'status-badge status-info';
     };
 
-    const getType = () => {
-      if (title.includes('Sales')) return 'Sales';
-      if (title.includes('Purchase')) return 'Purchase';
-      if (title.includes('Credit Note')) return 'Credit Note';
-      if (title.includes('Debit Note')) return 'Debit Note';
-      return title;
-    };
-
-    const type = getType();
-
-    return (
-      <div className="master-section grid-section">
-        <div className="grid-header">
-          <h3>{title} List ({transformedData.length})</h3>
-          <div className="table-controls">
-            <input
-              type="text"
-              placeholder="Search..."
-              className="filter-input"
-              value={filters[type.toLowerCase()] || ''}
-              onChange={(e) => setFilters({ ...filters, [type.toLowerCase()]: e.target.value })}
-            />
-            <button className="btn-excel" onClick={() => exportToExcel(transformedData.filter(d =>
-              d.partyName?.toLowerCase().includes((filters[type.toLowerCase()] || '').toLowerCase()) ||
-              d.billNumber?.toLowerCase().includes((filters[type.toLowerCase()] || '').toLowerCase())
-            ), title, standardColumns.filter(c => c.key !== 'actions'))}>
-              📊 Export Excel
-            </button>
-            <button className="btn-pdf" onClick={() => exportToPDF(transformedData.filter(d =>
-              d.partyName?.toLowerCase().includes((filters[type.toLowerCase()] || '').toLowerCase()) ||
-              d.billNumber?.toLowerCase().includes((filters[type.toLowerCase()] || '').toLowerCase())
-            ), title, standardColumns.filter(c => c.key !== 'actions'))}>
-              📄 Export PDF
-            </button>
-            <button className="btn-add-new" onClick={() => handlePlusClick(type, new Event('click'))}>
-              + Add New {type}
-            </button>
+    return `<!DOCTYPE html>
+    <html>
+    <head>
+      <meta charset="UTF-8">
+      <title>TAX INVOICE - ${invoiceData.invoiceInfo.number}</title>
+      <style>
+        * {
+          margin: 0;
+          padding: 0;
+          box-sizing: border-box;
+        }
+        
+        body {
+          font-family: 'Courier New', 'Segoe UI', Arial, sans-serif;
+          background: #e2e8f0;
+          padding: 20px;
+          font-size: 10px;
+        }
+        
+        /* A4 Portrait Layout */
+        .invoice-wrapper {
+          max-width: 210mm;
+          width: 210mm;
+          margin: 0 auto;
+          background: white;
+          box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+          min-height: 297mm;
+        }
+        
+        .invoice {
+          padding: 15px 20px;
+          background: white;
+        }
+        
+        /* Header Section */
+        .header-section {
+          border-bottom: 2px solid #000;
+          padding-bottom: 10px;
+          margin-bottom: 12px;
+        }
+        
+        .firm-details {
+          text-align: center;
+          margin-bottom: 10px;
+        }
+        
+        .firm-name {
+          font-size: 18px;
+          font-weight: bold;
+          text-transform: uppercase;
+          letter-spacing: 1px;
+          margin-bottom: 4px;
+        }
+        
+        .firm-address {
+          font-size: 9px;
+          line-height: 1.3;
+          color: #333;
+        }
+        
+        .firm-contact {
+          font-size: 9px;
+          margin-top: 3px;
+        }
+        
+        .gst-fssai {
+          font-size: 8px;
+          margin-top: 2px;
+          color: #555;
+        }
+        
+        /* Horizontal Layout for all sections */
+        .details-section {
+          display: flex;
+          gap: 15px;
+          margin-bottom: 20px;
+          flex-wrap: wrap;
+        }
+        
+        .info-card {
+          flex: 1;
+          min-width: 200px;
+          border: 1px solid #ddd;
+          padding: 10px;
+          background: #fff;
+        }
+        
+        .info-title {
+          font-weight: bold;
+          font-size: 10px;
+          margin-bottom: 8px;
+          padding-bottom: 4px;
+          border-bottom: 1px solid #ccc;
+          background: none;
+          padding: 0 0 4px 0;
+        }
+        
+        .info-row {
+          margin-bottom: 4px;
+          font-size: 9px;
+          line-height: 1.3;
+        }
+        
+        .info-label {
+          font-weight: 600;
+          min-width: 90px;
+          display: inline-block;
+        }
+        
+        /* Invoice Title */
+        .invoice-title-section {
+          text-align: center;
+          margin: 10px 0;
+        }
+        
+        .invoice-title {
+          font-size: 16px;
+          font-weight: bold;
+          letter-spacing: 2px;
+          background: #f0f0f0;
+          display: inline-block;
+          padding: 4px 20px;
+        }
+        
+        .invoice-subtitle {
+          display: flex;
+          justify-content: center;
+          gap: 30px;
+          margin-top: 6px;
+          font-size: 9px;
+        }
+        
+        /* Product Table - Compact for A4 */
+        .product-table {
+          width: 100%;
+          border-collapse: collapse;
+          margin: 10px 0;
+          font-size: 8px;
+        }
+        
+        .product-table th {
+          background: #e8e8e8;
+          border: 1px solid #999;
+          padding: 5px 2px;
+          font-weight: bold;
+          text-align: center;
+          font-size: 8px;
+        }
+        
+        .product-table td {
+          border: 1px solid #999;
+          padding: 4px 2px;
+          text-align: center;
+          font-size: 8px;
+        }
+        
+        .product-table td:first-child,
+        .product-table th:first-child {
+          text-align: center;
+        }
+        
+        .product-table td:nth-child(2) {
+          text-align: left;
+        }
+        
+        /* Summary Section - Clean horizontal layout without boxes */
+        .summary-section {
+          margin: 15px 0;
+          padding: 10px 0;
+          border-top: 1px solid #ccc;
+          border-bottom: 1px solid #ccc;
+        }
+        
+        .summary-grid {
+          display: flex;
+          justify-content: space-between;
+          align-items: center;
+          flex-wrap: wrap;
+          gap: 15px;
+        }
+        
+        .summary-item {
+          display: flex;
+          justify-content: space-between;
+          align-items: center;
+          min-width: 150px;
+          padding: 5px 10px;
+        }
+        
+        .summary-label {
+          font-weight: 600;
+          margin-right: 10px;
+        }
+        
+        .summary-value {
+          font-weight: 500;
+        }
+        
+        .net-amount-item {
+          font-weight: bold;
+          font-size: 12px;
+          background: #f0f0f0;
+          padding: 8px 15px;
+          border-radius: 4px;
+        }
+        
+        /* Bank Details - Clean style */
+        .bank-details {
+          margin: 10px 0;
+          padding: 8px 0;
+          font-size: 8px;
+        }
+        
+        .bank-grid {
+          display: flex;
+          gap: 20px;
+          flex-wrap: wrap;
+        }
+        
+        /* Footer */
+        .footer-section {
+          margin-top: 15px;
+          padding-top: 10px;
+          border-top: 1px solid #ccc;
+        }
+        
+        .declaration {
+          font-size: 8px;
+          font-style: italic;
+          margin-bottom: 8px;
+        }
+        
+        .signature-row {
+          display: flex;
+          justify-content: space-between;
+          margin-top: 15px;
+        }
+        
+        .signature-line {
+          border-top: 1px solid #000;
+          width: 200px;
+          padding-top: 4px;
+          font-size: 8px;
+          text-align: center;
+        }
+        
+        .total-words {
+          font-size: 8px;
+          margin: 8px 0;
+          font-weight: bold;
+        }
+        
+        .no-print {
+          text-align: center;
+          margin-top: 20px;
+        }
+        
+        .no-print button {
+          padding: 8px 16px;
+          margin: 5px;
+          background: #1e3a8a;
+          color: white;
+          border: none;
+          border-radius: 4px;
+          cursor: pointer;
+          font-size: 12px;
+        }
+        
+        .no-print button:hover {
+          background: #1e40af;
+        }
+        
+        @media print {
+          body {
+            background: white;
+            padding: 0;
+            margin: 0;
+          }
+          .no-print {
+            display: none;
+          }
+          .invoice-wrapper {
+            box-shadow: none;
+            width: 100%;
+            max-width: 210mm;
+            margin: 0;
+            padding: 0;
+          }
+          .invoice {
+            padding: 10px;
+          }
+        }
+        
+        @page {
+          size: A4;
+          margin: 10mm;
+        }
+      </style>
+    </head>
+    <body>
+      <div class="invoice-wrapper">
+        <div class="invoice">
+          <!-- Firm Header -->
+          <div class="header-section">
+            <div class="firm-details">
+              <div class="firm-name">${invoiceData.firmDetails.name}</div>
+              <div class="firm-address">${invoiceData.firmDetails.address}</div>
+              <div class="firm-contact">📞 ${invoiceData.firmDetails.phone}</div>
+              <div class="gst-fssai">GSTIN: ${invoiceData.firmDetails.gstin} | FSSAI: ${invoiceData.firmDetails.fssai}</div>
+            </div>
+          </div>
+          
+          <!-- TAX INVOICE Title -->
+          <div class="invoice-title-section">
+            <div class="invoice-title">TAX INVOICE</div>
+            <div class="invoice-subtitle">
+              <span>INVOICE NO: ${invoiceData.invoiceInfo.number}</span>
+              <span>INVOICE DATE: ${invoiceData.invoiceInfo.date}</span>
+              <span>PO NUMBER: ${invoiceData.invoiceInfo.poNumber}</span>
+            </div>
+          </div>
+          
+          <!-- Three Column Horizontal Layout for Details (one beside each other) -->
+          <div class="details-section">
+            <div class="info-card">
+              <div class="info-title">DETAILS OF CONSIGNEE (SHIPPED TO)</div>
+              <div class="info-row"><strong>${invoiceData.consigneeDetails.name}</strong></div>
+              <div class="info-row">${invoiceData.consigneeDetails.address}</div>
+              <div class="info-row">GSTIN/UNIQUE ID: ${invoiceData.consigneeDetails.gstin}</div>
+              <div class="info-row">STATE: ${invoiceData.consigneeDetails.state}</div>
+              <div class="info-row">${invoiceData.consigneeDetails.city}</div>
+            </div>
+            
+            <div class="info-card">
+              <div class="info-title">DETAILS OF RECEIVER (BILLED TO)</div>
+              <div class="info-row"><strong>${invoiceData.receiverDetails.name}</strong></div>
+              <div class="info-row">${invoiceData.receiverDetails.address}</div>
+              <div class="info-row">GSTIN/UNIQUE ID: ${invoiceData.receiverDetails.gstin}</div>
+              <div class="info-row">STATE: ${invoiceData.receiverDetails.state}</div>
+              <div class="info-row">${invoiceData.receiverDetails.city}</div>
+              <div class="info-row">Phone: ${invoiceData.receiverDetails.phone}</div>
+            </div>
+            
+            <div class="info-card">
+              <div class="info-title">INVOICE DETAILS</div>
+              <div class="info-row"><span class="info-label">Firm Food Lic No:</span> ${invoiceData.invoiceInfo.foodLicNo}</div>
+              <div class="info-row"><span class="info-label">Beat:</span> ${invoiceData.invoiceInfo.beat}</div>
+            </div>
+          </div>
+          
+          <!-- Product Table -->
+          <table class="product-table">
+            <thead>
+              <tr>
+                <th>SR</th>
+                <th>Product Name</th>
+                <th>HSN</th>
+                <th>MRP</th>
+                <th>Unit</th>
+                <th>Qty</th>
+                <th>Fr.</th>
+                <th>Rate</th>
+                <th>Taxable Amt</th>
+                <th>SGST</th>
+<th>CGST</th>
+<th>IGST</th>
+<th>Amount</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${invoiceData.products.map(product => `
+                <tr>
+                  <td>${product.sr}</td>
+                  <td style="text-align:left">${product.name}</td>
+                  <td>${product.hsn}</td>
+                  <td>${product.mrp}</td>
+                  <td>${product.unit}</td>
+                  <td>${product.qty}</td>
+                  <td>-</td>
+                  <td>${product.rate.toFixed(2)}</td>
+                  <td>${product.taxableAmt.toFixed(2)}</td>
+                  <td>${product.cgst.toFixed(2)}</td>
+                  <td>${product.sgst.toFixed(2)}</td>
+                  <td>${product.netAmt.toFixed(2)}</td>
+                </tr>
+              `).join('')}
+            </tbody>
+            <tfoot>
+              <tr style="background: #f0f0f0;">
+                <td colspan="8" style="text-align:right; font-weight:bold;">Total</td>
+                <td style="font-weight:bold;">₹${invoiceData.products.reduce((sum, p) => sum + p.taxableAmt, 0).toFixed(2)}</td>
+                <td style="font-weight:bold;">₹${invoiceData.products.reduce((sum, p) => sum + p.cgst, 0).toFixed(2)}</td>
+                <td style="font-weight:bold;">₹${invoiceData.products.reduce((sum, p) => sum + p.sgst, 0).toFixed(2)}</td>
+                <td style="font-weight:bold;">₹${invoiceData.products.reduce((sum, p) => sum + p.netAmt, 0).toFixed(2)}</td>
+              </tr>
+            </tfoot>
+          </table>
+          
+          <!-- Summary Section - Clean without boxes, horizontal layout -->
+          <div class="summary-section">
+            <div class="summary-grid">
+              <div class="summary-item">
+                <span class="summary-label">TAXABLE AMT:</span>
+                <span class="summary-value">₹${invoiceData.summary.taxableAmt.toFixed(2)}</span>
+              </div>
+              <div class="summary-item">
+                <span class="summary-label">Sche/Cash:</span>
+                <span class="summary-value">₹${invoiceData.summary.scheDisc.toFixed(2)}</span>
+              </div>
+              <div class="summary-item">
+                <span class="summary-label">CGST AMT:</span>
+                <span class="summary-value">₹${invoiceData.summary.cgstAmt.toFixed(2)}</span>
+              </div>
+              <div class="summary-item">
+                <span class="summary-label">SGST AMT:</span>
+                <span class="summary-value">₹${invoiceData.summary.sgstAmt.toFixed(2)}</span>
+              </div>
+              <div class="summary-item">
+                <span class="summary-label">CN/STAR/DIS:</span>
+                <span class="summary-value">₹${invoiceData.summary.starDisc.toFixed(2)}</span>
+              </div>
+              <div class="summary-item">
+                <span class="summary-label">TCS Amt:</span>
+                <span class="summary-value">₹${invoiceData.summary.tcsAmt.toFixed(2)}</span>
+              </div>
+              <div class="summary-item">
+                <span class="summary-label">ROUNDING:</span>
+                <span class="summary-value">₹${invoiceData.summary.rounding.toFixed(2)}</span>
+              </div>
+              <div class="summary-item net-amount-item">
+                <span class="summary-label"><strong>NET AMOUNT:</strong></span>
+                <span class="summary-value"><strong>₹${invoiceData.summary.netAmount.toFixed(2)}</strong></span>
+              </div>
+            </div>
+          </div>
+          
+          <!-- Total in Words -->
+          <div class="total-words">
+            <strong>Tot Value (Words):</strong> RS. Two Hundred Sixty-Three And Seventeen Paisa Only
+          </div>
+          
+          <!-- Bank Details - Clean without box -->
+          <div class="bank-details">
+            <div class="bank-grid">
+              <span><strong>A/c No:</strong> ${invoiceData.bankDetails.accountNo}</span>
+              <span><strong>IFSC:</strong> ${invoiceData.bankDetails.ifsc}</span>
+              <span><strong>Branch:</strong> ${invoiceData.bankDetails.branch}</span>
+              <span><strong>A/c Type:</strong> ${invoiceData.bankDetails.accountType}</span>
+            </div>
+          </div>
+          
+          <!-- Declaration and Signature -->
+          <div class="footer-section">
+            <div class="declaration">
+              Declaration: Certified that the particulars given above are true and correct and the amount indicated.
+            </div>
+            
+            <div class="signature-row">
+              <div>
+                <div class="signature-line">Receiver's Stamp & Sign.</div>
+              </div>
+              <div>
+                <div class="signature-line">FOR RAJKUMAR PENURKAR</div>
+                <div style="font-size:8px; text-align:center; margin-top:3px">Authorised Signatory</div>
+              </div>
+            </div>
           </div>
         </div>
-        {transformedData.length > 0 ? (
-          <div className="data-table-container" style={{ overflowX: 'auto' }}>
-            <table className="data-table" style={{ minWidth: '1200px' }}>
-              <thead>
-                <tr>
-                  {standardColumns.map(col => (
-                    <th key={col.key} style={col.key === 'actions' ? {
-                      textAlign: 'center',
-                      width: '160px',
-                      position: 'sticky',
-                      right: 0,
-                      backgroundColor: '#f8fafc',
-                      zIndex: 15
-                    } : {}}>
-                      {col.label}
-                    </th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {transformedData
-                  .filter(d =>
-                    d.partyName?.toLowerCase().includes((filters[type.toLowerCase()] || '').toLowerCase()) ||
-                    d.billNumber?.toLowerCase().includes((filters[type.toLowerCase()] || '').toLowerCase())
-                  )
-                  .map((item, index) => (
-                    <tr key={index}>
-                      <td>{item.date}</td>
-                      <td>{item.billSeries}</td>
-                      <td>{item.billNumber}</td>
-                      <td>{item.billType}</td>
-                      <td>{item.partyCode}</td>
-                      <td>{item.partyName}</td>
-                      <td>{item.branchName}</td>
-                      <td className="amount-cell">₹{item.amount.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
-                      <td>{item.loadSeries}</td>
-                      <td>{item.loadNumber}</td>
-                      <td><span className={getStatusBadgeClass(item.status)}>{item.status}</span></td>
-                      <td className="action-buttons" style={{
-                        whiteSpace: 'nowrap',
-                        position: 'sticky',
-                        right: 0,
-                        backgroundColor: '#ffffff',
-                        zIndex: 10,
-                        boxShadow: '-2px 0 5px -2px rgba(0,0,0,0.1)'
-                      }}>
-                        <button
-                          className="btn-view"
-                          onClick={() => handleViewVoucher(type, item.originalItem)}
-                          title="View"
-                          style={{ background: '#10b981', color: 'white', border: 'none', borderRadius: '4px', padding: '4px 8px', margin: '0 2px', cursor: 'pointer' }}
-                        >
-                          👁️ View
-                        </button>
-                        <button
-                          className="btn-edit"
-                          onClick={() => handleEditVoucher(type, item.originalItem)}
-                          title="Edit"
-                          style={{ background: '#3b82f6', color: 'white', border: 'none', borderRadius: '4px', padding: '4px 8px', margin: '0 2px', cursor: 'pointer' }}
-                        >
-                          ✏️ Edit
-                        </button>
-                        <button
-                          className="btn-delete"
-                          onClick={() => handleDeleteVoucher(type, item.id)}
-                          title="Delete"
-                          style={{ background: '#ef4444', color: 'white', border: 'none', borderRadius: '4px', padding: '4px 8px', margin: '0 2px', cursor: 'pointer' }}
-                        >
-                          🗑 Delete
-                        </button>
-                      </td>
-                    </tr>
-                  ))}
-              </tbody>
-            </table>
-          </div>
-        ) : (
-          <div className="empty-state">No data found. Click + Add New to create one.</div>
-        )}
       </div>
-    );
+      
+      <div class="no-print">
+        <button onclick="window.print()">🖨️ Print Invoice (A4)</button>
+        <button onclick="window.close()">❌ Close</button>
+      </div>
+    </body>
+    </html>`;
   };
+
+  // Handle Print
+  const handlePrintVoucher = (item) => {
+    const printWindow = window.open('', '_blank', 'width=900,height=700');
+    printWindow.document.write(generateInvoicePreviewHTML(item));
+    printWindow.document.close();
+    setTimeout(() => {
+      printWindow.print();
+    }, 100);
+  };
+
+  // Handle Preview
+  const handlePreviewVoucher = (item) => {
+    const previewWindow = window.open('', '_blank', 'width=900,height=700');
+    previewWindow.document.write(generateInvoicePreviewHTML(item));
+    previewWindow.document.close();
+  };
+
+  return (
+    <div className="master-section grid-section">
+      <div className="grid-header">
+        <h3>{title} List ({transformedData.length})</h3>
+        <div className="table-controls">
+          <input
+            type="text"
+            placeholder="Search..."
+            className="filter-input"
+            value={filters[type.toLowerCase()] || ''}
+            onChange={(e) => setFilters({ ...filters, [type.toLowerCase()]: e.target.value })}
+          />
+          <button className="btn-excel" onClick={() => exportToExcel(transformedData.filter(d =>
+            d.partyName?.toLowerCase().includes((filters[type.toLowerCase()] || '').toLowerCase()) ||
+            d.billNumber?.toLowerCase().includes((filters[type.toLowerCase()] || '').toLowerCase())
+          ), title, standardColumns.filter(c => c.key !== 'actions'))}>
+            📊 Export Excel
+          </button>
+          <button className="btn-pdf" onClick={() => exportToPDF(transformedData.filter(d =>
+            d.partyName?.toLowerCase().includes((filters[type.toLowerCase()] || '').toLowerCase()) ||
+            d.billNumber?.toLowerCase().includes((filters[type.toLowerCase()] || '').toLowerCase())
+          ), title, standardColumns.filter(c => c.key !== 'actions'))}>
+            📄 Export PDF
+          </button>
+          <button className="btn-add-new" onClick={() => handlePlusClick(type, new Event('click'))}>
+            + Add New {type}
+          </button>
+        </div>
+      </div>
+      {transformedData.length > 0 ? (
+        <div className="data-table-container" style={{ overflowX: 'auto' }}>
+          <table className="data-table" style={{ minWidth: '100%', width: '100%', tableLayout: 'auto' }}>
+            <thead>
+              <tr>
+                <th style={{ whiteSpace: 'nowrap', width: `${columnWidths.date?.max || 110}px`, minWidth: `${columnWidths.date?.min || 100}px` }}>Date</th>
+                <th style={{ whiteSpace: 'nowrap', width: `${columnWidths.billSeries?.max || 100}px`, minWidth: `${columnWidths.billSeries?.min || 90}px` }}>Bill Series</th>
+                <th style={{ whiteSpace: 'nowrap', width: `${columnWidths.billNumber?.max || 120}px`, minWidth: `${columnWidths.billNumber?.min || 100}px` }}>Bill Number</th>
+                <th style={{ whiteSpace: 'nowrap', width: `${columnWidths.billType?.max || 90}px`, minWidth: `${columnWidths.billType?.min || 80}px` }}>Bill Type</th>
+                <th style={{ whiteSpace: 'nowrap', width: `${columnWidths.partyCode?.max || 150}px`, minWidth: `${columnWidths.partyCode?.min || 110}px` }}>Party Code</th>
+                <th style={{ whiteSpace: 'nowrap', width: `${columnWidths.partyName?.max || 250}px`, minWidth: `${columnWidths.partyName?.min || 180}px`, maxWidth: '450px' }}>Party Name</th>
+                <th style={{ whiteSpace: 'nowrap', width: `${columnWidths.branchName?.max || 220}px`, minWidth: `${columnWidths.branchName?.min || 160}px`, maxWidth: '380px' }}>Branch Name</th>
+                <th style={{ whiteSpace: 'nowrap', width: `${columnWidths.amount?.max || 130}px`, minWidth: `${columnWidths.amount?.min || 120}px`, textAlign: 'right' }}>Amount (₹)</th>
+                <th style={{ whiteSpace: 'nowrap', width: `${columnWidths.loadSeries?.max || 100}px`, minWidth: `${columnWidths.loadSeries?.min || 90}px` }}>Load Series</th>
+                <th style={{ whiteSpace: 'nowrap', width: `${columnWidths.loadNumber?.max || 120}px`, minWidth: `${columnWidths.loadNumber?.min || 100}px` }}>Load Number</th>
+                <th style={{ whiteSpace: 'nowrap', width: `${columnWidths.status?.max || 110}px`, minWidth: `${columnWidths.status?.min || 100}px` }}>Status</th>
+                <th style={{ whiteSpace: 'nowrap', width: '300px', minWidth: '300px', position: 'sticky', right: 0, backgroundColor: '#f8fafc', zIndex: 15, textAlign: 'center' }}>Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {transformedData
+                .filter(d =>
+                  d.partyName?.toLowerCase().includes((filters[type.toLowerCase()] || '').toLowerCase()) ||
+                  d.billNumber?.toLowerCase().includes((filters[type.toLowerCase()] || '').toLowerCase())
+                )
+                .map((item, index) => (
+                  <tr key={index}>
+                    <td style={{ whiteSpace: 'nowrap' }}>{item.date}</td>
+                    <td style={{ whiteSpace: 'nowrap' }}>{item.billSeries}</td>
+                    <td style={{ whiteSpace: 'nowrap' }}>{item.billNumber}</td>
+                    <td style={{ whiteSpace: 'nowrap' }}>{item.billType}</td>
+                    <td style={{ whiteSpace: 'nowrap' }}>{item.partyCode}</td>
+                    <td style={{ whiteSpace: 'nowrap', maxWidth: '450px', overflow: 'hidden', textOverflow: 'ellipsis' }} title={item.partyName}>{item.partyName}</td>
+                    <td style={{ whiteSpace: 'nowrap', maxWidth: '380px', overflow: 'hidden', textOverflow: 'ellipsis' }} title={item.branchName}>{item.branchName}</td>
+                    <td className="amount-cell" style={{ whiteSpace: 'nowrap', textAlign: 'right' }}>₹{item.amount.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                    <td style={{ whiteSpace: 'nowrap' }}>{item.loadSeries}</td>
+                    <td style={{ whiteSpace: 'nowrap' }}>{item.loadNumber}</td>
+                    <td style={{ whiteSpace: 'nowrap' }}><span className={getStatusBadgeClass(item.status)}>{item.status}</span></td>
+                    <td className="action-buttons" style={{ whiteSpace: 'nowrap', position: 'sticky', right: 0, backgroundColor: '#ffffff', zIndex: 10, boxShadow: '-2px 0 5px -2px rgba(0,0,0,0.1)' }}>
+                      <button className="btn-view" onClick={() => handleViewVoucher(type, item.originalItem)} title="View" style={{ background: '#10b981', color: 'white', border: 'none', borderRadius: '4px', padding: '4px 8px', margin: '0 2px', cursor: 'pointer' }}>👁️ View</button>
+                      <button className="btn-edit" onClick={() => handleEditVoucher(type, item.originalItem)} title="Edit" style={{ background: '#3b82f6', color: 'white', border: 'none', borderRadius: '4px', padding: '4px 8px', margin: '0 2px', cursor: 'pointer' }}>✏️ Edit</button>
+                      <button className="btn-print" onClick={() => handlePrintVoucher(item)} title="Print" style={{ background: '#f59e0b', color: 'white', border: 'none', borderRadius: '4px', padding: '4px 8px', margin: '0 2px', cursor: 'pointer' }}>🖨️ Print</button>
+                      <button className="btn-preview" onClick={() => handlePreviewVoucher(item)} title="Preview" style={{ background: '#8b5cf6', color: 'white', border: 'none', borderRadius: '4px', padding: '4px 8px', margin: '0 2px', cursor: 'pointer' }}>👁️ Preview</button>
+                      <button className="btn-delete" onClick={() => handleDeleteVoucher(type, item.id)} title="Delete" style={{ background: '#ef4444', color: 'white', border: 'none', borderRadius: '4px', padding: '4px 8px', margin: '0 2px', cursor: 'pointer' }}>🗑 Delete</button>
+                    </td>
+                  </tr>
+                ))}
+            </tbody>
+          </table>
+        </div>
+      ) : (
+        <div className="empty-state">No data found. Click + Add New to create one.</div>
+      )}
+    </div>
+  );
+};
   const renderLoadList = (title, data) => {
-    const loadColumns = [
-      { key: 'date', label: 'Load Date' },
-      { key: 'loadSeries', label: 'Load Series' },
-      { key: 'loadNumber', label: 'Load Number' },
-      { key: 'company', label: 'Company' },
-      { key: 'deliveryBy', label: 'Delivery By' },
-      { key: 'selectedSalesman', label: 'Salesman' },
-      { key: 'totalAmount', label: 'Total Amount (₹)' },
-      { key: 'itemCount', label: 'Items' },
-      { key: 'status', label: 'Status' },
-      { key: 'actions', label: 'Actions' }
-    ];
+  const loadColumns = [
+    { key: 'date', label: 'Load Date' },
+    { key: 'loadSeries', label: 'Load Series' },
+    { key: 'loadNumber', label: 'Load Number' },
+    { key: 'company', label: 'Company' },
+    { key: 'deliveryBy', label: 'Delivery By' },
+    { key: 'selectedSalesman', label: 'Salesman' },
+    { key: 'totalAmount', label: 'Total Amount (₹)' },
+    { key: 'itemCount', label: 'Items' },
+    { key: 'status', label: 'Status' },
+    { key: 'actions', label: 'Actions' }
+  ];
 
-    const handleViewLoad = (item) => {
-      setViewData(item);
-      setViewType('Create Load');
-      setShowViewModal(true);
-    };
+  const handleViewLoad = (item) => {
+    setViewData(item);
+    setViewType('Create Load');
+    setShowViewModal(true);
+  };
 
-    const handleEditLoad = (item) => {
-      console.log('Editing Load:', item);
+  const handleEditLoad = (item) => {
+    console.log('Editing Load:', item);
 
-      setShowCreateLoadList(false);
+    setShowCreateLoadList(false);
 
-      setCreateLoadFormData({
-        loadSeries: item.loadSeries || '',
-        loadNo: item.loadNo || '',
-        loadDate: item.loadDate || new Date().toISOString().split('T')[0],
-        company: item.company || '',
-        deliverBoy: item.deliverBoy || '',
-        selectedSalesman: item.selectedSalesman || '',
-        billFromDate: item.billFromDate || new Date().toISOString().split('T')[0],
-        billToDate: item.billToDate || new Date().toISOString().split('T')[0],
-        narration: item.narration || '',
-        deliveryBy: item.deliveryBy || ''
-      });
-      setCreateLoadItems(item.items || []);
-      setOpenFormFor('Create Load');
-    };
+    setCreateLoadFormData({
+      loadSeries: item.loadSeries || '',
+      loadNo: item.loadNo || '',
+      loadDate: item.loadDate || new Date().toISOString().split('T')[0],
+      company: item.company || '',
+      deliverBoy: item.deliverBoy || '',
+      selectedSalesman: Array.isArray(item.selectedSalesmanList)
+  ? item.selectedSalesmanList
+  : Array.isArray(item.selectedSalesman)
+    ? item.selectedSalesman
+    : item.selectedSalesman && item.selectedSalesman !== "MIX"
+      ? [item.selectedSalesman]
+      : [],
+      billFromDate: item.billFromDate || getCurrentYearAprilFirst(),
+      billToDate: item.billToDate || new Date().toISOString().split('T')[0],
+      narration: item.narration || '',
+      deliveryBy: item.deliveryBy || ''
+    });
+    setCreateLoadItems(item.items || []);
+    setOpenFormFor('Create Load');
+  };
 
-    const handleDeleteLoad = (id) => {
-      if (window.confirm('Are you sure you want to delete this Load?')) {
-        setCreateLoadListData(createLoadListData.filter(item => item.id !== id));
-        alert('Load deleted successfully!');
-      }
-    };
+  const handleDeleteLoad = (id) => {
+    if (window.confirm('Are you sure you want to delete this Load?')) {
+      setCreateLoadListData(createLoadListData.filter(item => item.id !== id));
+      alert('Load deleted successfully!');
+    }
+  };
 
-    const transformedData = data.map(item => ({
-      id: item.id,
-      date: item.loadDate || item.date || '-',
-      loadSeries: item.loadSeries || '-',
-      loadNumber: item.loadNo || item.loadNumber || '-',
-      company: item.company || '-',
-      deliveryBy: item.deliveryBy || '-',
-      selectedSalesman: item.selectedSalesman || '-',
-      totalAmount: parseFloat(item.totalAmount) || parseFloat(item.amount) || 0,
-      itemCount: item.items?.length || 0,
-      status: item.status || 'Pending',
-      originalItem: item
-    }));
+  const transformedData = data.map(item => ({
+    id: item.id,
+    date: item.loadDate || item.date || '-',
+    loadSeries: item.loadSeries || '-',
+    loadNumber: item.loadNo || item.loadNumber || '-',
+    company: item.company || '-',
+    deliveryBy: item.deliveryBy || '-',
+    selectedSalesman: item.selectedSalesman || '-',
+    totalAmount: parseFloat(item.totalAmount) || parseFloat(item.amount) || 0,
+    itemCount: item.items?.length || 0,
+    status: item.status || 'Pending',
+    originalItem: item
+  }));
 
-    const getStatusBadgeClass = (status) => {
-      const statusLower = (status || '').toLowerCase();
-      if (statusLower === 'settled') {
-        return 'status-badge status-success';
-      } else if (statusLower === 'pending') {
-        return 'status-badge status-warning';
-      }
-      return 'status-badge status-info';
-    };
+  const getStatusBadgeClass = (status) => {
+    const statusLower = (status || '').toLowerCase();
+    if (statusLower === 'settled') {
+      return 'status-badge status-success';
+    } else if (statusLower === 'pending') {
+      return 'status-badge status-warning';
+    }
+    return 'status-badge status-info';
+  };
 
-    return (
-      <div className="master-section grid-section">
-        <div className="grid-header">
-          <h3>{title} ({transformedData.length})</h3>
-          <div className="table-controls">
-            <input
-              type="text"
-              placeholder="Search..."
-              className="filter-input"
-              value={filters['load'] || ''}
-              onChange={(e) => setFilters({ ...filters, load: e.target.value })}
-            />
-            <button className="btn-excel" onClick={() => exportToExcel(
-              transformedData.filter(d =>
-                d.loadSeries?.toLowerCase().includes((filters['load'] || '').toLowerCase()) ||
-                d.loadNumber?.toLowerCase().includes((filters['load'] || '').toLowerCase())
-              ),
-              title,
-              loadColumns.filter(c => c.key !== 'actions')
-            )}>
-              📊 Export Excel
-            </button>
-            <button className="btn-pdf" onClick={() => exportToPDF(
-              transformedData.filter(d =>
-                d.loadSeries?.toLowerCase().includes((filters['load'] || '').toLowerCase()) ||
-                d.loadNumber?.toLowerCase().includes((filters['load'] || '').toLowerCase())
-              ),
-              title,
-              loadColumns.filter(c => c.key !== 'actions')
-            )}>
-              📄 Export PDF
-            </button>
-          </div>
+  return (
+    <div className="master-section grid-section">
+      <div className="grid-header">
+        <h3>{title} ({transformedData.length})</h3>
+        <div className="table-controls">
+          <input
+            type="text"
+            placeholder="Search..."
+            className="filter-input"
+            value={filters['load'] || ''}
+            onChange={(e) => setFilters({ ...filters, load: e.target.value })}
+          />
+          <button className="btn-excel" onClick={() => exportToExcel(
+            transformedData.filter(d =>
+              d.loadSeries?.toLowerCase().includes((filters['load'] || '').toLowerCase()) ||
+              d.loadNumber?.toLowerCase().includes((filters['load'] || '').toLowerCase())
+            ),
+            title,
+            loadColumns.filter(c => c.key !== 'actions')
+          )}>
+            📊 Export Excel
+          </button>
+          <button className="btn-pdf" onClick={() => exportToPDF(
+            transformedData.filter(d =>
+              d.loadSeries?.toLowerCase().includes((filters['load'] || '').toLowerCase()) ||
+              d.loadNumber?.toLowerCase().includes((filters['load'] || '').toLowerCase())
+            ),
+            title,
+            loadColumns.filter(c => c.key !== 'actions')
+          )}>
+            📄 Export PDF
+          </button>
         </div>
-        {transformedData.length > 0 ? (
-          <div className="data-table-container" style={{ overflowX: 'auto' }}>
-            <table className="data-table" style={{ minWidth: '1000px' }}>
-              <thead>
-                <tr>
-                  {loadColumns.map(col => (
-                    <th key={col.key} style={col.key === 'actions' ? {
-                      textAlign: 'center',
-                      width: '200px',
+      </div>
+      {transformedData.length > 0 ? (
+        <div className="data-table-container" style={{ overflowX: 'auto' }}>
+          <table className="data-table" style={{ minWidth: '1000px' }}>
+            <thead>
+              <tr>
+                {loadColumns.map(col => (
+                  <th key={col.key} style={col.key === 'actions' ? {
+                    textAlign: 'center',
+                    width: '200px',
+                    position: 'sticky',
+                    right: 0,
+                    backgroundColor: '#f8fafc',
+                    zIndex: 15
+                  } : {}}>
+                    {col.label}
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {transformedData
+                .filter(d =>
+                  d.loadSeries?.toLowerCase().includes((filters['load'] || '').toLowerCase()) ||
+                  d.loadNumber?.toLowerCase().includes((filters['load'] || '').toLowerCase())
+                )
+                .map((item, index) => (
+                  <tr key={index}>
+                    <td>{item.date}</td>
+                    <td>{item.loadSeries}</td>
+                    <td>{item.loadNumber}</td>
+                    <td>{item.company}</td>
+                    <td>{item.deliveryBy}</td>
+                    <td>{item.selectedSalesman}</td>
+                    <td className="amount-cell">₹{item.totalAmount.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                    <td>{item.itemCount}</td>
+                    <td><span className={getStatusBadgeClass(item.status)}>{item.status}</span></td>
+                    <td className="action-buttons" style={{
+                      whiteSpace: 'nowrap',
                       position: 'sticky',
                       right: 0,
-                      backgroundColor: '#f8fafc',
-                      zIndex: 15
-                    } : {}}>
-                      {col.label}
-                    </th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {transformedData
-                  .filter(d =>
-                    d.loadSeries?.toLowerCase().includes((filters['load'] || '').toLowerCase()) ||
-                    d.loadNumber?.toLowerCase().includes((filters['load'] || '').toLowerCase())
-                  )
-                  .map((item, index) => (
-                    <tr key={index}>
-                      <td>{item.date}</td>
-                      <td>{item.loadSeries}</td>
-                      <td>{item.loadNumber}</td>
-                      <td>{item.company}</td>
-                      <td>{item.deliveryBy}</td>
-                      <td>{item.selectedSalesman}</td>
-                      <td className="amount-cell">₹{item.totalAmount.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
-                      <td>{item.itemCount}</td>
-                      <td><span className={getStatusBadgeClass(item.status)}>{item.status}</span></td>
-                      <td className="action-buttons" style={{
-                        whiteSpace: 'nowrap',
-                        position: 'sticky',
-                        right: 0,
-                        backgroundColor: '#ffffff',
-                        zIndex: 10,
-                        boxShadow: '-2px 0 5px -2px rgba(0,0,0,0.1)'
-                      }}>
+                      backgroundColor: '#ffffff',
+                      zIndex: 10,
+                      boxShadow: '-2px 0 5px -2px rgba(0,0,0,0.1)'
+                    }}>
+                      <button
+                        className="btn-view"
+                        onClick={() => handleViewLoad(item.originalItem)}
+                        title="View"
+                        style={{ background: '#10b981', color: 'white', border: 'none', borderRadius: '4px', padding: '4px 8px', margin: '0 2px', cursor: 'pointer' }}
+                      >
+                        👁️ View
+                      </button>
+                      <button
+                        className="btn-edit"
+                        onClick={() => handleEditLoad(item.originalItem)}
+                        title="Edit"
+                        style={{ background: '#3b82f6', color: 'white', border: 'none', borderRadius: '4px', padding: '4px 8px', margin: '0 2px', cursor: 'pointer' }}
+                      >
+                        ✏️ Edit
+                      </button>
+                      {item.status !== 'Settled' && (
                         <button
-                          className="btn-view"
-                          onClick={() => handleViewLoad(item.originalItem)}
-                          title="View"
-                          style={{ background: '#10b981', color: 'white', border: 'none', borderRadius: '4px', padding: '4px 8px', margin: '0 2px', cursor: 'pointer' }}
+                          className="btn-settle"
+                          onClick={() => handleSettleLoad(item.originalItem)}
+                          title="Settle Load"
+                          style={{ background: '#8b5cf6', color: 'white', border: 'none', borderRadius: '4px', padding: '4px 8px', margin: '0 2px', cursor: 'pointer' }}
                         >
-                          👁️ View
+                          ✅ Settle
                         </button>
-                        <button
-                          className="btn-edit"
-                          onClick={() => handleEditLoad(item.originalItem)}
-                          title="Edit"
-                          style={{ background: '#3b82f6', color: 'white', border: 'none', borderRadius: '4px', padding: '4px 8px', margin: '0 2px', cursor: 'pointer' }}
-                        >
-                          ✏️ Edit
-                        </button>
-                        {item.status !== 'Settled' && (
-                          <button
-                            className="btn-settle"
-                            onClick={() => handleSettleLoad(item.originalItem)}
-                            title="Settle Load"
-                            style={{ background: '#8b5cf6', color: 'white', border: 'none', borderRadius: '4px', padding: '4px 8px', margin: '0 2px', cursor: 'pointer' }}
-                          >
-                            ✅ Settle
-                          </button>
-                        )}
-                        <button
-                          className="btn-delete"
-                          onClick={() => handleDeleteLoad(item.id)}
-                          title="Delete"
-                          style={{ background: '#ef4444', color: 'white', border: 'none', borderRadius: '4px', padding: '4px 8px', margin: '0 2px', cursor: 'pointer' }}
-                        >
-                          🗑 Delete
-                        </button>
-                      </td>
-                    </tr>
-                  ))}
-              </tbody>
-            </table>
-          </div>
-        ) : (
-          <div className="empty-state">No loads found. Click + Add New to create one.</div>
-        )}
-      </div>
-    );
-  };
+                      )}
+                      <button
+                        className="btn-delete"
+                        onClick={() => handleDeleteLoad(item.id)}
+                        title="Delete"
+                        style={{ background: '#ef4444', color: 'white', border: 'none', borderRadius: '4px', padding: '4px 8px', margin: '0 2px', cursor: 'pointer' }}
+                      >
+                        🗑 Delete
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+            </tbody>
+          </table>
+        </div>
+      ) : (
+        <div className="empty-state">No loads found. Click + Add New to create one.</div>
+      )}
+    </div>
+  );
+};
+
+// ========== VIEW, EDIT, DELETE HANDLERS FOR ALL VOUCHERS ==========
+
+const handleViewVoucher = (type, item) => {
+  setViewData(item);
+  setViewType(type);
+  setShowViewModal(true);
+};
+
+const handleEditVoucher = (type, item) => {
+  console.log('Editing voucher:', type, item);
+  
+  // Close the list view
+    setEditingInvoiceId(item.id);
+  if (type === 'Sales' || type === 'Billing' || type === 'Quotation') {
+    setShowSalesList(false);
+  } else if (type === 'Purchase') {
+    setShowPurchaseList(false);
+  } else if (type === 'Credit Note') {
+    setShowCreditNoteList(false);
+  } else if (type === 'Debit Note') {
+    setShowDebitNoteList(false);
+  } else if (type === 'Create Load') {
+    setShowCreateLoadList(false);
+  }
+  
+  // Populate the form based on type
+  if (type === 'Sales' || type === 'Billing') {
+    setInvoiceFormData({
+      billDate: item.billDate || new Date().toISOString().split('T')[0],
+      godown: item.godown || 'G1',
+      company: item.company || '',
+      area: item.area || '',
+      party: item.party || item.partyName || '',
+      BillSeries: item.billSeries || '',
+      billNo: item.billNo || '',
+      billType: item.billType || 'Credit',
+      dueDate: item.dueDate || '',
+      salesman: item.salesman || '',
+      narration: item.narration || ''
+    });
+    setInvoiceItems(item.items || []);
+    setInvoiceSummary(item.summary || { gross: 0, tpr: 0, scheme: 0, bottom: 0, star: 0, cd: 0, gst: 0, cess: 0, tcs: 0, rounding: 0, net: 0 });
+    setOpenFormFor('Billing');
+    setActiveSubMenu('Billing');
+  } 
+  else if (type === 'Quotation') {
+    setInvoiceFormData({
+      billDate: item.billDate || new Date().toISOString().split('T')[0],
+      godown: item.godown || 'G1',
+      company: item.company || '',
+      area: item.area || '',
+      party: item.party || item.partyName || '',
+      BillSeries: item.billSeries || '',
+      billNo: item.billNo || '',
+      billType: item.billType || 'Credit',
+      dueDate: item.dueDate || '',
+      salesman: item.salesman || '',
+      narration: item.narration || ''
+    });
+    setInvoiceItems(item.items || []);
+    setInvoiceSummary(item.summary || { gross: 0, tpr: 0, scheme: 0, bottom: 0, star: 0, cd: 0, gst: 0, cess: 0, tcs: 0, rounding: 0, net: 0 });
+    setOpenFormFor('Quotation');
+    setActiveSubMenu('Quotation');
+  }
+  else if (type === 'Purchase') {
+    setPurchaseFormData({
+      supplier: item.supplier || item.partyName || '',
+      company: item.company || '',
+      storageLocation: item.storageLocation || item.branchName || '',
+      invoiceDate: item.invoiceDate || item.billDate || new Date().toISOString().split('T')[0],
+      vno: item.vno || '',
+      invoiceNumber: item.invoiceNumber || item.billNo || '',
+      narration: item.narration || '',
+      discountPercent: item.discountPercent || '',
+      grossAmount: item.grossAmount || 0,
+      mrpTotal: item.mrpTotal || 0,
+      tcbPercent: item.tcbPercent || 0,
+      diBc1: item.diBc1 || 0,
+      afterDiBc1: item.afterDiBc1 || 0,
+      groBsAmt: item.groBsAmt || 0,
+      tcbAmount: item.tcbAmount || 0,
+      diBc2: item.diBc2 || 0,
+      afterDiBc2: item.afterDiBc2 || 0,
+      qbtAmt: item.qbtAmt || 0,
+      rounding: item.rounding || 0,
+      diBc3: item.diBc3 || 0,
+      afterDiBc3: item.afterDiBc3 || 0,
+      ceBsAmt: item.ceBsAmt || 0,
+      netAmt: item.netAmt || item.amount || 0
+    });
+    setPurchaseItems(item.items || []);
+    setOpenFormFor('Purchase');
+    setActiveSubMenu('Purchase');
+  }
+  else if (type === 'Credit Note') {
+    setCreditNoteFormData({
+      vDate: item.vDate || item.billDate || new Date().toISOString().split('T')[0],
+      vNo: item.vNo || item.billNo || '',
+      party: item.party || item.partyName || '',
+      godown: item.godown || 'G1',
+      salesman: item.salesman || '',
+      tinNo: item.tinNo || '',
+      company: item.company || '',
+      narr: item.narr || item.narration || '',
+      billSeries: item.billSeries || '',
+      billNo: item.billNo || '',
+      full: item.full || '',
+      refNo: item.refNo || '',
+      refDate: item.refDate || ''
+    });
+    setCreditNoteItems(item.items || []);
+    setCreditNoteSummary(item.summary || { grossAmt: 0, schemeAmt: 0, tprAmt: 0, cashDisc: 0, gstAmt: 0, starAmt: 0, starPercent: 0, addLess: 0, display: 0, coupon: 0, rounding: 0, cessAmt: 0, tcsPercent: 0, tcsAmt: 0, billBalAmt: 0, netAmt: 0 });
+    setOpenFormFor('Credit Note');
+    setActiveSubMenu('Credit Note');
+  }
+  else if (type === 'Debit Note') {
+    setDebitNoteFormData({
+      vDate: item.vDate || item.billDate || new Date().toISOString().split('T')[0],
+      vNo: item.vNo || item.billNo || '',
+      godown: item.godown || 'G1',
+      company: item.company || '',
+      narr: item.narr || item.narration || '',
+      supplier: item.supplier || item.partyName || '',
+      igst: item.igst || 'N'
+    });
+    setDebitNoteItems(item.items || []);
+    setDebitNoteSummary(item.summary || { grossAmt: 0, gstAmt: 0, tcsPercent: 0, tcsAmt: 0, beforeVatDiscAmt: 0, surcharge: 0, rounding: 0, beforeVatAddAmt: 0, afterVatDiscAmt: 0, netAmt: 0 });
+    setOpenFormFor('Debit Note');
+    setActiveSubMenu('Debit Note');
+  }
+  
+  // Add a default row if items are empty
+  if ((type === 'Sales' || type === 'Billing' || type === 'Quotation') && invoiceItems.length === 0) {
+    addInvoiceItem();
+  }
+  if (type === 'Purchase' && purchaseItems.length === 0) {
+    addPurchaseItem();
+  }
+  if (type === 'Credit Note' && creditNoteItems.length === 0) {
+    addCreditNoteItem();
+  }
+  if (type === 'Debit Note' && debitNoteItems.length === 0) {
+    addDebitNoteItem();
+  }
+};
+
+const handleDeleteVoucher = (type, id) => {
+  if (window.confirm(`Are you sure you want to delete this ${type}?`)) {
+    if (type === 'Sales' || type === 'Billing' || type === 'Quotation') {
+      setSalesListData(salesListData.filter(item => item.id !== id));
+    } else if (type === 'Purchase') {
+      setPurchaseListData(purchaseListData.filter(item => item.id !== id));
+    } else if (type === 'Credit Note') {
+      setCreditNoteListData(creditNoteListData.filter(item => item.id !== id));
+    } else if (type === 'Debit Note') {
+      setDebitNoteListData(debitNoteListData.filter(item => item.id !== id));
+    } else if (type === 'Create Load') {
+      setCreateLoadListData(createLoadListData.filter(item => item.id !== id));
+    }
+    alert(`${type} deleted successfully!`);
+  }
+};
   return (
     <div className="dashboard-container">
       <aside className="sidebar">
@@ -6022,10 +7193,18 @@ const Dashboard = () => {
             >
               📊 Dashboard
             </button>
+            
             <div className="notification-bell">🔔</div>
-            <div className="user-profile">
-              <div className="avatar">MK</div>
-            </div>
+
+<div className="logged-user-name">
+  {loggedUserName}
+</div>
+
+<div className="user-profile">
+  <div className="avatar">
+    {loggedUserName ? loggedUserName.substring(0, 2).toUpperCase() : "US"}
+  </div>
+</div>
           </div>
         </header>
 
@@ -6083,9 +7262,9 @@ const Dashboard = () => {
           )}
 
 
-         {activeSubMenu === 'Settle Load' && (
+             {activeSubMenu === 'Settle Load' && (
             <div className="master-section erp-master-form settle-load-form" style={{ maxWidth: '1400px', margin: '0 auto' }}>
-              <div className="erp-header">
+              <div className="erp-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                 <div>
                   <h2 className="erp-title">Settle Load</h2>
                   <p style={{ fontSize: '13px', color: '#6b7280', marginTop: '4px' }}>
@@ -6834,10 +8013,12 @@ const Dashboard = () => {
                 </div>
               </div>
             </div>
-          )}  {/* Bill Print Form */}
+          )}  
+                   {/* Bill Print Form */}
+
           {activeSubMenu === 'Bill Print' && !showBillPrintPreview && (
             <div className="master-section erp-master-form">
-              <div className="erp-header">
+              <div className="erp-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                 <div>
                   <h2 className="erp-title">Bill Print</h2>
                 </div>
@@ -7095,9 +8276,10 @@ const Dashboard = () => {
           )}
 
           {/* Quotation Form - Same as Sales Invoice but with Quotation title */}
+          {/* Quotation Form */}
           {activeSubMenu === 'Quotation' && openFormFor === 'Quotation' && (
             <div className="master-section erp-master-form sales-invoice">
-              <div className="erp-header">
+              <div className="erp-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                 <div>
                   <h2 className="erp-title">Quotation</h2>
                 </div>
@@ -7179,6 +8361,7 @@ const Dashboard = () => {
                           <th style={{ minWidth: '100px' }}>GST %</th>
                           <th style={{ minWidth: '100px' }}>SGST</th>
                           <th style={{ minWidth: '100px' }}>CGST</th>
+                          <th style={{ minWidth: '80px' }}>IGST</th>
                           <th style={{ minWidth: '120px' }}>Amount</th>
                           <th style={{ position: 'sticky', right: 0, backgroundColor: '#f8fafc', zIndex: 20, minWidth: '70px' }}>Action</th>
                         </tr>
@@ -7347,8 +8530,49 @@ const Dashboard = () => {
                             <td><input className="erp-input numeric" data-field="starAmt" data-index={index} value={item.starAmt} onChange={(e) => updateInvoiceItem(index, 'starAmt', e.target.value)} onKeyDown={(e) => handleInvoiceKeyDown(e, index, 'starAmt')} style={{ width: '100%' }} /></td>
                             <td><input className="erp-input numeric" data-field="taxable" data-index={index} value={item.taxable} onChange={(e) => updateInvoiceItem(index, 'taxable', e.target.value)} onKeyDown={(e) => handleInvoiceKeyDown(e, index, 'taxable')} style={{ width: '100%' }} /></td>
                             <td><input className="erp-input numeric small" data-field="gst" data-index={index} value={item.gst} onChange={(e) => updateInvoiceItem(index, 'gst', e.target.value)} onKeyDown={(e) => handleInvoiceKeyDown(e, index, 'gst')} style={{ width: '100%' }} /></td>
-                            <td><input className="erp-input numeric" data-field="sgst" data-index={index} value={item.sgst} onChange={(e) => updateInvoiceItem(index, 'sgst', e.target.value)} onKeyDown={(e) => handleInvoiceKeyDown(e, index, 'sgst')} style={{ width: '100%' }} /></td>
-                            <td><input className="erp-input numeric" data-field="cgst" data-index={index} value={item.cgst} onChange={(e) => updateInvoiceItem(index, 'cgst', e.target.value)} onKeyDown={(e) => handleInvoiceKeyDown(e, index, 'cgst')} style={{ width: '100%' }} /></td>
+                            <td>
+  <input
+    className="erp-input numeric"
+    data-field="sgst"
+    data-index={index}
+    value={item.sgst || "0.00"}
+    readOnly
+    style={{ width: '100%' }}
+  />
+</td>
+
+<td>
+  <input
+    className="erp-input numeric"
+    data-field="cgst"
+    data-index={index}
+    value={item.cgst || "0.00"}
+    readOnly
+    style={{ width: '100%' }}
+  />
+</td>
+
+<td>
+  <input
+    className="erp-input numeric"
+    data-field="igst"
+    data-index={index}
+    value={item.igst || "0.00"}
+    readOnly
+    style={{ width: '100%' }}
+  />
+</td>
+
+<td>
+  <input
+    className="erp-input numeric font-bold"
+    data-field="amount"
+    data-index={index}
+    value={item.amount || "0.00"}
+    readOnly
+    style={{ width: '100%', fontWeight: 'bold' }}
+  />
+</td>
                             <td><input className="erp-input numeric font-bold" data-field="amount" data-index={index} value={item.amount} onChange={(e) => updateInvoiceItem(index, 'amount', e.target.value)} onKeyDown={(e) => handleInvoiceKeyDown(e, index, 'amount')} style={{ width: '100%', fontWeight: 'bold' }} /></td>
                             <td style={{ position: 'sticky', right: 0, backgroundColor: index === activeRow ? '#eff6ff' : 'white', zIndex: 5 }}>
                               <button className="btn-delete text-red-500" onClick={() => deleteInvoiceItem(index)} style={{ padding: '6px 12px', whiteSpace: 'nowrap' }}>🗑 Delete</button>
@@ -7389,303 +8613,240 @@ const Dashboard = () => {
           )}
 
 
-          {/* Create Load Form */}
-          {activeSubMenu === 'Create Load' && openFormFor === 'Create Load' && (
-            <div className="master-section erp-master-form">
-              <div className="erp-header">
-                <div>
-                  <h2 className="erp-title">Create Load</h2>
-                </div>
-                <button className="close-form-btn" onClick={closeForm}>✕</button>
-              </div>
+         {activeSubMenu === "Create Load" && openFormFor === "Create Load" && (
+  <div className="master-section erp-master-form create-load-section">
+    <div className="erp-header">
+      <h2 className="erp-title">Create Load</h2>
+      <button className="close-form-btn" onClick={closeForm}>✕</button>
+    </div>
 
-              <form className="master-form" onSubmit={(e) => { e.preventDefault(); saveCreateLoad(); }}>
-                <div className="form-section">
-                  <h4 className="section-header">Load Information</h4>
-                  {/* Row 1: 5 fields */}
-                  <div className="form-grid-5">
-                    <div className="labeled-input">
-                      <label>Load Series *</label>
-                      <input
-                        type="text"
-                        name="loadSeries"
-                        className="erp-input"
-                        placeholder="Load Series"
-                        value={createLoadFormData.loadSeries}
-                        onChange={handleCreateLoadInputChange}
-                        required
-                      />
-                    </div>
-                    <div className="labeled-input">
-                      <label>Load No *</label>
-                      <input
-                        type="text"
-                        name="loadNo"
-                        className="erp-input"
-                        placeholder="Load Number"
-                        value={createLoadFormData.loadNo}
-                        onChange={handleCreateLoadInputChange}
-                        required
-                      />
-                    </div>
-                    <div className="labeled-input">
-                      <label>Load Date *</label>
-                      <input
-                        type="date"
-                        name="loadDate"
-                        className="erp-input"
-                        value={createLoadFormData.loadDate}
-                        onChange={handleCreateLoadInputChange}
-                        required
-                      />
-                    </div>
-                    <div className="labeled-input">
-                      <label>Company *</label>
-                      <select
-                        name="company"
-                        className="erp-select"
-                        value={createLoadFormData.company}
-                        onChange={handleCreateLoadInputChange}
-                        required
-                      >
-                        <option value="">Select Company</option>
-                        {companies.map(c => <option key={c.id} value={c.name}>{c.name}</option>)}
-                      </select>
-                    </div>
-                    <div className="labeled-input">
-                      <label>Delivery By *</label>
-                      <input
-                        type="text"
-                        name="deliveryBy"
-                        className="erp-input"
-                        placeholder="Delivery By"
-                        value={createLoadFormData.deliveryBy}
-                        onChange={handleCreateLoadInputChange}
-                        required
-                      />
-                    </div>
-                  </div>
+    <form className="master-form" onSubmit={(e) => { e.preventDefault(); saveCreateLoad(); }}>
+      <div className="form-section create-load-card">
+        <h4 className="section-header">Load Information</h4>
 
-                  {/* Row 2: 5 fields */}
-                  <div className="form-grid-5">
-                    <div className="labeled-input">
-                      <label>Delivery Boy *</label>
-                      <select
-                        name="deliverBoy"
-                        className="erp-select"
-                        value={createLoadFormData.deliverBoy}
-                        onChange={handleCreateLoadInputChange}
-                        required
-                      >
-                        <option value="db">DB</option>
-                        <option value="other">Other</option>
-                      </select>
-                    </div>
-                    <div className="labeled-input">
-                      <label>Salesman Selection</label>
-                      <select
-                        name="selectedSalesman"
-                        className="erp-select"
-                        value={createLoadFormData.selectedSalesman}
-                        onChange={handleCreateLoadInputChange}
-                        multiple
-                        size="3"
-                        style={{ height: 'auto', minHeight: '80px' }}
-                      >
-                        {salesmen.filter(s => s.type === 'SALESMAN').map(s => (
-                          <option key={s.id} value={s.name}>{s.name}</option>
-                        ))}
-                      </select>
-                      <small style={{ fontSize: '11px', color: '#666' }}>Hold Ctrl/Cmd to select multiple</small>
-                    </div>
-                    <div className="labeled-input">
-                      <label>Bill From Date *</label>
-                      <input
-                        type="date"
-                        name="billFromDate"
-                        className="erp-input"
-                        value={createLoadFormData.billFromDate}
-                        onChange={handleCreateLoadInputChange}
-                        required
-                      />
-                    </div>
-                    <div className="labeled-input">
-                      <label>Bill To Date *</label>
-                      <input
-                        type="date"
-                        name="billToDate"
-                        className="erp-input"
-                        value={createLoadFormData.billToDate}
-                        onChange={handleCreateLoadInputChange}
-                        required
-                      />
-                    </div>
-                    <div className="labeled-input narration-field">
-                      <label>Narration</label>
-                      <textarea
-                        name="narration"
-                        className="erp-textarea"
-                        rows="2"
-                        placeholder="Enter narration..."
-                        value={createLoadFormData.narration}
-                        onChange={handleCreateLoadInputChange}
-                      />
-                    </div>
-                  </div>
-                </div>
+        <div className="create-load-grid-5">
+          <div className="labeled-input">
+            <label>Load Series *</label>
+            <input className="erp-input" name="loadSeries" value={createLoadFormData.loadSeries} onChange={handleCreateLoadInputChange} required />
+          </div>
 
-                <div className="form-section">
-                  <h4 className="section-header">Invoices Grid</h4>
+          <div className="labeled-input">
+            <label>Load No *</label>
+            <input className="erp-input" name="loadNo" value={createLoadFormData.loadNo} onChange={handleCreateLoadInputChange} required />
+          </div>
 
-                  {/* Removed Add Invoice button - only grid is shown */}
+          <div className="labeled-input">
+            <label>Load Date *</label>
+            <input type="date" className="erp-input" name="loadDate" value={createLoadFormData.loadDate} onChange={handleCreateLoadInputChange} required />
+          </div>
 
-                  <div className="data-table-container" style={{ overflowX: 'auto', overflowY: 'auto', maxHeight: '400px' }}>
-                    <table className="data-table" style={{ minWidth: '1200px' }}>
-                      <thead style={{ position: 'sticky', top: 0, zIndex: 10 }}>
-                        <tr>
-                          <th style={{ position: 'sticky', left: 0, backgroundColor: '#f8fafc', zIndex: 20, width: '50px' }}>Sl No</th>
-                          <th style={{ width: '100px' }}>Select</th>
-                          <th style={{ width: '120px' }}>Party Code</th>
-                          <th style={{ width: '180px' }}>Party Name</th>
-                          <th style={{ width: '100px' }}>Bill Series</th>
-                          <th style={{ width: '100px' }}>Bill No</th>
-                          <th style={{ width: '110px' }}>Bill Date</th>
-                          <th style={{ width: '120px' }}>Salesman</th>
-                          <th style={{ width: '120px' }}>Area</th>
-                          <th style={{ width: '120px' }}>Amount</th>
-                          <th style={{ position: 'sticky', right: 0, backgroundColor: '#f8fafc', zIndex: 20, width: '80px' }}>Action</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {createLoadItems.map((item, index) => (
-                          <tr key={item.id}>
-                            <td style={{ position: 'sticky', left: 0, backgroundColor: 'white', zIndex: 5 }}>{item.sr}</td>
-                            <td style={{ textAlign: 'center' }}>
-                              <input
-                                type="checkbox"
-                                checked={item.selected || false}
-                                onChange={(e) => updateCreateLoadItem(index, 'selected', e.target.checked)}
-                                style={{ width: '20px', height: '20px', cursor: 'pointer' }}
-                              />
-                            </td>
-                            <td>
-                              <input
-                                type="text"
-                                className="erp-input"
-                                value={item.partyCode}
-                                onChange={(e) => updateCreateLoadItem(index, 'partyCode', e.target.value)}
-                                placeholder="Party Code"
-                                style={{ width: '100%' }}
-                              />
-                            </td>
-                            <td>
-                              <input
-                                type="text"
-                                className="erp-input"
-                                value={item.partyName}
-                                onChange={(e) => updateCreateLoadItem(index, 'partyName', e.target.value)}
-                                placeholder="Party Name"
-                                style={{ width: '100%' }}
-                              />
-                            </td>
-                            <td>
-                              <input
-                                type="text"
-                                className="erp-input"
-                                value={item.billSeries}
-                                onChange={(e) => updateCreateLoadItem(index, 'billSeries', e.target.value)}
-                                placeholder="Series"
-                                style={{ width: '100%' }}
-                              />
-                            </td>
-                            <td>
-                              <input
-                                type="text"
-                                className="erp-input"
-                                value={item.billNo}
-                                onChange={(e) => updateCreateLoadItem(index, 'billNo', e.target.value)}
-                                placeholder="Bill No"
-                                style={{ width: '100%' }}
-                              />
-                            </td>
-                            <td>
-                              <input
-                                type="date"
-                                className="erp-input"
-                                value={item.billDate}
-                                onChange={(e) => updateCreateLoadItem(index, 'billDate', e.target.value)}
-                                style={{ width: '100%' }}
-                              />
-                            </td>
-                            <td>
-                              <select
-                                className="erp-select"
-                                value={item.salesman}
-                                onChange={(e) => updateCreateLoadItem(index, 'salesman', e.target.value)}
-                                style={{ width: '100%' }}
-                              >
-                                <option value="">Select</option>
-                                {salesmen.map(s => <option key={s.id} value={s.name}>{s.name}</option>)}
-                              </select>
-                            </td>
-                            <td>
-                              <select
-                                className="erp-select"
-                                value={item.area}
-                                onChange={(e) => updateCreateLoadItem(index, 'area', e.target.value)}
-                                style={{ width: '100%' }}
-                              >
-                                <option value="">Select</option>
-                                {areas.map(a => <option key={a.id} value={a.name}>{a.name}</option>)}
-                              </select>
-                            </td>
-                            <td>
-                              <input
-                                type="number"
-                                className="erp-input numeric"
-                                value={item.amount}
-                                onChange={(e) => updateCreateLoadItem(index, 'amount', e.target.value)}
-                                placeholder="Amount"
-                                style={{ width: '100%' }}
-                              />
-                            </td>
-                            <td>
-                              <button
-                                type="button"
-                                className="btn-delete"
-                                onClick={() => deleteCreateLoadItem(index)}
-                                style={{ whiteSpace: 'nowrap' }}
-                              >
-                                🗑 Delete
-                              </button>
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                    {createLoadItems.length === 0 && (
-                      <div className="empty-state" style={{ padding: '40px', textAlign: 'center' }}>
-                        No invoices added.
-                      </div>
-                    )}
-                  </div>
-                </div>
+          <div className="labeled-input">
+            <label>Company *</label>
+            <select className="erp-select" name="company" value={createLoadFormData.company} onChange={handleCreateLoadInputChange} required>
+              <option value="">Select Company</option>
+              {companies.map((c) => (
+                <option key={c.id || c.code || c.name} value={c.name}>{c.name}</option>
+              ))}
+            </select>
+          </div>
 
-                <div className="form-actions">
-                  <button type="submit" className="btn-primary">
-                    💾 Create Load
-                  </button>
-                  <button type="button" className="btn-secondary" onClick={closeForm}>
-                    Cancel
-                  </button>
-                </div>
-              </form>
-            </div>
-          )}
-          {/* Print Load Form */}
+          <div className="labeled-input">
+            <label>Delivery Boy *</label>
+            <select className="erp-select" name="deliverBoy" value={createLoadFormData.deliverBoy} onChange={handleCreateLoadInputChange} required>
+              <option value="">Select</option>
+              <option value="DB">DB</option>
+              <option value="Other">Other</option>
+            </select>
+          </div>
+        </div>
+
+        <div className="create-load-grid-5">
+       <div className="labeled-input create-load-salesman-cell">
+  <label>Salesman Selection *</label>
+
+  <button
+    type="button"
+    className="erp-input create-load-salesman-btn"
+    onClick={(e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      setShowCreateLoadSalesmanBox((prev) => !prev);
+    }}
+  >
+    {getSelectedSalesmanText()}
+  </button>
+
+  {showCreateLoadSalesmanBox && (
+    <div
+      className="create-load-salesman-dropdown"
+      onClick={(e) => e.stopPropagation()}
+    >
+      <label className="create-load-check-row">
+        <input
+          type="checkbox"
+          checked={
+            salesmen.length > 0 &&
+            createLoadFormData.selectedSalesman.length === salesmen.length
+          }
+          onChange={(e) => {
+            e.stopPropagation();
+
+            const checked = e.target.checked;
+
+            setCreateLoadFormData((prev) => ({
+              ...prev,
+              selectedSalesman: checked
+  ? salesmen.flatMap((s) =>
+      [s.name, s.salesmanName, s.code, s.salesmanCode].filter(Boolean)
+    )
+  : []
+            }));
+
+            setCreateLoadItems([]);
+setCreateLoadDateRangeChanged(false);
+setShowCreateLoadSalesmanBox(false);
+          }}
+        />
+        <span>ALL SALESMAN</span>
+      </label>
+
+      {salesmen.map((salesman, index) => {
+        const salesmanValue =
+          salesman.name || salesman.salesmanName || salesman.code;
+
+        return (
+          <label
+            key={salesman.id || index}
+            className="create-load-check-row"
+          >
+            <input
+              type="checkbox"
+              checked={(createLoadFormData.selectedSalesman || []).includes(
+                salesmanValue
+              )}
+             onChange={(e) => {
+  e.stopPropagation();
+
+  setCreateLoadFormData((prev) => {
+    const oldSalesmen = prev.selectedSalesman || [];
+
+    const salesmanValues = [
+      salesman.name,
+      salesman.salesmanName,
+      salesman.code,
+      salesman.salesmanCode
+    ].filter(Boolean);
+
+    const alreadySelected = salesmanValues.some((v) =>
+      oldSalesmen.includes(v)
+    );
+
+    const updatedSalesmen = alreadySelected
+      ? oldSalesmen.filter((s) => !salesmanValues.includes(s))
+      : [...oldSalesmen, ...salesmanValues];
+
+    return {
+      ...prev,
+      selectedSalesman: updatedSalesmen
+    };
+  });
+
+  setShowCreateLoadSalesmanBox(false);
+}}
+            />
+
+            <span>
+              {salesman.code} - {salesman.name}
+            </span>
+          </label>
+        );
+      })}
+    </div>
+  )}
+</div>
+          <div className="labeled-input">
+            <label>Bill From Date *</label>
+            <input type="date" className="erp-input" name="billFromDate" value={createLoadFormData.billFromDate} onChange={handleCreateLoadInputChange} required />
+          </div>
+
+          <div className="labeled-input">
+            <label>Bill To Date *</label>
+            <input type="date" className="erp-input" name="billToDate" value={createLoadFormData.billToDate} onChange={handleCreateLoadInputChange} required />
+          </div>
+
+          <div className="labeled-input">
+            <label>Narration</label>
+            <input className="erp-input" name="narration" value={createLoadFormData.narration} onChange={handleCreateLoadInputChange} placeholder="Narration" />
+          </div>
+
+          
+        </div>
+      </div>
+
+    <div className="receipt-sales-table-wrap create-load-grid-wrap">
+  <table className="receipt-sales-table create-load-entry-table">
+    <thead>
+      <tr>
+        <th>Sl</th>
+        <th>Select</th>
+        <th>Bill Date</th>
+        <th>Series</th>
+        <th>Bill No</th>
+        <th>Party Code</th>
+        <th>Party Name</th>
+        <th>Salesman</th>
+        <th>Area</th>
+        <th>Amount</th>
+      </tr>
+    </thead>
+
+    <tbody>
+      {createLoadItems.length === 0 ? (
+        <tr>
+          <td colSpan="10" className="no-data">
+            Select salesman and date range to load bills
+          </td>
+        </tr>
+      ) : (
+        createLoadItems.map((item, index) => (
+          <tr key={item.id || index}>
+            <td>{index + 1}</td>
+            <td>
+              <input
+                type="checkbox"
+                checked={item.selected !== false}
+                onChange={(e) =>
+                  updateCreateLoadItem(index, "selected", e.target.checked)
+                }
+              />
+            </td>
+            <td>{item.billDate || "-"}</td>
+            <td>{item.billSeries || "-"}</td>
+            <td>{item.billNo || "-"}</td>
+            <td>{item.partyCode || "-"}</td>
+            <td>{item.partyName || "-"}</td>
+            <td>{item.salesman || "-"}</td>
+            <td>{item.area || "-"}</td>
+            <td className="amount-cell">
+              ₹{Number(item.amount || item.billAmount || 0).toFixed(2)}
+            </td>
+          </tr>
+        ))
+      )}
+    </tbody>
+  </table>
+</div>
+      <div className="form-actions">
+        <button type="submit" className="btn-primary">💾 Create Load</button>
+        <button type="button" className="btn-secondary" onClick={closeForm}>Cancel</button>
+      </div>
+    </form>
+  </div>
+)}
+                    {/* Print Load Form */}
           {activeSubMenu === 'Print Load' && openFormFor === 'Print Load' && (
             <div className="master-section erp-master-form">
-              <div className="erp-header">
+              <div className="erp-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                 <div>
                   <h2 className="erp-title">Print Load</h2>
                 </div>
@@ -8176,124 +9337,171 @@ const Dashboard = () => {
                         <th className="actions-header">Actions</th>
                       </tr>
                     </thead>
-                    <tbody>
-                      {firms
-                        .filter(f =>
-                          f.firmName?.toLowerCase().includes((filters.firm || '').toLowerCase()) ||
-                          f.firmCode?.toLowerCase().includes((filters.firm || '').toLowerCase())
-                        )
-                        .map(firm => (
-                          <tr key={firm.id}>
-                            <td>{firm.firmCode}</td>
-                            <td>{firm.firmName}</td>
-                            <td>{firm.address1 || '-'} {firm.address2 || ''}</td>
-                            <td>{firm.city || '-'}</td>
-                            <td>{firm.state || '-'}</td>
-                            <td>{firm.mobileNo || '-'}</td>
-                            <td>{firm.gstNo || '-'}</td>
-                            <td className="action-buttons-cell">
-                              <div className="action-buttons-wrapper" style={{ display: 'flex', gap: '8px', alignItems: 'center', justifyContent: 'center' }}>
-                                <button
-                                  className="action-btn action-btn-view"
-                                  onClick={() => {
-                                    alert(`View Firm:\n\nCode: ${firm.firmCode}\nName: ${firm.firmName}\nAddress: ${firm.address1 || 'N/A'}\nCity: ${firm.city || 'N/A'}\nState: ${firm.state || 'N/A'}\nMobile: ${firm.mobileNo || 'N/A'}\nGST: ${firm.gstNo || 'N/A'}`);
-                                  }}
-                                  title="View"
-                                  style={{
-                                    background: '#10b981',
-                                    color: 'white',
-                                    border: 'none',
-                                    borderRadius: '4px',
-                                    padding: '6px 12px',
-                                    cursor: 'pointer',
-                                    fontSize: '12px',
-                                    fontWeight: '500',
-                                    display: 'inline-flex',
-                                    alignItems: 'center',
-                                    gap: '4px',
-                                    transition: 'all 0.2s ease'
-                                  }}
-                                  onMouseEnter={(e) => e.currentTarget.style.background = '#059669'}
-                                  onMouseLeave={(e) => e.currentTarget.style.background = '#10b981'}
-                                >
-                                  👁️ View
-                                </button>
-                                <button
-                                  className="action-btn action-btn-edit"
-                                  onClick={() => {
-                                    setFirmData({
-                                      firmCode: firm.firmCode,
-                                      firmName: firm.firmName,
-                                      address1: firm.address1 || '',
-                                      address2: firm.address2 || '',
-                                      city: firm.city || '',
-                                      pinCode: firm.pinCode || '',
-                                      state: firm.state || '',
-                                      country: firm.country || '',
-                                      phoneNo: firm.phoneNo || '',
-                                      mobileNo: firm.mobileNo || '',
-                                      tinNo: firm.tinNo || '',
-                                      regNo: firm.regNo || '',
-                                      gstNo: firm.gstNo || '',
-                                      drugLicNo: firm.drugLicNo || '',
-                                      foodLicenceNo: firm.foodLicenceNo || '',
-                                      distributorId: firm.distributorId || '',
-                                      apiKey: firm.apiKey || ''
-                                    });
-                                    setOpenFormFor('Firm Creation');
-                                  }}
-                                  title="Edit"
-                                  style={{
-                                    background: '#3b82f6',
-                                    color: 'white',
-                                    border: 'none',
-                                    borderRadius: '4px',
-                                    padding: '6px 12px',
-                                    cursor: 'pointer',
-                                    fontSize: '12px',
-                                    fontWeight: '500',
-                                    display: 'inline-flex',
-                                    alignItems: 'center',
-                                    gap: '4px',
-                                    transition: 'all 0.2s ease'
-                                  }}
-                                  onMouseEnter={(e) => e.currentTarget.style.background = '#2563eb'}
-                                  onMouseLeave={(e) => e.currentTarget.style.background = '#3b82f6'}
-                                >
-                                  ✏️ Edit
-                                </button>
-                                <button
-                                  className="action-btn action-btn-delete"
-                                  onClick={() => {
-                                    if (window.confirm('Are you sure you want to delete this firm?')) {
-                                      setFirms(firms.filter(f => f.id !== firm.id));
-                                    }
-                                  }}
-                                  title="Delete"
-                                  style={{
-                                    background: '#ef4444',
-                                    color: 'white',
-                                    border: 'none',
-                                    borderRadius: '4px',
-                                    padding: '6px 12px',
-                                    cursor: 'pointer',
-                                    fontSize: '12px',
-                                    fontWeight: '500',
-                                    display: 'inline-flex',
-                                    alignItems: 'center',
-                                    gap: '4px',
-                                    transition: 'all 0.2s ease'
-                                  }}
-                                  onMouseEnter={(e) => e.currentTarget.style.background = '#dc2626'}
-                                  onMouseLeave={(e) => e.currentTarget.style.background = '#ef4444'}
-                                >
-                                  🗑 Delete
-                                </button>
-                              </div>
-                            </td>
-                          </tr>
-                        ))}
-                    </tbody>
+                   <tbody>
+  {firms
+    .filter((f) =>
+      f.firmName?.toLowerCase().includes((filters.firm || "").toLowerCase()) ||
+      f.firmCode?.toLowerCase().includes((filters.firm || "").toLowerCase())
+    )
+    .map((firm) => (
+      <tr key={firm._id || firm.firmId}>
+        <td>{firm.firmCode}</td>
+        <td>{firm.firmName}</td>
+        <td>
+          {firm.address1 || "-"} {firm.address2 || ""}
+        </td>
+        <td>{firm.city || "-"}</td>
+        <td>{firm.state || "-"}</td>
+        <td>{firm.mobileNo || "-"}</td>
+        <td>{firm.gstNo || "-"}</td>
+
+        <td className="action-buttons-cell">
+          <div
+            className="action-buttons-wrapper"
+            style={{
+              display: "flex",
+              gap: "8px",
+              alignItems: "center",
+              justifyContent: "center",
+            }}
+          >
+            <button
+              className="action-btn action-btn-view"
+              onClick={() => {
+                alert(
+                  `View Firm:\n\nFirm ID: ${firm.firmId || "N/A"}\nDistributor ID: ${firm.distributorId || "N/A"}\nCode: ${firm.firmCode}\nName: ${firm.firmName}\nAddress: ${firm.address1 || "N/A"} ${firm.address2 || ""}\nCity: ${firm.city || "N/A"}\nState: ${firm.state || "N/A"}\nMobile: ${firm.mobileNo || "N/A"}\nGST: ${firm.gstNo || "N/A"}`
+                );
+              }}
+              title="View"
+              style={{
+                background: "#10b981",
+                color: "white",
+                border: "none",
+                borderRadius: "4px",
+                padding: "6px 12px",
+                cursor: "pointer",
+                fontSize: "12px",
+                fontWeight: "500",
+                display: "inline-flex",
+                alignItems: "center",
+                gap: "4px",
+                transition: "all 0.2s ease",
+              }}
+              onMouseEnter={(e) =>
+                (e.currentTarget.style.background = "#059669")
+              }
+              onMouseLeave={(e) =>
+                (e.currentTarget.style.background = "#10b981")
+              }
+            >
+              👁️ View
+            </button>
+
+            <button
+              className="action-btn action-btn-edit"
+              onClick={() => {
+                setFirmData({
+                  firmCode: firm.firmCode || "",
+                  firmName: firm.firmName || "",
+                  address1: firm.address1 || "",
+                  address2: firm.address2 || "",
+                  city: firm.city || "",
+                  pinCode: firm.pinCode || "",
+                  state: firm.state || "",
+                  country: firm.country || "India",
+                  phoneNo: firm.phoneNo || "",
+                  mobileNo: firm.mobileNo || "",
+                  tinNo: firm.tinNo || "",
+                  regNo: firm.regNo || "",
+                  gstNo: firm.gstNo || "",
+                  drugLicNo: firm.drugLicNo || "",
+                  foodLicenceNo: firm.foodLicenceNo || "",
+                  distributorId: firm.distributorId || "",
+                  apiKey: firm.apiKey || "",
+                });
+
+                setOpenFormFor("Firm Creation");
+              }}
+              title="Edit"
+              style={{
+                background: "#3b82f6",
+                color: "white",
+                border: "none",
+                borderRadius: "4px",
+                padding: "6px 12px",
+                cursor: "pointer",
+                fontSize: "12px",
+                fontWeight: "500",
+                display: "inline-flex",
+                alignItems: "center",
+                gap: "4px",
+                transition: "all 0.2s ease",
+              }}
+              onMouseEnter={(e) =>
+                (e.currentTarget.style.background = "#2563eb")
+              }
+              onMouseLeave={(e) =>
+                (e.currentTarget.style.background = "#3b82f6")
+              }
+            >
+              ✏️ Edit
+            </button>
+
+            <button
+              className="action-btn action-btn-delete"
+              onClick={() => {
+                alert(
+                  "Delete from database is not added yet. This button will only remove from screen."
+                );
+
+                setFirms((prev) =>
+                  prev.filter(
+                    (f) =>
+                      (f._id || f.firmId) !== (firm._id || firm.firmId)
+                  )
+                );
+              }}
+              title="Delete"
+              style={{
+                background: "#ef4444",
+                color: "white",
+                border: "none",
+                borderRadius: "4px",
+                padding: "6px 12px",
+                cursor: "pointer",
+                fontSize: "12px",
+                fontWeight: "500",
+                display: "inline-flex",
+                alignItems: "center",
+                gap: "4px",
+                transition: "all 0.2s ease",
+              }}
+              onMouseEnter={(e) =>
+                (e.currentTarget.style.background = "#dc2626")
+              }
+              onMouseLeave={(e) =>
+                (e.currentTarget.style.background = "#ef4444")
+              }
+            >
+              🗑 Delete
+            </button>
+          </div>
+        </td>
+      </tr>
+    ))}
+
+  {firms.filter(
+    (f) =>
+      f.firmName?.toLowerCase().includes((filters.firm || "").toLowerCase()) ||
+      f.firmCode?.toLowerCase().includes((filters.firm || "").toLowerCase())
+  ).length === 0 && (
+    <tr>
+      <td colSpan="8" style={{ textAlign: "center", padding: "14px" }}>
+        No firms found
+      </td>
+    </tr>
+  )}
+</tbody>
                   </table>
                 </div>
               ) : (
@@ -8848,20 +10056,21 @@ const Dashboard = () => {
 
           {activeMenu === "transactions" && (
 
-            <Transaction
-              salesInvoices={salesListData}
-              salesmen={salesmen}
-              accounts={accounts}
-              customerBanks={customerBanks}
-              activeTransaction={activeSubMenu}
-              openFormFor={openFormFor}
-              showReceiptForm={showReceiptForm}
-              setShowReceiptForm={setShowReceiptForm}
-              transactionFormMode={transactionFormMode}
-              setTransactionFormMode={setTransactionFormMode}
-              setActiveTransaction={setOpenFormFor}
-
-            />
+<Transaction
+  salesInvoices={salesListData}
+  salesmen={salesmen}
+  areas={areas}
+  accounts={accounts}
+  otherAccounts={otherAccounts}
+  customerBanks={customerBanks}
+  activeTransaction={activeSubMenu}
+  openFormFor={openFormFor}
+  showReceiptForm={showReceiptForm}
+  setShowReceiptForm={setShowReceiptForm}
+  transactionFormMode={transactionFormMode}
+  setTransactionFormMode={setTransactionFormMode}
+  setActiveTransaction={setOpenFormFor}
+/>
           )}
 
           {/* Product - Form View */}
@@ -8999,21 +10208,23 @@ const Dashboard = () => {
                         <label>Reorder Level</label>
                         <input name="Reorder_Level" placeholder="0" value={productForm.Reorder_Level} onChange={handleProductInput} type="number" />
                       </div>
-                      <div className="form-actions">
-                        <button type="submit" className="btn-primary">Save Product</button>
+                      <div className="form-actions-left">
+  <button type="submit" className="btn-primary">
+    Save Product
+  </button>
 
-                        <button
-                          type="button"
-                          className="btn-secondary"
-                          onClick={closeForm}
-                        >
-                          Cancel
-                        </button>
+  <button
+    type="button"
+    className="btn-secondary"
+    onClick={closeForm}
+  >
+    Cancel
+  </button>
 
-                        <a href="/product-mapping" className="link-mapping">
-                          Product Mapping
-                        </a>
-                      </div>
+  <a href="/product-mapping" className="link-mapping">
+    Product Mapping
+  </a>
+</div>
                     </div>
                   </div>
                 </div>
@@ -9070,6 +10281,21 @@ const Dashboard = () => {
                       <div className="labeled-input"><label>Opening Balance</label><div style={{ display: 'flex', gap: '8px' }}><input name="openingBal" placeholder="0.00" value={accountForm.openingBal} onChange={handleAccountInput} style={{ flex: 1 }} /><select name="openingBalType" value={accountForm.openingBalType} onChange={handleAccountInput} style={{ width: '80px' }}><option value="Dr">Dr</option><option value="Cr">Cr</option></select></div></div>
                       <div className="labeled-input"><label>Contact Person</label><input name="contactPerson" placeholder="Contact Person" value={accountForm.contactPerson} onChange={handleAccountInput} /></div>
                     </div>
+                    <div className="labeled-input">
+  <label>Inv Type</label>
+  <select name="invType" value={accountForm.invType} onChange={handleAccountInput}>
+    <option value="TAXABLE">TAXABLE</option>
+    <option value="CST">CST</option>
+  </select>
+</div>
+
+<div className="labeled-input">
+  <label>Tax On</label>
+  <select name="taxOn" value={accountForm.taxOn} onChange={handleAccountInput}>
+    <option value="SRATE">SRATE</option>
+    <option value="MRP">MRP</option>
+  </select>
+</div>
                   </>
                 )}
                 {accountActiveTab === 'gst' && (
@@ -9201,6 +10427,21 @@ const Dashboard = () => {
                       <div className="labeled-input"><label>Tin No.</label><input name="tinNo" placeholder="Tin No." value={otherAccountForm.tinNo} onChange={handleOtherAccountInput} /></div>
                       <div className="labeled-input"><label>Opening Balance</label><div style={{ display: 'flex', gap: '8px' }}><input name="openingBal" placeholder="0.00" value={otherAccountForm.openingBal} onChange={handleOtherAccountInput} style={{ flex: 1 }} /><select name="openingBalType" value={otherAccountForm.openingBalType} onChange={handleOtherAccountInput} style={{ width: '80px' }}><option value="Dr">Dr</option><option value="Cr">Cr</option></select></div></div>
                     </div>
+                    <div className="labeled-input">
+  <label>Inv Type</label>
+  <select name="invType" value={otherAccountForm.invType} onChange={handleOtherAccountInput}>
+    <option value="TAXABLE">TAXABLE</option>
+    <option value="CST">CST</option>
+  </select>
+</div>
+
+<div className="labeled-input">
+  <label>Tax On</label>
+  <select name="taxOn" value={otherAccountForm.taxOn} onChange={handleOtherAccountInput}>
+    <option value="SRATE">SRATE</option>
+    <option value="MRP">MRP</option>
+  </select>
+</div>
                   </>
                 )}
                 {otherAccountActiveTab === 'gst' && (
@@ -9233,7 +10474,39 @@ const Dashboard = () => {
               </form>
             </div>
           )}
+{String(otherAccountForm.accountGroup || "").toUpperCase() === "BANK ACCOUNTS" && (
+  <div className="form-grid-3">
+    <div className="labeled-input">
+      <label>Bank Account No</label>
+      <input
+        name="bankAccountNo"
+        placeholder="Bank Account No"
+        value={otherAccountForm.bankAccountNo || ""}
+        onChange={handleOtherAccountInput}
+      />
+    </div>
 
+    <div className="labeled-input">
+      <label>IFSC Code</label>
+      <input
+        name="ifscCode"
+        placeholder="IFSC Code"
+        value={otherAccountForm.ifscCode || ""}
+        onChange={handleOtherAccountInput}
+      />
+    </div>
+
+    <div className="labeled-input">
+      <label>Branch</label>
+      <input
+        name="branchName"
+        placeholder="Branch"
+        value={otherAccountForm.branchName || ""}
+        onChange={handleOtherAccountInput}
+      />
+    </div>
+  </div>
+)}
           {/* Other Account - Grid View */}
           {activeSubMenu === 'Other Account' && openFormFor !== 'Other Account' && (
             renderDataTable('Other Accounts List', getFilteredOtherAccounts(), [
@@ -9517,300 +10790,391 @@ const Dashboard = () => {
           {/* Salesman To Area Mapping UI */}
           {activeSubMenu === 'Salesman To Area' && <SalesmanToAreaMapping />}
 
+        {/* Sales Invoice (Billing) Form */}
+{activeSubMenu === 'Billing' && openFormFor === 'Billing' && (
+  <div className="master-section erp-master-form sales-invoice">
+    <div className="erp-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+      <div>
+        <h2 className="erp-title">Sales Invoice (Billing)</h2>
+      </div>
+      <button className="close-form-btn" onClick={closeForm}>✕</button>
+    </div>
 
-          {/* Sales Invoice (Billing) Form */}
-          {activeSubMenu === 'Billing' && openFormFor === 'Billing' && (
-            <div className="master-section erp-master-form sales-invoice">
-              <div className="erp-header">
-                <div>
-                  <h2 className="erp-title">Sales Invoice (Billing)</h2>
-                </div>
-                <button className="close-form-btn" onClick={closeForm}>✕</button>
-              </div>
+    {/* Invoice Header - 4 col grid */}
+    <div className="form-section">
+      <h4 className="section-header">Invoice Header</h4>
+      <div className="invoice-header-grid">
+        <div className="labeled-input"><label>Bill Date *</label><input type="date" name="billDate" className="erp-input" value={invoiceFormData.billDate} onChange={handleInvoiceInputChange} /></div>
+        <div className="labeled-input"><label>Godown *</label>
+          <select name="godown" className="erp-select" value={invoiceFormData.godown} onChange={handleInvoiceInputChange}>
+            <option value="">Select</option>
+            {godowns.map(g => <option key={g.id} value={g.code}>{g.name}</option>)}
+          </select>
+        </div>
+        <div className="labeled-input"><label>Company</label>
+          <select name="company" className="erp-select" value={invoiceFormData.company} onChange={handleInvoiceInputChange}>
+            <option value="">Select</option>
+            {companies.map(c => <option key={c.id} value={c.name}>{c.name}</option>)}
+          </select>
+        </div>
+        <div className="labeled-input"><label>Area *</label>
+          <select name="area" className="erp-select" value={invoiceFormData.area} onChange={handleInvoiceInputChange}>
+            <option value="">Select</option>
+            {areas.map(a => <option key={a.id} value={a.name}>{a.name}</option>)}
+          </select>
+        </div>
 
-              {/* Invoice Header - 4 col grid */}
-              <div className="form-section">
-                <h4 className="section-header">Invoice Header</h4>
-                <div className="invoice-header-grid">
-                  <div className="labeled-input"><label>Bill Date *</label><input type="date" name="billDate" className="erp-input" value={invoiceFormData.billDate} onChange={handleInvoiceInputChange} /></div>
-                  <div className="labeled-input"><label>Godown *</label>
-                    <select name="godown" className="erp-select" value={invoiceFormData.godown} onChange={handleInvoiceInputChange}>
-                      <option value="">Select</option>
-                      {godowns.map(g => <option key={g.id} value={g.code}>{g.name}</option>)}
+        <div className="labeled-input"><label>Party *</label>
+          <select name="party" className="erp-select" value={invoiceFormData.party} onChange={handleInvoiceInputChange}>
+            <option value="">Select</option>
+            {accounts.map(a => <option key={a.id} value={a.accountName}>{a.accountName}</option>)}
+          </select>
+        </div>
+        <div className="labeled-input"><label>BillSeries</label><input name="BillSeries" className="erp-input" value={invoiceFormData.BillSeries} onChange={handleInvoiceInputChange} /></div>
+        <div className="labeled-input"><label>Bill No</label><input name="billNo" className="erp-input" value={invoiceFormData.billNo} onChange={handleInvoiceInputChange} /></div>
+        <div className="labeled-input"><label>Bill Type *</label>
+          <select name="billType" className="erp-select" value={invoiceFormData.billType} onChange={handleInvoiceInputChange}>
+            <option>Cash</option><option>Credit</option>
+          </select>
+        </div>
+        <div className="labeled-input"><label>Due Date *</label><input type="date" name="dueDate" className="erp-input" value={invoiceFormData.dueDate} onChange={handleInvoiceInputChange} /></div>
+        <div className="labeled-input"><label>Sales Man *</label>
+          <select name="salesman" className="erp-select" value={invoiceFormData.salesman} onChange={handleInvoiceInputChange}>
+            <option value="">Select</option>
+            {salesmen.map(s => <option key={s.id} value={s.name}>{s.name}</option>)}
+          </select>
+        </div>
+        <div className="labeled-input narration-field"><label>Narration</label><textarea name="narration" className="erp-textarea" rows="2" value={invoiceFormData.narration} onChange={handleInvoiceInputChange} /></div>
+      </div>
+    </div>
+
+    {/* Product Entry Table - Keep the existing product entry table code */}
+    <div className="form-section">
+      <h4 className="section-header">Product Entry</h4>
+      <div className="product-entry-container" style={{ overflowX: 'auto', overflowY: 'auto', maxHeight: '500px' }}>
+        <div className="erp-table-container" style={{ minWidth: '2000px' }}>
+          <table className="product-entry-table" style={{ width: '100%', borderCollapse: 'collapse' }}>
+            <thead style={{ position: 'sticky', top: 0, zIndex: 10 }}>
+              <tr>
+                <th style={{ position: 'sticky', left: 0, backgroundColor: '#f8fafc', zIndex: 20, minWidth: '50px' }}>Sr</th>
+                <th style={{ minWidth: '180px' }}>Product</th>
+                <th style={{ minWidth: '100px' }}>Units</th>
+                <th style={{ minWidth: '100px' }}>Qty</th>
+                <th style={{ minWidth: '100px' }}>Free</th>
+                <th style={{ minWidth: '100px' }}>MRP</th>
+                <th style={{ minWidth: '100px' }}>Rate</th>
+                <th style={{ minWidth: '120px' }}>Rate GST</th>
+                <th style={{ minWidth: '120px' }}>TPR Amt</th>
+                <th style={{ minWidth: '100px' }}>Scheme %</th>
+                <th style={{ minWidth: '120px' }}>Scheme Amt</th>
+                <th style={{ minWidth: '100px' }}>CD %</th>
+                <th style={{ minWidth: '120px' }}>CD Amt</th>
+                <th style={{ minWidth: '100px' }}>Star %</th>
+                <th style={{ minWidth: '120px' }}>Star Amt</th>
+                <th style={{ minWidth: '120px' }}>Taxable</th>
+                <th style={{ minWidth: '100px' }}>GST %</th>
+                <th style={{ minWidth: '100px' }}>SGST</th>
+                <th style={{ minWidth: '100px' }}>CGST</th>
+                <th style={{ minWidth: '100px' }}>IGST</th> {/* IGST Column Header Added */}
+                <th style={{ minWidth: '120px' }}>Amount</th>
+                <th style={{ position: 'sticky', right: 0, backgroundColor: '#f8fafc', zIndex: 20, minWidth: '90px' }}>
+                  Action
+                </th>
+              </tr>
+            </thead>
+            <tbody>
+              {invoiceItems.map((item, index) => (
+                <tr key={item.id} className={index === activeRow ? 'active-row' : ''}>
+                  <td style={{ position: 'sticky', left: 0, backgroundColor: index === activeRow ? '#eff6ff' : 'white', zIndex: 5, minWidth: '50px' }}>{item.sr}</td>
+                  <td style={{ position: 'relative' }}>
+                    <input
+                      data-product-index={index}
+                      className="erp-input product-search"
+                      value={item.product}
+                      onChange={(e) => {
+                        const value = e.target.value;
+                        updateInvoiceItem(index, 'product', value);
+                        setCurrentProductIndex(index);
+                        if (value.trim() !== '') {
+                          setProductListFilter(value);
+                          setShowProductList(true);
+                        } else {
+                          setShowProductList(false);
+                        }
+                      }}
+                      onFocus={() => {
+                        setActiveRow(index);
+                        if (item.product) {
+                          setProductListFilter(item.product);
+                          setCurrentProductIndex(index);
+                          setShowProductList(true);
+                        }
+                      }}
+                      style={{ width: '100%', minWidth: '150px', cursor: 'pointer' }}
+                      placeholder="Click to select product"
+                    />
+
+                    {showProductList && currentProductIndex === index && productListFilter.trim() !== '' && (
+                      <div className="erlay">
+                        <div className="product-dropdown">
+                          <div className="dropdown-list">
+                            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '12px' }}>
+                              <thead>
+                                <tr style={{ background: '#eff6ff', position: 'sticky', top: 0 }}>
+                                  <th style={{ padding: '6px', textAlign: 'left' }}>Item Code</th>
+                                  <th style={{ padding: '6px', textAlign: 'left' }}>Name</th>
+                                  <th style={{ padding: '6px', textAlign: 'left' }}>Batch</th>
+                                  <th style={{ padding: '6px', textAlign: 'right' }}>MRP</th>
+                                  <th style={{ padding: '6px', textAlign: 'right' }}>Sales Rate</th>
+                                  <th style={{ padding: '6px', textAlign: 'right' }}>Stock</th>
+                                </tr>
+                              </thead>
+                              <tbody>
+                                {products
+                                  .filter(p =>
+                                    p.name?.toLowerCase().includes(productListFilter.toLowerCase()) ||
+                                    p.code?.toLowerCase().includes(productListFilter.toLowerCase())
+                                  )
+                                  .map(product => {
+                                    const productBatches = batches.filter(b => b.productId === product.id);
+                                    const displayBatch = productBatches[0];
+                                    const totalStock = productBatches.reduce((sum, b) => sum + (parseFloat(b.stockQty) || 0), 0);
+
+                                    return (
+                                      <tr
+                                        key={product.id}
+                                        onClick={() => {
+                                          if (productBatches.length > 1) {
+                                            setCurrentProductIndex(index);
+                                            setShowBatchSelectionModal(true);
+                                          } else if (productBatches.length === 1) {
+                                            handleProductSelect(currentProductIndex, {
+                                              ...product,
+                                              selectedBatch: productBatches[0]
+                                            });
+                                            if (index === invoiceItems.length - 1) {
+                                              setTimeout(() => {
+                                                addInvoiceItem();
+                                                setTimeout(() => {
+                                                  const nextProductInput = document.querySelector(`[data-product-index="${index + 1}"]`);
+                                                  if (nextProductInput) nextProductInput.focus();
+                                                }, 50);
+                                              }, 150);
+                                            } else {
+                                              setTimeout(() => {
+                                                const nextProductInput = document.querySelector(`[data-product-index="${index + 1}"]`);
+                                                if (nextProductInput) nextProductInput.focus();
+                                              }, 50);
+                                            }
+                                          } else {
+                                            handleProductSelect(currentProductIndex, product);
+                                            if (index === invoiceItems.length - 1) {
+                                              setTimeout(() => {
+                                                addInvoiceItem();
+                                                setTimeout(() => {
+                                                  const nextProductInput = document.querySelector(`[data-product-index="${index + 1}"]`);
+                                                  if (nextProductInput) nextProductInput.focus();
+                                                }, 50);
+                                              }, 150);
+                                            } else {
+                                              setTimeout(() => {
+                                                const nextProductInput = document.querySelector(`[data-product-index="${index + 1}"]`);
+                                                if (nextProductInput) nextProductInput.focus();
+                                              }, 50);
+                                            }
+                                          }
+                                        }}
+                                        style={{ cursor: 'pointer', borderBottom: '1px solid #eee' }}
+                                        onMouseEnter={(e) => { e.currentTarget.style.background = '#f8fafc'; }}
+                                        onMouseLeave={(e) => { e.currentTarget.style.background = 'white'; }}
+                                      >
+                                        <td style={{ padding: '6px' }}>{product.code}</td>
+                                        <td style={{ padding: '6px' }}>{product.name}</td>
+                                        <td style={{ padding: '6px' }}>
+                                          {productBatches.length > 1
+                                            ? `${productBatches.length} batches`
+                                            : displayBatch?.batchNo || '-'}
+                                        </td>
+                                        <td style={{ padding: '6px', textAlign: 'right' }}>
+                                          ₹{displayBatch?.mrp || product.mrp || 0}
+                                        </td>
+                                        <td style={{ padding: '6px', textAlign: 'right' }}>
+                                          ₹{displayBatch?.salesRate || product.salesRate || product.mrp || 0}
+                                        </td>
+                                        <td style={{ padding: '6px', textAlign: 'right' }}>
+                                          {totalStock}
+                                        </td>
+                                      </tr>
+                                    );
+                                  })}
+                              </tbody>
+                            </table>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+                  </td>
+                  <td>
+                    <select
+                      className="erp-select"
+                      data-field="units"
+                      data-index={index}
+                      value={item.units}
+                      onChange={(e) => updateInvoiceItem(index, 'units', e.target.value)}
+                      onKeyDown={(e) => handleInvoiceKeyDown(e, index, 'units')}
+                      style={{ width: '100%' }}
+                    >
+                      <option value="PCS">PCS</option>
+                      <option value="BOX">BOX</option>
+                      <option value="INBOX">INBOX</option>
+                      <option value="OUTER">OUTER</option>
+                      <option value="KG">KG</option>
+                      <option value="LTR">LTR</option>
                     </select>
-                  </div>
-                  <div className="labeled-input"><label>Company</label>
-                    <select name="company" className="erp-select" value={invoiceFormData.company} onChange={handleInvoiceInputChange}>
-                      <option value="">Select</option>
-                      {companies.map(c => <option key={c.id} value={c.name}>{c.name}</option>)}
-                    </select>
-                  </div>
-                  <div className="labeled-input"><label>Area *</label>
-                    <select name="area" className="erp-select" value={invoiceFormData.area} onChange={handleInvoiceInputChange}>
-                      <option value="">Select</option>
-                      {areas.map(a => <option key={a.id} value={a.name}>{a.name}</option>)}
-                    </select>
-                  </div>
+                  </td>
+                  <td><input className="erp-input numeric" data-field="qty" data-index={index} value={item.qty} onChange={(e) => updateInvoiceItem(index, 'qty', e.target.value)} onKeyDown={(e) => handleInvoiceKeyDown(e, index, 'qty')} style={{ width: '100%' }} /></td>
+                  <td><input className="erp-input numeric" data-field="free" data-index={index} value={item.free} onChange={(e) => updateInvoiceItem(index, 'free', e.target.value)} onKeyDown={(e) => handleInvoiceKeyDown(e, index, 'free')} style={{ width: '100%' }} /></td>
+                  <td><input className="erp-input numeric" data-field="mrp" data-index={index} value={item.mrp} onChange={(e) => updateInvoiceItem(index, 'mrp', e.target.value)} onKeyDown={(e) => handleInvoiceKeyDown(e, index, 'mrp')} style={{ width: '100%' }} /></td>
+                  <td><input className="erp-input numeric" data-field="rate" data-index={index} value={item.rate} onChange={(e) => updateInvoiceItem(index, 'rate', e.target.value)} onKeyDown={(e) => handleInvoiceKeyDown(e, index, 'rate')} style={{ width: '100%' }} /></td>
+                  <td><input className="erp-input numeric" data-field="rateGst" data-index={index} value={item.rateGst} onChange={(e) => updateInvoiceItem(index, 'rateGst', e.target.value)} onKeyDown={(e) => handleInvoiceKeyDown(e, index, 'rateGst')} style={{ width: '100%' }} /></td>
+                  <td><input className="erp-input numeric" data-field="tprAmt" data-index={index} value={item.tprAmt} onChange={(e) => updateInvoiceItem(index, 'tprAmt', e.target.value)} onKeyDown={(e) => handleInvoiceKeyDown(e, index, 'tprAmt')} style={{ width: '100%' }} /></td>
+                  <td><input className="erp-input numeric small" data-field="schemePct" data-index={index} value={item.schemePct} onChange={(e) => updateInvoiceItem(index, 'schemePct', e.target.value)} onKeyDown={(e) => handleInvoiceKeyDown(e, index, 'schemePct')} style={{ width: '100%' }} /></td>
+                  <td><input className="erp-input numeric" data-field="schemeAmt" data-index={index} value={item.schemeAmt} onChange={(e) => updateInvoiceItem(index, 'schemeAmt', e.target.value)} onKeyDown={(e) => handleInvoiceKeyDown(e, index, 'schemeAmt')} style={{ width: '100%' }} /></td>
+                  <td><input className="erp-input numeric small" data-field="cdPct" data-index={index} value={item.cdPct} onChange={(e) => updateInvoiceItem(index, 'cdPct', e.target.value)} onKeyDown={(e) => handleInvoiceKeyDown(e, index, 'cdPct')} style={{ width: '100%' }} /></td>
+                  <td><input className="erp-input numeric" data-field="cdAmt" data-index={index} value={item.cdAmt} onChange={(e) => updateInvoiceItem(index, 'cdAmt', e.target.value)} onKeyDown={(e) => handleInvoiceKeyDown(e, index, 'cdAmt')} style={{ width: '100%' }} /></td>
+                  <td><input className="erp-input numeric small" data-field="starPct" data-index={index} value={item.starPct} onChange={(e) => updateInvoiceItem(index, 'starPct', e.target.value)} onKeyDown={(e) => handleInvoiceKeyDown(e, index, 'starPct')} style={{ width: '100%' }} /></td>
+                  <td><input className="erp-input numeric" data-field="starAmt" data-index={index} value={item.starAmt} onChange={(e) => updateInvoiceItem(index, 'starAmt', e.target.value)} onKeyDown={(e) => handleInvoiceKeyDown(e, index, 'starAmt')} style={{ width: '100%' }} /></td>
+                  <td><input className="erp-input numeric" data-field="taxable" data-index={index} value={item.taxable} onChange={(e) => updateInvoiceItem(index, 'taxable', e.target.value)} onKeyDown={(e) => handleInvoiceKeyDown(e, index, 'taxable')} style={{ width: '100%' }} /></td>
+                  <td><input className="erp-input numeric small" data-field="gst" data-index={index} value={item.gst} onChange={(e) => updateInvoiceItem(index, 'gst', e.target.value)} onKeyDown={(e) => handleInvoiceKeyDown(e, index, 'gst')} style={{ width: '100%' }} /></td>
+                  <td><input className="erp-input numeric" data-field="sgst" data-index={index} value={item.sgst} onChange={(e) => updateInvoiceItem(index, 'sgst', e.target.value)} onKeyDown={(e) => handleInvoiceKeyDown(e, index, 'sgst')} style={{ width: '100%' }} /></td>
+                  <td><input className="erp-input numeric" data-field="cgst" data-index={index} value={item.cgst} onChange={(e) => updateInvoiceItem(index, 'cgst', e.target.value)} onKeyDown={(e) => handleInvoiceKeyDown(e, index, 'cgst')} style={{ width: '100%' }} /></td>
+                  <td> {/* IGST Column Data */}
+                    <input
+                      className="erp-input numeric"
+                      data-field="igst"
+                      data-index={index}
+                      value={item.igst || 0}
+                      onChange={(e) => updateInvoiceItem(index, 'igst', e.target.value)}
+                      onKeyDown={(e) => handleInvoiceKeyDown(e, index, 'igst')}
+                      style={{ width: '100%' }}
+                    />
+                  </td>
+                  <td><input className="erp-input numeric font-bold" data-field="amount" data-index={index} value={item.amount} onChange={(e) => updateInvoiceItem(index, 'amount', e.target.value)} onKeyDown={(e) => handleInvoiceKeyDown(e, index, 'amount')} style={{ width: '100%', fontWeight: 'bold' }} /></td>
+                  <td style={{ position: 'sticky', right: 0, backgroundColor: index === activeRow ? '#eff6ff' : 'white', zIndex: 5 }}>
+                    <button className="btn-delete text-red-500" onClick={() => deleteInvoiceItem(index)} style={{ padding: '6px 12px', whiteSpace: 'nowrap' }}>🗑 Delete</button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
 
-                  <div className="labeled-input"><label>Party *</label>
-                    <select name="party" className="erp-select" value={invoiceFormData.party} onChange={handleInvoiceInputChange}>
-                      <option value="">Select</option>
-                      {accounts.map(a => <option key={a.id} value={a.accountName}>{a.accountName}</option>)}
-                    </select>
-                  </div>
-                  <div className="labeled-input"><label>BillSeries</label><input name="BillSeries" className="erp-input" value={invoiceFormData.BillSeries} onChange={handleInvoiceInputChange} /></div>
-                  <div className="labeled-input"><label>Bill No</label><input name="billNo" className="erp-input" value={invoiceFormData.billNo} onChange={handleInvoiceInputChange} /></div>
-                  <div className="labeled-input"><label>Bill Type *</label>
-                    <select name="billType" className="erp-select" value={invoiceFormData.billType} onChange={handleInvoiceInputChange}>
-                      <option>Cash</option><option>Credit</option>
-                    </select>
-                  </div>
-                  <div className="labeled-input"><label>Due Date *</label><input type="date" name="dueDate" className="erp-input" value={invoiceFormData.dueDate} onChange={handleInvoiceInputChange} /></div>
-                  <div className="labeled-input"><label>Sales Man *</label>
-                    <select name="salesman" className="erp-select" value={invoiceFormData.salesman} onChange={handleInvoiceInputChange}>
-                      <option value="">Select</option>
-                      {salesmen.map(s => <option key={s.id} value={s.name}>{s.name}</option>)}
-                    </select>
-                  </div>
-                  <div className="labeled-input narration-field"><label>Narration</label><textarea name="narration" className="erp-textarea" rows="2" value={invoiceFormData.narration} onChange={handleInvoiceInputChange} /></div>
-                </div>
-              </div>
+    <div className="form-section">
+      <h4 className="section-header">Invoice Summary</h4>
 
-              {/* Product Entry Table - Keep the existing product entry table code */}
-              <div className="form-section">
-                <h4 className="section-header">Product Entry</h4>
-                <div className="product-entry-container" style={{ overflowX: 'auto', overflowY: 'auto', maxHeight: '500px' }}>
-                  <div className="erp-table-container" style={{ minWidth: '2000px' }}>
-                    <table className="product-entry-table" style={{ width: '100%', borderCollapse: 'collapse' }}>
-                      <thead style={{ position: 'sticky', top: 0, zIndex: 10 }}>
-                        <tr>
-                          <th style={{ position: 'sticky', left: 0, backgroundColor: '#f8fafc', zIndex: 20, minWidth: '50px' }}>Sr</th>
-                          <th style={{ minWidth: '180px' }}>Product</th>
-                          <th style={{ minWidth: '100px' }}>Units</th>
-                          <th style={{ minWidth: '100px' }}>Qty</th>
-                          <th style={{ minWidth: '100px' }}>Free</th>
-                          <th style={{ minWidth: '100px' }}>MRP</th>
-                          <th style={{ minWidth: '100px' }}>Rate</th>
-                          <th style={{ minWidth: '120px' }}>Rate GST</th>
-                          <th style={{ minWidth: '120px' }}>TPR Amt</th>
-                          <th style={{ minWidth: '100px' }}>Scheme %</th>
-                          <th style={{ minWidth: '120px' }}>Scheme Amt</th>
-                          <th style={{ minWidth: '100px' }}>CD %</th>
-                          <th style={{ minWidth: '120px' }}>CD Amt</th>
-                          <th style={{ minWidth: '100px' }}>Star %</th>
-                          <th style={{ minWidth: '120px' }}>Star Amt</th>
-                          <th style={{ minWidth: '120px' }}>Taxable</th>
-                          <th style={{ minWidth: '100px' }}>GST %</th>
-                          <th style={{ minWidth: '100px' }}>SGST</th>
-                          <th style={{ minWidth: '100px' }}>CGST</th>
-                          <th style={{ minWidth: '120px' }}>Amount</th>
-                          <th style={{ position: 'sticky', right: 0, backgroundColor: '#f8fafc', zIndex: 20, minWidth: '70px' }}>Action</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {invoiceItems.map((item, index) => (
-                          <tr key={item.id} className={index === activeRow ? 'active-row' : ''}>
-                            <td style={{ position: 'sticky', left: 0, backgroundColor: index === activeRow ? '#eff6ff' : 'white', zIndex: 5, minWidth: '50px' }}>{item.sr}</td>
-                            <td style={{ position: 'relative' }}>
-                              <input
-                                data-product-index={index}
-                                className="erp-input product-search"
-                                value={item.product}
-                                onChange={(e) => {
-                                  const value = e.target.value;
-                                  updateInvoiceItem(index, 'product', value);
-                                  setCurrentProductIndex(index);
-                                  if (value.trim() !== '') {
-                                    setProductListFilter(value);
-                                    setShowProductList(true);
-                                  } else {
-                                    setShowProductList(false);
-                                  }
-                                }}
-                                onFocus={() => {
-                                  setActiveRow(index);
-                                  if (item.product) {
-                                    setProductListFilter(item.product);
-                                    setCurrentProductIndex(index);
-                                    setShowProductList(true);
-                                  }
-                                }}
-                                style={{ width: '100%', minWidth: '150px', cursor: 'pointer' }}
-                                placeholder="Click to select product"
-                              />
+      <div className="summary-bar">
+        <div>
+          Gross Amount:
+          <span className="amount">
+            ₹{invoiceSummary.gross.toFixed(2)}
+          </span>
+        </div>
 
-                              {showProductList && currentProductIndex === index && productListFilter.trim() !== '' && (
-                                <div className="erlay">
-                                  <div className="product-dropdown">
-                                    <div className="dropdown-list">
-                                      <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '12px' }}>
-                                        <thead>
-                                          <tr style={{ background: '#eff6ff', position: 'sticky', top: 0 }}>
-                                            <th style={{ padding: '6px', textAlign: 'left' }}>Item Code</th>
-                                            <th style={{ padding: '6px', textAlign: 'left' }}>Name</th>
-                                            <th style={{ padding: '6px', textAlign: 'left' }}>Batch</th>
-                                            <th style={{ padding: '6px', textAlign: 'right' }}>MRP</th>
-                                            <th style={{ padding: '6px', textAlign: 'right' }}>Sales Rate</th>
-                                            <th style={{ padding: '6px', textAlign: 'right' }}>Stock</th>
-                                          </tr>
-                                        </thead>
-                                        <tbody>
-                                          {products
-                                            .filter(p =>
-                                              p.name?.toLowerCase().includes(productListFilter.toLowerCase()) ||
-                                              p.code?.toLowerCase().includes(productListFilter.toLowerCase())
-                                            )
-                                            .map(product => {
-                                              const productBatches = batches.filter(b => b.productId === product.id);
-                                              const displayBatch = productBatches[0];
-                                              const totalStock = productBatches.reduce((sum, b) => sum + (parseFloat(b.stockQty) || 0), 0);
+        <div>
+          TPR Amount:
+          <span className="amount">
+            -₹{invoiceSummary.tpr.toFixed(2)}
+          </span>
+        </div>
 
-                                              return (
-                                                <tr
-                                                  key={product.id}
-                                                  onClick={() => {
-                                                    if (productBatches.length > 1) {
-                                                      setCurrentProductIndex(index);
-                                                      setShowBatchSelectionModal(true);
-                                                    } else if (productBatches.length === 1) {
-                                                      handleProductSelect(currentProductIndex, {
-                                                        ...product,
-                                                        selectedBatch: productBatches[0]
-                                                      });
-                                                      if (index === invoiceItems.length - 1) {
-                                                        setTimeout(() => {
-                                                          addInvoiceItem();
-                                                          setTimeout(() => {
-                                                            const nextProductInput = document.querySelector(`[data-product-index="${index + 1}"]`);
-                                                            if (nextProductInput) nextProductInput.focus();
-                                                          }, 50);
-                                                        }, 150);
-                                                      } else {
-                                                        setTimeout(() => {
-                                                          const nextProductInput = document.querySelector(`[data-product-index="${index + 1}"]`);
-                                                          if (nextProductInput) nextProductInput.focus();
-                                                        }, 50);
-                                                      }
-                                                    } else {
-                                                      handleProductSelect(currentProductIndex, product);
-                                                      if (index === invoiceItems.length - 1) {
-                                                        setTimeout(() => {
-                                                          addInvoiceItem();
-                                                          setTimeout(() => {
-                                                            const nextProductInput = document.querySelector(`[data-product-index="${index + 1}"]`);
-                                                            if (nextProductInput) nextProductInput.focus();
-                                                          }, 50);
-                                                        }, 150);
-                                                      } else {
-                                                        setTimeout(() => {
-                                                          const nextProductInput = document.querySelector(`[data-product-index="${index + 1}"]`);
-                                                          if (nextProductInput) nextProductInput.focus();
-                                                        }, 50);
-                                                      }
-                                                    }
-                                                  }}
-                                                  style={{ cursor: 'pointer', borderBottom: '1px solid #eee' }}
-                                                  onMouseEnter={(e) => { e.currentTarget.style.background = '#f8fafc'; }}
-                                                  onMouseLeave={(e) => { e.currentTarget.style.background = 'white'; }}
-                                                >
-                                                  <td style={{ padding: '6px' }}>{product.code}</td>
-                                                  <td style={{ padding: '6px' }}>{product.name}</td>
-                                                  <td style={{ padding: '6px' }}>
-                                                    {productBatches.length > 1
-                                                      ? `${productBatches.length} batches`
-                                                      : displayBatch?.batchNo || '-'}
-                                                  </td>
-                                                  <td style={{ padding: '6px', textAlign: 'right' }}>
-                                                    ₹{displayBatch?.mrp || product.mrp || 0}
-                                                  </td>
-                                                  <td style={{ padding: '6px', textAlign: 'right' }}>
-                                                    ₹{displayBatch?.salesRate || product.salesRate || product.mrp || 0}
-                                                  </td>
-                                                  <td style={{ padding: '6px', textAlign: 'right' }}>
-                                                    {totalStock}
-                                                  </td>
-                                                </tr>
-                                              );
-                                            })}
-                                        </tbody>
-                                      </table>
-                                    </div>
-                                  </div>
-                                </div>
-                              )}
-                            </td>
-                            <td>
-                              <select
-                                className="erp-select"
-                                data-field="units"
-                                data-index={index}
-                                value={item.units}
-                                onChange={(e) => updateInvoiceItem(index, 'units', e.target.value)}
-                                onKeyDown={(e) => handleInvoiceKeyDown(e, index, 'units')}
-                                style={{ width: '100%' }}
-                              >
-                                <option value="PCS">PCS</option>
-                                <option value="BOX">BOX</option>
-                                <option value="INBOX">INBOX</option>
-                                <option value="OUTER">OUTER</option>
-                                <option value="KG">KG</option>
-                                <option value="LTR">LTR</option>
-                              </select>
-                            </td>
-                            <td><input className="erp-input numeric" data-field="qty" data-index={index} value={item.qty} onChange={(e) => updateInvoiceItem(index, 'qty', e.target.value)} onKeyDown={(e) => handleInvoiceKeyDown(e, index, 'qty')} style={{ width: '100%' }} /></td>
-                            <td><input className="erp-input numeric" data-field="free" data-index={index} value={item.free} onChange={(e) => updateInvoiceItem(index, 'free', e.target.value)} onKeyDown={(e) => handleInvoiceKeyDown(e, index, 'free')} style={{ width: '100%' }} /></td>
-                            <td><input className="erp-input numeric" data-field="mrp" data-index={index} value={item.mrp} onChange={(e) => updateInvoiceItem(index, 'mrp', e.target.value)} onKeyDown={(e) => handleInvoiceKeyDown(e, index, 'mrp')} style={{ width: '100%' }} /></td>
-                            <td><input className="erp-input numeric" data-field="rate" data-index={index} value={item.rate} onChange={(e) => updateInvoiceItem(index, 'rate', e.target.value)} onKeyDown={(e) => handleInvoiceKeyDown(e, index, 'rate')} style={{ width: '100%' }} /></td>
-                            <td><input className="erp-input numeric" data-field="rateGst" data-index={index} value={item.rateGst} onChange={(e) => updateInvoiceItem(index, 'rateGst', e.target.value)} onKeyDown={(e) => handleInvoiceKeyDown(e, index, 'rateGst')} style={{ width: '100%' }} /></td>
-                            <td><input className="erp-input numeric" data-field="tprAmt" data-index={index} value={item.tprAmt} onChange={(e) => updateInvoiceItem(index, 'tprAmt', e.target.value)} onKeyDown={(e) => handleInvoiceKeyDown(e, index, 'tprAmt')} style={{ width: '100%' }} /></td>
-                            <td><input className="erp-input numeric small" data-field="schemePct" data-index={index} value={item.schemePct} onChange={(e) => updateInvoiceItem(index, 'schemePct', e.target.value)} onKeyDown={(e) => handleInvoiceKeyDown(e, index, 'schemePct')} style={{ width: '100%' }} /></td>
-                            <td><input className="erp-input numeric" data-field="schemeAmt" data-index={index} value={item.schemeAmt} onChange={(e) => updateInvoiceItem(index, 'schemeAmt', e.target.value)} onKeyDown={(e) => handleInvoiceKeyDown(e, index, 'schemeAmt')} style={{ width: '100%' }} /></td>
-                            <td><input className="erp-input numeric small" data-field="cdPct" data-index={index} value={item.cdPct} onChange={(e) => updateInvoiceItem(index, 'cdPct', e.target.value)} onKeyDown={(e) => handleInvoiceKeyDown(e, index, 'cdPct')} style={{ width: '100%' }} /></td>
-                            <td><input className="erp-input numeric" data-field="cdAmt" data-index={index} value={item.cdAmt} onChange={(e) => updateInvoiceItem(index, 'cdAmt', e.target.value)} onKeyDown={(e) => handleInvoiceKeyDown(e, index, 'cdAmt')} style={{ width: '100%' }} /></td>
-                            <td><input className="erp-input numeric small" data-field="starPct" data-index={index} value={item.starPct} onChange={(e) => updateInvoiceItem(index, 'starPct', e.target.value)} onKeyDown={(e) => handleInvoiceKeyDown(e, index, 'starPct')} style={{ width: '100%' }} /></td>
-                            <td><input className="erp-input numeric" data-field="starAmt" data-index={index} value={item.starAmt} onChange={(e) => updateInvoiceItem(index, 'starAmt', e.target.value)} onKeyDown={(e) => handleInvoiceKeyDown(e, index, 'starAmt')} style={{ width: '100%' }} /></td>
-                            <td><input className="erp-input numeric" data-field="taxable" data-index={index} value={item.taxable} onChange={(e) => updateInvoiceItem(index, 'taxable', e.target.value)} onKeyDown={(e) => handleInvoiceKeyDown(e, index, 'taxable')} style={{ width: '100%' }} /></td>
-                            <td><input className="erp-input numeric small" data-field="gst" data-index={index} value={item.gst} onChange={(e) => updateInvoiceItem(index, 'gst', e.target.value)} onKeyDown={(e) => handleInvoiceKeyDown(e, index, 'gst')} style={{ width: '100%' }} /></td>
-                            <td><input className="erp-input numeric" data-field="sgst" data-index={index} value={item.sgst} onChange={(e) => updateInvoiceItem(index, 'sgst', e.target.value)} onKeyDown={(e) => handleInvoiceKeyDown(e, index, 'sgst')} style={{ width: '100%' }} /></td>
-                            <td><input className="erp-input numeric" data-field="cgst" data-index={index} value={item.cgst} onChange={(e) => updateInvoiceItem(index, 'cgst', e.target.value)} onKeyDown={(e) => handleInvoiceKeyDown(e, index, 'cgst')} style={{ width: '100%' }} /></td>
-                            <td><input className="erp-input numeric font-bold" data-field="amount" data-index={index} value={item.amount} onChange={(e) => updateInvoiceItem(index, 'amount', e.target.value)} onKeyDown={(e) => handleInvoiceKeyDown(e, index, 'amount')} style={{ width: '100%', fontWeight: 'bold' }} /></td>
-                            <td style={{ position: 'sticky', right: 0, backgroundColor: index === activeRow ? '#eff6ff' : 'white', zIndex: 5 }}>
-                              <button className="btn-delete text-red-500" onClick={() => deleteInvoiceItem(index)} style={{ padding: '6px 12px', whiteSpace: 'nowrap' }}>🗑 Delete</button>
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                </div>
-              </div>
+        <div>
+          Scheme Amount:
+          <span className="amount">
+            -₹{invoiceSummary.scheme.toFixed(2)}
+          </span>
+        </div>
 
-              <div className="form-section">
-                <h4 className="section-header">Invoice Summary</h4>
-                <div className="summary-bar">
-                  <div>Gross Amount: <span className="amount">₹{invoiceSummary.gross.toFixed(2)}</span></div>
-                  <div>TPR Amount: <span className="amount">-₹{invoiceSummary.tpr.toFixed(2)}</span></div>
-                  <div>Scheme Amount: <span className="amount">-₹{invoiceSummary.scheme.toFixed(2)}</span></div>
-                  <div>Star Discount: <span className="amount">-₹{invoiceSummary.star.toFixed(2)}</span></div>
-                  <div>Cash Discount: <span className="amount">-₹{invoiceSummary.cd.toFixed(2)}</span></div>
-                  <div className="taxable-value">Taxable Value: <span className="amount">₹{(invoiceSummary.gross - invoiceSummary.tpr - invoiceSummary.scheme - invoiceSummary.star - invoiceSummary.cd).toFixed(2)}</span></div>
-                  <div>SGST Amount: <span className="amount">+₹{(invoiceSummary.gst / 2).toFixed(2)}</span></div>
-                  <div>CGST Amount: <span className="amount">+₹{(invoiceSummary.gst / 2).toFixed(2)}</span></div>
-                  <div className="net-amount">Net Amount: <strong>₹{((invoiceSummary.gross - invoiceSummary.tpr - invoiceSummary.scheme - invoiceSummary.star - invoiceSummary.cd) + invoiceSummary.gst).toFixed(2)}</strong></div>
-                </div>
-              </div>
+        <div>
+          Star Discount:
+          <span className="amount">
+            -₹{invoiceSummary.star.toFixed(2)}
+          </span>
+        </div>
 
-              {/* Action Button */}
-              <div className="form-actions">
-                <button className="btn-add-invoice" onClick={saveInvoice}>
-                  💾 Add Invoice
-                </button>
-                <button type="button" className="btn-secondary" onClick={closeForm}>
-                  Cancel
-                </button>
-              </div>
-            </div>
-          )}
+        <div>
+          Cash Discount:
+          <span className="amount">
+            -₹{invoiceSummary.cd.toFixed(2)}
+          </span>
+        </div>
+
+        <div className="taxable-value">
+          Taxable Value:
+          <span className="amount">
+            ₹{(
+              invoiceSummary.gross -
+              invoiceSummary.tpr -
+              invoiceSummary.scheme -
+              invoiceSummary.star -
+              invoiceSummary.cd
+            ).toFixed(2)}
+          </span>
+        </div>
+
+        <div>
+          SGST Amount:
+          <span className="amount">
+            +₹{(invoiceSummary.sgst || 0).toFixed(2)}
+          </span>
+        </div>
+
+        <div>
+          CGST Amount:
+          <span className="amount">
+            +₹{(invoiceSummary.cgst || 0).toFixed(2)}
+          </span>
+        </div>
+
+        <div>
+          IGST Amount:
+          <span className="amount">
+            +₹{(invoiceSummary.igst || 0).toFixed(2)}
+          </span>
+        </div>
+
+        <div className="net-amount">
+          Net Amount:
+          <strong>
+            ₹{(
+              (
+                invoiceSummary.gross -
+                invoiceSummary.tpr -
+                invoiceSummary.scheme -
+                invoiceSummary.star -
+                invoiceSummary.cd
+              ) +
+              (invoiceSummary.cgst || 0) +
+              (invoiceSummary.sgst || 0) +
+              (invoiceSummary.igst || 0)
+            ).toFixed(2)}
+          </strong>
+        </div>
+      </div>
+    </div>
+
+    {/* Action Button */}
+    <div className="form-actions">
+      <button className="btn-add-invoice" onClick={saveInvoice}>
+        💾 Add Invoice
+      </button>
+      <button type="button" className="btn-secondary" onClick={closeForm}>
+        Cancel
+      </button>
+    </div>
+  </div>
+)}
 
           {/* Purchase Form - Only shown when openFormFor is 'Purchase' */}
           {activeSubMenu === 'Purchase' && openFormFor === 'Purchase' && (
@@ -9834,12 +11198,15 @@ const Dashboard = () => {
                   <div className="labeled-input"><label>Vou No</label>
                     <input type="text" name="Vou No" className="erp-input" placeholder="Vou No" value={purchaseFormData.vno} onChange={handlePurchaseInputChange} />
                   </div>
-                  <div className="labeled-input"><label>SUPPLIER *</label>
-                    <select name="supplier" className="erp-select" value={purchaseFormData.supplier} onChange={handlePurchaseInputChange}>
-                      <option value="">Select Supplier</option>
-                      {accounts.map(acc => <option key={acc.id} value={acc.accountName}>{acc.accountName}</option>)}
-                    </select>
-                  </div>
+                <div className="labeled-input">
+  <label>SUPPLIER *</label>
+  <select name="supplier" className="erp-select" value={purchaseFormData.supplier} onChange={handlePurchaseInputChange}>
+    <option value="">Select Supplier</option>
+    {otherAccounts
+      .filter(acc => acc.accountGroup === 'SUNDRY CREDITORS')
+      .map(acc => <option key={acc.id} value={acc.accountName}>{acc.accountName}</option>)}
+  </select>
+</div>
                   <div className="labeled-input"><label>COMPANY *</label>
                     <select name="company" className="erp-select" value={purchaseFormData.company} onChange={handlePurchaseInputChange}>
                       <option value="">Select Company</option>
@@ -9901,6 +11268,7 @@ const Dashboard = () => {
                           <th style={{ minWidth: '80px' }}>TAX</th>
                           <th style={{ minWidth: '80px' }}>CGST</th>
                           <th style={{ minWidth: '80px' }}>SGST</th>
+                          <th style={{ minWidth: '80px' }}>IGST</th>
                           <th style={{ minWidth: '100px' }}>AfterDisc 1</th>
                           <th style={{ minWidth: '100px' }}>AfterDisc 2</th>
                           <th style={{ minWidth: '100px' }}>AfterDisc 3</th>
@@ -10124,6 +11492,15 @@ const Dashboard = () => {
                               />
                             </td>
                             <td>
+  <input
+    className="erp-input numeric"
+    type="number"
+    value={item.igst || ''}
+    readOnly
+    style={{ width: '100%' }}
+  />
+</td>
+                            <td>
                               <input
                                 className="erp-input numeric"
                                 type="number"
@@ -10183,24 +11560,29 @@ const Dashboard = () => {
               </div>
 
               {/* Purchase Summary Section */}
-              <div className="form-section">
-                <h4 className="section-header">Invoice Summary</h4>
-                <div className="summary-bar">
-                  <div>MRP Total: <span className="amount">₹{purchaseFormData.mrpTotal || '0.00'}</span></div>
-                  <div>TCS %: <span className="amount">{purchaseFormData.tcbPercent || '0.00'}%</span></div>
-                  <div>TCS Amount: <span className="amount">-₹{purchaseFormData.tcbAmount || '0.00'}</span></div>
-                  <div>DISC1: <span className="amount">-₹{purchaseFormData.diBc1 || '0.00'}</span></div>
-                  <div>After DISC1: <span className="amount">₹{purchaseFormData.afterDiBc1 || '0.00'}</span></div>
-                  <div>Gross Amount: <span className="amount">₹{purchaseFormData.groBsAmt || '0.00'}</span></div>
-                  <div>DISC2: <span className="amount">-₹{purchaseFormData.diBc2 || '0.00'}</span></div>
-                  <div>After DISC2: <span className="amount">₹{purchaseFormData.afterDiBc2 || '0.00'}</span></div>
-                  <div>GST Amount: <span className="amount">+₹{purchaseFormData.qbtAmt || '0.00'}</span></div>
-                  <div>DISC3: <span className="amount">-₹{purchaseFormData.diBc3 || '0.00'}</span></div>
-                  <div>After DISC3: <span className="amount">₹{purchaseFormData.afterDiBc3 || '0.00'}</span></div>
-                  <div>Rounding: <span className="amount">₹{purchaseFormData.rounding || '0.00'}</span></div>
-                  <div className="net-amount">Net Amount: <strong>₹{purchaseFormData.netAmt || '0.00'}</strong></div>
-                </div>
-              </div>
+<div className="form-section">
+  <h4 className="section-header">Invoice Summary</h4>
+  <div className="summary-bar">
+    <div>MRP Total: <span className="amount">₹{purchaseFormData.mrpTotal || '0.00'}</span></div>
+    <div>TCS %: <span className="amount">{purchaseFormData.tcbPercent || '0.00'}%</span></div>
+    <div>TCS Amount: <span className="amount">-₹{purchaseFormData.tcbAmount || '0.00'}</span></div>
+    <div>DISC1: <span className="amount">-₹{purchaseFormData.diBc1 || '0.00'}</span></div>
+    <div>After DISC1: <span className="amount">₹{purchaseFormData.afterDiBc1 || '0.00'}</span></div>
+    <div>Gross Amount: <span className="amount">₹{purchaseFormData.groBsAmt || '0.00'}</span></div>
+    <div>DISC2: <span className="amount">-₹{purchaseFormData.diBc2 || '0.00'}</span></div>
+    <div>After DISC2: <span className="amount">₹{purchaseFormData.afterDiBc2 || '0.00'}</span></div>
+
+    <div>GST Amount: <span className="amount">+₹{purchaseFormData.qbtAmt || '0.00'}</span></div>
+    <div>CGST Amount: <span className="amount">₹{Number(purchaseFormData.cgstAmt || 0).toFixed(2)}</span></div>
+    <div>SGST Amount: <span className="amount">₹{Number(purchaseFormData.sgstAmt || 0).toFixed(2)}</span></div>
+    <div>IGST Amount: <span className="amount">₹{Number(purchaseFormData.igstAmt || 0).toFixed(2)}</span></div>
+
+    <div>DISC3: <span className="amount">-₹{purchaseFormData.diBc3 || '0.00'}</span></div>
+    <div>After DISC3: <span className="amount">₹{purchaseFormData.afterDiBc3 || '0.00'}</span></div>
+    <div>Rounding: <span className="amount">₹{purchaseFormData.rounding || '0.00'}</span></div>
+    <div className="net-amount">Net Amount: <strong>₹{purchaseFormData.netAmt || '0.00'}</strong></div>
+  </div>
+</div>
 
               <div className="form-actions">
                 <button className="btn-add-invoice" onClick={savePurchase}>
@@ -11392,22 +12774,25 @@ const Dashboard = () => {
                         <tr
                           key={idx}
                           onClick={() => {
-                            const updatedItems = [...purchaseItems];
-                            updatedItems[currentBatchRow] = {
-                              ...updatedItems[currentBatchRow],
-                              batchNo: batch.batchNo,
-                              mfgDate: batch.mfgDate,
-                              expDate: batch.expDate,
-                              mrp: batch.mrp,
-                              purRate: batch.purchaseRate,
-                              salesRate: batch.salesRate,
-                              quantity: updatedItems[currentBatchRow]?.quantity || 1,
-                              stockQty: batch.stockQty,
-                              boxPack: batch.boxPack || 1
-                            };
-                            setPurchaseItems(updatedItems);
-                            setShowBatchModal(false);
-                          }}
+  const updatedItems = [...purchaseItems];
+  updatedItems[currentBatchRow] = {
+    ...updatedItems[currentBatchRow],
+    selectedBatch: { ...batch },
+    batchNo: batch.batchNo,
+    mfgDate: batch.mfgDate,
+    expDate: batch.expDate,
+    mrp: batch.mrp,
+    purRate: batch.purchaseRate,
+    salesRate: batch.salesRate,
+    stockQty: batch.stockQty,
+    boxPack: batch.boxPack || 1,
+    ratePerUnit: batch.ratePerUnit || 1,
+    previousPurchaseRate: batch.previousPurchaseRate || '',
+    quantity: updatedItems[currentBatchRow]?.quantity || 1
+  };
+  setPurchaseItems(updatedItems);
+  setShowBatchModal(false);
+}}
                           style={{
                             cursor: 'pointer',
                             transition: '0.2s',
@@ -11788,11 +13173,137 @@ const Dashboard = () => {
                 </div>
               </>
             )}
+                    </div>
+        </div>
+      )}
+
+      {/* View Modal */}
+      {showViewModal && viewData && (
+        <div
+          style={{
+            position: 'fixed',
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            backgroundColor: 'rgba(0, 0, 0, 0.5)',
+            display: 'flex',
+            justifyContent: 'center',
+            alignItems: 'center',
+            zIndex: 999999
+          }}
+          onClick={(e) => {
+            if (e.target === e.currentTarget) setShowViewModal(false);
+          }}
+        >
+          <div
+            style={{
+              backgroundColor: 'white',
+              borderRadius: '12px',
+              padding: '24px',
+              width: '600px',
+              maxWidth: '90%',
+              maxHeight: '80vh',
+              overflowY: 'auto',
+              boxShadow: '0 20px 25px -5px rgba(0,0,0,0.1)'
+            }}
+          >
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px', paddingBottom: '10px', borderBottom: '1px solid #e5e7eb' }}>
+              <h3 style={{ margin: 0, fontSize: '18px', fontWeight: '600' }}>View {viewType} Details</h3>
+              <button
+                onClick={() => setShowViewModal(false)}
+                style={{ background: 'none', border: 'none', fontSize: '20px', cursor: 'pointer' }}
+              >
+                ✕
+              </button>
+            </div>
+
+            <div style={{ marginBottom: '15px' }}>
+              <strong>Date:</strong> {viewData.billDate || viewData.invoiceDate || viewData.vDate || '-'}
+            </div>
+            <div style={{ marginBottom: '15px' }}>
+              <strong>Bill Series:</strong> {viewData.billSeries || '-'}
+            </div>
+            <div style={{ marginBottom: '15px' }}>
+              <strong>Bill Number:</strong> {viewData.billNo || viewData.invoiceNumber || viewData.vNo || '-'}
+            </div>
+            <div style={{ marginBottom: '15px' }}>
+              <strong>Bill Type:</strong> {viewData.billType || '-'}
+            </div>
+            <div style={{ marginBottom: '15px' }}>
+              <strong>Party Name:</strong> {viewData.party || viewData.partyName || viewData.supplier || '-'}
+            </div>
+            <div style={{ marginBottom: '15px' }}>
+              <strong>Party Code:</strong> {viewData.partyCode || '-'}
+            </div>
+            <div style={{ marginBottom: '15px' }}>
+              <strong>Branch/Area:</strong> {viewData.area || viewData.branchName || viewData.storageLocation || '-'}
+            </div>
+            <div style={{ marginBottom: '15px' }}>
+              <strong>Amount:</strong> <span style={{ fontWeight: 'bold', color: '#059669' }}>₹{parseFloat(viewData.amount || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</span>
+            </div>
+            <div style={{ marginBottom: '15px' }}>
+              <strong>Status:</strong> <span style={{ padding: '2px 8px', borderRadius: '4px', fontSize: '12px', background: viewData.status === 'Paid' || viewData.status === 'Approved' ? '#d1fae5' : '#fef3c7', color: viewData.status === 'Paid' || viewData.status === 'Approved' ? '#065f46' : '#92400e' }}>{viewData.status || 'Pending'}</span>
+            </div>
+            {viewData.narration && (
+              <div style={{ marginBottom: '15px' }}>
+                <strong>Narration:</strong> {viewData.narration}
+              </div>
+            )}
+
+            {viewData.items && viewData.items.length > 0 && (
+              <>
+                <h4 style={{ marginTop: '20px', marginBottom: '10px' }}>Products/Items</h4>
+                <div style={{ overflowX: 'auto' }}>
+                  <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '12px' }}>
+                    <thead>
+                      <tr style={{ background: '#f3f4f6' }}>
+                        <th style={{ padding: '8px', border: '1px solid #e5e7eb' }}>Sr</th>
+                        <th style={{ padding: '8px', border: '1px solid #e5e7eb' }}>Product</th>
+                        <th style={{ padding: '8px', border: '1px solid #e5e7eb' }}>Qty</th>
+                        <th style={{ padding: '8px', border: '1px solid #e5e7eb' }}>Rate</th>
+                        <th style={{ padding: '8px', border: '1px solid #e5e7eb' }}>Amount</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {viewData.items.map((item, idx) => (
+                        <tr key={idx}>
+                          <td style={{ padding: '8px', border: '1px solid #e5e7eb', textAlign: 'center' }}>{item.sr || idx + 1}</td>
+                          <td style={{ padding: '8px', border: '1px solid #e5e7eb' }}>{item.product || item.itemName || '-'}</td>
+                          <td style={{ padding: '8px', border: '1px solid #e5e7eb', textAlign: 'center' }}>{item.qty || item.quantity || '-'}</td>
+                          <td style={{ padding: '8px', border: '1px solid #e5e7eb', textAlign: 'right' }}>₹{parseFloat(item.rate || 0).toFixed(2)}</td>
+                          <td style={{ padding: '8px', border: '1px solid #e5e7eb', textAlign: 'right' }}>₹{parseFloat(item.amount || 0).toFixed(2)}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                    <tfoot>
+                      <tr style={{ background: '#f9fafb', fontWeight: 'bold' }}>
+                        <td colSpan="4" style={{ padding: '8px', border: '1px solid #e5e7eb', textAlign: 'right' }}>Total:</td>
+                        <td style={{ padding: '8px', border: '1px solid #e5e7eb', textAlign: 'right' }}>₹{parseFloat(viewData.amount || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
+                      </tr>
+                    </tfoot>
+                  </table>
+                </div>
+              </>
+            )}
+
+            <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '20px' }}>
+              <button
+                onClick={() => setShowViewModal(false)}
+                style={{ padding: '8px 20px', background: '#3b82f6', color: 'white', border: 'none', borderRadius: '6px', cursor: 'pointer' }}
+              >
+                Close
+              </button>
+            </div>
           </div>
         </div>
       )}
+{loggedFirmName && (
+  <div className="logged-firm-footer">
+    Firm: <strong>{loggedFirmName}</strong>
+  </div>
+)}
     </div>
   );
 }
-
 export default Dashboard;
