@@ -13,8 +13,8 @@ import Report from "./Report";
 // Note: Adjust the "../" or "./" depending on exactly where Dashboard.jsx sits relative to assets
 import SalesmanToAreaMapping from './SalesmanToAreaMapping';
 import Transaction from "./Transaction";
-// const API_URL = "https://total-solution-backend.onrender.com/api";
-const API_URL = "http://localhost:5000/api";
+const API_URL = "https://total-solution-backend.onrender.com/api";
+// const API_URL = "http://localhost:5000/api";
 
 import {
   LineChart,
