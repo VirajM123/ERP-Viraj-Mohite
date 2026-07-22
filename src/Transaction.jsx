@@ -1,6 +1,30 @@
 import React, { useState, useCallback, useEffect } from "react";
 import "./Transaction.css";
 import { useERP } from "./context/ERPContext";
+import {
+    Plus,
+    FileSpreadsheet,
+    FileText,
+    Printer,
+    SlidersHorizontal,
+    Search,
+    CalendarDays,
+    BookOpen,
+    ReceiptText,
+    CircleCheck,
+    ArrowUpRight,
+    ArrowDownLeft,
+    TriangleAlert,
+    Clock3,
+    CircleX,
+    Wallet,
+    Eye,
+    Pencil,
+    Trash2,
+    ChevronLeft,
+    ChevronRight,
+    ChevronDown,
+} from "lucide-react";
 
 const API_URL = "https://total-solution-backend.onrender.com/api";
 const Transaction = ({
@@ -143,7 +167,70 @@ const Transaction = ({
   // =========================
   // RECEIPT STATES
   // =========================
+  const [receiptFiltersVisible, setReceiptFiltersVisible] =
+    useState(false);
+  const createDefaultReceiptListFilters = () => ({
+    fromDate: "",
+    toDate: "",
+    receiptType: "",
+    party: "",
+  });
+
+  const [receiptDraftFilters, setReceiptDraftFilters] =
+    useState(() =>
+      createDefaultReceiptListFilters()
+    );
+
+  const [receiptAppliedFilters, setReceiptAppliedFilters] =
+    useState(() =>
+      createDefaultReceiptListFilters()
+    );
   // const [showReceiptForm, setShowReceiptForm] = useState(false);
+  /* =========================================================
+   RECEIPT LIST SEARCH AND PAGINATION
+   ========================================================= */
+
+  const [receiptListSearch, setReceiptListSearch] =
+    useState("");
+
+  const [receiptListCurrentPage, setReceiptListCurrentPage] =
+    useState(1);
+
+  const [receiptListRowsPerPage, setReceiptListRowsPerPage] =
+    useState(10);
+    /* =========================================================
+   RECEIPT LIST FILTER HANDLERS
+   Keep these inside Transaction component,
+   but outside every other function
+   ========================================================= */
+
+const handleReceiptDraftFilterChange = (
+  field,
+  value
+) => {
+  setReceiptDraftFilters((previous) => ({
+    ...previous,
+    [field]: value,
+  }));
+};
+
+const applyReceiptListFilters = () => {
+  setReceiptAppliedFilters({
+    ...receiptDraftFilters,
+  });
+
+  setReceiptListCurrentPage(1);
+};
+
+const clearReceiptListFilters = () => {
+  const clearedFilters =
+    createDefaultReceiptListFilters();
+
+  setReceiptDraftFilters(clearedFilters);
+  setReceiptAppliedFilters(clearedFilters);
+  setReceiptListSearch("");
+  setReceiptListCurrentPage(1);
+};
   const [editReceiptId, setEditReceiptId] = useState(null);
   const [partySuggestions, setPartySuggestions] = useState([]);
   const [partySearchActive, setPartySearchActive] = useState(false);
@@ -179,6 +266,76 @@ const Transaction = ({
   // PAYMENT STATES
   // =========================
   // const [showPaymentForm, setShowPaymentForm] = useState(false);
+  /* =========================================================
+   PAYMENT LIST STATES
+   ========================================================= */
+
+const createDefaultPaymentListFilters = () => ({
+  fromDate: "",
+  toDate: "",
+  party: "",
+  paymentType: "",
+});
+
+const [paymentListSearch, setPaymentListSearch] =
+  useState("");
+
+const [
+  paymentListCurrentPage,
+  setPaymentListCurrentPage,
+] = useState(1);
+
+const [
+  paymentListRowsPerPage,
+  setPaymentListRowsPerPage,
+] = useState(10);
+
+const [
+  paymentFiltersVisible,
+  setPaymentFiltersVisible,
+] = useState(false);
+
+const [
+  paymentDraftFilters,
+  setPaymentDraftFilters,
+] = useState(() =>
+  createDefaultPaymentListFilters()
+);
+
+const [
+  paymentAppliedFilters,
+  setPaymentAppliedFilters,
+] = useState(() =>
+  createDefaultPaymentListFilters()
+);
+
+const handlePaymentDraftFilterChange = (
+  field,
+  value
+) => {
+  setPaymentDraftFilters((previous) => ({
+    ...previous,
+    [field]: value,
+  }));
+};
+
+const applyPaymentListFilters = () => {
+  setPaymentAppliedFilters({
+    ...paymentDraftFilters,
+  });
+
+  setPaymentListCurrentPage(1);
+};
+
+const clearPaymentListFilters = () => {
+  const clearedFilters =
+    createDefaultPaymentListFilters();
+
+  setPaymentDraftFilters(clearedFilters);
+  setPaymentAppliedFilters(clearedFilters);
+  setPaymentListSearch("");
+  setPaymentListCurrentPage(1);
+};
   const [paymentPartySuggestions, setPaymentPartySuggestions] = useState([]);
   const [paymentFormData, setPaymentFormData] = useState({
     vDate: new Date().toISOString().split("T")[0],
@@ -220,6 +377,79 @@ const Transaction = ({
   // JOURNAL STATES
   // =========================
   // const [showJournalForm, setShowJournalForm] = useState(false);
+  /* =========================================================
+   JOURNAL VOUCHER LIST STATES
+   ========================================================= */
+
+const createDefaultJournalListFilters = () => ({
+  fromDate: "",
+  toDate: "",
+  voucherNo: "",
+  narration: "",
+  balanceStatus: "",
+});
+
+const [
+  journalListSearch,
+  setJournalListSearch,
+] = useState("");
+
+const [
+  journalListCurrentPage,
+  setJournalListCurrentPage,
+] = useState(1);
+
+const [
+  journalListRowsPerPage,
+  setJournalListRowsPerPage,
+] = useState(10);
+
+const [
+  journalFiltersVisible,
+  setJournalFiltersVisible,
+] = useState(false);
+
+const [
+  journalDraftFilters,
+  setJournalDraftFilters,
+] = useState(() =>
+  createDefaultJournalListFilters()
+);
+
+const [
+  journalAppliedFilters,
+  setJournalAppliedFilters,
+] = useState(() =>
+  createDefaultJournalListFilters()
+);
+
+const handleJournalDraftFilterChange = (
+  field,
+  value
+) => {
+  setJournalDraftFilters((previous) => ({
+    ...previous,
+    [field]: value,
+  }));
+};
+
+const applyJournalListFilters = () => {
+  setJournalAppliedFilters({
+    ...journalDraftFilters,
+  });
+
+  setJournalListCurrentPage(1);
+};
+
+const clearJournalListFilters = () => {
+  const clearedFilters =
+    createDefaultJournalListFilters();
+
+  setJournalDraftFilters(clearedFilters);
+  setJournalAppliedFilters(clearedFilters);
+  setJournalListSearch("");
+  setJournalListCurrentPage(1);
+};
   const [accountSuggestions, setAccountSuggestions] = useState([]);
   const [activeAccountRow, setActiveAccountRow] = useState(null);
   const [journalFormData, setJournalFormData] = useState({
@@ -248,6 +478,49 @@ const Transaction = ({
   // =========================
   // const [showChequeBounceForm, setShowChequeBounceForm] = useState(false);
   const [editChequeBounceId, setEditChequeBounceId] = useState(null);
+  /* =========================================================
+   CHEQUE BOUNCE LIST STATES
+   ========================================================= */
+
+const [chequeBounceListSearch, setChequeBounceListSearch] =
+  useState("");
+
+const [
+  chequeBounceListCurrentPage,
+  setChequeBounceListCurrentPage,
+] = useState(1);
+
+const [
+  chequeBounceListRowsPerPage,
+  setChequeBounceListRowsPerPage,
+] = useState(10);
+
+const [
+  chequeBounceFiltersVisible,
+  setChequeBounceFiltersVisible,
+] = useState(false);
+
+const createDefaultChequeBounceFilters = () => ({
+  fromDate: "",
+  toDate: "",
+  party: "",
+  bank: "",
+  chequeNo: "",
+});
+
+const [
+  chequeBounceDraftFilters,
+  setChequeBounceDraftFilters,
+] = useState(() =>
+  createDefaultChequeBounceFilters()
+);
+
+const [
+  chequeBounceAppliedFilters,
+  setChequeBounceAppliedFilters,
+] = useState(() =>
+  createDefaultChequeBounceFilters()
+);
 
 
   const [chequeBounceFormData, setChequeBounceFormData] = useState({
@@ -275,6 +548,77 @@ const Transaction = ({
   // PDC DOCKET STATES
   // =========================
   // const [showPDCDocketForm, setShowPDCDocketForm] = useState(false);
+  /* =========================================================
+   PDC DOCKET LIST STATES
+   ========================================================= */
+
+const createDefaultPDCDocketListFilters = () => ({
+  fromDepositDate: "",
+  toDepositDate: "",
+  houseBank: "",
+  pdcType: "",
+  docketNo: "",
+});
+
+const [pdcDocketListSearch, setPDCDocketListSearch] =
+  useState("");
+
+const [
+  pdcDocketListCurrentPage,
+  setPDCDocketListCurrentPage,
+] = useState(1);
+
+const [
+  pdcDocketListRowsPerPage,
+  setPDCDocketListRowsPerPage,
+] = useState(10);
+
+const [
+  pdcDocketFiltersVisible,
+  setPDCDocketFiltersVisible,
+] = useState(false);
+
+const [
+  pdcDocketDraftFilters,
+  setPDCDocketDraftFilters,
+] = useState(() =>
+  createDefaultPDCDocketListFilters()
+);
+
+const [
+  pdcDocketAppliedFilters,
+  setPDCDocketAppliedFilters,
+] = useState(() =>
+  createDefaultPDCDocketListFilters()
+);
+
+const handlePDCDocketDraftFilterChange = (
+  field,
+  value
+) => {
+  setPDCDocketDraftFilters((previous) => ({
+    ...previous,
+    [field]: value,
+  }));
+};
+
+const applyPDCDocketListFilters = () => {
+  setPDCDocketAppliedFilters({
+    ...pdcDocketDraftFilters,
+  });
+
+  setPDCDocketListCurrentPage(1);
+};
+
+const clearPDCDocketListFilters = () => {
+  const clearedFilters =
+    createDefaultPDCDocketListFilters();
+
+  setPDCDocketDraftFilters(clearedFilters);
+  setPDCDocketAppliedFilters(clearedFilters);
+  setPDCDocketListSearch("");
+  setPDCDocketListCurrentPage(1);
+};
   const [editPDCDocketId, setEditPDCDocketId] = useState(null);
   const [pdcDocketFormData, setPDCDocketFormData] = useState({
     depositDate: new Date().toISOString().split("T")[0],
@@ -295,6 +639,78 @@ const Transaction = ({
   // CONTRA STATES
   // =========================
   // const [showContraForm, setShowContraForm] = useState(false);
+
+  /* =========================================================
+   CONTRA LIST STATES
+   ========================================================= */
+
+const createDefaultContraListFilters = () => ({
+  fromDate: "",
+  toDate: "",
+  transactionType: "",
+  voucherNo: "",
+  narration: "",
+});
+
+const [contraListSearch, setContraListSearch] =
+  useState("");
+
+const [
+  contraListCurrentPage,
+  setContraListCurrentPage,
+] = useState(1);
+
+const [
+  contraListRowsPerPage,
+  setContraListRowsPerPage,
+] = useState(10);
+
+const [
+  contraFiltersVisible,
+  setContraFiltersVisible,
+] = useState(false);
+
+const [
+  contraDraftFilters,
+  setContraDraftFilters,
+] = useState(() =>
+  createDefaultContraListFilters()
+);
+
+const [
+  contraAppliedFilters,
+  setContraAppliedFilters,
+] = useState(() =>
+  createDefaultContraListFilters()
+);
+
+const handleContraDraftFilterChange = (
+  field,
+  value
+) => {
+  setContraDraftFilters((previous) => ({
+    ...previous,
+    [field]: value,
+  }));
+};
+
+const applyContraListFilters = () => {
+  setContraAppliedFilters({
+    ...contraDraftFilters,
+  });
+
+  setContraListCurrentPage(1);
+};
+
+const clearContraListFilters = () => {
+  const clearedFilters =
+    createDefaultContraListFilters();
+
+  setContraDraftFilters(clearedFilters);
+  setContraAppliedFilters(clearedFilters);
+  setContraListSearch("");
+  setContraListCurrentPage(1);
+};
   const [editContraId, setEditContraId] = useState(null);
   const [contraFormData, setContraFormData] = useState({
     transactionDate: new Date().toISOString().split("T")[0],
@@ -307,6 +723,88 @@ const Transaction = ({
   // =========================
   // COLLECTION VOUCHER STATES
   // =========================
+
+  /* =========================================================
+   COLLECTION VOUCHER LIST STATES
+   ========================================================= */
+
+const createDefaultCollectionVoucherFilters = () => ({
+  fromDate: "",
+  toDate: "",
+  collectionType: "",
+  voucherNo: "",
+  minimumAmount: "",
+});
+
+const [
+  collectionVoucherSearch,
+  setCollectionVoucherSearch,
+] = useState("");
+
+const [
+  collectionVoucherCurrentPage,
+  setCollectionVoucherCurrentPage,
+] = useState(1);
+
+const [
+  collectionVoucherRowsPerPage,
+  setCollectionVoucherRowsPerPage,
+] = useState(10);
+
+const [
+  collectionVoucherFiltersVisible,
+  setCollectionVoucherFiltersVisible,
+] = useState(false);
+
+const [
+  collectionVoucherDraftFilters,
+  setCollectionVoucherDraftFilters,
+] = useState(() =>
+  createDefaultCollectionVoucherFilters()
+);
+
+const [
+  collectionVoucherAppliedFilters,
+  setCollectionVoucherAppliedFilters,
+] = useState(() =>
+  createDefaultCollectionVoucherFilters()
+);
+
+const handleCollectionVoucherFilterChange = (
+  field,
+  value
+) => {
+  setCollectionVoucherDraftFilters(
+    (previous) => ({
+      ...previous,
+      [field]: value,
+    })
+  );
+};
+
+const applyCollectionVoucherFilters = () => {
+  setCollectionVoucherAppliedFilters({
+    ...collectionVoucherDraftFilters,
+  });
+
+  setCollectionVoucherCurrentPage(1);
+};
+
+const clearCollectionVoucherFilters = () => {
+  const clearedFilters =
+    createDefaultCollectionVoucherFilters();
+
+  setCollectionVoucherDraftFilters(
+    clearedFilters
+  );
+
+  setCollectionVoucherAppliedFilters(
+    clearedFilters
+  );
+
+  setCollectionVoucherSearch("");
+  setCollectionVoucherCurrentPage(1);
+};
   // const [showCollectionVoucherForm, setShowCollectionVoucherForm] = useState(false);
   const [editCollectionVoucherId, setEditCollectionVoucherId] = useState(null);
   const [collectionVoucherFormData, setCollectionVoucherFormData] = useState({
@@ -406,6 +904,7 @@ const Transaction = ({
 
       const normalizedRawValue = normalizeValue(rawValue);
 
+    
       const matchedArea = (areas || []).find((area) => {
         const areaCode =
           area.areaCode ||
@@ -2078,7 +2577,7 @@ const Transaction = ({
 
       await loadReceipts();
 
-     // openTransactionList("Receipt");
+      // openTransactionList("Receipt");
     } catch (error) {
       console.error(
         "RECEIPT SAVE ERROR =",
@@ -3417,6 +3916,241 @@ const Transaction = ({
     }
   };
 
+  /* =========================================================
+   RECEIPT LIST FILTER AND PAGINATION
+   ========================================================= */
+
+  const receiptListRows = Array.isArray(state.receipts)
+    ? state.receipts
+    : [];
+
+  const normalizedReceiptSearch =
+    String(receiptListSearch || "")
+      .trim()
+      .toLowerCase();
+
+  const filteredReceiptList =
+    receiptListRows.filter((receipt) => {
+      const header = receipt?.header || {};
+      const summary = receipt?.summary || {};
+
+      const receiptDate = String(
+        header.receiptDate ||
+        header.ReceiptDate ||
+        header.vDate ||
+        header.date ||
+        ""
+      )
+        .trim()
+        .slice(0, 10);
+
+      const partyName = String(
+        header.partyName ||
+        header.PartyName ||
+        header.creditAccount ||
+        ""
+      )
+        .trim()
+        .toLowerCase();
+
+      const chequeNo = String(
+        header.chequeNo ||
+        header.chqNo ||
+        header.ChequeNo ||
+        ""
+      ).trim();
+
+      const bankCash = String(
+        header.bankCash ||
+        header.BankCash ||
+        header.debitAccount ||
+        ""
+      )
+        .trim()
+        .toLowerCase();
+
+      const hasChequeNumber =
+        chequeNo.length > 0 &&
+        chequeNo !== "-" &&
+        chequeNo !== "0";
+
+      const resolvedReceiptType =
+        hasChequeNumber ||
+          bankCash.includes("bank")
+          ? "cheque"
+          : "cash";
+
+      const searchableText = [
+        receiptDate,
+        header.billSeries,
+        header.rno,
+        header.billNo,
+        partyName,
+        header.receiptAmount,
+        summary.totalAdjusted,
+        bankCash,
+        chequeNo,
+        header.chequeDate,
+        header.salesman,
+        header.narration,
+        header.bankCode,
+        header.micr,
+        header.loadNo,
+        header.rloadNo,
+        header.addUser,
+        header.editUser,
+        header.editDateTime,
+        header.docketNo,
+      ]
+        .map((value) =>
+          String(value ?? "")
+            .trim()
+            .toLowerCase()
+        )
+        .join(" ");
+
+      const matchesSearch =
+        !normalizedReceiptSearch ||
+        searchableText.includes(
+          normalizedReceiptSearch
+        );
+
+      const appliedFromDate = String(
+        receiptAppliedFilters.fromDate || ""
+      ).trim();
+
+      const appliedToDate = String(
+        receiptAppliedFilters.toDate || ""
+      ).trim();
+
+      const appliedParty = String(
+        receiptAppliedFilters.party || ""
+      )
+        .trim()
+        .toLowerCase();
+
+      const appliedReceiptType = String(
+        receiptAppliedFilters.receiptType || ""
+      )
+        .trim()
+        .toLowerCase();
+
+      const matchesFromDate =
+        !appliedFromDate ||
+        (receiptDate &&
+          receiptDate >= appliedFromDate);
+
+      const matchesToDate =
+        !appliedToDate ||
+        (receiptDate &&
+          receiptDate <= appliedToDate);
+
+      const matchesParty =
+        !appliedParty ||
+        partyName.includes(appliedParty);
+
+      const matchesReceiptType =
+        !appliedReceiptType ||
+        resolvedReceiptType ===
+        appliedReceiptType;
+
+      return (
+        matchesSearch &&
+        matchesFromDate &&
+        matchesToDate &&
+        matchesParty &&
+        matchesReceiptType
+      );
+    });
+  const receiptActiveFilterCount = [
+    receiptAppliedFilters.fromDate,
+    receiptAppliedFilters.toDate,
+    receiptAppliedFilters.receiptType,
+    receiptAppliedFilters.party,
+  ].filter((value) =>
+    String(value || "").trim()
+  ).length;
+
+  const receiptListTotalPages = Math.max(
+    Math.ceil(
+      filteredReceiptList.length /
+      receiptListRowsPerPage
+    ),
+    1
+  );
+
+  const receiptListSafePage = Math.min(
+    receiptListCurrentPage,
+    receiptListTotalPages
+  );
+
+  const receiptListStartIndex =
+    (receiptListSafePage - 1) *
+    receiptListRowsPerPage;
+
+  const paginatedReceiptList =
+    filteredReceiptList.slice(
+      receiptListStartIndex,
+      receiptListStartIndex +
+      receiptListRowsPerPage
+    );
+
+  const receiptListShowingFrom =
+    filteredReceiptList.length === 0
+      ? 0
+      : receiptListStartIndex + 1;
+
+  const receiptListShowingTo = Math.min(
+    receiptListStartIndex +
+    receiptListRowsPerPage,
+    filteredReceiptList.length
+  );
+
+  const getReceiptPaginationPages = () => {
+    const pages = [];
+
+    const startPage = Math.max(
+      1,
+      receiptListSafePage - 2
+    );
+
+    const endPage = Math.min(
+      receiptListTotalPages,
+      receiptListSafePage + 2
+    );
+
+    for (
+      let pageNumber = startPage;
+      pageNumber <= endPage;
+      pageNumber += 1
+    ) {
+      pages.push(pageNumber);
+    }
+
+    return pages;
+  };
+
+  useEffect(() => {
+    setReceiptListCurrentPage(1);
+  }, [
+    receiptListSearch,
+    receiptListRowsPerPage,
+  ]);
+
+  useEffect(() => {
+    if (
+      receiptListCurrentPage >
+      receiptListTotalPages
+    ) {
+      setReceiptListCurrentPage(
+        receiptListTotalPages
+      );
+    }
+  }, [
+    receiptListCurrentPage,
+    receiptListTotalPages,
+  ]);
+
   const loadChequeBounces = async () => {
     try {
       const res = await fetch(
@@ -3437,112 +4171,736 @@ const Transaction = ({
       console.log(err);
     }
   };
-
   const renderReceiptList = () => (
-    <div className="receipt-sales-list-section">
-      <div className="receipt-sales-list-header">
-        <h3>Receipt List ({state.receipts.length})</h3>
+    <div className="receipt-premium-list-page">
+      {/* =====================================================
+          PAGE HEADER
+          ===================================================== */}
 
-        <div className="receipt-sales-list-actions">
-          <input className="receipt-sales-search" type="text" placeholder="Search..." />
-          <button className="receipt-export-excel">📊 Export Excel</button>
-          <button className="receipt-export-pdf">📄 Export PDF</button>
-        <button
-  type="button"
-  className="receipt-settle-load-btn"
-  onClick={() =>
-    window.dispatchEvent(
-      new CustomEvent("openSettleLoad")
-    )
-  }
->
-  Settle Load
-</button>
+      <div className="receipt-premium-heading">
+        <div className="receipt-premium-title">
+          <h2>Receipt List</h2>
 
-<button
-  type="button"
-  className="receipt-add-btn"
-  onClick={() => {
-    resetReceiptForm();
-    openTransactionEntry("Receipt");
-  }}
->
-  + Add Receipt
-</button>
+          <p>
+            Manage all customer receipt transactions
+          </p>
+        </div>
+
+        <div className="receipt-premium-heading-actions">
+          <button
+            type="button"
+            className="receipt-premium-button receipt-premium-add-button"
+            onClick={() => {
+              resetReceiptForm();
+              openTransactionEntry("Receipt");
+            }}
+          >
+            <Plus size={14} />
+            New Receipt
+          </button>
+
+          <button
+            type="button"
+            className="receipt-premium-button receipt-premium-excel-button"
+          >
+            <FileSpreadsheet size={14} />
+            Export Excel
+          </button>
+
+          <button
+            type="button"
+            className="receipt-premium-button receipt-premium-pdf-button"
+          >
+            <FileText size={14} />
+            Export PDF
+          </button>
+
+          <button
+            type="button"
+            className="receipt-premium-button receipt-premium-print-button"
+            onClick={() => window.print()}
+          >
+            <Printer size={14} />
+            Print List
+          </button>
         </div>
       </div>
 
-      <div className="receipt-sales-table-wrap">
-        <table className="receipt-sales-table">
-          <thead>
-            <tr>
-              <th>Date</th>
-              <th>Series</th>
-              <th>Voucher No</th>
-              <th>Credit Account<br /></th>
-              <th>Amount</th>
-              <th>Debit Account<br /></th>
-              <th>Chq No</th>
-              <th>Chq Date</th>
-              <th>Salesman</th>
-              <th>Narration</th>
-              <th>Bank Code</th>
-              <th>Load No</th>
-              <th>Add User</th>
-              <th>Edit User</th>
-              <th>Edit Date.Time</th>
-              <th>Docket No</th>
-              <th className="receipt-sticky-action-head">Actions</th>
-            </tr>
-          </thead>
+      {/* =====================================================
+          SUMMARY CARDS
+          ===================================================== */}
 
-          <tbody>
-            {state.receipts.length === 0 ? (
+      <div className="receipt-premium-summary-grid">
+        {/* TODAY'S RECEIPTS */}
+
+        <div className="receipt-premium-summary-card">
+          <div className="receipt-premium-summary-icon blue">
+            <CalendarDays size={18} />
+          </div>
+
+          <div className="receipt-premium-summary-content">
+            <span>Today's Receipts</span>
+
+            <strong>
+              {
+                receiptListRows.filter((receipt) => {
+                  const receiptDate =
+                    receipt?.header?.receiptDate || "";
+
+                  const today =
+                    new Date()
+                      .toISOString()
+                      .split("T")[0];
+
+                  return receiptDate === today;
+                }).length
+              }
+            </strong>
+
+            <small>
+              {new Date().toLocaleDateString("en-GB")}
+            </small>
+          </div>
+
+          <div className="receipt-card-decoration" />
+        </div>
+
+        {/* TOTAL RECEIPTS */}
+
+        <div className="receipt-premium-summary-card">
+          <div className="receipt-premium-summary-icon blue">
+            <ReceiptText size={18} />
+          </div>
+
+          <div className="receipt-premium-summary-content">
+            <span>Total Receipts</span>
+
+            <strong>{receiptListRows.length}</strong>
+
+            <small>All Time</small>
+          </div>
+
+          <div className="receipt-card-decoration" />
+        </div>
+
+        {/* CHEQUE RECEIPTS */}
+
+        <div className="receipt-premium-summary-card">
+          <div className="receipt-premium-summary-icon orange">
+            <Clock3 size={18} />
+          </div>
+
+          <div className="receipt-premium-summary-content">
+            <span>Cheque Receipts</span>
+
+            <strong>
+              {
+                receiptListRows.filter((receipt) => {
+                  const header =
+                    receipt?.header || {};
+
+                  const chequeNo = String(
+                    header.chequeNo ||
+                    header.chqNo ||
+                    ""
+                  ).trim();
+
+                  const bankCash = String(
+                    header.bankCash || ""
+                  ).toLowerCase();
+
+                  return (
+                    (chequeNo &&
+                      chequeNo !== "-" &&
+                      chequeNo !== "0") ||
+                    bankCash.includes("bank")
+                  );
+                }).length
+              }
+            </strong>
+
+            <small>Cheque entries</small>
+          </div>
+
+          <div className="receipt-card-decoration" />
+        </div>
+
+        {/* CASH RECEIPTS */}
+
+        <div className="receipt-premium-summary-card">
+          <div className="receipt-premium-summary-icon red">
+            <CircleX size={18} />
+          </div>
+
+          <div className="receipt-premium-summary-content">
+            <span>Cash Receipts</span>
+
+            <strong>
+              {
+                receiptListRows.filter((receipt) => {
+                  const header =
+                    receipt?.header || {};
+
+                  const chequeNo = String(
+                    header.chequeNo ||
+                    header.chqNo ||
+                    ""
+                  ).trim();
+
+                  const bankCash = String(
+                    header.bankCash || ""
+                  ).toLowerCase();
+
+                  const isCheque =
+                    (chequeNo &&
+                      chequeNo !== "-" &&
+                      chequeNo !== "0") ||
+                    bankCash.includes("bank");
+
+                  return !isCheque;
+                }).length
+              }
+            </strong>
+
+            <small>Cash transactions</small>
+          </div>
+
+          <div className="receipt-card-decoration" />
+        </div>
+
+        {/* RECEIPT VALUE */}
+
+        <div className="receipt-premium-summary-card">
+          <div className="receipt-premium-summary-icon violet">
+            <Wallet size={18} />
+          </div>
+
+          <div className="receipt-premium-summary-content">
+            <span>Receipt Value</span>
+
+            <strong>
+              ₹{" "}
+              {filteredReceiptList
+                .reduce((total, receipt) => {
+                  const header =
+                    receipt?.header || {};
+
+                  const summary =
+                    receipt?.summary || {};
+
+                  return (
+                    total +
+                    Number(
+                      summary.totalAdjusted ||
+                      header.receiptAmount ||
+                      0
+                    )
+                  );
+                }, 0)
+                .toLocaleString("en-IN", {
+                  minimumFractionDigits: 2,
+                  maximumFractionDigits: 2,
+                })}
+            </strong>
+
+            <small>Filtered Result</small>
+          </div>
+
+          <div className="receipt-card-decoration" />
+        </div>
+      </div>
+      {/* =====================================================
+          SEARCH TOOLBAR
+          ===================================================== */}
+
+      <div className="receipt-premium-toolbar">
+        <div className="receipt-premium-search-box">
+          <Search size={15} />
+
+          <input
+            type="text"
+            value={receiptListSearch}
+            placeholder="Search receipts, parties, cheque no..."
+            onChange={(event) =>
+              setReceiptListSearch(
+                event.target.value
+              )
+            }
+          />
+
+          {receiptListSearch && (
+            <button
+              type="button"
+              className="receipt-premium-clear-search"
+              onClick={() =>
+                setReceiptListSearch("")
+              }
+            >
+              ×
+            </button>
+          )}
+        </div>
+
+        <button
+          type="button"
+          className={`receipt-premium-filter-button ${receiptActiveFilterCount > 0
+              ? "has-active-filters"
+              : ""
+            }`}
+          onClick={() =>
+            setReceiptFiltersVisible(
+              (previous) => !previous
+            )
+          }
+        >
+          <SlidersHorizontal size={15} />
+
+          Apply Filter
+
+          {receiptActiveFilterCount > 0 && (
+            <span className="receipt-filter-count">
+              {receiptActiveFilterCount}
+            </span>
+          )}
+
+          <ChevronDown
+            size={14}
+            className={
+              receiptFiltersVisible
+                ? "receipt-filter-chevron open"
+                : "receipt-filter-chevron"
+            }
+          />
+        </button>
+      </div>{receiptFiltersVisible && (
+        <div className="receipt-premium-filter-panel">
+          <div className="receipt-filter-field">
+            <label>From Date</label>
+
+            <input
+              type="date"
+              value={
+                receiptDraftFilters.fromDate
+              }
+              onChange={(event) =>
+                handleReceiptDraftFilterChange(
+                  "fromDate",
+                  event.target.value
+                )
+              }
+            />
+          </div>
+
+          <div className="receipt-filter-field">
+            <label>To Date</label>
+
+            <input
+              type="date"
+              value={
+                receiptDraftFilters.toDate
+              }
+              onChange={(event) =>
+                handleReceiptDraftFilterChange(
+                  "toDate",
+                  event.target.value
+                )
+              }
+            />
+          </div>
+
+          <div className="receipt-filter-field">
+            <label>Receipt Type</label>
+
+            <select
+              value={
+                receiptDraftFilters.receiptType
+              }
+              onChange={(event) =>
+                handleReceiptDraftFilterChange(
+                  "receiptType",
+                  event.target.value
+                )
+              }
+            >
+              <option value="">All Types</option>
+              <option value="cash">
+                Cash Receipt
+              </option>
+              <option value="cheque">
+                Bank / Cheque Receipt
+              </option>
+            </select>
+          </div>
+
+          <div className="receipt-filter-field">
+            <label>Party Name</label>
+
+            <input
+              type="text"
+              value={receiptDraftFilters.party}
+              placeholder="Enter party name"
+              onChange={(event) =>
+                handleReceiptDraftFilterChange(
+                  "party",
+                  event.target.value
+                )
+              }
+              onKeyDown={(event) => {
+                if (event.key === "Enter") {
+                  event.preventDefault();
+                  applyReceiptListFilters();
+                }
+              }}
+            />
+          </div>
+
+          <div className="receipt-filter-actions">
+            <button
+              type="button"
+              className="receipt-filter-clear-button"
+              onClick={clearReceiptListFilters}
+            >
+              Clear
+            </button>
+
+            <button
+              type="button"
+              className="receipt-filter-apply-button"
+              onClick={applyReceiptListFilters}
+            >
+              <SlidersHorizontal size={14} />
+              Apply Filter
+            </button>
+          </div>
+        </div>
+      )}
+      {/* =====================================================
+          TABLE CARD
+          ===================================================== */}
+
+      <div className="receipt-premium-table-card">
+        <div className="receipt-premium-table-scroll">
+          <table className="receipt-premium-table">
+            <thead>
               <tr>
-                <td colSpan="17" className="no-data">No Receipts Added</td>
+                <th className="receipt-premium-sr-column">
+                  SrNo
+                </th>
+
+                <th>Date</th>
+                <th>Series</th>
+                <th>Voucher No</th>
+                <th>Credit Account</th>
+                <th className="receipt-premium-amount-column">
+                  Amount
+                </th>
+                <th>Debit Account</th>
+                <th>Chq No</th>
+                <th>Chq Date</th>
+                <th>Salesman</th>
+                <th>Narration</th>
+                <th>Bank Code</th>
+                <th>Load No</th>
+                <th>Add User</th>
+                <th>Edit User</th>
+                <th>Edit Date.Time</th>
+                <th>Docket No</th>
+
+                <th className="receipt-premium-actions-column">
+                  Actions
+                </th>
               </tr>
-            ) : (
-              state.receipts.map((receipt) => {
-                const header = receipt.header || {};
-                const summary = receipt.summary || {};
+            </thead>
 
-                return (
-                  <tr key={receipt.id}>
-                    <td>{header.receiptDate || "-"}</td>
-                    <td>{header.billSeries || "-"}</td>
-                    <td>{header.rno || header.billNo || "-"}</td>
-                    <td>{header.partyName || "-"}</td>
-                    <td className="amount-cell">
-                      ₹{Number(summary.totalAdjusted || header.receiptAmount || 0).toLocaleString("en-IN", {
-                        minimumFractionDigits: 2,
-                        maximumFractionDigits: 2
-                      })}
-                    </td>
-                    <td>{header.bankCash || "-"}</td>
-                    <td>{header.chequeNo || "-"}</td>
-                    <td>{header.chequeDate || "-"}</td>
-                    <td>{header.salesman || "-"}</td>
-                    <td>{header.narration || "-"}</td>
-                    <td>{header.bankCode || header.micr || "-"}</td>
-                    <td>{header.loadNo || header.rloadNo || "-"}</td>
-                    <td>{header.addUser || "Admin"}</td>
-                    <td>{header.editUser || "-"}</td>
-                    <td>{header.editDateTime || "-"}</td>
-                    <td>{header.docketNo || "-"}</td>
+            <tbody>
+              {paginatedReceiptList.length === 0 ? (
+                <tr>
+                  <td
+                    colSpan="18"
+                    className="receipt-premium-empty"
+                  >
+                    <strong>
+                      No receipts found
+                    </strong>
 
-                    <td className="receipt-sticky-action-cell">
-                      <div className="receipt-action-buttons">
-                        <button className="btn-view" onClick={() => editReceipt(receipt)}>👁️ View</button>
-                        <button className="btn-edit" onClick={() => editReceipt(receipt)}>✏️ Edit</button>
-                        <button className="btn-delete" onClick={() => deleteReceipt(receipt.id)}>🗑 Delete</button>
-                      </div>
-                    </td>
-                  </tr>
-                );
-              })
-            )}
-          </tbody>
-        </table>
+                    <span>
+                      {receiptListSearch
+                        ? "Try another search keyword."
+                        : "Click New Receipt to create your first receipt."}
+                    </span>
+                  </td>
+                </tr>
+              ) : (
+                paginatedReceiptList.map(
+                  (receipt, index) => {
+                    const header =
+                      receipt?.header || {};
+
+                    const summary =
+                      receipt?.summary || {};
+
+                    const receiptAmount =
+                      Number(
+                        summary.totalAdjusted ||
+                        header.receiptAmount ||
+                        0
+                      );
+
+                    return (
+                      <tr
+                        key={
+                          receipt.id ||
+                          `${header.billSeries}-${header.rno}-${index}`
+                        }
+                      >
+                        <td className="receipt-premium-sr-column">
+                          {receiptListStartIndex +
+                            index +
+                            1}
+                        </td>
+
+                        <td className="receipt-premium-nowrap">
+                          {header.receiptDate || "-"}
+                        </td>
+
+                        <td className="receipt-premium-series">
+                          {header.billSeries || "-"}
+                        </td>
+
+                        <td className="receipt-premium-voucher-number">
+                          {header.rno ||
+                            header.billNo ||
+                            "-"}
+                        </td>
+
+                        <td
+                          className="receipt-premium-party"
+                          title={
+                            header.partyName || ""
+                          }
+                        >
+                          {header.partyName || "-"}
+                        </td>
+
+                        <td className="receipt-premium-amount-column">
+                          ₹
+                          {receiptAmount.toLocaleString(
+                            "en-IN",
+                            {
+                              minimumFractionDigits: 2,
+                              maximumFractionDigits: 2,
+                            }
+                          )}
+                        </td>
+
+                        <td
+                          title={
+                            header.bankCash || ""
+                          }
+                        >
+                          {header.bankCash || "-"}
+                        </td>
+
+                        <td>
+                          {header.chequeNo || "-"}
+                        </td>
+
+                        <td className="receipt-premium-nowrap">
+                          {header.chequeDate || "-"}
+                        </td>
+
+                        <td
+                          title={
+                            header.salesman || ""
+                          }
+                        >
+                          {header.salesman || "-"}
+                        </td>
+
+                        <td
+                          className="receipt-premium-narration"
+                          title={
+                            header.narration || ""
+                          }
+                        >
+                          {header.narration || "-"}
+                        </td>
+
+                        <td>
+                          {header.bankCode ||
+                            header.micr ||
+                            "-"}
+                        </td>
+
+                        <td>
+                          {header.loadNo ||
+                            header.rloadNo ||
+                            "-"}
+                        </td>
+
+                        <td>
+                          {header.addUser ||
+                            "Admin"}
+                        </td>
+
+                        <td>
+                          {header.editUser || "-"}
+                        </td>
+
+                        <td className="receipt-premium-nowrap">
+                          {header.editDateTime || "-"}
+                        </td>
+
+                        <td>
+                          {header.docketNo || "-"}
+                        </td>
+
+                        <td className="receipt-premium-actions-column">
+                          <div className="receipt-premium-row-actions">
+                            <button
+                              type="button"
+                              className="receipt-premium-action-button view"
+                              title="View Receipt"
+                              onClick={() =>
+                                editReceipt(receipt)
+                              }
+                            >
+                              <Eye size={14} />
+                            </button>
+
+                            <button
+                              type="button"
+                              className="receipt-premium-action-button edit"
+                              title="Edit Receipt"
+                              onClick={() =>
+                                editReceipt(receipt)
+                              }
+                            >
+                              <Pencil size={14} />
+                            </button>
+
+                            <button
+                              type="button"
+                              className="receipt-premium-action-button delete"
+                              title="Delete Receipt"
+                              onClick={() =>
+                                deleteReceipt(receipt.id)
+                              }
+                            >
+                              <Trash2 size={14} />
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  }
+                )
+              )}
+            </tbody>
+          </table>
+        </div>
+
+        {/* ===================================================
+            PAGINATION FOOTER
+            =================================================== */}
+
+        <div className="receipt-premium-pagination-footer">
+          <div className="receipt-premium-pagination-info">
+            Showing{" "}
+            <strong>
+              {receiptListShowingFrom}
+            </strong>{" "}
+            to{" "}
+            <strong>
+              {receiptListShowingTo}
+            </strong>{" "}
+            of{" "}
+            <strong>
+              {filteredReceiptList.length}
+            </strong>{" "}
+            entries
+          </div>
+
+          <div className="receipt-premium-pagination-controls">
+            <select
+              value={receiptListRowsPerPage}
+              onChange={(event) =>
+                setReceiptListRowsPerPage(
+                  Number(event.target.value)
+                )
+              }
+              aria-label="Rows per page"
+            >
+              <option value={10}>10</option>
+              <option value={20}>20</option>
+              <option value={50}>50</option>
+              <option value={100}>100</option>
+            </select>
+
+            <div className="receipt-premium-pagination">
+              <button
+                type="button"
+                disabled={
+                  receiptListSafePage === 1
+                }
+                onClick={() =>
+                  setReceiptListCurrentPage(
+                    (previousPage) =>
+                      Math.max(
+                        previousPage - 1,
+                        1
+                      )
+                  )
+                }
+                title="Previous page"
+              >
+                ‹
+              </button>
+
+              {getReceiptPaginationPages().map(
+                (pageNumber) => (
+                  <button
+                    type="button"
+                    key={pageNumber}
+                    className={
+                      pageNumber ===
+                        receiptListSafePage
+                        ? "active"
+                        : ""
+                    }
+                    onClick={() =>
+                      setReceiptListCurrentPage(
+                        pageNumber
+                      )
+                    }
+                  >
+                    {pageNumber}
+                  </button>
+                )
+              )}
+
+              <button
+                type="button"
+                disabled={
+                  receiptListSafePage ===
+                  receiptListTotalPages
+                }
+                onClick={() =>
+                  setReceiptListCurrentPage(
+                    (previousPage) =>
+                      Math.min(
+                        previousPage + 1,
+                        receiptListTotalPages
+                      )
+                  )
+                }
+                title="Next page"
+              >
+                ›
+              </button>
+            </div>
+          </div>
+        </div>
       </div>
     </div>
   );
@@ -4535,91 +5893,1006 @@ const Transaction = ({
     </div>
   );
 
-  // Journal List
-  const renderJournalList = () => (
-    <div className="master-section"><div className="grid-header"><h3>Journal Voucher Management</h3><button className="btn-add-new" onClick={() => { openTransactionEntry("Journal Voucher"); if (journalItems.length === 0) addJournalRow(); }}>+ Add Journal Voucher</button></div>
-      <div className="table-responsive"><table className="erp-table"><thead><tr><th>VNo</th><th>VDate</th><th>Narration</th><th>Total Dr</th><th>Total Cr</th><th>Actions</th></tr></thead>
-        <tbody>{state.journals.length === 0 ? (<tr><td colSpan="5">No Journal Vouchers Added</td></tr>) : (state.journals.map((journal) => (<tr key={journal.id}><td>{journal.header.vNo}</td><td>{journal.header.vDate}</td><td>{journal.header.narr}</td><td>₹ {journal.summary.totalDr.toFixed(2)}</td><td>₹ {journal.summary.totalCr.toFixed(2)}</td>
-          <td
-            className="action-buttons"
-            style={{
-              whiteSpace: 'nowrap',
-              position: 'sticky',
-              right: 0,
-              backgroundColor: '#ffffff',
-              zIndex: 10,
-              boxShadow: '-2px 0 5px -2px rgba(0,0,0,0.1)'
-            }}
-          >
+  /* =========================================================
+   JOURNAL VOUCHER FILTERING AND PAGINATION
+   ========================================================= */
 
-            <button
-              className="btn-view"
-              onClick={() => {
-                setTransactionFormMode(prev => ({
-                  ...prev,
-                  ["Journal Voucher"]: true
-                }));
+const journalListRows = Array.isArray(
+  state.journals
+)
+  ? state.journals
+  : [];
 
-                editJournal(journal);
-              }}
-              title="View"
-              style={{
-                background: '#10b981',
-                color: 'white',
-                border: 'none',
-                borderRadius: '4px',
-                padding: '4px 8px',
-                margin: '0 2px',
-                cursor: 'pointer'
-              }}
-            >
-              👁️ View
-            </button>
+const normalizedJournalSearch = String(
+  journalListSearch || ""
+)
+  .trim()
+  .toLowerCase();
 
-            <button
-              className="btn-edit"
-              onClick={() => {
-                setTransactionFormMode(prev => ({
-                  ...prev,
-                  ["Journal Voucher"]: true
-                }));
+const filteredJournalList =
+  journalListRows.filter((journal) => {
+    const header =
+      journal.header || journal || {};
 
-                editJournal(journal);
-              }}
-              title="Edit"
-              style={{
-                background: '#3b82f6',
-                color: 'white',
-                border: 'none',
-                borderRadius: '4px',
-                padding: '4px 8px',
-                margin: '0 2px',
-                cursor: 'pointer'
-              }}
-            >
-              ✏️ Edit
-            </button>
+    const summary =
+      journal.summary || {};
 
-            <button
-              className="btn-delete"
-              onClick={() => deleteJournal(journal.id)}
-              title="Delete"
-              style={{
-                background: '#ef4444',
-                color: 'white',
-                border: 'none',
-                borderRadius: '4px',
-                padding: '4px 8px',
-                margin: '0 2px',
-                cursor: 'pointer'
-              }}
-            >
-              🗑 Delete
-            </button>
+    const voucherNo = String(
+      header.vNo ||
+        header.voucherNo ||
+        ""
+    )
+      .trim()
+      .toLowerCase();
 
-          </td>
-        </tr>)))}</tbody></table></div></div>
+    const voucherDate = String(
+      header.vDate ||
+        header.voucherDate ||
+        header.date ||
+        ""
+    )
+      .trim()
+      .slice(0, 10);
+
+    const narration = String(
+      header.narr ||
+        header.narration ||
+        ""
+    )
+      .trim()
+      .toLowerCase();
+
+    const totalDr =
+      Number(
+        summary.totalDr ??
+          header.totalDr ??
+          0
+      ) || 0;
+
+    const totalCr =
+      Number(
+        summary.totalCr ??
+          header.totalCr ??
+          0
+      ) || 0;
+
+    const difference = Math.abs(
+      totalDr - totalCr
+    );
+
+    const balanceStatus =
+      difference < 0.01
+        ? "balanced"
+        : "unbalanced";
+
+    const searchableText = [
+      voucherNo,
+      voucherDate,
+      narration,
+      totalDr,
+      totalCr,
+      balanceStatus,
+      header.addUser,
+      header.editUser,
+    ]
+      .map((value) =>
+        String(value ?? "")
+          .trim()
+          .toLowerCase()
+      )
+      .join(" ");
+
+    const appliedFromDate = String(
+      journalAppliedFilters.fromDate || ""
+    ).trim();
+
+    const appliedToDate = String(
+      journalAppliedFilters.toDate || ""
+    ).trim();
+
+    const appliedVoucherNo = String(
+      journalAppliedFilters.voucherNo || ""
+    )
+      .trim()
+      .toLowerCase();
+
+    const appliedNarration = String(
+      journalAppliedFilters.narration || ""
+    )
+      .trim()
+      .toLowerCase();
+
+    const appliedBalanceStatus = String(
+      journalAppliedFilters.balanceStatus ||
+        ""
+    )
+      .trim()
+      .toLowerCase();
+
+    const matchesSearch =
+      !normalizedJournalSearch ||
+      searchableText.includes(
+        normalizedJournalSearch
+      );
+
+    const matchesFromDate =
+      !appliedFromDate ||
+      (voucherDate &&
+        voucherDate >= appliedFromDate);
+
+    const matchesToDate =
+      !appliedToDate ||
+      (voucherDate &&
+        voucherDate <= appliedToDate);
+
+    const matchesVoucherNo =
+      !appliedVoucherNo ||
+      voucherNo.includes(appliedVoucherNo);
+
+    const matchesNarration =
+      !appliedNarration ||
+      narration.includes(appliedNarration);
+
+    const matchesBalanceStatus =
+      !appliedBalanceStatus ||
+      balanceStatus ===
+        appliedBalanceStatus;
+
+    return (
+      matchesSearch &&
+      matchesFromDate &&
+      matchesToDate &&
+      matchesVoucherNo &&
+      matchesNarration &&
+      matchesBalanceStatus
+    );
+  });
+
+const journalActiveFilterCount = [
+  journalAppliedFilters.fromDate,
+  journalAppliedFilters.toDate,
+  journalAppliedFilters.voucherNo,
+  journalAppliedFilters.narration,
+  journalAppliedFilters.balanceStatus,
+].filter((value) =>
+  String(value || "").trim()
+).length;
+
+const journalTotalPages = Math.max(
+  Math.ceil(
+    filteredJournalList.length /
+      journalListRowsPerPage
+  ),
+  1
+);
+
+const journalSafePage = Math.min(
+  journalListCurrentPage,
+  journalTotalPages
+);
+
+const journalStartIndex =
+  (journalSafePage - 1) *
+  journalListRowsPerPage;
+
+const paginatedJournalList =
+  filteredJournalList.slice(
+    journalStartIndex,
+    journalStartIndex +
+      journalListRowsPerPage
   );
+
+const journalShowingFrom =
+  filteredJournalList.length === 0
+    ? 0
+    : journalStartIndex + 1;
+
+const journalShowingTo = Math.min(
+  journalStartIndex +
+    journalListRowsPerPage,
+  filteredJournalList.length
+);
+
+const getJournalPaginationPages = () => {
+  const pages = [];
+
+  const startPage = Math.max(
+    1,
+    journalSafePage - 2
+  );
+
+  const endPage = Math.min(
+    journalTotalPages,
+    journalSafePage + 2
+  );
+
+  for (
+    let pageNumber = startPage;
+    pageNumber <= endPage;
+    pageNumber += 1
+  ) {
+    pages.push(pageNumber);
+  }
+
+  return pages;
+};
+
+useEffect(() => {
+  setJournalListCurrentPage(1);
+}, [
+  journalListSearch,
+  journalListRowsPerPage,
+]);
+
+useEffect(() => {
+  if (
+    journalListCurrentPage >
+    journalTotalPages
+  ) {
+    setJournalListCurrentPage(
+      journalTotalPages
+    );
+  }
+}, [
+  journalListCurrentPage,
+  journalTotalPages,
+]);
+
+  // Journal List
+const renderJournalList = () => {
+  const today = new Date()
+    .toISOString()
+    .split("T")[0];
+
+  const todayJournalCount =
+    journalListRows.filter((journal) => {
+      const header =
+        journal.header || journal || {};
+
+      return (
+        String(header.vDate || "")
+          .slice(0, 10) === today
+      );
+    }).length;
+
+  const totalDebitAmount =
+    filteredJournalList.reduce(
+      (total, journal) => {
+        const summary =
+          journal.summary || {};
+
+        return (
+          total +
+          (Number(summary.totalDr) || 0)
+        );
+      },
+      0
+    );
+
+  const totalCreditAmount =
+    filteredJournalList.reduce(
+      (total, journal) => {
+        const summary =
+          journal.summary || {};
+
+        return (
+          total +
+          (Number(summary.totalCr) || 0)
+        );
+      },
+      0
+    );
+
+  const balancedJournalCount =
+    filteredJournalList.filter(
+      (journal) => {
+        const summary =
+          journal.summary || {};
+
+        const totalDr =
+          Number(summary.totalDr) || 0;
+
+        const totalCr =
+          Number(summary.totalCr) || 0;
+
+        return (
+          Math.abs(totalDr - totalCr) <
+          0.01
+        );
+      }
+    ).length;
+
+  const unbalancedJournalCount =
+    filteredJournalList.length -
+    balancedJournalCount;
+
+  const openNewJournalVoucher = () => {
+    openTransactionEntry(
+      "Journal Voucher"
+    );
+
+    if (journalItems.length === 0) {
+      addJournalRow();
+    }
+  };
+
+  return (
+    <div className="journal-premium-list-page">
+      <div className="journal-premium-heading">
+        <div className="journal-premium-title">
+          <h2>Journal Voucher List</h2>
+
+          <p>
+            Manage debit and credit journal
+            voucher entries
+          </p>
+        </div>
+
+        <div className="journal-heading-actions">
+          <button
+            type="button"
+            className="journal-main-button journal-add-button"
+            onClick={openNewJournalVoucher}
+          >
+            <Plus size={16} />
+            New Journal Voucher
+          </button>
+
+          <button
+            type="button"
+            className="journal-main-button journal-excel-button"
+          >
+            <FileSpreadsheet size={16} />
+            Export Excel
+          </button>
+
+          <button
+            type="button"
+            className="journal-main-button journal-pdf-button"
+          >
+            <FileText size={16} />
+            Export PDF
+          </button>
+
+          <button
+            type="button"
+            className="journal-main-button journal-print-button"
+            onClick={() => window.print()}
+          >
+            <Printer size={16} />
+            Print List
+          </button>
+        </div>
+      </div>
+
+      <div className="journal-summary-grid">
+        <div className="journal-summary-card">
+          <div className="journal-summary-icon blue">
+            <CalendarDays size={20} />
+          </div>
+
+          <div className="journal-summary-content">
+            <span>Today's Journals</span>
+
+            <strong>
+              {todayJournalCount}
+            </strong>
+
+            <small>
+              {new Date().toLocaleDateString(
+                "en-GB"
+              )}
+            </small>
+          </div>
+        </div>
+
+        <div className="journal-summary-card">
+          <div className="journal-summary-icon violet">
+            <BookOpen size={20} />
+          </div>
+
+          <div className="journal-summary-content">
+            <span>Total Journals</span>
+
+            <strong>
+              {journalListRows.length}
+            </strong>
+
+            <small>All records</small>
+          </div>
+        </div>
+
+        <div className="journal-summary-card">
+          <div className="journal-summary-icon red">
+            <ArrowUpRight size={20} />
+          </div>
+
+          <div className="journal-summary-content">
+            <span>Total Debit</span>
+
+            <strong>
+              ₹
+              {totalDebitAmount.toLocaleString(
+                "en-IN",
+                {
+                  minimumFractionDigits: 2,
+                  maximumFractionDigits: 2,
+                }
+              )}
+            </strong>
+
+            <small>Filtered records</small>
+          </div>
+        </div>
+
+        <div className="journal-summary-card">
+          <div className="journal-summary-icon green">
+            <ArrowDownLeft size={20} />
+          </div>
+
+          <div className="journal-summary-content">
+            <span>Total Credit</span>
+
+            <strong>
+              ₹
+              {totalCreditAmount.toLocaleString(
+                "en-IN",
+                {
+                  minimumFractionDigits: 2,
+                  maximumFractionDigits: 2,
+                }
+              )}
+            </strong>
+
+            <small>Filtered records</small>
+          </div>
+        </div>
+
+        <div className="journal-summary-card">
+          <div
+            className={`journal-summary-icon ${
+              unbalancedJournalCount > 0
+                ? "orange"
+                : "cyan"
+            }`}
+          >
+            {unbalancedJournalCount > 0 ? (
+              <TriangleAlert size={20} />
+            ) : (
+              <CircleCheck size={20} />
+            )}
+          </div>
+
+          <div className="journal-summary-content">
+            <span>
+              {unbalancedJournalCount > 0
+                ? "Unbalanced"
+                : "Balanced Journals"}
+            </span>
+
+            <strong>
+              {unbalancedJournalCount > 0
+                ? unbalancedJournalCount
+                : balancedJournalCount}
+            </strong>
+
+            <small>
+              {unbalancedJournalCount > 0
+                ? "Needs verification"
+                : "Debit equals credit"}
+            </small>
+          </div>
+        </div>
+      </div>
+
+      <div className="journal-list-toolbar">
+        <div className="journal-search-box">
+          <Search size={16} />
+
+          <input
+            type="text"
+            value={journalListSearch}
+            placeholder="Search voucher, date or narration..."
+            onChange={(event) =>
+              setJournalListSearch(
+                event.target.value
+              )
+            }
+          />
+
+          {journalListSearch && (
+            <button
+              type="button"
+              className="journal-clear-search"
+              onClick={() =>
+                setJournalListSearch("")
+              }
+            >
+              ×
+            </button>
+          )}
+        </div>
+
+        <button
+          type="button"
+          className={`journal-filter-toggle ${
+            journalActiveFilterCount > 0
+              ? "has-active-filters"
+              : ""
+          }`}
+          onClick={() =>
+            setJournalFiltersVisible(
+              (previous) => !previous
+            )
+          }
+        >
+          <SlidersHorizontal size={16} />
+          Apply Filter
+
+          {journalActiveFilterCount > 0 && (
+            <span className="journal-filter-count">
+              {journalActiveFilterCount}
+            </span>
+          )}
+
+          <ChevronDown
+            size={15}
+            className={
+              journalFiltersVisible
+                ? "journal-filter-chevron open"
+                : "journal-filter-chevron"
+            }
+          />
+        </button>
+      </div>
+
+      {journalFiltersVisible && (
+        <div className="journal-filter-panel">
+          <div className="journal-filter-field">
+            <label>From Date</label>
+
+            <input
+              type="date"
+              value={
+                journalDraftFilters.fromDate
+              }
+              onChange={(event) =>
+                handleJournalDraftFilterChange(
+                  "fromDate",
+                  event.target.value
+                )
+              }
+            />
+          </div>
+
+          <div className="journal-filter-field">
+            <label>To Date</label>
+
+            <input
+              type="date"
+              value={
+                journalDraftFilters.toDate
+              }
+              onChange={(event) =>
+                handleJournalDraftFilterChange(
+                  "toDate",
+                  event.target.value
+                )
+              }
+            />
+          </div>
+
+          <div className="journal-filter-field">
+            <label>Voucher No</label>
+
+            <input
+              type="text"
+              value={
+                journalDraftFilters.voucherNo
+              }
+              placeholder="Enter voucher no"
+              onChange={(event) =>
+                handleJournalDraftFilterChange(
+                  "voucherNo",
+                  event.target.value
+                )
+              }
+            />
+          </div>
+
+          <div className="journal-filter-field">
+            <label>Narration</label>
+
+            <input
+              type="text"
+              value={
+                journalDraftFilters.narration
+              }
+              placeholder="Enter narration"
+              onChange={(event) =>
+                handleJournalDraftFilterChange(
+                  "narration",
+                  event.target.value
+                )
+              }
+            />
+          </div>
+
+          <div className="journal-filter-field">
+            <label>Balance Status</label>
+
+            <select
+              value={
+                journalDraftFilters.balanceStatus
+              }
+              onChange={(event) =>
+                handleJournalDraftFilterChange(
+                  "balanceStatus",
+                  event.target.value
+                )
+              }
+            >
+              <option value="">
+                All Journals
+              </option>
+
+              <option value="balanced">
+                Balanced
+              </option>
+
+              <option value="unbalanced">
+                Unbalanced
+              </option>
+            </select>
+          </div>
+
+          <div className="journal-filter-actions">
+            <button
+              type="button"
+              className="journal-filter-clear"
+              onClick={
+                clearJournalListFilters
+              }
+            >
+              Clear
+            </button>
+
+            <button
+              type="button"
+              className="journal-filter-apply"
+              onClick={
+                applyJournalListFilters
+              }
+            >
+              <SlidersHorizontal size={15} />
+              Apply Filter
+            </button>
+          </div>
+        </div>
+      )}
+
+      <div className="journal-table-card">
+        <div className="journal-table-scroll">
+          <table className="journal-premium-table">
+            <thead>
+              <tr>
+                <th className="journal-sr-column">
+                  SrNo
+                </th>
+
+                <th>Voucher No</th>
+                <th>Voucher Date</th>
+                <th>Narration</th>
+
+                <th className="journal-amount-column">
+                  Total Debit
+                </th>
+
+                <th className="journal-amount-column">
+                  Total Credit
+                </th>
+
+                <th className="journal-amount-column">
+                  Difference
+                </th>
+
+                <th>Status</th>
+
+                <th className="journal-actions-column">
+                  Actions
+                </th>
+              </tr>
+            </thead>
+
+            <tbody>
+              {paginatedJournalList.length ===
+              0 ? (
+                <tr>
+                  <td
+                    colSpan="9"
+                    className="journal-empty-cell"
+                  >
+                    <strong>
+                      No journal voucher records
+                      found
+                    </strong>
+
+                    <span>
+                      {journalListSearch ||
+                      journalActiveFilterCount > 0
+                        ? "Try changing or clearing the filters."
+                        : "Click New Journal Voucher to create an entry."}
+                    </span>
+                  </td>
+                </tr>
+              ) : (
+                paginatedJournalList.map(
+                  (journal, index) => {
+                    const header =
+                      journal.header ||
+                      journal ||
+                      {};
+
+                    const summary =
+                      journal.summary || {};
+
+                    const totalDr =
+                      Number(
+                        summary.totalDr ??
+                          header.totalDr ??
+                          0
+                      ) || 0;
+
+                    const totalCr =
+                      Number(
+                        summary.totalCr ??
+                          header.totalCr ??
+                          0
+                      ) || 0;
+
+                    const difference =
+                      Math.abs(
+                        totalDr - totalCr
+                      );
+
+                    const isBalanced =
+                      difference < 0.01;
+
+                    return (
+                      <tr
+                        key={
+                          journal.id ||
+                          journal._id ||
+                          `${header.vNo}-${index}`
+                        }
+                      >
+                        <td className="journal-sr-column">
+                          {journalStartIndex +
+                            index +
+                            1}
+                        </td>
+
+                        <td className="journal-voucher-number">
+                          {header.vNo || "-"}
+                        </td>
+
+                        <td>
+                          {header.vDate || "-"}
+                        </td>
+
+                        <td className="journal-narration">
+                          {header.narr ||
+                            header.narration ||
+                            "-"}
+                        </td>
+
+                        <td className="journal-amount-column journal-debit-amount">
+                          ₹
+                          {totalDr.toLocaleString(
+                            "en-IN",
+                            {
+                              minimumFractionDigits: 2,
+                              maximumFractionDigits: 2,
+                            }
+                          )}
+                        </td>
+
+                        <td className="journal-amount-column journal-credit-amount">
+                          ₹
+                          {totalCr.toLocaleString(
+                            "en-IN",
+                            {
+                              minimumFractionDigits: 2,
+                              maximumFractionDigits: 2,
+                            }
+                          )}
+                        </td>
+
+                        <td className="journal-amount-column">
+                          ₹
+                          {difference.toLocaleString(
+                            "en-IN",
+                            {
+                              minimumFractionDigits: 2,
+                              maximumFractionDigits: 2,
+                            }
+                          )}
+                        </td>
+
+                        <td>
+                          <span
+                            className={`journal-status-badge ${
+                              isBalanced
+                                ? "balanced"
+                                : "unbalanced"
+                            }`}
+                          >
+                            {isBalanced
+                              ? "Balanced"
+                              : "Unbalanced"}
+                          </span>
+                        </td>
+
+                        <td className="journal-actions-column">
+                          <div className="journal-row-actions">
+                            <button
+                              type="button"
+                              className="journal-action-button view"
+                              title="View Journal Voucher"
+                              onClick={() => {
+                                setTransactionFormMode(
+                                  (previous) => ({
+                                    ...previous,
+                                    ["Journal Voucher"]:
+                                      true,
+                                  })
+                                );
+
+                                editJournal(journal);
+                              }}
+                            >
+                              <Eye size={16} />
+                            </button>
+
+                            <button
+                              type="button"
+                              className="journal-action-button edit"
+                              title="Edit Journal Voucher"
+                              onClick={() => {
+                                setTransactionFormMode(
+                                  (previous) => ({
+                                    ...previous,
+                                    ["Journal Voucher"]:
+                                      true,
+                                  })
+                                );
+
+                                editJournal(journal);
+                              }}
+                            >
+                              <Pencil size={16} />
+                            </button>
+
+                            <button
+                              type="button"
+                              className="journal-action-button delete"
+                              title="Delete Journal Voucher"
+                              onClick={() =>
+                                deleteJournal(
+                                  journal.id ||
+                                    journal._id
+                                )
+                              }
+                            >
+                              <Trash2 size={16} />
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  }
+                )
+              )}
+            </tbody>
+          </table>
+        </div>
+
+        <div className="journal-pagination-footer">
+          <div className="journal-pagination-info">
+            Showing{" "}
+            <strong>
+              {journalShowingFrom}
+            </strong>{" "}
+            to{" "}
+            <strong>
+              {journalShowingTo}
+            </strong>{" "}
+            of{" "}
+            <strong>
+              {filteredJournalList.length}
+            </strong>{" "}
+            entries
+          </div>
+
+          <div className="journal-pagination-controls">
+            <select
+              value={journalListRowsPerPage}
+              onChange={(event) =>
+                setJournalListRowsPerPage(
+                  Number(event.target.value)
+                )
+              }
+            >
+              <option value={10}>10</option>
+              <option value={20}>20</option>
+              <option value={50}>50</option>
+              <option value={100}>100</option>
+            </select>
+
+            <div className="journal-page-buttons">
+              <button
+                type="button"
+                disabled={journalSafePage === 1}
+                onClick={() =>
+                  setJournalListCurrentPage(
+                    (previous) =>
+                      Math.max(
+                        previous - 1,
+                        1
+                      )
+                  )
+                }
+              >
+                <ChevronLeft size={16} />
+              </button>
+
+              {getJournalPaginationPages().map(
+                (pageNumber) => (
+                  <button
+                    type="button"
+                    key={pageNumber}
+                    className={
+                      pageNumber ===
+                      journalSafePage
+                        ? "active"
+                        : ""
+                    }
+                    onClick={() =>
+                      setJournalListCurrentPage(
+                        pageNumber
+                      )
+                    }
+                  >
+                    {pageNumber}
+                  </button>
+                )
+              )}
+
+              <button
+                type="button"
+                disabled={
+                  journalSafePage ===
+                  journalTotalPages
+                }
+                onClick={() =>
+                  setJournalListCurrentPage(
+                    (previous) =>
+                      Math.min(
+                        previous + 1,
+                        journalTotalPages
+                      )
+                  )
+                }
+              >
+                <ChevronRight size={16} />
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
 
   // Journal Form
   // =========================================================
@@ -5022,91 +7295,856 @@ const Transaction = ({
       </div>
     </div>
   );
+  /* =========================================================
+   PAYMENT LIST FILTERING AND PAGINATION
+   ========================================================= */
+
+const paymentListRows = Array.isArray(
+  state.payments
+)
+  ? state.payments
+  : [];
+
+const normalizedPaymentSearch = String(
+  paymentListSearch || ""
+)
+  .trim()
+  .toLowerCase();
+
+const filteredPaymentList =
+  paymentListRows.filter((payment) => {
+    const header = payment.header || payment || {};
+
+    const paymentDate = String(
+      header.vDate ||
+        header.paymentDate ||
+        header.date ||
+        ""
+    )
+      .trim()
+      .slice(0, 10);
+
+    const partyName = String(
+      header.partyName ||
+        header.accountName ||
+        ""
+    )
+      .trim()
+      .toLowerCase();
+
+    const paymentType = String(
+      header.bankCash ||
+        header.paymentType ||
+        ""
+    )
+      .trim()
+      .toLowerCase();
+
+    const searchableText = [
+      header.vNo,
+      paymentDate,
+      partyName,
+      header.drAmt,
+      header.crAmt,
+      header.chqNo,
+      header.chequeNo,
+      header.bankCash,
+      header.partyBankName,
+      header.bankAccountNo,
+      header.narr,
+      header.narration,
+    ]
+      .map((value) =>
+        String(value ?? "")
+          .trim()
+          .toLowerCase()
+      )
+      .join(" ");
+
+    const appliedFromDate = String(
+      paymentAppliedFilters.fromDate || ""
+    ).trim();
+
+    const appliedToDate = String(
+      paymentAppliedFilters.toDate || ""
+    ).trim();
+
+    const appliedParty = String(
+      paymentAppliedFilters.party || ""
+    )
+      .trim()
+      .toLowerCase();
+
+    const appliedPaymentType = String(
+      paymentAppliedFilters.paymentType || ""
+    )
+      .trim()
+      .toLowerCase();
+
+    const matchesSearch =
+      !normalizedPaymentSearch ||
+      searchableText.includes(
+        normalizedPaymentSearch
+      );
+
+    const matchesFromDate =
+      !appliedFromDate ||
+      (paymentDate &&
+        paymentDate >= appliedFromDate);
+
+    const matchesToDate =
+      !appliedToDate ||
+      (paymentDate &&
+        paymentDate <= appliedToDate);
+
+    const matchesParty =
+      !appliedParty ||
+      partyName.includes(appliedParty);
+
+    const matchesPaymentType =
+      !appliedPaymentType ||
+      paymentType === appliedPaymentType;
+
+    return (
+      matchesSearch &&
+      matchesFromDate &&
+      matchesToDate &&
+      matchesParty &&
+      matchesPaymentType
+    );
+  });
+
+const paymentActiveFilterCount = [
+  paymentAppliedFilters.fromDate,
+  paymentAppliedFilters.toDate,
+  paymentAppliedFilters.party,
+  paymentAppliedFilters.paymentType,
+].filter((value) =>
+  String(value || "").trim()
+).length;
+
+const paymentTotalPages = Math.max(
+  Math.ceil(
+    filteredPaymentList.length /
+      paymentListRowsPerPage
+  ),
+  1
+);
+
+const paymentSafePage = Math.min(
+  paymentListCurrentPage,
+  paymentTotalPages
+);
+
+const paymentStartIndex =
+  (paymentSafePage - 1) *
+  paymentListRowsPerPage;
+
+const paginatedPaymentList =
+  filteredPaymentList.slice(
+    paymentStartIndex,
+    paymentStartIndex +
+      paymentListRowsPerPage
+  );
+
+const paymentShowingFrom =
+  filteredPaymentList.length === 0
+    ? 0
+    : paymentStartIndex + 1;
+
+const paymentShowingTo = Math.min(
+  paymentStartIndex + paymentListRowsPerPage,
+  filteredPaymentList.length
+);
+
+const getPaymentPaginationPages = () => {
+  const pages = [];
+
+  const startPage = Math.max(
+    1,
+    paymentSafePage - 2
+  );
+
+  const endPage = Math.min(
+    paymentTotalPages,
+    paymentSafePage + 2
+  );
+
+  for (
+    let pageNumber = startPage;
+    pageNumber <= endPage;
+    pageNumber += 1
+  ) {
+    pages.push(pageNumber);
+  }
+
+  return pages;
+};
+
+useEffect(() => {
+  setPaymentListCurrentPage(1);
+}, [
+  paymentListSearch,
+  paymentListRowsPerPage,
+]);
+
+useEffect(() => {
+  if (
+    paymentListCurrentPage >
+    paymentTotalPages
+  ) {
+    setPaymentListCurrentPage(
+      paymentTotalPages
+    );
+  }
+}, [
+  paymentListCurrentPage,
+  paymentTotalPages,
+]);
 
   // Payment List
-  const renderPaymentList = () => (
-    <div className="master-section"><div className="grid-header"><h3>Payment Management</h3><button className="btn-add-new" onClick={() => openTransactionEntry("Payment")}>+ Add Payment</button></div>
-      <div className="table-responsive"><table className="erp-table"><thead><tr><th>VNo</th><th>Date</th><th>Party</th><th>Dr Amt</th><th>Cr Amt</th><th>Actions</th></tr></thead>
-        <tbody>{(state.payments || []).length === 0 ? (<tr><td colSpan="5">No Payments Added</td></tr>) : ((state.payments || []).map((payment) => (<tr key={payment.id}><td>{payment.header.vNo}</td><td>{payment.header.vDate}</td><td>{payment.header.partyName}</td><td>{payment.header.drAmt}</td><td>{payment.header.crAmt}</td>
-          <td
-            className="action-buttons"
-            style={{
-              whiteSpace: 'nowrap',
-              position: 'sticky',
-              right: 0,
-              backgroundColor: '#ffffff',
-              zIndex: 10,
-              boxShadow: '-2px 0 5px -2px rgba(0,0,0,0.1)'
-            }}
+const renderPaymentList = () => {
+  const today = new Date()
+    .toISOString()
+    .split("T")[0];
+
+  const todayPaymentCount =
+    paymentListRows.filter((payment) => {
+      const header =
+        payment.header || payment || {};
+
+      return (
+        String(header.vDate || "")
+          .slice(0, 10) === today
+      );
+    }).length;
+
+  const totalDebitAmount =
+    filteredPaymentList.reduce(
+      (total, payment) => {
+        const header =
+          payment.header || payment || {};
+
+        return (
+          total +
+          (Number(header.drAmt) || 0)
+        );
+      },
+      0
+    );
+
+  const totalCreditAmount =
+    filteredPaymentList.reduce(
+      (total, payment) => {
+        const header =
+          payment.header || payment || {};
+
+        return (
+          total +
+          (Number(header.crAmt) || 0)
+        );
+      },
+      0
+    );
+
+  const cashPaymentCount =
+    filteredPaymentList.filter(
+      (payment) => {
+        const header =
+          payment.header || payment || {};
+
+        return (
+          String(header.bankCash || "")
+            .trim()
+            .toLowerCase() === "cash"
+        );
+      }
+    ).length;
+
+  return (
+    <div className="payment-premium-list-page">
+      <div className="payment-premium-heading">
+        <div className="payment-premium-title">
+          <h2>Payment List</h2>
+          <p>
+            Manage supplier and account payments
+          </p>
+        </div>
+
+        <div className="payment-heading-actions">
+          <button
+            type="button"
+            className="payment-main-button payment-add-button"
+            onClick={() =>
+              openTransactionEntry("Payment")
+            }
           >
+            <Plus size={16} />
+            New Payment
+          </button>
 
+          <button
+            type="button"
+            className="payment-main-button payment-excel-button"
+          >
+            <FileSpreadsheet size={16} />
+            Export Excel
+          </button>
+
+          <button
+            type="button"
+            className="payment-main-button payment-pdf-button"
+          >
+            <FileText size={16} />
+            Export PDF
+          </button>
+
+          <button
+            type="button"
+            className="payment-main-button payment-print-button"
+            onClick={() => window.print()}
+          >
+            <Printer size={16} />
+            Print List
+          </button>
+        </div>
+      </div>
+
+      <div className="payment-summary-grid">
+        <div className="payment-summary-card">
+          <div className="payment-summary-icon blue">
+            <CalendarDays size={20} />
+          </div>
+
+          <div className="payment-summary-content">
+            <span>Today's Payments</span>
+            <strong>{todayPaymentCount}</strong>
+            <small>
+              {new Date().toLocaleDateString(
+                "en-GB"
+              )}
+            </small>
+          </div>
+        </div>
+
+        <div className="payment-summary-card">
+          <div className="payment-summary-icon violet">
+            <ReceiptText size={20} />
+          </div>
+
+          <div className="payment-summary-content">
+            <span>Total Payments</span>
+            <strong>
+              {paymentListRows.length}
+            </strong>
+            <small>All records</small>
+          </div>
+        </div>
+
+        <div className="payment-summary-card">
+          <div className="payment-summary-icon red">
+            <Wallet size={20} />
+          </div>
+
+          <div className="payment-summary-content">
+            <span>Total Debit</span>
+            <strong>
+              ₹
+              {totalDebitAmount.toLocaleString(
+                "en-IN",
+                {
+                  minimumFractionDigits: 2,
+                  maximumFractionDigits: 2,
+                }
+              )}
+            </strong>
+            <small>Filtered records</small>
+          </div>
+        </div>
+
+        <div className="payment-summary-card">
+          <div className="payment-summary-icon green">
+            <Wallet size={20} />
+          </div>
+
+          <div className="payment-summary-content">
+            <span>Total Credit</span>
+            <strong>
+              ₹
+              {totalCreditAmount.toLocaleString(
+                "en-IN",
+                {
+                  minimumFractionDigits: 2,
+                  maximumFractionDigits: 2,
+                }
+              )}
+            </strong>
+            <small>Filtered records</small>
+          </div>
+        </div>
+
+        <div className="payment-summary-card">
+          <div className="payment-summary-icon orange">
+            <ReceiptText size={20} />
+          </div>
+
+          <div className="payment-summary-content">
+            <span>Cash Payments</span>
+            <strong>{cashPaymentCount}</strong>
+            <small>Filtered records</small>
+          </div>
+        </div>
+      </div>
+
+      <div className="payment-list-toolbar">
+        <div className="payment-search-box">
+          <Search size={16} />
+
+          <input
+            type="text"
+            value={paymentListSearch}
+            placeholder="Search voucher, party, cheque or bank..."
+            onChange={(event) =>
+              setPaymentListSearch(
+                event.target.value
+              )
+            }
+          />
+
+          {paymentListSearch && (
             <button
-              className="btn-view"
-              onClick={() => {
-                setTransactionFormMode(prev => ({
-                  ...prev,
-                  Payment: true
-                }));
-
-                editPayment(payment);
-              }}
-              title="View"
-              style={{
-                background: '#10b981',
-                color: 'white',
-                border: 'none',
-                borderRadius: '4px',
-                padding: '4px 8px',
-                margin: '0 2px',
-                cursor: 'pointer'
-              }}
+              type="button"
+              className="payment-clear-search"
+              onClick={() =>
+                setPaymentListSearch("")
+              }
             >
-              👁️ View
+              ×
+            </button>
+          )}
+        </div>
+
+        <button
+          type="button"
+          className={`payment-filter-toggle ${
+            paymentActiveFilterCount > 0
+              ? "has-active-filters"
+              : ""
+          }`}
+          onClick={() =>
+            setPaymentFiltersVisible(
+              (previous) => !previous
+            )
+          }
+        >
+          <SlidersHorizontal size={16} />
+          Apply Filter
+
+          {paymentActiveFilterCount > 0 && (
+            <span className="payment-filter-count">
+              {paymentActiveFilterCount}
+            </span>
+          )}
+
+          <ChevronDown
+            size={15}
+            className={
+              paymentFiltersVisible
+                ? "payment-filter-chevron open"
+                : "payment-filter-chevron"
+            }
+          />
+        </button>
+      </div>
+
+      {paymentFiltersVisible && (
+        <div className="payment-filter-panel">
+          <div className="payment-filter-field">
+            <label>From Date</label>
+
+            <input
+              type="date"
+              value={
+                paymentDraftFilters.fromDate
+              }
+              onChange={(event) =>
+                handlePaymentDraftFilterChange(
+                  "fromDate",
+                  event.target.value
+                )
+              }
+            />
+          </div>
+
+          <div className="payment-filter-field">
+            <label>To Date</label>
+
+            <input
+              type="date"
+              value={
+                paymentDraftFilters.toDate
+              }
+              onChange={(event) =>
+                handlePaymentDraftFilterChange(
+                  "toDate",
+                  event.target.value
+                )
+              }
+            />
+          </div>
+
+          <div className="payment-filter-field">
+            <label>Party Name</label>
+
+            <input
+              type="text"
+              value={
+                paymentDraftFilters.party
+              }
+              placeholder="Enter party name"
+              onChange={(event) =>
+                handlePaymentDraftFilterChange(
+                  "party",
+                  event.target.value
+                )
+              }
+            />
+          </div>
+
+          <div className="payment-filter-field">
+            <label>Payment Type</label>
+
+            <select
+              value={
+                paymentDraftFilters.paymentType
+              }
+              onChange={(event) =>
+                handlePaymentDraftFilterChange(
+                  "paymentType",
+                  event.target.value
+                )
+              }
+            >
+              <option value="">
+                All Types
+              </option>
+              <option value="Cash">Cash</option>
+              <option value="Bank">Bank</option>
+              <option value="Cheque">
+                Cheque
+              </option>
+            </select>
+          </div>
+
+          <div className="payment-filter-actions">
+            <button
+              type="button"
+              className="payment-filter-clear"
+              onClick={clearPaymentListFilters}
+            >
+              Clear
             </button>
 
             <button
-              className="btn-edit"
-              onClick={() => {
-                setTransactionFormMode(prev => ({
-                  ...prev,
-                  Payment: true
-                }));
-
-                editPayment(payment);
-              }}
-              title="Edit"
-              style={{
-                background: '#3b82f6',
-                color: 'white',
-                border: 'none',
-                borderRadius: '4px',
-                padding: '4px 8px',
-                margin: '0 2px',
-                cursor: 'pointer'
-              }}
+              type="button"
+              className="payment-filter-apply"
+              onClick={applyPaymentListFilters}
             >
-              ✏️ Edit
+              <SlidersHorizontal size={15} />
+              Apply Filter
             </button>
+          </div>
+        </div>
+      )}
 
-            <button
-              className="btn-delete"
-              onClick={() => deletePayment(payment.id)}
-              title="Delete"
-              style={{
-                background: '#ef4444',
-                color: 'white',
-                border: 'none',
-                borderRadius: '4px',
-                padding: '4px 8px',
-                margin: '0 2px',
-                cursor: 'pointer'
-              }}
+      <div className="payment-table-card">
+        <div className="payment-table-scroll">
+          <table className="payment-premium-table">
+            <thead>
+              <tr>
+                <th className="payment-sr-column">
+                  SrNo
+                </th>
+                <th>Voucher No</th>
+                <th>Date</th>
+                <th>Party Name</th>
+                <th>Payment Type</th>
+                <th>Cheque No</th>
+                <th>Cheque Date</th>
+                <th className="payment-amount-column">
+                  Debit Amount
+                </th>
+                <th className="payment-amount-column">
+                  Credit Amount
+                </th>
+                <th>Narration</th>
+                <th className="payment-actions-column">
+                  Actions
+                </th>
+              </tr>
+            </thead>
+
+            <tbody>
+              {paginatedPaymentList.length ===
+              0 ? (
+                <tr>
+                  <td
+                    colSpan="11"
+                    className="payment-empty-cell"
+                  >
+                    <strong>
+                      No payment records found
+                    </strong>
+
+                    <span>
+                      {paymentListSearch ||
+                      paymentActiveFilterCount > 0
+                        ? "Try changing or clearing the filters."
+                        : "Click New Payment to create a payment."}
+                    </span>
+                  </td>
+                </tr>
+              ) : (
+                paginatedPaymentList.map(
+                  (payment, index) => {
+                    const header =
+                      payment.header ||
+                      payment ||
+                      {};
+
+                    return (
+                      <tr
+                        key={
+                          payment.id ||
+                          header._id ||
+                          `${header.vNo}-${index}`
+                        }
+                      >
+                        <td className="payment-sr-column">
+                          {paymentStartIndex +
+                            index +
+                            1}
+                        </td>
+
+                        <td className="payment-voucher-number">
+                          {header.vNo || "-"}
+                        </td>
+
+                        <td>
+                          {header.vDate || "-"}
+                        </td>
+
+                        <td className="payment-party-name">
+                          {header.partyName ||
+                            "-"}
+                        </td>
+
+                        <td>
+                          {header.bankCash ||
+                            "-"}
+                        </td>
+
+                        <td>
+                          {header.chqNo ||
+                            header.chequeNo ||
+                            "-"}
+                        </td>
+
+                        <td>
+                          {header.chqDate ||
+                            header.chequeDate ||
+                            "-"}
+                        </td>
+
+                        <td className="payment-amount-column">
+                          ₹
+                          {Number(
+                            header.drAmt || 0
+                          ).toLocaleString(
+                            "en-IN",
+                            {
+                              minimumFractionDigits: 2,
+                              maximumFractionDigits: 2,
+                            }
+                          )}
+                        </td>
+
+                        <td className="payment-amount-column">
+                          ₹
+                          {Number(
+                            header.crAmt || 0
+                          ).toLocaleString(
+                            "en-IN",
+                            {
+                              minimumFractionDigits: 2,
+                              maximumFractionDigits: 2,
+                            }
+                          )}
+                        </td>
+
+                        <td className="payment-narration">
+                          {header.narr ||
+                            header.narration ||
+                            "-"}
+                        </td>
+
+                        <td className="payment-actions-column">
+                          <div className="payment-row-actions">
+                            <button
+                              type="button"
+                              className="payment-action-button view"
+                              title="View Payment"
+                              onClick={() => {
+                                setTransactionFormMode(
+                                  (previous) => ({
+                                    ...previous,
+                                    Payment: true,
+                                  })
+                                );
+
+                                editPayment(payment);
+                              }}
+                            >
+                              <Eye size={16} />
+                            </button>
+
+                            <button
+                              type="button"
+                              className="payment-action-button edit"
+                              title="Edit Payment"
+                              onClick={() => {
+                                setTransactionFormMode(
+                                  (previous) => ({
+                                    ...previous,
+                                    Payment: true,
+                                  })
+                                );
+
+                                editPayment(payment);
+                              }}
+                            >
+                              <Pencil size={16} />
+                            </button>
+
+                            <button
+                              type="button"
+                              className="payment-action-button delete"
+                              title="Delete Payment"
+                              onClick={() =>
+                                deletePayment(
+                                  payment.id
+                                )
+                              }
+                            >
+                              <Trash2 size={16} />
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  }
+                )
+              )}
+            </tbody>
+          </table>
+        </div>
+
+        <div className="payment-pagination-footer">
+          <div className="payment-pagination-info">
+            Showing{" "}
+            <strong>
+              {paymentShowingFrom}
+            </strong>{" "}
+            to{" "}
+            <strong>
+              {paymentShowingTo}
+            </strong>{" "}
+            of{" "}
+            <strong>
+              {filteredPaymentList.length}
+            </strong>{" "}
+            entries
+          </div>
+
+          <div className="payment-pagination-controls">
+            <select
+              value={paymentListRowsPerPage}
+              onChange={(event) =>
+                setPaymentListRowsPerPage(
+                  Number(event.target.value)
+                )
+              }
             >
-              🗑 Delete
-            </button>
+              <option value={10}>10</option>
+              <option value={20}>20</option>
+              <option value={50}>50</option>
+              <option value={100}>100</option>
+            </select>
 
-          </td></tr>)))}</tbody></table></div></div>
+            <div className="payment-page-buttons">
+              <button
+                type="button"
+                disabled={paymentSafePage === 1}
+                onClick={() =>
+                  setPaymentListCurrentPage(
+                    (previous) =>
+                      Math.max(
+                        previous - 1,
+                        1
+                      )
+                  )
+                }
+              >
+                <ChevronLeft size={16} />
+              </button>
+
+              {getPaymentPaginationPages().map(
+                (pageNumber) => (
+                  <button
+                    type="button"
+                    key={pageNumber}
+                    className={
+                      pageNumber ===
+                      paymentSafePage
+                        ? "active"
+                        : ""
+                    }
+                    onClick={() =>
+                      setPaymentListCurrentPage(
+                        pageNumber
+                      )
+                    }
+                  >
+                    {pageNumber}
+                  </button>
+                )
+              )}
+
+              <button
+                type="button"
+                disabled={
+                  paymentSafePage ===
+                  paymentTotalPages
+                }
+                onClick={() =>
+                  setPaymentListCurrentPage(
+                    (previous) =>
+                      Math.min(
+                        previous + 1,
+                        paymentTotalPages
+                      )
+                  )
+                }
+              >
+                <ChevronRight size={16} />
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
   );
+};
 
   // Payment Form
   const renderPaymentForm = () => (
@@ -5139,132 +8177,964 @@ const Transaction = ({
 
   // Cheque Bounce List
   // Cheque Bounce List
-  const renderChequeBounceList = () => (
-    <div className="receipt-sales-list-section">
-      <div className="receipt-sales-list-header">
-        <h3>Cheque Bounce List ({state.chequeBounces?.length || 0})</h3>
+ const renderChequeBounceList = () => {
+  const today = new Date()
+    .toISOString()
+    .split("T")[0];
 
-        <div className="receipt-sales-list-actions">
-          <input className="receipt-sales-search" type="text" placeholder="Search..." />
-          <button className="receipt-export-excel">📊 Export Excel</button>
-          <button className="receipt-export-pdf">📄 Export PDF</button>
+  const todayChequeBounces =
+    chequeBounceListRows.filter(
+      (chequeBounce) =>
+        String(
+          chequeBounce.chqBounceDate || ""
+        )
+          .slice(0, 10) === today
+    );
+
+  const totalChequeAmount =
+    filteredChequeBounceList.reduce(
+      (total, chequeBounce) =>
+        total +
+        Number(
+          chequeBounce.chequeAmt || 0
+        ),
+      0
+    );
+
+  const totalBounceCharges =
+    filteredChequeBounceList.reduce(
+      (total, chequeBounce) =>
+        total +
+        Number(
+          chequeBounce.chqBounceCharges || 0
+        ),
+      0
+    );
+
+  const totalBounceAmount =
+    filteredChequeBounceList.reduce(
+      (total, chequeBounce) =>
+        total +
+        Number(
+          chequeBounce.totalAmt ||
+            (Number(
+              chequeBounce.chequeAmt
+            ) || 0) +
+              (Number(
+                chequeBounce.chqBounceCharges
+              ) || 0)
+        ),
+      0
+    );
+
+  return (
+    <div className="cheque-bounce-premium-list-page">
+      {/* PAGE HEADER */}
+
+      <div className="cheque-bounce-premium-heading">
+        <div className="cheque-bounce-premium-title">
+          <h2>Cheque Bounce List</h2>
+
+          <p>
+            Manage all cheque bounce transactions
+          </p>
+        </div>
+
+        <div className="cheque-bounce-heading-actions">
           <button
-            className="receipt-settle-load-btn"
+            type="button"
+            className="cheque-bounce-main-button cheque-bounce-add-button"
             onClick={() => {
               resetChequeBounceForm();
-              setTransactionFormMode(prev => ({
-                ...prev,
-                ["Cheque Bounce"]: true
-              }));
+
+              setTransactionFormMode(
+                (previous) => ({
+                  ...previous,
+                  ["Cheque Bounce"]: true,
+                })
+              );
             }}
           >
-            + Add Cheque Bounce
+            <Plus size={15} />
+            New Cheque Bounce
+          </button>
+
+          <button
+            type="button"
+            className="cheque-bounce-main-button cheque-bounce-excel-button"
+          >
+            <FileSpreadsheet size={15} />
+            Export Excel
+          </button>
+
+          <button
+            type="button"
+            className="cheque-bounce-main-button cheque-bounce-pdf-button"
+          >
+            <FileText size={15} />
+            Export PDF
+          </button>
+
+          <button
+            type="button"
+            className="cheque-bounce-main-button cheque-bounce-print-button"
+            onClick={() => window.print()}
+          >
+            <Printer size={15} />
+            Print List
           </button>
         </div>
       </div>
 
-      <div className="receipt-sales-table-wrap">
-        <table className="receipt-sales-table">
-          <thead>
-            <tr>
-              <th>Trn Date</th>
-              <th>Trn Series</th>
-              <th>Trn No</th>
-              <th>Account Name Dr</th>
-              <th>Account Name Cr</th>
-              <th>Cheque No</th>
-              <th>Cheque Date</th>
-              <th>Cheque Amount</th>
-              <th>Chq Bounce Charges Amt</th>
-              <th>Total Amount</th>
-              <th>Rec Series</th>
-              <th>Rec No</th>
-              <th>Narration</th>
-              <th className="receipt-sticky-action-head">Actions</th>
-            </tr>
-          </thead>
+      {/* SUMMARY CARDS */}
 
-          <tbody>
-            {(state.chequeBounces || []).length === 0 ? (
+      <div className="cheque-bounce-summary-grid">
+        <div className="cheque-bounce-summary-card">
+          <div className="cheque-bounce-summary-icon blue">
+            <CalendarDays size={19} />
+          </div>
+
+          <div className="cheque-bounce-summary-content">
+            <span>Today's Bounces</span>
+            <strong>
+              {todayChequeBounces.length}
+            </strong>
+            <small>
+              {new Date().toLocaleDateString(
+                "en-GB"
+              )}
+            </small>
+          </div>
+
+          <div className="cheque-bounce-card-decoration" />
+        </div>
+
+        <div className="cheque-bounce-summary-card">
+          <div className="cheque-bounce-summary-icon blue">
+            <ReceiptText size={19} />
+          </div>
+
+          <div className="cheque-bounce-summary-content">
+            <span>Total Bounces</span>
+            <strong>
+              {chequeBounceListRows.length}
+            </strong>
+            <small>All Time</small>
+          </div>
+
+          <div className="cheque-bounce-card-decoration" />
+        </div>
+
+        <div className="cheque-bounce-summary-card">
+          <div className="cheque-bounce-summary-icon orange">
+            <Wallet size={19} />
+          </div>
+
+          <div className="cheque-bounce-summary-content">
+            <span>Cheque Amount</span>
+            <strong>
+              ₹
+              {totalChequeAmount.toLocaleString(
+                "en-IN",
+                {
+                  minimumFractionDigits: 2,
+                  maximumFractionDigits: 2,
+                }
+              )}
+            </strong>
+            <small>Filtered Result</small>
+          </div>
+
+          <div className="cheque-bounce-card-decoration" />
+        </div>
+
+        <div className="cheque-bounce-summary-card">
+          <div className="cheque-bounce-summary-icon red">
+            <CircleX size={19} />
+          </div>
+
+          <div className="cheque-bounce-summary-content">
+            <span>Bounce Charges</span>
+            <strong>
+              ₹
+              {totalBounceCharges.toLocaleString(
+                "en-IN",
+                {
+                  minimumFractionDigits: 2,
+                  maximumFractionDigits: 2,
+                }
+              )}
+            </strong>
+            <small>Filtered Result</small>
+          </div>
+
+          <div className="cheque-bounce-card-decoration" />
+        </div>
+
+        <div className="cheque-bounce-summary-card">
+          <div className="cheque-bounce-summary-icon violet">
+            <Wallet size={19} />
+          </div>
+
+          <div className="cheque-bounce-summary-content">
+            <span>Total Bounce Value</span>
+            <strong>
+              ₹
+              {totalBounceAmount.toLocaleString(
+                "en-IN",
+                {
+                  minimumFractionDigits: 2,
+                  maximumFractionDigits: 2,
+                }
+              )}
+            </strong>
+            <small>Filtered Result</small>
+          </div>
+
+          <div className="cheque-bounce-card-decoration" />
+        </div>
+      </div>
+
+      {/* SEARCH AND FILTER */}
+
+      <div className="cheque-bounce-toolbar">
+        <div className="cheque-bounce-search-box">
+          <Search size={15} />
+
+          <input
+            type="text"
+            value={chequeBounceListSearch}
+            placeholder="Search cheque, party, bank, transaction..."
+            onChange={(event) =>
+              setChequeBounceListSearch(
+                event.target.value
+              )
+            }
+          />
+
+          {chequeBounceListSearch && (
+            <button
+              type="button"
+              className="cheque-bounce-clear-search"
+              onClick={() =>
+                setChequeBounceListSearch("")
+              }
+            >
+              ×
+            </button>
+          )}
+        </div>
+
+        <button
+          type="button"
+          className={`cheque-bounce-filter-button ${
+            chequeBounceActiveFilterCount > 0
+              ? "has-active-filters"
+              : ""
+          }`}
+          onClick={() =>
+            setChequeBounceFiltersVisible(
+              (previous) => !previous
+            )
+          }
+        >
+          <SlidersHorizontal size={15} />
+
+          Apply Filter
+
+          {chequeBounceActiveFilterCount >
+            0 && (
+            <span className="cheque-bounce-filter-count">
+              {chequeBounceActiveFilterCount}
+            </span>
+          )}
+
+          <ChevronDown
+            size={14}
+            className={
+              chequeBounceFiltersVisible
+                ? "cheque-bounce-filter-chevron open"
+                : "cheque-bounce-filter-chevron"
+            }
+          />
+        </button>
+      </div>
+
+      {chequeBounceFiltersVisible && (
+        <div className="cheque-bounce-filter-panel">
+          <div className="cheque-bounce-filter-field">
+            <label>From Date</label>
+
+            <input
+              type="date"
+              value={
+                chequeBounceDraftFilters.fromDate
+              }
+              onChange={(event) =>
+                handleChequeBounceDraftFilterChange(
+                  "fromDate",
+                  event.target.value
+                )
+              }
+            />
+          </div>
+
+          <div className="cheque-bounce-filter-field">
+            <label>To Date</label>
+
+            <input
+              type="date"
+              value={
+                chequeBounceDraftFilters.toDate
+              }
+              onChange={(event) =>
+                handleChequeBounceDraftFilterChange(
+                  "toDate",
+                  event.target.value
+                )
+              }
+            />
+          </div>
+
+          <div className="cheque-bounce-filter-field">
+            <label>Party Name</label>
+
+            <input
+              type="text"
+              value={
+                chequeBounceDraftFilters.party
+              }
+              placeholder="Enter party name"
+              onChange={(event) =>
+                handleChequeBounceDraftFilterChange(
+                  "party",
+                  event.target.value
+                )
+              }
+            />
+          </div>
+
+          <div className="cheque-bounce-filter-field">
+            <label>Bank Name</label>
+
+            <input
+              type="text"
+              value={
+                chequeBounceDraftFilters.bank
+              }
+              placeholder="Enter bank name"
+              onChange={(event) =>
+                handleChequeBounceDraftFilterChange(
+                  "bank",
+                  event.target.value
+                )
+              }
+            />
+          </div>
+
+          <div className="cheque-bounce-filter-field">
+            <label>Cheque No</label>
+
+            <input
+              type="text"
+              value={
+                chequeBounceDraftFilters.chequeNo
+              }
+              placeholder="Enter cheque no"
+              onChange={(event) =>
+                handleChequeBounceDraftFilterChange(
+                  "chequeNo",
+                  event.target.value
+                )
+              }
+              onKeyDown={(event) => {
+                if (event.key === "Enter") {
+                  event.preventDefault();
+                  applyChequeBounceFilters();
+                }
+              }}
+            />
+          </div>
+
+          <div className="cheque-bounce-filter-actions">
+            <button
+              type="button"
+              className="cheque-bounce-filter-clear-button"
+              onClick={
+                clearChequeBounceFilters
+              }
+            >
+              Clear
+            </button>
+
+            <button
+              type="button"
+              className="cheque-bounce-filter-apply-button"
+              onClick={
+                applyChequeBounceFilters
+              }
+            >
+              <SlidersHorizontal size={14} />
+              Apply Filter
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* TABLE */}
+
+      <div className="cheque-bounce-table-card">
+        <div className="cheque-bounce-table-scroll">
+          <table className="cheque-bounce-table">
+            <thead>
               <tr>
-                <td colSpan="14" className="no-data">
-                  No Cheque Bounce Records Added
-                </td>
+                <th className="cheque-bounce-sr-column">
+                  SrNo
+                </th>
+                <th>Trn Date</th>
+                <th>Trn Series</th>
+                <th>Trn No</th>
+                <th>Account Name Dr</th>
+                <th>Account Name Cr</th>
+                <th>Cheque No</th>
+                <th>Cheque Date</th>
+                <th className="cheque-bounce-amount-column">
+                  Cheque Amount
+                </th>
+                <th className="cheque-bounce-amount-column">
+                  Bounce Charges
+                </th>
+                <th className="cheque-bounce-amount-column">
+                  Total Amount
+                </th>
+                <th>Rec Series</th>
+                <th>Rec No</th>
+                <th>Narration</th>
+                <th className="cheque-bounce-actions-column">
+                  Actions
+                </th>
               </tr>
-            ) : (
-              (state.chequeBounces || []).map((chequeBounce) => (
-                <tr key={chequeBounce.id}>
-                  <td>{chequeBounce.chqBounceDate || "-"}</td>
-                  <td>{chequeBounce.trnSeries || "CHB"}</td>
-                  <td>{chequeBounce.chqBounceNo || "-"}</td>
-                  <td>{chequeBounce.accountNameDr || chequeBounce.partyName || "-"}</td>
-                  <td>{chequeBounce.accountNameCr || chequeBounce.bankName || "-"}</td>
-                  <td>{chequeBounce.chequeNo || "-"}</td>
-                  <td>{chequeBounce.chequeDate || "-"}</td>
+            </thead>
 
-                  <td className="amount-cell">
-                    ₹{Number(chequeBounce.chequeAmt || 0).toLocaleString("en-IN", {
-                      minimumFractionDigits: 2,
-                      maximumFractionDigits: 2
-                    })}
-                  </td>
+            <tbody>
+              {paginatedChequeBounceList.length ===
+              0 ? (
+                <tr>
+                  <td
+                    colSpan="15"
+                    className="cheque-bounce-empty"
+                  >
+                    <strong>
+                      No cheque bounce records found
+                    </strong>
 
-                  <td className="amount-cell">
-                    ₹{Number(chequeBounce.chqBounceCharges || 0).toLocaleString("en-IN", {
-                      minimumFractionDigits: 2,
-                      maximumFractionDigits: 2
-                    })}
-                  </td>
-
-                  <td className="amount-cell">
-                    ₹{Number(
-                      chequeBounce.totalAmt ||
-                      ((Number(chequeBounce.chequeAmt) || 0) +
-                        (Number(chequeBounce.chqBounceCharges) || 0))
-                    ).toLocaleString("en-IN", {
-                      minimumFractionDigits: 2,
-                      maximumFractionDigits: 2
-                    })}
-                  </td>
-
-                  <td>{chequeBounce.recSeries || "REC"}</td>
-                  <td>{chequeBounce.recNo || chequeBounce.receiptNo || "-"}</td>
-                  <td>{chequeBounce.narration || "-"}</td>
-
-                  <td className="receipt-sticky-action-cell">
-                    <div className="receipt-action-buttons">
-
-                      <button
-                        className="btn-view"
-                        onClick={() => editChequeBounce(chequeBounce)}
-                      >
-                        👁️ View
-                      </button>
-
-                      <button
-                        className="btn-edit"
-                        onClick={() => editChequeBounce(chequeBounce)}
-                      >
-                        ✏️ Edit
-                      </button>
-
-                      <button
-                        className="btn-delete"
-                        onClick={() => deleteChequeBounce(chequeBounce.id)}
-                      >
-                        🗑 Delete
-                      </button>
-
-                    </div>
+                    <span>
+                      {chequeBounceListSearch ||
+                      chequeBounceActiveFilterCount >
+                        0
+                        ? "Try changing or clearing the filters."
+                        : "Click New Cheque Bounce to create a record."}
+                    </span>
                   </td>
                 </tr>
-              ))
-            )}
-          </tbody>
-        </table>
+              ) : (
+                paginatedChequeBounceList.map(
+                  (chequeBounce, index) => {
+                    const totalAmount =
+                      Number(
+                        chequeBounce.totalAmt ||
+                          (Number(
+                            chequeBounce.chequeAmt
+                          ) || 0) +
+                            (Number(
+                              chequeBounce.chqBounceCharges
+                            ) || 0)
+                      );
+
+                    return (
+                      <tr
+                        key={
+                          chequeBounce.id ||
+                          `${chequeBounce.trnSeries}-${chequeBounce.chqBounceNo}-${index}`
+                        }
+                      >
+                        <td className="cheque-bounce-sr-column">
+                          {chequeBounceStartIndex +
+                            index +
+                            1}
+                        </td>
+
+                        <td>
+                          {chequeBounce.chqBounceDate ||
+                            "-"}
+                        </td>
+
+                        <td className="cheque-bounce-series">
+                          {chequeBounce.trnSeries ||
+                            "CHB"}
+                        </td>
+
+                        <td className="cheque-bounce-number">
+                          {chequeBounce.chqBounceNo ||
+                            chequeBounce.trnNo ||
+                            "-"}
+                        </td>
+
+                        <td className="cheque-bounce-party">
+                          {chequeBounce.accountNameDr ||
+                            chequeBounce.partyName ||
+                            "-"}
+                        </td>
+
+                        <td className="cheque-bounce-bank">
+                          {chequeBounce.accountNameCr ||
+                            chequeBounce.bankName ||
+                            "-"}
+                        </td>
+
+                        <td>
+                          {chequeBounce.chequeNo ||
+                            "-"}
+                        </td>
+
+                        <td>
+                          {chequeBounce.chequeDate ||
+                            "-"}
+                        </td>
+
+                        <td className="cheque-bounce-amount-column">
+                          ₹
+                          {Number(
+                            chequeBounce.chequeAmt ||
+                              0
+                          ).toLocaleString(
+                            "en-IN",
+                            {
+                              minimumFractionDigits: 2,
+                              maximumFractionDigits: 2,
+                            }
+                          )}
+                        </td>
+
+                        <td className="cheque-bounce-amount-column">
+                          ₹
+                          {Number(
+                            chequeBounce.chqBounceCharges ||
+                              0
+                          ).toLocaleString(
+                            "en-IN",
+                            {
+                              minimumFractionDigits: 2,
+                              maximumFractionDigits: 2,
+                            }
+                          )}
+                        </td>
+
+                        <td className="cheque-bounce-amount-column">
+                          ₹
+                          {totalAmount.toLocaleString(
+                            "en-IN",
+                            {
+                              minimumFractionDigits: 2,
+                              maximumFractionDigits: 2,
+                            }
+                          )}
+                        </td>
+
+                        <td>
+                          {chequeBounce.recSeries ||
+                            "REC"}
+                        </td>
+
+                        <td>
+                          {chequeBounce.recNo ||
+                            chequeBounce.receiptNo ||
+                            "-"}
+                        </td>
+
+                        <td className="cheque-bounce-narration">
+                          {chequeBounce.narration ||
+                            "-"}
+                        </td>
+
+                        <td className="cheque-bounce-actions-column">
+                          <div className="cheque-bounce-row-actions">
+                            <button
+                              type="button"
+                              className="cheque-bounce-action-button view"
+                              title="View Cheque Bounce"
+                              onClick={() =>
+                                editChequeBounce(
+                                  chequeBounce
+                                )
+                              }
+                            >
+                              <Eye size={16} />
+                            </button>
+
+                            <button
+                              type="button"
+                              className="cheque-bounce-action-button edit"
+                              title="Edit Cheque Bounce"
+                              onClick={() =>
+                                editChequeBounce(
+                                  chequeBounce
+                                )
+                              }
+                            >
+                              <Pencil size={16} />
+                            </button>
+
+                            <button
+                              type="button"
+                              className="cheque-bounce-action-button delete"
+                              title="Delete Cheque Bounce"
+                              onClick={() =>
+                                deleteChequeBounce(
+                                  chequeBounce.id
+                                )
+                              }
+                            >
+                              <Trash2 size={16} />
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  }
+                )
+              )}
+            </tbody>
+          </table>
+        </div>
+
+        {/* PAGINATION */}
+
+        <div className="cheque-bounce-pagination-footer">
+          <div className="cheque-bounce-pagination-info">
+            Showing{" "}
+            <strong>
+              {chequeBounceShowingFrom}
+            </strong>{" "}
+            to{" "}
+            <strong>
+              {chequeBounceShowingTo}
+            </strong>{" "}
+            of{" "}
+            <strong>
+              {filteredChequeBounceList.length}
+            </strong>{" "}
+            entries
+          </div>
+
+          <div className="cheque-bounce-pagination-controls">
+            <select
+              value={
+                chequeBounceListRowsPerPage
+              }
+              onChange={(event) =>
+                setChequeBounceListRowsPerPage(
+                  Number(event.target.value)
+                )
+              }
+            >
+              <option value={10}>10</option>
+              <option value={20}>20</option>
+              <option value={50}>50</option>
+              <option value={100}>100</option>
+            </select>
+
+            <div className="cheque-bounce-pagination">
+              <button
+                type="button"
+                disabled={
+                  chequeBounceSafePage === 1
+                }
+                onClick={() =>
+                  setChequeBounceListCurrentPage(
+                    (previous) =>
+                      Math.max(
+                        previous - 1,
+                        1
+                      )
+                  )
+                }
+              >
+                <ChevronLeft size={15} />
+              </button>
+
+              {getChequeBouncePaginationPages().map(
+                (pageNumber) => (
+                  <button
+                    type="button"
+                    key={pageNumber}
+                    className={
+                      pageNumber ===
+                      chequeBounceSafePage
+                        ? "active"
+                        : ""
+                    }
+                    onClick={() =>
+                      setChequeBounceListCurrentPage(
+                        pageNumber
+                      )
+                    }
+                  >
+                    {pageNumber}
+                  </button>
+                )
+              )}
+
+              <button
+                type="button"
+                disabled={
+                  chequeBounceSafePage ===
+                  chequeBounceTotalPages
+                }
+                onClick={() =>
+                  setChequeBounceListCurrentPage(
+                    (previous) =>
+                      Math.min(
+                        previous + 1,
+                        chequeBounceTotalPages
+                      )
+                  )
+                }
+              >
+                <ChevronRight size={15} />
+              </button>
+            </div>
+          </div>
+        </div>
       </div>
     </div>
   );
+};
+  /* =========================================================
+   CHEQUE BOUNCE LIST FILTER + PAGINATION
+   ========================================================= */
+
+const chequeBounceListRows = Array.isArray(
+  state.chequeBounces
+)
+  ? state.chequeBounces
+  : [];
+
+const normalizedChequeBounceSearch = String(
+  chequeBounceListSearch || ""
+)
+  .trim()
+  .toLowerCase();
+
+const filteredChequeBounceList =
+  chequeBounceListRows.filter((chequeBounce) => {
+    const transactionDate = String(
+      chequeBounce.chqBounceDate ||
+        chequeBounce.transactionDate ||
+        ""
+    )
+      .trim()
+      .slice(0, 10);
+
+    const partyName = String(
+      chequeBounce.accountNameDr ||
+        chequeBounce.partyName ||
+        ""
+    )
+      .trim()
+      .toLowerCase();
+
+    const bankName = String(
+      chequeBounce.accountNameCr ||
+        chequeBounce.bankName ||
+        ""
+    )
+      .trim()
+      .toLowerCase();
+
+    const chequeNo = String(
+      chequeBounce.chequeNo || ""
+    )
+      .trim()
+      .toLowerCase();
+
+    const searchableText = [
+      transactionDate,
+      chequeBounce.trnSeries,
+      chequeBounce.trnNo,
+      chequeBounce.chqBounceNo,
+      partyName,
+      bankName,
+      chequeNo,
+      chequeBounce.chequeDate,
+      chequeBounce.chequeAmt,
+      chequeBounce.chqBounceCharges,
+      chequeBounce.totalAmt,
+      chequeBounce.recSeries,
+      chequeBounce.recNo,
+      chequeBounce.receiptNo,
+      chequeBounce.narration,
+    ]
+      .map((value) =>
+        String(value ?? "")
+          .trim()
+          .toLowerCase()
+      )
+      .join(" ");
+
+    const matchesSearch =
+      !normalizedChequeBounceSearch ||
+      searchableText.includes(
+        normalizedChequeBounceSearch
+      );
+
+    const appliedFromDate = String(
+      chequeBounceAppliedFilters.fromDate || ""
+    ).trim();
+
+    const appliedToDate = String(
+      chequeBounceAppliedFilters.toDate || ""
+    ).trim();
+
+    const appliedParty = String(
+      chequeBounceAppliedFilters.party || ""
+    )
+      .trim()
+      .toLowerCase();
+
+    const appliedBank = String(
+      chequeBounceAppliedFilters.bank || ""
+    )
+      .trim()
+      .toLowerCase();
+
+    const appliedChequeNo = String(
+      chequeBounceAppliedFilters.chequeNo || ""
+    )
+      .trim()
+      .toLowerCase();
+
+    const matchesFromDate =
+      !appliedFromDate ||
+      (transactionDate &&
+        transactionDate >= appliedFromDate);
+
+    const matchesToDate =
+      !appliedToDate ||
+      (transactionDate &&
+        transactionDate <= appliedToDate);
+
+    const matchesParty =
+      !appliedParty ||
+      partyName.includes(appliedParty);
+
+    const matchesBank =
+      !appliedBank ||
+      bankName.includes(appliedBank);
+
+    const matchesChequeNo =
+      !appliedChequeNo ||
+      chequeNo.includes(appliedChequeNo);
+
+    return (
+      matchesSearch &&
+      matchesFromDate &&
+      matchesToDate &&
+      matchesParty &&
+      matchesBank &&
+      matchesChequeNo
+    );
+  });
+
+const chequeBounceActiveFilterCount = [
+  chequeBounceAppliedFilters.fromDate,
+  chequeBounceAppliedFilters.toDate,
+  chequeBounceAppliedFilters.party,
+  chequeBounceAppliedFilters.bank,
+  chequeBounceAppliedFilters.chequeNo,
+].filter((value) =>
+  String(value || "").trim()
+).length;
+
+const chequeBounceTotalPages = Math.max(
+  Math.ceil(
+    filteredChequeBounceList.length /
+      chequeBounceListRowsPerPage
+  ),
+  1
+);
+
+const chequeBounceSafePage = Math.min(
+  chequeBounceListCurrentPage,
+  chequeBounceTotalPages
+);
+
+const chequeBounceStartIndex =
+  (chequeBounceSafePage - 1) *
+  chequeBounceListRowsPerPage;
+
+const paginatedChequeBounceList =
+  filteredChequeBounceList.slice(
+    chequeBounceStartIndex,
+    chequeBounceStartIndex +
+      chequeBounceListRowsPerPage
+  );
+
+const chequeBounceShowingFrom =
+  filteredChequeBounceList.length === 0
+    ? 0
+    : chequeBounceStartIndex + 1;
+
+const chequeBounceShowingTo = Math.min(
+  chequeBounceStartIndex +
+    chequeBounceListRowsPerPage,
+  filteredChequeBounceList.length
+);
+
+const getChequeBouncePaginationPages = () => {
+  const pages = [];
+
+  const startPage = Math.max(
+    1,
+    chequeBounceSafePage - 2
+  );
+
+  const endPage = Math.min(
+    chequeBounceTotalPages,
+    chequeBounceSafePage + 2
+  );
+
+  for (
+    let pageNumber = startPage;
+    pageNumber <= endPage;
+    pageNumber += 1
+  ) {
+    pages.push(pageNumber);
+  }
+
+  return pages;
+};
+
+useEffect(() => {
+  setChequeBounceListCurrentPage(1);
+}, [
+  chequeBounceListSearch,
+  chequeBounceListRowsPerPage,
+]);
+
+useEffect(() => {
+  if (
+    chequeBounceListCurrentPage >
+    chequeBounceTotalPages
+  ) {
+    setChequeBounceListCurrentPage(
+      chequeBounceTotalPages
+    );
+  }
+}, [
+  chequeBounceListCurrentPage,
+  chequeBounceTotalPages,
+]);
   // Cheque Bounce Form
   // =========================================================
   // CHEQUE BOUNCE FORM — RECEIPT STYLE UI
@@ -5786,149 +9656,942 @@ const Transaction = ({
 
     printWindow.document.close();
   };
+  /* =========================================================
+   PDC DOCKET FILTERING AND PAGINATION
+   ========================================================= */
+
+const pdcDocketListRows = Array.isArray(
+  state.pdcDockets
+)
+  ? state.pdcDockets
+  : [];
+
+const normalizedPDCDocketSearch = String(
+  pdcDocketListSearch || ""
+)
+  .trim()
+  .toLowerCase();
+
+const filteredPDCDocketList =
+  pdcDocketListRows.filter((docket) => {
+    const header = docket.header || docket || {};
+
+    const depositDate = String(
+      header.depositDate || ""
+    )
+      .trim()
+      .slice(0, 10);
+
+    const docketSeries = String(
+      header.docSeries ||
+        header.pdcSeries ||
+        header.series ||
+        ""
+    )
+      .trim()
+      .toLowerCase();
+
+    const docketNo = String(
+      header.pdcNo ||
+        header.docVNo ||
+        ""
+    )
+      .trim()
+      .toLowerCase();
+
+    const houseBank = String(
+      header.houseBank ||
+        header.bankName ||
+        header.houseBankName ||
+        ""
+    )
+      .trim()
+      .toLowerCase();
+
+    const pdcType = String(
+      header.clearingType ||
+        header.pdcType ||
+        ""
+    )
+      .trim()
+      .toLowerCase();
+
+    const searchableText = [
+      depositDate,
+      docketSeries,
+      docketNo,
+      houseBank,
+      header.fromDate,
+      header.toDate,
+      pdcType,
+      header.totalAmount,
+      header.totalCheques,
+      header.clearingDate,
+      header.narration,
+      header.addUser,
+      header.addDate,
+      header.editUser,
+      header.editDate,
+    ]
+      .map((value) =>
+        String(value ?? "")
+          .trim()
+          .toLowerCase()
+      )
+      .join(" ");
+
+    const appliedFromDate = String(
+      pdcDocketAppliedFilters.fromDepositDate ||
+        ""
+    ).trim();
+
+    const appliedToDate = String(
+      pdcDocketAppliedFilters.toDepositDate ||
+        ""
+    ).trim();
+
+    const appliedBank = String(
+      pdcDocketAppliedFilters.houseBank || ""
+    )
+      .trim()
+      .toLowerCase();
+
+    const appliedPDCType = String(
+      pdcDocketAppliedFilters.pdcType || ""
+    )
+      .trim()
+      .toLowerCase();
+
+    const appliedDocketNo = String(
+      pdcDocketAppliedFilters.docketNo || ""
+    )
+      .trim()
+      .toLowerCase();
+
+    const matchesSearch =
+      !normalizedPDCDocketSearch ||
+      searchableText.includes(
+        normalizedPDCDocketSearch
+      );
+
+    const matchesFromDate =
+      !appliedFromDate ||
+      (depositDate &&
+        depositDate >= appliedFromDate);
+
+    const matchesToDate =
+      !appliedToDate ||
+      (depositDate &&
+        depositDate <= appliedToDate);
+
+    const matchesBank =
+      !appliedBank ||
+      houseBank.includes(appliedBank);
+
+    const matchesPDCType =
+      !appliedPDCType ||
+      pdcType === appliedPDCType;
+
+    const matchesDocketNo =
+      !appliedDocketNo ||
+      docketNo.includes(appliedDocketNo);
+
+    return (
+      matchesSearch &&
+      matchesFromDate &&
+      matchesToDate &&
+      matchesBank &&
+      matchesPDCType &&
+      matchesDocketNo
+    );
+  });
+
+const pdcDocketActiveFilterCount = [
+  pdcDocketAppliedFilters.fromDepositDate,
+  pdcDocketAppliedFilters.toDepositDate,
+  pdcDocketAppliedFilters.houseBank,
+  pdcDocketAppliedFilters.pdcType,
+  pdcDocketAppliedFilters.docketNo,
+].filter((value) =>
+  String(value || "").trim()
+).length;
+
+const pdcDocketTotalPages = Math.max(
+  Math.ceil(
+    filteredPDCDocketList.length /
+      pdcDocketListRowsPerPage
+  ),
+  1
+);
+
+const pdcDocketSafePage = Math.min(
+  pdcDocketListCurrentPage,
+  pdcDocketTotalPages
+);
+
+const pdcDocketStartIndex =
+  (pdcDocketSafePage - 1) *
+  pdcDocketListRowsPerPage;
+
+const paginatedPDCDocketList =
+  filteredPDCDocketList.slice(
+    pdcDocketStartIndex,
+    pdcDocketStartIndex +
+      pdcDocketListRowsPerPage
+  );
+
+const pdcDocketShowingFrom =
+  filteredPDCDocketList.length === 0
+    ? 0
+    : pdcDocketStartIndex + 1;
+
+const pdcDocketShowingTo = Math.min(
+  pdcDocketStartIndex +
+    pdcDocketListRowsPerPage,
+  filteredPDCDocketList.length
+);
+
+const getPDCDocketPaginationPages = () => {
+  const pages = [];
+
+  const startPage = Math.max(
+    1,
+    pdcDocketSafePage - 2
+  );
+
+  const endPage = Math.min(
+    pdcDocketTotalPages,
+    pdcDocketSafePage + 2
+  );
+
+  for (
+    let pageNumber = startPage;
+    pageNumber <= endPage;
+    pageNumber += 1
+  ) {
+    pages.push(pageNumber);
+  }
+
+  return pages;
+};
+
+useEffect(() => {
+  setPDCDocketListCurrentPage(1);
+}, [
+  pdcDocketListSearch,
+  pdcDocketListRowsPerPage,
+]);
+
+useEffect(() => {
+  if (
+    pdcDocketListCurrentPage >
+    pdcDocketTotalPages
+  ) {
+    setPDCDocketListCurrentPage(
+      pdcDocketTotalPages
+    );
+  }
+}, [
+  pdcDocketListCurrentPage,
+  pdcDocketTotalPages,
+]);
+
 
   // PDC Docket List
-  const renderPDCDocketList = () => (
-    <div className="receipt-sales-list-section">
-      <div className="receipt-sales-list-header">
-        <h3>PDC Docket List ({state.pdcDockets?.length || 0})</h3>
+ const renderPDCDocketList = () => {
+  const today = new Date()
+    .toISOString()
+    .split("T")[0];
 
-        <div className="receipt-sales-list-actions">
-          <input className="receipt-sales-search" type="text" placeholder="Search..." />
-          <button className="receipt-export-excel">📊 Export Excel</button>
-          <button className="receipt-export-pdf">📄 Export PDF</button>
+  const todayDocketCount =
+    pdcDocketListRows.filter((docket) => {
+      const header =
+        docket.header || docket || {};
 
+      return (
+        String(header.depositDate || "")
+          .slice(0, 10) === today
+      );
+    }).length;
+
+  const totalDocketAmount =
+    filteredPDCDocketList.reduce(
+      (total, docket) => {
+        const header =
+          docket.header || docket || {};
+
+        return (
+          total +
+          (Number(header.totalAmount) || 0)
+        );
+      },
+      0
+    );
+
+  const totalChequeCount =
+    filteredPDCDocketList.reduce(
+      (total, docket) => {
+        const header =
+          docket.header || docket || {};
+
+        return (
+          total +
+          (Number(header.totalCheques) || 0)
+        );
+      },
+      0
+    );
+
+  const clearedDocketCount =
+    filteredPDCDocketList.filter(
+      (docket) => {
+        const header =
+          docket.header || docket || {};
+
+        return Boolean(
+          String(
+            header.clearingDate || ""
+          ).trim()
+        );
+      }
+    ).length;
+
+  return (
+    <div className="pdc-docket-premium-list-page">
+      <div className="pdc-docket-premium-heading">
+        <div className="pdc-docket-premium-title">
+          <h2>PDC Docket List</h2>
+
+          <p>
+            Manage post-dated cheque deposit
+            dockets
+          </p>
+        </div>
+
+        <div className="pdc-docket-heading-actions">
           <button
-            className="receipt-settle-load-btn"
+            type="button"
+            className="pdc-docket-main-button pdc-docket-add-button"
             onClick={() => {
               resetPDCDocketForm();
               openTransactionEntry("PDC Docket");
             }}
           >
-            + Add PDC Docket
+            <Plus size={16} />
+            New PDC Docket
+          </button>
+
+          <button
+            type="button"
+            className="pdc-docket-main-button pdc-docket-excel-button"
+          >
+            <FileSpreadsheet size={16} />
+            Export Excel
+          </button>
+
+          <button
+            type="button"
+            className="pdc-docket-main-button pdc-docket-pdf-button"
+          >
+            <FileText size={16} />
+            Export PDF
+          </button>
+
+          <button
+            type="button"
+            className="pdc-docket-main-button pdc-docket-print-list-button"
+            onClick={() => window.print()}
+          >
+            <Printer size={16} />
+            Print List
           </button>
         </div>
       </div>
 
-      <div className="receipt-sales-table-wrap">
-        <table className="receipt-sales-table">
-          <thead>
-            <tr>
-              <th>Deposit Date</th>
-              <th>PDC Series</th>
-              <th>PDC No</th>
-              <th>House Bank</th>
-              <th>From Cheq Date</th>
-              <th>To Date</th>
-              <th>PDC Type</th>
-              <th>Total Amount</th>
-              <th>Total Cheques</th>
-              <th>Clearing Date</th>
-              <th>Narration</th>
-              <th>Add User</th>
-              <th>Add Date</th>
-              <th>Edit User</th>
-              <th>Edit Date</th>
-              <th className="receipt-sticky-action-head">Actions</th>
-            </tr>
-          </thead>
+      <div className="pdc-docket-summary-grid">
+        <div className="pdc-docket-summary-card">
+          <div className="pdc-docket-summary-icon blue">
+            <CalendarDays size={20} />
+          </div>
 
-          <tbody>
-            {(state.pdcDockets || []).length === 0 ? (
+          <div className="pdc-docket-summary-content">
+            <span>Today's Dockets</span>
+            <strong>{todayDocketCount}</strong>
+            <small>
+              {new Date().toLocaleDateString(
+                "en-GB"
+              )}
+            </small>
+          </div>
+        </div>
+
+        <div className="pdc-docket-summary-card">
+          <div className="pdc-docket-summary-icon violet">
+            <ReceiptText size={20} />
+          </div>
+
+          <div className="pdc-docket-summary-content">
+            <span>Total Dockets</span>
+            <strong>
+              {pdcDocketListRows.length}
+            </strong>
+            <small>All records</small>
+          </div>
+        </div>
+
+        <div className="pdc-docket-summary-card">
+          <div className="pdc-docket-summary-icon green">
+            <Wallet size={20} />
+          </div>
+
+          <div className="pdc-docket-summary-content">
+            <span>Total Amount</span>
+            <strong>
+              ₹
+              {totalDocketAmount.toLocaleString(
+                "en-IN",
+                {
+                  minimumFractionDigits: 2,
+                  maximumFractionDigits: 2,
+                }
+              )}
+            </strong>
+            <small>Filtered records</small>
+          </div>
+        </div>
+
+        <div className="pdc-docket-summary-card">
+          <div className="pdc-docket-summary-icon orange">
+            <ReceiptText size={20} />
+          </div>
+
+          <div className="pdc-docket-summary-content">
+            <span>Total Cheques</span>
+            <strong>{totalChequeCount}</strong>
+            <small>Filtered records</small>
+          </div>
+        </div>
+
+        <div className="pdc-docket-summary-card">
+          <div className="pdc-docket-summary-icon cyan">
+            <CircleCheck size={20} />
+          </div>
+
+          <div className="pdc-docket-summary-content">
+            <span>Cleared Dockets</span>
+            <strong>{clearedDocketCount}</strong>
+            <small>With clearing date</small>
+          </div>
+        </div>
+      </div>
+
+      <div className="pdc-docket-list-toolbar">
+        <div className="pdc-docket-search-box">
+          <Search size={16} />
+
+          <input
+            type="text"
+            value={pdcDocketListSearch}
+            placeholder="Search docket, bank, series or narration..."
+            onChange={(event) =>
+              setPDCDocketListSearch(
+                event.target.value
+              )
+            }
+          />
+
+          {pdcDocketListSearch && (
+            <button
+              type="button"
+              className="pdc-docket-clear-search"
+              onClick={() =>
+                setPDCDocketListSearch("")
+              }
+            >
+              ×
+            </button>
+          )}
+        </div>
+
+        <button
+          type="button"
+          className={`pdc-docket-filter-toggle ${
+            pdcDocketActiveFilterCount > 0
+              ? "has-active-filters"
+              : ""
+          }`}
+          onClick={() =>
+            setPDCDocketFiltersVisible(
+              (previous) => !previous
+            )
+          }
+        >
+          <SlidersHorizontal size={16} />
+          Apply Filter
+
+          {pdcDocketActiveFilterCount > 0 && (
+            <span className="pdc-docket-filter-count">
+              {pdcDocketActiveFilterCount}
+            </span>
+          )}
+
+          <ChevronDown
+            size={15}
+            className={
+              pdcDocketFiltersVisible
+                ? "pdc-docket-filter-chevron open"
+                : "pdc-docket-filter-chevron"
+            }
+          />
+        </button>
+      </div>
+
+      {pdcDocketFiltersVisible && (
+        <div className="pdc-docket-filter-panel">
+          <div className="pdc-docket-filter-field">
+            <label>From Deposit Date</label>
+
+            <input
+              type="date"
+              value={
+                pdcDocketDraftFilters.fromDepositDate
+              }
+              onChange={(event) =>
+                handlePDCDocketDraftFilterChange(
+                  "fromDepositDate",
+                  event.target.value
+                )
+              }
+            />
+          </div>
+
+          <div className="pdc-docket-filter-field">
+            <label>To Deposit Date</label>
+
+            <input
+              type="date"
+              value={
+                pdcDocketDraftFilters.toDepositDate
+              }
+              onChange={(event) =>
+                handlePDCDocketDraftFilterChange(
+                  "toDepositDate",
+                  event.target.value
+                )
+              }
+            />
+          </div>
+
+          <div className="pdc-docket-filter-field">
+            <label>House Bank</label>
+
+            <input
+              type="text"
+              value={
+                pdcDocketDraftFilters.houseBank
+              }
+              placeholder="Enter bank name"
+              onChange={(event) =>
+                handlePDCDocketDraftFilterChange(
+                  "houseBank",
+                  event.target.value
+                )
+              }
+            />
+          </div>
+
+          <div className="pdc-docket-filter-field">
+            <label>PDC Type</label>
+
+            <select
+              value={
+                pdcDocketDraftFilters.pdcType
+              }
+              onChange={(event) =>
+                handlePDCDocketDraftFilterChange(
+                  "pdcType",
+                  event.target.value
+                )
+              }
+            >
+              <option value="">All Types</option>
+              <option value="Clearing">
+                Clearing
+              </option>
+              <option value="Collection">
+                Collection
+              </option>
+              <option value="Discounting">
+                Discounting
+              </option>
+            </select>
+          </div>
+
+          <div className="pdc-docket-filter-field">
+            <label>PDC No</label>
+
+            <input
+              type="text"
+              value={
+                pdcDocketDraftFilters.docketNo
+              }
+              placeholder="Enter PDC no"
+              onChange={(event) =>
+                handlePDCDocketDraftFilterChange(
+                  "docketNo",
+                  event.target.value
+                )
+              }
+              onKeyDown={(event) => {
+                if (event.key === "Enter") {
+                  event.preventDefault();
+                  applyPDCDocketListFilters();
+                }
+              }}
+            />
+          </div>
+
+          <div className="pdc-docket-filter-actions">
+            <button
+              type="button"
+              className="pdc-docket-filter-clear"
+              onClick={
+                clearPDCDocketListFilters
+              }
+            >
+              Clear
+            </button>
+
+            <button
+              type="button"
+              className="pdc-docket-filter-apply"
+              onClick={
+                applyPDCDocketListFilters
+              }
+            >
+              <SlidersHorizontal size={15} />
+              Apply Filter
+            </button>
+          </div>
+        </div>
+      )}
+
+      <div className="pdc-docket-table-card">
+        <div className="pdc-docket-table-scroll">
+          <table className="pdc-docket-premium-table">
+            <thead>
               <tr>
-                <td colSpan="16" className="no-data">
-                  No PDC Dockets Added
-                </td>
+                <th className="pdc-docket-sr-column">
+                  SrNo
+                </th>
+                <th>Deposit Date</th>
+                <th>PDC Series</th>
+                <th>PDC No</th>
+                <th>House Bank</th>
+                <th>From Cheque Date</th>
+                <th>To Date</th>
+                <th>PDC Type</th>
+                <th className="pdc-docket-amount-column">
+                  Total Amount
+                </th>
+                <th>Total Cheques</th>
+                <th>Clearing Date</th>
+                <th>Narration</th>
+                <th>Add User</th>
+                <th>Add Date</th>
+                <th>Edit User</th>
+                <th>Edit Date</th>
+                <th className="pdc-docket-actions-column">
+                  Actions
+                </th>
               </tr>
-            ) : (
-              (state.pdcDockets || []).map((docket) => {
-                const h = docket.header || docket;
+            </thead>
 
-                return (
-                  <tr key={docket._id}>
-                    <td>{h.depositDate || "-"}</td>
-                    <td>{h.docSeries || h.pdcSeries || h.series || "-"}</td>
+            <tbody>
+              {paginatedPDCDocketList.length ===
+              0 ? (
+                <tr>
+                  <td
+                    colSpan="17"
+                    className="pdc-docket-empty-cell"
+                  >
+                    <strong>
+                      No PDC docket records found
+                    </strong>
 
-                    <td>{h.pdcNo || h.docVNo || "-"}</td>
-                    <td>
-                      {h.houseBank ||
-                        h.bankName ||
-                        h.houseBankName ||
-                        "-"}
-                    </td>
-                    <td>{h.fromDate || "-"}</td>
-                    <td>{h.toDate || "-"}</td>
-                    <td>{h.clearingType || h.pdcType || "-"}</td>
+                    <span>
+                      {pdcDocketListSearch ||
+                      pdcDocketActiveFilterCount > 0
+                        ? "Try changing or clearing the filters."
+                        : "Click New PDC Docket to create a docket."}
+                    </span>
+                  </td>
+                </tr>
+              ) : (
+                paginatedPDCDocketList.map(
+                  (docket, index) => {
+                    const header =
+                      docket.header ||
+                      docket ||
+                      {};
 
-                    <td className="amount-cell">
-                      ₹{Number(h.totalAmount || 0).toLocaleString("en-IN", {
-                        minimumFractionDigits: 2,
-                        maximumFractionDigits: 2
-                      })}
-                    </td>
+                    return (
+                      <tr
+                        key={
+                          docket._id ||
+                          docket.id ||
+                          `${header.docSeries}-${header.pdcNo}-${index}`
+                        }
+                      >
+                        <td className="pdc-docket-sr-column">
+                          {pdcDocketStartIndex +
+                            index +
+                            1}
+                        </td>
 
-                    <td>{h.totalCheques || "-"}</td>
-                    <td>{h.clearingDate || "-"}</td>
-                    <td>{h.narration || "-"}</td>
-                    <td>{h.addUser || "-"}</td>
-                    <td>{h.addDate || "-"}</td>
-                    <td>{h.editUser || "-"}</td>
-                    <td>{h.editDate || "-"}</td>
+                        <td>
+                          {header.depositDate ||
+                            "-"}
+                        </td>
 
-                    <td className="receipt-sticky-action-cell">
-                      <div className="receipt-action-buttons">
-                        <button
-                          className="btn-view"
-                          onClick={() => {
-                            setTransactionFormMode(prev => ({
-                              ...prev,
-                              ["PDC Docket"]: true
-                            }));
-                            editPDCDocket(docket);
-                          }}
-                        >
-                          👁️ View
-                        </button>
+                        <td className="pdc-docket-series">
+                          {header.docSeries ||
+                            header.pdcSeries ||
+                            header.series ||
+                            "-"}
+                        </td>
 
-                        <button
-                          className="btn-edit"
-                          onClick={() => {
-                            setTransactionFormMode(prev => ({
-                              ...prev,
-                              ["PDC Docket"]: true
-                            }));
-                            editPDCDocket(docket);
-                          }}
-                        >
-                          ✏️ Edit
-                        </button>
+                        <td className="pdc-docket-number">
+                          {header.pdcNo ||
+                            header.docVNo ||
+                            "-"}
+                        </td>
 
-                        <button
-                          className="btn-print pdc-print-btn"
-                          onClick={() => printPDCDocket(docket)}
-                          title="Print"
-                        >
-                          <span className="pdc-print-icon">🖨️</span>
-                          Print
-                        </button>
+                        <td className="pdc-docket-bank">
+                          {header.houseBank ||
+                            header.bankName ||
+                            header.houseBankName ||
+                            "-"}
+                        </td>
 
-                        <button
-                          className="btn-delete"
-                          onClick={() => deletePDCDocket(docket._id)}
-                        >
-                          🗑 Delete
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                );
-              })
-            )}
-          </tbody>
-        </table>
+                        <td>
+                          {header.fromDate || "-"}
+                        </td>
+
+                        <td>
+                          {header.toDate || "-"}
+                        </td>
+
+                        <td>
+                          {header.clearingType ||
+                            header.pdcType ||
+                            "-"}
+                        </td>
+
+                        <td className="pdc-docket-amount-column">
+                          ₹
+                          {Number(
+                            header.totalAmount || 0
+                          ).toLocaleString(
+                            "en-IN",
+                            {
+                              minimumFractionDigits: 2,
+                              maximumFractionDigits: 2,
+                            }
+                          )}
+                        </td>
+
+                        <td className="pdc-docket-cheque-count">
+                          {header.totalCheques || 0}
+                        </td>
+
+                        <td>
+                          {header.clearingDate ||
+                            "-"}
+                        </td>
+
+                        <td className="pdc-docket-narration">
+                          {header.narration || "-"}
+                        </td>
+
+                        <td>{header.addUser || "-"}</td>
+                        <td>{header.addDate || "-"}</td>
+                        <td>{header.editUser || "-"}</td>
+                        <td>{header.editDate || "-"}</td>
+
+                        <td className="pdc-docket-actions-column">
+                          <div className="pdc-docket-row-actions">
+                            <button
+                              type="button"
+                              className="pdc-docket-action-button view"
+                              title="View PDC Docket"
+                              onClick={() => {
+                                setTransactionFormMode(
+                                  (previous) => ({
+                                    ...previous,
+                                    ["PDC Docket"]: true,
+                                  })
+                                );
+
+                                editPDCDocket(docket);
+                              }}
+                            >
+                              <Eye size={16} />
+                            </button>
+
+                            <button
+                              type="button"
+                              className="pdc-docket-action-button edit"
+                              title="Edit PDC Docket"
+                              onClick={() => {
+                                setTransactionFormMode(
+                                  (previous) => ({
+                                    ...previous,
+                                    ["PDC Docket"]: true,
+                                  })
+                                );
+
+                                editPDCDocket(docket);
+                              }}
+                            >
+                              <Pencil size={16} />
+                            </button>
+
+                            <button
+                              type="button"
+                              className="pdc-docket-action-button print"
+                              title="Print PDC Docket"
+                              onClick={() =>
+                                printPDCDocket(docket)
+                              }
+                            >
+                              <Printer size={16} />
+                            </button>
+
+                            <button
+                              type="button"
+                              className="pdc-docket-action-button delete"
+                              title="Delete PDC Docket"
+                              onClick={() =>
+                                deletePDCDocket(
+                                  docket._id ||
+                                    docket.id
+                                )
+                              }
+                            >
+                              <Trash2 size={16} />
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  }
+                )
+              )}
+            </tbody>
+          </table>
+        </div>
+
+        <div className="pdc-docket-pagination-footer">
+          <div className="pdc-docket-pagination-info">
+            Showing{" "}
+            <strong>
+              {pdcDocketShowingFrom}
+            </strong>{" "}
+            to{" "}
+            <strong>
+              {pdcDocketShowingTo}
+            </strong>{" "}
+            of{" "}
+            <strong>
+              {filteredPDCDocketList.length}
+            </strong>{" "}
+            entries
+          </div>
+
+          <div className="pdc-docket-pagination-controls">
+            <select
+              value={
+                pdcDocketListRowsPerPage
+              }
+              onChange={(event) =>
+                setPDCDocketListRowsPerPage(
+                  Number(event.target.value)
+                )
+              }
+            >
+              <option value={10}>10</option>
+              <option value={20}>20</option>
+              <option value={50}>50</option>
+              <option value={100}>100</option>
+            </select>
+
+            <div className="pdc-docket-page-buttons">
+              <button
+                type="button"
+                disabled={
+                  pdcDocketSafePage === 1
+                }
+                onClick={() =>
+                  setPDCDocketListCurrentPage(
+                    (previous) =>
+                      Math.max(
+                        previous - 1,
+                        1
+                      )
+                  )
+                }
+              >
+                <ChevronLeft size={16} />
+              </button>
+
+              {getPDCDocketPaginationPages().map(
+                (pageNumber) => (
+                  <button
+                    type="button"
+                    key={pageNumber}
+                    className={
+                      pageNumber ===
+                      pdcDocketSafePage
+                        ? "active"
+                        : ""
+                    }
+                    onClick={() =>
+                      setPDCDocketListCurrentPage(
+                        pageNumber
+                      )
+                    }
+                  >
+                    {pageNumber}
+                  </button>
+                )
+              )}
+
+              <button
+                type="button"
+                disabled={
+                  pdcDocketSafePage ===
+                  pdcDocketTotalPages
+                }
+                onClick={() =>
+                  setPDCDocketListCurrentPage(
+                    (previous) =>
+                      Math.min(
+                        previous + 1,
+                        pdcDocketTotalPages
+                      )
+                  )
+                }
+              >
+                <ChevronRight size={16} />
+              </button>
+            </div>
+          </div>
+        </div>
       </div>
     </div>
   );
+};
   // =========================================================
   // PDC DOCKET FORM — RECEIPT STYLE UI
   // =========================================================
@@ -6302,91 +10965,965 @@ const Transaction = ({
       </div>
     </div>
   );
+  /* =========================================================
+   CONTRA LIST FILTERING AND PAGINATION
+   ========================================================= */
+
+const contraListRows = Array.isArray(
+  state.contra
+)
+  ? state.contra
+  : [];
+
+const normalizedContraSearch = String(
+  contraListSearch || ""
+)
+  .trim()
+  .toLowerCase();
+
+const getContraType = (transaction = {}) =>
+  String(
+    transaction.transactionType ||
+      transaction.type ||
+      transaction.tranType ||
+      ""
+  )
+    .trim()
+    .toLowerCase();
+
+const filteredContraList =
+  contraListRows.filter((transaction) => {
+    const voucherNo = String(
+      transaction.tranVNo ||
+        transaction.vNo ||
+        transaction.voucherNo ||
+        ""
+    )
+      .trim()
+      .toLowerCase();
+
+    const transactionDate = String(
+      transaction.transactionDate ||
+        transaction.vDate ||
+        transaction.date ||
+        ""
+    )
+      .trim()
+      .slice(0, 10);
+
+    const transactionType =
+      getContraType(transaction);
+
+    const narration = String(
+      transaction.narration ||
+        transaction.narr ||
+        ""
+    )
+      .trim()
+      .toLowerCase();
+
+    const searchableText = [
+      voucherNo,
+      transactionDate,
+      transactionType,
+      transaction.amount,
+      narration,
+      transaction.fromAccount,
+      transaction.toAccount,
+      transaction.bankName,
+      transaction.cashAccount,
+    ]
+      .map((value) =>
+        String(value ?? "")
+          .trim()
+          .toLowerCase()
+      )
+      .join(" ");
+
+    const appliedFromDate = String(
+      contraAppliedFilters.fromDate || ""
+    ).trim();
+
+    const appliedToDate = String(
+      contraAppliedFilters.toDate || ""
+    ).trim();
+
+    const appliedType = String(
+      contraAppliedFilters.transactionType ||
+        ""
+    )
+      .trim()
+      .toLowerCase();
+
+    const appliedVoucherNo = String(
+      contraAppliedFilters.voucherNo || ""
+    )
+      .trim()
+      .toLowerCase();
+
+    const appliedNarration = String(
+      contraAppliedFilters.narration || ""
+    )
+      .trim()
+      .toLowerCase();
+
+    const matchesSearch =
+      !normalizedContraSearch ||
+      searchableText.includes(
+        normalizedContraSearch
+      );
+
+    const matchesFromDate =
+      !appliedFromDate ||
+      (transactionDate &&
+        transactionDate >= appliedFromDate);
+
+    const matchesToDate =
+      !appliedToDate ||
+      (transactionDate &&
+        transactionDate <= appliedToDate);
+
+    const matchesType =
+      !appliedType ||
+      transactionType === appliedType;
+
+    const matchesVoucherNo =
+      !appliedVoucherNo ||
+      voucherNo.includes(appliedVoucherNo);
+
+    const matchesNarration =
+      !appliedNarration ||
+      narration.includes(appliedNarration);
+
+    return (
+      matchesSearch &&
+      matchesFromDate &&
+      matchesToDate &&
+      matchesType &&
+      matchesVoucherNo &&
+      matchesNarration
+    );
+  });
+
+const contraActiveFilterCount = [
+  contraAppliedFilters.fromDate,
+  contraAppliedFilters.toDate,
+  contraAppliedFilters.transactionType,
+  contraAppliedFilters.voucherNo,
+  contraAppliedFilters.narration,
+].filter((value) =>
+  String(value || "").trim()
+).length;
+
+const contraTotalPages = Math.max(
+  Math.ceil(
+    filteredContraList.length /
+      contraListRowsPerPage
+  ),
+  1
+);
+
+const contraSafePage = Math.min(
+  contraListCurrentPage,
+  contraTotalPages
+);
+
+const contraStartIndex =
+  (contraSafePage - 1) *
+  contraListRowsPerPage;
+
+const paginatedContraList =
+  filteredContraList.slice(
+    contraStartIndex,
+    contraStartIndex +
+      contraListRowsPerPage
+  );
+
+const contraShowingFrom =
+  filteredContraList.length === 0
+    ? 0
+    : contraStartIndex + 1;
+
+const contraShowingTo = Math.min(
+  contraStartIndex +
+    contraListRowsPerPage,
+  filteredContraList.length
+);
+
+const getContraPaginationPages = () => {
+  const pages = [];
+
+  const startPage = Math.max(
+    1,
+    contraSafePage - 2
+  );
+
+  const endPage = Math.min(
+    contraTotalPages,
+    contraSafePage + 2
+  );
+
+  for (
+    let pageNumber = startPage;
+    pageNumber <= endPage;
+    pageNumber += 1
+  ) {
+    pages.push(pageNumber);
+  }
+
+  return pages;
+};
+
+useEffect(() => {
+  setContraListCurrentPage(1);
+}, [
+  contraListSearch,
+  contraListRowsPerPage,
+]);
+
+useEffect(() => {
+  if (
+    contraListCurrentPage >
+    contraTotalPages
+  ) {
+    setContraListCurrentPage(
+      contraTotalPages
+    );
+  }
+}, [
+  contraListCurrentPage,
+  contraTotalPages,
+]);
 
   // Contra List
-  const renderContraList = () => (
-    <div className="master-section"><div className="grid-header"><h3>Bank Deposit/Withdrawal</h3><button className="btn-add-new btn-contra" onClick={() => { resetContraForm(); openTransactionEntry("Contra"); }}>+ Add Transaction</button></div>
-      <div className="table-responsive"><table className="erp-table"><thead><tr><th>Tran VNo.</th><th>Date</th><th>Type</th><th>Amount</th><th>Narration</th><th>Actions</th></tr></thead>
-        <tbody>{state.contra?.length === 0 ? (<tr><td colSpan="6" className="no-data">No Transactions Added</td></tr>) : (state.contra?.map((transaction) => (<tr key={transaction.id}><td>{transaction.tranVNo || '-'}</td><td>{transaction.transactionDate}</td><td>{transaction.transactionType}</td><td>₹{parseFloat(transaction.amount || 0).toFixed(2)}</td><td>{transaction.narration || '-'}</td>
-          <td
-            className="action-buttons"
-            style={{
-              whiteSpace: 'nowrap',
-              position: 'sticky',
-              right: 0,
-              backgroundColor: '#ffffff',
-              zIndex: 10,
-              boxShadow: '-2px 0 5px -2px rgba(0,0,0,0.1)'
+const renderContraList = () => {
+  const today = new Date()
+    .toISOString()
+    .split("T")[0];
+
+  const todayContraCount =
+    contraListRows.filter(
+      (transaction) =>
+        String(
+          transaction.transactionDate ||
+            transaction.vDate ||
+            ""
+        ).slice(0, 10) === today
+    ).length;
+
+  const totalContraAmount =
+    filteredContraList.reduce(
+      (total, transaction) =>
+        total +
+        (Number(transaction.amount) || 0),
+      0
+    );
+
+  const depositTransactions =
+    filteredContraList.filter(
+      (transaction) => {
+        const type =
+          getContraType(transaction);
+
+        return (
+          type.includes("deposit") ||
+          type.includes("cash to bank") ||
+          type.includes("cash deposit")
+        );
+      }
+    );
+
+  const withdrawalTransactions =
+    filteredContraList.filter(
+      (transaction) => {
+        const type =
+          getContraType(transaction);
+
+        return (
+          type.includes("withdraw") ||
+          type.includes("bank to cash") ||
+          type.includes("cash withdrawal")
+        );
+      }
+    );
+
+  const totalDepositAmount =
+    depositTransactions.reduce(
+      (total, transaction) =>
+        total +
+        (Number(transaction.amount) || 0),
+      0
+    );
+
+  const totalWithdrawalAmount =
+    withdrawalTransactions.reduce(
+      (total, transaction) =>
+        total +
+        (Number(transaction.amount) || 0),
+      0
+    );
+
+  return (
+    <div className="contra-premium-list-page">
+      <div className="contra-premium-heading">
+        <div className="contra-premium-title">
+          <h2>Bank Deposit / Withdrawal</h2>
+
+          <p>
+            Manage bank deposits, withdrawals and
+            cash transfer transactions
+          </p>
+        </div>
+
+        <div className="contra-heading-actions">
+          <button
+            type="button"
+            className="contra-main-button contra-add-button"
+            onClick={() => {
+              resetContraForm();
+              openTransactionEntry("Contra");
             }}
           >
+            <Plus size={16} />
+            New Transaction
+          </button>
 
+          <button
+            type="button"
+            className="contra-main-button contra-excel-button"
+          >
+            <FileSpreadsheet size={16} />
+            Export Excel
+          </button>
+
+          <button
+            type="button"
+            className="contra-main-button contra-pdf-button"
+          >
+            <FileText size={16} />
+            Export PDF
+          </button>
+
+          <button
+            type="button"
+            className="contra-main-button contra-print-button"
+            onClick={() => window.print()}
+          >
+            <Printer size={16} />
+            Print List
+          </button>
+        </div>
+      </div>
+
+      <div className="contra-summary-grid">
+        <div className="contra-summary-card">
+          <div className="contra-summary-icon blue">
+            <CalendarDays size={20} />
+          </div>
+
+          <div className="contra-summary-content">
+            <span>Today's Transactions</span>
+            <strong>{todayContraCount}</strong>
+            <small>
+              {new Date().toLocaleDateString(
+                "en-GB"
+              )}
+            </small>
+          </div>
+        </div>
+
+        <div className="contra-summary-card">
+          <div className="contra-summary-icon violet">
+            <BookOpen size={20} />
+          </div>
+
+          <div className="contra-summary-content">
+            <span>Total Transactions</span>
+            <strong>
+              {contraListRows.length}
+            </strong>
+            <small>All records</small>
+          </div>
+        </div>
+
+        <div className="contra-summary-card">
+          <div className="contra-summary-icon cyan">
+            <Wallet size={20} />
+          </div>
+
+          <div className="contra-summary-content">
+            <span>Total Amount</span>
+
+            <strong>
+              ₹
+              {totalContraAmount.toLocaleString(
+                "en-IN",
+                {
+                  minimumFractionDigits: 2,
+                  maximumFractionDigits: 2,
+                }
+              )}
+            </strong>
+
+            <small>Filtered records</small>
+          </div>
+        </div>
+
+        <div className="contra-summary-card">
+          <div className="contra-summary-icon green">
+            <ArrowDownLeft size={20} />
+          </div>
+
+          <div className="contra-summary-content">
+            <span>Bank Deposits</span>
+
+            <strong>
+              ₹
+              {totalDepositAmount.toLocaleString(
+                "en-IN",
+                {
+                  minimumFractionDigits: 2,
+                  maximumFractionDigits: 2,
+                }
+              )}
+            </strong>
+
+            <small>
+              {depositTransactions.length}{" "}
+              transactions
+            </small>
+          </div>
+        </div>
+
+        <div className="contra-summary-card">
+          <div className="contra-summary-icon orange">
+            <ArrowUpRight size={20} />
+          </div>
+
+          <div className="contra-summary-content">
+            <span>Bank Withdrawals</span>
+
+            <strong>
+              ₹
+              {totalWithdrawalAmount.toLocaleString(
+                "en-IN",
+                {
+                  minimumFractionDigits: 2,
+                  maximumFractionDigits: 2,
+                }
+              )}
+            </strong>
+
+            <small>
+              {withdrawalTransactions.length}{" "}
+              transactions
+            </small>
+          </div>
+        </div>
+      </div>
+
+      <div className="contra-list-toolbar">
+        <div className="contra-search-box">
+          <Search size={16} />
+
+          <input
+            type="text"
+            value={contraListSearch}
+            placeholder="Search voucher, type, amount or narration..."
+            onChange={(event) =>
+              setContraListSearch(
+                event.target.value
+              )
+            }
+          />
+
+          {contraListSearch && (
             <button
-              className="btn-view"
-              onClick={() => {
-                setTransactionFormMode(prev => ({
-                  ...prev,
-                  Contra: true
-                }));
-
-                editContra(transaction);
-              }}
-              title="View"
-              style={{
-                background: '#10b981',
-                color: 'white',
-                border: 'none',
-                borderRadius: '4px',
-                padding: '4px 8px',
-                margin: '0 2px',
-                cursor: 'pointer'
-              }}
+              type="button"
+              className="contra-clear-search"
+              onClick={() =>
+                setContraListSearch("")
+              }
             >
-              👁️ View
+              ×
+            </button>
+          )}
+        </div>
+
+        <button
+          type="button"
+          className={`contra-filter-toggle ${
+            contraActiveFilterCount > 0
+              ? "has-active-filters"
+              : ""
+          }`}
+          onClick={() =>
+            setContraFiltersVisible(
+              (previous) => !previous
+            )
+          }
+        >
+          <SlidersHorizontal size={16} />
+          Apply Filter
+
+          {contraActiveFilterCount > 0 && (
+            <span className="contra-filter-count">
+              {contraActiveFilterCount}
+            </span>
+          )}
+
+          <ChevronDown
+            size={15}
+            className={
+              contraFiltersVisible
+                ? "contra-filter-chevron open"
+                : "contra-filter-chevron"
+            }
+          />
+        </button>
+      </div>
+
+      {contraFiltersVisible && (
+        <div className="contra-filter-panel">
+          <div className="contra-filter-field">
+            <label>From Date</label>
+
+            <input
+              type="date"
+              value={
+                contraDraftFilters.fromDate
+              }
+              onChange={(event) =>
+                handleContraDraftFilterChange(
+                  "fromDate",
+                  event.target.value
+                )
+              }
+            />
+          </div>
+
+          <div className="contra-filter-field">
+            <label>To Date</label>
+
+            <input
+              type="date"
+              value={
+                contraDraftFilters.toDate
+              }
+              onChange={(event) =>
+                handleContraDraftFilterChange(
+                  "toDate",
+                  event.target.value
+                )
+              }
+            />
+          </div>
+
+          <div className="contra-filter-field">
+            <label>Transaction Type</label>
+
+            <select
+              value={
+                contraDraftFilters.transactionType
+              }
+              onChange={(event) =>
+                handleContraDraftFilterChange(
+                  "transactionType",
+                  event.target.value
+                )
+              }
+            >
+              <option value="">
+                All Types
+              </option>
+
+              <option value="deposit">
+                Deposit
+              </option>
+
+              <option value="withdrawal">
+                Withdrawal
+              </option>
+
+              <option value="cash to bank">
+                Cash to Bank
+              </option>
+
+              <option value="bank to cash">
+                Bank to Cash
+              </option>
+            </select>
+          </div>
+
+          <div className="contra-filter-field">
+            <label>Voucher No</label>
+
+            <input
+              type="text"
+              value={
+                contraDraftFilters.voucherNo
+              }
+              placeholder="Enter voucher no"
+              onChange={(event) =>
+                handleContraDraftFilterChange(
+                  "voucherNo",
+                  event.target.value
+                )
+              }
+            />
+          </div>
+
+          <div className="contra-filter-field">
+            <label>Narration</label>
+
+            <input
+              type="text"
+              value={
+                contraDraftFilters.narration
+              }
+              placeholder="Enter narration"
+              onChange={(event) =>
+                handleContraDraftFilterChange(
+                  "narration",
+                  event.target.value
+                )
+              }
+              onKeyDown={(event) => {
+                if (event.key === "Enter") {
+                  event.preventDefault();
+                  applyContraListFilters();
+                }
+              }}
+            />
+          </div>
+
+          <div className="contra-filter-actions">
+            <button
+              type="button"
+              className="contra-filter-clear"
+              onClick={
+                clearContraListFilters
+              }
+            >
+              Clear
             </button>
 
             <button
-              className="btn-edit"
-              onClick={() => {
-                setTransactionFormMode(prev => ({
-                  ...prev,
-                  Contra: true
-                }));
-
-                editContra(transaction);
-              }}
-              title="Edit"
-              style={{
-                background: '#3b82f6',
-                color: 'white',
-                border: 'none',
-                borderRadius: '4px',
-                padding: '4px 8px',
-                margin: '0 2px',
-                cursor: 'pointer'
-              }}
+              type="button"
+              className="contra-filter-apply"
+              onClick={
+                applyContraListFilters
+              }
             >
-              ✏️ Edit
+              <SlidersHorizontal size={15} />
+              Apply Filter
             </button>
+          </div>
+        </div>
+      )}
 
-            <button
-              className="btn-delete"
-              onClick={() => deleteContra(transaction.id)}
-              title="Delete"
-              style={{
-                background: '#ef4444',
-                color: 'white',
-                border: 'none',
-                borderRadius: '4px',
-                padding: '4px 8px',
-                margin: '0 2px',
-                cursor: 'pointer'
-              }}
+      <div className="contra-table-card">
+        <div className="contra-table-scroll">
+          <table className="contra-premium-table">
+            <thead>
+              <tr>
+                <th className="contra-sr-column">
+                  SrNo
+                </th>
+
+                <th>Tran VNo.</th>
+                <th>Date</th>
+                <th>Transaction Type</th>
+
+                <th className="contra-amount-column">
+                  Amount
+                </th>
+
+                <th>Narration</th>
+                <th>Status</th>
+
+                <th className="contra-actions-column">
+                  Actions
+                </th>
+              </tr>
+            </thead>
+
+            <tbody>
+              {paginatedContraList.length ===
+              0 ? (
+                <tr>
+                  <td
+                    colSpan="8"
+                    className="contra-empty-cell"
+                  >
+                    <strong>
+                      No Contra transactions found
+                    </strong>
+
+                    <span>
+                      {contraListSearch ||
+                      contraActiveFilterCount > 0
+                        ? "Try changing or clearing the filters."
+                        : "Click New Transaction to add a bank deposit or withdrawal."}
+                    </span>
+                  </td>
+                </tr>
+              ) : (
+                paginatedContraList.map(
+                  (transaction, index) => {
+                    const transactionType =
+                      String(
+                        transaction.transactionType ||
+                          transaction.type ||
+                          "-"
+                      ).trim();
+
+                    const normalizedType =
+                      transactionType.toLowerCase();
+
+                    const isDeposit =
+                      normalizedType.includes(
+                        "deposit"
+                      ) ||
+                      normalizedType.includes(
+                        "cash to bank"
+                      );
+
+                    const isWithdrawal =
+                      normalizedType.includes(
+                        "withdraw"
+                      ) ||
+                      normalizedType.includes(
+                        "bank to cash"
+                      );
+
+                    return (
+                      <tr
+                        key={
+                          transaction.id ||
+                          transaction._id ||
+                          `${transaction.tranVNo}-${index}`
+                        }
+                      >
+                        <td className="contra-sr-column">
+                          {contraStartIndex +
+                            index +
+                            1}
+                        </td>
+
+                        <td className="contra-voucher-number">
+                          {transaction.tranVNo ||
+                            transaction.vNo ||
+                            "-"}
+                        </td>
+
+                        <td>
+                          {transaction.transactionDate ||
+                            transaction.vDate ||
+                            "-"}
+                        </td>
+
+                        <td>
+                          <span
+                            className={`contra-type-badge ${
+                              isDeposit
+                                ? "deposit"
+                                : isWithdrawal
+                                  ? "withdrawal"
+                                  : "other"
+                            }`}
+                          >
+                            {transactionType}
+                          </span>
+                        </td>
+
+                        <td className="contra-amount-column">
+                          ₹
+                          {Number(
+                            transaction.amount || 0
+                          ).toLocaleString(
+                            "en-IN",
+                            {
+                              minimumFractionDigits: 2,
+                              maximumFractionDigits: 2,
+                            }
+                          )}
+                        </td>
+
+                        <td className="contra-narration">
+                          {transaction.narration ||
+                            "-"}
+                        </td>
+
+                        <td>
+                          <span className="contra-status-badge">
+                            <CircleCheck size={12} />
+                            Posted
+                          </span>
+                        </td>
+
+                        <td className="contra-actions-column">
+                          <div className="contra-row-actions">
+                            <button
+                              type="button"
+                              className="contra-action-button view"
+                              title="View Transaction"
+                              onClick={() => {
+                                setTransactionFormMode(
+                                  (previous) => ({
+                                    ...previous,
+                                    Contra: true,
+                                  })
+                                );
+
+                                editContra(
+                                  transaction
+                                );
+                              }}
+                            >
+                              <Eye size={16} />
+                            </button>
+
+                            <button
+                              type="button"
+                              className="contra-action-button edit"
+                              title="Edit Transaction"
+                              onClick={() => {
+                                setTransactionFormMode(
+                                  (previous) => ({
+                                    ...previous,
+                                    Contra: true,
+                                  })
+                                );
+
+                                editContra(
+                                  transaction
+                                );
+                              }}
+                            >
+                              <Pencil size={16} />
+                            </button>
+
+                            <button
+                              type="button"
+                              className="contra-action-button delete"
+                              title="Delete Transaction"
+                              onClick={() =>
+                                deleteContra(
+                                  transaction.id ||
+                                    transaction._id
+                                )
+                              }
+                            >
+                              <Trash2 size={16} />
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  }
+                )
+              )}
+            </tbody>
+          </table>
+        </div>
+
+        <div className="contra-pagination-footer">
+          <div className="contra-pagination-info">
+            Showing{" "}
+            <strong>
+              {contraShowingFrom}
+            </strong>{" "}
+            to{" "}
+            <strong>
+              {contraShowingTo}
+            </strong>{" "}
+            of{" "}
+            <strong>
+              {filteredContraList.length}
+            </strong>{" "}
+            entries
+          </div>
+
+          <div className="contra-pagination-controls">
+            <select
+              value={contraListRowsPerPage}
+              onChange={(event) =>
+                setContraListRowsPerPage(
+                  Number(event.target.value)
+                )
+              }
             >
-              🗑 Delete
-            </button>
+              <option value={10}>10</option>
+              <option value={20}>20</option>
+              <option value={50}>50</option>
+              <option value={100}>100</option>
+            </select>
 
-          </td></tr>)))}</tbody></table></div></div>
+            <div className="contra-page-buttons">
+              <button
+                type="button"
+                disabled={contraSafePage === 1}
+                onClick={() =>
+                  setContraListCurrentPage(
+                    (previous) =>
+                      Math.max(
+                        previous - 1,
+                        1
+                      )
+                  )
+                }
+              >
+                <ChevronLeft size={16} />
+              </button>
+
+              {getContraPaginationPages().map(
+                (pageNumber) => (
+                  <button
+                    type="button"
+                    key={pageNumber}
+                    className={
+                      pageNumber ===
+                      contraSafePage
+                        ? "active"
+                        : ""
+                    }
+                    onClick={() =>
+                      setContraListCurrentPage(
+                        pageNumber
+                      )
+                    }
+                  >
+                    {pageNumber}
+                  </button>
+                )
+              )}
+
+              <button
+                type="button"
+                disabled={
+                  contraSafePage ===
+                  contraTotalPages
+                }
+                onClick={() =>
+                  setContraListCurrentPage(
+                    (previous) =>
+                      Math.min(
+                        previous + 1,
+                        contraTotalPages
+                      )
+                  )
+                }
+              >
+                <ChevronRight size={16} />
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
   );
+};
 
   // Contra Form
   // const renderContraForm = () => (
@@ -6637,91 +12174,957 @@ const Transaction = ({
       </div>
     </div>
   );
+/* =========================================================
+   COLLECTION VOUCHER FILTERING AND PAGINATION
+   ========================================================= */
 
+const collectionVoucherRows = Array.isArray(
+  state.collectionVouchers
+)
+  ? state.collectionVouchers
+  : [];
+
+const normalizedCollectionVoucherSearch =
+  String(collectionVoucherSearch || "")
+    .trim()
+    .toLowerCase();
+
+const collectionVoucherTypeOptions = [
+  ...new Set(
+    collectionVoucherRows
+      .map((voucher) =>
+        String(
+          voucher.collectionType ||
+            voucher.type ||
+            ""
+        ).trim()
+      )
+      .filter(Boolean)
+  ),
+];
+
+const filteredCollectionVoucherList =
+  collectionVoucherRows.filter(
+    (voucher) => {
+      const voucherNo = String(
+        voucher.colVNo ||
+          voucher.collectionVNo ||
+          voucher.vNo ||
+          ""
+      )
+        .trim()
+        .toLowerCase();
+
+      const collectionDate = String(
+        voucher.collectionDate ||
+          voucher.vDate ||
+          voucher.date ||
+          ""
+      )
+        .trim()
+        .slice(0, 10);
+
+      const collectionType = String(
+        voucher.collectionType ||
+          voucher.type ||
+          ""
+      )
+        .trim()
+        .toLowerCase();
+
+      const totalAmount =
+        Number(
+          voucher.totalCollectionAmount ??
+            voucher.totalAmount ??
+            voucher.amount ??
+            0
+        ) || 0;
+
+      const totalBills =
+        Number(
+          voucher.totalBills ??
+            voucher.billCount ??
+            0
+        ) || 0;
+
+      const searchableText = [
+        voucherNo,
+        collectionDate,
+        collectionType,
+        totalAmount,
+        totalBills,
+        voucher.partyName,
+        voucher.salesmanName,
+        voucher.areaName,
+        voucher.narration,
+        voucher.bankName,
+        voucher.chequeNo,
+      ]
+        .map((value) =>
+          String(value ?? "")
+            .trim()
+            .toLowerCase()
+        )
+        .join(" ");
+
+      const appliedFromDate = String(
+        collectionVoucherAppliedFilters
+          .fromDate || ""
+      ).trim();
+
+      const appliedToDate = String(
+        collectionVoucherAppliedFilters
+          .toDate || ""
+      ).trim();
+
+      const appliedType = String(
+        collectionVoucherAppliedFilters
+          .collectionType || ""
+      )
+        .trim()
+        .toLowerCase();
+
+      const appliedVoucherNo = String(
+        collectionVoucherAppliedFilters
+          .voucherNo || ""
+      )
+        .trim()
+        .toLowerCase();
+
+      const minimumAmount =
+        Number(
+          collectionVoucherAppliedFilters
+            .minimumAmount
+        ) || 0;
+
+      const matchesSearch =
+        !normalizedCollectionVoucherSearch ||
+        searchableText.includes(
+          normalizedCollectionVoucherSearch
+        );
+
+      const matchesFromDate =
+        !appliedFromDate ||
+        (collectionDate &&
+          collectionDate >= appliedFromDate);
+
+      const matchesToDate =
+        !appliedToDate ||
+        (collectionDate &&
+          collectionDate <= appliedToDate);
+
+      const matchesType =
+        !appliedType ||
+        collectionType === appliedType;
+
+      const matchesVoucherNo =
+        !appliedVoucherNo ||
+        voucherNo.includes(appliedVoucherNo);
+
+      const matchesMinimumAmount =
+        !collectionVoucherAppliedFilters
+          .minimumAmount ||
+        totalAmount >= minimumAmount;
+
+      return (
+        matchesSearch &&
+        matchesFromDate &&
+        matchesToDate &&
+        matchesType &&
+        matchesVoucherNo &&
+        matchesMinimumAmount
+      );
+    }
+  );
+
+const collectionVoucherActiveFilterCount = [
+  collectionVoucherAppliedFilters.fromDate,
+  collectionVoucherAppliedFilters.toDate,
+  collectionVoucherAppliedFilters
+    .collectionType,
+  collectionVoucherAppliedFilters.voucherNo,
+  collectionVoucherAppliedFilters
+    .minimumAmount,
+].filter((value) =>
+  String(value || "").trim()
+).length;
+
+const collectionVoucherTotalPages = Math.max(
+  Math.ceil(
+    filteredCollectionVoucherList.length /
+      collectionVoucherRowsPerPage
+  ),
+  1
+);
+
+const collectionVoucherSafePage = Math.min(
+  collectionVoucherCurrentPage,
+  collectionVoucherTotalPages
+);
+
+const collectionVoucherStartIndex =
+  (collectionVoucherSafePage - 1) *
+  collectionVoucherRowsPerPage;
+
+const paginatedCollectionVoucherList =
+  filteredCollectionVoucherList.slice(
+    collectionVoucherStartIndex,
+    collectionVoucherStartIndex +
+      collectionVoucherRowsPerPage
+  );
+
+const collectionVoucherShowingFrom =
+  filteredCollectionVoucherList.length === 0
+    ? 0
+    : collectionVoucherStartIndex + 1;
+
+const collectionVoucherShowingTo = Math.min(
+  collectionVoucherStartIndex +
+    collectionVoucherRowsPerPage,
+  filteredCollectionVoucherList.length
+);
+
+const getCollectionVoucherPaginationPages =
+  () => {
+    const pages = [];
+
+    const startPage = Math.max(
+      1,
+      collectionVoucherSafePage - 2
+    );
+
+    const endPage = Math.min(
+      collectionVoucherTotalPages,
+      collectionVoucherSafePage + 2
+    );
+
+    for (
+      let pageNumber = startPage;
+      pageNumber <= endPage;
+      pageNumber += 1
+    ) {
+      pages.push(pageNumber);
+    }
+
+    return pages;
+  };
+
+useEffect(() => {
+  setCollectionVoucherCurrentPage(1);
+}, [
+  collectionVoucherSearch,
+  collectionVoucherRowsPerPage,
+]);
+
+useEffect(() => {
+  if (
+    collectionVoucherCurrentPage >
+    collectionVoucherTotalPages
+  ) {
+    setCollectionVoucherCurrentPage(
+      collectionVoucherTotalPages
+    );
+  }
+}, [
+  collectionVoucherCurrentPage,
+  collectionVoucherTotalPages,
+]);
   // Collection Voucher List
-  const renderCollectionVoucherList = () => (
-    <div className="master-section"><div className="grid-header"><h3>Collection Voucher</h3><button className="btn-add-new btn-collection-voucher" onClick={() => { resetCollectionVoucherForm(); openTransactionEntry("Collection Voucher"); }}>+ Add Collection Voucher</button></div>
-      <div className="table-responsive"><table className="erp-table"><thead><tr><th>Col VNo.</th><th>Collection Date</th><th>Collection Type</th><th>Total Amount</th><th>Total Bills</th><th>Actions</th></tr></thead>
-        <tbody>{state.collectionVouchers?.length === 0 ? (<tr><td colSpan="6" className="no-data">No Collection Vouchers Added</td></tr>) : (state.collectionVouchers?.map((voucher) => (<tr key={voucher.id}><td>{voucher.colVNo || '-'}</td><td>{voucher.collectionDate}</td><td>{voucher.collectionType}</td><td>₹{parseFloat(voucher.totalCollectionAmount || 0).toFixed(2)}</td><td>{voucher.totalBills || 0}</td>
-          <td
-            className="action-buttons"
-            style={{
-              whiteSpace: 'nowrap',
-              position: 'sticky',
-              right: 0,
-              backgroundColor: '#ffffff',
-              zIndex: 10,
-              boxShadow: '-2px 0 5px -2px rgba(0,0,0,0.1)'
+const renderCollectionVoucherList = () => {
+  const today = new Date()
+    .toISOString()
+    .split("T")[0];
+
+  const todayVoucherCount =
+    collectionVoucherRows.filter(
+      (voucher) =>
+        String(
+          voucher.collectionDate ||
+            voucher.vDate ||
+            ""
+        ).slice(0, 10) === today
+    ).length;
+
+  const totalCollectionAmount =
+    filteredCollectionVoucherList.reduce(
+      (total, voucher) =>
+        total +
+        (Number(
+          voucher.totalCollectionAmount ??
+            voucher.totalAmount ??
+            voucher.amount ??
+            0
+        ) || 0),
+      0
+    );
+
+  const totalCollectedBills =
+    filteredCollectionVoucherList.reduce(
+      (total, voucher) =>
+        total +
+        (Number(
+          voucher.totalBills ??
+            voucher.billCount ??
+            0
+        ) || 0),
+      0
+    );
+
+  const averageCollectionAmount =
+    filteredCollectionVoucherList.length >
+    0
+      ? totalCollectionAmount /
+        filteredCollectionVoucherList.length
+      : 0;
+
+  return (
+    <div className="collection-voucher-premium-list-page">
+      <div className="collection-voucher-premium-heading">
+        <div className="collection-voucher-premium-title">
+          <h2>Collection Voucher List</h2>
+
+          <p>
+            Manage collection vouchers, bill
+            collections and received amounts
+          </p>
+        </div>
+
+        <div className="collection-voucher-heading-actions">
+          <button
+            type="button"
+            className="collection-voucher-main-button collection-voucher-add-button"
+            onClick={() => {
+              resetCollectionVoucherForm();
+
+              openTransactionEntry(
+                "Collection Voucher"
+              );
             }}
           >
+            <Plus size={16} />
+            New Collection Voucher
+          </button>
 
+          <button
+            type="button"
+            className="collection-voucher-main-button collection-voucher-excel-button"
+          >
+            <FileSpreadsheet size={16} />
+            Export Excel
+          </button>
+
+          <button
+            type="button"
+            className="collection-voucher-main-button collection-voucher-pdf-button"
+          >
+            <FileText size={16} />
+            Export PDF
+          </button>
+
+          <button
+            type="button"
+            className="collection-voucher-main-button"
+            onClick={() => window.print()}
+          >
+            <Printer size={16} />
+            Print List
+          </button>
+        </div>
+      </div>
+
+      <div className="collection-voucher-summary-grid">
+        <div className="collection-voucher-summary-card">
+          <div className="collection-voucher-summary-icon blue">
+            <CalendarDays size={20} />
+          </div>
+
+          <div className="collection-voucher-summary-content">
+            <span>Today's Collections</span>
+            <strong>{todayVoucherCount}</strong>
+
+            <small>
+              {new Date().toLocaleDateString(
+                "en-GB"
+              )}
+            </small>
+          </div>
+        </div>
+
+        <div className="collection-voucher-summary-card">
+          <div className="collection-voucher-summary-icon violet">
+            <ReceiptText size={20} />
+          </div>
+
+          <div className="collection-voucher-summary-content">
+            <span>Total Vouchers</span>
+
+            <strong>
+              {collectionVoucherRows.length}
+            </strong>
+
+            <small>All records</small>
+          </div>
+        </div>
+
+        <div className="collection-voucher-summary-card">
+          <div className="collection-voucher-summary-icon green">
+            <Wallet size={20} />
+          </div>
+
+          <div className="collection-voucher-summary-content">
+            <span>Total Collection</span>
+
+            <strong>
+              ₹
+              {totalCollectionAmount.toLocaleString(
+                "en-IN",
+                {
+                  minimumFractionDigits: 2,
+                  maximumFractionDigits: 2,
+                }
+              )}
+            </strong>
+
+            <small>Filtered records</small>
+          </div>
+        </div>
+
+        <div className="collection-voucher-summary-card">
+          <div className="collection-voucher-summary-icon orange">
+            <BookOpen size={20} />
+          </div>
+
+          <div className="collection-voucher-summary-content">
+            <span>Total Bills</span>
+
+            <strong>
+              {totalCollectedBills}
+            </strong>
+
+            <small>Collected bills</small>
+          </div>
+        </div>
+
+        <div className="collection-voucher-summary-card">
+          <div className="collection-voucher-summary-icon cyan">
+            <CircleCheck size={20} />
+          </div>
+
+          <div className="collection-voucher-summary-content">
+            <span>Average Collection</span>
+
+            <strong>
+              ₹
+              {averageCollectionAmount.toLocaleString(
+                "en-IN",
+                {
+                  minimumFractionDigits: 2,
+                  maximumFractionDigits: 2,
+                }
+              )}
+            </strong>
+
+            <small>Per voucher</small>
+          </div>
+        </div>
+      </div>
+
+      <div className="collection-voucher-list-toolbar">
+        <div className="collection-voucher-search-box">
+          <Search size={16} />
+
+          <input
+            type="text"
+            value={collectionVoucherSearch}
+            placeholder="Search voucher, type, party, bill or amount..."
+            onChange={(event) =>
+              setCollectionVoucherSearch(
+                event.target.value
+              )
+            }
+          />
+
+          {collectionVoucherSearch && (
             <button
-              className="btn-view"
-              onClick={() => {
-                setTransactionFormMode(prev => ({
-                  ...prev,
-                  ["Collection Voucher"]: true
-                }));
-
-                editCollectionVoucher(voucher);
-              }}
-              title="View"
-              style={{
-                background: '#10b981',
-                color: 'white',
-                border: 'none',
-                borderRadius: '4px',
-                padding: '4px 8px',
-                margin: '0 2px',
-                cursor: 'pointer'
-              }}
+              type="button"
+              className="collection-voucher-clear-search"
+              onClick={() =>
+                setCollectionVoucherSearch("")
+              }
             >
-              👁️ View
+              ×
+            </button>
+          )}
+        </div>
+
+        <button
+          type="button"
+          className="collection-voucher-filter-toggle"
+          onClick={() =>
+            setCollectionVoucherFiltersVisible(
+              (previous) => !previous
+            )
+          }
+        >
+          <SlidersHorizontal size={16} />
+          Apply Filter
+
+          {collectionVoucherActiveFilterCount >
+            0 && (
+            <span className="collection-voucher-filter-count">
+              {
+                collectionVoucherActiveFilterCount
+              }
+            </span>
+          )}
+
+          <ChevronDown
+            size={15}
+            className={
+              collectionVoucherFiltersVisible
+                ? "collection-voucher-filter-chevron open"
+                : "collection-voucher-filter-chevron"
+            }
+          />
+        </button>
+      </div>
+
+      {collectionVoucherFiltersVisible && (
+        <div className="collection-voucher-filter-panel">
+          <div className="collection-voucher-filter-field">
+            <label>From Date</label>
+
+            <input
+              type="date"
+              value={
+                collectionVoucherDraftFilters
+                  .fromDate
+              }
+              onChange={(event) =>
+                handleCollectionVoucherFilterChange(
+                  "fromDate",
+                  event.target.value
+                )
+              }
+            />
+          </div>
+
+          <div className="collection-voucher-filter-field">
+            <label>To Date</label>
+
+            <input
+              type="date"
+              value={
+                collectionVoucherDraftFilters
+                  .toDate
+              }
+              onChange={(event) =>
+                handleCollectionVoucherFilterChange(
+                  "toDate",
+                  event.target.value
+                )
+              }
+            />
+          </div>
+
+          <div className="collection-voucher-filter-field">
+            <label>Collection Type</label>
+
+            <select
+              value={
+                collectionVoucherDraftFilters
+                  .collectionType
+              }
+              onChange={(event) =>
+                handleCollectionVoucherFilterChange(
+                  "collectionType",
+                  event.target.value
+                )
+              }
+            >
+              <option value="">
+                All Collection Types
+              </option>
+
+              {collectionVoucherTypeOptions.map(
+                (type) => (
+                  <option
+                    key={type}
+                    value={type}
+                  >
+                    {type}
+                  </option>
+                )
+              )}
+            </select>
+          </div>
+
+          <div className="collection-voucher-filter-field">
+            <label>Voucher No</label>
+
+            <input
+              type="text"
+              value={
+                collectionVoucherDraftFilters
+                  .voucherNo
+              }
+              placeholder="Enter voucher no"
+              onChange={(event) =>
+                handleCollectionVoucherFilterChange(
+                  "voucherNo",
+                  event.target.value
+                )
+              }
+            />
+          </div>
+
+          <div className="collection-voucher-filter-field">
+            <label>Minimum Amount</label>
+
+            <input
+              type="number"
+              min="0"
+              value={
+                collectionVoucherDraftFilters
+                  .minimumAmount
+              }
+              placeholder="Minimum amount"
+              onChange={(event) =>
+                handleCollectionVoucherFilterChange(
+                  "minimumAmount",
+                  event.target.value
+                )
+              }
+              onKeyDown={(event) => {
+                if (event.key === "Enter") {
+                  event.preventDefault();
+                  applyCollectionVoucherFilters();
+                }
+              }}
+            />
+          </div>
+
+          <div className="collection-voucher-filter-actions">
+            <button
+              type="button"
+              className="collection-voucher-filter-clear"
+              onClick={
+                clearCollectionVoucherFilters
+              }
+            >
+              Clear
             </button>
 
             <button
-              className="btn-edit"
-              onClick={() => {
-                setTransactionFormMode(prev => ({
-                  ...prev,
-                  ["Collection Voucher"]: true
-                }));
-
-                editCollectionVoucher(voucher);
-              }}
-              title="Edit"
-              style={{
-                background: '#3b82f6',
-                color: 'white',
-                border: 'none',
-                borderRadius: '4px',
-                padding: '4px 8px',
-                margin: '0 2px',
-                cursor: 'pointer'
-              }}
+              type="button"
+              className="collection-voucher-filter-apply"
+              onClick={
+                applyCollectionVoucherFilters
+              }
             >
-              ✏️ Edit
+              <SlidersHorizontal size={15} />
+              Apply Filter
             </button>
+          </div>
+        </div>
+      )}
 
-            <button
-              className="btn-delete"
-              onClick={() => deleteCollectionVoucher(voucher.id)}
-              title="Delete"
-              style={{
-                background: '#ef4444',
-                color: 'white',
-                border: 'none',
-                borderRadius: '4px',
-                padding: '4px 8px',
-                margin: '0 2px',
-                cursor: 'pointer'
-              }}
+      <div className="collection-voucher-table-card">
+        <div className="collection-voucher-table-scroll">
+          <table className="collection-voucher-premium-table">
+            <thead>
+              <tr>
+                <th className="collection-voucher-sr-column">
+                  SrNo
+                </th>
+
+                <th>Col VNo.</th>
+                <th>Collection Date</th>
+                <th>Collection Type</th>
+
+                <th className="collection-voucher-amount-column">
+                  Total Amount
+                </th>
+
+                <th className="collection-voucher-bills-column">
+                  Total Bills
+                </th>
+
+                <th>Status</th>
+
+                <th className="collection-voucher-actions-column">
+                  Actions
+                </th>
+              </tr>
+            </thead>
+
+            <tbody>
+              {paginatedCollectionVoucherList.length ===
+              0 ? (
+                <tr>
+                  <td
+                    colSpan="8"
+                    className="collection-voucher-empty-cell"
+                  >
+                    <strong>
+                      No collection vouchers
+                      found
+                    </strong>
+
+                    <span>
+                      {collectionVoucherSearch ||
+                      collectionVoucherActiveFilterCount >
+                        0
+                        ? "Try changing or clearing the filters."
+                        : "Click New Collection Voucher to create an entry."}
+                    </span>
+                  </td>
+                </tr>
+              ) : (
+                paginatedCollectionVoucherList.map(
+                  (voucher, index) => {
+                    const totalAmount =
+                      Number(
+                        voucher.totalCollectionAmount ??
+                          voucher.totalAmount ??
+                          voucher.amount ??
+                          0
+                      ) || 0;
+
+                    const totalBills =
+                      Number(
+                        voucher.totalBills ??
+                          voucher.billCount ??
+                          0
+                      ) || 0;
+
+                    return (
+                      <tr
+                        key={
+                          voucher.id ||
+                          voucher._id ||
+                          `${voucher.colVNo}-${index}`
+                        }
+                      >
+                        <td className="collection-voucher-sr-column">
+                          {collectionVoucherStartIndex +
+                            index +
+                            1}
+                        </td>
+
+                        <td className="collection-voucher-number">
+                          {voucher.colVNo ||
+                            voucher.collectionVNo ||
+                            voucher.vNo ||
+                            "-"}
+                        </td>
+
+                        <td>
+                          {voucher.collectionDate ||
+                            voucher.vDate ||
+                            "-"}
+                        </td>
+
+                        <td>
+                          <span className="collection-voucher-type-badge">
+                            {voucher.collectionType ||
+                              voucher.type ||
+                              "-"}
+                          </span>
+                        </td>
+
+                        <td className="collection-voucher-amount-column">
+                          ₹
+                          {totalAmount.toLocaleString(
+                            "en-IN",
+                            {
+                              minimumFractionDigits: 2,
+                              maximumFractionDigits: 2,
+                            }
+                          )}
+                        </td>
+
+                        <td className="collection-voucher-bills-column">
+                          {totalBills}
+                        </td>
+
+                        <td>
+                          <span className="collection-voucher-status-badge">
+                            <CircleCheck size={12} />
+                            Posted
+                          </span>
+                        </td>
+
+                        <td className="collection-voucher-actions-column">
+                          <div className="collection-voucher-row-actions">
+                            <button
+                              type="button"
+                              className="collection-voucher-action-button view"
+                              title="View Collection Voucher"
+                              onClick={() => {
+                                setTransactionFormMode(
+                                  (previous) => ({
+                                    ...previous,
+                                    ["Collection Voucher"]:
+                                      true,
+                                  })
+                                );
+
+                                editCollectionVoucher(
+                                  voucher
+                                );
+                              }}
+                            >
+                              <Eye size={16} />
+                            </button>
+
+                            <button
+                              type="button"
+                              className="collection-voucher-action-button edit"
+                              title="Edit Collection Voucher"
+                              onClick={() => {
+                                setTransactionFormMode(
+                                  (previous) => ({
+                                    ...previous,
+                                    ["Collection Voucher"]:
+                                      true,
+                                  })
+                                );
+
+                                editCollectionVoucher(
+                                  voucher
+                                );
+                              }}
+                            >
+                              <Pencil size={16} />
+                            </button>
+
+                            <button
+                              type="button"
+                              className="collection-voucher-action-button delete"
+                              title="Delete Collection Voucher"
+                              onClick={() =>
+                                deleteCollectionVoucher(
+                                  voucher.id ||
+                                    voucher._id
+                                )
+                              }
+                            >
+                              <Trash2 size={16} />
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  }
+                )
+              )}
+            </tbody>
+          </table>
+        </div>
+
+        <div className="collection-voucher-pagination-footer">
+          <div className="collection-voucher-pagination-info">
+            Showing{" "}
+            <strong>
+              {collectionVoucherShowingFrom}
+            </strong>{" "}
+            to{" "}
+            <strong>
+              {collectionVoucherShowingTo}
+            </strong>{" "}
+            of{" "}
+            <strong>
+              {
+                filteredCollectionVoucherList.length
+              }
+            </strong>{" "}
+            entries
+          </div>
+
+          <div className="collection-voucher-pagination-controls">
+            <select
+              value={
+                collectionVoucherRowsPerPage
+              }
+              onChange={(event) =>
+                setCollectionVoucherRowsPerPage(
+                  Number(event.target.value)
+                )
+              }
             >
-              🗑 Delete
-            </button>
+              <option value={10}>10</option>
+              <option value={20}>20</option>
+              <option value={50}>50</option>
+              <option value={100}>100</option>
+            </select>
 
-          </td></tr>)))}</tbody></table></div></div>
+            <div className="collection-voucher-page-buttons">
+              <button
+                type="button"
+                disabled={
+                  collectionVoucherSafePage === 1
+                }
+                onClick={() =>
+                  setCollectionVoucherCurrentPage(
+                    (previous) =>
+                      Math.max(
+                        previous - 1,
+                        1
+                      )
+                  )
+                }
+              >
+                <ChevronLeft size={16} />
+              </button>
+
+              {getCollectionVoucherPaginationPages().map(
+                (pageNumber) => (
+                  <button
+                    type="button"
+                    key={pageNumber}
+                    className={
+                      pageNumber ===
+                      collectionVoucherSafePage
+                        ? "active"
+                        : ""
+                    }
+                    onClick={() =>
+                      setCollectionVoucherCurrentPage(
+                        pageNumber
+                      )
+                    }
+                  >
+                    {pageNumber}
+                  </button>
+                )
+              )}
+
+              <button
+                type="button"
+                disabled={
+                  collectionVoucherSafePage ===
+                  collectionVoucherTotalPages
+                }
+                onClick={() =>
+                  setCollectionVoucherCurrentPage(
+                    (previous) =>
+                      Math.min(
+                        previous + 1,
+                        collectionVoucherTotalPages
+                      )
+                  )
+                }
+              >
+                <ChevronRight size={16} />
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
   );
+};
   const renderCollectionReceiptModalForm = () => (
     <div className="collection-receipt-small-form">
       <h3 className="section-header">Receipt Information</h3>

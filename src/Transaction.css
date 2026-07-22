@@ -7465,3 +7465,4936 @@ background:#f3f4f6;
     font-size: 12px;
   }
 }
+
+/* =========================================================
+   RECEIPT LIST — EXACT PURCHASE LIST STYLE
+   Only affects Receipt List
+   ========================================================= */
+
+.transaction-page .receipt-premium-list-page {
+  width: 100%;
+  height: calc(100vh - 86px);
+  min-width: 0;
+  padding: 13px 16px 14px;
+  overflow: hidden;
+  background: #f6f8fc;
+  font-family: Inter, "Segoe UI", sans-serif;
+}
+
+/* ================= PAGE HEADER ================= */
+
+.transaction-page .receipt-premium-heading {
+  min-height: 51px;
+  margin-bottom: 12px;
+
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 18px;
+}
+
+.transaction-page .receipt-premium-title h2 {
+  margin: 0;
+  color: #14213d;
+  font-size: 20px;
+  font-weight: 800;
+  line-height: 1.2;
+}
+
+.transaction-page .receipt-premium-title p {
+  margin: 5px 0 0;
+  color: #7d8ba3;
+  font-size: 10px;
+  font-weight: 500;
+}
+
+.transaction-page
+  .receipt-premium-heading-actions {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+}
+
+.transaction-page .receipt-premium-button {
+  height: 36px;
+  padding: 0 14px;
+
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+
+  border: 1px solid #d8dfeb;
+  border-radius: 7px;
+
+  background: #ffffff;
+  color: #34425d;
+
+  font-size: 10px;
+  font-weight: 700;
+  white-space: nowrap;
+
+  cursor: pointer;
+  transition: 0.18s ease;
+}
+
+.transaction-page
+  .receipt-premium-button:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 10px
+    rgba(15, 23, 42, 0.08);
+}
+
+.transaction-page
+  .receipt-premium-add-button {
+  min-width: 146px;
+  border-color: #4566e6;
+  background: linear-gradient(
+    135deg,
+    #5676e8,
+    #3e5ed9
+  );
+  color: #ffffff;
+  box-shadow: 0 5px 12px
+    rgba(62, 94, 217, 0.23);
+}
+
+.transaction-page
+  .receipt-premium-excel-button {
+  color: #138c55;
+  border-color: #c6e4d4;
+}
+
+.transaction-page
+  .receipt-premium-pdf-button {
+  color: #dc5361;
+  border-color: #efcbd0;
+}
+
+.transaction-page
+  .receipt-premium-print-button {
+  color: #55647c;
+}
+
+/* ================= SUMMARY CARDS ================= */
+
+.transaction-page
+  .receipt-premium-summary-grid {
+  width: 100%;
+  margin-bottom: 16px;
+
+  display: grid;
+  grid-template-columns: repeat(
+    5,
+    minmax(0, 1fr)
+  );
+  gap: 13px;
+}
+
+.transaction-page
+  .receipt-premium-summary-card {
+  position: relative;
+
+  min-width: 0;
+  height: 74px;
+  padding: 11px 13px;
+
+  display: flex;
+  align-items: center;
+  gap: 11px;
+
+  overflow: hidden;
+
+  border: 1px solid #dbe3ef;
+  border-radius: 10px;
+
+  background: #ffffff;
+
+  box-shadow: 0 2px 7px
+    rgba(15, 23, 42, 0.035);
+}
+
+.transaction-page
+  .receipt-premium-summary-icon {
+  position: relative;
+  z-index: 2;
+
+  width: 36px;
+  min-width: 36px;
+  height: 36px;
+
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+
+  border-radius: 50%;
+}
+
+.transaction-page
+  .receipt-premium-summary-icon.blue {
+  background: #edf3ff;
+  color: #3f68de;
+}
+
+.transaction-page
+  .receipt-premium-summary-icon.orange {
+  background: #fff4e8;
+  color: #f28c28;
+}
+
+.transaction-page
+  .receipt-premium-summary-icon.red {
+  background: #fff0f1;
+  color: #ee6370;
+}
+
+.transaction-page
+  .receipt-premium-summary-icon.violet {
+  background: #f2edff;
+  color: #7659db;
+}
+
+.transaction-page
+  .receipt-premium-summary-content {
+  position: relative;
+  z-index: 2;
+
+  min-width: 0;
+
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.transaction-page
+  .receipt-premium-summary-content span {
+  overflow: hidden;
+  color: #6f7d94;
+  font-size: 8.5px;
+  font-weight: 700;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.transaction-page
+  .receipt-premium-summary-content strong {
+  overflow: hidden;
+  color: #15213b;
+  font-size: 13px;
+  font-weight: 800;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.transaction-page
+  .receipt-premium-summary-content small {
+  color: #9aa6b8;
+  font-size: 7.5px;
+}
+
+.transaction-page
+  .receipt-card-decoration {
+  position: absolute;
+  right: -12px;
+  bottom: -24px;
+
+  width: 74px;
+  height: 74px;
+
+  border: 1px solid #dce6fb;
+  border-radius: 50%;
+
+  opacity: 0.9;
+}
+
+.transaction-page
+  .receipt-card-decoration::before,
+.transaction-page
+  .receipt-card-decoration::after {
+  content: "";
+  position: absolute;
+
+  border: 1px solid #dce6fb;
+  border-radius: 50%;
+}
+
+.transaction-page
+  .receipt-card-decoration::before {
+  inset: 8px;
+}
+
+.transaction-page
+  .receipt-card-decoration::after {
+  inset: 17px;
+}
+
+/* ================= TOOLBAR ================= */
+
+.transaction-page
+  .receipt-premium-toolbar {
+  min-height: 40px;
+  margin-bottom: 9px;
+
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+}
+
+.transaction-page
+  .receipt-premium-search-box {
+  position: relative;
+  width: 315px;
+}
+
+.transaction-page
+  .receipt-premium-search-box > svg {
+  position: absolute;
+  left: 11px;
+  top: 50%;
+  z-index: 2;
+
+  color: #71809a;
+
+  transform: translateY(-50%);
+  pointer-events: none;
+}
+
+.transaction-page
+  .receipt-premium-search-box input {
+  width: 100%;
+  height: 36px;
+  padding: 0 35px 0 35px;
+
+  border: 1px solid #d5deea;
+  border-radius: 7px;
+  outline: none;
+
+  background: #ffffff;
+  color: #273650;
+
+  font-size: 10px;
+}
+
+.transaction-page
+  .receipt-premium-search-box
+  input:focus {
+  border-color: #7793e7;
+  box-shadow: 0 0 0 3px
+    rgba(72, 100, 220, 0.08);
+}
+
+.transaction-page
+  .receipt-premium-clear-search {
+  position: absolute;
+  right: 7px;
+  top: 50%;
+
+  width: 23px;
+  height: 23px;
+  padding: 0;
+
+  border: 0;
+  border-radius: 50%;
+
+  background: #edf1f6;
+  color: #65748d;
+
+  cursor: pointer;
+  transform: translateY(-50%);
+}
+
+.transaction-page
+  .receipt-premium-filter-button {
+  height: 36px;
+  padding: 0 14px;
+
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+
+  border: 1px solid #5575d9;
+  border-radius: 7px;
+
+  background: linear-gradient(
+    135deg,
+    #6884dc,
+    #5571ce
+  );
+  color: #ffffff;
+
+  font-size: 10px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.transaction-page
+  .receipt-filter-arrow {
+  transition: transform 0.2s ease;
+}
+
+.transaction-page
+  .receipt-filter-arrow.open {
+  transform: rotate(180deg);
+}
+
+/* ================= FILTER PANEL ================= */
+
+.transaction-page
+  .receipt-premium-filter-panel {
+  margin-bottom: 10px;
+  padding: 10px 12px;
+
+  display: grid;
+  grid-template-columns: repeat(
+    4,
+    minmax(150px, 1fr)
+  );
+  gap: 10px;
+
+  border: 1px solid #dbe3ee;
+  border-radius: 8px;
+
+  background: #ffffff;
+}
+
+.transaction-page .receipt-filter-field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.transaction-page
+  .receipt-filter-field label {
+  color: #64748b;
+  font-size: 8px;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.transaction-page
+  .receipt-filter-field input,
+.transaction-page
+  .receipt-filter-field select {
+  width: 100%;
+  height: 31px;
+  padding: 0 9px;
+
+  border: 1px solid #d3dce8;
+  border-radius: 6px;
+  outline: none;
+
+  background: #ffffff;
+  color: #334155;
+
+  font-size: 9px;
+}
+
+/* ================= TABLE CONTAINER ================= */
+
+.transaction-page
+  .receipt-premium-table-card {
+  width: 100%;
+  height: calc(100vh - 344px);
+  min-height: 380px;
+
+  display: flex;
+  flex-direction: column;
+
+  overflow: hidden;
+
+  border: 1px solid #d8e1ed;
+  border-radius: 10px;
+
+  background: #ffffff;
+}
+
+.transaction-page
+  .receipt-premium-table-scroll {
+  flex: 1 1 auto;
+  width: 100%;
+  min-height: 0;
+  overflow: auto;
+
+  scrollbar-width: thin;
+  scrollbar-color: #aeb9ca #edf1f6;
+}
+
+.transaction-page
+  .receipt-premium-table-scroll::-webkit-scrollbar {
+  width: 9px;
+  height: 9px;
+}
+
+.transaction-page
+  .receipt-premium-table-scroll::-webkit-scrollbar-track {
+  background: #edf1f6;
+}
+
+.transaction-page
+  .receipt-premium-table-scroll::-webkit-scrollbar-thumb {
+  border: 2px solid #edf1f6;
+  border-radius: 20px;
+  background: #aeb9ca;
+}
+
+/* ================= TABLE ================= */
+
+.transaction-page .receipt-premium-table {
+  width: max-content;
+  min-width: 1900px;
+
+  border-collapse: separate;
+  border-spacing: 0;
+}
+
+.transaction-page
+  .receipt-premium-table th {
+  position: sticky;
+  top: 0;
+  z-index: 15;
+
+  height: 40px;
+  padding: 0 10px;
+
+  border-right: 1px solid #dce4ef;
+  border-bottom: 1px solid #cad5e5;
+
+  background: #eef3fb;
+  color: #263650;
+
+  font-size: 8.5px;
+  font-weight: 800;
+  text-align: left;
+  white-space: nowrap;
+}
+
+.transaction-page
+  .receipt-premium-table td {
+  height: 42px;
+  padding: 5px 10px;
+
+  border-right: 1px solid #e0e6ef;
+  border-bottom: 1px solid #e0e6ef;
+
+  background: #ffffff;
+  color: #293854;
+
+  font-size: 9px;
+  vertical-align: middle;
+  white-space: nowrap;
+}
+
+.transaction-page
+  .receipt-premium-table
+  tbody
+  tr:nth-child(even)
+  td {
+  background: #f8faff;
+}
+
+.transaction-page
+  .receipt-premium-table
+  tbody
+  tr:hover
+  td {
+  background: #eef3ff;
+}
+
+.transaction-page
+  .receipt-premium-sr-column {
+  width: 52px;
+  min-width: 52px;
+  text-align: center !important;
+}
+
+.transaction-page
+  .receipt-premium-amount-column {
+  width: 115px;
+  min-width: 115px;
+  text-align: right !important;
+  font-weight: 800;
+}
+
+.transaction-page
+  .receipt-premium-party {
+  width: 205px;
+  min-width: 205px;
+  max-width: 205px;
+
+  overflow: hidden;
+  font-weight: 700;
+  text-overflow: ellipsis;
+}
+
+.transaction-page
+  .receipt-premium-narration {
+  width: 185px;
+  min-width: 185px;
+  max-width: 185px;
+
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* ================= ACTIONS ================= */
+
+.transaction-page
+  .receipt-premium-actions-column {
+  position: sticky !important;
+  right: 0 !important;
+
+  width: 120px;
+  min-width: 120px;
+  max-width: 120px;
+
+  padding: 0 7px !important;
+  text-align: center !important;
+
+  border-left: 1px solid #d8e1ed !important;
+}
+
+.transaction-page
+  th.receipt-premium-actions-column {
+  top: 0 !important;
+  z-index: 35 !important;
+  background: #eef3fb !important;
+}
+
+.transaction-page
+  td.receipt-premium-actions-column {
+  z-index: 25 !important;
+  background: #ffffff !important;
+}
+
+.transaction-page
+  .receipt-premium-table
+  tbody
+  tr:nth-child(even)
+  td.receipt-premium-actions-column {
+  background: #f8faff !important;
+}
+
+.transaction-page
+  .receipt-premium-table
+  tbody
+  tr:hover
+  td.receipt-premium-actions-column {
+  background: #eef3ff !important;
+}
+
+.transaction-page
+  .receipt-premium-row-actions {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+}
+
+.transaction-page
+  .receipt-premium-action-button {
+  width: 29px;
+  min-width: 29px;
+  height: 29px;
+  padding: 0;
+
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+
+  border-radius: 50%;
+  background: #ffffff;
+
+  cursor: pointer;
+  transition: 0.16s ease;
+}
+
+.transaction-page
+  .receipt-premium-action-button.view {
+  border: 1px solid #b9ccf5;
+  color: #5275d0;
+}
+
+.transaction-page
+  .receipt-premium-action-button.edit {
+  border: 1px solid #b9ccf5;
+  color: #5275d0;
+}
+
+.transaction-page
+  .receipt-premium-action-button.delete {
+  border: 1px solid #f3bdc5;
+  color: #ed5362;
+}
+
+.transaction-page
+  .receipt-premium-action-button:hover {
+  transform: translateY(-1px);
+}
+
+/* ================= EMPTY ================= */
+
+.transaction-page
+  .receipt-premium-empty {
+  height: 250px !important;
+  text-align: center !important;
+  color: #7d8ba2 !important;
+}
+
+/* ================= PAGINATION ================= */
+
+.transaction-page
+  .receipt-premium-pagination-footer {
+  flex: 0 0 auto;
+  min-height: 53px;
+  padding: 8px 14px;
+
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+
+  border-top: 1px solid #dfe6ef;
+
+  background: #ffffff;
+}
+
+.transaction-page
+  .receipt-premium-pagination-info {
+  color: #758199;
+  font-size: 9px;
+}
+
+.transaction-page
+  .receipt-premium-pagination-info strong {
+  color: #3d4b66;
+}
+
+.transaction-page
+  .receipt-premium-pagination-controls {
+  display: flex;
+  align-items: center;
+  gap: 17px;
+}
+
+.transaction-page
+  .receipt-premium-pagination-controls
+  > select {
+  width: 61px;
+  height: 34px;
+  padding: 0 8px;
+
+  border: 1px solid #d3dcea;
+  border-radius: 7px;
+  outline: none;
+
+  background: #ffffff;
+  color: #34415b;
+
+  font-size: 10px;
+}
+
+.transaction-page
+  .receipt-premium-pagination {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.transaction-page
+  .receipt-premium-pagination button {
+  min-width: 32px;
+  height: 32px;
+  padding: 0 8px;
+
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+
+  border: 1px solid #dce3ed;
+  border-radius: 7px;
+
+  background: #ffffff;
+  color: #526078;
+
+  font-size: 10px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.transaction-page
+  .receipt-premium-pagination
+  button.active {
+  border-color: #5d77ce;
+  background: #617bd1;
+  color: #ffffff;
+  box-shadow: 0 4px 9px
+    rgba(70, 91, 181, 0.22);
+}
+
+.transaction-page
+  .receipt-premium-pagination
+  button:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+
+@media (max-width: 1200px) {
+  .transaction-page
+    .receipt-premium-summary-grid {
+    grid-template-columns: repeat(
+      3,
+      minmax(0, 1fr)
+    );
+  }
+}
+/* =========================================================
+   RECEIPT LIST FINAL SIZE + WORKING FILTER OVERRIDES
+   Keep at absolute end of Transaction.css
+   ========================================================= */
+
+/* Slightly enlarge the whole receipt list content */
+
+.transaction-page .receipt-premium-list-page {
+  padding: 16px 18px 16px !important;
+}
+
+/* Slightly larger heading */
+
+.transaction-page
+  .receipt-premium-title h2 {
+  font-size: 21px !important;
+}
+
+.transaction-page
+  .receipt-premium-title p {
+  font-size: 10.5px !important;
+}
+
+/* Larger main buttons, closer to Purchase */
+
+.transaction-page
+  .receipt-premium-button {
+  height: 38px !important;
+  min-height: 38px !important;
+  padding: 0 15px !important;
+
+  font-size: 10.5px !important;
+}
+
+.transaction-page
+  .receipt-premium-button svg {
+  width: 15px !important;
+  height: 15px !important;
+}
+
+/* Slightly increase summary cards */
+
+.transaction-page
+  .receipt-premium-summary-card {
+  height: 78px !important;
+  padding: 12px 14px !important;
+}
+
+.transaction-page
+  .receipt-premium-summary-icon {
+  width: 38px !important;
+  min-width: 38px !important;
+  height: 38px !important;
+}
+
+.transaction-page
+  .receipt-premium-summary-icon svg {
+  width: 19px !important;
+  height: 19px !important;
+}
+
+.transaction-page
+  .receipt-premium-summary-content span {
+  font-size: 9px !important;
+}
+
+.transaction-page
+  .receipt-premium-summary-content strong {
+  font-size: 14px !important;
+}
+
+.transaction-page
+  .receipt-premium-summary-content small {
+  font-size: 8px !important;
+}
+
+/* Larger search and filter controls */
+
+.transaction-page
+  .receipt-premium-search-box {
+  width: 330px !important;
+}
+
+.transaction-page
+  .receipt-premium-search-box input,
+.transaction-page
+  .receipt-premium-filter-button {
+  height: 38px !important;
+  min-height: 38px !important;
+}
+
+.transaction-page
+  .receipt-premium-search-box input {
+  font-size: 10.5px !important;
+}
+
+.transaction-page
+  .receipt-premium-filter-button {
+  padding: 0 14px !important;
+  font-size: 10.5px !important;
+}
+
+/* Active filter badge */
+
+.transaction-page
+  .receipt-premium-filter-button.has-active-filters {
+  border-color: #3157df !important;
+  background: linear-gradient(
+    135deg,
+    #4168e8,
+    #3154d5
+  ) !important;
+}
+
+.transaction-page
+  .receipt-filter-count {
+  min-width: 18px;
+  height: 18px;
+  padding: 0 5px;
+
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+
+  border-radius: 9px;
+
+  background: #ffffff;
+  color: #3559d8;
+
+  font-size: 9px;
+  font-weight: 800;
+}
+
+.transaction-page
+  .receipt-filter-chevron {
+  transition: transform 0.2s ease;
+}
+
+.transaction-page
+  .receipt-filter-chevron.open {
+  transform: rotate(180deg);
+}
+
+/* Working filter panel layout */
+
+.transaction-page
+  .receipt-premium-filter-panel {
+  margin-bottom: 12px !important;
+  padding: 12px !important;
+
+  display: grid !important;
+  grid-template-columns:
+    minmax(145px, 0.8fr)
+    minmax(145px, 0.8fr)
+    minmax(175px, 1fr)
+    minmax(220px, 1.4fr)
+    auto !important;
+
+  align-items: end !important;
+  gap: 11px !important;
+}
+
+.transaction-page
+  .receipt-filter-field {
+  min-width: 0;
+}
+
+.transaction-page
+  .receipt-filter-field label {
+  margin-bottom: 2px;
+  font-size: 9px !important;
+}
+
+.transaction-page
+  .receipt-filter-field input,
+.transaction-page
+  .receipt-filter-field select {
+  height: 34px !important;
+  min-height: 34px !important;
+  padding: 0 10px !important;
+
+  font-size: 10px !important;
+}
+
+.transaction-page
+  .receipt-filter-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.transaction-page
+  .receipt-filter-clear-button,
+.transaction-page
+  .receipt-filter-apply-button {
+  height: 34px;
+  min-height: 34px;
+  padding: 0 13px;
+
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+
+  border-radius: 6px;
+
+  font-family: inherit;
+  font-size: 10px;
+  font-weight: 700;
+  white-space: nowrap;
+
+  cursor: pointer;
+}
+
+.transaction-page
+  .receipt-filter-clear-button {
+  border: 1px solid #d7dfeb;
+  background: #ffffff;
+  color: #61708a;
+}
+
+.transaction-page
+  .receipt-filter-clear-button:hover {
+  background: #f5f7fb;
+}
+
+.transaction-page
+  .receipt-filter-apply-button {
+  border: 1px solid #3157df;
+  background: linear-gradient(
+    135deg,
+    #456bea,
+    #3155da
+  );
+  color: #ffffff;
+}
+
+.transaction-page
+  .receipt-filter-apply-button:hover {
+  box-shadow: 0 4px 10px
+    rgba(49, 85, 218, 0.2);
+}
+
+/* Make grid look slightly zoomed like Purchase */
+
+.transaction-page
+  .receipt-premium-table th {
+  height: 42px !important;
+  padding: 0 11px !important;
+
+  font-size: 9.2px !important;
+}
+
+.transaction-page
+  .receipt-premium-table td {
+  height: 44px !important;
+  padding: 6px 11px !important;
+
+  font-size: 9.7px !important;
+}
+
+.transaction-page
+  .receipt-premium-party {
+  font-size: 9.8px !important;
+}
+
+/* Action column same width and visual size as Purchase */
+
+.transaction-page
+  .receipt-premium-actions-column {
+  width: 132px !important;
+  min-width: 132px !important;
+  max-width: 132px !important;
+
+  padding: 0 8px !important;
+}
+
+.transaction-page
+  .receipt-premium-row-actions {
+  gap: 7px !important;
+}
+
+/* Larger circular action buttons */
+
+.transaction-page
+  .receipt-premium-action-button {
+  width: 32px !important;
+  min-width: 32px !important;
+  max-width: 32px !important;
+
+  height: 32px !important;
+  min-height: 32px !important;
+  max-height: 32px !important;
+
+  padding: 0 !important;
+  margin: 0 !important;
+
+  border-radius: 50% !important;
+}
+
+.transaction-page
+  .receipt-premium-action-button svg {
+  width: 16px !important;
+  height: 16px !important;
+
+  stroke-width: 2 !important;
+}
+
+/* Stronger action borders like Purchase */
+
+.transaction-page
+  .receipt-premium-action-button.view,
+.transaction-page
+  .receipt-premium-action-button.edit {
+  border: 1px solid #9eb9f3 !important;
+  color: #456fde !important;
+}
+
+.transaction-page
+  .receipt-premium-action-button.delete {
+  border: 1px solid #f2aeb8 !important;
+  color: #ed5364 !important;
+}
+
+.transaction-page
+  .receipt-premium-action-button.view:hover,
+.transaction-page
+  .receipt-premium-action-button.edit:hover {
+  border-color: #6f96ed !important;
+  background: #edf3ff !important;
+
+  transform: translateY(-1px)
+    scale(1.04) !important;
+}
+
+.transaction-page
+  .receipt-premium-action-button.delete:hover {
+  border-color: #ec8291 !important;
+  background: #fff0f2 !important;
+
+  transform: translateY(-1px)
+    scale(1.04) !important;
+}
+
+/* Slightly larger footer controls */
+
+.transaction-page
+  .receipt-premium-pagination-footer {
+  min-height: 56px !important;
+}
+
+.transaction-page
+  .receipt-premium-pagination-controls
+  > select {
+  width: 66px !important;
+  height: 35px !important;
+  font-size: 10.5px !important;
+}
+
+.transaction-page
+  .receipt-premium-pagination button {
+  min-width: 34px !important;
+  height: 34px !important;
+  font-size: 10.5px !important;
+}
+
+/* Responsive filter panel */
+
+@media (max-width: 1200px) {
+  .transaction-page
+    .receipt-premium-filter-panel {
+    grid-template-columns: repeat(
+      2,
+      minmax(180px, 1fr)
+    ) !important;
+  }
+
+  .transaction-page
+    .receipt-filter-actions {
+    grid-column: 1 / -1;
+    justify-content: flex-end;
+  }
+}
+/* =========================================================
+   CHEQUE BOUNCE LIST — PURCHASE STYLE
+   ========================================================= */
+
+.transaction-page
+  .cheque-bounce-premium-list-page {
+  width: 100%;
+  height: calc(100vh - 86px);
+  min-width: 0;
+  padding: 16px 18px;
+  overflow: hidden;
+  background: #f6f8fc;
+}
+
+.transaction-page
+  .cheque-bounce-premium-heading {
+  min-height: 52px;
+  margin-bottom: 12px;
+
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 18px;
+}
+
+.transaction-page
+  .cheque-bounce-premium-title h2 {
+  margin: 0;
+  color: #14213d;
+  font-size: 21px;
+  font-weight: 800;
+}
+
+.transaction-page
+  .cheque-bounce-premium-title p {
+  margin: 5px 0 0;
+  color: #7d8ba3;
+  font-size: 10.5px;
+}
+
+.transaction-page
+  .cheque-bounce-heading-actions {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+}
+
+.transaction-page
+  .cheque-bounce-main-button {
+  height: 38px;
+  padding: 0 15px;
+
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+
+  border: 1px solid #d8dfeb;
+  border-radius: 7px;
+
+  background: #ffffff;
+  color: #34425d;
+
+  font-size: 10.5px;
+  font-weight: 700;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.transaction-page
+  .cheque-bounce-add-button {
+  border-color: #4566e6;
+  background: linear-gradient(
+    135deg,
+    #5676e8,
+    #3e5ed9
+  );
+  color: #ffffff;
+}
+
+.transaction-page
+  .cheque-bounce-excel-button {
+  border-color: #c6e4d4;
+  color: #138c55;
+}
+
+.transaction-page
+  .cheque-bounce-pdf-button {
+  border-color: #efcbd0;
+  color: #dc5361;
+}
+
+.transaction-page
+  .cheque-bounce-summary-grid {
+  margin-bottom: 16px;
+
+  display: grid;
+  grid-template-columns: repeat(
+    5,
+    minmax(0, 1fr)
+  );
+  gap: 13px;
+}
+
+.transaction-page
+  .cheque-bounce-summary-card {
+  position: relative;
+
+  height: 78px;
+  padding: 12px 14px;
+
+  display: flex;
+  align-items: center;
+  gap: 11px;
+
+  overflow: hidden;
+
+  border: 1px solid #dbe3ef;
+  border-radius: 10px;
+
+  background: #ffffff;
+}
+
+.transaction-page
+  .cheque-bounce-summary-icon {
+  position: relative;
+  z-index: 2;
+
+  width: 38px;
+  min-width: 38px;
+  height: 38px;
+
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+
+  border-radius: 50%;
+}
+
+.transaction-page
+  .cheque-bounce-summary-icon.blue {
+  background: #edf3ff;
+  color: #3f68de;
+}
+
+.transaction-page
+  .cheque-bounce-summary-icon.orange {
+  background: #fff4e8;
+  color: #f28c28;
+}
+
+.transaction-page
+  .cheque-bounce-summary-icon.red {
+  background: #fff0f1;
+  color: #ee6370;
+}
+
+.transaction-page
+  .cheque-bounce-summary-icon.violet {
+  background: #f2edff;
+  color: #7659db;
+}
+
+.transaction-page
+  .cheque-bounce-summary-content {
+  position: relative;
+  z-index: 2;
+
+  min-width: 0;
+
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.transaction-page
+  .cheque-bounce-summary-content span {
+  color: #6f7d94;
+  font-size: 9px;
+  font-weight: 700;
+}
+
+.transaction-page
+  .cheque-bounce-summary-content strong {
+  overflow: hidden;
+
+  color: #15213b;
+  font-size: 14px;
+  font-weight: 800;
+
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.transaction-page
+  .cheque-bounce-summary-content small {
+  color: #9aa6b8;
+  font-size: 8px;
+}
+
+.transaction-page
+  .cheque-bounce-card-decoration {
+  position: absolute;
+  right: -12px;
+  bottom: -24px;
+
+  width: 74px;
+  height: 74px;
+
+  border: 1px solid #dce6fb;
+  border-radius: 50%;
+}
+
+.transaction-page
+  .cheque-bounce-card-decoration::before,
+.transaction-page
+  .cheque-bounce-card-decoration::after {
+  content: "";
+  position: absolute;
+  border: 1px solid #dce6fb;
+  border-radius: 50%;
+}
+
+.transaction-page
+  .cheque-bounce-card-decoration::before {
+  inset: 8px;
+}
+
+.transaction-page
+  .cheque-bounce-card-decoration::after {
+  inset: 17px;
+}
+
+.transaction-page
+  .cheque-bounce-toolbar {
+  min-height: 40px;
+  margin-bottom: 9px;
+
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+}
+
+.transaction-page
+  .cheque-bounce-search-box {
+  position: relative;
+  width: 330px;
+}
+
+.transaction-page
+  .cheque-bounce-search-box > svg {
+  position: absolute;
+  left: 11px;
+  top: 50%;
+
+  color: #71809a;
+
+  transform: translateY(-50%);
+}
+
+.transaction-page
+  .cheque-bounce-search-box input {
+  width: 100%;
+  height: 38px;
+  padding: 0 35px;
+
+  border: 1px solid #d5deea;
+  border-radius: 7px;
+  outline: none;
+
+  font-size: 10.5px;
+}
+
+.transaction-page
+  .cheque-bounce-clear-search {
+  position: absolute;
+  right: 7px;
+  top: 50%;
+
+  width: 23px;
+  height: 23px;
+
+  border: 0;
+  border-radius: 50%;
+
+  background: #edf1f6;
+  color: #65748d;
+
+  cursor: pointer;
+  transform: translateY(-50%);
+}
+
+.transaction-page
+  .cheque-bounce-filter-button {
+  height: 38px;
+  padding: 0 14px;
+
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+
+  border: 1px solid #5575d9;
+  border-radius: 7px;
+
+  background: linear-gradient(
+    135deg,
+    #6884dc,
+    #5571ce
+  );
+  color: #ffffff;
+
+  font-size: 10.5px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.transaction-page
+  .cheque-bounce-filter-count {
+  min-width: 18px;
+  height: 18px;
+  padding: 0 5px;
+
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+
+  border-radius: 9px;
+
+  background: #ffffff;
+  color: #3559d8;
+
+  font-size: 9px;
+  font-weight: 800;
+}
+
+.transaction-page
+  .cheque-bounce-filter-chevron {
+  transition: transform 0.2s;
+}
+
+.transaction-page
+  .cheque-bounce-filter-chevron.open {
+  transform: rotate(180deg);
+}
+
+.transaction-page
+  .cheque-bounce-filter-panel {
+  margin-bottom: 12px;
+  padding: 12px;
+
+  display: grid;
+  grid-template-columns:
+    145px
+    145px
+    minmax(170px, 1fr)
+    minmax(170px, 1fr)
+    minmax(150px, 0.8fr)
+    auto;
+  align-items: end;
+  gap: 11px;
+
+  border: 1px solid #dbe3ee;
+  border-radius: 8px;
+
+  background: #ffffff;
+}
+
+.transaction-page
+  .cheque-bounce-filter-field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.transaction-page
+  .cheque-bounce-filter-field label {
+  color: #64748b;
+  font-size: 9px;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.transaction-page
+  .cheque-bounce-filter-field input {
+  width: 100%;
+  height: 34px;
+  padding: 0 10px;
+
+  border: 1px solid #d3dce8;
+  border-radius: 6px;
+  outline: none;
+
+  font-size: 10px;
+}
+
+.transaction-page
+  .cheque-bounce-filter-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.transaction-page
+  .cheque-bounce-filter-clear-button,
+.transaction-page
+  .cheque-bounce-filter-apply-button {
+  height: 34px;
+  padding: 0 13px;
+
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+
+  border-radius: 6px;
+
+  font-size: 10px;
+  font-weight: 700;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.transaction-page
+  .cheque-bounce-filter-clear-button {
+  border: 1px solid #d7dfeb;
+  background: #ffffff;
+  color: #61708a;
+}
+
+.transaction-page
+  .cheque-bounce-filter-apply-button {
+  border: 1px solid #3157df;
+  background: #4168e8;
+  color: #ffffff;
+}
+
+.transaction-page
+  .cheque-bounce-table-card {
+  width: 100%;
+  height: calc(100vh - 344px);
+  min-height: 380px;
+
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+
+  border: 1px solid #d8e1ed;
+  border-radius: 10px;
+
+  background: #ffffff;
+}
+
+.transaction-page
+  .cheque-bounce-table-scroll {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: auto;
+}
+
+.transaction-page
+  .cheque-bounce-table {
+  width: max-content;
+  min-width: 1900px;
+
+  border-collapse: separate;
+  border-spacing: 0;
+}
+
+.transaction-page
+  .cheque-bounce-table th {
+  position: sticky;
+  top: 0;
+  z-index: 15;
+
+  height: 42px;
+  padding: 0 11px;
+
+  border-right: 1px solid #dce4ef;
+  border-bottom: 1px solid #cad5e5;
+
+  background: #eef3fb;
+  color: #263650;
+
+  font-size: 9.2px;
+  font-weight: 800;
+  text-align: left;
+  white-space: nowrap;
+}
+
+.transaction-page
+  .cheque-bounce-table td {
+  height: 44px;
+  padding: 6px 11px;
+
+  border-right: 1px solid #e0e6ef;
+  border-bottom: 1px solid #e0e6ef;
+
+  background: #ffffff;
+  color: #293854;
+
+  font-size: 9.7px;
+  white-space: nowrap;
+}
+
+.transaction-page
+  .cheque-bounce-table
+  tbody
+  tr:nth-child(even)
+  td {
+  background: #f8faff;
+}
+
+.transaction-page
+  .cheque-bounce-table
+  tbody
+  tr:hover
+  td {
+  background: #eef3ff;
+}
+
+.transaction-page
+  .cheque-bounce-sr-column {
+  width: 52px;
+  min-width: 52px;
+  text-align: center !important;
+}
+
+.transaction-page
+  .cheque-bounce-party,
+.transaction-page
+  .cheque-bounce-bank {
+  width: 190px;
+  min-width: 190px;
+  max-width: 190px;
+
+  overflow: hidden;
+  font-weight: 700;
+  text-overflow: ellipsis;
+}
+
+.transaction-page
+  .cheque-bounce-narration {
+  width: 180px;
+  min-width: 180px;
+  max-width: 180px;
+
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.transaction-page
+  .cheque-bounce-amount-column {
+  width: 125px;
+  min-width: 125px;
+  text-align: right !important;
+  font-weight: 800;
+}
+
+.transaction-page
+  .cheque-bounce-actions-column {
+  position: sticky !important;
+  right: 0 !important;
+
+  width: 132px;
+  min-width: 132px;
+  max-width: 132px;
+
+  text-align: center !important;
+  border-left: 1px solid #d8e1ed !important;
+}
+
+.transaction-page
+  th.cheque-bounce-actions-column {
+  z-index: 35 !important;
+  background: #eef3fb !important;
+}
+
+.transaction-page
+  td.cheque-bounce-actions-column {
+  z-index: 25 !important;
+  background: #ffffff !important;
+}
+
+.transaction-page
+  .cheque-bounce-row-actions {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+}
+
+.transaction-page
+  .cheque-bounce-action-button {
+  width: 32px;
+  min-width: 32px;
+  height: 32px;
+
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+
+  border-radius: 50%;
+  background: #ffffff;
+
+  cursor: pointer;
+}
+
+.transaction-page
+  .cheque-bounce-action-button.view,
+.transaction-page
+  .cheque-bounce-action-button.edit {
+  border: 1px solid #9eb9f3;
+  color: #456fde;
+}
+
+.transaction-page
+  .cheque-bounce-action-button.delete {
+  border: 1px solid #f2aeb8;
+  color: #ed5364;
+}
+
+.transaction-page
+  .cheque-bounce-empty {
+  height: 250px !important;
+  text-align: center !important;
+  color: #7d8ba2 !important;
+}
+
+.transaction-page
+  .cheque-bounce-empty strong,
+.transaction-page
+  .cheque-bounce-empty span {
+  display: block;
+}
+
+.transaction-page
+  .cheque-bounce-pagination-footer {
+  min-height: 56px;
+  padding: 8px 14px;
+
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+
+  border-top: 1px solid #dfe6ef;
+
+  background: #ffffff;
+}
+
+.transaction-page
+  .cheque-bounce-pagination-info {
+  color: #758199;
+  font-size: 9px;
+}
+
+.transaction-page
+  .cheque-bounce-pagination-controls {
+  display: flex;
+  align-items: center;
+  gap: 17px;
+}
+
+.transaction-page
+  .cheque-bounce-pagination-controls
+  > select {
+  width: 66px;
+  height: 35px;
+
+  border: 1px solid #d3dcea;
+  border-radius: 7px;
+
+  background: #ffffff;
+
+  font-size: 10.5px;
+}
+
+.transaction-page
+  .cheque-bounce-pagination {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.transaction-page
+  .cheque-bounce-pagination button {
+  min-width: 34px;
+  height: 34px;
+
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+
+  border: 1px solid #dce3ed;
+  border-radius: 7px;
+
+  background: #ffffff;
+  color: #526078;
+
+  cursor: pointer;
+}
+
+.transaction-page
+  .cheque-bounce-pagination
+  button.active {
+  border-color: #5d77ce;
+  background: #617bd1;
+  color: #ffffff;
+}
+
+.transaction-page
+  .cheque-bounce-pagination
+  button:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+
+@media (max-width: 1200px) {
+  .transaction-page
+    .cheque-bounce-summary-grid {
+    grid-template-columns: repeat(
+      3,
+      minmax(0, 1fr)
+    );
+  }
+
+  .transaction-page
+    .cheque-bounce-filter-panel {
+    grid-template-columns: repeat(
+      2,
+      minmax(180px, 1fr)
+    );
+  }
+}
+
+/* =========================================================
+   PAYMENT LIST — PURCHASE STYLE
+   ========================================================= */
+
+.transaction-page .payment-premium-list-page {
+  width: 100%;
+  height: calc(100vh - 86px);
+  min-width: 0;
+  padding: 16px 18px;
+  overflow: hidden;
+  background: #f6f8fc;
+}
+
+.transaction-page .payment-premium-heading {
+  min-height: 52px;
+  margin-bottom: 12px;
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 18px;
+}
+
+.transaction-page .payment-premium-title h2 {
+  margin: 0;
+  color: #14213d;
+  font-size: 21px;
+  font-weight: 800;
+}
+
+.transaction-page .payment-premium-title p {
+  margin: 5px 0 0;
+  color: #7d8ba3;
+  font-size: 10.5px;
+}
+
+.transaction-page .payment-heading-actions {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+}
+
+.transaction-page .payment-main-button {
+  height: 38px;
+  padding: 0 15px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  border: 1px solid #d8dfeb;
+  border-radius: 7px;
+  background: #ffffff;
+  color: #34425d;
+  font-size: 10.5px;
+  font-weight: 700;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.transaction-page .payment-add-button {
+  border-color: #4566e6;
+  background: linear-gradient(
+    135deg,
+    #5676e8,
+    #3e5ed9
+  );
+  color: #ffffff;
+}
+
+.transaction-page .payment-excel-button {
+  border-color: #c6e4d4;
+  color: #138c55;
+}
+
+.transaction-page .payment-pdf-button {
+  border-color: #efcbd0;
+  color: #dc5361;
+}
+
+.transaction-page .payment-summary-grid {
+  margin-bottom: 16px;
+  display: grid;
+  grid-template-columns: repeat(
+    5,
+    minmax(0, 1fr)
+  );
+  gap: 13px;
+}
+
+.transaction-page .payment-summary-card {
+  height: 78px;
+  padding: 12px 14px;
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  border: 1px solid #dbe3ef;
+  border-radius: 10px;
+  background: #ffffff;
+}
+
+.transaction-page .payment-summary-icon {
+  width: 38px;
+  min-width: 38px;
+  height: 38px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+}
+
+.transaction-page .payment-summary-icon.blue {
+  background: #edf3ff;
+  color: #3f68de;
+}
+
+.transaction-page .payment-summary-icon.violet {
+  background: #f2edff;
+  color: #7659db;
+}
+
+.transaction-page .payment-summary-icon.red {
+  background: #fff0f1;
+  color: #ee6370;
+}
+
+.transaction-page .payment-summary-icon.green {
+  background: #eaf9f1;
+  color: #199560;
+}
+
+.transaction-page .payment-summary-icon.orange {
+  background: #fff4e8;
+  color: #f28c28;
+}
+
+.transaction-page .payment-summary-content {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.transaction-page .payment-summary-content span {
+  color: #6f7d94;
+  font-size: 9px;
+  font-weight: 700;
+}
+
+.transaction-page .payment-summary-content strong {
+  overflow: hidden;
+  color: #15213b;
+  font-size: 14px;
+  font-weight: 800;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.transaction-page .payment-summary-content small {
+  color: #9aa6b8;
+  font-size: 8px;
+}
+
+.transaction-page .payment-list-toolbar {
+  min-height: 40px;
+  margin-bottom: 9px;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+}
+
+.transaction-page .payment-search-box {
+  position: relative;
+  width: 340px;
+}
+
+.transaction-page .payment-search-box > svg {
+  position: absolute;
+  left: 11px;
+  top: 50%;
+  color: #71809a;
+  transform: translateY(-50%);
+}
+
+.transaction-page .payment-search-box input {
+  width: 100%;
+  height: 38px;
+  padding: 0 35px;
+  border: 1px solid #d5deea;
+  border-radius: 7px;
+  outline: none;
+  font-size: 10.5px;
+}
+
+.transaction-page .payment-clear-search {
+  position: absolute;
+  right: 7px;
+  top: 50%;
+  width: 23px;
+  height: 23px;
+  border: 0;
+  border-radius: 50%;
+  background: #edf1f6;
+  color: #65748d;
+  cursor: pointer;
+  transform: translateY(-50%);
+}
+
+.transaction-page .payment-filter-toggle {
+  height: 38px;
+  padding: 0 14px;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  border: 1px solid #5575d9;
+  border-radius: 7px;
+  background: linear-gradient(
+    135deg,
+    #6884dc,
+    #5571ce
+  );
+  color: #ffffff;
+  font-size: 10.5px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.transaction-page .payment-filter-count {
+  min-width: 18px;
+  height: 18px;
+  padding: 0 5px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 9px;
+  background: #ffffff;
+  color: #3559d8;
+  font-size: 9px;
+  font-weight: 800;
+}
+
+.transaction-page .payment-filter-chevron {
+  transition: transform 0.2s;
+}
+
+.transaction-page .payment-filter-chevron.open {
+  transform: rotate(180deg);
+}
+
+.transaction-page .payment-filter-panel {
+  margin-bottom: 12px;
+  padding: 12px;
+  display: grid;
+  grid-template-columns:
+    150px
+    150px
+    minmax(210px, 1fr)
+    180px
+    auto;
+  align-items: end;
+  gap: 11px;
+  border: 1px solid #dbe3ee;
+  border-radius: 8px;
+  background: #ffffff;
+}
+
+.transaction-page .payment-filter-field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.transaction-page .payment-filter-field label {
+  color: #64748b;
+  font-size: 9px;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.transaction-page .payment-filter-field input,
+.transaction-page .payment-filter-field select {
+  width: 100%;
+  height: 34px;
+  padding: 0 10px;
+  border: 1px solid #d3dce8;
+  border-radius: 6px;
+  outline: none;
+  background: #ffffff;
+  font-size: 10px;
+}
+
+.transaction-page .payment-filter-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.transaction-page .payment-filter-clear,
+.transaction-page .payment-filter-apply {
+  height: 34px;
+  padding: 0 13px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  border-radius: 6px;
+  font-size: 10px;
+  font-weight: 700;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.transaction-page .payment-filter-clear {
+  border: 1px solid #d7dfeb;
+  background: #ffffff;
+  color: #61708a;
+}
+
+.transaction-page .payment-filter-apply {
+  border: 1px solid #3157df;
+  background: #4168e8;
+  color: #ffffff;
+}
+
+.transaction-page .payment-table-card {
+  width: 100%;
+  height: calc(100vh - 344px);
+  min-height: 380px;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  border: 1px solid #d8e1ed;
+  border-radius: 10px;
+  background: #ffffff;
+}
+
+.transaction-page .payment-table-scroll {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: auto;
+}
+
+.transaction-page .payment-premium-table {
+  width: 100%;
+  min-width: 1350px;
+  border-collapse: separate;
+  border-spacing: 0;
+}
+
+.transaction-page .payment-premium-table th {
+  position: sticky;
+  top: 0;
+  z-index: 15;
+  height: 42px;
+  padding: 0 11px;
+  border-right: 1px solid #dce4ef;
+  border-bottom: 1px solid #cad5e5;
+  background: #eef3fb;
+  color: #263650;
+  font-size: 9.2px;
+  font-weight: 800;
+  text-align: left;
+  white-space: nowrap;
+}
+
+.transaction-page .payment-premium-table td {
+  height: 44px;
+  padding: 6px 11px;
+  border-right: 1px solid #e0e6ef;
+  border-bottom: 1px solid #e0e6ef;
+  background: #ffffff;
+  color: #293854;
+  font-size: 9.7px;
+  white-space: nowrap;
+}
+
+.transaction-page
+  .payment-premium-table
+  tbody
+  tr:nth-child(even)
+  td {
+  background: #f8faff;
+}
+
+.transaction-page
+  .payment-premium-table
+  tbody
+  tr:hover
+  td {
+  background: #eef3ff;
+}
+
+.transaction-page .payment-sr-column {
+  width: 55px;
+  min-width: 55px;
+  text-align: center !important;
+}
+
+.transaction-page .payment-voucher-number {
+  font-weight: 800;
+  color: #345fd4;
+}
+
+.transaction-page .payment-party-name {
+  width: 220px;
+  min-width: 220px;
+  max-width: 220px;
+  overflow: hidden;
+  font-weight: 700;
+  text-overflow: ellipsis;
+}
+
+.transaction-page .payment-narration {
+  width: 200px;
+  min-width: 200px;
+  max-width: 200px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.transaction-page .payment-amount-column {
+  width: 130px;
+  min-width: 130px;
+  text-align: right !important;
+  font-weight: 800;
+}
+
+.transaction-page .payment-actions-column {
+  position: sticky !important;
+  right: 0 !important;
+  width: 132px;
+  min-width: 132px;
+  max-width: 132px;
+  text-align: center !important;
+  border-left: 1px solid #d8e1ed !important;
+}
+
+.transaction-page th.payment-actions-column {
+  z-index: 35 !important;
+  background: #eef3fb !important;
+}
+
+.transaction-page td.payment-actions-column {
+  z-index: 25 !important;
+  background: #ffffff !important;
+}
+
+.transaction-page .payment-row-actions {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+}
+
+.transaction-page .payment-action-button {
+  width: 32px;
+  min-width: 32px;
+  height: 32px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  background: #ffffff;
+  cursor: pointer;
+}
+
+.transaction-page .payment-action-button.view,
+.transaction-page .payment-action-button.edit {
+  border: 1px solid #9eb9f3;
+  color: #456fde;
+}
+
+.transaction-page .payment-action-button.delete {
+  border: 1px solid #f2aeb8;
+  color: #ed5364;
+}
+
+.transaction-page .payment-empty-cell {
+  height: 250px !important;
+  text-align: center !important;
+  color: #7d8ba2 !important;
+}
+
+.transaction-page .payment-empty-cell strong,
+.transaction-page .payment-empty-cell span {
+  display: block;
+}
+
+.transaction-page .payment-pagination-footer {
+  min-height: 56px;
+  padding: 8px 14px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  border-top: 1px solid #dfe6ef;
+  background: #ffffff;
+}
+
+.transaction-page .payment-pagination-info {
+  color: #758199;
+  font-size: 9px;
+}
+
+.transaction-page .payment-pagination-controls {
+  display: flex;
+  align-items: center;
+  gap: 17px;
+}
+
+.transaction-page
+  .payment-pagination-controls
+  > select {
+  width: 66px;
+  height: 35px;
+  border: 1px solid #d3dcea;
+  border-radius: 7px;
+  background: #ffffff;
+  font-size: 10.5px;
+}
+
+.transaction-page .payment-page-buttons {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.transaction-page
+  .payment-page-buttons
+  button {
+  min-width: 34px;
+  height: 34px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid #dce3ed;
+  border-radius: 7px;
+  background: #ffffff;
+  color: #526078;
+  cursor: pointer;
+}
+
+.transaction-page
+  .payment-page-buttons
+  button.active {
+  border-color: #5d77ce;
+  background: #617bd1;
+  color: #ffffff;
+}
+
+.transaction-page
+  .payment-page-buttons
+  button:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+
+@media (max-width: 1200px) {
+  .transaction-page
+    .payment-summary-grid {
+    grid-template-columns: repeat(
+      3,
+      minmax(0, 1fr)
+    );
+  }
+
+  .transaction-page
+    .payment-filter-panel {
+    grid-template-columns: repeat(
+      2,
+      minmax(180px, 1fr)
+    );
+  }
+}
+/* =========================================================
+   PDC DOCKET LIST — PURCHASE STYLE
+   ========================================================= */
+
+.transaction-page .pdc-docket-premium-list-page {
+  width: 100%;
+  height: calc(100vh - 86px);
+  min-width: 0;
+  padding: 16px 18px;
+  overflow: hidden;
+  background: #f6f8fc;
+}
+
+.transaction-page .pdc-docket-premium-heading {
+  min-height: 52px;
+  margin-bottom: 12px;
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 18px;
+}
+
+.transaction-page .pdc-docket-premium-title h2 {
+  margin: 0;
+  color: #14213d;
+  font-size: 21px;
+  font-weight: 800;
+}
+
+.transaction-page .pdc-docket-premium-title p {
+  margin: 5px 0 0;
+  color: #7d8ba3;
+  font-size: 10.5px;
+}
+
+.transaction-page .pdc-docket-heading-actions {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+}
+
+.transaction-page .pdc-docket-main-button {
+  height: 38px;
+  padding: 0 15px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  border: 1px solid #d8dfeb;
+  border-radius: 7px;
+  background: #ffffff;
+  color: #34425d;
+  font-size: 10.5px;
+  font-weight: 700;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.transaction-page .pdc-docket-add-button {
+  border-color: #4566e6;
+  background: linear-gradient(
+    135deg,
+    #5676e8,
+    #3e5ed9
+  );
+  color: #ffffff;
+}
+
+.transaction-page .pdc-docket-excel-button {
+  border-color: #c6e4d4;
+  color: #138c55;
+}
+
+.transaction-page .pdc-docket-pdf-button {
+  border-color: #efcbd0;
+  color: #dc5361;
+}
+
+.transaction-page .pdc-docket-summary-grid {
+  margin-bottom: 16px;
+  display: grid;
+  grid-template-columns: repeat(
+    5,
+    minmax(0, 1fr)
+  );
+  gap: 13px;
+}
+
+.transaction-page .pdc-docket-summary-card {
+  height: 78px;
+  padding: 12px 14px;
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  border: 1px solid #dbe3ef;
+  border-radius: 10px;
+  background: #ffffff;
+}
+
+.transaction-page .pdc-docket-summary-icon {
+  width: 38px;
+  min-width: 38px;
+  height: 38px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+}
+
+.transaction-page .pdc-docket-summary-icon.blue {
+  background: #edf3ff;
+  color: #3f68de;
+}
+
+.transaction-page .pdc-docket-summary-icon.violet {
+  background: #f2edff;
+  color: #7659db;
+}
+
+.transaction-page .pdc-docket-summary-icon.green {
+  background: #eaf9f1;
+  color: #199560;
+}
+
+.transaction-page .pdc-docket-summary-icon.orange {
+  background: #fff4e8;
+  color: #f28c28;
+}
+
+.transaction-page .pdc-docket-summary-icon.cyan {
+  background: #e9f9fb;
+  color: #178ea2;
+}
+
+.transaction-page .pdc-docket-summary-content {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.transaction-page .pdc-docket-summary-content span {
+  color: #6f7d94;
+  font-size: 9px;
+  font-weight: 700;
+}
+
+.transaction-page .pdc-docket-summary-content strong {
+  overflow: hidden;
+  color: #15213b;
+  font-size: 14px;
+  font-weight: 800;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.transaction-page .pdc-docket-summary-content small {
+  color: #9aa6b8;
+  font-size: 8px;
+}
+
+.transaction-page .pdc-docket-list-toolbar {
+  min-height: 40px;
+  margin-bottom: 9px;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+}
+
+.transaction-page .pdc-docket-search-box {
+  position: relative;
+  width: 350px;
+}
+
+.transaction-page .pdc-docket-search-box > svg {
+  position: absolute;
+  left: 11px;
+  top: 50%;
+  color: #71809a;
+  transform: translateY(-50%);
+}
+
+.transaction-page .pdc-docket-search-box input {
+  width: 100%;
+  height: 38px;
+  padding: 0 35px;
+  border: 1px solid #d5deea;
+  border-radius: 7px;
+  outline: none;
+  font-size: 10.5px;
+}
+
+.transaction-page .pdc-docket-clear-search {
+  position: absolute;
+  right: 7px;
+  top: 50%;
+  width: 23px;
+  height: 23px;
+  border: 0;
+  border-radius: 50%;
+  background: #edf1f6;
+  color: #65748d;
+  cursor: pointer;
+  transform: translateY(-50%);
+}
+
+.transaction-page .pdc-docket-filter-toggle {
+  height: 38px;
+  padding: 0 14px;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  border: 1px solid #5575d9;
+  border-radius: 7px;
+  background: linear-gradient(
+    135deg,
+    #6884dc,
+    #5571ce
+  );
+  color: #ffffff;
+  font-size: 10.5px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.transaction-page .pdc-docket-filter-count {
+  min-width: 18px;
+  height: 18px;
+  padding: 0 5px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 9px;
+  background: #ffffff;
+  color: #3559d8;
+  font-size: 9px;
+  font-weight: 800;
+}
+
+.transaction-page .pdc-docket-filter-chevron {
+  transition: transform 0.2s;
+}
+
+.transaction-page .pdc-docket-filter-chevron.open {
+  transform: rotate(180deg);
+}
+
+.transaction-page .pdc-docket-filter-panel {
+  margin-bottom: 12px;
+  padding: 12px;
+  display: grid;
+  grid-template-columns:
+    155px
+    155px
+    minmax(190px, 1fr)
+    170px
+    150px
+    auto;
+  align-items: end;
+  gap: 11px;
+  border: 1px solid #dbe3ee;
+  border-radius: 8px;
+  background: #ffffff;
+}
+
+.transaction-page .pdc-docket-filter-field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.transaction-page .pdc-docket-filter-field label {
+  color: #64748b;
+  font-size: 9px;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.transaction-page .pdc-docket-filter-field input,
+.transaction-page .pdc-docket-filter-field select {
+  width: 100%;
+  height: 34px;
+  padding: 0 10px;
+  border: 1px solid #d3dce8;
+  border-radius: 6px;
+  outline: none;
+  background: #ffffff;
+  font-size: 10px;
+}
+
+.transaction-page .pdc-docket-filter-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.transaction-page .pdc-docket-filter-clear,
+.transaction-page .pdc-docket-filter-apply {
+  height: 34px;
+  padding: 0 13px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  border-radius: 6px;
+  font-size: 10px;
+  font-weight: 700;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.transaction-page .pdc-docket-filter-clear {
+  border: 1px solid #d7dfeb;
+  background: #ffffff;
+  color: #61708a;
+}
+
+.transaction-page .pdc-docket-filter-apply {
+  border: 1px solid #3157df;
+  background: #4168e8;
+  color: #ffffff;
+}
+
+.transaction-page .pdc-docket-table-card {
+  width: 100%;
+  height: calc(100vh - 344px);
+  min-height: 380px;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  border: 1px solid #d8e1ed;
+  border-radius: 10px;
+  background: #ffffff;
+}
+
+.transaction-page .pdc-docket-table-scroll {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: auto;
+}
+
+.transaction-page .pdc-docket-premium-table {
+  width: max-content;
+  min-width: 2100px;
+  border-collapse: separate;
+  border-spacing: 0;
+}
+
+.transaction-page .pdc-docket-premium-table th {
+  position: sticky;
+  top: 0;
+  z-index: 15;
+  height: 42px;
+  padding: 0 11px;
+  border-right: 1px solid #dce4ef;
+  border-bottom: 1px solid #cad5e5;
+  background: #eef3fb;
+  color: #263650;
+  font-size: 9.2px;
+  font-weight: 800;
+  text-align: left;
+  white-space: nowrap;
+}
+
+.transaction-page .pdc-docket-premium-table td {
+  height: 44px;
+  padding: 6px 11px;
+  border-right: 1px solid #e0e6ef;
+  border-bottom: 1px solid #e0e6ef;
+  background: #ffffff;
+  color: #293854;
+  font-size: 9.7px;
+  white-space: nowrap;
+}
+
+.transaction-page
+  .pdc-docket-premium-table
+  tbody
+  tr:nth-child(even)
+  td {
+  background: #f8faff;
+}
+
+.transaction-page
+  .pdc-docket-premium-table
+  tbody
+  tr:hover
+  td {
+  background: #eef3ff;
+}
+
+.transaction-page .pdc-docket-sr-column {
+  width: 55px;
+  min-width: 55px;
+  text-align: center !important;
+}
+
+.transaction-page .pdc-docket-series,
+.transaction-page .pdc-docket-number {
+  font-weight: 800;
+  color: #345fd4;
+}
+
+.transaction-page .pdc-docket-bank {
+  width: 210px;
+  min-width: 210px;
+  max-width: 210px;
+  overflow: hidden;
+  font-weight: 700;
+  text-overflow: ellipsis;
+}
+
+.transaction-page .pdc-docket-narration {
+  width: 190px;
+  min-width: 190px;
+  max-width: 190px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.transaction-page .pdc-docket-amount-column {
+  width: 135px;
+  min-width: 135px;
+  text-align: right !important;
+  font-weight: 800;
+}
+
+.transaction-page .pdc-docket-cheque-count {
+  text-align: center;
+  font-weight: 800;
+}
+
+.transaction-page .pdc-docket-actions-column {
+  position: sticky !important;
+  right: 0 !important;
+  width: 170px;
+  min-width: 170px;
+  max-width: 170px;
+  text-align: center !important;
+  border-left: 1px solid #d8e1ed !important;
+}
+
+.transaction-page th.pdc-docket-actions-column {
+  z-index: 35 !important;
+  background: #eef3fb !important;
+}
+
+.transaction-page td.pdc-docket-actions-column {
+  z-index: 25 !important;
+  background: #ffffff !important;
+}
+
+.transaction-page .pdc-docket-row-actions {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+}
+
+.transaction-page .pdc-docket-action-button {
+  width: 32px;
+  min-width: 32px;
+  height: 32px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  background: #ffffff;
+  cursor: pointer;
+}
+
+.transaction-page .pdc-docket-action-button.view,
+.transaction-page .pdc-docket-action-button.edit {
+  border: 1px solid #9eb9f3;
+  color: #456fde;
+}
+
+.transaction-page .pdc-docket-action-button.print {
+  border: 1px solid #b9b0ed;
+  color: #6d57cf;
+}
+
+.transaction-page .pdc-docket-action-button.delete {
+  border: 1px solid #f2aeb8;
+  color: #ed5364;
+}
+
+.transaction-page .pdc-docket-empty-cell {
+  height: 250px !important;
+  text-align: center !important;
+  color: #7d8ba2 !important;
+}
+
+.transaction-page .pdc-docket-empty-cell strong,
+.transaction-page .pdc-docket-empty-cell span {
+  display: block;
+}
+
+.transaction-page .pdc-docket-pagination-footer {
+  min-height: 56px;
+  padding: 8px 14px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  border-top: 1px solid #dfe6ef;
+  background: #ffffff;
+}
+
+.transaction-page .pdc-docket-pagination-info {
+  color: #758199;
+  font-size: 9px;
+}
+
+.transaction-page .pdc-docket-pagination-controls {
+  display: flex;
+  align-items: center;
+  gap: 17px;
+}
+
+.transaction-page
+  .pdc-docket-pagination-controls
+  > select {
+  width: 66px;
+  height: 35px;
+  border: 1px solid #d3dcea;
+  border-radius: 7px;
+  background: #ffffff;
+  font-size: 10.5px;
+}
+
+.transaction-page .pdc-docket-page-buttons {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.transaction-page
+  .pdc-docket-page-buttons
+  button {
+  min-width: 34px;
+  height: 34px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid #dce3ed;
+  border-radius: 7px;
+  background: #ffffff;
+  color: #526078;
+  cursor: pointer;
+}
+
+.transaction-page
+  .pdc-docket-page-buttons
+  button.active {
+  border-color: #5d77ce;
+  background: #617bd1;
+  color: #ffffff;
+}
+
+.transaction-page
+  .pdc-docket-page-buttons
+  button:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+
+@media (max-width: 1200px) {
+  .transaction-page
+    .pdc-docket-summary-grid {
+    grid-template-columns: repeat(
+      3,
+      minmax(0, 1fr)
+    );
+  }
+
+  .transaction-page
+    .pdc-docket-filter-panel {
+    grid-template-columns: repeat(
+      2,
+      minmax(180px, 1fr)
+    );
+  }
+}
+/* =========================================================
+   JOURNAL VOUCHER LIST — PURCHASE STYLE
+   ========================================================= */
+
+.transaction-page .journal-premium-list-page {
+  width: 100%;
+  height: calc(100vh - 86px);
+  min-width: 0;
+  padding: 16px 18px;
+  overflow: hidden;
+  background: #f6f8fc;
+}
+
+.transaction-page .journal-premium-heading {
+  min-height: 52px;
+  margin-bottom: 12px;
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 18px;
+}
+
+.transaction-page .journal-premium-title h2 {
+  margin: 0;
+  color: #14213d;
+  font-size: 21px;
+  font-weight: 800;
+}
+
+.transaction-page .journal-premium-title p {
+  margin: 5px 0 0;
+  color: #7d8ba3;
+  font-size: 10.5px;
+}
+
+.transaction-page .journal-heading-actions {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+}
+
+.transaction-page .journal-main-button {
+  height: 38px;
+  padding: 0 15px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  border: 1px solid #d8dfeb;
+  border-radius: 7px;
+  background: #ffffff;
+  color: #34425d;
+  font-size: 10.5px;
+  font-weight: 700;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.transaction-page .journal-add-button {
+  border-color: #4566e6;
+  background: linear-gradient(
+    135deg,
+    #5676e8,
+    #3e5ed9
+  );
+  color: #ffffff;
+}
+
+.transaction-page .journal-excel-button {
+  border-color: #c6e4d4;
+  color: #138c55;
+}
+
+.transaction-page .journal-pdf-button {
+  border-color: #efcbd0;
+  color: #dc5361;
+}
+
+.transaction-page .journal-summary-grid {
+  margin-bottom: 16px;
+  display: grid;
+  grid-template-columns: repeat(
+    5,
+    minmax(0, 1fr)
+  );
+  gap: 13px;
+}
+
+.transaction-page .journal-summary-card {
+  height: 78px;
+  padding: 12px 14px;
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  border: 1px solid #dbe3ef;
+  border-radius: 10px;
+  background: #ffffff;
+}
+
+.transaction-page .journal-summary-icon {
+  width: 38px;
+  min-width: 38px;
+  height: 38px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+}
+
+.transaction-page .journal-summary-icon.blue {
+  background: #edf3ff;
+  color: #3f68de;
+}
+
+.transaction-page .journal-summary-icon.violet {
+  background: #f2edff;
+  color: #7659db;
+}
+
+.transaction-page .journal-summary-icon.red {
+  background: #fff0f1;
+  color: #ee6370;
+}
+
+.transaction-page .journal-summary-icon.green {
+  background: #eaf9f1;
+  color: #199560;
+}
+
+.transaction-page .journal-summary-icon.orange {
+  background: #fff4e8;
+  color: #f28c28;
+}
+
+.transaction-page .journal-summary-icon.cyan {
+  background: #e9f9fb;
+  color: #178ea2;
+}
+
+.transaction-page .journal-summary-content {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.transaction-page .journal-summary-content span {
+  color: #6f7d94;
+  font-size: 9px;
+  font-weight: 700;
+}
+
+.transaction-page .journal-summary-content strong {
+  overflow: hidden;
+  color: #15213b;
+  font-size: 14px;
+  font-weight: 800;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.transaction-page .journal-summary-content small {
+  color: #9aa6b8;
+  font-size: 8px;
+}
+
+.transaction-page .journal-list-toolbar {
+  min-height: 40px;
+  margin-bottom: 9px;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+}
+
+.transaction-page .journal-search-box {
+  position: relative;
+  width: 350px;
+}
+
+.transaction-page .journal-search-box > svg {
+  position: absolute;
+  left: 11px;
+  top: 50%;
+  color: #71809a;
+  transform: translateY(-50%);
+}
+
+.transaction-page .journal-search-box input {
+  width: 100%;
+  height: 38px;
+  padding: 0 35px;
+  border: 1px solid #d5deea;
+  border-radius: 7px;
+  outline: none;
+  font-size: 10.5px;
+}
+
+.transaction-page .journal-clear-search {
+  position: absolute;
+  right: 7px;
+  top: 50%;
+  width: 23px;
+  height: 23px;
+  border: 0;
+  border-radius: 50%;
+  background: #edf1f6;
+  color: #65748d;
+  cursor: pointer;
+  transform: translateY(-50%);
+}
+
+.transaction-page .journal-filter-toggle {
+  height: 38px;
+  padding: 0 14px;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  border: 1px solid #5575d9;
+  border-radius: 7px;
+  background: linear-gradient(
+    135deg,
+    #6884dc,
+    #5571ce
+  );
+  color: #ffffff;
+  font-size: 10.5px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.transaction-page .journal-filter-count {
+  min-width: 18px;
+  height: 18px;
+  padding: 0 5px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 9px;
+  background: #ffffff;
+  color: #3559d8;
+  font-size: 9px;
+  font-weight: 800;
+}
+
+.transaction-page .journal-filter-chevron {
+  transition: transform 0.2s;
+}
+
+.transaction-page .journal-filter-chevron.open {
+  transform: rotate(180deg);
+}
+
+.transaction-page .journal-filter-panel {
+  margin-bottom: 12px;
+  padding: 12px;
+  display: grid;
+  grid-template-columns:
+    155px
+    155px
+    160px
+    minmax(220px, 1fr)
+    170px
+    auto;
+  align-items: end;
+  gap: 11px;
+  border: 1px solid #dbe3ee;
+  border-radius: 8px;
+  background: #ffffff;
+}
+
+.transaction-page .journal-filter-field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.transaction-page .journal-filter-field label {
+  color: #64748b;
+  font-size: 9px;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.transaction-page .journal-filter-field input,
+.transaction-page .journal-filter-field select {
+  width: 100%;
+  height: 34px;
+  padding: 0 10px;
+  border: 1px solid #d3dce8;
+  border-radius: 6px;
+  outline: none;
+  background: #ffffff;
+  font-size: 10px;
+}
+
+.transaction-page .journal-filter-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.transaction-page .journal-filter-clear,
+.transaction-page .journal-filter-apply {
+  height: 34px;
+  padding: 0 13px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  border-radius: 6px;
+  font-size: 10px;
+  font-weight: 700;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.transaction-page .journal-filter-clear {
+  border: 1px solid #d7dfeb;
+  background: #ffffff;
+  color: #61708a;
+}
+
+.transaction-page .journal-filter-apply {
+  border: 1px solid #3157df;
+  background: #4168e8;
+  color: #ffffff;
+}
+
+.transaction-page .journal-table-card {
+  width: 100%;
+  height: calc(100vh - 344px);
+  min-height: 380px;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  border: 1px solid #d8e1ed;
+  border-radius: 10px;
+  background: #ffffff;
+}
+
+.transaction-page .journal-table-scroll {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: auto;
+}
+
+.transaction-page .journal-premium-table {
+  width: 100%;
+  min-width: 1180px;
+  border-collapse: separate;
+  border-spacing: 0;
+}
+
+.transaction-page .journal-premium-table th {
+  position: sticky;
+  top: 0;
+  z-index: 15;
+  height: 42px;
+  padding: 0 11px;
+  border-right: 1px solid #dce4ef;
+  border-bottom: 1px solid #cad5e5;
+  background: #eef3fb;
+  color: #263650;
+  font-size: 9.2px;
+  font-weight: 800;
+  text-align: left;
+  white-space: nowrap;
+}
+
+.transaction-page .journal-premium-table td {
+  height: 44px;
+  padding: 6px 11px;
+  border-right: 1px solid #e0e6ef;
+  border-bottom: 1px solid #e0e6ef;
+  background: #ffffff;
+  color: #293854;
+  font-size: 9.7px;
+  white-space: nowrap;
+}
+
+.transaction-page
+  .journal-premium-table
+  tbody
+  tr:nth-child(even)
+  td {
+  background: #f8faff;
+}
+
+.transaction-page
+  .journal-premium-table
+  tbody
+  tr:hover
+  td {
+  background: #eef3ff;
+}
+
+.transaction-page .journal-sr-column {
+  width: 55px;
+  min-width: 55px;
+  text-align: center !important;
+}
+
+.transaction-page .journal-voucher-number {
+  color: #345fd4;
+  font-weight: 800;
+}
+
+.transaction-page .journal-narration {
+  width: 280px;
+  min-width: 280px;
+  max-width: 280px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.transaction-page .journal-amount-column {
+  width: 140px;
+  min-width: 140px;
+  text-align: right !important;
+  font-weight: 800;
+}
+
+.transaction-page .journal-debit-amount {
+  color: #dc5361 !important;
+}
+
+.transaction-page .journal-credit-amount {
+  color: #168c59 !important;
+}
+
+.transaction-page .journal-status-badge {
+  min-width: 78px;
+  padding: 5px 10px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 12px;
+  font-size: 9px;
+  font-weight: 800;
+}
+
+.transaction-page .journal-status-badge.balanced {
+  border: 1px solid #afe3ca;
+  background: #eaf9f1;
+  color: #168c59;
+}
+
+.transaction-page .journal-status-badge.unbalanced {
+  border: 1px solid #f3c0c7;
+  background: #fff0f1;
+  color: #dd5362;
+}
+
+.transaction-page .journal-actions-column {
+  position: sticky !important;
+  right: 0 !important;
+  width: 132px;
+  min-width: 132px;
+  max-width: 132px;
+  text-align: center !important;
+  border-left: 1px solid #d8e1ed !important;
+}
+
+.transaction-page th.journal-actions-column {
+  z-index: 35 !important;
+  background: #eef3fb !important;
+}
+
+.transaction-page td.journal-actions-column {
+  z-index: 25 !important;
+  background: #ffffff !important;
+}
+
+.transaction-page .journal-row-actions {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+}
+
+.transaction-page .journal-action-button {
+  width: 32px;
+  min-width: 32px;
+  height: 32px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  background: #ffffff;
+  cursor: pointer;
+}
+
+.transaction-page .journal-action-button.view,
+.transaction-page .journal-action-button.edit {
+  border: 1px solid #9eb9f3;
+  color: #456fde;
+}
+
+.transaction-page .journal-action-button.delete {
+  border: 1px solid #f2aeb8;
+  color: #ed5364;
+}
+
+.transaction-page .journal-empty-cell {
+  height: 250px !important;
+  text-align: center !important;
+  color: #7d8ba2 !important;
+}
+
+.transaction-page .journal-empty-cell strong,
+.transaction-page .journal-empty-cell span {
+  display: block;
+}
+
+.transaction-page .journal-pagination-footer {
+  min-height: 56px;
+  padding: 8px 14px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  border-top: 1px solid #dfe6ef;
+  background: #ffffff;
+}
+
+.transaction-page .journal-pagination-info {
+  color: #758199;
+  font-size: 9px;
+}
+
+.transaction-page .journal-pagination-controls {
+  display: flex;
+  align-items: center;
+  gap: 17px;
+}
+
+.transaction-page
+  .journal-pagination-controls
+  > select {
+  width: 66px;
+  height: 35px;
+  border: 1px solid #d3dcea;
+  border-radius: 7px;
+  background: #ffffff;
+  font-size: 10.5px;
+}
+
+.transaction-page .journal-page-buttons {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.transaction-page
+  .journal-page-buttons
+  button {
+  min-width: 34px;
+  height: 34px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid #dce3ed;
+  border-radius: 7px;
+  background: #ffffff;
+  color: #526078;
+  cursor: pointer;
+}
+
+.transaction-page
+  .journal-page-buttons
+  button.active {
+  border-color: #5d77ce;
+  background: #617bd1;
+  color: #ffffff;
+}
+
+.transaction-page
+  .journal-page-buttons
+  button:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+
+@media (max-width: 1200px) {
+  .transaction-page
+    .journal-summary-grid {
+    grid-template-columns: repeat(
+      3,
+      minmax(0, 1fr)
+    );
+  }
+
+  .transaction-page
+    .journal-filter-panel {
+    grid-template-columns: repeat(
+      2,
+      minmax(180px, 1fr)
+    );
+  }
+}
+/* =========================================================
+   CONTRA LIST — PURCHASE STYLE
+   ========================================================= */
+
+.transaction-page .contra-premium-list-page {
+  width: 100%;
+  height: calc(100vh - 86px);
+  min-width: 0;
+  padding: 16px 18px;
+  overflow: hidden;
+  background: #f6f8fc;
+}
+
+.transaction-page .contra-premium-heading {
+  min-height: 52px;
+  margin-bottom: 12px;
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 18px;
+}
+
+.transaction-page .contra-premium-title h2 {
+  margin: 0;
+  color: #14213d;
+  font-size: 21px;
+  font-weight: 800;
+}
+
+.transaction-page .contra-premium-title p {
+  margin: 5px 0 0;
+  color: #7d8ba3;
+  font-size: 10.5px;
+}
+
+.transaction-page .contra-heading-actions {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+}
+
+.transaction-page .contra-main-button {
+  height: 38px;
+  padding: 0 15px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  border: 1px solid #d8dfeb;
+  border-radius: 7px;
+  background: #ffffff;
+  color: #34425d;
+  font-size: 10.5px;
+  font-weight: 700;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.transaction-page .contra-add-button {
+  border-color: #4566e6;
+  background: linear-gradient(
+    135deg,
+    #5676e8,
+    #3e5ed9
+  );
+  color: #ffffff;
+}
+
+.transaction-page .contra-excel-button {
+  border-color: #c6e4d4;
+  color: #138c55;
+}
+
+.transaction-page .contra-pdf-button {
+  border-color: #efcbd0;
+  color: #dc5361;
+}
+
+.transaction-page .contra-summary-grid {
+  margin-bottom: 16px;
+  display: grid;
+  grid-template-columns: repeat(
+    5,
+    minmax(0, 1fr)
+  );
+  gap: 13px;
+}
+
+.transaction-page .contra-summary-card {
+  height: 78px;
+  padding: 12px 14px;
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  border: 1px solid #dbe3ef;
+  border-radius: 10px;
+  background: #ffffff;
+}
+
+.transaction-page .contra-summary-icon {
+  width: 38px;
+  min-width: 38px;
+  height: 38px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+}
+
+.transaction-page .contra-summary-icon.blue {
+  background: #edf3ff;
+  color: #3f68de;
+}
+
+.transaction-page .contra-summary-icon.violet {
+  background: #f2edff;
+  color: #7659db;
+}
+
+.transaction-page .contra-summary-icon.cyan {
+  background: #e9f9fb;
+  color: #178ea2;
+}
+
+.transaction-page .contra-summary-icon.green {
+  background: #eaf9f1;
+  color: #199560;
+}
+
+.transaction-page .contra-summary-icon.orange {
+  background: #fff4e8;
+  color: #f28c28;
+}
+
+.transaction-page .contra-summary-content {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.transaction-page .contra-summary-content span {
+  color: #6f7d94;
+  font-size: 9px;
+  font-weight: 700;
+}
+
+.transaction-page .contra-summary-content strong {
+  overflow: hidden;
+  color: #15213b;
+  font-size: 14px;
+  font-weight: 800;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.transaction-page .contra-summary-content small {
+  color: #9aa6b8;
+  font-size: 8px;
+}
+
+.transaction-page .contra-list-toolbar {
+  min-height: 40px;
+  margin-bottom: 9px;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+}
+
+.transaction-page .contra-search-box {
+  position: relative;
+  width: 350px;
+}
+
+.transaction-page .contra-search-box > svg {
+  position: absolute;
+  left: 11px;
+  top: 50%;
+  color: #71809a;
+  transform: translateY(-50%);
+}
+
+.transaction-page .contra-search-box input {
+  width: 100%;
+  height: 38px;
+  padding: 0 35px;
+  border: 1px solid #d5deea;
+  border-radius: 7px;
+  outline: none;
+  font-size: 10.5px;
+}
+
+.transaction-page .contra-clear-search {
+  position: absolute;
+  right: 7px;
+  top: 50%;
+  width: 23px;
+  height: 23px;
+  border: 0;
+  border-radius: 50%;
+  background: #edf1f6;
+  color: #65748d;
+  cursor: pointer;
+  transform: translateY(-50%);
+}
+
+.transaction-page .contra-filter-toggle {
+  height: 38px;
+  padding: 0 14px;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  border: 1px solid #5575d9;
+  border-radius: 7px;
+  background: linear-gradient(
+    135deg,
+    #6884dc,
+    #5571ce
+  );
+  color: #ffffff;
+  font-size: 10.5px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.transaction-page .contra-filter-count {
+  min-width: 18px;
+  height: 18px;
+  padding: 0 5px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 9px;
+  background: #ffffff;
+  color: #3559d8;
+  font-size: 9px;
+  font-weight: 800;
+}
+
+.transaction-page .contra-filter-chevron {
+  transition: transform 0.2s;
+}
+
+.transaction-page .contra-filter-chevron.open {
+  transform: rotate(180deg);
+}
+
+.transaction-page .contra-filter-panel {
+  margin-bottom: 12px;
+  padding: 12px;
+  display: grid;
+  grid-template-columns:
+    155px
+    155px
+    180px
+    160px
+    minmax(220px, 1fr)
+    auto;
+  align-items: end;
+  gap: 11px;
+  border: 1px solid #dbe3ee;
+  border-radius: 8px;
+  background: #ffffff;
+}
+
+.transaction-page .contra-filter-field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.transaction-page .contra-filter-field label {
+  color: #64748b;
+  font-size: 9px;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.transaction-page .contra-filter-field input,
+.transaction-page .contra-filter-field select {
+  width: 100%;
+  height: 34px;
+  padding: 0 10px;
+  border: 1px solid #d3dce8;
+  border-radius: 6px;
+  outline: none;
+  background: #ffffff;
+  font-size: 10px;
+}
+
+.transaction-page .contra-filter-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.transaction-page .contra-filter-clear,
+.transaction-page .contra-filter-apply {
+  height: 34px;
+  padding: 0 13px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  border-radius: 6px;
+  font-size: 10px;
+  font-weight: 700;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.transaction-page .contra-filter-clear {
+  border: 1px solid #d7dfeb;
+  background: #ffffff;
+  color: #61708a;
+}
+
+.transaction-page .contra-filter-apply {
+  border: 1px solid #3157df;
+  background: #4168e8;
+  color: #ffffff;
+}
+
+.transaction-page .contra-table-card {
+  width: 100%;
+  height: calc(100vh - 344px);
+  min-height: 380px;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  border: 1px solid #d8e1ed;
+  border-radius: 10px;
+  background: #ffffff;
+}
+
+.transaction-page .contra-table-scroll {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: auto;
+}
+
+.transaction-page .contra-premium-table {
+  width: 100%;
+  min-width: 1180px;
+  border-collapse: separate;
+  border-spacing: 0;
+}
+
+.transaction-page .contra-premium-table th {
+  position: sticky;
+  top: 0;
+  z-index: 15;
+  height: 42px;
+  padding: 0 11px;
+  border-right: 1px solid #dce4ef;
+  border-bottom: 1px solid #cad5e5;
+  background: #eef3fb;
+  color: #263650;
+  font-size: 9.2px;
+  font-weight: 800;
+  text-align: left;
+  white-space: nowrap;
+}
+
+.transaction-page .contra-premium-table td {
+  height: 44px;
+  padding: 6px 11px;
+  border-right: 1px solid #e0e6ef;
+  border-bottom: 1px solid #e0e6ef;
+  background: #ffffff;
+  color: #293854;
+  font-size: 9.7px;
+  white-space: nowrap;
+}
+
+.transaction-page
+  .contra-premium-table
+  tbody
+  tr:nth-child(even)
+  td {
+  background: #f8faff;
+}
+
+.transaction-page
+  .contra-premium-table
+  tbody
+  tr:hover
+  td {
+  background: #eef3ff;
+}
+
+.transaction-page .contra-sr-column {
+  width: 55px;
+  min-width: 55px;
+  text-align: center !important;
+}
+
+.transaction-page .contra-voucher-number {
+  color: #345fd4;
+  font-weight: 800;
+}
+
+.transaction-page .contra-amount-column {
+  width: 145px;
+  min-width: 145px;
+  text-align: right !important;
+  font-weight: 800;
+}
+
+.transaction-page .contra-narration {
+  width: 300px;
+  min-width: 300px;
+  max-width: 300px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.transaction-page .contra-type-badge {
+  min-width: 90px;
+  padding: 5px 10px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 12px;
+  font-size: 9px;
+  font-weight: 800;
+}
+
+.transaction-page .contra-type-badge.deposit {
+  border: 1px solid #afe3ca;
+  background: #eaf9f1;
+  color: #168c59;
+}
+
+.transaction-page .contra-type-badge.withdrawal {
+  border: 1px solid #f3c9a5;
+  background: #fff4e8;
+  color: #d9791e;
+}
+
+.transaction-page .contra-type-badge.other {
+  border: 1px solid #c8d4ed;
+  background: #edf3ff;
+  color: #4969be;
+}
+
+.transaction-page .contra-status-badge {
+  padding: 5px 9px;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  border: 1px solid #afe3ca;
+  border-radius: 12px;
+  background: #eaf9f1;
+  color: #168c59;
+  font-size: 9px;
+  font-weight: 800;
+}
+
+.transaction-page .contra-actions-column {
+  position: sticky !important;
+  right: 0 !important;
+  width: 132px;
+  min-width: 132px;
+  max-width: 132px;
+  text-align: center !important;
+  border-left: 1px solid #d8e1ed !important;
+}
+
+.transaction-page th.contra-actions-column {
+  z-index: 35 !important;
+  background: #eef3fb !important;
+}
+
+.transaction-page td.contra-actions-column {
+  z-index: 25 !important;
+  background: #ffffff !important;
+}
+
+.transaction-page .contra-row-actions {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+}
+
+.transaction-page .contra-action-button {
+  width: 32px;
+  min-width: 32px;
+  height: 32px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  background: #ffffff;
+  cursor: pointer;
+}
+
+.transaction-page .contra-action-button.view,
+.transaction-page .contra-action-button.edit {
+  border: 1px solid #9eb9f3;
+  color: #456fde;
+}
+
+.transaction-page .contra-action-button.delete {
+  border: 1px solid #f2aeb8;
+  color: #ed5364;
+}
+
+.transaction-page .contra-empty-cell {
+  height: 250px !important;
+  text-align: center !important;
+  color: #7d8ba2 !important;
+}
+
+.transaction-page .contra-empty-cell strong,
+.transaction-page .contra-empty-cell span {
+  display: block;
+}
+
+.transaction-page .contra-pagination-footer {
+  min-height: 56px;
+  padding: 8px 14px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  border-top: 1px solid #dfe6ef;
+  background: #ffffff;
+}
+
+.transaction-page .contra-pagination-info {
+  color: #758199;
+  font-size: 9px;
+}
+
+.transaction-page .contra-pagination-controls {
+  display: flex;
+  align-items: center;
+  gap: 17px;
+}
+
+.transaction-page
+  .contra-pagination-controls
+  > select {
+  width: 66px;
+  height: 35px;
+  border: 1px solid #d3dcea;
+  border-radius: 7px;
+  background: #ffffff;
+  font-size: 10.5px;
+}
+
+.transaction-page .contra-page-buttons {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.transaction-page
+  .contra-page-buttons
+  button {
+  min-width: 34px;
+  height: 34px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid #dce3ed;
+  border-radius: 7px;
+  background: #ffffff;
+  color: #526078;
+  cursor: pointer;
+}
+
+.transaction-page
+  .contra-page-buttons
+  button.active {
+  border-color: #5d77ce;
+  background: #617bd1;
+  color: #ffffff;
+}
+
+.transaction-page
+  .contra-page-buttons
+  button:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+
+@media (max-width: 1200px) {
+  .transaction-page
+    .contra-summary-grid {
+    grid-template-columns: repeat(
+      3,
+      minmax(0, 1fr)
+    );
+  }
+
+  .transaction-page
+    .contra-filter-panel {
+    grid-template-columns: repeat(
+      2,
+      minmax(180px, 1fr)
+    );
+  }
+}
+/* =========================================================
+   COLLECTION VOUCHER LIST
+   ========================================================= */
+
+.transaction-page
+  .collection-voucher-premium-list-page {
+  width: 100%;
+  height: calc(100vh - 86px);
+  min-width: 0;
+  padding: 16px 18px;
+  overflow: hidden;
+  background: #f6f8fc;
+}
+
+.transaction-page
+  .collection-voucher-premium-heading {
+  min-height: 52px;
+  margin-bottom: 12px;
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 18px;
+}
+
+.transaction-page
+  .collection-voucher-premium-title
+  h2 {
+  margin: 0;
+  color: #14213d;
+  font-size: 21px;
+  font-weight: 800;
+}
+
+.transaction-page
+  .collection-voucher-premium-title
+  p {
+  margin: 5px 0 0;
+  color: #7d8ba3;
+  font-size: 10.5px;
+}
+
+.transaction-page
+  .collection-voucher-heading-actions {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+}
+
+.transaction-page
+  .collection-voucher-main-button {
+  height: 38px;
+  padding: 0 15px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  border: 1px solid #d8dfeb;
+  border-radius: 7px;
+  background: #ffffff;
+  color: #34425d;
+  font-size: 10.5px;
+  font-weight: 700;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.transaction-page
+  .collection-voucher-add-button {
+  border-color: #4566e6;
+  background: linear-gradient(
+    135deg,
+    #5676e8,
+    #3e5ed9
+  );
+  color: #ffffff;
+}
+
+.transaction-page
+  .collection-voucher-excel-button {
+  border-color: #c6e4d4;
+  color: #138c55;
+}
+
+.transaction-page
+  .collection-voucher-pdf-button {
+  border-color: #efcbd0;
+  color: #dc5361;
+}
+
+.transaction-page
+  .collection-voucher-summary-grid {
+  margin-bottom: 16px;
+  display: grid;
+  grid-template-columns: repeat(
+    5,
+    minmax(0, 1fr)
+  );
+  gap: 13px;
+}
+
+.transaction-page
+  .collection-voucher-summary-card {
+  height: 78px;
+  padding: 12px 14px;
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  border: 1px solid #dbe3ef;
+  border-radius: 10px;
+  background: #ffffff;
+}
+
+.transaction-page
+  .collection-voucher-summary-icon {
+  width: 38px;
+  min-width: 38px;
+  height: 38px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+}
+
+.transaction-page
+  .collection-voucher-summary-icon.blue {
+  background: #edf3ff;
+  color: #3f68de;
+}
+
+.transaction-page
+  .collection-voucher-summary-icon.violet {
+  background: #f2edff;
+  color: #7659db;
+}
+
+.transaction-page
+  .collection-voucher-summary-icon.green {
+  background: #eaf9f1;
+  color: #199560;
+}
+
+.transaction-page
+  .collection-voucher-summary-icon.orange {
+  background: #fff4e8;
+  color: #f28c28;
+}
+
+.transaction-page
+  .collection-voucher-summary-icon.cyan {
+  background: #e9f9fb;
+  color: #178ea2;
+}
+
+.transaction-page
+  .collection-voucher-summary-content {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.transaction-page
+  .collection-voucher-summary-content
+  span {
+  color: #6f7d94;
+  font-size: 9px;
+  font-weight: 700;
+}
+
+.transaction-page
+  .collection-voucher-summary-content
+  strong {
+  overflow: hidden;
+  color: #15213b;
+  font-size: 14px;
+  font-weight: 800;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.transaction-page
+  .collection-voucher-summary-content
+  small {
+  color: #9aa6b8;
+  font-size: 8px;
+}
+
+.transaction-page
+  .collection-voucher-list-toolbar {
+  min-height: 40px;
+  margin-bottom: 9px;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+}
+
+.transaction-page
+  .collection-voucher-search-box {
+  position: relative;
+  width: 360px;
+}
+
+.transaction-page
+  .collection-voucher-search-box
+  > svg {
+  position: absolute;
+  left: 11px;
+  top: 50%;
+  color: #71809a;
+  transform: translateY(-50%);
+}
+
+.transaction-page
+  .collection-voucher-search-box
+  input {
+  width: 100%;
+  height: 38px;
+  padding: 0 35px;
+  border: 1px solid #d5deea;
+  border-radius: 7px;
+  outline: none;
+  font-size: 10.5px;
+}
+
+.transaction-page
+  .collection-voucher-clear-search {
+  position: absolute;
+  right: 7px;
+  top: 50%;
+  width: 23px;
+  height: 23px;
+  border: 0;
+  border-radius: 50%;
+  background: #edf1f6;
+  color: #65748d;
+  cursor: pointer;
+  transform: translateY(-50%);
+}
+
+.transaction-page
+  .collection-voucher-filter-toggle {
+  height: 38px;
+  padding: 0 14px;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  border: 1px solid #5575d9;
+  border-radius: 7px;
+  background: linear-gradient(
+    135deg,
+    #6884dc,
+    #5571ce
+  );
+  color: #ffffff;
+  font-size: 10.5px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.transaction-page
+  .collection-voucher-filter-count {
+  min-width: 18px;
+  height: 18px;
+  padding: 0 5px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 9px;
+  background: #ffffff;
+  color: #3559d8;
+  font-size: 9px;
+  font-weight: 800;
+}
+
+.transaction-page
+  .collection-voucher-filter-chevron {
+  transition: transform 0.2s;
+}
+
+.transaction-page
+  .collection-voucher-filter-chevron.open {
+  transform: rotate(180deg);
+}
+
+.transaction-page
+  .collection-voucher-filter-panel {
+  margin-bottom: 12px;
+  padding: 12px;
+  display: grid;
+  grid-template-columns:
+    155px
+    155px
+    190px
+    170px
+    170px
+    auto;
+  align-items: end;
+  gap: 11px;
+  border: 1px solid #dbe3ee;
+  border-radius: 8px;
+  background: #ffffff;
+}
+
+.transaction-page
+  .collection-voucher-filter-field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.transaction-page
+  .collection-voucher-filter-field
+  label {
+  color: #64748b;
+  font-size: 9px;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.transaction-page
+  .collection-voucher-filter-field
+  input,
+.transaction-page
+  .collection-voucher-filter-field
+  select {
+  width: 100%;
+  height: 34px;
+  padding: 0 10px;
+  border: 1px solid #d3dce8;
+  border-radius: 6px;
+  outline: none;
+  background: #ffffff;
+  font-size: 10px;
+}
+
+.transaction-page
+  .collection-voucher-filter-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.transaction-page
+  .collection-voucher-filter-clear,
+.transaction-page
+  .collection-voucher-filter-apply {
+  height: 34px;
+  padding: 0 13px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  border-radius: 6px;
+  font-size: 10px;
+  font-weight: 700;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.transaction-page
+  .collection-voucher-filter-clear {
+  border: 1px solid #d7dfeb;
+  background: #ffffff;
+  color: #61708a;
+}
+
+.transaction-page
+  .collection-voucher-filter-apply {
+  border: 1px solid #3157df;
+  background: #4168e8;
+  color: #ffffff;
+}
+
+.transaction-page
+  .collection-voucher-table-card {
+  width: 100%;
+  height: calc(100vh - 344px);
+  min-height: 380px;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  border: 1px solid #d8e1ed;
+  border-radius: 10px;
+  background: #ffffff;
+}
+
+.transaction-page
+  .collection-voucher-table-scroll {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: auto;
+}
+
+.transaction-page
+  .collection-voucher-premium-table {
+  width: 100%;
+  min-width: 1120px;
+  border-collapse: separate;
+  border-spacing: 0;
+}
+
+.transaction-page
+  .collection-voucher-premium-table
+  th {
+  position: sticky;
+  top: 0;
+  z-index: 15;
+  height: 42px;
+  padding: 0 11px;
+  border-right: 1px solid #dce4ef;
+  border-bottom: 1px solid #cad5e5;
+  background: #eef3fb;
+  color: #263650;
+  font-size: 9.2px;
+  font-weight: 800;
+  text-align: left;
+  white-space: nowrap;
+}
+
+.transaction-page
+  .collection-voucher-premium-table
+  td {
+  height: 44px;
+  padding: 6px 11px;
+  border-right: 1px solid #e0e6ef;
+  border-bottom: 1px solid #e0e6ef;
+  background: #ffffff;
+  color: #293854;
+  font-size: 9.7px;
+  white-space: nowrap;
+}
+
+.transaction-page
+  .collection-voucher-premium-table
+  tbody
+  tr:nth-child(even)
+  td {
+  background: #f8faff;
+}
+
+.transaction-page
+  .collection-voucher-premium-table
+  tbody
+  tr:hover
+  td {
+  background: #eef3ff;
+}
+
+.transaction-page
+  .collection-voucher-sr-column {
+  width: 55px;
+  min-width: 55px;
+  text-align: center !important;
+}
+
+.transaction-page
+  .collection-voucher-number {
+  color: #345fd4;
+  font-weight: 800;
+}
+
+.transaction-page
+  .collection-voucher-amount-column {
+  width: 160px;
+  min-width: 160px;
+  text-align: right !important;
+  font-weight: 800;
+}
+
+.transaction-page
+  .collection-voucher-bills-column {
+  width: 100px;
+  min-width: 100px;
+  text-align: center !important;
+  font-weight: 800;
+}
+
+.transaction-page
+  .collection-voucher-type-badge {
+  min-width: 90px;
+  padding: 5px 10px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid #c8d4ed;
+  border-radius: 12px;
+  background: #edf3ff;
+  color: #4969be;
+  font-size: 9px;
+  font-weight: 800;
+}
+
+.transaction-page
+  .collection-voucher-status-badge {
+  padding: 5px 9px;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  border: 1px solid #afe3ca;
+  border-radius: 12px;
+  background: #eaf9f1;
+  color: #168c59;
+  font-size: 9px;
+  font-weight: 800;
+}
+
+.transaction-page
+  .collection-voucher-actions-column {
+  position: sticky !important;
+  right: 0 !important;
+  width: 132px;
+  min-width: 132px;
+  max-width: 132px;
+  text-align: center !important;
+  border-left: 1px solid #d8e1ed !important;
+}
+
+.transaction-page
+  th.collection-voucher-actions-column {
+  z-index: 35 !important;
+  background: #eef3fb !important;
+}
+
+.transaction-page
+  td.collection-voucher-actions-column {
+  z-index: 25 !important;
+  background: #ffffff !important;
+}
+
+.transaction-page
+  .collection-voucher-row-actions {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+}
+
+.transaction-page
+  .collection-voucher-action-button {
+  width: 32px;
+  min-width: 32px;
+  height: 32px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  background: #ffffff;
+  cursor: pointer;
+}
+
+.transaction-page
+  .collection-voucher-action-button.view,
+.transaction-page
+  .collection-voucher-action-button.edit {
+  border: 1px solid #9eb9f3;
+  color: #456fde;
+}
+
+.transaction-page
+  .collection-voucher-action-button.delete {
+  border: 1px solid #f2aeb8;
+  color: #ed5364;
+}
+
+.transaction-page
+  .collection-voucher-empty-cell {
+  height: 250px !important;
+  text-align: center !important;
+  color: #7d8ba2 !important;
+}
+
+.transaction-page
+  .collection-voucher-empty-cell
+  strong,
+.transaction-page
+  .collection-voucher-empty-cell
+  span {
+  display: block;
+}
+
+.transaction-page
+  .collection-voucher-pagination-footer {
+  min-height: 56px;
+  padding: 8px 14px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  border-top: 1px solid #dfe6ef;
+  background: #ffffff;
+}
+
+.transaction-page
+  .collection-voucher-pagination-info {
+  color: #758199;
+  font-size: 9px;
+}
+
+.transaction-page
+  .collection-voucher-pagination-controls {
+  display: flex;
+  align-items: center;
+  gap: 17px;
+}
+
+.transaction-page
+  .collection-voucher-pagination-controls
+  > select {
+  width: 66px;
+  height: 35px;
+  border: 1px solid #d3dcea;
+  border-radius: 7px;
+  background: #ffffff;
+  font-size: 10.5px;
+}
+
+.transaction-page
+  .collection-voucher-page-buttons {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.transaction-page
+  .collection-voucher-page-buttons
+  button {
+  min-width: 34px;
+  height: 34px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid #dce3ed;
+  border-radius: 7px;
+  background: #ffffff;
+  color: #526078;
+  cursor: pointer;
+}
+
+.transaction-page
+  .collection-voucher-page-buttons
+  button.active {
+  border-color: #5d77ce;
+  background: #617bd1;
+  color: #ffffff;
+}
+
+.transaction-page
+  .collection-voucher-page-buttons
+  button:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+
+@media (max-width: 1200px) {
+  .transaction-page
+    .collection-voucher-summary-grid {
+    grid-template-columns: repeat(
+      3,
+      minmax(0, 1fr)
+    );
+  }
+
+  .transaction-page
+    .collection-voucher-filter-panel {
+    grid-template-columns: repeat(
+      2,
+      minmax(180px, 1fr)
+    );
+  }
+}
