@@ -3077,14 +3077,20 @@ const handleReportClick = (reportName) => {
       billSeries,
       billNo,
 
-      party:
-        savedPartyCode,
+    party:
+  invoiceFormData.partyCode ||
+  invoiceFormData.party ||
+  "",
 
-      partyCode:
-        savedPartyCode,
+partyCode:
+  invoiceFormData.partyCode ||
+  invoiceFormData.party ||
+  "",
 
-      partyName:
-        savedPartyName,
+partyName:
+  invoiceFormData.partyName ||
+  invoiceFormData.party ||
+  "",
 
       godown:
         invoiceFormData.godown ||
