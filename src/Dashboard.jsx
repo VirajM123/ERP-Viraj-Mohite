@@ -16,6 +16,7 @@ import Transaction from "./Transaction";
 const API_URL = "https://total-solution-backend.onrender.com/api";
 // const API_URL = "http://localhost:5000/api";
 
+
 import {
   LineChart,
   Line,
@@ -3871,24 +3872,11 @@ const handleReportClick = (reportName) => {
     focusInvoiceProductRow(0);
   };
 
-  const getFilteredFirms = () => {
-    const searchValue = String(filters.firm || "").trim().toLowerCase();
-
-    if (!searchValue) return firms;
-
-    return firms.filter((firm) =>
-      [
-        firm.firmCode,
-        firm.firmName,
-        firm.city,
-        firm.state,
-        firm.mobileNo,
-        firm.gstNo,
-      ].some((value) =>
-        String(value || "").toLowerCase().includes(searchValue)
-      )
-    );
-  };
+const getFilteredFirms = () => {
+  return Array.isArray(firms)
+    ? firms
+    : [];
+};
 
   const resetAndOpenFirmForm = () => {
     setEditFirmId(null);
@@ -3915,26 +3903,11 @@ const handleReportClick = (reportName) => {
 
     setOpenFormFor("Firm Master");
   };
-  const getFilteredUsers = () => {
-    const searchValue = String(filters.user || "")
-      .trim()
-      .toLowerCase();
-
-    if (!searchValue) return users;
-
-    return users.filter((user) =>
-      [
-        user.userName,
-        user.role,
-        user.firmName,
-        user.status,
-      ].some((value) =>
-        String(value || "")
-          .toLowerCase()
-          .includes(searchValue)
-      )
-    );
-  };
+const getFilteredUsers = () => {
+  return Array.isArray(users)
+    ? users
+    : [];
+};
 
   const resetAndOpenUserForm = () => {
     setEditUserId(null);
@@ -4991,11 +4964,34 @@ const handleReportClick = (reportName) => {
     }
 
     try {
+      const wasEditing =
+  Boolean(editProductId);
+
       /*
         Refresh Product Master data so the newly created
         product becomes available immediately.
       */
       await loadProducts();
+     const refreshPage =
+  wasEditing
+    ? productCurrentPage
+    : 1;
+
+setProductCurrentPage(
+  refreshPage
+);
+
+await loadProductMaster({
+  page: refreshPage,
+  limit: productRowsPerPage,
+  search: productBackendSearch,
+  companyCode:
+    productCompanyFilter,
+  groupCode:
+    productGroupFilter,
+  categoryCode:
+    productCategoryFilter,
+});
     } catch (error) {
       console.error(
         "Unable to refresh Purchase product list:",
@@ -5007,6 +5003,8 @@ const handleReportClick = (reportName) => {
       Number(returnContext.productRowIndex) >= 0
         ? Number(returnContext.productRowIndex)
         : 0;
+
+        
 
     setEditProductId(null);
 
@@ -5216,6 +5214,36 @@ const handleReportClick = (reportName) => {
 
   // Master data state
   const [companies, setCompanies] = useState([]);
+  /* =========================================================
+   COMPANY MASTER BACKEND PAGINATION
+   ========================================================= */
+
+const [companyMasterRows, setCompanyMasterRows] =
+  useState([]);
+
+const [companyCurrentPage, setCompanyCurrentPage] =
+  useState(1);
+
+const [companyRowsPerPage, setCompanyRowsPerPage] =
+  useState(10);
+
+const [companyTotalRecords, setCompanyTotalRecords] =
+  useState(0);
+
+const [companyTotalPages, setCompanyTotalPages] =
+  useState(1);
+
+const [companyStartRecord, setCompanyStartRecord] =
+  useState(0);
+
+const [companyEndRecord, setCompanyEndRecord] =
+  useState(0);
+
+const [companyLoading, setCompanyLoading] =
+  useState(false);
+
+const [companyBackendSearch, setCompanyBackendSearch] =
+  useState("");
   const [products, setProducts] = useState([
     { id: 1, code: 'P001', name: 'Parle G Biscuit', basicUnit: 'PCS', mrp: 15, gst: 18, Rate_Per_Unit: 12, salesRate: 12 },
     { id: 2, code: 'P002', name: 'Lays Classic Salted', basicUnit: 'PCS', mrp: 20, gst: 18, Rate_Per_Unit: 18, salesRate: 18 },
@@ -5223,8 +5251,119 @@ const handleReportClick = (reportName) => {
     { id: 4, code: 'P004', name: 'Tata Tea 1kg', basicUnit: 'KG', mrp: 250, gst: 5, Rate_Per_Unit: 220, salesRate: 220 },
     { id: 5, code: 'P005', name: 'Surf Excel 2kg', basicUnit: 'KG', mrp: 450, gst: 18, Rate_Per_Unit: 380, salesRate: 380 },
   ]);
+  /* =========================================================
+   PRODUCT MASTER BACKEND PAGINATION
+   Only used by Product Master list.
+   Existing products state remains unchanged for billing.
+   ========================================================= */
+
+const [productMasterRows, setProductMasterRows] =
+  useState([]);
+
+const [productCurrentPage, setProductCurrentPage] =
+  useState(1);
+
+const [productRowsPerPage, setProductRowsPerPage] =
+  useState(20);
+
+const [productTotalRecords, setProductTotalRecords] =
+  useState(0);
+
+const [productTotalPages, setProductTotalPages] =
+  useState(1);
+
+const [productStartRecord, setProductStartRecord] =
+  useState(0);
+
+const [productEndRecord, setProductEndRecord] =
+  useState(0);
+
+const [productMasterLoading, setProductMasterLoading] =
+  useState(false);
+
+const [
+  productBackendSearch,
+  setProductBackendSearch,
+] = useState("");
+
+const [
+  productCompanyFilter,
+  setProductCompanyFilter,
+] = useState("");
+
+const [
+  productGroupFilter,
+  setProductGroupFilter,
+] = useState("");
+
+const [
+  productCategoryFilter,
+  setProductCategoryFilter,
+] = useState("");
   const [groupsState, setGroupsState] = useState([]);
+  /* =========================================================
+   GROUP MASTER BACKEND PAGINATION
+   ========================================================= */
+
+const [groupMasterRows, setGroupMasterRows] =
+  useState([]);
+
+const [groupCurrentPage, setGroupCurrentPage] =
+  useState(1);
+
+const [groupRowsPerPage, setGroupRowsPerPage] =
+  useState(10);
+
+const [groupTotalRecords, setGroupTotalRecords] =
+  useState(0);
+
+const [groupTotalPages, setGroupTotalPages] =
+  useState(1);
+
+const [groupStartRecord, setGroupStartRecord] =
+  useState(0);
+
+const [groupEndRecord, setGroupEndRecord] =
+  useState(0);
+
+const [groupLoading, setGroupLoading] =
+  useState(false);
+
+const [groupBackendSearch, setGroupBackendSearch] =
+  useState("");
   const [categoriesState, setCategoriesState] = useState([]);
+  /* =========================================================
+   CATEGORY MASTER BACKEND PAGINATION
+   ========================================================= */
+
+const [categoryMasterRows, setCategoryMasterRows] =
+  useState([]);
+
+const [categoryCurrentPage, setCategoryCurrentPage] =
+  useState(1);
+
+const [categoryRowsPerPage, setCategoryRowsPerPage] =
+  useState(10);
+
+const [categoryTotalRecords, setCategoryTotalRecords] =
+  useState(0);
+
+const [categoryTotalPages, setCategoryTotalPages] =
+  useState(1);
+
+const [categoryStartRecord, setCategoryStartRecord] =
+  useState(0);
+
+const [categoryEndRecord, setCategoryEndRecord] =
+  useState(0);
+
+const [categoryLoading, setCategoryLoading] =
+  useState(false);
+
+const [
+  categoryBackendSearch,
+  setCategoryBackendSearch,
+] = useState("");
   const [accounts, setAccounts] = useState([]);
   const [otherAccounts, setOtherAccounts] = useState([]);
 
@@ -7532,35 +7671,255 @@ const handleReportClick = (reportName) => {
   });
 
   const [firms, setFirms] = useState([]);
-  const [users, setUsers] = useState([{ userName: 'ADMIN', password: 'admin123' }]);
-  const [currentUser, setCurrentUser] = useState('ADMIN');
 
-  const loadFirms = async () => {
+/* =========================================================
+   FIRM MASTER BACKEND PAGINATION
+   ========================================================= */
+
+const [firmCurrentPage, setFirmCurrentPage] =
+  useState(1);
+
+const [firmRowsPerPage, setFirmRowsPerPage] =
+  useState(10);
+
+const [firmTotalRecords, setFirmTotalRecords] =
+  useState(0);
+
+const [firmTotalPages, setFirmTotalPages] =
+  useState(1);
+
+const [firmStartRecord, setFirmStartRecord] =
+  useState(0);
+
+const [firmEndRecord, setFirmEndRecord] =
+  useState(0);
+
+const [firmLoading, setFirmLoading] =
+  useState(false);
+
+/*
+ * This separate value is used for debounced
+ * backend search.
+ */
+const [firmBackendSearch, setFirmBackendSearch] =
+  useState("");
+
+const [users, setUsers] = useState([
+  {
+    userName: "ADMIN",
+    password: "admin123",
+  },
+]);
+/* =========================================================
+   USER MASTER BACKEND PAGINATION
+   ========================================================= */
+
+const [userCurrentPage, setUserCurrentPage] =
+  useState(1);
+
+const [userRowsPerPage, setUserRowsPerPage] =
+  useState(10);
+
+const [userTotalRecords, setUserTotalRecords] =
+  useState(0);
+
+const [userTotalPages, setUserTotalPages] =
+  useState(1);
+
+const [userStartRecord, setUserStartRecord] =
+  useState(0);
+
+const [userEndRecord, setUserEndRecord] =
+  useState(0);
+
+const [userLoading, setUserLoading] =
+  useState(false);
+
+const [userBackendSearch, setUserBackendSearch] =
+  useState("");
+
+const [currentUser, setCurrentUser] =
+  useState("ADMIN");
+
+const loadFirms = useCallback(
+  async ({
+    page = firmCurrentPage,
+    limit = firmRowsPerPage,
+    search = firmBackendSearch,
+  } = {}) => {
     try {
-      const distributorId = localStorage.getItem("distributorId");
+      const distributorId =
+        localStorage.getItem("distributorId");
 
       if (!distributorId) {
         setFirms([]);
+        setFirmTotalRecords(0);
+        setFirmTotalPages(1);
+        setFirmStartRecord(0);
+        setFirmEndRecord(0);
         return;
       }
 
+      setFirmLoading(true);
+
+      const query = new URLSearchParams({
+        distributorId,
+        page: String(page),
+        limit: String(limit),
+      });
+
+      const cleanSearch = String(
+        search || ""
+      ).trim();
+
+      if (cleanSearch) {
+        query.set("search", cleanSearch);
+      }
+
       const response = await fetch(
-        `${API_URL}/firms?distributorId=${distributorId}`
+        `${API_URL}/firms?${query.toString()}`
       );
 
       const result = await response.json();
 
-      if (!response.ok) {
-        alert(result.message || "Failed to load firms");
-        return;
+      if (!response.ok || result.success === false) {
+        throw new Error(
+          result.message ||
+          "Failed to load firms"
+        );
       }
 
-      setFirms(result.firms || []);
+      const pagination =
+        result.pagination || {};
+
+      const returnedPage = Number(
+        pagination.currentPage ||
+        pagination.page ||
+        page ||
+        1
+      );
+
+      setFirms(
+        Array.isArray(result.firms)
+          ? result.firms
+          : []
+      );
+
+      setFirmCurrentPage(returnedPage);
+
+      setFirmRowsPerPage(
+        Number(
+          pagination.limit ||
+          limit ||
+          10
+        )
+      );
+
+      setFirmTotalRecords(
+        Number(
+          pagination.totalRecords ||
+          0
+        )
+      );
+
+      setFirmTotalPages(
+        Math.max(
+          Number(
+            pagination.totalPages ||
+            1
+          ),
+          1
+        )
+      );
+
+      setFirmStartRecord(
+        Number(
+          pagination.startRecord ||
+          0
+        )
+      );
+
+      setFirmEndRecord(
+        Number(
+          pagination.endRecord ||
+          0
+        )
+      );
     } catch (error) {
-      console.error(error);
-      alert("Server not connected. Failed to load firms.");
+      console.error(
+        "Firm Master load error:",
+        error
+      );
+
+      setFirms([]);
+      setFirmTotalRecords(0);
+      setFirmTotalPages(1);
+      setFirmStartRecord(0);
+      setFirmEndRecord(0);
+
+      alert(
+        error.message ||
+        "Unable to load firms."
+      );
+    } finally {
+      setFirmLoading(false);
     }
+  },
+  [
+    firmCurrentPage,
+    firmRowsPerPage,
+    firmBackendSearch,
+  ]
+);
+
+/*
+ * Wait briefly after typing before requesting
+ * Firm Master data from the backend.
+ */
+useEffect(() => {
+  const timer = window.setTimeout(() => {
+    const searchText = String(
+      filters.firm || ""
+    ).trim();
+
+    setFirmBackendSearch(searchText);
+
+    /*
+     * Every new search must begin from page 1.
+     */
+    setFirmCurrentPage(1);
+  }, 400);
+
+  return () => {
+    window.clearTimeout(timer);
   };
+}, [filters.firm]);
+
+/*
+ * Load Firm Master whenever page, page size,
+ * or debounced search changes.
+ */
+useEffect(() => {
+  if (
+    activeSubMenu !== "Firm Master" ||
+    openFormFor === "Firm Master"
+  ) {
+    return;
+  }
+
+  loadFirms({
+    page: firmCurrentPage,
+    limit: firmRowsPerPage,
+    search: firmBackendSearch,
+  });
+}, [
+  activeSubMenu,
+  openFormFor,
+  firmCurrentPage,
+  firmRowsPerPage,
+  firmBackendSearch,
+  loadFirms,
+]);
 
   const getFirmSession = () => ({
     distributorId: localStorage.getItem("distributorId"),
@@ -7682,11 +8041,10 @@ const handleReportClick = (reportName) => {
 
     return { valid: true, message: '' };
   };
+  
+
   useEffect(() => {
-    loadFirms();
-  }, []);
-  useEffect(() => {
-    loadUsers();
+    
     loadCompanies();
     loadGroups();
     loadCategories();
@@ -10042,7 +10400,21 @@ const handleReportClick = (reportName) => {
         return alert(result.message || "Firm save failed");
       }
 
-      await loadFirms();
+      /*
+ * After adding a new firm, show page 1.
+ * After editing, keep the current page.
+ */
+const refreshPage = editFirmId
+  ? firmCurrentPage
+  : 1;
+
+setFirmCurrentPage(refreshPage);
+
+await loadFirms({
+  page: refreshPage,
+  limit: firmRowsPerPage,
+  search: firmBackendSearch,
+});
 
       // ✅ RESET FORM FIELDS
       resetFirmForm();
@@ -10131,7 +10503,23 @@ const handleReportClick = (reportName) => {
         return alert(result.message || "Firm delete failed");
       }
 
-      await loadFirms();
+      /*
+ * When deleting the only row on a page,
+ * return to the previous valid page.
+ */
+const pageAfterDelete =
+  firms.length === 1 &&
+  firmCurrentPage > 1
+    ? firmCurrentPage - 1
+    : firmCurrentPage;
+
+setFirmCurrentPage(pageAfterDelete);
+
+await loadFirms({
+  page: pageAfterDelete,
+  limit: firmRowsPerPage,
+  search: firmBackendSearch,
+});
       alert("Firm deleted successfully!");
     } catch (error) {
       console.error(error);
@@ -10142,31 +10530,180 @@ const handleReportClick = (reportName) => {
   const handleUserInput = (e) => {
     setUserData({ ...userData, [e.target.name]: e.target.value });
   };
-  const loadUsers = async () => {
+const loadUsers = useCallback(
+  async ({
+    page = userCurrentPage,
+    limit = userRowsPerPage,
+    search = userBackendSearch,
+  } = {}) => {
     try {
-      const distributorId = localStorage.getItem("distributorId");
-      const firmId = localStorage.getItem("firmId");
+      const distributorId =
+        localStorage.getItem("distributorId");
+
+      const firmId =
+        localStorage.getItem("firmId");
 
       if (!distributorId || !firmId) {
         setUsers([]);
+        setUserTotalRecords(0);
+        setUserTotalPages(1);
+        setUserStartRecord(0);
+        setUserEndRecord(0);
         return;
       }
 
-      const res = await fetch(`${API_URL}/users?distributorId=${distributorId}&firmId=${firmId}`);
-      const result = await res.json();
+      setUserLoading(true);
 
-      if (!res.ok) {
-        alert(result.message || "Failed to load users");
-        return;
+      const query = new URLSearchParams({
+        distributorId,
+        firmId,
+        page: String(page),
+        limit: String(limit),
+      });
+
+      const cleanSearch = String(
+        search || ""
+      ).trim();
+
+      if (cleanSearch) {
+        query.set("search", cleanSearch);
       }
 
-      setUsers(result.users || []);
+      const response = await fetch(
+        `${API_URL}/users?${query.toString()}`
+      );
+
+      const result = await response.json();
+
+      if (
+        !response.ok ||
+        result.success === false
+      ) {
+        throw new Error(
+          result.message ||
+          "Failed to load users"
+        );
+      }
+
+      const pagination =
+        result.pagination || {};
+
+      const returnedPage = Number(
+        pagination.currentPage ||
+        pagination.page ||
+        page ||
+        1
+      );
+
+      setUsers(
+        Array.isArray(result.users)
+          ? result.users
+          : []
+      );
+
+      setUserCurrentPage(returnedPage);
+
+      setUserRowsPerPage(
+        Number(
+          pagination.limit ||
+          limit ||
+          10
+        )
+      );
+
+      setUserTotalRecords(
+        Number(
+          pagination.totalRecords ||
+          0
+        )
+      );
+
+      setUserTotalPages(
+        Math.max(
+          Number(
+            pagination.totalPages ||
+            1
+          ),
+          1
+        )
+      );
+
+      setUserStartRecord(
+        Number(
+          pagination.startRecord ||
+          0
+        )
+      );
+
+      setUserEndRecord(
+        Number(
+          pagination.endRecord ||
+          0
+        )
+      );
     } catch (error) {
-      console.error(error);
-      alert("Server not connected. Failed to load users.");
-    }
-  };
+      console.error(
+        "User Master load error:",
+        error
+      );
 
+      setUsers([]);
+      setUserTotalRecords(0);
+      setUserTotalPages(1);
+      setUserStartRecord(0);
+      setUserEndRecord(0);
+
+      alert(
+        error.message ||
+        "Unable to load users."
+      );
+    } finally {
+      setUserLoading(false);
+    }
+  },
+  [
+    userCurrentPage,
+    userRowsPerPage,
+    userBackendSearch,
+  ]
+);
+
+useEffect(() => {
+  const timer = window.setTimeout(() => {
+    const searchText = String(
+      filters.user || ""
+    ).trim();
+
+    setUserBackendSearch(searchText);
+    setUserCurrentPage(1);
+  }, 400);
+
+  return () => {
+    window.clearTimeout(timer);
+  };
+}, [filters.user]);
+
+useEffect(() => {
+  if (
+    activeSubMenu !== "User Master" ||
+    openFormFor === "User Master"
+  ) {
+    return;
+  }
+
+  loadUsers({
+    page: userCurrentPage,
+    limit: userRowsPerPage,
+    search: userBackendSearch,
+  });
+}, [
+  activeSubMenu,
+  openFormFor,
+  userCurrentPage,
+  userRowsPerPage,
+  userBackendSearch,
+  loadUsers,
+]);
   const loadCompanies = async () => {
     try {
       const distributorId = localStorage.getItem("distributorId");
@@ -10199,6 +10736,212 @@ const handleReportClick = (reportName) => {
       alert("Server not connected. Failed to load companies.");
     }
   };
+  const loadCompanyMaster = useCallback(
+  async ({
+    page = companyCurrentPage,
+    limit = companyRowsPerPage,
+    search = companyBackendSearch,
+  } = {}) => {
+    try {
+      const distributorId =
+        localStorage.getItem("distributorId");
+
+      const firmId =
+        localStorage.getItem("firmId");
+
+      if (!distributorId || !firmId) {
+        setCompanyMasterRows([]);
+        setCompanyTotalRecords(0);
+        setCompanyTotalPages(1);
+        setCompanyStartRecord(0);
+        setCompanyEndRecord(0);
+        return;
+      }
+
+      setCompanyLoading(true);
+
+      const query = new URLSearchParams({
+        distributorId,
+        firmId,
+        page: String(page),
+        limit: String(limit),
+      });
+
+      const cleanSearch = String(
+        search || ""
+      ).trim();
+
+      if (cleanSearch) {
+        query.set("search", cleanSearch);
+      }
+
+      const response = await fetch(
+        `${API_URL}/companies/list?${query.toString()}`
+      );
+
+      const result = await response.json();
+
+      if (
+        !response.ok ||
+        result.success === false
+      ) {
+        throw new Error(
+          result.message ||
+          "Failed to load company list"
+        );
+      }
+
+      const pagination =
+        result.pagination || {};
+
+      const rows = Array.isArray(
+        result.companies
+      )
+        ? result.companies.map(
+            (company) => ({
+              id: company._id,
+              _id: company._id,
+
+              code:
+                company.companyCode || "",
+
+              name:
+                company.companyName || "",
+
+              address:
+                company.companyAddress || "",
+
+              branchAddress:
+                company.branchOfficeAddress || "",
+
+              companyCode:
+                company.companyCode || "",
+
+              companyName:
+                company.companyName || "",
+
+              companyAddress:
+                company.companyAddress || "",
+
+              branchOfficeAddress:
+                company.branchOfficeAddress || "",
+
+              isActive:
+                company.isActive !== false,
+            })
+          )
+        : [];
+
+      setCompanyMasterRows(rows);
+
+      setCompanyCurrentPage(
+        Number(
+          pagination.currentPage ||
+          pagination.page ||
+          page ||
+          1
+        )
+      );
+
+      setCompanyRowsPerPage(
+        Number(
+          pagination.limit ||
+          limit ||
+          10
+        )
+      );
+
+      setCompanyTotalRecords(
+        Number(
+          pagination.totalRecords ||
+          0
+        )
+      );
+
+      setCompanyTotalPages(
+        Math.max(
+          Number(
+            pagination.totalPages ||
+            1
+          ),
+          1
+        )
+      );
+
+      setCompanyStartRecord(
+        Number(
+          pagination.startRecord ||
+          0
+        )
+      );
+
+      setCompanyEndRecord(
+        Number(
+          pagination.endRecord ||
+          0
+        )
+      );
+    } catch (error) {
+      console.error(
+        "Company Master load error:",
+        error
+      );
+
+      setCompanyMasterRows([]);
+      setCompanyTotalRecords(0);
+      setCompanyTotalPages(1);
+      setCompanyStartRecord(0);
+      setCompanyEndRecord(0);
+
+      alert(
+        error.message ||
+        "Unable to load companies."
+      );
+    } finally {
+      setCompanyLoading(false);
+    }
+  },
+  [
+    companyCurrentPage,
+    companyRowsPerPage,
+    companyBackendSearch,
+  ]
+);
+useEffect(() => {
+  const timer = window.setTimeout(() => {
+    const searchText = String(
+      filters.company || ""
+    ).trim();
+
+    setCompanyBackendSearch(searchText);
+    setCompanyCurrentPage(1);
+  }, 400);
+
+  return () => {
+    window.clearTimeout(timer);
+  };
+}, [filters.company]);
+useEffect(() => {
+  if (
+    activeSubMenu !== "Company Master" ||
+    openFormFor === "Company Master"
+  ) {
+    return;
+  }
+
+  loadCompanyMaster({
+    page: companyCurrentPage,
+    limit: companyRowsPerPage,
+    search: companyBackendSearch,
+  });
+}, [
+  activeSubMenu,
+  openFormFor,
+  companyCurrentPage,
+  companyRowsPerPage,
+  companyBackendSearch,
+  loadCompanyMaster,
+]);
   const loadGroups = async () => {
     try {
       const distributorId = localStorage.getItem("distributorId");
@@ -10232,6 +10975,202 @@ const handleReportClick = (reportName) => {
     }
   };
 
+  const loadGroupMaster = useCallback(
+  async ({
+    page = groupCurrentPage,
+    limit = groupRowsPerPage,
+    search = groupBackendSearch,
+  } = {}) => {
+    try {
+      const distributorId =
+        localStorage.getItem("distributorId");
+
+      const firmId =
+        localStorage.getItem("firmId");
+
+      if (!distributorId || !firmId) {
+        setGroupMasterRows([]);
+        setGroupTotalRecords(0);
+        setGroupTotalPages(1);
+        setGroupStartRecord(0);
+        setGroupEndRecord(0);
+        return;
+      }
+
+      setGroupLoading(true);
+
+      const query = new URLSearchParams({
+        distributorId,
+        firmId,
+        page: String(page),
+        limit: String(limit),
+      });
+
+      const cleanSearch = String(
+        search || ""
+      ).trim();
+
+      if (cleanSearch) {
+        query.set("search", cleanSearch);
+      }
+
+      const response = await fetch(
+        `${API_URL}/groups/list?${query.toString()}`
+      );
+
+      const result = await response.json();
+
+      if (
+        !response.ok ||
+        result.success === false
+      ) {
+        throw new Error(
+          result.message ||
+          "Failed to load Group Master"
+        );
+      }
+
+      const pagination =
+        result.pagination || {};
+
+      const rows = Array.isArray(
+        result.groups
+      )
+        ? result.groups.map((group) => ({
+            id: group._id,
+            _id: group._id,
+
+            code:
+              group.groupCode || "",
+
+            name:
+              group.groupName || "",
+
+            groupCode:
+              group.groupCode || "",
+
+            groupName:
+              group.groupName || "",
+
+            firmName:
+              group.firmName || "",
+
+            isActive:
+              group.isActive !== false,
+          }))
+        : [];
+
+      setGroupMasterRows(rows);
+
+      setGroupCurrentPage(
+        Number(
+          pagination.currentPage ||
+          pagination.page ||
+          page ||
+          1
+        )
+      );
+
+      setGroupRowsPerPage(
+        Number(
+          pagination.limit ||
+          limit ||
+          10
+        )
+      );
+
+      setGroupTotalRecords(
+        Number(
+          pagination.totalRecords ||
+          0
+        )
+      );
+
+      setGroupTotalPages(
+        Math.max(
+          Number(
+            pagination.totalPages ||
+            1
+          ),
+          1
+        )
+      );
+
+      setGroupStartRecord(
+        Number(
+          pagination.startRecord ||
+          0
+        )
+      );
+
+      setGroupEndRecord(
+        Number(
+          pagination.endRecord ||
+          0
+        )
+      );
+    } catch (error) {
+      console.error(
+        "Group Master load error:",
+        error
+      );
+
+      setGroupMasterRows([]);
+      setGroupTotalRecords(0);
+      setGroupTotalPages(1);
+      setGroupStartRecord(0);
+      setGroupEndRecord(0);
+
+      alert(
+        error.message ||
+        "Unable to load groups."
+      );
+    } finally {
+      setGroupLoading(false);
+    }
+  },
+  [
+    groupCurrentPage,
+    groupRowsPerPage,
+    groupBackendSearch,
+  ]
+);
+useEffect(() => {
+  const timer = window.setTimeout(() => {
+    const searchText = String(
+      filters.group || ""
+    ).trim();
+
+    setGroupBackendSearch(searchText);
+    setGroupCurrentPage(1);
+  }, 400);
+
+  return () => {
+    window.clearTimeout(timer);
+  };
+}, [filters.group]);
+useEffect(() => {
+  if (
+    activeSubMenu !== "Group Master" ||
+    openFormFor === "Group Master"
+  ) {
+    return;
+  }
+
+  loadGroupMaster({
+    page: groupCurrentPage,
+    limit: groupRowsPerPage,
+    search: groupBackendSearch,
+  });
+}, [
+  activeSubMenu,
+  openFormFor,
+  groupCurrentPage,
+  groupRowsPerPage,
+  groupBackendSearch,
+  loadGroupMaster,
+]);
+
   const loadCategories = async () => {
     try {
       const distributorId = localStorage.getItem("distributorId");
@@ -10264,6 +11203,217 @@ const handleReportClick = (reportName) => {
       console.error(error);
     }
   };
+  const loadCategoryMaster = useCallback(
+  async ({
+    page = 1,
+    limit = 10,
+    search = "",
+  } = {}) => {
+    try {
+      const distributorId =
+        localStorage.getItem("distributorId");
+
+      const firmId =
+        localStorage.getItem("firmId");
+
+      if (!distributorId || !firmId) {
+        setCategoryMasterRows([]);
+        setCategoryTotalRecords(0);
+        setCategoryTotalPages(1);
+        setCategoryStartRecord(0);
+        setCategoryEndRecord(0);
+        return;
+      }
+
+      setCategoryLoading(true);
+
+      const query = new URLSearchParams({
+        distributorId,
+        firmId,
+        page: String(page),
+        limit: String(limit),
+      });
+
+      const cleanSearch = String(
+        search || ""
+      ).trim();
+
+      if (cleanSearch) {
+        query.set("search", cleanSearch);
+      }
+
+      const response = await fetch(
+        `${API_URL}/categories/list?${query.toString()}`
+      );
+
+      const result = await response.json();
+
+      if (
+        !response.ok ||
+        result.success === false
+      ) {
+        throw new Error(
+          result.message ||
+          "Failed to load Category Master"
+        );
+      }
+
+      const pagination =
+        result.pagination || {};
+
+      const rows = Array.isArray(
+        result.categories
+      )
+        ? result.categories.map(
+            (category) => ({
+              id:
+                category._id ||
+                category.id,
+
+              _id:
+                category._id ||
+                category.id,
+
+              code:
+                category.categoryCode ||
+                category.code ||
+                "",
+
+              name:
+                category.categoryName ||
+                category.name ||
+                "",
+
+              categoryCode:
+                category.categoryCode ||
+                category.code ||
+                "",
+
+              categoryName:
+                category.categoryName ||
+                category.name ||
+                "",
+
+              firmName:
+                category.firmName || "",
+
+              isActive:
+                category.isActive !== false,
+            })
+          )
+        : [];
+
+      setCategoryMasterRows(rows);
+
+      setCategoryCurrentPage(
+        Number(
+          pagination.currentPage ||
+          pagination.page ||
+          page ||
+          1
+        )
+      );
+
+      setCategoryRowsPerPage(
+        Number(
+          pagination.limit ||
+          limit ||
+          10
+        )
+      );
+
+      setCategoryTotalRecords(
+        Number(
+          pagination.totalRecords ||
+          0
+        )
+      );
+
+      setCategoryTotalPages(
+        Math.max(
+          Number(
+            pagination.totalPages ||
+            1
+          ),
+          1
+        )
+      );
+
+      setCategoryStartRecord(
+        Number(
+          pagination.startRecord ||
+          0
+        )
+      );
+
+      setCategoryEndRecord(
+        Number(
+          pagination.endRecord ||
+          0
+        )
+      );
+    } catch (error) {
+      console.error(
+        "Category Master load error:",
+        error
+      );
+
+      setCategoryMasterRows([]);
+      setCategoryTotalRecords(0);
+      setCategoryTotalPages(1);
+      setCategoryStartRecord(0);
+      setCategoryEndRecord(0);
+
+      alert(
+        error.message ||
+        "Unable to load categories."
+      );
+    } finally {
+      setCategoryLoading(false);
+    }
+  },
+  []
+);
+
+useEffect(() => {
+  const timer = window.setTimeout(() => {
+    const searchText = String(
+      filters.category || ""
+    ).trim();
+
+    setCategoryBackendSearch(
+      searchText
+    );
+
+    setCategoryCurrentPage(1);
+  }, 400);
+
+  return () => {
+    window.clearTimeout(timer);
+  };
+}, [filters.category]);
+
+useEffect(() => {
+  if (
+    activeSubMenu !== "Category Master" ||
+    openFormFor === "Category Master"
+  ) {
+    return;
+  }
+
+  loadCategoryMaster({
+    page: categoryCurrentPage,
+    limit: categoryRowsPerPage,
+    search: categoryBackendSearch,
+  });
+}, [
+  activeSubMenu,
+  openFormFor,
+  categoryCurrentPage,
+  categoryRowsPerPage,
+  categoryBackendSearch,
+  loadCategoryMaster,
+]);
 
   const loadProducts = async () => {
     try {
@@ -10297,6 +11447,330 @@ const handleReportClick = (reportName) => {
       console.error(error);
     }
   };
+  const loadProductMaster = useCallback(
+  async ({
+    page = 1,
+    limit = 20,
+    search = "",
+    companyCode = "",
+    groupCode = "",
+    categoryCode = "",
+  } = {}) => {
+    try {
+      const distributorId =
+        localStorage.getItem("distributorId");
+
+      const firmId =
+        localStorage.getItem("firmId");
+
+      if (!distributorId || !firmId) {
+        setProductMasterRows([]);
+        setProductTotalRecords(0);
+        setProductTotalPages(1);
+        setProductStartRecord(0);
+        setProductEndRecord(0);
+        return;
+      }
+
+      setProductMasterLoading(true);
+
+      const query =
+        new URLSearchParams({
+          distributorId,
+          firmId,
+          page: String(page),
+          limit: String(limit),
+        });
+
+      const cleanSearch =
+        String(search || "").trim();
+
+      const cleanCompanyCode =
+        String(companyCode || "").trim();
+
+      const cleanGroupCode =
+        String(groupCode || "").trim();
+
+      const cleanCategoryCode =
+        String(categoryCode || "").trim();
+
+      if (cleanSearch) {
+        query.set(
+          "search",
+          cleanSearch
+        );
+      }
+
+      if (cleanCompanyCode) {
+        query.set(
+          "companyCode",
+          cleanCompanyCode
+        );
+      }
+
+      if (cleanGroupCode) {
+        query.set(
+          "groupCode",
+          cleanGroupCode
+        );
+      }
+
+      if (cleanCategoryCode) {
+        query.set(
+          "categoryCode",
+          cleanCategoryCode
+        );
+      }
+
+      const response = await fetch(
+        `${API_URL}/products/list?${query.toString()}`
+      );
+
+      const result =
+        await response.json();
+
+      if (
+        !response.ok ||
+        result.success === false
+      ) {
+        throw new Error(
+          result.message ||
+          "Failed to load Product Master"
+        );
+      }
+
+      const pagination =
+        result.pagination || {};
+
+      const rows = Array.isArray(
+        result.products
+      )
+        ? result.products.map(
+            (product) => ({
+              ...product,
+
+              id:
+                product._id ||
+                product.id,
+
+              _id:
+                product._id ||
+                product.id,
+
+              code:
+                product.ProdCode ||
+                product.productCode ||
+                product.code ||
+                "",
+
+              name:
+                product.ProdName ||
+                product.productName ||
+                product.name ||
+                "",
+
+              productCode:
+                product.ProdCode ||
+                product.productCode ||
+                product.code ||
+                "",
+
+              productName:
+                product.ProdName ||
+                product.productName ||
+                product.name ||
+                "",
+
+              companyCode:
+                product.CompanyCode ||
+                product.companyCode ||
+                product.CompCode ||
+                "",
+
+              companyName:
+                product.CompanyName ||
+                product.companyName ||
+                "",
+
+              groupCode:
+                product.GroupCode ||
+                product.groupCode ||
+                "",
+
+              groupName:
+                product.GroupName ||
+                product.groupName ||
+                product.group ||
+                "",
+
+              categoryCode:
+                product.CategoryCode ||
+                product.categoryCode ||
+                "",
+
+              categoryName:
+                product.CategoryName ||
+                product.categoryName ||
+                product.category ||
+                "",
+
+              gst:
+                product.GST ||
+                product.gst ||
+                product.gstPercent ||
+                0,
+
+              basicUnit:
+                product.BasicUnit ||
+                product.basicUnit ||
+                product.unit ||
+                "",
+
+              hsn:
+                product.HSNCode ||
+                product.hsnCode ||
+                product.hsn ||
+                "",
+
+              eanCode:
+                product.EANNo ||
+                product.EANCode ||
+                product.eanCode ||
+                product.barcode ||
+                "",
+
+              shortCode:
+                product.ShortCode ||
+                product.shortCode ||
+                "",
+
+              isActive:
+                product.isActive !== false,
+            })
+          )
+        : [];
+
+      setProductMasterRows(rows);
+
+      setProductCurrentPage(
+        Number(
+          pagination.currentPage ||
+          pagination.page ||
+          page ||
+          1
+        )
+      );
+
+      setProductRowsPerPage(
+        Number(
+          pagination.limit ||
+          limit ||
+          20
+        )
+      );
+
+      setProductTotalRecords(
+        Number(
+          pagination.totalRecords ||
+          0
+        )
+      );
+
+      setProductTotalPages(
+        Math.max(
+          Number(
+            pagination.totalPages ||
+            1
+          ),
+          1
+        )
+      );
+
+      setProductStartRecord(
+        Number(
+          pagination.startRecord ||
+          0
+        )
+      );
+
+      setProductEndRecord(
+        Number(
+          pagination.endRecord ||
+          0
+        )
+      );
+    } catch (error) {
+      console.error(
+        "Product Master load error:",
+        error
+      );
+
+      setProductMasterRows([]);
+      setProductTotalRecords(0);
+      setProductTotalPages(1);
+      setProductStartRecord(0);
+      setProductEndRecord(0);
+
+      alert(
+        error.message ||
+        "Unable to load Product Master."
+      );
+    } finally {
+      setProductMasterLoading(false);
+    }
+  },
+  []
+);
+
+useEffect(() => {
+  const timer =
+    window.setTimeout(() => {
+      const searchText =
+        String(
+          filters.product || ""
+        ).trim();
+
+      setProductBackendSearch(
+        searchText
+      );
+
+      setProductCurrentPage(1);
+    }, 400);
+
+  return () => {
+    window.clearTimeout(timer);
+  };
+}, [filters.product]);
+useEffect(() => {
+  if (
+    activeSubMenu !== "Product" ||
+    openFormFor === "Product"
+  ) {
+    return;
+  }
+
+  loadProductMaster({
+    page: productCurrentPage,
+    limit: productRowsPerPage,
+    search: productBackendSearch,
+    companyCode:
+      productCompanyFilter,
+    groupCode:
+      productGroupFilter,
+    categoryCode:
+      productCategoryFilter,
+  });
+}, [
+  activeSubMenu,
+  openFormFor,
+  productCurrentPage,
+  productRowsPerPage,
+  productBackendSearch,
+  productCompanyFilter,
+  productGroupFilter,
+  productCategoryFilter,
+  loadProductMaster,
+]);
 
 
   const saveUser = async (e) => {
@@ -10338,7 +11812,17 @@ const handleReportClick = (reportName) => {
       return alert(result.message || "User save failed");
     }
 
-    await loadUsers();
+   const refreshPage = editUserId
+  ? userCurrentPage
+  : 1;
+
+setUserCurrentPage(refreshPage);
+
+await loadUsers({
+  page: refreshPage,
+  limit: userRowsPerPage,
+  search: userBackendSearch,
+});
     alert(editUserId ? "User updated successfully!" : "User created successfully!");
 
     // ✅ RESET FORM
@@ -10398,7 +11882,19 @@ const handleReportClick = (reportName) => {
       return alert(result.message || "User delete failed");
     }
 
-    await loadUsers();
+    const pageAfterDelete =
+  users.length === 1 &&
+  userCurrentPage > 1
+    ? userCurrentPage - 1
+    : userCurrentPage;
+
+setUserCurrentPage(pageAfterDelete);
+
+await loadUsers({
+  page: pageAfterDelete,
+  limit: userRowsPerPage,
+  search: userBackendSearch,
+});
     alert("User deleted successfully!");
   };
   const handleLogout = () => {
@@ -25446,33 +26942,33 @@ isNewBatch:
   };
 
   // Get filtered data
-  const getFilteredCompanies = () => {
-    return companies.filter(company =>
-      company.code?.toLowerCase().includes(filters.company.toLowerCase()) ||
-      company.name?.toLowerCase().includes(filters.company.toLowerCase())
-    );
-  };
+ const getFilteredCompanies = () => {
+  return Array.isArray(companyMasterRows)
+    ? companyMasterRows
+    : [];
+};
 
-  const getFilteredGroups = () => {
-    return groupsState.filter(group =>
-      group.code?.toLowerCase().includes(filters.group.toLowerCase()) ||
-      group.name?.toLowerCase().includes(filters.group.toLowerCase())
-    );
-  };
+const getFilteredGroups = () => {
+  return Array.isArray(groupMasterRows)
+    ? groupMasterRows
+    : [];
+};
 
   const getFilteredCategories = () => {
-    return categoriesState.filter(category =>
-      category.code?.toLowerCase().includes(filters.category.toLowerCase()) ||
-      category.name?.toLowerCase().includes(filters.category.toLowerCase())
-    );
-  };
+  return Array.isArray(
+    categoryMasterRows
+  )
+    ? categoryMasterRows
+    : [];
+};
 
-  const getFilteredProducts = () => {
-    return products.filter(product =>
-      product.code?.toLowerCase().includes(filters.product.toLowerCase()) ||
-      product.name?.toLowerCase().includes(filters.product.toLowerCase())
-    );
-  };
+const getFilteredProducts = () => {
+  return Array.isArray(
+    productMasterRows
+  )
+    ? productMasterRows
+    : [];
+};
 
   const getFilteredAccounts = () => {
     return accounts.filter(account =>
@@ -28254,6 +29750,7 @@ isNewBatch:
     }
 
     try {
+      const wasEditing = Boolean(editCompanyId);
       const url = editCompanyId
         ? `${API_URL}/companies/${editCompanyId}`
         : `${API_URL}/companies`;
@@ -28277,7 +29774,25 @@ isNewBatch:
         return alert(result.message || "Company save failed");
       }
 
-      await loadCompanies();
+    const refreshPage = wasEditing
+  ? companyCurrentPage
+  : 1;
+
+/*
+ * Refresh full company dropdown data.
+ */
+await loadCompanies();
+
+/*
+ * Refresh Company Master grid.
+ */
+setCompanyCurrentPage(refreshPage);
+
+await loadCompanyMaster({
+  page: refreshPage,
+  limit: companyRowsPerPage,
+  search: companyBackendSearch,
+});
 
       // ✅ RESET FORM FIELDS
       setEditCompanyId(null);
@@ -28286,7 +29801,11 @@ isNewBatch:
       // ✅ CLOSE FORM AND SHOW GRID VIEW
       closeForm();
 
-      alert(editCompanyId ? "Company updated successfully!" : "Company created successfully!");
+    alert(
+  wasEditing
+    ? "Company updated successfully!"
+    : "Company created successfully!"
+);
     } catch (error) {
       console.error(error);
       alert("Server not connected. Company save failed.");
@@ -28335,7 +29854,27 @@ isNewBatch:
         return alert(result.message || "Company delete failed");
       }
 
-      await loadCompanies();
+      const pageAfterDelete =
+  companyMasterRows.length === 1 &&
+  companyCurrentPage > 1
+    ? companyCurrentPage - 1
+    : companyCurrentPage;
+
+/*
+ * Refresh full dropdown data.
+ */
+await loadCompanies();
+
+/*
+ * Refresh Company Master grid.
+ */
+setCompanyCurrentPage(pageAfterDelete);
+
+await loadCompanyMaster({
+  page: pageAfterDelete,
+  limit: companyRowsPerPage,
+  search: companyBackendSearch,
+});
       alert("Company deleted successfully!");
     } catch (error) {
       console.error(error);
@@ -28718,7 +30257,27 @@ isNewBatch:
       if (!res.ok || !result.success) {
         return alert(result.message || "Group delete failed");
       }
-      await loadGroups();
+  const pageAfterDelete =
+  groupMasterRows.length === 1 &&
+  groupCurrentPage > 1
+    ? groupCurrentPage - 1
+    : groupCurrentPage;
+
+/*
+ * Refresh complete group options.
+ */
+await loadGroups();
+
+/*
+ * Refresh the correct Group Master page.
+ */
+setGroupCurrentPage(pageAfterDelete);
+
+await loadGroupMaster({
+  page: pageAfterDelete,
+  limit: groupRowsPerPage,
+  search: groupBackendSearch,
+});
       alert("Group deleted successfully!");
     } catch (error) {
       console.error(error);
@@ -28726,34 +30285,91 @@ isNewBatch:
     }
   };
 
-  const deleteCategory = async (idOrCategory) => {
-    const id =
-      typeof idOrCategory === "object"
-        ? idOrCategory.id || idOrCategory._id
-        : idOrCategory;
+const deleteCategory = async (
+  idOrCategory
+) => {
+  const id =
+    typeof idOrCategory ===
+    "object"
+      ? idOrCategory.id ||
+        idOrCategory._id
+      : idOrCategory;
 
-    if (!id) return alert("Category ID not found");
+  if (!id) {
+    return alert(
+      "Category ID not found"
+    );
+  }
 
-    if (!window.confirm("Are you sure you want to delete this category?")) return;
+  if (
+    !window.confirm(
+      "Are you sure you want to delete this category?"
+    )
+  ) {
+    return;
+  }
 
-    try {
-      const res = await fetch(`${API_URL}/categories/${id}`, {
+  try {
+    const response = await fetch(
+      `${API_URL}/categories/${id}`,
+      {
         method: "DELETE",
-      });
-
-      const result = await res.json();
-
-      if (!res.ok || !result.success) {
-        return alert(result.message || "Category delete failed");
       }
+    );
 
-      await loadCategories();
-      alert("Category deleted successfully!");
-    } catch (error) {
-      console.error(error);
-      alert("Server not connected. Category delete failed.");
+    const result =
+      await response.json();
+
+    if (
+      !response.ok ||
+      !result.success
+    ) {
+      return alert(
+        result.message ||
+        "Category delete failed"
+      );
     }
-  };
+
+    const pageAfterDelete =
+      categoryMasterRows.length === 1 &&
+      categoryCurrentPage > 1
+        ? categoryCurrentPage - 1
+        : categoryCurrentPage;
+
+    /*
+     * Refresh full categories for dropdowns.
+     */
+    await loadCategories();
+
+    /*
+     * Refresh correct paginated page.
+     */
+    setCategoryCurrentPage(
+      pageAfterDelete
+    );
+
+    await loadCategoryMaster({
+      page: pageAfterDelete,
+      limit:
+        categoryRowsPerPage,
+      search:
+        categoryBackendSearch,
+    });
+
+    alert(
+      "Category deleted successfully!"
+    );
+  } catch (error) {
+    console.error(
+      "Category delete error:",
+      error
+    );
+
+    alert(
+      "Server not connected. Category delete failed."
+    );
+  }
+};
 
   const deleteProduct = async (productOrId) => {
     const id =
@@ -28783,7 +30399,36 @@ isNewBatch:
         return alert(result.message || "Product delete failed");
       }
 
-      await loadProducts();
+     const pageAfterDelete =
+  productMasterRows.length === 1 &&
+  productCurrentPage > 1
+    ? productCurrentPage - 1
+    : productCurrentPage;
+
+/*
+ * Refresh global products for existing
+ * billing and transaction flows.
+ */
+await loadProducts();
+
+/*
+ * Refresh Product Master page.
+ */
+setProductCurrentPage(
+  pageAfterDelete
+);
+
+await loadProductMaster({
+  page: pageAfterDelete,
+  limit: productRowsPerPage,
+  search: productBackendSearch,
+  companyCode:
+    productCompanyFilter,
+  groupCode:
+    productGroupFilter,
+  categoryCode:
+    productCategoryFilter,
+});
       alert("Product deleted successfully!");
     } catch (error) {
       console.error(error);
@@ -29862,7 +31507,27 @@ isNewBatch:
         return alert(result.message || "Group save failed");
       }
 
-      await loadGroups();
+    const wasEditing = Boolean(editGroupId);
+
+const refreshPage = wasEditing
+  ? groupCurrentPage
+  : 1;
+
+/*
+ * Refresh full group options.
+ */
+await loadGroups();
+
+/*
+ * Refresh paginated Group Master grid.
+ */
+setGroupCurrentPage(refreshPage);
+
+await loadGroupMaster({
+  page: refreshPage,
+  limit: groupRowsPerPage,
+  search: groupBackendSearch,
+});
       alert(editGroupId ? "Group updated successfully!" : "Group created successfully!");
 
       // ✅ RESET FORM AND CLOSE
@@ -29881,61 +31546,135 @@ isNewBatch:
     setCategoryForm({ ...categoryForm, [e.target.name]: e.target.value });
   };
 
-  const saveCategory = async (e) => {
-    e.preventDefault();
+  const saveCategory = async (event) => {
+  event.preventDefault();
 
-    if (!categoryForm.code || !categoryForm.name) {
-      return alert("Code and Name required");
-    }
+  const cleanCode = String(
+    categoryForm.code || ""
+  ).trim();
 
-    const { distributorId, firmId, firmName } = getFirmInfo();
+  const cleanName = String(
+    categoryForm.name || ""
+  ).trim();
 
-    if (!distributorId || !firmId) {
-      return alert("Distributor/Firm not found. Please login again.");
-    }
+  if (!cleanCode || !cleanName) {
+    return alert(
+      "Code and Name required"
+    );
+  }
 
-    try {
-      const url = editCategoryId
-        ? `${API_URL}/categories/${editCategoryId}`
-        : `${API_URL}/categories`;
+  const {
+    distributorId,
+    firmId,
+    firmName,
+  } = getFirmInfo();
 
-      const method = editCategoryId ? "PUT" : "POST";
+  if (!distributorId || !firmId) {
+    return alert(
+      "Distributor/Firm not found. Please login again."
+    );
+  }
 
-      const res = await fetch(url, {
+  const wasEditing =
+    Boolean(editCategoryId);
+
+  try {
+    const url = wasEditing
+      ? `${API_URL}/categories/${editCategoryId}`
+      : `${API_URL}/categories`;
+
+    const method = wasEditing
+      ? "PUT"
+      : "POST";
+
+    const response = await fetch(
+      url,
+      {
         method,
-        headers: { "Content-Type": "application/json" },
+
+        headers: {
+          "Content-Type":
+            "application/json",
+        },
+
         body: JSON.stringify({
-          code: categoryForm.code,
-          name: categoryForm.name,
+          code: cleanCode,
+          name: cleanName,
           distributorId,
           firmId,
           firmName,
         }),
-      });
-
-      const result = await res.json();
-
-      if (!res.ok || !result.success) {
-        return alert(result.message || "Category save failed");
       }
+    );
 
-      await loadCategories();
+    const result =
+      await response.json();
 
-      alert(editCategoryId ? "Category updated successfully!" : "Category created successfully!");
-
-      // ✅ RESET FORM FIELDS - FIXED
-      setCategoryForm({ code: "", name: "" });
-      setEditCategoryId(null);
-
-      // ✅ CLOSE FORM AND SHOW GRID VIEW
-      setOpenFormFor(null);
-      setActiveSubMenu("Category Master"); // Keep the submenu active to show grid
-
-    } catch (error) {
-      console.error(error);
-      alert("Server not connected. Category save failed.");
+    if (
+      !response.ok ||
+      !result.success
+    ) {
+      return alert(
+        result.message ||
+        "Category save failed"
+      );
     }
-  };
+
+    const refreshPage =
+      wasEditing
+        ? categoryCurrentPage
+        : 1;
+
+    /*
+     * Refresh complete Category data for
+     * Product Master and dropdowns.
+     */
+    await loadCategories();
+
+    /*
+     * Refresh Category Master paginated grid.
+     */
+    setCategoryCurrentPage(
+      refreshPage
+    );
+
+    await loadCategoryMaster({
+      page: refreshPage,
+      limit:
+        categoryRowsPerPage,
+      search:
+        categoryBackendSearch,
+    });
+
+    alert(
+      wasEditing
+        ? "Category updated successfully!"
+        : "Category created successfully!"
+    );
+
+    setCategoryForm({
+      code: "",
+      name: "",
+    });
+
+    setEditCategoryId(null);
+
+    setOpenFormFor(null);
+
+    setActiveSubMenu(
+      "Category Master"
+    );
+  } catch (error) {
+    console.error(
+      "Category save error:",
+      error
+    );
+
+    alert(
+      "Server not connected. Category save failed."
+    );
+  }
+};
 
 
   // ===== Salesman To Area Mapping Handlers =====
@@ -43077,16 +44816,23 @@ isNewBatch:
                     <Search size={17} />
 
                     <input
-                      type="text"
-                      value={filters.firm || ""}
-                      placeholder="Search firms..."
-                      onChange={(e) =>
-                        setFilters((previous) => ({
-                          ...previous,
-                          firm: e.target.value,
-                        }))
-                      }
-                    />
+  type="text"
+  value={filters.firm || ""}
+  placeholder="Search firms..."
+  onChange={(event) => {
+    const value = event.target.value;
+
+    setFilters((previous) => ({
+      ...previous,
+      firm: value,
+    }));
+
+    /*
+     * Search results always begin on page 1.
+     */
+    setFirmCurrentPage(1);
+  }}
+/>
                   </div>
 
                   <button
@@ -43159,9 +44905,28 @@ isNewBatch:
                       </tr>
                     </thead>
 
-                    <tbody>
-                      {getFilteredFirms().length > 0 ? (
-                        getFilteredFirms().map((firm, index) => {
+                   <tbody>
+  {firmLoading ? (
+    <tr>
+      <td colSpan={7}>
+        <div className="firm-ui-empty-state">
+          <div className="firm-ui-empty-icon">
+            <RefreshCw
+              size={25}
+              className="spin"
+            />
+          </div>
+
+          <h3>Loading firms...</h3>
+
+          <p>
+            Please wait while Firm Master records are loaded.
+          </p>
+        </div>
+      </td>
+    </tr>
+  ) : getFilteredFirms().length > 0 ? (
+    getFilteredFirms().map((firm, index) => {
                           const firmName = String(firm.firmName || "Unnamed Firm");
                           const initials = firmName
                             .split(/\s+/)
@@ -43172,9 +44937,12 @@ isNewBatch:
 
                           return (
                             <tr key={firm._id || firm.id || index}>
-                              <td className="firm-ui-sno-column">
-                                {index + 1}
-                              </td>
+                            <td className="firm-ui-sno-column">
+  {(firmCurrentPage - 1) *
+    firmRowsPerPage +
+    index +
+    1}
+</td>
 
                               <td>
                                 <div className="firm-ui-firm-cell">
@@ -43285,30 +45053,114 @@ isNewBatch:
                   </table>
                 </div>
 
-                <div className="firm-ui-table-footer">
-                  <span>
-                    Showing{" "}
-                    <strong>{getFilteredFirms().length ? 1 : 0}</strong>
-                    {" to "}
-                    <strong>{getFilteredFirms().length}</strong>
-                    {" of "}
-                    <strong>{firms.length}</strong> entries
-                  </span>
+             <div className="firm-ui-table-footer">
+  <span>
+    Showing{" "}
+    <strong>{firmStartRecord}</strong>
+    {" to "}
+    <strong>{firmEndRecord}</strong>
+    {" of "}
+    <strong>{firmTotalRecords}</strong>
+    {" entries"}
+  </span>
 
-                  <div className="firm-ui-pagination">
-                    <button type="button" disabled>
-                      <ChevronLeft size={16} />
-                    </button>
+  <div className="firm-ui-pagination">
+    <button
+      type="button"
+      title="Previous page"
+      disabled={
+        firmLoading ||
+        firmCurrentPage <= 1
+      }
+      onClick={() =>
+        setFirmCurrentPage(
+          (previous) =>
+            Math.max(previous - 1, 1)
+        )
+      }
+    >
+      <ChevronLeft size={16} />
+    </button>
 
-                    <button type="button" className="active">
-                      1
-                    </button>
+    {Array.from(
+      {
+        length: firmTotalPages,
+      },
+      (_, index) => index + 1
+    )
+      .filter((pageNumber) => {
+        /*
+         * Display the first page, last page,
+         * current page and two nearby pages.
+         */
+        return (
+          pageNumber === 1 ||
+          pageNumber === firmTotalPages ||
+          Math.abs(
+            pageNumber - firmCurrentPage
+          ) <= 2
+        );
+      })
+      .map((pageNumber, index, visiblePages) => {
+        const previousVisiblePage =
+          visiblePages[index - 1];
 
-                    <button type="button" disabled>
-                      <ChevronRight size={16} />
-                    </button>
-                  </div>
-                </div>
+        return (
+          <React.Fragment
+            key={pageNumber}
+          >
+            {previousVisiblePage &&
+              pageNumber -
+                previousVisiblePage >
+                1 && (
+                <span
+                  className="firm-ui-pagination-dots"
+                >
+                  ...
+                </span>
+              )}
+
+            <button
+              type="button"
+              disabled={firmLoading}
+              className={
+                firmCurrentPage === pageNumber
+                  ? "active"
+                  : ""
+              }
+              onClick={() =>
+                setFirmCurrentPage(
+                  pageNumber
+                )
+              }
+            >
+              {pageNumber}
+            </button>
+          </React.Fragment>
+        );
+      })}
+
+    <button
+      type="button"
+      title="Next page"
+      disabled={
+        firmLoading ||
+        firmCurrentPage >= firmTotalPages
+      }
+      onClick={() =>
+        setFirmCurrentPage(
+          (previous) =>
+            Math.min(
+              previous + 1,
+              firmTotalPages
+            )
+        )
+      }
+    >
+      <ChevronRight size={16} />
+    </button>
+  </div>
+</div>
               </div>
             </div>
           )}
@@ -43475,17 +45327,21 @@ isNewBatch:
                     <div className="user-ui-search-box">
                       <Search size={17} />
 
-                      <input
-                        type="text"
-                        value={filters.user || ""}
-                        placeholder="Search users..."
-                        onChange={(event) =>
-                          setFilters((previous) => ({
-                            ...previous,
-                            user: event.target.value,
-                          }))
-                        }
-                      />
+                     <input
+  type="text"
+  value={filters.user || ""}
+  placeholder="Search users..."
+  onChange={(event) => {
+    const value = event.target.value;
+
+    setFilters((previous) => ({
+      ...previous,
+      user: value,
+    }));
+
+    setUserCurrentPage(1);
+  }}
+/>
                     </div>
 
                     <button
@@ -43585,16 +45441,38 @@ isNewBatch:
                       </thead>
 
                       <tbody>
-                        {getFilteredUsers().length > 0 ? (
-                          getFilteredUsers().map((user, index) => {
+  {userLoading ? (
+    <tr>
+      <td colSpan={7}>
+        <div className="user-ui-empty-state">
+          <div className="user-ui-empty-icon">
+            <RefreshCw
+              size={25}
+              className="spin"
+            />
+          </div>
+
+          <h3>Loading users...</h3>
+
+          <p>
+            Please wait while User Master records are loaded.
+          </p>
+        </div>
+      </td>
+    </tr>
+  ) : getFilteredUsers().length > 0 ? (
+    getFilteredUsers().map((user, index) => {
                             const isUserActive =
                               user.isActive !== false;
 
                             return (
                               <tr key={user._id || user.id || index}>
-                                <td className="user-ui-sno-column">
-                                  {index + 1}
-                                </td>
+                               <td className="user-ui-sno-column">
+  {(userCurrentPage - 1) *
+    userRowsPerPage +
+    index +
+    1}
+</td>
 
                                 <td>
                                   <div className="user-ui-user-cell">
@@ -43751,31 +45629,114 @@ isNewBatch:
                     </table>
                   </div>
 
-                  <div className="user-ui-table-footer">
-                    <span>
-                      Showing{" "}
-                      <strong>
-                        {getFilteredUsers().length ? 1 : 0}
-                      </strong>{" "}
-                      to{" "}
-                      <strong>{getFilteredUsers().length}</strong>{" "}
-                      of <strong>{users.length}</strong> entries
-                    </span>
+                <div className="user-ui-table-footer">
+  <span>
+    Showing{" "}
+    <strong>{userStartRecord}</strong>
+    {" to "}
+    <strong>{userEndRecord}</strong>
+    {" of "}
+    <strong>{userTotalRecords}</strong>
+    {" entries"}
+  </span>
 
-                    <div className="user-ui-pagination">
-                      <button type="button" disabled>
-                        <ChevronLeft size={16} />
-                      </button>
+  <div className="user-ui-pagination">
+    <button
+      type="button"
+      title="Previous page"
+      disabled={
+        userLoading ||
+        userCurrentPage <= 1
+      }
+      onClick={() =>
+        setUserCurrentPage(
+          (previous) =>
+            Math.max(previous - 1, 1)
+        )
+      }
+    >
+      <ChevronLeft size={16} />
+    </button>
 
-                      <button type="button" className="active">
-                        1
-                      </button>
+    {Array.from(
+      {
+        length: userTotalPages,
+      },
+      (_, index) => index + 1
+    )
+      .filter((pageNumber) => {
+        return (
+          pageNumber === 1 ||
+          pageNumber === userTotalPages ||
+          Math.abs(
+            pageNumber - userCurrentPage
+          ) <= 2
+        );
+      })
+      .map(
+        (
+          pageNumber,
+          index,
+          visiblePages
+        ) => {
+          const previousVisiblePage =
+            visiblePages[index - 1];
 
-                      <button type="button" disabled>
-                        <ChevronRight size={16} />
-                      </button>
-                    </div>
-                  </div>
+          return (
+            <React.Fragment
+              key={pageNumber}
+            >
+              {previousVisiblePage &&
+                pageNumber -
+                  previousVisiblePage >
+                  1 && (
+                  <span className="user-ui-pagination-dots">
+                    ...
+                  </span>
+                )}
+
+              <button
+                type="button"
+                disabled={userLoading}
+                className={
+                  userCurrentPage === pageNumber
+                    ? "active"
+                    : ""
+                }
+                onClick={() =>
+                  setUserCurrentPage(
+                    pageNumber
+                  )
+                }
+              >
+                {pageNumber}
+              </button>
+            </React.Fragment>
+          );
+        }
+      )}
+
+    <button
+      type="button"
+      title="Next page"
+      disabled={
+        userLoading ||
+        userCurrentPage >= userTotalPages
+      }
+      onClick={() =>
+        setUserCurrentPage(
+          (previous) =>
+            Math.min(
+              previous + 1,
+              userTotalPages
+            )
+        )
+      }
+    >
+      <ChevronRight size={16} />
+    </button>
+  </div>
+</div>
                 </div>
               </div>
             )}
@@ -44311,12 +46272,21 @@ isNewBatch:
                 <div className="firm-ui-list-toolbar">
                   <div className="firm-ui-search-box">
                     <Search size={17} />
-                    <input
-                      type="text"
-                      value={filters.company || ''}
-                      placeholder="Search companies..."
-                      onChange={(e) => setFilters({ ...filters, company: e.target.value })}
-                    />
+                <input
+  type="text"
+  value={filters.company || ""}
+  placeholder="Search companies..."
+  onChange={(event) => {
+    const value = event.target.value;
+
+    setFilters((previous) => ({
+      ...previous,
+      company: value,
+    }));
+
+    setCompanyCurrentPage(1);
+  }}
+/>
                   </div>
 
                   <button
@@ -44373,9 +46343,29 @@ isNewBatch:
                         <th className="firm-ui-action-column">Actions</th>
                       </tr>
                     </thead>
-                    <tbody>
-                      {getFilteredCompanies().length > 0 ? (
-                        getFilteredCompanies().map((company, index) => {
+                  <tbody>
+  {companyLoading ? (
+    <tr>
+      <td colSpan={6}>
+        <div className="firm-ui-empty-state">
+          <div className="firm-ui-empty-icon">
+            <RefreshCw
+              size={25}
+              className="spin"
+            />
+          </div>
+
+          <h3>Loading companies...</h3>
+
+          <p>
+            Please wait while Company Master records are loaded.
+          </p>
+        </div>
+      </td>
+    </tr>
+  ) : getFilteredCompanies().length > 0 ? (
+    getFilteredCompanies().map(
+      (company, index) => {
                           const initials = String(company.name || 'C')
                             .split(/\s+/)
                             .filter(Boolean)
@@ -44385,7 +46375,10 @@ isNewBatch:
 
                           return (
                             <tr key={company._id || company.id || index}>
-                              <td className="firm-ui-sno-column">{index + 1}</td>
+                              <td className="firm-ui-sno-column">{(companyCurrentPage - 1) *
+  companyRowsPerPage +
+  index +
+  1}</td>
                               <td>
                                 <div className="firm-ui-firm-cell">
                                   <div className={`firm-ui-firm-avatar avatar-${(index % 5) + 1}`}>
@@ -44443,7 +46436,8 @@ isNewBatch:
                             </tr>
                           );
                         })
-                      ) : (
+                           
+                       ) : (
                         <tr>
                           <td colSpan={6}>
                             <div className="firm-ui-empty-state">
@@ -44478,22 +46472,118 @@ isNewBatch:
                   </table>
                 </div>
 
-                <div className="firm-ui-table-footer">
-                  <span>
-                    Showing <strong>{getFilteredCompanies().length ? 1 : 0}</strong> to{' '}
-                    <strong>{getFilteredCompanies().length}</strong> of{' '}
-                    <strong>{companies.length}</strong> entries
+            <div className="firm-ui-table-footer">
+  <span>
+    Showing{" "}
+    <strong>{companyStartRecord}</strong>
+    {" to "}
+    <strong>{companyEndRecord}</strong>
+    {" of "}
+    <strong>{companyTotalRecords}</strong>
+    {" entries"}
+  </span>
+
+  <div className="firm-ui-pagination">
+    <button
+      type="button"
+      title="Previous page"
+      disabled={
+        companyLoading ||
+        companyCurrentPage <= 1
+      }
+      onClick={() =>
+        setCompanyCurrentPage(
+          (previous) =>
+            Math.max(previous - 1, 1)
+        )
+      }
+    >
+      <ChevronLeft size={16} />
+    </button>
+
+    {Array.from(
+      {
+        length: companyTotalPages,
+      },
+      (_, index) => index + 1
+    )
+      .filter((pageNumber) => {
+        return (
+          pageNumber === 1 ||
+          pageNumber ===
+            companyTotalPages ||
+          Math.abs(
+            pageNumber -
+              companyCurrentPage
+          ) <= 2
+        );
+      })
+      .map(
+        (
+          pageNumber,
+          index,
+          visiblePages
+        ) => {
+          const previousVisiblePage =
+            visiblePages[index - 1];
+
+          return (
+            <React.Fragment
+              key={pageNumber}
+            >
+              {previousVisiblePage &&
+                pageNumber -
+                  previousVisiblePage >
+                  1 && (
+                  <span className="firm-ui-pagination-dots">
+                    ...
                   </span>
-                  <div className="firm-ui-pagination">
-                    <button type="button" disabled>
-                      <ChevronLeft size={16} />
-                    </button>
-                    <button type="button" className="active">1</button>
-                    <button type="button" disabled>
-                      <ChevronRight size={16} />
-                    </button>
-                  </div>
-                </div>
+                )}
+
+              <button
+                type="button"
+                disabled={companyLoading}
+                className={
+                  companyCurrentPage ===
+                  pageNumber
+                    ? "active"
+                    : ""
+                }
+                onClick={() =>
+                  setCompanyCurrentPage(
+                    pageNumber
+                  )
+                }
+              >
+                {pageNumber}
+              </button>
+            </React.Fragment>
+          );
+        }
+      )}
+
+    <button
+      type="button"
+      title="Next page"
+      disabled={
+        companyLoading ||
+        companyCurrentPage >=
+          companyTotalPages
+      }
+      onClick={() =>
+        setCompanyCurrentPage(
+          (previous) =>
+            Math.min(
+              previous + 1,
+              companyTotalPages
+            )
+        )
+      }
+    >
+      <ChevronRight size={16} />
+    </button>
+  </div>
+</div>
               </div>
             </div>
           )}
@@ -44603,12 +46693,21 @@ isNewBatch:
                 <div className="firm-ui-list-toolbar">
                   <div className="firm-ui-search-box">
                     <Search size={17} />
-                    <input
-                      type="text"
-                      value={filters.group || ''}
-                      placeholder="Search groups..."
-                      onChange={(e) => setFilters({ ...filters, group: e.target.value })}
-                    />
+                 <input
+  type="text"
+  value={filters.group || ""}
+  placeholder="Search groups..."
+  onChange={(event) => {
+    const value = event.target.value;
+
+    setFilters((previous) => ({
+      ...previous,
+      group: value,
+    }));
+
+    setGroupCurrentPage(1);
+  }}
+/>
                   </div>
 
                   <button
@@ -44662,11 +46761,34 @@ isNewBatch:
                         <th className="firm-ui-action-column" style={{ width: '15%' }}>Actions</th>
                       </tr>
                     </thead>
-                    <tbody>
-                      {getFilteredGroups().length > 0 ? (
-                        getFilteredGroups().map((group, index) => (
+                   <tbody>
+  {groupLoading ? (
+    <tr>
+      <td colSpan={4}>
+        <div className="firm-ui-empty-state">
+          <div className="firm-ui-empty-icon">
+            <RefreshCw
+              size={25}
+              className="spin"
+            />
+          </div>
+
+          <h3>Loading groups...</h3>
+
+          <p>
+            Please wait while Group Master records are loaded.
+          </p>
+        </div>
+      </td>
+    </tr>
+  ) : getFilteredGroups().length > 0 ? (
+    getFilteredGroups().map(
+      (group, index) => {
                           <tr key={group._id || group.id || index}>
-                            <td className="firm-ui-sno-column">{index + 1}</td>
+                            <td className="firm-ui-sno-column">{(groupCurrentPage - 1) *
+  groupRowsPerPage +
+  index +
+  1}</td>
                             <td><strong>{group.code || group.groupCode || '-'}</strong></td>
                             <td>{group.name || group.groupName || '-'}</td>
                             <td>
@@ -44703,7 +46825,7 @@ isNewBatch:
                               </div>
                             </td>
                           </tr>
-                        ))
+})
                       ) : (
                         <tr>
                           <td colSpan={5}>
@@ -44739,22 +46861,115 @@ isNewBatch:
                   </table>
                 </div>
 
-                <div className="firm-ui-table-footer">
-                  <span>
-                    Showing <strong>{getFilteredGroups().length ? 1 : 0}</strong> to{' '}
-                    <strong>{getFilteredGroups().length}</strong> of{' '}
-                    <strong>{groupsState.length}</strong> entries
+               <div className="firm-ui-table-footer">
+  <span>
+    Showing{" "}
+    <strong>{groupStartRecord}</strong>
+    {" to "}
+    <strong>{groupEndRecord}</strong>
+    {" of "}
+    <strong>{groupTotalRecords}</strong>
+    {" entries"}
+  </span>
+
+  <div className="firm-ui-pagination">
+    <button
+      type="button"
+      title="Previous page"
+      disabled={
+        groupLoading ||
+        groupCurrentPage <= 1
+      }
+      onClick={() =>
+        setGroupCurrentPage(
+          (previous) =>
+            Math.max(previous - 1, 1)
+        )
+      }
+    >
+      <ChevronLeft size={16} />
+    </button>
+
+    {Array.from(
+      {
+        length: groupTotalPages,
+      },
+      (_, index) => index + 1
+    )
+      .filter((pageNumber) => {
+        return (
+          pageNumber === 1 ||
+          pageNumber === groupTotalPages ||
+          Math.abs(
+            pageNumber - groupCurrentPage
+          ) <= 2
+        );
+      })
+      .map(
+        (
+          pageNumber,
+          index,
+          visiblePages
+        ) => {
+          const previousVisiblePage =
+            visiblePages[index - 1];
+
+          return (
+            <React.Fragment
+              key={pageNumber}
+            >
+              {previousVisiblePage &&
+                pageNumber -
+                  previousVisiblePage >
+                  1 && (
+                  <span className="firm-ui-pagination-dots">
+                    ...
                   </span>
-                  <div className="firm-ui-pagination">
-                    <button type="button" disabled>
-                      <ChevronLeft size={16} />
-                    </button>
-                    <button type="button" className="active">1</button>
-                    <button type="button" disabled>
-                      <ChevronRight size={16} />
-                    </button>
-                  </div>
-                </div>
+                )}
+
+              <button
+                type="button"
+                disabled={groupLoading}
+                className={
+                  groupCurrentPage ===
+                  pageNumber
+                    ? "active"
+                    : ""
+                }
+                onClick={() =>
+                  setGroupCurrentPage(
+                    pageNumber
+                  )
+                }
+              >
+                {pageNumber}
+              </button>
+            </React.Fragment>
+          );
+        }
+      )}
+
+    <button
+      type="button"
+      title="Next page"
+      disabled={
+        groupLoading ||
+        groupCurrentPage >= groupTotalPages
+      }
+      onClick={() =>
+        setGroupCurrentPage(
+          (previous) =>
+            Math.min(
+              previous + 1,
+              groupTotalPages
+            )
+        )
+      }
+    >
+      <ChevronRight size={16} />
+    </button>
+  </div>
+</div>
               </div>
             </div>
           )}
@@ -44866,11 +47081,21 @@ isNewBatch:
                   <div className="firm-ui-search-box">
                     <Search size={17} />
                     <input
-                      type="text"
-                      value={filters.category || ''}
-                      placeholder="Search categories..."
-                      onChange={(e) => setFilters({ ...filters, category: e.target.value })}
-                    />
+  type="text"
+  value={filters.category || ""}
+  placeholder="Search categories..."
+  onChange={(event) => {
+    const value =
+      event.target.value;
+
+    setFilters((previous) => ({
+      ...previous,
+      category: value,
+    }));
+
+    setCategoryCurrentPage(1);
+  }}
+/>
                   </div>
 
                   <button
@@ -44924,11 +47149,38 @@ isNewBatch:
                         <th className="firm-ui-action-column" style={{ width: '15%' }}>Actions</th>
                       </tr>
                     </thead>
-                    <tbody>
-                      {getFilteredCategories().length > 0 ? (
-                        getFilteredCategories().map((category, index) => (
+                   <tbody>
+  {categoryLoading ? (
+    <tr>
+      <td colSpan={5}>
+        <div className="firm-ui-empty-state">
+          <div className="firm-ui-empty-icon">
+            <RefreshCw
+              size={25}
+              className="spin"
+            />
+          </div>
+
+          <h3>
+            Loading categories...
+          </h3>
+
+          <p>
+            Please wait while Category Master records are loaded.
+          </p>
+        </div>
+      </td>
+    </tr>
+  ) : getFilteredCategories().length > 0 ? (
+    getFilteredCategories().map(
+      (category, index) => (
                           <tr key={category._id || category.id || index}>
-                            <td className="firm-ui-sno-column">{index + 1}</td>
+                           <td className="firm-ui-sno-column">
+  {(categoryCurrentPage - 1) *
+    categoryRowsPerPage +
+    index +
+    1}
+</td>
                             <td><strong>{category.code || category.categoryCode || '-'}</strong></td>
                             <td>{category.name || category.categoryName || '-'}</td>
                             <td>
@@ -45001,22 +47253,130 @@ isNewBatch:
                   </table>
                 </div>
 
-                <div className="firm-ui-table-footer">
-                  <span>
-                    Showing <strong>{getFilteredCategories().length ? 1 : 0}</strong> to{' '}
-                    <strong>{getFilteredCategories().length}</strong> of{' '}
-                    <strong>{categoriesState.length}</strong> entries
+               <div className="firm-ui-table-footer">
+  <span>
+    Showing{" "}
+    <strong>
+      {categoryStartRecord}
+    </strong>
+    {" to "}
+    <strong>
+      {categoryEndRecord}
+    </strong>
+    {" of "}
+    <strong>
+      {categoryTotalRecords}
+    </strong>
+    {" entries"}
+  </span>
+
+  <div className="firm-ui-pagination">
+    <button
+      type="button"
+      title="Previous page"
+      disabled={
+        categoryLoading ||
+        categoryCurrentPage <= 1
+      }
+      onClick={() =>
+        setCategoryCurrentPage(
+          (previous) =>
+            Math.max(
+              previous - 1,
+              1
+            )
+        )
+      }
+    >
+      <ChevronLeft size={16} />
+    </button>
+
+    {Array.from(
+      {
+        length:
+          categoryTotalPages,
+      },
+      (_, index) => index + 1
+    )
+      .filter((pageNumber) => {
+        return (
+          pageNumber === 1 ||
+          pageNumber ===
+            categoryTotalPages ||
+          Math.abs(
+            pageNumber -
+              categoryCurrentPage
+          ) <= 2
+        );
+      })
+      .map(
+        (
+          pageNumber,
+          index,
+          visiblePages
+        ) => {
+          const previousPage =
+            visiblePages[index - 1];
+
+          return (
+            <React.Fragment
+              key={pageNumber}
+            >
+              {previousPage &&
+                pageNumber -
+                  previousPage >
+                  1 && (
+                  <span className="firm-ui-pagination-dots">
+                    ...
                   </span>
-                  <div className="firm-ui-pagination">
-                    <button type="button" disabled>
-                      <ChevronLeft size={16} />
-                    </button>
-                    <button type="button" className="active">1</button>
-                    <button type="button" disabled>
-                      <ChevronRight size={16} />
-                    </button>
-                  </div>
-                </div>
+                )}
+
+              <button
+                type="button"
+                disabled={
+                  categoryLoading
+                }
+                className={
+                  categoryCurrentPage ===
+                  pageNumber
+                    ? "active"
+                    : ""
+                }
+                onClick={() =>
+                  setCategoryCurrentPage(
+                    pageNumber
+                  )
+                }
+              >
+                {pageNumber}
+              </button>
+            </React.Fragment>
+          );
+        }
+      )}
+
+    <button
+      type="button"
+      title="Next page"
+      disabled={
+        categoryLoading ||
+        categoryCurrentPage >=
+          categoryTotalPages
+      }
+      onClick={() =>
+        setCategoryCurrentPage(
+          (previous) =>
+            Math.min(
+              previous + 1,
+              categoryTotalPages
+            )
+        )
+      }
+    >
+      <ChevronRight size={16} />
+    </button>
+  </div>
+</div>
               </div>
             </div>
           )}
@@ -45435,13 +47795,24 @@ isNewBatch:
                 <div className="firm-ui-list-toolbar">
                   <div className="firm-ui-search-box">
                     <Search size={17} />
-                    <input
-                      type="text"
-                      value={filters.product || ''}
-                      placeholder="Search products..."
-                      onChange={(e) => setFilters({ ...filters, product: e.target.value })}
-                    />
+                   <input
+  type="text"
+  value={filters.product || ""}
+  placeholder="Search product code, name, barcode..."
+  onChange={(event) => {
+    const value =
+      event.target.value;
+
+    setFilters((previous) => ({
+      ...previous,
+      product: value,
+    }));
+
+    setProductCurrentPage(1);
+  }}
+/>  
                   </div>
+
 
                   <button
                     type="button"
@@ -45515,11 +47886,35 @@ isNewBatch:
                         <th className="firm-ui-action-column" style={{ width: '14%' }}>Actions</th>
                       </tr>
                     </thead>
-                    <tbody>
-                      {getFilteredProducts().length > 0 ? (
+                   <tbody>
+  {productMasterLoading ? (
+    <tr>
+      <td colSpan={10}>
+        <div className="firm-ui-empty-state">
+          <div className="firm-ui-empty-icon">
+            <RefreshCw
+              size={25}
+              className="spin"
+            />
+          </div>
+
+          <h3>
+            Loading products...
+          </h3>
+
+          <p>
+            Please wait while Product Master records are loaded.
+          </p>
+        </div>
+      </td>
+    </tr>
+  ) : getFilteredProducts().length > 0 ? (
                         getFilteredProducts().map((product, index) => (
                           <tr key={product._id || product.id || index}>
-                            <td className="firm-ui-sno-column">{index + 1}</td>
+                            <td className="firm-ui-sno-column">{(productCurrentPage - 1) *
+  productRowsPerPage +
+  index +
+  1}</td>
                             <td><strong>{product.code || product.productCode || '-'}</strong></td>
                             <td>{product.name || product.productName || '-'}</td>
                             <td>{product.companyName || '-'}</td>
@@ -45621,22 +48016,168 @@ isNewBatch:
                   </table>
                 </div>
 
-                <div className="firm-ui-table-footer">
-                  <span>
-                    Showing <strong>{getFilteredProducts().length ? 1 : 0}</strong> to{' '}
-                    <strong>{getFilteredProducts().length}</strong> of{' '}
-                    <strong>{products.length}</strong> entries
+        <div className="firm-ui-table-footer">
+  <div>
+    <span>
+      Showing{" "}
+      <strong>
+        {productStartRecord}
+      </strong>
+      {" to "}
+      <strong>
+        {productEndRecord}
+      </strong>
+      {" of "}
+      <strong>
+        {productTotalRecords}
+      </strong>
+      {" products"}
+    </span>
+
+    <div className="firm-ui-page-size">
+      <span>Rows:</span>
+
+      <select
+        value={productRowsPerPage}
+        disabled={
+          productMasterLoading
+        }
+        onChange={(event) => {
+          setProductRowsPerPage(
+            Number(
+              event.target.value
+            )
+          );
+
+          setProductCurrentPage(1);
+        }}
+      >
+        <option value={10}>
+          10
+        </option>
+
+        <option value={20}>
+          20
+        </option>
+
+        <option value={50}>
+          50
+        </option>
+
+        <option value={100}>
+          100
+        </option>
+      </select>
+    </div>
+  </div>
+
+  <div className="firm-ui-pagination">
+    <button
+      type="button"
+      title="Previous page"
+      disabled={
+        productMasterLoading ||
+        productCurrentPage <= 1
+      }
+      onClick={() =>
+        setProductCurrentPage(
+          (previous) =>
+            Math.max(
+              previous - 1,
+              1
+            )
+        )
+      }
+    >
+      <ChevronLeft size={16} />
+    </button>
+
+    {Array.from(
+      {
+        length:
+          productTotalPages,
+      },
+      (_, index) => index + 1
+    )
+      .filter((pageNumber) => {
+        return (
+          pageNumber === 1 ||
+          pageNumber ===
+            productTotalPages ||
+          Math.abs(
+            pageNumber -
+              productCurrentPage
+          ) <= 2
+        );
+      })
+      .map(
+        (
+          pageNumber,
+          index,
+          visiblePages
+        ) => {
+          const previousPage =
+            visiblePages[index - 1];
+
+          return (
+            <React.Fragment
+              key={pageNumber}
+            >
+              {previousPage &&
+                pageNumber -
+                  previousPage >
+                  1 && (
+                  <span className="firm-ui-pagination-dots">
+                    ...
                   </span>
-                  <div className="firm-ui-pagination">
-                    <button type="button" disabled>
-                      <ChevronLeft size={16} />
-                    </button>
-                    <button type="button" className="active">1</button>
-                    <button type="button" disabled>
-                      <ChevronRight size={16} />
-                    </button>
-                  </div>
-                </div>
+                )}
+
+              <button
+                type="button"
+                disabled={
+                  productMasterLoading
+                }
+                className={
+                  productCurrentPage ===
+                  pageNumber
+                    ? "active"
+                    : ""
+                }
+                onClick={() =>
+                  setProductCurrentPage(
+                    pageNumber
+                  )
+                }
+              >
+                {pageNumber}
+              </button>
+            </React.Fragment>
+          );
+        }
+      )}
+
+    <button
+      type="button"
+      title="Next page"
+      disabled={
+        productMasterLoading ||
+        productCurrentPage >=
+          productTotalPages
+      }
+      onClick={() =>
+        setProductCurrentPage(
+          (previous) =>
+            Math.min(
+              previous + 1,
+              productTotalPages
+            )
+        )
+      }
+    >
+      <ChevronRight size={16} />
+    </button>
+  </div>
+</div>
               </div>
             </div>
           )}

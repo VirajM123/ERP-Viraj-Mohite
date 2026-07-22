@@ -345,24 +345,144 @@ app.post("/api/login", ensureConnection, async (req, res) => {
 
 app.get("/api/users", ensureConnection, async (req, res) => {
   try {
-    const { distributorId, firmId } = req.query;
+    const distributorId = String(
+      req.query.distributorId || ""
+    ).trim();
+
+    const firmId = String(
+      req.query.firmId || ""
+    ).trim();
+
+    const search = String(
+      req.query.search || ""
+    ).trim();
+
+    const requestedPage = Number.parseInt(
+      req.query.page,
+      10
+    );
+
+    const requestedLimit = Number.parseInt(
+      req.query.limit,
+      10
+    );
+
+    const page =
+      Number.isFinite(requestedPage) &&
+      requestedPage > 0
+        ? requestedPage
+        : 1;
+
+    const limit =
+      Number.isFinite(requestedLimit) &&
+      requestedLimit > 0
+        ? Math.min(requestedLimit, 100)
+        : 10;
 
     if (!distributorId || !firmId) {
       return res.status(400).json({
         success: false,
-        message: "distributorId and firmId are required",
+        message:
+          "distributorId and firmId are required",
       });
     }
 
-    const users = await User.find({
+    const escapedSearch = search.replace(
+      /[.*+?^${}()|[\]\\]/g,
+      "\\$&"
+    );
+
+    const filter = {
       distributorId,
       firmId,
       isActive: true,
-    }).sort({ createdAt: -1 });
+    };
 
-    res.json({ success: true, count: users.length, users });
+    if (escapedSearch) {
+      const searchRegex = new RegExp(
+        escapedSearch,
+        "i"
+      );
+
+      filter.$or = [
+        { userId: searchRegex },
+        { userName: searchRegex },
+        { role: searchRegex },
+        { firmName: searchRegex },
+      ];
+    }
+
+    const totalRecords =
+      await User.countDocuments(filter);
+
+    const totalPages = Math.max(
+      1,
+      Math.ceil(totalRecords / limit)
+    );
+
+    const currentPage = Math.min(
+      page,
+      totalPages
+    );
+
+    const skip =
+      (currentPage - 1) * limit;
+
+    const users = await User.find(filter)
+      /*
+       * Password fields are not needed in the list.
+       * Do not send them unnecessarily.
+       */
+      .select("-password")
+      .sort({
+        createdAt: -1,
+        _id: -1,
+      })
+      .skip(skip)
+      .limit(limit)
+      .lean();
+
+    return res.json({
+      success: true,
+
+      users,
+
+      count: users.length,
+
+      pagination: {
+        currentPage,
+        page: currentPage,
+        limit,
+        totalRecords,
+        totalPages,
+
+        hasPreviousPage:
+          currentPage > 1,
+
+        hasNextPage:
+          currentPage < totalPages,
+
+        startRecord:
+          totalRecords === 0
+            ? 0
+            : skip + 1,
+
+        endRecord:
+          totalRecords === 0
+            ? 0
+            : Math.min(
+                skip + users.length,
+                totalRecords
+              ),
+      },
+    });
   } catch (error) {
-    res.status(500).json({
+    console.error(
+      "❌ User Master pagination load error:",
+      error
+    );
+
+    return res.status(500).json({
       success: false,
       message: "Failed to fetch users",
       error: error.message,
@@ -1246,6 +1366,7 @@ app.get(
         areas,
         salesmen,
         partyMappings,
+
         salesmanAreaMappings,
       });
     } catch (error) {
@@ -3837,27 +3958,216 @@ const LoadHeader = mongoose.model(
 );
 
 
-
-
 const OtherAccount = mongoose.model("Mas_OtherAccount", otherAccountSchema);
-app.get("/api/companies", ensureConnection, async (req, res) => {
-  try {
-    const { distributorId, firmId } = req.query;
+app.get(
+  "/api/companies",
+  ensureConnection,
+  async (req, res) => {
+    try {
+      const distributorId = String(
+        req.query.distributorId || ""
+      ).trim();
 
-    if (!distributorId || !firmId) {
-      return res.status(400).json({
+      const firmId = String(
+        req.query.firmId || ""
+      ).trim();
+
+      if (!distributorId || !firmId) {
+        return res.status(400).json({
+          success: false,
+          message:
+            "distributorId and firmId are required",
+        });
+      }
+
+      const companies = await Company.find({
+        distributorId,
+        firmId,
+        isActive: true,
+      })
+        .sort({
+          companyName: 1,
+          companyCode: 1,
+        })
+        .lean();
+
+      return res.json({
+        success: true,
+        count: companies.length,
+        companies,
+      });
+    } catch (error) {
+      console.error(
+        "Company load error:",
+        error
+      );
+
+      return res.status(500).json({
         success: false,
-        message: "distributorId and firmId are required",
+        message:
+          "Failed to fetch companies",
+        error: error.message,
       });
     }
-
-    const companies = await Company.find({ distributorId, firmId, isActive: true }).sort({ createdAt: -1 });
-
-    res.json({ success: true, count: companies.length, companies });
-  } catch (error) {
-    res.status(500).json({ success: false, message: "Failed to fetch companies", error: error.message });
   }
-});
+);
+app.get(
+  "/api/companies/list",
+  ensureConnection,
+  async (req, res) => {
+    try {
+      const distributorId = String(
+        req.query.distributorId || ""
+      ).trim();
+
+      const firmId = String(
+        req.query.firmId || ""
+      ).trim();
+
+      const search = String(
+        req.query.search || ""
+      ).trim();
+
+      const requestedPage = Number.parseInt(
+        req.query.page,
+        10
+      );
+
+      const requestedLimit = Number.parseInt(
+        req.query.limit,
+        10
+      );
+
+      const page =
+        Number.isFinite(requestedPage) &&
+        requestedPage > 0
+          ? requestedPage
+          : 1;
+
+      const limit =
+        Number.isFinite(requestedLimit) &&
+        requestedLimit > 0
+          ? Math.min(requestedLimit, 100)
+          : 10;
+
+      if (!distributorId || !firmId) {
+        return res.status(400).json({
+          success: false,
+          message:
+            "distributorId and firmId are required",
+        });
+      }
+
+      const escapedSearch = search.replace(
+        /[.*+?^${}()|[\]\\]/g,
+        "\\$&"
+      );
+
+      const filter = {
+        distributorId,
+        firmId,
+        isActive: true,
+      };
+
+      if (escapedSearch) {
+        const searchRegex = new RegExp(
+          escapedSearch,
+          "i"
+        );
+
+        filter.$or = [
+          {
+            companyCode: searchRegex,
+          },
+          {
+            companyName: searchRegex,
+          },
+          {
+            companyAddress: searchRegex,
+          },
+          {
+            branchOfficeAddress: searchRegex,
+          },
+          {
+            firmName: searchRegex,
+          },
+        ];
+      }
+
+      const totalRecords =
+        await Company.countDocuments(filter);
+
+      const totalPages = Math.max(
+        1,
+        Math.ceil(totalRecords / limit)
+      );
+
+      const currentPage = Math.min(
+        page,
+        totalPages
+      );
+
+      const skip =
+        (currentPage - 1) * limit;
+
+      const companies = await Company.find(
+        filter
+      )
+        .sort({
+          createdAt: -1,
+          _id: -1,
+        })
+        .skip(skip)
+        .limit(limit)
+        .lean();
+
+      return res.json({
+        success: true,
+        companies,
+        count: companies.length,
+
+        pagination: {
+          currentPage,
+          page: currentPage,
+          limit,
+          totalRecords,
+          totalPages,
+
+          hasPreviousPage:
+            currentPage > 1,
+
+          hasNextPage:
+            currentPage < totalPages,
+
+          startRecord:
+            totalRecords === 0
+              ? 0
+              : skip + 1,
+
+          endRecord:
+            totalRecords === 0
+              ? 0
+              : Math.min(
+                  skip + companies.length,
+                  totalRecords
+                ),
+        },
+      });
+    } catch (error) {
+      console.error(
+        "Company Master list pagination error:",
+        error
+      );
+
+      return res.status(500).json({
+        success: false,
+        message:
+          "Failed to fetch company list",
+        error: error.message,
+      });
+    }
+  }
+);
 
 app.post("/api/companies", ensureConnection, async (req, res) => {
   try {
@@ -4017,6 +4327,158 @@ app.get("/api/groups", ensureConnection, async (req, res) => {
   }
 });
 
+app.get(
+  "/api/groups/list",
+  ensureConnection,
+  async (req, res) => {
+    try {
+      const distributorId = String(
+        req.query.distributorId || ""
+      ).trim();
+
+      const firmId = String(
+        req.query.firmId || ""
+      ).trim();
+
+      const search = String(
+        req.query.search || ""
+      ).trim();
+
+      const requestedPage = Number.parseInt(
+        req.query.page,
+        10
+      );
+
+      const requestedLimit = Number.parseInt(
+        req.query.limit,
+        10
+      );
+
+      const page =
+        Number.isFinite(requestedPage) &&
+        requestedPage > 0
+          ? requestedPage
+          : 1;
+
+      const limit =
+        Number.isFinite(requestedLimit) &&
+        requestedLimit > 0
+          ? Math.min(requestedLimit, 100)
+          : 10;
+
+      if (!distributorId || !firmId) {
+        return res.status(400).json({
+          success: false,
+          message:
+            "distributorId and firmId are required",
+        });
+      }
+
+      const escapedSearch = search.replace(
+        /[.*+?^${}()|[\]\\]/g,
+        "\\$&"
+      );
+
+      const filter = {
+        distributorId,
+        firmId,
+        isActive: true,
+      };
+
+      if (escapedSearch) {
+        const searchRegex = new RegExp(
+          escapedSearch,
+          "i"
+        );
+
+        filter.$or = [
+          {
+            groupCode: searchRegex,
+          },
+          {
+            groupName: searchRegex,
+          },
+          {
+            firmName: searchRegex,
+          },
+        ];
+      }
+
+      const totalRecords =
+        await Group.countDocuments(filter);
+
+      const totalPages = Math.max(
+        1,
+        Math.ceil(totalRecords / limit)
+      );
+
+      const currentPage = Math.min(
+        page,
+        totalPages
+      );
+
+      const skip =
+        (currentPage - 1) * limit;
+
+      const groups = await Group.find(filter)
+        .sort({
+          createdAt: -1,
+          _id: -1,
+        })
+        .skip(skip)
+        .limit(limit)
+        .lean();
+
+      return res.json({
+        success: true,
+
+        groups,
+
+        count: groups.length,
+
+        pagination: {
+          currentPage,
+          page: currentPage,
+          limit,
+          totalRecords,
+          totalPages,
+
+          hasPreviousPage:
+            currentPage > 1,
+
+          hasNextPage:
+            currentPage < totalPages,
+
+          startRecord:
+            totalRecords === 0
+              ? 0
+              : skip + 1,
+
+          endRecord:
+            totalRecords === 0
+              ? 0
+              : Math.min(
+                  skip + groups.length,
+                  totalRecords
+                ),
+        },
+      });
+    } catch (error) {
+      console.error(
+        "Group Master list pagination error:",
+        error
+      );
+
+      return res.status(500).json({
+        success: false,
+        message:
+          "Failed to fetch Group Master list",
+        error: error.message,
+      });
+    }
+  }
+);
+
 app.post("/api/groups", ensureConnection, async (req, res) => {
   try {
     const { distributorId, firmId, firmName, code, name } = req.body;
@@ -4077,6 +4539,158 @@ app.get("/api/categories", ensureConnection, async (req, res) => {
     });
   }
 });
+app.get(
+  "/api/categories/list",
+  ensureConnection,
+  async (req, res) => {
+    try {
+      const distributorId = String(
+        req.query.distributorId || ""
+      ).trim();
+
+      const firmId = String(
+        req.query.firmId || ""
+      ).trim();
+
+      const search = String(
+        req.query.search || ""
+      ).trim();
+
+      const requestedPage = Number.parseInt(
+        req.query.page,
+        10
+      );
+
+      const requestedLimit = Number.parseInt(
+        req.query.limit,
+        10
+      );
+
+      const page =
+        Number.isFinite(requestedPage) &&
+        requestedPage > 0
+          ? requestedPage
+          : 1;
+
+      const limit =
+        Number.isFinite(requestedLimit) &&
+        requestedLimit > 0
+          ? Math.min(requestedLimit, 100)
+          : 10;
+
+      if (!distributorId || !firmId) {
+        return res.status(400).json({
+          success: false,
+          message:
+            "distributorId and firmId are required",
+        });
+      }
+
+      const escapedSearch = search.replace(
+        /[.*+?^${}()|[\]\\]/g,
+        "\\$&"
+      );
+
+      const filter = {
+        distributorId,
+        firmId,
+        isActive: true,
+      };
+
+      if (escapedSearch) {
+        const searchRegex = new RegExp(
+          escapedSearch,
+          "i"
+        );
+
+        filter.$or = [
+          {
+            categoryCode: searchRegex,
+          },
+          {
+            categoryName: searchRegex,
+          },
+          {
+            firmName: searchRegex,
+          },
+        ];
+      }
+
+      const totalRecords =
+        await Category.countDocuments(filter);
+
+      const totalPages = Math.max(
+        1,
+        Math.ceil(totalRecords / limit)
+      );
+
+      const currentPage = Math.min(
+        page,
+        totalPages
+      );
+
+      const skip =
+        (currentPage - 1) * limit;
+
+      const categories =
+        await Category.find(filter)
+          .sort({
+            createdAt: -1,
+            _id: -1,
+          })
+          .skip(skip)
+          .limit(limit)
+          .lean();
+
+      return res.json({
+        success: true,
+
+        categories,
+
+        count: categories.length,
+
+        pagination: {
+          currentPage,
+          page: currentPage,
+          limit,
+          totalRecords,
+          totalPages,
+
+          hasPreviousPage:
+            currentPage > 1,
+
+          hasNextPage:
+            currentPage < totalPages,
+
+          startRecord:
+            totalRecords === 0
+              ? 0
+              : skip + 1,
+
+          endRecord:
+            totalRecords === 0
+              ? 0
+              : Math.min(
+                  skip + categories.length,
+                  totalRecords
+                ),
+        },
+      });
+    } catch (error) {
+      console.error(
+        "Category Master list pagination error:",
+        error
+      );
+
+      return res.status(500).json({
+        success: false,
+        message:
+          "Failed to fetch Category Master list",
+        error: error.message,
+      });
+    }
+  }
+);
 
 app.post("/api/categories", ensureConnection, async (req, res) => {
   try {
@@ -4148,6 +4762,339 @@ app.get("/api/products", ensureConnection, async (req, res) => {
     });
   }
 });
+app.get(
+  "/api/products/list",
+  ensureConnection,
+  async (req, res) => {
+    try {
+      const distributorId = String(
+        req.query.distributorId || ""
+      ).trim();
+
+      const firmId = String(
+        req.query.firmId || ""
+      ).trim();
+
+      const search = String(
+        req.query.search || ""
+      ).trim();
+
+      const companyCode = String(
+        req.query.companyCode || ""
+      ).trim();
+
+      const groupCode = String(
+        req.query.groupCode || ""
+      ).trim();
+
+      const categoryCode = String(
+        req.query.categoryCode || ""
+      ).trim();
+
+      const requestedPage = Number.parseInt(
+        req.query.page,
+        10
+      );
+
+      const requestedLimit = Number.parseInt(
+        req.query.limit,
+        10
+      );
+
+      const page =
+        Number.isFinite(requestedPage) &&
+        requestedPage > 0
+          ? requestedPage
+          : 1;
+
+      const limit =
+        Number.isFinite(requestedLimit) &&
+        requestedLimit > 0
+          ? Math.min(requestedLimit, 100)
+          : 20;
+
+      if (!distributorId || !firmId) {
+        return res.status(400).json({
+          success: false,
+          message:
+            "distributorId and firmId are required",
+        });
+      }
+
+      /*
+       * Main filters.
+       */
+      const filter = {
+        distributorId,
+        firmId,
+
+        /*
+         * Include active records and old records
+         * where isActive may not exist.
+         */
+        isActive: {
+          $ne: false,
+        },
+      };
+
+      /*
+       * Store all optional filters inside $and.
+       *
+       * This avoids conflicts between:
+       * - product search
+       * - company filter
+       * - group filter
+       * - category filter
+       */
+      const andConditions = [];
+
+      if (companyCode) {
+        andConditions.push({
+          $or: [
+            {
+              CompanyCode: companyCode,
+            },
+            {
+              companyCode,
+            },
+            {
+              CompCode: companyCode,
+            },
+          ],
+        });
+      }
+
+      if (groupCode) {
+        andConditions.push({
+          $or: [
+            {
+              GroupCode: groupCode,
+            },
+            {
+              groupCode,
+            },
+          ],
+        });
+      }
+
+      if (categoryCode) {
+        andConditions.push({
+          $or: [
+            {
+              CategoryCode: categoryCode,
+            },
+            {
+              categoryCode,
+            },
+          ],
+        });
+      }
+
+      /*
+       * Backend product search.
+       */
+      if (search) {
+        const escapedSearch = search.replace(
+          /[.*+?^${}()|[\]\\]/g,
+          "\\$&"
+        );
+
+        const searchRegex = new RegExp(
+          escapedSearch,
+          "i"
+        );
+
+        andConditions.push({
+          $or: [
+            {
+              ProdCode: searchRegex,
+            },
+            {
+              productCode: searchRegex,
+            },
+            {
+              code: searchRegex,
+            },
+
+            {
+              ProdName: searchRegex,
+            },
+            {
+              productName: searchRegex,
+            },
+            {
+              name: searchRegex,
+            },
+
+            {
+              ShortCode: searchRegex,
+            },
+            {
+              shortCode: searchRegex,
+            },
+
+            {
+              EANNo: searchRegex,
+            },
+            {
+              EANCode: searchRegex,
+            },
+            {
+              eanCode: searchRegex,
+            },
+            {
+              barcode: searchRegex,
+            },
+
+            {
+              CompanyCode: searchRegex,
+            },
+            {
+              companyCode: searchRegex,
+            },
+
+            {
+              CompanyName: searchRegex,
+            },
+            {
+              companyName: searchRegex,
+            },
+
+            {
+              GroupCode: searchRegex,
+            },
+            {
+              groupCode: searchRegex,
+            },
+
+            {
+              GroupName: searchRegex,
+            },
+            {
+              groupName: searchRegex,
+            },
+
+            {
+              CategoryCode: searchRegex,
+            },
+            {
+              categoryCode: searchRegex,
+            },
+
+            {
+              CategoryName: searchRegex,
+            },
+            {
+              categoryName: searchRegex,
+            },
+
+            {
+              HSNCode: searchRegex,
+            },
+            {
+              hsnCode: searchRegex,
+            },
+            {
+              hsn: searchRegex,
+            },
+          ],
+        });
+      }
+
+      if (andConditions.length > 0) {
+        filter.$and = andConditions;
+      }
+
+      /*
+       * Count matching records.
+       */
+      const totalRecords =
+        await Product.countDocuments(filter);
+
+      const totalPages = Math.max(
+        1,
+        Math.ceil(totalRecords / limit)
+      );
+
+      /*
+       * Prevent requesting a page greater than
+       * the available page count.
+       */
+      const currentPage = Math.min(
+        page,
+        totalPages
+      );
+
+      const skip =
+        (currentPage - 1) * limit;
+
+      /*
+       * Fetch only the current page.
+       */
+      const products = await Product.find(
+        filter
+      )
+        .sort({
+          ProdName: 1,
+          productName: 1,
+          ProdCode: 1,
+          productCode: 1,
+          _id: 1,
+        })
+        .skip(skip)
+        .limit(limit)
+        .lean();
+
+      return res.status(200).json({
+        success: true,
+
+        products,
+
+        count: products.length,
+
+        pagination: {
+          currentPage,
+          page: currentPage,
+          limit,
+
+          totalRecords,
+          totalPages,
+
+          hasPreviousPage:
+            currentPage > 1,
+
+          hasNextPage:
+            currentPage < totalPages,
+
+          startRecord:
+            totalRecords === 0
+              ? 0
+              : skip + 1,
+
+          endRecord:
+            totalRecords === 0
+              ? 0
+              : Math.min(
+                  skip + products.length,
+                  totalRecords
+                ),
+        },
+      });
+    } catch (error) {
+      console.error(
+        "Product Master pagination error:",
+        error
+      );
+
+      return res.status(500).json({
+        success: false,
+        message:
+          "Failed to load Product Master",
+        error: error.message,
+      });
+    }
+  }
+);
 
 app.post("/api/products", ensureConnection, async (req, res) => {
   try {
@@ -4411,10 +5358,47 @@ app.post("/api/other-accounts", ensureConnection, async (req, res) => {
   }
 });
 
-
 app.get("/api/firms", ensureConnection, async (req, res) => {
   try {
-    const { distributorId } = req.query;
+    const distributorId = String(
+      req.query.distributorId || ""
+    ).trim();
+
+    const search = String(
+      req.query.search || ""
+    ).trim();
+
+    /*
+     * Safe pagination values.
+     *
+     * Existing frontend calls without page and limit
+     * will automatically load page 1 with 10 records.
+     */
+    const requestedPage = Number.parseInt(
+      req.query.page,
+      10
+    );
+
+    const requestedLimit = Number.parseInt(
+      req.query.limit,
+      10
+    );
+
+    const page =
+      Number.isFinite(requestedPage) &&
+      requestedPage > 0
+        ? requestedPage
+        : 1;
+
+    /*
+     * Maximum 100 records per request prevents
+     * accidental very large API responses.
+     */
+    const limit =
+      Number.isFinite(requestedLimit) &&
+      requestedLimit > 0
+        ? Math.min(requestedLimit, 100)
+        : 10;
 
     if (!distributorId) {
       return res.status(400).json({
@@ -4423,14 +5407,118 @@ app.get("/api/firms", ensureConnection, async (req, res) => {
       });
     }
 
-    const firms = await Register.find(
-      { distributorId, isActive: true },
-      { password: 0 }
-    ).sort({ firmName: 1 });
+    /*
+     * Escape special regular-expression characters
+     * entered in the search box.
+     */
+    const escapedSearch = search.replace(
+      /[.*+?^${}()|[\]\\]/g,
+      "\\$&"
+    );
 
-    res.json({ success: true, firms });
+    const filter = {
+      distributorId,
+      isActive: true,
+    };
+
+    /*
+     * Search is applied before count, skip and limit.
+     * This means pagination works on filtered records.
+     */
+    if (escapedSearch) {
+      const searchRegex = new RegExp(
+        escapedSearch,
+        "i"
+      );
+
+      filter.$or = [
+        { firmCode: searchRegex },
+        { firmName: searchRegex },
+        { city: searchRegex },
+        { state: searchRegex },
+        { mobileNo: searchRegex },
+        { phoneNo: searchRegex },
+        { gstNo: searchRegex },
+        { email: searchRegex },
+      ];
+    }
+
+    /*
+     * Count matching records first so frontend
+     * can calculate pagination buttons.
+     */
+    const totalRecords =
+      await Register.countDocuments(filter);
+
+    const totalPages =
+      Math.max(
+        1,
+        Math.ceil(totalRecords / limit)
+      );
+
+    /*
+     * If the requested page is greater than the
+     * available pages, return the last valid page.
+     */
+    const currentPage =
+      Math.min(page, totalPages);
+
+    const skip =
+      (currentPage - 1) * limit;
+
+    const firms = await Register.find(
+      filter,
+      {
+        password: 0,
+      }
+    )
+      .sort({
+        firmName: 1,
+        _id: 1,
+      })
+      .skip(skip)
+      .limit(limit)
+      .lean();
+
+    return res.json({
+      success: true,
+
+      firms,
+
+      pagination: {
+        currentPage,
+        page: currentPage,
+        limit,
+        totalRecords,
+        totalPages,
+
+        hasPreviousPage:
+          currentPage > 1,
+
+        hasNextPage:
+          currentPage < totalPages,
+
+        startRecord:
+          totalRecords === 0
+            ? 0
+            : skip + 1,
+
+        endRecord:
+          totalRecords === 0
+            ? 0
+            : Math.min(
+                skip + firms.length,
+                totalRecords
+              ),
+      },
+    });
   } catch (error) {
-    res.status(500).json({
+    console.error(
+      "❌ Firm pagination load error:",
+      error
+    );
+
+    return res.status(500).json({
       success: false,
       message: "Failed to fetch firms",
       error: error.message,
