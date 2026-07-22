@@ -1,0 +1,7467 @@
+/* Main Container */
+.transaction-page {
+  padding: 20px;
+  background: #f8fafc;
+  min-height: 100vh;
+}
+
+.master-section {
+  background: white;
+  border-radius: 12px;
+  padding: 20px;
+  margin-bottom: 24px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+}
+
+/* Grid Header */
+.grid-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 20px;
+  padding-bottom: 12px;
+  border-bottom: 2px solid #e2e8f0;
+}
+
+.grid-header h3 {
+  font-size: 18px;
+  font-weight: 600;
+  color: #1e293b;
+  margin: 0;
+}
+
+.table-controls {
+  display: flex;
+  gap: 10px;
+}
+
+/* Buttons */
+.btn-add-new, .btn-primary {
+  background-color: #3b82f6;
+  color: white;
+  padding: 8px 16px;
+  border: none;
+  border-radius: 6px;
+  font-weight: 600;
+  font-size: 14px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.btn-add-new:hover, .btn-primary:hover {
+  background-color: #2563eb;
+  transform: translateY(-1px);
+}
+
+.btn-cheque-bounce { background-color: #8b5cf6; }
+.btn-cheque-bounce:hover { background-color: #7c3aed; }
+
+.btn-pdc-docket { background-color: #8b5cf6; }
+.btn-pdc-docket:hover { background-color: #7c3aed; }
+
+.btn-contra { background-color: #10b981; }
+.btn-contra:hover { background-color: #059669; }
+
+.btn-collection-voucher { background-color: #8b5cf6; }
+.btn-collection-voucher:hover { background-color: #7c3aed; }
+
+.btn-edit {
+  background-color: #f59e0b;
+  color: white;
+  padding: 6px 12px;
+  border: none;
+  border-radius: 4px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  margin-right: 8px;
+}
+
+.btn-edit:hover { background-color: #d97706; }
+
+.btn-delete {
+  background-color: #ef4444;
+  color: white;
+  padding: 6px 12px;
+  border: none;
+  border-radius: 4px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.btn-delete:hover { background-color: #dc2626; }
+
+.btn-save {
+  background-color: #10b981;
+  color: white;
+  padding: 10px 24px;
+  border: none;
+  border-radius: 6px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.btn-save:hover { background-color: #059669; }
+
+.btn-cancel, .btn-secondary {
+  background-color: #ef4444;
+  color: white;
+  padding: 10px 24px;
+  border: none;
+  border-radius: 6px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.btn-cancel:hover, .btn-secondary:hover { background-color: #dc2626; }
+
+.btn-secondary {
+  background-color: #64748b;
+}
+
+.btn-secondary:hover {
+  background-color: #475569;
+}
+
+/* Form Header */
+.form-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding-bottom: 16px;
+  border-bottom: 2px solid #e2e8f0;
+  margin-bottom: 24px;
+}
+
+.close-form-btn {
+  background: none;
+  border: none;
+  font-size: 32px;
+  cursor: pointer;
+  color: #64748b;
+  transition: all 0.2s ease;
+  width: 36px;
+  height: 36px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 6px;
+}
+
+.close-form-btn:hover {
+  color: #ef4444;
+  background-color: #fef2f2;
+}
+
+.page-title-large {
+  font-size: 24px;
+  font-weight: 600;
+  color: #1e293b;
+  margin: 0;
+}
+
+/* Form Actions */
+.form-actions {
+  display: flex;
+  gap: 12px;
+  justify-content: flex-end;
+  padding-top: 24px;
+  border-top: 1px solid #e2e8f0;
+  margin-top: 24px;
+}
+
+/* Form Grids */
+.form-grid-4, .form-row-4 {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 16px;
+  margin-bottom: 20px;
+}
+
+.form-row-single {
+  margin-bottom: 20px;
+}
+
+.labeled-input, .form-field, .info-group {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.labeled-input label, .form-field label, .info-group label {
+  font-size: 12px;
+  font-weight: 600;
+  color: #334155;
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+}
+
+.labeled-input input, .labeled-input select, .labeled-input textarea,
+.form-field input, .form-field select, .form-field textarea,
+.info-group input, .info-group select, .info-group textarea {
+  padding: 8px 12px;
+  border: 1px solid #cbd5e1;
+  border-radius: 6px;
+  font-size: 14px;
+  transition: all 0.2s ease;
+  background: white;
+  font-family: inherit;
+  width: 100%;
+}
+
+.labeled-input input:focus, .labeled-input select:focus, .labeled-input textarea:focus,
+.form-field input:focus, .form-field select:focus, .form-field textarea:focus,
+.info-group input:focus, .info-group select:focus, .info-group textarea:focus {
+  outline: none;
+  border-color: #3b82f6;
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+}
+
+.form-field select, .info-group select {
+  cursor: pointer;
+  appearance: none;
+  background-image: url("data:image/svg+xml;charset=UTF-8,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3e%3cpolyline points='6 9 12 15 18 9'%3e%3c/polyline%3e%3c/svg%3e");
+  background-repeat: no-repeat;
+  background-position: right 8px center;
+  background-size: 16px;
+  padding-right: 28px;
+}
+
+.narration-field textarea {
+  resize: vertical;
+  min-height: 60px;
+}
+
+.section-header, .section-header-row {
+  font-size: 16px;
+  font-weight: 600;
+  color: #1e293b;
+  margin: 0 0 16px 0;
+  padding-bottom: 8px;
+  border-bottom: 1px solid #e2e8f0;
+}
+
+.section-header-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+/* Tables */
+.table-responsive {
+  overflow-x: auto;
+  border-radius: 8px;
+  border: 1px solid #e2e8f0;
+}
+
+.erp-table, .bills-table {
+  width: 100%;
+  border-collapse: collapse;
+  background: white;
+}
+
+.erp-table thead, .bills-table thead {
+  background-color: #f8fafc;
+  border-bottom: 2px solid #e2e8f0;
+}
+
+.erp-table th, .bills-table th {
+  padding: 12px 16px;
+  text-align: left;
+  font-size: 13px;
+  font-weight: 600;
+  color: #475569;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.erp-table td, .bills-table td {
+  padding: 12px 16px;
+  border-bottom: 1px solid #e2e8f0;
+  font-size: 14px;
+  color: #1e293b;
+}
+
+.erp-table tbody tr:hover, .bills-table tbody tr:hover {
+  background-color: #f8fafc;
+}
+
+.erp-table input, .erp-table select,
+.bills-table input, .bills-table select {
+  width: 100%;
+  padding: 6px 8px;
+  border: 1px solid #cbd5e1;
+  border-radius: 4px;
+  font-size: 13px;
+}
+
+.amount-cell {
+  text-align: right;
+  font-weight: 500;
+}
+
+.text-center {
+  text-align: center;
+}
+
+/* Summary Cards */
+.receipt-summary-grid, .summary-grid, .payment-summary-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 16px;
+  margin-top: 16px;
+}
+
+.summary-card {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  padding: 16px;
+  border-radius: 8px;
+  color: white;
+  text-align: center;
+}
+
+.summary-card label {
+  font-size: 12px;
+  opacity: 0.9;
+  display: block;
+  margin-bottom: 8px;
+}
+
+.summary-card h3 {
+  font-size: 24px;
+  margin: 0;
+  font-weight: 700;
+}
+
+/* Payment Specific */
+.payment-header-grid {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(140px, 1fr));
+  gap: 10px;
+  align-items: end;
+}
+
+.payment-section .labeled-input input,
+.payment-section .labeled-input select,
+.payment-section .labeled-input textarea {
+  height: 30px;
+  padding: 4px 8px;
+  font-size: 11px;
+}
+
+.payment-section .labeled-input label {
+  font-size: 10px;
+  margin-bottom: 3px;
+}
+
+.payment-narration {
+  grid-column: span 2;
+}
+
+.payment-bottom-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  width: 100%;
+  margin-top: 16px;
+}
+
+.payment-rtgs-card {
+  width: 100%;
+  background: #f8fafc;
+  border: 1px solid #dbeafe;
+  border-radius: 10px;
+  padding: 16px;
+}
+
+.payment-rtgs-card h4 {
+  font-size: 15px;
+  font-weight: 700;
+  margin-bottom: 14px;
+  color: #1e293b;
+}
+
+.payment-rtgs-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(280px, 1fr));
+  gap: 18px;
+}
+
+/* Journal Specific */
+.journal-section {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.journal-header-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(180px, 240px));
+  gap: 14px;
+  align-items: end;
+  justify-content: start;
+}
+
+.journal-narration-row {
+  margin-top: 10px;
+}
+
+.journal-narration-row textarea {
+  height: 34px;
+  min-height: 34px;
+  resize: none;
+}
+
+.journal-section .form-section {
+  margin-bottom: 10px;
+}
+
+.journal-section .section-header {
+  margin-bottom: 8px;
+}
+
+/* Live Search */
+.journal-table {
+  overflow: visible !important;
+}
+
+.journal-table td {
+  vertical-align: top;
+}
+
+.journal-table tbody,
+.journal-table tr,
+.journal-table td {
+  overflow: visible !important;
+  position: relative;
+}
+
+.live-search-box {
+  position: relative;
+  width: 100%;
+}
+
+.live-dropdown, .party-suggestion-dropdown {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  right: 0;
+  width: 100%;
+  background: #fff;
+  border: 1px solid #dbeafe;
+  border-radius: 10px;
+  max-height: 220px;
+  overflow-y: auto;
+  z-index: 999999;
+  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.16);
+}
+
+.live-item, .party-suggestion-item {
+  padding: 10px 12px;
+  cursor: pointer;
+  font-size: 12px;
+  border-bottom: 1px solid #f1f5f9;
+}
+
+.live-item:hover, .party-suggestion-item:hover {
+  background: #eff6ff;
+}
+
+/* PDC Docket Specific */
+.pdc-header-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 24px;
+  margin-bottom: 24px;
+  padding-bottom: 20px;
+  border-bottom: 1px solid #e2e8f0;
+}
+
+.pdc-header-left, .pdc-header-right {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 16px;
+}
+
+.info-group.full-width {
+  grid-column: span 2;
+}
+
+.pdc-clearing-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 24px;
+  margin-bottom: 24px;
+  padding: 16px;
+  background: #f8fafc;
+  border-radius: 8px;
+}
+
+.pdc-summary {
+  display: flex;
+  justify-content: flex-end;
+  gap: 32px;
+  padding: 16px;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  border-radius: 8px;
+  color: white;
+}
+
+.pdc-summary .summary-item {
+  text-align: right;
+}
+
+.pdc-summary .summary-item label {
+  font-size: 12px;
+  opacity: 0.9;
+  display: block;
+  margin-bottom: 4px;
+}
+
+.pdc-summary .summary-item h3 {
+  font-size: 24px;
+  margin: 0;
+  font-weight: 700;
+}
+
+/* Contra Specific */
+.contra-section {
+  max-width: 900px;
+  margin: 0 auto;
+}
+
+.form-row-3 {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 16px;
+  margin-bottom: 16px;
+}
+
+/* Collection Voucher Specific */
+.collection-voucher-section {
+  max-width: 1400px;
+  margin: 0 auto;
+}
+
+.bills-table-container {
+  margin-top: 20px;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.bills-table-container .table-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px 16px;
+  background: #f8fafc;
+  border-bottom: 1px solid #e2e8f0;
+}
+
+.bills-table-container .table-header h3 {
+  font-size: 16px;
+  font-weight: 600;
+  color: #1e293b;
+  margin: 0;
+}
+
+.btn-select-all {
+  background-color: #3b82f6;
+  color: white;
+  padding: 6px 12px;
+  border: none;
+  border-radius: 4px;
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.btn-select-all:hover {
+  background-color: #2563eb;
+}
+
+.bills-table input[type="checkbox"] {
+  width: 18px;
+  height: 18px;
+  cursor: pointer;
+}
+
+.collection-input, .discount-input, .rec-input {
+  min-width: 100px;
+}
+
+.collection-summary {
+  margin-top: 20px;
+  padding-top: 20px;
+  border-top: 2px solid #e2e8f0;
+}
+
+/* No Data Styling */
+.no-data {
+  text-align: center;
+  padding: 40px !important;
+  color: #94a3b8;
+  font-style: italic;
+}
+
+.total-amount-field {
+  background-color: #f1f5f9;
+  font-weight: 600;
+  color: #1e293b;
+  cursor: not-allowed;
+}
+
+/* Animations */
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.master-section {
+  animation: fadeIn 0.3s ease-in-out;
+}
+
+/* Scrollbar Styling */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: #f1f1f1;
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #94a3b8;
+}
+
+/* Modal Styles */
+.modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+}
+
+.modal-container {
+  background: white;
+  border-radius: 12px;
+  width: 90%;
+  max-width: 1400px;
+  max-height: 85vh;
+  display: flex;
+  flex-direction: column;
+  box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1);
+}
+
+.modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 16px 20px;
+  border-bottom: 1px solid #e2e8f0;
+}
+
+.modal-header h3 {
+  margin: 0;
+  font-size: 18px;
+  color: #1e293b;
+}
+
+.modal-close-btn {
+  background: none;
+  border: none;
+  font-size: 24px;
+  cursor: pointer;
+  color: #666;
+  padding: 0;
+  width: 30px;
+  height: 30px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 4px;
+}
+
+.modal-close-btn:hover {
+  background: #e0e0e0;
+  color: #333;
+}
+
+.modal-body {
+  padding: 20px;
+  overflow-y: auto;
+  flex: 1;
+}
+
+.modal-toolbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 16px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid #e0e0e0;
+}
+
+.btn-select-all-modal {
+  padding: 6px 12px;
+  background: #2196f3;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 14px;
+}
+
+.btn-select-all-modal:hover {
+  background: #1976d2;
+}
+
+.modal-stats {
+  font-size: 14px;
+  color: #666;
+}
+
+.modal-table-container {
+  overflow-x: auto;
+  max-height: 400px;
+  overflow-y: auto;
+}
+
+.modal-bills-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+
+.modal-bills-table th,
+.modal-bills-table td {
+  border: 1px solid #e0e0e0;
+  padding: 10px;
+  text-align: left;
+}
+
+.modal-bills-table th {
+  background: #f5f5f5;
+  font-weight: 600;
+  position: sticky;
+  top: 0;
+  z-index: 10;
+}
+
+.modal-bills-table tbody tr:hover {
+  background: #f9f9f9;
+}
+
+.modal-footer {
+  padding: 16px 20px;
+  border-top: 1px solid #e2e8f0;
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
+  background: #fafafa;
+  border-radius: 0 0 12px 12px;
+}
+
+.btn-modal-confirm {
+  background: #4caf50;
+  color: white;
+  padding: 8px 20px;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 14px;
+}
+
+.btn-modal-confirm:hover {
+  background: #45a049;
+}
+
+.btn-modal-cancel {
+  background: #f44336;
+  color: white;
+  padding: 8px 20px;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 14px;
+}
+
+.btn-modal-cancel:hover {
+  background: #da190b;
+}
+
+.btn-select-bills-modal {
+  padding: 6px 16px;
+  background: #ff9800;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 14px;
+}
+
+.btn-select-bills-modal:hover {
+  background: #f57c00;
+}
+
+/* Form row with button aligned to right */
+.form-row-with-button {
+  display: flex;
+  align-items: flex-end;
+  gap: 20px;
+  margin-bottom: 20px;
+}
+
+.form-row-with-button .form-row-4 {
+  flex: 1;
+  margin-bottom: 0;
+}
+
+.select-bills-button-wrapper {
+  margin-bottom: 10px;
+}
+
+.select-bills-button-wrapper .btn-select-bills-modal {
+  padding: 8px 20px;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 500;
+  white-space: nowrap;
+  transition: all 0.3s ease;
+}
+
+.select-bills-button-wrapper .btn-select-bills-modal:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+}
+
+/* Salesman and Area Selection Modals */
+.salesman-selection-modal,
+.area-selection-modal {
+  width: 800px;
+  max-width: 90%;
+}
+
+/* Responsive Design */
+@media (max-width: 1400px) {
+  .payment-header-grid {
+    grid-template-columns: repeat(4, minmax(140px, 1fr));
+  }
+}
+
+@media (max-width: 1200px) {
+  .form-grid-4, .form-row-4 {
+    grid-template-columns: repeat(2, 1fr);
+  }
+  .payment-header-grid {
+    grid-template-columns: repeat(3, minmax(140px, 1fr));
+  }
+  .pdc-header-grid {
+    grid-template-columns: 1fr;
+  }
+  .summary-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+@media (max-width: 968px) {
+  .form-row-3 {
+    grid-template-columns: repeat(2, 1fr);
+  }
+  .receipt-summary-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+  .payment-summary-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+  .collection-voucher-section .form-row-4 {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+@media (max-width: 768px) {
+  .transaction-page {
+    padding: 12px;
+  }
+  .master-section {
+    padding: 16px;
+  }
+  .form-grid-4, .form-row-4, .form-row-3 {
+    grid-template-columns: 1fr;
+  }
+  .payment-header-grid {
+    grid-template-columns: 1fr;
+  }
+  .receipt-summary-grid, .summary-grid, .payment-summary-grid {
+    grid-template-columns: 1fr;
+  }
+  .form-actions {
+    flex-direction: column;
+  }
+  .btn-save, .btn-cancel, .btn-primary, .btn-secondary {
+    width: 100%;
+  }
+  .pdc-header-left, .pdc-header-right {
+    grid-template-columns: 1fr;
+  }
+  .pdc-clearing-grid {
+    grid-template-columns: 1fr;
+  }
+  .pdc-summary {
+    flex-direction: column;
+    gap: 16px;
+  }
+  .pdc-summary .summary-item {
+    text-align: left;
+  }
+  .erp-table th, .erp-table td {
+    padding: 8px 12px;
+  }
+  .btn-edit, .btn-delete {
+    padding: 4px 8px;
+    font-size: 11px;
+  }
+  .payment-rtgs-grid {
+    grid-template-columns: 1fr;
+  }
+  .journal-header-grid {
+    grid-template-columns: 1fr;
+  }
+  .collection-voucher-section .form-row-4 {
+    grid-template-columns: 1fr;
+  }
+  .form-row-with-button {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .select-bills-button-wrapper {
+    margin-top: 10px;
+  }
+  .select-bills-button-wrapper .btn-select-bills-modal {
+    width: 100%;
+  }
+  .summary-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+@media (max-width: 640px) {
+  .summary-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+
+.action-buttons {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+}
+
+
+.btn-view,
+.btn-edit,
+.btn-delete {
+  border: none;
+  padding: 7px 12px;
+  border-radius: 6px;
+  color: white;
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 500;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.btn-view {
+  background: #10b981;
+}
+
+.btn-edit {
+  background: #3b82f6;
+}
+
+.btn-delete {
+  background: #ef4444;
+}
+/* ===== RECEIPT LIST EXACT SALES-LIST SIZE FIX ===== */
+
+.receipt-sales-list-section {
+  background: #ffffff;
+  border-radius: 14px;
+  padding: 24px;
+  box-shadow: 0 1px 5px rgba(15, 23, 42, 0.15);
+  max-width: 100%;
+}
+
+.receipt-sales-list-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding-bottom: 16px;
+  margin-bottom: 22px;
+  border-bottom: 1px solid #dbe3ee;
+}
+
+.receipt-sales-list-header h3 {
+  margin: 0;
+  color: #020617;
+  font-size: 19px;
+  font-weight: 700;
+}
+
+.receipt-sales-list-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.receipt-sales-search {
+  width: 240px !important;
+  height: 34px !important;
+  min-height: 34px !important;
+  padding: 0 10px !important;
+  border: 1px solid #cbd5e1;
+  border-radius: 6px;
+  font-size: 13px !important;
+}
+
+.receipt-export-excel,
+.receipt-export-pdf,
+.receipt-settle-load-btn {
+  height: 34px !important;
+  min-height: 34px !important;
+  padding: 0 14px !important;
+  border: none;
+  border-radius: 6px;
+  color: #ffffff;
+  font-size: 13px !important;
+  font-weight: 500 !important;
+  cursor: pointer;
+  white-space: nowrap;
+  line-height: 34px !important;
+}
+
+.receipt-export-excel {
+  background: #10b981;
+}
+
+.receipt-export-pdf {
+  background: #ef4444;
+}
+
+.receipt-settle-load-btn {
+  background: #2563eb;
+}
+
+.receipt-sales-table-wrap {
+  width: 100%;
+  overflow-x: auto;
+  border: 1px solid #dbe3ee;
+  border-radius: 10px;
+  background: #ffffff;
+}
+
+.receipt-sales-table {
+  width: 100%;
+  min-width: 1250px;
+  border-collapse: collapse;
+  background: #ffffff;
+  table-layout: fixed;
+}
+
+.receipt-sales-table th {
+  background: #f8fafc;
+  color: #020617;
+  font-size: 14px;
+  font-weight: 700;
+  padding: 12px 14px;
+  text-align: left;
+  border-bottom: 1px solid #dbe3ee;
+  white-space: nowrap;
+}
+
+.receipt-sales-table td {
+  background: #ffffff;
+  color: #0f172a;
+  font-size: 13px;
+  font-weight: 400;
+  padding: 9px 14px;
+  border-bottom: 1px solid #eef2f7;
+  vertical-align: middle;
+  white-space: nowrap;
+}
+
+.receipt-sales-table tbody tr:hover td {
+  background: #f9fbfd;
+}
+
+/* Sticky Action Column */
+.receipt-sticky-action-head,
+.receipt-sticky-action-cell {
+  position: sticky;
+  right: 0;
+  text-align: center;
+  box-shadow: -4px 0 8px -6px rgba(0, 0, 0, 0.35);
+}
+
+.receipt-sticky-action-head {
+  background: #f8fafc !important;
+  z-index: 30;
+  width: 245px !important;
+  min-width: 245px !important;
+}
+
+.receipt-sticky-action-cell {
+  background: #ffffff !important;
+  z-index: 20;
+  width: 245px !important;
+  min-width: 245px !important;
+}
+
+.receipt-sales-table tbody tr:hover .receipt-sticky-action-cell {
+  background: #f9fbfd !important;
+}
+
+.receipt-action-buttons {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+}
+
+.receipt-action-buttons .btn-view,
+.receipt-action-buttons .btn-edit,
+.receipt-action-buttons .btn-delete {
+  height: 31px !important;
+  min-height: 31px !important;
+  padding: 0 11px !important;
+  border: none;
+  border-radius: 5px;
+  color: #ffffff !important;
+  font-size: 12px !important;
+  font-weight: 500 !important;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  white-space: nowrap;
+  line-height: 31px !important;
+  transform: none !important;
+  box-shadow: none !important;
+}
+
+.receipt-action-buttons .btn-view {
+  background: #10b981 !important;
+}
+
+.receipt-action-buttons .btn-edit {
+  background: #3b82f6 !important;
+}
+
+.receipt-action-buttons .btn-delete {
+  background: #ef4444 !important;
+}
+/* ===== RECEIPT FINAL POLISHING ===== */
+
+.receipt-sales-list-section {
+  margin: 0 auto;
+  padding: 24px 24px 22px !important;
+}
+
+.receipt-sales-list-header {
+  margin-bottom: 20px !important;
+}
+
+.receipt-sales-list-actions {
+  gap: 10px !important;
+}
+
+.receipt-sales-search {
+  width: 230px !important;
+}
+
+.receipt-export-excel,
+.receipt-export-pdf,
+.receipt-settle-load-btn {
+  height: 32px !important;
+  min-height: 32px !important;
+  line-height: 32px !important;
+  padding: 0 13px !important;
+  font-size: 12.5px !important;
+  border-radius: 5px !important;
+}
+
+.receipt-sales-table {
+  min-width: 1180px !important;
+  table-layout: auto !important;
+}
+
+.receipt-sales-table th {
+  padding: 11px 14px !important;
+  font-size: 13.5px !important;
+  line-height: 1.25 !important;
+}
+
+.receipt-sales-table td {
+  padding: 8px 14px !important;
+  font-size: 13px !important;
+  line-height: 1.35 !important;
+}
+
+.receipt-sales-table th:nth-child(1),
+.receipt-sales-table td:nth-child(1) {
+  width: 130px;
+}
+
+.receipt-sales-table th:nth-child(2),
+.receipt-sales-table td:nth-child(2) {
+  width: 95px;
+}
+
+.receipt-sales-table th:nth-child(3),
+.receipt-sales-table td:nth-child(3) {
+  width: 110px;
+}
+
+.receipt-sales-table th:nth-child(4),
+.receipt-sales-table td:nth-child(4) {
+  width: 110px;
+}
+
+.receipt-sales-table th:nth-child(5),
+.receipt-sales-table td:nth-child(5) {
+  width: 120px;
+}
+
+.receipt-sales-table th:nth-child(6),
+.receipt-sales-table td:nth-child(6) {
+  width: 180px;
+}
+
+.receipt-sales-table th:nth-child(7),
+.receipt-sales-table td:nth-child(7) {
+  width: 120px;
+}
+
+.receipt-sales-table th:nth-child(8),
+.receipt-sales-table td:nth-child(8) {
+  width: 130px;
+}
+
+.receipt-sticky-action-head,
+.receipt-sticky-action-cell {
+  width: 250px !important;
+  min-width: 250px !important;
+}
+
+.receipt-action-buttons {
+  gap: 7px !important;
+}
+
+.receipt-action-buttons .btn-view,
+.receipt-action-buttons .btn-edit,
+.receipt-action-buttons .btn-delete {
+  height: 30px !important;
+  min-height: 30px !important;
+  line-height: 30px !important;
+  padding: 0 10px !important;
+  font-size: 12px !important;
+  border-radius: 5px !important;
+}
+.pdc-print-btn {
+  background: #475569 !important;
+  color: #ffffff !important;
+  border: none !important;
+  border-radius: 4px;
+  padding: 4px 8px;
+  margin: 0 2px;
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 600;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.pdc-print-btn:hover {
+  background: #3e71b8 !important;
+}
+
+.pdc-print-icon {
+  font-size: 14px;
+  line-height: 1;
+}
+.collection-voucher-top-grid {
+  display: grid;
+  grid-template-columns: 220px 220px 280px 1fr 180px;
+  gap: 14px;
+  align-items: end;
+  margin-bottom: 18px;
+}
+
+.collection-voucher-top-grid .form-field {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.collection-voucher-top-grid label {
+  font-weight: 700;
+  font-size: 14px;
+  color: #111827;
+}
+
+.collection-voucher-top-grid input,
+.collection-voucher-top-grid select {
+  height: 34px;
+  border: 1px solid #9ca3af;
+  border-radius: 4px;
+  padding: 5px 8px;
+  font-size: 14px;
+  background: #fff;
+}
+
+.narration-field input {
+  width: 100%;
+}
+
+.selection-btn-area {
+  display: flex;
+  align-items: end;
+  justify-content: flex-end;
+}
+
+.btn-select-bills-modal {
+  height: 34px;
+  padding: 0 16px;
+  border: 1px solid #0891b2;
+  border-radius: 4px;
+  background: linear-gradient(#67e8f9, #06b6d4);
+  color: #111827;
+  font-weight: 700;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.bills-table th:first-child,
+.bills-table td:first-child {
+  width: 38px;
+  text-align: center;
+}
+
+.bills-table input[type="checkbox"] {
+  width: 15px;
+  height: 15px;
+  cursor: pointer;
+}
+
+.collection-input,
+.discount-input,
+.rec-input {
+  width: 100%;
+  min-width: 90px;
+  height: 28px;
+  border: 1px solid #cbd5e1;
+  border-radius: 3px;
+  padding: 3px 6px;
+  font-size: 13px;
+}
+
+.collection-input {
+  background: #fff;
+}
+
+.collection-input:focus {
+  background: #ffe4e6;
+  border-color: #ef4444;
+  outline: none;
+}
+
+@media (max-width: 1200px) {
+  .collection-voucher-top-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  .narration-field,
+  .selection-btn-area {
+    grid-column: span 2;
+  }
+
+  .selection-btn-area {
+    justify-content: flex-start;
+  }
+}
+.receipt-grid-wrap {
+  width: 100%;
+  overflow-x: auto;
+  border: 1px solid #d8e2ef;
+  border-radius: 8px;
+  background: #fff;
+}
+
+.receipt-entry-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+
+.receipt-entry-table th {
+  background: #f1f6ff;
+  color: #111827;
+  padding: 9px;
+  border-bottom: 1px solid #d8e2ef;
+  text-align: left;
+  white-space: nowrap;
+}
+
+.receipt-entry-table td {
+  padding: 7px;
+  border-bottom: 1px solid #e5edf7;
+  vertical-align: middle;
+}
+
+.receipt-entry-table input {
+  width: 100%;
+  height: 32px;
+  border: 1px solid #cbd5e1;
+  border-radius: 5px;
+  padding: 4px 8px;
+}
+
+.receipt-entry-table tr:nth-child(even) {
+  background: #f8fbff;
+}
+
+.amount-cell {
+  text-align: right;
+  white-space: nowrap;
+  font-weight: 600;
+}
+
+.receipt-summary-strip {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  padding: 10px 0;
+}
+
+.receipt-summary-strip div {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: #f8fbff;
+  border-bottom: 2px solid #3b82f6;
+  padding: 8px 12px;
+  border-radius: 4px;
+}
+
+.receipt-summary-strip span {
+  font-size: 12px;
+  color: #374151;
+}
+
+.receipt-summary-strip b {
+  color: #2563eb;
+  font-size: 13px;
+}
+.receipt-grid-wrap {
+  width: 100%;
+  overflow-x: auto;
+  border: 1px solid #d7e2f0;
+  border-radius: 8px;
+  background: #fff;
+}
+
+.receipt-entry-table {
+  width: 100%;
+  min-width: 1050px;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+
+.receipt-entry-table th {
+  background: #f4f8ff;
+  color: #111827;
+  font-weight: 600;
+  padding: 9px 8px;
+  border: 1px solid #d7e2f0;
+  text-align: left;
+  white-space: nowrap;
+}
+
+.receipt-entry-table td {
+  padding: 7px 8px;
+  border: 1px solid #d7e2f0;
+  vertical-align: middle;
+  background: #fff;
+}
+
+.receipt-entry-table tbody tr:nth-child(even) td {
+  background: #f8fbff;
+}
+
+.receipt-entry-table input {
+  width: 100%;
+  height: 30px;
+  border: 1px solid #cbd5e1;
+  border-radius: 5px;
+  padding: 4px 6px;
+  font-size: 13px;
+}
+
+.receipt-entry-table .amount-cell {
+  text-align: right;
+  font-weight: 600;
+  color: #0f172a;
+  white-space: nowrap;
+}
+
+.receipt-bottom-summary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 10px 0;
+  border-top: 2px solid #2563eb;
+  margin-top: 12px;
+}
+
+.receipt-summary-pill {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: #f8fafc;
+  border-radius: 6px;
+  padding: 8px 12px;
+  min-height: 36px;
+}
+
+.receipt-summary-pill span {
+  font-size: 12px;
+  color: #111827;
+  font-weight: 500;
+}
+
+.receipt-summary-pill b {
+  font-size: 12px;
+  color: #2563eb;
+  font-weight: 700;
+}
+.receipt-actions-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.receipt-party-balance {
+  margin-right: auto;
+  color: #dc2626;
+  font-weight: 700;
+  font-size: 15px;
+}
+
+.now-adjust-active {
+  border: 2px solid #2563eb !important;
+  background: #eff6ff;
+}
+.collection-voucher-card {
+  background: #fff;
+  padding: 12px;
+  border-radius: 8px;
+}
+
+.collection-voucher-header-grid {
+  display: grid;
+  grid-template-columns: 190px 160px 180px 1fr;
+  gap: 12px;
+  align-items: end;
+  margin-bottom: 14px;
+}
+
+.collection-field label {
+  display: block;
+  font-size: 13px;
+  font-weight: 600;
+  color: #1f2937;
+  margin-bottom: 5px;
+}
+
+.collection-field input,
+.collection-field select {
+  width: 100%;
+  height: 34px;
+  border: 1px solid #cbd5e1;
+  border-radius: 5px;
+  padding: 6px 8px;
+  font-size: 13px;
+  background: #fff;
+}
+
+.collection-narr-field {
+  min-width: 280px;
+}
+
+.collection-narr-row {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.collection-narr-row input {
+  flex: 1;
+}
+
+.collection-select-btn {
+  height: 34px;
+  padding: 0 14px;
+  border: none;
+  border-radius: 5px;
+  background: #2563eb;
+  color: #fff;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.collection-select-btn:hover {
+  background: #1d4ed8;
+}
+
+.collection-grid-wrap {
+  margin-top: 10px;
+  border: 1px solid #cbd5e1;
+  border-radius: 7px;
+  overflow: auto;
+  max-width: 100%;
+}
+
+.collection-voucher-table {
+  min-width: 1250px;
+}
+
+.collection-voucher-table th {
+  white-space: nowrap;
+  background: #f1f5f9;
+  color: #1f2937;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.collection-voucher-table td {
+  font-size: 12px;
+  vertical-align: middle;
+}
+
+.table-input {
+  width: 90px;
+  height: 28px;
+  border: 1px solid #cbd5e1;
+  border-radius: 4px;
+  padding: 4px 6px;
+  font-size: 12px;
+  background: #fff;
+}
+
+.amount-input {
+  text-align: right;
+}
+
+.amount-cell {
+  text-align: right;
+  font-weight: 600;
+}
+
+.receipt-empty-row {
+  height: 90px;
+  text-align: center;
+  color: #8aa0bd;
+  font-style: italic;
+  font-size: 12px;
+}
+
+.collection-bottom-summary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  border-top: 2px solid #2563eb;
+  margin-top: 26px;
+  padding-top: 10px;
+}
+
+.collection-bottom-summary span {
+  background: #f8fafc;
+  border-radius: 6px;
+  padding: 9px 12px;
+  font-size: 12px;
+  font-weight: 600;
+  color: #1f2937;
+}
+
+.collection-bottom-summary b {
+  color: #2563eb;
+  margin-left: 5px;
+}
+
+@media (max-width: 900px) {
+  .collection-voucher-header-grid {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .collection-narr-field {
+    grid-column: 1 / -1;
+  }
+}
+
+@media (max-width: 600px) {
+  .collection-voucher-header-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .collection-narr-row {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .collection-select-btn {
+    width: 100%;
+  }
+}
+.collection-receipt-modal {
+  width: 96%;
+  max-width: 1360px;
+  max-height: 92vh;
+  overflow: auto;
+  background: #e5e5e5;
+  border: 1px solid #777;
+  box-shadow: 0 8px 30px rgba(0, 0, 0, 0.35);
+  padding: 8px;
+  position: relative;
+}
+
+.collection-receipt-modal .modal-close-btn {
+  position: absolute;
+  right: 10px;
+  top: 8px;
+  z-index: 20;
+}
+.collection-receipt-compact-modal {
+  background: #fff;
+  width: 92%;
+  max-width: 1050px;
+  padding: 16px;
+  border-radius: 10px;
+  position: relative;
+}
+
+.collection-receipt-grid-6 {
+  display: grid;
+  grid-template-columns: repeat(6, 1fr);
+  gap: 10px;
+}
+
+.collection-receipt-small-form .labeled-input label {
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.collection-receipt-small-form input,
+.collection-receipt-small-form select {
+  height: 32px;
+  font-size: 12px;
+}
+
+.collection-receipt-actions {
+  margin-top: 14px;
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+}
+
+@media (max-width: 1100px) {
+  .collection-receipt-grid-6 {
+    grid-template-columns: repeat(3, 1fr);
+  }
+};
+.party-search-box {
+  position: relative !important;
+  overflow: visible !important;
+  z-index: 1000;
+}
+
+.party-suggestion-dropdown {
+  position: absolute;
+  top: calc(100% + 3px);
+  left: 0;
+  right: 0;
+  z-index: 99999;
+  background: #ffffff;
+  border: 1px solid #cbd5e1;
+  border-radius: 6px;
+  max-height: 220px;
+  overflow-y: auto;
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.15);
+}
+
+.party-suggestion-item {
+  padding: 10px 12px;
+  cursor: pointer;
+  border-bottom: 1px solid #eef2f7;
+  color: #1e293b;
+  background: #ffffff;
+}
+
+.party-suggestion-item:hover {
+  background: #eff6ff;
+}
+
+.receipt-section,
+.receipt-section .form-section,
+.receipt-section .form-grid-4 {
+  overflow: visible !important;
+}
+/* =========================================================
+   TRANSACTION MODULE 01 — RECEIPT
+   Scoped only to .receipt-billing-page
+   Keep this block at the absolute end of Transaction.css
+   ========================================================= */
+
+.receipt-billing-page {
+  --receipt-primary: #2563eb;
+  --receipt-primary-light: #eff6ff;
+  --receipt-success: #16a34a;
+  --receipt-danger: #dc2626;
+  --receipt-warning: #c2410c;
+  --receipt-text: #172554;
+  --receipt-muted: #64748b;
+  --receipt-border: #d7e1ee;
+  --receipt-soft-border: #e2e8f0;
+  --receipt-surface: #ffffff;
+  --receipt-soft-bg: #f8fafc;
+
+  width: 100% !important;
+  min-width: 0 !important;
+  margin: 0 !important;
+  padding: 0 !important;
+
+  background: var(--receipt-surface) !important;
+  border: 1px solid var(--receipt-border) !important;
+  border-radius: 9px !important;
+
+  box-shadow: 0 2px 8px rgba(15, 23, 42, 0.05) !important;
+  overflow: visible !important;
+}
+
+/* =========================================================
+   TOP HEADER
+   ========================================================= */
+
+.receipt-billing-page .receipt-billing-topbar {
+  min-height: 49px !important;
+  padding: 7px 14px !important;
+
+  display: flex !important;
+  align-items: center !important;
+  justify-content: space-between !important;
+  gap: 12px !important;
+
+  background: #ffffff !important;
+  border-bottom: 1px solid var(--receipt-border) !important;
+}
+
+.receipt-billing-page .receipt-billing-title-wrap {
+  display: flex !important;
+  align-items: center !important;
+  gap: 9px !important;
+  min-width: 0 !important;
+}
+
+.receipt-billing-page .receipt-billing-title-wrap h2 {
+  margin: 0 !important;
+
+  color: var(--receipt-text) !important;
+  font-size: 16px !important;
+  font-weight: 800 !important;
+  line-height: 1.2 !important;
+}
+
+.receipt-billing-page .receipt-billing-badge {
+  height: 20px !important;
+  min-height: 20px !important;
+  padding: 0 8px !important;
+
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+
+  border-radius: 999px !important;
+  background: var(--receipt-primary-light) !important;
+  color: var(--receipt-primary) !important;
+
+  font-size: 9px !important;
+  font-weight: 700 !important;
+  white-space: nowrap !important;
+}
+
+.receipt-billing-page .receipt-billing-header-actions {
+  display: flex !important;
+  align-items: center !important;
+  justify-content: flex-end !important;
+  gap: 6px !important;
+}
+
+.receipt-billing-page .receipt-billing-header-actions button {
+  width: auto !important;
+
+  height: 31px !important;
+  min-height: 31px !important;
+  max-height: 31px !important;
+
+  margin: 0 !important;
+  padding: 0 12px !important;
+
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  gap: 5px !important;
+
+  border-radius: 5px !important;
+
+  font-family: inherit !important;
+  font-size: 10px !important;
+  font-weight: 700 !important;
+  line-height: 29px !important;
+  white-space: nowrap !important;
+
+  cursor: pointer !important;
+  box-shadow: none !important;
+  transform: none !important;
+}
+
+.receipt-billing-page .receipt-preview-btn {
+  border: 1px solid #93c5fd !important;
+  background: #ffffff !important;
+  color: #1d4ed8 !important;
+}
+
+.receipt-billing-page .receipt-save-draft-btn {
+  border: 1px solid var(--receipt-primary) !important;
+  background: var(--receipt-primary) !important;
+  color: #ffffff !important;
+}
+
+.receipt-billing-page .receipt-save-main-btn {
+  border: 1px solid #15803d !important;
+  background: var(--receipt-success) !important;
+  color: #ffffff !important;
+}
+
+.receipt-billing-page .receipt-more-btn,
+.receipt-billing-page .receipt-close-btn {
+  width: 30px !important;
+  min-width: 30px !important;
+  padding: 0 !important;
+
+  border: 0 !important;
+  background: transparent !important;
+  color: #64748b !important;
+}
+
+.receipt-billing-page .receipt-more-btn {
+  font-size: 17px !important;
+}
+
+.receipt-billing-page .receipt-close-btn {
+  font-size: 21px !important;
+}
+
+.receipt-billing-page .receipt-more-btn:hover,
+.receipt-billing-page .receipt-close-btn:hover {
+  background: #f1f5f9 !important;
+}
+
+/* =========================================================
+   SHARED SECTION HEADINGS
+   ========================================================= */
+
+.receipt-billing-page .receipt-billing-section {
+  width: 100% !important;
+  min-width: 0 !important;
+  background: #ffffff !important;
+}
+
+.receipt-billing-page .receipt-header-section {
+  padding: 10px 14px 12px !important;
+  border-bottom: 1px solid var(--receipt-border) !important;
+  overflow: visible !important;
+}
+
+.receipt-billing-page .receipt-section-heading,
+.receipt-billing-page .receipt-grid-title,
+.receipt-billing-page .receipt-summary-title {
+  display: flex !important;
+  align-items: center !important;
+  gap: 7px !important;
+}
+
+.receipt-billing-page .receipt-section-heading {
+  min-height: 26px !important;
+  margin: 0 0 8px !important;
+}
+
+.receipt-billing-page .receipt-section-heading h3,
+.receipt-billing-page .receipt-grid-title h3,
+.receipt-billing-page .receipt-summary-title h3 {
+  margin: 0 !important;
+
+  color: var(--receipt-text) !important;
+  font-size: 11px !important;
+  font-weight: 800 !important;
+  line-height: 1.2 !important;
+}
+
+.receipt-billing-page .receipt-section-dot {
+  width: 16px !important;
+  min-width: 16px !important;
+  height: 16px !important;
+
+  flex: 0 0 16px !important;
+
+  border-radius: 50% !important;
+  background: #3b82f6 !important;
+
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.11) !important;
+}
+
+.receipt-billing-page .receipt-header-status {
+  margin-left: auto !important;
+
+  display: flex !important;
+  align-items: center !important;
+  gap: 13px !important;
+
+  color: var(--receipt-muted) !important;
+  font-size: 9px !important;
+  white-space: nowrap !important;
+}
+
+.receipt-billing-page .receipt-header-status span {
+  display: inline-flex !important;
+  align-items: center !important;
+  gap: 4px !important;
+}
+
+.receipt-billing-page .receipt-header-status strong {
+  color: var(--receipt-text) !important;
+  font-weight: 800 !important;
+}
+
+/* =========================================================
+   RECEIPT INPUT GRID
+   Existing fields remain unchanged
+   ========================================================= */
+
+.receipt-billing-page .receipt-header-grid {
+  width: 100% !important;
+  min-width: 0 !important;
+
+  display: grid !important;
+  grid-template-columns: repeat(4, minmax(0, 1fr)) !important;
+
+  column-gap: 12px !important;
+  row-gap: 10px !important;
+
+  align-items: end !important;
+
+  margin: 0 !important;
+  overflow: visible !important;
+}
+
+.receipt-billing-page .receipt-narration-field {
+  grid-column: 1 / -1 !important;
+}
+
+.receipt-billing-page .receipt-narration-field textarea {
+  width: 100% !important;
+  min-width: 0 !important;
+  height: 38px !important;
+  min-height: 38px !important;
+  max-height: 60px !important;
+
+  padding: 7px 10px !important;
+
+  border: 1px solid var(--receipt-border) !important;
+  border-radius: 5px !important;
+
+  background: #ffffff !important;
+  color: var(--receipt-text) !important;
+
+  font-family: inherit !important;
+  font-size: 10.5px !important;
+  line-height: 1.3 !important;
+
+  resize: vertical !important;
+  box-sizing: border-box !important;
+}
+
+.receipt-billing-page .receipt-narration-field textarea:focus {
+  outline: none !important;
+  border-color: var(--receipt-primary) !important;
+  box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.1) !important;
+}
+.receipt-billing-page .receipt-field {
+  width: 100% !important;
+  min-width: 0 !important;
+
+  display: flex !important;
+  flex-direction: column !important;
+  gap: 4px !important;
+
+  margin: 0 !important;
+  padding: 0 !important;
+}
+
+.receipt-billing-page .receipt-field > label {
+  display: block !important;
+  min-height: 14px !important;
+
+  margin: 0 !important;
+  padding: 0 !important;
+
+  color: #334155 !important;
+
+  font-family: inherit !important;
+  font-size: 9.5px !important;
+  font-weight: 700 !important;
+  line-height: 14px !important;
+
+  letter-spacing: 0 !important;
+  text-transform: none !important;
+}
+
+.receipt-billing-page .receipt-field > label span {
+  color: var(--receipt-danger) !important;
+}
+
+.receipt-billing-page .receipt-field > input,
+.receipt-billing-page .receipt-field > select {
+  width: 100% !important;
+  min-width: 0 !important;
+  max-width: none !important;
+
+  height: 31px !important;
+  min-height: 31px !important;
+  max-height: 31px !important;
+
+  margin: 0 !important;
+  padding: 0 9px !important;
+
+  border: 1px solid #cbd5e1 !important;
+  border-radius: 5px !important;
+  outline: none !important;
+
+  background-color: #ffffff !important;
+  color: var(--receipt-text) !important;
+
+  font-family: inherit !important;
+  font-size: 10.5px !important;
+  font-weight: 500 !important;
+  line-height: 29px !important;
+
+  box-shadow: none !important;
+  box-sizing: border-box !important;
+}
+
+.receipt-billing-page .receipt-field > select {
+  padding-right: 27px !important;
+  cursor: pointer !important;
+}
+
+.receipt-billing-page .receipt-field > input::placeholder {
+  color: #94a3b8 !important;
+  font-size: 10px !important;
+  font-weight: 400 !important;
+  opacity: 1 !important;
+}
+
+.receipt-billing-page .receipt-field > input:focus,
+.receipt-billing-page .receipt-field > select:focus {
+  border-color: #60a5fa !important;
+  box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.1) !important;
+}
+
+.receipt-billing-page .receipt-number-input {
+  text-align: right !important;
+  font-weight: 700 !important;
+  font-variant-numeric: tabular-nums !important;
+}
+
+.receipt-billing-page .receipt-narration-field {
+  grid-column: span 3 !important;
+}
+
+/* =========================================================
+   PARTY SEARCH
+   ========================================================= */
+
+.receipt-billing-page .receipt-party-field {
+  position: relative !important;
+  z-index: 500 !important;
+  overflow: visible !important;
+}
+
+.receipt-billing-page .receipt-party-dropdown {
+  position: absolute !important;
+
+  top: calc(100% + 4px) !important;
+  left: 0 !important;
+
+  width: max(100%, 330px) !important;
+  max-height: 220px !important;
+
+  overflow-x: hidden !important;
+  overflow-y: auto !important;
+
+  z-index: 999999 !important;
+
+  border: 1px solid #cbd5e1 !important;
+  border-radius: 7px !important;
+
+  background: #ffffff !important;
+
+  box-shadow: 0 14px 30px rgba(15, 23, 42, 0.16) !important;
+}
+
+.receipt-billing-page .receipt-party-option {
+  width: 100% !important;
+  min-height: 37px !important;
+
+  padding: 7px 10px !important;
+
+  display: flex !important;
+  align-items: center !important;
+  justify-content: space-between !important;
+  gap: 12px !important;
+
+  border: 0 !important;
+  border-bottom: 1px solid #edf2f7 !important;
+
+  background: #ffffff !important;
+  color: var(--receipt-text) !important;
+
+  text-align: left !important;
+  cursor: pointer !important;
+}
+
+.receipt-billing-page .receipt-party-option:last-child {
+  border-bottom: 0 !important;
+}
+
+.receipt-billing-page .receipt-party-option:hover,
+.receipt-billing-page .receipt-party-option.active {
+  background: var(--receipt-primary-light) !important;
+}
+
+.receipt-billing-page .receipt-party-option strong {
+  min-width: 0 !important;
+  overflow: hidden !important;
+
+  font-size: 10px !important;
+  font-weight: 700 !important;
+
+  text-overflow: ellipsis !important;
+  white-space: nowrap !important;
+}
+
+.receipt-billing-page .receipt-party-option span {
+  flex: 0 0 auto !important;
+
+  color: var(--receipt-muted) !important;
+  font-size: 9px !important;
+  font-weight: 600 !important;
+}
+
+.receipt-billing-page .receipt-party-empty {
+  padding: 13px !important;
+
+  color: #94a3b8 !important;
+  font-size: 10px !important;
+  text-align: center !important;
+}
+
+/* =========================================================
+   BILL ADJUSTMENT GRID
+   ========================================================= */
+
+.receipt-billing-page .receipt-grid-section {
+  padding: 8px 14px 10px !important;
+  border-bottom: 1px solid var(--receipt-border) !important;
+}
+
+.receipt-billing-page .receipt-grid-toolbar {
+  min-height: 29px !important;
+
+  display: flex !important;
+  align-items: center !important;
+  justify-content: space-between !important;
+  gap: 14px !important;
+}
+
+.receipt-billing-page .receipt-grid-toolbar-right {
+  display: flex !important;
+  align-items: center !important;
+  gap: 16px !important;
+
+  color: var(--receipt-muted) !important;
+  font-size: 9px !important;
+  white-space: nowrap !important;
+}
+
+.receipt-billing-page .receipt-grid-toolbar-right span {
+  display: inline-flex !important;
+  align-items: center !important;
+  gap: 5px !important;
+}
+
+.receipt-billing-page .receipt-grid-toolbar-right strong {
+  color: var(--receipt-text) !important;
+  font-weight: 800 !important;
+}
+
+.receipt-billing-page .receipt-bill-table-scroll {
+  width: 100% !important;
+  min-height: 230px !important;
+  max-height: 310px !important;
+
+  overflow: auto !important;
+
+  border: 1px solid var(--receipt-border) !important;
+  border-radius: 7px 7px 0 0 !important;
+
+  background: #ffffff !important;
+}
+
+.receipt-billing-page .receipt-bill-table-scroll::-webkit-scrollbar {
+  width: 8px !important;
+  height: 8px !important;
+}
+
+.receipt-billing-page .receipt-bill-table-scroll::-webkit-scrollbar-track {
+  background: #edf2f7 !important;
+}
+
+.receipt-billing-page .receipt-bill-table-scroll::-webkit-scrollbar-thumb {
+  border-radius: 999px !important;
+  background: #aebed2 !important;
+}
+
+.receipt-billing-page .receipt-bill-table {
+  width: 100% !important;
+  min-width: 1120px !important;
+
+  border-collapse: separate !important;
+  border-spacing: 0 !important;
+  table-layout: fixed !important;
+
+  background: #ffffff !important;
+}
+
+.receipt-billing-page .receipt-bill-table th {
+  position: sticky !important;
+  top: 0 !important;
+  z-index: 10 !important;
+
+  height: 31px !important;
+  padding: 4px 7px !important;
+
+  border-right: 1px solid #dfe7f1 !important;
+  border-bottom: 1px solid var(--receipt-border) !important;
+
+  background: #f5f8fc !important;
+  color: #263d5d !important;
+
+  text-align: left !important;
+
+  font-size: 9px !important;
+  font-weight: 800 !important;
+  line-height: 1.1 !important;
+
+  text-transform: none !important;
+  white-space: nowrap !important;
+}
+
+.receipt-billing-page .receipt-bill-table td {
+  height: 37px !important;
+  padding: 4px 7px !important;
+
+  border-right: 1px solid var(--receipt-soft-border) !important;
+  border-bottom: 1px solid var(--receipt-soft-border) !important;
+
+  background: #ffffff !important;
+  color: #213a5d !important;
+
+  vertical-align: middle !important;
+
+  font-size: 9.5px !important;
+  font-weight: 500 !important;
+  line-height: 1.2 !important;
+}
+
+.receipt-billing-page .receipt-bill-table tbody tr:nth-child(even) td {
+  background: #fbfdff !important;
+}
+
+.receipt-billing-page .receipt-bill-table tbody tr:hover td {
+  background: #f1f6ff !important;
+}
+
+.receipt-billing-page .receipt-bill-table th:last-child,
+.receipt-billing-page .receipt-bill-table td:last-child {
+  border-right: 0 !important;
+}
+
+.receipt-billing-page .receipt-col-sr {
+  width: 42px !important;
+  text-align: center !important;
+}
+
+.receipt-billing-page .receipt-col-remark {
+  width: 165px !important;
+}
+
+.receipt-billing-page .receipt-align-right {
+  text-align: right !important;
+  font-variant-numeric: tabular-nums !important;
+}
+
+.receipt-billing-page .receipt-readonly-value {
+  color: #334155 !important;
+  font-weight: 700 !important;
+}
+
+.receipt-billing-page .receipt-balance-value {
+  color: #b45309 !important;
+  font-weight: 800 !important;
+}
+
+.receipt-billing-page .receipt-discount-value {
+  color: var(--receipt-danger) !important;
+  font-weight: 700 !important;
+}
+
+.receipt-billing-page .receipt-bill-table input {
+  width: 100% !important;
+  min-width: 0 !important;
+
+  height: 26px !important;
+  min-height: 26px !important;
+  max-height: 26px !important;
+
+  margin: 0 !important;
+  padding: 0 6px !important;
+
+  border: 1px solid #cbd5e1 !important;
+  border-radius: 4px !important;
+  outline: none !important;
+
+  background: #ffffff !important;
+  color: var(--receipt-text) !important;
+
+  font-family: inherit !important;
+  font-size: 9.5px !important;
+  line-height: 24px !important;
+
+  box-shadow: none !important;
+  box-sizing: border-box !important;
+}
+
+.receipt-billing-page .receipt-bill-table input:focus {
+  border-color: var(--receipt-primary) !important;
+  background: #ffffff !important;
+  box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.08) !important;
+}
+
+.receipt-billing-page .receipt-table-number-input {
+  text-align: right !important;
+  font-weight: 700 !important;
+  font-variant-numeric: tabular-nums !important;
+}
+
+.receipt-billing-page .receipt-table-remark-input {
+  min-width: 145px !important;
+}
+
+.receipt-billing-page .receipt-table-empty {
+  height: 150px !important;
+
+  color: #8aa0bd !important;
+  text-align: center !important;
+
+  font-size: 10px !important;
+  font-style: italic !important;
+}
+
+.receipt-billing-page .receipt-grid-footer {
+  min-height: 31px !important;
+  padding: 0 10px !important;
+
+  display: flex !important;
+  align-items: center !important;
+  justify-content: space-between !important;
+  gap: 14px !important;
+
+  border: 1px solid var(--receipt-border) !important;
+  border-top: 0 !important;
+  border-radius: 0 0 7px 7px !important;
+
+  background: var(--receipt-soft-bg) !important;
+}
+
+.receipt-billing-page .receipt-grid-footer-left,
+.receipt-billing-page .receipt-grid-footer-right {
+  display: flex !important;
+  align-items: center !important;
+  gap: 18px !important;
+}
+
+.receipt-billing-page .receipt-grid-footer span {
+  display: inline-flex !important;
+  align-items: center !important;
+  gap: 5px !important;
+
+  color: var(--receipt-muted) !important;
+  font-size: 9px !important;
+  white-space: nowrap !important;
+}
+
+.receipt-billing-page .receipt-grid-footer strong {
+  color: var(--receipt-text) !important;
+  font-weight: 800 !important;
+}
+/* =========================================================
+   RECEIPT SUMMARY — MATCH SALES INVOICE SUMMARY
+   Paste at absolute end of Transaction.css
+   ========================================================= */
+
+.receipt-billing-page .receipt-compact-summary {
+  width: 100% !important;
+  margin: 10px 0 0 !important;
+  padding: 0 0 10px !important;
+
+  border: 0 !important;
+  border-top: 1px solid #cbd5e1 !important;
+  border-radius: 0 !important;
+
+  background: #ffffff !important;
+  box-shadow: none !important;
+  overflow: visible !important;
+}
+
+/* ================= SUMMARY HEADER ================= */
+
+.receipt-billing-page .receipt-summary-header {
+  width: 100% !important;
+  min-height: 42px !important;
+
+  margin: 0 !important;
+  padding: 8px 14px 6px !important;
+
+  display: flex !important;
+  align-items: center !important;
+  justify-content: space-between !important;
+  gap: 12px !important;
+
+  border-bottom: 0 !important;
+  background: #ffffff !important;
+}
+
+.receipt-billing-page .receipt-summary-title {
+  display: flex !important;
+  align-items: center !important;
+  gap: 7px !important;
+}
+
+.receipt-billing-page .receipt-summary-title .receipt-section-dot {
+  width: 16px !important;
+  min-width: 16px !important;
+  height: 16px !important;
+
+  border-radius: 50% !important;
+  background: #3b82f6 !important;
+
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.12) !important;
+}
+
+.receipt-billing-page .receipt-summary-title h3 {
+  margin: 0 !important;
+
+  color: #172554 !important;
+  font-size: 12px !important;
+  font-weight: 800 !important;
+  line-height: 1.2 !important;
+}
+
+.receipt-billing-page .receipt-summary-party {
+  display: flex !important;
+  align-items: center !important;
+  gap: 5px !important;
+
+  color: #64748b !important;
+  font-size: 9px !important;
+  font-weight: 500 !important;
+  white-space: nowrap !important;
+}
+
+.receipt-billing-page .receipt-summary-party strong {
+  color: #172554 !important;
+  font-weight: 800 !important;
+}
+
+/* ================= SUMMARY CARD GRID ================= */
+
+.receipt-billing-page .receipt-summary-values {
+  width: 100% !important;
+
+  display: grid !important;
+  grid-template-columns: repeat(10, minmax(96px, 1fr)) !important;
+
+  gap: 7px !important;
+  padding: 0 14px !important;
+
+  align-items: stretch !important;
+  box-sizing: border-box !important;
+}
+
+/* ================= NORMAL SUMMARY CARD ================= */
+
+.receipt-billing-page .receipt-summary-item {
+  width: 100% !important;
+  min-width: 0 !important;
+
+  height: 52px !important;
+  min-height: 52px !important;
+
+  padding: 7px 10px !important;
+
+  display: flex !important;
+  flex-direction: column !important;
+  align-items: flex-start !important;
+  justify-content: center !important;
+  gap: 6px !important;
+
+  border: 1px solid #cbd9eb !important;
+  border-radius: 7px !important;
+
+  background: #f8fafc !important;
+
+  box-sizing: border-box !important;
+  overflow: hidden !important;
+}
+
+.receipt-billing-page .receipt-summary-item > span {
+  width: 100% !important;
+
+  color: #475569 !important;
+  font-size: 8px !important;
+  font-weight: 700 !important;
+  line-height: 1 !important;
+
+  overflow: hidden !important;
+  text-overflow: ellipsis !important;
+  white-space: nowrap !important;
+}
+
+.receipt-billing-page .receipt-summary-item > strong {
+  width: 100% !important;
+
+  color: #0f172a !important;
+  font-size: 13px !important;
+  font-weight: 800 !important;
+  line-height: 1 !important;
+
+  overflow: hidden !important;
+  text-overflow: ellipsis !important;
+  white-space: nowrap !important;
+
+  font-variant-numeric: tabular-nums !important;
+}
+
+/* ================= DISCOUNT CARD ================= */
+
+.receipt-billing-page .receipt-summary-item.receipt-summary-discount {
+  border-color: #fca5a5 !important;
+  background: #fff1f2 !important;
+}
+
+.receipt-billing-page
+  .receipt-summary-item.receipt-summary-discount
+  > span,
+.receipt-billing-page
+  .receipt-summary-item.receipt-summary-discount
+  > strong {
+  color: #dc2626 !important;
+}
+
+/* ================= BALANCE CARD ================= */
+
+.receipt-billing-page .receipt-summary-item.receipt-summary-balance {
+  border-color: #fdba74 !important;
+  background: #fff7ed !important;
+}
+
+.receipt-billing-page
+  .receipt-summary-item.receipt-summary-balance
+  > span,
+.receipt-billing-page
+  .receipt-summary-item.receipt-summary-balance
+  > strong {
+  color: #c2410c !important;
+}
+
+/* ================= NET RECEIPT CARD ================= */
+
+.receipt-billing-page .receipt-summary-item.receipt-summary-net {
+  border-color: #60a5fa !important;
+  background: #eff6ff !important;
+}
+
+.receipt-billing-page
+  .receipt-summary-item.receipt-summary-net
+  > span {
+  color: #2563eb !important;
+}
+
+.receipt-billing-page
+  .receipt-summary-item.receipt-summary-net
+  > strong {
+  color: #1d4ed8 !important;
+  font-size: 14px !important;
+}
+
+/* ================= NARRATION + COUNTS ================= */
+
+.receipt-billing-page .receipt-summary-bottom {
+  width: 100% !important;
+
+  margin: 8px 0 0 !important;
+  padding: 0 14px !important;
+
+  display: flex !important;
+  align-items: center !important;
+  gap: 12px !important;
+
+  box-sizing: border-box !important;
+}
+
+.receipt-billing-page .receipt-summary-narration {
+  flex: 1 1 auto !important;
+  width: 100% !important;
+  min-width: 0 !important;
+
+  height: 32px !important;
+  min-height: 32px !important;
+
+  margin: 0 !important;
+  padding: 0 10px !important;
+
+  border: 1px solid #cbd5e1 !important;
+  border-radius: 6px !important;
+
+  background: #ffffff !important;
+  color: #172554 !important;
+
+  font-family: inherit !important;
+  font-size: 10px !important;
+  line-height: 30px !important;
+
+  outline: none !important;
+  box-sizing: border-box !important;
+}
+
+.receipt-billing-page .receipt-summary-narration::placeholder {
+  color: #94a3b8 !important;
+  opacity: 1 !important;
+}
+
+.receipt-billing-page .receipt-summary-narration:focus {
+  border-color: #3b82f6 !important;
+  box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.1) !important;
+}
+
+.receipt-billing-page .receipt-summary-counts {
+  flex: 0 0 auto !important;
+
+  display: flex !important;
+  align-items: center !important;
+  gap: 15px !important;
+
+  color: #64748b !important;
+  font-size: 9px !important;
+  white-space: nowrap !important;
+}
+
+.receipt-billing-page .receipt-summary-counts span {
+  display: inline-flex !important;
+  align-items: center !important;
+  gap: 4px !important;
+}
+
+.receipt-billing-page .receipt-summary-counts strong {
+  color: #172554 !important;
+  font-weight: 800 !important;
+}
+
+/* ================= RESPONSIVE ================= */
+
+@media (max-width: 1250px) {
+  .receipt-billing-page .receipt-summary-values {
+    grid-template-columns: repeat(6, minmax(110px, 1fr)) !important;
+  }
+}
+
+@media (max-width: 950px) {
+  .receipt-billing-page .receipt-summary-values {
+    grid-template-columns: repeat(4, minmax(120px, 1fr)) !important;
+  }
+
+  .receipt-billing-page .receipt-summary-bottom {
+    flex-direction: column !important;
+    align-items: stretch !important;
+  }
+
+  .receipt-billing-page .receipt-summary-counts {
+    justify-content: flex-end !important;
+  }
+}
+
+@media (max-width: 650px) {
+  .receipt-billing-page .receipt-summary-values {
+    grid-template-columns: repeat(2, minmax(120px, 1fr)) !important;
+  }
+
+  .receipt-billing-page .receipt-summary-header {
+    align-items: flex-start !important;
+    flex-direction: column !important;
+  }
+
+  .receipt-billing-page .receipt-summary-party {
+    width: 100% !important;
+    justify-content: flex-start !important;
+  }
+}
+
+/* =========================================================
+   BOTTOM ACTIONS
+   ========================================================= */
+
+.receipt-billing-page .receipt-bottom-actions {
+  min-height: 49px !important;
+  padding: 8px 14px !important;
+
+  display: flex !important;
+  align-items: center !important;
+  justify-content: flex-end !important;
+  gap: 8px !important;
+}
+
+.receipt-billing-page .receipt-bottom-actions button {
+  width: auto !important;
+
+  height: 31px !important;
+  min-height: 31px !important;
+  max-height: 31px !important;
+
+  margin: 0 !important;
+  padding: 0 14px !important;
+
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+
+  border-radius: 5px !important;
+
+  font-family: inherit !important;
+  font-size: 10px !important;
+  font-weight: 700 !important;
+  line-height: 29px !important;
+
+  cursor: pointer !important;
+}
+
+.receipt-billing-page .receipt-bottom-cancel-btn {
+  border: 1px solid #cbd5e1 !important;
+  background: #ffffff !important;
+  color: #475569 !important;
+}
+
+.receipt-billing-page .receipt-bottom-save-btn {
+  border: 1px solid #15803d !important;
+  background: var(--receipt-success) !important;
+  color: #ffffff !important;
+}
+
+.receipt-billing-page .receipt-bottom-cancel-btn:hover {
+  background: #f1f5f9 !important;
+}
+
+.receipt-billing-page .receipt-bottom-save-btn:hover {
+  background: #15803d !important;
+}
+
+/* =========================================================
+   RECEIPT RESPONSIVE
+   ========================================================= */
+
+@media (max-width: 1250px) {
+  .receipt-billing-page .receipt-header-grid {
+    grid-template-columns: repeat(4, minmax(0, 1fr)) !important;
+  }
+
+  .receipt-billing-page .receipt-narration-field {
+    grid-column: span 2 !important;
+  }
+
+  .receipt-billing-page .receipt-summary-values {
+    grid-template-columns: repeat(5, minmax(100px, 1fr)) !important;
+  }
+}
+
+@media (max-width: 850px) {
+  .receipt-billing-page .receipt-billing-topbar {
+    align-items: flex-start !important;
+    flex-direction: column !important;
+  }
+
+  .receipt-billing-page .receipt-billing-header-actions {
+    width: 100% !important;
+    justify-content: flex-start !important;
+    flex-wrap: wrap !important;
+  }
+
+  .receipt-billing-page .receipt-header-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  }
+
+  .receipt-billing-page .receipt-narration-field {
+    grid-column: span 2 !important;
+  }
+
+  .receipt-billing-page .receipt-summary-values {
+    grid-template-columns: repeat(2, minmax(110px, 1fr)) !important;
+  }
+
+  .receipt-billing-page .receipt-summary-header,
+  .receipt-billing-page .receipt-summary-bottom {
+    align-items: stretch !important;
+    flex-direction: column !important;
+  }
+
+  .receipt-billing-page .receipt-summary-party {
+    justify-content: flex-start !important;
+  }
+}
+
+@media (max-width: 520px) {
+  .receipt-billing-page .receipt-header-grid {
+    grid-template-columns: 1fr !important;
+  }
+
+  .receipt-billing-page .receipt-narration-field {
+    grid-column: span 1 !important;
+  }
+
+  .receipt-billing-page .receipt-summary-values {
+    grid-template-columns: 1fr !important;
+  }
+
+  .receipt-billing-page .receipt-grid-toolbar,
+  .receipt-billing-page .receipt-grid-footer {
+    align-items: flex-start !important;
+    flex-direction: column !important;
+
+    padding-top: 7px !important;
+    padding-bottom: 7px !important;
+  }
+
+  .receipt-billing-page .receipt-grid-toolbar-right,
+  .receipt-billing-page .receipt-grid-footer-right {
+    flex-wrap: wrap !important;
+  }
+
+  .receipt-billing-page .receipt-summary-counts {
+    align-items: flex-start !important;
+    flex-direction: column !important;
+    gap: 6px !important;
+  }
+}
+  /* =========================================================
+   RECEIPT SUMMARY — INVOICE SUMMARY STRUCTURE
+   ========================================================= */
+
+.receipt-billing-page .receipt-invoice-summary {
+  width: 100% !important;
+  margin: 10px 0 0 !important;
+  padding: 0 6px 8px !important;
+
+  border: 0 !important;
+  border-top: 1px solid #d7e1ee !important;
+  border-radius: 0 !important;
+
+  background: #ffffff !important;
+  box-shadow: none !important;
+
+  box-sizing: border-box !important;
+}
+
+/* Header */
+
+.receipt-billing-page .receipt-invoice-summary-header {
+  min-height: 40px !important;
+  padding: 8px 0 6px !important;
+
+  display: flex !important;
+  align-items: center !important;
+  justify-content: space-between !important;
+  gap: 12px !important;
+}
+
+.receipt-billing-page .receipt-invoice-summary-title {
+  display: flex !important;
+  align-items: center !important;
+  gap: 7px !important;
+}
+
+.receipt-billing-page .receipt-invoice-summary-dot {
+  width: 17px !important;
+  min-width: 17px !important;
+  height: 17px !important;
+
+  border-radius: 50% !important;
+  background: #3b82f6 !important;
+
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.12) !important;
+}
+
+.receipt-billing-page .receipt-invoice-summary-title h3 {
+  margin: 0 !important;
+
+  color: #172554 !important;
+  font-size: 11px !important;
+  font-weight: 800 !important;
+}
+
+.receipt-billing-page .receipt-invoice-summary-right {
+  color: #64748b !important;
+  font-size: 9px !important;
+  white-space: nowrap !important;
+}
+
+.receipt-billing-page .receipt-invoice-summary-right span {
+  display: flex !important;
+  align-items: center !important;
+  gap: 5px !important;
+}
+
+.receipt-billing-page .receipt-invoice-summary-right strong {
+  color: #172554 !important;
+  font-weight: 800 !important;
+}
+
+/* Cards */
+
+.receipt-billing-page .receipt-invoice-summary-cards {
+  width: 100% !important;
+
+  display: flex !important;
+  flex-wrap: wrap !important;
+  align-items: stretch !important;
+
+  gap: 7px !important;
+}
+
+.receipt-billing-page .receipt-invoice-summary-card {
+  width: 106px !important;
+  min-width: 106px !important;
+  height: 52px !important;
+
+  padding: 7px 10px !important;
+
+  display: flex !important;
+  flex-direction: column !important;
+  align-items: flex-start !important;
+  justify-content: center !important;
+  gap: 7px !important;
+
+  border: 1px solid #cfdaea !important;
+  border-radius: 7px !important;
+
+  background: #f8fafc !important;
+
+  box-sizing: border-box !important;
+  overflow: hidden !important;
+}
+
+.receipt-billing-page
+  .receipt-invoice-summary-card
+  > span {
+  width: 100% !important;
+
+  color: #475569 !important;
+  font-size: 8px !important;
+  font-weight: 700 !important;
+  line-height: 1 !important;
+
+  overflow: hidden !important;
+  text-overflow: ellipsis !important;
+  white-space: nowrap !important;
+}
+
+.receipt-billing-page
+  .receipt-invoice-summary-card
+  > strong {
+  width: 100% !important;
+
+  color: #0f172a !important;
+  font-size: 13px !important;
+  font-weight: 800 !important;
+  line-height: 1 !important;
+
+  overflow: hidden !important;
+  text-overflow: ellipsis !important;
+  white-space: nowrap !important;
+
+  font-variant-numeric: tabular-nums !important;
+}
+
+/* Red discount card */
+
+.receipt-billing-page
+  .receipt-invoice-summary-red {
+  border-color: #fca5a5 !important;
+  background: #fff1f2 !important;
+}
+
+.receipt-billing-page
+  .receipt-invoice-summary-red
+  > span,
+.receipt-billing-page
+  .receipt-invoice-summary-red
+  > strong {
+  color: #dc2626 !important;
+}
+
+/* Orange balance card */
+
+.receipt-billing-page
+  .receipt-invoice-summary-orange {
+  border-color: #fdba74 !important;
+  background: #fff7ed !important;
+}
+
+.receipt-billing-page
+  .receipt-invoice-summary-orange
+  > span,
+.receipt-billing-page
+  .receipt-invoice-summary-orange
+  > strong {
+  color: #c2410c !important;
+}
+
+/* Blue net card */
+
+.receipt-billing-page
+  .receipt-invoice-summary-blue {
+  border-color: #60a5fa !important;
+  background: #eff6ff !important;
+}
+
+.receipt-billing-page
+  .receipt-invoice-summary-blue
+  > span {
+  color: #2563eb !important;
+}
+
+.receipt-billing-page
+  .receipt-invoice-summary-blue
+  > strong {
+  color: #1d4ed8 !important;
+  font-size: 14px !important;
+}
+
+/* Narration row */
+
+.receipt-billing-page
+  .receipt-invoice-summary-narration-row {
+  width: 100% !important;
+  margin-top: 8px !important;
+
+  display: flex !important;
+  align-items: center !important;
+  gap: 12px !important;
+}
+
+.receipt-billing-page
+  .receipt-invoice-summary-narration-row
+  > input {
+  flex: 1 1 auto !important;
+  min-width: 0 !important;
+
+  height: 31px !important;
+  padding: 0 10px !important;
+
+  border: 1px solid #cbd5e1 !important;
+  border-radius: 6px !important;
+
+  background: #ffffff !important;
+  color: #172554 !important;
+
+  font-family: inherit !important;
+  font-size: 10px !important;
+
+  outline: none !important;
+  box-sizing: border-box !important;
+}
+
+.receipt-billing-page
+  .receipt-invoice-summary-narration-row
+  > input:focus {
+  border-color: #3b82f6 !important;
+  box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.1) !important;
+}
+
+.receipt-billing-page
+  .receipt-invoice-summary-narration-row
+  > input::placeholder {
+  color: #94a3b8 !important;
+}
+
+.receipt-billing-page .receipt-invoice-summary-meta {
+  flex: 0 0 auto !important;
+
+  display: flex !important;
+  align-items: center !important;
+  gap: 15px !important;
+
+  color: #64748b !important;
+  font-size: 9px !important;
+  white-space: nowrap !important;
+}
+
+.receipt-billing-page
+  .receipt-invoice-summary-meta
+  span {
+  display: flex !important;
+  align-items: center !important;
+  gap: 4px !important;
+}
+
+.receipt-billing-page
+  .receipt-invoice-summary-meta
+  strong {
+  color: #172554 !important;
+  font-weight: 800 !important;
+}
+
+/* Responsive */
+
+@media (max-width: 900px) {
+  .receipt-billing-page
+    .receipt-invoice-summary-narration-row {
+    align-items: stretch !important;
+    flex-direction: column !important;
+  }
+
+  .receipt-billing-page
+    .receipt-invoice-summary-meta {
+    width: 100% !important;
+    justify-content: flex-end !important;
+  }
+}
+
+@media (max-width: 600px) {
+  .receipt-billing-page
+    .receipt-invoice-summary-card {
+    width: calc(50% - 4px) !important;
+    min-width: calc(50% - 4px) !important;
+  }
+
+  .receipt-billing-page
+    .receipt-invoice-summary-header {
+    align-items: flex-start !important;
+    flex-direction: column !important;
+  }
+}
+
+/* =========================================================
+   RECEIPT HEADER — EXACT TWO ROW LAYOUT
+   ========================================================= */
+
+.receipt-billing-page .receipt-header-two-rows {
+  width: 100% !important;
+
+  display: grid !important;
+  grid-template-columns:
+    minmax(125px, 0.85fr)
+    minmax(100px, 0.7fr)
+    minmax(125px, 0.9fr)
+    minmax(125px, 0.9fr)
+    minmax(210px, 1.55fr)
+    minmax(150px, 1.05fr) !important;
+
+  gap: 8px 12px !important;
+  align-items: end !important;
+}
+
+.receipt-billing-page
+  .receipt-header-two-rows
+  .receipt-field {
+  min-width: 0 !important;
+  width: 100% !important;
+}
+
+.receipt-billing-page
+  .receipt-header-two-rows
+  .receipt-party-field {
+  min-width: 0 !important;
+  grid-column: auto !important;
+}
+
+.receipt-billing-page
+  .receipt-header-two-rows
+  input,
+.receipt-billing-page
+  .receipt-header-two-rows
+  select {
+  width: 100% !important;
+  min-width: 0 !important;
+  box-sizing: border-box !important;
+}
+
+/* Bottom buttons are no longer required */
+.receipt-billing-page .receipt-bottom-actions {
+  display: none !important;
+}
+
+/* Medium screens */
+
+@media (max-width: 1250px) {
+  .receipt-billing-page .receipt-header-two-rows {
+    grid-template-columns: repeat(
+      4,
+      minmax(150px, 1fr)
+    ) !important;
+  }
+}
+
+/* Small screens */
+
+@media (max-width: 800px) {
+  .receipt-billing-page .receipt-header-two-rows {
+    grid-template-columns: repeat(
+      2,
+      minmax(140px, 1fr)
+    ) !important;
+  }
+}
+
+@media (max-width: 520px) {
+  .receipt-billing-page .receipt-header-two-rows {
+    grid-template-columns: 1fr !important;
+  }
+}
+/* =========================================================
+   TRANSACTION MODULE — CHEQUE BOUNCE
+   Receipt-style design
+   Only affects .cheque-bounce-billing-page
+   ========================================================= */
+
+.cheque-bounce-billing-page {
+  --cb-primary: #2563eb;
+  --cb-primary-light: #eff6ff;
+  --cb-success: #16a34a;
+  --cb-success-dark: #15803d;
+  --cb-warning: #ea580c;
+  --cb-warning-light: #fff7ed;
+  --cb-danger: #dc2626;
+  --cb-text: #172554;
+  --cb-muted: #64748b;
+  --cb-border: #d7e1ee;
+  --cb-soft-border: #e2e8f0;
+  --cb-background: #f8fafc;
+  --cb-surface: #ffffff;
+
+  width: 100%;
+  min-width: 0;
+  padding: 4px 0 16px;
+  box-sizing: border-box;
+}
+
+.cheque-bounce-billing-page,
+.cheque-bounce-billing-page * {
+  box-sizing: border-box;
+}
+
+.cheque-bounce-card {
+  width: 100%;
+  min-width: 0;
+
+  overflow: hidden;
+
+  border: 1px solid var(--cb-border);
+  border-radius: 9px;
+
+  background: var(--cb-surface);
+
+  box-shadow:
+    0 1px 2px rgba(15, 23, 42, 0.04),
+    0 4px 12px rgba(15, 23, 42, 0.04);
+}
+
+/* =========================================================
+   TOP TITLE BAR
+   ========================================================= */
+
+.cheque-bounce-topbar {
+  min-height: 51px;
+  padding: 7px 12px 7px 16px;
+
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+
+  border-bottom: 1px solid var(--cb-border);
+  background: #ffffff;
+}
+
+.cheque-bounce-title-area {
+  min-width: 0;
+
+  display: flex;
+  align-items: center;
+  gap: 9px;
+}
+
+.cheque-bounce-title-area h2 {
+  margin: 0;
+
+  color: #0f2454;
+
+  font-size: 15px;
+  font-weight: 800;
+  line-height: 1.2;
+}
+
+.cheque-bounce-status-badge {
+  min-height: 21px;
+  padding: 3px 9px;
+
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+
+  border-radius: 999px;
+
+  background: var(--cb-primary-light);
+  color: var(--cb-primary);
+
+  font-size: 9px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.cheque-bounce-top-actions {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+}
+
+.cheque-bounce-save-btn {
+  height: 32px;
+  padding: 0 13px;
+
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+
+  border: 1px solid var(--cb-success-dark);
+  border-radius: 5px;
+
+  background: var(--cb-success);
+  color: #ffffff;
+
+  font-size: 10px;
+  font-weight: 700;
+  white-space: nowrap;
+
+  cursor: pointer;
+  transition:
+    background 0.18s ease,
+    transform 0.18s ease,
+    box-shadow 0.18s ease;
+}
+
+.cheque-bounce-save-btn:hover {
+  background: var(--cb-success-dark);
+  box-shadow: 0 3px 8px rgba(22, 163, 74, 0.18);
+  transform: translateY(-1px);
+}
+
+.cheque-bounce-more-btn,
+.cheque-bounce-close-btn {
+  width: 30px;
+  min-width: 30px;
+  height: 32px;
+  padding: 0;
+
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+
+  border: 0;
+  border-radius: 5px;
+
+  background: transparent;
+  color: #64748b;
+
+  cursor: pointer;
+}
+
+.cheque-bounce-more-btn {
+  font-size: 17px;
+}
+
+.cheque-bounce-close-btn {
+  font-size: 22px;
+  line-height: 1;
+}
+
+.cheque-bounce-more-btn:hover,
+.cheque-bounce-close-btn:hover {
+  background: #f1f5f9;
+  color: #334155;
+}
+
+/* =========================================================
+   ENTRY SECTION
+   ========================================================= */
+
+.cheque-bounce-entry-section {
+  width: 100%;
+  min-width: 0;
+  padding: 10px 14px 12px;
+
+  border-bottom: 1px solid var(--cb-border);
+
+  background: #ffffff;
+}
+
+.cheque-bounce-section-heading {
+  min-height: 27px;
+  margin-bottom: 8px;
+
+  display: flex;
+  align-items: center;
+  gap: 7px;
+}
+
+.cheque-bounce-section-heading h3,
+.cheque-bounce-summary-title h3 {
+  margin: 0;
+
+  color: var(--cb-text);
+
+  font-size: 11px;
+  font-weight: 800;
+  line-height: 1.2;
+}
+
+.cheque-bounce-section-dot {
+  width: 16px;
+  min-width: 16px;
+  height: 16px;
+
+  display: inline-block;
+
+  border-radius: 50%;
+
+  background: #3b82f6;
+
+  box-shadow:
+    0 0 0 3px rgba(59, 130, 246, 0.11);
+}
+
+.cheque-bounce-header-status {
+  margin-left: auto;
+
+  display: flex;
+  align-items: center;
+  gap: 15px;
+
+  color: var(--cb-muted);
+
+  font-size: 9px;
+  white-space: nowrap;
+}
+
+.cheque-bounce-header-status span {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.cheque-bounce-header-status strong {
+  color: var(--cb-text);
+  font-weight: 800;
+}
+
+/* =========================================================
+   EXACT TWO-ROW FIELD GRID
+   Six fields in each row
+   ========================================================= */
+
+.cheque-bounce-header-grid {
+  width: 100%;
+  min-width: 0;
+
+  display: grid;
+  grid-template-columns:
+    repeat(6, minmax(0, 1fr));
+
+  column-gap: 12px;
+  row-gap: 10px;
+
+  align-items: end;
+}
+
+.cheque-bounce-field {
+  width: 100%;
+  min-width: 0;
+
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.cheque-bounce-field label {
+  min-height: 13px;
+  margin: 0;
+
+  color: #263d5d;
+
+  font-size: 9.5px;
+  font-weight: 700;
+  line-height: 1.2;
+}
+
+.cheque-bounce-field label span {
+  color: var(--cb-danger);
+}
+
+.cheque-bounce-field input,
+.cheque-bounce-field select {
+  width: 100%;
+  min-width: 0;
+  height: 31px;
+  padding: 5px 8px;
+
+  border: 1px solid var(--cb-border);
+  border-radius: 5px;
+
+  outline: none;
+
+  background: #ffffff;
+  color: var(--cb-text);
+
+  font-family: inherit;
+  font-size: 10.5px;
+  line-height: 1.2;
+
+  transition:
+    border-color 0.18s ease,
+    box-shadow 0.18s ease,
+    background 0.18s ease;
+}
+
+.cheque-bounce-field select {
+  padding-right: 26px;
+  cursor: pointer;
+}
+
+.cheque-bounce-field input::placeholder {
+  color: #94a3b8;
+}
+
+.cheque-bounce-field input:focus,
+.cheque-bounce-field select:focus {
+  border-color: var(--cb-primary);
+
+  box-shadow:
+    0 0 0 2px rgba(37, 99, 235, 0.1);
+}
+
+.cheque-bounce-field input:hover:not(:read-only),
+.cheque-bounce-field select:hover {
+  border-color: #aebed2;
+}
+
+.cheque-bounce-field .cheque-bounce-readonly {
+  background: #f8fafc;
+  color: #475569;
+  cursor: default;
+}
+
+.cheque-bounce-field .cheque-bounce-number {
+  text-align: right;
+}
+
+.cheque-bounce-field .cheque-bounce-total-input {
+  border-color: #93c5fd;
+
+  background: var(--cb-primary-light);
+  color: #1d4ed8;
+
+  text-align: right;
+
+  font-weight: 800;
+}
+
+/* Remove number arrows where supported */
+
+.cheque-bounce-field input[type="number"]::-webkit-inner-spin-button,
+.cheque-bounce-field input[type="number"]::-webkit-outer-spin-button {
+  margin: 0;
+}
+
+/* =========================================================
+   SUMMARY SECTION
+   ========================================================= */
+
+.cheque-bounce-summary-section {
+  width: 100%;
+  min-width: 0;
+  padding: 10px 14px 11px;
+
+  background: #ffffff;
+}
+
+.cheque-bounce-summary-heading {
+  min-height: 28px;
+  margin-bottom: 8px;
+
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 15px;
+}
+
+.cheque-bounce-summary-title {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+}
+
+.cheque-bounce-summary-party {
+  color: var(--cb-muted);
+
+  font-size: 9px;
+  white-space: nowrap;
+}
+
+.cheque-bounce-summary-party strong {
+  margin-left: 4px;
+
+  color: var(--cb-text);
+
+  font-weight: 800;
+}
+
+.cheque-bounce-summary-grid {
+  width: 100%;
+
+  display: grid;
+  grid-template-columns:
+    repeat(6, minmax(0, 1fr));
+
+  gap: 8px;
+}
+
+.cheque-bounce-summary-card {
+  min-width: 0;
+  min-height: 49px;
+  padding: 7px 9px;
+
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 4px;
+
+  border: 1px solid var(--cb-border);
+  border-radius: 6px;
+
+  background: #f8fafc;
+}
+
+.cheque-bounce-summary-card span {
+  overflow: hidden;
+
+  color: var(--cb-muted);
+
+  font-size: 8.5px;
+  font-weight: 700;
+  line-height: 1.2;
+
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.cheque-bounce-summary-card strong {
+  overflow: hidden;
+
+  color: var(--cb-text);
+
+  font-size: 13px;
+  font-weight: 800;
+  line-height: 1.2;
+
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.cheque-bounce-summary-card.warning {
+  border-color: #fed7aa;
+
+  background: var(--cb-warning-light);
+}
+
+.cheque-bounce-summary-card.warning strong {
+  color: var(--cb-warning);
+}
+
+.cheque-bounce-summary-card.total {
+  border-color: #93c5fd;
+
+  background: var(--cb-primary-light);
+}
+
+.cheque-bounce-summary-card.total strong {
+  color: #1d4ed8;
+}
+
+.cheque-bounce-narration-row {
+  width: 100%;
+  margin-top: 8px;
+}
+
+.cheque-bounce-narration-row input {
+  width: 100%;
+  height: 31px;
+  padding: 5px 9px;
+
+  border: 1px solid var(--cb-border);
+  border-radius: 5px;
+
+  outline: none;
+
+  background: #ffffff;
+  color: var(--cb-text);
+
+  font-family: inherit;
+  font-size: 10.5px;
+}
+
+.cheque-bounce-narration-row input::placeholder {
+  color: #94a3b8;
+}
+
+.cheque-bounce-narration-row input:focus {
+  border-color: var(--cb-primary);
+
+  box-shadow:
+    0 0 0 2px rgba(37, 99, 235, 0.1);
+}
+
+/* Old bottom action block is not used in new JSX */
+
+.cheque-bounce-billing-page .form-actions {
+  display: none;
+}
+
+/* =========================================================
+   RESPONSIVE
+   ========================================================= */
+
+@media (max-width: 1250px) {
+  .cheque-bounce-header-grid {
+    grid-template-columns:
+      repeat(4, minmax(145px, 1fr));
+  }
+
+  .cheque-bounce-summary-grid {
+    grid-template-columns:
+      repeat(3, minmax(145px, 1fr));
+  }
+}
+
+@media (max-width: 900px) {
+  .cheque-bounce-topbar {
+    align-items: flex-start;
+  }
+
+  .cheque-bounce-header-grid {
+    grid-template-columns:
+      repeat(2, minmax(140px, 1fr));
+  }
+
+  .cheque-bounce-summary-grid {
+    grid-template-columns:
+      repeat(2, minmax(140px, 1fr));
+  }
+
+  .cheque-bounce-header-status {
+    display: none;
+  }
+}
+
+@media (max-width: 600px) {
+  .cheque-bounce-topbar {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .cheque-bounce-top-actions {
+    justify-content: flex-end;
+  }
+
+  .cheque-bounce-header-grid,
+  .cheque-bounce-summary-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .cheque-bounce-summary-heading {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+}
+
+/* =========================================================
+   PDC DOCKET — RECEIPT STYLE DESIGN
+   ========================================================= */
+
+.pdc-billing-page {
+  --pdc-primary: #2563eb;
+  --pdc-primary-dark: #1d4ed8;
+  --pdc-primary-light: #eff6ff;
+  --pdc-success: #16a34a;
+  --pdc-success-dark: #15803d;
+  --pdc-danger: #dc2626;
+  --pdc-text: #172554;
+  --pdc-muted: #64748b;
+  --pdc-border: #d7e1ee;
+  --pdc-soft-border: #e2e8f0;
+  --pdc-surface: #ffffff;
+  --pdc-soft-background: #f8fafc;
+
+  width: 100%;
+  min-width: 0;
+  padding: 4px 0 16px;
+}
+
+.pdc-billing-page,
+.pdc-billing-page * {
+  box-sizing: border-box;
+}
+
+.pdc-billing-card {
+  width: 100%;
+  min-width: 0;
+  overflow: hidden;
+
+  background: var(--pdc-surface);
+  border: 1px solid var(--pdc-border);
+  border-radius: 9px;
+
+  box-shadow:
+    0 1px 2px rgba(15, 23, 42, 0.04),
+    0 4px 12px rgba(15, 23, 42, 0.04);
+}
+
+/* =========================================================
+   TOP HEADER
+   ========================================================= */
+
+.pdc-billing-topbar {
+  min-height: 50px;
+  padding: 7px 12px 7px 16px;
+
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+
+  border-bottom: 1px solid var(--pdc-border);
+  background: #ffffff;
+}
+
+.pdc-billing-title-wrap {
+  min-width: 0;
+
+  display: flex;
+  align-items: center;
+  gap: 9px;
+}
+
+.pdc-billing-title-wrap h2 {
+  margin: 0;
+
+  color: var(--pdc-text);
+
+  font-size: 15px;
+  font-weight: 800;
+  line-height: 1.2;
+}
+
+.pdc-billing-badge {
+  height: 21px;
+  padding: 0 9px;
+
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+
+  border-radius: 999px;
+
+  background: var(--pdc-primary-light);
+  color: var(--pdc-primary);
+
+  font-size: 9px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.pdc-billing-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+}
+
+.pdc-save-header-btn {
+  height: 32px;
+  padding: 0 13px;
+
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+
+  border: 1px solid var(--pdc-success-dark);
+  border-radius: 5px;
+
+  background: var(--pdc-success);
+  color: #ffffff;
+
+  font-size: 10px;
+  font-weight: 700;
+  white-space: nowrap;
+
+  cursor: pointer;
+}
+
+.pdc-save-header-btn:hover {
+  background: var(--pdc-success-dark);
+}
+
+.pdc-more-btn,
+.pdc-close-header-btn {
+  width: 30px;
+  min-width: 30px;
+  height: 32px;
+  padding: 0;
+
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+
+  border: 0;
+  border-radius: 5px;
+
+  background: transparent;
+  color: #64748b;
+
+  cursor: pointer;
+}
+
+.pdc-more-btn {
+  font-size: 17px;
+}
+
+.pdc-close-header-btn {
+  font-size: 22px;
+  line-height: 1;
+}
+
+.pdc-more-btn:hover,
+.pdc-close-header-btn:hover {
+  background: #f1f5f9;
+  color: #334155;
+}
+
+/* =========================================================
+   PDC HEADER FIELDS
+   ========================================================= */
+
+.pdc-entry-section {
+  width: 100%;
+  min-width: 0;
+  padding: 10px 14px 12px;
+
+  border-bottom: 1px solid var(--pdc-border);
+  background: #ffffff;
+}
+
+.pdc-section-heading,
+.pdc-grid-heading {
+  min-height: 27px;
+  margin-bottom: 8px;
+
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.pdc-heading-left {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+}
+
+.pdc-heading-left h3 {
+  margin: 0;
+
+  color: var(--pdc-text);
+
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.pdc-section-dot {
+  width: 16px;
+  min-width: 16px;
+  height: 16px;
+
+  border-radius: 50%;
+
+  background: #3b82f6;
+
+  box-shadow:
+    0 0 0 3px rgba(59, 130, 246, 0.11);
+}
+
+.pdc-heading-status,
+.pdc-grid-count {
+  display: flex;
+  align-items: center;
+  gap: 15px;
+
+  color: var(--pdc-muted);
+
+  font-size: 9px;
+  white-space: nowrap;
+}
+
+.pdc-heading-status span,
+.pdc-grid-count span {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.pdc-heading-status strong,
+.pdc-grid-count strong {
+  color: var(--pdc-text);
+  font-weight: 800;
+}
+
+/* Exactly four fields in each row */
+
+.pdc-header-two-rows {
+  width: 100%;
+  min-width: 0;
+
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+
+  column-gap: 12px;
+  row-gap: 10px;
+
+  align-items: end;
+}
+
+.pdc-field {
+  width: 100%;
+  min-width: 0;
+
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.pdc-field label,
+.pdc-narration-field label {
+  min-height: 13px;
+  margin: 0;
+
+  color: #263d5d;
+
+  font-size: 9.5px;
+  font-weight: 700;
+  line-height: 1.2;
+}
+
+.pdc-field label span {
+  color: var(--pdc-danger);
+}
+
+.pdc-field input,
+.pdc-field select,
+.pdc-narration-field input {
+  width: 100%;
+  min-width: 0;
+  height: 31px;
+  padding: 5px 8px;
+
+  border: 1px solid var(--pdc-border);
+  border-radius: 5px;
+
+  outline: none;
+
+  background: #ffffff;
+  color: var(--pdc-text);
+
+  font-family: inherit;
+  font-size: 10.5px;
+}
+
+.pdc-field select {
+  padding-right: 26px;
+  cursor: pointer;
+}
+
+.pdc-field input:focus,
+.pdc-field select:focus,
+.pdc-narration-field input:focus {
+  border-color: var(--pdc-primary);
+
+  box-shadow:
+    0 0 0 2px rgba(37, 99, 235, 0.1);
+}
+
+.pdc-field input::placeholder,
+.pdc-narration-field input::placeholder {
+  color: #94a3b8;
+}
+
+.pdc-narration-field {
+  width: 100%;
+  margin-top: 9px;
+
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+/* =========================================================
+   CHEQUE TABLE
+   ========================================================= */
+
+.pdc-cheque-section {
+  width: 100%;
+  min-width: 0;
+  padding: 10px 14px 12px;
+
+  background: #ffffff;
+}
+
+.pdc-grid-scroll {
+  width: 100%;
+  height: 245px;
+
+  overflow: auto;
+
+  border: 1px solid var(--pdc-border);
+  border-radius: 6px;
+
+  background: #ffffff;
+}
+
+.pdc-entry-table {
+  width: 100%;
+  min-width: 1160px;
+
+  border-collapse: separate;
+  border-spacing: 0;
+
+  table-layout: auto;
+
+  background: #ffffff;
+}
+
+.pdc-entry-table th {
+  position: sticky;
+  top: 0;
+  z-index: 5;
+
+  height: 31px;
+  padding: 6px 8px;
+
+  border-right: 1px solid var(--pdc-border);
+  border-bottom: 1px solid var(--pdc-border);
+
+  background: #f2f7ff;
+  color: var(--pdc-text);
+
+  text-align: left;
+
+  font-size: 9.5px;
+  font-weight: 800;
+  white-space: nowrap;
+}
+
+.pdc-entry-table td {
+  height: 30px;
+  padding: 5px 8px;
+
+  border-right: 1px solid #edf2f7;
+  border-bottom: 1px solid #e8eef5;
+
+  background: #ffffff;
+  color: #263d5d;
+
+  font-size: 10px;
+  white-space: nowrap;
+}
+
+.pdc-entry-table tbody tr:nth-child(even) td {
+  background: #fbfdff;
+}
+
+.pdc-entry-table tbody tr:hover td {
+  background: #eff6ff;
+}
+
+.pdc-entry-table th:first-child,
+.pdc-entry-table td:first-child {
+  width: 46px;
+  min-width: 46px;
+  text-align: center;
+}
+
+.pdc-entry-table th:last-child,
+.pdc-entry-table td:last-child {
+  border-right: 0;
+}
+
+.pdc-amount-cell {
+  text-align: right;
+  font-weight: 700;
+}
+
+.pdc-empty-row {
+  height: 165px !important;
+
+  color: #8aa0bd !important;
+
+  text-align: center !important;
+  font-size: 10px !important;
+  font-style: italic !important;
+}
+
+/* =========================================================
+   SUMMARY CARDS
+   ========================================================= */
+
+.pdc-summary-section {
+  width: 100%;
+  margin-top: 9px;
+
+  display: grid;
+  grid-template-columns:
+    repeat(4, minmax(0, 1fr));
+
+  gap: 8px;
+}
+
+.pdc-summary-card {
+  min-width: 0;
+  min-height: 49px;
+  padding: 7px 9px;
+
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 4px;
+
+  border: 1px solid var(--pdc-border);
+  border-radius: 6px;
+
+  background: var(--pdc-soft-background);
+}
+
+.pdc-summary-card span {
+  overflow: hidden;
+
+  color: var(--pdc-muted);
+
+  font-size: 8.5px;
+  font-weight: 700;
+
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.pdc-summary-card strong {
+  overflow: hidden;
+
+  color: var(--pdc-text);
+
+  font-size: 13px;
+  font-weight: 800;
+
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.pdc-summary-card.total {
+  border-color: #93c5fd;
+  background: var(--pdc-primary-light);
+}
+
+.pdc-summary-card.total strong {
+  color: var(--pdc-primary-dark);
+}
+
+/* Hide old bottom controls if any old markup remains */
+
+.pdc-billing-page .form-actions,
+.pdc-billing-page .receipt-bottom-summary {
+  display: none !important;
+}
+
+/* Scrollbar */
+
+.pdc-grid-scroll::-webkit-scrollbar {
+  width: 9px;
+  height: 9px;
+}
+
+.pdc-grid-scroll::-webkit-scrollbar-track {
+  background: #eef2f7;
+}
+
+.pdc-grid-scroll::-webkit-scrollbar-thumb {
+  border: 2px solid #eef2f7;
+  border-radius: 999px;
+  background: #9fb0c5;
+}
+
+.pdc-grid-scroll::-webkit-scrollbar-thumb:hover {
+  background: #71839a;
+}
+
+/* =========================================================
+   RESPONSIVE
+   ========================================================= */
+
+@media (max-width: 1050px) {
+  .pdc-header-two-rows,
+  .pdc-summary-section {
+    grid-template-columns:
+      repeat(2, minmax(145px, 1fr));
+  }
+}
+
+@media (max-width: 700px) {
+  .pdc-billing-topbar {
+    align-items: flex-start;
+  }
+
+  .pdc-heading-status,
+  .pdc-grid-count {
+    display: none;
+  }
+}
+
+@media (max-width: 560px) {
+  .pdc-billing-topbar {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .pdc-billing-header-actions {
+    justify-content: flex-end;
+  }
+
+  .pdc-header-two-rows,
+  .pdc-summary-section {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* =========================================================
+   JOURNAL VOUCHER — RECEIPT STYLE DESIGN
+   ========================================================= */
+
+.journal-billing-page {
+  --journal-primary: #2563eb;
+  --journal-primary-dark: #1d4ed8;
+  --journal-primary-light: #eff6ff;
+  --journal-success: #16a34a;
+  --journal-success-dark: #15803d;
+  --journal-danger: #dc2626;
+  --journal-warning: #ea580c;
+  --journal-text: #172554;
+  --journal-muted: #64748b;
+  --journal-border: #d7e1ee;
+  --journal-soft-border: #e2e8f0;
+  --journal-surface: #ffffff;
+  --journal-background: #f8fafc;
+
+  width: 100%;
+  min-width: 0;
+  padding: 4px 0 16px;
+}
+
+.journal-billing-page,
+.journal-billing-page * {
+  box-sizing: border-box;
+}
+
+.journal-billing-card {
+  width: 100%;
+  min-width: 0;
+  overflow: visible;
+
+  border: 1px solid var(--journal-border);
+  border-radius: 9px;
+
+  background: var(--journal-surface);
+
+  box-shadow:
+    0 1px 2px rgba(15, 23, 42, 0.04),
+    0 4px 12px rgba(15, 23, 42, 0.04);
+}
+
+/* ================= TOP HEADER ================= */
+
+.journal-billing-topbar {
+  min-height: 50px;
+  padding: 7px 12px 7px 16px;
+
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+
+  border-bottom: 1px solid var(--journal-border);
+  background: #ffffff;
+}
+
+.journal-billing-title-wrap {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+}
+
+.journal-billing-title-wrap h2 {
+  margin: 0;
+  color: var(--journal-text);
+  font-size: 15px;
+  font-weight: 800;
+}
+
+.journal-billing-badge {
+  height: 21px;
+  padding: 0 9px;
+
+  display: inline-flex;
+  align-items: center;
+
+  border-radius: 999px;
+
+  background: var(--journal-primary-light);
+  color: var(--journal-primary);
+
+  font-size: 9px;
+  font-weight: 700;
+}
+
+.journal-billing-actions {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+}
+
+.journal-save-header-btn {
+  height: 32px;
+  padding: 0 14px;
+
+  border: 1px solid var(--journal-success-dark);
+  border-radius: 5px;
+
+  background: var(--journal-success);
+  color: #ffffff;
+
+  font-size: 10px;
+  font-weight: 700;
+
+  cursor: pointer;
+}
+
+.journal-save-header-btn:hover {
+  background: var(--journal-success-dark);
+}
+
+.journal-more-btn,
+.journal-close-header-btn {
+  width: 30px;
+  height: 32px;
+  padding: 0;
+
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+
+  border: 0;
+  border-radius: 5px;
+
+  background: transparent;
+  color: #64748b;
+
+  cursor: pointer;
+}
+
+.journal-more-btn {
+  font-size: 17px;
+}
+
+.journal-close-header-btn {
+  font-size: 22px;
+}
+
+.journal-more-btn:hover,
+.journal-close-header-btn:hover {
+  background: #f1f5f9;
+  color: #334155;
+}
+
+/* ================= SECTION HEADERS ================= */
+
+.journal-entry-header-section,
+.journal-grid-section,
+.journal-summary-section {
+  width: 100%;
+  min-width: 0;
+  padding: 10px 14px 12px;
+}
+
+.journal-entry-header-section,
+.journal-grid-section {
+  border-bottom: 1px solid var(--journal-border);
+}
+
+.journal-section-heading,
+.journal-grid-heading,
+.journal-summary-heading {
+  min-height: 28px;
+  margin-bottom: 8px;
+
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.journal-heading-left {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+}
+
+.journal-heading-left h3 {
+  margin: 0;
+
+  color: var(--journal-text);
+
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.journal-section-dot {
+  width: 16px;
+  min-width: 16px;
+  height: 16px;
+
+  border-radius: 50%;
+
+  background: #3b82f6;
+
+  box-shadow:
+    0 0 0 3px rgba(59, 130, 246, 0.11);
+}
+
+.journal-header-meta {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+
+  color: var(--journal-muted);
+
+  font-size: 9px;
+}
+
+.journal-header-meta span {
+  display: inline-flex;
+  gap: 4px;
+}
+
+.journal-header-meta strong {
+  color: var(--journal-text);
+}
+
+/* ================= HEADER — ONLY TWO ROWS ================= */
+
+.journal-header-two-rows {
+  width: 100%;
+
+  display: grid;
+  grid-template-columns:
+    minmax(150px, 1fr)
+    minmax(150px, 1fr)
+    minmax(150px, 1fr)
+    minmax(300px, 3fr);
+
+  gap: 10px 12px;
+  align-items: end;
+}
+
+.journal-field {
+  min-width: 0;
+
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.journal-field label {
+  color: #263d5d;
+
+  font-size: 9.5px;
+  font-weight: 700;
+}
+
+.journal-field label span {
+  color: var(--journal-danger);
+}
+
+.journal-field input,
+.journal-field select {
+  width: 100%;
+  min-width: 0;
+  height: 31px;
+  padding: 5px 8px;
+
+  border: 1px solid var(--journal-border);
+  border-radius: 5px;
+
+  outline: none;
+
+  background: #ffffff;
+  color: var(--journal-text);
+
+  font-family: inherit;
+  font-size: 10.5px;
+}
+
+.journal-field input:focus,
+.journal-field select:focus {
+  border-color: var(--journal-primary);
+
+  box-shadow:
+    0 0 0 2px rgba(37, 99, 235, 0.1);
+}
+
+.journal-narration-inline {
+  grid-column: auto;
+}
+
+/* ================= GRID ================= */
+
+.journal-add-row-top-btn,
+.journal-add-row-bottom-btn {
+  height: 29px;
+  padding: 0 11px;
+
+  border: 1px solid #bfdbfe;
+  border-radius: 5px;
+
+  background: #ffffff;
+  color: var(--journal-primary);
+
+  font-size: 9.5px;
+  font-weight: 700;
+
+  cursor: pointer;
+}
+
+.journal-add-row-top-btn:hover,
+.journal-add-row-bottom-btn:hover {
+  border-color: var(--journal-primary);
+  background: var(--journal-primary-light);
+}
+
+.journal-grid-scroll {
+  width: 100%;
+  min-height: 220px;
+  max-height: 320px;
+
+  overflow: auto;
+
+  border: 1px solid var(--journal-border);
+  border-radius: 6px 6px 0 0;
+
+  background: #ffffff;
+}
+
+.journal-entry-grid {
+  width: 100%;
+  min-width: 800px;
+
+  border-collapse: separate;
+  border-spacing: 0;
+
+  table-layout: fixed;
+}
+
+.journal-entry-grid th {
+  position: sticky;
+  top: 0;
+  z-index: 5;
+
+  height: 32px;
+  padding: 6px 8px;
+
+  border-right: 1px solid var(--journal-border);
+  border-bottom: 1px solid var(--journal-border);
+
+  background: #f2f7ff;
+  color: var(--journal-text);
+
+  text-align: left;
+
+  font-size: 9.5px;
+  font-weight: 800;
+}
+
+.journal-entry-grid td {
+  height: 39px;
+  padding: 5px 7px;
+
+  position: relative;
+
+  border-right: 1px solid #edf2f7;
+  border-bottom: 1px solid #e8eef5;
+
+  background: #ffffff;
+}
+
+.journal-entry-grid tbody tr:nth-child(even) td {
+  background: #fbfdff;
+}
+
+.journal-entry-grid th:nth-child(1),
+.journal-entry-grid td:nth-child(1) {
+  width: 75px;
+}
+
+.journal-entry-grid th:nth-child(2),
+.journal-entry-grid td:nth-child(2) {
+  width: 190px;
+}
+
+.journal-entry-grid th:nth-child(3),
+.journal-entry-grid td:nth-child(3) {
+  width: 310px;
+}
+
+.journal-entry-grid th:nth-child(4),
+.journal-entry-grid td:nth-child(4),
+.journal-entry-grid th:nth-child(5),
+.journal-entry-grid td:nth-child(5) {
+  width: 190px;
+}
+
+.journal-seq-cell {
+  color: var(--journal-text);
+
+  text-align: center;
+
+  font-size: 10px;
+  font-weight: 700;
+}
+
+.journal-entry-grid input {
+  width: 100%;
+  height: 27px;
+  padding: 4px 7px;
+
+  border: 1px solid #cbd5e1;
+  border-radius: 4px;
+
+  outline: none;
+
+  background: #ffffff;
+  color: var(--journal-text);
+
+  font-size: 10px;
+}
+
+.journal-entry-grid input:focus {
+  border-color: var(--journal-primary);
+
+  box-shadow:
+    0 0 0 2px rgba(37, 99, 235, 0.08);
+}
+
+.journal-readonly-input {
+  background: #f8fafc !important;
+  color: #64748b !important;
+}
+
+.journal-amount-input {
+  text-align: right;
+  font-weight: 700;
+}
+
+/* ================= ACCOUNT DROPDOWN ================= */
+
+.journal-account-search-cell {
+  overflow: visible;
+  z-index: 20;
+}
+
+.journal-account-search-wrap {
+  position: relative;
+  width: 100%;
+}
+
+.journal-account-dropdown {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  right: 0;
+  z-index: 99999;
+
+  max-height: 220px;
+  overflow-y: auto;
+
+  border: 1px solid #bfdbfe;
+  border-radius: 6px;
+
+  background: #ffffff;
+
+  box-shadow:
+    0 10px 25px rgba(15, 23, 42, 0.18);
+}
+
+.journal-account-option {
+  width: 100%;
+  min-height: 38px;
+  padding: 6px 9px;
+
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+
+  border: 0;
+  border-bottom: 1px solid #eef2f7;
+
+  background: #ffffff;
+  color: var(--journal-text);
+
+  text-align: left;
+
+  cursor: pointer;
+}
+
+.journal-account-option:hover {
+  background: var(--journal-primary-light);
+}
+
+.journal-account-option strong {
+  font-size: 10px;
+}
+
+.journal-account-option span {
+  color: var(--journal-muted);
+  font-size: 9px;
+}
+
+/* ================= GRID FOOTER ================= */
+
+.journal-grid-footer {
+  min-height: 34px;
+  padding: 3px 8px;
+
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+
+  border: 1px solid var(--journal-border);
+  border-top: 0;
+  border-radius: 0 0 6px 6px;
+
+  background: var(--journal-background);
+}
+
+.journal-grid-footer-info {
+  display: flex;
+  align-items: center;
+  gap: 15px;
+}
+
+.journal-grid-footer-info span {
+  color: var(--journal-muted);
+
+  font-size: 9px;
+}
+
+.journal-grid-footer-info strong {
+  margin-left: 4px;
+
+  color: var(--journal-text);
+}
+
+/* ================= SUMMARY ================= */
+
+.journal-balance-status {
+  padding: 4px 9px;
+
+  border-radius: 999px;
+
+  font-size: 9px;
+  font-weight: 700;
+}
+
+.journal-balance-status.balanced {
+  background: #dcfce7;
+  color: #15803d;
+}
+
+.journal-balance-status.unbalanced {
+  background: #fee2e2;
+  color: #dc2626;
+}
+
+.journal-summary-grid {
+  width: 100%;
+
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+
+  gap: 8px;
+}
+
+.journal-summary-card {
+  min-height: 50px;
+  padding: 7px 9px;
+
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 4px;
+
+  border: 1px solid var(--journal-border);
+  border-radius: 6px;
+
+  background: var(--journal-background);
+}
+
+.journal-summary-card span {
+  color: var(--journal-muted);
+
+  font-size: 8.5px;
+  font-weight: 700;
+}
+
+.journal-summary-card strong {
+  color: var(--journal-text);
+
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.journal-summary-card.difference.balanced {
+  border-color: #86efac;
+  background: #f0fdf4;
+}
+
+.journal-summary-card.difference.balanced strong {
+  color: #15803d;
+}
+
+.journal-summary-card.difference.unbalanced {
+  border-color: #fca5a5;
+  background: #fef2f2;
+}
+
+.journal-summary-card.difference.unbalanced strong {
+  color: #dc2626;
+}
+
+/* Hide any old bottom actions */
+
+.journal-billing-page .form-actions,
+.journal-billing-page .receipt-bottom-summary,
+.journal-billing-page > .btn-add-row {
+  display: none !important;
+}
+
+/* ================= RESPONSIVE ================= */
+
+@media (max-width: 1050px) {
+  .journal-header-two-rows {
+    grid-template-columns:
+      repeat(2, minmax(150px, 1fr));
+  }
+
+  .journal-narration-inline {
+    grid-column: 1 / -1;
+  }
+
+  .journal-summary-grid {
+    grid-template-columns:
+      repeat(2, minmax(145px, 1fr));
+  }
+}
+
+@media (max-width: 600px) {
+  .journal-billing-topbar {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .journal-billing-actions {
+    justify-content: flex-end;
+  }
+
+  .journal-header-two-rows,
+  .journal-summary-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .journal-narration-inline {
+    grid-column: auto;
+  }
+
+  .journal-header-meta {
+    display: none;
+  }
+}
+/* =========================================================
+   JOURNAL VOUCHER — FINAL COMPACT FIX
+   ========================================================= */
+
+.journal-billing-page {
+  padding: 2px 0 10px !important;
+}
+
+.journal-billing-card {
+  border-radius: 7px !important;
+  box-shadow:
+    0 1px 2px rgba(15, 23, 42, 0.04) !important;
+}
+
+/* ================= TOP BAR ================= */
+
+.journal-billing-topbar {
+  min-height: 43px !important;
+  height: 43px !important;
+  padding: 5px 10px 5px 13px !important;
+}
+
+.journal-billing-title-wrap {
+  gap: 7px !important;
+}
+
+.journal-billing-title-wrap h2 {
+  font-size: 13px !important;
+}
+
+.journal-billing-badge {
+  height: 19px !important;
+  padding: 0 7px !important;
+  font-size: 8px !important;
+}
+
+.journal-save-header-btn {
+  height: 29px !important;
+  min-height: 29px !important;
+  padding: 0 11px !important;
+  font-size: 9px !important;
+}
+
+.journal-more-btn,
+.journal-close-header-btn {
+  width: 27px !important;
+  min-width: 27px !important;
+  height: 29px !important;
+}
+
+/* ================= SECTIONS ================= */
+
+.journal-entry-header-section,
+.journal-grid-section,
+.journal-summary-section {
+  padding: 7px 12px 8px !important;
+}
+
+.journal-section-heading,
+.journal-grid-heading,
+.journal-summary-heading {
+  min-height: 22px !important;
+  margin-bottom: 6px !important;
+}
+
+.journal-section-dot {
+  width: 14px !important;
+  min-width: 14px !important;
+  height: 14px !important;
+
+  box-shadow:
+    0 0 0 2px rgba(59, 130, 246, 0.12) !important;
+}
+
+.journal-heading-left {
+  gap: 6px !important;
+}
+
+.journal-heading-left h3 {
+  font-size: 10px !important;
+}
+
+.journal-header-meta {
+  gap: 12px !important;
+  font-size: 8px !important;
+}
+
+/* ================= HEADER FIELDS ================= */
+
+.journal-header-two-rows {
+  grid-template-columns:
+    minmax(125px, 0.8fr)
+    minmax(125px, 0.8fr)
+    minmax(120px, 0.75fr)
+    minmax(280px, 2.6fr) !important;
+
+  gap: 6px 10px !important;
+}
+
+.journal-field {
+  gap: 3px !important;
+}
+
+.journal-field label {
+  min-height: 11px !important;
+  font-size: 8.5px !important;
+}
+
+.journal-field input,
+.journal-field select {
+  height: 28px !important;
+  min-height: 28px !important;
+  padding: 3px 7px !important;
+
+  border-radius: 4px !important;
+
+  font-size: 9.5px !important;
+}
+
+/* ================= GRID ================= */
+
+.journal-grid-section {
+  overflow: visible !important;
+}
+
+.journal-grid-heading {
+  margin-bottom: 5px !important;
+}
+
+.journal-add-row-top-btn,
+.journal-add-row-bottom-btn {
+  height: 26px !important;
+  min-height: 26px !important;
+  padding: 0 9px !important;
+
+  font-size: 8.5px !important;
+}
+
+.journal-grid-scroll {
+  min-height: 150px !important;
+  height: 165px !important;
+  max-height: 165px !important;
+
+  overflow-x: auto !important;
+  overflow-y: auto !important;
+}
+
+.journal-entry-grid {
+  min-width: 760px !important;
+}
+
+.journal-entry-grid th {
+  height: 27px !important;
+  padding: 4px 7px !important;
+
+  font-size: 8.5px !important;
+}
+
+.journal-entry-grid td {
+  height: 34px !important;
+  padding: 3px 6px !important;
+}
+
+.journal-entry-grid th:nth-child(1),
+.journal-entry-grid td:nth-child(1) {
+  width: 70px !important;
+}
+
+.journal-entry-grid th:nth-child(2),
+.journal-entry-grid td:nth-child(2) {
+  width: 160px !important;
+}
+
+.journal-entry-grid th:nth-child(3),
+.journal-entry-grid td:nth-child(3) {
+  width: 300px !important;
+}
+
+.journal-entry-grid th:nth-child(4),
+.journal-entry-grid td:nth-child(4),
+.journal-entry-grid th:nth-child(5),
+.journal-entry-grid td:nth-child(5) {
+  width: 165px !important;
+}
+
+.journal-entry-grid input {
+  height: 25px !important;
+  min-height: 25px !important;
+  padding: 2px 6px !important;
+
+  border-radius: 4px !important;
+
+  font-size: 9px !important;
+}
+
+.journal-seq-cell {
+  font-size: 9px !important;
+}
+
+/* ================= ACCOUNT DROPDOWN ================= */
+
+.journal-account-search-cell {
+  position: relative !important;
+  overflow: visible !important;
+  z-index: 50 !important;
+}
+
+.journal-account-search-wrap {
+  position: relative !important;
+  width: 100% !important;
+}
+
+.journal-account-dropdown {
+  position: absolute !important;
+  top: calc(100% + 3px) !important;
+  left: 0 !important;
+
+  width: 100% !important;
+  min-width: 300px !important;
+  max-height: 160px !important;
+
+  overflow-y: auto !important;
+
+  z-index: 999999 !important;
+
+  border: 1px solid #bfdbfe !important;
+  border-radius: 5px !important;
+
+  background: #ffffff !important;
+
+  box-shadow:
+    0 8px 20px rgba(15, 23, 42, 0.16) !important;
+}
+
+.journal-account-option {
+  width: 100% !important;
+  min-height: 32px !important;
+  padding: 4px 8px !important;
+
+  display: grid !important;
+  grid-template-columns: 72px minmax(0, 1fr) !important;
+  align-items: center !important;
+  gap: 7px !important;
+
+  border: 0 !important;
+  border-bottom: 1px solid #edf2f7 !important;
+
+  background: #ffffff !important;
+
+  text-align: left !important;
+  cursor: pointer !important;
+}
+
+.journal-account-option:last-child {
+  border-bottom: 0 !important;
+}
+
+.journal-account-option:hover {
+  background: #eff6ff !important;
+}
+
+.journal-option-code {
+  color: #1d4ed8 !important;
+
+  font-size: 8.5px !important;
+  font-weight: 800 !important;
+}
+
+.journal-option-name {
+  overflow: hidden !important;
+
+  color: #334155 !important;
+
+  font-size: 8.5px !important;
+  font-weight: 600 !important;
+
+  text-overflow: ellipsis !important;
+  white-space: nowrap !important;
+}
+
+/* ================= GRID FOOTER ================= */
+
+.journal-grid-footer {
+  min-height: 30px !important;
+  height: 30px !important;
+  padding: 2px 7px !important;
+}
+
+.journal-grid-footer-info span {
+  font-size: 8px !important;
+}
+
+/* ================= SUMMARY ================= */
+
+.journal-summary-section {
+  padding-top: 7px !important;
+}
+
+.journal-summary-grid {
+  gap: 6px !important;
+}
+
+.journal-summary-card {
+  min-height: 42px !important;
+  padding: 5px 8px !important;
+
+  gap: 2px !important;
+}
+
+.journal-summary-card span {
+  font-size: 7.5px !important;
+}
+
+.journal-summary-card strong {
+  font-size: 11px !important;
+}
+
+.journal-balance-status {
+  padding: 3px 7px !important;
+  font-size: 7.5px !important;
+}
+
+/* Compact scrollbars */
+
+.journal-grid-scroll::-webkit-scrollbar,
+.journal-account-dropdown::-webkit-scrollbar {
+  width: 7px !important;
+  height: 7px !important;
+}
+
+.journal-grid-scroll::-webkit-scrollbar-track,
+.journal-account-dropdown::-webkit-scrollbar-track {
+  background: #eef2f7 !important;
+}
+
+.journal-grid-scroll::-webkit-scrollbar-thumb,
+.journal-account-dropdown::-webkit-scrollbar-thumb {
+  border-radius: 999px !important;
+  background: #9fb0c5 !important;
+}
+
+/* =========================================================
+   JOURNAL VOUCHER — FINAL BALANCED PROFESSIONAL DESIGN
+   Compact but readable
+   ========================================================= */
+
+.journal-billing-page {
+  width: 100%;
+  padding: 8px 0 18px !important;
+}
+
+.journal-billing-card {
+  width: 100%;
+  overflow: visible !important;
+
+  border: 1px solid #d7e1ee !important;
+  border-radius: 10px !important;
+
+  background: #ffffff !important;
+
+  box-shadow:
+    0 2px 8px rgba(15, 23, 42, 0.06) !important;
+}
+
+/* =========================================================
+   TOP HEADER
+   ========================================================= */
+
+.journal-billing-topbar {
+  min-height: 52px !important;
+  height: auto !important;
+  padding: 8px 13px 8px 16px !important;
+
+  display: flex !important;
+  align-items: center !important;
+  justify-content: space-between !important;
+  gap: 14px !important;
+
+  border-bottom: 1px solid #dbe4ef !important;
+}
+
+.journal-billing-title-wrap {
+  display: flex !important;
+  align-items: center !important;
+  gap: 9px !important;
+}
+
+.journal-billing-title-wrap h2 {
+  margin: 0 !important;
+
+  color: #102a56 !important;
+
+  font-size: 15px !important;
+  font-weight: 800 !important;
+}
+
+.journal-billing-badge {
+  height: 22px !important;
+  padding: 0 9px !important;
+
+  display: inline-flex !important;
+  align-items: center !important;
+
+  border-radius: 999px !important;
+
+  background: #eff6ff !important;
+  color: #2563eb !important;
+
+  font-size: 9px !important;
+  font-weight: 700 !important;
+}
+
+.journal-billing-actions {
+  display: flex !important;
+  align-items: center !important;
+  gap: 7px !important;
+}
+
+.journal-save-header-btn {
+  height: 33px !important;
+  min-height: 33px !important;
+  padding: 0 14px !important;
+
+  border: 1px solid #15803d !important;
+  border-radius: 6px !important;
+
+  background: #16a34a !important;
+  color: #ffffff !important;
+
+  font-size: 10px !important;
+  font-weight: 700 !important;
+
+  cursor: pointer !important;
+}
+
+.journal-save-header-btn:hover {
+  background: #15803d !important;
+}
+
+.journal-more-btn,
+.journal-close-header-btn {
+  width: 31px !important;
+  min-width: 31px !important;
+  height: 33px !important;
+
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+
+  border: 0 !important;
+  border-radius: 6px !important;
+
+  background: transparent !important;
+  color: #64748b !important;
+}
+
+.journal-more-btn:hover,
+.journal-close-header-btn:hover {
+  background: #f1f5f9 !important;
+}
+
+/* =========================================================
+   SECTIONS
+   ========================================================= */
+
+.journal-entry-header-section,
+.journal-grid-section,
+.journal-summary-section {
+  width: 100% !important;
+  padding: 10px 13px 12px !important;
+}
+
+.journal-entry-header-section,
+.journal-grid-section {
+  border-bottom: 1px solid #dbe4ef !important;
+}
+
+.journal-section-heading,
+.journal-grid-heading,
+.journal-summary-heading {
+  min-height: 30px !important;
+  margin-bottom: 9px !important;
+
+  display: flex !important;
+  align-items: center !important;
+  justify-content: space-between !important;
+  gap: 12px !important;
+}
+
+.journal-heading-left {
+  display: flex !important;
+  align-items: center !important;
+  gap: 8px !important;
+}
+
+.journal-section-dot {
+  width: 16px !important;
+  min-width: 16px !important;
+  height: 16px !important;
+
+  border-radius: 50% !important;
+
+  background: #3b82f6 !important;
+
+  box-shadow:
+    0 0 0 3px rgba(59, 130, 246, 0.12) !important;
+}
+
+.journal-heading-left h3 {
+  margin: 0 !important;
+
+  color: #172554 !important;
+
+  font-size: 11px !important;
+  font-weight: 800 !important;
+}
+
+.journal-header-meta {
+  display: flex !important;
+  align-items: center !important;
+  gap: 15px !important;
+
+  color: #64748b !important;
+
+  font-size: 9px !important;
+}
+
+.journal-header-meta strong {
+  margin-left: 4px !important;
+  color: #172554 !important;
+}
+
+/* =========================================================
+   HEADER FIELDS
+   ========================================================= */
+
+.journal-header-two-rows {
+  width: 100% !important;
+
+  display: grid !important;
+
+  grid-template-columns:
+    minmax(145px, 1fr)
+    minmax(145px, 1fr)
+    minmax(145px, 1fr)
+    minmax(320px, 2.8fr) !important;
+
+  gap: 9px 12px !important;
+
+  align-items: end !important;
+}
+
+.journal-field {
+  min-width: 0 !important;
+
+  display: flex !important;
+  flex-direction: column !important;
+  gap: 5px !important;
+}
+
+.journal-field label {
+  min-height: 13px !important;
+
+  color: #334155 !important;
+
+  font-size: 10px !important;
+  font-weight: 700 !important;
+}
+
+.journal-field label span {
+  color: #dc2626 !important;
+}
+
+.journal-field input,
+.journal-field select {
+  width: 100% !important;
+  min-width: 0 !important;
+  height: 34px !important;
+  min-height: 34px !important;
+
+  padding: 6px 9px !important;
+
+  border: 1px solid #cbd7e5 !important;
+  border-radius: 6px !important;
+
+  outline: none !important;
+
+  background: #ffffff !important;
+  color: #172554 !important;
+
+  font-size: 11px !important;
+}
+
+.journal-field input:focus,
+.journal-field select:focus {
+  border-color: #2563eb !important;
+
+  box-shadow:
+    0 0 0 2px rgba(37, 99, 235, 0.1) !important;
+}
+
+/* =========================================================
+   JOURNAL GRID
+   ========================================================= */
+
+.journal-grid-section {
+  overflow: visible !important;
+}
+
+.journal-add-row-top-btn,
+.journal-add-row-bottom-btn {
+  height: 30px !important;
+  min-height: 30px !important;
+
+  padding: 0 12px !important;
+
+  border: 1px solid #bfdbfe !important;
+  border-radius: 6px !important;
+
+  background: #ffffff !important;
+  color: #2563eb !important;
+
+  font-size: 9.5px !important;
+  font-weight: 700 !important;
+
+  cursor: pointer !important;
+}
+
+.journal-add-row-top-btn:hover,
+.journal-add-row-bottom-btn:hover {
+  border-color: #2563eb !important;
+  background: #eff6ff !important;
+}
+
+.journal-grid-scroll {
+  width: 100% !important;
+  height: 235px !important;
+  min-height: 235px !important;
+  max-height: 235px !important;
+
+  overflow-x: auto !important;
+  overflow-y: auto !important;
+
+  border: 1px solid #d7e1ee !important;
+  border-radius: 7px 7px 0 0 !important;
+
+  background: #ffffff !important;
+}
+
+.journal-entry-grid {
+  width: 100% !important;
+  min-width: 900px !important;
+
+  border-collapse: separate !important;
+  border-spacing: 0 !important;
+
+  table-layout: fixed !important;
+}
+
+.journal-entry-grid th {
+  position: sticky !important;
+  top: 0 !important;
+  z-index: 10 !important;
+
+  height: 34px !important;
+  padding: 7px 9px !important;
+
+  border-right: 1px solid #d7e1ee !important;
+  border-bottom: 1px solid #d7e1ee !important;
+
+  background: #f2f7ff !important;
+  color: #172554 !important;
+
+  text-align: left !important;
+
+  font-size: 10px !important;
+  font-weight: 800 !important;
+}
+
+.journal-entry-grid td {
+  height: 43px !important;
+  padding: 5px 7px !important;
+
+  position: relative !important;
+
+  border-right: 1px solid #edf2f7 !important;
+  border-bottom: 1px solid #e8eef5 !important;
+
+  background: #ffffff !important;
+}
+
+.journal-entry-grid tbody tr:nth-child(even) td {
+  background: #fbfdff !important;
+}
+
+.journal-entry-grid tbody tr:hover td {
+  background: #f8fbff !important;
+}
+
+.journal-entry-grid th:nth-child(1),
+.journal-entry-grid td:nth-child(1) {
+  width: 80px !important;
+}
+
+.journal-entry-grid th:nth-child(2),
+.journal-entry-grid td:nth-child(2) {
+  width: 180px !important;
+}
+
+.journal-entry-grid th:nth-child(3),
+.journal-entry-grid td:nth-child(3) {
+  width: 360px !important;
+}
+
+.journal-entry-grid th:nth-child(4),
+.journal-entry-grid td:nth-child(4),
+.journal-entry-grid th:nth-child(5),
+.journal-entry-grid td:nth-child(5) {
+  width: 190px !important;
+}
+
+.journal-seq-cell {
+  color: #172554 !important;
+
+  text-align: center !important;
+
+  font-size: 11px !important;
+  font-weight: 700 !important;
+}
+
+.journal-entry-grid input {
+  width: 100% !important;
+  height: 31px !important;
+  min-height: 31px !important;
+
+  padding: 5px 8px !important;
+
+  border: 1px solid #cbd5e1 !important;
+  border-radius: 5px !important;
+
+  outline: none !important;
+
+  background: #ffffff !important;
+  color: #172554 !important;
+
+  font-size: 10.5px !important;
+}
+
+.journal-entry-grid input:focus {
+  border-color: #2563eb !important;
+
+  box-shadow:
+    0 0 0 2px rgba(37, 99, 235, 0.08) !important;
+}
+
+.journal-readonly-input {
+  background: #f8fafc !important;
+  color: #64748b !important;
+}
+
+.journal-amount-input {
+  text-align: right !important;
+  font-weight: 700 !important;
+}
+
+/* =========================================================
+   ACCOUNT SEARCH DROPDOWN
+   ========================================================= */
+
+.journal-account-search-cell {
+  position: relative !important;
+  overflow: visible !important;
+  z-index: 50 !important;
+}
+
+.journal-account-search-wrap {
+  position: relative !important;
+  width: 100% !important;
+}
+
+.journal-account-dropdown {
+  position: absolute !important;
+  top: calc(100% + 4px) !important;
+  left: 0 !important;
+
+  width: 100% !important;
+  min-width: 350px !important;
+  max-height: 190px !important;
+
+  overflow-y: auto !important;
+
+  z-index: 999999 !important;
+
+  border: 1px solid #bfdbfe !important;
+  border-radius: 7px !important;
+
+  background: #ffffff !important;
+
+  box-shadow:
+    0 12px 28px rgba(15, 23, 42, 0.18) !important;
+}
+
+.journal-account-option {
+  width: 100% !important;
+  min-height: 38px !important;
+  padding: 6px 10px !important;
+
+  display: grid !important;
+  grid-template-columns: 85px minmax(0, 1fr) !important;
+  align-items: center !important;
+  gap: 9px !important;
+
+  border: 0 !important;
+  border-bottom: 1px solid #edf2f7 !important;
+
+  background: #ffffff !important;
+
+  text-align: left !important;
+  cursor: pointer !important;
+}
+
+.journal-account-option:hover {
+  background: #eff6ff !important;
+}
+
+.journal-option-code {
+  color: #1d4ed8 !important;
+
+  font-size: 10px !important;
+  font-weight: 800 !important;
+}
+
+.journal-option-name {
+  overflow: hidden !important;
+
+  color: #334155 !important;
+
+  font-size: 10px !important;
+  font-weight: 600 !important;
+
+  text-overflow: ellipsis !important;
+  white-space: nowrap !important;
+}
+
+/* =========================================================
+   GRID FOOTER
+   ========================================================= */
+
+.journal-grid-footer {
+  min-height: 36px !important;
+  padding: 3px 8px !important;
+
+  display: flex !important;
+  align-items: center !important;
+  justify-content: space-between !important;
+
+  border: 1px solid #d7e1ee !important;
+  border-top: 0 !important;
+  border-radius: 0 0 7px 7px !important;
+
+  background: #f8fafc !important;
+}
+
+.journal-grid-footer-info span {
+  color: #64748b !important;
+
+  font-size: 9px !important;
+}
+
+.journal-grid-footer-info strong {
+  margin-left: 4px !important;
+  color: #172554 !important;
+}
+
+/* =========================================================
+   SUMMARY
+   ========================================================= */
+
+.journal-summary-grid {
+  width: 100% !important;
+
+  display: grid !important;
+  grid-template-columns: repeat(4, minmax(0, 1fr)) !important;
+
+  gap: 9px !important;
+}
+
+.journal-summary-card {
+  min-height: 58px !important;
+  padding: 8px 10px !important;
+
+  display: flex !important;
+  flex-direction: column !important;
+  justify-content: center !important;
+  gap: 5px !important;
+
+  border: 1px solid #d7e1ee !important;
+  border-radius: 7px !important;
+
+  background: #f8fafc !important;
+}
+
+.journal-summary-card span {
+  color: #64748b !important;
+
+  font-size: 9px !important;
+  font-weight: 700 !important;
+}
+
+.journal-summary-card strong {
+  color: #172554 !important;
+
+  font-size: 14px !important;
+  font-weight: 800 !important;
+}
+
+.journal-summary-card.difference.balanced {
+  border-color: #86efac !important;
+  background: #f0fdf4 !important;
+}
+
+.journal-summary-card.difference.balanced strong {
+  color: #15803d !important;
+}
+
+.journal-summary-card.difference.unbalanced {
+  border-color: #fca5a5 !important;
+  background: #fef2f2 !important;
+}
+
+.journal-summary-card.difference.unbalanced strong {
+  color: #dc2626 !important;
+}
+
+.journal-balance-status {
+  padding: 4px 9px !important;
+
+  border-radius: 999px !important;
+
+  font-size: 8.5px !important;
+  font-weight: 700 !important;
+}
+
+/* Scrollbars */
+
+.journal-grid-scroll::-webkit-scrollbar,
+.journal-account-dropdown::-webkit-scrollbar {
+  width: 8px !important;
+  height: 8px !important;
+}
+
+.journal-grid-scroll::-webkit-scrollbar-track,
+.journal-account-dropdown::-webkit-scrollbar-track {
+  background: #eef2f7 !important;
+}
+
+.journal-grid-scroll::-webkit-scrollbar-thumb,
+.journal-account-dropdown::-webkit-scrollbar-thumb {
+  border-radius: 999px !important;
+  background: #9fb0c5 !important;
+}
+
+/* =========================================================
+   RESPONSIVE
+   ========================================================= */
+
+@media (max-width: 1100px) {
+  .journal-header-two-rows {
+    grid-template-columns:
+      repeat(2, minmax(160px, 1fr)) !important;
+  }
+
+  .journal-narration-inline {
+    grid-column: 1 / -1 !important;
+  }
+
+  .journal-summary-grid {
+    grid-template-columns:
+      repeat(2, minmax(160px, 1fr)) !important;
+  }
+}
+
+@media (max-width: 600px) {
+  .journal-billing-topbar {
+    flex-direction: column !important;
+    align-items: stretch !important;
+  }
+
+  .journal-billing-actions {
+    justify-content: flex-end !important;
+  }
+
+  .journal-header-two-rows,
+  .journal-summary-grid {
+    grid-template-columns: 1fr !important;
+  }
+
+  .journal-narration-inline {
+    grid-column: auto !important;
+  }
+}
+
+/* =========================================================
+   CONTRA — RECEIPT STYLE PROFESSIONAL DESIGN
+   ========================================================= */
+
+.contra-billing-page {
+  --contra-primary: #2563eb;
+  --contra-primary-light: #eff6ff;
+  --contra-success: #16a34a;
+  --contra-success-dark: #15803d;
+  --contra-danger: #dc2626;
+  --contra-warning: #ea580c;
+  --contra-text: #172554;
+  --contra-muted: #64748b;
+  --contra-border: #d7e1ee;
+  --contra-background: #f8fafc;
+
+  width: 100% !important;
+  min-width: 0 !important;
+  margin: 0 !important;
+  padding: 4px 0 16px !important;
+}
+
+.contra-billing-page,
+.contra-billing-page * {
+  box-sizing: border-box;
+}
+
+.contra-billing-card {
+  width: 100% !important;
+  min-width: 0 !important;
+  overflow: hidden !important;
+
+  border: 1px solid var(--contra-border) !important;
+  border-radius: 9px !important;
+
+  background: #ffffff !important;
+
+  box-shadow:
+    0 2px 8px rgba(15, 23, 42, 0.05) !important;
+}
+
+/* ================= TOP HEADER ================= */
+
+.contra-billing-topbar {
+  min-height: 49px !important;
+  padding: 7px 13px 7px 15px !important;
+
+  display: flex !important;
+  align-items: center !important;
+  justify-content: space-between !important;
+  gap: 14px !important;
+
+  border-bottom: 1px solid var(--contra-border) !important;
+
+  background: #ffffff !important;
+}
+
+.contra-billing-title-wrap {
+  min-width: 0 !important;
+
+  display: flex !important;
+  align-items: center !important;
+  gap: 9px !important;
+}
+
+.contra-billing-title-wrap h2 {
+  margin: 0 !important;
+
+  color: var(--contra-text) !important;
+
+  font-size: 15px !important;
+  font-weight: 800 !important;
+  line-height: 1.2 !important;
+}
+
+.contra-billing-badge {
+  height: 21px !important;
+  padding: 0 9px !important;
+
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+
+  border-radius: 999px !important;
+
+  background: var(--contra-primary-light) !important;
+  color: var(--contra-primary) !important;
+
+  font-size: 9px !important;
+  font-weight: 700 !important;
+  white-space: nowrap !important;
+}
+
+.contra-billing-actions {
+  display: flex !important;
+  align-items: center !important;
+  gap: 7px !important;
+}
+
+.contra-save-header-btn {
+  height: 32px !important;
+  min-height: 32px !important;
+  padding: 0 14px !important;
+
+  border: 1px solid var(--contra-success-dark) !important;
+  border-radius: 5px !important;
+
+  background: var(--contra-success) !important;
+  color: #ffffff !important;
+
+  font-size: 10px !important;
+  font-weight: 700 !important;
+
+  cursor: pointer !important;
+}
+
+.contra-save-header-btn:hover {
+  background: var(--contra-success-dark) !important;
+}
+
+.contra-more-btn,
+.contra-close-header-btn {
+  width: 30px !important;
+  min-width: 30px !important;
+  height: 32px !important;
+  padding: 0 !important;
+
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+
+  border: 0 !important;
+  border-radius: 5px !important;
+
+  background: transparent !important;
+  color: #64748b !important;
+
+  cursor: pointer !important;
+}
+
+.contra-more-btn {
+  font-size: 17px !important;
+}
+
+.contra-close-header-btn {
+  font-size: 22px !important;
+  line-height: 1 !important;
+}
+
+.contra-more-btn:hover,
+.contra-close-header-btn:hover {
+  background: #f1f5f9 !important;
+  color: #334155 !important;
+}
+
+/* ================= ENTRY SECTION ================= */
+
+.contra-entry-section,
+.contra-summary-section {
+  width: 100% !important;
+  min-width: 0 !important;
+
+  padding: 10px 14px 12px !important;
+
+  background: #ffffff !important;
+}
+
+.contra-entry-section {
+  border-bottom: 1px solid var(--contra-border) !important;
+}
+
+.contra-section-heading,
+.contra-summary-heading {
+  min-height: 28px !important;
+  margin-bottom: 8px !important;
+
+  display: flex !important;
+  align-items: center !important;
+  justify-content: space-between !important;
+  gap: 12px !important;
+}
+
+.contra-heading-left {
+  display: flex !important;
+  align-items: center !important;
+  gap: 7px !important;
+}
+
+.contra-section-dot {
+  width: 16px !important;
+  min-width: 16px !important;
+  height: 16px !important;
+
+  border-radius: 50% !important;
+
+  background: #3b82f6 !important;
+
+  box-shadow:
+    0 0 0 3px rgba(59, 130, 246, 0.11) !important;
+}
+
+.contra-heading-left h3 {
+  margin: 0 !important;
+
+  color: var(--contra-text) !important;
+
+  font-size: 11px !important;
+  font-weight: 800 !important;
+}
+
+.contra-header-meta {
+  display: flex !important;
+  align-items: center !important;
+  gap: 15px !important;
+
+  color: var(--contra-muted) !important;
+
+  font-size: 9px !important;
+  white-space: nowrap !important;
+}
+
+.contra-header-meta span {
+  display: inline-flex !important;
+  align-items: center !important;
+  gap: 4px !important;
+}
+
+.contra-header-meta strong {
+  color: var(--contra-text) !important;
+  font-weight: 800 !important;
+}
+
+/* ================= FIELD GRID ================= */
+
+.contra-header-grid {
+  width: 100% !important;
+  min-width: 0 !important;
+
+  display: grid !important;
+
+  grid-template-columns:
+    minmax(145px, 0.9fr)
+    minmax(145px, 0.9fr)
+    minmax(170px, 1.1fr)
+    minmax(145px, 0.9fr)
+    minmax(280px, 2fr) !important;
+
+  gap: 10px 12px !important;
+
+  align-items: end !important;
+}
+
+.contra-field {
+  width: 100% !important;
+  min-width: 0 !important;
+
+  display: flex !important;
+  flex-direction: column !important;
+  gap: 4px !important;
+}
+
+.contra-field label {
+  min-height: 13px !important;
+
+  color: #334155 !important;
+
+  font-size: 9.5px !important;
+  font-weight: 700 !important;
+}
+
+.contra-field label span {
+  color: var(--contra-danger) !important;
+}
+
+.contra-field input,
+.contra-field select {
+  width: 100% !important;
+  min-width: 0 !important;
+  height: 32px !important;
+  min-height: 32px !important;
+
+  padding: 5px 8px !important;
+
+  border: 1px solid #cbd7e5 !important;
+  border-radius: 5px !important;
+
+  outline: none !important;
+
+  background: #ffffff !important;
+  color: var(--contra-text) !important;
+
+  font-family: inherit !important;
+  font-size: 10.5px !important;
+}
+
+.contra-field input::placeholder {
+  color: #94a3b8 !important;
+}
+
+.contra-field input:focus,
+.contra-field select:focus {
+  border-color: var(--contra-primary) !important;
+
+  box-shadow:
+    0 0 0 2px rgba(37, 99, 235, 0.1) !important;
+}
+
+.contra-amount-wrap {
+  width: 100% !important;
+  height: 32px !important;
+
+  display: flex !important;
+  align-items: center !important;
+
+  overflow: hidden !important;
+
+  border: 1px solid #cbd7e5 !important;
+  border-radius: 5px !important;
+
+  background: #ffffff !important;
+}
+
+.contra-amount-wrap:focus-within {
+  border-color: var(--contra-primary) !important;
+
+  box-shadow:
+    0 0 0 2px rgba(37, 99, 235, 0.1) !important;
+}
+
+.contra-amount-wrap > span {
+  width: 31px !important;
+  height: 100% !important;
+
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+
+  border-right: 1px solid #dbe4ef !important;
+
+  background: #f8fafc !important;
+  color: #475569 !important;
+
+  font-size: 11px !important;
+  font-weight: 700 !important;
+}
+
+.contra-amount-wrap input {
+  flex: 1 !important;
+  height: 100% !important;
+
+  border: 0 !important;
+  border-radius: 0 !important;
+
+  text-align: right !important;
+
+  box-shadow: none !important;
+}
+
+.contra-narration-field {
+  min-width: 0 !important;
+}
+
+/* ================= SUMMARY ================= */
+
+.contra-summary-grid {
+  width: 100% !important;
+
+  display: grid !important;
+  grid-template-columns:
+    repeat(4, minmax(0, 1fr)) !important;
+
+  gap: 8px !important;
+}
+
+.contra-summary-card {
+  min-width: 0 !important;
+  min-height: 53px !important;
+  padding: 7px 9px !important;
+
+  display: flex !important;
+  flex-direction: column !important;
+  justify-content: center !important;
+  gap: 4px !important;
+
+  border: 1px solid var(--contra-border) !important;
+  border-radius: 6px !important;
+
+  background: var(--contra-background) !important;
+}
+
+.contra-summary-card span {
+  overflow: hidden !important;
+
+  color: var(--contra-muted) !important;
+
+  font-size: 8.5px !important;
+  font-weight: 700 !important;
+
+  text-overflow: ellipsis !important;
+  white-space: nowrap !important;
+}
+
+.contra-summary-card strong {
+  overflow: hidden !important;
+
+  color: var(--contra-text) !important;
+
+  font-size: 13px !important;
+  font-weight: 800 !important;
+
+  text-overflow: ellipsis !important;
+  white-space: nowrap !important;
+}
+
+.contra-summary-card.amount.deposit {
+  border-color: #86efac !important;
+  background: #f0fdf4 !important;
+}
+
+.contra-summary-card.amount.deposit strong {
+  color: #15803d !important;
+}
+
+.contra-summary-card.amount.withdrawal {
+  border-color: #fdba74 !important;
+  background: #fff7ed !important;
+}
+
+.contra-summary-card.amount.withdrawal strong {
+  color: #c2410c !important;
+}
+
+.contra-type-status {
+  padding: 4px 9px !important;
+
+  border-radius: 999px !important;
+
+  font-size: 8.5px !important;
+  font-weight: 700 !important;
+}
+
+.contra-type-status.deposit {
+  background: #dcfce7 !important;
+  color: #15803d !important;
+}
+
+.contra-type-status.withdrawal {
+  background: #ffedd5 !important;
+  color: #c2410c !important;
+}
+
+/* Hide old buttons if any old markup remains */
+
+.contra-billing-page .form-actions {
+  display: none !important;
+}
+
+/* ================= RESPONSIVE ================= */
+
+@media (max-width: 1150px) {
+  .contra-header-grid {
+    grid-template-columns:
+      repeat(3, minmax(150px, 1fr)) !important;
+  }
+
+  .contra-narration-field {
+    grid-column: span 2 !important;
+  }
+}
+
+@media (max-width: 800px) {
+  .contra-header-grid,
+  .contra-summary-grid {
+    grid-template-columns:
+      repeat(2, minmax(145px, 1fr)) !important;
+  }
+
+  .contra-narration-field {
+    grid-column: 1 / -1 !important;
+  }
+
+  .contra-header-meta {
+    display: none !important;
+  }
+}
+
+@media (max-width: 560px) {
+  .contra-billing-topbar {
+    flex-direction: column !important;
+    align-items: stretch !important;
+  }
+
+  .contra-billing-actions {
+    justify-content: flex-end !important;
+  }
+
+  .contra-header-grid,
+  .contra-summary-grid {
+    grid-template-columns: 1fr !important;
+  }
+
+  .contra-narration-field {
+    grid-column: auto !important;
+  }
+}
+/* ---------- COLLECTION HEADER ---------- */
+
+.collection-premium-header{
+
+display:flex;
+justify-content:space-between;
+align-items:center;
+
+padding:14px 18px;
+
+border-bottom:1px solid #e5e7eb;
+
+background:#fff;
+
+}
+
+.collection-premium-title{
+
+display:flex;
+align-items:center;
+gap:10px;
+
+}
+
+.collection-premium-title h2{
+
+margin:0;
+
+font-size:22px;
+
+font-weight:700;
+
+color:#1e3a8a;
+
+}
+
+.collection-premium-title span{
+
+background:#eff6ff;
+
+color:#2563eb;
+
+padding:4px 10px;
+
+border-radius:20px;
+
+font-size:12px;
+
+font-weight:600;
+
+}
+
+.collection-premium-actions{
+
+display:flex;
+align-items:center;
+gap:8px;
+
+}
+
+.collection-save-btn-top{
+
+height:36px;
+
+padding:0 16px;
+
+background:#16a34a;
+
+border:none;
+
+border-radius:6px;
+
+color:white;
+
+font-weight:600;
+
+cursor:pointer;
+
+}
+
+.collection-save-btn-top:hover{
+
+background:#15803d;
+
+}
+
+.collection-more-btn,
+.collection-close-btn{
+
+width:34px;
+
+height:34px;
+
+border:none;
+
+background:white;
+
+border-radius:6px;
+
+cursor:pointer;
+
+font-size:18px;
+
+}
+
+.collection-more-btn:hover,
+.collection-close-btn:hover{
+
+background:#f3f4f6;
+
+}
+/* =========================================================
+   COLLECTION VOUCHER — RECEIPT STYLE FINAL OVERRIDE
+   Add at absolute bottom of Transaction.css
+   ========================================================= */
+
+.collection-voucher-section {
+  width: 100% !important;
+  max-width: none !important;
+  min-width: 0 !important;
+
+  margin: 0 !important;
+  padding: 0 !important;
+
+  overflow: hidden !important;
+
+  border: 1px solid #d7e1ee !important;
+  border-radius: 9px !important;
+
+  background: #ffffff !important;
+
+  box-shadow:
+    0 1px 2px rgba(15, 23, 42, 0.04),
+    0 4px 12px rgba(15, 23, 42, 0.04) !important;
+}
+
+/* =========================================================
+   TOP HEADER
+   ========================================================= */
+
+.collection-premium-header {
+  width: 100% !important;
+  min-height: 50px !important;
+
+  padding: 7px 12px 7px 16px !important;
+
+  display: flex !important;
+  align-items: center !important;
+  justify-content: space-between !important;
+  gap: 14px !important;
+
+  border-bottom: 1px solid #d7e1ee !important;
+
+  background: #ffffff !important;
+}
+
+.collection-premium-title {
+  min-width: 0 !important;
+
+  display: flex !important;
+  align-items: center !important;
+  gap: 9px !important;
+}
+
+.collection-premium-title h2 {
+  margin: 0 !important;
+
+  color: #172554 !important;
+
+  font-size: 15px !important;
+  font-weight: 800 !important;
+  line-height: 1.2 !important;
+}
+
+.collection-premium-title span {
+  min-height: 21px !important;
+  padding: 3px 9px !important;
+
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+
+  border-radius: 999px !important;
+
+  background: #eff6ff !important;
+  color: #2563eb !important;
+
+  font-size: 9px !important;
+  font-weight: 700 !important;
+  white-space: nowrap !important;
+}
+
+.collection-premium-actions {
+  display: flex !important;
+  align-items: center !important;
+  gap: 7px !important;
+}
+
+.collection-save-btn-top {
+  height: 32px !important;
+  min-height: 32px !important;
+  padding: 0 13px !important;
+
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  gap: 5px !important;
+
+  border: 1px solid #15803d !important;
+  border-radius: 5px !important;
+
+  background: #16a34a !important;
+  color: #ffffff !important;
+
+  font-size: 10px !important;
+  font-weight: 700 !important;
+  white-space: nowrap !important;
+
+  cursor: pointer !important;
+}
+
+.collection-save-btn-top:hover {
+  background: #15803d !important;
+}
+
+.collection-more-btn,
+.collection-close-btn {
+  width: 30px !important;
+  min-width: 30px !important;
+  height: 32px !important;
+  padding: 0 !important;
+
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+
+  border: 0 !important;
+  border-radius: 5px !important;
+
+  background: transparent !important;
+  color: #64748b !important;
+
+  cursor: pointer !important;
+}
+
+.collection-more-btn {
+  font-size: 17px !important;
+}
+
+.collection-close-btn {
+  font-size: 22px !important;
+  line-height: 1 !important;
+}
+
+.collection-more-btn:hover,
+.collection-close-btn:hover {
+  background: #f1f5f9 !important;
+  color: #334155 !important;
+}
+
+/* =========================================================
+   MAIN COLLECTION CARD
+   ========================================================= */
+
+.collection-voucher-card {
+  width: 100% !important;
+  min-width: 0 !important;
+
+  padding: 10px 14px 12px !important;
+
+  border: 0 !important;
+  border-radius: 0 !important;
+
+  background: #ffffff !important;
+}
+
+/* Add Receipt-style blue section marker before fields */
+
+.collection-voucher-card::before {
+  content: "Collection Information";
+
+  min-height: 26px;
+  margin-bottom: 8px;
+
+  display: flex;
+  align-items: center;
+
+  padding-left: 24px;
+
+  color: #172554;
+
+  font-size: 11px;
+  font-weight: 800;
+
+  background:
+    radial-gradient(
+      circle at 8px center,
+      #3b82f6 0,
+      #3b82f6 7px,
+      rgba(59, 130, 246, 0.14) 8px,
+      rgba(59, 130, 246, 0.14) 10px,
+      transparent 11px
+    );
+}
+
+/* =========================================================
+   HEADER FIELDS
+   ========================================================= */
+
+.collection-voucher-header-grid {
+  width: 100% !important;
+  min-width: 0 !important;
+
+  display: grid !important;
+
+  grid-template-columns:
+    minmax(150px, 0.9fr)
+    minmax(130px, 0.75fr)
+    minmax(160px, 0.95fr)
+    minmax(340px, 2.3fr) !important;
+
+  gap: 8px 12px !important;
+
+  align-items: end !important;
+
+  margin: 0 0 10px !important;
+}
+
+.collection-field {
+  width: 100% !important;
+  min-width: 0 !important;
+
+  display: flex !important;
+  flex-direction: column !important;
+  gap: 4px !important;
+}
+
+.collection-field label {
+  min-height: 13px !important;
+  margin: 0 !important;
+
+  color: #263d5d !important;
+
+  font-size: 9.5px !important;
+  font-weight: 700 !important;
+  line-height: 1.2 !important;
+}
+
+.collection-field input,
+.collection-field select {
+  width: 100% !important;
+  min-width: 0 !important;
+  height: 31px !important;
+  min-height: 31px !important;
+
+  padding: 5px 8px !important;
+
+  border: 1px solid #d7e1ee !important;
+  border-radius: 5px !important;
+
+  outline: none !important;
+
+  background: #ffffff !important;
+  color: #172554 !important;
+
+  font-family: inherit !important;
+  font-size: 10.5px !important;
+}
+
+.collection-field input::placeholder {
+  color: #94a3b8 !important;
+}
+
+.collection-field input:focus,
+.collection-field select:focus {
+  border-color: #2563eb !important;
+
+  box-shadow:
+    0 0 0 2px rgba(37, 99, 235, 0.1) !important;
+}
+
+.collection-narr-field {
+  min-width: 0 !important;
+}
+
+.collection-narr-row {
+  width: 100% !important;
+
+  display: grid !important;
+  grid-template-columns:
+    minmax(0, 1fr)
+    auto !important;
+
+  gap: 8px !important;
+  align-items: center !important;
+}
+
+.collection-narr-row input {
+  width: 100% !important;
+  min-width: 0 !important;
+}
+
+.collection-select-btn {
+  height: 31px !important;
+  min-height: 31px !important;
+  padding: 0 13px !important;
+
+  border: 1px solid #1d4ed8 !important;
+  border-radius: 5px !important;
+
+  background: #2563eb !important;
+  color: #ffffff !important;
+
+  font-size: 10px !important;
+  font-weight: 700 !important;
+  white-space: nowrap !important;
+
+  cursor: pointer !important;
+}
+
+.collection-select-btn:hover {
+  background: #1d4ed8 !important;
+}
+
+/* =========================================================
+   COLLECTION GRID
+   ========================================================= */
+
+.collection-grid-wrap {
+  width: 100% !important;
+  min-width: 0 !important;
+
+  height: 245px !important;
+  min-height: 245px !important;
+  max-height: 245px !important;
+
+  margin-top: 0 !important;
+
+  overflow-x: auto !important;
+  overflow-y: auto !important;
+
+  border: 1px solid #d7e1ee !important;
+  border-radius: 7px !important;
+
+  background: #ffffff !important;
+}
+
+.collection-voucher-table {
+  width: 100% !important;
+  min-width: 1280px !important;
+
+  border-collapse: separate !important;
+  border-spacing: 0 !important;
+  table-layout: auto !important;
+
+  background: #ffffff !important;
+}
+
+.collection-voucher-table th {
+  position: sticky !important;
+  top: 0 !important;
+  z-index: 10 !important;
+
+  height: 31px !important;
+  padding: 5px 8px !important;
+
+  border-right: 1px solid #dfe7f1 !important;
+  border-bottom: 1px solid #d7e1ee !important;
+
+  background: #f5f8fc !important;
+  color: #263d5d !important;
+
+  text-align: left !important;
+
+  font-size: 9px !important;
+  font-weight: 800 !important;
+  line-height: 1.1 !important;
+
+  text-transform: none !important;
+  white-space: nowrap !important;
+}
+
+.collection-voucher-table td {
+  height: 34px !important;
+  padding: 4px 7px !important;
+
+  border-right: 1px solid #edf2f7 !important;
+  border-bottom: 1px solid #e8eef5 !important;
+
+  background: #ffffff !important;
+  color: #263d5d !important;
+
+  font-size: 9.5px !important;
+  white-space: nowrap !important;
+}
+
+.collection-voucher-table tbody tr:nth-child(even) td {
+  background: #fbfdff !important;
+}
+
+.collection-voucher-table tbody tr:hover td {
+  background: #eff6ff !important;
+}
+
+.collection-voucher-table th:first-child,
+.collection-voucher-table td:first-child {
+  width: 42px !important;
+  min-width: 42px !important;
+
+  text-align: center !important;
+}
+
+.collection-voucher-table input[type="checkbox"] {
+  width: 15px !important;
+  height: 15px !important;
+
+  cursor: pointer !important;
+}
+
+.collection-voucher-table input[type="text"],
+.collection-voucher-table input[type="number"],
+.collection-voucher-table .table-input,
+.collection-voucher-table .collection-amt-input {
+  height: 26px !important;
+  min-height: 26px !important;
+
+  padding: 3px 6px !important;
+
+  border: 1px solid #cbd5e1 !important;
+  border-radius: 4px !important;
+
+  outline: none !important;
+
+  background: #ffffff !important;
+  color: #172554 !important;
+
+  font-size: 9.5px !important;
+}
+
+.collection-voucher-table input:focus {
+  border-color: #2563eb !important;
+
+  box-shadow:
+    0 0 0 2px rgba(37, 99, 235, 0.08) !important;
+}
+
+.receipt-empty-row {
+  height: 180px !important;
+
+  color: #8aa0bd !important;
+
+  text-align: center !important;
+
+  font-size: 10px !important;
+  font-style: italic !important;
+}
+
+/* =========================================================
+   SUMMARY — RECEIPT STYLE CARDS
+   ========================================================= */
+
+.collection-bottom-summary {
+  width: 100% !important;
+
+  margin-top: 10px !important;
+  padding-top: 10px !important;
+
+  display: grid !important;
+
+  grid-template-columns:
+    repeat(4, minmax(0, 1fr)) !important;
+
+  gap: 8px !important;
+
+  border-top: 1px solid #d7e1ee !important;
+}
+
+.collection-bottom-summary span {
+  min-width: 0 !important;
+  min-height: 52px !important;
+  padding: 7px 9px !important;
+
+  display: flex !important;
+  flex-direction: column !important;
+  justify-content: center !important;
+  gap: 4px !important;
+
+  border: 1px solid #d7e1ee !important;
+  border-radius: 6px !important;
+
+  background: #f8fafc !important;
+  color: #64748b !important;
+
+  font-size: 8.5px !important;
+  font-weight: 700 !important;
+}
+
+.collection-bottom-summary b {
+  margin: 0 !important;
+
+  color: #172554 !important;
+
+  font-size: 13px !important;
+  font-weight: 800 !important;
+}
+
+/* First card — blue */
+
+.collection-bottom-summary span:nth-child(1) {
+  border-color: #93c5fd !important;
+  background: #eff6ff !important;
+}
+
+.collection-bottom-summary span:nth-child(1) b {
+  color: #1d4ed8 !important;
+}
+
+/* Cash card — green */
+
+.collection-bottom-summary span:nth-child(2) {
+  border-color: #86efac !important;
+  background: #f0fdf4 !important;
+}
+
+.collection-bottom-summary span:nth-child(2) b {
+  color: #15803d !important;
+}
+
+/* Cheque card — purple */
+
+.collection-bottom-summary span:nth-child(3) {
+  border-color: #c4b5fd !important;
+  background: #f5f3ff !important;
+}
+
+.collection-bottom-summary span:nth-child(3) b {
+  color: #6d28d9 !important;
+}
+
+/* Bills card */
+
+.collection-bottom-summary span:nth-child(4) {
+  border-color: #d7e1ee !important;
+  background: #f8fafc !important;
+}
+
+/* =========================================================
+   SCROLLBARS
+   ========================================================= */
+
+.collection-grid-wrap::-webkit-scrollbar {
+  width: 8px !important;
+  height: 8px !important;
+}
+
+.collection-grid-wrap::-webkit-scrollbar-track {
+  background: #edf2f7 !important;
+}
+
+.collection-grid-wrap::-webkit-scrollbar-thumb {
+  border-radius: 999px !important;
+  background: #aebed2 !important;
+}
+
+.collection-grid-wrap::-webkit-scrollbar-thumb:hover {
+  background: #8497ad !important;
+}
+
+/* Old bottom actions must remain hidden */
+
+.collection-voucher-section > .form-actions {
+  display: none !important;
+}
+
+/* =========================================================
+   RESPONSIVE
+   ========================================================= */
+
+@media (max-width: 1100px) {
+  .collection-voucher-header-grid {
+    grid-template-columns:
+      repeat(2, minmax(160px, 1fr)) !important;
+  }
+
+  .collection-narr-field {
+    grid-column: 1 / -1 !important;
+  }
+
+  .collection-bottom-summary {
+    grid-template-columns:
+      repeat(2, minmax(150px, 1fr)) !important;
+  }
+}
+
+@media (max-width: 650px) {
+  .collection-premium-header {
+    align-items: flex-start !important;
+  }
+
+  .collection-voucher-header-grid,
+  .collection-bottom-summary {
+    grid-template-columns: 1fr !important;
+  }
+
+  .collection-narr-field {
+    grid-column: auto !important;
+  }
+
+  .collection-narr-row {
+    grid-template-columns: 1fr !important;
+  }
+
+  .collection-select-btn {
+    width: 100% !important;
+  }
+
+  .collection-premium-title h2 {
+    font-size: 13px !important;
+  }
+}
+.receipt-add-btn {
+  height: 36px;
+  padding: 0 16px;
+  border: 1px solid #16a34a;
+  border-radius: 6px;
+  background: #16a34a;
+  color: #ffffff;
+  font-size: 13px;
+  font-weight: 700;
+  white-space: nowrap;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  transition:
+    background 0.2s ease,
+    border-color 0.2s ease,
+    box-shadow 0.2s ease,
+    transform 0.1s ease;
+}
+
+.receipt-add-btn:hover {
+  background: #15803d;
+  border-color: #15803d;
+  box-shadow: 0 4px 10px rgba(22, 163, 74, 0.2);
+}
+
+.receipt-add-btn:active {
+  transform: translateY(1px);
+}
+
+@media (max-width: 1100px) {
+  .receipt-add-btn {
+    height: 34px;
+    padding: 0 12px;
+    font-size: 12px;
+  }
+}
