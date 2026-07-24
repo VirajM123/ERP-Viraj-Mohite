@@ -5173,6 +5173,302 @@ app.get("/api/accounts", ensureConnection, async (req, res) => {
   }
 });
 
+/* =========================================================
+   ACCOUNT MASTER PAGINATED LIST
+
+   Existing:
+   GET /api/accounts
+   remains unchanged.
+
+   New:
+   GET /api/accounts/list
+   is used only by Account Master grid.
+   ========================================================= */
+
+app.get(
+  "/api/accounts/list",
+  ensureConnection,
+  async (req, res) => {
+    try {
+      const distributorId = String(
+        req.query.distributorId || ""
+      ).trim();
+
+      const firmId = String(
+        req.query.firmId || ""
+      ).trim();
+
+      const search = String(
+        req.query.search || ""
+      ).trim();
+
+      const requestedPage = Number.parseInt(
+        req.query.page,
+        10
+      );
+
+      const requestedLimit = Number.parseInt(
+        req.query.limit,
+        10
+      );
+
+      const page =
+        Number.isFinite(requestedPage) &&
+        requestedPage > 0
+          ? requestedPage
+          : 1;
+
+      const limit =
+        Number.isFinite(requestedLimit) &&
+        requestedLimit > 0
+          ? Math.min(
+              requestedLimit,
+              100
+            )
+          : 20;
+
+      if (!distributorId || !firmId) {
+        return res.status(400).json({
+          success: false,
+          message:
+            "distributorId and firmId are required",
+        });
+      }
+
+      const filter = {
+        distributorId,
+        firmId,
+
+        /*
+         * This includes:
+         * - active accounts
+         * - old accounts where isActive does not exist
+         */
+        isActive: {
+          $ne: false,
+        },
+      };
+
+      /*
+       * Backend search.
+       */
+      if (search) {
+        const escapedSearch =
+          search.replace(
+            /[.*+?^${}()|[\]\\]/g,
+            "\\$&"
+          );
+
+        const searchRegex =
+          new RegExp(
+            escapedSearch,
+            "i"
+          );
+
+        filter.$or = [
+          {
+            accountCode:
+              searchRegex,
+          },
+          {
+            accountName:
+              searchRegex,
+          },
+          {
+            contactPerson:
+              searchRegex,
+          },
+          {
+            mobileNo:
+              searchRegex,
+          },
+          {
+            phoneNo:
+              searchRegex,
+          },
+          {
+            emailId:
+              searchRegex,
+          },
+          {
+            town:
+              searchRegex,
+          },
+          {
+            state:
+              searchRegex,
+          },
+          {
+            pinCode:
+              searchRegex,
+          },
+          {
+            gstNo:
+              searchRegex,
+          },
+          {
+            tinNo:
+              searchRegex,
+          },
+          {
+            panNo:
+              searchRegex,
+          },
+          {
+            areaCode:
+              searchRegex,
+          },
+          {
+            address:
+              searchRegex,
+          },
+        ];
+      }
+
+      /*
+       * Count matching accounts.
+       */
+      const totalRecords =
+        await Account.countDocuments(
+          filter
+        );
+
+      const totalPages = Math.max(
+        1,
+        Math.ceil(
+          totalRecords / limit
+        )
+      );
+
+      /*
+       * Prevent loading a page greater than
+       * the available total pages.
+       */
+      const currentPage = Math.min(
+        page,
+        totalPages
+      );
+
+      const skip =
+        (currentPage - 1) *
+        limit;
+
+      /*
+       * Load only the current Account Master page.
+       *
+       * All fields are returned because the same row
+       * is passed to the Edit Account form.
+       */
+      const accounts =
+        await Account.find(filter)
+          .select(
+            [
+              "accountCode",
+              "accountName",
+              "openingDate",
+              "address",
+              "town",
+              "state",
+              "pinCode",
+              "phoneNo",
+              "mobileNo",
+              "emailId",
+              "tinNo",
+              "openingBal",
+              "openingBalType",
+              "contactPerson",
+              "invType",
+              "taxOn",
+              "panNo",
+              "foodLicense",
+              "gstNo",
+              "billToAdd1",
+              "tanNo",
+              "gstType",
+              "gstDate",
+              "gstClsDate",
+              "add2",
+              "tcsPercent",
+              "allowInPurchase",
+              "drugLicNo",
+              "drugExpDate",
+              "creditDays",
+              "creditBills",
+              "lockDays",
+              "creditAmt",
+              "blackListed",
+              "lastBillDate",
+              "lastInvoiceDate",
+              "areaCode",
+              "distributorId",
+              "firmId",
+              "firmName",
+              "isActive",
+              "createdAt",
+              "updatedAt",
+            ].join(" ")
+          )
+          .sort({
+            accountName: 1,
+            accountCode: 1,
+            _id: 1,
+          })
+          .skip(skip)
+          .limit(limit)
+          .lean();
+
+      return res.status(200).json({
+        success: true,
+
+        accounts,
+
+        count: accounts.length,
+
+        pagination: {
+          currentPage,
+          page: currentPage,
+          limit,
+
+          totalRecords,
+          totalPages,
+
+          hasPreviousPage:
+            currentPage > 1,
+
+          hasNextPage:
+            currentPage <
+            totalPages,
+
+          startRecord:
+            totalRecords === 0
+              ? 0
+              : skip + 1,
+
+          endRecord:
+            totalRecords === 0
+              ? 0
+              : Math.min(
+                  skip +
+                    accounts.length,
+                  totalRecords
+                ),
+        },
+      });
+    } catch (error) {
+      console.error(
+        "Account Master pagination error:",
+        error
+      );
+
+      return res.status(500).json({
+        success: false,
+        message:
+          "Failed to load Account Master",
+        error: error.message,
+      });
+    }
+  }
+);
 app.post("/api/accounts", ensureConnection, async (req, res) => {
   try {
     const distributorId = String(req.body.distributorId || "").trim();
@@ -5306,6 +5602,247 @@ app.get("/api/other-accounts", ensureConnection, async (req, res) => {
     });
   }
 });
+/* =========================================================
+   OTHER ACCOUNT MASTER PAGINATED LIST
+
+   Existing:
+   GET /api/other-accounts
+   remains unchanged.
+
+   New:
+   GET /api/other-accounts/list
+   used only by Other Account Master grid.
+   ========================================================= */
+
+app.get(
+  "/api/other-accounts/list",
+  ensureConnection,
+  async (req, res) => {
+    try {
+      const distributorId = String(
+        req.query.distributorId || ""
+      ).trim();
+
+      const firmId = String(
+        req.query.firmId || ""
+      ).trim();
+
+      const search = String(
+        req.query.search || ""
+      ).trim();
+
+      const requestedPage = Number.parseInt(
+        req.query.page,
+        10
+      );
+
+      const requestedLimit = Number.parseInt(
+        req.query.limit,
+        10
+      );
+
+      const page =
+        Number.isFinite(requestedPage) &&
+        requestedPage > 0
+          ? requestedPage
+          : 1;
+
+      const limit =
+        Number.isFinite(requestedLimit) &&
+        requestedLimit > 0
+          ? Math.min(
+              requestedLimit,
+              100
+            )
+          : 20;
+
+      if (!distributorId || !firmId) {
+        return res.status(400).json({
+          success: false,
+          message:
+            "distributorId and firmId are required",
+        });
+      }
+
+      const filter = {
+        distributorId,
+        firmId,
+
+        /*
+         * Include active records and older records
+         * where isActive may not exist.
+         */
+        isActive: {
+          $ne: false,
+        },
+      };
+
+      if (search) {
+        const escapedSearch =
+          search.replace(
+            /[.*+?^${}()|[\]\\]/g,
+            "\\$&"
+          );
+
+        const searchRegex =
+          new RegExp(
+            escapedSearch,
+            "i"
+          );
+
+        filter.$or = [
+          {
+            accountCode:
+              searchRegex,
+          },
+          {
+            accountName:
+              searchRegex,
+          },
+          {
+            accountGroup:
+              searchRegex,
+          },
+          {
+            mobileNo:
+              searchRegex,
+          },
+          {
+            phoneNo:
+              searchRegex,
+          },
+          {
+            emailId:
+              searchRegex,
+          },
+          {
+            town:
+              searchRegex,
+          },
+          {
+            state:
+              searchRegex,
+          },
+          {
+            pinCode:
+              searchRegex,
+          },
+          {
+            gstNo:
+              searchRegex,
+          },
+          {
+            tinNo:
+              searchRegex,
+          },
+          {
+            panNo:
+              searchRegex,
+          },
+          {
+            bankAccountNo:
+              searchRegex,
+          },
+          {
+            ifscCode:
+              searchRegex,
+          },
+          {
+            branchName:
+              searchRegex,
+          },
+          {
+            remark:
+              searchRegex,
+          },
+        ];
+      }
+
+      const totalRecords =
+        await OtherAccount.countDocuments(
+          filter
+        );
+
+      const totalPages = Math.max(
+        1,
+        Math.ceil(
+          totalRecords / limit
+        )
+      );
+
+      const currentPage = Math.min(
+        page,
+        totalPages
+      );
+
+      const skip =
+        (currentPage - 1) *
+        limit;
+
+      const otherAccounts =
+        await OtherAccount.find(filter)
+          .sort({
+            accountName: 1,
+            accountCode: 1,
+            _id: 1,
+          })
+          .skip(skip)
+          .limit(limit)
+          .lean();
+
+      return res.status(200).json({
+        success: true,
+
+        otherAccounts,
+
+        count:
+          otherAccounts.length,
+
+        pagination: {
+          currentPage,
+          page: currentPage,
+          limit,
+
+          totalRecords,
+          totalPages,
+
+          hasPreviousPage:
+            currentPage > 1,
+
+          hasNextPage:
+            currentPage <
+            totalPages,
+
+          startRecord:
+            totalRecords === 0
+              ? 0
+              : skip + 1,
+
+          endRecord:
+            totalRecords === 0
+              ? 0
+              : Math.min(
+                  skip +
+                    otherAccounts.length,
+                  totalRecords
+                ),
+        },
+      });
+    } catch (error) {
+      console.error(
+        "Other Account Master pagination error:",
+        error
+      );
+
+      return res.status(500).json({
+        success: false,
+        message:
+          "Failed to load Other Account Master",
+        error: error.message,
+      });
+    }
+  }
+);
 
 app.post("/api/other-accounts", ensureConnection, async (req, res) => {
   try {
@@ -5642,6 +6179,8 @@ const companySchema = new mongoose.Schema(
 
 const User = mongoose.model("Mas_User", userSchema);
 const Company = mongoose.model("Mas_Company", companySchema);
+
+
 app.get("/api/gst", ensureConnection, async (req, res) => {
   try {
     const { distributorId, firmId } = req.query;
@@ -5672,6 +6211,239 @@ app.get("/api/gst", ensureConnection, async (req, res) => {
     });
   }
 });
+/* =========================================================
+   GST MASTER PAGINATED LIST
+
+   Existing:
+   GET /api/gst
+   remains unchanged.
+
+   New:
+   GET /api/gst/list
+   used only by GST Master grid.
+   ========================================================= */
+
+app.get(
+  "/api/gst/list",
+  ensureConnection,
+  async (req, res) => {
+    try {
+      const distributorId = String(
+        req.query.distributorId || ""
+      ).trim();
+
+      const firmId = String(
+        req.query.firmId || ""
+      ).trim();
+
+      const search = String(
+        req.query.search || ""
+      ).trim();
+
+      const requestedPage =
+        Number.parseInt(
+          req.query.page,
+          10
+        );
+
+      const requestedLimit =
+        Number.parseInt(
+          req.query.limit,
+          10
+        );
+
+      const page =
+        Number.isFinite(
+          requestedPage
+        ) &&
+        requestedPage > 0
+          ? requestedPage
+          : 1;
+
+      const limit =
+        Number.isFinite(
+          requestedLimit
+        ) &&
+        requestedLimit > 0
+          ? Math.min(
+              requestedLimit,
+              100
+            )
+          : 10;
+
+      if (
+        !distributorId ||
+        !firmId
+      ) {
+        return res
+          .status(400)
+          .json({
+            success: false,
+            message:
+              "distributorId and firmId are required",
+          });
+      }
+
+      const filter = {
+        distributorId,
+        firmId,
+
+        /*
+         * Include active GST records and
+         * older records where isActive
+         * may not be present.
+         */
+        isActive: {
+          $ne: false,
+        },
+      };
+
+      if (search) {
+        const escapedSearch =
+          search.replace(
+            /[.*+?^${}()|[\]\\]/g,
+            "\\$&"
+          );
+
+        const searchRegex =
+          new RegExp(
+            escapedSearch,
+            "i"
+          );
+
+        const numericSearch =
+          Number(search);
+
+        filter.$or = [
+          {
+            gstCode:
+              searchRegex,
+          },
+          {
+            purchaseType:
+              searchRegex,
+          },
+          {
+            salesType:
+              searchRegex,
+          },
+        ];
+
+        /*
+         * Allow exact search by GST percentage.
+         * For example: 5, 12, 18 or 28.
+         */
+        if (
+          Number.isFinite(
+            numericSearch
+          )
+        ) {
+          filter.$or.push({
+            vatPercent:
+              numericSearch,
+          });
+        }
+      }
+
+      const totalRecords =
+        await GST.countDocuments(
+          filter
+        );
+
+      const totalPages =
+        Math.max(
+          1,
+          Math.ceil(
+            totalRecords /
+              limit
+          )
+        );
+
+      /*
+       * If requested page becomes invalid
+       * after deletion, return the last
+       * available page.
+       */
+      const currentPage =
+        Math.min(
+          page,
+          totalPages
+        );
+
+      const skip =
+        (currentPage - 1) *
+        limit;
+
+      const gstList =
+        await GST.find(filter)
+          .sort({
+            vatPercent: 1,
+            gstCode: 1,
+            _id: 1,
+          })
+          .skip(skip)
+          .limit(limit)
+          .lean();
+
+      return res
+        .status(200)
+        .json({
+          success: true,
+
+          gstList,
+
+          count:
+            gstList.length,
+
+          pagination: {
+            currentPage,
+            page:
+              currentPage,
+            limit,
+
+            totalRecords,
+            totalPages,
+
+            hasPreviousPage:
+              currentPage > 1,
+
+            hasNextPage:
+              currentPage <
+              totalPages,
+
+            startRecord:
+              totalRecords === 0
+                ? 0
+                : skip + 1,
+
+            endRecord:
+              totalRecords === 0
+                ? 0
+                : Math.min(
+                    skip +
+                      gstList.length,
+                    totalRecords
+                  ),
+          },
+        });
+    } catch (error) {
+      console.error(
+        "GST Master pagination error:",
+        error
+      );
+
+      return res
+        .status(500)
+        .json({
+          success: false,
+          message:
+            "Failed to load GST Master",
+          error:
+            error.message,
+        });
+    }
+  }
+);
 
 app.post("/api/gst", ensureConnection, async (req, res) => {
   try {
@@ -5815,6 +6587,260 @@ app.get("/api/salesmen", ensureConnection, async (req, res) => {
     });
   }
 });
+/* =========================================================
+   SALESMAN MASTER PAGINATED LIST
+
+   Existing:
+   GET /api/salesmen
+   remains unchanged.
+
+   New:
+   GET /api/salesmen/list
+   used only by Salesman Master grid.
+   ========================================================= */
+
+app.get(
+  "/api/salesmen/list",
+  ensureConnection,
+  async (req, res) => {
+    try {
+      const distributorId = String(
+        req.query.distributorId || ""
+      ).trim();
+
+      const firmId = String(
+        req.query.firmId || ""
+      ).trim();
+
+      const search = String(
+        req.query.search || ""
+      ).trim();
+
+      const requestedPage =
+        Number.parseInt(
+          req.query.page,
+          10
+        );
+
+      const requestedLimit =
+        Number.parseInt(
+          req.query.limit,
+          10
+        );
+
+      const page =
+        Number.isFinite(
+          requestedPage
+        ) &&
+        requestedPage > 0
+          ? requestedPage
+          : 1;
+
+      const limit =
+        Number.isFinite(
+          requestedLimit
+        ) &&
+        requestedLimit > 0
+          ? Math.min(
+              requestedLimit,
+              100
+            )
+          : 20;
+
+      if (
+        !distributorId ||
+        !firmId
+      ) {
+        return res
+          .status(400)
+          .json({
+            success: false,
+            message:
+              "distributorId and firmId are required",
+          });
+      }
+
+      const filter = {
+        distributorId,
+        firmId,
+
+        /*
+         * Include active records and older
+         * records where isActive may not exist.
+         */
+        isActive: {
+          $ne: false,
+        },
+      };
+
+      if (search) {
+        const escapedSearch =
+          search.replace(
+            /[.*+?^${}()|[\]\\]/g,
+            "\\$&"
+          );
+
+        const searchRegex =
+          new RegExp(
+            escapedSearch,
+            "i"
+          );
+
+        filter.$or = [
+          {
+            salesmanCode:
+              searchRegex,
+          },
+          {
+            salesmanName:
+              searchRegex,
+          },
+          {
+            salesmanType:
+              searchRegex,
+          },
+          {
+            mobileNo:
+              searchRegex,
+          },
+          {
+            phoneNo:
+              searchRegex,
+          },
+          {
+            emailId:
+              searchRegex,
+          },
+          {
+            town:
+              searchRegex,
+          },
+          {
+            state:
+              searchRegex,
+          },
+          {
+            pinCode:
+              searchRegex,
+          },
+          {
+            qualification:
+              searchRegex,
+          },
+          {
+            reference:
+              searchRegex,
+          },
+          {
+            imeiNo:
+              searchRegex,
+          },
+          {
+            address:
+              searchRegex,
+          },
+        ];
+      }
+
+      const totalRecords =
+        await Salesman.countDocuments(
+          filter
+        );
+
+      const totalPages =
+        Math.max(
+          1,
+          Math.ceil(
+            totalRecords /
+              limit
+          )
+        );
+
+      /*
+       * If requested page becomes invalid
+       * after deletion, return the last
+       * available page.
+       */
+      const currentPage =
+        Math.min(
+          page,
+          totalPages
+        );
+
+      const skip =
+        (currentPage - 1) *
+        limit;
+
+      const salesmen =
+        await Salesman.find(filter)
+          .sort({
+            salesmanName: 1,
+            salesmanCode: 1,
+            _id: 1,
+          })
+          .skip(skip)
+          .limit(limit)
+          .lean();
+
+      return res
+        .status(200)
+        .json({
+          success: true,
+
+          salesmen,
+
+          count:
+            salesmen.length,
+
+          pagination: {
+            currentPage,
+            page:
+              currentPage,
+            limit,
+
+            totalRecords,
+            totalPages,
+
+            hasPreviousPage:
+              currentPage > 1,
+
+            hasNextPage:
+              currentPage <
+              totalPages,
+
+            startRecord:
+              totalRecords === 0
+                ? 0
+                : skip + 1,
+
+            endRecord:
+              totalRecords === 0
+                ? 0
+                : Math.min(
+                    skip +
+                      salesmen.length,
+                    totalRecords
+                  ),
+          },
+        });
+    } catch (error) {
+      console.error(
+        "Salesman Master pagination error:",
+        error
+      );
+
+      return res
+        .status(500)
+        .json({
+          success: false,
+          message:
+            "Failed to load Salesman Master",
+          error:
+            error.message,
+        });
+    }
+  }
+);
 
 app.post("/api/salesmen", ensureConnection, async (req, res) => {
   try {
@@ -6291,6 +7317,220 @@ app.get("/api/areas", ensureConnection, async (req, res) => {
     });
   }
 });
+/* =========================================================
+   AREA MASTER - PAGINATED LIST
+   Existing GET /api/areas remains unchanged for dropdowns.
+   This API is used only by the Area Master grid.
+   ========================================================= */
+
+app.get(
+  "/api/areas/list",
+  ensureConnection,
+  async (req, res) => {
+    try {
+      const distributorId = String(
+        req.query.distributorId || ""
+      ).trim();
+
+      const firmId = String(
+        req.query.firmId || ""
+      ).trim();
+
+      const search = String(
+        req.query.search || ""
+      ).trim();
+
+      const requestedPage =
+        Number.parseInt(
+          req.query.page,
+          10
+        );
+
+      const requestedLimit =
+        Number.parseInt(
+          req.query.limit,
+          10
+        );
+
+      const page =
+        Number.isFinite(
+          requestedPage
+        ) &&
+        requestedPage > 0
+          ? requestedPage
+          : 1;
+
+      const limit =
+        Number.isFinite(
+          requestedLimit
+        ) &&
+        requestedLimit > 0
+          ? Math.min(
+              requestedLimit,
+              100
+            )
+          : 10;
+
+      if (
+        !distributorId ||
+        !firmId
+      ) {
+        return res
+          .status(400)
+          .json({
+            success: false,
+            message:
+              "distributorId and firmId are required",
+          });
+      }
+
+      /*
+       * Escape special RegExp characters so that
+       * text such as +, (, ), [, ] does not break search.
+       */
+      const escapedSearch =
+        search.replace(
+          /[.*+?^${}()|[\]\\]/g,
+          "\\$&"
+        );
+
+      const filter = {
+        distributorId,
+        firmId,
+
+        /*
+         * Keep the same active-record logic
+         * used by your existing Area API.
+         */
+        isActive: true,
+      };
+
+      if (escapedSearch) {
+        const searchRegex =
+          new RegExp(
+            escapedSearch,
+            "i"
+          );
+
+        filter.$or = [
+          {
+            areaCode:
+              searchRegex,
+          },
+
+          {
+            areaName:
+              searchRegex,
+          },
+
+          {
+            firmName:
+              searchRegex,
+          },
+        ];
+      }
+
+      const totalRecords =
+        await Area.countDocuments(
+          filter
+        );
+
+      const totalPages =
+        Math.max(
+          1,
+          Math.ceil(
+            totalRecords /
+              limit
+          )
+        );
+
+      /*
+       * Prevent requesting a page number greater
+       * than the available pages after deletion.
+       */
+      const currentPage =
+        Math.min(
+          page,
+          totalPages
+        );
+
+      const skip =
+        (currentPage - 1) *
+        limit;
+
+      const areas =
+        await Area.find(filter)
+          .sort({
+            areaName: 1,
+            areaCode: 1,
+            _id: 1,
+          })
+          .skip(skip)
+          .limit(limit)
+          .lean();
+
+      return res.json({
+        success: true,
+
+        areas,
+
+        count:
+          areas.length,
+
+        pagination: {
+          currentPage,
+
+          page:
+            currentPage,
+
+          limit,
+
+          totalRecords,
+
+          totalPages,
+
+          hasPreviousPage:
+            currentPage > 1,
+
+          hasNextPage:
+            currentPage <
+            totalPages,
+
+          startRecord:
+            totalRecords === 0
+              ? 0
+              : skip + 1,
+
+          endRecord:
+            totalRecords === 0
+              ? 0
+              : Math.min(
+                  skip +
+                    areas.length,
+                  totalRecords
+                ),
+        },
+      });
+    } catch (error) {
+      console.error(
+        "Area Master list pagination error:",
+        error
+      );
+
+      return res
+        .status(500)
+        .json({
+          success: false,
+
+          message:
+            "Failed to fetch Area Master list",
+
+          error:
+            error.message,
+        });
+    }
+  }
+);
 
 app.post("/api/areas", ensureConnection, async (req, res) => {
   try {
@@ -6375,6 +7615,208 @@ app.get("/api/godowns", ensureConnection, async (req, res) => {
     });
   }
 });
+/* =========================================================
+   GODOWN MASTER PAGINATED LIST
+
+   Existing:
+   GET /api/godowns
+   remains unchanged for Billing, Purchase, Stock,
+   Credit Note, Debit Note and dropdowns.
+
+   New:
+   GET /api/godowns/list
+   is used only by the GoDown Master grid.
+   ========================================================= */
+
+app.get(
+  "/api/godowns/list",
+  ensureConnection,
+  async (req, res) => {
+    try {
+      const distributorId = String(
+        req.query.distributorId || ""
+      ).trim();
+
+      const firmId = String(
+        req.query.firmId || ""
+      ).trim();
+
+      const search = String(
+        req.query.search || ""
+      ).trim();
+
+      const requestedPage = Number.parseInt(
+        req.query.page,
+        10
+      );
+
+      const requestedLimit = Number.parseInt(
+        req.query.limit,
+        10
+      );
+
+      const page =
+        Number.isFinite(requestedPage) &&
+        requestedPage > 0
+          ? requestedPage
+          : 1;
+
+      const limit =
+        Number.isFinite(requestedLimit) &&
+        requestedLimit > 0
+          ? Math.min(
+              requestedLimit,
+              100
+            )
+          : 20;
+
+      if (!distributorId || !firmId) {
+        return res.status(400).json({
+          success: false,
+          message:
+            "distributorId and firmId are required",
+        });
+      }
+
+      const filter = {
+        distributorId,
+        firmId,
+
+        /*
+         * Include active records and older records
+         * where isActive may not exist.
+         */
+        isActive: {
+          $ne: false,
+        },
+      };
+
+      if (search) {
+        const escapedSearch =
+          search.replace(
+            /[.*+?^${}()|[\]\\]/g,
+            "\\$&"
+          );
+
+        const searchRegex =
+          new RegExp(
+            escapedSearch,
+            "i"
+          );
+
+        filter.$or = [
+          {
+            godownCode:
+              searchRegex,
+          },
+          {
+            godownName:
+              searchRegex,
+          },
+          {
+            address:
+              searchRegex,
+          },
+          {
+            location:
+              searchRegex,
+          },
+          {
+            firmName:
+              searchRegex,
+          },
+        ];
+      }
+
+      const totalRecords =
+        await Godown.countDocuments(
+          filter
+        );
+
+      const totalPages = Math.max(
+        1,
+        Math.ceil(
+          totalRecords / limit
+        )
+      );
+
+      /*
+       * Keep requested page inside the
+       * currently available page range.
+       */
+      const currentPage = Math.min(
+        page,
+        totalPages
+      );
+
+      const skip =
+        (currentPage - 1) *
+        limit;
+
+      const godowns =
+        await Godown.find(filter)
+          .sort({
+            godownName: 1,
+            godownCode: 1,
+            _id: 1,
+          })
+          .skip(skip)
+          .limit(limit)
+          .lean();
+
+      return res.json({
+        success: true,
+
+        godowns,
+
+        count:
+          godowns.length,
+
+        pagination: {
+          currentPage,
+          page: currentPage,
+          limit,
+          totalRecords,
+          totalPages,
+
+          hasPreviousPage:
+            currentPage > 1,
+
+          hasNextPage:
+            currentPage <
+            totalPages,
+
+          startRecord:
+            totalRecords === 0
+              ? 0
+              : skip + 1,
+
+          endRecord:
+            totalRecords === 0
+              ? 0
+              : Math.min(
+                  skip +
+                    godowns.length,
+                  totalRecords
+                ),
+        },
+      });
+    } catch (error) {
+      console.error(
+        "Godown Master pagination error:",
+        error
+      );
+
+      return res.status(500).json({
+        success: false,
+        message:
+          "Failed to load Godown Master",
+        error:
+          error.message,
+      });
+    }
+  }
+);
 app.post("/api/godowns", ensureConnection, async (req, res) => {
   try {
     const distributorId = String(req.body.distributorId || "").trim();
@@ -6468,6 +7910,255 @@ app.get("/api/customer-banks", ensureConnection, async (req, res) => {
     });
   }
 });
+/* =========================================================
+   CUSTOMER BANK MASTER PAGINATED LIST
+
+   Existing:
+   GET /api/customer-banks
+   remains unchanged for complete-list usage.
+
+   New:
+   GET /api/customer-banks/list
+   is used only by Customer Bank Master grid.
+   ========================================================= */
+
+app.get(
+  "/api/customer-banks/list",
+  ensureConnection,
+  async (req, res) => {
+    try {
+      const distributorId = String(
+        req.query.distributorId || ""
+      ).trim();
+
+      const firmId = String(
+        req.query.firmId || ""
+      ).trim();
+
+      const search = String(
+        req.query.search || ""
+      ).trim();
+
+      const requestedPage = Number.parseInt(
+        req.query.page,
+        10
+      );
+
+      const requestedLimit = Number.parseInt(
+        req.query.limit,
+        10
+      );
+
+      const page =
+        Number.isFinite(requestedPage) &&
+        requestedPage > 0
+          ? requestedPage
+          : 1;
+
+      const limit =
+        Number.isFinite(requestedLimit) &&
+        requestedLimit > 0
+          ? Math.min(
+              requestedLimit,
+              100
+            )
+          : 20;
+
+      if (!distributorId || !firmId) {
+        return res.status(400).json({
+          success: false,
+          message:
+            "distributorId and firmId are required",
+        });
+      }
+
+      const filter = {
+        distributorId,
+        firmId,
+
+        /*
+         * Include active records and old records
+         * where isActive may not exist.
+         */
+        isActive: {
+          $ne: false,
+        },
+      };
+
+      if (search) {
+        const escapedSearch =
+          search.replace(
+            /[.*+?^${}()|[\]\\]/g,
+            "\\$&"
+          );
+
+        const searchRegex =
+          new RegExp(
+            escapedSearch,
+            "i"
+          );
+
+        filter.$or = [
+          {
+            bankCode:
+              searchRegex,
+          },
+          {
+            bankName:
+              searchRegex,
+          },
+          {
+            accountNumber:
+              searchRegex,
+          },
+          {
+            ifscCode:
+              searchRegex,
+          },
+          {
+            branchName:
+              searchRegex,
+          },
+          {
+            accountType:
+              searchRegex,
+          },
+          {
+            clearingType:
+              searchRegex,
+          },
+          {
+            customerName:
+              searchRegex,
+          },
+          {
+            customerCode:
+              searchRegex,
+          },
+          {
+            mobileNo:
+              searchRegex,
+          },
+          {
+            emailId:
+              searchRegex,
+          },
+          {
+            upiId:
+              searchRegex,
+          },
+          {
+            beneficiaryName:
+              searchRegex,
+          },
+          {
+            swiftCode:
+              searchRegex,
+          },
+          {
+            micrCode:
+              searchRegex,
+          },
+          {
+            panNumber:
+              searchRegex,
+          },
+          {
+            remarks:
+              searchRegex,
+          },
+        ];
+      }
+
+      const totalRecords =
+        await CustomerBank.countDocuments(
+          filter
+        );
+
+      const totalPages = Math.max(
+        1,
+        Math.ceil(
+          totalRecords / limit
+        )
+      );
+
+      /*
+       * Keep the requested page inside
+       * the currently available page range.
+       */
+      const currentPage = Math.min(
+        page,
+        totalPages
+      );
+
+      const skip =
+        (currentPage - 1) *
+        limit;
+
+      const customerBanks =
+        await CustomerBank.find(filter)
+          .sort({
+            bankName: 1,
+            bankCode: 1,
+            _id: 1,
+          })
+          .skip(skip)
+          .limit(limit)
+          .lean();
+
+      return res.json({
+        success: true,
+
+        customerBanks,
+
+        count:
+          customerBanks.length,
+
+        pagination: {
+          currentPage,
+          page: currentPage,
+          limit,
+          totalRecords,
+          totalPages,
+
+          hasPreviousPage:
+            currentPage > 1,
+
+          hasNextPage:
+            currentPage <
+            totalPages,
+
+          startRecord:
+            totalRecords === 0
+              ? 0
+              : skip + 1,
+
+          endRecord:
+            totalRecords === 0
+              ? 0
+              : Math.min(
+                  skip +
+                    customerBanks.length,
+                  totalRecords
+                ),
+        },
+      });
+    } catch (error) {
+      console.error(
+        "Customer Bank Master pagination error:",
+        error
+      );
+
+      return res.status(500).json({
+        success: false,
+        message:
+          "Failed to load Customer Bank Master",
+        error:
+          error.message,
+      });
+    }
+  }
+);
 app.post("/api/customer-banks", ensureConnection, async (req, res) => {
   try {
     const distributorId = String(req.body.distributorId || "").trim();
@@ -6967,6 +8658,7 @@ app.post("/api/purchase", ensureConnection, async (req, res) => {
   }
 });
 
+
 app.get("/api/purchase", ensureConnection, async (req, res) => {
   try {
     const { distributorId, firmId } = req.query;
@@ -6999,6 +8691,481 @@ app.get("/api/purchase", ensureConnection, async (req, res) => {
     });
   }
 });
+/* =========================================================
+   PURCHASE LIST - BACKEND PAGINATION
+
+   Existing:
+   GET /api/purchase
+   remains unchanged for any existing full-list dependency.
+
+   New:
+   GET /api/purchase/list
+   is used only by Purchase List.
+   ========================================================= */
+
+app.get(
+  "/api/purchase/list",
+  ensureConnection,
+  async (req, res) => {
+    try {
+      const distributorId = String(
+        req.query.distributorId || ""
+      ).trim();
+
+      const firmId = String(
+        req.query.firmId || ""
+      ).trim();
+
+      const search = String(
+        req.query.search || ""
+      ).trim();
+
+      const fromDate = String(
+        req.query.fromDate || ""
+      ).trim();
+
+      const toDate = String(
+        req.query.toDate || ""
+      ).trim();
+
+      const vouSer = String(
+        req.query.vouSer ||
+        req.query.billSeries ||
+        ""
+      ).trim();
+
+      const supplierCode = String(
+        req.query.supplierCode ||
+        req.query.partyCode ||
+        ""
+      ).trim();
+
+      const supplierName = String(
+        req.query.supplierName ||
+        req.query.partyName ||
+        req.query.party ||
+        ""
+      ).trim();
+
+      const company = String(
+        req.query.company || ""
+      ).trim();
+
+      const gdCode = String(
+        req.query.gdCode ||
+        req.query.godownCode ||
+        ""
+      ).trim();
+
+      const godownName = String(
+        req.query.godownName ||
+        req.query.branchName ||
+        ""
+      ).trim();
+
+      const invoiceNumber = String(
+        req.query.invoiceNumber || ""
+      ).trim();
+
+      const minAmountText = String(
+        req.query.minAmount || ""
+      ).trim();
+
+      const maxAmountText = String(
+        req.query.maxAmount || ""
+      ).trim();
+
+      const requestedPage = Number.parseInt(
+        req.query.page,
+        10
+      );
+
+      const requestedLimit = Number.parseInt(
+        req.query.limit,
+        10
+      );
+
+      const page =
+        Number.isFinite(requestedPage) &&
+        requestedPage > 0
+          ? requestedPage
+          : 1;
+
+      const limit =
+        Number.isFinite(requestedLimit) &&
+        requestedLimit > 0
+          ? Math.min(requestedLimit, 100)
+          : 10;
+
+      if (!distributorId || !firmId) {
+        return res.status(400).json({
+          success: false,
+          message:
+            "distributorId and firmId are required",
+        });
+      }
+
+      /*
+       * Escape user-entered search text before
+       * creating MongoDB regular expressions.
+       */
+      const escapeRegex = (value) =>
+        String(value || "").replace(
+          /[.*+?^${}()|[\]\\]/g,
+          "\\$&"
+        );
+
+      const containsRegex = (value) =>
+        new RegExp(
+          escapeRegex(value),
+          "i"
+        );
+
+      const exactRegex = (value) =>
+        new RegExp(
+          `^${escapeRegex(value)}$`,
+          "i"
+        );
+
+      const filter = {
+        distributorId,
+        firmId,
+
+        /*
+         * This permits old Purchase records where
+         * isActive was not explicitly stored.
+         */
+        isActive: {
+          $ne: false,
+        },
+      };
+
+      /* =====================================================
+         DATE FILTER
+         ===================================================== */
+
+      if (fromDate || toDate) {
+        filter.invoiceDate = {};
+
+        if (fromDate) {
+          filter.invoiceDate.$gte =
+            fromDate;
+        }
+
+        if (toDate) {
+          filter.invoiceDate.$lte =
+            toDate;
+        }
+      }
+
+      /* =====================================================
+         EXACT AND TEXT FILTERS
+         ===================================================== */
+
+      if (vouSer) {
+        filter.vouSer =
+          exactRegex(vouSer);
+      }
+
+      if (supplierCode) {
+        filter.supplierCode =
+          exactRegex(supplierCode);
+      }
+
+      if (supplierName) {
+        filter.supplierName =
+          containsRegex(supplierName);
+      }
+
+     if (company) {
+  const companyRegex =
+    containsRegex(company);
+
+  /*
+   * Purchase records store company in
+   * companyCode and companyName.
+   *
+   * Some old records may contain company,
+   * so that field is also checked.
+   */
+  filter.$and =
+    filter.$and || [];
+
+  filter.$and.push({
+    $or: [
+      {
+        companyCode:
+          companyRegex,
+      },
+      {
+        companyName:
+          companyRegex,
+      },
+      {
+        company:
+          companyRegex,
+      },
+    ],
+  });
+}
+
+      if (gdCode) {
+        filter.gdCode =
+          exactRegex(gdCode);
+      }
+
+      if (godownName) {
+        filter.godownName =
+          containsRegex(godownName);
+      }
+
+      if (invoiceNumber) {
+        filter.invoiceNumber =
+          containsRegex(invoiceNumber);
+      }
+
+      /* =====================================================
+         AMOUNT RANGE
+         ===================================================== */
+
+      const minAmount =
+        Number(minAmountText);
+
+      const maxAmount =
+        Number(maxAmountText);
+
+      if (
+        (
+          minAmountText &&
+          Number.isFinite(minAmount)
+        ) ||
+        (
+          maxAmountText &&
+          Number.isFinite(maxAmount)
+        )
+      ) {
+        filter.netAmt = {};
+
+        if (
+          minAmountText &&
+          Number.isFinite(minAmount)
+        ) {
+          filter.netAmt.$gte =
+            minAmount;
+        }
+
+        if (
+          maxAmountText &&
+          Number.isFinite(maxAmount)
+        ) {
+          filter.netAmt.$lte =
+            maxAmount;
+        }
+      }
+
+      /* =====================================================
+         GENERAL SEARCH
+         ===================================================== */
+
+      if (search) {
+        const searchRegex =
+          containsRegex(search);
+
+        const numericSearch =
+          Number(search);
+
+        const searchConditions = [
+          {
+            vouSer:
+              searchRegex,
+          },
+          {
+            vno:
+              searchRegex,
+          },
+          {
+            supplierCode:
+              searchRegex,
+          },
+          {
+            supplierName:
+              searchRegex,
+          },
+          {
+            company:
+              searchRegex,
+          },
+          {
+            gdCode:
+              searchRegex,
+          },
+          {
+            godownName:
+              searchRegex,
+          },
+          {
+            invoiceNumber:
+              searchRegex,
+          },
+          {
+            narration:
+              searchRegex,
+          },
+          {
+            firmName:
+              searchRegex,
+          },
+        ];
+
+        /*
+         * Voucher number and amount are numeric fields.
+         * Search them only when entered text is numeric.
+         */
+        if (
+          Number.isFinite(
+            numericSearch
+          )
+        ) {
+          searchConditions.push(
+            {
+              vouNo:
+                numericSearch,
+            },
+            {
+              netAmt:
+                numericSearch,
+            }
+          );
+        }
+
+     filter.$and =
+  filter.$and || [];
+
+filter.$and.push({
+  $or:
+    searchConditions,
+});
+      }
+
+      /* =====================================================
+         COUNT ALL MATCHING RECORDS
+         ===================================================== */
+
+      const totalRecords =
+        await PurchaseHeader.countDocuments(
+          filter
+        );
+
+      const totalPages =
+        Math.max(
+          1,
+          Math.ceil(
+            totalRecords /
+            limit
+          )
+        );
+
+      /*
+       * Protect against an invalid page after deletion.
+       *
+       * Example:
+       * User deletes the only record on page 4.
+       * The backend safely returns page 3.
+       */
+      const currentPage =
+        Math.min(
+          page,
+          totalPages
+        );
+
+      const skip =
+        (
+          currentPage -
+          1
+        ) *
+        limit;
+
+      /* =====================================================
+         LOAD ONLY THE CURRENT PAGE
+         ===================================================== */
+
+      const purchases =
+        await PurchaseHeader.find(
+          filter
+        )
+          .sort({
+            invoiceDate: -1,
+            vouNo: -1,
+            _id: -1,
+          })
+          .skip(skip)
+          .limit(limit)
+          .lean();
+
+      /* =====================================================
+         RESPONSE
+         ===================================================== */
+
+      return res.json({
+        success: true,
+
+        purchases,
+
+        count:
+          purchases.length,
+
+        pagination: {
+          currentPage,
+
+          page:
+            currentPage,
+
+          limit,
+
+          totalRecords,
+
+          totalPages,
+
+          hasPreviousPage:
+            currentPage > 1,
+
+          hasNextPage:
+            currentPage <
+            totalPages,
+
+          startRecord:
+            totalRecords === 0
+              ? 0
+              : skip + 1,
+
+          endRecord:
+            totalRecords === 0
+              ? 0
+              : Math.min(
+                  skip +
+                  purchases.length,
+                  totalRecords
+                ),
+        },
+      });
+    } catch (error) {
+      console.error(
+        "Purchase list pagination error:",
+        error
+      );
+
+      return res.status(500).json({
+        success: false,
+
+        message:
+          "Failed to load purchase bills",
+
+        error:
+          error.message,
+      });
+    }
+  }
+);
 
 app.get(
   "/api/purchase/find-bill",
@@ -7367,6 +9534,1308 @@ app.get("/api/sales", ensureConnection, async (req, res) => {
   }
 });
 
+  /* =========================================================
+   SALES BILLING LIST - BACKEND PAGINATION
+
+   Existing:
+   GET /api/sales
+   remains unchanged for existing full-list dependencies.
+
+   New:
+   GET /api/sales/list
+   is used only by Sales -> Billing list.
+   ========================================================= */
+
+app.get(
+  "/api/sales/list",
+  ensureConnection,
+  async (req, res) => {
+    try {
+      /* =====================================================
+         REQUEST PARAMETERS
+         ===================================================== */
+
+      const distributorId = String(
+        req.query.distributorId || ""
+      ).trim();
+
+      const firmId = String(
+        req.query.firmId || ""
+      ).trim();
+
+      const search = String(
+        req.query.search || ""
+      ).trim();
+
+      const fromDate = String(
+        req.query.fromDate || ""
+      ).trim();
+
+      const toDate = String(
+        req.query.toDate || ""
+      ).trim();
+
+      const billSeries = String(
+        req.query.billSeries || ""
+      ).trim();
+
+      const billType = String(
+        req.query.billType || ""
+      ).trim();
+
+      const companyCode = String(
+        req.query.companyCode ||
+        req.query.company ||
+        ""
+      ).trim();
+
+      const partyCode = String(
+        req.query.partyCode || ""
+      ).trim();
+
+      const partyName = String(
+        req.query.partyName ||
+        req.query.party ||
+        ""
+      ).trim();
+
+      const salesmanCode = String(
+        req.query.salesmanCode || ""
+      ).trim();
+
+      const salesmanName = String(
+        req.query.salesmanName ||
+        req.query.salesman ||
+        ""
+      ).trim();
+
+      const areaCode = String(
+        req.query.areaCode || ""
+      ).trim();
+
+      const areaName = String(
+        req.query.areaName ||
+        req.query.area ||
+        ""
+      ).trim();
+
+      const godownCode = String(
+        req.query.godownCode ||
+        req.query.gdCode ||
+        ""
+      ).trim();
+
+      /*
+       * Load filters.
+       */
+      const loadSeries = String(
+        req.query.loadSeries || ""
+      ).trim();
+
+      const loadNoText = String(
+        req.query.loadNo ||
+        req.query.loadNumber ||
+        ""
+      ).trim();
+
+      /*
+       * User who added the Sales Bill.
+       */
+      const addUser = String(
+        req.query.addUser ||
+        req.query.createdBy ||
+        ""
+      ).trim();
+
+      const paymentStatus = String(
+        req.query.paymentStatus || ""
+      ).trim();
+
+      const minAmountText = String(
+        req.query.minAmount || ""
+      ).trim();
+
+      const maxAmountText = String(
+        req.query.maxAmount || ""
+      ).trim();
+
+      /* =====================================================
+         PAGINATION PARAMETERS
+         ===================================================== */
+
+      const requestedPage = Number.parseInt(
+        req.query.page,
+        10
+      );
+
+      const requestedLimit = Number.parseInt(
+        req.query.limit,
+        10
+      );
+
+      const page =
+        Number.isFinite(requestedPage) &&
+        requestedPage > 0
+          ? requestedPage
+          : 1;
+
+      const limit =
+        Number.isFinite(requestedLimit) &&
+        requestedLimit > 0
+          ? Math.min(
+              requestedLimit,
+              100
+            )
+          : 20;
+
+      if (!distributorId || !firmId) {
+        return res.status(400).json({
+          success: false,
+          message:
+            "distributorId and firmId are required",
+        });
+      }
+
+      /* =====================================================
+         HELPER FUNCTIONS
+         ===================================================== */
+
+      const escapeRegex = (value) =>
+        String(value || "").replace(
+          /[.*+?^${}()|[\]\\]/g,
+          "\\$&"
+        );
+
+      /*
+       * Creates an exact, case-insensitive
+       * regular expression.
+       *
+       * Example:
+       * CAD will match CAD, cad and Cad,
+       * but it will not match CADBURY.
+       */
+      const createExactRegex = (value) =>
+        new RegExp(
+          `^${escapeRegex(
+            String(value || "").trim()
+          )}$`,
+          "i"
+        );
+
+      /*
+       * All independent field filters are added
+       * to the same $and array.
+       *
+       * This permits:
+       * Company + Area + Salesman + Load Series
+       * + Load No + Party at the same time.
+       */
+      const andConditions = [];
+
+      /* =====================================================
+         BASE FILTER
+         ===================================================== */
+
+      const filter = {
+        distributorId,
+        firmId,
+
+        /*
+         * Include active records and old records
+         * where isActive was never stored.
+         */
+        isActive: {
+          $ne: false,
+        },
+      };
+
+      /* =====================================================
+         DATE FILTER
+         ===================================================== */
+
+      if (fromDate || toDate) {
+        const billDateFilter = {};
+
+        if (fromDate) {
+          const startDate = new Date(
+            `${fromDate}T00:00:00.000Z`
+          );
+
+          if (
+            !Number.isNaN(
+              startDate.getTime()
+            )
+          ) {
+            billDateFilter.$gte =
+              startDate;
+          }
+        }
+
+        if (toDate) {
+          const endDate = new Date(
+            `${toDate}T23:59:59.999Z`
+          );
+
+          if (
+            !Number.isNaN(
+              endDate.getTime()
+            )
+          ) {
+            billDateFilter.$lte =
+              endDate;
+          }
+        }
+
+        if (
+          Object.keys(
+            billDateFilter
+          ).length > 0
+        ) {
+          andConditions.push({
+            $or: [
+              {
+                BillDate:
+                  billDateFilter,
+              },
+              {
+                billDate:
+                  billDateFilter,
+              },
+            ],
+          });
+        }
+      }
+
+      /* =====================================================
+         BILL SERIES FILTER
+         ===================================================== */
+
+      if (billSeries) {
+        const billSeriesRegex =
+          createExactRegex(
+            billSeries
+          );
+
+        andConditions.push({
+          $or: [
+            {
+              BillSeries:
+                billSeriesRegex,
+            },
+            {
+              billSeries:
+                billSeriesRegex,
+            },
+            {
+              TrnSeries:
+                billSeriesRegex,
+            },
+            {
+              trnSeries:
+                billSeriesRegex,
+            },
+          ],
+        });
+      }
+
+      /* =====================================================
+         BILL TYPE FILTER
+         ===================================================== */
+
+      if (billType) {
+        const billTypeRegex =
+          createExactRegex(
+            billType
+          );
+
+        andConditions.push({
+          $or: [
+            {
+              BillType:
+                billTypeRegex,
+            },
+            {
+              billType:
+                billTypeRegex,
+            },
+            {
+              InvoiceType:
+                billTypeRegex,
+            },
+            {
+              invoiceType:
+                billTypeRegex,
+            },
+          ],
+        });
+      }
+
+      /* =====================================================
+         COMPANY FILTER
+         ===================================================== */
+
+      if (companyCode) {
+        const companyRegex =
+          createExactRegex(
+            companyCode
+          );
+
+        andConditions.push({
+          $or: [
+            /*
+             * Correct code fields.
+             */
+            {
+              CompanyCode:
+                companyRegex,
+            },
+            {
+              companyCode:
+                companyRegex,
+            },
+            {
+              CompCode:
+                companyRegex,
+            },
+            {
+              compCode:
+                companyRegex,
+            },
+
+            /*
+             * Fallback for cases where the frontend
+             * option contains a company name because
+             * an old master has no company code.
+             */
+            {
+              CompanyName:
+                companyRegex,
+            },
+            {
+              companyName:
+                companyRegex,
+            },
+          ],
+        });
+      }
+
+      /* =====================================================
+         PARTY CODE FILTER
+         ===================================================== */
+
+      if (partyCode) {
+        const partyCodeRegex =
+          createExactRegex(
+            partyCode
+          );
+
+        andConditions.push({
+          $or: [
+            {
+              PartyCode:
+                partyCodeRegex,
+            },
+            {
+              partyCode:
+                partyCodeRegex,
+            },
+            {
+              AccountCode:
+                partyCodeRegex,
+            },
+            {
+              accountCode:
+                partyCodeRegex,
+            },
+          ],
+        });
+      }
+
+      /* =====================================================
+         PARTY NAME FILTER
+         ===================================================== */
+
+      if (partyName) {
+        const partyNameRegex =
+          new RegExp(
+            escapeRegex(
+              partyName
+            ),
+            "i"
+          );
+
+        andConditions.push({
+          $or: [
+            {
+              PartyName:
+                partyNameRegex,
+            },
+            {
+              partyName:
+                partyNameRegex,
+            },
+            {
+              party:
+                partyNameRegex,
+            },
+            {
+              AccountName:
+                partyNameRegex,
+            },
+            {
+              accountName:
+                partyNameRegex,
+            },
+          ],
+        });
+      }
+
+      /* =====================================================
+         SALESMAN CODE FILTER
+         ===================================================== */
+
+      if (salesmanCode) {
+        const salesmanCodeRegex =
+          createExactRegex(
+            salesmanCode
+          );
+
+        andConditions.push({
+          $or: [
+            {
+              SalesmanCode:
+                salesmanCodeRegex,
+            },
+            {
+              salesmanCode:
+                salesmanCodeRegex,
+            },
+            {
+              SmanCode:
+                salesmanCodeRegex,
+            },
+            {
+              smanCode:
+                salesmanCodeRegex,
+            },
+
+            /*
+             * Fallback when the dropdown value is
+             * salesman name rather than code.
+             */
+            {
+              SalesmanName:
+                salesmanCodeRegex,
+            },
+            {
+              salesmanName:
+                salesmanCodeRegex,
+            },
+          ],
+        });
+      }
+
+      /* =====================================================
+         SALESMAN NAME FILTER
+         ===================================================== */
+
+      if (salesmanName) {
+        const salesmanNameRegex =
+          new RegExp(
+            escapeRegex(
+              salesmanName
+            ),
+            "i"
+          );
+
+        andConditions.push({
+          $or: [
+            {
+              SalesmanName:
+                salesmanNameRegex,
+            },
+            {
+              salesmanName:
+                salesmanNameRegex,
+            },
+            {
+              salesman:
+                salesmanNameRegex,
+            },
+          ],
+        });
+      }
+
+      /* =====================================================
+         AREA CODE FILTER
+         ===================================================== */
+
+      if (areaCode) {
+        const areaCodeRegex =
+          createExactRegex(
+            areaCode
+          );
+
+        andConditions.push({
+          $or: [
+            {
+              AreaCode:
+                areaCodeRegex,
+            },
+            {
+              areaCode:
+                areaCodeRegex,
+            },
+
+            /*
+             * Fallback for old master records where
+             * the dropdown value may contain the name.
+             */
+            {
+              AreaName:
+                areaCodeRegex,
+            },
+            {
+              areaName:
+                areaCodeRegex,
+            },
+          ],
+        });
+      }
+
+      /* =====================================================
+         AREA NAME FILTER
+         ===================================================== */
+
+      if (areaName) {
+        const areaNameRegex =
+          new RegExp(
+            escapeRegex(
+              areaName
+            ),
+            "i"
+          );
+
+        andConditions.push({
+          $or: [
+            {
+              AreaName:
+                areaNameRegex,
+            },
+            {
+              areaName:
+                areaNameRegex,
+            },
+            {
+              area:
+                areaNameRegex,
+            },
+          ],
+        });
+      }
+
+      /* =====================================================
+         GODOWN FILTER
+         ===================================================== */
+
+      if (godownCode) {
+        const godownCodeRegex =
+          createExactRegex(
+            godownCode
+          );
+
+        andConditions.push({
+          $or: [
+            {
+              GDCode:
+                godownCodeRegex,
+            },
+            {
+              gdCode:
+                godownCodeRegex,
+            },
+            {
+              GodownCode:
+                godownCodeRegex,
+            },
+            {
+              godownCode:
+                godownCodeRegex,
+            },
+          ],
+        });
+      }
+
+      /* =====================================================
+         LOAD SERIES FILTER
+         ===================================================== */
+
+      if (loadSeries) {
+        const loadSeriesRegex =
+          createExactRegex(
+            loadSeries
+          );
+
+        andConditions.push({
+          $or: [
+            {
+              LoadSeries:
+                loadSeriesRegex,
+            },
+            {
+              loadSeries:
+                loadSeriesRegex,
+            },
+            {
+              LoadSer:
+                loadSeriesRegex,
+            },
+            {
+              loadSer:
+                loadSeriesRegex,
+            },
+          ],
+        });
+      }
+
+      /* =====================================================
+         LOAD NUMBER FILTER
+         ===================================================== */
+
+      if (loadNoText) {
+        const numericLoadNo =
+          Number(loadNoText);
+
+        const loadNoConditions = [
+          /*
+           * String representations.
+           */
+          {
+            LoadNo:
+              loadNoText,
+          },
+          {
+            loadNo:
+              loadNoText,
+          },
+          {
+            LoadNumber:
+              loadNoText,
+          },
+          {
+            loadNumber:
+              loadNoText,
+          },
+        ];
+
+        /*
+         * MongoDB documents may store LoadNo as
+         * a numeric value instead of a string.
+         */
+        if (
+          Number.isFinite(
+            numericLoadNo
+          )
+        ) {
+          loadNoConditions.push(
+            {
+              LoadNo:
+                numericLoadNo,
+            },
+            {
+              loadNo:
+                numericLoadNo,
+            },
+            {
+              LoadNumber:
+                numericLoadNo,
+            },
+            {
+              loadNumber:
+                numericLoadNo,
+            }
+          );
+        }
+
+        andConditions.push({
+          $or:
+            loadNoConditions,
+        });
+      }
+
+      /* =====================================================
+         ADD USER FILTER
+         ===================================================== */
+
+      if (addUser) {
+        const addUserRegex =
+          createExactRegex(
+            addUser
+          );
+
+        andConditions.push({
+          $or: [
+            {
+              CreatedBy:
+                addUserRegex,
+            },
+            {
+              createdBy:
+                addUserRegex,
+            },
+            {
+              AddUser:
+                addUserRegex,
+            },
+            {
+              addUser:
+                addUserRegex,
+            },
+            {
+              UserName:
+                addUserRegex,
+            },
+            {
+              userName:
+                addUserRegex,
+            },
+          ],
+        });
+      }
+
+      /* =====================================================
+         AMOUNT RANGE FILTER
+         ===================================================== */
+
+      const minAmount =
+        Number(minAmountText);
+
+      const maxAmount =
+        Number(maxAmountText);
+
+      if (
+        minAmountText !== "" &&
+        Number.isFinite(minAmount)
+      ) {
+        andConditions.push({
+          $or: [
+            {
+              NetAmount: {
+                $gte:
+                  minAmount,
+              },
+            },
+            {
+              netAmount: {
+                $gte:
+                  minAmount,
+              },
+            },
+            {
+              amount: {
+                $gte:
+                  minAmount,
+              },
+            },
+          ],
+        });
+      }
+
+      if (
+        maxAmountText !== "" &&
+        Number.isFinite(maxAmount)
+      ) {
+        andConditions.push({
+          $or: [
+            {
+              NetAmount: {
+                $lte:
+                  maxAmount,
+              },
+            },
+            {
+              netAmount: {
+                $lte:
+                  maxAmount,
+              },
+            },
+            {
+              amount: {
+                $lte:
+                  maxAmount,
+              },
+            },
+          ],
+        });
+      }
+
+      /* =====================================================
+         PAYMENT STATUS FILTER
+         ===================================================== */
+
+      if (
+        paymentStatus &&
+        paymentStatus.toLowerCase() !==
+          "all"
+      ) {
+        const normalizedStatus =
+          paymentStatus.toLowerCase();
+
+        if (
+          normalizedStatus ===
+          "paid"
+        ) {
+          andConditions.push({
+            $or: [
+              {
+                PaymentStatus: {
+                  $regex:
+                    /^paid$/i,
+                },
+              },
+              {
+                paymentStatus: {
+                  $regex:
+                    /^paid$/i,
+                },
+              },
+              {
+                BalanceAmount: {
+                  $lte: 0,
+                },
+              },
+              {
+                balanceAmount: {
+                  $lte: 0,
+                },
+              },
+            ],
+          });
+        } else if (
+          normalizedStatus ===
+          "pending"
+        ) {
+          andConditions.push({
+            $or: [
+              {
+                PaymentStatus: {
+                  $regex:
+                    /pending|unpaid/i,
+                },
+              },
+              {
+                paymentStatus: {
+                  $regex:
+                    /pending|unpaid/i,
+                },
+              },
+              {
+                BalanceAmount: {
+                  $gt: 0,
+                },
+              },
+              {
+                balanceAmount: {
+                  $gt: 0,
+                },
+              },
+            ],
+          });
+        } else if (
+          normalizedStatus ===
+          "partial"
+        ) {
+          andConditions.push({
+            $or: [
+              {
+                PaymentStatus: {
+                  $regex:
+                    /partial/i,
+                },
+              },
+              {
+                paymentStatus: {
+                  $regex:
+                    /partial/i,
+                },
+              },
+            ],
+          });
+        } else {
+          const statusRegex =
+            createExactRegex(
+              paymentStatus
+            );
+
+          andConditions.push({
+            $or: [
+              {
+                PaymentStatus:
+                  statusRegex,
+              },
+              {
+                paymentStatus:
+                  statusRegex,
+              },
+            ],
+          });
+        }
+      }
+
+      /* =====================================================
+         GENERAL SEARCH
+         ===================================================== */
+
+      if (search) {
+        const searchRegex =
+          new RegExp(
+            escapeRegex(
+              search
+            ),
+            "i"
+          );
+
+        const searchConditions = [
+          {
+            BillSeries:
+              searchRegex,
+          },
+          {
+            billSeries:
+              searchRegex,
+          },
+          {
+            PartyCode:
+              searchRegex,
+          },
+          {
+            partyCode:
+              searchRegex,
+          },
+          {
+            PartyName:
+              searchRegex,
+          },
+          {
+            partyName:
+              searchRegex,
+          },
+          {
+            CompanyCode:
+              searchRegex,
+          },
+          {
+            companyCode:
+              searchRegex,
+          },
+          {
+            CompanyName:
+              searchRegex,
+          },
+          {
+            companyName:
+              searchRegex,
+          },
+          {
+            SalesmanCode:
+              searchRegex,
+          },
+          {
+            salesmanCode:
+              searchRegex,
+          },
+          {
+            SalesmanName:
+              searchRegex,
+          },
+          {
+            salesmanName:
+              searchRegex,
+          },
+          {
+            AreaCode:
+              searchRegex,
+          },
+          {
+            areaCode:
+              searchRegex,
+          },
+          {
+            AreaName:
+              searchRegex,
+          },
+          {
+            areaName:
+              searchRegex,
+          },
+          {
+            GDCode:
+              searchRegex,
+          },
+          {
+            gdCode:
+              searchRegex,
+          },
+          {
+            Godown:
+              searchRegex,
+          },
+          {
+            godown:
+              searchRegex,
+          },
+          {
+            BillType:
+              searchRegex,
+          },
+          {
+            billType:
+              searchRegex,
+          },
+          {
+            LoadSeries:
+              searchRegex,
+          },
+          {
+            loadSeries:
+              searchRegex,
+          },
+          {
+            CreatedBy:
+              searchRegex,
+          },
+          {
+            createdBy:
+              searchRegex,
+          },
+          {
+            AddUser:
+              searchRegex,
+          },
+          {
+            addUser:
+              searchRegex,
+          },
+          {
+            Narration:
+              searchRegex,
+          },
+          {
+            narration:
+              searchRegex,
+          },
+        ];
+
+        /*
+         * BillNo and LoadNo may be stored as numbers.
+         */
+        const numericSearch =
+          Number(search);
+
+        if (
+          Number.isFinite(
+            numericSearch
+          )
+        ) {
+          searchConditions.push(
+            {
+              BillNo:
+                numericSearch,
+            },
+            {
+              billNo:
+                numericSearch,
+            },
+            {
+              LoadNo:
+                numericSearch,
+            },
+            {
+              loadNo:
+                numericSearch,
+            }
+          );
+        }
+
+        /*
+         * Also allow string LoadNo searches.
+         */
+        searchConditions.push(
+          {
+            LoadNo:
+              search,
+          },
+          {
+            loadNo:
+              search,
+          }
+        );
+
+        andConditions.push({
+          $or:
+            searchConditions,
+        });
+      }
+
+      /* =====================================================
+         APPLY ALL COMBINED CONDITIONS
+         ===================================================== */
+
+      if (
+        andConditions.length > 0
+      ) {
+        filter.$and =
+          andConditions;
+      }
+
+      /* =====================================================
+         COUNT AND PAGINATION
+         ===================================================== */
+
+      const totalRecords =
+        await SalesHeader.countDocuments(
+          filter
+        );
+
+      const totalPages = Math.max(
+        1,
+        Math.ceil(
+          totalRecords /
+          limit
+        )
+      );
+
+      /*
+       * If a deletion reduced the number of pages,
+       * move the request to the final available page.
+       */
+      const currentPage = Math.min(
+        page,
+        totalPages
+      );
+
+      const skip =
+        (currentPage - 1) *
+        limit;
+
+      /* =====================================================
+         LOAD SALES LIST
+         ===================================================== */
+
+      const sales =
+        await SalesHeader.find(
+          filter
+        )
+          /*
+           * Exclude products/items from the list API.
+           * The edit and print APIs can load full items.
+           */
+          .select({
+            items: 0,
+            Items: 0,
+          })
+          .sort({
+            BillDate: -1,
+            BillNo: -1,
+            _id: -1,
+          })
+          .skip(skip)
+          .limit(limit)
+          .lean();
+
+      /* =====================================================
+         RESPONSE
+         ===================================================== */
+
+      return res.json({
+        success: true,
+
+        sales,
+
+        count:
+          sales.length,
+
+        pagination: {
+          currentPage,
+          page:
+            currentPage,
+          limit,
+          totalRecords,
+          totalPages,
+
+          hasPreviousPage:
+            currentPage > 1,
+
+          hasNextPage:
+            currentPage <
+            totalPages,
+
+          startRecord:
+            totalRecords === 0
+              ? 0
+              : skip + 1,
+
+          endRecord:
+            totalRecords === 0
+              ? 0
+              : Math.min(
+                  skip +
+                  sales.length,
+                  totalRecords
+                ),
+        },
+
+        appliedFilters: {
+          search,
+          fromDate,
+          toDate,
+          billSeries,
+          billType,
+
+          companyCode,
+
+          partyCode,
+          partyName,
+
+          salesmanCode,
+          salesmanName,
+
+          areaCode,
+          areaName,
+
+          godownCode,
+
+          loadSeries,
+          loadNo:
+            loadNoText,
+
+          addUser,
+
+          paymentStatus,
+
+          minAmount:
+            minAmountText,
+
+          maxAmount:
+            maxAmountText,
+        },
+      });
+    } catch (error) {
+      console.error(
+        "Sales Billing paginated list error:",
+        error
+      );
+
+      return res.status(500).json({
+        success: false,
+        message:
+          "Failed to load Sales Billing list",
+        error:
+          error.message,
+      });
+    }
+  }
+);
 //Quotation backend 
 
 
@@ -8025,6 +11494,961 @@ app.get("/api/quotation", ensureConnection, async (req, res) => {
     });
   }
 });
+app.get(
+  "/api/quotation/list",
+  ensureConnection,
+  async (req, res) => {
+    try {
+      /* =====================================================
+         REQUEST PARAMETERS
+         ===================================================== */
+
+      const distributorId = String(
+        req.query.distributorId || ""
+      ).trim();
+
+      const firmId = String(
+        req.query.firmId || ""
+      ).trim();
+
+      const search = String(
+        req.query.search || ""
+      ).trim();
+
+      const fromDate = String(
+        req.query.fromDate || ""
+      ).trim();
+
+      const toDate = String(
+        req.query.toDate || ""
+      ).trim();
+
+      const billSeries = String(
+        req.query.billSeries || ""
+      ).trim();
+
+      const billType = String(
+        req.query.billType || ""
+      ).trim();
+
+      const companyCode = String(
+        req.query.companyCode ||
+        req.query.company ||
+        ""
+      ).trim();
+
+      const partyCode = String(
+        req.query.partyCode || ""
+      ).trim();
+
+      const partyName = String(
+        req.query.partyName ||
+        req.query.party ||
+        ""
+      ).trim();
+
+      const salesmanCode = String(
+        req.query.salesmanCode || ""
+      ).trim();
+
+      const salesmanName = String(
+        req.query.salesmanName ||
+        req.query.salesman ||
+        ""
+      ).trim();
+
+      const areaCode = String(
+        req.query.areaCode || ""
+      ).trim();
+
+      const areaName = String(
+        req.query.areaName ||
+        req.query.area ||
+        ""
+      ).trim();
+
+      const godownCode = String(
+        req.query.godownCode ||
+        req.query.gdCode ||
+        ""
+      ).trim();
+
+      const addUser = String(
+        req.query.addUser ||
+        req.query.createdBy ||
+        ""
+      ).trim();
+
+      const minAmountText = String(
+        req.query.minAmount || ""
+      ).trim();
+
+      const maxAmountText = String(
+        req.query.maxAmount || ""
+      ).trim();
+
+      /* =====================================================
+         PAGINATION
+         ===================================================== */
+
+      const requestedPage =
+        Number.parseInt(
+          req.query.page,
+          10
+        );
+
+      const requestedLimit =
+        Number.parseInt(
+          req.query.limit,
+          10
+        );
+
+      const page =
+        Number.isFinite(requestedPage) &&
+        requestedPage > 0
+          ? requestedPage
+          : 1;
+
+      const limit =
+        Number.isFinite(requestedLimit) &&
+        requestedLimit > 0
+          ? Math.min(
+              requestedLimit,
+              100
+            )
+          : 20;
+
+      if (!distributorId || !firmId) {
+        return res.status(400).json({
+          success: false,
+          message:
+            "distributorId and firmId are required",
+        });
+      }
+
+      /* =====================================================
+         HELPERS
+         ===================================================== */
+
+      const escapeRegex = (value) =>
+        String(value || "").replace(
+          /[.*+?^${}()|[\]\\]/g,
+          "\\$&"
+        );
+
+      const exactRegex = (value) =>
+        new RegExp(
+          `^${escapeRegex(
+            String(value || "").trim()
+          )}$`,
+          "i"
+        );
+
+      const andConditions = [];
+
+      /* =====================================================
+         BASE FILTER
+         ===================================================== */
+
+      const filter = {
+        distributorId,
+        firmId,
+
+        /*
+         * Include active quotations and older records
+         * where isActive is not present.
+         */
+        isActive: {
+          $ne: false,
+        },
+      };
+
+      /* =====================================================
+         DATE FILTER
+         ===================================================== */
+
+      if (fromDate || toDate) {
+        const dateCondition = {};
+
+        if (fromDate) {
+          const startDate = new Date(
+            `${fromDate}T00:00:00.000Z`
+          );
+
+          if (
+            !Number.isNaN(
+              startDate.getTime()
+            )
+          ) {
+            dateCondition.$gte =
+              startDate;
+          }
+        }
+
+        if (toDate) {
+          const endDate = new Date(
+            `${toDate}T23:59:59.999Z`
+          );
+
+          if (
+            !Number.isNaN(
+              endDate.getTime()
+            )
+          ) {
+            dateCondition.$lte =
+              endDate;
+          }
+        }
+
+        if (
+          Object.keys(
+            dateCondition
+          ).length > 0
+        ) {
+          andConditions.push({
+            $or: [
+              {
+                BillDate:
+                  dateCondition,
+              },
+              {
+                billDate:
+                  dateCondition,
+              },
+            ],
+          });
+        }
+      }
+
+      /* =====================================================
+         BILL SERIES
+         ===================================================== */
+
+      if (billSeries) {
+        const regex =
+          exactRegex(
+            billSeries
+          );
+
+        andConditions.push({
+          $or: [
+            {
+              BillSeries:
+                regex,
+            },
+            {
+              billSeries:
+                regex,
+            },
+          ],
+        });
+      }
+
+      /* =====================================================
+         BILL TYPE
+         ===================================================== */
+
+      if (billType) {
+        const regex =
+          exactRegex(
+            billType
+          );
+
+        andConditions.push({
+          $or: [
+            {
+              BillType:
+                regex,
+            },
+            {
+              billType:
+                regex,
+            },
+          ],
+        });
+      }
+
+      /* =====================================================
+         COMPANY
+         ===================================================== */
+
+      if (companyCode) {
+        const regex =
+          exactRegex(
+            companyCode
+          );
+
+        andConditions.push({
+          $or: [
+            {
+              CompanyCode:
+                regex,
+            },
+            {
+              companyCode:
+                regex,
+            },
+            {
+              CompCode:
+                regex,
+            },
+            {
+              compCode:
+                regex,
+            },
+
+            /*
+             * Fallback for old records where a name
+             * may have been saved instead of a code.
+             */
+            {
+              CompanyName:
+                regex,
+            },
+            {
+              companyName:
+                regex,
+            },
+          ],
+        });
+      }
+
+      /* =====================================================
+         PARTY CODE
+         ===================================================== */
+
+      if (partyCode) {
+        const regex =
+          exactRegex(
+            partyCode
+          );
+
+        andConditions.push({
+          $or: [
+            {
+              PartyCode:
+                regex,
+            },
+            {
+              partyCode:
+                regex,
+            },
+            {
+              AccountCode:
+                regex,
+            },
+            {
+              accountCode:
+                regex,
+            },
+          ],
+        });
+      }
+
+      /* =====================================================
+         PARTY NAME
+         ===================================================== */
+
+      if (partyName) {
+        const regex =
+          new RegExp(
+            escapeRegex(
+              partyName
+            ),
+            "i"
+          );
+
+        andConditions.push({
+          $or: [
+            {
+              PartyName:
+                regex,
+            },
+            {
+              partyName:
+                regex,
+            },
+            {
+              party:
+                regex,
+            },
+            {
+              AccountName:
+                regex,
+            },
+            {
+              accountName:
+                regex,
+            },
+          ],
+        });
+      }
+
+      /* =====================================================
+         SALESMAN CODE
+         ===================================================== */
+
+      if (salesmanCode) {
+        const regex =
+          exactRegex(
+            salesmanCode
+          );
+
+        andConditions.push({
+          $or: [
+            {
+              SalesmanCode:
+                regex,
+            },
+            {
+              salesmanCode:
+                regex,
+            },
+            {
+              SmanCode:
+                regex,
+            },
+            {
+              smanCode:
+                regex,
+            },
+            {
+              SalesmanName:
+                regex,
+            },
+            {
+              salesmanName:
+                regex,
+            },
+          ],
+        });
+      }
+
+      /* =====================================================
+         SALESMAN NAME
+         ===================================================== */
+
+      if (salesmanName) {
+        const regex =
+          new RegExp(
+            escapeRegex(
+              salesmanName
+            ),
+            "i"
+          );
+
+        andConditions.push({
+          $or: [
+            {
+              SalesmanName:
+                regex,
+            },
+            {
+              salesmanName:
+                regex,
+            },
+            {
+              salesman:
+                regex,
+            },
+          ],
+        });
+      }
+
+      /* =====================================================
+         AREA CODE
+         ===================================================== */
+
+      if (areaCode) {
+        const regex =
+          exactRegex(
+            areaCode
+          );
+
+        andConditions.push({
+          $or: [
+            {
+              AreaCode:
+                regex,
+            },
+            {
+              areaCode:
+                regex,
+            },
+            {
+              AreaName:
+                regex,
+            },
+            {
+              areaName:
+                regex,
+            },
+          ],
+        });
+      }
+
+      /* =====================================================
+         AREA NAME
+         ===================================================== */
+
+      if (areaName) {
+        const regex =
+          new RegExp(
+            escapeRegex(
+              areaName
+            ),
+            "i"
+          );
+
+        andConditions.push({
+          $or: [
+            {
+              AreaName:
+                regex,
+            },
+            {
+              areaName:
+                regex,
+            },
+            {
+              area:
+                regex,
+            },
+          ],
+        });
+      }
+
+      /* =====================================================
+         GODOWN
+         ===================================================== */
+
+      if (godownCode) {
+        const regex =
+          exactRegex(
+            godownCode
+          );
+
+        andConditions.push({
+          $or: [
+            {
+              GDCode:
+                regex,
+            },
+            {
+              gdCode:
+                regex,
+            },
+            {
+              GodownCode:
+                regex,
+            },
+            {
+              godownCode:
+                regex,
+            },
+          ],
+        });
+      }
+
+      /* =====================================================
+         ADD USER
+         ===================================================== */
+
+      if (addUser) {
+        const regex =
+          exactRegex(
+            addUser
+          );
+
+        andConditions.push({
+          $or: [
+            {
+              CreatedBy:
+                regex,
+            },
+            {
+              createdBy:
+                regex,
+            },
+            {
+              AddUser:
+                regex,
+            },
+            {
+              addUser:
+                regex,
+            },
+            {
+              UserName:
+                regex,
+            },
+            {
+              userName:
+                regex,
+            },
+          ],
+        });
+      }
+
+      /* =====================================================
+         AMOUNT RANGE
+         ===================================================== */
+
+      const minAmount =
+        Number(minAmountText);
+
+      const maxAmount =
+        Number(maxAmountText);
+
+      if (
+        minAmountText !== "" &&
+        Number.isFinite(minAmount)
+      ) {
+        andConditions.push({
+          $or: [
+            {
+              NetAmount: {
+                $gte:
+                  minAmount,
+              },
+            },
+            {
+              netAmount: {
+                $gte:
+                  minAmount,
+              },
+            },
+          ],
+        });
+      }
+
+      if (
+        maxAmountText !== "" &&
+        Number.isFinite(maxAmount)
+      ) {
+        andConditions.push({
+          $or: [
+            {
+              NetAmount: {
+                $lte:
+                  maxAmount,
+              },
+            },
+            {
+              netAmount: {
+                $lte:
+                  maxAmount,
+              },
+            },
+          ],
+        });
+      }
+
+      /* =====================================================
+         GENERAL SEARCH
+         ===================================================== */
+
+      if (search) {
+        const searchRegex =
+          new RegExp(
+            escapeRegex(
+              search
+            ),
+            "i"
+          );
+
+        const searchConditions = [
+          {
+            BillSeries:
+              searchRegex,
+          },
+          {
+            billSeries:
+              searchRegex,
+          },
+          {
+            PartyCode:
+              searchRegex,
+          },
+          {
+            partyCode:
+              searchRegex,
+          },
+          {
+            PartyName:
+              searchRegex,
+          },
+          {
+            partyName:
+              searchRegex,
+          },
+          {
+            CompanyCode:
+              searchRegex,
+          },
+          {
+            companyCode:
+              searchRegex,
+          },
+          {
+            CompanyName:
+              searchRegex,
+          },
+          {
+            companyName:
+              searchRegex,
+          },
+          {
+            SalesmanCode:
+              searchRegex,
+          },
+          {
+            salesmanCode:
+              searchRegex,
+          },
+          {
+            SalesmanName:
+              searchRegex,
+          },
+          {
+            salesmanName:
+              searchRegex,
+          },
+          {
+            AreaCode:
+              searchRegex,
+          },
+          {
+            areaCode:
+              searchRegex,
+          },
+          {
+            AreaName:
+              searchRegex,
+          },
+          {
+            areaName:
+              searchRegex,
+          },
+          {
+            GDCode:
+              searchRegex,
+          },
+          {
+            gdCode:
+              searchRegex,
+          },
+          {
+            Godown:
+              searchRegex,
+          },
+          {
+            godown:
+              searchRegex,
+          },
+          {
+            BillType:
+              searchRegex,
+          },
+          {
+            billType:
+              searchRegex,
+          },
+          {
+            Narration:
+              searchRegex,
+          },
+          {
+            narration:
+              searchRegex,
+          },
+          {
+            CreatedBy:
+              searchRegex,
+          },
+          {
+            createdBy:
+              searchRegex,
+          },
+        ];
+
+        /*
+         * BillNo is usually stored as a number.
+         */
+        const numericSearch =
+          Number(search);
+
+        if (
+          Number.isFinite(
+            numericSearch
+          )
+        ) {
+          searchConditions.push(
+            {
+              BillNo:
+                numericSearch,
+            },
+            {
+              billNo:
+                numericSearch,
+            }
+          );
+        }
+
+        andConditions.push({
+          $or:
+            searchConditions,
+        });
+      }
+
+      /* =====================================================
+         APPLY CONDITIONS
+         ===================================================== */
+
+      if (
+        andConditions.length > 0
+      ) {
+        filter.$and =
+          andConditions;
+      }
+
+      /* =====================================================
+         COUNT RECORDS
+         ===================================================== */
+
+      const totalRecords =
+        await QuotationHeader.countDocuments(
+          filter
+        );
+
+      const totalPages = Math.max(
+        1,
+        Math.ceil(
+          totalRecords /
+          limit
+        )
+      );
+
+      const currentPage = Math.min(
+        page,
+        totalPages
+      );
+
+      const skip =
+        (currentPage - 1) *
+        limit;
+
+      /* =====================================================
+         LOAD CURRENT PAGE
+         ===================================================== */
+
+      const quotations =
+        await QuotationHeader.find(
+          filter
+        )
+          /*
+           * Do not return quotation product items
+           * in the list API.
+           */
+          .select({
+            items: 0,
+            Items: 0,
+          })
+          .sort({
+            BillDate: -1,
+            BillNo: -1,
+            _id: -1,
+          })
+          .skip(skip)
+          .limit(limit)
+          .lean();
+
+      /* =====================================================
+         RESPONSE
+         ===================================================== */
+
+      return res.json({
+        success: true,
+
+        quotations,
+
+        count:
+          quotations.length,
+
+        pagination: {
+          currentPage,
+          page:
+            currentPage,
+          limit,
+          totalRecords,
+          totalPages,
+
+          hasPreviousPage:
+            currentPage > 1,
+
+          hasNextPage:
+            currentPage <
+            totalPages,
+
+          startRecord:
+            totalRecords === 0
+              ? 0
+              : skip + 1,
+
+          endRecord:
+            totalRecords === 0
+              ? 0
+              : Math.min(
+                  skip +
+                  quotations.length,
+                  totalRecords
+                ),
+        },
+
+        appliedFilters: {
+          search,
+          fromDate,
+          toDate,
+          billSeries,
+          billType,
+
+          companyCode,
+
+          partyCode,
+          partyName,
+
+          salesmanCode,
+          salesmanName,
+
+          areaCode,
+          areaName,
+
+          godownCode,
+          addUser,
+
+          minAmount:
+            minAmountText,
+
+          maxAmount:
+            maxAmountText,
+        },
+      });
+    } catch (error) {
+      console.error(
+        "Quotation paginated list error:",
+        error
+      );
+
+      return res.status(500).json({
+        success: false,
+        message:
+          "Failed to load Quotation list",
+        error:
+          error.message,
+      });
+    }
+  }
+);
 
 app.get(
   "/api/create-load/sales-bills",
@@ -8819,6 +13243,834 @@ app.get("/api/create-load", ensureConnection, async (req, res) => {
     });
   }
 });
+app.get(
+  "/api/create-load/list",
+  ensureConnection,
+  async (req, res) => {
+    try {
+      /* =====================================================
+         REQUEST VALUES
+         ===================================================== */
+
+      const distributorId = String(
+        req.query.distributorId || ""
+      ).trim();
+
+      const firmId = String(
+        req.query.firmId || ""
+      ).trim();
+
+      const search = String(
+        req.query.search || ""
+      ).trim();
+
+      const fromDate = String(
+        req.query.fromDate || ""
+      ).trim();
+
+      const toDate = String(
+        req.query.toDate || ""
+      ).trim();
+
+      const loadSeries = String(
+        req.query.loadSeries || ""
+      ).trim();
+
+      const loadNoText = String(
+        req.query.loadNo || ""
+      ).trim();
+
+      const companyCode = String(
+        req.query.companyCode ||
+        req.query.company ||
+        ""
+      ).trim();
+
+      const salesmanCode = String(
+        req.query.salesmanCode ||
+        req.query.salesman ||
+        ""
+      ).trim();
+
+      const deliveryBy = String(
+        req.query.deliveryBy ||
+        req.query.deliveryBoy ||
+        ""
+      ).trim();
+
+      const vehicleNo = String(
+        req.query.vehicleNo || ""
+      ).trim();
+
+      const status = String(
+        req.query.status || ""
+      ).trim();
+
+      const createdBy = String(
+        req.query.createdBy ||
+        req.query.addUser ||
+        ""
+      ).trim();
+
+      const minAmountText = String(
+        req.query.minAmount || ""
+      ).trim();
+
+      const maxAmountText = String(
+        req.query.maxAmount || ""
+      ).trim();
+
+      const requestedPage =
+        Number.parseInt(
+          req.query.page,
+          10
+        );
+
+      const requestedLimit =
+        Number.parseInt(
+          req.query.limit,
+          10
+        );
+
+      const page =
+        Number.isFinite(requestedPage) &&
+        requestedPage > 0
+          ? requestedPage
+          : 1;
+
+      const limit =
+        Number.isFinite(requestedLimit) &&
+        requestedLimit > 0
+          ? Math.min(
+              requestedLimit,
+              100
+            )
+          : 10;
+
+      if (
+        !distributorId ||
+        !firmId
+      ) {
+        return res.status(400).json({
+          success: false,
+          message:
+            "distributorId and firmId are required",
+        });
+      }
+
+      /* =====================================================
+         REGEX HELPERS
+         ===================================================== */
+
+      const escapeRegex = (value) =>
+        String(value || "").replace(
+          /[.*+?^${}()|[\]\\]/g,
+          "\\$&"
+        );
+
+      const createExactRegex = (
+        value
+      ) =>
+        new RegExp(
+          `^${escapeRegex(
+            String(value || "").trim()
+          )}$`,
+          "i"
+        );
+
+      const createContainsRegex = (
+        value
+      ) =>
+        new RegExp(
+          escapeRegex(
+            String(value || "").trim()
+          ),
+          "i"
+        );
+
+      /* =====================================================
+         BASE FILTER
+         ===================================================== */
+
+      const filter = {
+        DistributorId:
+          distributorId,
+
+        FirmId:
+          firmId,
+
+        IsCancelled: {
+          $ne: true,
+        },
+      };
+
+      const andConditions = [];
+
+      /* =====================================================
+         LOAD DATE
+         ===================================================== */
+
+      if (fromDate || toDate) {
+        const dateCondition = {};
+
+        if (fromDate) {
+          const startDate =
+            new Date(
+              `${fromDate}T00:00:00.000Z`
+            );
+
+          if (
+            !Number.isNaN(
+              startDate.getTime()
+            )
+          ) {
+            dateCondition.$gte =
+              startDate;
+          }
+        }
+
+        if (toDate) {
+          const endDate =
+            new Date(
+              `${toDate}T23:59:59.999Z`
+            );
+
+          if (
+            !Number.isNaN(
+              endDate.getTime()
+            )
+          ) {
+            dateCondition.$lte =
+              endDate;
+          }
+        }
+
+        if (
+          Object.keys(
+            dateCondition
+          ).length > 0
+        ) {
+          andConditions.push({
+            $or: [
+              {
+                LoadDate:
+                  dateCondition,
+              },
+              {
+                loadDate:
+                  dateCondition,
+              },
+            ],
+          });
+        }
+      }
+
+      /* =====================================================
+         LOAD SERIES
+         ===================================================== */
+
+      if (loadSeries) {
+        const regex =
+          createExactRegex(
+            loadSeries
+          );
+
+        andConditions.push({
+          $or: [
+            {
+              LoadSeries:
+                regex,
+            },
+            {
+              loadSeries:
+                regex,
+            },
+          ],
+        });
+      }
+
+      /* =====================================================
+         LOAD NUMBER
+         ===================================================== */
+
+      if (loadNoText) {
+        const numericLoadNo =
+          Number(loadNoText);
+
+        const conditions = [
+          {
+            LoadNo:
+              createExactRegex(
+                loadNoText
+              ),
+          },
+          {
+            loadNo:
+              createExactRegex(
+                loadNoText
+              ),
+          },
+        ];
+
+        if (
+          Number.isFinite(
+            numericLoadNo
+          )
+        ) {
+          conditions.push(
+            {
+              LoadNo:
+                numericLoadNo,
+            },
+            {
+              loadNo:
+                numericLoadNo,
+            }
+          );
+        }
+
+        andConditions.push({
+          $or:
+            conditions,
+        });
+      }
+
+      /* =====================================================
+         COMPANY
+         ===================================================== */
+
+      if (companyCode) {
+        const regex =
+          createExactRegex(
+            companyCode
+          );
+
+        andConditions.push({
+          $or: [
+            {
+              CompanyCode:
+                regex,
+            },
+            {
+              companyCode:
+                regex,
+            },
+            {
+              CompanyName:
+                regex,
+            },
+            {
+              companyName:
+                regex,
+            },
+          ],
+        });
+      }
+
+      /* =====================================================
+         SALESMAN
+         ===================================================== */
+
+      if (salesmanCode) {
+        const exactRegex =
+          createExactRegex(
+            salesmanCode
+          );
+
+        const containsRegex =
+          createContainsRegex(
+            salesmanCode
+          );
+
+        andConditions.push({
+          $or: [
+            {
+              SalesmanCode:
+                containsRegex,
+            },
+            {
+              salesmanCode:
+                containsRegex,
+            },
+            {
+              SalesmanName:
+                containsRegex,
+            },
+            {
+              salesmanName:
+                containsRegex,
+            },
+            {
+              "SelectedSalesmen.salesmanCode":
+                exactRegex,
+            },
+            {
+              "SelectedSalesmen.salesmanName":
+                exactRegex,
+            },
+          ],
+        });
+      }
+
+      /* =====================================================
+         DELIVERY BY
+         ===================================================== */
+
+      if (deliveryBy) {
+        const regex =
+          createContainsRegex(
+            deliveryBy
+          );
+
+        andConditions.push({
+          $or: [
+            {
+              DeliveryBy:
+                regex,
+            },
+            {
+              deliveryBy:
+                regex,
+            },
+            {
+              DeliveryBoyCode:
+                regex,
+            },
+            {
+              deliveryBoyCode:
+                regex,
+            },
+            {
+              DeliveryBoyName:
+                regex,
+            },
+            {
+              deliveryBoyName:
+                regex,
+            },
+          ],
+        });
+      }
+
+      /* =====================================================
+         VEHICLE
+         ===================================================== */
+
+      if (vehicleNo) {
+        const regex =
+          createContainsRegex(
+            vehicleNo
+          );
+
+        andConditions.push({
+          $or: [
+            {
+              VehicleNo:
+                regex,
+            },
+            {
+              vehicleNo:
+                regex,
+            },
+          ],
+        });
+      }
+
+      /* =====================================================
+         STATUS
+         ===================================================== */
+
+      if (status) {
+        const regex =
+          createExactRegex(
+            status
+          );
+
+        const statusConditions = [
+          {
+            Status:
+              regex,
+          },
+          {
+            status:
+              regex,
+          },
+        ];
+
+        /*
+         * UI displays ACTIVE as Pending.
+         */
+        if (
+          status.toLowerCase() ===
+          "pending"
+        ) {
+          statusConditions.push({
+            Status:
+              createExactRegex(
+                "ACTIVE"
+              ),
+          });
+        }
+
+        andConditions.push({
+          $or:
+            statusConditions,
+        });
+      }
+
+      /* =====================================================
+         CREATED BY
+         ===================================================== */
+
+      if (createdBy) {
+        const regex =
+          createExactRegex(
+            createdBy
+          );
+
+        andConditions.push({
+          $or: [
+            {
+              CreatedBy:
+                regex,
+            },
+            {
+              createdBy:
+                regex,
+            },
+            {
+              UpdatedBy:
+                regex,
+            },
+            {
+              updatedBy:
+                regex,
+            },
+          ],
+        });
+      }
+
+      /* =====================================================
+         AMOUNT RANGE
+         ===================================================== */
+
+      const minAmount =
+        Number(minAmountText);
+
+      const maxAmount =
+        Number(maxAmountText);
+
+      if (
+        minAmountText !== "" &&
+        Number.isFinite(
+          minAmount
+        )
+      ) {
+        andConditions.push({
+          $or: [
+            {
+              TotalAmount: {
+                $gte:
+                  minAmount,
+              },
+            },
+            {
+              totalAmount: {
+                $gte:
+                  minAmount,
+              },
+            },
+          ],
+        });
+      }
+
+      if (
+        maxAmountText !== "" &&
+        Number.isFinite(
+          maxAmount
+        )
+      ) {
+        andConditions.push({
+          $or: [
+            {
+              TotalAmount: {
+                $lte:
+                  maxAmount,
+              },
+            },
+            {
+              totalAmount: {
+                $lte:
+                  maxAmount,
+              },
+            },
+          ],
+        });
+      }
+
+      /* =====================================================
+         GENERAL SEARCH
+         ===================================================== */
+
+      if (search) {
+        const searchRegex =
+          createContainsRegex(
+            search
+          );
+
+        const searchConditions = [
+          {
+            LoadSeries:
+              searchRegex,
+          },
+          {
+            loadSeries:
+              searchRegex,
+          },
+          {
+            CompanyCode:
+              searchRegex,
+          },
+          {
+            companyCode:
+              searchRegex,
+          },
+          {
+            CompanyName:
+              searchRegex,
+          },
+          {
+            companyName:
+              searchRegex,
+          },
+          {
+            DeliveryBy:
+              searchRegex,
+          },
+          {
+            DeliveryBoyName:
+              searchRegex,
+          },
+          {
+            DeliveryBoyCode:
+              searchRegex,
+          },
+          {
+            VehicleNo:
+              searchRegex,
+          },
+          {
+            DriverMobile:
+              searchRegex,
+          },
+          {
+            SalesmanCode:
+              searchRegex,
+          },
+          {
+            SalesmanName:
+              searchRegex,
+          },
+          {
+            Narration:
+              searchRegex,
+          },
+          {
+            Remarks:
+              searchRegex,
+          },
+          {
+            Status:
+              searchRegex,
+          },
+          {
+            CreatedBy:
+              searchRegex,
+          },
+          {
+            UpdatedBy:
+              searchRegex,
+          },
+          {
+            "SelectedSalesmen.salesmanCode":
+              searchRegex,
+          },
+          {
+            "SelectedSalesmen.salesmanName":
+              searchRegex,
+          },
+          {
+            "SelectedAreas.areaCode":
+              searchRegex,
+          },
+          {
+            "SelectedAreas.areaName":
+              searchRegex,
+          },
+        ];
+
+        const numericSearch =
+          Number(search);
+
+        if (
+          Number.isFinite(
+            numericSearch
+          )
+        ) {
+          searchConditions.push(
+            {
+              LoadNo:
+                numericSearch,
+            },
+            {
+              loadNo:
+                numericSearch,
+            }
+          );
+        }
+
+        andConditions.push({
+          $or:
+            searchConditions,
+        });
+      }
+
+      if (
+        andConditions.length > 0
+      ) {
+        filter.$and =
+          andConditions;
+      }
+
+      /* =====================================================
+         PAGINATION COUNT
+         ===================================================== */
+
+      const totalRecords =
+        await LoadHeader.countDocuments(
+          filter
+        );
+
+      const totalPages =
+        Math.max(
+          1,
+          Math.ceil(
+            totalRecords /
+            limit
+          )
+        );
+
+      const currentPage =
+        Math.min(
+          page,
+          totalPages
+        );
+
+      const skip =
+        (
+          currentPage -
+          1
+        ) *
+        limit;
+
+      /* =====================================================
+         LOAD PAGE
+         ===================================================== */
+
+      const loads =
+        await LoadHeader.find(
+          filter
+        )
+          /*
+           * Bills can be very large.
+           * Exclude them from list API.
+           */
+          .select({
+            Bills: 0,
+            bills: 0,
+          })
+          .sort({
+            LoadDate: -1,
+            LoadNo: -1,
+            _id: -1,
+          })
+          .skip(skip)
+          .limit(limit)
+          .lean();
+
+      return res.json({
+        success: true,
+
+        loads,
+
+        count:
+          loads.length,
+
+        pagination: {
+          currentPage,
+          page:
+            currentPage,
+          limit,
+          totalRecords,
+          totalPages,
+
+          hasPreviousPage:
+            currentPage > 1,
+
+          hasNextPage:
+            currentPage <
+            totalPages,
+
+          startRecord:
+            totalRecords === 0
+              ? 0
+              : skip + 1,
+
+          endRecord:
+            totalRecords === 0
+              ? 0
+              : Math.min(
+                  skip +
+                  loads.length,
+                  totalRecords
+                ),
+        },
+
+        appliedFilters: {
+          search,
+          fromDate,
+          toDate,
+          loadSeries,
+          loadNo:
+            loadNoText,
+          companyCode,
+          salesmanCode,
+          deliveryBy,
+          vehicleNo,
+          status,
+          createdBy,
+          minAmount:
+            minAmountText,
+          maxAmount:
+            maxAmountText,
+        },
+      });
+    } catch (error) {
+      console.error(
+        "Create Load paginated list error:",
+        error
+      );
+
+      return res.status(500).json({
+        success: false,
+        message:
+          "Failed to load Create Load list",
+        error:
+          error.message,
+      });
+    }
+  }
+);
 const buildCreateLoadBillCondition = (bill) => {
   const salesBillId = String(
     bill.SalesBillId ||
@@ -10677,6 +15929,801 @@ app.get("/api/settle-load/list", ensureConnection, async (req, res) => {
     });
   }
 });
+app.get(
+  "/api/settle-load/list",
+  ensureConnection,
+  async (req, res) => {
+    try {
+      /* =====================================================
+         REQUEST PARAMETERS
+         ===================================================== */
+
+      const distributorId = String(
+        req.query.distributorId || ""
+      ).trim();
+
+      const firmId = String(
+        req.query.firmId || ""
+      ).trim();
+
+      const search = String(
+        req.query.search || ""
+      ).trim();
+
+      const fromDate = String(
+        req.query.fromDate || ""
+      ).trim();
+
+      const toDate = String(
+        req.query.toDate || ""
+      ).trim();
+
+      const settlementFromDate = String(
+        req.query.settlementFromDate || ""
+      ).trim();
+
+      const settlementToDate = String(
+        req.query.settlementToDate || ""
+      ).trim();
+
+      const loadSeries = String(
+        req.query.loadSeries || ""
+      ).trim();
+
+      const loadNoText = String(
+        req.query.loadNo || ""
+      ).trim();
+
+      const status = String(
+        req.query.status || ""
+      ).trim();
+
+      const createdBy = String(
+        req.query.createdBy ||
+        req.query.addUser ||
+        ""
+      ).trim();
+
+      const minAmountText = String(
+        req.query.minAmount || ""
+      ).trim();
+
+      const maxAmountText = String(
+        req.query.maxAmount || ""
+      ).trim();
+
+      const minReceiptText = String(
+        req.query.minReceiptAmount || ""
+      ).trim();
+
+      const maxReceiptText = String(
+        req.query.maxReceiptAmount || ""
+      ).trim();
+
+      const minPendingText = String(
+        req.query.minPendingAmount || ""
+      ).trim();
+
+      const maxPendingText = String(
+        req.query.maxPendingAmount || ""
+      ).trim();
+
+      const requestedPage =
+        Number.parseInt(
+          req.query.page,
+          10
+        );
+
+      const requestedLimit =
+        Number.parseInt(
+          req.query.limit,
+          10
+        );
+
+      const page =
+        Number.isFinite(requestedPage) &&
+        requestedPage > 0
+          ? requestedPage
+          : 1;
+
+      const limit =
+        Number.isFinite(requestedLimit) &&
+        requestedLimit > 0
+          ? Math.min(
+              requestedLimit,
+              100
+            )
+          : 10;
+
+      if (
+        !distributorId ||
+        !firmId
+      ) {
+        return res.status(400).json({
+          success: false,
+          message:
+            "Distributor/Firm not found",
+        });
+      }
+
+      /* =====================================================
+         REGEX HELPERS
+         ===================================================== */
+
+      const escapeRegex = (value) =>
+        String(value || "").replace(
+          /[.*+?^${}()|[\]\\]/g,
+          "\\$&"
+        );
+
+      const exactRegex = (value) =>
+        new RegExp(
+          `^${escapeRegex(
+            String(value || "").trim()
+          )}$`,
+          "i"
+        );
+
+      const containsRegex = (value) =>
+        new RegExp(
+          escapeRegex(
+            String(value || "").trim()
+          ),
+          "i"
+        );
+
+      /* =====================================================
+         BASE FILTER
+         ===================================================== */
+
+      const filter = {
+        distributorId,
+        firmId,
+
+        isActive: {
+          $ne: false,
+        },
+      };
+
+      const andConditions = [];
+
+      /* =====================================================
+         LOAD DATE FILTER
+         ===================================================== */
+
+      if (
+        fromDate ||
+        toDate
+      ) {
+        const dateCondition = {};
+
+        if (fromDate) {
+          const startDate =
+            new Date(
+              `${fromDate}T00:00:00.000Z`
+            );
+
+          if (
+            !Number.isNaN(
+              startDate.getTime()
+            )
+          ) {
+            dateCondition.$gte =
+              startDate;
+          }
+        }
+
+        if (toDate) {
+          const endDate =
+            new Date(
+              `${toDate}T23:59:59.999Z`
+            );
+
+          if (
+            !Number.isNaN(
+              endDate.getTime()
+            )
+          ) {
+            dateCondition.$lte =
+              endDate;
+          }
+        }
+
+        if (
+          Object.keys(
+            dateCondition
+          ).length > 0
+        ) {
+          andConditions.push({
+            $or: [
+              {
+                loadDate:
+                  dateCondition,
+              },
+              {
+                LoadDate:
+                  dateCondition,
+              },
+            ],
+          });
+        }
+      }
+
+      /* =====================================================
+         SETTLEMENT DATE FILTER
+         ===================================================== */
+
+      if (
+        settlementFromDate ||
+        settlementToDate
+      ) {
+        const dateCondition = {};
+
+        if (settlementFromDate) {
+          const startDate =
+            new Date(
+              `${settlementFromDate}T00:00:00.000Z`
+            );
+
+          if (
+            !Number.isNaN(
+              startDate.getTime()
+            )
+          ) {
+            dateCondition.$gte =
+              startDate;
+          }
+        }
+
+        if (settlementToDate) {
+          const endDate =
+            new Date(
+              `${settlementToDate}T23:59:59.999Z`
+            );
+
+          if (
+            !Number.isNaN(
+              endDate.getTime()
+            )
+          ) {
+            dateCondition.$lte =
+              endDate;
+          }
+        }
+
+        if (
+          Object.keys(
+            dateCondition
+          ).length > 0
+        ) {
+          andConditions.push({
+            $or: [
+              {
+                settlementDate:
+                  dateCondition,
+              },
+              {
+                SettlementDate:
+                  dateCondition,
+              },
+            ],
+          });
+        }
+      }
+
+      /* =====================================================
+         LOAD SERIES
+         ===================================================== */
+
+      if (loadSeries) {
+        const regex =
+          exactRegex(
+            loadSeries
+          );
+
+        andConditions.push({
+          $or: [
+            {
+              loadSeries:
+                regex,
+            },
+            {
+              LoadSeries:
+                regex,
+            },
+          ],
+        });
+      }
+
+      /* =====================================================
+         LOAD NUMBER
+         ===================================================== */
+
+      if (loadNoText) {
+        const numericLoadNo =
+          Number(loadNoText);
+
+        const loadNoConditions = [
+          {
+            loadNo:
+              exactRegex(
+                loadNoText
+              ),
+          },
+          {
+            LoadNo:
+              exactRegex(
+                loadNoText
+              ),
+          },
+        ];
+
+        if (
+          Number.isFinite(
+            numericLoadNo
+          )
+        ) {
+          loadNoConditions.push(
+            {
+              loadNo:
+                numericLoadNo,
+            },
+            {
+              LoadNo:
+                numericLoadNo,
+            }
+          );
+        }
+
+        andConditions.push({
+          $or:
+            loadNoConditions,
+        });
+      }
+
+      /* =====================================================
+         STATUS
+         ===================================================== */
+
+      if (status) {
+        const regex =
+          exactRegex(
+            status
+          );
+
+        andConditions.push({
+          $or: [
+            {
+              status:
+                regex,
+            },
+            {
+              Status:
+                regex,
+            },
+          ],
+        });
+      }
+
+      /* =====================================================
+         CREATED BY
+         ===================================================== */
+
+      if (createdBy) {
+        const regex =
+          exactRegex(
+            createdBy
+          );
+
+        andConditions.push({
+          $or: [
+            {
+              createdBy:
+                regex,
+            },
+            {
+              CreatedBy:
+                regex,
+            },
+            {
+              updatedBy:
+                regex,
+            },
+            {
+              UpdatedBy:
+                regex,
+            },
+          ],
+        });
+      }
+
+      /* =====================================================
+         TOTAL AMOUNT
+         ===================================================== */
+
+      const minAmount =
+        Number(minAmountText);
+
+      const maxAmount =
+        Number(maxAmountText);
+
+      if (
+        minAmountText !== "" &&
+        Number.isFinite(
+          minAmount
+        )
+      ) {
+        andConditions.push({
+          totalAmount: {
+            $gte:
+              minAmount,
+          },
+        });
+      }
+
+      if (
+        maxAmountText !== "" &&
+        Number.isFinite(
+          maxAmount
+        )
+      ) {
+        andConditions.push({
+          totalAmount: {
+            $lte:
+              maxAmount,
+          },
+        });
+      }
+
+      /* =====================================================
+         RECEIPT AMOUNT
+         ===================================================== */
+
+      const minReceiptAmount =
+        Number(minReceiptText);
+
+      const maxReceiptAmount =
+        Number(maxReceiptText);
+
+      if (
+        minReceiptText !== "" &&
+        Number.isFinite(
+          minReceiptAmount
+        )
+      ) {
+        andConditions.push({
+          totalReceiptAmount: {
+            $gte:
+              minReceiptAmount,
+          },
+        });
+      }
+
+      if (
+        maxReceiptText !== "" &&
+        Number.isFinite(
+          maxReceiptAmount
+        )
+      ) {
+        andConditions.push({
+          totalReceiptAmount: {
+            $lte:
+              maxReceiptAmount,
+          },
+        });
+      }
+
+      /* =====================================================
+         PENDING AMOUNT
+         ===================================================== */
+
+      const minPendingAmount =
+        Number(minPendingText);
+
+      const maxPendingAmount =
+        Number(maxPendingText);
+
+      if (
+        minPendingText !== "" &&
+        Number.isFinite(
+          minPendingAmount
+        )
+      ) {
+        andConditions.push({
+          totalPendingAmount: {
+            $gte:
+              minPendingAmount,
+          },
+        });
+      }
+
+      if (
+        maxPendingText !== "" &&
+        Number.isFinite(
+          maxPendingAmount
+        )
+      ) {
+        andConditions.push({
+          totalPendingAmount: {
+            $lte:
+              maxPendingAmount,
+          },
+        });
+      }
+
+      /* =====================================================
+         GENERAL SEARCH
+         ===================================================== */
+
+      if (search) {
+        const regex =
+          containsRegex(
+            search
+          );
+
+        const searchConditions = [
+          {
+            loadSeries:
+              regex,
+          },
+          {
+            LoadSeries:
+              regex,
+          },
+          {
+            status:
+              regex,
+          },
+          {
+            Status:
+              regex,
+          },
+          {
+            narration:
+              regex,
+          },
+          {
+            Narration:
+              regex,
+          },
+          {
+            firmName:
+              regex,
+          },
+          {
+            FirmName:
+              regex,
+          },
+          {
+            createdBy:
+              regex,
+          },
+          {
+            CreatedBy:
+              regex,
+          },
+          {
+            "bills.partyCode":
+              regex,
+          },
+          {
+            "bills.partyName":
+              regex,
+          },
+          {
+            "bills.salesman":
+              regex,
+          },
+          {
+            "bills.billSeries":
+              regex,
+          },
+          {
+            "bills.receiptSeries":
+              regex,
+          },
+          {
+            "bills.receiptNo":
+              regex,
+          },
+          {
+            "bills.chequeNo":
+              regex,
+          },
+          {
+            "bills.transactionNo":
+              regex,
+          },
+        ];
+
+        const numericSearch =
+          Number(search);
+
+        if (
+          Number.isFinite(
+            numericSearch
+          )
+        ) {
+          searchConditions.push(
+            {
+              loadNo:
+                numericSearch,
+            },
+            {
+              LoadNo:
+                numericSearch,
+            },
+            {
+              "bills.billNo":
+                numericSearch,
+            }
+          );
+        }
+
+        andConditions.push({
+          $or:
+            searchConditions,
+        });
+      }
+
+      if (
+        andConditions.length > 0
+      ) {
+        filter.$and =
+          andConditions;
+      }
+
+      /* =====================================================
+         RECORD COUNT
+         ===================================================== */
+
+      const totalRecords =
+        await SettleLoad.countDocuments(
+          filter
+        );
+
+      const totalPages =
+        Math.max(
+          1,
+          Math.ceil(
+            totalRecords /
+            limit
+          )
+        );
+
+      const currentPage =
+        Math.min(
+          page,
+          totalPages
+        );
+
+      const skip =
+        (
+          currentPage -
+          1
+        ) *
+        limit;
+
+      /* =====================================================
+         LOAD CURRENT PAGE
+         ===================================================== */
+
+      const records =
+        await SettleLoad.find(
+          filter
+        )
+          /*
+           * Edit already loads the complete record using
+           * GET /api/settle-load/:id.
+           *
+           * Do not send all bill details in the list.
+           */
+          .select({
+            bills: 0,
+            Bills: 0,
+          })
+          .sort({
+            settlementDate: -1,
+            createdAt: -1,
+            _id: -1,
+          })
+          .skip(skip)
+          .limit(limit)
+          .lean();
+
+      /* =====================================================
+         RESPONSE
+         ===================================================== */
+
+      return res.json({
+        success: true,
+
+        records,
+
+        count:
+          records.length,
+
+        pagination: {
+          currentPage,
+          page:
+            currentPage,
+          limit,
+          totalRecords,
+          totalPages,
+
+          hasPreviousPage:
+            currentPage > 1,
+
+          hasNextPage:
+            currentPage <
+            totalPages,
+
+          startRecord:
+            totalRecords === 0
+              ? 0
+              : skip + 1,
+
+          endRecord:
+            totalRecords === 0
+              ? 0
+              : Math.min(
+                  skip +
+                  records.length,
+                  totalRecords
+                ),
+        },
+
+        appliedFilters: {
+          search,
+
+          fromDate,
+          toDate,
+
+          settlementFromDate,
+          settlementToDate,
+
+          loadSeries,
+          loadNo:
+            loadNoText,
+
+          status,
+          createdBy,
+
+          minAmount:
+            minAmountText,
+
+          maxAmount:
+            maxAmountText,
+
+          minReceiptAmount:
+            minReceiptText,
+
+          maxReceiptAmount:
+            maxReceiptText,
+
+          minPendingAmount:
+            minPendingText,
+
+          maxPendingAmount:
+            maxPendingText,
+        },
+      });
+    } catch (error) {
+      console.error(
+        "Settle Load paginated list error:",
+        error
+      );
+
+      return res.status(500).json({
+        success: false,
+        message:
+          "Failed to load Settle Load list",
+        error:
+          error.message,
+      });
+    }
+  }
+);
 
 app.get("/api/settle-load/:id", ensureConnection, async (req, res) => {
   try {
@@ -12123,6 +18170,606 @@ app.get(
         message:
           "Failed to load Debit Notes.",
 
+        error:
+          error.message,
+      });
+    }
+  }
+);
+/* =========================================================
+   DEBIT NOTE LIST - BACKEND PAGINATION
+   ========================================================= */
+
+app.get(
+  "/api/debit-note/list",
+  ensureConnection,
+  async (req, res) => {
+    try {
+      const distributorId = String(
+        req.query.distributorId || ""
+      ).trim();
+
+      const firmId = String(
+        req.query.firmId || ""
+      ).trim();
+
+      const search = String(
+        req.query.search || ""
+      ).trim();
+
+      const fromDate = String(
+        req.query.fromDate || ""
+      ).trim();
+
+      const toDate = String(
+        req.query.toDate || ""
+      ).trim();
+
+      const debitNoteSeries = String(
+        req.query.debitNoteSeries ||
+        req.query.vouSer ||
+        ""
+      ).trim();
+
+      const supplierCode = String(
+        req.query.supplierCode ||
+        req.query.partyCode ||
+        ""
+      ).trim();
+
+      const supplierName = String(
+        req.query.supplierName ||
+        req.query.partyName ||
+        ""
+      ).trim();
+
+      const company = String(
+        req.query.company || ""
+      ).trim();
+
+      const gdCode = String(
+        req.query.gdCode || ""
+      ).trim();
+
+      const godownName = String(
+        req.query.godownName || ""
+      ).trim();
+
+      const salesmanCode = String(
+        req.query.salesmanCode || ""
+      ).trim();
+
+      const salesmanName = String(
+        req.query.salesmanName || ""
+      ).trim();
+
+      const referenceBillSeries = String(
+        req.query.referenceBillSeries || ""
+      ).trim();
+
+      const referenceBillNo = String(
+        req.query.referenceBillNo || ""
+      ).trim();
+
+      const returnType = String(
+        req.query.returnType || ""
+      ).trim();
+
+      const status = String(
+        req.query.status || ""
+      ).trim();
+
+      const createdBy = String(
+        req.query.createdBy || ""
+      ).trim();
+
+      const minAmountText = String(
+        req.query.minAmount || ""
+      ).trim();
+
+      const maxAmountText = String(
+        req.query.maxAmount || ""
+      ).trim();
+
+      const requestedPage =
+        Number.parseInt(
+          req.query.page,
+          10
+        );
+
+      const requestedLimit =
+        Number.parseInt(
+          req.query.limit,
+          10
+        );
+
+      const page =
+        Number.isFinite(
+          requestedPage
+        ) &&
+        requestedPage > 0
+          ? requestedPage
+          : 1;
+
+      const limit =
+        Number.isFinite(
+          requestedLimit
+        ) &&
+        requestedLimit > 0
+          ? Math.min(
+              requestedLimit,
+              100
+            )
+          : 10;
+
+      if (
+        !distributorId ||
+        !firmId
+      ) {
+        return res.status(400).json({
+          success: false,
+          message:
+            "distributorId and firmId are required.",
+        });
+      }
+
+      const escapeRegex = (
+        value
+      ) =>
+        String(value || "").replace(
+          /[.*+?^${}()|[\]\\]/g,
+          "\\$&"
+        );
+
+      const containsRegex = (
+        value
+      ) =>
+        new RegExp(
+          escapeRegex(value),
+          "i"
+        );
+
+      const exactRegex = (
+        value
+      ) =>
+        new RegExp(
+          `^${escapeRegex(
+            value
+          )}$`,
+          "i"
+        );
+
+      const filter = {
+        distributorId,
+        firmId,
+
+        isActive: {
+          $ne: false,
+        },
+      };
+
+      /*
+       * Every grouped OR condition is pushed
+       * into this array so none overwrite another.
+       */
+      const andConditions = [];
+
+      /* =========================================
+         DATE
+         ========================================= */
+
+      if (
+        fromDate ||
+        toDate
+      ) {
+        filter.VDate = {};
+
+        if (fromDate) {
+          filter.VDate.$gte =
+            fromDate;
+        }
+
+        if (toDate) {
+          filter.VDate.$lte =
+            toDate;
+        }
+      }
+
+      /* =========================================
+         DEBIT NOTE SERIES
+         ========================================= */
+
+      if (debitNoteSeries) {
+        filter.DebitNoteSeries =
+          exactRegex(
+            debitNoteSeries
+          );
+      }
+
+      /* =========================================
+         SUPPLIER
+         ========================================= */
+
+      if (supplierCode) {
+        filter.SupplierCode =
+          exactRegex(
+            supplierCode
+          );
+      }
+
+      if (supplierName) {
+        filter.SupplierName =
+          containsRegex(
+            supplierName
+          );
+      }
+
+      /* =========================================
+         COMPANY
+         ========================================= */
+
+      if (company) {
+        const companyRegex =
+          containsRegex(
+            company
+          );
+
+        andConditions.push({
+          $or: [
+            {
+              CompanyCode:
+                companyRegex,
+            },
+            {
+              CompanyName:
+                companyRegex,
+            },
+            {
+              companyCode:
+                companyRegex,
+            },
+            {
+              companyName:
+                companyRegex,
+            },
+          ],
+        });
+      }
+
+      /* =========================================
+         GODOWN
+         ========================================= */
+
+      if (gdCode) {
+        filter.GDCode =
+          exactRegex(
+            gdCode
+          );
+      }
+
+      if (godownName) {
+        filter.Godown =
+          containsRegex(
+            godownName
+          );
+      }
+
+      /* =========================================
+         SALESMAN
+         ========================================= */
+
+      if (salesmanCode) {
+        filter.SalesmanCode =
+          exactRegex(
+            salesmanCode
+          );
+      }
+
+      if (salesmanName) {
+        filter.SalesmanName =
+          containsRegex(
+            salesmanName
+          );
+      }
+
+      /* =========================================
+         REFERENCED PURCHASE BILL
+         ========================================= */
+
+      if (referenceBillSeries) {
+        filter.BillSeries =
+          exactRegex(
+            referenceBillSeries
+          );
+      }
+
+      if (referenceBillNo) {
+        const numericBillNo =
+          Number(
+            referenceBillNo
+          );
+
+        if (
+          Number.isFinite(
+            numericBillNo
+          )
+        ) {
+          filter.BillNo =
+            numericBillNo;
+        }
+      }
+
+      /* =========================================
+         RETURN TYPE / STATUS / USER
+         ========================================= */
+
+      if (returnType) {
+        filter.ReturnType =
+          exactRegex(
+            returnType
+          );
+      }
+
+      if (status) {
+        filter.Status =
+          exactRegex(status);
+      }
+
+      if (createdBy) {
+        filter.CreatedBy =
+          containsRegex(
+            createdBy
+          );
+      }
+
+      /* =========================================
+         AMOUNT RANGE
+         ========================================= */
+
+      const minAmount =
+        Number(minAmountText);
+
+      const maxAmount =
+        Number(maxAmountText);
+
+      if (
+        (
+          minAmountText &&
+          Number.isFinite(
+            minAmount
+          )
+        ) ||
+        (
+          maxAmountText &&
+          Number.isFinite(
+            maxAmount
+          )
+        )
+      ) {
+        filter.NetAmount = {};
+
+        if (
+          minAmountText &&
+          Number.isFinite(
+            minAmount
+          )
+        ) {
+          filter.NetAmount.$gte =
+            minAmount;
+        }
+
+        if (
+          maxAmountText &&
+          Number.isFinite(
+            maxAmount
+          )
+        ) {
+          filter.NetAmount.$lte =
+            maxAmount;
+        }
+      }
+
+      /* =========================================
+         GENERAL SEARCH
+         ========================================= */
+
+      if (search) {
+        const searchRegex =
+          containsRegex(search);
+
+        const numericSearch =
+          Number(search);
+
+        const searchConditions = [
+          {
+            DebitNoteSeries:
+              searchRegex,
+          },
+          {
+            BillSeries:
+              searchRegex,
+          },
+          {
+            SupplierCode:
+              searchRegex,
+          },
+          {
+            SupplierName:
+              searchRegex,
+          },
+          {
+            CompanyCode:
+              searchRegex,
+          },
+          {
+            CompanyName:
+              searchRegex,
+          },
+          {
+            GDCode:
+              searchRegex,
+          },
+          {
+            Godown:
+              searchRegex,
+          },
+          {
+            SalesmanCode:
+              searchRegex,
+          },
+          {
+            SalesmanName:
+              searchRegex,
+          },
+          {
+            ReturnType:
+              searchRegex,
+          },
+          {
+            Status:
+              searchRegex,
+          },
+          {
+            CreatedBy:
+              searchRegex,
+          },
+          {
+            Narration:
+              searchRegex,
+          },
+        ];
+
+        if (
+          Number.isFinite(
+            numericSearch
+          )
+        ) {
+          searchConditions.push(
+            {
+              DebitNoteNo:
+                numericSearch,
+            },
+            {
+              VNo:
+                numericSearch,
+            },
+            {
+              BillNo:
+                numericSearch,
+            },
+            {
+              NetAmount:
+                numericSearch,
+            }
+          );
+        }
+
+        andConditions.push({
+          $or:
+            searchConditions,
+        });
+      }
+
+      if (
+        andConditions.length > 0
+      ) {
+        filter.$and =
+          andConditions;
+      }
+
+      const totalRecords =
+        await DebitNote
+          .countDocuments(
+            filter
+          );
+
+      const totalPages =
+        Math.max(
+          1,
+          Math.ceil(
+            totalRecords /
+            limit
+          )
+        );
+
+      const currentPage =
+        Math.min(
+          page,
+          totalPages
+        );
+
+      const skip =
+        (
+          currentPage -
+          1
+        ) *
+        limit;
+
+      const debitNotes =
+        await DebitNote.find(
+          filter
+        )
+          .sort({
+            VDate: -1,
+            DebitNoteNo: -1,
+            _id: -1,
+          })
+          .skip(skip)
+          .limit(limit)
+          .lean();
+
+      return res.json({
+        success: true,
+
+        debitNotes,
+
+        count:
+          debitNotes.length,
+
+        pagination: {
+          currentPage,
+
+          page:
+            currentPage,
+
+          limit,
+
+          totalRecords,
+
+          totalPages,
+
+          hasPreviousPage:
+            currentPage > 1,
+
+          hasNextPage:
+            currentPage <
+            totalPages,
+
+          startRecord:
+            totalRecords === 0
+              ? 0
+              : skip + 1,
+
+          endRecord:
+            totalRecords === 0
+              ? 0
+              : Math.min(
+                  skip +
+                  debitNotes.length,
+                  totalRecords
+                ),
+        },
+      });
+    } catch (error) {
+      console.error(
+        "Debit Note pagination error:",
+        error
+      );
+
+      return res.status(500).json({
+        success: false,
+        message:
+          "Failed to load Debit Notes.",
         error:
           error.message,
       });
@@ -14614,6 +21261,560 @@ app.get("/api/credit-note", ensureConnection, async (req, res) => {
     });
   }
 });
+/* =========================================================
+   CREDIT NOTE LIST - BACKEND PAGINATION
+   ========================================================= */
+
+app.get(
+  "/api/credit-note/list",
+  ensureConnection,
+  async (req, res) => {
+    try {
+      const distributorId = String(
+        req.query.distributorId || ""
+      ).trim();
+
+      const firmId = String(
+        req.query.firmId || ""
+      ).trim();
+
+      const search = String(
+        req.query.search || ""
+      ).trim();
+
+      const fromDate = String(
+        req.query.fromDate || ""
+      ).trim();
+
+      const toDate = String(
+        req.query.toDate || ""
+      ).trim();
+
+      const creditNoteSeries = String(
+        req.query.creditNoteSeries ||
+        req.query.vouSer ||
+        ""
+      ).trim();
+
+      const partyCode = String(
+        req.query.partyCode || ""
+      ).trim();
+
+      const partyName = String(
+        req.query.partyName || ""
+      ).trim();
+
+      const company = String(
+        req.query.company || ""
+      ).trim();
+
+      const gdCode = String(
+        req.query.gdCode || ""
+      ).trim();
+
+      const godownName = String(
+        req.query.godownName || ""
+      ).trim();
+
+      const salesmanCode = String(
+        req.query.salesmanCode || ""
+      ).trim();
+
+      const salesmanName = String(
+        req.query.salesmanName || ""
+      ).trim();
+
+      const referenceBillSeries = String(
+        req.query.referenceBillSeries || ""
+      ).trim();
+
+      const referenceBillNo = String(
+        req.query.referenceBillNo || ""
+      ).trim();
+
+      const status = String(
+        req.query.status || ""
+      ).trim();
+
+      const createdBy = String(
+        req.query.createdBy || ""
+      ).trim();
+
+      const minAmountText = String(
+        req.query.minAmount || ""
+      ).trim();
+
+      const maxAmountText = String(
+        req.query.maxAmount || ""
+      ).trim();
+
+      const requestedPage = Number.parseInt(
+        req.query.page,
+        10
+      );
+
+      const requestedLimit = Number.parseInt(
+        req.query.limit,
+        10
+      );
+
+      const page =
+        Number.isFinite(requestedPage) &&
+        requestedPage > 0
+          ? requestedPage
+          : 1;
+
+      const limit =
+        Number.isFinite(requestedLimit) &&
+        requestedLimit > 0
+          ? Math.min(requestedLimit, 100)
+          : 10;
+
+      if (!distributorId || !firmId) {
+        return res.status(400).json({
+          success: false,
+          message:
+            "distributorId and firmId are required",
+        });
+      }
+
+      const escapeRegex = (value) =>
+        String(value || "").replace(
+          /[.*+?^${}()|[\]\\]/g,
+          "\\$&"
+        );
+
+      const containsRegex = (value) =>
+        new RegExp(
+          escapeRegex(value),
+          "i"
+        );
+
+      const exactRegex = (value) =>
+        new RegExp(
+          `^${escapeRegex(value)}$`,
+          "i"
+        );
+
+      const filter = {
+        distributorId,
+        firmId,
+
+        isActive: {
+          $ne: false,
+        },
+      };
+
+      /*
+       * Use $and so multiple groups of $or
+       * conditions do not overwrite one another.
+       */
+      const andConditions = [];
+
+      /* =========================================
+         DATE FILTER
+         ========================================= */
+
+      if (fromDate || toDate) {
+        const dateFilter = {};
+
+        if (fromDate) {
+          dateFilter.$gte =
+            fromDate;
+        }
+
+        if (toDate) {
+          dateFilter.$lte =
+            toDate;
+        }
+
+        filter.VDate =
+          dateFilter;
+      }
+
+      /* =========================================
+         CREDIT NOTE SERIES
+         ========================================= */
+
+      if (creditNoteSeries) {
+        filter.CreditNoteSeries =
+          exactRegex(
+            creditNoteSeries
+          );
+      }
+
+      /* =========================================
+         PARTY FILTERS
+         ========================================= */
+
+      if (partyCode) {
+        filter.PartyCode =
+          exactRegex(
+            partyCode
+          );
+      }
+
+      if (partyName) {
+        filter.PartyName =
+          containsRegex(
+            partyName
+          );
+      }
+
+      /* =========================================
+         COMPANY FILTER
+         ========================================= */
+
+      if (company) {
+        const companyRegex =
+          containsRegex(
+            company
+          );
+
+        andConditions.push({
+          $or: [
+            {
+              CompanyCode:
+                companyRegex,
+            },
+            {
+              CompanyName:
+                companyRegex,
+            },
+            {
+              companyCode:
+                companyRegex,
+            },
+            {
+              companyName:
+                companyRegex,
+            },
+          ],
+        });
+      }
+
+      /* =========================================
+         GODOWN FILTERS
+         ========================================= */
+
+      if (gdCode) {
+        filter.GDCode =
+          exactRegex(
+            gdCode
+          );
+      }
+
+      if (godownName) {
+        filter.Godown =
+          containsRegex(
+            godownName
+          );
+      }
+
+      /* =========================================
+         SALESMAN FILTERS
+         ========================================= */
+
+      if (salesmanCode) {
+        filter.SalesmanCode =
+          exactRegex(
+            salesmanCode
+          );
+      }
+
+      if (salesmanName) {
+        filter.SalesmanName =
+          containsRegex(
+            salesmanName
+          );
+      }
+
+      /* =========================================
+         ORIGINAL SALES BILL REFERENCE
+         ========================================= */
+
+      if (referenceBillSeries) {
+        filter.BillSeries =
+          exactRegex(
+            referenceBillSeries
+          );
+      }
+
+      if (referenceBillNo) {
+        const numericReferenceBillNo =
+          Number(
+            referenceBillNo
+          );
+
+        if (
+          Number.isFinite(
+            numericReferenceBillNo
+          )
+        ) {
+          filter.BillNo =
+            numericReferenceBillNo;
+        }
+      }
+
+      /* =========================================
+         STATUS / CREATED BY
+         ========================================= */
+
+      if (status) {
+        filter.Status =
+          exactRegex(
+            status
+          );
+      }
+
+      if (createdBy) {
+        filter.CreatedBy =
+          containsRegex(
+            createdBy
+          );
+      }
+
+      /* =========================================
+         AMOUNT RANGE
+         ========================================= */
+
+      const minAmount =
+        Number(minAmountText);
+
+      const maxAmount =
+        Number(maxAmountText);
+
+      if (
+        (
+          minAmountText &&
+          Number.isFinite(minAmount)
+        ) ||
+        (
+          maxAmountText &&
+          Number.isFinite(maxAmount)
+        )
+      ) {
+        filter.NetAmount = {};
+
+        if (
+          minAmountText &&
+          Number.isFinite(minAmount)
+        ) {
+          filter.NetAmount.$gte =
+            minAmount;
+        }
+
+        if (
+          maxAmountText &&
+          Number.isFinite(maxAmount)
+        ) {
+          filter.NetAmount.$lte =
+            maxAmount;
+        }
+      }
+
+      /* =========================================
+         GENERAL SEARCH
+         ========================================= */
+
+      if (search) {
+        const searchRegex =
+          containsRegex(search);
+
+        const numericSearch =
+          Number(search);
+
+        const searchConditions = [
+          {
+            CreditNoteSeries:
+              searchRegex,
+          },
+          {
+            PartyCode:
+              searchRegex,
+          },
+          {
+            PartyName:
+              searchRegex,
+          },
+          {
+            BillSeries:
+              searchRegex,
+          },
+          {
+            CompanyCode:
+              searchRegex,
+          },
+          {
+            CompanyName:
+              searchRegex,
+          },
+          {
+            GDCode:
+              searchRegex,
+          },
+          {
+            Godown:
+              searchRegex,
+          },
+          {
+            SalesmanCode:
+              searchRegex,
+          },
+          {
+            SalesmanName:
+              searchRegex,
+          },
+          {
+            Status:
+              searchRegex,
+          },
+          {
+            CreatedBy:
+              searchRegex,
+          },
+          {
+            Narration:
+              searchRegex,
+          },
+        ];
+
+        if (
+          Number.isFinite(
+            numericSearch
+          )
+        ) {
+          searchConditions.push(
+            {
+              CreditNoteNo:
+                numericSearch,
+            },
+            {
+              VNo:
+                numericSearch,
+            },
+            {
+              BillNo:
+                numericSearch,
+            },
+            {
+              NetAmount:
+                numericSearch,
+            }
+          );
+        }
+
+        andConditions.push({
+          $or:
+            searchConditions,
+        });
+      }
+
+      if (
+        andConditions.length > 0
+      ) {
+        filter.$and =
+          andConditions;
+      }
+
+      const totalRecords =
+        await CreditNote.countDocuments(
+          filter
+        );
+
+      const totalPages =
+        Math.max(
+          1,
+          Math.ceil(
+            totalRecords /
+            limit
+          )
+        );
+
+      const currentPage =
+        Math.min(
+          page,
+          totalPages
+        );
+
+      const skip =
+        (
+          currentPage -
+          1
+        ) *
+        limit;
+
+      const creditNotes =
+        await CreditNote.find(
+          filter
+        )
+          .sort({
+            VDate: -1,
+            CreditNoteNo: -1,
+            _id: -1,
+          })
+          .skip(skip)
+          .limit(limit)
+          .lean();
+
+      return res.json({
+        success: true,
+
+        creditNotes,
+
+        count:
+          creditNotes.length,
+
+        pagination: {
+          currentPage,
+
+          page:
+            currentPage,
+
+          limit,
+
+          totalRecords,
+
+          totalPages,
+
+          hasPreviousPage:
+            currentPage > 1,
+
+          hasNextPage:
+            currentPage <
+            totalPages,
+
+          startRecord:
+            totalRecords === 0
+              ? 0
+              : skip + 1,
+
+          endRecord:
+            totalRecords === 0
+              ? 0
+              : Math.min(
+                  skip +
+                  creditNotes.length,
+                  totalRecords
+                ),
+        },
+      });
+    } catch (error) {
+      console.error(
+        "Credit Note pagination error:",
+        error
+      );
+
+      return res.status(500).json({
+        success: false,
+        message:
+          "Failed to load Credit Notes",
+        error:
+          error.message,
+      });
+    }
+  }
+);
 const damStockSchema = new mongoose.Schema(
   {
     GDCode: String,

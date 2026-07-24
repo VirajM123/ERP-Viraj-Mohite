@@ -13,8 +13,8 @@ import Report from "./Report";
 // Note: Adjust the "../" or "./" depending on exactly where Dashboard.jsx sits relative to assets
 import SalesmanToAreaMapping from './SalesmanToAreaMapping';
 import Transaction from "./Transaction";
-const API_URL = "https://total-solution-backend.onrender.com/api";
-// const API_URL = "http://localhost:5000/api";
+// const API_URL = "https://total-solution-backend.onrender.com/api";
+const API_URL = "http://localhost:5000/api";
 
 
 import {
@@ -120,7 +120,7 @@ const Dashboard = ({ onLogout }) => {
 
 
 
-/* These existing Dashboard states are also used by Report navigation */
+  /* These existing Dashboard states are also used by Report navigation */
 
 
   /* =========================================================
@@ -129,11 +129,11 @@ const Dashboard = ({ onLogout }) => {
 
   const [debitFilteredProductList, setDebitFilteredProductList] =
     useState([]);
-const [expandedReportCategory, setExpandedReportCategory] =
-  useState(null);
+  const [expandedReportCategory, setExpandedReportCategory] =
+    useState(null);
 
-const [selectedReport, setSelectedReport] =
-  useState(null);
+  const [selectedReport, setSelectedReport] =
+    useState(null);
 
 
 
@@ -164,15 +164,92 @@ const [selectedReport, setSelectedReport] =
     useState(0);
   const [creditNoteReturnToBilling, setCreditNoteReturnToBilling] =
     useState(false);
-  const [settleLoadSearch, setSettleLoadSearch] =
-    useState("");
+  const createDefaultSettleLoadFilters = () => ({
+    search: "",
+    fromDate: "",
+    toDate: "",
+    settlementFromDate: "",
+    settlementToDate: "",
+    loadSeries: "",
+    loadNo: "",
+    status: "",
+    createdBy: "",
+    minAmount: "",
+    maxAmount: "",
+    minReceiptAmount: "",
+    maxReceiptAmount: "",
+    minPendingAmount: "",
+    maxPendingAmount: "",
+  });
 
-  const [loadListRowsPerPage, setLoadListRowsPerPage] =
-    useState(10);
+  const [
+    settleLoadSearch,
+    setSettleLoadSearch,
+  ] = useState("");
+
+
+
+  const [
+    settleLoadFilters,
+    setSettleLoadFilters,
+  ] = useState(
+    createDefaultSettleLoadFilters
+  );
+
+  const [
+    settleLoadAppliedFilters,
+    setSettleLoadAppliedFilters,
+  ] = useState(
+    createDefaultSettleLoadFilters
+  );
+
+  const [
+    settleLoadFiltersVisible,
+    setSettleLoadFiltersVisible,
+  ] = useState(false);
+
+  const [
+    settleLoadCurrentPage,
+    setSettleLoadCurrentPage,
+  ] = useState(1);
+
+  const [
+    settleLoadTotalPages,
+    setSettleLoadTotalPages,
+  ] = useState(1);
+
+  const [
+    settleLoadTotalRecords,
+    setSettleLoadTotalRecords,
+  ] = useState(0);
+
+  const [
+    settleLoadStartRecord,
+    setSettleLoadStartRecord,
+  ] = useState(0);
+
+  const [
+    settleLoadEndRecord,
+    setSettleLoadEndRecord,
+  ] = useState(0);
+
+  const [
+    settleLoadListLoading,
+    setSettleLoadListLoading,
+  ] = useState(false);
+
+  const [
+    settleLoadSearchDebounced,
+    setSettleLoadSearchDebounced,
+  ] = useState("");
 
   const [settleListRowsPerPage, setSettleListRowsPerPage] =
     useState(10);
 
+  const [
+    loadListRowsPerPage,
+    setLoadListRowsPerPage,
+  ] = useState(10);
   const [showCreditBatchModal, setShowCreditBatchModal] =
     useState(false);
 
@@ -230,45 +307,101 @@ const [selectedReport, setSelectedReport] =
     ========================================================= */
   const [creditFilteredProductList, setCreditFilteredProductList] =
     useState([]);
-  const [loadFiltersVisible, setLoadFiltersVisible] =
-    useState(false);
+  const createDefaultLoadListFilters = () => ({
+    search: "",
+    fromDate: "",
+    toDate: "",
+    loadSeries: "",
+    loadNo: "",
+    company: "",
+    salesman: "",
+    deliveryBy: "",
+    vehicleNo: "",
+    status: "",
+    createdBy: "",
+    minAmount: "",
+    maxAmount: "",
+  });
 
-  const [loadListFilters, setLoadListFilters] =
-    useState({
-      search: "",
-      fromDate: "",
-      toDate: "",
-      status: "",
-      company: "",
-      loadSeries: "",
-    });
+  const [
+    loadFiltersVisible,
+    setLoadFiltersVisible,
+  ] = useState(false);
 
-const handleReportCategoryClick = (category) => {
-  setExpandedReportCategory((previousCategory) =>
-    previousCategory === category ? null : category
+  const [
+    loadListFilters,
+    setLoadListFilters,
+  ] = useState(
+    createDefaultLoadListFilters
   );
 
-  setActiveSubMenu(category);
-  setSelectedReport(null);
-  setOpenFormFor(null);
-  setShowDashboard(false);
-};
+  const [
+    loadAppliedFilters,
+    setLoadAppliedFilters,
+  ] = useState(
+    createDefaultLoadListFilters
+  );
 
-const handleReportClick = (reportName) => {
-  setSelectedReport(reportName);
-  setActiveSubMenu(reportName);
-  setOpenFormFor("Report");
-  setShowDashboard(false);
+  const [
+    createLoadCurrentPage,
+    setCreateLoadCurrentPage,
+  ] = useState(1);
 
-  setShowSalesList(false);
-  setShowPurchaseList(false);
-  setShowCreditNoteList(false);
-  setShowDebitNoteList(false);
-  setShowCreateLoadList(false);
-  setShowSettleLoadList(false);
-  setShowPrintPreview(false);
-};
-  
+  const [
+    createLoadTotalPages,
+    setCreateLoadTotalPages,
+  ] = useState(1);
+
+  const [
+    createLoadTotalRecords,
+    setCreateLoadTotalRecords,
+  ] = useState(0);
+
+  const [
+    createLoadStartRecord,
+    setCreateLoadStartRecord,
+  ] = useState(0);
+
+  const [
+    createLoadEndRecord,
+    setCreateLoadEndRecord,
+  ] = useState(0);
+
+  const [
+    createLoadListLoading,
+    setCreateLoadListLoading,
+  ] = useState(false);
+
+  const [
+    createLoadSearchDebounced,
+    setCreateLoadSearchDebounced,
+  ] = useState("");
+  const handleReportCategoryClick = (category) => {
+    setExpandedReportCategory((previousCategory) =>
+      previousCategory === category ? null : category
+    );
+
+    setActiveSubMenu(category);
+    setSelectedReport(null);
+    setOpenFormFor(null);
+    setShowDashboard(false);
+  };
+
+  const handleReportClick = (reportName) => {
+    setSelectedReport(reportName);
+    setActiveSubMenu(reportName);
+    setOpenFormFor("Report");
+    setShowDashboard(false);
+
+    setShowSalesList(false);
+    setShowPurchaseList(false);
+    setShowCreditNoteList(false);
+    setShowDebitNoteList(false);
+    setShowCreateLoadList(false);
+    setShowSettleLoadList(false);
+    setShowPrintPreview(false);
+  };
+
   /* =========================================================
     SALES BILLING PARTY SEARCH
     ========================================================= */
@@ -388,6 +521,81 @@ const handleReportClick = (reportName) => {
     minAmount: "",
     maxAmount: "",
   });
+  const createDefaultQuotationListFilters =
+    () => ({
+      fromDate: "",
+      toDate: "",
+      invoiceSearch: "",
+      billSeries: "",
+      billType: "",
+      party: "",
+      partyCode: "",
+      salesman: "",
+      area: "",
+      company: "",
+      addUser: "",
+      minAmount: "",
+      maxAmount: "",
+    });
+
+  const [
+    quotationListData,
+    setQuotationListData,
+  ] = useState([]);
+
+  const [
+    quotationCurrentPage,
+    setQuotationCurrentPage,
+  ] = useState(1);
+
+  const [
+    quotationTotalPages,
+    setQuotationTotalPages,
+  ] = useState(1);
+
+  const [
+    quotationTotalRecords,
+    setQuotationTotalRecords,
+  ] = useState(0);
+
+  const [
+    quotationStartRecord,
+    setQuotationStartRecord,
+  ] = useState(0);
+
+  const [
+    quotationEndRecord,
+    setQuotationEndRecord,
+  ] = useState(0);
+
+  const [
+    quotationRowsPerPage,
+    setQuotationRowsPerPage,
+  ] = useState(10);
+
+  const [
+    quotationListLoading,
+    setQuotationListLoading,
+  ] = useState(false);
+
+  const [
+    quotationAdvancedFilters,
+    setQuotationAdvancedFilters,
+  ] = useState(
+    createDefaultQuotationListFilters
+  );
+
+  const [
+    quotationAppliedFilters,
+    setQuotationAppliedFilters,
+  ] = useState(
+    createDefaultQuotationListFilters
+  );
+
+  const [
+    quotationSearchDebounced,
+    setQuotationSearchDebounced,
+  ] = useState("");
 
   const [salesAdvancedFilters, setSalesAdvancedFilters] =
     useState(() => createDefaultSalesListFilters());
@@ -428,13 +636,63 @@ const handleReportClick = (reportName) => {
 
   const [salesRowsPerPage, setSalesRowsPerPage] =
     useState(10);
+  /* =========================================================
+     SALES BILLING BACKEND PAGINATION STATES
+     ========================================================= */
 
+  const [
+    salesCurrentPage,
+    setSalesCurrentPage,
+  ] = useState(1);
+
+  const [
+    salesTotalPages,
+    setSalesTotalPages,
+  ] = useState(1);
+
+  const [
+    salesTotalRecords,
+    setSalesTotalRecords,
+  ] = useState(0);
+
+  const [
+    salesStartRecord,
+    setSalesStartRecord,
+  ] = useState(0);
+
+  const [
+    salesEndRecord,
+    setSalesEndRecord,
+  ] = useState(0);
+
+  const [
+    salesListLoading,
+    setSalesListLoading,
+  ] = useState(false);
+
+  const [
+    salesSearchDebounced,
+    setSalesSearchDebounced,
+  ] = useState("");
 
   const billingBeforeCreditNoteRef = useRef(null);
   // Batch  State
   const [batches, setBatches] = useState([]);
   const [showBatchModal, setShowBatchModal] = useState(false);
   const [existingBatches, setExistingBatches] = useState([]);
+  const [
+    purchaseBatchSelectedIndex,
+    setPurchaseBatchSelectedIndex,
+  ] = useState(0);
+
+  /*
+   * Keeps the latest highlighted batch available
+   * inside the window keyboard event.
+   */
+  const purchaseBatchSelectedIndexRef =
+    useRef(0);
+
+  const purchaseBatchModalRef = useRef(null);
   const [theme, setTheme] = useState(() => {
     return localStorage.getItem("erp-theme") || "light";
   });
@@ -456,7 +714,278 @@ const handleReportClick = (reportName) => {
   const [editingCreditNoteId, setEditingCreditNoteId] = useState(null);
 
   const [editingCreateLoadBills, setEditingCreateLoadBills] = useState([]);
+  /* =========================================================
+   PURCHASE LIST BACKEND PAGINATION STATES
+   ========================================================= */
 
+  const createDefaultPurchaseListFilters =
+    () => ({
+      fromDate: "",
+      toDate: "",
+
+      /*
+       * Main search box.
+       */
+      search: "",
+
+      vouSer: "",
+      supplierCode: "",
+      supplierName: "",
+      company: "",
+      gdCode: "",
+      godownName: "",
+      invoiceNumber: "",
+      minAmount: "",
+      maxAmount: "",
+    });
+
+  const [
+    purchaseCurrentPage,
+    setPurchaseCurrentPage,
+  ] = useState(1);
+
+  const [
+    purchaseTotalPages,
+    setPurchaseTotalPages,
+  ] = useState(1);
+
+  const [
+    purchaseTotalRecords,
+    setPurchaseTotalRecords,
+  ] = useState(0);
+
+  const [
+    purchaseStartRecord,
+    setPurchaseStartRecord,
+  ] = useState(0);
+
+  const [
+    purchaseEndRecord,
+    setPurchaseEndRecord,
+  ] = useState(0);
+
+  const [
+    purchaseRowsPerPage,
+    setPurchaseRowsPerPage,
+  ] = useState(10);
+
+  const [
+    purchaseListLoading,
+    setPurchaseListLoading,
+  ] = useState(false);
+
+  const [
+    purchaseSearchDebounced,
+    setPurchaseSearchDebounced,
+  ] = useState("");
+
+  const [
+    purchaseAdvancedFilters,
+    setPurchaseAdvancedFilters,
+  ] = useState(
+    createDefaultPurchaseListFilters
+  );
+
+  const [
+    purchaseAppliedFilters,
+    setPurchaseAppliedFilters,
+  ] = useState(
+    createDefaultPurchaseListFilters
+  );
+
+  const [
+    purchaseFiltersVisible,
+    setPurchaseFiltersVisible,
+  ] = useState(false);
+
+
+  /* =========================================================
+   CREDIT NOTE LIST BACKEND PAGINATION STATES
+   ========================================================= */
+
+  const createDefaultCreditNoteListFilters =
+    () => ({
+      search: "",
+
+      fromDate: "",
+      toDate: "",
+
+      creditNoteSeries: "",
+
+      partyCode: "",
+      partyName: "",
+
+      company: "",
+
+      gdCode: "",
+      godownName: "",
+
+      salesmanCode: "",
+      salesmanName: "",
+
+      referenceBillSeries: "",
+      referenceBillNo: "",
+
+      status: "",
+      createdBy: "",
+
+      minAmount: "",
+      maxAmount: "",
+    });
+
+  const [
+    creditNoteCurrentPage,
+    setCreditNoteCurrentPage,
+  ] = useState(1);
+
+  const [
+    creditNoteTotalPages,
+    setCreditNoteTotalPages,
+  ] = useState(1);
+
+  const [
+    creditNoteTotalRecords,
+    setCreditNoteTotalRecords,
+  ] = useState(0);
+
+  const [
+    creditNoteStartRecord,
+    setCreditNoteStartRecord,
+  ] = useState(0);
+
+  const [
+    creditNoteEndRecord,
+    setCreditNoteEndRecord,
+  ] = useState(0);
+
+  const [
+    creditNoteRowsPerPage,
+    setCreditNoteRowsPerPage,
+  ] = useState(10);
+
+  const [
+    creditNoteListLoading,
+    setCreditNoteListLoading,
+  ] = useState(false);
+
+  const [
+    creditNoteSearchDebounced,
+    setCreditNoteSearchDebounced,
+  ] = useState("");
+
+  const [
+    creditNoteAdvancedFilters,
+    setCreditNoteAdvancedFilters,
+  ] = useState(
+    createDefaultCreditNoteListFilters
+  );
+
+  const [
+    creditNoteAppliedFilters,
+    setCreditNoteAppliedFilters,
+  ] = useState(
+    createDefaultCreditNoteListFilters
+  );
+
+  const [
+    creditNoteFiltersVisible,
+    setCreditNoteFiltersVisible,
+  ] = useState(false);
+
+
+  /* =========================================================
+   DEBIT NOTE LIST BACKEND PAGINATION STATES
+   ========================================================= */
+
+  const createDefaultDebitNoteListFilters =
+    () => ({
+      search: "",
+
+      fromDate: "",
+      toDate: "",
+
+      debitNoteSeries: "",
+
+      supplierCode: "",
+      supplierName: "",
+
+      company: "",
+
+      gdCode: "",
+      godownName: "",
+
+      salesmanCode: "",
+      salesmanName: "",
+
+      referenceBillSeries: "",
+      referenceBillNo: "",
+
+      returnType: "",
+      status: "",
+      createdBy: "",
+
+      minAmount: "",
+      maxAmount: "",
+    });
+
+  const [
+    debitNoteCurrentPage,
+    setDebitNoteCurrentPage,
+  ] = useState(1);
+
+  const [
+    debitNoteTotalPages,
+    setDebitNoteTotalPages,
+  ] = useState(1);
+
+  const [
+    debitNoteTotalRecords,
+    setDebitNoteTotalRecords,
+  ] = useState(0);
+
+  const [
+    debitNoteStartRecord,
+    setDebitNoteStartRecord,
+  ] = useState(0);
+
+  const [
+    debitNoteEndRecord,
+    setDebitNoteEndRecord,
+  ] = useState(0);
+
+  const [
+    debitNoteRowsPerPage,
+    setDebitNoteRowsPerPage,
+  ] = useState(10);
+
+  const [
+    debitNoteListLoading,
+    setDebitNoteListLoading,
+  ] = useState(false);
+
+  const [
+    debitNoteSearchDebounced,
+    setDebitNoteSearchDebounced,
+  ] = useState("");
+
+  const [
+    debitNoteAdvancedFilters,
+    setDebitNoteAdvancedFilters,
+  ] = useState(
+    createDefaultDebitNoteListFilters
+  );
+
+  const [
+    debitNoteAppliedFilters,
+    setDebitNoteAppliedFilters,
+  ] = useState(
+    createDefaultDebitNoteListFilters
+  );
+
+  const [
+    debitNoteFiltersVisible,
+    setDebitNoteFiltersVisible,
+  ] = useState(false);
   /* =========================================================
     TAX INVOICE PRINT HELPERS
     Used by Sales List and Bill Print
@@ -3077,20 +3606,20 @@ const handleReportClick = (reportName) => {
       billSeries,
       billNo,
 
-    party:
-  invoiceFormData.partyCode ||
-  invoiceFormData.party ||
-  "",
+      party:
+        invoiceFormData.partyCode ||
+        invoiceFormData.party ||
+        "",
 
-partyCode:
-  invoiceFormData.partyCode ||
-  invoiceFormData.party ||
-  "",
+      partyCode:
+        invoiceFormData.partyCode ||
+        invoiceFormData.party ||
+        "",
 
-partyName:
-  invoiceFormData.partyName ||
-  invoiceFormData.party ||
-  "",
+      partyName:
+        invoiceFormData.partyName ||
+        invoiceFormData.party ||
+        "",
 
       godown:
         invoiceFormData.godown ||
@@ -3878,11 +4407,11 @@ partyName:
     focusInvoiceProductRow(0);
   };
 
-const getFilteredFirms = () => {
-  return Array.isArray(firms)
-    ? firms
-    : [];
-};
+  const getFilteredFirms = () => {
+    return Array.isArray(firms)
+      ? firms
+      : [];
+  };
 
   const resetAndOpenFirmForm = () => {
     setEditFirmId(null);
@@ -3909,11 +4438,11 @@ const getFilteredFirms = () => {
 
     setOpenFormFor("Firm Master");
   };
-const getFilteredUsers = () => {
-  return Array.isArray(users)
-    ? users
-    : [];
-};
+  const getFilteredUsers = () => {
+    return Array.isArray(users)
+      ? users
+      : [];
+  };
 
   const resetAndOpenUserForm = () => {
     setEditUserId(null);
@@ -4140,6 +4669,186 @@ const getFilteredUsers = () => {
       setAreaOptions([]);
     }
   };
+  const loadAreaMaster = useCallback(
+    async ({
+      page = 1,
+      limit = 20,
+      search = "",
+    } = {}) => {
+      try {
+        const distributorId =
+          localStorage.getItem(
+            "distributorId"
+          );
+
+        const firmId =
+          localStorage.getItem(
+            "firmId"
+          );
+
+        if (!distributorId || !firmId) {
+          setAreaMasterRows([]);
+          setAreaTotalRecords(0);
+          setAreaTotalPages(1);
+          setAreaStartRecord(0);
+          setAreaEndRecord(0);
+          return;
+        }
+
+        setAreaMasterLoading(true);
+
+        const params =
+          new URLSearchParams({
+            distributorId,
+            firmId,
+            page: String(page),
+            limit: String(limit),
+          });
+
+        const cleanSearch =
+          String(search || "").trim();
+
+        if (cleanSearch) {
+          params.set(
+            "search",
+            cleanSearch
+          );
+        }
+
+        const response = await fetch(
+          `${API_URL}/areas/list?${params.toString()}`
+        );
+
+        const result =
+          await response.json();
+
+        if (
+          !response.ok ||
+          result.success === false
+        ) {
+          throw new Error(
+            result.message ||
+            "Failed to load Area Master"
+          );
+        }
+
+        const pagination =
+          result.pagination || {};
+
+        const currentPage = Number(
+          pagination.currentPage ||
+          pagination.page ||
+          page
+        );
+
+        const currentLimit = Number(
+          pagination.limit ||
+          limit
+        );
+
+        const rows = Array.isArray(
+          result.areas
+        )
+          ? result.areas.map(
+            (area, index) => ({
+              ...area,
+
+              id:
+                area._id ||
+                area.id,
+
+              code:
+                area.areaCode ||
+                area.code ||
+                "",
+
+              name:
+                area.areaName ||
+                area.name ||
+                "",
+
+              areaCode:
+                area.areaCode ||
+                area.code ||
+                "",
+
+              areaName:
+                area.areaName ||
+                area.name ||
+                "",
+
+              srNo:
+                (currentPage - 1) *
+                currentLimit +
+                index +
+                1,
+            })
+          )
+          : [];
+
+        setAreaMasterRows(rows);
+
+        setAreaCurrentPage(
+          currentPage
+        );
+
+        setAreaRowsPerPage(
+          currentLimit
+        );
+
+        setAreaTotalRecords(
+          Number(
+            pagination.totalRecords ||
+            0
+          )
+        );
+
+        setAreaTotalPages(
+          Math.max(
+            Number(
+              pagination.totalPages ||
+              1
+            ),
+            1
+          )
+        );
+
+        setAreaStartRecord(
+          Number(
+            pagination.startRecord ||
+            0
+          )
+        );
+
+        setAreaEndRecord(
+          Number(
+            pagination.endRecord ||
+            0
+          )
+        );
+      } catch (error) {
+        console.error(
+          "Area Master load error:",
+          error
+        );
+
+        setAreaMasterRows([]);
+        setAreaTotalRecords(0);
+        setAreaTotalPages(1);
+        setAreaStartRecord(0);
+        setAreaEndRecord(0);
+
+        alert(
+          error.message ||
+          "Unable to load Area Master."
+        );
+      } finally {
+        setAreaMasterLoading(false);
+      }
+    },
+    []
+  );
+
   const updateMappedRow = (index, field, value) => {
     setMappedRows((prev) =>
       prev.map((row, i) => (i === index ? { ...row, [field]: value } : row))
@@ -4637,12 +5346,77 @@ const getFilteredUsers = () => {
   const [batchMode, setBatchMode] = useState('new');
 
   // GoDown Master State
-  const [godowns, setGodowns] = useState([
-    { id: 1, code: 'G1', name: 'Main Godown', address: 'Main Street', location: 'Central' },
-    { id: 2, code: 'G2', name: 'Branch Godown', address: 'Branch Road', location: 'North' }
-  ]);
-  const [godownForm, setGodownForm] = useState({ code: '', name: '', address: '', location: '' });
-  const [editGodownId, setEditGodownId] = useState(null);
+
+  /*
+   * Complete Godown list.
+   *
+   * Keep this for Billing, Purchase, Reports,
+   * Credit Note, Debit Note and dropdowns.
+   */
+  const [godowns, setGodowns] =
+    useState([]);
+
+  const [godownForm, setGodownForm] =
+    useState({
+      code: "",
+      name: "",
+      address: "",
+      location: "",
+    });
+
+  const [editGodownId, setEditGodownId] =
+    useState(null);
+
+  /*
+   * Backend-paginated GoDown Master grid.
+   *
+   * These states are used only by the
+   * GoDown Master list page.
+   */
+  const [
+    godownMasterRows,
+    setGodownMasterRows,
+  ] = useState([]);
+
+  const [
+    godownCurrentPage,
+    setGodownCurrentPage,
+  ] = useState(1);
+
+  const [
+    godownRowsPerPage,
+    setGodownRowsPerPage,
+  ] = useState(20);
+
+  const [
+    godownTotalRecords,
+    setGodownTotalRecords,
+  ] = useState(0);
+
+  const [
+    godownTotalPages,
+    setGodownTotalPages,
+  ] = useState(1);
+
+  const [
+    godownStartRecord,
+    setGodownStartRecord,
+  ] = useState(0);
+
+  const [
+    godownEndRecord,
+    setGodownEndRecord,
+  ] = useState(0);
+
+  const [
+    godownMasterLoading,
+    setGodownMasterLoading,
+  ] = useState(false);
+
+  const [
+    godownBackendSearch,
+    setGodownBackendSearch,
+  ] = useState("");
 
   // Sales Invoice State
   const [invoiceFormData, setInvoiceFormData] = useState({
@@ -4971,33 +5745,33 @@ const getFilteredUsers = () => {
 
     try {
       const wasEditing =
-  Boolean(editProductId);
+        Boolean(editProductId);
 
       /*
         Refresh Product Master data so the newly created
         product becomes available immediately.
       */
       await loadProducts();
-     const refreshPage =
-  wasEditing
-    ? productCurrentPage
-    : 1;
+      const refreshPage =
+        wasEditing
+          ? productCurrentPage
+          : 1;
 
-setProductCurrentPage(
-  refreshPage
-);
+      setProductCurrentPage(
+        refreshPage
+      );
 
-await loadProductMaster({
-  page: refreshPage,
-  limit: productRowsPerPage,
-  search: productBackendSearch,
-  companyCode:
-    productCompanyFilter,
-  groupCode:
-    productGroupFilter,
-  categoryCode:
-    productCategoryFilter,
-});
+      await loadProductMaster({
+        page: refreshPage,
+        limit: productRowsPerPage,
+        search: productBackendSearch,
+        companyCode:
+          productCompanyFilter,
+        groupCode:
+          productGroupFilter,
+        categoryCode:
+          productCategoryFilter,
+      });
     } catch (error) {
       console.error(
         "Unable to refresh Purchase product list:",
@@ -5010,7 +5784,7 @@ await loadProductMaster({
         ? Number(returnContext.productRowIndex)
         : 0;
 
-        
+
 
     setEditProductId(null);
 
@@ -5203,19 +5977,19 @@ await loadProductMaster({
   const [currentDebitProductIndex, setCurrentDebitProductIndex] = useState(-1);
 
   const [filters, setFilters] = useState({
-    company: '',
-    group: '',
-    category: '',
-    product: '',
-    account: '',
-    otherAccount: '',
-    gst: '',
-    salesman: '',
-    area: '',
-    service: '',
-    godown: '',
-    firm: '',      // Add this
-    user: ''       // Add this
+    company: "",
+    group: "",
+    category: "",
+    product: "",
+    account: "",
+    otherAccount: "",
+    gst: "",
+    salesman: "",
+    area: "",
+    service: "",
+    godown: "",
+    firm: "",
+    user: "",
   });
 
   // Master data state
@@ -5224,32 +5998,32 @@ await loadProductMaster({
    COMPANY MASTER BACKEND PAGINATION
    ========================================================= */
 
-const [companyMasterRows, setCompanyMasterRows] =
-  useState([]);
+  const [companyMasterRows, setCompanyMasterRows] =
+    useState([]);
 
-const [companyCurrentPage, setCompanyCurrentPage] =
-  useState(1);
+  const [companyCurrentPage, setCompanyCurrentPage] =
+    useState(1);
 
-const [companyRowsPerPage, setCompanyRowsPerPage] =
-  useState(10);
+  const [companyRowsPerPage, setCompanyRowsPerPage] =
+    useState(10);
 
-const [companyTotalRecords, setCompanyTotalRecords] =
-  useState(0);
+  const [companyTotalRecords, setCompanyTotalRecords] =
+    useState(0);
 
-const [companyTotalPages, setCompanyTotalPages] =
-  useState(1);
+  const [companyTotalPages, setCompanyTotalPages] =
+    useState(1);
 
-const [companyStartRecord, setCompanyStartRecord] =
-  useState(0);
+  const [companyStartRecord, setCompanyStartRecord] =
+    useState(0);
 
-const [companyEndRecord, setCompanyEndRecord] =
-  useState(0);
+  const [companyEndRecord, setCompanyEndRecord] =
+    useState(0);
 
-const [companyLoading, setCompanyLoading] =
-  useState(false);
+  const [companyLoading, setCompanyLoading] =
+    useState(false);
 
-const [companyBackendSearch, setCompanyBackendSearch] =
-  useState("");
+  const [companyBackendSearch, setCompanyBackendSearch] =
+    useState("");
   const [products, setProducts] = useState([
     { id: 1, code: 'P001', name: 'Parle G Biscuit', basicUnit: 'PCS', mrp: 15, gst: 18, Rate_Per_Unit: 12, salesRate: 12 },
     { id: 2, code: 'P002', name: 'Lays Classic Salted', basicUnit: 'PCS', mrp: 20, gst: 18, Rate_Per_Unit: 18, salesRate: 18 },
@@ -5263,116 +6037,200 @@ const [companyBackendSearch, setCompanyBackendSearch] =
    Existing products state remains unchanged for billing.
    ========================================================= */
 
-const [productMasterRows, setProductMasterRows] =
-  useState([]);
+  const [productMasterRows, setProductMasterRows] =
+    useState([]);
 
-const [productCurrentPage, setProductCurrentPage] =
-  useState(1);
+  const [productCurrentPage, setProductCurrentPage] =
+    useState(1);
 
-const [productRowsPerPage, setProductRowsPerPage] =
-  useState(20);
+  const [productRowsPerPage, setProductRowsPerPage] =
+    useState(20);
 
-const [productTotalRecords, setProductTotalRecords] =
-  useState(0);
+  const [productTotalRecords, setProductTotalRecords] =
+    useState(0);
 
-const [productTotalPages, setProductTotalPages] =
-  useState(1);
+  const [productTotalPages, setProductTotalPages] =
+    useState(1);
 
-const [productStartRecord, setProductStartRecord] =
-  useState(0);
+  const [productStartRecord, setProductStartRecord] =
+    useState(0);
 
-const [productEndRecord, setProductEndRecord] =
-  useState(0);
+  const [productEndRecord, setProductEndRecord] =
+    useState(0);
 
-const [productMasterLoading, setProductMasterLoading] =
-  useState(false);
+  const [productMasterLoading, setProductMasterLoading] =
+    useState(false);
 
-const [
-  productBackendSearch,
-  setProductBackendSearch,
-] = useState("");
+  const [
+    productBackendSearch,
+    setProductBackendSearch,
+  ] = useState("");
 
-const [
-  productCompanyFilter,
-  setProductCompanyFilter,
-] = useState("");
+  const [
+    productCompanyFilter,
+    setProductCompanyFilter,
+  ] = useState("");
 
-const [
-  productGroupFilter,
-  setProductGroupFilter,
-] = useState("");
+  const [
+    productGroupFilter,
+    setProductGroupFilter,
+  ] = useState("");
 
-const [
-  productCategoryFilter,
-  setProductCategoryFilter,
-] = useState("");
+  const [
+    productCategoryFilter,
+    setProductCategoryFilter,
+  ] = useState("");
   const [groupsState, setGroupsState] = useState([]);
   /* =========================================================
    GROUP MASTER BACKEND PAGINATION
    ========================================================= */
 
-const [groupMasterRows, setGroupMasterRows] =
-  useState([]);
+  const [groupMasterRows, setGroupMasterRows] =
+    useState([]);
 
-const [groupCurrentPage, setGroupCurrentPage] =
-  useState(1);
+  const [groupCurrentPage, setGroupCurrentPage] =
+    useState(1);
 
-const [groupRowsPerPage, setGroupRowsPerPage] =
-  useState(10);
+  const [groupRowsPerPage, setGroupRowsPerPage] =
+    useState(10);
 
-const [groupTotalRecords, setGroupTotalRecords] =
-  useState(0);
+  const [groupTotalRecords, setGroupTotalRecords] =
+    useState(0);
 
-const [groupTotalPages, setGroupTotalPages] =
-  useState(1);
+  const [groupTotalPages, setGroupTotalPages] =
+    useState(1);
 
-const [groupStartRecord, setGroupStartRecord] =
-  useState(0);
+  const [groupStartRecord, setGroupStartRecord] =
+    useState(0);
 
-const [groupEndRecord, setGroupEndRecord] =
-  useState(0);
+  const [groupEndRecord, setGroupEndRecord] =
+    useState(0);
 
-const [groupLoading, setGroupLoading] =
-  useState(false);
+  const [groupLoading, setGroupLoading] =
+    useState(false);
 
-const [groupBackendSearch, setGroupBackendSearch] =
-  useState("");
+  const [groupBackendSearch, setGroupBackendSearch] =
+    useState("");
   const [categoriesState, setCategoriesState] = useState([]);
   /* =========================================================
    CATEGORY MASTER BACKEND PAGINATION
    ========================================================= */
 
-const [categoryMasterRows, setCategoryMasterRows] =
-  useState([]);
+  const [categoryMasterRows, setCategoryMasterRows] =
+    useState([]);
 
-const [categoryCurrentPage, setCategoryCurrentPage] =
-  useState(1);
+  const [categoryCurrentPage, setCategoryCurrentPage] =
+    useState(1);
 
-const [categoryRowsPerPage, setCategoryRowsPerPage] =
-  useState(10);
+  const [categoryRowsPerPage, setCategoryRowsPerPage] =
+    useState(10);
 
-const [categoryTotalRecords, setCategoryTotalRecords] =
-  useState(0);
+  const [categoryTotalRecords, setCategoryTotalRecords] =
+    useState(0);
 
-const [categoryTotalPages, setCategoryTotalPages] =
-  useState(1);
+  const [categoryTotalPages, setCategoryTotalPages] =
+    useState(1);
 
-const [categoryStartRecord, setCategoryStartRecord] =
-  useState(0);
+  const [categoryStartRecord, setCategoryStartRecord] =
+    useState(0);
 
-const [categoryEndRecord, setCategoryEndRecord] =
-  useState(0);
+  const [categoryEndRecord, setCategoryEndRecord] =
+    useState(0);
 
-const [categoryLoading, setCategoryLoading] =
-  useState(false);
+  const [categoryLoading, setCategoryLoading] =
+    useState(false);
 
-const [
-  categoryBackendSearch,
-  setCategoryBackendSearch,
-] = useState("");
+  const [
+    categoryBackendSearch,
+    setCategoryBackendSearch,
+  ] = useState("");
   const [accounts, setAccounts] = useState([]);
+  /* =========================================================
+   ACCOUNT MASTER BACKEND PAGINATION
+   Used only by Account Master List.
+   Existing accounts state remains unchanged.
+   ========================================================= */
+
+  const [accountMasterRows, setAccountMasterRows] =
+    useState([]);
+
+  const [accountCurrentPage, setAccountCurrentPage] =
+    useState(1);
+
+  const [accountRowsPerPage, setAccountRowsPerPage] =
+    useState(20);
+
+  const [accountTotalRecords, setAccountTotalRecords] =
+    useState(0);
+
+  const [accountTotalPages, setAccountTotalPages] =
+    useState(1);
+
+  const [accountStartRecord, setAccountStartRecord] =
+    useState(0);
+
+  const [accountEndRecord, setAccountEndRecord] =
+    useState(0);
+
+  const [accountLoading, setAccountLoading] =
+    useState(false);
+
+  const [
+    accountBackendSearch,
+    setAccountBackendSearch,
+  ] = useState("");
   const [otherAccounts, setOtherAccounts] = useState([]);
 
+  /* =========================================================
+     OTHER ACCOUNT MASTER BACKEND PAGINATION
+     Used only by Other Account Master list.
+     Existing otherAccounts state remains unchanged.
+     ========================================================= */
+
+  const [
+    otherAccountMasterRows,
+    setOtherAccountMasterRows,
+  ] = useState([]);
+
+  const [
+    otherAccountCurrentPage,
+    setOtherAccountCurrentPage,
+  ] = useState(1);
+
+  const [
+    otherAccountRowsPerPage,
+    setOtherAccountRowsPerPage,
+  ] = useState(20);
+
+  const [
+    otherAccountTotalRecords,
+    setOtherAccountTotalRecords,
+  ] = useState(0);
+
+  const [
+    otherAccountTotalPages,
+    setOtherAccountTotalPages,
+  ] = useState(1);
+
+  const [
+    otherAccountStartRecord,
+    setOtherAccountStartRecord,
+  ] = useState(0);
+
+  const [
+    otherAccountEndRecord,
+    setOtherAccountEndRecord,
+  ] = useState(0);
+
+  const [
+    otherAccountLoading,
+    setOtherAccountLoading,
+  ] = useState(false);
+
+  const [
+    otherAccountBackendSearch,
+    setOtherAccountBackendSearch,
+  ] = useState("");
   const [basicUnits] = useState(['PCS', 'Box', 'Inbox', 'KG', 'Litre']);
 
   // GST Master State
@@ -5383,6 +6241,58 @@ const [
     { id: 4, srNo: 4, code: '4', vat: 18.00, purchaseType: 'VAT ON PURCHASE PRICE', salesType: 'VAT ON SALES PRICE' },
     { id: 5, srNo: 5, code: '5', vat: 28.00, purchaseType: 'VAT ON PURCHASE PRICE', salesType: 'VAT ON SALES PRICE' }
   ]);
+  /* =========================================================
+   GST MASTER BACKEND PAGINATION
+   Used only by GST Master list.
+
+   Existing gstList remains unchanged because it is used
+   by Product, Sales and Purchase GST dropdowns.
+   ========================================================= */
+
+  const [
+    gstMasterRows,
+    setGstMasterRows,
+  ] = useState([]);
+
+  const [
+    gstCurrentPage,
+    setGstCurrentPage,
+  ] = useState(1);
+
+  const [
+    gstRowsPerPage,
+    setGstRowsPerPage,
+  ] = useState(10);
+
+  const [
+    gstTotalRecords,
+    setGstTotalRecords,
+  ] = useState(0);
+
+  const [
+    gstTotalPages,
+    setGstTotalPages,
+  ] = useState(1);
+
+  const [
+    gstStartRecord,
+    setGstStartRecord,
+  ] = useState(0);
+
+  const [
+    gstEndRecord,
+    setGstEndRecord,
+  ] = useState(0);
+
+  const [
+    gstMasterLoading,
+    setGstMasterLoading,
+  ] = useState(false);
+
+  const [
+    gstBackendSearch,
+    setGstBackendSearch,
+  ] = useState("");
   const gstRates = gstList.map((g) => ({
     id: g._id || g.id,
     code: g.gstCode || g.code,
@@ -5404,6 +6314,15 @@ const [
     { id: 2, code: 'S1', name: 'Salesman 1', type: 'SALESMAN', address: '', town: '', pinCode: '', state: '', country: '', phoneNo: '', mobileNo: '', emailId: '', dateOfBirth: '', qualification: '', reference: '', imeiNo: '' },
     { id: 3, code: 'H1', name: 'SALESMAN 2', type: 'SALESMAN', address: '', town: '', pinCode: '', state: '', country: '', phoneNo: '', mobileNo: '', emailId: '', dateOfBirth: '', qualification: '', reference: '', imeiNo: '' }
   ]);
+  const [salesmanMasterRows, setSalesmanMasterRows] = useState([]);
+  const [salesmanCurrentPage, setSalesmanCurrentPage] = useState(1);
+  const [salesmanRowsPerPage, setSalesmanRowsPerPage] = useState(20);
+  const [salesmanTotalRecords, setSalesmanTotalRecords] = useState(0);
+  const [salesmanTotalPages, setSalesmanTotalPages] = useState(1);
+  const [salesmanStartRecord, setSalesmanStartRecord] = useState(0);
+  const [salesmanEndRecord, setSalesmanEndRecord] = useState(0);
+  const [salesmanLoading, setSalesmanLoading] = useState(false);
+  const [salesmanBackendSearch, setSalesmanBackendSearch] = useState("");
 
   // Service Master State
   const [services, setServices] = useState([]);
@@ -5433,6 +6352,106 @@ const [
   const [areas, setAreas] = useState([]);
   const [areaForm, setAreaForm] = useState({ code: '', name: '' });
   const [editAreaId, setEditAreaId] = useState(null);
+  // Area Master State
+
+  /*
+   * Complete area list used by dropdowns, mappings,
+   * Account Master, Billing and Reports.
+   *
+   * Do not convert this state to paginated data.
+   */
+  // const [areas, setAreas] = useState([]);
+
+  // const [areaForm, setAreaForm] = useState({
+  //   code: "",
+  //   name: "",
+  // });
+
+  // const [editAreaId, setEditAreaId] =
+  //   useState(null);
+
+  /*
+   * Paginated Area Master grid states.
+   *
+   * These states are used only by the Area Master list.
+   */
+  const [areaMasterRows, setAreaMasterRows] =
+    useState([]);
+
+  const [areaCurrentPage, setAreaCurrentPage] =
+    useState(1);
+
+  const [areaRowsPerPage, setAreaRowsPerPage] =
+    useState(20);
+
+  const [areaTotalRecords, setAreaTotalRecords] =
+    useState(0);
+
+  const [areaTotalPages, setAreaTotalPages] =
+    useState(1);
+
+  const [areaStartRecord, setAreaStartRecord] =
+    useState(0);
+
+  const [areaEndRecord, setAreaEndRecord] =
+    useState(0);
+
+  const [areaMasterLoading, setAreaMasterLoading] =
+    useState(false);
+
+  const [areaBackendSearch, setAreaBackendSearch] =
+    useState("");
+
+
+  useEffect(() => {
+    const timer =
+      window.setTimeout(() => {
+        setAreaBackendSearch(
+          String(
+            filters.area || ""
+          ).trim()
+        );
+
+        /*
+         * Every new search must begin
+         * from the first backend page.
+         */
+        setAreaCurrentPage(1);
+      }, 400);
+
+    return () => {
+      window.clearTimeout(timer);
+    };
+  }, [filters.area]);
+  useEffect(() => {
+    /*
+     * Load paginated data only when the
+     * Area Master list page is visible.
+     *
+     * Do not call this API while the
+     * Add/Edit Area form is open.
+     */
+    if (
+      activeSubMenu !== "Area" ||
+      openFormFor === "Area"
+    ) {
+      return;
+    }
+
+    loadAreaMaster({
+      page: areaCurrentPage,
+      limit: areaRowsPerPage,
+      search: areaBackendSearch,
+    });
+  }, [
+    activeSubMenu,
+    openFormFor,
+    areaCurrentPage,
+    areaRowsPerPage,
+    areaBackendSearch,
+    loadAreaMaster,
+  ]);
+
 
   const [salesmanForm, setSalesmanForm] = useState({
     code: '',
@@ -7460,7 +8479,35 @@ const [
         "Settle Load and all bill changes saved successfully."
       );
 
-      await loadSettleLoadList();
+      const refreshPage =
+        editingSettleLoadId
+          ? settleLoadCurrentPage
+          : 1;
+
+      setSettleLoadCurrentPage(
+        refreshPage
+      );
+
+      await loadSettleLoadList({
+        page:
+          refreshPage,
+
+        limit:
+          settleListRowsPerPage,
+
+        filters:
+          settleLoadAppliedFilters,
+
+        search:
+          settleLoadSearchDebounced,
+      });
+
+      setShowSettleLoad(false);
+      setShowSettleLoadList(true);
+      setShowDashboard(false);
+
+      setActiveMenu("sales");
+      setActiveSubMenu("Settle Load");
     } catch (error) {
       console.error(
         "Save settle load error:",
@@ -7473,37 +8520,453 @@ const [
     }
   };
 
-  const loadSettleLoadList = async () => {
-    try {
-      const { distributorId, firmId } = getFirmSession();
+  const loadSettleLoadList =
+    useCallback(
+      async ({
+        page,
+        limit,
+        filters,
+        search,
+      } = {}) => {
+        try {
+          const {
+            distributorId,
+            firmId,
+          } = getFirmSession();
 
-      if (!distributorId || !firmId) {
-        setSettleLoadListData([]);
-        return;
-      }
+          if (
+            !distributorId ||
+            !firmId
+          ) {
+            setSettleLoadListData([]);
+            setSettleLoadTotalRecords(0);
+            setSettleLoadTotalPages(1);
+            setSettleLoadStartRecord(0);
+            setSettleLoadEndRecord(0);
+            return;
+          }
 
-      const res = await fetch(
-        `${API_URL}/settle-load/list?distributorId=${distributorId}&firmId=${firmId}`
+          const requestedPage =
+            Number(
+              page ??
+              settleLoadCurrentPage
+            ) || 1;
+
+          const requestedLimit =
+            Number(
+              limit ??
+              settleListRowsPerPage
+            ) || 10;
+
+          const activeFilters =
+            filters ||
+            settleLoadAppliedFilters ||
+            createDefaultSettleLoadFilters();
+
+          const searchText =
+            search !== undefined
+              ? String(
+                search || ""
+              ).trim()
+              : String(
+                settleLoadSearchDebounced ||
+                ""
+              ).trim();
+
+          setSettleLoadListLoading(
+            true
+          );
+
+          const query =
+            new URLSearchParams({
+              distributorId,
+              firmId,
+              page: String(
+                requestedPage
+              ),
+              limit: String(
+                requestedLimit
+              ),
+            });
+
+          const appendFilter = (
+            key,
+            value
+          ) => {
+            const cleanValue =
+              String(
+                value ?? ""
+              ).trim();
+
+            if (cleanValue) {
+              query.set(
+                key,
+                cleanValue
+              );
+            }
+          };
+
+          appendFilter(
+            "search",
+            searchText
+          );
+
+          appendFilter(
+            "fromDate",
+            activeFilters.fromDate
+          );
+
+          appendFilter(
+            "toDate",
+            activeFilters.toDate
+          );
+
+          appendFilter(
+            "settlementFromDate",
+            activeFilters.settlementFromDate
+          );
+
+          appendFilter(
+            "settlementToDate",
+            activeFilters.settlementToDate
+          );
+
+          appendFilter(
+            "loadSeries",
+            activeFilters.loadSeries
+          );
+
+          appendFilter(
+            "loadNo",
+            activeFilters.loadNo
+          );
+
+          appendFilter(
+            "status",
+            activeFilters.status
+          );
+
+          appendFilter(
+            "createdBy",
+            activeFilters.createdBy
+          );
+
+          appendFilter(
+            "minAmount",
+            activeFilters.minAmount
+          );
+
+          appendFilter(
+            "maxAmount",
+            activeFilters.maxAmount
+          );
+
+          appendFilter(
+            "minReceiptAmount",
+            activeFilters.minReceiptAmount
+          );
+
+          appendFilter(
+            "maxReceiptAmount",
+            activeFilters.maxReceiptAmount
+          );
+
+          appendFilter(
+            "minPendingAmount",
+            activeFilters.minPendingAmount
+          );
+
+          appendFilter(
+            "maxPendingAmount",
+            activeFilters.maxPendingAmount
+          );
+
+          const response =
+            await fetch(
+              `${API_URL}/settle-load/list?${query.toString()}`
+            );
+
+          const result =
+            await response.json();
+
+          if (
+            !response.ok ||
+            !result.success
+          ) {
+            throw new Error(
+              result.message ||
+              "Failed to load Settle Load list"
+            );
+          }
+
+          const pagination =
+            result.pagination || {};
+
+          const resolvedPage =
+            Number(
+              pagination.currentPage ||
+              pagination.page ||
+              requestedPage
+            ) || 1;
+
+          const resolvedLimit =
+            Number(
+              pagination.limit ||
+              requestedLimit
+            ) || 10;
+
+          const mappedRecords =
+            (
+              Array.isArray(
+                result.records
+              )
+                ? result.records
+                : []
+            ).map(
+              (
+                record,
+                index
+              ) => ({
+                ...record,
+
+                id:
+                  record._id ||
+                  record.id,
+
+                _id:
+                  record._id ||
+                  record.id,
+
+                serialNumber:
+                  (
+                    resolvedPage -
+                    1
+                  ) *
+                  resolvedLimit +
+                  index +
+                  1,
+
+                loadDate:
+                  record.loadDate ||
+                  record.LoadDate ||
+                  "",
+
+                loadSeries:
+                  record.loadSeries ||
+                  record.LoadSeries ||
+                  "",
+
+                loadNo:
+                  record.loadNo ??
+                  record.LoadNo ??
+                  "",
+
+                settlementDate:
+                  record.settlementDate ||
+                  record.SettlementDate ||
+                  "",
+
+                totalBills:
+                  Number(
+                    record.totalBills ??
+                    record.TotalBills ??
+                    0
+                  ) || 0,
+
+                totalAmount:
+                  Number(
+                    record.totalAmount ??
+                    record.TotalAmount ??
+                    0
+                  ) || 0,
+
+                totalReceiptAmount:
+                  Number(
+                    record.totalReceiptAmount ??
+                    record.TotalReceiptAmount ??
+                    0
+                  ) || 0,
+
+                totalPendingAmount:
+                  Number(
+                    record.totalPendingAmount ??
+                    record.TotalPendingAmount ??
+                    0
+                  ) || 0,
+
+                status:
+                  record.status ||
+                  record.Status ||
+                  "Settled",
+
+                narration:
+                  record.narration ||
+                  record.Narration ||
+                  "",
+
+                createdBy:
+                  record.createdBy ||
+                  record.CreatedBy ||
+                  "",
+
+                originalItem:
+                  record,
+              })
+            );
+
+          setSettleLoadListData(
+            mappedRecords
+          );
+
+          setSettleLoadCurrentPage(
+            resolvedPage
+          );
+
+          setSettleListRowsPerPage(
+            resolvedLimit
+          );
+
+          setSettleLoadTotalRecords(
+            Number(
+              pagination.totalRecords ||
+              0
+            )
+          );
+
+          setSettleLoadTotalPages(
+            Math.max(
+              Number(
+                pagination.totalPages ||
+                1
+              ),
+              1
+            )
+          );
+
+          setSettleLoadStartRecord(
+            Number(
+              pagination.startRecord ||
+              0
+            )
+          );
+
+          setSettleLoadEndRecord(
+            Number(
+              pagination.endRecord ||
+              0
+            )
+          );
+
+          setListPage(
+            (previous) => ({
+              ...previous,
+              settleLoad:
+                resolvedPage,
+            })
+          );
+        } catch (error) {
+          console.error(
+            "Load Settle Load list error:",
+            error
+          );
+
+          setSettleLoadListData([]);
+          setSettleLoadTotalRecords(0);
+          setSettleLoadTotalPages(1);
+          setSettleLoadStartRecord(0);
+          setSettleLoadEndRecord(0);
+
+          alert(
+            error.message ||
+            "Server not connected. Failed to load Settle Load list."
+          );
+        } finally {
+          setSettleLoadListLoading(
+            false
+          );
+        }
+      },
+      [
+        settleLoadCurrentPage,
+        settleListRowsPerPage,
+        settleLoadAppliedFilters,
+        settleLoadSearchDebounced,
+      ]
+    );
+
+  useEffect(() => {
+    const timer =
+      window.setTimeout(() => {
+        setSettleLoadSearchDebounced(
+          String(
+            settleLoadAppliedFilters
+              .search ||
+            ""
+          ).trim()
+        );
+      }, 400);
+
+    return () => {
+      window.clearTimeout(
+        timer
       );
+    };
+  }, [
+    settleLoadAppliedFilters.search,
+  ]);
+  useEffect(() => {
+    const isSettleLoadScreen =
+      showSettleLoadList &&
+      String(
+        activeSubMenu || ""
+      )
+        .trim()
+        .toLowerCase() ===
+      "settle load";
 
-      const result = await res.json();
-
-      if (!res.ok || !result.success) {
-        alert(result.message || "Failed to load settle load list");
-        return;
-      }
-
-      setSettleLoadListData(result.records || []);
-    } catch (error) {
-      console.error("Load settle load list error:", error);
-      alert("Server not connected. Failed to load settle load list.");
+    if (!isSettleLoadScreen) {
+      return;
     }
-  };
 
-  const openSettleLoadList = async () => {
-    setShowSettleLoadList(true);
+    loadSettleLoadList({
+      page:
+        settleLoadCurrentPage,
+
+      limit:
+        settleListRowsPerPage,
+
+      filters:
+        settleLoadAppliedFilters,
+
+      search:
+        settleLoadSearchDebounced,
+    });
+  }, [
+    showSettleLoadList,
+    activeSubMenu,
+    settleLoadCurrentPage,
+    settleListRowsPerPage,
+    settleLoadAppliedFilters,
+    settleLoadSearchDebounced,
+    loadSettleLoadList,
+  ]);
+
+  const openSettleLoadList = () => {
+    setOpenFormFor(null);
+
+    setShowDashboard(false);
+
+    setShowSalesList(false);
+    setShowPurchaseList(false);
+    setShowCreditNoteList(false);
+    setShowDebitNoteList(false);
+    setShowCreateLoadList(false);
+
     setShowSettleLoad(false);
-    await loadSettleLoadList();
+    setShowSettleLoadList(true);
+
+    setActiveMenu("sales");
+    setActiveSubMenu("Settle Load");
   };
 
   const editSettleLoadRecord = async (recordId) => {
@@ -7678,254 +9141,254 @@ const [
 
   const [firms, setFirms] = useState([]);
 
-/* =========================================================
-   FIRM MASTER BACKEND PAGINATION
-   ========================================================= */
+  /* =========================================================
+     FIRM MASTER BACKEND PAGINATION
+     ========================================================= */
 
-const [firmCurrentPage, setFirmCurrentPage] =
-  useState(1);
+  const [firmCurrentPage, setFirmCurrentPage] =
+    useState(1);
 
-const [firmRowsPerPage, setFirmRowsPerPage] =
-  useState(10);
+  const [firmRowsPerPage, setFirmRowsPerPage] =
+    useState(10);
 
-const [firmTotalRecords, setFirmTotalRecords] =
-  useState(0);
+  const [firmTotalRecords, setFirmTotalRecords] =
+    useState(0);
 
-const [firmTotalPages, setFirmTotalPages] =
-  useState(1);
+  const [firmTotalPages, setFirmTotalPages] =
+    useState(1);
 
-const [firmStartRecord, setFirmStartRecord] =
-  useState(0);
+  const [firmStartRecord, setFirmStartRecord] =
+    useState(0);
 
-const [firmEndRecord, setFirmEndRecord] =
-  useState(0);
+  const [firmEndRecord, setFirmEndRecord] =
+    useState(0);
 
-const [firmLoading, setFirmLoading] =
-  useState(false);
+  const [firmLoading, setFirmLoading] =
+    useState(false);
 
-/*
- * This separate value is used for debounced
- * backend search.
- */
-const [firmBackendSearch, setFirmBackendSearch] =
-  useState("");
+  /*
+   * This separate value is used for debounced
+   * backend search.
+   */
+  const [firmBackendSearch, setFirmBackendSearch] =
+    useState("");
 
-const [users, setUsers] = useState([
-  {
-    userName: "ADMIN",
-    password: "admin123",
-  },
-]);
-/* =========================================================
-   USER MASTER BACKEND PAGINATION
-   ========================================================= */
+  const [users, setUsers] = useState([
+    {
+      userName: "ADMIN",
+      password: "admin123",
+    },
+  ]);
+  /* =========================================================
+     USER MASTER BACKEND PAGINATION
+     ========================================================= */
 
-const [userCurrentPage, setUserCurrentPage] =
-  useState(1);
+  const [userCurrentPage, setUserCurrentPage] =
+    useState(1);
 
-const [userRowsPerPage, setUserRowsPerPage] =
-  useState(10);
+  const [userRowsPerPage, setUserRowsPerPage] =
+    useState(10);
 
-const [userTotalRecords, setUserTotalRecords] =
-  useState(0);
+  const [userTotalRecords, setUserTotalRecords] =
+    useState(0);
 
-const [userTotalPages, setUserTotalPages] =
-  useState(1);
+  const [userTotalPages, setUserTotalPages] =
+    useState(1);
 
-const [userStartRecord, setUserStartRecord] =
-  useState(0);
+  const [userStartRecord, setUserStartRecord] =
+    useState(0);
 
-const [userEndRecord, setUserEndRecord] =
-  useState(0);
+  const [userEndRecord, setUserEndRecord] =
+    useState(0);
 
-const [userLoading, setUserLoading] =
-  useState(false);
+  const [userLoading, setUserLoading] =
+    useState(false);
 
-const [userBackendSearch, setUserBackendSearch] =
-  useState("");
+  const [userBackendSearch, setUserBackendSearch] =
+    useState("");
 
-const [currentUser, setCurrentUser] =
-  useState("ADMIN");
+  const [currentUser, setCurrentUser] =
+    useState("ADMIN");
 
-const loadFirms = useCallback(
-  async ({
-    page = firmCurrentPage,
-    limit = firmRowsPerPage,
-    search = firmBackendSearch,
-  } = {}) => {
-    try {
-      const distributorId =
-        localStorage.getItem("distributorId");
+  const loadFirms = useCallback(
+    async ({
+      page = firmCurrentPage,
+      limit = firmRowsPerPage,
+      search = firmBackendSearch,
+    } = {}) => {
+      try {
+        const distributorId =
+          localStorage.getItem("distributorId");
 
-      if (!distributorId) {
+        if (!distributorId) {
+          setFirms([]);
+          setFirmTotalRecords(0);
+          setFirmTotalPages(1);
+          setFirmStartRecord(0);
+          setFirmEndRecord(0);
+          return;
+        }
+
+        setFirmLoading(true);
+
+        const query = new URLSearchParams({
+          distributorId,
+          page: String(page),
+          limit: String(limit),
+        });
+
+        const cleanSearch = String(
+          search || ""
+        ).trim();
+
+        if (cleanSearch) {
+          query.set("search", cleanSearch);
+        }
+
+        const response = await fetch(
+          `${API_URL}/firms?${query.toString()}`
+        );
+
+        const result = await response.json();
+
+        if (!response.ok || result.success === false) {
+          throw new Error(
+            result.message ||
+            "Failed to load firms"
+          );
+        }
+
+        const pagination =
+          result.pagination || {};
+
+        const returnedPage = Number(
+          pagination.currentPage ||
+          pagination.page ||
+          page ||
+          1
+        );
+
+        setFirms(
+          Array.isArray(result.firms)
+            ? result.firms
+            : []
+        );
+
+        setFirmCurrentPage(returnedPage);
+
+        setFirmRowsPerPage(
+          Number(
+            pagination.limit ||
+            limit ||
+            10
+          )
+        );
+
+        setFirmTotalRecords(
+          Number(
+            pagination.totalRecords ||
+            0
+          )
+        );
+
+        setFirmTotalPages(
+          Math.max(
+            Number(
+              pagination.totalPages ||
+              1
+            ),
+            1
+          )
+        );
+
+        setFirmStartRecord(
+          Number(
+            pagination.startRecord ||
+            0
+          )
+        );
+
+        setFirmEndRecord(
+          Number(
+            pagination.endRecord ||
+            0
+          )
+        );
+      } catch (error) {
+        console.error(
+          "Firm Master load error:",
+          error
+        );
+
         setFirms([]);
         setFirmTotalRecords(0);
         setFirmTotalPages(1);
         setFirmStartRecord(0);
         setFirmEndRecord(0);
-        return;
+
+        alert(
+          error.message ||
+          "Unable to load firms."
+        );
+      } finally {
+        setFirmLoading(false);
       }
+    },
+    [
+      firmCurrentPage,
+      firmRowsPerPage,
+      firmBackendSearch,
+    ]
+  );
 
-      setFirmLoading(true);
-
-      const query = new URLSearchParams({
-        distributorId,
-        page: String(page),
-        limit: String(limit),
-      });
-
-      const cleanSearch = String(
-        search || ""
+  /*
+   * Wait briefly after typing before requesting
+   * Firm Master data from the backend.
+   */
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      const searchText = String(
+        filters.firm || ""
       ).trim();
 
-      if (cleanSearch) {
-        query.set("search", cleanSearch);
-      }
+      setFirmBackendSearch(searchText);
 
-      const response = await fetch(
-        `${API_URL}/firms?${query.toString()}`
-      );
+      /*
+       * Every new search must begin from page 1.
+       */
+      setFirmCurrentPage(1);
+    }, 400);
 
-      const result = await response.json();
+    return () => {
+      window.clearTimeout(timer);
+    };
+  }, [filters.firm]);
 
-      if (!response.ok || result.success === false) {
-        throw new Error(
-          result.message ||
-          "Failed to load firms"
-        );
-      }
-
-      const pagination =
-        result.pagination || {};
-
-      const returnedPage = Number(
-        pagination.currentPage ||
-        pagination.page ||
-        page ||
-        1
-      );
-
-      setFirms(
-        Array.isArray(result.firms)
-          ? result.firms
-          : []
-      );
-
-      setFirmCurrentPage(returnedPage);
-
-      setFirmRowsPerPage(
-        Number(
-          pagination.limit ||
-          limit ||
-          10
-        )
-      );
-
-      setFirmTotalRecords(
-        Number(
-          pagination.totalRecords ||
-          0
-        )
-      );
-
-      setFirmTotalPages(
-        Math.max(
-          Number(
-            pagination.totalPages ||
-            1
-          ),
-          1
-        )
-      );
-
-      setFirmStartRecord(
-        Number(
-          pagination.startRecord ||
-          0
-        )
-      );
-
-      setFirmEndRecord(
-        Number(
-          pagination.endRecord ||
-          0
-        )
-      );
-    } catch (error) {
-      console.error(
-        "Firm Master load error:",
-        error
-      );
-
-      setFirms([]);
-      setFirmTotalRecords(0);
-      setFirmTotalPages(1);
-      setFirmStartRecord(0);
-      setFirmEndRecord(0);
-
-      alert(
-        error.message ||
-        "Unable to load firms."
-      );
-    } finally {
-      setFirmLoading(false);
+  /*
+   * Load Firm Master whenever page, page size,
+   * or debounced search changes.
+   */
+  useEffect(() => {
+    if (
+      activeSubMenu !== "Firm Master" ||
+      openFormFor === "Firm Master"
+    ) {
+      return;
     }
-  },
-  [
+
+    loadFirms({
+      page: firmCurrentPage,
+      limit: firmRowsPerPage,
+      search: firmBackendSearch,
+    });
+  }, [
+    activeSubMenu,
+    openFormFor,
     firmCurrentPage,
     firmRowsPerPage,
     firmBackendSearch,
-  ]
-);
-
-/*
- * Wait briefly after typing before requesting
- * Firm Master data from the backend.
- */
-useEffect(() => {
-  const timer = window.setTimeout(() => {
-    const searchText = String(
-      filters.firm || ""
-    ).trim();
-
-    setFirmBackendSearch(searchText);
-
-    /*
-     * Every new search must begin from page 1.
-     */
-    setFirmCurrentPage(1);
-  }, 400);
-
-  return () => {
-    window.clearTimeout(timer);
-  };
-}, [filters.firm]);
-
-/*
- * Load Firm Master whenever page, page size,
- * or debounced search changes.
- */
-useEffect(() => {
-  if (
-    activeSubMenu !== "Firm Master" ||
-    openFormFor === "Firm Master"
-  ) {
-    return;
-  }
-
-  loadFirms({
-    page: firmCurrentPage,
-    limit: firmRowsPerPage,
-    search: firmBackendSearch,
-  });
-}, [
-  activeSubMenu,
-  openFormFor,
-  firmCurrentPage,
-  firmRowsPerPage,
-  firmBackendSearch,
-  loadFirms,
-]);
+    loadFirms,
+  ]);
 
   const getFirmSession = () => ({
     distributorId: localStorage.getItem("distributorId"),
@@ -8047,10 +9510,10 @@ useEffect(() => {
 
     return { valid: true, message: '' };
   };
-  
+
 
   useEffect(() => {
-    
+
     loadCompanies();
     loadGroups();
     loadCategories();
@@ -8110,6 +9573,7 @@ useEffect(() => {
   }, []);
   // Filter for Customer Bank Master
   const [customerBankFilter, setCustomerBankFilter] = useState('');
+
   // Form states
   const [companyForm, setCompanyForm] = useState({ code: '', name: '', address: '', branchAddress: '' });
 
@@ -8406,120 +9870,120 @@ useEffect(() => {
   // Group/Category forms
   const [groupForm, setGroupForm] = useState({ code: '', name: '' });
   const [categoryForm, setCategoryForm] = useState({ code: '', name: '' });
-    const reportMenuItems = {
-  Sales: [
-    "Party Wise Sales Report",
-    "All Party Wise Sales Report",
-    "Product Wise Sales Report",
-    "All Product Wise Sales Report",
-  ],
+  const reportMenuItems = {
+    Sales: [
+      "Party Wise Sales Report",
+      "All Party Wise Sales Report",
+      "Product Wise Sales Report",
+      "All Product Wise Sales Report",
+    ],
 
-  Purchase: [
-    "Company Wise Purchase Report",
-  ],
+    Purchase: [
+      "Company Wise Purchase Report",
+    ],
 
-  Stock: [
-    "Current Stock Report",
-    "As On Date Stock Report",
-    "Damage Stock Report",
-    "Product Ledger",
-  ],
+    Stock: [
+      "Current Stock Report",
+      "As On Date Stock Report",
+      "Damage Stock Report",
+      "Product Ledger",
+    ],
 
-  "GST Report": [],
-};
- const menuItems = {
-  dashboard: {
-    title: "Dashboard",
-    icon: "⚛️",
-    items: ["Firm Master", "User Master"]
-  },
+    "GST Report": [],
+  };
+  const menuItems = {
+    dashboard: {
+      title: "Dashboard",
+      icon: "⚛️",
+      items: ["Firm Master", "User Master"]
+    },
 
-  master: {
-    title: "Master",
-    icon: "📁",
-    items: [
-      "Company Master",
-      "Group Master",
-      "Category Master",
-      "Product",
-      "Account",
-      "Other Account",
-      "GST Master",
-      "Salesman",
-      "Area",
-      "Service",
-      "GoDown Master",
-      "Scheme",
-      "Customer Bank Master"
-    ]
-  },
+    master: {
+      title: "Master",
+      icon: "📁",
+      items: [
+        "Company Master",
+        "Group Master",
+        "Category Master",
+        "Product",
+        "Account",
+        "Other Account",
+        "GST Master",
+        "Salesman",
+        "Area",
+        "Service",
+        "GoDown Master",
+        "Scheme",
+        "Customer Bank Master"
+      ]
+    },
 
-  mapping: {
-    title: "Mapping",
-    icon: "🔗",
-    items: ["Salesman To Area", "Area To Party"]
-  },
+    mapping: {
+      title: "Mapping",
+      icon: "🔗",
+      items: ["Salesman To Area", "Area To Party"]
+    },
 
-  sales: {
-    title: "Sales",
-    icon: "📊",
-    items: [
-      "Billing",
-      "Quotation",
-      "Create Load",
-      "Print Load",
-      "Settle Load",
-      "Bill Print",
-      "Load Transfer"
-    ]
-  },
+    sales: {
+      title: "Sales",
+      icon: "📊",
+      items: [
+        "Billing",
+        "Quotation",
+        "Create Load",
+        "Print Load",
+        "Settle Load",
+        "Bill Print",
+        "Load Transfer"
+      ]
+    },
 
-  vouchers: {
-    title: "Vouchers",
-    icon: "📄",
-    items: ["Purchase", "Credit Note", "Debit Note"]
-  },
+    vouchers: {
+      title: "Vouchers",
+      icon: "📄",
+      items: ["Purchase", "Credit Note", "Debit Note"]
+    },
 
-  transactions: {
-    title: "Transactions",
-    icon: "💳",
-    items: [
-      "Receipt",
-      "Cheque Bounce",
-      "PDC Docket",
-      "Journal Voucher",
-      "Contra",
-      "Payment",
-      "Collection Voucher"
-    ]
-  },
+    transactions: {
+      title: "Transactions",
+      icon: "💳",
+      items: [
+        "Receipt",
+        "Cheque Bounce",
+        "PDC Docket",
+        "Journal Voucher",
+        "Contra",
+        "Payment",
+        "Collection Voucher"
+      ]
+    },
 
-  reports: {
-    title: "Reports",
-    icon: "📈",
-    items: [
-      "Sales",
-      "Purchase",
-      "Stock",
-      "GST Report"
-    ]
-  },
+    reports: {
+      title: "Reports",
+      icon: "📈",
+      items: [
+        "Sales",
+        "Purchase",
+        "Stock",
+        "GST Report"
+      ]
+    },
 
-  tools: {
-    title: "Tools",
-    icon: "⚙️",
-    items: [
-      "General Setup",
-      "Security Setup"
-    ]
-  },
+    tools: {
+      title: "Tools",
+      icon: "⚙️",
+      items: [
+        "General Setup",
+        "Security Setup"
+      ]
+    },
 
-  logout: {
-    title: "Logout",
-    icon: "🚪",
-    items: []
-  }
-};
+    logout: {
+      title: "Logout",
+      icon: "🚪",
+      items: []
+    }
+  };
   const handleGodownInput = (e) => {
     const { name, value } = e.target;
     setGodownForm({ ...godownForm, [name]: regexInputValue(name, value) });
@@ -10410,17 +11874,17 @@ useEffect(() => {
  * After adding a new firm, show page 1.
  * After editing, keep the current page.
  */
-const refreshPage = editFirmId
-  ? firmCurrentPage
-  : 1;
+      const refreshPage = editFirmId
+        ? firmCurrentPage
+        : 1;
 
-setFirmCurrentPage(refreshPage);
+      setFirmCurrentPage(refreshPage);
 
-await loadFirms({
-  page: refreshPage,
-  limit: firmRowsPerPage,
-  search: firmBackendSearch,
-});
+      await loadFirms({
+        page: refreshPage,
+        limit: firmRowsPerPage,
+        search: firmBackendSearch,
+      });
 
       // ✅ RESET FORM FIELDS
       resetFirmForm();
@@ -10513,19 +11977,19 @@ await loadFirms({
  * When deleting the only row on a page,
  * return to the previous valid page.
  */
-const pageAfterDelete =
-  firms.length === 1 &&
-  firmCurrentPage > 1
-    ? firmCurrentPage - 1
-    : firmCurrentPage;
+      const pageAfterDelete =
+        firms.length === 1 &&
+          firmCurrentPage > 1
+          ? firmCurrentPage - 1
+          : firmCurrentPage;
 
-setFirmCurrentPage(pageAfterDelete);
+      setFirmCurrentPage(pageAfterDelete);
 
-await loadFirms({
-  page: pageAfterDelete,
-  limit: firmRowsPerPage,
-  search: firmBackendSearch,
-});
+      await loadFirms({
+        page: pageAfterDelete,
+        limit: firmRowsPerPage,
+        search: firmBackendSearch,
+      });
       alert("Firm deleted successfully!");
     } catch (error) {
       console.error(error);
@@ -10536,180 +12000,180 @@ await loadFirms({
   const handleUserInput = (e) => {
     setUserData({ ...userData, [e.target.name]: e.target.value });
   };
-const loadUsers = useCallback(
-  async ({
-    page = userCurrentPage,
-    limit = userRowsPerPage,
-    search = userBackendSearch,
-  } = {}) => {
-    try {
-      const distributorId =
-        localStorage.getItem("distributorId");
+  const loadUsers = useCallback(
+    async ({
+      page = userCurrentPage,
+      limit = userRowsPerPage,
+      search = userBackendSearch,
+    } = {}) => {
+      try {
+        const distributorId =
+          localStorage.getItem("distributorId");
 
-      const firmId =
-        localStorage.getItem("firmId");
+        const firmId =
+          localStorage.getItem("firmId");
 
-      if (!distributorId || !firmId) {
+        if (!distributorId || !firmId) {
+          setUsers([]);
+          setUserTotalRecords(0);
+          setUserTotalPages(1);
+          setUserStartRecord(0);
+          setUserEndRecord(0);
+          return;
+        }
+
+        setUserLoading(true);
+
+        const query = new URLSearchParams({
+          distributorId,
+          firmId,
+          page: String(page),
+          limit: String(limit),
+        });
+
+        const cleanSearch = String(
+          search || ""
+        ).trim();
+
+        if (cleanSearch) {
+          query.set("search", cleanSearch);
+        }
+
+        const response = await fetch(
+          `${API_URL}/users?${query.toString()}`
+        );
+
+        const result = await response.json();
+
+        if (
+          !response.ok ||
+          result.success === false
+        ) {
+          throw new Error(
+            result.message ||
+            "Failed to load users"
+          );
+        }
+
+        const pagination =
+          result.pagination || {};
+
+        const returnedPage = Number(
+          pagination.currentPage ||
+          pagination.page ||
+          page ||
+          1
+        );
+
+        setUsers(
+          Array.isArray(result.users)
+            ? result.users
+            : []
+        );
+
+        setUserCurrentPage(returnedPage);
+
+        setUserRowsPerPage(
+          Number(
+            pagination.limit ||
+            limit ||
+            10
+          )
+        );
+
+        setUserTotalRecords(
+          Number(
+            pagination.totalRecords ||
+            0
+          )
+        );
+
+        setUserTotalPages(
+          Math.max(
+            Number(
+              pagination.totalPages ||
+              1
+            ),
+            1
+          )
+        );
+
+        setUserStartRecord(
+          Number(
+            pagination.startRecord ||
+            0
+          )
+        );
+
+        setUserEndRecord(
+          Number(
+            pagination.endRecord ||
+            0
+          )
+        );
+      } catch (error) {
+        console.error(
+          "User Master load error:",
+          error
+        );
+
         setUsers([]);
         setUserTotalRecords(0);
         setUserTotalPages(1);
         setUserStartRecord(0);
         setUserEndRecord(0);
-        return;
+
+        alert(
+          error.message ||
+          "Unable to load users."
+        );
+      } finally {
+        setUserLoading(false);
       }
+    },
+    [
+      userCurrentPage,
+      userRowsPerPage,
+      userBackendSearch,
+    ]
+  );
 
-      setUserLoading(true);
-
-      const query = new URLSearchParams({
-        distributorId,
-        firmId,
-        page: String(page),
-        limit: String(limit),
-      });
-
-      const cleanSearch = String(
-        search || ""
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      const searchText = String(
+        filters.user || ""
       ).trim();
 
-      if (cleanSearch) {
-        query.set("search", cleanSearch);
-      }
+      setUserBackendSearch(searchText);
+      setUserCurrentPage(1);
+    }, 400);
 
-      const response = await fetch(
-        `${API_URL}/users?${query.toString()}`
-      );
+    return () => {
+      window.clearTimeout(timer);
+    };
+  }, [filters.user]);
 
-      const result = await response.json();
-
-      if (
-        !response.ok ||
-        result.success === false
-      ) {
-        throw new Error(
-          result.message ||
-          "Failed to load users"
-        );
-      }
-
-      const pagination =
-        result.pagination || {};
-
-      const returnedPage = Number(
-        pagination.currentPage ||
-        pagination.page ||
-        page ||
-        1
-      );
-
-      setUsers(
-        Array.isArray(result.users)
-          ? result.users
-          : []
-      );
-
-      setUserCurrentPage(returnedPage);
-
-      setUserRowsPerPage(
-        Number(
-          pagination.limit ||
-          limit ||
-          10
-        )
-      );
-
-      setUserTotalRecords(
-        Number(
-          pagination.totalRecords ||
-          0
-        )
-      );
-
-      setUserTotalPages(
-        Math.max(
-          Number(
-            pagination.totalPages ||
-            1
-          ),
-          1
-        )
-      );
-
-      setUserStartRecord(
-        Number(
-          pagination.startRecord ||
-          0
-        )
-      );
-
-      setUserEndRecord(
-        Number(
-          pagination.endRecord ||
-          0
-        )
-      );
-    } catch (error) {
-      console.error(
-        "User Master load error:",
-        error
-      );
-
-      setUsers([]);
-      setUserTotalRecords(0);
-      setUserTotalPages(1);
-      setUserStartRecord(0);
-      setUserEndRecord(0);
-
-      alert(
-        error.message ||
-        "Unable to load users."
-      );
-    } finally {
-      setUserLoading(false);
+  useEffect(() => {
+    if (
+      activeSubMenu !== "User Master" ||
+      openFormFor === "User Master"
+    ) {
+      return;
     }
-  },
-  [
+
+    loadUsers({
+      page: userCurrentPage,
+      limit: userRowsPerPage,
+      search: userBackendSearch,
+    });
+  }, [
+    activeSubMenu,
+    openFormFor,
     userCurrentPage,
     userRowsPerPage,
     userBackendSearch,
-  ]
-);
-
-useEffect(() => {
-  const timer = window.setTimeout(() => {
-    const searchText = String(
-      filters.user || ""
-    ).trim();
-
-    setUserBackendSearch(searchText);
-    setUserCurrentPage(1);
-  }, 400);
-
-  return () => {
-    window.clearTimeout(timer);
-  };
-}, [filters.user]);
-
-useEffect(() => {
-  if (
-    activeSubMenu !== "User Master" ||
-    openFormFor === "User Master"
-  ) {
-    return;
-  }
-
-  loadUsers({
-    page: userCurrentPage,
-    limit: userRowsPerPage,
-    search: userBackendSearch,
-  });
-}, [
-  activeSubMenu,
-  openFormFor,
-  userCurrentPage,
-  userRowsPerPage,
-  userBackendSearch,
-  loadUsers,
-]);
+    loadUsers,
+  ]);
   const loadCompanies = async () => {
     try {
       const distributorId = localStorage.getItem("distributorId");
@@ -10743,67 +12207,67 @@ useEffect(() => {
     }
   };
   const loadCompanyMaster = useCallback(
-  async ({
-    page = companyCurrentPage,
-    limit = companyRowsPerPage,
-    search = companyBackendSearch,
-  } = {}) => {
-    try {
-      const distributorId =
-        localStorage.getItem("distributorId");
+    async ({
+      page = companyCurrentPage,
+      limit = companyRowsPerPage,
+      search = companyBackendSearch,
+    } = {}) => {
+      try {
+        const distributorId =
+          localStorage.getItem("distributorId");
 
-      const firmId =
-        localStorage.getItem("firmId");
+        const firmId =
+          localStorage.getItem("firmId");
 
-      if (!distributorId || !firmId) {
-        setCompanyMasterRows([]);
-        setCompanyTotalRecords(0);
-        setCompanyTotalPages(1);
-        setCompanyStartRecord(0);
-        setCompanyEndRecord(0);
-        return;
-      }
+        if (!distributorId || !firmId) {
+          setCompanyMasterRows([]);
+          setCompanyTotalRecords(0);
+          setCompanyTotalPages(1);
+          setCompanyStartRecord(0);
+          setCompanyEndRecord(0);
+          return;
+        }
 
-      setCompanyLoading(true);
+        setCompanyLoading(true);
 
-      const query = new URLSearchParams({
-        distributorId,
-        firmId,
-        page: String(page),
-        limit: String(limit),
-      });
+        const query = new URLSearchParams({
+          distributorId,
+          firmId,
+          page: String(page),
+          limit: String(limit),
+        });
 
-      const cleanSearch = String(
-        search || ""
-      ).trim();
+        const cleanSearch = String(
+          search || ""
+        ).trim();
 
-      if (cleanSearch) {
-        query.set("search", cleanSearch);
-      }
+        if (cleanSearch) {
+          query.set("search", cleanSearch);
+        }
 
-      const response = await fetch(
-        `${API_URL}/companies/list?${query.toString()}`
-      );
-
-      const result = await response.json();
-
-      if (
-        !response.ok ||
-        result.success === false
-      ) {
-        throw new Error(
-          result.message ||
-          "Failed to load company list"
+        const response = await fetch(
+          `${API_URL}/companies/list?${query.toString()}`
         );
-      }
 
-      const pagination =
-        result.pagination || {};
+        const result = await response.json();
 
-      const rows = Array.isArray(
-        result.companies
-      )
-        ? result.companies.map(
+        if (
+          !response.ok ||
+          result.success === false
+        ) {
+          throw new Error(
+            result.message ||
+            "Failed to load company list"
+          );
+        }
+
+        const pagination =
+          result.pagination || {};
+
+        const rows = Array.isArray(
+          result.companies
+        )
+          ? result.companies.map(
             (company) => ({
               id: company._id,
               _id: company._id,
@@ -10836,118 +12300,118 @@ useEffect(() => {
                 company.isActive !== false,
             })
           )
-        : [];
+          : [];
 
-      setCompanyMasterRows(rows);
+        setCompanyMasterRows(rows);
 
-      setCompanyCurrentPage(
-        Number(
-          pagination.currentPage ||
-          pagination.page ||
-          page ||
-          1
-        )
-      );
-
-      setCompanyRowsPerPage(
-        Number(
-          pagination.limit ||
-          limit ||
-          10
-        )
-      );
-
-      setCompanyTotalRecords(
-        Number(
-          pagination.totalRecords ||
-          0
-        )
-      );
-
-      setCompanyTotalPages(
-        Math.max(
+        setCompanyCurrentPage(
           Number(
-            pagination.totalPages ||
+            pagination.currentPage ||
+            pagination.page ||
+            page ||
             1
-          ),
-          1
-        )
-      );
+          )
+        );
 
-      setCompanyStartRecord(
-        Number(
-          pagination.startRecord ||
-          0
-        )
-      );
+        setCompanyRowsPerPage(
+          Number(
+            pagination.limit ||
+            limit ||
+            10
+          )
+        );
 
-      setCompanyEndRecord(
-        Number(
-          pagination.endRecord ||
-          0
-        )
-      );
-    } catch (error) {
-      console.error(
-        "Company Master load error:",
-        error
-      );
+        setCompanyTotalRecords(
+          Number(
+            pagination.totalRecords ||
+            0
+          )
+        );
 
-      setCompanyMasterRows([]);
-      setCompanyTotalRecords(0);
-      setCompanyTotalPages(1);
-      setCompanyStartRecord(0);
-      setCompanyEndRecord(0);
+        setCompanyTotalPages(
+          Math.max(
+            Number(
+              pagination.totalPages ||
+              1
+            ),
+            1
+          )
+        );
 
-      alert(
-        error.message ||
-        "Unable to load companies."
-      );
-    } finally {
-      setCompanyLoading(false);
+        setCompanyStartRecord(
+          Number(
+            pagination.startRecord ||
+            0
+          )
+        );
+
+        setCompanyEndRecord(
+          Number(
+            pagination.endRecord ||
+            0
+          )
+        );
+      } catch (error) {
+        console.error(
+          "Company Master load error:",
+          error
+        );
+
+        setCompanyMasterRows([]);
+        setCompanyTotalRecords(0);
+        setCompanyTotalPages(1);
+        setCompanyStartRecord(0);
+        setCompanyEndRecord(0);
+
+        alert(
+          error.message ||
+          "Unable to load companies."
+        );
+      } finally {
+        setCompanyLoading(false);
+      }
+    },
+    [
+      companyCurrentPage,
+      companyRowsPerPage,
+      companyBackendSearch,
+    ]
+  );
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      const searchText = String(
+        filters.company || ""
+      ).trim();
+
+      setCompanyBackendSearch(searchText);
+      setCompanyCurrentPage(1);
+    }, 400);
+
+    return () => {
+      window.clearTimeout(timer);
+    };
+  }, [filters.company]);
+  useEffect(() => {
+    if (
+      activeSubMenu !== "Company Master" ||
+      openFormFor === "Company Master"
+    ) {
+      return;
     }
-  },
-  [
+
+    loadCompanyMaster({
+      page: companyCurrentPage,
+      limit: companyRowsPerPage,
+      search: companyBackendSearch,
+    });
+  }, [
+    activeSubMenu,
+    openFormFor,
     companyCurrentPage,
     companyRowsPerPage,
     companyBackendSearch,
-  ]
-);
-useEffect(() => {
-  const timer = window.setTimeout(() => {
-    const searchText = String(
-      filters.company || ""
-    ).trim();
-
-    setCompanyBackendSearch(searchText);
-    setCompanyCurrentPage(1);
-  }, 400);
-
-  return () => {
-    window.clearTimeout(timer);
-  };
-}, [filters.company]);
-useEffect(() => {
-  if (
-    activeSubMenu !== "Company Master" ||
-    openFormFor === "Company Master"
-  ) {
-    return;
-  }
-
-  loadCompanyMaster({
-    page: companyCurrentPage,
-    limit: companyRowsPerPage,
-    search: companyBackendSearch,
-  });
-}, [
-  activeSubMenu,
-  openFormFor,
-  companyCurrentPage,
-  companyRowsPerPage,
-  companyBackendSearch,
-  loadCompanyMaster,
-]);
+    loadCompanyMaster,
+  ]);
   const loadGroups = async () => {
     try {
       const distributorId = localStorage.getItem("distributorId");
@@ -10982,67 +12446,67 @@ useEffect(() => {
   };
 
   const loadGroupMaster = useCallback(
-  async ({
-    page = groupCurrentPage,
-    limit = groupRowsPerPage,
-    search = groupBackendSearch,
-  } = {}) => {
-    try {
-      const distributorId =
-        localStorage.getItem("distributorId");
+    async ({
+      page = groupCurrentPage,
+      limit = groupRowsPerPage,
+      search = groupBackendSearch,
+    } = {}) => {
+      try {
+        const distributorId =
+          localStorage.getItem("distributorId");
 
-      const firmId =
-        localStorage.getItem("firmId");
+        const firmId =
+          localStorage.getItem("firmId");
 
-      if (!distributorId || !firmId) {
-        setGroupMasterRows([]);
-        setGroupTotalRecords(0);
-        setGroupTotalPages(1);
-        setGroupStartRecord(0);
-        setGroupEndRecord(0);
-        return;
-      }
+        if (!distributorId || !firmId) {
+          setGroupMasterRows([]);
+          setGroupTotalRecords(0);
+          setGroupTotalPages(1);
+          setGroupStartRecord(0);
+          setGroupEndRecord(0);
+          return;
+        }
 
-      setGroupLoading(true);
+        setGroupLoading(true);
 
-      const query = new URLSearchParams({
-        distributorId,
-        firmId,
-        page: String(page),
-        limit: String(limit),
-      });
+        const query = new URLSearchParams({
+          distributorId,
+          firmId,
+          page: String(page),
+          limit: String(limit),
+        });
 
-      const cleanSearch = String(
-        search || ""
-      ).trim();
+        const cleanSearch = String(
+          search || ""
+        ).trim();
 
-      if (cleanSearch) {
-        query.set("search", cleanSearch);
-      }
+        if (cleanSearch) {
+          query.set("search", cleanSearch);
+        }
 
-      const response = await fetch(
-        `${API_URL}/groups/list?${query.toString()}`
-      );
-
-      const result = await response.json();
-
-      if (
-        !response.ok ||
-        result.success === false
-      ) {
-        throw new Error(
-          result.message ||
-          "Failed to load Group Master"
+        const response = await fetch(
+          `${API_URL}/groups/list?${query.toString()}`
         );
-      }
 
-      const pagination =
-        result.pagination || {};
+        const result = await response.json();
 
-      const rows = Array.isArray(
-        result.groups
-      )
-        ? result.groups.map((group) => ({
+        if (
+          !response.ok ||
+          result.success === false
+        ) {
+          throw new Error(
+            result.message ||
+            "Failed to load Group Master"
+          );
+        }
+
+        const pagination =
+          result.pagination || {};
+
+        const rows = Array.isArray(
+          result.groups
+        )
+          ? result.groups.map((group) => ({
             id: group._id,
             _id: group._id,
 
@@ -11064,118 +12528,118 @@ useEffect(() => {
             isActive:
               group.isActive !== false,
           }))
-        : [];
+          : [];
 
-      setGroupMasterRows(rows);
+        setGroupMasterRows(rows);
 
-      setGroupCurrentPage(
-        Number(
-          pagination.currentPage ||
-          pagination.page ||
-          page ||
-          1
-        )
-      );
-
-      setGroupRowsPerPage(
-        Number(
-          pagination.limit ||
-          limit ||
-          10
-        )
-      );
-
-      setGroupTotalRecords(
-        Number(
-          pagination.totalRecords ||
-          0
-        )
-      );
-
-      setGroupTotalPages(
-        Math.max(
+        setGroupCurrentPage(
           Number(
-            pagination.totalPages ||
+            pagination.currentPage ||
+            pagination.page ||
+            page ||
             1
-          ),
-          1
-        )
-      );
+          )
+        );
 
-      setGroupStartRecord(
-        Number(
-          pagination.startRecord ||
-          0
-        )
-      );
+        setGroupRowsPerPage(
+          Number(
+            pagination.limit ||
+            limit ||
+            10
+          )
+        );
 
-      setGroupEndRecord(
-        Number(
-          pagination.endRecord ||
-          0
-        )
-      );
-    } catch (error) {
-      console.error(
-        "Group Master load error:",
-        error
-      );
+        setGroupTotalRecords(
+          Number(
+            pagination.totalRecords ||
+            0
+          )
+        );
 
-      setGroupMasterRows([]);
-      setGroupTotalRecords(0);
-      setGroupTotalPages(1);
-      setGroupStartRecord(0);
-      setGroupEndRecord(0);
+        setGroupTotalPages(
+          Math.max(
+            Number(
+              pagination.totalPages ||
+              1
+            ),
+            1
+          )
+        );
 
-      alert(
-        error.message ||
-        "Unable to load groups."
-      );
-    } finally {
-      setGroupLoading(false);
+        setGroupStartRecord(
+          Number(
+            pagination.startRecord ||
+            0
+          )
+        );
+
+        setGroupEndRecord(
+          Number(
+            pagination.endRecord ||
+            0
+          )
+        );
+      } catch (error) {
+        console.error(
+          "Group Master load error:",
+          error
+        );
+
+        setGroupMasterRows([]);
+        setGroupTotalRecords(0);
+        setGroupTotalPages(1);
+        setGroupStartRecord(0);
+        setGroupEndRecord(0);
+
+        alert(
+          error.message ||
+          "Unable to load groups."
+        );
+      } finally {
+        setGroupLoading(false);
+      }
+    },
+    [
+      groupCurrentPage,
+      groupRowsPerPage,
+      groupBackendSearch,
+    ]
+  );
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      const searchText = String(
+        filters.group || ""
+      ).trim();
+
+      setGroupBackendSearch(searchText);
+      setGroupCurrentPage(1);
+    }, 400);
+
+    return () => {
+      window.clearTimeout(timer);
+    };
+  }, [filters.group]);
+  useEffect(() => {
+    if (
+      activeSubMenu !== "Group Master" ||
+      openFormFor === "Group Master"
+    ) {
+      return;
     }
-  },
-  [
+
+    loadGroupMaster({
+      page: groupCurrentPage,
+      limit: groupRowsPerPage,
+      search: groupBackendSearch,
+    });
+  }, [
+    activeSubMenu,
+    openFormFor,
     groupCurrentPage,
     groupRowsPerPage,
     groupBackendSearch,
-  ]
-);
-useEffect(() => {
-  const timer = window.setTimeout(() => {
-    const searchText = String(
-      filters.group || ""
-    ).trim();
-
-    setGroupBackendSearch(searchText);
-    setGroupCurrentPage(1);
-  }, 400);
-
-  return () => {
-    window.clearTimeout(timer);
-  };
-}, [filters.group]);
-useEffect(() => {
-  if (
-    activeSubMenu !== "Group Master" ||
-    openFormFor === "Group Master"
-  ) {
-    return;
-  }
-
-  loadGroupMaster({
-    page: groupCurrentPage,
-    limit: groupRowsPerPage,
-    search: groupBackendSearch,
-  });
-}, [
-  activeSubMenu,
-  openFormFor,
-  groupCurrentPage,
-  groupRowsPerPage,
-  groupBackendSearch,
-  loadGroupMaster,
-]);
+    loadGroupMaster,
+  ]);
 
   const loadCategories = async () => {
     try {
@@ -11210,67 +12674,67 @@ useEffect(() => {
     }
   };
   const loadCategoryMaster = useCallback(
-  async ({
-    page = 1,
-    limit = 10,
-    search = "",
-  } = {}) => {
-    try {
-      const distributorId =
-        localStorage.getItem("distributorId");
+    async ({
+      page = 1,
+      limit = 10,
+      search = "",
+    } = {}) => {
+      try {
+        const distributorId =
+          localStorage.getItem("distributorId");
 
-      const firmId =
-        localStorage.getItem("firmId");
+        const firmId =
+          localStorage.getItem("firmId");
 
-      if (!distributorId || !firmId) {
-        setCategoryMasterRows([]);
-        setCategoryTotalRecords(0);
-        setCategoryTotalPages(1);
-        setCategoryStartRecord(0);
-        setCategoryEndRecord(0);
-        return;
-      }
+        if (!distributorId || !firmId) {
+          setCategoryMasterRows([]);
+          setCategoryTotalRecords(0);
+          setCategoryTotalPages(1);
+          setCategoryStartRecord(0);
+          setCategoryEndRecord(0);
+          return;
+        }
 
-      setCategoryLoading(true);
+        setCategoryLoading(true);
 
-      const query = new URLSearchParams({
-        distributorId,
-        firmId,
-        page: String(page),
-        limit: String(limit),
-      });
+        const query = new URLSearchParams({
+          distributorId,
+          firmId,
+          page: String(page),
+          limit: String(limit),
+        });
 
-      const cleanSearch = String(
-        search || ""
-      ).trim();
+        const cleanSearch = String(
+          search || ""
+        ).trim();
 
-      if (cleanSearch) {
-        query.set("search", cleanSearch);
-      }
+        if (cleanSearch) {
+          query.set("search", cleanSearch);
+        }
 
-      const response = await fetch(
-        `${API_URL}/categories/list?${query.toString()}`
-      );
-
-      const result = await response.json();
-
-      if (
-        !response.ok ||
-        result.success === false
-      ) {
-        throw new Error(
-          result.message ||
-          "Failed to load Category Master"
+        const response = await fetch(
+          `${API_URL}/categories/list?${query.toString()}`
         );
-      }
 
-      const pagination =
-        result.pagination || {};
+        const result = await response.json();
 
-      const rows = Array.isArray(
-        result.categories
-      )
-        ? result.categories.map(
+        if (
+          !response.ok ||
+          result.success === false
+        ) {
+          throw new Error(
+            result.message ||
+            "Failed to load Category Master"
+          );
+        }
+
+        const pagination =
+          result.pagination || {};
+
+        const rows = Array.isArray(
+          result.categories
+        )
+          ? result.categories.map(
             (category) => ({
               id:
                 category._id ||
@@ -11307,119 +12771,119 @@ useEffect(() => {
                 category.isActive !== false,
             })
           )
-        : [];
+          : [];
 
-      setCategoryMasterRows(rows);
+        setCategoryMasterRows(rows);
 
-      setCategoryCurrentPage(
-        Number(
-          pagination.currentPage ||
-          pagination.page ||
-          page ||
-          1
-        )
-      );
-
-      setCategoryRowsPerPage(
-        Number(
-          pagination.limit ||
-          limit ||
-          10
-        )
-      );
-
-      setCategoryTotalRecords(
-        Number(
-          pagination.totalRecords ||
-          0
-        )
-      );
-
-      setCategoryTotalPages(
-        Math.max(
+        setCategoryCurrentPage(
           Number(
-            pagination.totalPages ||
+            pagination.currentPage ||
+            pagination.page ||
+            page ||
             1
-          ),
-          1
-        )
+          )
+        );
+
+        setCategoryRowsPerPage(
+          Number(
+            pagination.limit ||
+            limit ||
+            10
+          )
+        );
+
+        setCategoryTotalRecords(
+          Number(
+            pagination.totalRecords ||
+            0
+          )
+        );
+
+        setCategoryTotalPages(
+          Math.max(
+            Number(
+              pagination.totalPages ||
+              1
+            ),
+            1
+          )
+        );
+
+        setCategoryStartRecord(
+          Number(
+            pagination.startRecord ||
+            0
+          )
+        );
+
+        setCategoryEndRecord(
+          Number(
+            pagination.endRecord ||
+            0
+          )
+        );
+      } catch (error) {
+        console.error(
+          "Category Master load error:",
+          error
+        );
+
+        setCategoryMasterRows([]);
+        setCategoryTotalRecords(0);
+        setCategoryTotalPages(1);
+        setCategoryStartRecord(0);
+        setCategoryEndRecord(0);
+
+        alert(
+          error.message ||
+          "Unable to load categories."
+        );
+      } finally {
+        setCategoryLoading(false);
+      }
+    },
+    []
+  );
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      const searchText = String(
+        filters.category || ""
+      ).trim();
+
+      setCategoryBackendSearch(
+        searchText
       );
 
-      setCategoryStartRecord(
-        Number(
-          pagination.startRecord ||
-          0
-        )
-      );
+      setCategoryCurrentPage(1);
+    }, 400);
 
-      setCategoryEndRecord(
-        Number(
-          pagination.endRecord ||
-          0
-        )
-      );
-    } catch (error) {
-      console.error(
-        "Category Master load error:",
-        error
-      );
+    return () => {
+      window.clearTimeout(timer);
+    };
+  }, [filters.category]);
 
-      setCategoryMasterRows([]);
-      setCategoryTotalRecords(0);
-      setCategoryTotalPages(1);
-      setCategoryStartRecord(0);
-      setCategoryEndRecord(0);
-
-      alert(
-        error.message ||
-        "Unable to load categories."
-      );
-    } finally {
-      setCategoryLoading(false);
+  useEffect(() => {
+    if (
+      activeSubMenu !== "Category Master" ||
+      openFormFor === "Category Master"
+    ) {
+      return;
     }
-  },
-  []
-);
 
-useEffect(() => {
-  const timer = window.setTimeout(() => {
-    const searchText = String(
-      filters.category || ""
-    ).trim();
-
-    setCategoryBackendSearch(
-      searchText
-    );
-
-    setCategoryCurrentPage(1);
-  }, 400);
-
-  return () => {
-    window.clearTimeout(timer);
-  };
-}, [filters.category]);
-
-useEffect(() => {
-  if (
-    activeSubMenu !== "Category Master" ||
-    openFormFor === "Category Master"
-  ) {
-    return;
-  }
-
-  loadCategoryMaster({
-    page: categoryCurrentPage,
-    limit: categoryRowsPerPage,
-    search: categoryBackendSearch,
-  });
-}, [
-  activeSubMenu,
-  openFormFor,
-  categoryCurrentPage,
-  categoryRowsPerPage,
-  categoryBackendSearch,
-  loadCategoryMaster,
-]);
+    loadCategoryMaster({
+      page: categoryCurrentPage,
+      limit: categoryRowsPerPage,
+      search: categoryBackendSearch,
+    });
+  }, [
+    activeSubMenu,
+    openFormFor,
+    categoryCurrentPage,
+    categoryRowsPerPage,
+    categoryBackendSearch,
+    loadCategoryMaster,
+  ]);
 
   const loadProducts = async () => {
     try {
@@ -11454,104 +12918,104 @@ useEffect(() => {
     }
   };
   const loadProductMaster = useCallback(
-  async ({
-    page = 1,
-    limit = 20,
-    search = "",
-    companyCode = "",
-    groupCode = "",
-    categoryCode = "",
-  } = {}) => {
-    try {
-      const distributorId =
-        localStorage.getItem("distributorId");
+    async ({
+      page = 1,
+      limit = 20,
+      search = "",
+      companyCode = "",
+      groupCode = "",
+      categoryCode = "",
+    } = {}) => {
+      try {
+        const distributorId =
+          localStorage.getItem("distributorId");
 
-      const firmId =
-        localStorage.getItem("firmId");
+        const firmId =
+          localStorage.getItem("firmId");
 
-      if (!distributorId || !firmId) {
-        setProductMasterRows([]);
-        setProductTotalRecords(0);
-        setProductTotalPages(1);
-        setProductStartRecord(0);
-        setProductEndRecord(0);
-        return;
-      }
+        if (!distributorId || !firmId) {
+          setProductMasterRows([]);
+          setProductTotalRecords(0);
+          setProductTotalPages(1);
+          setProductStartRecord(0);
+          setProductEndRecord(0);
+          return;
+        }
 
-      setProductMasterLoading(true);
+        setProductMasterLoading(true);
 
-      const query =
-        new URLSearchParams({
-          distributorId,
-          firmId,
-          page: String(page),
-          limit: String(limit),
-        });
+        const query =
+          new URLSearchParams({
+            distributorId,
+            firmId,
+            page: String(page),
+            limit: String(limit),
+          });
 
-      const cleanSearch =
-        String(search || "").trim();
+        const cleanSearch =
+          String(search || "").trim();
 
-      const cleanCompanyCode =
-        String(companyCode || "").trim();
+        const cleanCompanyCode =
+          String(companyCode || "").trim();
 
-      const cleanGroupCode =
-        String(groupCode || "").trim();
+        const cleanGroupCode =
+          String(groupCode || "").trim();
 
-      const cleanCategoryCode =
-        String(categoryCode || "").trim();
+        const cleanCategoryCode =
+          String(categoryCode || "").trim();
 
-      if (cleanSearch) {
-        query.set(
-          "search",
-          cleanSearch
+        if (cleanSearch) {
+          query.set(
+            "search",
+            cleanSearch
+          );
+        }
+
+        if (cleanCompanyCode) {
+          query.set(
+            "companyCode",
+            cleanCompanyCode
+          );
+        }
+
+        if (cleanGroupCode) {
+          query.set(
+            "groupCode",
+            cleanGroupCode
+          );
+        }
+
+        if (cleanCategoryCode) {
+          query.set(
+            "categoryCode",
+            cleanCategoryCode
+          );
+        }
+
+        const response = await fetch(
+          `${API_URL}/products/list?${query.toString()}`
         );
-      }
 
-      if (cleanCompanyCode) {
-        query.set(
-          "companyCode",
-          cleanCompanyCode
-        );
-      }
+        const result =
+          await response.json();
 
-      if (cleanGroupCode) {
-        query.set(
-          "groupCode",
-          cleanGroupCode
-        );
-      }
+        if (
+          !response.ok ||
+          result.success === false
+        ) {
+          throw new Error(
+            result.message ||
+            "Failed to load Product Master"
+          );
+        }
 
-      if (cleanCategoryCode) {
-        query.set(
-          "categoryCode",
-          cleanCategoryCode
-        );
-      }
+        const pagination =
+          result.pagination || {};
 
-      const response = await fetch(
-        `${API_URL}/products/list?${query.toString()}`
-      );
-
-      const result =
-        await response.json();
-
-      if (
-        !response.ok ||
-        result.success === false
-      ) {
-        throw new Error(
-          result.message ||
-          "Failed to load Product Master"
-        );
-      }
-
-      const pagination =
-        result.pagination || {};
-
-      const rows = Array.isArray(
-        result.products
-      )
-        ? result.products.map(
+        const rows = Array.isArray(
+          result.products
+        )
+          ? result.products.map(
             (product) => ({
               ...product,
 
@@ -11654,129 +13118,129 @@ useEffect(() => {
                 product.isActive !== false,
             })
           )
-        : [];
+          : [];
 
-      setProductMasterRows(rows);
+        setProductMasterRows(rows);
 
-      setProductCurrentPage(
-        Number(
-          pagination.currentPage ||
-          pagination.page ||
-          page ||
-          1
-        )
-      );
-
-      setProductRowsPerPage(
-        Number(
-          pagination.limit ||
-          limit ||
-          20
-        )
-      );
-
-      setProductTotalRecords(
-        Number(
-          pagination.totalRecords ||
-          0
-        )
-      );
-
-      setProductTotalPages(
-        Math.max(
+        setProductCurrentPage(
           Number(
-            pagination.totalPages ||
+            pagination.currentPage ||
+            pagination.page ||
+            page ||
             1
-          ),
-          1
-        )
-      );
+          )
+        );
 
-      setProductStartRecord(
-        Number(
-          pagination.startRecord ||
-          0
-        )
-      );
+        setProductRowsPerPage(
+          Number(
+            pagination.limit ||
+            limit ||
+            20
+          )
+        );
 
-      setProductEndRecord(
-        Number(
-          pagination.endRecord ||
-          0
-        )
-      );
-    } catch (error) {
-      console.error(
-        "Product Master load error:",
-        error
-      );
+        setProductTotalRecords(
+          Number(
+            pagination.totalRecords ||
+            0
+          )
+        );
 
-      setProductMasterRows([]);
-      setProductTotalRecords(0);
-      setProductTotalPages(1);
-      setProductStartRecord(0);
-      setProductEndRecord(0);
+        setProductTotalPages(
+          Math.max(
+            Number(
+              pagination.totalPages ||
+              1
+            ),
+            1
+          )
+        );
 
-      alert(
-        error.message ||
-        "Unable to load Product Master."
-      );
-    } finally {
-      setProductMasterLoading(false);
+        setProductStartRecord(
+          Number(
+            pagination.startRecord ||
+            0
+          )
+        );
+
+        setProductEndRecord(
+          Number(
+            pagination.endRecord ||
+            0
+          )
+        );
+      } catch (error) {
+        console.error(
+          "Product Master load error:",
+          error
+        );
+
+        setProductMasterRows([]);
+        setProductTotalRecords(0);
+        setProductTotalPages(1);
+        setProductStartRecord(0);
+        setProductEndRecord(0);
+
+        alert(
+          error.message ||
+          "Unable to load Product Master."
+        );
+      } finally {
+        setProductMasterLoading(false);
+      }
+    },
+    []
+  );
+
+  useEffect(() => {
+    const timer =
+      window.setTimeout(() => {
+        const searchText =
+          String(
+            filters.product || ""
+          ).trim();
+
+        setProductBackendSearch(
+          searchText
+        );
+
+        setProductCurrentPage(1);
+      }, 400);
+
+    return () => {
+      window.clearTimeout(timer);
+    };
+  }, [filters.product]);
+  useEffect(() => {
+    if (
+      activeSubMenu !== "Product" ||
+      openFormFor === "Product"
+    ) {
+      return;
     }
-  },
-  []
-);
 
-useEffect(() => {
-  const timer =
-    window.setTimeout(() => {
-      const searchText =
-        String(
-          filters.product || ""
-        ).trim();
-
-      setProductBackendSearch(
-        searchText
-      );
-
-      setProductCurrentPage(1);
-    }, 400);
-
-  return () => {
-    window.clearTimeout(timer);
-  };
-}, [filters.product]);
-useEffect(() => {
-  if (
-    activeSubMenu !== "Product" ||
-    openFormFor === "Product"
-  ) {
-    return;
-  }
-
-  loadProductMaster({
-    page: productCurrentPage,
-    limit: productRowsPerPage,
-    search: productBackendSearch,
-    companyCode:
-      productCompanyFilter,
-    groupCode:
-      productGroupFilter,
-    categoryCode:
-      productCategoryFilter,
-  });
-}, [
-  activeSubMenu,
-  openFormFor,
-  productCurrentPage,
-  productRowsPerPage,
-  productBackendSearch,
-  productCompanyFilter,
-  productGroupFilter,
-  productCategoryFilter,
-  loadProductMaster,
-]);
+    loadProductMaster({
+      page: productCurrentPage,
+      limit: productRowsPerPage,
+      search: productBackendSearch,
+      companyCode:
+        productCompanyFilter,
+      groupCode:
+        productGroupFilter,
+      categoryCode:
+        productCategoryFilter,
+    });
+  }, [
+    activeSubMenu,
+    openFormFor,
+    productCurrentPage,
+    productRowsPerPage,
+    productBackendSearch,
+    productCompanyFilter,
+    productGroupFilter,
+    productCategoryFilter,
+    loadProductMaster,
+  ]);
 
 
   const saveUser = async (e) => {
@@ -11818,17 +13282,17 @@ useEffect(() => {
       return alert(result.message || "User save failed");
     }
 
-   const refreshPage = editUserId
-  ? userCurrentPage
-  : 1;
+    const refreshPage = editUserId
+      ? userCurrentPage
+      : 1;
 
-setUserCurrentPage(refreshPage);
+    setUserCurrentPage(refreshPage);
 
-await loadUsers({
-  page: refreshPage,
-  limit: userRowsPerPage,
-  search: userBackendSearch,
-});
+    await loadUsers({
+      page: refreshPage,
+      limit: userRowsPerPage,
+      search: userBackendSearch,
+    });
     alert(editUserId ? "User updated successfully!" : "User created successfully!");
 
     // ✅ RESET FORM
@@ -11889,18 +13353,18 @@ await loadUsers({
     }
 
     const pageAfterDelete =
-  users.length === 1 &&
-  userCurrentPage > 1
-    ? userCurrentPage - 1
-    : userCurrentPage;
+      users.length === 1 &&
+        userCurrentPage > 1
+        ? userCurrentPage - 1
+        : userCurrentPage;
 
-setUserCurrentPage(pageAfterDelete);
+    setUserCurrentPage(pageAfterDelete);
 
-await loadUsers({
-  page: pageAfterDelete,
-  limit: userRowsPerPage,
-  search: userBackendSearch,
-});
+    await loadUsers({
+      page: pageAfterDelete,
+      limit: userRowsPerPage,
+      search: userBackendSearch,
+    });
     alert("User deleted successfully!");
   };
   const handleLogout = () => {
@@ -11950,6 +13414,246 @@ await loadUsers({
       alert("Server not connected. Failed to load godowns.");
     }
   };
+  const loadGodownMaster = useCallback(
+    async ({
+      page = 1,
+      limit = 20,
+      search = "",
+    } = {}) => {
+      try {
+        const distributorId =
+          localStorage.getItem(
+            "distributorId"
+          );
+
+        const firmId =
+          localStorage.getItem(
+            "firmId"
+          );
+
+        if (!distributorId || !firmId) {
+          setGodownMasterRows([]);
+          setGodownTotalRecords(0);
+          setGodownTotalPages(1);
+          setGodownStartRecord(0);
+          setGodownEndRecord(0);
+          return;
+        }
+
+        setGodownMasterLoading(true);
+
+        const params =
+          new URLSearchParams({
+            distributorId,
+            firmId,
+            page: String(page),
+            limit: String(limit),
+          });
+
+        const cleanSearch =
+          String(search || "").trim();
+
+        if (cleanSearch) {
+          params.set(
+            "search",
+            cleanSearch
+          );
+        }
+
+        const response = await fetch(
+          `${API_URL}/godowns/list?${params.toString()}`
+        );
+
+        const result =
+          await response.json();
+
+        if (
+          !response.ok ||
+          result.success === false
+        ) {
+          throw new Error(
+            result.message ||
+            "Failed to load GoDown Master"
+          );
+        }
+
+        const pagination =
+          result.pagination || {};
+
+        const currentPage = Number(
+          pagination.currentPage ||
+          pagination.page ||
+          page
+        );
+
+        const currentLimit = Number(
+          pagination.limit ||
+          limit
+        );
+
+        const rows = Array.isArray(
+          result.godowns
+        )
+          ? result.godowns.map(
+            (godown, index) => ({
+              ...godown,
+
+              id:
+                godown._id ||
+                godown.id,
+
+              code:
+                godown.godownCode ||
+                godown.code ||
+                "",
+
+              name:
+                godown.godownName ||
+                godown.name ||
+                "",
+
+              godownCode:
+                godown.godownCode ||
+                godown.code ||
+                "",
+
+              godownName:
+                godown.godownName ||
+                godown.name ||
+                "",
+
+              address:
+                godown.address ||
+                "",
+
+              location:
+                godown.location ||
+                "",
+
+              srNo:
+                (currentPage - 1) *
+                currentLimit +
+                index +
+                1,
+            })
+          )
+          : [];
+
+        setGodownMasterRows(rows);
+
+        setGodownCurrentPage(
+          currentPage
+        );
+
+        setGodownRowsPerPage(
+          currentLimit
+        );
+
+        setGodownTotalRecords(
+          Number(
+            pagination.totalRecords ||
+            0
+          )
+        );
+
+        setGodownTotalPages(
+          Math.max(
+            Number(
+              pagination.totalPages ||
+              1
+            ),
+            1
+          )
+        );
+
+        setGodownStartRecord(
+          Number(
+            pagination.startRecord ||
+            0
+          )
+        );
+
+        setGodownEndRecord(
+          Number(
+            pagination.endRecord ||
+            0
+          )
+        );
+      } catch (error) {
+        console.error(
+          "GoDown Master load error:",
+          error
+        );
+
+        setGodownMasterRows([]);
+        setGodownTotalRecords(0);
+        setGodownTotalPages(1);
+        setGodownStartRecord(0);
+        setGodownEndRecord(0);
+
+        alert(
+          error.message ||
+          "Unable to load GoDown Master."
+        );
+      } finally {
+        setGodownMasterLoading(false);
+      }
+    },
+    []
+  );/*
+ * GODOWN MASTER SEARCH DEBOUNCE
+ */
+  useEffect(() => {
+    const timer =
+      window.setTimeout(() => {
+        const searchText =
+          String(
+            filters?.godown || ""
+          ).trim();
+
+        setGodownBackendSearch(
+          searchText
+        );
+
+        setGodownCurrentPage(1);
+      }, 400);
+
+    return () => {
+      window.clearTimeout(timer);
+    };
+  }, [filters?.godown]);
+
+
+  /*
+   * GODOWN MASTER BACKEND PAGINATION LOAD
+   */
+  useEffect(() => {
+    /*
+     * Load only when the GoDown Master list
+     * is open, not while Add/Edit form is open.
+     */
+    if (
+      activeSubMenu !==
+      "GoDown Master" ||
+      openFormFor ===
+      "GoDown Master"
+    ) {
+      return;
+    }
+
+    loadGodownMaster({
+      page: godownCurrentPage,
+      limit: godownRowsPerPage,
+      search: godownBackendSearch,
+    });
+  }, [
+    activeSubMenu,
+    openFormFor,
+    godownCurrentPage,
+    godownRowsPerPage,
+    godownBackendSearch,
+    loadGodownMaster,
+  ]);
   // Add this function with other helper functions
   const getSalesGodownCode = () => {
     // Get the current godown from invoice form data
@@ -11963,55 +13667,134 @@ await loadUsers({
     // Return the godown code, or the value itself if not found
     return selectedGodown?.code || selectedGodown?.godownCode || godownValue;
   };
-  const saveGodown = async (e) => {
-    e.preventDefault();
+  const saveGodown = async (event) => {
+    event.preventDefault();
 
-    if (!godownForm.code || !godownForm.name) {
-      return alert("Code and Name required");
+    const godownCode =
+      String(
+        godownForm.code || ""
+      ).trim();
+
+    const godownName =
+      String(
+        godownForm.name || ""
+      ).trim();
+
+    if (
+      !godownCode ||
+      !godownName
+    ) {
+      return alert(
+        "Code and Name required"
+      );
     }
 
-    const distributorId = localStorage.getItem("distributorId");
-    const firmId = localStorage.getItem("firmId");
-    const firmName = localStorage.getItem("firmName");
+    const distributorId =
+      localStorage.getItem(
+        "distributorId"
+      );
+
+    const firmId =
+      localStorage.getItem(
+        "firmId"
+      );
+
+    const firmName =
+      localStorage.getItem(
+        "firmName"
+      );
 
     if (!distributorId || !firmId) {
-      return alert("Distributor/Firm not found. Please login again.");
+      return alert(
+        "Distributor/Firm not found. Please login again."
+      );
     }
+
+    const wasEditing =
+      Boolean(editGodownId);
 
     try {
       const url = editGodownId
         ? `${API_URL}/godowns/${editGodownId}`
         : `${API_URL}/godowns`;
 
-      const method = editGodownId ? "PUT" : "POST";
+      const method = editGodownId
+        ? "PUT"
+        : "POST";
 
-      const res = await fetch(url, {
-        method,
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          godownCode: godownForm.code,
-          godownName: godownForm.name,
-          address: godownForm.address,
-          location: godownForm.location,
-          distributorId,
-          firmId,
-          firmName,
-        }),
-      });
+      const response = await fetch(
+        url,
+        {
+          method,
 
-      const result = await res.json();
+          headers: {
+            "Content-Type":
+              "application/json",
+          },
 
-      if (!res.ok || result.success === false) {
-        return alert(result.message || "Godown save/update failed");
+          body: JSON.stringify({
+            godownCode,
+            godownName,
+
+            address:
+              String(
+                godownForm.address ||
+                ""
+              ).trim(),
+
+            location:
+              String(
+                godownForm.location ||
+                ""
+              ).trim(),
+
+            distributorId,
+            firmId,
+            firmName,
+          }),
+        }
+      );
+
+      const result =
+        await response.json();
+
+      if (
+        !response.ok ||
+        result.success === false
+      ) {
+        return alert(
+          result.message ||
+          "Godown save/update failed"
+        );
       }
 
+      /*
+       * Refresh complete godown data used
+       * by all transaction dropdowns.
+       */
       await loadGodowns();
 
-      alert(editGodownId ? "Godown updated successfully!" : "Godown saved successfully!");
+      const refreshPage =
+        wasEditing
+          ? godownCurrentPage
+          : 1;
 
-      // ✅ RESET FORM FIELDS
+      setGodownCurrentPage(
+        refreshPage
+      );
+
+      await loadGodownMaster({
+        page: refreshPage,
+        limit: godownRowsPerPage,
+        search: godownBackendSearch,
+      });
+
+      alert(
+        wasEditing
+          ? "Godown updated successfully!"
+          : "Godown saved successfully!"
+      );
+
       setGodownForm({
         code: "",
         name: "",
@@ -12020,11 +13803,17 @@ await loadUsers({
       });
 
       setEditGodownId(null);
-      // ✅ CLOSE FORM
+
       closeForm();
     } catch (error) {
-      console.error(error);
-      alert("Server not connected. Godown save/update failed.");
+      console.error(
+        "Godown save error:",
+        error
+      );
+
+      alert(
+        "Server not connected. Godown save/update failed."
+      );
     }
   };
 
@@ -12048,47 +13837,122 @@ await loadUsers({
     setOpenFormFor("GoDown Master");
   };
 
-  const deleteGodown = async (godownOrId) => {
+  const deleteGodown = async (
+    godownOrId
+  ) => {
     const id =
       typeof godownOrId === "object"
-        ? godownOrId._id || godownOrId.id
+        ? godownOrId._id ||
+        godownOrId.id
         : godownOrId;
 
     const godownName =
       typeof godownOrId === "object"
-        ? godownOrId.godownName || godownOrId.name || ""
+        ? godownOrId.godownName ||
+        godownOrId.name ||
+        ""
         : "";
 
     if (!id) {
-      return alert("Godown ID not found");
+      return alert(
+        "Godown ID not found"
+      );
     }
 
-    if (!window.confirm(`Delete godown "${godownName}"?`)) return;
+    const displayName =
+      godownName
+        ? `"${godownName}"`
+        : "this godown";
+
+    if (
+      !window.confirm(
+        `Delete godown ${displayName}?`
+      )
+    ) {
+      return;
+    }
 
     try {
-      const res = await fetch(`${API_URL}/godowns/${id}`, {
-        method: "DELETE",
-      });
+      const response = await fetch(
+        `${API_URL}/godowns/${id}`,
+        {
+          method: "DELETE",
+        }
+      );
 
-      const result = await res.json();
+      const result =
+        await response.json();
 
-      if (!res.ok || result.success === false) {
-        return alert(result.message || "Godown delete failed");
+      if (
+        !response.ok ||
+        result.success === false
+      ) {
+        return alert(
+          result.message ||
+          "Godown delete failed"
+        );
       }
 
+      /*
+       * Refresh the complete dropdown list.
+       */
       await loadGodowns();
-      alert("Godown deleted successfully!");
+
+      const recordsAfterDelete =
+        Math.max(
+          godownTotalRecords - 1,
+          0
+        );
+
+      const pagesAfterDelete =
+        Math.max(
+          Math.ceil(
+            recordsAfterDelete /
+            godownRowsPerPage
+          ),
+          1
+        );
+
+      const pageAfterDelete =
+        Math.min(
+          godownCurrentPage,
+          pagesAfterDelete
+        );
+
+      setGodownCurrentPage(
+        pageAfterDelete
+      );
+
+      await loadGodownMaster({
+        page: pageAfterDelete,
+        limit: godownRowsPerPage,
+        search: godownBackendSearch,
+      });
+
+      alert(
+        "Godown deleted successfully!"
+      );
     } catch (error) {
-      console.error(error);
-      alert("Server not connected. Godown delete failed.");
+      console.error(
+        "Godown delete error:",
+        error
+      );
+
+      alert(
+        "Server not connected. Godown delete failed."
+      );
     }
   };
-
   const getFilteredGodowns = () => {
-    return godowns.filter(godown =>
-      godown.code?.toLowerCase().includes(filters.godown.toLowerCase()) ||
-      godown.name?.toLowerCase().includes(filters.godown.toLowerCase())
-    );
+    /*
+     * Search and pagination are now
+     * performed by the backend.
+     */
+    return Array.isArray(
+      godownMasterRows
+    )
+      ? godownMasterRows
+      : [];
   };
   const handleCustomerBankInput = (e) => {
     const { name, value } = e.target;
@@ -14538,20 +16402,29 @@ await loadUsers({
 
           product.companyCode,
           product.CompanyCode,
+          product.compCode,
+          product.CompCode,
+
+          product.companyName,
+          product.CompanyName,
+          product.compName,
+          product.CompName,
 
           product.company,
           product.Company,
 
-          product.companyName,
-          product.CompanyName,
-
           product.company?._id,
           product.company?.id,
+
           product.company?.companyCode,
           product.company?.CompanyCode,
+          product.company?.code,
+          product.company?.Code,
+
           product.company?.companyName,
           product.company?.CompanyName,
           product.company?.name,
+          product.company?.Name,
         ]
           .map(normalizeCompanyValue)
           .filter(Boolean);
@@ -14560,16 +16433,48 @@ await loadUsers({
          * Allow products from every company only
          * when no company is selected.
          */
+        const selectedCompany =
+          findCreditCompany(
+            selectedCompanyValue
+          );
+
+        const selectedCompanyValues = [
+          selectedCompany?._id,
+          selectedCompany?.id,
+
+          selectedCompany?.companyCode,
+          selectedCompany?.CompanyCode,
+          selectedCompany?.code,
+          selectedCompany?.Code,
+
+          selectedCompany?.companyName,
+          selectedCompany?.CompanyName,
+          selectedCompany?.name,
+          selectedCompany?.Name,
+
+          selectedCompanyValue,
+        ]
+          .map(normalizeCompanyValue)
+          .filter(Boolean);
+
+        const isAllCompany =
+          selectedCompanyValues.length === 0 ||
+          selectedCompanyValues.some(
+            (value) =>
+              value === "ALL" ||
+              value === "ALL COMPANY" ||
+              value === "ALL COMPANIES" ||
+              value === "MIX"
+          );
+
         const matchesCompany =
-          !selectedCompanyCode &&
-            !selectedCompanyName
-            ? true
-            : productCompanyValues.includes(
-              selectedCompanyCode
-            ) ||
-            productCompanyValues.includes(
-              selectedCompanyName
-            );
+          isAllCompany ||
+          selectedCompanyValues.some(
+            (selectedValue) =>
+              productCompanyValues.includes(
+                selectedValue
+              )
+          );
 
         return (
           matchesSearch &&
@@ -15072,11 +16977,49 @@ await loadUsers({
       const result = await res.json();
 
       if (!res.ok || !result.success) {
-        alert(result.message || "Sales save failed");
+        alert(
+          result.message ||
+          "Sales save failed"
+        );
+
         return;
       }
 
-      await loadSalesBills();
+      /*
+       * A newly created invoice should reload page 1
+       * because the list is sorted newest first.
+       *
+       * An edited invoice should remain on the
+       * currently selected page.
+       */
+      const salesPageAfterSave =
+        isEditMode
+          ? salesCurrentPage
+          : 1;
+
+      setSalesCurrentPage(
+        salesPageAfterSave
+      );
+
+      setListPage((previous) => ({
+        ...previous,
+        Billing:
+          salesPageAfterSave,
+      }));
+
+      await loadSalesBills({
+        page:
+          salesPageAfterSave,
+
+        limit:
+          salesRowsPerPage,
+
+        filters:
+          salesAppliedFilters,
+
+        search:
+          salesSearchDebounced,
+      });
 
       if (isSettleAdjustMode) {
         if (settleAdjustRowIndex !== null) {
@@ -15243,99 +17186,1084 @@ await loadUsers({
     }
   }, [openFormFor, editingInvoiceId, isSettleAdjustMode]);
 
-  const loadSalesBills = async () => {
-    try {
-      const { distributorId, firmId } = getFirmSession();
+  const loadSalesBills =
+    useCallback(
+      async ({
+        page,
+        limit,
+        filters,
+        search,
+      } = {}) => {
+        try {
+          const {
+            distributorId,
+            firmId,
+          } = getFirmSession();
 
-      if (!distributorId || !firmId) {
-        setSalesListData([]);
-        return;
-      }
+          if (
+            !distributorId ||
+            !firmId
+          ) {
+            setSalesListData([]);
+            setSalesTotalRecords(0);
+            setSalesTotalPages(1);
+            setSalesStartRecord(0);
+            setSalesEndRecord(0);
 
-      const res = await fetch(
-        `${API_URL}/sales?distributorId=${distributorId}&firmId=${firmId}`
-      );
+            return;
+          }
 
-      const result = await res.json();
+          const requestedPage =
+            Number(
+              page ??
+              salesCurrentPage
+            ) || 1;
 
-      if (!res.ok || !result.success) {
-        alert(result.message || "Failed to load sales bills");
-        return;
-      }
+          const requestedLimit =
+            Number(
+              limit ??
+              salesRowsPerPage
+            ) || 10;
 
-      const normalizedSales = (result.sales || []).map((s) => ({
-        ...s,
-        id: s._id || s.id,
-        billDate: s.BillDate || s.billDate || "",
-        billSeries: s.BillSeries || s.billSeries || "",
-        billNo: s.BillNo || s.billNo || "",
-        billType: s.BillType || s.billType || "",
-        partyCode: s.PartyCode || s.partyCode || "",
-        party: s.PartyName || s.party || "",
-        partyName: s.PartyName || s.partyName || "",
-        area: s.AreaName || s.area || "",
-        amount: Number(s.NetAmount || s.amount || 0),
+          const appliedFilters =
+            filters ||
+            salesAppliedFilters ||
+            createDefaultSalesListFilters();
 
-        loadSeries: s.LoadSeries || s.loadSeries || "",
-        loadNumber: s.LoadNo || s.loadNo || "",
+          const searchText =
+            search !== undefined
+              ? String(search || "").trim()
+              : String(
+                salesSearchDebounced ||
+                ""
+              ).trim();
 
-        items: s.items || [],
-        status: s.IsLoaded ? "Loaded" : "Pending",
-        type: "Invoice",
-      }));
+          setSalesListLoading(true);
 
-      setSalesListData(normalizedSales);
-    } catch (error) {
-      console.error(error);
-      alert("Server not connected. Failed to load sales bills.");
+          const query =
+            new URLSearchParams({
+              distributorId,
+              firmId,
+              page: String(
+                requestedPage
+              ),
+              limit: String(
+                requestedLimit
+              ),
+            });
+
+          const appendFilter = (
+            key,
+            value
+          ) => {
+            const cleanValue =
+              String(
+                value ?? ""
+              ).trim();
+
+            if (cleanValue) {
+              query.set(
+                key,
+                cleanValue
+              );
+            }
+          };
+
+          appendFilter(
+            "search",
+            searchText
+          );
+
+          appendFilter(
+            "fromDate",
+            appliedFilters.fromDate
+          );
+
+          appendFilter(
+            "toDate",
+            appliedFilters.toDate
+          );
+
+          appendFilter(
+            "billSeries",
+            appliedFilters.billSeries
+          );
+
+          appendFilter(
+            "billType",
+            appliedFilters.billType
+          );
+
+          appendFilter(
+            "party",
+            appliedFilters.party
+          );
+
+          appendFilter(
+            "partyCode",
+            appliedFilters.partyCode
+          );
+
+          appendFilter(
+            "salesmanCode",
+            appliedFilters.salesman
+          );
+
+          appendFilter(
+            "areaCode",
+            appliedFilters.area
+          );
+
+
+          appendFilter(
+            "companyCode",
+            appliedFilters.company
+          );
+
+          appendFilter(
+            "loadSeries",
+            appliedFilters.loadSeries
+          );
+
+          appendFilter(
+            "loadNo",
+            appliedFilters.loadNo
+          );
+
+          appendFilter(
+            "addUser",
+            appliedFilters.addUser
+          );
+
+          appendFilter(
+            "paymentStatus",
+            appliedFilters.paymentStatus
+          );
+
+          appendFilter(
+            "minAmount",
+            appliedFilters.minAmount
+          );
+
+          appendFilter(
+            "maxAmount",
+            appliedFilters.maxAmount
+          );
+
+          const response =
+            await fetch(
+              `${API_URL}/sales/list?${query.toString()}`
+            );
+
+          const result =
+            await response.json();
+
+          if (
+            !response.ok ||
+            !result.success
+          ) {
+            throw new Error(
+              result.message ||
+              "Failed to load sales bills"
+            );
+          }
+
+          const pagination =
+            result.pagination || {};
+
+          const resolvedPage =
+            Number(
+              pagination.currentPage ||
+              pagination.page ||
+              requestedPage
+            ) || 1;
+
+          const resolvedLimit =
+            Number(
+              pagination.limit ||
+              requestedLimit
+            ) || 10;
+
+          const normalizedSales =
+            (
+              Array.isArray(
+                result.sales
+              )
+                ? result.sales
+                : []
+            ).map(
+              (sale, index) => {
+                const originalItem =
+                  sale || {};
+
+                const netAmount =
+                  Number(
+                    sale.NetAmount ??
+                    sale.netAmount ??
+                    sale.amount ??
+                    0
+                  ) || 0;
+
+                const paidAmount =
+                  Number(
+                    sale.PaidAmount ??
+                    sale.paidAmount ??
+                    sale.ReceivedAmount ??
+                    sale.receivedAmount ??
+                    0
+                  ) || 0;
+
+                const balanceAmount =
+                  Number(
+                    sale.BalanceAmount ??
+                    sale.balanceAmount ??
+                    Math.max(
+                      netAmount -
+                      paidAmount,
+                      0
+                    )
+                  ) || 0;
+
+                const storedPaymentStatus =
+                  String(
+                    sale.PaymentStatus ??
+                    sale.paymentStatus ??
+                    ""
+                  ).trim();
+
+                const paymentStatus =
+                  storedPaymentStatus ||
+                  (
+                    balanceAmount <= 0 &&
+                      netAmount > 0
+                      ? "Paid"
+                      : paidAmount > 0
+                        ? "Partial"
+                        : "Pending"
+                  );
+
+                return {
+                  ...sale,
+
+                  id:
+                    sale._id ||
+                    sale.id,
+
+                  _id:
+                    sale._id ||
+                    sale.id,
+
+                  serialNumber:
+                    (
+                      resolvedPage -
+                      1
+                    ) *
+                    resolvedLimit +
+                    index +
+                    1,
+
+                  billDate:
+                    sale.BillDate ||
+                    sale.billDate ||
+                    "",
+
+                  date:
+                    sale.BillDate ||
+                    sale.billDate ||
+                    "",
+
+                  billSeries:
+                    sale.BillSeries ||
+                    sale.billSeries ||
+                    "",
+
+                  billNo:
+                    sale.BillNo ??
+                    sale.billNo ??
+                    "",
+
+                  billNumber:
+                    sale.BillNo ??
+                    sale.billNo ??
+                    "",
+
+                  billType:
+                    sale.BillType ||
+                    sale.billType ||
+                    "",
+
+                  partyCode:
+                    sale.PartyCode ||
+                    sale.partyCode ||
+                    "",
+
+                  party:
+                    sale.PartyName ||
+                    sale.party ||
+                    sale.partyName ||
+                    "",
+
+                  partyName:
+                    sale.PartyName ||
+                    sale.partyName ||
+                    sale.party ||
+                    "",
+
+                  area:
+                    sale.AreaName ||
+                    sale.area ||
+                    "",
+
+                  areaName:
+                    sale.AreaName ||
+                    sale.areaName ||
+                    sale.area ||
+                    "",
+
+                  company:
+                    sale.CompanyName ||
+                    sale.companyName ||
+                    sale.CompanyCode ||
+                    sale.company ||
+                    "",
+
+                  companyName:
+                    sale.CompanyName ||
+                    sale.companyName ||
+                    "",
+
+                  companyCode:
+                    sale.CompanyCode ||
+                    sale.companyCode ||
+                    "",
+
+                  salesman:
+                    sale.SalesmanName ||
+                    sale.salesmanName ||
+                    sale.salesman ||
+                    "",
+
+                  salesmanName:
+                    sale.SalesmanName ||
+                    sale.salesmanName ||
+                    sale.salesman ||
+                    "",
+
+                  loadSeries:
+                    sale.LoadSeries ||
+                    sale.loadSeries ||
+                    "",
+
+                  loadNumber:
+                    sale.LoadNo ??
+                    sale.loadNo ??
+                    sale.loadNumber ??
+                    "",
+
+                  loadNo:
+                    sale.LoadNo ??
+                    sale.loadNo ??
+                    sale.loadNumber ??
+                    "",
+
+                  addUser:
+                    sale.CreatedBy ||
+                    sale.createdBy ||
+                    sale.AddUser ||
+                    sale.addUser ||
+                    "",
+
+                  amount:
+                    netAmount,
+
+                  netAmount:
+                    netAmount,
+
+                  paidAmount,
+                  balanceAmount,
+                  paymentStatus,
+
+                  status:
+                    sale.IsLoaded ||
+                      sale.isLoaded
+                      ? "Loaded"
+                      : "Pending",
+
+                  type:
+                    "Invoice",
+
+                  /*
+                   * Items are intentionally not returned
+                   * by /api/sales/list.
+                   */
+                  items: [],
+
+                  originalItem,
+                };
+              }
+            );
+
+          setSalesListData(
+            normalizedSales
+          );
+
+          setSalesCurrentPage(
+            resolvedPage
+          );
+
+          setSalesRowsPerPage(
+            resolvedLimit
+          );
+
+          setSalesTotalRecords(
+            Number(
+              pagination.totalRecords ||
+              0
+            )
+          );
+
+          setSalesTotalPages(
+            Math.max(
+              Number(
+                pagination.totalPages ||
+                1
+              ),
+              1
+            )
+          );
+
+          setSalesStartRecord(
+            Number(
+              pagination.startRecord ||
+              0
+            )
+          );
+
+          setSalesEndRecord(
+            Number(
+              pagination.endRecord ||
+              0
+            )
+          );
+
+          /*
+           * Keep your existing generic list-page state
+           * synchronized if other code reads it.
+           */
+          setListPage(
+            (previous) => ({
+              ...previous,
+              Billing:
+                resolvedPage,
+            })
+          );
+        } catch (error) {
+          console.error(
+            "Sales Billing list error:",
+            error
+          );
+
+          setSalesListData([]);
+          setSalesTotalRecords(0);
+          setSalesTotalPages(1);
+          setSalesStartRecord(0);
+          setSalesEndRecord(0);
+
+          alert(
+            error.message ||
+            "Server not connected. Failed to load sales bills."
+          );
+        } finally {
+          setSalesListLoading(false);
+        }
+      },
+      [
+        salesCurrentPage,
+        salesRowsPerPage,
+        salesAppliedFilters,
+        salesSearchDebounced,
+      ]
+    );
+  useEffect(() => {
+    const timer =
+      window.setTimeout(() => {
+        setSalesSearchDebounced(
+          String(
+            salesAppliedFilters
+              .invoiceSearch ||
+            ""
+          ).trim()
+        );
+
+        setSalesCurrentPage(1);
+
+        setListPage(
+          (previous) => ({
+            ...previous,
+            Billing: 1,
+          })
+        );
+      }, 400);
+
+    return () => {
+      window.clearTimeout(timer);
+    };
+  }, [
+    salesAppliedFilters.invoiceSearch,
+  ]);
+  useEffect(() => {
+    const billingListIsVisible =
+      activeSubMenu ===
+      "Billing" &&
+      showSalesList &&
+      openFormFor !==
+      "Billing";
+
+    if (!billingListIsVisible) {
+      return;
     }
-  };
 
-  const loadQuotationBills = async () => {
-    try {
-      const { distributorId, firmId } = getFirmSession();
+    loadSalesBills({
+      page:
+        salesCurrentPage,
 
-      if (!distributorId || !firmId) {
-        setSalesListData(prev => prev.filter(x => x.type !== "Quotation"));
-        return;
-      }
+      limit:
+        salesRowsPerPage,
 
-      const res = await fetch(
-        `${API_URL}/quotation?distributorId=${distributorId}&firmId=${firmId}`
+      filters:
+        salesAppliedFilters,
+
+      search:
+        salesSearchDebounced,
+    });
+  }, [
+    activeSubMenu,
+    showSalesList,
+    openFormFor,
+    salesCurrentPage,
+    salesRowsPerPage,
+    salesAppliedFilters,
+    salesSearchDebounced,
+    loadSalesBills,
+  ]);
+
+  const loadQuotationBills =
+    useCallback(
+      async ({
+        page,
+        limit,
+        filters,
+        search,
+      } = {}) => {
+        try {
+          const {
+            distributorId,
+            firmId,
+          } = getFirmSession();
+
+          if (
+            !distributorId ||
+            !firmId
+          ) {
+            setQuotationListData([]);
+            setQuotationTotalRecords(0);
+            setQuotationTotalPages(1);
+            setQuotationStartRecord(0);
+            setQuotationEndRecord(0);
+
+            return;
+          }
+
+          const requestedPage =
+            Number(
+              page ??
+              quotationCurrentPage
+            ) || 1;
+
+          const requestedLimit =
+            Number(
+              limit ??
+              quotationRowsPerPage
+            ) || 10;
+
+          const appliedFilters =
+            filters ||
+            quotationAppliedFilters ||
+            createDefaultQuotationListFilters();
+
+          const searchText =
+            search !== undefined
+              ? String(
+                search || ""
+              ).trim()
+              : String(
+                quotationSearchDebounced ||
+                ""
+              ).trim();
+
+          setQuotationListLoading(
+            true
+          );
+
+          const query =
+            new URLSearchParams({
+              distributorId,
+              firmId,
+              page: String(
+                requestedPage
+              ),
+              limit: String(
+                requestedLimit
+              ),
+            });
+
+          const appendFilter = (
+            key,
+            value
+          ) => {
+            const cleanValue =
+              String(
+                value ?? ""
+              ).trim();
+
+            if (cleanValue) {
+              query.set(
+                key,
+                cleanValue
+              );
+            }
+          };
+
+          appendFilter(
+            "search",
+            searchText
+          );
+
+          appendFilter(
+            "fromDate",
+            appliedFilters.fromDate
+          );
+
+          appendFilter(
+            "toDate",
+            appliedFilters.toDate
+          );
+
+          appendFilter(
+            "billSeries",
+            appliedFilters.billSeries
+          );
+
+          appendFilter(
+            "billType",
+            appliedFilters.billType
+          );
+
+          appendFilter(
+            "party",
+            appliedFilters.party
+          );
+
+          appendFilter(
+            "partyCode",
+            appliedFilters.partyCode
+          );
+
+          appendFilter(
+            "salesmanCode",
+            appliedFilters.salesman
+          );
+
+          appendFilter(
+            "areaCode",
+            appliedFilters.area
+          );
+
+          appendFilter(
+            "companyCode",
+            appliedFilters.company
+          );
+
+          appendFilter(
+            "addUser",
+            appliedFilters.addUser
+          );
+
+          appendFilter(
+            "minAmount",
+            appliedFilters.minAmount
+          );
+
+          appendFilter(
+            "maxAmount",
+            appliedFilters.maxAmount
+          );
+
+          const response =
+            await fetch(
+              `${API_URL}/quotation/list?${query.toString()}`
+            );
+
+          const result =
+            await response.json();
+
+          if (
+            !response.ok ||
+            !result.success
+          ) {
+            throw new Error(
+              result.message ||
+              "Failed to load quotations"
+            );
+          }
+
+          const pagination =
+            result.pagination || {};
+
+          const resolvedPage =
+            Number(
+              pagination.currentPage ||
+              pagination.page ||
+              requestedPage
+            ) || 1;
+
+          const resolvedLimit =
+            Number(
+              pagination.limit ||
+              requestedLimit
+            ) || 10;
+
+          const quotationList =
+            (
+              Array.isArray(
+                result.quotations
+              )
+                ? result.quotations
+                : []
+            ).map(
+              (
+                quotation,
+                index
+              ) => {
+                const netAmount =
+                  Number(
+                    quotation.NetAmount ??
+                    quotation.netAmount ??
+                    quotation.amount ??
+                    0
+                  ) || 0;
+
+                return {
+                  ...quotation,
+
+                  id:
+                    quotation._id ||
+                    quotation.id,
+
+                  _id:
+                    quotation._id ||
+                    quotation.id,
+
+                  serialNumber:
+                    (
+                      resolvedPage -
+                      1
+                    ) *
+                    resolvedLimit +
+                    index +
+                    1,
+
+                  billDate:
+                    quotation.BillDate ||
+                    quotation.billDate ||
+                    "",
+
+                  date:
+                    quotation.BillDate ||
+                    quotation.billDate ||
+                    "",
+
+                  billSeries:
+                    quotation.BillSeries ||
+                    quotation.billSeries ||
+                    "",
+
+                  billNo:
+                    quotation.BillNo ??
+                    quotation.billNo ??
+                    "",
+
+                  billNumber:
+                    quotation.BillNo ??
+                    quotation.billNo ??
+                    "",
+
+                  billType:
+                    quotation.BillType ||
+                    quotation.billType ||
+                    "",
+
+                  party:
+                    quotation.PartyName ||
+                    quotation.partyName ||
+                    quotation.party ||
+                    "",
+
+                  partyName:
+                    quotation.PartyName ||
+                    quotation.partyName ||
+                    quotation.party ||
+                    "",
+
+                  partyCode:
+                    quotation.PartyCode ||
+                    quotation.partyCode ||
+                    "",
+
+                  area:
+                    quotation.AreaName ||
+                    quotation.areaName ||
+                    quotation.area ||
+                    "",
+
+                  areaName:
+                    quotation.AreaName ||
+                    quotation.areaName ||
+                    quotation.area ||
+                    "",
+
+                  areaCode:
+                    quotation.AreaCode ||
+                    quotation.areaCode ||
+                    "",
+
+                  company:
+                    quotation.CompanyName ||
+                    quotation.companyName ||
+                    quotation.CompanyCode ||
+                    quotation.company ||
+                    "",
+
+                  companyName:
+                    quotation.CompanyName ||
+                    quotation.companyName ||
+                    "",
+
+                  companyCode:
+                    quotation.CompanyCode ||
+                    quotation.companyCode ||
+                    "",
+
+                  salesman:
+                    quotation.SalesmanName ||
+                    quotation.salesmanName ||
+                    quotation.salesman ||
+                    "",
+
+                  salesmanName:
+                    quotation.SalesmanName ||
+                    quotation.salesmanName ||
+                    quotation.salesman ||
+                    "",
+
+                  salesmanCode:
+                    quotation.SalesmanCode ||
+                    quotation.salesmanCode ||
+                    "",
+
+                  branchName:
+                    quotation.AreaName ||
+                    quotation.areaName ||
+                    quotation.Godown ||
+                    quotation.godown ||
+                    "",
+
+                  addUser:
+                    quotation.CreatedBy ||
+                    quotation.createdBy ||
+                    quotation.AddUser ||
+                    quotation.addUser ||
+                    "",
+
+                  amount:
+                    netAmount,
+
+                  netAmount:
+                    netAmount,
+
+                  status:
+                    quotation.Status ||
+                    quotation.status ||
+                    "Draft",
+
+                  type:
+                    "Quotation",
+
+                  /*
+                   * Items are intentionally excluded
+                   * from /api/quotation/list.
+                   */
+                  items: [],
+
+                  raw:
+                    quotation,
+
+                  originalItem:
+                    quotation,
+                };
+              }
+            );
+
+          setQuotationListData(
+            quotationList
+          );
+
+          /*
+           * Keep old shared data clean.
+           * Quotations now live only in
+           * quotationListData.
+           */
+          setSalesListData(
+            (previous) =>
+              previous.filter(
+                (item) =>
+                  item.type !==
+                  "Quotation"
+              )
+          );
+
+          setQuotationCurrentPage(
+            resolvedPage
+          );
+
+          setQuotationRowsPerPage(
+            resolvedLimit
+          );
+
+          setQuotationTotalRecords(
+            Number(
+              pagination.totalRecords ||
+              0
+            )
+          );
+
+          setQuotationTotalPages(
+            Math.max(
+              Number(
+                pagination.totalPages ||
+                1
+              ),
+              1
+            )
+          );
+
+          setQuotationStartRecord(
+            Number(
+              pagination.startRecord ||
+              0
+            )
+          );
+
+          setQuotationEndRecord(
+            Number(
+              pagination.endRecord ||
+              0
+            )
+          );
+
+          setListPage(
+            (previous) => ({
+              ...previous,
+              quotation:
+                resolvedPage,
+            })
+          );
+        } catch (error) {
+          console.error(
+            "Quotation list error:",
+            error
+          );
+
+          setQuotationListData([]);
+          setQuotationTotalRecords(0);
+          setQuotationTotalPages(1);
+          setQuotationStartRecord(0);
+          setQuotationEndRecord(0);
+
+          alert(
+            error.message ||
+            "Server not connected. Failed to load quotations."
+          );
+        } finally {
+          setQuotationListLoading(
+            false
+          );
+        }
+      },
+      [
+        quotationCurrentPage,
+        quotationRowsPerPage,
+        quotationAppliedFilters,
+        quotationSearchDebounced,
+      ]
+    );
+  useEffect(() => {
+    const timer =
+      window.setTimeout(() => {
+        setQuotationSearchDebounced(
+          String(
+            quotationAppliedFilters
+              .invoiceSearch ||
+            ""
+          ).trim()
+        );
+      }, 400);
+
+    return () => {
+      window.clearTimeout(
+        timer
       );
+    };
+  }, [
+    quotationAppliedFilters
+      .invoiceSearch,
+  ]);
+  useEffect(() => {
+    const isQuotationScreen =
+      showSalesList &&
+      String(
+        activeSubMenu || ""
+      )
+        .trim()
+        .toLowerCase() ===
+      "quotation";
 
-      const result = await res.json();
-
-      if (!res.ok || !result.success) {
-        alert(result.message || "Failed to load quotations");
-        return;
-      }
-
-      const quotationList = (result.quotations || []).map(q => ({
-        id: q._id,
-        billDate: q.BillDate,
-        billSeries: q.BillSeries,
-        billNo: q.BillNo,
-        billType: q.BillType,
-        party: q.PartyName,
-        partyCode: q.PartyCode,
-        area: q.AreaName,
-        amount: q.NetAmount || 0,
-        items: q.items || [],
-        status: "Draft",
-        type: "Quotation",
-        raw: q,
-      }));
-
-      setSalesListData(prev => [
-        ...prev.filter(x => x.type !== "Quotation"),
-        ...quotationList,
-      ]);
-    } catch (error) {
-      console.error(error);
-      alert("Server not connected. Failed to load quotations.");
+    if (!isQuotationScreen) {
+      return;
     }
-  };
+
+    loadQuotationBills({
+      page:
+        quotationCurrentPage,
+
+      limit:
+        quotationRowsPerPage,
+
+      filters:
+        quotationAppliedFilters,
+
+      search:
+        quotationSearchDebounced,
+    });
+  }, [
+    showSalesList,
+    activeSubMenu,
+    quotationCurrentPage,
+    quotationRowsPerPage,
+    quotationAppliedFilters,
+    quotationSearchDebounced,
+    loadQuotationBills,
+  ]);
   const getSelectedCompanyFromValue = (companyValue) => {
     return companies.find(c =>
       norm(c.name) === norm(companyValue) ||
@@ -15988,7 +18916,15 @@ await loadUsers({
       const purRate = parseFloat(item.purRate) || parseFloat(item.selectedBatch?.purchaseRate) || 0;
       const mrp = parseFloat(item.mrp) || 0;
 
-      const baseRate = taxOn === 'MRP' ? mrp : purRate;
+      const effectivePurchaseRate =
+        purRate > 0
+          ? purRate
+          : mrp;
+
+      const baseRate =
+        taxOn === "MRP"
+          ? mrp
+          : effectivePurchaseRate;
       const grossAmt = qty * baseRate;
 
       item.grossAmount = grossAmt.toFixed(2);
@@ -16062,100 +18998,353 @@ await loadUsers({
   };
 
   // Replace the entire calcPurchaseSummary function
-  const calcPurchaseSummary = useCallback((items = purchaseItems) => {
-    let totalMrp = 0;
-    let totalGrossAmount = 0;
-    let totalTaxable = 0;
-    let totalCgst = 0;
-    let totalSgst = 0;
-    let totalIgst = 0;
-    let totalAmount = 0;
+  const calcPurchaseSummary = useCallback(
+    (items = purchaseItems) => {
+      let totalMrp = 0;
+      let totalGrossAmount = 0;
+      let totalTaxable = 0;
+      let totalCgst = 0;
+      let totalSgst = 0;
+      let totalIgst = 0;
+      let totalAmount = 0;
 
-    items.forEach(item => {
-      // Get quantity with unit consideration
-      let qty = parseFloat(item.quantity) || 0;
-      const unit = String(item.unitId || "PCS").toLowerCase();
-      const boxPack = parseFloat(item.boxPack) || 1;
-      const inboxPack = parseFloat(item.inboxPack) || 1;
+      const supplierAccount =
+        otherAccounts.find(
+          (account) =>
+            account.accountName ===
+            purchaseFormData.supplier ||
+            account.accountCode ===
+            purchaseFormData.supplier
+        );
 
-      if (unit === "box") {
-        qty = qty * boxPack;
-      } else if (unit === "inbox") {
-        qty = qty * inboxPack;
-      }
+      const invType = String(
+        supplierAccount?.invType || "TAXABLE"
+      ).toUpperCase();
 
-      const mrp = parseFloat(item.mrp) || 0;
-      const rate = parseFloat(item.purRate) || 0;
+      const taxOn = String(
+        supplierAccount?.taxOn || "SRATE"
+      ).toUpperCase();
 
-      totalMrp += qty * mrp;
-      totalGrossAmount += qty * rate;
-      totalTaxable += parseFloat(item.taxable) || 0;
-      totalCgst += parseFloat(item.cgst) || 0;
-      totalSgst += parseFloat(item.sgst) || 0;
-      totalIgst += parseFloat(item.igst) || 0;
-      totalAmount += parseFloat(item.amount) || 0;
-    });
+      const isIgstPurchase =
+        purchaseFormData.isIgst === "Y" ||
+        purchaseFormData.isIgst === "Yes" ||
+        invType === "CST" ||
+        invType === "IGST";
 
-    // Get discount values from form (diBc1, diBc2, diBc3 are the discount amounts in rupees)
-    const diBc1 = parseFloat(purchaseFormData.diBc1) || 0;
-    const diBc2 = parseFloat(purchaseFormData.diBc2) || 0;
-    const diBc3 = parseFloat(purchaseFormData.diBc3) || 0;
-    const rounding = parseFloat(purchaseFormData.rounding) || 0;
-    const tcbPercent = parseFloat(purchaseFormData.tcbPercent) || 0;
+      const recalculatedItems = items.map(
+        (sourceItem) => {
+          const item = {
+            ...sourceItem,
+          };
 
-    // Calculate TCS amount based on gross amount
-    const tcbAmount = totalGrossAmount * (tcbPercent / 100);
+          let qty =
+            Number(
+              item.quantity ??
+              item.qty ??
+              0
+            ) || 0;
 
-    // After DISC1 = MRP Total - DISC1 (but only if discount is applied)
-    let afterDiBc1 = totalMrp - diBc1;
-    if (diBc1 <= 0) afterDiBc1 = totalMrp;
+          const unit = String(
+            item.unitId ||
+            item.unit ||
+            "PCS"
+          ).toLowerCase();
 
-    // Gross Amount should be the total amount after DISC1
-    // But if no items have rates, use the taxable value
-    const groBsAmt = totalGrossAmount > 0 ? totalGrossAmount : afterDiBc1;
+          const boxPack =
+            Number(
+              item.boxPack ??
+              item.BoxPack ??
+              1
+            ) || 1;
 
-    // After DISC2 = After DISC1 - DISC2
-    let afterDiBc2 = afterDiBc1 - diBc2;
-    if (diBc2 <= 0) afterDiBc2 = afterDiBc1;
+          const inboxPack =
+            Number(
+              item.inboxPack ??
+              item.inBoxPack ??
+              item.InBoxPack ??
+              1
+            ) || 1;
 
-    // GST Amount = Total CGST + SGST + IGST
-    const gstTotal = totalCgst + totalSgst + totalIgst;
+          if (unit === "box") {
+            qty *= boxPack;
+          } else if (
+            unit === "inbox" ||
+            unit === "inner"
+          ) {
+            qty *= inboxPack;
+          }
 
-    // QBT Amount = Total Taxable + GST
-    const qbtAmt = totalTaxable + gstTotal;
+          const mrp =
+            Number(
+              item.mrp ??
+              item.MRP ??
+              item.selectedBatch?.mrp ??
+              item.selectedBatch?.MRP ??
+              0
+            ) || 0;
 
-    // After DISC3 = QBT Amount - DISC3
-    let afterDiBc3 = qbtAmt - diBc3;
-    if (diBc3 <= 0) afterDiBc3 = qbtAmt;
+          const purchaseRate =
+            Number(
+              item.purRate ??
+              item.purchaseRate ??
+              item.PRate ??
+              item.selectedBatch?.purchaseRate ??
+              item.selectedBatch?.PurchaseRate ??
+              item.selectedBatch?.PRate ??
+              item.selectedBatch?.pRate ??
+              item.selectedBatch?.Rate_Per_Unit ??
+              0
+            ) || 0;
 
-    // Net Amount = After DISC3 + Rounding
-    const netAmt = afterDiBc3 + rounding;
+          /*
+           * Use MRP only when Supplier Master taxOn is MRP.
+           * Otherwise use Purchase Rate.
+           */
+          /*
+  * Some existing stock batches currently have
+  * Purchase Rate = 0.
+  *
+  * Prefer Purchase Rate when available.
+  * Otherwise calculate using MRP so that the
+  * purchase row and summary do not remain zero.
+  */
+          const effectivePurchaseRate =
+            purchaseRate > 0
+              ? purchaseRate
+              : mrp;
 
-    // If no items, set everything to 0
-    const finalNetAmt = items.length > 0 ? netAmt : 0;
-    const finalGrossAmt = items.length > 0 ? groBsAmt : 0;
-    const finalAfterDiBc1 = items.length > 0 ? afterDiBc1 : 0;
-    const finalAfterDiBc2 = items.length > 0 ? afterDiBc2 : 0;
-    const finalAfterDiBc3 = items.length > 0 ? afterDiBc3 : 0;
-    const finalQbtAmt = items.length > 0 ? qbtAmt : 0;
+          const baseRate =
+            taxOn === "MRP"
+              ? mrp
+              : effectivePurchaseRate;
 
-    setPurchaseFormData(prev => ({
-      ...prev,
-      mrpTotal: totalMrp.toFixed(2),
-      grossAmount: finalGrossAmt.toFixed(2),
-      tcbAmount: tcbAmount.toFixed(2),
-      afterDiBc1: finalAfterDiBc1.toFixed(2),
-      groBsAmt: finalGrossAmt.toFixed(2),
-      afterDiBc2: finalAfterDiBc2.toFixed(2),
-      qbtAmt: finalQbtAmt.toFixed(2),
-      afterDiBc3: finalAfterDiBc3.toFixed(2),
-      ceBsAmt: finalAfterDiBc3.toFixed(2),
-      cgstAmt: totalCgst.toFixed(2),
-      sgstAmt: totalSgst.toFixed(2),
-      igstAmt: totalIgst.toFixed(2),
-      netAmt: finalNetAmt.toFixed(2)
-    }));
-  }, [purchaseItems, purchaseFormData.diBc1, purchaseFormData.diBc2, purchaseFormData.diBc3, purchaseFormData.rounding, purchaseFormData.tcbPercent]);
+          const grossAmount =
+            qty * baseRate;
+
+          const disc1 =
+            Number(item.disc1 || 0);
+
+          const disc2 =
+            Number(item.disc2 || 0);
+
+          const disc3 =
+            Number(item.disc3 || 0);
+
+          const afterDisc1 =
+            grossAmount -
+            grossAmount * disc1 / 100;
+
+          const afterDisc2 =
+            afterDisc1 -
+            afterDisc1 * disc2 / 100;
+
+          const afterDisc3 =
+            afterDisc2 -
+            afterDisc2 * disc3 / 100;
+
+          const taxable =
+            afterDisc3;
+
+          const taxPercent =
+            Number(
+              item.tax ??
+              item.gst ??
+              item.gstPercent ??
+              0
+            ) || 0;
+
+          const gstAmount =
+            taxable * taxPercent / 100;
+
+          const cgst =
+            isIgstPurchase
+              ? 0
+              : gstAmount / 2;
+
+          const sgst =
+            isIgstPurchase
+              ? 0
+              : gstAmount / 2;
+
+          const igst =
+            isIgstPurchase
+              ? gstAmount
+              : 0;
+
+          const amount =
+            taxable +
+            cgst +
+            sgst +
+            igst;
+
+          totalMrp += qty * mrp;
+          totalGrossAmount += grossAmount;
+          totalTaxable += taxable;
+          totalCgst += cgst;
+          totalSgst += sgst;
+          totalIgst += igst;
+          totalAmount += amount;
+
+          return {
+            ...item,
+
+            grossAmount:
+              grossAmount.toFixed(2),
+
+            afterDisc1:
+              afterDisc1.toFixed(2),
+
+            afterDisc2:
+              afterDisc2.toFixed(2),
+
+            afterDisc3:
+              afterDisc3.toFixed(2),
+
+            taxable:
+              taxable.toFixed(2),
+
+            cgst:
+              cgst.toFixed(2),
+
+            sgst:
+              sgst.toFixed(2),
+
+            igst:
+              igst.toFixed(2),
+
+            amount:
+              amount.toFixed(2),
+          };
+        }
+      );
+
+      const diBc1 =
+        Number(purchaseFormData.diBc1 || 0);
+
+      const diBc2 =
+        Number(purchaseFormData.diBc2 || 0);
+
+      const diBc3 =
+        Number(purchaseFormData.diBc3 || 0);
+
+      const rounding =
+        Number(
+          purchaseFormData.rounding || 0
+        );
+
+      const tcbPercent =
+        Number(
+          purchaseFormData.tcbPercent || 0
+        );
+
+      const tcbAmount =
+        totalAmount *
+        tcbPercent /
+        100;
+
+      const afterDiBc1 =
+        totalAmount - diBc1;
+
+      const afterDiBc2 =
+        afterDiBc1 - diBc2;
+
+      const qbtAmt =
+        afterDiBc2 + tcbAmount;
+
+      const afterDiBc3 =
+        qbtAmt - diBc3;
+
+      const netAmt =
+        afterDiBc3 + rounding;
+
+      setPurchaseItems(
+        (currentItems) => {
+          /*
+           * Avoid unnecessary repeated state updates.
+           */
+          const hasDifference =
+            JSON.stringify(currentItems) !==
+            JSON.stringify(recalculatedItems);
+
+          return hasDifference
+            ? recalculatedItems
+            : currentItems;
+        }
+      );
+
+      setPurchaseFormData(
+        (previous) => ({
+          ...previous,
+
+          mrpTotal:
+            totalMrp.toFixed(2),
+
+          grossAmount:
+            totalGrossAmount.toFixed(2),
+
+          groBsAmt:
+            totalGrossAmount.toFixed(2),
+
+          taxableAmount:
+            totalTaxable.toFixed(2),
+
+          tcbAmount:
+            tcbAmount.toFixed(2),
+
+          afterDiBc1:
+            afterDiBc1.toFixed(2),
+
+          afterDiBc2:
+            afterDiBc2.toFixed(2),
+
+          qbtAmt:
+            qbtAmt.toFixed(2),
+
+          afterDiBc3:
+            afterDiBc3.toFixed(2),
+
+          ceBsAmt:
+            afterDiBc3.toFixed(2),
+
+          cgstAmt:
+            totalCgst.toFixed(2),
+
+          sgstAmt:
+            totalSgst.toFixed(2),
+
+          igstAmt:
+            totalIgst.toFixed(2),
+
+          gstAmount:
+            (
+              totalCgst +
+              totalSgst +
+              totalIgst
+            ).toFixed(2),
+
+          rounding:
+            rounding.toFixed(2),
+
+          netAmt:
+            Math.max(
+              0,
+              netAmt
+            ).toFixed(2),
+        })
+      );
+    },
+    [
+      purchaseItems,
+      purchaseFormData.supplier,
+      purchaseFormData.isIgst,
+      purchaseFormData.diBc1,
+      purchaseFormData.diBc2,
+      purchaseFormData.diBc3,
+      purchaseFormData.rounding,
+      purchaseFormData.tcbPercent,
+      otherAccounts,
+    ]
+  );
 
   const deletePurchaseItem = (index) => {
     const newItems = purchaseItems.filter((_, i) => i !== index);
@@ -16163,7 +19352,7 @@ await loadUsers({
     setPurchaseItems(newItems);
 
     // ADD THIS LINE - Calculate summary after deleting item
-    calcPurchaseSummary();
+    calcPurchaseSummary(newItems);
   };
   const loadNextPurchaseVouNo = async (series = "") => {
     try {
@@ -16519,11 +19708,14 @@ await loadUsers({
       addPurchaseItem();
     }
 
-    setTimeout(() => {
-      document
-        .querySelector(`[data-purchase-field="quantity"][data-purchase-index="${index}"]`)
-        ?.focus();
-    }, 80);
+    window.setTimeout(() => {
+      if (
+        showBatchModal ||
+        loadedBatches.length > 0
+      ) {
+        purchaseBatchModalRef.current?.focus();
+      }
+    }, 100);
   };
 
   const openBatchModal = (index) => {
@@ -16626,6 +19818,305 @@ await loadUsers({
       isLocked: "N",
     });
   };
+  const applyExistingPurchaseBatch = (
+    batch
+  ) => {
+    if (
+      currentBatchRow === null ||
+      currentBatchRow === undefined ||
+      currentBatchRow < 0 ||
+      !batch
+    ) {
+      return;
+    }
+
+    const rowIndex =
+      currentBatchRow;
+
+    const currentItem =
+      purchaseItems[rowIndex] || {};
+
+    const batchNo = String(
+      batch.Batch ??
+      batch.batchNo ??
+      batch.BatchNo ??
+      batch.batch ??
+      "."
+    ).trim() || ".";
+
+    const mrp =
+      Number(
+        batch.MRP ??
+        batch.mrp ??
+        currentItem.mrp ??
+        0
+      ) || 0;
+
+    const purchaseRate =
+      Number(
+        batch.PRate ??
+        batch.pRate ??
+        batch.purchaseRate ??
+        batch.PurchaseRate ??
+        batch.Rate_Per_Unit ??
+        currentItem.purRate ??
+        currentItem.purchaseRate ??
+        0
+      ) || 0;
+
+    const salesRate =
+      Number(
+        batch.SRate ??
+        batch.sRate ??
+        batch.salesRate ??
+        batch.SalesRate ??
+        currentItem.salesRate ??
+        0
+      ) || 0;
+
+    const updatedItems =
+      purchaseItems.map(
+        (item, index) => {
+          if (index !== rowIndex) {
+            return item;
+          }
+
+          return {
+            ...item,
+
+            selectedBatch: {
+              ...batch,
+              batchNo,
+              mrp,
+              purchaseRate,
+              salesRate,
+            },
+
+            batchNo,
+
+            expDate:
+              batch.ExpDt ??
+              batch.expDate ??
+              batch.ExpDate ??
+              "",
+
+            mfgDate:
+              batch.MfgDt ??
+              batch.mfgDate ??
+              batch.MfgDate ??
+              "",
+
+            mrp:
+              String(mrp),
+
+            purRate:
+              String(purchaseRate),
+
+            purchaseRate:
+              String(purchaseRate),
+
+            salesRate:
+              String(salesRate),
+
+            stockQty:
+              String(
+                batch.Qty ??
+                batch.qty ??
+                batch.StockQty ??
+                batch.stockQty ??
+                0
+              ),
+
+            boxPack:
+              Number(
+                batch.BoxPack ??
+                batch.boxPack ??
+                item.boxPack ??
+                1
+              ) || 1,
+
+            inboxPack:
+              Number(
+                batch.InBoxPack ??
+                batch.inBoxPack ??
+                batch.inboxPack ??
+                item.inboxPack ??
+                1
+              ) || 1,
+
+            isLocked:
+              batch.IsLocked ??
+              batch.isLocked ??
+              "N",
+          };
+        }
+      );
+
+    setPurchaseItems(updatedItems);
+
+    /*
+     * This function now calculates Taxable,
+     * GST and Net itself.
+     */
+    calcPurchaseSummary(updatedItems);
+
+    setShowBatchModal(false);
+    setPurchaseBatchSelectedIndex(0);
+
+    window.setTimeout(() => {
+      const quantityInput =
+        document.querySelector(
+          `[data-purchase-field="quantity"][data-purchase-index="${rowIndex}"]`
+        );
+
+      quantityInput?.focus();
+      quantityInput?.select();
+    }, 50);
+  };
+
+  useEffect(() => {
+    if (
+      !showBatchModal ||
+      batchMode !== "existing"
+    ) {
+      return;
+    }
+
+    /*
+     * Select the first row only once,
+     * when the modal initially opens.
+     */
+    purchaseBatchSelectedIndexRef.current = 0;
+    setPurchaseBatchSelectedIndex(0);
+
+    const focusTimer = window.setTimeout(() => {
+      purchaseBatchModalRef.current?.focus();
+    }, 20);
+
+    const handlePurchaseBatchKeyboard = (
+      event
+    ) => {
+      const allowedKeys = [
+        "ArrowDown",
+        "ArrowUp",
+        "Enter",
+        "Escape",
+      ];
+
+      if (!allowedKeys.includes(event.key)) {
+        return;
+      }
+
+      /*
+       * Prevent the Quantity number input
+       * from receiving Arrow Up/Arrow Down.
+       */
+      event.preventDefault();
+      event.stopPropagation();
+
+      if (
+        typeof event.stopImmediatePropagation ===
+        "function"
+      ) {
+        event.stopImmediatePropagation();
+      }
+
+      const totalBatches =
+        existingBatches.length;
+
+      if (event.key === "ArrowDown") {
+        if (totalBatches === 0) {
+          return;
+        }
+
+        const nextIndex =
+          purchaseBatchSelectedIndexRef.current <
+            totalBatches - 1
+            ? purchaseBatchSelectedIndexRef.current +
+            1
+            : 0;
+
+        purchaseBatchSelectedIndexRef.current =
+          nextIndex;
+
+        setPurchaseBatchSelectedIndex(
+          nextIndex
+        );
+
+        return;
+      }
+
+      if (event.key === "ArrowUp") {
+        if (totalBatches === 0) {
+          return;
+        }
+
+        const previousIndex =
+          purchaseBatchSelectedIndexRef.current >
+            0
+            ? purchaseBatchSelectedIndexRef.current -
+            1
+            : totalBatches - 1;
+
+        purchaseBatchSelectedIndexRef.current =
+          previousIndex;
+
+        setPurchaseBatchSelectedIndex(
+          previousIndex
+        );
+
+        return;
+      }
+
+      if (event.key === "Enter") {
+        const selectedBatch =
+          existingBatches[
+          purchaseBatchSelectedIndexRef.current
+          ];
+
+        if (selectedBatch) {
+          applyExistingPurchaseBatch(
+            selectedBatch
+          );
+        }
+
+        return;
+      }
+
+      if (event.key === "Escape") {
+        setShowBatchModal(false);
+
+        purchaseBatchSelectedIndexRef.current =
+          0;
+
+        setPurchaseBatchSelectedIndex(0);
+      }
+    };
+
+    /*
+     * Capture phase receives the key before
+     * the Quantity input can change itself.
+     */
+    window.addEventListener(
+      "keydown",
+      handlePurchaseBatchKeyboard,
+      true
+    );
+
+    return () => {
+      window.clearTimeout(focusTimer);
+
+      window.removeEventListener(
+        "keydown",
+        handlePurchaseBatchKeyboard,
+        true
+      );
+    };
+  }, [
+    showBatchModal,
+    batchMode,
+    existingBatches,
+  ]);
   const selectPurchaseBatch = (batch) => {
     const updatedItems = [...purchaseItems];
 
@@ -16814,7 +20305,28 @@ await loadUsers({
       }
 
       alert(result.message || "Purchase saved successfully");
-      await loadPurchaseBills();
+      /*
+  * A new Purchase is sorted at the top,
+  * so return to page 1 before reloading.
+  */
+      setPurchaseCurrentPage(1);
+
+      setListPage(
+        (previous) => ({
+          ...previous,
+          Purchase: 1,
+        })
+      );
+
+      await loadPurchaseBills({
+        page: 1,
+        limit:
+          purchaseRowsPerPage,
+        filters:
+          purchaseAppliedFilters,
+        search:
+          purchaseSearchDebounced,
+      });
 
       setPurchaseItems([]);
       setTimeout(() => addPurchaseItem(), 100);
@@ -16846,404 +20358,1636 @@ await loadUsers({
       alert("Server not connected. Purchase not saved.");
     }
   };
-
-  const loadPurchaseBills = async () => {
-    try {
-      const { distributorId, firmId } = getFirmSession();
-
-      if (!distributorId || !firmId) {
-        setPurchaseListData([]);
-        return;
-      }
-
-      const res = await fetch(
-        `${API_URL}/purchase?distributorId=${encodeURIComponent(distributorId)}&firmId=${encodeURIComponent(firmId)}`
-      );
-
-      const result = await res.json();
-
-      if (!res.ok || !result.success) {
-        alert(result.message || "Failed to load purchase bills");
-        setPurchaseListData([]);
-        return;
-      }
-
-      const rows = (result.purchases || []).map((p) => ({
-        ...p,
-        id: p._id,
-
-        billDate: p.invoiceDate || "",
-        billSeries: p.vouSer || "",
-        billNo: p.vouNo || "",
-        billType: "Purchase",
-
-        partyCode: p.supplierCode || "",
-        partyName: p.supplierName || "",
-
-        branchName: p.godownName || "",
-        amount: Number(p.netAmt || 0),
-        status: "Saved",
-      }));
-
-      setPurchaseListData(rows);
-    } catch (error) {
-      console.error("Purchase list load error:", error);
-      alert("Server not connected. Failed to load purchase bills.");
-      setPurchaseListData([]);
-    }
-  };
-  const loadCreditNotes = async () => {
-    try {
-      const {
-        distributorId,
-        firmId,
-      } = getFirmSession();
-
-      if (
-        !distributorId ||
-        !firmId
-      ) {
-        setCreditNoteListData([]);
-        return [];
-      }
-
-      const query =
-        new URLSearchParams({
-          distributorId:
-            String(distributorId),
-
-          firmId:
-            String(firmId),
-        });
-
-      const response = await fetch(
-        `${API_URL}/credit-note?${query.toString()}`
-      );
-
-      const result =
-        await response.json();
-
-      if (
-        !response.ok ||
-        !result.success
-      ) {
-        throw new Error(
-          result.message ||
-          "Failed to load Credit Notes."
-        );
-      }
-
-      const rows = Array.isArray(
-        result.creditNotes
-      )
-        ? result.creditNotes.map(
-          (creditNote) => ({
-            ...creditNote,
-
-            id:
-              creditNote._id ||
-              creditNote.id,
-
-            _id:
-              creditNote._id ||
-              creditNote.id,
-
-            billDate:
-              creditNote.VDate ||
-              creditNote.vDate ||
-              creditNote.createdAt ||
-              "",
-
-            /*
-             * Voucher number displayed in the
-             * list's Bill Series/Bill No columns.
-             */
-            billSeries:
-              creditNote.CreditNoteSeries ||
-              creditNote.creditNoteSeries ||
-              "",
-
-            billNo:
-              creditNote.CreditNoteNo ||
-              creditNote.creditNoteNo ||
-              creditNote.VNo ||
-              "",
-
-            /*
-             * Original Sales Bill reference is
-             * kept separately.
-             */
-            referenceBillSeries:
-              creditNote.BillSeries ||
-              creditNote.billSeries ||
-              "",
-
-            referenceBillNo:
-              creditNote.BillNo ||
-              creditNote.billNo ||
-              "",
-
-            billType:
-              "Credit Note",
-
-            partyCode:
-              creditNote.PartyCode ||
-              creditNote.partyCode ||
-              "",
-
-            partyName:
-              creditNote.PartyName ||
-              creditNote.partyName ||
-              "",
-
-            area:
-              creditNote.Godown ||
-              creditNote.godown ||
-              "",
-
-            branchName:
-              creditNote.Godown ||
-              creditNote.godown ||
-              "",
-
-            company:
-              creditNote.CompanyName ||
-              creditNote.companyName ||
-              creditNote.CompanyCode ||
-              creditNote.companyCode ||
-              "",
-
-            salesman:
-              creditNote.SalesmanName ||
-              creditNote.salesmanName ||
-              "",
-
-            amount:
-              Number(
-                creditNote.NetAmount ??
-                creditNote.amount ??
-                0
-              ),
-
-            status:
-              creditNote.Status ||
-              creditNote.status ||
-              "Approved",
-
-            addUser:
-              creditNote.CreatedBy ||
-              creditNote.createdBy ||
-              "",
-
-            items:
-              Array.isArray(
-                creditNote.items
-              )
-                ? creditNote.items
-                : [],
-            databaseCreditNote:
-              creditNote,
-            originalItem:
-              creditNote,
-          })
+  const creditNoteSeriesOptions =
+    Array.from(
+      new Set(
+        (
+          Array.isArray(
+            creditNoteListData
+          )
+            ? creditNoteListData
+            : []
         )
-        : [];
-
-      setCreditNoteListData(rows);
-
-      return rows;
-    } catch (error) {
-      console.error(
-        "Credit Note list load error:",
-        error
-      );
-
-      setCreditNoteListData([]);
-
-      alert(
-        error.message ||
-        "Unable to load Credit Notes."
-      );
-
-      return [];
-    }
-  };
-
-  const loadDebitNotes = async () => {
-    try {
-      const {
-        distributorId,
-        firmId,
-      } = getFirmSession();
-
-      if (
-        !distributorId ||
-        !firmId
-      ) {
-        setDebitNoteListData([]);
-        return [];
-      }
-
-      const query =
-        new URLSearchParams({
-          distributorId:
-            String(distributorId),
-
-          firmId:
-            String(firmId),
-        });
-
-      const response = await fetch(
-        `${API_URL}/debit-note?${query.toString()}`
-      );
-
-      const result =
-        await response.json();
-
-      if (
-        !response.ok ||
-        !result.success
-      ) {
-        throw new Error(
-          result.message ||
-          "Failed to load Debit Notes."
-        );
-      }
-
-      const rows = Array.isArray(
-        result.debitNotes
+          .map((row) =>
+            String(
+              row.CreditNoteSeries ||
+              row.creditNoteSeries ||
+              row.billSeries ||
+              ""
+            ).trim()
+          )
+          .filter(Boolean)
       )
-        ? result.debitNotes.map(
-          (debitNote) => ({
-            ...debitNote,
+    ).sort();
 
-            id:
-              debitNote._id ||
-              debitNote.id,
-
-            _id:
-              debitNote._id ||
-              debitNote.id,
-
-            billDate:
-              debitNote.VDate ||
-              debitNote.vDate ||
-              debitNote.createdAt ||
-              "",
-
-            /*
-             * Display Debit Note voucher number,
-             * not referenced Purchase Bill number.
-             */
-            billSeries:
-              debitNote.DebitNoteSeries ||
-              debitNote.debitNoteSeries ||
-              debitNote.VouSer ||
-              "",
-
-            billNo:
-              debitNote.DebitNoteNo ||
-              debitNote.debitNoteNo ||
-              debitNote.VNo ||
-              "",
-
-            referenceBillSeries:
-              debitNote.BillSeries ||
-              debitNote.billSeries ||
-              "",
-
-            referenceBillNo:
-              debitNote.BillNo ||
-              debitNote.billNo ||
-              "",
-
-            billType:
-              "Debit Note",
-
-            partyCode:
-              debitNote.SupplierCode ||
-              debitNote.supplierCode ||
-              "",
-
-            partyName:
-              debitNote.SupplierName ||
-              debitNote.supplierName ||
-              "",
-
-            area:
-              debitNote.Godown ||
-              debitNote.godown ||
-              "",
-
-            branchName:
-              debitNote.Godown ||
-              debitNote.godown ||
-              "",
-
-            company:
-              debitNote.CompanyName ||
-              debitNote.companyName ||
-              debitNote.CompanyCode ||
-              debitNote.companyCode ||
-              "",
-
-            salesman:
-              debitNote.SalesmanName ||
-              debitNote.salesmanName ||
-              "",
-
-            amount:
-              Number(
-                debitNote.NetAmount ??
-                debitNote.amount ??
-                0
-              ),
-
-            status:
-              debitNote.Status ||
-              debitNote.status ||
-              "Approved",
-
-            addUser:
-              debitNote.CreatedBy ||
-              debitNote.createdBy ||
-              "",
-
-            items:
-              Array.isArray(
-                debitNote.items
-              )
-                ? debitNote.items
-                : [],
-
-            databaseDebitNote:
-              debitNote,
-
-            originalItem:
-              debitNote,
-          })
+  const debitNoteSeriesOptions =
+    Array.from(
+      new Set(
+        (
+          Array.isArray(
+            debitNoteListData
+          )
+            ? debitNoteListData
+            : []
         )
-        : [];
+          .map((row) =>
+            String(
+              row.DebitNoteSeries ||
+              row.debitNoteSeries ||
+              row.billSeries ||
+              ""
+            ).trim()
+          )
+          .filter(Boolean)
+      )
+    ).sort();
 
-      setDebitNoteListData(rows);
+  const debitNoteSupplierOptions =
+    Array.from(
+      new Map(
+        (
+          Array.isArray(accounts)
+            ? accounts
+            : []
+        )
+          .map((account) => {
+            const code = String(
+              account.accountCode ||
+              account.AccountCode ||
+              account.supplierCode ||
+              ""
+            ).trim();
 
-      return rows;
-    } catch (error) {
-      console.error(
-        "Debit Note list load error:",
-        error
+            const name = String(
+              account.accountName ||
+              account.AccountName ||
+              account.supplierName ||
+              ""
+            ).trim();
+
+            if (
+              !code &&
+              !name
+            ) {
+              return null;
+            }
+
+            return [
+              code || name,
+              {
+                code,
+                name:
+                  name || code,
+              },
+            ];
+          })
+          .filter(Boolean)
+      ).values()
+    ).sort(
+      (
+        first,
+        second
+      ) =>
+        first.name.localeCompare(
+          second.name
+        )
+    );
+
+  const debitNoteGodownOptions =
+    Array.from(
+      new Map(
+        (
+          Array.isArray(godowns)
+            ? godowns
+            : []
+        )
+          .map((godown) => {
+            const code = String(
+              godown.godownCode ||
+              godown.GodownCode ||
+              godown.GDCode ||
+              godown.code ||
+              ""
+            ).trim();
+
+            const name = String(
+              godown.godownName ||
+              godown.GodownName ||
+              godown.Godown ||
+              godown.name ||
+              ""
+            ).trim();
+
+            if (
+              !code &&
+              !name
+            ) {
+              return null;
+            }
+
+            return [
+              code || name,
+              {
+                code,
+                name:
+                  name || code,
+              },
+            ];
+          })
+          .filter(Boolean)
+      ).values()
+    ).sort(
+      (
+        first,
+        second
+      ) =>
+        first.name.localeCompare(
+          second.name
+        )
+    );
+
+  const creditNotePartyOptions =
+    Array.from(
+      new Map(
+        (
+          Array.isArray(accounts)
+            ? accounts
+            : []
+        )
+          .map((account) => {
+            const code = String(
+              account.accountCode ||
+              account.AccountCode ||
+              ""
+            ).trim();
+
+            const name = String(
+              account.accountName ||
+              account.AccountName ||
+              ""
+            ).trim();
+
+            if (!code && !name) {
+              return null;
+            }
+
+            return [
+              code || name,
+              {
+                code,
+                name:
+                  name || code,
+              },
+            ];
+          })
+          .filter(Boolean)
+      ).values()
+    ).sort((first, second) =>
+      first.name.localeCompare(
+        second.name
+      )
+    );
+
+  const creditNoteGodownOptions =
+    Array.from(
+      new Map(
+        (
+          Array.isArray(godowns)
+            ? godowns
+            : []
+        )
+          .map((godown) => {
+            const code = String(
+              godown.godownCode ||
+              godown.GodownCode ||
+              godown.GDCode ||
+              godown.code ||
+              ""
+            ).trim();
+
+            const name = String(
+              godown.godownName ||
+              godown.GodownName ||
+              godown.Godown ||
+              godown.name ||
+              ""
+            ).trim();
+
+            if (!code && !name) {
+              return null;
+            }
+
+            return [
+              code || name,
+              {
+                code,
+                name:
+                  name || code,
+              },
+            ];
+          })
+          .filter(Boolean)
+      ).values()
+    ).sort((first, second) =>
+      first.name.localeCompare(
+        second.name
+      )
+    );
+
+  const loadPurchaseBills =
+    useCallback(
+      async ({
+        page,
+        limit,
+        filters,
+        search,
+      } = {}) => {
+        try {
+          const {
+            distributorId,
+            firmId,
+          } = getFirmSession();
+
+          if (
+            !distributorId ||
+            !firmId
+          ) {
+            setPurchaseListData([]);
+            setPurchaseTotalRecords(0);
+            setPurchaseTotalPages(1);
+            setPurchaseStartRecord(0);
+            setPurchaseEndRecord(0);
+
+            return [];
+          }
+
+          const requestedPage =
+            Number(
+              page ??
+              purchaseCurrentPage
+            ) || 1;
+
+          const requestedLimit =
+            Number(
+              limit ??
+              purchaseRowsPerPage
+            ) || 10;
+
+          const appliedFilters =
+            filters ||
+            purchaseAppliedFilters ||
+            createDefaultPurchaseListFilters();
+
+          const searchText =
+            search !== undefined
+              ? String(
+                search || ""
+              ).trim()
+              : String(
+                purchaseSearchDebounced ||
+                ""
+              ).trim();
+
+          setPurchaseListLoading(
+            true
+          );
+
+          const query =
+            new URLSearchParams({
+              distributorId:
+                String(distributorId),
+
+              firmId:
+                String(firmId),
+
+              page:
+                String(requestedPage),
+
+              limit:
+                String(requestedLimit),
+            });
+
+          const appendFilter = (
+            key,
+            value
+          ) => {
+            const cleanValue =
+              String(
+                value ?? ""
+              ).trim();
+
+            if (cleanValue) {
+              query.set(
+                key,
+                cleanValue
+              );
+            }
+          };
+
+          appendFilter(
+            "search",
+            searchText
+          );
+
+          appendFilter(
+            "fromDate",
+            appliedFilters.fromDate
+          );
+
+          appendFilter(
+            "toDate",
+            appliedFilters.toDate
+          );
+
+          appendFilter(
+            "vouSer",
+            appliedFilters.vouSer
+          );
+
+          appendFilter(
+            "supplierCode",
+            appliedFilters.supplierCode
+          );
+
+          appendFilter(
+            "supplierName",
+            appliedFilters.supplierName
+          );
+
+          appendFilter(
+            "company",
+            appliedFilters.company
+          );
+
+          appendFilter(
+            "gdCode",
+            appliedFilters.gdCode
+          );
+
+          appendFilter(
+            "godownName",
+            appliedFilters.godownName
+          );
+
+          appendFilter(
+            "invoiceNumber",
+            appliedFilters.invoiceNumber
+          );
+
+          appendFilter(
+            "minAmount",
+            appliedFilters.minAmount
+          );
+
+          appendFilter(
+            "maxAmount",
+            appliedFilters.maxAmount
+          );
+
+          const response =
+            await fetch(
+              `${API_URL}/purchase/list?${query.toString()}`
+            );
+
+          const result =
+            await response.json();
+
+          if (
+            !response.ok ||
+            !result.success
+          ) {
+            throw new Error(
+              result.message ||
+              "Failed to load purchase bills"
+            );
+          }
+
+          const rows =
+            Array.isArray(
+              result.purchases
+            )
+              ? result.purchases.map(
+                (purchase) => ({
+                  ...purchase,
+
+                  id:
+                    purchase._id ||
+                    purchase.id,
+
+                  _id:
+                    purchase._id ||
+                    purchase.id,
+
+                  billDate:
+                    purchase.invoiceDate ||
+                    "",
+
+                  billSeries:
+                    purchase.vouSer ||
+                    "",
+
+                  billNo:
+                    purchase.vouNo ??
+                    "",
+
+                  billType:
+                    "Purchase",
+
+                  partyCode:
+                    purchase.supplierCode ||
+                    "",
+
+                  partyName:
+                    purchase.supplierName ||
+                    "",
+
+                  supplierCode:
+                    purchase.supplierCode ||
+                    "",
+
+                  supplierName:
+                    purchase.supplierName ||
+                    "",
+
+                  branchName:
+                    purchase.godownName ||
+                    "",
+
+                  godownCode:
+                    purchase.gdCode ||
+                    "",
+
+                  godownName:
+                    purchase.godownName ||
+                    "",
+
+                  company:
+                    purchase.company ||
+                    purchase.companyName ||
+                    "",
+
+                  invoiceNumber:
+                    purchase.invoiceNumber ||
+                    "",
+
+                  amount:
+                    Number(
+                      purchase.netAmt ||
+                      0
+                    ),
+
+                  status:
+                    "Saved",
+                })
+              )
+              : [];
+
+          const pagination =
+            result.pagination ||
+            {};
+
+          const resolvedPage =
+            Number(
+              pagination.currentPage ??
+              pagination.page ??
+              requestedPage
+            ) || 1;
+
+          const resolvedTotalPages =
+            Math.max(
+              1,
+              Number(
+                pagination.totalPages ||
+                1
+              )
+            );
+
+          setPurchaseListData(
+            rows
+          );
+
+          setPurchaseCurrentPage(
+            resolvedPage
+          );
+
+          setPurchaseTotalPages(
+            resolvedTotalPages
+          );
+
+          setPurchaseTotalRecords(
+            Number(
+              pagination.totalRecords ||
+              0
+            )
+          );
+
+          setPurchaseStartRecord(
+            Number(
+              pagination.startRecord ||
+              0
+            )
+          );
+
+          setPurchaseEndRecord(
+            Number(
+              pagination.endRecord ||
+              0
+            )
+          );
+
+          /*
+           * Keep old shared list-page state synchronized,
+           * but do not use it to slice backend rows.
+           */
+          setListPage(
+            (previous) => ({
+              ...previous,
+              Purchase:
+                resolvedPage,
+            })
+          );
+
+          return rows;
+        } catch (error) {
+          console.error(
+            "Purchase list load error:",
+            error
+          );
+
+          setPurchaseListData([]);
+          setPurchaseTotalRecords(0);
+          setPurchaseTotalPages(1);
+          setPurchaseStartRecord(0);
+          setPurchaseEndRecord(0);
+
+          alert(
+            error.message ||
+            "Server not connected. Failed to load purchase bills."
+          );
+
+          return [];
+        } finally {
+          setPurchaseListLoading(
+            false
+          );
+        }
+      },
+      [
+        purchaseCurrentPage,
+        purchaseRowsPerPage,
+        purchaseAppliedFilters,
+        purchaseSearchDebounced,
+      ]
+    );
+  const loadCreditNotes =
+    useCallback(
+      async ({
+        page,
+        limit,
+        filters,
+        search,
+      } = {}) => {
+        try {
+          const {
+            distributorId,
+            firmId,
+          } = getFirmSession();
+
+          if (
+            !distributorId ||
+            !firmId
+          ) {
+            setCreditNoteListData([]);
+            setCreditNoteTotalRecords(0);
+            setCreditNoteTotalPages(1);
+            setCreditNoteStartRecord(0);
+            setCreditNoteEndRecord(0);
+
+            return [];
+          }
+
+          const requestedPage =
+            Number(
+              page ??
+              creditNoteCurrentPage
+            ) || 1;
+
+          const requestedLimit =
+            Number(
+              limit ??
+              creditNoteRowsPerPage
+            ) || 10;
+
+          const appliedFilters =
+            filters ||
+            creditNoteAppliedFilters ||
+            createDefaultCreditNoteListFilters();
+
+          const searchText =
+            search !== undefined
+              ? String(
+                search || ""
+              ).trim()
+              : String(
+                creditNoteSearchDebounced ||
+                ""
+              ).trim();
+
+          setCreditNoteListLoading(
+            true
+          );
+
+          const query =
+            new URLSearchParams({
+              distributorId:
+                String(distributorId),
+
+              firmId:
+                String(firmId),
+
+              page:
+                String(requestedPage),
+
+              limit:
+                String(requestedLimit),
+            });
+
+          const appendFilter = (
+            key,
+            value
+          ) => {
+            const cleanValue =
+              String(
+                value ?? ""
+              ).trim();
+
+            if (cleanValue) {
+              query.set(
+                key,
+                cleanValue
+              );
+            }
+          };
+
+          appendFilter(
+            "search",
+            searchText
+          );
+
+          appendFilter(
+            "fromDate",
+            appliedFilters.fromDate
+          );
+
+          appendFilter(
+            "toDate",
+            appliedFilters.toDate
+          );
+
+          appendFilter(
+            "creditNoteSeries",
+            appliedFilters
+              .creditNoteSeries
+          );
+
+          appendFilter(
+            "partyCode",
+            appliedFilters.partyCode
+          );
+
+          appendFilter(
+            "partyName",
+            appliedFilters.partyName
+          );
+
+          appendFilter(
+            "company",
+            appliedFilters.company
+          );
+
+          appendFilter(
+            "gdCode",
+            appliedFilters.gdCode
+          );
+
+          appendFilter(
+            "godownName",
+            appliedFilters.godownName
+          );
+
+          appendFilter(
+            "salesmanCode",
+            appliedFilters.salesmanCode
+          );
+
+          appendFilter(
+            "salesmanName",
+            appliedFilters.salesmanName
+          );
+
+          appendFilter(
+            "referenceBillSeries",
+            appliedFilters
+              .referenceBillSeries
+          );
+
+          appendFilter(
+            "referenceBillNo",
+            appliedFilters
+              .referenceBillNo
+          );
+
+          appendFilter(
+            "status",
+            appliedFilters.status
+          );
+
+          appendFilter(
+            "createdBy",
+            appliedFilters.createdBy
+          );
+
+          appendFilter(
+            "minAmount",
+            appliedFilters.minAmount
+          );
+
+          appendFilter(
+            "maxAmount",
+            appliedFilters.maxAmount
+          );
+
+          const response =
+            await fetch(
+              `${API_URL}/credit-note/list?${query.toString()}`
+            );
+
+          const result =
+            await response.json();
+
+          if (
+            !response.ok ||
+            !result.success
+          ) {
+            throw new Error(
+              result.message ||
+              "Failed to load Credit Notes."
+            );
+          }
+
+          const rows =
+            Array.isArray(
+              result.creditNotes
+            )
+              ? result.creditNotes.map(
+                (creditNote) => ({
+                  ...creditNote,
+
+                  id:
+                    creditNote._id ||
+                    creditNote.id,
+
+                  _id:
+                    creditNote._id ||
+                    creditNote.id,
+
+                  billDate:
+                    creditNote.VDate ||
+                    creditNote.vDate ||
+                    creditNote.createdAt ||
+                    "",
+
+                  billSeries:
+                    creditNote
+                      .CreditNoteSeries ||
+                    creditNote
+                      .creditNoteSeries ||
+                    "",
+
+                  billNo:
+                    creditNote
+                      .CreditNoteNo ||
+                    creditNote
+                      .creditNoteNo ||
+                    creditNote.VNo ||
+                    "",
+
+                  referenceBillSeries:
+                    creditNote.BillSeries ||
+                    creditNote.billSeries ||
+                    "",
+
+                  referenceBillNo:
+                    creditNote.BillNo ||
+                    creditNote.billNo ||
+                    "",
+
+                  billType:
+                    "Credit Note",
+
+                  partyCode:
+                    creditNote.PartyCode ||
+                    creditNote.partyCode ||
+                    "",
+
+                  partyName:
+                    creditNote.PartyName ||
+                    creditNote.partyName ||
+                    "",
+
+                  area:
+                    creditNote.Godown ||
+                    creditNote.godown ||
+                    "",
+
+                  branchName:
+                    creditNote.Godown ||
+                    creditNote.godown ||
+                    "",
+
+                  godownCode:
+                    creditNote.GDCode ||
+                    creditNote.gdCode ||
+                    "",
+
+                  godownName:
+                    creditNote.Godown ||
+                    creditNote.godown ||
+                    "",
+
+                  companyCode:
+                    creditNote.CompanyCode ||
+                    creditNote.companyCode ||
+                    "",
+
+                  company:
+                    creditNote.CompanyName ||
+                    creditNote.companyName ||
+                    creditNote.CompanyCode ||
+                    creditNote.companyCode ||
+                    "",
+
+                  salesmanCode:
+                    creditNote.SalesmanCode ||
+                    creditNote.salesmanCode ||
+                    "",
+
+                  salesman:
+                    creditNote.SalesmanName ||
+                    creditNote.salesmanName ||
+                    "",
+
+                  amount:
+                    Number(
+                      creditNote.NetAmount ??
+                      creditNote.amount ??
+                      0
+                    ),
+
+                  status:
+                    creditNote.Status ||
+                    creditNote.status ||
+                    "Approved",
+
+                  addUser:
+                    creditNote.CreatedBy ||
+                    creditNote.createdBy ||
+                    "",
+
+                  items:
+                    Array.isArray(
+                      creditNote.items
+                    )
+                      ? creditNote.items
+                      : [],
+
+                  databaseCreditNote:
+                    creditNote,
+
+                  originalItem:
+                    creditNote,
+                })
+              )
+              : [];
+
+          const pagination =
+            result.pagination ||
+            {};
+
+          const resolvedPage =
+            Number(
+              pagination.currentPage ??
+              pagination.page ??
+              requestedPage
+            ) || 1;
+
+          setCreditNoteListData(
+            rows
+          );
+
+          setCreditNoteCurrentPage(
+            resolvedPage
+          );
+
+          setCreditNoteTotalPages(
+            Math.max(
+              1,
+              Number(
+                pagination.totalPages ||
+                1
+              )
+            )
+          );
+
+          setCreditNoteTotalRecords(
+            Number(
+              pagination.totalRecords ||
+              0
+            )
+          );
+
+          setCreditNoteStartRecord(
+            Number(
+              pagination.startRecord ||
+              0
+            )
+          );
+
+          setCreditNoteEndRecord(
+            Number(
+              pagination.endRecord ||
+              0
+            )
+          );
+
+          setListPage(
+            (previous) => ({
+              ...previous,
+              "Credit Note":
+                resolvedPage,
+            })
+          );
+
+          return rows;
+        } catch (error) {
+          console.error(
+            "Credit Note list load error:",
+            error
+          );
+
+          setCreditNoteListData([]);
+          setCreditNoteTotalRecords(0);
+          setCreditNoteTotalPages(1);
+          setCreditNoteStartRecord(0);
+          setCreditNoteEndRecord(0);
+
+          alert(
+            error.message ||
+            "Unable to load Credit Notes."
+          );
+
+          return [];
+        } finally {
+          setCreditNoteListLoading(
+            false
+          );
+        }
+      },
+      [
+        creditNoteCurrentPage,
+        creditNoteRowsPerPage,
+        creditNoteAppliedFilters,
+        creditNoteSearchDebounced,
+      ]
+    );
+
+  /* =========================================================
+   CREDIT NOTE SEARCH DEBOUNCE
+   ========================================================= */
+
+  useEffect(() => {
+    const timer =
+      window.setTimeout(() => {
+        setCreditNoteSearchDebounced(
+          String(
+            creditNoteAppliedFilters
+              .search || ""
+          ).trim()
+        );
+
+        setCreditNoteCurrentPage(
+          1
+        );
+
+        setListPage(
+          (previous) => ({
+            ...previous,
+            "Credit Note": 1,
+          })
+        );
+      }, 400);
+
+    return () => {
+      window.clearTimeout(
+        timer
       );
+    };
+  }, [
+    creditNoteAppliedFilters.search,
+  ]);
 
-      setDebitNoteListData([]);
+  /* =========================================================
+     CREDIT NOTE PAGINATED LIST LOADING
+     ========================================================= */
 
-      alert(
-        error.message ||
-        "Unable to load Debit Notes."
-      );
+  useEffect(() => {
+    const creditNoteListIsVisible =
+      activeSubMenu ===
+      "Credit Note" &&
+      showCreditNoteList &&
+      openFormFor !==
+      "Credit Note";
 
-      return [];
+    if (
+      !creditNoteListIsVisible
+    ) {
+      return;
     }
-  };
+
+    loadCreditNotes({
+      page:
+        creditNoteCurrentPage,
+
+      limit:
+        creditNoteRowsPerPage,
+
+      filters:
+        creditNoteAppliedFilters,
+
+      search:
+        creditNoteSearchDebounced,
+    });
+  }, [
+    activeSubMenu,
+    showCreditNoteList,
+    openFormFor,
+    creditNoteCurrentPage,
+    creditNoteRowsPerPage,
+    creditNoteAppliedFilters,
+    creditNoteSearchDebounced,
+    loadCreditNotes,
+  ]);
+
+  const loadDebitNotes =
+    useCallback(
+      async ({
+        page,
+        limit,
+        filters,
+        search,
+      } = {}) => {
+        try {
+          const {
+            distributorId,
+            firmId,
+          } = getFirmSession();
+
+          if (
+            !distributorId ||
+            !firmId
+          ) {
+            setDebitNoteListData([]);
+            setDebitNoteTotalRecords(0);
+            setDebitNoteTotalPages(1);
+            setDebitNoteStartRecord(0);
+            setDebitNoteEndRecord(0);
+
+            return [];
+          }
+
+          const requestedPage =
+            Number(
+              page ??
+              debitNoteCurrentPage
+            ) || 1;
+
+          const requestedLimit =
+            Number(
+              limit ??
+              debitNoteRowsPerPage
+            ) || 10;
+
+          const appliedFilters =
+            filters ||
+            debitNoteAppliedFilters ||
+            createDefaultDebitNoteListFilters();
+
+          const searchText =
+            search !== undefined
+              ? String(
+                search || ""
+              ).trim()
+              : String(
+                debitNoteSearchDebounced ||
+                ""
+              ).trim();
+
+          setDebitNoteListLoading(
+            true
+          );
+
+          const query =
+            new URLSearchParams({
+              distributorId:
+                String(
+                  distributorId
+                ),
+
+              firmId:
+                String(firmId),
+
+              page:
+                String(
+                  requestedPage
+                ),
+
+              limit:
+                String(
+                  requestedLimit
+                ),
+            });
+
+          const appendFilter = (
+            key,
+            value
+          ) => {
+            const cleanValue =
+              String(
+                value ?? ""
+              ).trim();
+
+            if (cleanValue) {
+              query.set(
+                key,
+                cleanValue
+              );
+            }
+          };
+
+          appendFilter(
+            "search",
+            searchText
+          );
+
+          appendFilter(
+            "fromDate",
+            appliedFilters.fromDate
+          );
+
+          appendFilter(
+            "toDate",
+            appliedFilters.toDate
+          );
+
+          appendFilter(
+            "debitNoteSeries",
+            appliedFilters
+              .debitNoteSeries
+          );
+
+          appendFilter(
+            "supplierCode",
+            appliedFilters
+              .supplierCode
+          );
+
+          appendFilter(
+            "supplierName",
+            appliedFilters
+              .supplierName
+          );
+
+          appendFilter(
+            "company",
+            appliedFilters.company
+          );
+
+          appendFilter(
+            "gdCode",
+            appliedFilters.gdCode
+          );
+
+          appendFilter(
+            "godownName",
+            appliedFilters
+              .godownName
+          );
+
+          appendFilter(
+            "salesmanCode",
+            appliedFilters
+              .salesmanCode
+          );
+
+          appendFilter(
+            "salesmanName",
+            appliedFilters
+              .salesmanName
+          );
+
+          appendFilter(
+            "referenceBillSeries",
+            appliedFilters
+              .referenceBillSeries
+          );
+
+          appendFilter(
+            "referenceBillNo",
+            appliedFilters
+              .referenceBillNo
+          );
+
+          appendFilter(
+            "returnType",
+            appliedFilters.returnType
+          );
+
+          appendFilter(
+            "status",
+            appliedFilters.status
+          );
+
+          appendFilter(
+            "createdBy",
+            appliedFilters.createdBy
+          );
+
+          appendFilter(
+            "minAmount",
+            appliedFilters.minAmount
+          );
+
+          appendFilter(
+            "maxAmount",
+            appliedFilters.maxAmount
+          );
+
+          const response =
+            await fetch(
+              `${API_URL}/debit-note/list?${query.toString()}`
+            );
+
+          const result =
+            await response.json();
+
+          if (
+            !response.ok ||
+            !result.success
+          ) {
+            throw new Error(
+              result.message ||
+              "Failed to load Debit Notes."
+            );
+          }
+
+          const rows =
+            Array.isArray(
+              result.debitNotes
+            )
+              ? result.debitNotes.map(
+                (debitNote) => ({
+                  ...debitNote,
+
+                  id:
+                    debitNote._id ||
+                    debitNote.id,
+
+                  _id:
+                    debitNote._id ||
+                    debitNote.id,
+
+                  billDate:
+                    debitNote.VDate ||
+                    debitNote.vDate ||
+                    debitNote.createdAt ||
+                    "",
+
+                  billSeries:
+                    debitNote
+                      .DebitNoteSeries ||
+                    debitNote
+                      .debitNoteSeries ||
+                    debitNote.VouSer ||
+                    "",
+
+                  billNo:
+                    debitNote
+                      .DebitNoteNo ||
+                    debitNote
+                      .debitNoteNo ||
+                    debitNote.VNo ||
+                    "",
+
+                  referenceBillSeries:
+                    debitNote.BillSeries ||
+                    debitNote.billSeries ||
+                    "",
+
+                  referenceBillNo:
+                    debitNote.BillNo ||
+                    debitNote.billNo ||
+                    "",
+
+                  billType:
+                    "Debit Note",
+
+                  partyCode:
+                    debitNote
+                      .SupplierCode ||
+                    debitNote
+                      .supplierCode ||
+                    "",
+
+                  partyName:
+                    debitNote
+                      .SupplierName ||
+                    debitNote
+                      .supplierName ||
+                    "",
+
+                  supplierCode:
+                    debitNote
+                      .SupplierCode ||
+                    debitNote
+                      .supplierCode ||
+                    "",
+
+                  supplierName:
+                    debitNote
+                      .SupplierName ||
+                    debitNote
+                      .supplierName ||
+                    "",
+
+                  area:
+                    debitNote.Godown ||
+                    debitNote.godown ||
+                    "",
+
+                  branchName:
+                    debitNote.Godown ||
+                    debitNote.godown ||
+                    "",
+
+                  godownCode:
+                    debitNote.GDCode ||
+                    debitNote.gdCode ||
+                    "",
+
+                  godownName:
+                    debitNote.Godown ||
+                    debitNote.godown ||
+                    "",
+
+                  companyCode:
+                    debitNote
+                      .CompanyCode ||
+                    debitNote
+                      .companyCode ||
+                    "",
+
+                  company:
+                    debitNote
+                      .CompanyName ||
+                    debitNote
+                      .companyName ||
+                    debitNote
+                      .CompanyCode ||
+                    debitNote
+                      .companyCode ||
+                    "",
+
+                  salesmanCode:
+                    debitNote
+                      .SalesmanCode ||
+                    debitNote
+                      .salesmanCode ||
+                    "",
+
+                  salesman:
+                    debitNote
+                      .SalesmanName ||
+                    debitNote
+                      .salesmanName ||
+                    "",
+
+                  returnType:
+                    debitNote
+                      .ReturnType ||
+                    debitNote
+                      .returnType ||
+                    "",
+
+                  amount:
+                    Number(
+                      debitNote.NetAmount ??
+                      debitNote.amount ??
+                      0
+                    ),
+
+                  status:
+                    debitNote.Status ||
+                    debitNote.status ||
+                    "Approved",
+
+                  addUser:
+                    debitNote.CreatedBy ||
+                    debitNote.createdBy ||
+                    "",
+
+                  items:
+                    Array.isArray(
+                      debitNote.items
+                    )
+                      ? debitNote.items
+                      : [],
+
+                  databaseDebitNote:
+                    debitNote,
+
+                  originalItem:
+                    debitNote,
+                })
+              )
+              : [];
+
+          const pagination =
+            result.pagination ||
+            {};
+
+          const resolvedPage =
+            Number(
+              pagination.currentPage ??
+              pagination.page ??
+              requestedPage
+            ) || 1;
+
+          setDebitNoteListData(
+            rows
+          );
+
+          setDebitNoteCurrentPage(
+            resolvedPage
+          );
+
+          setDebitNoteTotalPages(
+            Math.max(
+              1,
+              Number(
+                pagination.totalPages ||
+                1
+              )
+            )
+          );
+
+          setDebitNoteTotalRecords(
+            Number(
+              pagination.totalRecords ||
+              0
+            )
+          );
+
+          setDebitNoteStartRecord(
+            Number(
+              pagination.startRecord ||
+              0
+            )
+          );
+
+          setDebitNoteEndRecord(
+            Number(
+              pagination.endRecord ||
+              0
+            )
+          );
+
+          setListPage(
+            (previous) => ({
+              ...previous,
+              "Debit Note":
+                resolvedPage,
+            })
+          );
+
+          return rows;
+        } catch (error) {
+          console.error(
+            "Debit Note list load error:",
+            error
+          );
+
+          setDebitNoteListData([]);
+          setDebitNoteTotalRecords(0);
+          setDebitNoteTotalPages(1);
+          setDebitNoteStartRecord(0);
+          setDebitNoteEndRecord(0);
+
+          alert(
+            error.message ||
+            "Unable to load Debit Notes."
+          );
+
+          return [];
+        } finally {
+          setDebitNoteListLoading(
+            false
+          );
+        }
+      },
+      [
+        debitNoteCurrentPage,
+        debitNoteRowsPerPage,
+        debitNoteAppliedFilters,
+        debitNoteSearchDebounced,
+      ]
+    );
+  /* =========================================================
+   DEBIT NOTE SEARCH DEBOUNCE
+   ========================================================= */
+
+  useEffect(() => {
+    const timer =
+      window.setTimeout(() => {
+        setDebitNoteSearchDebounced(
+          String(
+            debitNoteAppliedFilters
+              .search || ""
+          ).trim()
+        );
+
+        setDebitNoteCurrentPage(
+          1
+        );
+
+        setListPage(
+          (previous) => ({
+            ...previous,
+            "Debit Note": 1,
+          })
+        );
+      }, 400);
+
+    return () => {
+      window.clearTimeout(
+        timer
+      );
+    };
+  }, [
+    debitNoteAppliedFilters.search,
+  ]);
+
+  /* =========================================================
+     DEBIT NOTE PAGINATED LIST LOADING
+     ========================================================= */
+
+  useEffect(() => {
+    const debitNoteListIsVisible =
+      activeSubMenu ===
+      "Debit Note" &&
+      showDebitNoteList &&
+      openFormFor !==
+      "Debit Note";
+
+    if (
+      !debitNoteListIsVisible
+    ) {
+      return;
+    }
+
+    loadDebitNotes({
+      page:
+        debitNoteCurrentPage,
+
+      limit:
+        debitNoteRowsPerPage,
+
+      filters:
+        debitNoteAppliedFilters,
+
+      search:
+        debitNoteSearchDebounced,
+    });
+  }, [
+    activeSubMenu,
+    showDebitNoteList,
+    openFormFor,
+    debitNoteCurrentPage,
+    debitNoteRowsPerPage,
+    debitNoteAppliedFilters,
+    debitNoteSearchDebounced,
+    loadDebitNotes,
+  ]);
+
   const loadDebitNoteForEdit = (
     selectedRow
   ) => {
@@ -19766,11 +24510,84 @@ await loadUsers({
         products,
       ]
     );
+  /* =========================================================
+     PURCHASE SEARCH DEBOUNCE
+     ========================================================= */
+
   useEffect(() => {
-    if (activeSubMenu === "Purchase" && showPurchaseList && !openFormFor) {
-      loadPurchaseBills();
+    const timer =
+      window.setTimeout(() => {
+        setPurchaseSearchDebounced(
+          String(
+            purchaseAppliedFilters
+              .search ||
+            ""
+          ).trim()
+        );
+
+        /*
+         * A new search always begins from page 1.
+         */
+        setPurchaseCurrentPage(1);
+
+        setListPage(
+          (previous) => ({
+            ...previous,
+            Purchase: 1,
+          })
+        );
+      }, 400);
+
+    return () => {
+      window.clearTimeout(
+        timer
+      );
+    };
+  }, [
+    purchaseAppliedFilters.search,
+  ]);
+
+  /* =========================================================
+     PURCHASE PAGINATED LIST LOADING
+     ========================================================= */
+
+  useEffect(() => {
+    const purchaseListIsVisible =
+      activeSubMenu ===
+      "Purchase" &&
+      showPurchaseList &&
+      openFormFor !==
+      "Purchase";
+
+    if (
+      !purchaseListIsVisible
+    ) {
+      return;
     }
-  }, [activeSubMenu, showPurchaseList, openFormFor]);
+
+    loadPurchaseBills({
+      page:
+        purchaseCurrentPage,
+
+      limit:
+        purchaseRowsPerPage,
+
+      filters:
+        purchaseAppliedFilters,
+
+      search:
+        purchaseSearchDebounced,
+    });
+  }, [
+    activeSubMenu,
+    showPurchaseList,
+    openFormFor,
+    purchaseCurrentPage,
+    purchaseRowsPerPage,
+    purchaseAppliedFilters,
+    purchaseSearchDebounced,
+    loadPurchaseBills,
+  ]);
 
   useEffect(() => {
     if (openFormFor !== "Credit Note") return;
@@ -20308,7 +25125,37 @@ await loadUsers({
         "Debit Note deleted successfully."
       );
 
-      await loadDebitNotes();
+      const targetPage =
+        debitNoteListData.length === 1 &&
+          debitNoteCurrentPage > 1
+          ? debitNoteCurrentPage - 1
+          : debitNoteCurrentPage;
+
+      setDebitNoteCurrentPage(
+        targetPage
+      );
+
+      setListPage(
+        (previous) => ({
+          ...previous,
+          "Debit Note":
+            targetPage,
+        })
+      );
+
+      await loadDebitNotes({
+        page:
+          targetPage,
+
+        limit:
+          debitNoteRowsPerPage,
+
+        filters:
+          debitNoteAppliedFilters,
+
+        search:
+          debitNoteSearchDebounced,
+      });
 
       if (
         typeof loadStock ===
@@ -21145,141 +25992,141 @@ await loadUsers({
     }, 60);
   };
 
- const confirmCreditNewBatch = () => {
-  const batchNo =
-    String(
-      creditNewBatchForm.batchNo || ""
-    ).trim();
+  const confirmCreditNewBatch = () => {
+    const batchNo =
+      String(
+        creditNewBatchForm.batchNo || ""
+      ).trim();
 
-  const mrp =
-    Number(
-      creditNewBatchForm.mrp || 0
-    );
-
-  const purchaseRate =
-    Number(
-      creditNewBatchForm.purchaseRate || 0
-    );
-
-  const salesRate =
-    Number(
-      creditNewBatchForm.salesRate || 0
-    );
-
-  const ratePerUnit =
-    Number(
-      creditNewBatchForm.ratePerUnit || 1
-    );
-
-  const boxPack =
-    Number(
-      creditNewBatchForm.boxPack || 1
-    );
-
-  const inboxPack =
-    Number(
-      creditNewBatchForm.inboxPack || 1
-    );
-
-  if (!batchNo) {
-    alert("Please enter Batch Number.");
-    return;
-  }
-
-  if (mrp <= 0) {
-    alert("Please enter valid MRP.");
-    return;
-  }
-
-  if (salesRate <= 0) {
-    alert("Please enter valid Sales Rate.");
-    return;
-  }
-
-  if (purchaseRate < 0) {
-    alert("Purchase Rate cannot be negative.");
-    return;
-  }
-
-  if (ratePerUnit <= 0) {
-    alert("Rate Per Unit must be greater than zero.");
-    return;
-  }
-
-  if (boxPack <= 0) {
-    alert("Box Pack must be greater than zero.");
-    return;
-  }
-
-  if (inboxPack <= 0) {
-    alert("InBox Pack must be greater than zero.");
-    return;
-  }
-
-  selectCreditNoteBatch({
-    batchNo,
-    BatchNo: batchNo,
-    Batch: batchNo,
-    batch: batchNo,
-
-    mrp,
-    MRP: mrp,
-
-    salesRate,
-    sRate: salesRate,
-    SRate: salesRate,
-    rate: salesRate,
-    Rate: salesRate,
-
-    purchaseRate,
-    pRate: purchaseRate,
-    PRate: purchaseRate,
-
-    mfgDate:
-      creditNewBatchForm.mfgDate || "",
-
-    MfgDt:
-      creditNewBatchForm.mfgDate || "",
-
-    expDate:
-      creditNewBatchForm.expDate || "",
-
-    ExpDt:
-      creditNewBatchForm.expDate || "",
-
-    ratePerUnit,
-    RatePerUnit: ratePerUnit,
-
-    previousPurchaseRate:
+    const mrp =
       Number(
-        creditNewBatchForm.previousPurchaseRate || 0
-      ),
+        creditNewBatchForm.mrp || 0
+      );
 
-    PreviousPurchaseRate:
+    const purchaseRate =
       Number(
-        creditNewBatchForm.previousPurchaseRate || 0
-      ),
+        creditNewBatchForm.purchaseRate || 0
+      );
 
-    stockQty: 0,
-    StockQty: 0,
-    Qty: 0,
+    const salesRate =
+      Number(
+        creditNewBatchForm.salesRate || 0
+      );
 
-    boxPack,
-    BoxPack: boxPack,
+    const ratePerUnit =
+      Number(
+        creditNewBatchForm.ratePerUnit || 1
+      );
 
-    inboxPack,
-    InBoxPack: inboxPack,
+    const boxPack =
+      Number(
+        creditNewBatchForm.boxPack || 1
+      );
 
-    isLocked:
-      creditNewBatchForm.isLocked || "N",
+    const inboxPack =
+      Number(
+        creditNewBatchForm.inboxPack || 1
+      );
 
-    IsLocked:
-      creditNewBatchForm.isLocked || "N",
+    if (!batchNo) {
+      alert("Please enter Batch Number.");
+      return;
+    }
 
-    isNewBatch: true,
-    source: "CREDIT_NOTE_NEW_BATCH",
-  });
-};
+    if (mrp <= 0) {
+      alert("Please enter valid MRP.");
+      return;
+    }
+
+    if (salesRate <= 0) {
+      alert("Please enter valid Sales Rate.");
+      return;
+    }
+
+    if (purchaseRate < 0) {
+      alert("Purchase Rate cannot be negative.");
+      return;
+    }
+
+    if (ratePerUnit <= 0) {
+      alert("Rate Per Unit must be greater than zero.");
+      return;
+    }
+
+    if (boxPack <= 0) {
+      alert("Box Pack must be greater than zero.");
+      return;
+    }
+
+    if (inboxPack <= 0) {
+      alert("InBox Pack must be greater than zero.");
+      return;
+    }
+
+    selectCreditNoteBatch({
+      batchNo,
+      BatchNo: batchNo,
+      Batch: batchNo,
+      batch: batchNo,
+
+      mrp,
+      MRP: mrp,
+
+      salesRate,
+      sRate: salesRate,
+      SRate: salesRate,
+      rate: salesRate,
+      Rate: salesRate,
+
+      purchaseRate,
+      pRate: purchaseRate,
+      PRate: purchaseRate,
+
+      mfgDate:
+        creditNewBatchForm.mfgDate || "",
+
+      MfgDt:
+        creditNewBatchForm.mfgDate || "",
+
+      expDate:
+        creditNewBatchForm.expDate || "",
+
+      ExpDt:
+        creditNewBatchForm.expDate || "",
+
+      ratePerUnit,
+      RatePerUnit: ratePerUnit,
+
+      previousPurchaseRate:
+        Number(
+          creditNewBatchForm.previousPurchaseRate || 0
+        ),
+
+      PreviousPurchaseRate:
+        Number(
+          creditNewBatchForm.previousPurchaseRate || 0
+        ),
+
+      stockQty: 0,
+      StockQty: 0,
+      Qty: 0,
+
+      boxPack,
+      BoxPack: boxPack,
+
+      inboxPack,
+      InBoxPack: inboxPack,
+
+      isLocked:
+        creditNewBatchForm.isLocked || "N",
+
+      IsLocked:
+        creditNewBatchForm.isLocked || "N",
+
+      isNewBatch: true,
+      source: "CREDIT_NOTE_NEW_BATCH",
+    });
+  };
 
   const selectCreditNoteBatch = (batch) => {
     if (
@@ -21493,71 +26340,71 @@ await loadUsers({
                   "",
 
                 selectedBatch: {
-  ...batch,
+                  ...batch,
 
-  batchNo,
-  BatchNo: batchNo,
-  Batch: batchNo,
+                  batchNo,
+                  BatchNo: batchNo,
+                  Batch: batchNo,
 
-  mrp,
-  MRP: mrp,
+                  mrp,
+                  MRP: mrp,
 
-  salesRate,
-  SRate: salesRate,
+                  salesRate,
+                  SRate: salesRate,
 
-  purchaseRate,
-  PRate: purchaseRate,
+                  purchaseRate,
+                  PRate: purchaseRate,
 
-  stockQty,
-  StockQty: stockQty,
+                  stockQty,
+                  StockQty: stockQty,
 
-  mfgDate:
-    batch.mfgDate ||
-    batch.MfgDt ||
-    "",
+                  mfgDate:
+                    batch.mfgDate ||
+                    batch.MfgDt ||
+                    "",
 
-  MfgDt:
-    batch.MfgDt ||
-    batch.mfgDate ||
-    "",
+                  MfgDt:
+                    batch.MfgDt ||
+                    batch.mfgDate ||
+                    "",
 
-  expDate:
-    batch.expDate ||
-    batch.ExpDt ||
-    "",
+                  expDate:
+                    batch.expDate ||
+                    batch.ExpDt ||
+                    "",
 
-  ExpDt:
-    batch.ExpDt ||
-    batch.expDate ||
-    "",
+                  ExpDt:
+                    batch.ExpDt ||
+                    batch.expDate ||
+                    "",
 
-  ratePerUnit:
-    Number(
-      batch.ratePerUnit ??
-      batch.RatePerUnit ??
-      1
-    ),
+                  ratePerUnit:
+                    Number(
+                      batch.ratePerUnit ??
+                      batch.RatePerUnit ??
+                      1
+                    ),
 
-  previousPurchaseRate:
-    Number(
-      batch.previousPurchaseRate ??
-      batch.PreviousPurchaseRate ??
-      0
-    ),
+                  previousPurchaseRate:
+                    Number(
+                      batch.previousPurchaseRate ??
+                      batch.PreviousPurchaseRate ??
+                      0
+                    ),
 
-  isLocked:
-    batch.isLocked ||
-    batch.IsLocked ||
-    "N",
+                  isLocked:
+                    batch.isLocked ||
+                    batch.IsLocked ||
+                    "N",
 
-  IsLocked:
-    batch.IsLocked ||
-    batch.isLocked ||
-    "N",
+                  IsLocked:
+                    batch.IsLocked ||
+                    batch.isLocked ||
+                    "N",
 
-  isNewBatch:
-    Boolean(batch.isNewBatch),
-},
+                  isNewBatch:
+                    Boolean(batch.isNewBatch),
+                },
 
                 batchNo,
 
@@ -21573,36 +26420,36 @@ await loadUsers({
 
                 stockQty,
                 mfgDate:
-  batch.mfgDate ||
-  batch.MfgDt ||
-  "",
+                  batch.mfgDate ||
+                  batch.MfgDt ||
+                  "",
 
-expDate:
-  batch.expDate ||
-  batch.ExpDt ||
-  "",
+                expDate:
+                  batch.expDate ||
+                  batch.ExpDt ||
+                  "",
 
-ratePerUnit:
-  Number(
-    batch.ratePerUnit ??
-    batch.RatePerUnit ??
-    1
-  ),
+                ratePerUnit:
+                  Number(
+                    batch.ratePerUnit ??
+                    batch.RatePerUnit ??
+                    1
+                  ),
 
-previousPurchaseRate:
-  Number(
-    batch.previousPurchaseRate ??
-    batch.PreviousPurchaseRate ??
-    0
-  ),
+                previousPurchaseRate:
+                  Number(
+                    batch.previousPurchaseRate ??
+                    batch.PreviousPurchaseRate ??
+                    0
+                  ),
 
-isLocked:
-  batch.isLocked ||
-  batch.IsLocked ||
-  "N",
+                isLocked:
+                  batch.isLocked ||
+                  batch.IsLocked ||
+                  "N",
 
-isNewBatch:
-  Boolean(batch.isNewBatch),
+                isNewBatch:
+                  Boolean(batch.isNewBatch),
 
                 hsn:
                   hsn ||
@@ -22010,22 +26857,81 @@ isNewBatch:
     openFormFor,
     editingCreditNoteId,
   ]);
-  const getCreditCompanyCode = (companyValue) => {
-    const company = companies.find(
-      (c) =>
-        String(c.companyCode || c.code || c.companyName || c.name) === String(companyValue)
-    );
+  const findCreditCompany = (companyValue) => {
+    const selectedValue = String(
+      typeof companyValue === "object"
+        ? companyValue?.companyCode ||
+        companyValue?.CompanyCode ||
+        companyValue?.code ||
+        companyValue?.Code ||
+        companyValue?.companyName ||
+        companyValue?.CompanyName ||
+        companyValue?.name ||
+        companyValue?.Name ||
+        companyValue?._id ||
+        companyValue?.id ||
+        ""
+        : companyValue || ""
+    )
+      .trim()
+      .toUpperCase();
 
-    return company?.companyCode || company?.code || companyValue || "";
+    if (!selectedValue) {
+      return null;
+    }
+
+    return (
+      companies.find((company) => {
+        const companyValues = [
+          company?._id,
+          company?.id,
+
+          company?.companyCode,
+          company?.CompanyCode,
+          company?.code,
+          company?.Code,
+
+          company?.companyName,
+          company?.CompanyName,
+          company?.name,
+          company?.Name,
+        ]
+          .map((value) =>
+            String(value ?? "")
+              .trim()
+              .toUpperCase()
+          )
+          .filter(Boolean);
+
+        return companyValues.includes(selectedValue);
+      }) || null
+    );
+  };
+
+  const getCreditCompanyCode = (companyValue) => {
+    const company =
+      findCreditCompany(companyValue);
+
+    return String(
+      company?.companyCode ||
+      company?.CompanyCode ||
+      company?.code ||
+      company?.Code ||
+      ""
+    ).trim();
   };
 
   const getCreditCompanyName = (companyValue) => {
-    const company = companies.find(
-      (c) =>
-        String(c.companyCode || c.code || c.companyName || c.name) === String(companyValue)
-    );
+    const company =
+      findCreditCompany(companyValue);
 
-    return company?.companyName || company?.name || companyValue || "";
+    return String(
+      company?.companyName ||
+      company?.CompanyName ||
+      company?.name ||
+      company?.Name ||
+      ""
+    ).trim();
   };
 
   const loadCreditNotePartiesByCompany =
@@ -23424,7 +28330,29 @@ isNewBatch:
       setCreditProductListFilter("");
       setShowCreditProductList(false);
 
-      await loadCreditNotes();
+      setCreditNoteCurrentPage(
+        1
+      );
+
+      setListPage(
+        (previous) => ({
+          ...previous,
+          "Credit Note": 1,
+        })
+      );
+
+      await loadCreditNotes({
+        page: 1,
+
+        limit:
+          creditNoteRowsPerPage,
+
+        filters:
+          creditNoteAppliedFilters,
+
+        search:
+          creditNoteSearchDebounced,
+      });
 
       setOpenFormFor(null);
       setShowCreditNoteList(true);
@@ -23550,7 +28478,37 @@ isNewBatch:
         "Credit Note deleted successfully."
       );
 
-      await loadCreditNotes();
+      const targetPage =
+        creditNoteListData.length === 1 &&
+          creditNoteCurrentPage > 1
+          ? creditNoteCurrentPage - 1
+          : creditNoteCurrentPage;
+
+      setCreditNoteCurrentPage(
+        targetPage
+      );
+
+      setListPage(
+        (previous) => ({
+          ...previous,
+          "Credit Note":
+            targetPage,
+        })
+      );
+
+      await loadCreditNotes({
+        page:
+          targetPage,
+
+        limit:
+          creditNoteRowsPerPage,
+
+        filters:
+          creditNoteAppliedFilters,
+
+        search:
+          creditNoteSearchDebounced,
+      });
 
       if (
         typeof loadStock ===
@@ -25347,7 +30305,29 @@ isNewBatch:
       /*
        * Reload database list after save.
        */
-      await loadDebitNotes();
+      setDebitNoteCurrentPage(
+        1
+      );
+
+      setListPage(
+        (previous) => ({
+          ...previous,
+          "Debit Note": 1,
+        })
+      );
+
+      await loadDebitNotes({
+        page: 1,
+
+        limit:
+          debitNoteRowsPerPage,
+
+        filters:
+          debitNoteAppliedFilters,
+
+        search:
+          debitNoteSearchDebounced,
+      });
 
       /*
        * Close form and show Debit Note list.
@@ -26690,7 +31670,28 @@ isNewBatch:
           : "Load saved successfully in MongoDB!"
       );
 
-      await loadCreateLoads();
+      const refreshPage =
+        editingCreateLoadId
+          ? createLoadCurrentPage
+          : 1;
+
+      setCreateLoadCurrentPage(
+        refreshPage
+      );
+
+      await loadCreateLoads({
+        page:
+          refreshPage,
+
+        limit:
+          loadListRowsPerPage,
+
+        filters:
+          loadAppliedFilters,
+
+        search:
+          createLoadSearchDebounced,
+      });
 
       setEditingCreateLoadId(null);
       setEditingCreateLoadBills([]);
@@ -26713,163 +31714,548 @@ isNewBatch:
       );
     }
   };
-  const loadCreateLoads = async () => {
-    try {
-      const { distributorId, firmId } = getFirmSession();
+  const loadCreateLoads =
+    useCallback(
+      async ({
+        page,
+        limit,
+        filters,
+        search,
+      } = {}) => {
+        try {
+          const {
+            distributorId,
+            firmId,
+          } = getFirmSession();
 
-      if (!distributorId || !firmId) {
-        setCreateLoadListData([]);
-        return;
-      }
+          if (
+            !distributorId ||
+            !firmId
+          ) {
+            setCreateLoadListData([]);
+            setCreateLoadTotalRecords(0);
+            setCreateLoadTotalPages(1);
+            setCreateLoadStartRecord(0);
+            setCreateLoadEndRecord(0);
+            return;
+          }
 
-      const res = await fetch(
-        `${API_URL}/create-load?distributorId=${distributorId}&firmId=${firmId}`
-      );
-
-      const result = await res.json();
-
-      if (!res.ok || !result.success) {
-        alert(result.message || "Failed to load create loads");
-        return;
-      }
-
-      const mappedLoads = (result.loads || []).map((l) => {
-        const bills = l.Bills || [];
-
-        const uniqueSalesmen = [
-          ...new Set(
-            bills
-              .map(
-                (b) =>
-                  b.SalesmanName ||
-                  b.salesmanName ||
-                  b.SalesmanCode ||
-                  b.salesmanCode ||
-                  ""
-              )
-              .filter(Boolean)
-          ),
-        ];
-
-        let salesmanDisplay = "-";
-
-        if (uniqueSalesmen.length === 1) {
-          salesmanDisplay = uniqueSalesmen[0];
-        } else if (uniqueSalesmen.length > 1) {
-          salesmanDisplay = "MIX";
-        } else {
-          salesmanDisplay =
-            l.SalesmanName ||
-            l.salesmanName ||
-            l.SalesmanCode ||
-            l.salesmanCode ||
-            "-";
-        }
-
-        return {
-          id: l._id,
-          _id: l._id,
-
-          loadDate:
-            l.LoadDate || "",
-
-          loadSeries:
-            l.LoadSeries || "",
-
-          loadNo:
-            l.LoadNo || "",
-
-          company:
-            l.CompanyName ||
-            l.CompanyCode ||
-            "-",
-
-          companyCode:
-            l.CompanyCode || "",
-
-          companyName:
-            l.CompanyName || "",
-
-          deliverBoy:
-            l.DeliveryBoyCode || "",
-
-          deliveryBy:
-            l.DeliveryBy ||
-            l.DeliveryBoyName ||
-            l.DeliveryBoyCode ||
-            "-",
-
-          vehicleNo:
-            l.VehicleNo || "",
-
-          driverMobile:
-            l.DriverMobile || "",
-
-          selectedSalesman:
-            salesmanDisplay,
-
-          selectedSalesmanList:
-            Array.isArray(l.SelectedSalesmen)
-              ? l.SelectedSalesmen
-                .map(
-                  (salesman) =>
-                    salesman.salesmanCode ||
-                    salesman.salesmanName ||
-                    ""
-                )
-                .filter(Boolean)
-              : [],
-
-          selectedSalesmen:
-            Array.isArray(l.SelectedSalesmen)
-              ? l.SelectedSalesmen
-              : [],
-
-          selectedAreas:
-            Array.isArray(l.SelectedAreas)
-              ? l.SelectedAreas
-              : [],
-
-          billFromDate:
-            l.BillFromDate || "",
-
-          billToDate:
-            l.BillToDate || "",
-
-          narration:
-            l.Narration || "",
-
-          remarks:
-            l.Remarks || "",
-
-          totalAmount:
-            Number(l.TotalAmount || 0),
-
-          totalBills:
+          const requestedPage =
             Number(
-              l.TotalBills ||
-              l.BillCount ||
-              bills.length ||
+              page ??
+              createLoadCurrentPage
+            ) || 1;
+
+          const requestedLimit =
+            Number(
+              limit ??
+              loadListRowsPerPage
+            ) || 10;
+
+          const activeFilters =
+            filters ||
+            loadAppliedFilters ||
+            createDefaultLoadListFilters();
+
+          const searchText =
+            search !== undefined
+              ? String(
+                search || ""
+              ).trim()
+              : String(
+                createLoadSearchDebounced ||
+                ""
+              ).trim();
+
+          setCreateLoadListLoading(
+            true
+          );
+
+          const query =
+            new URLSearchParams({
+              distributorId,
+              firmId,
+              page: String(
+                requestedPage
+              ),
+              limit: String(
+                requestedLimit
+              ),
+            });
+
+          const appendFilter = (
+            key,
+            value
+          ) => {
+            const cleanValue =
+              String(
+                value ?? ""
+              ).trim();
+
+            if (cleanValue) {
+              query.set(
+                key,
+                cleanValue
+              );
+            }
+          };
+
+          appendFilter(
+            "search",
+            searchText
+          );
+
+          appendFilter(
+            "fromDate",
+            activeFilters.fromDate
+          );
+
+          appendFilter(
+            "toDate",
+            activeFilters.toDate
+          );
+
+          appendFilter(
+            "loadSeries",
+            activeFilters.loadSeries
+          );
+
+          appendFilter(
+            "loadNo",
+            activeFilters.loadNo
+          );
+
+          appendFilter(
+            "companyCode",
+            activeFilters.company
+          );
+
+          appendFilter(
+            "salesmanCode",
+            activeFilters.salesman
+          );
+
+          appendFilter(
+            "deliveryBy",
+            activeFilters.deliveryBy
+          );
+
+          appendFilter(
+            "vehicleNo",
+            activeFilters.vehicleNo
+          );
+
+          appendFilter(
+            "status",
+            activeFilters.status
+          );
+
+          appendFilter(
+            "createdBy",
+            activeFilters.createdBy
+          );
+
+          appendFilter(
+            "minAmount",
+            activeFilters.minAmount
+          );
+
+          appendFilter(
+            "maxAmount",
+            activeFilters.maxAmount
+          );
+
+          const response =
+            await fetch(
+              `${API_URL}/create-load/list?${query.toString()}`
+            );
+
+          const result =
+            await response.json();
+
+          if (
+            !response.ok ||
+            !result.success
+          ) {
+            throw new Error(
+              result.message ||
+              "Failed to load Create Load list"
+            );
+          }
+
+          const pagination =
+            result.pagination || {};
+
+          const resolvedPage =
+            Number(
+              pagination.currentPage ||
+              pagination.page ||
+              requestedPage
+            ) || 1;
+
+          const resolvedLimit =
+            Number(
+              pagination.limit ||
+              requestedLimit
+            ) || 10;
+
+          const mappedLoads =
+            (
+              Array.isArray(
+                result.loads
+              )
+                ? result.loads
+                : []
+            ).map(
+              (
+                load,
+                index
+              ) => {
+                const selectedSalesmen =
+                  Array.isArray(
+                    load.SelectedSalesmen
+                  )
+                    ? load.SelectedSalesmen
+                    : [];
+
+                const salesmanNames =
+                  selectedSalesmen
+                    .map(
+                      (salesman) =>
+                        salesman.salesmanName ||
+                        salesman.SalesmanName ||
+                        salesman.salesmanCode ||
+                        salesman.SalesmanCode ||
+                        ""
+                    )
+                    .filter(Boolean);
+
+                let salesmanDisplay =
+                  load.SalesmanName ||
+                  load.salesmanName ||
+                  load.SalesmanCode ||
+                  load.salesmanCode ||
+                  "-";
+
+                if (
+                  salesmanNames.length === 1
+                ) {
+                  salesmanDisplay =
+                    salesmanNames[0];
+                } else if (
+                  salesmanNames.length > 1
+                ) {
+                  salesmanDisplay =
+                    "MIX";
+                }
+
+                const totalAmount =
+                  Number(
+                    load.TotalAmount ??
+                    load.totalAmount ??
+                    0
+                  ) || 0;
+
+                const totalBills =
+                  Number(
+                    load.TotalBills ??
+                    load.totalBills ??
+                    load.BillCount ??
+                    load.billCount ??
+                    0
+                  ) || 0;
+
+                return {
+                  ...load,
+
+                  id:
+                    load._id ||
+                    load.id,
+
+                  _id:
+                    load._id ||
+                    load.id,
+
+                  serialNumber:
+                    (
+                      resolvedPage -
+                      1
+                    ) *
+                    resolvedLimit +
+                    index +
+                    1,
+
+                  loadDate:
+                    load.LoadDate ||
+                    load.loadDate ||
+                    "",
+
+                  loadSeries:
+                    load.LoadSeries ||
+                    load.loadSeries ||
+                    "",
+
+                  loadNo:
+                    load.LoadNo ??
+                    load.loadNo ??
+                    "",
+
+                  company:
+                    load.CompanyName ||
+                    load.companyName ||
+                    load.CompanyCode ||
+                    load.companyCode ||
+                    "-",
+
+                  companyCode:
+                    load.CompanyCode ||
+                    load.companyCode ||
+                    "",
+
+                  companyName:
+                    load.CompanyName ||
+                    load.companyName ||
+                    "",
+
+                  deliverBoy:
+                    load.DeliveryBoyCode ||
+                    load.deliveryBoyCode ||
+                    "",
+
+                  deliveryBy:
+                    load.DeliveryBy ||
+                    load.deliveryBy ||
+                    load.DeliveryBoyName ||
+                    load.deliveryBoyName ||
+                    load.DeliveryBoyCode ||
+                    load.deliveryBoyCode ||
+                    "-",
+
+                  vehicleNo:
+                    load.VehicleNo ||
+                    load.vehicleNo ||
+                    "",
+
+                  driverMobile:
+                    load.DriverMobile ||
+                    load.driverMobile ||
+                    "",
+
+                  selectedSalesman:
+                    salesmanDisplay,
+
+                  selectedSalesmanList:
+                    selectedSalesmen
+                      .map(
+                        (salesman) =>
+                          salesman.salesmanCode ||
+                          salesman.SalesmanCode ||
+                          salesman.salesmanName ||
+                          salesman.SalesmanName ||
+                          ""
+                      )
+                      .filter(Boolean),
+
+                  selectedSalesmen,
+
+                  selectedAreas:
+                    Array.isArray(
+                      load.SelectedAreas
+                    )
+                      ? load.SelectedAreas
+                      : [],
+
+                  billFromDate:
+                    load.BillFromDate ||
+                    load.billFromDate ||
+                    "",
+
+                  billToDate:
+                    load.BillToDate ||
+                    load.billToDate ||
+                    "",
+
+                  narration:
+                    load.Narration ||
+                    load.narration ||
+                    "",
+
+                  remarks:
+                    load.Remarks ||
+                    load.remarks ||
+                    "",
+
+                  totalAmount,
+
+                  totalBills,
+
+                  /*
+                   * Bills are excluded by
+                   * /api/create-load/list.
+                   */
+                  items: [],
+
+                  status:
+                    String(
+                      load.Status ||
+                      load.status ||
+                      "ACTIVE"
+                    ).toUpperCase() ===
+                      "ACTIVE"
+                      ? "Pending"
+                      : (
+                        load.Status ||
+                        load.status ||
+                        "Pending"
+                      ),
+
+                  createdBy:
+                    load.CreatedBy ||
+                    load.createdBy ||
+                    "",
+
+                  originalItem:
+                    load,
+                };
+              }
+            );
+
+          setCreateLoadListData(
+            mappedLoads
+          );
+
+          setCreateLoadCurrentPage(
+            resolvedPage
+          );
+
+          setLoadListRowsPerPage(
+            resolvedLimit
+          );
+
+          setCreateLoadTotalRecords(
+            Number(
+              pagination.totalRecords ||
               0
-            ),
+            )
+          );
 
-          items: bills,
+          setCreateLoadTotalPages(
+            Math.max(
+              Number(
+                pagination.totalPages ||
+                1
+              ),
+              1
+            )
+          );
 
-          status:
-            l.Status === "ACTIVE"
-              ? "Pending"
-              : l.Status || "Pending",
+          setCreateLoadStartRecord(
+            Number(
+              pagination.startRecord ||
+              0
+            )
+          );
 
-          originalItem: l,
-        };
-      });
+          setCreateLoadEndRecord(
+            Number(
+              pagination.endRecord ||
+              0
+            )
+          );
 
-      setCreateLoadListData(mappedLoads);
-    } catch (error) {
-      console.error("Load create loads error:", error);
-      alert("Server not connected. Failed to load create loads.");
+          setListPage(
+            (previous) => ({
+              ...previous,
+              createLoad:
+                resolvedPage,
+            })
+          );
+        } catch (error) {
+          console.error(
+            "Load Create Load list error:",
+            error
+          );
+
+          setCreateLoadListData([]);
+          setCreateLoadTotalRecords(0);
+          setCreateLoadTotalPages(1);
+          setCreateLoadStartRecord(0);
+          setCreateLoadEndRecord(0);
+
+          alert(
+            error.message ||
+            "Server not connected. Failed to load Create Loads."
+          );
+        } finally {
+          setCreateLoadListLoading(
+            false
+          );
+        }
+      },
+      [
+        createLoadCurrentPage,
+        loadListRowsPerPage,
+        loadAppliedFilters,
+        createLoadSearchDebounced,
+      ]
+    );
+
+  useEffect(() => {
+    const timer =
+      window.setTimeout(() => {
+        setCreateLoadSearchDebounced(
+          String(
+            loadAppliedFilters.search ||
+            ""
+          ).trim()
+        );
+      }, 400);
+
+    return () => {
+      window.clearTimeout(
+        timer
+      );
+    };
+  }, [
+    loadAppliedFilters.search,
+  ]);
+  useEffect(() => {
+    const isCreateLoadScreen =
+      showCreateLoadList &&
+      String(
+        activeSubMenu || ""
+      )
+        .trim()
+        .toLowerCase() ===
+      "create load";
+
+    if (!isCreateLoadScreen) {
+      return;
     }
-  };
+
+    loadCreateLoads({
+      page:
+        createLoadCurrentPage,
+
+      limit:
+        loadListRowsPerPage,
+
+      filters:
+        loadAppliedFilters,
+
+      search:
+        createLoadSearchDebounced,
+    });
+  }, [
+    showCreateLoadList,
+    activeSubMenu,
+    createLoadCurrentPage,
+    loadListRowsPerPage,
+    loadAppliedFilters,
+    createLoadSearchDebounced,
+    loadCreateLoads,
+  ]);
+
   const loadPendingBillsForNextLoad = async () => {
     try {
       const { distributorId, firmId } = getFirmSession();
@@ -26948,66 +32334,74 @@ isNewBatch:
   };
 
   // Get filtered data
- const getFilteredCompanies = () => {
-  return Array.isArray(companyMasterRows)
-    ? companyMasterRows
-    : [];
-};
+  const getFilteredCompanies = () => {
+    return Array.isArray(companyMasterRows)
+      ? companyMasterRows
+      : [];
+  };
 
-const getFilteredGroups = () => {
-  return Array.isArray(groupMasterRows)
-    ? groupMasterRows
-    : [];
-};
+  const getFilteredGroups = () => {
+    return Array.isArray(groupMasterRows)
+      ? groupMasterRows
+      : [];
+  };
 
   const getFilteredCategories = () => {
-  return Array.isArray(
-    categoryMasterRows
-  )
-    ? categoryMasterRows
-    : [];
-};
+    return Array.isArray(
+      categoryMasterRows
+    )
+      ? categoryMasterRows
+      : [];
+  };
 
-const getFilteredProducts = () => {
-  return Array.isArray(
-    productMasterRows
-  )
-    ? productMasterRows
-    : [];
-};
+  const getFilteredProducts = () => {
+    return Array.isArray(
+      productMasterRows
+    )
+      ? productMasterRows
+      : [];
+  };
 
   const getFilteredAccounts = () => {
-    return accounts.filter(account =>
-      account.accountCode?.toLowerCase().includes(filters.account.toLowerCase()) ||
-      account.accountName?.toLowerCase().includes(filters.account.toLowerCase())
-    );
-  };
+    return Array.isArray(
+      accountMasterRows
+    )
+      ? accountMasterRows
+      : [];
+  };;
 
-  const getFilteredOtherAccounts = () => {
-    return otherAccounts.filter(account =>
-      account.accountCode?.toLowerCase().includes(filters.otherAccount.toLowerCase()) ||
-      account.accountName?.toLowerCase().includes(filters.otherAccount.toLowerCase())
-    );
-  };
-
+  const getFilteredOtherAccounts =
+    () => {
+      return Array.isArray(
+        otherAccountMasterRows
+      )
+        ? otherAccountMasterRows
+        : [];
+    };
   const getFilteredGST = () => {
-    return gstList.filter(gst =>
-      gst.code?.toLowerCase().includes(filters.gst.toLowerCase())
-    );
+    return Array.isArray(
+      gstMasterRows
+    )
+      ? gstMasterRows
+      : [];
   };
 
   const getFilteredSalesmen = () => {
-    return salesmen.filter(salesman =>
-      salesman.code?.toLowerCase().includes(filters.salesman.toLowerCase()) ||
-      salesman.name?.toLowerCase().includes(filters.salesman.toLowerCase())
-    );
+    return Array.isArray(
+      salesmanMasterRows
+    )
+      ? salesmanMasterRows
+      : [];
   };
 
   const getFilteredAreas = () => {
-    return areas.filter(area =>
-      area.code?.toLowerCase().includes(filters.area.toLowerCase()) ||
-      area.name?.toLowerCase().includes(filters.area.toLowerCase())
-    );
+    /*
+     * Search and pagination are now handled
+     * by the backend Area Master list API.
+     */
+    return Array.isArray(areaMasterRows)
+      ? areaMasterRows
+      : [];
   };
 
   const updateProductDropdownPosition = () => {
@@ -27877,27 +33271,34 @@ const getFilteredProducts = () => {
 
     // IMPORTANT: show Create Load LIST first, not form
     if (item === "Create Load") {
-      await loadCreateLoads();
-
       setOpenFormFor(null);
+
+      setShowDashboard(false);
+      setShowSalesList(false);
+      setShowPurchaseList(false);
+      setShowCreditNoteList(false);
+      setShowDebitNoteList(false);
+
       setShowCreateLoadList(true);
+
       setShowSettleLoad(false);
       setShowSettleLoadList(false);
+
+      setActiveMenu("sales");
+      setActiveSubMenu("Create Load");
+
       return;
     }
 
     if (item === "Purchase") {
       setShowDashboard(false);
 
-      /*
-      * Keep Purchase under the existing Vouchers menu.
-      * Do not open the Purchase form here.
-      */
       setActiveMenu("vouchers");
       setActiveSubMenu("Purchase");
       setOpenFormFor(null);
 
       setShowSalesList(false);
+      setShowPurchaseList(true);
       setShowCreditNoteList(false);
       setShowDebitNoteList(false);
       setShowCreateLoadList(false);
@@ -27906,89 +33307,146 @@ const getFilteredProducts = () => {
       setShowPrintPreview(false);
 
       /*
-      * Show the list before and after loading.
-      */
-      setShowPurchaseList(true);
+       * Begin Purchase List from page 1 when
+       * the user opens it from the menu.
+       */
+      setPurchaseCurrentPage(1);
 
-      try {
-        await loadPurchaseBills();
-      } catch (error) {
-        console.error(
-          "Unable to open Purchase list:",
-          error
-        );
-      }
+      setListPage(
+        (previous) => ({
+          ...previous,
+          Purchase: 1,
+        })
+      );
 
-      setShowPurchaseList(true);
       return;
     }
 
     if (item === "Credit Note") {
-      setActiveMenu("vouchers");
-      setActiveSubMenu("Credit Note");
-      setOpenFormFor(null);
-      setShowDashboard(false);
+      setActiveMenu(
+        "vouchers"
+      );
 
-      setShowSalesList(false);
-      setShowPurchaseList(false);
-      setShowDebitNoteList(false);
-      setShowCreateLoadList(false);
-      setShowSettleLoadList(false);
-      setShowSettleLoad(false);
-      setShowPrintPreview(false);
+      setActiveSubMenu(
+        "Credit Note"
+      );
 
-      try {
-        await loadCreditNotes();
-      } catch (error) {
-        console.error(
-          "Unable to open Credit Note list:",
-          error
-        );
-      }
+      setOpenFormFor(
+        null
+      );
 
-      setShowCreditNoteList(true);
+      setShowDashboard(
+        false
+      );
+
+      setShowSalesList(
+        false
+      );
+
+      setShowPurchaseList(
+        false
+      );
+
+      setShowCreditNoteList(
+        true
+      );
+
+      setShowDebitNoteList(
+        false
+      );
+
+      setShowCreateLoadList(
+        false
+      );
+
+      setShowSettleLoadList(
+        false
+      );
+
+      setShowSettleLoad(
+        false
+      );
+
+      setShowPrintPreview(
+        false
+      );
+
+      setCreditNoteCurrentPage(
+        1
+      );
+
+      setListPage(
+        (previous) => ({
+          ...previous,
+          "Credit Note": 1,
+        })
+      );
 
       return;
     }
 
     if (item === "Debit Note") {
-      setActiveMenu("vouchers");
-      setActiveSubMenu("Debit Note");
+      setActiveMenu(
+        "vouchers"
+      );
 
-      /*
-       * Clicking menu text must open the list,
-       * not a new Debit Note form.
-       */
-      setOpenFormFor(null);
-      setShowDashboard(false);
+      setActiveSubMenu(
+        "Debit Note"
+      );
 
-      setShowSalesList(false);
-      setShowPurchaseList(false);
-      setShowCreditNoteList(false);
-      setShowCreateLoadList(false);
-      setShowSettleLoadList(false);
-      setShowSettleLoad(false);
-      setShowPrintPreview(false);
+      setOpenFormFor(
+        null
+      );
 
-      /*
-       * Show the list before and after loading.
-       */
-      setShowDebitNoteList(true);
+      setShowDashboard(
+        false
+      );
 
-      try {
-        await loadDebitNotes();
-      } catch (error) {
-        console.error(
-          "Unable to open Debit Note list:",
-          error
-        );
-      }
+      setShowSalesList(
+        false
+      );
 
-      setShowDebitNoteList(true);
+      setShowPurchaseList(
+        false
+      );
+
+      setShowCreditNoteList(
+        false
+      );
+
+      setShowDebitNoteList(
+        true
+      );
+
+      setShowCreateLoadList(
+        false
+      );
+
+      setShowSettleLoadList(
+        false
+      );
+
+      setShowSettleLoad(
+        false
+      );
+
+      setShowPrintPreview(
+        false
+      );
+
+      setDebitNoteCurrentPage(
+        1
+      );
+
+      setListPage(
+        (previous) => ({
+          ...previous,
+          "Debit Note": 1,
+        })
+      );
 
       return;
     }
-
     if (item === "Print Load") {
       const savedSettings =
         getSavedPrintLoadSettings();
@@ -28939,7 +34397,19 @@ const getFilteredProducts = () => {
           : "Quotation saved successfully!"
       );
 
-      await loadQuotationBills();
+      await loadQuotationBills({
+        page:
+          quotationCurrentPage,
+
+        limit:
+          quotationRowsPerPage,
+
+        filters:
+          quotationAppliedFilters,
+
+        search:
+          quotationSearchDebounced,
+      });
 
       const retainedCompany =
         invoiceFormData.company || "";
@@ -29295,6 +34765,225 @@ const getFilteredProducts = () => {
       alert("Server not connected. Failed to load GST.");
     }
   };
+  const loadGstMaster =
+    useCallback(
+      async ({
+        page = 1,
+        limit = 10,
+        search = "",
+      } = {}) => {
+        try {
+          const distributorId =
+            localStorage.getItem(
+              "distributorId"
+            );
+
+          const firmId =
+            localStorage.getItem(
+              "firmId"
+            );
+
+          if (
+            !distributorId ||
+            !firmId
+          ) {
+            setGstMasterRows([]);
+            setGstTotalRecords(0);
+            setGstTotalPages(1);
+            setGstStartRecord(0);
+            setGstEndRecord(0);
+            return;
+          }
+
+          setGstMasterLoading(true);
+
+          const params =
+            new URLSearchParams({
+              distributorId,
+              firmId,
+              page: String(page),
+              limit: String(limit),
+            });
+
+          const searchText =
+            String(
+              search || ""
+            ).trim();
+
+          if (searchText) {
+            params.set(
+              "search",
+              searchText
+            );
+          }
+
+          const response =
+            await fetch(
+              `${API_URL}/gst/list?${params.toString()}`
+            );
+
+          const result =
+            await response.json();
+
+          if (
+            !response.ok ||
+            result.success === false
+          ) {
+            throw new Error(
+              result.message ||
+              "Failed to load GST Master"
+            );
+          }
+
+          const pagination =
+            result.pagination || {};
+
+          const rows =
+            Array.isArray(
+              result.gstList
+            )
+              ? result.gstList.map(
+                (gst, index) => ({
+                  ...gst,
+
+                  id:
+                    gst._id ||
+                    gst.id,
+
+                  srNo:
+                    (Number(
+                      pagination.currentPage ||
+                      page
+                    ) -
+                      1) *
+                    Number(
+                      pagination.limit ||
+                      limit
+                    ) +
+                    index +
+                    1,
+
+                  code:
+                    gst.gstCode ||
+                    gst.code ||
+                    "",
+
+                  vat:
+                    gst.vatPercent ??
+                    gst.vat ??
+                    0,
+                })
+              )
+              : [];
+
+          setGstMasterRows(rows);
+
+          setGstCurrentPage(
+            Number(
+              pagination.currentPage ||
+              page
+            )
+          );
+
+          setGstRowsPerPage(
+            Number(
+              pagination.limit ||
+              limit
+            )
+          );
+
+          setGstTotalRecords(
+            Number(
+              pagination.totalRecords ||
+              0
+            )
+          );
+
+          setGstTotalPages(
+            Math.max(
+              Number(
+                pagination.totalPages ||
+                1
+              ),
+              1
+            )
+          );
+
+          setGstStartRecord(
+            Number(
+              pagination.startRecord ||
+              0
+            )
+          );
+
+          setGstEndRecord(
+            Number(
+              pagination.endRecord ||
+              0
+            )
+          );
+        } catch (error) {
+          console.error(
+            "GST Master load error:",
+            error
+          );
+
+          setGstMasterRows([]);
+          setGstTotalRecords(0);
+          setGstTotalPages(1);
+          setGstStartRecord(0);
+          setGstEndRecord(0);
+
+          alert(
+            error.message ||
+            "Unable to load GST Master."
+          );
+        } finally {
+          setGstMasterLoading(false);
+        }
+      },
+      []
+    );
+  useEffect(() => {
+    const timer =
+      window.setTimeout(() => {
+        setGstBackendSearch(
+          String(
+            filters.gst || ""
+          ).trim()
+        );
+
+        setGstCurrentPage(1);
+      }, 400);
+
+    return () => {
+      window.clearTimeout(timer);
+    };
+  }, [filters.gst]);
+  useEffect(() => {
+    if (
+      activeSubMenu !==
+      "GST Master" ||
+      openFormFor ===
+      "GST Master"
+    ) {
+      return;
+    }
+
+    loadGstMaster({
+      page: gstCurrentPage,
+      limit: gstRowsPerPage,
+      search: gstBackendSearch,
+    });
+  }, [
+    activeSubMenu,
+    openFormFor,
+    gstCurrentPage,
+    gstRowsPerPage,
+    gstBackendSearch,
+    loadGstMaster,
+  ]);
+
   useEffect(() => {
     setActiveMenu(null);
     setActiveSubMenu(null);
@@ -29329,8 +35018,13 @@ const getFilteredProducts = () => {
       firmName,
     };
 
+    const wasEditing =
+      Boolean(editGstId);
+
     try {
-      const url = editGstId ? `${API_URL}/gst/${editGstId}` : `${API_URL}/gst`;
+      const url = editGstId
+        ? `${API_URL}/gst/${editGstId}`
+        : `${API_URL}/gst`;
       const method = editGstId ? "PUT" : "POST";
 
       const res = await fetch(url, {
@@ -29345,9 +35039,32 @@ const getFilteredProducts = () => {
         return alert(result.message || "GST save failed");
       }
 
+      /*
+       * Refresh the complete GST list used
+       * by Product, Sales and Purchase forms.
+       */
       await loadGst();
 
-      alert(editGstId ? "GST updated successfully!" : "GST saved successfully!");
+      const refreshPage =
+        wasEditing
+          ? gstCurrentPage
+          : 1;
+
+      setGstCurrentPage(
+        refreshPage
+      );
+
+      await loadGstMaster({
+        page: refreshPage,
+        limit: gstRowsPerPage,
+        search: gstBackendSearch,
+      });
+
+      alert(
+        wasEditing
+          ? "GST updated successfully!"
+          : "GST saved successfully!"
+      );
 
       // ✅ RESET FORM FIELDS
       setEditGstId(null);
@@ -29443,73 +35160,388 @@ const getFilteredProducts = () => {
       alert("Server not connected. Failed to load salesmen.");
     }
   };
+  const loadSalesmanMaster = useCallback(
+    async ({
+      page = 1,
+      limit = 20,
+      search = "",
+    } = {}) => {
+      try {
+        const distributorId =
+          localStorage.getItem("distributorId");
 
-  const saveSalesman = async (e) => {
-    e.preventDefault();
+        const firmId =
+          localStorage.getItem("firmId");
 
-    if (!validateFormRegex(salesmanForm)) return;
+        if (!distributorId || !firmId) {
+          setSalesmanMasterRows([]);
+          setSalesmanTotalRecords(0);
+          setSalesmanTotalPages(1);
+          setSalesmanStartRecord(0);
+          setSalesmanEndRecord(0);
+          return;
+        }
 
-    if (!salesmanForm.code || !salesmanForm.name) {
-      return alert("Code and Name required");
+        setSalesmanLoading(true);
+
+        const params = new URLSearchParams({
+          distributorId,
+          firmId,
+          page: String(page),
+          limit: String(limit),
+        });
+
+        const cleanSearch =
+          String(search || "").trim();
+
+        if (cleanSearch) {
+          params.set(
+            "search",
+            cleanSearch
+          );
+        }
+
+        const response = await fetch(
+          `${API_URL}/salesmen/list?${params.toString()}`
+        );
+
+        const result =
+          await response.json();
+
+        if (
+          !response.ok ||
+          result.success === false
+        ) {
+          throw new Error(
+            result.message ||
+            "Failed to load Salesman Master"
+          );
+        }
+
+        const pagination =
+          result.pagination || {};
+
+        const currentPage = Number(
+          pagination.currentPage ||
+          pagination.page ||
+          page
+        );
+
+        const currentLimit = Number(
+          pagination.limit ||
+          limit
+        );
+
+        const rows = Array.isArray(
+          result.salesmen
+        )
+          ? result.salesmen.map(
+            (salesman, index) => ({
+              ...salesman,
+
+              id:
+                salesman._id ||
+                salesman.id,
+
+              code:
+                salesman.salesmanCode ||
+                salesman.code ||
+                "",
+
+              name:
+                salesman.salesmanName ||
+                salesman.name ||
+                "",
+
+              type:
+                salesman.salesmanType ||
+                salesman.type ||
+                "SALESMAN",
+
+              srNo:
+                (currentPage - 1) *
+                currentLimit +
+                index +
+                1,
+            })
+          )
+          : [];
+
+        setSalesmanMasterRows(rows);
+
+        setSalesmanCurrentPage(
+          currentPage
+        );
+
+        setSalesmanRowsPerPage(
+          currentLimit
+        );
+
+        setSalesmanTotalRecords(
+          Number(
+            pagination.totalRecords ||
+            0
+          )
+        );
+
+        setSalesmanTotalPages(
+          Math.max(
+            Number(
+              pagination.totalPages ||
+              1
+            ),
+            1
+          )
+        );
+
+        setSalesmanStartRecord(
+          Number(
+            pagination.startRecord ||
+            0
+          )
+        );
+
+        setSalesmanEndRecord(
+          Number(
+            pagination.endRecord ||
+            0
+          )
+        );
+      } catch (error) {
+        console.error(
+          "Salesman Master load error:",
+          error
+        );
+
+        setSalesmanMasterRows([]);
+        setSalesmanTotalRecords(0);
+        setSalesmanTotalPages(1);
+        setSalesmanStartRecord(0);
+        setSalesmanEndRecord(0);
+
+        alert(
+          error.message ||
+          "Unable to load Salesman Master."
+        );
+      } finally {
+        setSalesmanLoading(false);
+      }
+    },
+    []
+  );
+
+  useEffect(() => {
+    const timer =
+      window.setTimeout(() => {
+        setSalesmanBackendSearch(
+          String(
+            filters.salesman || ""
+          ).trim()
+        );
+
+        setSalesmanCurrentPage(1);
+      }, 400);
+
+    return () => {
+      window.clearTimeout(timer);
+    };
+  }, [filters.salesman]);
+  useEffect(() => {
+    if (
+      activeSubMenu !== "Salesman" ||
+      openFormFor === "Salesman"
+    ) {
+      return;
     }
 
-    const distributorId = localStorage.getItem("distributorId");
-    const firmId = localStorage.getItem("firmId");
-    const firmName = localStorage.getItem("firmName");
+    loadSalesmanMaster({
+      page: salesmanCurrentPage,
+      limit: salesmanRowsPerPage,
+      search: salesmanBackendSearch,
+    });
+  }, [
+    activeSubMenu,
+    openFormFor,
+    salesmanCurrentPage,
+    salesmanRowsPerPage,
+    salesmanBackendSearch,
+    loadSalesmanMaster,
+  ]);
 
-    if (!distributorId || !firmId) {
-      return alert("Distributor/Firm not found. Please login again.");
+  const saveSalesman = async (
+    event
+  ) => {
+    event.preventDefault();
+
+    if (
+      !validateFormRegex(
+        salesmanForm
+      )
+    ) {
+      return;
     }
+
+    const salesmanCode =
+      String(
+        salesmanForm.code || ""
+      ).trim();
+
+    const salesmanName =
+      String(
+        salesmanForm.name || ""
+      ).trim();
+
+    if (
+      !salesmanCode ||
+      !salesmanName
+    ) {
+      return alert(
+        "Code and Name required"
+      );
+    }
+
+    const distributorId =
+      localStorage.getItem(
+        "distributorId"
+      );
+
+    const firmId =
+      localStorage.getItem(
+        "firmId"
+      );
+
+    const firmName =
+      localStorage.getItem(
+        "firmName"
+      );
+
+    if (
+      !distributorId ||
+      !firmId
+    ) {
+      return alert(
+        "Distributor/Firm not found. Please login again."
+      );
+    }
+
+    const wasEditing =
+      Boolean(editSalesmanId);
 
     try {
-      const url = editSalesmanId
+      const url = wasEditing
         ? `${API_URL}/salesmen/${editSalesmanId}`
         : `${API_URL}/salesmen`;
 
-      const method = editSalesmanId ? "PUT" : "POST";
+      const method = wasEditing
+        ? "PUT"
+        : "POST";
 
-      const res = await fetch(url, {
-        method,
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          salesmanCode: salesmanForm.code,
-          salesmanName: salesmanForm.name,
-          salesmanType: salesmanForm.type,
+      const response = await fetch(
+        url,
+        {
+          method,
 
-          dateOfBirth: salesmanForm.dateOfBirth,
-          address: salesmanForm.address,
-          town: salesmanForm.town,
-          pinCode: salesmanForm.pinCode,
-          state: salesmanForm.state,
-          country: salesmanForm.country,
+          headers: {
+            "Content-Type":
+              "application/json",
+          },
 
-          phoneNo: salesmanForm.phoneNo,
-          mobileNo: salesmanForm.mobileNo,
-          emailId: salesmanForm.emailId,
+          body: JSON.stringify({
+            salesmanCode,
+            salesmanName,
 
-          qualification: salesmanForm.qualification,
-          reference: salesmanForm.reference,
-          imeiNo: salesmanForm.imeiNo,
+            salesmanType:
+              salesmanForm.type ||
+              "SALESMAN",
 
-          distributorId,
-          firmId,
-          firmName,
-        }),
-      });
+            dateOfBirth:
+              salesmanForm.dateOfBirth,
 
-      const result = await res.json();
+            address:
+              salesmanForm.address,
 
-      if (!res.ok || result.success === false) {
-        return alert(result.message || "Salesman save/update failed");
+            town:
+              salesmanForm.town,
+
+            pinCode:
+              salesmanForm.pinCode,
+
+            state:
+              salesmanForm.state,
+
+            country:
+              salesmanForm.country,
+
+            phoneNo:
+              salesmanForm.phoneNo,
+
+            mobileNo:
+              salesmanForm.mobileNo,
+
+            emailId:
+              salesmanForm.emailId,
+
+            qualification:
+              salesmanForm.qualification,
+
+            reference:
+              salesmanForm.reference,
+
+            imeiNo:
+              salesmanForm.imeiNo,
+
+            distributorId,
+            firmId,
+            firmName,
+          }),
+        }
+      );
+
+      const result =
+        await response.json();
+
+      if (
+        !response.ok ||
+        result.success === false
+      ) {
+        return alert(
+          result.message ||
+          "Salesman save/update failed"
+        );
       }
 
+      const refreshPage =
+        wasEditing
+          ? salesmanCurrentPage
+          : 1;
+
+      /*
+       * Refresh complete salesman list used
+       * by Billing, Reports and mappings.
+       */
       await loadSalesmen();
 
-      alert(editSalesmanId ? "Salesman updated successfully!" : "Salesman saved successfully!");
+      /*
+       * Refresh Salesman Master paginated grid.
+       */
+      setSalesmanCurrentPage(
+        refreshPage
+      );
 
-      // ✅ RESET FORM FIELDS
+      await loadSalesmanMaster({
+        page: refreshPage,
+        limit:
+          salesmanRowsPerPage,
+        search:
+          salesmanBackendSearch,
+      });
+
+      alert(
+        wasEditing
+          ? "Salesman updated successfully!"
+          : "Salesman saved successfully!"
+      );
+
       setSalesmanForm({
         code: "",
         name: "",
@@ -29518,7 +35550,7 @@ const getFilteredProducts = () => {
         town: "",
         pinCode: "",
         state: "",
-        country: "",
+        country: "India",
         phoneNo: "",
         mobileNo: "",
         emailId: "",
@@ -29529,11 +35561,17 @@ const getFilteredProducts = () => {
       });
 
       setEditSalesmanId(null);
-      // ✅ CLOSE FORM
+
       closeForm();
     } catch (error) {
-      console.error(error);
-      alert("Server not connected. Salesman save/update failed.");
+      console.error(
+        "Salesman save error:",
+        error
+      );
+
+      alert(
+        "Server not connected. Salesman save/update failed."
+      );
     }
   };
   const editSalesman = (salesman) => {
@@ -29614,64 +35652,141 @@ const getFilteredProducts = () => {
       alert("Server not connected. Failed to load areas.");
     }
   };
-  const saveArea = async (e) => {
-    e.preventDefault();
+  const saveArea = async (event) => {
+    event.preventDefault();
 
-    if (!areaForm.code || !areaForm.name) {
-      return alert("Code and Name required");
+    const areaCode =
+      String(
+        areaForm.code || ""
+      ).trim();
+
+    const areaName =
+      String(
+        areaForm.name || ""
+      ).trim();
+
+    if (!areaCode || !areaName) {
+      return alert(
+        "Code and Name required"
+      );
     }
 
-    const distributorId = localStorage.getItem("distributorId");
-    const firmId = localStorage.getItem("firmId");
-    const firmName = localStorage.getItem("firmName");
+    const distributorId =
+      localStorage.getItem(
+        "distributorId"
+      );
+
+    const firmId =
+      localStorage.getItem(
+        "firmId"
+      );
+
+    const firmName =
+      localStorage.getItem(
+        "firmName"
+      );
 
     if (!distributorId || !firmId) {
-      return alert("Distributor/Firm not found. Please login again.");
+      return alert(
+        "Distributor/Firm not found. Please login again."
+      );
     }
+
+    const wasEditing =
+      Boolean(editAreaId);
 
     try {
       const url = editAreaId
         ? `${API_URL}/areas/${editAreaId}`
         : `${API_URL}/areas`;
 
-      const method = editAreaId ? "PUT" : "POST";
+      const method = editAreaId
+        ? "PUT"
+        : "POST";
 
-      const res = await fetch(url, {
-        method,
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          areaCode: areaForm.code,
-          areaName: areaForm.name,
-          distributorId,
-          firmId,
-          firmName,
-        }),
-      });
+      const response = await fetch(
+        url,
+        {
+          method,
 
-      const result = await res.json();
+          headers: {
+            "Content-Type":
+              "application/json",
+          },
 
-      if (!res.ok || result.success === false) {
-        return alert(result.message || "Area save/update failed");
+          body: JSON.stringify({
+            areaCode,
+            areaName,
+            distributorId,
+            firmId,
+            firmName,
+          }),
+        }
+      );
+
+      const result =
+        await response.json();
+
+      if (
+        !response.ok ||
+        result.success === false
+      ) {
+        return alert(
+          result.message ||
+          "Area save/update failed"
+        );
       }
 
+      /*
+       * Refresh the complete area list used
+       * by mappings, dropdowns and other forms.
+       */
       await loadAreas();
 
-      alert(editAreaId ? "Area updated successfully!" : "Area saved successfully!");
+      /*
+       * After adding a new area, return to page 1
+       * because backend sorting decides its position.
+       *
+       * While editing, remain on the same page.
+       */
+      const refreshPage =
+        wasEditing
+          ? areaCurrentPage
+          : 1;
 
-      // ✅ RESET FORM FIELDS
+      setAreaCurrentPage(
+        refreshPage
+      );
+
+      await loadAreaMaster({
+        page: refreshPage,
+        limit: areaRowsPerPage,
+        search: areaBackendSearch,
+      });
+
+      alert(
+        wasEditing
+          ? "Area updated successfully!"
+          : "Area saved successfully!"
+      );
+
       setAreaForm({
         code: "",
         name: "",
       });
 
       setEditAreaId(null);
-      // ✅ CLOSE FORM
+
       closeForm();
     } catch (error) {
-      console.error(error);
-      alert("Server not connected. Area save/update failed.");
+      console.error(
+        "Area save error:",
+        error
+      );
+
+      alert(
+        "Server not connected. Area save/update failed."
+      );
     }
   };
   const editArea = (area) => {
@@ -29780,25 +35895,25 @@ const getFilteredProducts = () => {
         return alert(result.message || "Company save failed");
       }
 
-    const refreshPage = wasEditing
-  ? companyCurrentPage
-  : 1;
+      const refreshPage = wasEditing
+        ? companyCurrentPage
+        : 1;
 
-/*
- * Refresh full company dropdown data.
- */
-await loadCompanies();
+      /*
+       * Refresh full company dropdown data.
+       */
+      await loadCompanies();
 
-/*
- * Refresh Company Master grid.
- */
-setCompanyCurrentPage(refreshPage);
+      /*
+       * Refresh Company Master grid.
+       */
+      setCompanyCurrentPage(refreshPage);
 
-await loadCompanyMaster({
-  page: refreshPage,
-  limit: companyRowsPerPage,
-  search: companyBackendSearch,
-});
+      await loadCompanyMaster({
+        page: refreshPage,
+        limit: companyRowsPerPage,
+        search: companyBackendSearch,
+      });
 
       // ✅ RESET FORM FIELDS
       setEditCompanyId(null);
@@ -29807,11 +35922,11 @@ await loadCompanyMaster({
       // ✅ CLOSE FORM AND SHOW GRID VIEW
       closeForm();
 
-    alert(
-  wasEditing
-    ? "Company updated successfully!"
-    : "Company created successfully!"
-);
+      alert(
+        wasEditing
+          ? "Company updated successfully!"
+          : "Company created successfully!"
+      );
     } catch (error) {
       console.error(error);
       alert("Server not connected. Company save failed.");
@@ -29861,26 +35976,26 @@ await loadCompanyMaster({
       }
 
       const pageAfterDelete =
-  companyMasterRows.length === 1 &&
-  companyCurrentPage > 1
-    ? companyCurrentPage - 1
-    : companyCurrentPage;
+        companyMasterRows.length === 1 &&
+          companyCurrentPage > 1
+          ? companyCurrentPage - 1
+          : companyCurrentPage;
 
-/*
- * Refresh full dropdown data.
- */
-await loadCompanies();
+      /*
+       * Refresh full dropdown data.
+       */
+      await loadCompanies();
 
-/*
- * Refresh Company Master grid.
- */
-setCompanyCurrentPage(pageAfterDelete);
+      /*
+       * Refresh Company Master grid.
+       */
+      setCompanyCurrentPage(pageAfterDelete);
 
-await loadCompanyMaster({
-  page: pageAfterDelete,
-  limit: companyRowsPerPage,
-  search: companyBackendSearch,
-});
+      await loadCompanyMaster({
+        page: pageAfterDelete,
+        limit: companyRowsPerPage,
+        search: companyBackendSearch,
+      });
       alert("Company deleted successfully!");
     } catch (error) {
       console.error(error);
@@ -30263,27 +36378,27 @@ await loadCompanyMaster({
       if (!res.ok || !result.success) {
         return alert(result.message || "Group delete failed");
       }
-  const pageAfterDelete =
-  groupMasterRows.length === 1 &&
-  groupCurrentPage > 1
-    ? groupCurrentPage - 1
-    : groupCurrentPage;
+      const pageAfterDelete =
+        groupMasterRows.length === 1 &&
+          groupCurrentPage > 1
+          ? groupCurrentPage - 1
+          : groupCurrentPage;
 
-/*
- * Refresh complete group options.
- */
-await loadGroups();
+      /*
+       * Refresh complete group options.
+       */
+      await loadGroups();
 
-/*
- * Refresh the correct Group Master page.
- */
-setGroupCurrentPage(pageAfterDelete);
+      /*
+       * Refresh the correct Group Master page.
+       */
+      setGroupCurrentPage(pageAfterDelete);
 
-await loadGroupMaster({
-  page: pageAfterDelete,
-  limit: groupRowsPerPage,
-  search: groupBackendSearch,
-});
+      await loadGroupMaster({
+        page: pageAfterDelete,
+        limit: groupRowsPerPage,
+        search: groupBackendSearch,
+      });
       alert("Group deleted successfully!");
     } catch (error) {
       console.error(error);
@@ -30291,91 +36406,91 @@ await loadGroupMaster({
     }
   };
 
-const deleteCategory = async (
-  idOrCategory
-) => {
-  const id =
-    typeof idOrCategory ===
-    "object"
-      ? idOrCategory.id ||
+  const deleteCategory = async (
+    idOrCategory
+  ) => {
+    const id =
+      typeof idOrCategory ===
+        "object"
+        ? idOrCategory.id ||
         idOrCategory._id
-      : idOrCategory;
+        : idOrCategory;
 
-  if (!id) {
-    return alert(
-      "Category ID not found"
-    );
-  }
-
-  if (
-    !window.confirm(
-      "Are you sure you want to delete this category?"
-    )
-  ) {
-    return;
-  }
-
-  try {
-    const response = await fetch(
-      `${API_URL}/categories/${id}`,
-      {
-        method: "DELETE",
-      }
-    );
-
-    const result =
-      await response.json();
-
-    if (
-      !response.ok ||
-      !result.success
-    ) {
+    if (!id) {
       return alert(
-        result.message ||
-        "Category delete failed"
+        "Category ID not found"
       );
     }
 
-    const pageAfterDelete =
-      categoryMasterRows.length === 1 &&
-      categoryCurrentPage > 1
-        ? categoryCurrentPage - 1
-        : categoryCurrentPage;
+    if (
+      !window.confirm(
+        "Are you sure you want to delete this category?"
+      )
+    ) {
+      return;
+    }
 
-    /*
-     * Refresh full categories for dropdowns.
-     */
-    await loadCategories();
+    try {
+      const response = await fetch(
+        `${API_URL}/categories/${id}`,
+        {
+          method: "DELETE",
+        }
+      );
 
-    /*
-     * Refresh correct paginated page.
-     */
-    setCategoryCurrentPage(
-      pageAfterDelete
-    );
+      const result =
+        await response.json();
 
-    await loadCategoryMaster({
-      page: pageAfterDelete,
-      limit:
-        categoryRowsPerPage,
-      search:
-        categoryBackendSearch,
-    });
+      if (
+        !response.ok ||
+        !result.success
+      ) {
+        return alert(
+          result.message ||
+          "Category delete failed"
+        );
+      }
 
-    alert(
-      "Category deleted successfully!"
-    );
-  } catch (error) {
-    console.error(
-      "Category delete error:",
-      error
-    );
+      const pageAfterDelete =
+        categoryMasterRows.length === 1 &&
+          categoryCurrentPage > 1
+          ? categoryCurrentPage - 1
+          : categoryCurrentPage;
 
-    alert(
-      "Server not connected. Category delete failed."
-    );
-  }
-};
+      /*
+       * Refresh full categories for dropdowns.
+       */
+      await loadCategories();
+
+      /*
+       * Refresh correct paginated page.
+       */
+      setCategoryCurrentPage(
+        pageAfterDelete
+      );
+
+      await loadCategoryMaster({
+        page: pageAfterDelete,
+        limit:
+          categoryRowsPerPage,
+        search:
+          categoryBackendSearch,
+      });
+
+      alert(
+        "Category deleted successfully!"
+      );
+    } catch (error) {
+      console.error(
+        "Category delete error:",
+        error
+      );
+
+      alert(
+        "Server not connected. Category delete failed."
+      );
+    }
+  };
 
   const deleteProduct = async (productOrId) => {
     const id =
@@ -30405,36 +36520,36 @@ const deleteCategory = async (
         return alert(result.message || "Product delete failed");
       }
 
-     const pageAfterDelete =
-  productMasterRows.length === 1 &&
-  productCurrentPage > 1
-    ? productCurrentPage - 1
-    : productCurrentPage;
+      const pageAfterDelete =
+        productMasterRows.length === 1 &&
+          productCurrentPage > 1
+          ? productCurrentPage - 1
+          : productCurrentPage;
 
-/*
- * Refresh global products for existing
- * billing and transaction flows.
- */
-await loadProducts();
+      /*
+       * Refresh global products for existing
+       * billing and transaction flows.
+       */
+      await loadProducts();
 
-/*
- * Refresh Product Master page.
- */
-setProductCurrentPage(
-  pageAfterDelete
-);
+      /*
+       * Refresh Product Master page.
+       */
+      setProductCurrentPage(
+        pageAfterDelete
+      );
 
-await loadProductMaster({
-  page: pageAfterDelete,
-  limit: productRowsPerPage,
-  search: productBackendSearch,
-  companyCode:
-    productCompanyFilter,
-  groupCode:
-    productGroupFilter,
-  categoryCode:
-    productCategoryFilter,
-});
+      await loadProductMaster({
+        page: pageAfterDelete,
+        limit: productRowsPerPage,
+        search: productBackendSearch,
+        companyCode:
+          productCompanyFilter,
+        groupCode:
+          productGroupFilter,
+        categoryCode:
+          productCategoryFilter,
+      });
       alert("Product deleted successfully!");
     } catch (error) {
       console.error(error);
@@ -30442,188 +36557,498 @@ await loadProductMaster({
     }
   };
 
-  const deleteAccount = async (accountOrId) => {
+  const deleteAccount = async (
+    accountOrId
+  ) => {
     const id =
       typeof accountOrId === "object"
-        ? accountOrId._id || accountOrId.id
+        ? accountOrId._id ||
+        accountOrId.id
         : accountOrId;
 
     const accountName =
       typeof accountOrId === "object"
-        ? accountOrId.accountName || ""
+        ? accountOrId.accountName ||
+        ""
         : "";
 
     if (!id) {
-      return alert("Account ID not found");
+      return alert(
+        "Account ID not found"
+      );
     }
 
-    if (!window.confirm(`Delete account "${accountName}"?`)) return;
+    if (
+      !window.confirm(
+        `Delete account "${accountName}"?`
+      )
+    ) {
+      return;
+    }
 
     try {
-      const res = await fetch(`${API_URL}/accounts/${id}`, {
-        method: "DELETE",
-      });
+      const response = await fetch(
+        `${API_URL}/accounts/${id}`,
+        {
+          method: "DELETE",
+        }
+      );
 
-      const result = await res.json();
+      const result =
+        await response.json();
 
-      if (!res.ok || !result.success) {
-        return alert(result.message || "Account delete failed");
+      if (
+        !response.ok ||
+        !result.success
+      ) {
+        return alert(
+          result.message ||
+          "Account delete failed"
+        );
       }
 
+      /*
+       * If the final row of a page is deleted,
+       * return to the previous available page.
+       */
+      const pageAfterDelete =
+        accountMasterRows.length === 1 &&
+          accountCurrentPage > 1
+          ? accountCurrentPage - 1
+          : accountCurrentPage;
+
+      /*
+       * Refresh the complete account list used
+       * by billing and existing dropdowns.
+       */
       await loadAccounts();
-      alert("Account deleted successfully!");
-    } catch (error) {
-      console.error(error);
-      alert("Server not connected. Account delete failed.");
-    }
-  };
 
-  const deleteOtherAccount = async (accountOrId) => {
-    const id =
-      typeof accountOrId === "object"
-        ? accountOrId._id || accountOrId.id
-        : accountOrId;
+      /*
+       * Refresh Account Master paginated list.
+       */
+      setAccountCurrentPage(
+        pageAfterDelete
+      );
 
-    const accountName =
-      typeof accountOrId === "object"
-        ? accountOrId.accountName || ""
-        : "";
-
-    if (!id) {
-      return alert("Other Account ID not found");
-    }
-
-    if (!window.confirm(`Delete other account "${accountName}"?`)) return;
-
-    try {
-      const res = await fetch(`${API_URL}/other-accounts/${id}`, {
-        method: "DELETE",
+      await loadAccountMaster({
+        page: pageAfterDelete,
+        limit: accountRowsPerPage,
+        search: accountBackendSearch,
       });
 
-      const result = await res.json();
-
-      if (!res.ok || !result.success) {
-        return alert(result.message || "Other Account delete failed");
-      }
-
-      await loadOtherAccounts();
-      alert("Other Account deleted successfully!");
+      alert(
+        "Account deleted successfully!"
+      );
     } catch (error) {
-      console.error(error);
-      alert("Server not connected. Other Account delete failed.");
+      console.error(
+        "Account delete error:",
+        error
+      );
+
+      alert(
+        "Server not connected. Account delete failed."
+      );
     }
   };
 
-  const deleteGst = async (gstOrId) => {
+  const deleteOtherAccount =
+    async (accountOrId) => {
+      const id =
+        typeof accountOrId ===
+          "object"
+          ? accountOrId._id ||
+          accountOrId.id
+          : accountOrId;
+
+      const accountName =
+        typeof accountOrId ===
+          "object"
+          ? accountOrId.accountName ||
+          ""
+          : "";
+
+      if (!id) {
+        return alert(
+          "Other Account ID not found"
+        );
+      }
+
+      if (
+        !window.confirm(
+          `Delete other account "${accountName}"?`
+        )
+      ) {
+        return;
+      }
+
+      try {
+        const response =
+          await fetch(
+            `${API_URL}/other-accounts/${id}`,
+            {
+              method: "DELETE",
+            }
+          );
+
+        const result =
+          await response.json();
+
+        if (
+          !response.ok ||
+          !result.success
+        ) {
+          return alert(
+            result.message ||
+            "Other Account delete failed"
+          );
+        }
+
+        const pageAfterDelete =
+          otherAccountMasterRows.length ===
+            1 &&
+            otherAccountCurrentPage > 1
+            ? otherAccountCurrentPage -
+            1
+            : otherAccountCurrentPage;
+
+        /*
+         * Refresh full list used by
+         * existing application modules.
+         */
+        await loadOtherAccounts();
+
+        /*
+         * Refresh paginated master list.
+         */
+        setOtherAccountCurrentPage(
+          pageAfterDelete
+        );
+
+        await loadOtherAccountMaster({
+          page: pageAfterDelete,
+          limit:
+            otherAccountRowsPerPage,
+          search:
+            otherAccountBackendSearch,
+        });
+
+        alert(
+          "Other Account deleted successfully!"
+        );
+      } catch (error) {
+        console.error(
+          "Other Account delete error:",
+          error
+        );
+
+        alert(
+          "Server not connected. Other Account delete failed."
+        );
+      }
+    };
+
+  const deleteGst = async (
+    gstOrId
+  ) => {
     const id =
       typeof gstOrId === "object"
-        ? gstOrId._id || gstOrId.id
+        ? gstOrId._id ||
+        gstOrId.id
         : gstOrId;
 
     const gstCode =
       typeof gstOrId === "object"
-        ? gstOrId.gstCode || gstOrId.code || ""
+        ? gstOrId.gstCode ||
+        gstOrId.code ||
+        ""
         : "";
 
     if (!id) {
-      return alert("GST ID not found");
+      return alert(
+        "GST ID not found"
+      );
     }
 
-    if (!window.confirm(`Delete GST "${gstCode}"?`)) return;
+    if (
+      !window.confirm(
+        `Delete GST "${gstCode}"?`
+      )
+    ) {
+      return;
+    }
 
     try {
-      const res = await fetch(`${API_URL}/gst/${id}`, {
-        method: "DELETE",
-      });
+      const response =
+        await fetch(
+          `${API_URL}/gst/${id}`,
+          {
+            method: "DELETE",
+          }
+        );
 
-      const result = await res.json();
+      const result =
+        await response.json();
 
-      if (!res.ok || result.success === false) {
-        return alert(result.message || "GST delete failed");
+      if (
+        !response.ok ||
+        result.success === false
+      ) {
+        return alert(
+          result.message ||
+          "GST delete failed"
+        );
       }
 
+      /*
+       * If the last GST row on the page
+       * is deleted, move to previous page.
+       */
+      const pageAfterDelete =
+        gstMasterRows.length === 1 &&
+          gstCurrentPage > 1
+          ? gstCurrentPage - 1
+          : gstCurrentPage;
+
+      /*
+       * Refresh full GST list used by
+       * other application forms.
+       */
       await loadGst();
-      alert("GST deleted successfully!");
+
+      /*
+       * Refresh GST Master paginated list.
+       */
+      setGstCurrentPage(
+        pageAfterDelete
+      );
+
+      await loadGstMaster({
+        page: pageAfterDelete,
+        limit: gstRowsPerPage,
+        search: gstBackendSearch,
+      });
+
+      alert(
+        "GST deleted successfully!"
+      );
     } catch (error) {
-      console.error(error);
-      alert("Server not connected. GST delete failed.");
+      console.error(
+        "GST delete error:",
+        error
+      );
+
+      alert(
+        "Server not connected. GST delete failed."
+      );
     }
   };
 
-  const deleteSalesman = async (salesmanOrId) => {
+  const deleteSalesman = async (
+    salesmanOrId
+  ) => {
     const id =
-      typeof salesmanOrId === "object"
-        ? salesmanOrId._id || salesmanOrId.id
+      typeof salesmanOrId ===
+        "object"
+        ? salesmanOrId._id ||
+        salesmanOrId.id
         : salesmanOrId;
 
     const salesmanName =
-      typeof salesmanOrId === "object"
-        ? salesmanOrId.salesmanName || salesmanOrId.name || ""
+      typeof salesmanOrId ===
+        "object"
+        ? salesmanOrId.salesmanName ||
+        salesmanOrId.name ||
+        ""
         : "";
 
     if (!id) {
-      return alert("Salesman ID not found");
+      return alert(
+        "Salesman ID not found"
+      );
     }
 
-    if (!window.confirm(`Delete salesman "${salesmanName}"?`)) return;
+    if (
+      !window.confirm(
+        `Delete salesman "${salesmanName}"?`
+      )
+    ) {
+      return;
+    }
 
     try {
-      const res = await fetch(`${API_URL}/salesmen/${id}`, {
-        method: "DELETE",
-      });
+      const response = await fetch(
+        `${API_URL}/salesmen/${id}`,
+        {
+          method: "DELETE",
+        }
+      );
 
-      const result = await res.json();
+      const result =
+        await response.json();
 
-      if (!res.ok || !result.success) {
-        return alert(result.message || "Salesman delete failed");
+      if (
+        !response.ok ||
+        result.success === false
+      ) {
+        return alert(
+          result.message ||
+          "Salesman delete failed"
+        );
       }
 
+      const pageAfterDelete =
+        salesmanMasterRows.length ===
+          1 &&
+          salesmanCurrentPage > 1
+          ? salesmanCurrentPage - 1
+          : salesmanCurrentPage;
+
+      /*
+       * Refresh complete salesman list used
+       * by other modules.
+       */
       await loadSalesmen();
-      alert("Salesman deleted successfully!");
+
+      /*
+       * Refresh Salesman Master paginated grid.
+       */
+      setSalesmanCurrentPage(
+        pageAfterDelete
+      );
+
+      await loadSalesmanMaster({
+        page: pageAfterDelete,
+        limit:
+          salesmanRowsPerPage,
+        search:
+          salesmanBackendSearch,
+      });
+
+      alert(
+        "Salesman deleted successfully!"
+      );
     } catch (error) {
-      console.error(error);
-      alert("Server not connected. Salesman delete failed.");
+      console.error(
+        "Salesman delete error:",
+        error
+      );
+
+      alert(
+        "Server not connected. Salesman delete failed."
+      );
     }
   };
-  const deleteArea = async (areaOrId) => {
+  const deleteArea = async (
+    areaOrId
+  ) => {
     const id =
       typeof areaOrId === "object"
-        ? areaOrId._id || areaOrId.id
+        ? areaOrId._id ||
+        areaOrId.id
         : areaOrId;
 
     const areaName =
       typeof areaOrId === "object"
-        ? areaOrId.areaName || areaOrId.name || ""
+        ? areaOrId.areaName ||
+        areaOrId.name ||
+        ""
         : "";
 
     if (!id) {
-      return alert("Area ID not found");
+      return alert(
+        "Area ID not found"
+      );
     }
 
-    if (!window.confirm(`Delete area "${areaName}"?`)) return;
+    const displayName =
+      areaName
+        ? `"${areaName}"`
+        : "this area";
+
+    if (
+      !window.confirm(
+        `Delete area ${displayName}?`
+      )
+    ) {
+      return;
+    }
 
     try {
-      const res = await fetch(`${API_URL}/areas/${id}`, {
-        method: "DELETE",
-      });
+      const response = await fetch(
+        `${API_URL}/areas/${id}`,
+        {
+          method: "DELETE",
+        }
+      );
 
-      const result = await res.json();
+      const result =
+        await response.json();
 
-      if (!res.ok || result.success === false) {
-        return alert(result.message || "Area delete failed");
+      if (
+        !response.ok ||
+        result.success === false
+      ) {
+        return alert(
+          result.message ||
+          "Area delete failed"
+        );
       }
 
+      /*
+       * Refresh the complete area collection used
+       * in mappings and dropdowns.
+       */
       await loadAreas();
-      alert("Area deleted successfully!");
+
+      const recordsAfterDelete =
+        Math.max(
+          areaTotalRecords - 1,
+          0
+        );
+
+      const pagesAfterDelete =
+        Math.max(
+          Math.ceil(
+            recordsAfterDelete /
+            areaRowsPerPage
+          ),
+          1
+        );
+
+      /*
+       * When the last record of the last page is
+       * deleted, move to the previous valid page.
+       */
+      const pageAfterDelete =
+        Math.min(
+          areaCurrentPage,
+          pagesAfterDelete
+        );
+
+      setAreaCurrentPage(
+        pageAfterDelete
+      );
+
+      await loadAreaMaster({
+        page: pageAfterDelete,
+        limit: areaRowsPerPage,
+        search: areaBackendSearch,
+      });
+
+      alert(
+        "Area deleted successfully!"
+      );
     } catch (error) {
-      console.error(error);
-      alert("Server not connected. Area delete failed.");
+      console.error(
+        "Area delete error:",
+        error
+      );
+
+      alert(
+        "Server not connected. Area delete failed."
+      );
     }
   };
-
-
-
-
 
   // const deleteCompany = (id) => {
   //   setCompanies(companies.filter(c => c.id !== id));
@@ -30969,6 +37394,176 @@ await loadProductMaster({
       console.error(error);
     }
   };
+  const loadAccountMaster = useCallback(
+    async ({
+      page = 1,
+      limit = 20,
+      search = "",
+    } = {}) => {
+      try {
+        const distributorId =
+          localStorage.getItem("distributorId");
+
+        const firmId =
+          localStorage.getItem("firmId");
+
+        if (!distributorId || !firmId) {
+          setAccountMasterRows([]);
+          setAccountTotalRecords(0);
+          setAccountTotalPages(1);
+          setAccountStartRecord(0);
+          setAccountEndRecord(0);
+          return;
+        }
+
+        setAccountLoading(true);
+
+        const query =
+          new URLSearchParams({
+            distributorId,
+            firmId,
+            page: String(page),
+            limit: String(limit),
+          });
+
+        const searchText =
+          String(search || "").trim();
+
+        if (searchText) {
+          query.set(
+            "search",
+            searchText
+          );
+        }
+
+        const response =
+          await fetch(
+            `${API_URL}/accounts/list?${query.toString()}`
+          );
+
+        const result =
+          await response.json();
+
+        if (
+          !response.ok ||
+          result.success === false
+        ) {
+          throw new Error(
+            result.message ||
+            "Failed to load Account Master"
+          );
+        }
+
+        const pagination =
+          result.pagination || {};
+
+        setAccountMasterRows(
+          Array.isArray(result.accounts)
+            ? result.accounts
+            : []
+        );
+
+        setAccountCurrentPage(
+          Number(
+            pagination.currentPage ||
+            page
+          )
+        );
+
+        setAccountRowsPerPage(
+          Number(
+            pagination.limit ||
+            limit
+          )
+        );
+
+        setAccountTotalRecords(
+          Number(
+            pagination.totalRecords ||
+            0
+          )
+        );
+
+        setAccountTotalPages(
+          Math.max(
+            Number(
+              pagination.totalPages ||
+              1
+            ),
+            1
+          )
+        );
+
+        setAccountStartRecord(
+          Number(
+            pagination.startRecord ||
+            0
+          )
+        );
+
+        setAccountEndRecord(
+          Number(
+            pagination.endRecord ||
+            0
+          )
+        );
+      } catch (error) {
+        console.error(error);
+
+        setAccountMasterRows([]);
+        setAccountTotalRecords(0);
+        setAccountTotalPages(1);
+        setAccountStartRecord(0);
+        setAccountEndRecord(0);
+
+        alert(
+          error.message ||
+          "Unable to load Account Master."
+        );
+      } finally {
+        setAccountLoading(false);
+      }
+    },
+    []
+  );
+  useEffect(() => {
+    const timer =
+      window.setTimeout(() => {
+        setAccountBackendSearch(
+          String(
+            filters.account || ""
+          ).trim()
+        );
+
+        setAccountCurrentPage(1);
+      }, 400);
+
+    return () =>
+      window.clearTimeout(timer);
+  }, [filters.account]);
+
+  useEffect(() => {
+    if (
+      activeSubMenu !== "Account" ||
+      openFormFor === "Account"
+    ) {
+      return;
+    }
+
+    loadAccountMaster({
+      page: accountCurrentPage,
+      limit: accountRowsPerPage,
+      search:
+        accountBackendSearch,
+    });
+  }, [
+    activeSubMenu,
+    openFormFor,
+    accountCurrentPage,
+    accountRowsPerPage,
+    accountBackendSearch,
+    loadAccountMaster,
+  ]);
   const saveAccount = async (e) => {
     e.preventDefault();
 
@@ -31019,11 +37614,13 @@ await loadProductMaster({
       blackListed: accountForm.blackListed,
     });
 
+    const wasEditing =
+      Boolean(editAccountId);
+
     try {
       const url = editAccountId
         ? `${API_URL}/accounts/${editAccountId}`
         : `${API_URL}/accounts`;
-
       const method = editAccountId ? "PUT" : "POST";
 
       // 🔥 FIX: Ensure numeric fields are sent as numbers, not strings
@@ -31146,11 +37743,36 @@ await loadProductMaster({
       }
 
       /*
-        Account was opened normally from Masters.
-      */
+  Account was opened normally from Masters.
+
+  Keep the complete account list refreshed
+  for billing and existing dropdowns.
+*/
       await loadAccounts();
 
-      accountOpenedFromInvoiceRef.current = false;
+      /*
+        For a newly created account, return to page 1.
+      
+        For an edited account, remain on the
+        currently selected page.
+      */
+      const refreshPage =
+        wasEditing
+          ? accountCurrentPage
+          : 1;
+
+      setAccountCurrentPage(
+        refreshPage
+      );
+
+      await loadAccountMaster({
+        page: refreshPage,
+        limit: accountRowsPerPage,
+        search: accountBackendSearch,
+      });
+
+      accountOpenedFromInvoiceRef.current =
+        false;
 
       setEditAccountId(null);
       setAccountActiveTab("basic");
@@ -31158,7 +37780,6 @@ await loadProductMaster({
       setActiveMenu("masters");
       setActiveSubMenu("Account");
       setShowDashboard(false);
-      setEditAccountId(null);
 
       setAccountForm({
         accountCode: "",
@@ -31215,7 +37836,7 @@ await loadProductMaster({
       setActiveSubMenu("Account");
 
       // Reset form
-      setEditAccountId(null);
+
       setAccountForm({
         accountCode: '',
         accountName: '',
@@ -31367,6 +37988,230 @@ await loadProductMaster({
       console.error(error);
     }
   };
+  const loadOtherAccountMaster =
+    useCallback(
+      async ({
+        page = 1,
+        limit = 20,
+        search = "",
+      } = {}) => {
+        try {
+          const distributorId =
+            localStorage.getItem(
+              "distributorId"
+            );
+
+          const firmId =
+            localStorage.getItem(
+              "firmId"
+            );
+
+          if (
+            !distributorId ||
+            !firmId
+          ) {
+            setOtherAccountMasterRows(
+              []
+            );
+
+            setOtherAccountTotalRecords(
+              0
+            );
+
+            setOtherAccountTotalPages(
+              1
+            );
+
+            setOtherAccountStartRecord(
+              0
+            );
+
+            setOtherAccountEndRecord(
+              0
+            );
+
+            return;
+          }
+
+          setOtherAccountLoading(true);
+
+          const params =
+            new URLSearchParams({
+              distributorId,
+              firmId,
+              page: String(page),
+              limit: String(limit),
+            });
+
+          const searchText =
+            String(
+              search || ""
+            ).trim();
+
+          if (searchText) {
+            params.set(
+              "search",
+              searchText
+            );
+          }
+
+          const response =
+            await fetch(
+              `${API_URL}/other-accounts/list?${params.toString()}`
+            );
+
+          const result =
+            await response.json();
+
+          if (
+            !response.ok ||
+            result.success === false
+          ) {
+            throw new Error(
+              result.message ||
+              "Failed to load Other Account Master"
+            );
+          }
+
+          const pagination =
+            result.pagination || {};
+
+          setOtherAccountMasterRows(
+            Array.isArray(
+              result.otherAccounts
+            )
+              ? result.otherAccounts
+              : []
+          );
+
+          setOtherAccountCurrentPage(
+            Number(
+              pagination.currentPage ||
+              page
+            )
+          );
+
+          setOtherAccountRowsPerPage(
+            Number(
+              pagination.limit ||
+              limit
+            )
+          );
+
+          setOtherAccountTotalRecords(
+            Number(
+              pagination.totalRecords ||
+              0
+            )
+          );
+
+          setOtherAccountTotalPages(
+            Math.max(
+              Number(
+                pagination.totalPages ||
+                1
+              ),
+              1
+            )
+          );
+
+          setOtherAccountStartRecord(
+            Number(
+              pagination.startRecord ||
+              0
+            )
+          );
+
+          setOtherAccountEndRecord(
+            Number(
+              pagination.endRecord ||
+              0
+            )
+          );
+        } catch (error) {
+          console.error(
+            "Other Account Master load error:",
+            error
+          );
+
+          setOtherAccountMasterRows(
+            []
+          );
+
+          setOtherAccountTotalRecords(
+            0
+          );
+
+          setOtherAccountTotalPages(
+            1
+          );
+
+          setOtherAccountStartRecord(
+            0
+          );
+
+          setOtherAccountEndRecord(
+            0
+          );
+
+          alert(
+            error.message ||
+            "Unable to load Other Account Master."
+          );
+        } finally {
+          setOtherAccountLoading(false);
+        }
+      },
+      []
+    );
+
+  useEffect(() => {
+    const timer =
+      window.setTimeout(() => {
+        setOtherAccountBackendSearch(
+          String(
+            filters.otherAccount ||
+            ""
+          ).trim()
+        );
+
+        setOtherAccountCurrentPage(
+          1
+        );
+      }, 400);
+
+    return () => {
+      window.clearTimeout(timer);
+    };
+  }, [filters.otherAccount]);
+  useEffect(() => {
+    if (
+      activeSubMenu !==
+      "Other Account" ||
+      openFormFor ===
+      "Other Account"
+    ) {
+      return;
+    }
+
+    loadOtherAccountMaster({
+      page:
+        otherAccountCurrentPage,
+
+      limit:
+        otherAccountRowsPerPage,
+
+      search:
+        otherAccountBackendSearch,
+    });
+  }, [
+    activeSubMenu,
+    openFormFor,
+    otherAccountCurrentPage,
+    otherAccountRowsPerPage,
+    otherAccountBackendSearch,
+    loadOtherAccountMaster,
+  ]);
 
   const saveOtherAccount = async (e) => {
     e.preventDefault();
@@ -31384,6 +38229,9 @@ await loadProductMaster({
     if (!distributorId || !firmId) {
       return alert("Distributor/Firm not found. Please login again.");
     }
+
+    const wasEditing =
+      Boolean(editOtherAccountId);
 
     try {
       const url = editOtherAccountId
@@ -31414,7 +38262,28 @@ await loadProductMaster({
         return alert(result.message || "Other account save failed");
       }
 
+      /*
+   * Keep full-list data refreshed for
+   * existing modules.
+   */
       await loadOtherAccounts();
+
+      const refreshPage =
+        wasEditing
+          ? otherAccountCurrentPage
+          : 1;
+
+      setOtherAccountCurrentPage(
+        refreshPage
+      );
+
+      await loadOtherAccountMaster({
+        page: refreshPage,
+        limit:
+          otherAccountRowsPerPage,
+        search:
+          otherAccountBackendSearch,
+      });
 
       alert(
         editOtherAccountId
@@ -31513,27 +38382,27 @@ await loadProductMaster({
         return alert(result.message || "Group save failed");
       }
 
-    const wasEditing = Boolean(editGroupId);
+      const wasEditing = Boolean(editGroupId);
 
-const refreshPage = wasEditing
-  ? groupCurrentPage
-  : 1;
+      const refreshPage = wasEditing
+        ? groupCurrentPage
+        : 1;
 
-/*
- * Refresh full group options.
- */
-await loadGroups();
+      /*
+       * Refresh full group options.
+       */
+      await loadGroups();
 
-/*
- * Refresh paginated Group Master grid.
- */
-setGroupCurrentPage(refreshPage);
+      /*
+       * Refresh paginated Group Master grid.
+       */
+      setGroupCurrentPage(refreshPage);
 
-await loadGroupMaster({
-  page: refreshPage,
-  limit: groupRowsPerPage,
-  search: groupBackendSearch,
-});
+      await loadGroupMaster({
+        page: refreshPage,
+        limit: groupRowsPerPage,
+        search: groupBackendSearch,
+      });
       alert(editGroupId ? "Group updated successfully!" : "Group created successfully!");
 
       // ✅ RESET FORM AND CLOSE
@@ -31553,134 +38422,134 @@ await loadGroupMaster({
   };
 
   const saveCategory = async (event) => {
-  event.preventDefault();
+    event.preventDefault();
 
-  const cleanCode = String(
-    categoryForm.code || ""
-  ).trim();
+    const cleanCode = String(
+      categoryForm.code || ""
+    ).trim();
 
-  const cleanName = String(
-    categoryForm.name || ""
-  ).trim();
+    const cleanName = String(
+      categoryForm.name || ""
+    ).trim();
 
-  if (!cleanCode || !cleanName) {
-    return alert(
-      "Code and Name required"
-    );
-  }
-
-  const {
-    distributorId,
-    firmId,
-    firmName,
-  } = getFirmInfo();
-
-  if (!distributorId || !firmId) {
-    return alert(
-      "Distributor/Firm not found. Please login again."
-    );
-  }
-
-  const wasEditing =
-    Boolean(editCategoryId);
-
-  try {
-    const url = wasEditing
-      ? `${API_URL}/categories/${editCategoryId}`
-      : `${API_URL}/categories`;
-
-    const method = wasEditing
-      ? "PUT"
-      : "POST";
-
-    const response = await fetch(
-      url,
-      {
-        method,
-
-        headers: {
-          "Content-Type":
-            "application/json",
-        },
-
-        body: JSON.stringify({
-          code: cleanCode,
-          name: cleanName,
-          distributorId,
-          firmId,
-          firmName,
-        }),
-      }
-    );
-
-    const result =
-      await response.json();
-
-    if (
-      !response.ok ||
-      !result.success
-    ) {
+    if (!cleanCode || !cleanName) {
       return alert(
-        result.message ||
-        "Category save failed"
+        "Code and Name required"
       );
     }
 
-    const refreshPage =
-      wasEditing
-        ? categoryCurrentPage
-        : 1;
+    const {
+      distributorId,
+      firmId,
+      firmName,
+    } = getFirmInfo();
 
-    /*
-     * Refresh complete Category data for
-     * Product Master and dropdowns.
-     */
-    await loadCategories();
+    if (!distributorId || !firmId) {
+      return alert(
+        "Distributor/Firm not found. Please login again."
+      );
+    }
 
-    /*
-     * Refresh Category Master paginated grid.
-     */
-    setCategoryCurrentPage(
-      refreshPage
-    );
+    const wasEditing =
+      Boolean(editCategoryId);
 
-    await loadCategoryMaster({
-      page: refreshPage,
-      limit:
-        categoryRowsPerPage,
-      search:
-        categoryBackendSearch,
-    });
+    try {
+      const url = wasEditing
+        ? `${API_URL}/categories/${editCategoryId}`
+        : `${API_URL}/categories`;
 
-    alert(
-      wasEditing
-        ? "Category updated successfully!"
-        : "Category created successfully!"
-    );
+      const method = wasEditing
+        ? "PUT"
+        : "POST";
 
-    setCategoryForm({
-      code: "",
-      name: "",
-    });
+      const response = await fetch(
+        url,
+        {
+          method,
 
-    setEditCategoryId(null);
+          headers: {
+            "Content-Type":
+              "application/json",
+          },
 
-    setOpenFormFor(null);
+          body: JSON.stringify({
+            code: cleanCode,
+            name: cleanName,
+            distributorId,
+            firmId,
+            firmName,
+          }),
+        }
+      );
 
-    setActiveSubMenu(
-      "Category Master"
-    );
-  } catch (error) {
-    console.error(
-      "Category save error:",
-      error
-    );
+      const result =
+        await response.json();
 
-    alert(
-      "Server not connected. Category save failed."
-    );
-  }
-};
+      if (
+        !response.ok ||
+        !result.success
+      ) {
+        return alert(
+          result.message ||
+          "Category save failed"
+        );
+      }
+
+      const refreshPage =
+        wasEditing
+          ? categoryCurrentPage
+          : 1;
+
+      /*
+       * Refresh complete Category data for
+       * Product Master and dropdowns.
+       */
+      await loadCategories();
+
+      /*
+       * Refresh Category Master paginated grid.
+       */
+      setCategoryCurrentPage(
+        refreshPage
+      );
+
+      await loadCategoryMaster({
+        page: refreshPage,
+        limit:
+          categoryRowsPerPage,
+        search:
+          categoryBackendSearch,
+      });
+
+      alert(
+        wasEditing
+          ? "Category updated successfully!"
+          : "Category created successfully!"
+      );
+
+      setCategoryForm({
+        code: "",
+        name: "",
+      });
+
+      setEditCategoryId(null);
+
+      setOpenFormFor(null);
+
+      setActiveSubMenu(
+        "Category Master"
+      );
+    } catch (error) {
+      console.error(
+        "Category save error:",
+        error
+      );
+
+      alert(
+        "Server not connected. Category save failed."
+      );
+    }
+  };
 
 
   // ===== Salesman To Area Mapping Handlers =====
@@ -32777,6 +39646,22 @@ await loadGroupMaster({
     };
 
     const type = getType();
+    const isSalesBillingList =
+      type === "Sales";
+
+    const isQuotationList =
+      type === "Quotation";
+
+    const isPurchaseList =
+      type === "Purchase";
+
+    const isCreditNoteList =
+      type === "Credit Note";
+
+    const isDebitNoteList =
+      type === "Debit Note";
+    const isQuotationMode =
+      type === "Quotation";
 
     const transformedData = data.map((item) => ({
       id:
@@ -33131,397 +40016,14 @@ await loadGroupMaster({
 
       return fallback;
     };
-    const premiumSalesFilteredData =
-      salesRowsWithStatus.filter((item) => {
-        const source =
-          item?.originalItem ||
-          item ||
-          {};
+    /*
+     * Filtering, sorting and pagination are now
+     * handled by GET /api/sales/list.
+     */
 
-        const normalizeText = (value) =>
-          String(value ?? "")
-            .trim()
-            .toLowerCase();
 
-        const rowDate =
-          normalizeSalesDate(
-            item.date ||
-            source.BillDate ||
-            source.billDate ||
-            source.TrnDate ||
-            source.trnDate
-          );
 
-        const billSeriesValue =
-          getSourceValue(
-            item,
-            [
-              "BillSeries",
-              "billSeries",
-              "TrnSeries",
-              "trnSeries",
-            ],
-            item.billSeries || ""
-          );
 
-        const billNumberValue =
-          getSourceValue(
-            item,
-            [
-              "BillNo",
-              "billNo",
-              "TrnNo",
-              "trnNo",
-            ],
-            item.billNumber || ""
-          );
-
-        const partyCodeValue =
-          getSourceValue(
-            item,
-            [
-              "PartyCode",
-              "partyCode",
-              "AccountCode",
-              "accountCode",
-            ],
-            item.partyCode || ""
-          );
-
-        const partyNameValue =
-          getSourceValue(
-            item,
-            [
-              "PartyName",
-              "partyName",
-              "AccountName",
-              "accountName",
-            ],
-            item.partyName || ""
-          );
-
-        const areaValue =
-          getSourceValue(
-            item,
-            [
-              "AreaName",
-              "areaName",
-              "Area",
-              "area",
-              "area.name",
-            ],
-            ""
-          );
-
-        const loadSeriesValue =
-          getSourceValue(
-            item,
-            [
-              "LoadSeries",
-              "loadSeries",
-              "Load.LoadSeries",
-              "load.loadSeries",
-            ],
-            ""
-          );
-
-        const loadNoValue =
-          getSourceValue(
-            item,
-            [
-              "LoadNo",
-              "loadNo",
-              "LoadNumber",
-              "loadNumber",
-              "Load.LoadNo",
-              "load.loadNo",
-            ],
-            ""
-          );
-
-        const companyValue =
-          getSourceValue(
-            item,
-            [
-              "CompanyName",
-              "companyName",
-              "Company",
-              "company",
-              "company.name",
-            ],
-            ""
-          );
-
-        const salesmanValue =
-          getSourceValue(
-            item,
-            [
-              "SalesmanName",
-              "salesmanName",
-              "Salesman",
-              "salesman",
-              "salesman.name",
-            ],
-            ""
-          );
-
-        const addUserValue =
-          getSourceValue(
-            item,
-            [
-              "AddUser",
-              "addUser",
-              "CreatedByName",
-              "createdByName",
-              "CreatedBy",
-              "createdBy",
-              "createdBy.name",
-              "UserName",
-              "userName",
-            ],
-            ""
-          );
-
-        const amountValue = Number(
-          item.amount ??
-          source.NetAmount ??
-          source.netAmount ??
-          source.Amount ??
-          source.amount ??
-          0
-        );
-
-        const searchValue =
-          normalizeText(
-            salesAppliedFilters.invoiceSearch
-          );
-
-        const searchableText = [
-          billSeriesValue,
-          billNumberValue,
-          partyCodeValue,
-          partyNameValue,
-          areaValue,
-          amountValue,
-          loadSeriesValue,
-          loadNoValue,
-          companyValue,
-          salesmanValue,
-          addUserValue,
-        ]
-          .map(normalizeText)
-          .join(" ");
-
-        const matchesSearch =
-          !searchValue ||
-          searchableText.includes(searchValue);
-
-        const matchesFromDate =
-          !salesAppliedFilters.fromDate ||
-          !rowDate ||
-          rowDate >=
-          salesAppliedFilters.fromDate;
-
-        const matchesToDate =
-          !salesAppliedFilters.toDate ||
-          !rowDate ||
-          rowDate <=
-          salesAppliedFilters.toDate;
-
-        const matchesBillSeries =
-          !salesAppliedFilters.billSeries ||
-          normalizeText(billSeriesValue) ===
-          normalizeText(
-            salesAppliedFilters.billSeries
-          );
-
-        const matchesParty =
-          !salesAppliedFilters.party ||
-          normalizeText(
-            partyNameValue
-          ).includes(
-            normalizeText(
-              salesAppliedFilters.party
-            )
-          );
-
-        const matchesPartyCode =
-          !salesAppliedFilters.partyCode ||
-          normalizeText(
-            partyCodeValue
-          ).includes(
-            normalizeText(
-              salesAppliedFilters.partyCode
-            )
-          );
-
-        const matchesArea =
-          !salesAppliedFilters.area ||
-          normalizeText(areaValue) ===
-          normalizeText(
-            salesAppliedFilters.area
-          );
-
-        const matchesCompany =
-          !salesAppliedFilters.company ||
-          normalizeText(companyValue) ===
-          normalizeText(
-            salesAppliedFilters.company
-          );
-
-        const matchesSalesman =
-          !salesAppliedFilters.salesman ||
-          normalizeText(salesmanValue) ===
-          normalizeText(
-            salesAppliedFilters.salesman
-          );
-
-        const matchesLoadSeries =
-          !salesAppliedFilters.loadSeries ||
-          normalizeText(loadSeriesValue) ===
-          normalizeText(
-            salesAppliedFilters.loadSeries
-          );
-
-        const matchesLoadNo =
-          !salesAppliedFilters.loadNo ||
-          normalizeText(loadNoValue).includes(
-            normalizeText(
-              salesAppliedFilters.loadNo
-            )
-          );
-
-        const matchesAddUser =
-          !salesAppliedFilters.addUser ||
-          normalizeText(addUserValue) ===
-          normalizeText(
-            salesAppliedFilters.addUser
-          );
-
-        const matchesMinAmount =
-          salesAppliedFilters.minAmount ===
-          "" ||
-          amountValue >=
-          Number(
-            salesAppliedFilters.minAmount
-          );
-
-        const matchesMaxAmount =
-          salesAppliedFilters.maxAmount ===
-          "" ||
-          amountValue <=
-          Number(
-            salesAppliedFilters.maxAmount
-          );
-
-        return (
-          matchesSearch &&
-          matchesFromDate &&
-          matchesToDate &&
-          matchesBillSeries &&
-          matchesParty &&
-          matchesPartyCode &&
-          matchesArea &&
-          matchesCompany &&
-          matchesSalesman &&
-          matchesLoadSeries &&
-          matchesLoadNo &&
-          matchesAddUser &&
-          matchesMinAmount &&
-          matchesMaxAmount
-        );
-      });
-
-    const premiumSalesSortedData = [
-      ...premiumSalesFilteredData,
-    ].sort((first, second) => {
-      const firstDate = new Date(first.date).getTime() || 0;
-      const secondDate = new Date(second.date).getTime() || 0;
-
-      if (secondDate !== firstDate) {
-        return secondDate - firstDate;
-      }
-
-      return (
-        Number(second.billNumber || 0) -
-        Number(first.billNumber || 0)
-      );
-    });
-
-    const salesPage =
-      listPage[listKey] || 1;
-
-    const premiumSalesTotalPages = Math.max(
-      1,
-      Math.ceil(
-        premiumSalesSortedData.length /
-        salesRowsPerPage
-      )
-    );
-
-    const safeSalesPage = Math.min(
-      salesPage,
-      premiumSalesTotalPages
-    );
-
-    const premiumSalesPagedRows =
-      premiumSalesSortedData.slice(
-        (safeSalesPage - 1) *
-        salesRowsPerPage,
-        safeSalesPage *
-        salesRowsPerPage
-      );
-
-    const salesTotalAmount =
-      premiumSalesFilteredData.reduce(
-        (total, item) =>
-          total + Number(item.amount || 0),
-        0
-      );
-
-    const salesPaidAmount =
-      premiumSalesFilteredData.reduce(
-        (total, item) => {
-          const source = item.originalItem || {};
-
-          const explicitPaid = Number(
-            source.paidAmount ||
-            source.PaidAmount ||
-            source.receivedAmount ||
-            source.ReceivedAmount ||
-            0
-          );
-
-          if (explicitPaid > 0) {
-            return total + explicitPaid;
-          }
-
-          if (
-            String(item.paymentStatus).toLowerCase() ===
-            "paid"
-          ) {
-            return total + Number(item.amount || 0);
-          }
-
-          return total;
-        },
-        0
-      );
-
-    const salesOutstandingAmount = Math.max(
-      0,
-      salesTotalAmount - salesPaidAmount
-    );
-
-    const salesBillSeriesOptions = Array.from(
-      new Set(
-        salesRowsWithStatus
-          .map((item) => item.billSeries)
-          .filter(
-            (value) => value && value !== "-"
-          )
-      )
-    );
 
     const salesBillTypeOptions = Array.from(
       new Set(
@@ -33550,11 +40052,24 @@ await loadGroupMaster({
       return String(value || "").trim() !== "";
     }).length;
 
-    const keepPremiumSalesListVisible = () => {
+    const keepPremiumSalesListVisible = (
+      targetType = type
+    ) => {
       /*
-      * Applying or clearing filters must never open
-      * the Sales Invoice entry form.
-      */
+       * Applying or clearing filters must keep
+       * the user on the current list.
+       */
+      const normalizedType =
+        String(
+          targetType || ""
+        )
+          .trim()
+          .toLowerCase();
+
+      const keepQuotationVisible =
+        normalizedType ===
+        "quotation";
+
       setOpenFormFor(null);
       setEditingInvoiceId(null);
 
@@ -33565,47 +40080,196 @@ await loadGroupMaster({
       setShowCreditNoteList(false);
       setShowDebitNoteList(false);
       setShowCreateLoadList(false);
+      setShowSettleLoadList(false);
 
       setActiveMenu("sales");
-      setActiveSubMenu("Billing");
-    };
 
-    const updateSalesAdvancedFilter = (
+      setActiveSubMenu(
+        keepQuotationVisible
+          ? "Quotation"
+          : "Billing"
+      );
+    };
+    const updateActiveAdvancedFilter = (
       field,
       value
     ) => {
-      setSalesAdvancedFilters((previous) => ({
-        ...previous,
-        [field]: value,
-      }));
+      if (isDebitNoteList) {
+        setDebitNoteAdvancedFilters(
+          (previous) => ({
+            ...previous,
+            [field]: value,
+          })
+        );
+
+        return;
+      }
+
+      if (isCreditNoteList) {
+        setCreditNoteAdvancedFilters(
+          (previous) => ({
+            ...previous,
+            [field]: value,
+          })
+        );
+
+        return;
+      }
+
+      if (isPurchaseList) {
+        setPurchaseAdvancedFilters(
+          (previous) => ({
+            ...previous,
+            [field]: value,
+          })
+        );
+
+        return;
+      }
+
+      if (isQuotationList) {
+        setQuotationAdvancedFilters(
+          (previous) => ({
+            ...previous,
+            [field]: value,
+          })
+        );
+
+        return;
+      }
+
+      setSalesAdvancedFilters(
+        (previous) => ({
+          ...previous,
+          [field]: value,
+        })
+      );
     };
 
     /*
-    * Search works immediately while typing.
-    * The user does not need to press Apply Filters for search.
-    */
-    const handlePremiumSalesSearch = (value) => {
-      setSalesAdvancedFilters((previous) => ({
-        ...previous,
-        invoiceSearch: value,
-      }));
+        * Search works immediately while typing.
+        * The user does not need to press Apply Filters for search.
+        */
+    const handlePremiumSalesSearch = (
+      value
+    ) => {
+      const searchValue =
+        String(value || "");
 
-      setSalesAppliedFilters((previous) => ({
-        ...previous,
-        invoiceSearch: value,
-      }));
+      /* =========================================
+         PURCHASE SEARCH
+         ========================================= */
 
-      setFilters((previous) => ({
-        ...previous,
-        [listKey]: value,
-      }));
+      if (isPurchaseList) {
+        setPurchaseAdvancedFilters(
+          (previous) => ({
+            ...previous,
+            search:
+              searchValue,
+          })
+        );
 
-      setListPage((previous) => ({
-        ...previous,
-        [listKey]: 1,
-      }));
+        setPurchaseAppliedFilters(
+          (previous) => ({
+            ...previous,
+            search:
+              searchValue,
+          })
+        );
 
-      keepPremiumSalesListVisible();
+        setPurchaseSearchDebounced(
+          searchValue.trim()
+        );
+
+        setPurchaseCurrentPage(1);
+
+        setListPage(
+          (previous) => ({
+            ...previous,
+            Purchase: 1,
+          })
+        );
+
+        return;
+      }
+
+      /* =========================================
+         QUOTATION SEARCH
+         ========================================= */
+
+      if (isQuotationList) {
+        setQuotationAdvancedFilters(
+          (previous) => ({
+            ...previous,
+            invoiceSearch:
+              searchValue,
+          })
+        );
+
+        setQuotationAppliedFilters(
+          (previous) => ({
+            ...previous,
+            invoiceSearch:
+              searchValue,
+          })
+        );
+
+        setQuotationSearchDebounced(
+          searchValue.trim()
+        );
+
+        setQuotationCurrentPage(1);
+
+        setListPage(
+          (previous) => ({
+            ...previous,
+            quotation: 1,
+          })
+        );
+
+        keepPremiumSalesListVisible(
+          "Quotation"
+        );
+
+        return;
+      }
+
+      /* =========================================
+         SALES SEARCH
+         ========================================= */
+
+      setSalesAdvancedFilters(
+        (previous) => ({
+          ...previous,
+          invoiceSearch:
+            searchValue,
+        })
+      );
+
+      setSalesAppliedFilters(
+        (previous) => ({
+          ...previous,
+          invoiceSearch:
+            searchValue,
+        })
+      );
+
+      setSalesSearchDebounced(
+        searchValue.trim()
+      );
+
+      setSalesCurrentPage(1);
+
+      setListPage(
+        (previous) => ({
+          ...previous,
+          Billing: 1,
+        })
+      );
+
+      keepPremiumSalesListVisible(
+        "Billing"
+      );
     };
 
     const applyPremiumSalesFilters = (
@@ -33623,7 +40287,7 @@ await loadGroupMaster({
       setFilters((previous) => ({
         ...previous,
         [listKey]:
-          salesAdvancedFilters.invoiceSearch || "",
+          activeAdvancedFilters.invoiceSearch || "",
       }));
 
       setListPage((previous) => ({
@@ -33714,17 +40378,30 @@ await loadGroupMaster({
       }));
     };
 
-    const renderPremiumSalesPageButtons = () => {
+    const renderPremiumSalesPageButtons = (
+      currentPage,
+      totalPages
+    ) => {
       const pages = [];
+
+      const safeCurrentPage = Math.max(
+        1,
+        Number(currentPage) || 1
+      );
+
+      const safeTotalPages = Math.max(
+        1,
+        Number(totalPages) || 1
+      );
 
       const startPage = Math.max(
         1,
-        safeSalesPage - 2
+        safeCurrentPage - 2
       );
 
       const endPage = Math.min(
-        premiumSalesTotalPages,
-        safeSalesPage + 2
+        safeTotalPages,
+        safeCurrentPage + 2
       );
 
       if (startPage > 1) {
@@ -33733,7 +40410,7 @@ await loadGroupMaster({
             type="button"
             key={1}
             className={
-              safeSalesPage === 1 ? "active" : ""
+              safeCurrentPage === 1 ? "active" : ""
             }
             onClick={() =>
               changePremiumSalesPage(1)
@@ -33765,7 +40442,7 @@ await loadGroupMaster({
             type="button"
             key={pageNumber}
             className={
-              safeSalesPage === pageNumber
+              safeCurrentPage === pageNumber
                 ? "active"
                 : ""
             }
@@ -33778,11 +40455,8 @@ await loadGroupMaster({
         );
       }
 
-      if (endPage < premiumSalesTotalPages) {
-        if (
-          endPage <
-          premiumSalesTotalPages - 1
-        ) {
+      if (endPage < safeTotalPages) {
+        if (endPage < safeTotalPages - 1) {
           pages.push(
             <span
               key="end-dots"
@@ -33796,20 +40470,19 @@ await loadGroupMaster({
         pages.push(
           <button
             type="button"
-            key={premiumSalesTotalPages}
+            key={safeTotalPages}
             className={
-              safeSalesPage ===
-                premiumSalesTotalPages
+              safeCurrentPage === safeTotalPages
                 ? "active"
                 : ""
             }
             onClick={() =>
               changePremiumSalesPage(
-                premiumSalesTotalPages
+                safeTotalPages
               )
             }
           >
-            {premiumSalesTotalPages}
+            {safeTotalPages}
           </button>
         );
       }
@@ -34961,15 +41634,267 @@ await loadGroupMaster({
       type === "Credit Note" ||
       type === "Debit Note"
     ) {
-      const isQuotationList =
-        type === "Quotation";
 
-      const isPurchaseList =
-        type === "Purchase";
-      const isCreditNoteList =
-        type === "Credit Note";
-      const isDebitNoteList =
-        type === "Debit Note";
+
+      /*
+       * Sales and Quotation use separate
+       * backend-pagination states.
+       */
+      const activeBackendListData =
+        isDebitNoteList
+          ? debitNoteListData
+          : isCreditNoteList
+            ? creditNoteListData
+            : isPurchaseList
+              ? purchaseListData
+              : isQuotationList
+                ? quotationListData
+                : salesListData;
+
+      const activeCurrentPage =
+        isDebitNoteList
+          ? debitNoteCurrentPage
+          : isCreditNoteList
+            ? creditNoteCurrentPage
+            : isPurchaseList
+              ? purchaseCurrentPage
+              : isQuotationList
+                ? quotationCurrentPage
+                : salesCurrentPage;
+
+      const activeTotalPages =
+        isDebitNoteList
+          ? debitNoteTotalPages
+          : isCreditNoteList
+            ? creditNoteTotalPages
+            : isPurchaseList
+              ? purchaseTotalPages
+              : isQuotationList
+                ? quotationTotalPages
+                : salesTotalPages;
+
+      const activeTotalRecords =
+        isDebitNoteList
+          ? debitNoteTotalRecords
+          : isCreditNoteList
+            ? creditNoteTotalRecords
+            : isPurchaseList
+              ? purchaseTotalRecords
+              : isQuotationList
+                ? quotationTotalRecords
+                : salesTotalRecords;
+
+      const activeStartRecord =
+        isDebitNoteList
+          ? debitNoteStartRecord
+          : isCreditNoteList
+            ? creditNoteStartRecord
+            : isPurchaseList
+              ? purchaseStartRecord
+              : isQuotationList
+                ? quotationStartRecord
+                : salesStartRecord;
+
+      const activeEndRecord =
+        isDebitNoteList
+          ? debitNoteEndRecord
+          : isCreditNoteList
+            ? creditNoteEndRecord
+            : isPurchaseList
+              ? purchaseEndRecord
+              : isQuotationList
+                ? quotationEndRecord
+                : salesEndRecord;
+
+      const activeRowsPerPage =
+        isDebitNoteList
+          ? debitNoteRowsPerPage
+          : isCreditNoteList
+            ? creditNoteRowsPerPage
+            : isPurchaseList
+              ? purchaseRowsPerPage
+              : isQuotationList
+                ? quotationRowsPerPage
+                : salesRowsPerPage;
+
+      const activeListLoading =
+        isDebitNoteList
+          ? debitNoteListLoading
+          : isCreditNoteList
+            ? creditNoteListLoading
+            : isPurchaseList
+              ? purchaseListLoading
+              : isQuotationList
+                ? quotationListLoading
+                : salesListLoading;
+
+      const activeAdvancedFilters =
+        isDebitNoteList
+          ? debitNoteAdvancedFilters
+          : isCreditNoteList
+            ? creditNoteAdvancedFilters
+            : isPurchaseList
+              ? purchaseAdvancedFilters
+              : isQuotationList
+                ? quotationAdvancedFilters
+                : salesAdvancedFilters;
+
+      const activeAppliedFilters =
+        isDebitNoteList
+          ? debitNoteAppliedFilters
+          : isCreditNoteList
+            ? creditNoteAppliedFilters
+            : isPurchaseList
+              ? purchaseAppliedFilters
+              : isQuotationList
+                ? quotationAppliedFilters
+                : salesAppliedFilters;
+
+      const activeFiltersVisible =
+        isDebitNoteList
+          ? debitNoteFiltersVisible
+          : isCreditNoteList
+            ? creditNoteFiltersVisible
+            : isPurchaseList
+              ? purchaseFiltersVisible
+              : salesFiltersVisible;
+
+      const setActiveFiltersVisible = (
+        visible
+      ) => {
+        if (isDebitNoteList) {
+          setDebitNoteFiltersVisible(
+            visible
+          );
+
+          return;
+        }
+
+        if (isCreditNoteList) {
+          setCreditNoteFiltersVisible(
+            visible
+          );
+
+          return;
+        }
+
+        if (isPurchaseList) {
+          setPurchaseFiltersVisible(
+            visible
+          );
+
+          return;
+        }
+
+        setSalesFiltersVisible(
+          visible
+        );
+      };
+
+
+      const premiumSalesFilteredData =
+        Array.isArray(
+          activeBackendListData
+        )
+          ? activeBackendListData
+          : [];
+
+      const premiumSalesSortedData =
+        premiumSalesFilteredData;
+
+      const salesPage =
+        activeCurrentPage;
+
+      const safeSalesPage =
+        activeCurrentPage;
+
+      const premiumSalesTotalPages =
+        activeTotalPages;
+
+      const premiumSalesPagedRows =
+        premiumSalesFilteredData;
+
+      const salesPageTotalAmount =
+        premiumSalesPagedRows.reduce(
+          (total, item) =>
+            total +
+            Number(
+              item.amount || 0
+            ),
+          0
+        );
+
+      const salesPagePaidAmount =
+        premiumSalesPagedRows.reduce(
+          (total, item) => {
+            const explicitPaid =
+              Number(
+                item.paidAmount ||
+                item.originalItem
+                  ?.PaidAmount ||
+                item.originalItem
+                  ?.paidAmount ||
+                0
+              ) || 0;
+
+            if (explicitPaid > 0) {
+              return (
+                total +
+                explicitPaid
+              );
+            }
+
+            if (
+              String(
+                item.paymentStatus ||
+                ""
+              ).toLowerCase() ===
+              "paid"
+            ) {
+              return (
+                total +
+                Number(
+                  item.amount || 0
+                )
+              );
+            }
+
+            return total;
+          },
+          0
+        );
+
+      const salesPageOutstandingAmount =
+        Math.max(
+          0,
+          salesPageTotalAmount -
+          salesPagePaidAmount
+        );
+
+      const salesTotalAmount =
+        salesPageTotalAmount;
+
+      const salesPaidAmount =
+        salesPagePaidAmount;
+
+      const salesOutstandingAmount =
+        salesPageOutstandingAmount;
+
+      const salesBillSeriesOptions =
+        Array.from(
+          new Set(
+            premiumSalesFilteredData
+              .map(
+                (item) =>
+                  item.billSeries ||
+                  item.BillSeries ||
+                  ""
+              )
+              .filter(Boolean)
+          )
+        );
+
+
 
       const pageTitle =
         isDebitNoteList
@@ -35224,19 +42149,6 @@ await loadGroupMaster({
 
 
 
-
-
-      const companyOptions =
-        uniqueDatabaseOptions([
-          "CompanyName",
-          "companyName",
-          "Company",
-          "company",
-          "company.name",
-        ]);
-
-
-
       const loadSeriesOptions =
         uniqueDatabaseOptions([
           "LoadSeries",
@@ -35245,20 +42157,246 @@ await loadGroupMaster({
           "load.loadSeries",
         ]);
 
-      const salesmanOptions = Array.from(
-        new Set(
-          salesRowsWithStatus
-            .map((item) => getSourceValue(item, ["salesmanName", "SalesmanName", "salesman", "Salesman"], ""))
+
+      /*
+    * Filter dropdowns must come from Master data,
+    * not from the currently loaded Sales page.
+    */
+
+      const companyOptions = Array.from(
+        new Map(
+          (Array.isArray(companies) ? companies : [])
+            .map((company) => {
+              const code = String(
+                company.companyCode ||
+                company.CompanyCode ||
+                company.code ||
+                company.CompCode ||
+                ""
+              ).trim();
+
+              const name = String(
+                company.companyName ||
+                company.CompanyName ||
+                company.name ||
+                ""
+              ).trim();
+
+              if (!code && !name) {
+                return null;
+              }
+
+              return [
+                code || name,
+                {
+                  code,
+                  name: name || code,
+                },
+              ];
+            })
             .filter(Boolean)
-        )
+        ).values()
+      );
+      /* =========================================================
+   PURCHASE FILTER DROPDOWN OPTIONS
+   ========================================================= */
+
+      const purchaseSupplierOptions =
+        Array.from(
+          new Map(
+            (
+              Array.isArray(accounts)
+                ? accounts
+                : []
+            )
+              .map((account) => {
+                const code = String(
+                  account.accountCode ||
+                  account.AccountCode ||
+                  account.partyCode ||
+                  account.PartyCode ||
+                  account.supplierCode ||
+                  account.code ||
+                  ""
+                ).trim();
+
+                const name = String(
+                  account.accountName ||
+                  account.AccountName ||
+                  account.partyName ||
+                  account.PartyName ||
+                  account.supplierName ||
+                  account.name ||
+                  ""
+                ).trim();
+
+                if (!code && !name) {
+                  return null;
+                }
+
+                return [
+                  code || name,
+                  {
+                    code,
+                    name:
+                      name || code,
+                  },
+                ];
+              })
+              .filter(Boolean)
+          ).values()
+        ).sort((first, second) =>
+          String(first.name).localeCompare(
+            String(second.name)
+          )
+        );
+
+      const purchaseGodownOptions =
+        Array.from(
+          new Map(
+            (
+              Array.isArray(godowns)
+                ? godowns
+                : []
+            )
+              .map((godown) => {
+                const code = String(
+                  godown.godownCode ||
+                  godown.GodownCode ||
+                  godown.code ||
+                  godown.GDCode ||
+                  godown.id ||
+                  ""
+                ).trim();
+
+                const name = String(
+                  godown.godownName ||
+                  godown.GodownName ||
+                  godown.name ||
+                  godown.Godown ||
+                  ""
+                ).trim();
+
+                if (!code && !name) {
+                  return null;
+                }
+
+                return [
+                  code || name,
+                  {
+                    code,
+                    name:
+                      name || code,
+                  },
+                ];
+              })
+              .filter(Boolean)
+          ).values()
+        ).sort((first, second) =>
+          String(first.name).localeCompare(
+            String(second.name)
+          )
+        );
+
+      /*
+       * Series found in currently loaded Purchase rows.
+       */
+      const purchaseBillSeriesOptions =
+        Array.from(
+          new Set(
+            (
+              Array.isArray(purchaseListData)
+                ? purchaseListData
+                : []
+            )
+              .map((purchase) =>
+                String(
+                  purchase.vouSer ||
+                  purchase.VouSer ||
+                  purchase.billSeries ||
+                  purchase.BillSeries ||
+                  ""
+                ).trim()
+              )
+              .filter(Boolean)
+          )
+        ).sort((first, second) =>
+          first.localeCompare(
+            second,
+            undefined,
+            {
+              numeric: true,
+              sensitivity: "base",
+            }
+          )
+        );
+
+      const salesmanOptions = Array.from(
+        new Map(
+          (Array.isArray(salesmen) ? salesmen : [])
+            .map((salesman) => {
+              const code = String(
+                salesman.salesmanCode ||
+                salesman.SalesmanCode ||
+                salesman.code ||
+                ""
+              ).trim();
+
+              const name = String(
+                salesman.salesmanName ||
+                salesman.SalesmanName ||
+                salesman.name ||
+                ""
+              ).trim();
+
+              if (!code && !name) {
+                return null;
+              }
+
+              return [
+                code || name,
+                {
+                  code,
+                  name: name || code,
+                },
+              ];
+            })
+            .filter(Boolean)
+        ).values()
       );
 
       const areaOptions = Array.from(
-        new Set(
-          salesRowsWithStatus
-            .map((item) => getSourceValue(item, ["areaName", "AreaName", "area", "Area"], ""))
+        new Map(
+          (Array.isArray(areas) ? areas : [])
+            .map((area) => {
+              const code = String(
+                area.areaCode ||
+                area.AreaCode ||
+                area.code ||
+                ""
+              ).trim();
+
+              const name = String(
+                area.areaName ||
+                area.AreaName ||
+                area.name ||
+                ""
+              ).trim();
+
+              if (!code && !name) {
+                return null;
+              }
+
+              return [
+                code || name,
+                {
+                  code,
+                  name: name || code,
+                },
+              ];
+            })
             .filter(Boolean)
-        )
+        ).values()
       );
 
       const vehicleOptions = Array.from(
@@ -35300,60 +42438,617 @@ await loadGroupMaster({
         (sum, item) => sum + Number(item.amount || 0),
         0
       );
+      const openSalesFilterPanel =
+        () => {
 
-      const openSalesFilterPanel = () => {
-        setSalesFiltersVisible(true);
-      };
+          if (isDebitNoteList) {
+            setDebitNoteAdvancedFilters({
+              ...debitNoteAppliedFilters,
+            });
 
-      const applyToolbarFilters = (event) => {
+            setDebitNoteFiltersVisible(
+              true
+            );
+
+            return;
+          }
+          if (isCreditNoteList) {
+            setCreditNoteAdvancedFilters({
+              ...creditNoteAppliedFilters,
+            });
+
+            setCreditNoteFiltersVisible(
+              true
+            );
+
+            return;
+          }
+
+          if (isPurchaseList) {
+            setPurchaseAdvancedFilters({
+              ...purchaseAppliedFilters,
+            });
+
+            setPurchaseFiltersVisible(
+              true
+            );
+
+            return;
+          }
+
+          if (isQuotationList) {
+            setQuotationAdvancedFilters({
+              ...quotationAppliedFilters,
+            });
+
+            setSalesFiltersVisible(
+              true
+            );
+
+            return;
+          }
+
+          setSalesAdvancedFilters({
+            ...salesAppliedFilters,
+          });
+
+          setSalesFiltersVisible(
+            true
+          );
+        };
+      const applyToolbarFilters = (
+        event
+      ) => {
+
+
         event?.preventDefault?.();
+        event?.stopPropagation?.();
+        if (isDebitNoteList) {
+          const nextFilters = {
+            ...debitNoteAdvancedFilters,
 
-        /*
-        * Copy the editable filters into the applied filters.
-        */
-        setSalesAppliedFilters({
+            search:
+              String(
+                debitNoteAdvancedFilters
+                  .search || ""
+              ).trim(),
+
+            debitNoteSeries:
+              String(
+                debitNoteAdvancedFilters
+                  .debitNoteSeries || ""
+              ).trim(),
+
+            supplierCode:
+              String(
+                debitNoteAdvancedFilters
+                  .supplierCode || ""
+              ).trim(),
+
+            supplierName:
+              String(
+                debitNoteAdvancedFilters
+                  .supplierName || ""
+              ).trim(),
+
+            company:
+              String(
+                debitNoteAdvancedFilters
+                  .company || ""
+              ).trim(),
+
+            gdCode:
+              String(
+                debitNoteAdvancedFilters
+                  .gdCode || ""
+              ).trim(),
+
+            godownName:
+              String(
+                debitNoteAdvancedFilters
+                  .godownName || ""
+              ).trim(),
+
+            salesmanCode:
+              String(
+                debitNoteAdvancedFilters
+                  .salesmanCode || ""
+              ).trim(),
+
+            salesmanName:
+              String(
+                debitNoteAdvancedFilters
+                  .salesmanName || ""
+              ).trim(),
+
+            referenceBillSeries:
+              String(
+                debitNoteAdvancedFilters
+                  .referenceBillSeries ||
+                ""
+              ).trim(),
+
+            referenceBillNo:
+              String(
+                debitNoteAdvancedFilters
+                  .referenceBillNo ||
+                ""
+              ).trim(),
+
+            returnType:
+              String(
+                debitNoteAdvancedFilters
+                  .returnType || ""
+              ).trim(),
+
+            status:
+              String(
+                debitNoteAdvancedFilters
+                  .status || ""
+              ).trim(),
+          };
+
+          setDebitNoteAppliedFilters(
+            nextFilters
+          );
+
+          setDebitNoteSearchDebounced(
+            nextFilters.search
+          );
+
+          setDebitNoteCurrentPage(
+            1
+          );
+
+          setListPage(
+            (previous) => ({
+              ...previous,
+              "Debit Note": 1,
+            })
+          );
+
+          setDebitNoteFiltersVisible(
+            false
+          );
+
+          return;
+        }
+
+        if (isCreditNoteList) {
+          const nextFilters = {
+            ...creditNoteAdvancedFilters,
+
+            search:
+              String(
+                creditNoteAdvancedFilters
+                  .search || ""
+              ).trim(),
+
+            creditNoteSeries:
+              String(
+                creditNoteAdvancedFilters
+                  .creditNoteSeries || ""
+              ).trim(),
+
+            partyCode:
+              String(
+                creditNoteAdvancedFilters
+                  .partyCode || ""
+              ).trim(),
+
+            partyName:
+              String(
+                creditNoteAdvancedFilters
+                  .partyName || ""
+              ).trim(),
+
+            company:
+              String(
+                creditNoteAdvancedFilters
+                  .company || ""
+              ).trim(),
+
+            gdCode:
+              String(
+                creditNoteAdvancedFilters
+                  .gdCode || ""
+              ).trim(),
+
+            godownName:
+              String(
+                creditNoteAdvancedFilters
+                  .godownName || ""
+              ).trim(),
+
+            salesmanCode:
+              String(
+                creditNoteAdvancedFilters
+                  .salesmanCode || ""
+              ).trim(),
+
+            salesmanName:
+              String(
+                creditNoteAdvancedFilters
+                  .salesmanName || ""
+              ).trim(),
+          };
+
+          setCreditNoteAppliedFilters(
+            nextFilters
+          );
+
+          setCreditNoteSearchDebounced(
+            nextFilters.search
+          );
+
+          setCreditNoteCurrentPage(
+            1
+          );
+
+          setListPage(
+            (previous) => ({
+              ...previous,
+              "Credit Note": 1,
+            })
+          );
+
+          setCreditNoteFiltersVisible(
+            false
+          );
+
+          return;
+        }
+        /* =========================================
+           PURCHASE APPLY FILTERS
+           ========================================= */
+
+        if (isPurchaseList) {
+          const nextFilters = {
+            ...purchaseAdvancedFilters,
+
+            search:
+              String(
+                purchaseAdvancedFilters
+                  .search || ""
+              ).trim(),
+
+            company:
+              String(
+                purchaseAdvancedFilters
+                  .company || ""
+              ).trim(),
+
+            supplierCode:
+              String(
+                purchaseAdvancedFilters
+                  .supplierCode || ""
+              ).trim(),
+
+            supplierName:
+              String(
+                purchaseAdvancedFilters
+                  .supplierName || ""
+              ).trim(),
+
+            gdCode:
+              String(
+                purchaseAdvancedFilters
+                  .gdCode || ""
+              ).trim(),
+
+            godownName:
+              String(
+                purchaseAdvancedFilters
+                  .godownName || ""
+              ).trim(),
+
+            vouSer:
+              String(
+                purchaseAdvancedFilters
+                  .vouSer || ""
+              ).trim(),
+          };
+
+          setPurchaseAppliedFilters(
+            nextFilters
+          );
+
+          setPurchaseSearchDebounced(
+            nextFilters.search
+          );
+
+          setPurchaseCurrentPage(1);
+
+          setListPage(
+            (previous) => ({
+              ...previous,
+              Purchase: 1,
+            })
+          );
+
+          /*
+           * Keep this if the panel should close.
+           * Remove it if the panel should stay open.
+           */
+          setPurchaseFiltersVisible(
+            false
+          );
+
+          return;
+        }
+        /* =========================================
+           QUOTATION APPLY FILTERS
+           ========================================= */
+
+        if (isQuotationList) {
+          const nextFilters = {
+            ...quotationAdvancedFilters,
+          };
+
+          setQuotationAppliedFilters(
+            nextFilters
+          );
+
+          setQuotationSearchDebounced(
+            String(
+              nextFilters.invoiceSearch ||
+              ""
+            ).trim()
+          );
+
+          setQuotationCurrentPage(1);
+
+          setListPage(
+            (previous) => ({
+              ...previous,
+              quotation: 1,
+            })
+          );
+
+          setSalesFiltersVisible(
+            false
+          );
+
+          keepPremiumSalesListVisible(
+            "Quotation"
+          );
+
+          return;
+        }
+
+        /* =========================================
+           SALES APPLY FILTERS
+           ========================================= */
+
+        const nextFilters = {
           ...salesAdvancedFilters,
-        });
+        };
 
-        setListPage((previous) => ({
-          ...previous,
-          [listKey]: 1,
-        }));
+        setSalesAppliedFilters(
+          nextFilters
+        );
 
-        /*
-        * Close the panel after applying.
-        */
-        setSalesFiltersVisible(false);
+        setSalesSearchDebounced(
+          String(
+            nextFilters.invoiceSearch ||
+            ""
+          ).trim()
+        );
+
+        setSalesCurrentPage(1);
+
+        setListPage(
+          (previous) => ({
+            ...previous,
+            Billing: 1,
+          })
+        );
+
+        setSalesFiltersVisible(
+          false
+        );
+
+        keepPremiumSalesListVisible(
+          "Billing"
+        );
       };
-
-      const clearToolbarFilters = (event) => {
+      const clearToolbarFilters = (
+        event
+      ) => {
         event?.preventDefault?.();
+        event?.stopPropagation?.();
+        if (isDebitNoteList) {
+          const emptyFilters =
+            createDefaultDebitNoteListFilters();
+
+          setDebitNoteAdvancedFilters({
+            ...emptyFilters,
+          });
+
+          setDebitNoteAppliedFilters({
+            ...emptyFilters,
+          });
+
+          setDebitNoteSearchDebounced(
+            ""
+          );
+
+          setDebitNoteCurrentPage(
+            1
+          );
+
+          setListPage(
+            (previous) => ({
+              ...previous,
+              "Debit Note": 1,
+            })
+          );
+
+          setDebitNoteFiltersVisible(
+            false
+          );
+
+          return;
+        }
+        if (isCreditNoteList) {
+          const emptyFilters =
+            createDefaultCreditNoteListFilters();
+
+          setCreditNoteAdvancedFilters({
+            ...emptyFilters,
+          });
+
+          setCreditNoteAppliedFilters({
+            ...emptyFilters,
+          });
+
+          setCreditNoteSearchDebounced(
+            ""
+          );
+
+          setCreditNoteCurrentPage(
+            1
+          );
+
+          setListPage(
+            (previous) => ({
+              ...previous,
+              "Credit Note": 1,
+            })
+          );
+
+          setCreditNoteFiltersVisible(
+            false
+          );
+
+          return;
+        }
+
+        /* =========================================
+           PURCHASE CLEAR FILTERS
+           ========================================= */
+
+        if (isPurchaseList) {
+          const emptyFilters =
+            createDefaultPurchaseListFilters();
+
+          setPurchaseAdvancedFilters({
+            ...emptyFilters,
+          });
+
+          setPurchaseAppliedFilters({
+            ...emptyFilters,
+          });
+
+          setPurchaseSearchDebounced(
+            ""
+          );
+
+          setPurchaseCurrentPage(1);
+
+          setListPage(
+            (previous) => ({
+              ...previous,
+              Purchase: 1,
+            })
+          );
+
+          setPurchaseFiltersVisible(
+            false
+          );
+
+          return;
+        }
+
+        /* =========================================
+           QUOTATION CLEAR FILTERS
+           ========================================= */
+
+        if (isQuotationList) {
+          const emptyFilters =
+            createDefaultQuotationListFilters();
+
+          setQuotationAdvancedFilters({
+            ...emptyFilters,
+          });
+
+          setQuotationAppliedFilters({
+            ...emptyFilters,
+          });
+
+          setQuotationSearchDebounced(
+            ""
+          );
+
+          setQuotationCurrentPage(1);
+
+          setListPage(
+            (previous) => ({
+              ...previous,
+              quotation: 1,
+            })
+          );
+
+          setFilters(
+            (previous) => ({
+              ...previous,
+              quotation: "",
+            })
+          );
+
+          setSalesFiltersVisible(
+            false
+          );
+
+          keepPremiumSalesListVisible(
+            "Quotation"
+          );
+
+          return;
+        }
+
+        /* =========================================
+           SALES CLEAR FILTERS
+           ========================================= */
 
         const emptyFilters =
           createDefaultSalesListFilters();
 
-        setSalesAdvancedFilters(
-          emptyFilters
+        setSalesAdvancedFilters({
+          ...emptyFilters,
+        });
+
+        setSalesAppliedFilters({
+          ...emptyFilters,
+        });
+
+        setSalesSearchDebounced(
+          ""
         );
 
-        setSalesAppliedFilters(
-          emptyFilters
+        setSalesCurrentPage(1);
+
+        setListPage(
+          (previous) => ({
+            ...previous,
+            Billing: 1,
+          })
         );
 
-        setFilters((previous) => ({
-          ...previous,
-          [listKey]: "",
-        }));
+        setFilters(
+          (previous) => ({
+            ...previous,
+            sales: "",
+          })
+        );
 
-        setListPage((previous) => ({
-          ...previous,
-          [listKey]: 1,
-        }));
+        setSalesFiltersVisible(
+          false
+        );
 
-        /*
-        * Close the panel after clearing.
-        */
-        setSalesFiltersVisible(false);
+        keepPremiumSalesListVisible(
+          "Billing"
+        );
       };
 
       return (
@@ -35420,7 +43115,7 @@ await loadGroupMaster({
       FILTER OPEN BUTTON
       Filters remain hidden until this is clicked.
   ================================================ */}
-          {!salesFiltersVisible && (
+          {!activeFiltersVisible && (
             <div className="ts-filter-launch-row">
               <button
                 type="button"
@@ -35433,7 +43128,7 @@ await loadGroupMaster({
               </button>
 
               {Object.values(
-                salesAppliedFilters
+                activeAppliedFilters
               ).some(
                 (value) =>
                   String(value || "").trim() !== ""
@@ -35449,7 +43144,7 @@ await loadGroupMaster({
       FILTER FIELDS
       Render only when Apply Filter is clicked.
   ================================================ */}
-          {salesFiltersVisible && (
+          {activeFiltersVisible && (
             <div className="ts-filter-panel">
               <div className="ts-filter-panel-heading">
                 <div>
@@ -35471,7 +43166,7 @@ await loadGroupMaster({
                   className="ts-filter-close-button"
                   title="Close filters"
                   onClick={() =>
-                    setSalesFiltersVisible(false)
+                    setActiveFiltersVisible(false)
                   }
                 >
                   <X size={17} />
@@ -35479,347 +43174,1508 @@ await loadGroupMaster({
               </div>
 
               <div className="ts-filter-grid">
-                <label className="ts-filter-field ts-filter-search-field">
-                  <span>Search Invoice</span>
+                {isDebitNoteList ? (
+                  <>
+                    <label className="ts-filter-field ts-filter-search-field">
+                      <span>Search Debit Note</span>
 
-                  <div className="ts-filter-input-icon">
-                    <Search size={15} />
+                      <div className="ts-filter-input-icon">
+                        <Search size={15} />
 
-                    <input
-                      type="text"
-                      placeholder="Bill, party, load, company..."
-                      value={
-                        salesAdvancedFilters.invoiceSearch ||
-                        ""
-                      }
-                      onChange={(event) =>
-                        updateSalesAdvancedFilter(
-                          "invoiceSearch",
-                          event.target.value
-                        )
-                      }
-                    />
-                  </div>
-                </label>
+                        <input
+                          type="text"
+                          placeholder="Debit note, supplier, bill..."
+                          value={
+                            debitNoteAdvancedFilters
+                              .search || ""
+                          }
+                          onChange={(event) =>
+                            updateActiveAdvancedFilter(
+                              "search",
+                              event.target.value
+                            )
+                          }
+                        />
+                      </div>
+                    </label>
 
-                <label className="ts-filter-field">
-                  <span>Date From</span>
+                    <label className="ts-filter-field">
+                      <span>Date From</span>
 
-                  <input
-                    type="date"
-                    value={
-                      salesAdvancedFilters.fromDate ||
-                      ""
-                    }
-                    onChange={(event) =>
-                      updateSalesAdvancedFilter(
-                        "fromDate",
-                        event.target.value
-                      )
-                    }
-                  />
-                </label>
+                      <input
+                        type="date"
+                        value={
+                          debitNoteAdvancedFilters
+                            .fromDate || ""
+                        }
+                        onChange={(event) =>
+                          updateActiveAdvancedFilter(
+                            "fromDate",
+                            event.target.value
+                          )
+                        }
+                      />
+                    </label>
 
-                <label className="ts-filter-field">
-                  <span>Date To</span>
+                    <label className="ts-filter-field">
+                      <span>Date To</span>
 
-                  <input
-                    type="date"
-                    value={
-                      salesAdvancedFilters.toDate ||
-                      ""
-                    }
-                    onChange={(event) =>
-                      updateSalesAdvancedFilter(
-                        "toDate",
-                        event.target.value
-                      )
-                    }
-                  />
-                </label>
+                      <input
+                        type="date"
+                        value={
+                          debitNoteAdvancedFilters
+                            .toDate || ""
+                        }
+                        onChange={(event) =>
+                          updateActiveAdvancedFilter(
+                            "toDate",
+                            event.target.value
+                          )
+                        }
+                      />
+                    </label>
 
-                <label className="ts-filter-field">
-                  <span>Bill Series</span>
+                    <label className="ts-filter-field">
+                      <span>Debit Note Series</span>
 
-                  <select
-                    value={
-                      salesAdvancedFilters.billSeries ||
-                      ""
-                    }
-                    onChange={(event) =>
-                      updateSalesAdvancedFilter(
-                        "billSeries",
-                        event.target.value
-                      )
-                    }
-                  >
-                    <option value="">
-                      All Bill Series
-                    </option>
-
-                    {salesBillSeriesOptions.map(
-                      (value) => (
-                        <option
-                          key={value}
-                          value={value}
-                        >
-                          {value}
-                        </option>
-                      )
-                    )}
-                  </select>
-                </label>
-
-                <label className="ts-filter-field">
-                  <span>Party Name</span>
-
-                  <input
-                    type="text"
-                    placeholder="Search party"
-                    value={
-                      salesAdvancedFilters.party ||
-                      ""
-                    }
-                    onChange={(event) =>
-                      updateSalesAdvancedFilter(
-                        "party",
-                        event.target.value
-                      )
-                    }
-                  />
-                </label>
-
-                <label className="ts-filter-field">
-                  <span>Party Code</span>
-
-                  <input
-                    type="text"
-                    placeholder="Party code"
-                    value={
-                      salesAdvancedFilters.partyCode ||
-                      ""
-                    }
-                    onChange={(event) =>
-                      updateSalesAdvancedFilter(
-                        "partyCode",
-                        event.target.value
-                      )
-                    }
-                  />
-                </label>
-
-                <label className="ts-filter-field">
-                  <span>Area</span>
-
-                  <select
-                    value={
-                      salesAdvancedFilters.area ||
-                      ""
-                    }
-                    onChange={(event) =>
-                      updateSalesAdvancedFilter(
-                        "area",
-                        event.target.value
-                      )
-                    }
-                  >
-                    <option value="">
-                      All Areas
-                    </option>
-
-                    {areaOptions.map((value) => (
-                      <option
-                        key={value}
-                        value={value}
+                      <select
+                        value={
+                          debitNoteAdvancedFilters
+                            .debitNoteSeries || ""
+                        }
+                        onChange={(event) =>
+                          updateActiveAdvancedFilter(
+                            "debitNoteSeries",
+                            event.target.value
+                          )
+                        }
                       >
-                        {value}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-
-                <label className="ts-filter-field">
-                  <span>Company</span>
-
-                  <select
-                    value={
-                      salesAdvancedFilters.company ||
-                      ""
-                    }
-                    onChange={(event) =>
-                      updateSalesAdvancedFilter(
-                        "company",
-                        event.target.value
-                      )
-                    }
-                  >
-                    <option value="">
-                      All Companies
-                    </option>
-
-                    {companyOptions.map((value) => (
-                      <option
-                        key={value}
-                        value={value}
-                      >
-                        {value}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-
-                <label className="ts-filter-field">
-                  <span>Salesman</span>
-
-                  <select
-                    value={
-                      salesAdvancedFilters.salesman ||
-                      ""
-                    }
-                    onChange={(event) =>
-                      updateSalesAdvancedFilter(
-                        "salesman",
-                        event.target.value
-                      )
-                    }
-                  >
-                    <option value="">
-                      All Salesmen
-                    </option>
-
-                    {salesmanOptions.map((value) => (
-                      <option
-                        key={value}
-                        value={value}
-                      >
-                        {value}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-
-                <label className="ts-filter-field">
-                  <span>Load Series</span>
-
-                  <select
-                    value={
-                      salesAdvancedFilters.loadSeries ||
-                      ""
-                    }
-                    onChange={(event) =>
-                      updateSalesAdvancedFilter(
-                        "loadSeries",
-                        event.target.value
-                      )
-                    }
-                  >
-                    <option value="">
-                      All Load Series
-                    </option>
-
-                    {loadSeriesOptions.map(
-                      (value) => (
-                        <option
-                          key={value}
-                          value={value}
-                        >
-                          {value}
+                        <option value="">
+                          All Series
                         </option>
-                      )
-                    )}
-                  </select>
-                </label>
 
-                <label className="ts-filter-field">
-                  <span>Load No</span>
+                        {debitNoteSeriesOptions.map(
+                          (series) => (
+                            <option
+                              key={series}
+                              value={series}
+                            >
+                              {series}
+                            </option>
+                          )
+                        )}
+                      </select>
+                    </label>
 
-                  <input
-                    type="text"
-                    placeholder="Load number"
-                    value={
-                      salesAdvancedFilters.loadNo ||
-                      ""
-                    }
-                    onChange={(event) =>
-                      updateSalesAdvancedFilter(
-                        "loadNo",
-                        event.target.value
-                      )
-                    }
-                  />
-                </label>
+                    <label className="ts-filter-field">
+                      <span>Supplier Code</span>
 
-                <label className="ts-filter-field">
-                  <span>Add User</span>
+                      <select
+                        value={
+                          debitNoteAdvancedFilters
+                            .supplierCode || ""
+                        }
+                        onChange={(event) => {
+                          const selectedCode =
+                            event.target.value;
 
-                  <select
-                    value={
-                      salesAdvancedFilters.addUser ||
-                      ""
-                    }
-                    onChange={(event) =>
-                      updateSalesAdvancedFilter(
-                        "addUser",
-                        event.target.value
-                      )
-                    }
-                  >
-                    <option value="">
-                      All Users
-                    </option>
+                          const selectedSupplier =
+                            debitNoteSupplierOptions.find(
+                              (supplier) =>
+                                supplier.code ===
+                                selectedCode
+                            );
 
-                    {createdByOptions.map(
-                      (value) => (
-                        <option
-                          key={value}
-                          value={value}
-                        >
-                          {value}
+                          setDebitNoteAdvancedFilters(
+                            (previous) => ({
+                              ...previous,
+
+                              supplierCode:
+                                selectedCode,
+
+                              supplierName:
+                                selectedCode
+                                  ? selectedSupplier
+                                    ?.name || ""
+                                  : "",
+                            })
+                          );
+                        }}
+                      >
+                        <option value="">
+                          All Supplier Codes
                         </option>
-                      )
-                    )}
-                  </select>
-                </label>
 
-                <label className="ts-filter-field">
-                  <span>Minimum Amount</span>
+                        {debitNoteSupplierOptions.map(
+                          (supplier) => (
+                            <option
+                              key={
+                                supplier.code ||
+                                supplier.name
+                              }
+                              value={supplier.code}
+                            >
+                              {supplier.code}
+                            </option>
+                          )
+                        )}
+                      </select>
+                    </label>
 
-                  <input
-                    type="number"
-                    min="0"
-                    placeholder="Min amount"
-                    value={
-                      salesAdvancedFilters.minAmount ||
-                      ""
-                    }
-                    onChange={(event) =>
-                      updateSalesAdvancedFilter(
-                        "minAmount",
-                        event.target.value
-                      )
-                    }
-                  />
-                </label>
+                    <label className="ts-filter-field">
+                      <span>Supplier Name</span>
 
-                <label className="ts-filter-field">
-                  <span>Maximum Amount</span>
+                      <select
+                        value={
+                          debitNoteAdvancedFilters
+                            .supplierName || ""
+                        }
+                        onChange={(event) => {
+                          const selectedName =
+                            event.target.value;
 
-                  <input
-                    type="number"
-                    min="0"
-                    placeholder="Max amount"
-                    value={
-                      salesAdvancedFilters.maxAmount ||
-                      ""
-                    }
-                    onChange={(event) =>
-                      updateSalesAdvancedFilter(
-                        "maxAmount",
-                        event.target.value
-                      )
-                    }
-                  />
-                </label>
+                          const selectedSupplier =
+                            debitNoteSupplierOptions.find(
+                              (supplier) =>
+                                supplier.name ===
+                                selectedName
+                            );
+
+                          setDebitNoteAdvancedFilters(
+                            (previous) => ({
+                              ...previous,
+
+                              supplierName:
+                                selectedName,
+
+                              supplierCode:
+                                selectedName
+                                  ? selectedSupplier
+                                    ?.code || ""
+                                  : "",
+                            })
+                          );
+                        }}
+                      >
+                        <option value="">
+                          All Suppliers
+                        </option>
+
+                        {debitNoteSupplierOptions.map(
+                          (supplier) => (
+                            <option
+                              key={
+                                `${supplier.code}-${supplier.name}`
+                              }
+                              value={supplier.name}
+                            >
+                              {supplier.name}
+                            </option>
+                          )
+                        )}
+                      </select>
+                    </label>
+
+                    <label className="ts-filter-field">
+                      <span>Company</span>
+
+                      <select
+                        value={
+                          debitNoteAdvancedFilters
+                            .company || ""
+                        }
+                        onChange={(event) =>
+                          updateActiveAdvancedFilter(
+                            "company",
+                            event.target.value
+                          )
+                        }
+                      >
+                        <option value="">
+                          All Companies
+                        </option>
+
+                        {companyOptions.map(
+                          (company) => (
+                            <option
+                              key={
+                                company.code ||
+                                company.name
+                              }
+                              value={
+                                company.code ||
+                                company.name
+                              }
+                            >
+                              {company.name}
+                            </option>
+                          )
+                        )}
+                      </select>
+                    </label>
+
+                    <label className="ts-filter-field">
+                      <span>Godown Code</span>
+
+                      <select
+                        value={
+                          debitNoteAdvancedFilters
+                            .gdCode || ""
+                        }
+                        onChange={(event) => {
+                          const selectedCode =
+                            event.target.value;
+
+                          const selectedGodown =
+                            debitNoteGodownOptions.find(
+                              (godown) =>
+                                godown.code ===
+                                selectedCode
+                            );
+
+                          setDebitNoteAdvancedFilters(
+                            (previous) => ({
+                              ...previous,
+
+                              gdCode:
+                                selectedCode,
+
+                              godownName:
+                                selectedCode
+                                  ? selectedGodown
+                                    ?.name || ""
+                                  : "",
+                            })
+                          );
+                        }}
+                      >
+                        <option value="">
+                          All Godown Codes
+                        </option>
+
+                        {debitNoteGodownOptions.map(
+                          (godown) => (
+                            <option
+                              key={
+                                godown.code ||
+                                godown.name
+                              }
+                              value={godown.code}
+                            >
+                              {godown.code}
+                            </option>
+                          )
+                        )}
+                      </select>
+                    </label>
+
+                    <label className="ts-filter-field">
+                      <span>Godown Name</span>
+
+                      <select
+                        value={
+                          debitNoteAdvancedFilters
+                            .godownName || ""
+                        }
+                        onChange={(event) => {
+                          const selectedName =
+                            event.target.value;
+
+                          const selectedGodown =
+                            debitNoteGodownOptions.find(
+                              (godown) =>
+                                godown.name ===
+                                selectedName
+                            );
+
+                          setDebitNoteAdvancedFilters(
+                            (previous) => ({
+                              ...previous,
+
+                              godownName:
+                                selectedName,
+
+                              gdCode:
+                                selectedName
+                                  ? selectedGodown
+                                    ?.code || ""
+                                  : "",
+                            })
+                          );
+                        }}
+                      >
+                        <option value="">
+                          All Godowns
+                        </option>
+
+                        {debitNoteGodownOptions.map(
+                          (godown) => (
+                            <option
+                              key={
+                                `${godown.code}-${godown.name}`
+                              }
+                              value={godown.name}
+                            >
+                              {godown.name}
+                            </option>
+                          )
+                        )}
+                      </select>
+                    </label>
+
+                    <label className="ts-filter-field">
+                      <span>Salesman</span>
+
+                      <select
+                        value={
+                          debitNoteAdvancedFilters
+                            .salesmanCode || ""
+                        }
+                        onChange={(event) => {
+                          const selectedCode =
+                            event.target.value;
+
+                          const selectedSalesman =
+                            salesmanOptions.find(
+                              (salesman) =>
+                                salesman.code ===
+                                selectedCode
+                            );
+
+                          setDebitNoteAdvancedFilters(
+                            (previous) => ({
+                              ...previous,
+
+                              salesmanCode:
+                                selectedCode,
+
+                              salesmanName:
+                                selectedCode
+                                  ? selectedSalesman
+                                    ?.name || ""
+                                  : "",
+                            })
+                          );
+                        }}
+                      >
+                        <option value="">
+                          All Salesmen
+                        </option>
+
+                        {salesmanOptions.map(
+                          (salesman) => (
+                            <option
+                              key={
+                                salesman.code ||
+                                salesman.name
+                              }
+                              value={salesman.code}
+                            >
+                              {salesman.name}
+                            </option>
+                          )
+                        )}
+                      </select>
+                    </label>
+
+                    <label className="ts-filter-field">
+                      <span>Reference Bill Series</span>
+
+                      <input
+                        type="text"
+                        value={
+                          debitNoteAdvancedFilters
+                            .referenceBillSeries || ""
+                        }
+                        onChange={(event) =>
+                          updateActiveAdvancedFilter(
+                            "referenceBillSeries",
+                            event.target.value
+                          )
+                        }
+                      />
+                    </label>
+
+                    <label className="ts-filter-field">
+                      <span>Reference Bill No.</span>
+
+                      <input
+                        type="number"
+                        min="0"
+                        value={
+                          debitNoteAdvancedFilters
+                            .referenceBillNo || ""
+                        }
+                        onChange={(event) =>
+                          updateActiveAdvancedFilter(
+                            "referenceBillNo",
+                            event.target.value
+                          )
+                        }
+                      />
+                    </label>
+
+                    <label className="ts-filter-field">
+                      <span>Return Type</span>
+
+                      <select
+                        value={
+                          debitNoteAdvancedFilters
+                            .returnType || ""
+                        }
+                        onChange={(event) =>
+                          updateActiveAdvancedFilter(
+                            "returnType",
+                            event.target.value
+                          )
+                        }
+                      >
+                        <option value="">
+                          All Return Types
+                        </option>
+
+                        <option value="GDR">
+                          GDR
+                        </option>
+
+                        <option value="DGR">
+                          DGR
+                        </option>
+                      </select>
+                    </label>
+
+                    <label className="ts-filter-field">
+                      <span>Status</span>
+
+                      <select
+                        value={
+                          debitNoteAdvancedFilters
+                            .status || ""
+                        }
+                        onChange={(event) =>
+                          updateActiveAdvancedFilter(
+                            "status",
+                            event.target.value
+                          )
+                        }
+                      >
+                        <option value="">
+                          All Statuses
+                        </option>
+
+                        <option value="Approved">
+                          Approved
+                        </option>
+
+                        <option value="Pending">
+                          Pending
+                        </option>
+
+                        <option value="Cancelled">
+                          Cancelled
+                        </option>
+                      </select>
+                    </label>
+
+                    <label className="ts-filter-field">
+                      <span>Minimum Amount</span>
+
+                      <input
+                        type="number"
+                        min="0"
+                        step="0.01"
+                        value={
+                          debitNoteAdvancedFilters
+                            .minAmount || ""
+                        }
+                        onChange={(event) =>
+                          updateActiveAdvancedFilter(
+                            "minAmount",
+                            event.target.value
+                          )
+                        }
+                      />
+                    </label>
+
+                    <label className="ts-filter-field">
+                      <span>Maximum Amount</span>
+
+                      <input
+                        type="number"
+                        min="0"
+                        step="0.01"
+                        value={
+                          debitNoteAdvancedFilters
+                            .maxAmount || ""
+                        }
+                        onChange={(event) =>
+                          updateActiveAdvancedFilter(
+                            "maxAmount",
+                            event.target.value
+                          )
+                        }
+                      />
+                    </label>
+                  </>
+                ) : isCreditNoteList ? (
+                  <>
+                    <label className="ts-filter-field ts-filter-search-field">
+                      <span>Search Credit Note</span>
+
+                      <div className="ts-filter-input-icon">
+                        <Search size={15} />
+
+                        <input
+                          type="text"
+                          placeholder="Credit note, party, bill..."
+                          value={
+                            creditNoteAdvancedFilters
+                              .search || ""
+                          }
+                          onChange={(event) =>
+                            updateActiveAdvancedFilter(
+                              "search",
+                              event.target.value
+                            )
+                          }
+                        />
+                      </div>
+                    </label>
+
+                    <label className="ts-filter-field">
+                      <span>Date From</span>
+
+                      <input
+                        type="date"
+                        value={
+                          creditNoteAdvancedFilters
+                            .fromDate || ""
+                        }
+                        onChange={(event) =>
+                          updateActiveAdvancedFilter(
+                            "fromDate",
+                            event.target.value
+                          )
+                        }
+                      />
+                    </label>
+
+                    <label className="ts-filter-field">
+                      <span>Date To</span>
+
+                      <input
+                        type="date"
+                        value={
+                          creditNoteAdvancedFilters
+                            .toDate || ""
+                        }
+                        onChange={(event) =>
+                          updateActiveAdvancedFilter(
+                            "toDate",
+                            event.target.value
+                          )
+                        }
+                      />
+                    </label>
+
+                    <label className="ts-filter-field">
+                      <span>Credit Note Series</span>
+
+                      <select
+                        value={
+                          creditNoteAdvancedFilters
+                            .creditNoteSeries || ""
+                        }
+                        onChange={(event) =>
+                          updateActiveAdvancedFilter(
+                            "creditNoteSeries",
+                            event.target.value
+                          )
+                        }
+                      >
+                        <option value="">
+                          All Series
+                        </option>
+
+                        {creditNoteSeriesOptions.map(
+                          (series) => (
+                            <option
+                              key={series}
+                              value={series}
+                            >
+                              {series}
+                            </option>
+                          )
+                        )}
+                      </select>
+                    </label>
+
+                    <label className="ts-filter-field">
+                      <span>Party Code</span>
+
+                      <select
+                        value={
+                          creditNoteAdvancedFilters
+                            .partyCode || ""
+                        }
+                        onChange={(event) => {
+                          const selectedCode =
+                            event.target.value;
+
+                          const selectedParty =
+                            creditNotePartyOptions.find(
+                              (party) =>
+                                party.code ===
+                                selectedCode
+                            );
+
+                          setCreditNoteAdvancedFilters(
+                            (previous) => ({
+                              ...previous,
+
+                              partyCode:
+                                selectedCode,
+
+                              partyName:
+                                selectedCode
+                                  ? selectedParty
+                                    ?.name || ""
+                                  : "",
+                            })
+                          );
+                        }}
+                      >
+                        <option value="">
+                          All Party Codes
+                        </option>
+
+                        {creditNotePartyOptions.map(
+                          (party) => (
+                            <option
+                              key={
+                                party.code ||
+                                party.name
+                              }
+                              value={party.code}
+                            >
+                              {party.code}
+                            </option>
+                          )
+                        )}
+                      </select>
+                    </label>
+
+                    <label className="ts-filter-field">
+                      <span>Party Name</span>
+
+                      <select
+                        value={
+                          creditNoteAdvancedFilters
+                            .partyName || ""
+                        }
+                        onChange={(event) => {
+                          const selectedName =
+                            event.target.value;
+
+                          const selectedParty =
+                            creditNotePartyOptions.find(
+                              (party) =>
+                                party.name ===
+                                selectedName
+                            );
+
+                          setCreditNoteAdvancedFilters(
+                            (previous) => ({
+                              ...previous,
+
+                              partyName:
+                                selectedName,
+
+                              partyCode:
+                                selectedName
+                                  ? selectedParty
+                                    ?.code || ""
+                                  : "",
+                            })
+                          );
+                        }}
+                      >
+                        <option value="">
+                          All Parties
+                        </option>
+
+                        {creditNotePartyOptions.map(
+                          (party) => (
+                            <option
+                              key={
+                                `${party.code}-${party.name}`
+                              }
+                              value={party.name}
+                            >
+                              {party.name}
+                            </option>
+                          )
+                        )}
+                      </select>
+                    </label>
+
+                    <label className="ts-filter-field">
+                      <span>Company</span>
+
+                      <select
+                        value={
+                          creditNoteAdvancedFilters
+                            .company || ""
+                        }
+                        onChange={(event) =>
+                          updateActiveAdvancedFilter(
+                            "company",
+                            event.target.value
+                          )
+                        }
+                      >
+                        <option value="">
+                          All Companies
+                        </option>
+
+                        {companyOptions.map(
+                          (company) => (
+                            <option
+                              key={
+                                company.code ||
+                                company.name
+                              }
+                              value={
+                                company.code ||
+                                company.name
+                              }
+                            >
+                              {company.name}
+                            </option>
+                          )
+                        )}
+                      </select>
+                    </label>
+
+                    <label className="ts-filter-field">
+                      <span>Godown Code</span>
+
+                      <select
+                        value={
+                          creditNoteAdvancedFilters
+                            .gdCode || ""
+                        }
+                        onChange={(event) => {
+                          const selectedCode =
+                            event.target.value;
+
+                          const selectedGodown =
+                            creditNoteGodownOptions.find(
+                              (godown) =>
+                                godown.code ===
+                                selectedCode
+                            );
+
+                          setCreditNoteAdvancedFilters(
+                            (previous) => ({
+                              ...previous,
+
+                              gdCode:
+                                selectedCode,
+
+                              godownName:
+                                selectedCode
+                                  ? selectedGodown
+                                    ?.name || ""
+                                  : "",
+                            })
+                          );
+                        }}
+                      >
+                        <option value="">
+                          All Godown Codes
+                        </option>
+
+                        {creditNoteGodownOptions.map(
+                          (godown) => (
+                            <option
+                              key={
+                                godown.code ||
+                                godown.name
+                              }
+                              value={godown.code}
+                            >
+                              {godown.code}
+                            </option>
+                          )
+                        )}
+                      </select>
+                    </label>
+
+                    <label className="ts-filter-field">
+                      <span>Godown Name</span>
+
+                      <select
+                        value={
+                          creditNoteAdvancedFilters
+                            .godownName || ""
+                        }
+                        onChange={(event) => {
+                          const selectedName =
+                            event.target.value;
+
+                          const selectedGodown =
+                            creditNoteGodownOptions.find(
+                              (godown) =>
+                                godown.name ===
+                                selectedName
+                            );
+
+                          setCreditNoteAdvancedFilters(
+                            (previous) => ({
+                              ...previous,
+
+                              godownName:
+                                selectedName,
+
+                              gdCode:
+                                selectedName
+                                  ? selectedGodown
+                                    ?.code || ""
+                                  : "",
+                            })
+                          );
+                        }}
+                      >
+                        <option value="">
+                          All Godowns
+                        </option>
+
+                        {creditNoteGodownOptions.map(
+                          (godown) => (
+                            <option
+                              key={
+                                `${godown.code}-${godown.name}`
+                              }
+                              value={godown.name}
+                            >
+                              {godown.name}
+                            </option>
+                          )
+                        )}
+                      </select>
+                    </label>
+
+                    <label className="ts-filter-field">
+                      <span>Salesman</span>
+
+                      <select
+                        value={
+                          creditNoteAdvancedFilters
+                            .salesmanCode || ""
+                        }
+                        onChange={(event) => {
+                          const selectedCode =
+                            event.target.value;
+
+                          const selectedSalesman =
+                            salesmanOptions.find(
+                              (salesman) =>
+                                salesman.code ===
+                                selectedCode
+                            );
+
+                          setCreditNoteAdvancedFilters(
+                            (previous) => ({
+                              ...previous,
+
+                              salesmanCode:
+                                selectedCode,
+
+                              salesmanName:
+                                selectedCode
+                                  ? selectedSalesman
+                                    ?.name || ""
+                                  : "",
+                            })
+                          );
+                        }}
+                      >
+                        <option value="">
+                          All Salesmen
+                        </option>
+
+                        {salesmanOptions.map(
+                          (salesman) => (
+                            <option
+                              key={
+                                salesman.code ||
+                                salesman.name
+                              }
+                              value={salesman.code}
+                            >
+                              {salesman.name}
+                            </option>
+                          )
+                        )}
+                      </select>
+                    </label>
+
+                    <label className="ts-filter-field">
+                      <span>Reference Bill Series</span>
+
+                      <input
+                        type="text"
+                        value={
+                          creditNoteAdvancedFilters
+                            .referenceBillSeries || ""
+                        }
+                        onChange={(event) =>
+                          updateActiveAdvancedFilter(
+                            "referenceBillSeries",
+                            event.target.value
+                          )
+                        }
+                      />
+                    </label>
+
+                    <label className="ts-filter-field">
+                      <span>Reference Bill No.</span>
+
+                      <input
+                        type="number"
+                        min="0"
+                        value={
+                          creditNoteAdvancedFilters
+                            .referenceBillNo || ""
+                        }
+                        onChange={(event) =>
+                          updateActiveAdvancedFilter(
+                            "referenceBillNo",
+                            event.target.value
+                          )
+                        }
+                      />
+                    </label>
+
+                    <label className="ts-filter-field">
+                      <span>Status</span>
+
+                      <select
+                        value={
+                          creditNoteAdvancedFilters
+                            .status || ""
+                        }
+                        onChange={(event) =>
+                          updateActiveAdvancedFilter(
+                            "status",
+                            event.target.value
+                          )
+                        }
+                      >
+                        <option value="">
+                          All Statuses
+                        </option>
+
+                        <option value="Approved">
+                          Approved
+                        </option>
+
+                        <option value="Pending">
+                          Pending
+                        </option>
+
+                        <option value="Cancelled">
+                          Cancelled
+                        </option>
+                      </select>
+                    </label>
+
+                    <label className="ts-filter-field">
+                      <span>Minimum Amount</span>
+
+                      <input
+                        type="number"
+                        min="0"
+                        step="0.01"
+                        value={
+                          creditNoteAdvancedFilters
+                            .minAmount || ""
+                        }
+                        onChange={(event) =>
+                          updateActiveAdvancedFilter(
+                            "minAmount",
+                            event.target.value
+                          )
+                        }
+                      />
+                    </label>
+
+                    <label className="ts-filter-field">
+                      <span>Maximum Amount</span>
+
+                      <input
+                        type="number"
+                        min="0"
+                        step="0.01"
+                        value={
+                          creditNoteAdvancedFilters
+                            .maxAmount || ""
+                        }
+                        onChange={(event) =>
+                          updateActiveAdvancedFilter(
+                            "maxAmount",
+                            event.target.value
+                          )
+                        }
+                      />
+                    </label>
+                  </>
+                ) : isPurchaseList ? (
+                  <>
+                    {/* PURCHASE SEARCH */}
+                    <label className="ts-filter-field ts-filter-search-field">
+                      <span>Search Purchase</span>
+
+                      <div className="ts-filter-input-icon">
+                        <Search size={15} />
+
+                        <input
+                          type="text"
+                          placeholder="Bill, supplier, company..."
+                          value={
+                            purchaseAdvancedFilters
+                              .search || ""
+                          }
+                          onChange={(event) =>
+                            updateActiveAdvancedFilter(
+                              "search",
+                              event.target.value
+                            )
+                          }
+                        />
+                      </div>
+                    </label>
+
+                    {/* FROM DATE */}
+                    <label className="ts-filter-field">
+                      <span>Date From</span>
+
+                      <input
+                        type="date"
+                        value={
+                          purchaseAdvancedFilters
+                            .fromDate || ""
+                        }
+                        onChange={(event) =>
+                          updateActiveAdvancedFilter(
+                            "fromDate",
+                            event.target.value
+                          )
+                        }
+                      />
+                    </label>
+
+                    {/* TO DATE */}
+                    <label className="ts-filter-field">
+                      <span>Date To</span>
+
+                      <input
+                        type="date"
+                        value={
+                          purchaseAdvancedFilters
+                            .toDate || ""
+                        }
+                        onChange={(event) =>
+                          updateActiveAdvancedFilter(
+                            "toDate",
+                            event.target.value
+                          )
+                        }
+                      />
+                    </label>
+
+                    {/* VOUCHER SERIES */}
+                    {/* VOUCHER SERIES */}
+                    <label className="ts-filter-field">
+                      <span>Bill Series</span>
+
+                      <select
+                        value={
+                          purchaseAdvancedFilters
+                            .vouSer || ""
+                        }
+                        onChange={(event) =>
+                          updateActiveAdvancedFilter(
+                            "vouSer",
+                            event.target.value
+                          )
+                        }
+                      >
+                        <option value="">
+                          All Bill Series
+                        </option>
+
+                        {purchaseBillSeriesOptions.map(
+                          (series) => (
+                            <option
+                              key={series}
+                              value={series}
+                            >
+                              {series}
+                            </option>
+                          )
+                        )}
+                      </select>
+                    </label>
+
+                    {/* SUPPLIER CODE */}
+                    {/* SUPPLIER CODE */}
+                    <label className="ts-filter-field">
+                      <span>Supplier Code</span>
+
+                      <select
+                        value={
+                          purchaseAdvancedFilters
+                            .supplierCode || ""
+                        }
+                        onChange={(event) => {
+                          const selectedCode =
+                            event.target.value;
+
+                          const selectedSupplier =
+                            purchaseSupplierOptions.find(
+                              (supplier) =>
+                                supplier.code ===
+                                selectedCode
+                            );
+
+                          setPurchaseAdvancedFilters(
+                            (previous) => ({
+                              ...previous,
+
+                              supplierCode:
+                                selectedCode,
+
+                              supplierName:
+                                selectedCode
+                                  ? selectedSupplier
+                                    ?.name || ""
+                                  : "",
+                            })
+                          );
+                        }}
+                      >
+                        <option value="">
+                          All Supplier Codes
+                        </option>
+
+                        {purchaseSupplierOptions.map(
+                          (supplier) => (
+                            <option
+                              key={
+                                supplier.code ||
+                                supplier.name
+                              }
+                              value={
+                                supplier.code
+                              }
+                            >
+                              {supplier.code}
+                            </option>
+                          )
+                        )}
+                      </select>
+                    </label>
+
+                    {/* SUPPLIER NAME */}
+                    {/* SUPPLIER NAME */}
+                    <label className="ts-filter-field">
+                      <span>Supplier Name</span>
+
+                      <select
+                        value={
+                          purchaseAdvancedFilters
+                            .supplierName || ""
+                        }
+                        onChange={(event) => {
+                          const selectedName =
+                            event.target.value;
+
+                          const selectedSupplier =
+                            purchaseSupplierOptions.find(
+                              (supplier) =>
+                                supplier.name ===
+                                selectedName
+                            );
+
+                          setPurchaseAdvancedFilters(
+                            (previous) => ({
+                              ...previous,
+
+                              supplierName:
+                                selectedName,
+
+                              supplierCode:
+                                selectedName
+                                  ? selectedSupplier
+                                    ?.code || ""
+                                  : "",
+                            })
+                          );
+                        }}
+                      >
+                        <option value="">
+                          All Suppliers
+                        </option>
+
+                        {purchaseSupplierOptions.map(
+                          (supplier) => (
+                            <option
+                              key={
+                                `${supplier.code}-${supplier.name}`
+                              }
+                              value={
+                                supplier.name
+                              }
+                            >
+                              {supplier.name}
+                            </option>
+                          )
+                        )}
+                      </select>
+                    </label>
+
+                    {/* COMPANY */}
+                    {/* COMPANY */}
+                    {/* COMPANY */}
+                    <label className="ts-filter-field">
+                      <span>Company</span>
+
+                      <select
+                        value={
+                          purchaseAdvancedFilters
+                            .company || ""
+                        }
+                        onChange={(event) =>
+                          updateActiveAdvancedFilter(
+                            "company",
+                            event.target.value
+                          )
+                        }
+                      >
+                        <option value="">
+                          All Companies
+                        </option>
+
+                        {companyOptions.map(
+                          (company) => (
+                            <option
+                              key={
+                                company.code ||
+                                company.name
+                              }
+                              value={
+                                company.code ||
+                                company.name
+                              }
+                            >
+                              {company.name}
+                            </option>
+                          )
+                        )}
+                      </select>
+                    </label>
+
+                    {/* GODOWN CODE */}
+                    {/* GODOWN CODE */}
+                    <label className="ts-filter-field">
+                      <span>Godown Code</span>
+
+                      <select
+                        value={
+                          purchaseAdvancedFilters
+                            .gdCode || ""
+                        }
+                        onChange={(event) => {
+                          const selectedCode =
+                            event.target.value;
+
+                          const selectedGodown =
+                            purchaseGodownOptions.find(
+                              (godown) =>
+                                godown.code ===
+                                selectedCode
+                            );
+
+                          setPurchaseAdvancedFilters(
+                            (previous) => ({
+                              ...previous,
+
+                              gdCode:
+                                selectedCode,
+
+                              godownName:
+                                selectedCode
+                                  ? selectedGodown
+                                    ?.name || ""
+                                  : "",
+                            })
+                          );
+                        }}
+                      >
+                        <option value="">
+                          All Godown Codes
+                        </option>
+
+                        {purchaseGodownOptions.map(
+                          (godown) => (
+                            <option
+                              key={
+                                godown.code ||
+                                godown.name
+                              }
+                              value={
+                                godown.code
+                              }
+                            >
+                              {godown.code}
+                            </option>
+                          )
+                        )}
+                      </select>
+                    </label>
+
+                    {/* GODOWN NAME */}
+                    {/* GODOWN NAME */}
+                    <label className="ts-filter-field">
+                      <span>Godown Name</span>
+
+                      <select
+                        value={
+                          purchaseAdvancedFilters
+                            .godownName || ""
+                        }
+                        onChange={(event) => {
+                          const selectedName =
+                            event.target.value;
+
+                          const selectedGodown =
+                            purchaseGodownOptions.find(
+                              (godown) =>
+                                godown.name ===
+                                selectedName
+                            );
+
+                          setPurchaseAdvancedFilters(
+                            (previous) => ({
+                              ...previous,
+
+                              godownName:
+                                selectedName,
+
+                              gdCode:
+                                selectedName
+                                  ? selectedGodown
+                                    ?.code || ""
+                                  : "",
+                            })
+                          );
+                        }}
+                      >
+                        <option value="">
+                          All Godowns
+                        </option>
+
+                        {purchaseGodownOptions.map(
+                          (godown) => (
+                            <option
+                              key={
+                                `${godown.code}-${godown.name}`
+                              }
+                              value={
+                                godown.name
+                              }
+                            >
+                              {godown.name}
+                            </option>
+                          )
+                        )}
+                      </select>
+                    </label>
+
+                    {/* SUPPLIER INVOICE NUMBER */}
+                    <label className="ts-filter-field">
+                      <span>Supplier Invoice No.</span>
+
+                      <input
+                        type="text"
+                        placeholder="Supplier invoice"
+                        value={
+                          purchaseAdvancedFilters
+                            .invoiceNumber || ""
+                        }
+                        onChange={(event) =>
+                          updateActiveAdvancedFilter(
+                            "invoiceNumber",
+                            event.target.value
+                          )
+                        }
+                      />
+                    </label>
+
+                    {/* MINIMUM AMOUNT */}
+                    <label className="ts-filter-field">
+                      <span>Minimum Amount</span>
+
+                      <input
+                        type="number"
+                        min="0"
+                        step="0.01"
+                        placeholder="0.00"
+                        value={
+                          purchaseAdvancedFilters
+                            .minAmount || ""
+                        }
+                        onChange={(event) =>
+                          updateActiveAdvancedFilter(
+                            "minAmount",
+                            event.target.value
+                          )
+                        }
+                      />
+                    </label>
+
+                    {/* MAXIMUM AMOUNT */}
+                    <label className="ts-filter-field">
+                      <span>Maximum Amount</span>
+
+                      <input
+                        type="number"
+                        min="0"
+                        step="0.01"
+                        placeholder="0.00"
+                        value={
+                          purchaseAdvancedFilters
+                            .maxAmount || ""
+                        }
+                        onChange={(event) =>
+                          updateActiveAdvancedFilter(
+                            "maxAmount",
+                            event.target.value
+                          )
+                        }
+                      />
+                    </label>
+                  </>
+                ) : (
+                  <>
+                    {/*
+        KEEP YOUR COMPLETE EXISTING
+        SALES / QUOTATION FILTER FIELDS HERE.
+      */}
+                  </>
+                )}
               </div>
 
               <div className="ts-filter-footer">
@@ -35831,12 +44687,13 @@ await loadGroupMaster({
                   <RotateCcw size={15} />
                   Clear
                 </button>
-
                 <button
                   type="button"
                   className="ts-cancel-filter"
                   onClick={() =>
-                    setSalesFiltersVisible(false)
+                    setActiveFiltersVisible(
+                      false
+                    )
                   }
                 >
                   Cancel
@@ -35952,7 +44809,53 @@ await loadGroupMaster({
                 </thead>
 
                 <tbody>
-                  {premiumSalesPagedRows.length >
+                  {(
+                    isSalesBillingList &&
+                    salesListLoading
+                  ) ||
+                    (
+                      isQuotationList &&
+                      quotationListLoading
+                    ) ||
+                    (
+                      isPurchaseList &&
+                      purchaseListLoading
+                    ) ||
+                    (
+                      isCreditNoteList &&
+                      creditNoteListLoading
+                    ) ||
+                    (
+                      isDebitNoteList &&
+                      debitNoteListLoading
+                    ) ? (
+                    <tr>
+                      <td
+                        colSpan={14}
+                        className="ts-empty-row"
+                      >
+                        <RefreshCw
+                          size={30}
+                          className="sales-list-loading-icon"
+                        />
+
+                        <strong>
+                          {isDebitNoteList
+                            ? "Loading debit notes..."
+                            : isCreditNoteList
+                              ? "Loading credit notes..."
+                              : isPurchaseList
+                                ? "Loading purchase invoices..."
+                                : isQuotationList
+                                  ? "Loading quotations..."
+                                  : "Loading sales invoices..."}
+                        </strong>
+                        <span>
+                          Please wait while the records are loaded.
+                        </span>
+                      </td>
+                    </tr>
+                  ) : premiumSalesPagedRows.length >
                     0 ? (
                     premiumSalesPagedRows.map(
                       (item, index) => {
@@ -36124,10 +45027,33 @@ await loadGroupMaster({
                         );
 
                         const serialNumber =
-                          (safeSalesPage - 1) *
-                          salesRowsPerPage +
-                          index +
-                          1;
+                          isDebitNoteList
+                            ? item.serialNumber ||
+                            debitNoteStartRecord +
+                            index
+                            : isCreditNoteList
+                              ? item.serialNumber ||
+                              creditNoteStartRecord +
+                              index
+                              : isPurchaseList
+                                ? item.serialNumber ||
+                                purchaseStartRecord +
+                                index
+                                : isQuotationList
+                                  ? item.serialNumber ||
+                                  quotationStartRecord +
+                                  index
+                                  : isSalesBillingList
+                                    ? item.serialNumber ||
+                                    salesStartRecord +
+                                    index
+                                    : (
+                                      safeSalesPage -
+                                      1
+                                    ) *
+                                    salesRowsPerPage +
+                                    index +
+                                    1;
 
                         const rowKey =
                           item.id ||
@@ -36353,11 +45279,16 @@ await loadGroupMaster({
                         <ShoppingCart size={32} />
 
                         <strong>
-                          {isQuotationList
-                            ? "No quotations found"
-                            : "No sales invoices found"}
+                          {isPurchaseList
+                            ? "No purchase invoices found"
+                            : isQuotationList
+                              ? "No quotations found"
+                              : isCreditNoteList
+                                ? "No credit notes found"
+                                : isDebitNoteList
+                                  ? "No debit notes found"
+                                  : "No sales invoices found"}
                         </strong>
-
                         <span>
                           Change the filters or create a
                           new record.
@@ -36371,28 +45302,541 @@ await loadGroupMaster({
 
             <div className="ts-grid-footer">
               <div>
-                Showing <strong>{premiumSalesFilteredData.length ? (safeSalesPage - 1) * salesRowsPerPage + 1 : 0}</strong> to <strong>{Math.min(safeSalesPage * salesRowsPerPage, premiumSalesFilteredData.length)}</strong> of <strong>{premiumSalesFilteredData.length}</strong> entries
+                {(
+                  isSalesBillingList ||
+                  isQuotationList ||
+                  isPurchaseList ||
+                  isCreditNoteList ||
+                  isDebitNoteList
+                ) ? (
+                  <>
+                    Showing{" "}
+                    <strong>
+                      {activeStartRecord}
+                    </strong>{" "}
+                    to{" "}
+                    <strong>
+                      {activeEndRecord}
+                    </strong>{" "}
+                    of{" "}
+                    <strong>
+                      {activeTotalRecords}
+                    </strong>{" "}
+                    entries
+                  </>
+                ) : (
+                  <>
+                    Showing{" "}
+                    <strong>
+                      {premiumSalesFilteredData.length
+                        ? (
+                          safeSalesPage -
+                          1
+                        ) *
+                        salesRowsPerPage +
+                        1
+                        : 0}
+                    </strong>{" "}
+                    to{" "}
+                    <strong>
+                      {Math.min(
+                        safeSalesPage *
+                        salesRowsPerPage,
+                        premiumSalesFilteredData.length
+                      )}
+                    </strong>{" "}
+                    of{" "}
+                    <strong>
+                      {
+                        premiumSalesFilteredData.length
+                      }
+                    </strong>{" "}
+                    entries
+                  </>
+                )}
               </div>
 
               <div className="ts-pagination-wrap">
                 <select
-                  value={salesRowsPerPage}
+                  value={
+                    isDebitNoteList
+                      ? debitNoteRowsPerPage
+                      : isCreditNoteList
+                        ? creditNoteRowsPerPage
+                        : isPurchaseList
+                          ? purchaseRowsPerPage
+                          : isQuotationList
+                            ? quotationRowsPerPage
+                            : salesRowsPerPage
+                  }
+                  disabled={
+                    isDebitNoteList
+                      ? debitNoteListLoading
+                      : isCreditNoteList
+                        ? creditNoteListLoading
+                        : isPurchaseList
+                          ? purchaseListLoading
+                          : isQuotationList
+                            ? quotationListLoading
+                            : isSalesBillingList
+                              ? salesListLoading
+                              : false
+                  }
                   onChange={(event) => {
-                    setSalesRowsPerPage(Number(event.target.value));
-                    setListPage((previous) => ({ ...previous, [listKey]: 1 }));
+                    const nextRowsPerPage =
+                      Number(
+                        event.target.value
+                      );
+                    if (isDebitNoteList) {
+                      setDebitNoteRowsPerPage(
+                        nextRowsPerPage
+                      );
+
+                      setDebitNoteCurrentPage(
+                        1
+                      );
+
+                      setListPage(
+                        (previous) => ({
+                          ...previous,
+                          "Debit Note": 1,
+                        })
+                      );
+
+                      return;
+                    }
+
+                    if (isCreditNoteList) {
+                      setCreditNoteRowsPerPage(
+                        nextRowsPerPage
+                      );
+
+                      setCreditNoteCurrentPage(
+                        1
+                      );
+
+                      setListPage(
+                        (previous) => ({
+                          ...previous,
+                          "Credit Note": 1,
+                        })
+                      );
+
+                      return;
+                    }
+
+                    if (isPurchaseList) {
+                      setPurchaseRowsPerPage(
+                        nextRowsPerPage
+                      );
+
+                      setPurchaseCurrentPage(
+                        1
+                      );
+
+                      setListPage(
+                        (previous) => ({
+                          ...previous,
+                          Purchase: 1,
+                        })
+                      );
+
+                      return;
+                    }
+
+                    if (isQuotationList) {
+                      setQuotationRowsPerPage(
+                        nextRowsPerPage
+                      );
+
+                      setQuotationCurrentPage(
+                        1
+                      );
+
+                      setListPage(
+                        (previous) => ({
+                          ...previous,
+                          quotation: 1,
+                        })
+                      );
+
+                      return;
+                    }
+
+                    setSalesRowsPerPage(
+                      nextRowsPerPage
+                    );
+
+                    if (isSalesBillingList) {
+                      setSalesCurrentPage(
+                        1
+                      );
+
+                      setListPage(
+                        (previous) => ({
+                          ...previous,
+                          Billing: 1,
+                        })
+                      );
+                    } else {
+                      setListPage(
+                        (previous) => ({
+                          ...previous,
+                          [listKey]: 1,
+                        })
+                      );
+                    }
                   }}
                 >
-                  <option value={10}>10</option>
-                  <option value={15}>15</option>
-                  <option value={25}>25</option>
-                  <option value={50}>50</option>
+                  <option value={10}>
+                    10
+                  </option>
+
+                  <option value={20}>
+                    20
+                  </option>
+
+                  <option value={50}>
+                    50
+                  </option>
+
+                  <option value={100}>
+                    100
+                  </option>
                 </select>
 
-                <div className="ts-pagination">
-                  <button type="button" disabled={safeSalesPage <= 1} onClick={() => changePremiumSalesPage(safeSalesPage - 1)}><ChevronLeft size={17} /></button>
-                  {renderPremiumSalesPageButtons()}
-                  <button type="button" disabled={safeSalesPage >= premiumSalesTotalPages} onClick={() => changePremiumSalesPage(safeSalesPage + 1)}><ChevronRight size={17} /></button>
-                </div>
+                {(
+                  isSalesBillingList ||
+                  isQuotationList ||
+                  isPurchaseList ||
+                  isCreditNoteList ||
+                  isDebitNoteList
+                ) ? (
+                  <div className="ts-pagination">
+                    <button
+                      type="button"
+                      title="Previous page"
+                      disabled={
+                        activeListLoading ||
+                        activeCurrentPage <= 1
+                      }
+                      onClick={() => {
+                        if (isDebitNoteList) {
+                          setDebitNoteCurrentPage(
+                            (previousPage) =>
+                              Math.max(
+                                previousPage - 1,
+                                1
+                              )
+                          );
+
+                          return;
+                        }
+
+                        if (isCreditNoteList) {
+                          setCreditNoteCurrentPage(
+                            (previousPage) =>
+                              Math.max(
+                                previousPage - 1,
+                                1
+                              )
+                          );
+
+                          return;
+                        }
+
+                        if (isPurchaseList) {
+                          setPurchaseCurrentPage(
+                            (previousPage) =>
+                              Math.max(
+                                previousPage - 1,
+                                1
+                              )
+                          );
+
+                          return;
+                        }
+
+                        if (isQuotationList) {
+                          setQuotationCurrentPage(
+                            (previousPage) =>
+                              Math.max(
+                                previousPage - 1,
+                                1
+                              )
+                          );
+
+                          return;
+                        }
+
+                        setSalesCurrentPage(
+                          (previousPage) =>
+                            Math.max(
+                              previousPage - 1,
+                              1
+                            )
+                        );
+                      }}
+                    >
+                      <ChevronLeft size={17} />
+                    </button>
+
+                    {Array.from(
+                      {
+                        length:
+                          activeTotalPages,
+                      },
+                      (_, index) =>
+                        index + 1
+                    )
+                      .filter(
+                        (pageNumber) =>
+                          pageNumber === 1 ||
+                          pageNumber ===
+                          activeTotalPages ||
+                          Math.abs(
+                            pageNumber -
+                            activeCurrentPage
+                          ) <= 2
+                      )
+                      .map(
+                        (
+                          pageNumber,
+                          index,
+                          visiblePages
+                        ) => {
+                          const previousPage =
+                            visiblePages[
+                            index - 1
+                            ];
+
+                          const showDots =
+                            previousPage &&
+                            pageNumber -
+                            previousPage >
+                            1;
+
+                          return (
+                            <React.Fragment
+                              key={pageNumber}
+                            >
+                              {showDots && (
+                                <span className="premium-sales-pagination-dots">
+                                  ...
+                                </span>
+                              )}
+
+                              <button
+                                type="button"
+                                disabled={
+                                  activeListLoading
+                                }
+                                className={
+                                  activeCurrentPage ===
+                                    pageNumber
+                                    ? "active"
+                                    : ""
+                                }
+                                onClick={() => {
+                                  if (isDebitNoteList) {
+                                    setDebitNoteCurrentPage(
+                                      pageNumber
+                                    );
+
+                                    setListPage(
+                                      (previous) => ({
+                                        ...previous,
+                                        "Debit Note":
+                                          pageNumber,
+                                      })
+                                    );
+
+                                    return;
+                                  }
+                                  if (
+                                    isCreditNoteList
+                                  ) {
+                                    setCreditNoteCurrentPage(
+                                      pageNumber
+                                    );
+
+                                    setListPage(
+                                      (
+                                        previous
+                                      ) => ({
+                                        ...previous,
+                                        "Credit Note":
+                                          pageNumber,
+                                      })
+                                    );
+
+                                    return;
+                                  }
+
+                                  if (
+                                    isPurchaseList
+                                  ) {
+                                    setPurchaseCurrentPage(
+                                      pageNumber
+                                    );
+
+                                    setListPage(
+                                      (
+                                        previous
+                                      ) => ({
+                                        ...previous,
+                                        Purchase:
+                                          pageNumber,
+                                      })
+                                    );
+
+                                    return;
+                                  }
+
+                                  if (
+                                    isQuotationList
+                                  ) {
+                                    setQuotationCurrentPage(
+                                      pageNumber
+                                    );
+
+                                    setListPage(
+                                      (
+                                        previous
+                                      ) => ({
+                                        ...previous,
+                                        quotation:
+                                          pageNumber,
+                                      })
+                                    );
+
+                                    return;
+                                  }
+
+                                  setSalesCurrentPage(
+                                    pageNumber
+                                  );
+
+                                  setListPage(
+                                    (
+                                      previous
+                                    ) => ({
+                                      ...previous,
+                                      Billing:
+                                        pageNumber,
+                                    })
+                                  );
+                                }}
+                              >
+                                {pageNumber}
+                              </button>
+                            </React.Fragment>
+                          );
+                        }
+                      )}
+
+                    <button
+                      type="button"
+                      title="Next page"
+                      disabled={
+                        activeListLoading ||
+                        activeCurrentPage >=
+                        activeTotalPages
+                      }
+                      onClick={() => {
+                        if (isDebitNoteList) {
+                          setDebitNoteCurrentPage(
+                            (previousPage) =>
+                              Math.min(
+                                previousPage + 1,
+                                debitNoteTotalPages
+                              )
+                          );
+
+                          return;
+                        }
+                        if (isCreditNoteList) {
+                          setCreditNoteCurrentPage(
+                            (previousPage) =>
+                              Math.min(
+                                previousPage + 1,
+                                creditNoteTotalPages
+                              )
+                          );
+
+                          return;
+                        }
+
+                        if (isPurchaseList) {
+                          setPurchaseCurrentPage(
+                            (previousPage) =>
+                              Math.min(
+                                previousPage + 1,
+                                purchaseTotalPages
+                              )
+                          );
+
+                          return;
+                        }
+
+                        if (isQuotationList) {
+                          setQuotationCurrentPage(
+                            (previousPage) =>
+                              Math.min(
+                                previousPage + 1,
+                                quotationTotalPages
+                              )
+                          );
+
+                          return;
+                        }
+
+                        setSalesCurrentPage(
+                          (previousPage) =>
+                            Math.min(
+                              previousPage + 1,
+                              salesTotalPages
+                            )
+                        );
+                      }}
+                    >
+                      <ChevronRight size={17} />
+                    </button>
+                  </div>
+                ) : (
+                  <div className="ts-pagination">
+                    <button
+                      type="button"
+                      disabled={
+                        safeSalesPage <= 1
+                      }
+                      onClick={() =>
+                        changePremiumSalesPage(
+                          safeSalesPage - 1
+                        )
+                      }
+                    >
+                      <ChevronLeft size={17} />
+                    </button>
+
+                    {renderPremiumSalesPageButtons()}
+
+                    <button
+                      type="button"
+                      disabled={
+                        safeSalesPage >=
+                        premiumSalesTotalPages
+                      }
+                      onClick={() =>
+                        changePremiumSalesPage(
+                          safeSalesPage + 1
+                        )
+                      }
+                    >
+                      <ChevronRight size={17} />
+                    </button>
+                  </div>
+                )}
               </div>
             </div>
           </div>
@@ -36655,72 +46099,146 @@ await loadGroupMaster({
       }
     };
 
-    const handleDeleteLoad = async (id) => {
-      if (!id) {
-        alert("Load ID not found.");
-        return;
-      }
-
-      const confirmed = window.confirm(
-        "Are you sure you want to delete this load?"
-      );
-
-      if (!confirmed) return;
-
-      try {
-        const { distributorId, firmId } = getFirmSession();
-
-        if (!distributorId || !firmId) {
+    const handleDeleteLoad =
+      async (id) => {
+        if (!id) {
           alert(
-            "Distributor/Firm not found. Please login again."
+            "Load ID not found."
           );
+
           return;
         }
 
-        const response = await fetch(
-          `${API_URL}/create-load/${id}`,
-          {
-            method: "DELETE",
-            headers: {
-              "Content-Type": "application/json",
-            },
-            body: JSON.stringify({
-              distributorId,
-              firmId,
-            }),
+        const confirmed =
+          window.confirm(
+            "Are you sure you want to permanently delete this load?"
+          );
+
+        if (!confirmed) {
+          return;
+        }
+
+        try {
+          const {
+            distributorId,
+            firmId,
+          } = getFirmSession();
+
+          if (
+            !distributorId ||
+            !firmId
+          ) {
+            alert(
+              "Distributor/Firm not found. Please login again."
+            );
+
+            return;
           }
-        );
 
-        const result = await response.json();
+          const response =
+            await fetch(
+              `${API_URL}/create-load/${id}`,
+              {
+                method:
+                  "DELETE",
 
-        if (!response.ok || !result.success) {
-          alert(
-            result.message ||
-            "Load deletion failed."
+                headers: {
+                  "Content-Type":
+                    "application/json",
+                },
+
+                body: JSON.stringify({
+                  distributorId,
+                  firmId,
+                }),
+              }
+            );
+
+          const result =
+            await response.json();
+
+          if (
+            !response.ok ||
+            !result.success
+          ) {
+            alert(
+              result.message ||
+              "Load deletion failed."
+            );
+
+            return;
+          }
+
+          const recordsAfterDelete =
+            Math.max(
+              createLoadTotalRecords -
+              1,
+              0
+            );
+
+          const pagesAfterDelete =
+            Math.max(
+              Math.ceil(
+                recordsAfterDelete /
+                loadListRowsPerPage
+              ),
+              1
+            );
+
+          const pageAfterDelete =
+            Math.min(
+              createLoadCurrentPage,
+              pagesAfterDelete
+            );
+
+          setCreateLoadCurrentPage(
+            pageAfterDelete
           );
-          return;
+
+          await loadCreateLoads({
+            page:
+              pageAfterDelete,
+
+            limit:
+              loadListRowsPerPage,
+
+            filters:
+              loadAppliedFilters,
+
+            search:
+              createLoadSearchDebounced,
+          });
+
+          setShowCreateLoadList(
+            true
+          );
+
+          setShowDashboard(
+            false
+          );
+
+          setActiveMenu(
+            "sales"
+          );
+
+          setActiveSubMenu(
+            "Create Load"
+          );
+
+          alert(
+            "Create Load deleted successfully."
+          );
+        } catch (error) {
+          console.error(
+            "Delete Create Load error:",
+            error
+          );
+
+          alert(
+            "Server not connected. Load was not deleted."
+          );
         }
-
-        setCreateLoadListData((previous) =>
-          previous.filter(
-            (load) =>
-              load.id !== id &&
-              load._id !== id
-          )
-        );
-
-        await loadCreateLoads();
-      } catch (error) {
-        console.error(
-          "Delete Create Load error:",
-          error
-        );
-
-        alert(
-          "Server not connected. Load was not deleted."
-        );
-      }
-    };
+      };
 
     /* =========================================================
       DATA TRANSFORMATION
@@ -36842,196 +46360,204 @@ await loadGroupMaster({
     );
 
     /* =========================================================
-      FILTERING
-      ========================================================= */
+    CREATE LOAD BACKEND LIST DATA
+    ========================================================= */
 
-    const normalizeDateValue = (value) => {
-      if (!value) return "";
+    const filteredData =
+      Array.isArray(
+        transformedData
+      )
+        ? transformedData
+        : [];
 
-      const parsedDate = new Date(value);
+    const pagedRows =
+      filteredData;
 
-      if (Number.isNaN(parsedDate.getTime())) {
-        return String(value).slice(0, 10);
-      }
-
-      return parsedDate.toISOString().slice(0, 10);
-    };
-
-    const searchValue =
-      loadListFilters.search.trim().toLowerCase();
-
-    const filteredData = transformedData.filter((item) => {
-      const matchesSearch =
-        !searchValue ||
-        [
-          item.loadSeries,
-          item.loadNumber,
-          item.company,
-          item.deliveryBy,
-          item.salesman,
-          item.vehicleNo,
-          item.status,
-        ].some((value) =>
-          String(value || "")
-            .toLowerCase()
-            .includes(searchValue)
-        );
-
-      const itemDate = normalizeDateValue(item.date);
-
-      const matchesFromDate =
-        !loadListFilters.fromDate ||
-        itemDate >= loadListFilters.fromDate;
-
-      const matchesToDate =
-        !loadListFilters.toDate ||
-        itemDate <= loadListFilters.toDate;
-
-      const matchesStatus =
-        !loadListFilters.status ||
-        String(item.status || "").toLowerCase() ===
-        loadListFilters.status.toLowerCase();
-
-      const matchesCompany =
-        !loadListFilters.company ||
-        String(item.company || "")
-          .toLowerCase()
-          .includes(
-            loadListFilters.company.toLowerCase()
-          );
-
-      const matchesSeries =
-        !loadListFilters.loadSeries ||
-        String(item.loadSeries || "")
-          .toLowerCase()
-          .includes(
-            loadListFilters.loadSeries.toLowerCase()
-          );
-
-      return (
-        matchesSearch &&
-        matchesFromDate &&
-        matchesToDate &&
-        matchesStatus &&
-        matchesCompany &&
-        matchesSeries
-      );
-    });
-
-    /* =========================================================
-      SUMMARY
-      ========================================================= */
-
-    const totalLoads = filteredData.length;
-
-    const totalBills = filteredData.reduce(
-      (total, item) => total + Number(item.itemCount || 0),
-      0
-    );
-
-    const totalAmount = filteredData.reduce(
-      (total, item) =>
-        total + Number(item.totalAmount || 0),
-      0
-    );
-
-    const pendingLoads = filteredData.filter(
-      (item) =>
-        String(item.status || "").toLowerCase() ===
-        "pending"
-    ).length;
-
-    const settledLoads = filteredData.filter(
-      (item) =>
-        String(item.status || "").toLowerCase() ===
-        "settled"
-    ).length;
-
-    /* =========================================================
-      PAGINATION
-      ========================================================= */
-
-    const listKey = "load";
-
-    const totalPages = Math.max(
-      Math.ceil(
-        filteredData.length /
-        loadListRowsPerPage
-      ),
-      1
-    );
-
-    const requestedPage =
-      Number(listPage[listKey] || 1);
-
-    const currentPage = Math.min(
-      Math.max(requestedPage, 1),
-      totalPages
-    );
-
+    /*
+     * Used only as a fallback for serial numbers.
+     * The API loader already supplies item.serialNumber.
+     */
     const startIndex =
-      (currentPage - 1) * loadListRowsPerPage;
+      (
+        createLoadCurrentPage -
+        1
+      ) *
+      loadListRowsPerPage;
 
-    const pagedRows = filteredData.slice(
-      startIndex,
-      startIndex + loadListRowsPerPage
-    );
+    /* =========================================================
+      CURRENT PAGE SUMMARY
+      ========================================================= */
 
-    const changeLoadPage = (page) => {
-      const safePage = Math.min(
-        Math.max(page, 1),
-        totalPages
+    const totalLoads =
+      createLoadTotalRecords;
+
+    const totalBills =
+      filteredData.reduce(
+        (total, item) =>
+          total +
+          Number(
+            item.itemCount ||
+            item.totalBills ||
+            0
+          ),
+        0
       );
 
-      setListPage((previous) => ({
-        ...previous,
-        [listKey]: safePage,
-      }));
-    };
-
-    const renderLoadPageButtons = () => {
-      const pages = [];
-
-      const firstPage = Math.max(
-        1,
-        Math.min(currentPage - 1, totalPages - 2)
+    const totalAmount =
+      filteredData.reduce(
+        (total, item) =>
+          total +
+          Number(
+            item.totalAmount ||
+            0
+          ),
+        0
       );
 
-      const lastPage = Math.min(
-        totalPages,
-        firstPage + 2
+    const pendingLoads =
+      filteredData.filter(
+        (item) =>
+          String(
+            item.status || ""
+          )
+            .trim()
+            .toLowerCase() ===
+          "pending"
+      ).length;
+
+    const settledLoads =
+      filteredData.filter(
+        (item) =>
+          String(
+            item.status || ""
+          )
+            .trim()
+            .toLowerCase() ===
+          "settled"
+      ).length;
+
+    /* =========================================================
+      CREATE LOAD FILTER HANDLERS
+      ========================================================= */
+
+    const updateLoadListFilter = (
+      field,
+      value
+    ) => {
+      setLoadListFilters(
+        (previous) => ({
+          ...previous,
+          [field]:
+            value,
+        })
+      );
+    };
+
+    const applyCreateLoadFilters = (
+      event
+    ) => {
+      event?.preventDefault?.();
+      event?.stopPropagation?.();
+
+      const nextFilters = {
+        ...loadListFilters,
+      };
+
+      setLoadAppliedFilters(
+        nextFilters
       );
 
-      for (
-        let page = firstPage;
-        page <= lastPage;
-        page += 1
-      ) {
-        pages.push(
-          <button
-            key={page}
-            type="button"
-            className={
-              currentPage === page ? "active" : ""
-            }
-            onClick={() => changeLoadPage(page)}
-          >
-            {page}
-          </button>
-        );
-      }
+      setCreateLoadSearchDebounced(
+        String(
+          nextFilters.search ||
+          ""
+        ).trim()
+      );
 
-      return pages;
+      setCreateLoadCurrentPage(
+        1
+      );
+
+      setListPage(
+        (previous) => ({
+          ...previous,
+          createLoad: 1,
+        })
+      );
+
+      setLoadFiltersVisible(
+        false
+      );
+
+      setShowCreateLoadList(
+        true
+      );
+
+      setShowDashboard(
+        false
+      );
+
+      setActiveMenu(
+        "sales"
+      );
+
+      setActiveSubMenu(
+        "Create Load"
+      );
     };
-    const resetLoadFilters = () => {
-      setLoadListFilters(createDefaultLoadListFilters());
 
-      setListPage((previous) => ({
-        ...previous,
-        [listKey]: 1,
-      }));
+    const clearCreateLoadFilters = (
+      event
+    ) => {
+      event?.preventDefault?.();
+      event?.stopPropagation?.();
+
+      const emptyFilters =
+        createDefaultLoadListFilters();
+
+      setLoadListFilters({
+        ...emptyFilters,
+      });
+
+      setLoadAppliedFilters({
+        ...emptyFilters,
+      });
+
+      setCreateLoadSearchDebounced(
+        ""
+      );
+
+      setCreateLoadCurrentPage(
+        1
+      );
+
+      setListPage(
+        (previous) => ({
+          ...previous,
+          createLoad: 1,
+        })
+      );
+
+      setLoadFiltersVisible(
+        false
+      );
+
+      setShowCreateLoadList(
+        true
+      );
+
+      setShowDashboard(
+        false
+      );
+
+      setActiveMenu(
+        "sales"
+      );
+
+      setActiveSubMenu(
+        "Create Load"
+      );
     };
-
     const openNewCreateLoad = (event) => {
       setEditingCreateLoadId(null);
       setEditingCreateLoadBills([]);
@@ -37127,17 +46653,18 @@ await loadGroupMaster({
             <input
               type="text"
               placeholder="Search load series, load number, company, salesman..."
-              value={loadListFilters.search}
+              value={
+                loadListFilters.search ||
+                ""
+              }
               onChange={(event) => {
-                setLoadListFilters((previous) => ({
-                  ...previous,
-                  search: event.target.value,
-                }));
-
-                setListPage((previous) => ({
-                  ...previous,
-                  [listKey]: 1,
-                }));
+                setLoadListFilters(
+                  (previous) => ({
+                    ...previous,
+                    search:
+                      event.target.value,
+                  })
+                );
               }}
             />
 
@@ -37160,10 +46687,15 @@ await loadGroupMaster({
 
           <button
             type="button"
-            className={`ts-load-filter-btn ${loadFiltersVisible ? "active" : ""
+            className={`ts-load-filter-btn ${loadFiltersVisible
+              ? "active"
+              : ""
               }`}
             onClick={() =>
-              setLoadFiltersVisible((previous) => !previous)
+              setLoadFiltersVisible(
+                (previous) =>
+                  !previous
+              )
             }
           >
             <SlidersHorizontal size={16} />
@@ -37267,7 +46799,7 @@ await loadGroupMaster({
               <button
                 type="button"
                 className="ts-load-clear-filter"
-                onClick={resetLoadFilters}
+                onClick={clearCreateLoadFilters}
               >
                 <RotateCcw size={15} />
                 Clear
@@ -37276,14 +46808,7 @@ await loadGroupMaster({
               <button
                 type="button"
                 className="ts-load-apply-filter"
-                onClick={() => {
-                  setListPage((previous) => ({
-                    ...previous,
-                    [listKey]: 1,
-                  }));
-
-                  setLoadFiltersVisible(false);
-                }}
+                onClick={applyCreateLoadFilters}
               >
                 <CheckCircle2 size={15} />
                 Apply
@@ -37400,160 +46925,189 @@ await loadGroupMaster({
               </thead>
 
               <tbody>
-                {pagedRows.length > 0 ? (
-                  pagedRows.map((item, index) => (
-                    <tr key={item.id}>
-                      <td className="ts-load-sr-column">
-                        {startIndex + index + 1}
-                      </td>
 
-                      <td>
-                        {item.date
-                          ? formatInvoiceDate(item.date)
-                          : "-"}
-                      </td>
+                {createLoadListLoading ? (
+                  <tr>
+                    <td
+                      colSpan={12}
+                      className="ts-load-empty-row"
+                    >
+                      <RefreshCw
+                        size={30}
+                        className="sales-list-loading-icon"
+                      />
 
-                      <td>
-                        <span className="ts-load-series-text">
-                          {item.loadSeries}
-                        </span>
-                      </td>
+                      <strong>
+                        Loading create loads...
+                      </strong>
 
-                      <td>
-                        <button
-                          type="button"
-                          className="ts-load-number-link"
-                          onClick={() =>
-                            handleViewLoad(item.originalItem)
-                          }
+                      <span>
+                        Please wait while records are loaded.
+                      </span>
+                    </td>
+                  </tr>
+                ) : pagedRows.length > 0 ? (
+                  pagedRows.map((item, index) => {
+                    const serialNumber =
+                      item.serialNumber ||
+                      startIndex +
+                      index +
+                      1;
+
+                    return (
+                      <tr key={item.id}>
+                        <td className="ts-load-sr-column">
+                          {serialNumber}
+                        </td>
+
+                        <td>
+                          {item.date
+                            ? formatInvoiceDate(item.date)
+                            : "-"}
+                        </td>
+
+                        <td>
+                          <span className="ts-load-series-text">
+                            {item.loadSeries}
+                          </span>
+                        </td>
+
+                        <td>
+                          <button
+                            type="button"
+                            className="ts-load-number-link"
+                            onClick={() =>
+                              handleViewLoad(item.originalItem)
+                            }
+                          >
+                            {item.loadNumber}
+                          </button>
+                        </td>
+
+                        <td
+                          className="ts-load-ellipsis"
+                          title={item.company}
                         >
-                          {item.loadNumber}
-                        </button>
-                      </td>
+                          {item.company}
+                        </td>
 
-                      <td
-                        className="ts-load-ellipsis"
-                        title={item.company}
-                      >
-                        {item.company}
-                      </td>
-
-                      <td
-                        className="ts-load-ellipsis"
-                        title={item.deliveryBy}
-                      >
-                        {item.deliveryBy}
-                      </td>
-
-                      <td
-                        className="ts-load-ellipsis"
-                        title={item.salesman}
-                      >
-                        {item.salesman}
-                      </td>
-
-                      <td>{item.vehicleNo}</td>
-
-                      <td className="ts-load-amount">
-                        ₹
-                        {item.totalAmount.toLocaleString(
-                          "en-IN",
-                          {
-                            minimumFractionDigits: 2,
-                            maximumFractionDigits: 2,
-                          }
-                        )}
-                      </td>
-
-                      <td className="center-column">
-                        <span className="ts-load-bill-count">
-                          {item.itemCount}
-                        </span>
-                      </td>
-
-                      <td className="center-column">
-                        <span
-                          className={`ts-load-status ${String(item.status)
-                            .toLowerCase() === "settled"
-                            ? "settled"
-                            : String(item.status)
-                              .toLowerCase() ===
-                              "cancelled"
-                              ? "cancelled"
-                              : "pending"
-                            }`}
+                        <td
+                          className="ts-load-ellipsis"
+                          title={item.deliveryBy}
                         >
-                          {item.status}
-                        </span>
-                      </td>
+                          {item.deliveryBy}
+                        </td>
 
-                      <td className="ts-load-actions-column">
-                        <div className="ts-load-action-buttons">
-                          <button
-                            type="button"
-                            className="view"
-                            onClick={() =>
-                              handleViewLoad(
-                                item.originalItem
-                              )
+                        <td
+                          className="ts-load-ellipsis"
+                          title={item.salesman}
+                        >
+                          {item.salesman}
+                        </td>
+
+                        <td>{item.vehicleNo}</td>
+
+                        <td className="ts-load-amount">
+                          ₹
+                          {item.totalAmount.toLocaleString(
+                            "en-IN",
+                            {
+                              minimumFractionDigits: 2,
+                              maximumFractionDigits: 2,
                             }
-                            title="View Load"
-                          >
-                            <Eye size={15} />
-                          </button>
+                          )}
+                        </td>
 
-                          <button
-                            type="button"
-                            className="edit"
-                            onClick={() =>
-                              handleEditLoad(
-                                item.originalItem
-                              )
-                            }
-                            title="Edit Load"
-                          >
-                            <Pencil size={15} />
-                          </button>
+                        <td className="center-column">
+                          <span className="ts-load-bill-count">
+                            {item.itemCount}
+                          </span>
+                        </td>
 
-                          {String(item.status).toLowerCase() !==
-                            "settled" && (
-                              <button
-                                type="button"
-                                className="settle"
-                                onClick={() =>
-                                  handleSettleLoad(
-                                    item.originalItem
-                                  )
-                                }
-                                title="Settle Load"
-                              >
-                                <CheckCircle2 size={15} />
-                              </button>
-                            )}
-
-                          <button
-                            type="button"
-                            className="print"
-                            onClick={() => window.print()}
-                            title="Print Load List"
+                        <td className="center-column">
+                          <span
+                            className={`ts-load-status ${String(item.status)
+                              .toLowerCase() === "settled"
+                              ? "settled"
+                              : String(item.status)
+                                .toLowerCase() ===
+                                "cancelled"
+                                ? "cancelled"
+                                : "pending"
+                              }`}
                           >
-                            <Printer size={15} />
-                          </button>
+                            {item.status}
+                          </span>
+                        </td>
 
-                          <button
-                            type="button"
-                            className="delete"
-                            onClick={() =>
-                              handleDeleteLoad(item.id)
-                            }
-                            title="Delete Load"
-                          >
-                            <Trash2 size={15} />
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
-                  ))
+                        <td className="ts-load-actions-column">
+                          <div className="ts-load-action-buttons">
+                            <button
+                              type="button"
+                              className="view"
+                              onClick={() =>
+                                handleViewLoad(
+                                  item.originalItem
+                                )
+                              }
+                              title="View Load"
+                            >
+                              <Eye size={15} />
+                            </button>
+
+                            <button
+                              type="button"
+                              className="edit"
+                              onClick={() =>
+                                handleEditLoad(
+                                  item.originalItem
+                                )
+                              }
+                              title="Edit Load"
+                            >
+                              <Pencil size={15} />
+                            </button>
+
+                            {String(item.status).toLowerCase() !==
+                              "settled" && (
+                                <button
+                                  type="button"
+                                  className="settle"
+                                  onClick={() =>
+                                    handleSettleLoad(
+                                      item.originalItem
+                                    )
+                                  }
+                                  title="Settle Load"
+                                >
+                                  <CheckCircle2 size={15} />
+                                </button>
+                              )}
+
+                            <button
+                              type="button"
+                              className="print"
+                              onClick={() => window.print()}
+                              title="Print Load List"
+                            >
+                              <Printer size={15} />
+                            </button>
+
+                            <button
+                              type="button"
+                              className="delete"
+                              onClick={() =>
+                                handleDeleteLoad(item.id)
+                              }
+                              title="Delete Load"
+                            >
+                              <Trash2 size={15} />
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })
                 ) : (
                   <tr>
                     <td
@@ -37582,59 +47136,184 @@ await loadGroupMaster({
             <div className="ts-load-entry-info">
               Showing{" "}
               <strong>
-                {filteredData.length
-                  ? startIndex + 1
-                  : 0}
+                {createLoadStartRecord}
               </strong>{" "}
               to{" "}
               <strong>
-                {Math.min(
-                  startIndex + loadListRowsPerPage,
-                  filteredData.length
-                )}
+                {createLoadEndRecord}
               </strong>{" "}
-              of <strong>{filteredData.length}</strong>{" "}
+              of{" "}
+              <strong>
+                {createLoadTotalRecords}
+              </strong>{" "}
               entries
             </div>
 
             <div className="ts-load-pagination-wrap">
               <select
-                value={loadListRowsPerPage}
+                value={
+                  loadListRowsPerPage
+                }
+                disabled={
+                  createLoadListLoading
+                }
                 onChange={(event) => {
+                  const nextLimit =
+                    Number(
+                      event.target.value
+                    );
+
                   setLoadListRowsPerPage(
-                    Number(event.target.value)
+                    nextLimit
                   );
 
-                  setListPage((previous) => ({
-                    ...previous,
-                    [listKey]: 1,
-                  }));
+                  setCreateLoadCurrentPage(
+                    1
+                  );
+
+                  setListPage(
+                    (previous) => ({
+                      ...previous,
+                      createLoad: 1,
+                    })
+                  );
                 }}
               >
-                <option value={10}>10</option>
-                <option value={15}>15</option>
-                <option value={25}>25</option>
-                <option value={50}>50</option>
+                <option value={10}>
+                  10
+                </option>
+
+                <option value={15}>
+                  15
+                </option>
+
+                <option value={20}>
+                  20
+                </option>
+
+                <option value={50}>
+                  50
+                </option>
+
+                <option value={100}>
+                  100
+                </option>
               </select>
 
               <div className="ts-load-pagination">
                 <button
                   type="button"
-                  disabled={currentPage <= 1}
+                  title="Previous page"
+                  disabled={
+                    createLoadListLoading ||
+                    createLoadCurrentPage <= 1
+                  }
                   onClick={() =>
-                    changeLoadPage(currentPage - 1)
+                    setCreateLoadCurrentPage(
+                      (previous) =>
+                        Math.max(
+                          previous - 1,
+                          1
+                        )
+                    )
                   }
                 >
                   <ChevronLeft size={17} />
                 </button>
 
-                {renderLoadPageButtons()}
+                {Array.from(
+                  {
+                    length:
+                      createLoadTotalPages,
+                  },
+                  (_, index) =>
+                    index + 1
+                )
+                  .filter(
+                    (pageNumber) =>
+                      pageNumber === 1 ||
+                      pageNumber ===
+                      createLoadTotalPages ||
+                      Math.abs(
+                        pageNumber -
+                        createLoadCurrentPage
+                      ) <= 2
+                  )
+                  .map(
+                    (
+                      pageNumber,
+                      index,
+                      visiblePages
+                    ) => {
+                      const previousPage =
+                        visiblePages[
+                        index - 1
+                        ];
+
+                      const showDots =
+                        previousPage &&
+                        pageNumber -
+                        previousPage >
+                        1;
+
+                      return (
+                        <React.Fragment
+                          key={pageNumber}
+                        >
+                          {showDots && (
+                            <span className="premium-sales-pagination-dots">
+                              ...
+                            </span>
+                          )}
+
+                          <button
+                            type="button"
+                            disabled={
+                              createLoadListLoading
+                            }
+                            className={
+                              createLoadCurrentPage ===
+                                pageNumber
+                                ? "active"
+                                : ""
+                            }
+                            onClick={() => {
+                              setCreateLoadCurrentPage(
+                                pageNumber
+                              );
+
+                              setListPage(
+                                (previous) => ({
+                                  ...previous,
+                                  createLoad:
+                                    pageNumber,
+                                })
+                              );
+                            }}
+                          >
+                            {pageNumber}
+                          </button>
+                        </React.Fragment>
+                      );
+                    }
+                  )}
 
                 <button
                   type="button"
-                  disabled={currentPage >= totalPages}
+                  title="Next page"
+                  disabled={
+                    createLoadListLoading ||
+                    createLoadCurrentPage >=
+                    createLoadTotalPages
+                  }
                   onClick={() =>
-                    changeLoadPage(currentPage + 1)
+                    setCreateLoadCurrentPage(
+                      (previous) =>
+                        Math.min(
+                          previous + 1,
+                          createLoadTotalPages
+                        )
+                    )
                   }
                 >
                   <ChevronRight size={17} />
@@ -38045,14 +47724,33 @@ await loadGroupMaster({
         recordId = billToDelete._id || billToDelete.id;
         endpoint = `${API_URL}/sales/${recordId}`;
       }
-      else if (type === 'Quotation') {
-        const billToDelete = salesListData.find(item => item.id === id && item.type === 'Quotation');
+      else if (
+        type === "Quotation"
+      ) {
+        const billToDelete =
+          quotationListData.find(
+            (item) =>
+              String(
+                item._id ||
+                item.id
+              ) ===
+              String(id)
+          );
+
         if (!billToDelete) {
-          alert("Quotation not found in local state.");
+          alert(
+            "Quotation not found in the current list."
+          );
+
           return;
         }
-        recordId = billToDelete._id || billToDelete.id;
-        endpoint = `${API_URL}/quotation/${recordId}`;
+
+        recordId =
+          billToDelete._id ||
+          billToDelete.id;
+
+        endpoint =
+          `${API_URL}/quotation/${recordId}`;
       }
       else if (type === 'Purchase') {
         const billToDelete = purchaseListData.find(item => item.id === id);
@@ -38129,8 +47827,35 @@ await loadGroupMaster({
       }
 
       // Remove from UI state only after successful server deletion
-      if (type === 'Sales' || type === 'Billing' || type === 'Quotation') {
-        setSalesListData(prev => prev.filter(item => item.id !== id));
+      if (
+        type === "Sales" ||
+        type === "Billing"
+      ) {
+        setSalesListData(
+          (previous) =>
+            previous.filter(
+              (item) =>
+                String(
+                  item._id ||
+                  item.id
+                ) !==
+                String(id)
+            )
+        );
+      } else if (
+        type === "Quotation"
+      ) {
+        setQuotationListData(
+          (previous) =>
+            previous.filter(
+              (item) =>
+                String(
+                  item._id ||
+                  item.id
+                ) !==
+                String(id)
+            )
+        );
       } else if (type === 'Purchase') {
         setPurchaseListData(prev => prev.filter(item => item.id !== id));
       } else if (type === 'Credit Note') {
@@ -38153,21 +47878,172 @@ await loadGroupMaster({
       setEditingInvoiceId(null);
 
       // ✅ FIXED: Only show the appropriate list view
-      if (type === 'Sales' || type === 'Billing') {
-        await loadSalesBills();
+      if (
+        type === "Sales" ||
+        type === "Billing"
+      ) {
+        /*
+         * Calculate how many records and pages remain
+         * after deleting one Sales bill.
+         */
+        const recordsAfterDelete =
+          Math.max(
+            salesTotalRecords - 1,
+            0
+          );
+
+        const pagesAfterDelete =
+          Math.max(
+            Math.ceil(
+              recordsAfterDelete /
+              salesRowsPerPage
+            ),
+            1
+          );
+
+        /*
+         * If the last record on the final page was
+         * deleted, move back to the previous page.
+         */
+        const pageAfterDelete =
+          Math.min(
+            salesCurrentPage,
+            pagesAfterDelete
+          );
+
+        setSalesCurrentPage(
+          pageAfterDelete
+        );
+
+        setListPage((previous) => ({
+          ...previous,
+          Billing:
+            pageAfterDelete,
+        }));
+
+        await loadSalesBills({
+          page:
+            pageAfterDelete,
+
+          limit:
+            salesRowsPerPage,
+
+          filters:
+            salesAppliedFilters,
+
+          search:
+            salesSearchDebounced,
+        });
+
         setShowSalesList(true);
         setShowDashboard(false);
+        setActiveMenu("sales");
         setActiveSubMenu("Billing");
         setShowSettleLoad(false);
         setShowSettleLoadList(false);
 
-      } else if (type === 'Quotation') {
-        await loadQuotationBills();
+      } else if (
+        type === "Quotation"
+      ) {
+        const recordsAfterDelete =
+          Math.max(
+            quotationTotalRecords -
+            1,
+            0
+          );
+
+        const pagesAfterDelete =
+          Math.max(
+            Math.ceil(
+              recordsAfterDelete /
+              quotationRowsPerPage
+            ),
+            1
+          );
+
+        const pageAfterDelete =
+          Math.min(
+            quotationCurrentPage,
+            pagesAfterDelete
+          );
+
+        setQuotationCurrentPage(
+          pageAfterDelete
+        );
+
+        setListPage(
+          (previous) => ({
+            ...previous,
+            quotation:
+              pageAfterDelete,
+          })
+        );
+
+        await loadQuotationBills({
+          page:
+            pageAfterDelete,
+
+          limit:
+            quotationRowsPerPage,
+
+          filters:
+            quotationAppliedFilters,
+
+          search:
+            quotationSearchDebounced,
+        });
+
         setShowSalesList(true);
-        setActiveSubMenu("Quotation");
+        setShowDashboard(false);
+
+        setActiveMenu(
+          "sales"
+        );
+
+        setActiveSubMenu(
+          "Quotation"
+        );
+
+        setShowPurchaseList(false);
+        setShowCreditNoteList(false);
+        setShowDebitNoteList(false);
 
       } else if (type === 'Purchase') {
-        await loadPurchaseBills();
+        /*
+ * If the only record on the current page was deleted,
+ * move safely to the previous page.
+ */
+        const targetPage =
+          purchaseListData.length === 1 &&
+            purchaseCurrentPage > 1
+            ? purchaseCurrentPage - 1
+            : purchaseCurrentPage;
+
+        setPurchaseCurrentPage(
+          targetPage
+        );
+
+        setListPage(
+          (previous) => ({
+            ...previous,
+            Purchase:
+              targetPage,
+          })
+        );
+
+        await loadPurchaseBills({
+          page:
+            targetPage,
+
+          limit:
+            purchaseRowsPerPage,
+
+          filters:
+            purchaseAppliedFilters,
+
+          search:
+            purchaseSearchDebounced,
+        });
         setShowPurchaseList(true);
         setActiveSubMenu("Purchase");
 
@@ -38186,9 +48062,68 @@ await loadGroupMaster({
         setShowCreateLoadList(true);
         setActiveSubMenu("Create Load");
 
-      } else if (type === 'Settle Load') {
-        await loadSettleLoadList();
+      } else if (
+        type === "Settle Load"
+      ) {
+        const recordsAfterDelete =
+          Math.max(
+            settleLoadTotalRecords -
+            1,
+            0
+          );
+
+        const pagesAfterDelete =
+          Math.max(
+            Math.ceil(
+              recordsAfterDelete /
+              settleListRowsPerPage
+            ),
+            1
+          );
+
+        const pageAfterDelete =
+          Math.min(
+            settleLoadCurrentPage,
+            pagesAfterDelete
+          );
+
+        setSettleLoadCurrentPage(
+          pageAfterDelete
+        );
+
+        setListPage(
+          (previous) => ({
+            ...previous,
+            settleLoad:
+              pageAfterDelete,
+          })
+        );
+
+        await loadSettleLoadList({
+          page:
+            pageAfterDelete,
+
+          limit:
+            settleListRowsPerPage,
+
+          filters:
+            settleLoadAppliedFilters,
+
+          search:
+            settleLoadSearchDebounced,
+        });
+
+        setShowDashboard(false);
+        setShowSalesList(false);
+        setShowPurchaseList(false);
+        setShowCreditNoteList(false);
+        setShowDebitNoteList(false);
+        setShowCreateLoadList(false);
+
+        setShowSettleLoad(false);
         setShowSettleLoadList(true);
+
+        setActiveMenu("sales");
         setActiveSubMenu("Settle Load");
       }
 
@@ -38231,178 +48166,172 @@ await loadGroupMaster({
         </div>
 
         {/* ==================== SIDEBAR MENU ==================== */}
-       <nav className="nav-menu">
-  {Object.entries(menuItems).map(([key, menu]) => (
-    <div key={key} className="nav-item">
-      <div
-        className={`nav-header ${
-          activeMenu === key ? "active" : ""
-        }`}
-        onClick={() => {
-          handleMenuClick(key);
+        <nav className="nav-menu">
+          {Object.entries(menuItems).map(([key, menu]) => (
+            <div key={key} className="nav-item">
+              <div
+                className={`nav-header ${activeMenu === key ? "active" : ""
+                  }`}
+                onClick={() => {
+                  handleMenuClick(key);
 
-          if (key !== "reports") {
-            setExpandedReportCategory(null);
-            setSelectedReport(null);
-          }
-        }}
-      >
-        <span className="nav-icon">{menu.icon}</span>
+                  if (key !== "reports") {
+                    setExpandedReportCategory(null);
+                    setSelectedReport(null);
+                  }
+                }}
+              >
+                <span className="nav-icon">{menu.icon}</span>
 
-        <span className="nav-title">{menu.title}</span>
+                <span className="nav-title">{menu.title}</span>
 
-        <span
-          className={`nav-arrow ${
-            activeMenu === key ? "open" : ""
-          }`}
-        >
-          ⌄
-        </span>
-      </div>
-
-      {activeMenu === key && (
-        <div className="nav-submenu">
-          {menu.items.map((item, idx) => {
-            /*
-             * Special nested layout only for Reports.
-             */
-            if (key === "reports") {
-              const childReports =
-                reportMenuItems[item] || [];
-
-              const isCategoryOpen =
-                expandedReportCategory === item;
-
-              return (
-                <div
-                  key={item}
-                  className="nav-subitem-wrapper report-menu-group"
-                >
-                  <div
-                    className={`nav-subitem report-category-row ${
-                      isCategoryOpen ? "active" : ""
+                <span
+                  className={`nav-arrow ${activeMenu === key ? "open" : ""
                     }`}
-                    onClick={() =>
-                      handleReportCategoryClick(item)
+                >
+                  ⌄
+                </span>
+              </div>
+
+              {activeMenu === key && (
+                <div className="nav-submenu">
+                  {menu.items.map((item, idx) => {
+                    /*
+                     * Special nested layout only for Reports.
+                     */
+                    if (key === "reports") {
+                      const childReports =
+                        reportMenuItems[item] || [];
+
+                      const isCategoryOpen =
+                        expandedReportCategory === item;
+
+                      return (
+                        <div
+                          key={item}
+                          className="nav-subitem-wrapper report-menu-group"
+                        >
+                          <div
+                            className={`nav-subitem report-category-row ${isCategoryOpen ? "active" : ""
+                              }`}
+                            onClick={() =>
+                              handleReportCategoryClick(item)
+                            }
+                          >
+                            <span className="submenu-text">
+                              {item}
+                            </span>
+
+                            <span
+                              className={`report-menu-arrow ${isCategoryOpen ? "open" : ""
+                                }`}
+                            >
+                              <ChevronRight size={16} />
+                            </span>
+                          </div>
+
+                          {isCategoryOpen && (
+                            <div className="report-subreport-list">
+                              {childReports.length > 0 ? (
+                                childReports.map((reportName) => (
+                                  <button
+                                    key={reportName}
+                                    type="button"
+                                    className={`report-subreport-item ${selectedReport === reportName
+                                      ? "active"
+                                      : ""
+                                      }`}
+                                    onClick={(event) => {
+                                      event.stopPropagation();
+                                      handleReportClick(reportName);
+                                    }}
+                                  >
+                                    <span className="report-subreport-dot" />
+
+                                    <span>{reportName}</span>
+                                  </button>
+                                ))
+                              ) : (
+                                <div className="report-subreport-empty">
+                                  No GST reports added
+                                </div>
+                              )}
+                            </div>
+                          )}
+                        </div>
+                      );
                     }
-                  >
-                    <span className="submenu-text">
-                      {item}
-                    </span>
 
-                    <span
-                      className={`report-menu-arrow ${
-                        isCategoryOpen ? "open" : ""
-                      }`}
-                    >
-                      <ChevronRight size={16} />
-                    </span>
-                  </div>
-
-                  {isCategoryOpen && (
-                    <div className="report-subreport-list">
-                      {childReports.length > 0 ? (
-                        childReports.map((reportName) => (
-                          <button
-                            key={reportName}
-                            type="button"
-                            className={`report-subreport-item ${
-                              selectedReport === reportName
-                                ? "active"
-                                : ""
+                    /*
+                     * Existing handling for every other menu.
+                     */
+                    return (
+                      <div
+                        key={idx}
+                        className="nav-subitem-wrapper"
+                      >
+                        <div
+                          className={`nav-subitem ${activeSubMenu === item ? "active" : ""
                             }`}
-                            onClick={(event) => {
-                              event.stopPropagation();
-                              handleReportClick(reportName);
+                        >
+                          <span
+                            className="submenu-text"
+                            onClick={() => {
+                              handleSubMenuClick(item);
+
+                              if (activeMenu === "transactions") {
+                                setActiveTransactionMenu(item);
+
+                                setTransactionFormMode((prev) => ({
+                                  ...prev,
+                                  [item]: false,
+                                }));
+
+                                return;
+                              }
+
+                              setTransactionFormMode((prev) => ({
+                                ...prev,
+                                [item]: false,
+                              }));
                             }}
                           >
-                            <span className="report-subreport-dot" />
+                            {item}
+                          </span>
 
-                            <span>{reportName}</span>
-                          </button>
-                        ))
-                      ) : (
-                        <div className="report-subreport-empty">
-                          No GST reports added
+                          <span
+                            className="plus-icon"
+                            onClick={(event) => {
+                              event.stopPropagation();
+
+                              if (activeMenu === "transactions") {
+                                setShowDashboard(false);
+                                setActiveSubMenu(item);
+                                setOpenFormFor(null);
+                                setActiveTransactionMenu(item);
+
+                                setTransactionFormMode((prev) => ({
+                                  ...prev,
+                                  [item]: true,
+                                }));
+
+                                return;
+                              }
+
+                              handlePlusClick(item, event);
+                            }}
+                          >
+                            +
+                          </span>
                         </div>
-                      )}
-                    </div>
-                  )}
+                      </div>
+                    );
+                  })}
                 </div>
-              );
-            }
-
-            /*
-             * Existing handling for every other menu.
-             */
-            return (
-              <div
-                key={idx}
-                className="nav-subitem-wrapper"
-              >
-                <div
-                  className={`nav-subitem ${
-                    activeSubMenu === item ? "active" : ""
-                  }`}
-                >
-                  <span
-                    className="submenu-text"
-                    onClick={() => {
-                      handleSubMenuClick(item);
-
-                      if (activeMenu === "transactions") {
-                        setActiveTransactionMenu(item);
-
-                        setTransactionFormMode((prev) => ({
-                          ...prev,
-                          [item]: false,
-                        }));
-
-                        return;
-                      }
-
-                      setTransactionFormMode((prev) => ({
-                        ...prev,
-                        [item]: false,
-                      }));
-                    }}
-                  >
-                    {item}
-                  </span>
-
-                  <span
-                    className="plus-icon"
-                    onClick={(event) => {
-                      event.stopPropagation();
-
-                      if (activeMenu === "transactions") {
-                        setShowDashboard(false);
-                        setActiveSubMenu(item);
-                        setOpenFormFor(null);
-                        setActiveTransactionMenu(item);
-
-                        setTransactionFormMode((prev) => ({
-                          ...prev,
-                          [item]: true,
-                        }));
-
-                        return;
-                      }
-
-                      handlePlusClick(item, event);
-                    }}
-                  >
-                    +
-                  </span>
-                </div>
-              </div>
-            );
-          })}
-        </div>
-      )}
-    </div>
-  ))}
-</nav>
+              )}
+            </div>
+          ))}
+        </nav>
 
         {/* ==================== SIDEBAR BOTTOM ==================== */}
         <div className="lovable-sidebar-bottom">
@@ -38455,9 +48384,129 @@ await loadGroupMaster({
             <Search size={18} />
 
             <input
-              type="search"
-              placeholder="Search invoices, customers, products..."
-              aria-label="Search invoices, customers and products"
+              type="text"
+              placeholder={
+                activeSubMenu === "Purchase"
+                  ? "Search bill, supplier, company..."
+                  : activeSubMenu === "Quotation"
+                    ? "Search quotations..."
+                    : "Search invoices, customers, products..."
+              }
+              value={
+                activeSubMenu === "Purchase"
+                  ? purchaseAdvancedFilters.search || ""
+                  : activeSubMenu === "Quotation"
+                    ? quotationAdvancedFilters
+                      .invoiceSearch || ""
+                    : activeSubMenu === "Billing"
+                      ? salesAdvancedFilters
+                        .invoiceSearch || ""
+                      : ""
+              }
+              onChange={(event) => {
+                const value =
+                  event.target.value;
+
+                /* PURCHASE SEARCH */
+                if (
+                  activeSubMenu === "Purchase"
+                ) {
+                  setPurchaseAdvancedFilters(
+                    (previous) => ({
+                      ...previous,
+                      search: value,
+                    })
+                  );
+
+                  setPurchaseAppliedFilters(
+                    (previous) => ({
+                      ...previous,
+                      search: value,
+                    })
+                  );
+
+                  setPurchaseSearchDebounced(
+                    value.trim()
+                  );
+
+                  setPurchaseCurrentPage(1);
+
+                  setListPage(
+                    (previous) => ({
+                      ...previous,
+                      Purchase: 1,
+                    })
+                  );
+
+                  return;
+                }
+
+                /* QUOTATION SEARCH */
+                if (
+                  activeSubMenu === "Quotation"
+                ) {
+                  setQuotationAdvancedFilters(
+                    (previous) => ({
+                      ...previous,
+                      invoiceSearch: value,
+                    })
+                  );
+
+                  setQuotationAppliedFilters(
+                    (previous) => ({
+                      ...previous,
+                      invoiceSearch: value,
+                    })
+                  );
+
+                  setQuotationSearchDebounced(
+                    value.trim()
+                  );
+
+                  setQuotationCurrentPage(1);
+
+                  setListPage(
+                    (previous) => ({
+                      ...previous,
+                      quotation: 1,
+                    })
+                  );
+
+                  return;
+                }
+
+                /* SALES SEARCH */
+                if (
+                  activeSubMenu === "Billing"
+                ) {
+                  setSalesAdvancedFilters(
+                    (previous) => ({
+                      ...previous,
+                      invoiceSearch: value,
+                    })
+                  );
+
+                  setSalesAppliedFilters(
+                    (previous) => ({
+                      ...previous,
+                      invoiceSearch: value,
+                    })
+                  );
+
+                  setSalesSearchDebounced(
+                    value.trim()
+                  );
+
+                  setSalesCurrentPage(1);
+
+                  setListPage(
+                    (previous) => ({
+                      ...previous,
+                      Billing: 1,
+                    })
+                  );
+                }
+              }}
             />
 
             <kbd>⌘K</kbd>
@@ -38586,21 +48635,21 @@ await loadGroupMaster({
 
         <div className="content-body">
           {activeMenu === "reports" &&
-  selectedReport &&
-  openFormFor === "Report" && (
-    <Report
-      selectedReport={selectedReport}
-      companies={companies}
-      accounts={accounts}
-      products={products}
-      godowns={godowns}
-      onBack={() => {
-        setSelectedReport(null);
-        setOpenFormFor(null);
-        setActiveSubMenu(expandedReportCategory);
-      }}
-    />
-  )}
+            selectedReport &&
+            openFormFor === "Report" && (
+              <Report
+                selectedReport={selectedReport}
+                companies={companies}
+                accounts={accounts}
+                products={products}
+                godowns={godowns}
+                onBack={() => {
+                  setSelectedReport(null);
+                  setOpenFormFor(null);
+                  setActiveSubMenu(expandedReportCategory);
+                }}
+              />
+            )}
 
           {activeSubMenu === 'GoDown Master' && openFormFor === 'GoDown Master' && (
             <div className="compact-master-page">
@@ -38714,9 +48763,22 @@ await loadGroupMaster({
                     <Search size={17} />
                     <input
                       type="text"
-                      value={filters.godown || ''}
+                      value={
+                        filters.godown || ""
+                      }
                       placeholder="Search godowns..."
-                      onChange={(e) => setFilters({ ...filters, godown: e.target.value })}
+                      disabled={
+                        godownMasterLoading
+                      }
+                      onChange={(event) => {
+                        setFilters(
+                          (previousFilters) => ({
+                            ...previousFilters,
+                            godown:
+                              event.target.value,
+                          })
+                        );
+                      }}
                     />
                   </div>
 
@@ -38777,49 +48839,127 @@ await loadGroupMaster({
                       </tr>
                     </thead>
                     <tbody>
-                      {getFilteredGodowns().length > 0 ? (
-                        getFilteredGodowns().map((godown, index) => (
-                          <tr key={godown._id || godown.id || index}>
-                            <td className="firm-ui-sno-column">{index + 1}</td>
-                            <td><strong>{godown.code || godown.godownCode || '-'}</strong></td>
-                            <td>{godown.name || godown.godownName || '-'}</td>
-                            <td>{godown.address || '-'}</td>
-                            <td>{godown.location || '-'}</td>
-                            <td>
-                              <span className={`firm-ui-status-badge ${godown.isActive !== false ? 'active' : 'inactive'}`}>
-                                {godown.isActive !== false ? 'Active' : 'Inactive'}
-                              </span>
-                            </td>
-                            <td className="firm-ui-action-column">
-                              <div className="firm-ui-row-actions">
-                                <button
-                                  type="button"
-                                  className="firm-ui-action-btn view"
-                                  title="View godown"
-                                  onClick={() => viewGodown(godown)}
-                                >
-                                  <Eye size={15} />
-                                </button>
-                                <button
-                                  type="button"
-                                  className="firm-ui-action-btn edit"
-                                  title="Edit godown"
-                                  onClick={() => editGodown(godown)}
-                                >
-                                  <Pencil size={15} />
-                                </button>
-                                <button
-                                  type="button"
-                                  className="firm-ui-action-btn delete"
-                                  title="Delete godown"
-                                  onClick={() => deleteGodown(godown._id || godown.id)}
-                                >
-                                  <Trash2 size={15} />
-                                </button>
+                      {godownMasterLoading ? (
+                        <tr>
+                          <td colSpan={7}>
+                            <div className="firm-ui-empty-state">
+                              <div className="firm-ui-empty-icon">
+                                <RefreshCw
+                                  size={27}
+                                  className="spin"
+                                />
                               </div>
-                            </td>
-                          </tr>
-                        ))
+
+                              <h3>
+                                Loading godowns...
+                              </h3>
+
+                              <p>
+                                Please wait while the godown
+                                records are loaded.
+                              </p>
+                            </div>
+                          </td>
+                        </tr>
+                      ) : getFilteredGodowns()
+                        .length > 0 ? (
+                        getFilteredGodowns().map(
+                          (godown, index) => (
+                            <tr
+                              key={
+                                godown._id ||
+                                godown.id ||
+                                index
+                              }
+                            >
+                              <td className="firm-ui-sno-column">
+                                {godown.srNo ||
+                                  (godownCurrentPage - 1) *
+                                  godownRowsPerPage +
+                                  index +
+                                  1}
+                              </td>
+
+                              <td>
+                                <strong>
+                                  {godown.code ||
+                                    godown.godownCode ||
+                                    "-"}
+                                </strong>
+                              </td>
+
+                              <td>
+                                {godown.name ||
+                                  godown.godownName ||
+                                  "-"}
+                              </td>
+
+                              <td>
+                                {godown.address ||
+                                  "-"}
+                              </td>
+
+                              <td>
+                                {godown.location ||
+                                  "-"}
+                              </td>
+
+                              <td>
+                                <span
+                                  className={`firm-ui-status-badge ${godown.isActive !==
+                                    false
+                                    ? "active"
+                                    : "inactive"
+                                    }`}
+                                >
+                                  {godown.isActive !==
+                                    false
+                                    ? "Active"
+                                    : "Inactive"}
+                                </span>
+                              </td>
+
+                              <td className="firm-ui-action-column">
+                                <div className="firm-ui-row-actions">
+                                  <button
+                                    type="button"
+                                    className="firm-ui-action-btn view"
+                                    title="View godown"
+                                    onClick={() =>
+                                      viewGodown(godown)
+                                    }
+                                  >
+                                    <Eye size={15} />
+                                  </button>
+
+                                  <button
+                                    type="button"
+                                    className="firm-ui-action-btn edit"
+                                    title="Edit godown"
+                                    onClick={() =>
+                                      editGodown(godown)
+                                    }
+                                  >
+                                    <Pencil size={15} />
+                                  </button>
+
+                                  <button
+                                    type="button"
+                                    className="firm-ui-action-btn delete"
+                                    title="Delete godown"
+                                    onClick={() =>
+                                      deleteGodown(
+                                        godown
+                                      )
+                                    }
+                                  >
+                                    <Trash2 size={15} />
+                                  </button>
+                                </div>
+                              </td>
+                            </tr>
+                          )
+                        )
                       ) : (
                         <tr>
                           <td colSpan={7}>
@@ -38827,20 +48967,36 @@ await loadGroupMaster({
                               <div className="firm-ui-empty-icon">
                                 <Warehouse size={27} />
                               </div>
-                              <h3>No godowns found</h3>
+
+                              <h3>
+                                No godowns found
+                              </h3>
+
                               <p>
-                                {filters.godown
-                                  ? 'No godown matches the entered search.'
-                                  : 'Add your first godown to start managing.'}
+                                {godownBackendSearch
+                                  ? "No godown matches the entered search."
+                                  : "Add your first godown to start managing."}
                               </p>
-                              {!filters.godown && (
+
+                              {!godownBackendSearch && (
                                 <button
                                   type="button"
                                   className="firm-ui-btn firm-ui-btn-primary"
                                   onClick={() => {
-                                    setEditGodownId(null);
-                                    setGodownForm({ code: '', name: '', address: '', location: '' });
-                                    setOpenFormFor('GoDown Master');
+                                    setEditGodownId(
+                                      null
+                                    );
+
+                                    setGodownForm({
+                                      code: "",
+                                      name: "",
+                                      address: "",
+                                      location: "",
+                                    });
+
+                                    setOpenFormFor(
+                                      "GoDown Master"
+                                    );
                                   }}
                                 >
                                   <Plus size={16} />
@@ -38854,19 +49010,173 @@ await loadGroupMaster({
                     </tbody>
                   </table>
                 </div>
-
                 <div className="firm-ui-table-footer">
-                  <span>
-                    Showing <strong>{getFilteredGodowns().length ? 1 : 0}</strong> to{' '}
-                    <strong>{getFilteredGodowns().length}</strong> of{' '}
-                    <strong>{godowns.length}</strong> entries
-                  </span>
+                  <div className="firm-ui-footer-info">
+                    <span>
+                      Showing{" "}
+                      <strong>
+                        {godownStartRecord}
+                      </strong>{" "}
+                      to{" "}
+                      <strong>
+                        {godownEndRecord}
+                      </strong>{" "}
+                      of{" "}
+                      <strong>
+                        {godownTotalRecords}
+                      </strong>{" "}
+                      entries
+                    </span>
+
+                    <div className="firm-ui-page-size">
+                      <span>
+                        Rows per page:
+                      </span>
+
+                      <select
+                        value={
+                          godownRowsPerPage
+                        }
+                        disabled={
+                          godownMasterLoading
+                        }
+                        onChange={(event) => {
+                          setGodownRowsPerPage(
+                            Number(
+                              event.target.value
+                            )
+                          );
+
+                          setGodownCurrentPage(
+                            1
+                          );
+                        }}
+                      >
+                        <option value={10}>
+                          10
+                        </option>
+
+                        <option value={20}>
+                          20
+                        </option>
+
+                        <option value={50}>
+                          50
+                        </option>
+
+                        <option value={100}>
+                          100
+                        </option>
+                      </select>
+                    </div>
+                  </div>
+
                   <div className="firm-ui-pagination">
-                    <button type="button" disabled>
+                    <button
+                      type="button"
+                      title="Previous page"
+                      disabled={
+                        godownMasterLoading ||
+                        godownCurrentPage <= 1
+                      }
+                      onClick={() =>
+                        setGodownCurrentPage(
+                          (previousPage) =>
+                            Math.max(
+                              previousPage - 1,
+                              1
+                            )
+                        )
+                      }
+                    >
                       <ChevronLeft size={16} />
                     </button>
-                    <button type="button" className="active">1</button>
-                    <button type="button" disabled>
+
+                    {Array.from(
+                      {
+                        length:
+                          godownTotalPages,
+                      },
+                      (_, index) =>
+                        index + 1
+                    )
+                      .filter((pageNumber) => {
+                        return (
+                          pageNumber === 1 ||
+                          pageNumber ===
+                          godownTotalPages ||
+                          Math.abs(
+                            pageNumber -
+                            godownCurrentPage
+                          ) <= 2
+                        );
+                      })
+                      .map(
+                        (
+                          pageNumber,
+                          index,
+                          visiblePages
+                        ) => {
+                          const previousVisiblePage =
+                            visiblePages[
+                            index - 1
+                            ];
+
+                          return (
+                            <React.Fragment
+                              key={pageNumber}
+                            >
+                              {previousVisiblePage &&
+                                pageNumber -
+                                previousVisiblePage >
+                                1 && (
+                                  <span className="firm-ui-pagination-dots">
+                                    ...
+                                  </span>
+                                )}
+
+                              <button
+                                type="button"
+                                disabled={
+                                  godownMasterLoading
+                                }
+                                className={
+                                  godownCurrentPage ===
+                                    pageNumber
+                                    ? "active"
+                                    : ""
+                                }
+                                onClick={() =>
+                                  setGodownCurrentPage(
+                                    pageNumber
+                                  )
+                                }
+                              >
+                                {pageNumber}
+                              </button>
+                            </React.Fragment>
+                          );
+                        }
+                      )}
+
+                    <button
+                      type="button"
+                      title="Next page"
+                      disabled={
+                        godownMasterLoading ||
+                        godownCurrentPage >=
+                        godownTotalPages
+                      }
+                      onClick={() =>
+                        setGodownCurrentPage(
+                          (previousPage) =>
+                            Math.min(
+                              previousPage + 1,
+                              godownTotalPages
+                            )
+                        )
+                      }
+                    >
                       <ChevronRight size={16} />
                     </button>
                   </div>
@@ -38878,24 +49188,37 @@ await loadGroupMaster({
           {showSettleLoadList &&
             activeSubMenu === "Settle Load" &&
             (() => {
-              const normalizedSearch = settleLoadSearch
-                .trim()
-                .toLowerCase();
 
-              const filteredRows = settleLoadListData.filter(
-                (item) =>
-                  [
-                    item.loadDate,
-                    item.loadSeries,
-                    item.loadNo,
-                    item.settlementDate,
-                    item.status,
-                  ].some((value) =>
-                    String(value || "")
-                      .toLowerCase()
-                      .includes(normalizedSearch)
-                  )
-              );
+
+              const filteredRows =
+                Array.isArray(
+                  settleLoadListData
+                )
+                  ? settleLoadListData
+                  : [];
+
+              const pagedRows =
+                filteredRows;
+
+              const safeCurrentPage =
+                settleLoadCurrentPage;
+
+              const totalPages =
+                settleLoadTotalPages;
+
+              const showingFrom =
+                settleLoadStartRecord;
+
+              const showingTo =
+                settleLoadEndRecord;
+
+              const startIndex =
+                (
+                  settleLoadCurrentPage -
+                  1
+                ) *
+                settleListRowsPerPage;
+
 
               const totalAmount = filteredRows.reduce(
                 (total, item) =>
@@ -38917,37 +49240,6 @@ await loadGroupMaster({
                 0
               );
 
-              const currentPage = listPage.settleLoad || 1;
-
-              const totalPages = Math.max(
-                1,
-                Math.ceil(
-                  filteredRows.length / settleListRowsPerPage
-                )
-              );
-
-              const safeCurrentPage = Math.min(
-                currentPage,
-                totalPages
-              );
-
-              const pagedRows = filteredRows.slice(
-                (safeCurrentPage - 1) *
-                settleListRowsPerPage,
-                safeCurrentPage * settleListRowsPerPage
-              );
-
-              const showingFrom =
-                filteredRows.length === 0
-                  ? 0
-                  : (safeCurrentPage - 1) *
-                  settleListRowsPerPage +
-                  1;
-
-              const showingTo = Math.min(
-                safeCurrentPage * settleListRowsPerPage,
-                filteredRows.length
-              );
 
               const settleExportColumns = [
                 { key: "loadDate", label: "Load Date" },
@@ -38969,6 +49261,123 @@ await loadGroupMaster({
                 },
                 { key: "status", label: "Status" },
               ];
+
+              const updateSettleLoadFilter = (
+                field,
+                value
+              ) => {
+                setSettleLoadFilters(
+                  (previous) => ({
+                    ...previous,
+                    [field]:
+                      value,
+                  })
+                );
+              };
+
+              const openSettleLoadFilters = () => {
+                setSettleLoadFilters({
+                  ...settleLoadAppliedFilters,
+                });
+
+                setSettleLoadFiltersVisible(
+                  true
+                );
+              };
+
+              const applySettleLoadFilters = (
+                event
+              ) => {
+                event?.preventDefault?.();
+                event?.stopPropagation?.();
+
+                const nextFilters = {
+                  ...settleLoadFilters,
+                };
+
+                setSettleLoadAppliedFilters(
+                  nextFilters
+                );
+
+                setSettleLoadSearch(
+                  nextFilters.search ||
+                  ""
+                );
+
+                setSettleLoadSearchDebounced(
+                  String(
+                    nextFilters.search ||
+                    ""
+                  ).trim()
+                );
+
+                setSettleLoadCurrentPage(
+                  1
+                );
+
+                setListPage(
+                  (previous) => ({
+                    ...previous,
+                    settleLoad: 1,
+                  })
+                );
+
+                setSettleLoadFiltersVisible(
+                  false
+                );
+
+                setShowSettleLoadList(
+                  true
+                );
+
+                setActiveSubMenu(
+                  "Settle Load"
+                );
+              };
+
+              const clearSettleLoadFilters = (
+                event
+              ) => {
+                event?.preventDefault?.();
+                event?.stopPropagation?.();
+
+                const emptyFilters =
+                  createDefaultSettleLoadFilters();
+
+                setSettleLoadFilters({
+                  ...emptyFilters,
+                });
+
+                setSettleLoadAppliedFilters({
+                  ...emptyFilters,
+                });
+
+                setSettleLoadSearch("");
+                setSettleLoadSearchDebounced("");
+
+                setSettleLoadCurrentPage(
+                  1
+                );
+
+                setListPage(
+                  (previous) => ({
+                    ...previous,
+                    settleLoad: 1,
+                  })
+                );
+
+                setSettleLoadFiltersVisible(
+                  false
+                );
+
+                setShowSettleLoadList(
+                  true
+                );
+
+                setActiveSubMenu(
+                  "Settle Load"
+                );
+              };
 
               return (
                 <div className="premium-list-page settle-list-page">
@@ -39106,16 +49515,17 @@ await loadGroupMaster({
 
                         <input
                           type="text"
-                          placeholder="Search load series, load number, status..."
-                          value={settleLoadSearch}
-                          onChange={(event) => {
-                            setSettleLoadSearch(event.target.value);
-
-                            setListPage((previous) => ({
-                              ...previous,
-                              settleLoad: 1,
-                            }));
-                          }}
+                          placeholder="Search load, receipt, party, status..."
+                          value={
+                            settleLoadFilters.search ||
+                            ""
+                          }
+                          onChange={(event) =>
+                            updateSettleLoadFilter(
+                              "search",
+                              event.target.value
+                            )
+                          }
                         />
                       </div>
 
@@ -39152,7 +49562,27 @@ await loadGroupMaster({
                         </thead>
 
                         <tbody>
-                          {pagedRows.length === 0 ? (
+                          {settleLoadListLoading ? (
+                            <tr>
+                              <td
+                                colSpan={11}
+                                className="premium-empty-row"
+                              >
+                                <RefreshCw
+                                  size={30}
+                                  className="sales-list-loading-icon"
+                                />
+
+                                <strong>
+                                  Loading settle loads...
+                                </strong>
+
+                                <span>
+                                  Please wait while records are loaded.
+                                </span>
+                              </td>
+                            </tr>
+                          ) : pagedRows.length === 0 ? (
                             <tr>
                               <td
                                 colSpan={11}
@@ -39162,209 +49592,306 @@ await loadGroupMaster({
                               </td>
                             </tr>
                           ) : (
-                            pagedRows.map((item, index) => (
-                              <tr key={item._id || item.id || index}>
-                                <td className="serial-column">
-                                  {(safeCurrentPage - 1) *
-                                    settleListRowsPerPage +
-                                    index +
-                                    1}
-                                </td>
+                            pagedRows.map((item, index) => {
+                              const serialNumber =
+                                item.serialNumber ||
+                                startIndex +
+                                index +
+                                1;
 
-                                <td>{item.loadDate || "-"}</td>
+                              return (
+                                <tr key={item._id || item.id || index}>
+                                  <td className="serial-column">
+                                    {serialNumber}
+                                  </td>
 
-                                <td>
-                                  <span className="premium-list-series">
-                                    {item.loadSeries || "-"}
-                                  </span>
-                                </td>
+                                  <td>{item.loadDate || "-"}</td>
 
-                                <td>
-                                  <strong className="premium-list-number">
-                                    {item.loadNo || "-"}
-                                  </strong>
-                                </td>
+                                  <td>
+                                    <span className="premium-list-series">
+                                      {item.loadSeries || "-"}
+                                    </span>
+                                  </td>
 
-                                <td>{item.settlementDate || "-"}</td>
+                                  <td>
+                                    <strong className="premium-list-number">
+                                      {item.loadNo || "-"}
+                                    </strong>
+                                  </td>
 
-                                <td className="center-column">
-                                  {item.totalBills || 0}
-                                </td>
+                                  <td>{item.settlementDate || "-"}</td>
 
-                                <td className="numeric-column">
-                                  ₹{" "}
-                                  {Number(
-                                    item.totalAmount || 0
-                                  ).toLocaleString("en-IN", {
-                                    minimumFractionDigits: 2,
-                                    maximumFractionDigits: 2,
-                                  })}
-                                </td>
+                                  <td className="center-column">
+                                    {item.totalBills || 0}
+                                  </td>
 
-                                <td className="numeric-column receipt-amount">
-                                  ₹{" "}
-                                  {Number(
-                                    item.totalReceiptAmount || 0
-                                  ).toLocaleString("en-IN", {
-                                    minimumFractionDigits: 2,
-                                    maximumFractionDigits: 2,
-                                  })}
-                                </td>
+                                  <td className="numeric-column">
+                                    ₹{" "}
+                                    {Number(
+                                      item.totalAmount || 0
+                                    ).toLocaleString("en-IN", {
+                                      minimumFractionDigits: 2,
+                                      maximumFractionDigits: 2,
+                                    })}
+                                  </td>
 
-                                <td className="numeric-column pending-amount">
-                                  ₹{" "}
-                                  {Number(
-                                    item.totalPendingAmount || 0
-                                  ).toLocaleString("en-IN", {
-                                    minimumFractionDigits: 2,
-                                    maximumFractionDigits: 2,
-                                  })}
-                                </td>
+                                  <td className="numeric-column receipt-amount">
+                                    ₹{" "}
+                                    {Number(
+                                      item.totalReceiptAmount || 0
+                                    ).toLocaleString("en-IN", {
+                                      minimumFractionDigits: 2,
+                                      maximumFractionDigits: 2,
+                                    })}
+                                  </td>
 
-                                <td>
-                                  <span className="premium-list-status settled">
-                                    {item.status || "SETTLED"}
-                                  </span>
-                                </td>
+                                  <td className="numeric-column pending-amount">
+                                    ₹{" "}
+                                    {Number(
+                                      item.totalPendingAmount || 0
+                                    ).toLocaleString("en-IN", {
+                                      minimumFractionDigits: 2,
+                                      maximumFractionDigits: 2,
+                                    })}
+                                  </td>
 
-                                <td className="premium-list-actions-column">
-                                  <div className="premium-list-actions">
-                                    <button
-                                      type="button"
-                                      className="premium-list-icon-button view"
-                                      title="View Settlement"
-                                      onClick={() =>
-                                        viewSettleLoadRecord?.(
-                                          item._id || item.id
-                                        )
-                                      }
-                                    >
-                                      <Eye size={14} />
-                                    </button>
+                                  <td>
+                                    <span className="premium-list-status settled">
+                                      {item.status || "SETTLED"}
+                                    </span>
+                                  </td>
 
-                                    <button
-                                      type="button"
-                                      className="premium-list-icon-button edit"
-                                      title="Edit Settlement"
-                                      onClick={() =>
-                                        editSettleLoadRecord(
-                                          item._id || item.id
-                                        )
-                                      }
-                                    >
-                                      <Pencil size={14} />
-                                    </button>
+                                  <td className="premium-list-actions-column">
+                                    <div className="premium-list-actions">
+                                      <button
+                                        type="button"
+                                        className="premium-list-icon-button view"
+                                        title="View Settlement"
+                                        onClick={() =>
+                                          viewSettleLoadRecord?.(
+                                            item._id || item.id
+                                          )
+                                        }
+                                      >
+                                        <Eye size={14} />
+                                      </button>
 
-                                    <button
-                                      type="button"
-                                      className="premium-list-icon-button delete"
-                                      title="Delete Settlement"
-                                      onClick={() =>
-                                        deleteSettleLoadRecord?.(
-                                          item._id || item.id
-                                        )
-                                      }
-                                    >
-                                      <Trash2 size={14} />
-                                    </button>
-                                  </div>
-                                </td>
-                              </tr>
-                            ))
+                                      <button
+                                        type="button"
+                                        className="premium-list-icon-button edit"
+                                        title="Edit Settlement"
+                                        onClick={() =>
+                                          editSettleLoadRecord(
+                                            item._id || item.id
+                                          )
+                                        }
+                                      >
+                                        <Pencil size={14} />
+                                      </button>
+
+                                      <button
+                                        type="button"
+                                        className="premium-list-icon-button delete"
+                                        title="Delete Settlement"
+                                        onClick={() =>
+                                          deleteSettleLoadRecord?.(
+                                            item._id || item.id
+                                          )
+                                        }
+                                      >
+                                        <Trash2 size={14} />
+                                      </button>
+                                    </div>
+                                  </td>
+                                </tr>
+                              );
+                            })
                           )}
                         </tbody>
                       </table>
                     </div>
 
                     <div className="premium-list-footer">
-                      <span>
-                        Showing <strong>{showingFrom}</strong> to{" "}
-                        <strong>{showingTo}</strong> of{" "}
-                        <strong>{filteredRows.length}</strong>{" "}
+                      <div>
+                        Showing{" "}
+                        <strong>
+                          {settleLoadStartRecord}
+                        </strong>{" "}
+                        to{" "}
+                        <strong>
+                          {settleLoadEndRecord}
+                        </strong>{" "}
+                        of{" "}
+                        <strong>
+                          {settleLoadTotalRecords}
+                        </strong>{" "}
                         entries
-                      </span>
+                      </div>
 
                       <div className="premium-list-pagination-wrap">
                         <select
-                          value={settleListRowsPerPage}
+                          value={
+                            settleListRowsPerPage
+                          }
+                          disabled={
+                            settleLoadListLoading
+                          }
                           onChange={(event) => {
+                            const nextLimit =
+                              Number(
+                                event.target.value
+                              );
+
                             setSettleListRowsPerPage(
-                              Number(event.target.value)
+                              nextLimit
                             );
 
-                            setListPage((previous) => ({
-                              ...previous,
-                              settleLoad: 1,
-                            }));
+                            setSettleLoadCurrentPage(
+                              1
+                            );
+
+                            setListPage(
+                              (previous) => ({
+                                ...previous,
+                                settleLoad: 1,
+                              })
+                            );
                           }}
                         >
-                          <option value={10}>10</option>
-                          <option value={20}>20</option>
-                          <option value={50}>50</option>
+                          <option value={10}>
+                            10
+                          </option>
+
+                          <option value={20}>
+                            20
+                          </option>
+
+                          <option value={50}>
+                            50
+                          </option>
+
+                          <option value={100}>
+                            100
+                          </option>
                         </select>
 
                         <div className="premium-list-pagination">
                           <button
                             type="button"
-                            disabled={safeCurrentPage === 1}
+                            title="Previous page"
+                            disabled={
+                              settleLoadListLoading ||
+                              settleLoadCurrentPage <= 1
+                            }
                             onClick={() =>
-                              setListPage((previous) => ({
-                                ...previous,
-                                settleLoad: Math.max(
-                                  1,
-                                  safeCurrentPage - 1
-                                ),
-                              }))
+                              setSettleLoadCurrentPage(
+                                (previousPage) =>
+                                  Math.max(
+                                    previousPage - 1,
+                                    1
+                                  )
+                              )
                             }
                           >
-                            <ChevronLeft size={15} />
+                            <ChevronLeft size={17} />
                           </button>
 
                           {Array.from(
-                            { length: totalPages },
-                            (_, pageIndex) => pageIndex + 1
+                            {
+                              length:
+                                settleLoadTotalPages,
+                            },
+                            (_, index) =>
+                              index + 1
                           )
-                            .slice(
-                              Math.max(0, safeCurrentPage - 3),
-                              Math.max(0, safeCurrentPage - 3) +
-                              5
+                            .filter(
+                              (pageNumber) =>
+                                pageNumber === 1 ||
+                                pageNumber ===
+                                settleLoadTotalPages ||
+                                Math.abs(
+                                  pageNumber -
+                                  settleLoadCurrentPage
+                                ) <= 2
                             )
-                            .map((pageNumber) => (
-                              <button
-                                type="button"
-                                key={pageNumber}
-                                className={
-                                  safeCurrentPage === pageNumber
-                                    ? "active"
-                                    : ""
-                                }
-                                onClick={() =>
-                                  setListPage((previous) => ({
-                                    ...previous,
-                                    settleLoad: pageNumber,
-                                  }))
-                                }
-                              >
-                                {pageNumber}
-                              </button>
-                            ))}
+                            .map(
+                              (
+                                pageNumber,
+                                index,
+                                visiblePages
+                              ) => {
+                                const previousPage =
+                                  visiblePages[
+                                  index - 1
+                                  ];
+
+                                const showDots =
+                                  previousPage &&
+                                  pageNumber -
+                                  previousPage >
+                                  1;
+
+                                return (
+                                  <React.Fragment
+                                    key={pageNumber}
+                                  >
+                                    {showDots && (
+                                      <span className="premium-sales-pagination-dots">
+                                        ...
+                                      </span>
+                                    )}
+
+                                    <button
+                                      type="button"
+                                      disabled={
+                                        settleLoadListLoading
+                                      }
+                                      className={
+                                        settleLoadCurrentPage ===
+                                          pageNumber
+                                          ? "active"
+                                          : ""
+                                      }
+                                      onClick={() => {
+                                        setSettleLoadCurrentPage(
+                                          pageNumber
+                                        );
+
+                                        setListPage(
+                                          (previous) => ({
+                                            ...previous,
+                                            settleLoad:
+                                              pageNumber,
+                                          })
+                                        );
+                                      }}
+                                    >
+                                      {pageNumber}
+                                    </button>
+                                  </React.Fragment>
+                                );
+                              }
+                            )}
 
                           <button
                             type="button"
+                            title="Next page"
                             disabled={
-                              safeCurrentPage === totalPages
+                              settleLoadListLoading ||
+                              settleLoadCurrentPage >=
+                              settleLoadTotalPages
                             }
                             onClick={() =>
-                              setListPage((previous) => ({
-                                ...previous,
-                                settleLoad: Math.min(
-                                  totalPages,
-                                  safeCurrentPage + 1
-                                ),
-                              }))
+                              setSettleLoadCurrentPage(
+                                (previousPage) =>
+                                  Math.min(
+                                    previousPage + 1,
+                                    settleLoadTotalPages
+                                  )
+                              )
                             }
                           >
-                            <ChevronRight size={15} />
+                            <ChevronRight size={17} />
                           </button>
                         </div>
                       </div>
@@ -44822,23 +55349,23 @@ await loadGroupMaster({
                     <Search size={17} />
 
                     <input
-  type="text"
-  value={filters.firm || ""}
-  placeholder="Search firms..."
-  onChange={(event) => {
-    const value = event.target.value;
+                      type="text"
+                      value={filters.firm || ""}
+                      placeholder="Search firms..."
+                      onChange={(event) => {
+                        const value = event.target.value;
 
-    setFilters((previous) => ({
-      ...previous,
-      firm: value,
-    }));
+                        setFilters((previous) => ({
+                          ...previous,
+                          firm: value,
+                        }));
 
-    /*
-     * Search results always begin on page 1.
-     */
-    setFirmCurrentPage(1);
-  }}
-/>
+                        /*
+                         * Search results always begin on page 1.
+                         */
+                        setFirmCurrentPage(1);
+                      }}
+                    />
                   </div>
 
                   <button
@@ -44911,28 +55438,28 @@ await loadGroupMaster({
                       </tr>
                     </thead>
 
-                   <tbody>
-  {firmLoading ? (
-    <tr>
-      <td colSpan={7}>
-        <div className="firm-ui-empty-state">
-          <div className="firm-ui-empty-icon">
-            <RefreshCw
-              size={25}
-              className="spin"
-            />
-          </div>
+                    <tbody>
+                      {firmLoading ? (
+                        <tr>
+                          <td colSpan={7}>
+                            <div className="firm-ui-empty-state">
+                              <div className="firm-ui-empty-icon">
+                                <RefreshCw
+                                  size={25}
+                                  className="spin"
+                                />
+                              </div>
 
-          <h3>Loading firms...</h3>
+                              <h3>Loading firms...</h3>
 
-          <p>
-            Please wait while Firm Master records are loaded.
-          </p>
-        </div>
-      </td>
-    </tr>
-  ) : getFilteredFirms().length > 0 ? (
-    getFilteredFirms().map((firm, index) => {
+                              <p>
+                                Please wait while Firm Master records are loaded.
+                              </p>
+                            </div>
+                          </td>
+                        </tr>
+                      ) : getFilteredFirms().length > 0 ? (
+                        getFilteredFirms().map((firm, index) => {
                           const firmName = String(firm.firmName || "Unnamed Firm");
                           const initials = firmName
                             .split(/\s+/)
@@ -44943,12 +55470,12 @@ await loadGroupMaster({
 
                           return (
                             <tr key={firm._id || firm.id || index}>
-                            <td className="firm-ui-sno-column">
-  {(firmCurrentPage - 1) *
-    firmRowsPerPage +
-    index +
-    1}
-</td>
+                              <td className="firm-ui-sno-column">
+                                {(firmCurrentPage - 1) *
+                                  firmRowsPerPage +
+                                  index +
+                                  1}
+                              </td>
 
                               <td>
                                 <div className="firm-ui-firm-cell">
@@ -45059,114 +55586,114 @@ await loadGroupMaster({
                   </table>
                 </div>
 
-             <div className="firm-ui-table-footer">
-  <span>
-    Showing{" "}
-    <strong>{firmStartRecord}</strong>
-    {" to "}
-    <strong>{firmEndRecord}</strong>
-    {" of "}
-    <strong>{firmTotalRecords}</strong>
-    {" entries"}
-  </span>
+                <div className="firm-ui-table-footer">
+                  <span>
+                    Showing{" "}
+                    <strong>{firmStartRecord}</strong>
+                    {" to "}
+                    <strong>{firmEndRecord}</strong>
+                    {" of "}
+                    <strong>{firmTotalRecords}</strong>
+                    {" entries"}
+                  </span>
 
-  <div className="firm-ui-pagination">
-    <button
-      type="button"
-      title="Previous page"
-      disabled={
-        firmLoading ||
-        firmCurrentPage <= 1
-      }
-      onClick={() =>
-        setFirmCurrentPage(
-          (previous) =>
-            Math.max(previous - 1, 1)
-        )
-      }
-    >
-      <ChevronLeft size={16} />
-    </button>
+                  <div className="firm-ui-pagination">
+                    <button
+                      type="button"
+                      title="Previous page"
+                      disabled={
+                        firmLoading ||
+                        firmCurrentPage <= 1
+                      }
+                      onClick={() =>
+                        setFirmCurrentPage(
+                          (previous) =>
+                            Math.max(previous - 1, 1)
+                        )
+                      }
+                    >
+                      <ChevronLeft size={16} />
+                    </button>
 
-    {Array.from(
-      {
-        length: firmTotalPages,
-      },
-      (_, index) => index + 1
-    )
-      .filter((pageNumber) => {
-        /*
-         * Display the first page, last page,
-         * current page and two nearby pages.
-         */
-        return (
-          pageNumber === 1 ||
-          pageNumber === firmTotalPages ||
-          Math.abs(
-            pageNumber - firmCurrentPage
-          ) <= 2
-        );
-      })
-      .map((pageNumber, index, visiblePages) => {
-        const previousVisiblePage =
-          visiblePages[index - 1];
+                    {Array.from(
+                      {
+                        length: firmTotalPages,
+                      },
+                      (_, index) => index + 1
+                    )
+                      .filter((pageNumber) => {
+                        /*
+                         * Display the first page, last page,
+                         * current page and two nearby pages.
+                         */
+                        return (
+                          pageNumber === 1 ||
+                          pageNumber === firmTotalPages ||
+                          Math.abs(
+                            pageNumber - firmCurrentPage
+                          ) <= 2
+                        );
+                      })
+                      .map((pageNumber, index, visiblePages) => {
+                        const previousVisiblePage =
+                          visiblePages[index - 1];
 
-        return (
-          <React.Fragment
-            key={pageNumber}
-          >
-            {previousVisiblePage &&
-              pageNumber -
-                previousVisiblePage >
-                1 && (
-                <span
-                  className="firm-ui-pagination-dots"
-                >
-                  ...
-                </span>
-              )}
+                        return (
+                          <React.Fragment
+                            key={pageNumber}
+                          >
+                            {previousVisiblePage &&
+                              pageNumber -
+                              previousVisiblePage >
+                              1 && (
+                                <span
+                                  className="firm-ui-pagination-dots"
+                                >
+                                  ...
+                                </span>
+                              )}
 
-            <button
-              type="button"
-              disabled={firmLoading}
-              className={
-                firmCurrentPage === pageNumber
-                  ? "active"
-                  : ""
-              }
-              onClick={() =>
-                setFirmCurrentPage(
-                  pageNumber
-                )
-              }
-            >
-              {pageNumber}
-            </button>
-          </React.Fragment>
-        );
-      })}
+                            <button
+                              type="button"
+                              disabled={firmLoading}
+                              className={
+                                firmCurrentPage === pageNumber
+                                  ? "active"
+                                  : ""
+                              }
+                              onClick={() =>
+                                setFirmCurrentPage(
+                                  pageNumber
+                                )
+                              }
+                            >
+                              {pageNumber}
+                            </button>
+                          </React.Fragment>
+                        );
+                      })}
 
-    <button
-      type="button"
-      title="Next page"
-      disabled={
-        firmLoading ||
-        firmCurrentPage >= firmTotalPages
-      }
-      onClick={() =>
-        setFirmCurrentPage(
-          (previous) =>
-            Math.min(
-              previous + 1,
-              firmTotalPages
-            )
-        )
-      }
-    >
-      <ChevronRight size={16} />
-    </button>
-  </div>
-</div>
+                    <button
+                      type="button"
+                      title="Next page"
+                      disabled={
+                        firmLoading ||
+                        firmCurrentPage >= firmTotalPages
+                      }
+                      onClick={() =>
+                        setFirmCurrentPage(
+                          (previous) =>
+                            Math.min(
+                              previous + 1,
+                              firmTotalPages
+                            )
+                        )
+                      }
+                    >
+                      <ChevronRight size={16} />
+                    </button>
+                  </div>
+                </div>
               </div>
             </div>
           )}
@@ -45333,21 +55860,21 @@ await loadGroupMaster({
                     <div className="user-ui-search-box">
                       <Search size={17} />
 
-                     <input
-  type="text"
-  value={filters.user || ""}
-  placeholder="Search users..."
-  onChange={(event) => {
-    const value = event.target.value;
+                      <input
+                        type="text"
+                        value={filters.user || ""}
+                        placeholder="Search users..."
+                        onChange={(event) => {
+                          const value = event.target.value;
 
-    setFilters((previous) => ({
-      ...previous,
-      user: value,
-    }));
+                          setFilters((previous) => ({
+                            ...previous,
+                            user: value,
+                          }));
 
-    setUserCurrentPage(1);
-  }}
-/>
+                          setUserCurrentPage(1);
+                        }}
+                      />
                     </div>
 
                     <button
@@ -45447,38 +55974,38 @@ await loadGroupMaster({
                       </thead>
 
                       <tbody>
-  {userLoading ? (
-    <tr>
-      <td colSpan={7}>
-        <div className="user-ui-empty-state">
-          <div className="user-ui-empty-icon">
-            <RefreshCw
-              size={25}
-              className="spin"
-            />
-          </div>
+                        {userLoading ? (
+                          <tr>
+                            <td colSpan={7}>
+                              <div className="user-ui-empty-state">
+                                <div className="user-ui-empty-icon">
+                                  <RefreshCw
+                                    size={25}
+                                    className="spin"
+                                  />
+                                </div>
 
-          <h3>Loading users...</h3>
+                                <h3>Loading users...</h3>
 
-          <p>
-            Please wait while User Master records are loaded.
-          </p>
-        </div>
-      </td>
-    </tr>
-  ) : getFilteredUsers().length > 0 ? (
-    getFilteredUsers().map((user, index) => {
+                                <p>
+                                  Please wait while User Master records are loaded.
+                                </p>
+                              </div>
+                            </td>
+                          </tr>
+                        ) : getFilteredUsers().length > 0 ? (
+                          getFilteredUsers().map((user, index) => {
                             const isUserActive =
                               user.isActive !== false;
 
                             return (
                               <tr key={user._id || user.id || index}>
-                               <td className="user-ui-sno-column">
-  {(userCurrentPage - 1) *
-    userRowsPerPage +
-    index +
-    1}
-</td>
+                                <td className="user-ui-sno-column">
+                                  {(userCurrentPage - 1) *
+                                    userRowsPerPage +
+                                    index +
+                                    1}
+                                </td>
 
                                 <td>
                                   <div className="user-ui-user-cell">
@@ -45635,114 +56162,114 @@ await loadGroupMaster({
                     </table>
                   </div>
 
-                <div className="user-ui-table-footer">
-  <span>
-    Showing{" "}
-    <strong>{userStartRecord}</strong>
-    {" to "}
-    <strong>{userEndRecord}</strong>
-    {" of "}
-    <strong>{userTotalRecords}</strong>
-    {" entries"}
-  </span>
+                  <div className="user-ui-table-footer">
+                    <span>
+                      Showing{" "}
+                      <strong>{userStartRecord}</strong>
+                      {" to "}
+                      <strong>{userEndRecord}</strong>
+                      {" of "}
+                      <strong>{userTotalRecords}</strong>
+                      {" entries"}
+                    </span>
 
-  <div className="user-ui-pagination">
-    <button
-      type="button"
-      title="Previous page"
-      disabled={
-        userLoading ||
-        userCurrentPage <= 1
-      }
-      onClick={() =>
-        setUserCurrentPage(
-          (previous) =>
-            Math.max(previous - 1, 1)
-        )
-      }
-    >
-      <ChevronLeft size={16} />
-    </button>
+                    <div className="user-ui-pagination">
+                      <button
+                        type="button"
+                        title="Previous page"
+                        disabled={
+                          userLoading ||
+                          userCurrentPage <= 1
+                        }
+                        onClick={() =>
+                          setUserCurrentPage(
+                            (previous) =>
+                              Math.max(previous - 1, 1)
+                          )
+                        }
+                      >
+                        <ChevronLeft size={16} />
+                      </button>
 
-    {Array.from(
-      {
-        length: userTotalPages,
-      },
-      (_, index) => index + 1
-    )
-      .filter((pageNumber) => {
-        return (
-          pageNumber === 1 ||
-          pageNumber === userTotalPages ||
-          Math.abs(
-            pageNumber - userCurrentPage
-          ) <= 2
-        );
-      })
-      .map(
-        (
-          pageNumber,
-          index,
-          visiblePages
-        ) => {
-          const previousVisiblePage =
-            visiblePages[index - 1];
+                      {Array.from(
+                        {
+                          length: userTotalPages,
+                        },
+                        (_, index) => index + 1
+                      )
+                        .filter((pageNumber) => {
+                          return (
+                            pageNumber === 1 ||
+                            pageNumber === userTotalPages ||
+                            Math.abs(
+                              pageNumber - userCurrentPage
+                            ) <= 2
+                          );
+                        })
+                        .map(
+                          (
+                            pageNumber,
+                            index,
+                            visiblePages
+                          ) => {
+                            const previousVisiblePage =
+                              visiblePages[index - 1];
 
-          return (
-            <React.Fragment
-              key={pageNumber}
-            >
-              {previousVisiblePage &&
-                pageNumber -
-                  previousVisiblePage >
-                  1 && (
-                  <span className="user-ui-pagination-dots">
-                    ...
-                  </span>
-                )}
+                            return (
+                              <React.Fragment
+                                key={pageNumber}
+                              >
+                                {previousVisiblePage &&
+                                  pageNumber -
+                                  previousVisiblePage >
+                                  1 && (
+                                    <span className="user-ui-pagination-dots">
+                                      ...
+                                    </span>
+                                  )}
 
-              <button
-                type="button"
-                disabled={userLoading}
-                className={
-                  userCurrentPage === pageNumber
-                    ? "active"
-                    : ""
-                }
-                onClick={() =>
-                  setUserCurrentPage(
-                    pageNumber
-                  )
-                }
-              >
-                {pageNumber}
-              </button>
-            </React.Fragment>
-          );
-        }
-      )}
+                                <button
+                                  type="button"
+                                  disabled={userLoading}
+                                  className={
+                                    userCurrentPage === pageNumber
+                                      ? "active"
+                                      : ""
+                                  }
+                                  onClick={() =>
+                                    setUserCurrentPage(
+                                      pageNumber
+                                    )
+                                  }
+                                >
+                                  {pageNumber}
+                                </button>
+                              </React.Fragment>
+                            );
+                          }
+                        )}
 
-    <button
-      type="button"
-      title="Next page"
-      disabled={
-        userLoading ||
-        userCurrentPage >= userTotalPages
-      }
-      onClick={() =>
-        setUserCurrentPage(
-          (previous) =>
-            Math.min(
-              previous + 1,
-              userTotalPages
-            )
-        )
-      }
-    >
-      <ChevronRight size={16} />
-    </button>
-  </div>
-</div>
+                      <button
+                        type="button"
+                        title="Next page"
+                        disabled={
+                          userLoading ||
+                          userCurrentPage >= userTotalPages
+                        }
+                        onClick={() =>
+                          setUserCurrentPage(
+                            (previous) =>
+                              Math.min(
+                                previous + 1,
+                                userTotalPages
+                              )
+                          )
+                        }
+                      >
+                        <ChevronRight size={16} />
+                      </button>
+                    </div>
+                  </div>
                 </div>
               </div>
             )}
@@ -46278,21 +56805,21 @@ await loadGroupMaster({
                 <div className="firm-ui-list-toolbar">
                   <div className="firm-ui-search-box">
                     <Search size={17} />
-                <input
-  type="text"
-  value={filters.company || ""}
-  placeholder="Search companies..."
-  onChange={(event) => {
-    const value = event.target.value;
+                    <input
+                      type="text"
+                      value={filters.company || ""}
+                      placeholder="Search companies..."
+                      onChange={(event) => {
+                        const value = event.target.value;
 
-    setFilters((previous) => ({
-      ...previous,
-      company: value,
-    }));
+                        setFilters((previous) => ({
+                          ...previous,
+                          company: value,
+                        }));
 
-    setCompanyCurrentPage(1);
-  }}
-/>
+                        setCompanyCurrentPage(1);
+                      }}
+                    />
                   </div>
 
                   <button
@@ -46349,101 +56876,101 @@ await loadGroupMaster({
                         <th className="firm-ui-action-column">Actions</th>
                       </tr>
                     </thead>
-                  <tbody>
-  {companyLoading ? (
-    <tr>
-      <td colSpan={6}>
-        <div className="firm-ui-empty-state">
-          <div className="firm-ui-empty-icon">
-            <RefreshCw
-              size={25}
-              className="spin"
-            />
-          </div>
+                    <tbody>
+                      {companyLoading ? (
+                        <tr>
+                          <td colSpan={6}>
+                            <div className="firm-ui-empty-state">
+                              <div className="firm-ui-empty-icon">
+                                <RefreshCw
+                                  size={25}
+                                  className="spin"
+                                />
+                              </div>
 
-          <h3>Loading companies...</h3>
+                              <h3>Loading companies...</h3>
 
-          <p>
-            Please wait while Company Master records are loaded.
-          </p>
-        </div>
-      </td>
-    </tr>
-  ) : getFilteredCompanies().length > 0 ? (
-    getFilteredCompanies().map(
-      (company, index) => {
-                          const initials = String(company.name || 'C')
-                            .split(/\s+/)
-                            .filter(Boolean)
-                            .slice(0, 2)
-                            .map((word) => word.charAt(0).toUpperCase())
-                            .join('');
+                              <p>
+                                Please wait while Company Master records are loaded.
+                              </p>
+                            </div>
+                          </td>
+                        </tr>
+                      ) : getFilteredCompanies().length > 0 ? (
+                        getFilteredCompanies().map(
+                          (company, index) => {
+                            const initials = String(company.name || 'C')
+                              .split(/\s+/)
+                              .filter(Boolean)
+                              .slice(0, 2)
+                              .map((word) => word.charAt(0).toUpperCase())
+                              .join('');
 
-                          return (
-                            <tr key={company._id || company.id || index}>
-                              <td className="firm-ui-sno-column">{(companyCurrentPage - 1) *
-  companyRowsPerPage +
-  index +
-  1}</td>
-                              <td>
-                                <div className="firm-ui-firm-cell">
-                                  <div className={`firm-ui-firm-avatar avatar-${(index % 5) + 1}`}>
-                                    {initials || 'CO'}
+                            return (
+                              <tr key={company._id || company.id || index}>
+                                <td className="firm-ui-sno-column">{(companyCurrentPage - 1) *
+                                  companyRowsPerPage +
+                                  index +
+                                  1}</td>
+                                <td>
+                                  <div className="firm-ui-firm-cell">
+                                    <div className={`firm-ui-firm-avatar avatar-${(index % 5) + 1}`}>
+                                      {initials || 'CO'}
+                                    </div>
+                                    <div className="firm-ui-firm-information">
+                                      <strong>{company.code || company.companyCode || '-'}</strong>
+                                      <span>Company ID: {company._id?.slice(-6) || '-'}</span>
+                                    </div>
                                   </div>
-                                  <div className="firm-ui-firm-information">
-                                    <strong>{company.code || company.companyCode || '-'}</strong>
-                                    <span>Company ID: {company._id?.slice(-6) || '-'}</span>
+                                </td>
+                                <td>
+                                  <div className="firm-ui-location-cell">
+                                    <strong>{company.name || company.companyName || '-'}</strong>
                                   </div>
-                                </div>
-                              </td>
-                              <td>
-                                <div className="firm-ui-location-cell">
-                                  <strong>{company.name || company.companyName || '-'}</strong>
-                                </div>
-                              </td>
-                              <td>
-                                <div className="firm-ui-location-cell">
-                                  <span>{company.address || company.companyAddress || '-'}</span>
-                                </div>
-                              </td>
-                              <td>
-                                <span className={`firm-ui-status-badge ${company.isActive !== false ? 'active' : 'inactive'}`}>
-                                  {company.isActive !== false ? 'Active' : 'Inactive'}
-                                </span>
-                              </td>
-                              <td className="firm-ui-action-column">
-                                <div className="firm-ui-row-actions">
-                                  <button
-                                    type="button"
-                                    className="firm-ui-action-btn view"
-                                    title="View company"
-                                    onClick={() => viewCompany(company)}
-                                  >
-                                    <Eye size={16} />
-                                  </button>
-                                  <button
-                                    type="button"
-                                    className="firm-ui-action-btn edit"
-                                    title="Edit company"
-                                    onClick={() => editCompany(company)}
-                                  >
-                                    <Pencil size={16} />
-                                  </button>
-                                  <button
-                                    type="button"
-                                    className="firm-ui-action-btn delete"
-                                    title="Delete company"
-                                    onClick={() => deleteCompany(company)}
-                                  >
-                                    <Trash2 size={16} />
-                                  </button>
-                                </div>
-                              </td>
-                            </tr>
-                          );
-                        })
-                           
-                       ) : (
+                                </td>
+                                <td>
+                                  <div className="firm-ui-location-cell">
+                                    <span>{company.address || company.companyAddress || '-'}</span>
+                                  </div>
+                                </td>
+                                <td>
+                                  <span className={`firm-ui-status-badge ${company.isActive !== false ? 'active' : 'inactive'}`}>
+                                    {company.isActive !== false ? 'Active' : 'Inactive'}
+                                  </span>
+                                </td>
+                                <td className="firm-ui-action-column">
+                                  <div className="firm-ui-row-actions">
+                                    <button
+                                      type="button"
+                                      className="firm-ui-action-btn view"
+                                      title="View company"
+                                      onClick={() => viewCompany(company)}
+                                    >
+                                      <Eye size={16} />
+                                    </button>
+                                    <button
+                                      type="button"
+                                      className="firm-ui-action-btn edit"
+                                      title="Edit company"
+                                      onClick={() => editCompany(company)}
+                                    >
+                                      <Pencil size={16} />
+                                    </button>
+                                    <button
+                                      type="button"
+                                      className="firm-ui-action-btn delete"
+                                      title="Delete company"
+                                      onClick={() => deleteCompany(company)}
+                                    >
+                                      <Trash2 size={16} />
+                                    </button>
+                                  </div>
+                                </td>
+                              </tr>
+                            );
+                          })
+
+                      ) : (
                         <tr>
                           <td colSpan={6}>
                             <div className="firm-ui-empty-state">
@@ -46478,118 +57005,118 @@ await loadGroupMaster({
                   </table>
                 </div>
 
-            <div className="firm-ui-table-footer">
-  <span>
-    Showing{" "}
-    <strong>{companyStartRecord}</strong>
-    {" to "}
-    <strong>{companyEndRecord}</strong>
-    {" of "}
-    <strong>{companyTotalRecords}</strong>
-    {" entries"}
-  </span>
-
-  <div className="firm-ui-pagination">
-    <button
-      type="button"
-      title="Previous page"
-      disabled={
-        companyLoading ||
-        companyCurrentPage <= 1
-      }
-      onClick={() =>
-        setCompanyCurrentPage(
-          (previous) =>
-            Math.max(previous - 1, 1)
-        )
-      }
-    >
-      <ChevronLeft size={16} />
-    </button>
-
-    {Array.from(
-      {
-        length: companyTotalPages,
-      },
-      (_, index) => index + 1
-    )
-      .filter((pageNumber) => {
-        return (
-          pageNumber === 1 ||
-          pageNumber ===
-            companyTotalPages ||
-          Math.abs(
-            pageNumber -
-              companyCurrentPage
-          ) <= 2
-        );
-      })
-      .map(
-        (
-          pageNumber,
-          index,
-          visiblePages
-        ) => {
-          const previousVisiblePage =
-            visiblePages[index - 1];
-
-          return (
-            <React.Fragment
-              key={pageNumber}
-            >
-              {previousVisiblePage &&
-                pageNumber -
-                  previousVisiblePage >
-                  1 && (
-                  <span className="firm-ui-pagination-dots">
-                    ...
+                <div className="firm-ui-table-footer">
+                  <span>
+                    Showing{" "}
+                    <strong>{companyStartRecord}</strong>
+                    {" to "}
+                    <strong>{companyEndRecord}</strong>
+                    {" of "}
+                    <strong>{companyTotalRecords}</strong>
+                    {" entries"}
                   </span>
-                )}
 
-              <button
-                type="button"
-                disabled={companyLoading}
-                className={
-                  companyCurrentPage ===
-                  pageNumber
-                    ? "active"
-                    : ""
-                }
-                onClick={() =>
-                  setCompanyCurrentPage(
-                    pageNumber
-                  )
-                }
-              >
-                {pageNumber}
-              </button>
-            </React.Fragment>
-          );
-        }
-      )}
+                  <div className="firm-ui-pagination">
+                    <button
+                      type="button"
+                      title="Previous page"
+                      disabled={
+                        companyLoading ||
+                        companyCurrentPage <= 1
+                      }
+                      onClick={() =>
+                        setCompanyCurrentPage(
+                          (previous) =>
+                            Math.max(previous - 1, 1)
+                        )
+                      }
+                    >
+                      <ChevronLeft size={16} />
+                    </button>
 
-    <button
-      type="button"
-      title="Next page"
-      disabled={
-        companyLoading ||
-        companyCurrentPage >=
-          companyTotalPages
-      }
-      onClick={() =>
-        setCompanyCurrentPage(
-          (previous) =>
-            Math.min(
-              previous + 1,
-              companyTotalPages
-            )
-        )
-      }
-    >
-      <ChevronRight size={16} />
-    </button>
-  </div>
-</div>
+                    {Array.from(
+                      {
+                        length: companyTotalPages,
+                      },
+                      (_, index) => index + 1
+                    )
+                      .filter((pageNumber) => {
+                        return (
+                          pageNumber === 1 ||
+                          pageNumber ===
+                          companyTotalPages ||
+                          Math.abs(
+                            pageNumber -
+                            companyCurrentPage
+                          ) <= 2
+                        );
+                      })
+                      .map(
+                        (
+                          pageNumber,
+                          index,
+                          visiblePages
+                        ) => {
+                          const previousVisiblePage =
+                            visiblePages[index - 1];
+
+                          return (
+                            <React.Fragment
+                              key={pageNumber}
+                            >
+                              {previousVisiblePage &&
+                                pageNumber -
+                                previousVisiblePage >
+                                1 && (
+                                  <span className="firm-ui-pagination-dots">
+                                    ...
+                                  </span>
+                                )}
+
+                              <button
+                                type="button"
+                                disabled={companyLoading}
+                                className={
+                                  companyCurrentPage ===
+                                    pageNumber
+                                    ? "active"
+                                    : ""
+                                }
+                                onClick={() =>
+                                  setCompanyCurrentPage(
+                                    pageNumber
+                                  )
+                                }
+                              >
+                                {pageNumber}
+                              </button>
+                            </React.Fragment>
+                          );
+                        }
+                      )}
+
+                    <button
+                      type="button"
+                      title="Next page"
+                      disabled={
+                        companyLoading ||
+                        companyCurrentPage >=
+                        companyTotalPages
+                      }
+                      onClick={() =>
+                        setCompanyCurrentPage(
+                          (previous) =>
+                            Math.min(
+                              previous + 1,
+                              companyTotalPages
+                            )
+                        )
+                      }
+                    >
+                      <ChevronRight size={16} />
+                    </button>
+                  </div>
+                </div>
               </div>
             </div>
           )}
@@ -46699,21 +57226,21 @@ await loadGroupMaster({
                 <div className="firm-ui-list-toolbar">
                   <div className="firm-ui-search-box">
                     <Search size={17} />
-                 <input
-  type="text"
-  value={filters.group || ""}
-  placeholder="Search groups..."
-  onChange={(event) => {
-    const value = event.target.value;
+                    <input
+                      type="text"
+                      value={filters.group || ""}
+                      placeholder="Search groups..."
+                      onChange={(event) => {
+                        const value = event.target.value;
 
-    setFilters((previous) => ({
-      ...previous,
-      group: value,
-    }));
+                        setFilters((previous) => ({
+                          ...previous,
+                          group: value,
+                        }));
 
-    setGroupCurrentPage(1);
-  }}
-/>
+                        setGroupCurrentPage(1);
+                      }}
+                    />
                   </div>
 
                   <button
@@ -46767,71 +57294,71 @@ await loadGroupMaster({
                         <th className="firm-ui-action-column" style={{ width: '15%' }}>Actions</th>
                       </tr>
                     </thead>
-                   <tbody>
-  {groupLoading ? (
-    <tr>
-      <td colSpan={4}>
-        <div className="firm-ui-empty-state">
-          <div className="firm-ui-empty-icon">
-            <RefreshCw
-              size={25}
-              className="spin"
-            />
-          </div>
-
-          <h3>Loading groups...</h3>
-
-          <p>
-            Please wait while Group Master records are loaded.
-          </p>
-        </div>
-      </td>
-    </tr>
-  ) : getFilteredGroups().length > 0 ? (
-    getFilteredGroups().map(
-      (group, index) => {
-                          <tr key={group._id || group.id || index}>
-                            <td className="firm-ui-sno-column">{(groupCurrentPage - 1) *
-  groupRowsPerPage +
-  index +
-  1}</td>
-                            <td><strong>{group.code || group.groupCode || '-'}</strong></td>
-                            <td>{group.name || group.groupName || '-'}</td>
-                            <td>
-                              <span className={`firm-ui-status-badge ${group.isActive !== false ? 'active' : 'inactive'}`}>
-                                {group.isActive !== false ? 'Active' : 'Inactive'}
-                              </span>
-                            </td>
-                            <td className="firm-ui-action-column">
-                              <div className="firm-ui-row-actions">
-                                <button
-                                  type="button"
-                                  className="firm-ui-action-btn view"
-                                  title="View group"
-                                  onClick={() => viewGroup(group)}
-                                >
-                                  <Eye size={15} />
-                                </button>
-                                <button
-                                  type="button"
-                                  className="firm-ui-action-btn edit"
-                                  title="Edit group"
-                                  onClick={() => editGroup(group)}
-                                >
-                                  <Pencil size={15} />
-                                </button>
-                                <button
-                                  type="button"
-                                  className="firm-ui-action-btn delete"
-                                  title="Delete group"
-                                  onClick={() => deleteGroup(group._id || group.id)}
-                                >
-                                  <Trash2 size={15} />
-                                </button>
+                    <tbody>
+                      {groupLoading ? (
+                        <tr>
+                          <td colSpan={4}>
+                            <div className="firm-ui-empty-state">
+                              <div className="firm-ui-empty-icon">
+                                <RefreshCw
+                                  size={25}
+                                  className="spin"
+                                />
                               </div>
-                            </td>
-                          </tr>
-})
+
+                              <h3>Loading groups...</h3>
+
+                              <p>
+                                Please wait while Group Master records are loaded.
+                              </p>
+                            </div>
+                          </td>
+                        </tr>
+                      ) : getFilteredGroups().length > 0 ? (
+                        getFilteredGroups().map(
+                          (group, index) => {
+                            <tr key={group._id || group.id || index}>
+                              <td className="firm-ui-sno-column">{(groupCurrentPage - 1) *
+                                groupRowsPerPage +
+                                index +
+                                1}</td>
+                              <td><strong>{group.code || group.groupCode || '-'}</strong></td>
+                              <td>{group.name || group.groupName || '-'}</td>
+                              <td>
+                                <span className={`firm-ui-status-badge ${group.isActive !== false ? 'active' : 'inactive'}`}>
+                                  {group.isActive !== false ? 'Active' : 'Inactive'}
+                                </span>
+                              </td>
+                              <td className="firm-ui-action-column">
+                                <div className="firm-ui-row-actions">
+                                  <button
+                                    type="button"
+                                    className="firm-ui-action-btn view"
+                                    title="View group"
+                                    onClick={() => viewGroup(group)}
+                                  >
+                                    <Eye size={15} />
+                                  </button>
+                                  <button
+                                    type="button"
+                                    className="firm-ui-action-btn edit"
+                                    title="Edit group"
+                                    onClick={() => editGroup(group)}
+                                  >
+                                    <Pencil size={15} />
+                                  </button>
+                                  <button
+                                    type="button"
+                                    className="firm-ui-action-btn delete"
+                                    title="Delete group"
+                                    onClick={() => deleteGroup(group._id || group.id)}
+                                  >
+                                    <Trash2 size={15} />
+                                  </button>
+                                </div>
+                              </td>
+                            </tr>
+                          })
                       ) : (
                         <tr>
                           <td colSpan={5}>
@@ -46867,115 +57394,115 @@ await loadGroupMaster({
                   </table>
                 </div>
 
-               <div className="firm-ui-table-footer">
-  <span>
-    Showing{" "}
-    <strong>{groupStartRecord}</strong>
-    {" to "}
-    <strong>{groupEndRecord}</strong>
-    {" of "}
-    <strong>{groupTotalRecords}</strong>
-    {" entries"}
-  </span>
-
-  <div className="firm-ui-pagination">
-    <button
-      type="button"
-      title="Previous page"
-      disabled={
-        groupLoading ||
-        groupCurrentPage <= 1
-      }
-      onClick={() =>
-        setGroupCurrentPage(
-          (previous) =>
-            Math.max(previous - 1, 1)
-        )
-      }
-    >
-      <ChevronLeft size={16} />
-    </button>
-
-    {Array.from(
-      {
-        length: groupTotalPages,
-      },
-      (_, index) => index + 1
-    )
-      .filter((pageNumber) => {
-        return (
-          pageNumber === 1 ||
-          pageNumber === groupTotalPages ||
-          Math.abs(
-            pageNumber - groupCurrentPage
-          ) <= 2
-        );
-      })
-      .map(
-        (
-          pageNumber,
-          index,
-          visiblePages
-        ) => {
-          const previousVisiblePage =
-            visiblePages[index - 1];
-
-          return (
-            <React.Fragment
-              key={pageNumber}
-            >
-              {previousVisiblePage &&
-                pageNumber -
-                  previousVisiblePage >
-                  1 && (
-                  <span className="firm-ui-pagination-dots">
-                    ...
+                <div className="firm-ui-table-footer">
+                  <span>
+                    Showing{" "}
+                    <strong>{groupStartRecord}</strong>
+                    {" to "}
+                    <strong>{groupEndRecord}</strong>
+                    {" of "}
+                    <strong>{groupTotalRecords}</strong>
+                    {" entries"}
                   </span>
-                )}
 
-              <button
-                type="button"
-                disabled={groupLoading}
-                className={
-                  groupCurrentPage ===
-                  pageNumber
-                    ? "active"
-                    : ""
-                }
-                onClick={() =>
-                  setGroupCurrentPage(
-                    pageNumber
-                  )
-                }
-              >
-                {pageNumber}
-              </button>
-            </React.Fragment>
-          );
-        }
-      )}
+                  <div className="firm-ui-pagination">
+                    <button
+                      type="button"
+                      title="Previous page"
+                      disabled={
+                        groupLoading ||
+                        groupCurrentPage <= 1
+                      }
+                      onClick={() =>
+                        setGroupCurrentPage(
+                          (previous) =>
+                            Math.max(previous - 1, 1)
+                        )
+                      }
+                    >
+                      <ChevronLeft size={16} />
+                    </button>
 
-    <button
-      type="button"
-      title="Next page"
-      disabled={
-        groupLoading ||
-        groupCurrentPage >= groupTotalPages
-      }
-      onClick={() =>
-        setGroupCurrentPage(
-          (previous) =>
-            Math.min(
-              previous + 1,
-              groupTotalPages
-            )
-        )
-      }
-    >
-      <ChevronRight size={16} />
-    </button>
-  </div>
-</div>
+                    {Array.from(
+                      {
+                        length: groupTotalPages,
+                      },
+                      (_, index) => index + 1
+                    )
+                      .filter((pageNumber) => {
+                        return (
+                          pageNumber === 1 ||
+                          pageNumber === groupTotalPages ||
+                          Math.abs(
+                            pageNumber - groupCurrentPage
+                          ) <= 2
+                        );
+                      })
+                      .map(
+                        (
+                          pageNumber,
+                          index,
+                          visiblePages
+                        ) => {
+                          const previousVisiblePage =
+                            visiblePages[index - 1];
+
+                          return (
+                            <React.Fragment
+                              key={pageNumber}
+                            >
+                              {previousVisiblePage &&
+                                pageNumber -
+                                previousVisiblePage >
+                                1 && (
+                                  <span className="firm-ui-pagination-dots">
+                                    ...
+                                  </span>
+                                )}
+
+                              <button
+                                type="button"
+                                disabled={groupLoading}
+                                className={
+                                  groupCurrentPage ===
+                                    pageNumber
+                                    ? "active"
+                                    : ""
+                                }
+                                onClick={() =>
+                                  setGroupCurrentPage(
+                                    pageNumber
+                                  )
+                                }
+                              >
+                                {pageNumber}
+                              </button>
+                            </React.Fragment>
+                          );
+                        }
+                      )}
+
+                    <button
+                      type="button"
+                      title="Next page"
+                      disabled={
+                        groupLoading ||
+                        groupCurrentPage >= groupTotalPages
+                      }
+                      onClick={() =>
+                        setGroupCurrentPage(
+                          (previous) =>
+                            Math.min(
+                              previous + 1,
+                              groupTotalPages
+                            )
+                        )
+                      }
+                    >
+                      <ChevronRight size={16} />
+                    </button>
+                  </div>
+                </div>
               </div>
             </div>
           )}
@@ -47087,21 +57614,21 @@ await loadGroupMaster({
                   <div className="firm-ui-search-box">
                     <Search size={17} />
                     <input
-  type="text"
-  value={filters.category || ""}
-  placeholder="Search categories..."
-  onChange={(event) => {
-    const value =
-      event.target.value;
+                      type="text"
+                      value={filters.category || ""}
+                      placeholder="Search categories..."
+                      onChange={(event) => {
+                        const value =
+                          event.target.value;
 
-    setFilters((previous) => ({
-      ...previous,
-      category: value,
-    }));
+                        setFilters((previous) => ({
+                          ...previous,
+                          category: value,
+                        }));
 
-    setCategoryCurrentPage(1);
-  }}
-/>
+                        setCategoryCurrentPage(1);
+                      }}
+                    />
                   </div>
 
                   <button
@@ -47155,75 +57682,75 @@ await loadGroupMaster({
                         <th className="firm-ui-action-column" style={{ width: '15%' }}>Actions</th>
                       </tr>
                     </thead>
-                   <tbody>
-  {categoryLoading ? (
-    <tr>
-      <td colSpan={5}>
-        <div className="firm-ui-empty-state">
-          <div className="firm-ui-empty-icon">
-            <RefreshCw
-              size={25}
-              className="spin"
-            />
-          </div>
-
-          <h3>
-            Loading categories...
-          </h3>
-
-          <p>
-            Please wait while Category Master records are loaded.
-          </p>
-        </div>
-      </td>
-    </tr>
-  ) : getFilteredCategories().length > 0 ? (
-    getFilteredCategories().map(
-      (category, index) => (
-                          <tr key={category._id || category.id || index}>
-                           <td className="firm-ui-sno-column">
-  {(categoryCurrentPage - 1) *
-    categoryRowsPerPage +
-    index +
-    1}
-</td>
-                            <td><strong>{category.code || category.categoryCode || '-'}</strong></td>
-                            <td>{category.name || category.categoryName || '-'}</td>
-                            <td>
-                              <span className={`firm-ui-status-badge ${category.isActive !== false ? 'active' : 'inactive'}`}>
-                                {category.isActive !== false ? 'Active' : 'Inactive'}
-                              </span>
-                            </td>
-                            <td className="firm-ui-action-column">
-                              <div className="firm-ui-row-actions">
-                                <button
-                                  type="button"
-                                  className="firm-ui-action-btn view"
-                                  title="View category"
-                                  onClick={() => viewCategory(category)}
-                                >
-                                  <Eye size={15} />
-                                </button>
-                                <button
-                                  type="button"
-                                  className="firm-ui-action-btn edit"
-                                  title="Edit category"
-                                  onClick={() => editCategory(category)}
-                                >
-                                  <Pencil size={15} />
-                                </button>
-                                <button
-                                  type="button"
-                                  className="firm-ui-action-btn delete"
-                                  title="Delete category"
-                                  onClick={() => deleteCategory(category._id || category.id)}
-                                >
-                                  <Trash2 size={15} />
-                                </button>
+                    <tbody>
+                      {categoryLoading ? (
+                        <tr>
+                          <td colSpan={5}>
+                            <div className="firm-ui-empty-state">
+                              <div className="firm-ui-empty-icon">
+                                <RefreshCw
+                                  size={25}
+                                  className="spin"
+                                />
                               </div>
-                            </td>
-                          </tr>
-                        ))
+
+                              <h3>
+                                Loading categories...
+                              </h3>
+
+                              <p>
+                                Please wait while Category Master records are loaded.
+                              </p>
+                            </div>
+                          </td>
+                        </tr>
+                      ) : getFilteredCategories().length > 0 ? (
+                        getFilteredCategories().map(
+                          (category, index) => (
+                            <tr key={category._id || category.id || index}>
+                              <td className="firm-ui-sno-column">
+                                {(categoryCurrentPage - 1) *
+                                  categoryRowsPerPage +
+                                  index +
+                                  1}
+                              </td>
+                              <td><strong>{category.code || category.categoryCode || '-'}</strong></td>
+                              <td>{category.name || category.categoryName || '-'}</td>
+                              <td>
+                                <span className={`firm-ui-status-badge ${category.isActive !== false ? 'active' : 'inactive'}`}>
+                                  {category.isActive !== false ? 'Active' : 'Inactive'}
+                                </span>
+                              </td>
+                              <td className="firm-ui-action-column">
+                                <div className="firm-ui-row-actions">
+                                  <button
+                                    type="button"
+                                    className="firm-ui-action-btn view"
+                                    title="View category"
+                                    onClick={() => viewCategory(category)}
+                                  >
+                                    <Eye size={15} />
+                                  </button>
+                                  <button
+                                    type="button"
+                                    className="firm-ui-action-btn edit"
+                                    title="Edit category"
+                                    onClick={() => editCategory(category)}
+                                  >
+                                    <Pencil size={15} />
+                                  </button>
+                                  <button
+                                    type="button"
+                                    className="firm-ui-action-btn delete"
+                                    title="Delete category"
+                                    onClick={() => deleteCategory(category._id || category.id)}
+                                  >
+                                    <Trash2 size={15} />
+                                  </button>
+                                </div>
+                              </td>
+                            </tr>
+                          ))
                       ) : (
                         <tr>
                           <td colSpan={5}>
@@ -47259,130 +57786,130 @@ await loadGroupMaster({
                   </table>
                 </div>
 
-               <div className="firm-ui-table-footer">
-  <span>
-    Showing{" "}
-    <strong>
-      {categoryStartRecord}
-    </strong>
-    {" to "}
-    <strong>
-      {categoryEndRecord}
-    </strong>
-    {" of "}
-    <strong>
-      {categoryTotalRecords}
-    </strong>
-    {" entries"}
-  </span>
-
-  <div className="firm-ui-pagination">
-    <button
-      type="button"
-      title="Previous page"
-      disabled={
-        categoryLoading ||
-        categoryCurrentPage <= 1
-      }
-      onClick={() =>
-        setCategoryCurrentPage(
-          (previous) =>
-            Math.max(
-              previous - 1,
-              1
-            )
-        )
-      }
-    >
-      <ChevronLeft size={16} />
-    </button>
-
-    {Array.from(
-      {
-        length:
-          categoryTotalPages,
-      },
-      (_, index) => index + 1
-    )
-      .filter((pageNumber) => {
-        return (
-          pageNumber === 1 ||
-          pageNumber ===
-            categoryTotalPages ||
-          Math.abs(
-            pageNumber -
-              categoryCurrentPage
-          ) <= 2
-        );
-      })
-      .map(
-        (
-          pageNumber,
-          index,
-          visiblePages
-        ) => {
-          const previousPage =
-            visiblePages[index - 1];
-
-          return (
-            <React.Fragment
-              key={pageNumber}
-            >
-              {previousPage &&
-                pageNumber -
-                  previousPage >
-                  1 && (
-                  <span className="firm-ui-pagination-dots">
-                    ...
+                <div className="firm-ui-table-footer">
+                  <span>
+                    Showing{" "}
+                    <strong>
+                      {categoryStartRecord}
+                    </strong>
+                    {" to "}
+                    <strong>
+                      {categoryEndRecord}
+                    </strong>
+                    {" of "}
+                    <strong>
+                      {categoryTotalRecords}
+                    </strong>
+                    {" entries"}
                   </span>
-                )}
 
-              <button
-                type="button"
-                disabled={
-                  categoryLoading
-                }
-                className={
-                  categoryCurrentPage ===
-                  pageNumber
-                    ? "active"
-                    : ""
-                }
-                onClick={() =>
-                  setCategoryCurrentPage(
-                    pageNumber
-                  )
-                }
-              >
-                {pageNumber}
-              </button>
-            </React.Fragment>
-          );
-        }
-      )}
+                  <div className="firm-ui-pagination">
+                    <button
+                      type="button"
+                      title="Previous page"
+                      disabled={
+                        categoryLoading ||
+                        categoryCurrentPage <= 1
+                      }
+                      onClick={() =>
+                        setCategoryCurrentPage(
+                          (previous) =>
+                            Math.max(
+                              previous - 1,
+                              1
+                            )
+                        )
+                      }
+                    >
+                      <ChevronLeft size={16} />
+                    </button>
 
-    <button
-      type="button"
-      title="Next page"
-      disabled={
-        categoryLoading ||
-        categoryCurrentPage >=
-          categoryTotalPages
-      }
-      onClick={() =>
-        setCategoryCurrentPage(
-          (previous) =>
-            Math.min(
-              previous + 1,
-              categoryTotalPages
-            )
-        )
-      }
-    >
-      <ChevronRight size={16} />
-    </button>
-  </div>
-</div>
+                    {Array.from(
+                      {
+                        length:
+                          categoryTotalPages,
+                      },
+                      (_, index) => index + 1
+                    )
+                      .filter((pageNumber) => {
+                        return (
+                          pageNumber === 1 ||
+                          pageNumber ===
+                          categoryTotalPages ||
+                          Math.abs(
+                            pageNumber -
+                            categoryCurrentPage
+                          ) <= 2
+                        );
+                      })
+                      .map(
+                        (
+                          pageNumber,
+                          index,
+                          visiblePages
+                        ) => {
+                          const previousPage =
+                            visiblePages[index - 1];
+
+                          return (
+                            <React.Fragment
+                              key={pageNumber}
+                            >
+                              {previousPage &&
+                                pageNumber -
+                                previousPage >
+                                1 && (
+                                  <span className="firm-ui-pagination-dots">
+                                    ...
+                                  </span>
+                                )}
+
+                              <button
+                                type="button"
+                                disabled={
+                                  categoryLoading
+                                }
+                                className={
+                                  categoryCurrentPage ===
+                                    pageNumber
+                                    ? "active"
+                                    : ""
+                                }
+                                onClick={() =>
+                                  setCategoryCurrentPage(
+                                    pageNumber
+                                  )
+                                }
+                              >
+                                {pageNumber}
+                              </button>
+                            </React.Fragment>
+                          );
+                        }
+                      )}
+
+                    <button
+                      type="button"
+                      title="Next page"
+                      disabled={
+                        categoryLoading ||
+                        categoryCurrentPage >=
+                        categoryTotalPages
+                      }
+                      onClick={() =>
+                        setCategoryCurrentPage(
+                          (previous) =>
+                            Math.min(
+                              previous + 1,
+                              categoryTotalPages
+                            )
+                        )
+                      }
+                    >
+                      <ChevronRight size={16} />
+                    </button>
+                  </div>
+                </div>
               </div>
             </div>
           )}
@@ -47801,22 +58328,22 @@ await loadGroupMaster({
                 <div className="firm-ui-list-toolbar">
                   <div className="firm-ui-search-box">
                     <Search size={17} />
-                   <input
-  type="text"
-  value={filters.product || ""}
-  placeholder="Search product code, name, barcode..."
-  onChange={(event) => {
-    const value =
-      event.target.value;
+                    <input
+                      type="text"
+                      value={filters.product || ""}
+                      placeholder="Search product code, name, barcode..."
+                      onChange={(event) => {
+                        const value =
+                          event.target.value;
 
-    setFilters((previous) => ({
-      ...previous,
-      product: value,
-    }));
+                        setFilters((previous) => ({
+                          ...previous,
+                          product: value,
+                        }));
 
-    setProductCurrentPage(1);
-  }}
-/>  
+                        setProductCurrentPage(1);
+                      }}
+                    />
                   </div>
 
 
@@ -47892,35 +58419,35 @@ await loadGroupMaster({
                         <th className="firm-ui-action-column" style={{ width: '14%' }}>Actions</th>
                       </tr>
                     </thead>
-                   <tbody>
-  {productMasterLoading ? (
-    <tr>
-      <td colSpan={10}>
-        <div className="firm-ui-empty-state">
-          <div className="firm-ui-empty-icon">
-            <RefreshCw
-              size={25}
-              className="spin"
-            />
-          </div>
+                    <tbody>
+                      {productMasterLoading ? (
+                        <tr>
+                          <td colSpan={10}>
+                            <div className="firm-ui-empty-state">
+                              <div className="firm-ui-empty-icon">
+                                <RefreshCw
+                                  size={25}
+                                  className="spin"
+                                />
+                              </div>
 
-          <h3>
-            Loading products...
-          </h3>
+                              <h3>
+                                Loading products...
+                              </h3>
 
-          <p>
-            Please wait while Product Master records are loaded.
-          </p>
-        </div>
-      </td>
-    </tr>
-  ) : getFilteredProducts().length > 0 ? (
+                              <p>
+                                Please wait while Product Master records are loaded.
+                              </p>
+                            </div>
+                          </td>
+                        </tr>
+                      ) : getFilteredProducts().length > 0 ? (
                         getFilteredProducts().map((product, index) => (
                           <tr key={product._id || product.id || index}>
                             <td className="firm-ui-sno-column">{(productCurrentPage - 1) *
-  productRowsPerPage +
-  index +
-  1}</td>
+                              productRowsPerPage +
+                              index +
+                              1}</td>
                             <td><strong>{product.code || product.productCode || '-'}</strong></td>
                             <td>{product.name || product.productName || '-'}</td>
                             <td>{product.companyName || '-'}</td>
@@ -48022,168 +58549,168 @@ await loadGroupMaster({
                   </table>
                 </div>
 
-        <div className="firm-ui-table-footer">
-  <div>
-    <span>
-      Showing{" "}
-      <strong>
-        {productStartRecord}
-      </strong>
-      {" to "}
-      <strong>
-        {productEndRecord}
-      </strong>
-      {" of "}
-      <strong>
-        {productTotalRecords}
-      </strong>
-      {" products"}
-    </span>
+                <div className="firm-ui-table-footer">
+                  <div>
+                    <span>
+                      Showing{" "}
+                      <strong>
+                        {productStartRecord}
+                      </strong>
+                      {" to "}
+                      <strong>
+                        {productEndRecord}
+                      </strong>
+                      {" of "}
+                      <strong>
+                        {productTotalRecords}
+                      </strong>
+                      {" products"}
+                    </span>
 
-    <div className="firm-ui-page-size">
-      <span>Rows:</span>
+                    <div className="firm-ui-page-size">
+                      <span>Rows:</span>
 
-      <select
-        value={productRowsPerPage}
-        disabled={
-          productMasterLoading
-        }
-        onChange={(event) => {
-          setProductRowsPerPage(
-            Number(
-              event.target.value
-            )
-          );
+                      <select
+                        value={productRowsPerPage}
+                        disabled={
+                          productMasterLoading
+                        }
+                        onChange={(event) => {
+                          setProductRowsPerPage(
+                            Number(
+                              event.target.value
+                            )
+                          );
 
-          setProductCurrentPage(1);
-        }}
-      >
-        <option value={10}>
-          10
-        </option>
+                          setProductCurrentPage(1);
+                        }}
+                      >
+                        <option value={10}>
+                          10
+                        </option>
 
-        <option value={20}>
-          20
-        </option>
+                        <option value={20}>
+                          20
+                        </option>
 
-        <option value={50}>
-          50
-        </option>
+                        <option value={50}>
+                          50
+                        </option>
 
-        <option value={100}>
-          100
-        </option>
-      </select>
-    </div>
-  </div>
+                        <option value={100}>
+                          100
+                        </option>
+                      </select>
+                    </div>
+                  </div>
 
-  <div className="firm-ui-pagination">
-    <button
-      type="button"
-      title="Previous page"
-      disabled={
-        productMasterLoading ||
-        productCurrentPage <= 1
-      }
-      onClick={() =>
-        setProductCurrentPage(
-          (previous) =>
-            Math.max(
-              previous - 1,
-              1
-            )
-        )
-      }
-    >
-      <ChevronLeft size={16} />
-    </button>
+                  <div className="firm-ui-pagination">
+                    <button
+                      type="button"
+                      title="Previous page"
+                      disabled={
+                        productMasterLoading ||
+                        productCurrentPage <= 1
+                      }
+                      onClick={() =>
+                        setProductCurrentPage(
+                          (previous) =>
+                            Math.max(
+                              previous - 1,
+                              1
+                            )
+                        )
+                      }
+                    >
+                      <ChevronLeft size={16} />
+                    </button>
 
-    {Array.from(
-      {
-        length:
-          productTotalPages,
-      },
-      (_, index) => index + 1
-    )
-      .filter((pageNumber) => {
-        return (
-          pageNumber === 1 ||
-          pageNumber ===
-            productTotalPages ||
-          Math.abs(
-            pageNumber -
-              productCurrentPage
-          ) <= 2
-        );
-      })
-      .map(
-        (
-          pageNumber,
-          index,
-          visiblePages
-        ) => {
-          const previousPage =
-            visiblePages[index - 1];
+                    {Array.from(
+                      {
+                        length:
+                          productTotalPages,
+                      },
+                      (_, index) => index + 1
+                    )
+                      .filter((pageNumber) => {
+                        return (
+                          pageNumber === 1 ||
+                          pageNumber ===
+                          productTotalPages ||
+                          Math.abs(
+                            pageNumber -
+                            productCurrentPage
+                          ) <= 2
+                        );
+                      })
+                      .map(
+                        (
+                          pageNumber,
+                          index,
+                          visiblePages
+                        ) => {
+                          const previousPage =
+                            visiblePages[index - 1];
 
-          return (
-            <React.Fragment
-              key={pageNumber}
-            >
-              {previousPage &&
-                pageNumber -
-                  previousPage >
-                  1 && (
-                  <span className="firm-ui-pagination-dots">
-                    ...
-                  </span>
-                )}
+                          return (
+                            <React.Fragment
+                              key={pageNumber}
+                            >
+                              {previousPage &&
+                                pageNumber -
+                                previousPage >
+                                1 && (
+                                  <span className="firm-ui-pagination-dots">
+                                    ...
+                                  </span>
+                                )}
 
-              <button
-                type="button"
-                disabled={
-                  productMasterLoading
-                }
-                className={
-                  productCurrentPage ===
-                  pageNumber
-                    ? "active"
-                    : ""
-                }
-                onClick={() =>
-                  setProductCurrentPage(
-                    pageNumber
-                  )
-                }
-              >
-                {pageNumber}
-              </button>
-            </React.Fragment>
-          );
-        }
-      )}
+                              <button
+                                type="button"
+                                disabled={
+                                  productMasterLoading
+                                }
+                                className={
+                                  productCurrentPage ===
+                                    pageNumber
+                                    ? "active"
+                                    : ""
+                                }
+                                onClick={() =>
+                                  setProductCurrentPage(
+                                    pageNumber
+                                  )
+                                }
+                              >
+                                {pageNumber}
+                              </button>
+                            </React.Fragment>
+                          );
+                        }
+                      )}
 
-    <button
-      type="button"
-      title="Next page"
-      disabled={
-        productMasterLoading ||
-        productCurrentPage >=
-          productTotalPages
-      }
-      onClick={() =>
-        setProductCurrentPage(
-          (previous) =>
-            Math.min(
-              previous + 1,
-              productTotalPages
-            )
-        )
-      }
-    >
-      <ChevronRight size={16} />
-    </button>
-  </div>
-</div>
+                    <button
+                      type="button"
+                      title="Next page"
+                      disabled={
+                        productMasterLoading ||
+                        productCurrentPage >=
+                        productTotalPages
+                      }
+                      onClick={() =>
+                        setProductCurrentPage(
+                          (previous) =>
+                            Math.min(
+                              previous + 1,
+                              productTotalPages
+                            )
+                        )
+                      }
+                    >
+                      <ChevronRight size={16} />
+                    </button>
+                  </div>
+                </div>
               </div>
             </div>
           )}
@@ -48639,9 +59166,16 @@ await loadGroupMaster({
                     <Search size={17} />
                     <input
                       type="text"
-                      value={filters.account || ''}
-                      placeholder="Search accounts..."
-                      onChange={(e) => setFilters({ ...filters, account: e.target.value })}
+                      value={filters.account || ""}
+                      placeholder="Search Account..."
+                      onChange={(e) => {
+                        setFilters((previous) => ({
+                          ...previous,
+                          account: e.target.value,
+                        }));
+
+                        setAccountCurrentPage(1);
+                      }}
                     />
                   </div>
 
@@ -48721,67 +59255,89 @@ await loadGroupMaster({
                       </tr>
                     </thead>
                     <tbody>
-                      {getFilteredAccounts().length > 0 ? (
-                        getFilteredAccounts().map((account, index) => {
-                          const isBlacklisted = String(account.blackListed || '').toUpperCase() === 'YES';
-                          return (
-                            <tr key={account._id || account.id || index}>
-                              <td className="firm-ui-sno-column">{index + 1}</td>
-                              <td><strong>{account.accountCode || '-'}</strong></td>
-                              <td>{account.accountName || '-'}</td>
-                              <td>{account.town || '-'}</td>
-                              <td>{account.mobileNo || '-'}</td>
-                              <td>
-                                <span style={{ fontSize: '10px' }}>
-                                  {account.gstNo || 'Not available'}
-                                </span>
-                              </td>
-                              <td>
-                                <span className={`firm-ui-status-badge ${account.gstType === 'Registered' ? 'active' : 'inactive'}`}>
-                                  {account.gstType || 'Unregistered'}
-                                </span>
-                              </td>
-                              <td>
-                                <span style={{ fontSize: '9px', fontWeight: '600', color: '#475569' }}>
-                                  {account.invType || 'TAXABLE'}
-                                </span>
-                              </td>
-                              <td>
-                                <span className={`firm-ui-status-badge ${isBlacklisted ? 'inactive' : 'active'}`}>
-                                  {isBlacklisted ? ' BLOCKED' : 'Active'}
-                                </span>
-                              </td>
-                              <td className="firm-ui-action-column">
-                                <div className="firm-ui-row-actions">
-                                  <button
-                                    type="button"
-                                    className="firm-ui-action-btn view"
-                                    title="View account"
-                                    onClick={() => viewAccount(account)}
-                                  >
-                                    <Eye size={15} />
-                                  </button>
-                                  <button
-                                    type="button"
-                                    className="firm-ui-action-btn edit"
-                                    title="Edit account"
-                                    onClick={() => editAccount(account)}
-                                  >
-                                    <Pencil size={15} />
-                                  </button>
-                                  <button
-                                    type="button"
-                                    className="firm-ui-action-btn delete"
-                                    title="Delete account"
-                                    onClick={() => deleteAccount(account._id || account.id)}
-                                  >
-                                    <Trash2 size={15} />
-                                  </button>
-                                </div>
-                              </td>
-                            </tr>
-                          );
-                        })
+                      {accountLoading ? (
+                        <tr>
+                          <td colSpan={10}>
+                            <div className="firm-ui-empty-state">
+                              <div className="firm-ui-empty-icon">
+                                <RefreshCw
+                                  size={25}
+                                  className="spin"
+                                />
+                              </div>
+
+                              <h3>Loading accounts...</h3>
+                              <p>Please wait while account records are loaded.</p>
+                            </div>
+                          </td>
+                        </tr>
+                      ) : accountMasterRows.length > 0 ? (
+                        accountMasterRows.map(
+                          (account, index) => {
+                            const isBlacklisted = String(account.blackListed || '').toUpperCase() === 'YES';
+                            return (
+                              <tr key={account._id || account.id || index}>
+                                <td className="firm-ui-sno-column">{(accountCurrentPage - 1) *
+                                  accountRowsPerPage +
+                                  index +
+                                  1}</td>
+                                <td><strong>{account.accountCode || '-'}</strong></td>
+                                <td>{account.accountName || '-'}</td>
+                                <td>{account.town || '-'}</td>
+                                <td>{account.mobileNo || '-'}</td>
+                                <td>
+                                  <span style={{ fontSize: '10px' }}>
+                                    {account.gstNo || 'Not available'}
+                                  </span>
+                                </td>
+                                <td>
+                                  <span className={`firm-ui-status-badge ${account.gstType === 'Registered' ? 'active' : 'inactive'}`}>
+                                    {account.gstType || 'Unregistered'}
+                                  </span>
+                                </td>
+                                <td>
+                                  <span style={{ fontSize: '9px', fontWeight: '600', color: '#475569' }}>
+                                    {account.invType || 'TAXABLE'}
+                                  </span>
+                                </td>
+                                <td>
+                                  <span className={`firm-ui-status-badge ${isBlacklisted ? 'inactive' : 'active'}`}>
+                                    {isBlacklisted ? ' BLOCKED' : 'Active'}
+                                  </span>
+                                </td>
+                                <td className="firm-ui-action-column">
+                                  <div className="firm-ui-row-actions">
+                                    <button
+                                      type="button"
+                                      className="firm-ui-action-btn view"
+                                      title="View account"
+                                      onClick={() => viewAccount(account)}
+                                    >
+                                      <Eye size={15} />
+                                    </button>
+                                    <button
+                                      type="button"
+                                      className="firm-ui-action-btn edit"
+                                      title="Edit account"
+                                      onClick={() => editAccount(account)}
+                                    >
+                                      <Pencil size={15} />
+                                    </button>
+                                    <button
+                                      type="button"
+                                      className="firm-ui-action-btn delete"
+                                      title="Delete account"
+                                      onClick={() =>
+                                        deleteAccount(account)
+                                      }
+                                    >
+                                      <Trash2 size={15} />
+                                    </button>
+                                  </div>
+                                </td>
+                              </tr>
+                            );
+                          })
                       ) : (
                         <tr>
                           <td colSpan={10}>
@@ -48830,17 +59386,145 @@ await loadGroupMaster({
                 </div>
 
                 <div className="firm-ui-table-footer">
-                  <span>
-                    Showing <strong>{getFilteredAccounts().length ? 1 : 0}</strong> to{' '}
-                    <strong>{getFilteredAccounts().length}</strong> of{' '}
-                    <strong>{accounts.length}</strong> entries
-                  </span>
+                  <div className="firm-ui-footer-info">
+                    <span>
+                      Showing{" "}
+                      <strong>
+                        {accountStartRecord}
+                      </strong>{" "}
+                      to{" "}
+                      <strong>
+                        {accountEndRecord}
+                      </strong>{" "}
+                      of{" "}
+                      <strong>
+                        {accountTotalRecords}
+                      </strong>{" "}
+                      entries
+                    </span>
+
+                    <div className="firm-ui-page-size">
+                      <span>Rows per page:</span>
+
+                      <select
+                        value={accountRowsPerPage}
+                        disabled={accountLoading}
+                        onChange={(event) => {
+                          setAccountRowsPerPage(
+                            Number(event.target.value)
+                          );
+
+                          setAccountCurrentPage(1);
+                        }}
+                      >
+                        <option value={10}>10</option>
+                        <option value={20}>20</option>
+                        <option value={50}>50</option>
+                        <option value={100}>100</option>
+                      </select>
+                    </div>
+                  </div>
+
                   <div className="firm-ui-pagination">
-                    <button type="button" disabled>
+                    <button
+                      type="button"
+                      title="Previous page"
+                      disabled={
+                        accountLoading ||
+                        accountCurrentPage <= 1
+                      }
+                      onClick={() =>
+                        setAccountCurrentPage(
+                          (previousPage) =>
+                            Math.max(
+                              previousPage - 1,
+                              1
+                            )
+                        )
+                      }
+                    >
                       <ChevronLeft size={16} />
                     </button>
-                    <button type="button" className="active">1</button>
-                    <button type="button" disabled>
+
+                    {Array.from(
+                      {
+                        length: accountTotalPages,
+                      },
+                      (_, index) => index + 1
+                    )
+                      .filter((pageNumber) => {
+                        return (
+                          pageNumber === 1 ||
+                          pageNumber ===
+                          accountTotalPages ||
+                          Math.abs(
+                            pageNumber -
+                            accountCurrentPage
+                          ) <= 2
+                        );
+                      })
+                      .map(
+                        (
+                          pageNumber,
+                          index,
+                          visiblePages
+                        ) => {
+                          const previousVisiblePage =
+                            visiblePages[index - 1];
+
+                          return (
+                            <React.Fragment
+                              key={pageNumber}
+                            >
+                              {previousVisiblePage &&
+                                pageNumber -
+                                previousVisiblePage >
+                                1 && (
+                                  <span className="firm-ui-pagination-dots">
+                                    ...
+                                  </span>
+                                )}
+
+                              <button
+                                type="button"
+                                disabled={accountLoading}
+                                className={
+                                  accountCurrentPage ===
+                                    pageNumber
+                                    ? "active"
+                                    : ""
+                                }
+                                onClick={() =>
+                                  setAccountCurrentPage(
+                                    pageNumber
+                                  )
+                                }
+                              >
+                                {pageNumber}
+                              </button>
+                            </React.Fragment>
+                          );
+                        }
+                      )}
+
+                    <button
+                      type="button"
+                      title="Next page"
+                      disabled={
+                        accountLoading ||
+                        accountCurrentPage >=
+                        accountTotalPages
+                      }
+                      onClick={() =>
+                        setAccountCurrentPage(
+                          (previousPage) =>
+                            Math.min(
+                              previousPage + 1,
+                              accountTotalPages
+                            )
+                        )
+                      }
+                    >
                       <ChevronRight size={16} />
                     </button>
                   </div>
@@ -49230,9 +59914,21 @@ await loadGroupMaster({
                     <Search size={17} />
                     <input
                       type="text"
-                      value={filters.otherAccount || ''}
+                      value={
+                        filters.otherAccount || ""
+                      }
                       placeholder="Search other accounts..."
-                      onChange={(e) => setFilters({ ...filters, otherAccount: e.target.value })}
+                      onChange={(event) => {
+                        setFilters((previous) => ({
+                          ...previous,
+                          otherAccount:
+                            event.target.value,
+                        }));
+
+                        setOtherAccountCurrentPage(
+                          1
+                        );
+                      }}
                     />
                   </div>
 
@@ -49310,59 +60006,143 @@ await loadGroupMaster({
                       </tr>
                     </thead>
                     <tbody>
-                      {getFilteredOtherAccounts().length > 0 ? (
-                        getFilteredOtherAccounts().map((account, index) => (
-                          <tr key={account._id || account.id || index}>
-                            <td className="firm-ui-sno-column">{index + 1}</td>
-                            <td><strong>{account.accountCode || '-'}</strong></td>
-                            <td>{account.accountName || '-'}</td>
-                            <td>
-                              <span style={{ fontSize: '9px', fontWeight: '600', color: '#475569' }}>
-                                {account.accountGroup || '-'}
-                              </span>
-                            </td>
-                            <td>{account.town || '-'}</td>
-                            <td>{account.mobileNo || '-'}</td>
-                            <td>
-                              <span style={{ fontSize: '10px' }}>
-                                {account.gstNo || 'Not available'}
-                              </span>
-                            </td>
-                            <td>
-                              <span className={`firm-ui-status-badge ${account.isActive !== false ? 'active' : 'inactive'}`}>
-                                {account.isActive !== false ? 'Active' : 'Inactive'}
-                              </span>
-                            </td>
-                            <td className="firm-ui-action-column">
-                              <div className="firm-ui-row-actions">
-                                <button
-                                  type="button"
-                                  className="firm-ui-action-btn view"
-                                  title="View account"
-                                  onClick={() => viewOtherAccount(account)}
-                                >
-                                  <Eye size={15} />
-                                </button>
-                                <button
-                                  type="button"
-                                  className="firm-ui-action-btn edit"
-                                  title="Edit account"
-                                  onClick={() => editOtherAccount(account)}
-                                >
-                                  <Pencil size={15} />
-                                </button>
-                                <button
-                                  type="button"
-                                  className="firm-ui-action-btn delete"
-                                  title="Delete account"
-                                  onClick={() => deleteOtherAccount(account._id || account.id)}
-                                >
-                                  <Trash2 size={15} />
-                                </button>
+                      {otherAccountLoading ? (
+                        <tr>
+                          <td colSpan={9}>
+                            <div className="firm-ui-empty-state">
+                              <div className="firm-ui-empty-icon">
+                                <RefreshCw
+                                  size={25}
+                                  className="spin"
+                                />
                               </div>
-                            </td>
-                          </tr>
-                        ))
+
+                              <h3>
+                                Loading other accounts...
+                              </h3>
+
+                              <p>
+                                Please wait while records
+                                are loaded.
+                              </p>
+                            </div>
+                          </td>
+                        </tr>
+                      ) : otherAccountMasterRows.length >
+                        0 ? (
+                        otherAccountMasterRows.map(
+                          (account, index) => {
+                            const serialNumber =
+                              (otherAccountCurrentPage -
+                                1) *
+                              otherAccountRowsPerPage +
+                              index +
+                              1;
+
+                            return (
+                              <tr
+                                key={
+                                  account._id ||
+                                  account.id ||
+                                  `${account.accountCode}-${index}`
+                                }
+                              >
+                                <td className="firm-ui-sno-column">
+                                  {serialNumber}
+                                </td>
+
+                                <td>
+                                  <strong>
+                                    {account.accountCode ||
+                                      "-"}
+                                  </strong>
+                                </td>
+
+                                <td>
+                                  {account.accountName ||
+                                    "-"}
+                                </td>
+
+                                <td>
+                                  {account.accountGroup ||
+                                    "-"}
+                                </td>
+
+                                <td>
+                                  {account.town || "-"}
+                                </td>
+
+                                <td>
+                                  {account.mobileNo ||
+                                    account.phoneNo ||
+                                    "-"}
+                                </td>
+
+                                <td>
+                                  {account.gstNo || "-"}
+                                </td>
+
+                                <td>
+                                  <span
+                                    className={`firm-ui-status-badge ${account.isActive ===
+                                      false
+                                      ? "inactive"
+                                      : "active"
+                                      }`}
+                                  >
+                                    {account.isActive ===
+                                      false
+                                      ? "Inactive"
+                                      : "Active"}
+                                  </span>
+                                </td>
+
+                                <td className="firm-ui-action-column">
+                                  <div className="firm-ui-row-actions">
+                                    <button
+                                      type="button"
+                                      className="firm-ui-action-btn view"
+                                      title="View account"
+                                      onClick={() =>
+                                        editOtherAccount(
+                                          account
+                                        )
+                                      }
+                                    >
+                                      <Eye size={15} />
+                                    </button>
+
+                                    <button
+                                      type="button"
+                                      className="firm-ui-action-btn edit"
+                                      title="Edit account"
+                                      onClick={() =>
+                                        editOtherAccount(
+                                          account
+                                        )
+                                      }
+                                    >
+                                      <Pencil size={15} />
+                                    </button>
+
+                                    <button
+                                      type="button"
+                                      className="firm-ui-action-btn delete"
+                                      title="Delete account"
+                                      onClick={() =>
+                                        deleteOtherAccount(
+                                          account
+                                        )
+                                      }
+                                    >
+                                      <Trash2 size={15} />
+                                    </button>
+                                  </div>
+                                </td>
+                              </tr>
+                            );
+                          }
+                        )
                       ) : (
                         <tr>
                           <td colSpan={9}>
@@ -49370,37 +60150,16 @@ await loadGroupMaster({
                               <div className="firm-ui-empty-icon">
                                 <Wallet size={27} />
                               </div>
-                              <h3>No other accounts found</h3>
+
+                              <h3>
+                                No other accounts found
+                              </h3>
+
                               <p>
-                                {filters.otherAccount
-                                  ? 'No account matches the entered search.'
-                                  : 'Add your first other account to start managing.'}
+                                {otherAccountBackendSearch
+                                  ? "No account matches the entered search."
+                                  : "Add your first other account to start managing."}
                               </p>
-                              {!filters.otherAccount && (
-                                <button
-                                  type="button"
-                                  className="firm-ui-btn firm-ui-btn-primary"
-                                  onClick={() => {
-                                    setEditOtherAccountId(null);
-                                    setOtherAccountForm({
-                                      accountCode: '', accountName: '', accountGroup: 'INCOMES DIRECT',
-                                      bankAccountNo: '', ifscCode: '', branchName: '',
-                                      address: '', town: '', state: '', country: 'India', pinCode: '',
-                                      phoneNo: '', mobileNo: '', emailId: '', tinNo: '',
-                                      openingBal: '0.00', openingBalType: 'Dr',
-                                      invType: 'TAXABLE', taxOn: 'SRATE',
-                                      panNo: '', foodLicense: '', gstNo: '',
-                                      billToAdd1: '', remark: '', tcsPercent: '0',
-                                      tanNo: '', gstType: 'Unregistered', gstDate: '',
-                                      add2: '', gstClsDate: ''
-                                    });
-                                    setOpenFormFor('Other Account');
-                                  }}
-                                >
-                                  <Plus size={16} />
-                                  Add New Account
-                                </button>
-                              )}
                             </div>
                           </td>
                         </tr>
@@ -49410,17 +60169,170 @@ await loadGroupMaster({
                 </div>
 
                 <div className="firm-ui-table-footer">
-                  <span>
-                    Showing <strong>{getFilteredOtherAccounts().length ? 1 : 0}</strong> to{' '}
-                    <strong>{getFilteredOtherAccounts().length}</strong> of{' '}
-                    <strong>{otherAccounts.length}</strong> entries
-                  </span>
+                  <div className="firm-ui-footer-info">
+                    <span>
+                      Showing{" "}
+                      <strong>
+                        {otherAccountStartRecord}
+                      </strong>{" "}
+                      to{" "}
+                      <strong>
+                        {otherAccountEndRecord}
+                      </strong>{" "}
+                      of{" "}
+                      <strong>
+                        {otherAccountTotalRecords}
+                      </strong>{" "}
+                      entries
+                    </span>
+
+                    <div className="firm-ui-page-size">
+                      <span>Rows per page:</span>
+
+                      <select
+                        value={
+                          otherAccountRowsPerPage
+                        }
+                        disabled={
+                          otherAccountLoading
+                        }
+                        onChange={(event) => {
+                          setOtherAccountRowsPerPage(
+                            Number(
+                              event.target.value
+                            )
+                          );
+
+                          setOtherAccountCurrentPage(
+                            1
+                          );
+                        }}
+                      >
+                        <option value={10}>
+                          10
+                        </option>
+
+                        <option value={20}>
+                          20
+                        </option>
+
+                        <option value={50}>
+                          50
+                        </option>
+
+                        <option value={100}>
+                          100
+                        </option>
+                      </select>
+                    </div>
+                  </div>
+
                   <div className="firm-ui-pagination">
-                    <button type="button" disabled>
+                    <button
+                      type="button"
+                      title="Previous page"
+                      disabled={
+                        otherAccountLoading ||
+                        otherAccountCurrentPage <=
+                        1
+                      }
+                      onClick={() =>
+                        setOtherAccountCurrentPage(
+                          (previousPage) =>
+                            Math.max(
+                              previousPage - 1,
+                              1
+                            )
+                        )
+                      }
+                    >
                       <ChevronLeft size={16} />
                     </button>
-                    <button type="button" className="active">1</button>
-                    <button type="button" disabled>
+
+                    {Array.from(
+                      {
+                        length:
+                          otherAccountTotalPages,
+                      },
+                      (_, index) => index + 1
+                    )
+                      .filter((pageNumber) => {
+                        return (
+                          pageNumber === 1 ||
+                          pageNumber ===
+                          otherAccountTotalPages ||
+                          Math.abs(
+                            pageNumber -
+                            otherAccountCurrentPage
+                          ) <= 2
+                        );
+                      })
+                      .map(
+                        (
+                          pageNumber,
+                          index,
+                          visiblePages
+                        ) => {
+                          const previousVisiblePage =
+                            visiblePages[
+                            index - 1
+                            ];
+
+                          return (
+                            <React.Fragment
+                              key={pageNumber}
+                            >
+                              {previousVisiblePage &&
+                                pageNumber -
+                                previousVisiblePage >
+                                1 && (
+                                  <span className="firm-ui-pagination-dots">
+                                    ...
+                                  </span>
+                                )}
+
+                              <button
+                                type="button"
+                                disabled={
+                                  otherAccountLoading
+                                }
+                                className={
+                                  otherAccountCurrentPage ===
+                                    pageNumber
+                                    ? "active"
+                                    : ""
+                                }
+                                onClick={() =>
+                                  setOtherAccountCurrentPage(
+                                    pageNumber
+                                  )
+                                }
+                              >
+                                {pageNumber}
+                              </button>
+                            </React.Fragment>
+                          );
+                        }
+                      )}
+
+                    <button
+                      type="button"
+                      title="Next page"
+                      disabled={
+                        otherAccountLoading ||
+                        otherAccountCurrentPage >=
+                        otherAccountTotalPages
+                      }
+                      onClick={() =>
+                        setOtherAccountCurrentPage(
+                          (previousPage) =>
+                            Math.min(
+                              previousPage + 1,
+                              otherAccountTotalPages
+                            )
+                        )
+                      }
+                    >
                       <ChevronRight size={16} />
                     </button>
                   </div>
@@ -49536,9 +60448,18 @@ await loadGroupMaster({
                     <Search size={17} />
                     <input
                       type="text"
-                      value={filters.gst || ''}
+                      value={
+                        filters.gst || ""
+                      }
                       placeholder="Search GST..."
-                      onChange={(e) => setFilters({ ...filters, gst: e.target.value })}
+                      onChange={(event) => {
+                        setFilters((previous) => ({
+                          ...previous,
+                          gst: event.target.value,
+                        }));
+
+                        setGstCurrentPage(1);
+                      }}
                     />
                   </div>
 
@@ -49599,47 +60520,117 @@ await loadGroupMaster({
                       </tr>
                     </thead>
                     <tbody>
-                      {getFilteredGST().length > 0 ? (
-                        getFilteredGST().map((gst, index) => {
-                          const gstValue = gst.vat ?? gst.vatPercent ?? 0;
-                          return (
-                            <tr key={gst._id || gst.id || index}>
-                              <td className="firm-ui-sno-column">{index + 1}</td>
-                              <td><strong>{gst.code || gst.gstCode || '-'}</strong></td>
-                              <td><span className="firm-ui-status-badge active">{gstValue}%</span></td>
-                              <td>{gst.purchaseType || '-'}</td>
-                              <td>{gst.salesType || '-'}</td>
-                              <td className="firm-ui-action-column">
-                                <div className="firm-ui-row-actions">
-                                  <button
-                                    type="button"
-                                    className="firm-ui-action-btn view"
-                                    title="View GST"
-                                    onClick={() => viewGst(gst)}
-                                  >
-                                    <Eye size={15} />
-                                  </button>
-                                  <button
-                                    type="button"
-                                    className="firm-ui-action-btn edit"
-                                    title="Edit GST"
-                                    onClick={() => editGst(gst)}
-                                  >
-                                    <Pencil size={15} />
-                                  </button>
-                                  <button
-                                    type="button"
-                                    className="firm-ui-action-btn delete"
-                                    title="Delete GST"
-                                    onClick={() => deleteGst(gst._id || gst.id)}
-                                  >
-                                    <Trash2 size={15} />
-                                  </button>
-                                </div>
-                              </td>
-                            </tr>
-                          );
-                        })
+                      {gstMasterLoading ? (
+                        <tr>
+                          <td colSpan={6}>
+                            <div className="firm-ui-empty-state">
+                              <div className="firm-ui-empty-icon">
+                                <RefreshCw
+                                  size={25}
+                                  className="spin"
+                                />
+                              </div>
+
+                              <h3>
+                                Loading GST records...
+                              </h3>
+
+                              <p>
+                                Please wait while GST
+                                records are loaded.
+                              </p>
+                            </div>
+                          </td>
+                        </tr>
+                      ) : gstMasterRows.length > 0 ? (
+                        gstMasterRows.map(
+                          (gst, index) => {
+                            const gstValue =
+                              gst.vat ??
+                              gst.vatPercent ??
+                              0;
+
+                            const serialNumber =
+                              (gstCurrentPage - 1) *
+                              gstRowsPerPage +
+                              index +
+                              1;
+
+                            return (
+                              <tr
+                                key={
+                                  gst._id ||
+                                  gst.id ||
+                                  `${gst.gstCode}-${index}`
+                                }
+                              >
+                                <td className="firm-ui-sno-column">
+                                  {serialNumber}
+                                </td>
+
+                                <td>
+                                  <strong>
+                                    {gst.code ||
+                                      gst.gstCode ||
+                                      "-"}
+                                  </strong>
+                                </td>
+
+                                <td>
+                                  <span className="firm-ui-status-badge active">
+                                    {gstValue}%
+                                  </span>
+                                </td>
+
+                                <td>
+                                  {gst.purchaseType ||
+                                    "-"}
+                                </td>
+
+                                <td>
+                                  {gst.salesType || "-"}
+                                </td>
+
+                                <td className="firm-ui-action-column">
+                                  <div className="firm-ui-row-actions">
+                                    <button
+                                      type="button"
+                                      className="firm-ui-action-btn view"
+                                      title="View GST"
+                                      onClick={() =>
+                                        viewGst(gst)
+                                      }
+                                    >
+                                      <Eye size={15} />
+                                    </button>
+
+                                    <button
+                                      type="button"
+                                      className="firm-ui-action-btn edit"
+                                      title="Edit GST"
+                                      onClick={() =>
+                                        editGst(gst)
+                                      }
+                                    >
+                                      <Pencil size={15} />
+                                    </button>
+
+                                    <button
+                                      type="button"
+                                      className="firm-ui-action-btn delete"
+                                      title="Delete GST"
+                                      onClick={() =>
+                                        deleteGst(gst)
+                                      }
+                                    >
+                                      <Trash2 size={15} />
+                                    </button>
+                                  </div>
+                                </td>
+                              </tr>
+                            );
+                          }
+                        )
                       ) : (
                         <tr>
                           <td colSpan={6}>
@@ -49647,20 +60638,36 @@ await loadGroupMaster({
                               <div className="firm-ui-empty-icon">
                                 <ReceiptText size={27} />
                               </div>
-                              <h3>No GST records found</h3>
+
+                              <h3>
+                                No GST records found
+                              </h3>
+
                               <p>
-                                {filters.gst
-                                  ? 'No GST record matches the entered search.'
-                                  : 'Add your first GST rate to start managing.'}
+                                {gstBackendSearch
+                                  ? "No GST record matches the entered search."
+                                  : "Add your first GST rate to start managing."}
                               </p>
-                              {!filters.gst && (
+
+                              {!gstBackendSearch && (
                                 <button
                                   type="button"
                                   className="firm-ui-btn firm-ui-btn-primary"
                                   onClick={() => {
                                     setEditGstId(null);
-                                    setGstForm({ code: '', vat: '', purchaseType: 'GST ON PURCHASE PRICE', salesType: 'GST ON SALES PRICE' });
-                                    setOpenFormFor('GST Master');
+
+                                    setGstForm({
+                                      code: "",
+                                      vat: "",
+                                      purchaseType:
+                                        "GST ON PURCHASE PRICE",
+                                      salesType:
+                                        "GST ON SALES PRICE",
+                                    });
+
+                                    setOpenFormFor(
+                                      "GST Master"
+                                    );
                                   }}
                                 >
                                   <Plus size={16} />
@@ -49676,17 +60683,160 @@ await loadGroupMaster({
                 </div>
 
                 <div className="firm-ui-table-footer">
-                  <span>
-                    Showing <strong>{getFilteredGST().length ? 1 : 0}</strong> to{' '}
-                    <strong>{getFilteredGST().length}</strong> of{' '}
-                    <strong>{gstList.length}</strong> entries
-                  </span>
+                  <div className="firm-ui-footer-info">
+                    <span>
+                      Showing{" "}
+                      <strong>
+                        {gstStartRecord}
+                      </strong>{" "}
+                      to{" "}
+                      <strong>
+                        {gstEndRecord}
+                      </strong>{" "}
+                      of{" "}
+                      <strong>
+                        {gstTotalRecords}
+                      </strong>{" "}
+                      entries
+                    </span>
+
+                    <div className="firm-ui-page-size">
+                      <span>Rows per page:</span>
+
+                      <select
+                        value={gstRowsPerPage}
+                        disabled={gstMasterLoading}
+                        onChange={(event) => {
+                          setGstRowsPerPage(
+                            Number(
+                              event.target.value
+                            )
+                          );
+
+                          setGstCurrentPage(1);
+                        }}
+                      >
+                        <option value={10}>
+                          10
+                        </option>
+
+                        <option value={20}>
+                          20
+                        </option>
+
+                        <option value={50}>
+                          50
+                        </option>
+
+                        <option value={100}>
+                          100
+                        </option>
+                      </select>
+                    </div>
+                  </div>
+
                   <div className="firm-ui-pagination">
-                    <button type="button" disabled>
+                    <button
+                      type="button"
+                      title="Previous page"
+                      disabled={
+                        gstMasterLoading ||
+                        gstCurrentPage <= 1
+                      }
+                      onClick={() =>
+                        setGstCurrentPage(
+                          (previousPage) =>
+                            Math.max(
+                              previousPage - 1,
+                              1
+                            )
+                        )
+                      }
+                    >
                       <ChevronLeft size={16} />
                     </button>
-                    <button type="button" className="active">1</button>
-                    <button type="button" disabled>
+
+                    {Array.from(
+                      {
+                        length: gstTotalPages,
+                      },
+                      (_, index) => index + 1
+                    )
+                      .filter((pageNumber) => {
+                        return (
+                          pageNumber === 1 ||
+                          pageNumber ===
+                          gstTotalPages ||
+                          Math.abs(
+                            pageNumber -
+                            gstCurrentPage
+                          ) <= 2
+                        );
+                      })
+                      .map(
+                        (
+                          pageNumber,
+                          index,
+                          visiblePages
+                        ) => {
+                          const previousVisiblePage =
+                            visiblePages[index - 1];
+
+                          return (
+                            <React.Fragment
+                              key={pageNumber}
+                            >
+                              {previousVisiblePage &&
+                                pageNumber -
+                                previousVisiblePage >
+                                1 && (
+                                  <span className="firm-ui-pagination-dots">
+                                    ...
+                                  </span>
+                                )}
+
+                              <button
+                                type="button"
+                                disabled={
+                                  gstMasterLoading
+                                }
+                                className={
+                                  gstCurrentPage ===
+                                    pageNumber
+                                    ? "active"
+                                    : ""
+                                }
+                                onClick={() =>
+                                  setGstCurrentPage(
+                                    pageNumber
+                                  )
+                                }
+                              >
+                                {pageNumber}
+                              </button>
+                            </React.Fragment>
+                          );
+                        }
+                      )}
+
+                    <button
+                      type="button"
+                      title="Next page"
+                      disabled={
+                        gstMasterLoading ||
+                        gstCurrentPage >=
+                        gstTotalPages
+                      }
+                      onClick={() =>
+                        setGstCurrentPage(
+                          (previousPage) =>
+                            Math.min(
+                              previousPage + 1,
+                              gstTotalPages
+                            )
+                        )
+                      }
+                    >
                       <ChevronRight size={16} />
                     </button>
                   </div>
@@ -49797,9 +60947,15 @@ await loadGroupMaster({
                     <Search size={17} />
                     <input
                       type="text"
-                      value={filters.area || ''}
+                      value={filters.area || ""}
                       placeholder="Search areas..."
-                      onChange={(e) => setFilters({ ...filters, area: e.target.value })}
+                      disabled={areaMasterLoading}
+                      onChange={(event) => {
+                        setFilters((previousFilters) => ({
+                          ...previousFilters,
+                          area: event.target.value,
+                        }));
+                      }}
                     />
                   </div>
 
@@ -49855,47 +61011,112 @@ await loadGroupMaster({
                       </tr>
                     </thead>
                     <tbody>
-                      {getFilteredAreas().length > 0 ? (
-                        getFilteredAreas().map((area, index) => (
-                          <tr key={area._id || area.id || index}>
-                            <td className="firm-ui-sno-column">{index + 1}</td>
-                            <td><strong>{area.code || area.areaCode || '-'}</strong></td>
-                            <td>{area.name || area.areaName || '-'}</td>
-                            <td>
-                              <span className={`firm-ui-status-badge ${area.isActive !== false ? 'active' : 'inactive'}`}>
-                                {area.isActive !== false ? 'Active' : 'Inactive'}
-                              </span>
-                            </td>
-                            <td className="firm-ui-action-column">
-                              <div className="firm-ui-row-actions">
-                                <button
-                                  type="button"
-                                  className="firm-ui-action-btn view"
-                                  title="View area"
-                                  onClick={() => viewArea(area)}
-                                >
-                                  <Eye size={15} />
-                                </button>
-                                <button
-                                  type="button"
-                                  className="firm-ui-action-btn edit"
-                                  title="Edit area"
-                                  onClick={() => editArea(area)}
-                                >
-                                  <Pencil size={15} />
-                                </button>
-                                <button
-                                  type="button"
-                                  className="firm-ui-action-btn delete"
-                                  title="Delete area"
-                                  onClick={() => deleteArea(area._id || area.id)}
-                                >
-                                  <Trash2 size={15} />
-                                </button>
+                      {areaMasterLoading ? (
+                        <tr>
+                          <td colSpan={5}>
+                            <div className="firm-ui-empty-state">
+                              <div className="firm-ui-empty-icon">
+                                <RefreshCw
+                                  size={27}
+                                  className="spin"
+                                />
                               </div>
-                            </td>
-                          </tr>
-                        ))
+
+                              <h3>
+                                Loading areas...
+                              </h3>
+
+                              <p>
+                                Please wait while the area
+                                records are loaded.
+                              </p>
+                            </div>
+                          </td>
+                        </tr>
+                      ) : getFilteredAreas().length > 0 ? (
+                        getFilteredAreas().map(
+                          (area, index) => (
+                            <tr
+                              key={
+                                area._id ||
+                                area.id ||
+                                index
+                              }
+                            >
+                              <td className="firm-ui-sno-column">
+                                {area.srNo ||
+                                  (areaCurrentPage - 1) *
+                                  areaRowsPerPage +
+                                  index +
+                                  1}
+                              </td>
+
+                              <td>
+                                <strong>
+                                  {area.code ||
+                                    area.areaCode ||
+                                    "-"}
+                                </strong>
+                              </td>
+
+                              <td>
+                                {area.name ||
+                                  area.areaName ||
+                                  "-"}
+                              </td>
+
+                              <td>
+                                <span
+                                  className={`firm-ui-status-badge ${area.isActive !== false
+                                    ? "active"
+                                    : "inactive"
+                                    }`}
+                                >
+                                  {area.isActive !== false
+                                    ? "Active"
+                                    : "Inactive"}
+                                </span>
+                              </td>
+
+                              <td className="firm-ui-action-column">
+                                <div className="firm-ui-row-actions">
+                                  <button
+                                    type="button"
+                                    className="firm-ui-action-btn view"
+                                    title="View area"
+                                    onClick={() =>
+                                      viewArea(area)
+                                    }
+                                  >
+                                    <Eye size={15} />
+                                  </button>
+
+                                  <button
+                                    type="button"
+                                    className="firm-ui-action-btn edit"
+                                    title="Edit area"
+                                    onClick={() =>
+                                      editArea(area)
+                                    }
+                                  >
+                                    <Pencil size={15} />
+                                  </button>
+
+                                  <button
+                                    type="button"
+                                    className="firm-ui-action-btn delete"
+                                    title="Delete area"
+                                    onClick={() =>
+                                      deleteArea(area)
+                                    }
+                                  >
+                                    <Trash2 size={15} />
+                                  </button>
+                                </div>
+                              </td>
+                            </tr>
+                          )
+                        )
                       ) : (
                         <tr>
                           <td colSpan={5}>
@@ -49903,20 +61124,32 @@ await loadGroupMaster({
                               <div className="firm-ui-empty-icon">
                                 <MapPin size={27} />
                               </div>
-                              <h3>No areas found</h3>
+
+                              <h3>
+                                No areas found
+                              </h3>
+
                               <p>
-                                {filters.area
-                                  ? 'No area matches the entered search.'
-                                  : 'Add your first area to start managing.'}
+                                {areaBackendSearch
+                                  ? "No area matches the entered search."
+                                  : "Add your first area to start managing."}
                               </p>
-                              {!filters.area && (
+
+                              {!areaBackendSearch && (
                                 <button
                                   type="button"
                                   className="firm-ui-btn firm-ui-btn-primary"
                                   onClick={() => {
                                     setEditAreaId(null);
-                                    setAreaForm({ code: '', name: '' });
-                                    setOpenFormFor('Area');
+
+                                    setAreaForm({
+                                      code: "",
+                                      name: "",
+                                    });
+
+                                    setOpenFormFor(
+                                      "Area"
+                                    );
                                   }}
                                 >
                                   <Plus size={16} />
@@ -49932,17 +61165,163 @@ await loadGroupMaster({
                 </div>
 
                 <div className="firm-ui-table-footer">
-                  <span>
-                    Showing <strong>{getFilteredAreas().length ? 1 : 0}</strong> to{' '}
-                    <strong>{getFilteredAreas().length}</strong> of{' '}
-                    <strong>{areas.length}</strong> entries
-                  </span>
+                  <div className="firm-ui-footer-info">
+                    <span>
+                      Showing{" "}
+                      <strong>
+                        {areaStartRecord}
+                      </strong>{" "}
+                      to{" "}
+                      <strong>
+                        {areaEndRecord}
+                      </strong>{" "}
+                      of{" "}
+                      <strong>
+                        {areaTotalRecords}
+                      </strong>{" "}
+                      entries
+                    </span>
+
+                    <div className="firm-ui-page-size">
+                      <span>
+                        Rows per page:
+                      </span>
+
+                      <select
+                        value={areaRowsPerPage}
+                        disabled={areaMasterLoading}
+                        onChange={(event) => {
+                          setAreaRowsPerPage(
+                            Number(
+                              event.target.value
+                            )
+                          );
+
+                          setAreaCurrentPage(1);
+                        }}
+                      >
+                        <option value={10}>
+                          10
+                        </option>
+
+                        <option value={20}>
+                          20
+                        </option>
+
+                        <option value={50}>
+                          50
+                        </option>
+
+                        <option value={100}>
+                          100
+                        </option>
+                      </select>
+                    </div>
+                  </div>
+
                   <div className="firm-ui-pagination">
-                    <button type="button" disabled>
+                    <button
+                      type="button"
+                      title="Previous page"
+                      disabled={
+                        areaMasterLoading ||
+                        areaCurrentPage <= 1
+                      }
+                      onClick={() =>
+                        setAreaCurrentPage(
+                          (previousPage) =>
+                            Math.max(
+                              previousPage - 1,
+                              1
+                            )
+                        )
+                      }
+                    >
                       <ChevronLeft size={16} />
                     </button>
-                    <button type="button" className="active">1</button>
-                    <button type="button" disabled>
+
+                    {Array.from(
+                      {
+                        length: areaTotalPages,
+                      },
+                      (_, index) =>
+                        index + 1
+                    )
+                      .filter((pageNumber) => {
+                        return (
+                          pageNumber === 1 ||
+                          pageNumber ===
+                          areaTotalPages ||
+                          Math.abs(
+                            pageNumber -
+                            areaCurrentPage
+                          ) <= 2
+                        );
+                      })
+                      .map(
+                        (
+                          pageNumber,
+                          index,
+                          visiblePages
+                        ) => {
+                          const previousVisiblePage =
+                            visiblePages[index - 1];
+
+                          return (
+                            <React.Fragment
+                              key={pageNumber}
+                            >
+                              {previousVisiblePage &&
+                                pageNumber -
+                                previousVisiblePage >
+                                1 && (
+                                  <span className="firm-ui-pagination-dots">
+                                    ...
+                                  </span>
+                                )}
+
+                              <button
+                                type="button"
+                                disabled={
+                                  areaMasterLoading
+                                }
+                                className={
+                                  areaCurrentPage ===
+                                    pageNumber
+                                    ? "active"
+                                    : ""
+                                }
+                                onClick={() =>
+                                  setAreaCurrentPage(
+                                    pageNumber
+                                  )
+                                }
+                              >
+                                {pageNumber}
+                              </button>
+                            </React.Fragment>
+                          );
+                        }
+                      )}
+
+                    <button
+                      type="button"
+                      title="Next page"
+                      disabled={
+                        areaMasterLoading ||
+                        areaCurrentPage >=
+                        areaTotalPages
+                      }
+                      onClick={() =>
+                        setAreaCurrentPage(
+                          (previousPage) =>
+                            Math.min(
+                              previousPage + 1,
+                              areaTotalPages
+                            )
+                        )
+                      }
+                    >
                       <ChevronRight size={16} />
                     </button>
                   </div>
@@ -50234,9 +61613,17 @@ await loadGroupMaster({
                     <Search size={17} />
                     <input
                       type="text"
-                      value={filters.salesman || ''}
+                      value={filters.salesman || ""}
                       placeholder="Search salesmen..."
-                      onChange={(e) => setFilters({ ...filters, salesman: e.target.value })}
+                      onChange={(event) => {
+                        setFilters((previous) => ({
+                          ...previous,
+                          salesman:
+                            event.target.value,
+                        }));
+
+                        setSalesmanCurrentPage(1);
+                      }}
                     />
                   </div>
 
@@ -50304,54 +61691,147 @@ await loadGroupMaster({
                       </tr>
                     </thead>
                     <tbody>
-                      {getFilteredSalesmen().length > 0 ? (
-                        getFilteredSalesmen().map((salesman, index) => (
-                          <tr key={salesman._id || salesman.id || index}>
-                            <td className="firm-ui-sno-column">{index + 1}</td>
-                            <td><strong>{salesman.code || salesman.salesmanCode || '-'}</strong></td>
-                            <td>{salesman.name || salesman.salesmanName || '-'}</td>
-                            <td>
-                              <span style={{ fontSize: '9px', fontWeight: '600', color: '#475569' }}>
-                                {salesman.type || salesman.salesmanType || 'SALESMAN'}
-                              </span>
-                            </td>
-                            <td>{salesman.mobileNo || '-'}</td>
-                            <td>{salesman.reference || '-'}</td>
-                            <td>
-                              <span className={`firm-ui-status-badge ${salesman.isActive !== false ? 'active' : 'inactive'}`}>
-                                {salesman.isActive !== false ? 'Active' : 'Inactive'}
-                              </span>
-                            </td>
-                            <td className="firm-ui-action-column">
-                              <div className="firm-ui-row-actions">
-                                <button
-                                  type="button"
-                                  className="firm-ui-action-btn view"
-                                  title="View salesman"
-                                  onClick={() => viewSalesman(salesman)}
-                                >
-                                  <Eye size={15} />
-                                </button>
-                                <button
-                                  type="button"
-                                  className="firm-ui-action-btn edit"
-                                  title="Edit salesman"
-                                  onClick={() => editSalesman(salesman)}
-                                >
-                                  <Pencil size={15} />
-                                </button>
-                                <button
-                                  type="button"
-                                  className="firm-ui-action-btn delete"
-                                  title="Delete salesman"
-                                  onClick={() => deleteSalesman(salesman._id || salesman.id)}
-                                >
-                                  <Trash2 size={15} />
-                                </button>
+                      {salesmanLoading ? (
+                        <tr>
+                          <td colSpan={8}>
+                            <div className="firm-ui-empty-state">
+                              <div className="firm-ui-empty-icon">
+                                <RefreshCw
+                                  size={25}
+                                  className="spin"
+                                />
                               </div>
-                            </td>
-                          </tr>
-                        ))
+
+                              <h3>
+                                Loading salesmen...
+                              </h3>
+
+                              <p>
+                                Please wait while salesman
+                                records are loaded.
+                              </p>
+                            </div>
+                          </td>
+                        </tr>
+                      ) : salesmanMasterRows.length > 0 ? (
+                        salesmanMasterRows.map(
+                          (salesman, index) => {
+                            const serialNumber =
+                              (salesmanCurrentPage - 1) *
+                              salesmanRowsPerPage +
+                              index +
+                              1;
+
+                            return (
+                              <tr
+                                key={
+                                  salesman._id ||
+                                  salesman.id ||
+                                  `${salesman.salesmanCode}-${index}`
+                                }
+                              >
+                                <td className="firm-ui-sno-column">
+                                  {serialNumber}
+                                </td>
+
+                                <td>
+                                  <strong>
+                                    {salesman.code ||
+                                      salesman.salesmanCode ||
+                                      "-"}
+                                  </strong>
+                                </td>
+
+                                <td>
+                                  {salesman.name ||
+                                    salesman.salesmanName ||
+                                    "-"}
+                                </td>
+
+                                <td>
+                                  <span
+                                    style={{
+                                      fontSize: "9px",
+                                      fontWeight: "600",
+                                      color: "#475569",
+                                    }}
+                                  >
+                                    {salesman.type ||
+                                      salesman.salesmanType ||
+                                      "SALESMAN"}
+                                  </span>
+                                </td>
+
+                                <td>
+                                  {salesman.mobileNo ||
+                                    salesman.phoneNo ||
+                                    "-"}
+                                </td>
+
+                                <td>
+                                  {salesman.reference ||
+                                    "-"}
+                                </td>
+
+                                <td>
+                                  <span
+                                    className={`firm-ui-status-badge ${salesman.isActive !==
+                                      false
+                                      ? "active"
+                                      : "inactive"
+                                      }`}
+                                  >
+                                    {salesman.isActive !==
+                                      false
+                                      ? "Active"
+                                      : "Inactive"}
+                                  </span>
+                                </td>
+
+                                <td className="firm-ui-action-column">
+                                  <div className="firm-ui-row-actions">
+                                    <button
+                                      type="button"
+                                      className="firm-ui-action-btn view"
+                                      title="View salesman"
+                                      onClick={() =>
+                                        viewSalesman(
+                                          salesman
+                                        )
+                                      }
+                                    >
+                                      <Eye size={15} />
+                                    </button>
+
+                                    <button
+                                      type="button"
+                                      className="firm-ui-action-btn edit"
+                                      title="Edit salesman"
+                                      onClick={() =>
+                                        editSalesman(
+                                          salesman
+                                        )
+                                      }
+                                    >
+                                      <Pencil size={15} />
+                                    </button>
+
+                                    <button
+                                      type="button"
+                                      className="firm-ui-action-btn delete"
+                                      title="Delete salesman"
+                                      onClick={() =>
+                                        deleteSalesman(salesman)
+                                      }
+                                    >
+                                      <Trash2 size={15} />
+                                    </button>
+                                  </div>
+                                </td>
+                              </tr>
+                            );
+                          }
+                        )
                       ) : (
                         <tr>
                           <td colSpan={8}>
@@ -50359,24 +61839,45 @@ await loadGroupMaster({
                               <div className="firm-ui-empty-icon">
                                 <UserRound size={27} />
                               </div>
-                              <h3>No salesmen found</h3>
+
+                              <h3>
+                                No salesmen found
+                              </h3>
+
                               <p>
-                                {filters.salesman
-                                  ? 'No salesman matches the entered search.'
-                                  : 'Add your first salesman to start managing.'}
+                                {salesmanBackendSearch
+                                  ? "No salesman matches the entered search."
+                                  : "Add your first salesman to start managing."}
                               </p>
-                              {!filters.salesman && (
+
+                              {!salesmanBackendSearch && (
                                 <button
                                   type="button"
                                   className="firm-ui-btn firm-ui-btn-primary"
                                   onClick={() => {
                                     setEditSalesmanId(null);
+
                                     setSalesmanForm({
-                                      code: '', name: '', type: 'SALESMAN', address: '', town: '',
-                                      pinCode: '', state: '', country: 'India', phoneNo: '', mobileNo: '',
-                                      emailId: '', dateOfBirth: '', qualification: '', reference: '', imeiNo: ''
+                                      code: "",
+                                      name: "",
+                                      type: "SALESMAN",
+                                      address: "",
+                                      town: "",
+                                      pinCode: "",
+                                      state: "",
+                                      country: "India",
+                                      phoneNo: "",
+                                      mobileNo: "",
+                                      emailId: "",
+                                      dateOfBirth: "",
+                                      qualification: "",
+                                      reference: "",
+                                      imeiNo: "",
                                     });
-                                    setOpenFormFor('Salesman');
+
+                                    setOpenFormFor(
+                                      "Salesman"
+                                    );
                                   }}
                                 >
                                   <Plus size={16} />
@@ -50392,17 +61893,165 @@ await loadGroupMaster({
                 </div>
 
                 <div className="firm-ui-table-footer">
-                  <span>
-                    Showing <strong>{getFilteredSalesmen().length ? 1 : 0}</strong> to{' '}
-                    <strong>{getFilteredSalesmen().length}</strong> of{' '}
-                    <strong>{salesmen.length}</strong> entries
-                  </span>
+                  <div className="firm-ui-footer-info">
+                    <span>
+                      Showing{" "}
+                      <strong>
+                        {salesmanStartRecord}
+                      </strong>{" "}
+                      to{" "}
+                      <strong>
+                        {salesmanEndRecord}
+                      </strong>{" "}
+                      of{" "}
+                      <strong>
+                        {salesmanTotalRecords}
+                      </strong>{" "}
+                      entries
+                    </span>
+
+                    <div className="firm-ui-page-size">
+                      <span>
+                        Rows per page:
+                      </span>
+
+                      <select
+                        value={salesmanRowsPerPage}
+                        disabled={salesmanLoading}
+                        onChange={(event) => {
+                          setSalesmanRowsPerPage(
+                            Number(
+                              event.target.value
+                            )
+                          );
+
+                          setSalesmanCurrentPage(1);
+                        }}
+                      >
+                        <option value={10}>
+                          10
+                        </option>
+
+                        <option value={20}>
+                          20
+                        </option>
+
+                        <option value={50}>
+                          50
+                        </option>
+
+                        <option value={100}>
+                          100
+                        </option>
+                      </select>
+                    </div>
+                  </div>
+
                   <div className="firm-ui-pagination">
-                    <button type="button" disabled>
+                    <button
+                      type="button"
+                      title="Previous page"
+                      disabled={
+                        salesmanLoading ||
+                        salesmanCurrentPage <= 1
+                      }
+                      onClick={() =>
+                        setSalesmanCurrentPage(
+                          (previousPage) =>
+                            Math.max(
+                              previousPage - 1,
+                              1
+                            )
+                        )
+                      }
+                    >
                       <ChevronLeft size={16} />
                     </button>
-                    <button type="button" className="active">1</button>
-                    <button type="button" disabled>
+
+                    {Array.from(
+                      {
+                        length:
+                          salesmanTotalPages,
+                      },
+                      (_, index) => index + 1
+                    )
+                      .filter((pageNumber) => {
+                        return (
+                          pageNumber === 1 ||
+                          pageNumber ===
+                          salesmanTotalPages ||
+                          Math.abs(
+                            pageNumber -
+                            salesmanCurrentPage
+                          ) <= 2
+                        );
+                      })
+                      .map(
+                        (
+                          pageNumber,
+                          index,
+                          visiblePages
+                        ) => {
+                          const previousVisiblePage =
+                            visiblePages[
+                            index - 1
+                            ];
+
+                          return (
+                            <React.Fragment
+                              key={pageNumber}
+                            >
+                              {previousVisiblePage &&
+                                pageNumber -
+                                previousVisiblePage >
+                                1 && (
+                                  <span className="firm-ui-pagination-dots">
+                                    ...
+                                  </span>
+                                )}
+
+                              <button
+                                type="button"
+                                disabled={
+                                  salesmanLoading
+                                }
+                                className={
+                                  salesmanCurrentPage ===
+                                    pageNumber
+                                    ? "active"
+                                    : ""
+                                }
+                                onClick={() =>
+                                  setSalesmanCurrentPage(
+                                    pageNumber
+                                  )
+                                }
+                              >
+                                {pageNumber}
+                              </button>
+                            </React.Fragment>
+                          );
+                        }
+                      )}
+
+                    <button
+                      type="button"
+                      title="Next page"
+                      disabled={
+                        salesmanLoading ||
+                        salesmanCurrentPage >=
+                        salesmanTotalPages
+                      }
+                      onClick={() =>
+                        setSalesmanCurrentPage(
+                          (previousPage) =>
+                            Math.min(
+                              previousPage + 1,
+                              salesmanTotalPages
+                            )
+                        )
+                      }
+                    >
                       <ChevronRight size={16} />
                     </button>
                   </div>
@@ -54399,11 +66048,10 @@ await loadGroupMaster({
                       >
                         <div
                           ref={creditBatchModalRef}
-                          className={`credit-batch-modal ${
-  creditBatchView === "new"
-    ? "credit-new-batch-modal"
-    : ""
-}`}
+                          className={`credit-batch-modal ${creditBatchView === "new"
+                            ? "credit-new-batch-modal"
+                            : ""
+                            }`}
                           role="dialog"
                           aria-modal="true"
                           aria-label="Select batch and MRP"
@@ -54463,506 +66111,506 @@ await loadGroupMaster({
                             </button>
                           </div>
 
-                      <div className="credit-batch-modal-body">
-  {creditBatchView === "new" ? (
-    /*
-     * NEW BATCH ENTRY FORM
-     */
-  <div className="credit-new-batch-grid">
-      {/* Batch Number */}
-      <div className="labeled-input">
-        <label>Batch No *</label>
+                          <div className="credit-batch-modal-body">
+                            {creditBatchView === "new" ? (
+                              /*
+                               * NEW BATCH ENTRY FORM
+                               */
+                              <div className="credit-new-batch-grid">
+                                {/* Batch Number */}
+                                <div className="labeled-input">
+                                  <label>Batch No *</label>
 
-        <input
-          type="text"
-          className="erp-input"
-          data-credit-new-batch-field="batchNo"
-          value={
-            creditNewBatchForm.batchNo
-          }
-          placeholder="Enter Batch Number"
-          autoComplete="off"
-          onChange={(event) => {
-            setCreditNewBatchForm(
-              (previous) => ({
-                ...previous,
-                batchNo:
-                  event.target.value,
-              })
-            );
-          }}
-        />
-      </div>
+                                  <input
+                                    type="text"
+                                    className="erp-input"
+                                    data-credit-new-batch-field="batchNo"
+                                    value={
+                                      creditNewBatchForm.batchNo
+                                    }
+                                    placeholder="Enter Batch Number"
+                                    autoComplete="off"
+                                    onChange={(event) => {
+                                      setCreditNewBatchForm(
+                                        (previous) => ({
+                                          ...previous,
+                                          batchNo:
+                                            event.target.value,
+                                        })
+                                      );
+                                    }}
+                                  />
+                                </div>
 
-      {/* Manufacturing Date */}
-      <div className="labeled-input">
-        <label>Mfg Date</label>
+                                {/* Manufacturing Date */}
+                                <div className="labeled-input">
+                                  <label>Mfg Date</label>
 
-        <input
-          type="date"
-          className="erp-input"
-          value={
-            creditNewBatchForm.mfgDate
-          }
-          onChange={(event) => {
-            setCreditNewBatchForm(
-              (previous) => ({
-                ...previous,
-                mfgDate:
-                  event.target.value,
-              })
-            );
-          }}
-        />
-      </div>
+                                  <input
+                                    type="date"
+                                    className="erp-input"
+                                    value={
+                                      creditNewBatchForm.mfgDate
+                                    }
+                                    onChange={(event) => {
+                                      setCreditNewBatchForm(
+                                        (previous) => ({
+                                          ...previous,
+                                          mfgDate:
+                                            event.target.value,
+                                        })
+                                      );
+                                    }}
+                                  />
+                                </div>
 
-      {/* Expiry Date */}
-      <div className="labeled-input">
-        <label>Expiry Date</label>
+                                {/* Expiry Date */}
+                                <div className="labeled-input">
+                                  <label>Expiry Date</label>
 
-        <input
-          type="date"
-          className="erp-input"
-          value={
-            creditNewBatchForm.expDate
-          }
-          onChange={(event) => {
-            setCreditNewBatchForm(
-              (previous) => ({
-                ...previous,
-                expDate:
-                  event.target.value,
-              })
-            );
-          }}
-        />
-      </div>
+                                  <input
+                                    type="date"
+                                    className="erp-input"
+                                    value={
+                                      creditNewBatchForm.expDate
+                                    }
+                                    onChange={(event) => {
+                                      setCreditNewBatchForm(
+                                        (previous) => ({
+                                          ...previous,
+                                          expDate:
+                                            event.target.value,
+                                        })
+                                      );
+                                    }}
+                                  />
+                                </div>
 
-      {/* MRP */}
-      <div className="labeled-input">
-        <label>MRP *</label>
+                                {/* MRP */}
+                                <div className="labeled-input">
+                                  <label>MRP *</label>
 
-        <input
-          type="number"
-          className="erp-input"
-          min="0"
-          step="0.01"
-          value={
-            creditNewBatchForm.mrp
-          }
-          placeholder="Enter MRP"
-          onChange={(event) => {
-            setCreditNewBatchForm(
-              (previous) => ({
-                ...previous,
-                mrp:
-                  event.target.value,
-              })
-            );
-          }}
-        />
-      </div>
+                                  <input
+                                    type="number"
+                                    className="erp-input"
+                                    min="0"
+                                    step="0.01"
+                                    value={
+                                      creditNewBatchForm.mrp
+                                    }
+                                    placeholder="Enter MRP"
+                                    onChange={(event) => {
+                                      setCreditNewBatchForm(
+                                        (previous) => ({
+                                          ...previous,
+                                          mrp:
+                                            event.target.value,
+                                        })
+                                      );
+                                    }}
+                                  />
+                                </div>
 
-      {/* Purchase Rate */}
-      <div className="labeled-input">
-        <label>Purchase Rate</label>
+                                {/* Purchase Rate */}
+                                <div className="labeled-input">
+                                  <label>Purchase Rate</label>
 
-        <input
-          type="number"
-          className="erp-input"
-          min="0"
-          step="0.01"
-          value={
-            creditNewBatchForm
-              .purchaseRate
-          }
-          placeholder="Enter Purchase Rate"
-          onChange={(event) => {
-            setCreditNewBatchForm(
-              (previous) => ({
-                ...previous,
-                purchaseRate:
-                  event.target.value,
-              })
-            );
-          }}
-        />
-      </div>
+                                  <input
+                                    type="number"
+                                    className="erp-input"
+                                    min="0"
+                                    step="0.01"
+                                    value={
+                                      creditNewBatchForm
+                                        .purchaseRate
+                                    }
+                                    placeholder="Enter Purchase Rate"
+                                    onChange={(event) => {
+                                      setCreditNewBatchForm(
+                                        (previous) => ({
+                                          ...previous,
+                                          purchaseRate:
+                                            event.target.value,
+                                        })
+                                      );
+                                    }}
+                                  />
+                                </div>
 
-      {/* Sales Rate */}
-      <div className="labeled-input">
-        <label>Sales Rate *</label>
+                                {/* Sales Rate */}
+                                <div className="labeled-input">
+                                  <label>Sales Rate *</label>
 
-        <input
-          type="number"
-          className="erp-input"
-          min="0"
-          step="0.01"
-          value={
-            creditNewBatchForm.salesRate
-          }
-          placeholder="Enter Sales Rate"
-          onChange={(event) => {
-            setCreditNewBatchForm(
-              (previous) => ({
-                ...previous,
-                salesRate:
-                  event.target.value,
-              })
-            );
-          }}
-        />
-      </div>
+                                  <input
+                                    type="number"
+                                    className="erp-input"
+                                    min="0"
+                                    step="0.01"
+                                    value={
+                                      creditNewBatchForm.salesRate
+                                    }
+                                    placeholder="Enter Sales Rate"
+                                    onChange={(event) => {
+                                      setCreditNewBatchForm(
+                                        (previous) => ({
+                                          ...previous,
+                                          salesRate:
+                                            event.target.value,
+                                        })
+                                      );
+                                    }}
+                                  />
+                                </div>
 
-      {/* Rate Per Unit */}
-      <div className="labeled-input">
-        <label>Rate Per Unit</label>
+                                {/* Rate Per Unit */}
+                                <div className="labeled-input">
+                                  <label>Rate Per Unit</label>
 
-        <input
-          type="number"
-          className="erp-input"
-          min="1"
-          step="1"
-          value={
-            creditNewBatchForm
-              .ratePerUnit
-          }
-          onChange={(event) => {
-            setCreditNewBatchForm(
-              (previous) => ({
-                ...previous,
-                ratePerUnit:
-                  event.target.value,
-              })
-            );
-          }}
-        />
-      </div>
+                                  <input
+                                    type="number"
+                                    className="erp-input"
+                                    min="1"
+                                    step="1"
+                                    value={
+                                      creditNewBatchForm
+                                        .ratePerUnit
+                                    }
+                                    onChange={(event) => {
+                                      setCreditNewBatchForm(
+                                        (previous) => ({
+                                          ...previous,
+                                          ratePerUnit:
+                                            event.target.value,
+                                        })
+                                      );
+                                    }}
+                                  />
+                                </div>
 
-      {/* Previous Purchase Rate */}
-      <div className="labeled-input">
-        <label>
-          Previous Purchase Rate
-        </label>
+                                {/* Previous Purchase Rate */}
+                                <div className="labeled-input">
+                                  <label>
+                                    Previous Purchase Rate
+                                  </label>
 
-        <input
-          type="number"
-          className="erp-input"
-          min="0"
-          step="0.01"
-          value={
-            creditNewBatchForm
-              .previousPurchaseRate
-          }
-          placeholder="Previous Purchase Rate"
-          onChange={(event) => {
-            setCreditNewBatchForm(
-              (previous) => ({
-                ...previous,
-                previousPurchaseRate:
-                  event.target.value,
-              })
-            );
-          }}
-        />
-      </div>
+                                  <input
+                                    type="number"
+                                    className="erp-input"
+                                    min="0"
+                                    step="0.01"
+                                    value={
+                                      creditNewBatchForm
+                                        .previousPurchaseRate
+                                    }
+                                    placeholder="Previous Purchase Rate"
+                                    onChange={(event) => {
+                                      setCreditNewBatchForm(
+                                        (previous) => ({
+                                          ...previous,
+                                          previousPurchaseRate:
+                                            event.target.value,
+                                        })
+                                      );
+                                    }}
+                                  />
+                                </div>
 
-      {/* Stock Quantity */}
-      <div className="labeled-input">
-        <label>Stock Quantity</label>
+                                {/* Stock Quantity */}
+                                <div className="labeled-input">
+                                  <label>Stock Quantity</label>
 
-        <input
-          type="number"
-          className="erp-input"
-          min="0"
-          value={
-            creditNewBatchForm.stockQty
-          }
-          placeholder="0"
-          readOnly
-        />
-      </div>
+                                  <input
+                                    type="number"
+                                    className="erp-input"
+                                    min="0"
+                                    value={
+                                      creditNewBatchForm.stockQty
+                                    }
+                                    placeholder="0"
+                                    readOnly
+                                  />
+                                </div>
 
-      {/* Batch Locked */}
-      <div className="labeled-input">
-        <label>Is Batch Locked</label>
+                                {/* Batch Locked */}
+                                <div className="labeled-input">
+                                  <label>Is Batch Locked</label>
 
-        <select
-          className="erp-select"
-          value={
-            creditNewBatchForm.isLocked
-          }
-          onChange={(event) => {
-            setCreditNewBatchForm(
-              (previous) => ({
-                ...previous,
-                isLocked:
-                  event.target.value,
-              })
-            );
-          }}
-        >
-          <option value="N">
-            No
-          </option>
+                                  <select
+                                    className="erp-select"
+                                    value={
+                                      creditNewBatchForm.isLocked
+                                    }
+                                    onChange={(event) => {
+                                      setCreditNewBatchForm(
+                                        (previous) => ({
+                                          ...previous,
+                                          isLocked:
+                                            event.target.value,
+                                        })
+                                      );
+                                    }}
+                                  >
+                                    <option value="N">
+                                      No
+                                    </option>
 
-          <option value="Y">
-            Yes
-          </option>
-        </select>
-      </div>
+                                    <option value="Y">
+                                      Yes
+                                    </option>
+                                  </select>
+                                </div>
 
-      {/* Box Pack */}
-      <div className="labeled-input">
-        <label>Box Pack</label>
+                                {/* Box Pack */}
+                                <div className="labeled-input">
+                                  <label>Box Pack</label>
 
-        <input
-          type="number"
-          className="erp-input"
-          min="1"
-          step="1"
-          value={
-            creditNewBatchForm.boxPack
-          }
-          onChange={(event) => {
-            setCreditNewBatchForm(
-              (previous) => ({
-                ...previous,
-                boxPack:
-                  event.target.value,
-              })
-            );
-          }}
-        />
-      </div>
+                                  <input
+                                    type="number"
+                                    className="erp-input"
+                                    min="1"
+                                    step="1"
+                                    value={
+                                      creditNewBatchForm.boxPack
+                                    }
+                                    onChange={(event) => {
+                                      setCreditNewBatchForm(
+                                        (previous) => ({
+                                          ...previous,
+                                          boxPack:
+                                            event.target.value,
+                                        })
+                                      );
+                                    }}
+                                  />
+                                </div>
 
-      {/* Inbox Pack */}
-      <div className="labeled-input">
-        <label>InBox Pack</label>
+                                {/* Inbox Pack */}
+                                <div className="labeled-input">
+                                  <label>InBox Pack</label>
 
-        <input
-          type="number"
-          className="erp-input"
-          min="1"
-          step="1"
-          value={
-            creditNewBatchForm.inboxPack
-          }
-          onChange={(event) => {
-            setCreditNewBatchForm(
-              (previous) => ({
-                ...previous,
-                inboxPack:
-                  event.target.value,
-              })
-            );
-          }}
-        />
-      </div>
-    </div>
-  ) : creditBatchLoading ? (
-    /*
-     * LOADING STATE
-     */
-    <div className="credit-batch-message">
-      Loading batches...
-    </div>
-  ) : creditBatchRows.length === 0 ? (
-    /*
-     * NO EXISTING BATCH
-     */
-    <div className="credit-batch-message">
-      No existing batch found.
-    </div>
-  ) : (
-    /*
-     * EXISTING BATCH TABLE
-     */
-    <div className="credit-batch-table-wrapper">
-      <table className="credit-batch-table">
-        <thead>
-          <tr>
-            <th>#</th>
-            <th>Batch</th>
-            <th>MRP</th>
-            <th>S.Rate</th>
-            <th>Stock</th>
-            <th>Mfg Date</th>
-            <th>Expiry</th>
-          </tr>
-        </thead>
+                                  <input
+                                    type="number"
+                                    className="erp-input"
+                                    min="1"
+                                    step="1"
+                                    value={
+                                      creditNewBatchForm.inboxPack
+                                    }
+                                    onChange={(event) => {
+                                      setCreditNewBatchForm(
+                                        (previous) => ({
+                                          ...previous,
+                                          inboxPack:
+                                            event.target.value,
+                                        })
+                                      );
+                                    }}
+                                  />
+                                </div>
+                              </div>
+                            ) : creditBatchLoading ? (
+                              /*
+                               * LOADING STATE
+                               */
+                              <div className="credit-batch-message">
+                                Loading batches...
+                              </div>
+                            ) : creditBatchRows.length === 0 ? (
+                              /*
+                               * NO EXISTING BATCH
+                               */
+                              <div className="credit-batch-message">
+                                No existing batch found.
+                              </div>
+                            ) : (
+                              /*
+                               * EXISTING BATCH TABLE
+                               */
+                              <div className="credit-batch-table-wrapper">
+                                <table className="credit-batch-table">
+                                  <thead>
+                                    <tr>
+                                      <th>#</th>
+                                      <th>Batch</th>
+                                      <th>MRP</th>
+                                      <th>S.Rate</th>
+                                      <th>Stock</th>
+                                      <th>Mfg Date</th>
+                                      <th>Expiry</th>
+                                    </tr>
+                                  </thead>
 
-        <tbody>
-          {creditBatchRows.map(
-            (batch, batchIndex) => {
-              const batchNo =
-                String(
-                  batch.batchNo ||
-                  batch.BatchNo ||
-                  batch.Batch ||
-                  batch.batch ||
-                  "."
-                ).trim() || ".";
+                                  <tbody>
+                                    {creditBatchRows.map(
+                                      (batch, batchIndex) => {
+                                        const batchNo =
+                                          String(
+                                            batch.batchNo ||
+                                            batch.BatchNo ||
+                                            batch.Batch ||
+                                            batch.batch ||
+                                            "."
+                                          ).trim() || ".";
 
-              const mrp =
-                creditNumber(
-                  batch.mrp ??
-                  batch.MRP
-                );
+                                        const mrp =
+                                          creditNumber(
+                                            batch.mrp ??
+                                            batch.MRP
+                                          );
 
-              const salesRate =
-                creditNumber(
-                  batch.salesRate ??
-                  batch.sRate ??
-                  batch.SRate ??
-                  batch.rate ??
-                  batch.Rate
-                );
+                                        const salesRate =
+                                          creditNumber(
+                                            batch.salesRate ??
+                                            batch.sRate ??
+                                            batch.SRate ??
+                                            batch.rate ??
+                                            batch.Rate
+                                          );
 
-              const stock =
-                creditNumber(
-                  batch.stockQty ??
-                  batch.StockQty ??
-                  batch.qty ??
-                  batch.Qty ??
-                  batch.balanceQty ??
-                  batch.BalanceQty
-                );
+                                        const stock =
+                                          creditNumber(
+                                            batch.stockQty ??
+                                            batch.StockQty ??
+                                            batch.qty ??
+                                            batch.Qty ??
+                                            batch.balanceQty ??
+                                            batch.BalanceQty
+                                          );
 
-              const isSelected =
-                batchIndex ===
-                creditBatchSelectedIndex;
+                                        const isSelected =
+                                          batchIndex ===
+                                          creditBatchSelectedIndex;
 
-              return (
-                <tr
-                  key={`${batchNo}-${mrp}-${batchIndex}`}
-                  className={
-                    isSelected
-                      ? "credit-batch-row-selected"
-                      : ""
-                  }
-                  onMouseDown={(event) => {
-                    event.preventDefault();
-                    event.stopPropagation();
+                                        return (
+                                          <tr
+                                            key={`${batchNo}-${mrp}-${batchIndex}`}
+                                            className={
+                                              isSelected
+                                                ? "credit-batch-row-selected"
+                                                : ""
+                                            }
+                                            onMouseDown={(event) => {
+                                              event.preventDefault();
+                                              event.stopPropagation();
 
-                    setCreditBatchSelectedIndex(
-                      batchIndex
-                    );
+                                              setCreditBatchSelectedIndex(
+                                                batchIndex
+                                              );
 
-                    selectCreditNoteBatch(
-                      batch
-                    );
-                  }}
-                >
-                  <td>
-                    {batchIndex + 1}
-                  </td>
+                                              selectCreditNoteBatch(
+                                                batch
+                                              );
+                                            }}
+                                          >
+                                            <td>
+                                              {batchIndex + 1}
+                                            </td>
 
-                  <td>
-                    {batchNo}
-                  </td>
+                                            <td>
+                                              {batchNo}
+                                            </td>
 
-                  <td className="numeric">
-                    ₹{mrp.toFixed(2)}
-                  </td>
+                                            <td className="numeric">
+                                              ₹{mrp.toFixed(2)}
+                                            </td>
 
-                  <td className="numeric">
-                    ₹{salesRate.toFixed(2)}
-                  </td>
+                                            <td className="numeric">
+                                              ₹{salesRate.toFixed(2)}
+                                            </td>
 
-                  <td className="numeric">
-                    {stock.toFixed(2)}
-                  </td>
+                                            <td className="numeric">
+                                              {stock.toFixed(2)}
+                                            </td>
 
-                  <td>
-                    {batch.mfgDate ||
-                      batch.MfgDt ||
-                      batch.MfgDate ||
-                      "-"}
-                  </td>
+                                            <td>
+                                              {batch.mfgDate ||
+                                                batch.MfgDt ||
+                                                batch.MfgDate ||
+                                                "-"}
+                                            </td>
 
-                  <td>
-                    {batch.expDate ||
-                      batch.ExpDt ||
-                      batch.ExpiryDate ||
-                      "-"}
-                  </td>
-                </tr>
-              );
-            }
-          )}
-        </tbody>
-      </table>
-    </div>
-  )}
-</div>
-<div
-  className="credit-batch-modal-footer"
-  style={{
-    display: "flex",
-    justifyContent: "space-between",
-    alignItems: "center",
-    gap: "12px",
-  }}
->
-  <div>
-    {creditBatchView === "existing" ? (
-      <button
-        type="button"
-        className="credit-new-batch-button"
-        onClick={() => {
-          openCreditNewBatchForm();
-        }}
-      >
-        + New Batch
-      </button>
-    ) : creditBatchRows.length > 0 ? (
-      <button
-        type="button"
-        className="credit-existing-batch-button"
-        onClick={() => {
-          setCreditBatchView("existing");
+                                            <td>
+                                              {batch.expDate ||
+                                                batch.ExpDt ||
+                                                batch.ExpiryDate ||
+                                                "-"}
+                                            </td>
+                                          </tr>
+                                        );
+                                      }
+                                    )}
+                                  </tbody>
+                                </table>
+                              </div>
+                            )}
+                          </div>
+                          <div
+                            className="credit-batch-modal-footer"
+                            style={{
+                              display: "flex",
+                              justifyContent: "space-between",
+                              alignItems: "center",
+                              gap: "12px",
+                            }}
+                          >
+                            <div>
+                              {creditBatchView === "existing" ? (
+                                <button
+                                  type="button"
+                                  className="credit-new-batch-button"
+                                  onClick={() => {
+                                    openCreditNewBatchForm();
+                                  }}
+                                >
+                                  + New Batch
+                                </button>
+                              ) : creditBatchRows.length > 0 ? (
+                                <button
+                                  type="button"
+                                  className="credit-existing-batch-button"
+                                  onClick={() => {
+                                    setCreditBatchView("existing");
 
-          window.setTimeout(() => {
-            creditBatchModalRef.current?.focus();
-          }, 0);
-        }}
-      >
-        Existing Batches
-      </button>
-    ) : (
-      <span />
-    )}
-  </div>
+                                    window.setTimeout(() => {
+                                      creditBatchModalRef.current?.focus();
+                                    }, 0);
+                                  }}
+                                >
+                                  Existing Batches
+                                </button>
+                              ) : (
+                                <span />
+                              )}
+                            </div>
 
-  <div
-    style={{
-      display: "flex",
-      alignItems: "center",
-      gap: "10px",
-    }}
-  >
-    <button
-      type="button"
-      onClick={() => {
-        setShowCreditBatchModal(false);
-        setCreditBatchView("existing");
-      }}
-    >
-      Cancel
-    </button>
+                            <div
+                              style={{
+                                display: "flex",
+                                alignItems: "center",
+                                gap: "10px",
+                              }}
+                            >
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setShowCreditBatchModal(false);
+                                  setCreditBatchView("existing");
+                                }}
+                              >
+                                Cancel
+                              </button>
 
-    {creditBatchView === "new" && (
-      <button
-        type="button"
-        className="credit-batch-select-button"
-        onClick={confirmCreditNewBatch}
-      >
-        Save Batch
-      </button>
-    )}
-  </div>
-</div>
+                              {creditBatchView === "new" && (
+                                <button
+                                  type="button"
+                                  className="credit-batch-select-button"
+                                  onClick={confirmCreditNewBatch}
+                                >
+                                  Save Batch
+                                </button>
+                              )}
+                            </div>
+                          </div>
                         </div>
                       </div>,
                       document.body
@@ -56556,14 +68204,18 @@ await loadGroupMaster({
           }}
         >
           <div
+            ref={purchaseBatchModalRef}
+            tabIndex={-1}
             style={{
-              width: '800px',
-              background: 'white',
-              borderRadius: '10px',
-              padding: '20px',
-              maxHeight: '90vh',
-              overflowY: 'auto',
-              boxShadow: '0 20px 25px -5px rgba(0,0,0,0.1)'
+              width: "800px",
+              background: "white",
+              borderRadius: "10px",
+              padding: "20px",
+              maxHeight: "90vh",
+              overflowY: "auto",
+              boxShadow:
+                "0 20px 25px -5px rgba(0,0,0,0.1)",
+              outline: "none",
             }}
           >
             {/* Header */}
@@ -56685,44 +68337,58 @@ await loadGroupMaster({
                     <tbody>
                       {existingBatches.map((batch, idx) => (
                         <tr
-                          key={idx}
-                          onClick={() => {
-                            const updatedItems = [...purchaseItems];
-                            updatedItems[currentBatchRow] = {
-                              ...updatedItems[currentBatchRow],
-                              selectedBatch: { ...batch },
-                              batchNo: batch.batchNo,
-                              mfgDate: batch.mfgDate,
-                              expDate: batch.expDate,
-                              mrp: batch.mrp,
-                              purRate: batch.purchaseRate,
-                              salesRate: batch.salesRate,
-                              stockQty: batch.stockQty,
-                              boxPack: batch.boxPack || 1,
-                              ratePerUnit: batch.ratePerUnit || 1,
-                              previousPurchaseRate: batch.previousPurchaseRate || '',
-                              quantity: updatedItems[currentBatchRow]?.quantity || 1
-                            };
-                            setPurchaseItems(updatedItems);
-                            setShowBatchModal(false);
+                          key={
+                            batch._id ||
+                            `${batch.batchNo ||
+                            batch.BatchNo ||
+                            batch.Batch ||
+                            "batch"}-${idx}`
+                          }
+                          onMouseEnter={() => {
+                            purchaseBatchSelectedIndexRef.current =
+                              idx;
+
+                            setPurchaseBatchSelectedIndex(idx);
+                          }}
+                          onMouseDown={(event) => {
+                            event.preventDefault();
+                            event.stopPropagation();
+
+                            purchaseBatchSelectedIndexRef.current =
+                              idx;
+
+                            setPurchaseBatchSelectedIndex(idx);
+
+                            applyExistingPurchaseBatch(batch);
                           }}
                           style={{
-                            cursor: 'pointer',
-                            transition: '0.2s',
-                            borderBottom: '1px solid #f3f4f6'
-                          }}
-                          onMouseEnter={(e) => {
-                            e.currentTarget.style.background = '#eff6ff';
-                          }}
-                          onMouseLeave={(e) => {
-                            e.currentTarget.style.background = 'transparent';
+                            cursor: "pointer",
+                            transition: "0.15s",
+                            borderBottom:
+                              "1px solid #f3f4f6",
+
+                            background:
+                              purchaseBatchSelectedIndex === idx
+                                ? "#dbeafe"
+                                : "transparent",
+
+                            outline:
+                              purchaseBatchSelectedIndex === idx
+                                ? "2px solid #2563eb"
+                                : "none",
+
+                            outlineOffset: "-2px",
                           }}
                         >
                           <td style={{ padding: '8px', textAlign: 'center' }}>{idx + 1}</td>
                           <td style={{ padding: '8px' }}>
                             <span style={{ fontWeight: '500', color: '#2563eb' }}>{batch.batchNo}</span>
                           </td>
-                          <td style={{ padding: '8px', textAlign: 'right' }}>₹{parseFloat(batch.mrp || 0).toFixed(2)}</td>
+                          <td style={{ padding: '8px', textAlign: 'right' }}>₹{Number(
+                            batch.mrp ??
+                            batch.MRP ??
+                            0
+                          ).toFixed(2)}</td>
                           <td style={{ padding: '8px', textAlign: 'center' }}>
                             {batch.mfgDate !== '01/01/1900' && batch.mfgDate !== '1900-01-01'
                               ? batch.mfgDate
@@ -56735,11 +68401,37 @@ await loadGroupMaster({
                           </td>
                           <td style={{ padding: '8px', textAlign: 'right' }}>
                             <span style={{ color: parseFloat(batch.stockQty) < 0 ? '#dc2626' : '#059669' }}>
-                              {parseFloat(batch.stockQty).toFixed(0)}
+                              {Number(
+                                batch.stockQty ??
+                                batch.StockQty ??
+                                batch.qty ??
+                                batch.Qty ??
+                                batch.balanceQty ??
+                                batch.BalanceQty ??
+                                0
+                              ).toFixed(2)}
                             </span>
                           </td>
-                          <td style={{ padding: '8px', textAlign: 'right' }}>₹{parseFloat(batch.salesRate || 0).toFixed(2)}</td>
-                          <td style={{ padding: '8px', textAlign: 'right' }}>₹{parseFloat(batch.purchaseRate || 0).toFixed(2)}</td>
+                          <td style={{ padding: '8px', textAlign: 'right' }}>₹{Number(
+                            batch.salesRate ??
+                            batch.SalesRate ??
+                            batch.sRate ??
+                            batch.SRate ??
+                            batch.rate ??
+                            batch.Rate ??
+                            0
+                          ).toFixed(2)}</td>
+                          <td style={{ padding: '8px', textAlign: 'right' }}>₹{Number(
+                            batch.purchaseRate ??
+                            batch.PurchaseRate ??
+                            batch.purRate ??
+                            batch.PurRate ??
+                            batch.pRate ??
+                            batch.PRate ??
+                            batch.ratePerUnit ??
+                            batch.Rate_Per_Unit ??
+                            0
+                          ).toFixed(2)}</td>
                           <td style={{ padding: '8px', textAlign: 'center' }}>{batch.boxPack || 1}</td>
                         </tr>
                       ))}
