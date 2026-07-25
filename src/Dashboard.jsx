@@ -402,6 +402,67 @@ const Dashboard = ({ onLogout }) => {
     setShowPrintPreview(false);
   };
 
+    /* =========================================================
+     LOAD TRANSFER STATES
+     ========================================================= */
+
+  const createDefaultLoadTransferForm = () => ({
+     transferMode: "LOAD_TO_LOAD",
+
+    fromLoadSeries: "",
+    fromLoadNo: "",
+
+    billSeries: "",
+    billNo: "",
+
+    toLoadSeries: "",
+    toLoadNo: "",
+  });
+
+  const [
+    loadTransferForm,
+    setLoadTransferForm,
+  ] = useState(() =>
+    createDefaultLoadTransferForm()
+  );
+
+  const [
+    loadTransferBills,
+    setLoadTransferBills,
+  ] = useState([]);
+
+  const [
+    loadTransferSourceLoad,
+    setLoadTransferSourceLoad,
+  ] = useState(null);
+
+  const [
+    loadTransferLoading,
+    setLoadTransferLoading,
+  ] = useState(false);
+
+  const [
+    loadTransferSaving,
+    setLoadTransferSaving,
+  ] = useState(false);
+
+  const [
+    loadTransferHasSearched,
+    setLoadTransferHasSearched,
+  ] = useState(false);
+
+  const [
+    loadTransferError,
+    setLoadTransferError,
+  ] = useState("");
+
+  const [
+    loadTransferSearchText,
+    setLoadTransferSearchText,
+  ] = useState("");
+
+  const loadTransferFirstInputRef =
+    useRef(null);
   /* =========================================================
     SALES BILLING PARTY SEARCH
     ========================================================= */
@@ -9989,6 +10050,924 @@ const Dashboard = ({ onLogout }) => {
     setGodownForm({ ...godownForm, [name]: regexInputValue(name, value) });
   };
 
+    /* =========================================================
+     LOAD TRANSFER HELPERS
+     ========================================================= */
+
+  const getLoadTransferBillId = (bill = {}) =>
+    String(
+      bill.SalesBillId ||
+      bill.salesBillId ||
+      bill._id ||
+      bill.id ||
+      ""
+    ).trim();
+
+
+  const loadTransferNumber = (value) => {
+    const number = Number(value || 0);
+
+    return Number.isFinite(number)
+      ? number
+      : 0;
+  };
+
+
+  const formatLoadTransferAmount = (value) =>
+    loadTransferNumber(value).toLocaleString(
+      "en-IN",
+      {
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2,
+      }
+    );
+
+
+  const formatLoadTransferDate = (value) => {
+    if (!value) {
+      return "";
+    }
+
+    const rawValue =
+      String(value).trim();
+
+    /*
+     * Handle YYYY-MM-DD directly without timezone conversion.
+     */
+    const isoDateMatch =
+      rawValue.match(
+        /^(\d{4})-(\d{2})-(\d{2})/
+      );
+
+    if (isoDateMatch) {
+      return `${isoDateMatch[3]}/${isoDateMatch[2]}/${isoDateMatch[1]}`;
+    }
+
+    const date =
+      new Date(rawValue);
+
+    if (
+      Number.isNaN(
+        date.getTime()
+      )
+    ) {
+      return rawValue;
+    }
+
+    return date.toLocaleDateString(
+      "en-GB"
+    );
+  };
+
+
+  const getLoadTransferBillAmount = (
+    bill = {}
+  ) =>
+    loadTransferNumber(
+      bill.NetAmount ??
+      bill.netAmount ??
+      bill.billAmount ??
+      bill.amount ??
+      0
+    );
+
+
+  const getSelectedLoadTransferBills =
+    () =>
+      loadTransferBills.filter(
+        (bill) =>
+          bill.selected === true
+      );
+
+
+  const selectedLoadTransferBills =
+    getSelectedLoadTransferBills();
+
+
+  const loadTransferSelectedCount =
+    selectedLoadTransferBills.length;
+
+
+  const loadTransferSelectedAmount =
+    selectedLoadTransferBills.reduce(
+      (total, bill) =>
+        total +
+        getLoadTransferBillAmount(
+          bill
+        ),
+      0
+    );
+
+
+  const loadTransferAllSelected =
+    loadTransferBills.length > 0 &&
+    loadTransferBills.every(
+      (bill) =>
+        bill.selected === true
+    );
+
+
+  const loadTransferSomeSelected =
+    loadTransferBills.some(
+      (bill) =>
+        bill.selected === true
+    ) &&
+    !loadTransferAllSelected;
+      const resetLoadTransferForm = ({
+    keepDestination = false,
+  } = {}) => {
+    setLoadTransferForm(
+      (previous) => ({
+        ...createDefaultLoadTransferForm(),
+
+transferMode:
+  previous.transferMode ||
+  "LOAD_TO_LOAD",
+
+        toLoadSeries:
+          keepDestination
+            ? previous.toLoadSeries
+            : "",
+
+        toLoadNo:
+          keepDestination
+            ? previous.toLoadNo
+            : "",
+      })
+    );
+
+    setLoadTransferBills([]);
+    setLoadTransferSourceLoad(null);
+    setLoadTransferHasSearched(false);
+    setLoadTransferError("");
+    setLoadTransferSearchText("");
+
+    window.setTimeout(() => {
+      loadTransferFirstInputRef
+        .current
+        ?.focus();
+    }, 100);
+  };
+    const handleLoadTransferInputChange = (
+    event
+  ) => {
+    const {
+      name,
+      value,
+    } = event.target;
+
+    let normalizedValue =
+      value;
+
+    /*
+     * Series values must remain uppercase.
+     */
+    if (
+      name ===
+        "fromLoadSeries" ||
+      name ===
+        "billSeries" ||
+      name ===
+        "toLoadSeries"
+    ) {
+      normalizedValue =
+        String(value || "")
+          .toUpperCase()
+          .replace(/\s+/g, "");
+    }
+
+    /*
+     * Number fields accept digits only.
+     */
+    if (
+      name === "fromLoadNo" ||
+      name === "billNo" ||
+      name === "toLoadNo"
+    ) {
+      normalizedValue =
+        String(value || "")
+          .replace(/[^\d]/g, "");
+    }
+
+    setLoadTransferForm(
+      (previous) => ({
+        ...previous,
+        [name]:
+          normalizedValue,
+      })
+    );
+
+    /*
+     * Clear old lookup results when source criteria changes.
+     */
+    if (
+      name ===
+        "fromLoadSeries" ||
+      name ===
+        "fromLoadNo" ||
+      name ===
+        "billSeries" ||
+      name ===
+        "billNo"
+    ) {
+      setLoadTransferBills([]);
+      setLoadTransferSourceLoad(null);
+      setLoadTransferHasSearched(false);
+      setLoadTransferError("");
+      setLoadTransferSearchText("");
+    }
+  };
+    const handleLoadTransferModeChange = (
+    event
+  ) => {
+const transferMode =
+  String(
+    event.target.value ||
+    "LOAD_TO_LOAD"
+  );
+
+    setLoadTransferForm(
+      (previous) => ({
+        ...createDefaultLoadTransferForm(),
+
+        transferMode,
+
+        /*
+         * Keep destination load while switching mode.
+         */
+        toLoadSeries:
+          previous.toLoadSeries,
+
+        toLoadNo:
+          previous.toLoadNo,
+      })
+    );
+
+    setLoadTransferBills([]);
+    setLoadTransferSourceLoad(null);
+    setLoadTransferHasSearched(false);
+    setLoadTransferError("");
+    setLoadTransferSearchText("");
+
+    window.setTimeout(() => {
+      loadTransferFirstInputRef
+        .current
+        ?.focus();
+    }, 100);
+  };
+    const toggleLoadTransferBill = (
+    billId
+  ) => {
+    setLoadTransferBills(
+      (previousBills) =>
+        previousBills.map(
+          (bill) =>
+            getLoadTransferBillId(
+              bill
+            ) ===
+            String(billId)
+              ? {
+                  ...bill,
+                  selected:
+                    !bill.selected,
+                }
+              : bill
+        )
+    );
+  };
+
+
+  const toggleAllLoadTransferBills =
+    () => {
+      const nextSelectedValue =
+        !loadTransferAllSelected;
+
+      setLoadTransferBills(
+        (previousBills) =>
+          previousBills.map(
+            (bill) => ({
+              ...bill,
+              selected:
+                nextSelectedValue,
+            })
+          )
+      );
+    };
+      const getFilteredLoadTransferBills =
+    () => {
+      const searchValue =
+        String(
+          loadTransferSearchText ||
+          ""
+        )
+          .trim()
+          .toLowerCase();
+
+      if (!searchValue) {
+        return loadTransferBills;
+      }
+
+      return loadTransferBills.filter(
+        (bill) => {
+          const searchableText = [
+            bill.BillDate,
+            bill.billDate,
+
+            bill.BillSeries,
+            bill.billSeries,
+
+            bill.BillNo,
+            bill.billNo,
+
+            bill.PartyCode,
+            bill.partyCode,
+
+            bill.PartyName,
+            bill.partyName,
+
+            bill.CompanyName,
+            bill.companyName,
+
+            bill.AreaName,
+            bill.areaName,
+
+            bill.SalesmanName,
+            bill.salesmanName,
+
+            getLoadTransferBillAmount(
+              bill
+            ),
+          ]
+            .filter(
+              (value) =>
+                value !== undefined &&
+                value !== null
+            )
+            .join(" ")
+            .toLowerCase();
+
+          return searchableText.includes(
+            searchValue
+          );
+        }
+      );
+    };
+      const fetchLoadTransferBills =
+    async () => {
+      if (loadTransferLoading) {
+        return;
+      }
+
+      const distributorId =
+        localStorage.getItem(
+          "distributorId"
+        );
+
+      const firmId =
+        localStorage.getItem(
+          "firmId"
+        );
+
+      if (
+        !distributorId ||
+        !firmId
+      ) {
+        alert(
+          "Distributor/Firm not found. Please login again."
+        );
+
+        return;
+      }
+
+   const currentTransferMode =
+  loadTransferForm.transferMode ||
+  "LOAD_TO_LOAD";
+
+const isLoadToLoad =
+  currentTransferMode ===
+  "LOAD_TO_LOAD";
+
+      if (
+        isLoadToLoad &&
+        !String(
+          loadTransferForm.fromLoadNo ||
+          ""
+        ).trim()
+      ) {
+        alert(
+          "Please enter From Load No."
+        );
+
+        return;
+      }
+
+      if (
+        !isLoadToLoad &&
+        !String(
+          loadTransferForm.billNo ||
+          ""
+        ).trim()
+      ) {
+        alert(
+          "Please enter Bill No."
+        );
+
+        return;
+      }
+
+      try {
+        setLoadTransferLoading(true);
+        setLoadTransferError("");
+        setLoadTransferBills([]);
+        setLoadTransferSourceLoad(null);
+        setLoadTransferHasSearched(true);
+        setLoadTransferSearchText("");
+
+        const query =
+          new URLSearchParams({
+            distributorId,
+            firmId,
+          });
+
+        let requestUrl = "";
+
+        if (isLoadToLoad) {
+          query.set(
+            "loadSeries",
+            String(
+              loadTransferForm
+                .fromLoadSeries ||
+              ""
+            ).trim()
+          );
+
+          query.set(
+            "loadNo",
+            String(
+              loadTransferForm
+                .fromLoadNo ||
+              ""
+            ).trim()
+          );
+
+          requestUrl =
+            `${API_URL}/load-transfer/load-bills?${query.toString()}`;
+        } else {
+          query.set(
+            "billSeries",
+            String(
+              loadTransferForm
+                .billSeries ||
+              ""
+            ).trim()
+          );
+
+          query.set(
+            "billNo",
+            String(
+              loadTransferForm
+                .billNo ||
+              ""
+            ).trim()
+          );
+
+          requestUrl =
+            `${API_URL}/load-transfer/bill?${query.toString()}`;
+        }
+
+        const response =
+          await fetch(requestUrl);
+
+        const result =
+          await response.json();
+
+        if (
+          !response.ok ||
+          result.success === false
+        ) {
+          throw new Error(
+            result.message ||
+            "Unable to load transfer bills."
+          );
+        }
+
+        const returnedBills =
+          isLoadToLoad
+            ? (
+                Array.isArray(
+                  result.bills
+                )
+                  ? result.bills
+                  : []
+              )
+            : (
+                result.bill
+                  ? [result.bill]
+                  : []
+              );
+
+        const normalizedBills =
+          returnedBills.map(
+            (bill, index) => ({
+              ...bill,
+
+              id:
+                getLoadTransferBillId(
+                  bill
+                ) ||
+                `${bill.BillSeries || ""}-${bill.BillNo || index}`,
+
+              selected: true,
+            })
+          );
+
+        setLoadTransferBills(
+          normalizedBills
+        );
+
+        setLoadTransferSourceLoad(
+          result.sourceLoad ||
+          null
+        );
+
+        /*
+         * In Bill Wise mode, show its current source load.
+         */
+        if (
+          !isLoadToLoad &&
+          result.sourceLoad
+        ) {
+          setLoadTransferForm(
+            (previous) => ({
+              ...previous,
+
+              fromLoadSeries:
+                result.sourceLoad
+                  .loadSeries ||
+                "",
+
+              fromLoadNo:
+                String(
+                  result.sourceLoad
+                    .loadNo ||
+                  ""
+                ),
+            })
+          );
+        }
+
+        if (
+          normalizedBills.length ===
+          0
+        ) {
+          setLoadTransferError(
+            "No bills were found."
+          );
+        }
+      } catch (error) {
+        console.error(
+          "Load Transfer lookup error:",
+          error
+        );
+
+        setLoadTransferBills([]);
+        setLoadTransferSourceLoad(null);
+
+        setLoadTransferError(
+          error.message ||
+          "Unable to load transfer bills."
+        );
+      } finally {
+        setLoadTransferLoading(false);
+      }
+    };
+      const handleLoadTransferLookupKeyDown = (
+    event
+  ) => {
+    if (event.key !== "Enter") {
+      return;
+    }
+
+    event.preventDefault();
+
+    fetchLoadTransferBills();
+  };
+    const saveLoadTransfer =
+    async () => {
+      if (loadTransferSaving) {
+        return;
+      }
+
+      const distributorId =
+        localStorage.getItem(
+          "distributorId"
+        );
+
+      const firmId =
+        localStorage.getItem(
+          "firmId"
+        );
+
+      const userName =
+        localStorage.getItem(
+          "userName"
+        ) ||
+        "ADMIN";
+
+      if (
+        !distributorId ||
+        !firmId
+      ) {
+        alert(
+          "Distributor/Firm not found. Please login again."
+        );
+
+        return;
+      }
+
+      const selectedBills =
+        getSelectedLoadTransferBills();
+
+      if (
+        selectedBills.length === 0
+      ) {
+        alert(
+          "Please select at least one bill to transfer."
+        );
+
+        return;
+      }
+
+      if (
+        !String(
+          loadTransferForm.toLoadNo ||
+          ""
+        ).trim()
+      ) {
+        alert(
+          "Please enter To Load No."
+        );
+
+        return;
+      }
+
+    const currentTransferMode =
+  loadTransferForm.transferMode ||
+  "LOAD_TO_LOAD";
+
+const isLoadToLoad =
+  currentTransferMode ===
+  "LOAD_TO_LOAD";
+
+      if (
+        isLoadToLoad &&
+        Number(
+          loadTransferForm.fromLoadNo ||
+          0
+        ) ===
+          Number(
+            loadTransferForm.toLoadNo ||
+            0
+          ) &&
+        String(
+          loadTransferForm
+            .fromLoadSeries ||
+          ""
+        )
+          .trim()
+          .toUpperCase() ===
+          String(
+            loadTransferForm
+              .toLoadSeries ||
+            ""
+          )
+            .trim()
+            .toUpperCase()
+      ) {
+        alert(
+          "From Load and To Load cannot be the same."
+        );
+
+        return;
+      }
+
+      const transferMessage =
+        selectedBills.length === 1
+          ? "Transfer the selected bill to the destination load?"
+          : `Transfer ${selectedBills.length} selected bills to the destination load?`;
+
+      const confirmed =
+        window.confirm(
+          transferMessage
+        );
+
+      if (!confirmed) {
+        return;
+      }
+
+      try {
+        setLoadTransferSaving(true);
+        setLoadTransferError("");
+
+        const selectedBillIds =
+          selectedBills.map(
+            (bill) =>
+              getLoadTransferBillId(
+                bill
+              )
+          );
+
+        if (
+          selectedBillIds.some(
+            (billId) =>
+              !billId
+          )
+        ) {
+          throw new Error(
+            "One or more selected bills do not have a valid ID."
+          );
+        }
+
+        const payload = {
+          distributorId,
+          firmId,
+
+        transferMode:
+  currentTransferMode,
+
+          fromLoadSeries:
+            String(
+              loadTransferForm
+                .fromLoadSeries ||
+              ""
+            ).trim(),
+
+          fromLoadNo:
+            Number(
+              loadTransferForm
+                .fromLoadNo ||
+              0
+            ),
+
+          toLoadSeries:
+            String(
+              loadTransferForm
+                .toLoadSeries ||
+              ""
+            ).trim(),
+
+          toLoadNo:
+            Number(
+              loadTransferForm
+                .toLoadNo ||
+              0
+            ),
+
+          selectedBillIds,
+
+          updatedBy:
+            userName,
+
+          userName,
+        };
+
+        const response =
+          await fetch(
+            `${API_URL}/load-transfer`,
+            {
+              method: "POST",
+
+              headers: {
+                "Content-Type":
+                  "application/json",
+              },
+
+              body:
+                JSON.stringify(
+                  payload
+                ),
+            }
+          );
+
+        const result =
+          await response.json();
+
+        if (
+          !response.ok ||
+          result.success === false
+        ) {
+          throw new Error(
+            result.message ||
+            "Load Transfer failed."
+          );
+        }
+
+               alert(
+          result.message ||
+          "Load Transfer completed successfully."
+        );
+
+        /*
+         * Remove transferred bills immediately from
+         * the currently visible table.
+         */
+        const transferredIdSet =
+          new Set(
+            selectedBillIds
+          );
+
+        setLoadTransferBills(
+          (previousBills) =>
+            previousBills.filter(
+              (bill) =>
+                !transferredIdSet.has(
+                  getLoadTransferBillId(
+                    bill
+                  )
+                )
+            )
+        );
+
+        /*
+         * In Load To Load mode, reload the same source
+         * load from the corrected backend API.
+         */
+        if (
+          currentTransferMode ===
+          "LOAD_TO_LOAD"
+        ) {
+          window.setTimeout(() => {
+            fetchLoadTransferBills();
+          }, 150);
+        } else {
+          resetLoadTransferForm({
+            keepDestination: true,
+          });
+        }
+      } catch (error) {
+        console.error(
+          "Load Transfer save error:",
+          error
+        );
+
+        setLoadTransferError(
+          error.message ||
+          "Load Transfer failed."
+        );
+
+        alert(
+          error.message ||
+          "Load Transfer failed."
+        );
+      } finally {
+        setLoadTransferSaving(false);
+      }
+    };
+      const cancelLoadTransfer =
+    () => {
+      const hasEnteredData =
+        Boolean(
+          loadTransferBills.length ||
+          loadTransferForm.fromLoadSeries ||
+          loadTransferForm.fromLoadNo ||
+          loadTransferForm.billSeries ||
+          loadTransferForm.billNo ||
+          loadTransferForm.toLoadSeries ||
+          loadTransferForm.toLoadNo
+        );
+
+      if (
+        hasEnteredData &&
+        !window.confirm(
+          "Clear the current Load Transfer details?"
+        )
+      ) {
+        return;
+      }
+
+      resetLoadTransferForm();
+    };
+      useEffect(() => {
+    if (
+      activeSubMenu !==
+        "Load Transfer" ||
+      openFormFor !==
+        "Load Transfer"
+    ) {
+      return;
+    }
+
+    setLoadTransferError("");
+
+    window.setTimeout(() => {
+      loadTransferFirstInputRef
+        .current
+        ?.focus();
+    }, 100);
+  }, [
+    activeSubMenu,
+    openFormFor,
+  ]);
   const handleBillPrintInputChange = (event) => {
     const { name, value } = event.target;
 
@@ -33229,6 +34208,30 @@ const Dashboard = ({ onLogout }) => {
       return;
     }
 
+        if (item === "Load Transfer") {
+      setActiveMenu("sales");
+      setActiveSubMenu("Load Transfer");
+      setOpenFormFor("Load Transfer");
+      setShowDashboard(false);
+
+      setShowSalesList(false);
+      setShowPurchaseList(false);
+      setShowCreditNoteList(false);
+      setShowDebitNoteList(false);
+      setShowCreateLoadList(false);
+      setShowSettleLoadList(false);
+      setShowPrintPreview(false);
+
+      setLoadTransferError("");
+
+      window.setTimeout(() => {
+        loadTransferFirstInputRef
+          .current
+          ?.focus();
+      }, 100);
+
+      return;
+    }
     if (item === "Dashboard") {
       setOpenFormFor(null);
       setActiveSubMenu(null);
@@ -38872,6 +39875,767 @@ const Dashboard = ({ onLogout }) => {
     setAreaToPartyEditingCell('');
     setShowAreaToPartyDropdown(false);
   };
+    /* =========================================================
+     LOAD TRANSFER PAGE
+     ========================================================= */
+  /* =========================================================
+     LOAD TRANSFER PAGE
+     ========================================================= */
+
+    /* =========================================================
+     LOAD TRANSFER PAGE
+     ========================================================= */
+
+  const renderLoadTransfer = () => {
+    const transferMode =
+      loadTransferForm.transferMode ||
+      "LOAD_TO_LOAD";
+
+    const isLoadToLoad =
+      transferMode === "LOAD_TO_LOAD";
+
+    const filteredBills =
+      getFilteredLoadTransferBills();
+
+    const totalLoadedAmount =
+      loadTransferBills.reduce(
+        (total, bill) =>
+          total +
+          getLoadTransferBillAmount(bill),
+        0
+      );
+
+    const sourceDisplay =
+      isLoadToLoad
+        ? [
+            loadTransferForm.fromLoadSeries,
+            loadTransferForm.fromLoadNo,
+          ]
+            .filter(Boolean)
+            .join(" / ")
+        : [
+            loadTransferForm.billSeries,
+            loadTransferForm.billNo,
+          ]
+            .filter(Boolean)
+            .join(" / ");
+
+    const destinationDisplay = [
+      loadTransferForm.toLoadSeries,
+      loadTransferForm.toLoadNo,
+    ]
+      .filter(Boolean)
+      .join(" / ");
+
+    const transferButtonDisabled =
+      loadTransferSaving ||
+      loadTransferLoading ||
+      loadTransferSelectedCount === 0 ||
+      !String(
+        loadTransferForm.toLoadNo || ""
+      ).trim();
+
+    return (
+      <div className="ltf-page">
+        {/* =================================================
+            PAGE HEADER
+            ================================================= */}
+
+        <div className="ltf-page-header">
+          <div className="ltf-page-heading">
+            <div className="ltf-page-icon">
+              <Truck size={21} />
+            </div>
+
+            <div>
+              <h1>Load Transfer</h1>
+
+              <p>
+                Transfer selected sales bills between
+                different loads
+              </p>
+            </div>
+          </div>
+
+          <div className="ltf-header-actions">
+            <button
+              type="button"
+              className="ltf-clear-button"
+              onClick={cancelLoadTransfer}
+              disabled={
+                loadTransferLoading ||
+                loadTransferSaving
+              }
+            >
+              <RotateCcw size={15} />
+              Clear
+            </button>
+
+            <button
+              type="button"
+              className="ltf-transfer-button"
+              onClick={saveLoadTransfer}
+              disabled={transferButtonDisabled}
+            >
+              {loadTransferSaving ? (
+                <>
+                  <RefreshCw
+                    size={16}
+                    className="load-transfer-spin"
+                  />
+                  Transferring...
+                </>
+              ) : (
+                <>
+                  <RefreshCw size={16} />
+
+                  Transfer
+                  {loadTransferSelectedCount > 0
+                    ? ` (${loadTransferSelectedCount})`
+                    : ""}
+                </>
+              )}
+            </button>
+          </div>
+        </div>
+
+        {/* =================================================
+            TRANSFER DETAILS
+            ================================================= */}
+
+        <section className="ltf-card ltf-criteria-card">
+          <div className="ltf-mode-field">
+            <label>
+              Load Transfer By
+              <span>*</span>
+            </label>
+
+            <select
+              name="transferMode"
+              value={transferMode}
+              onChange={
+                handleLoadTransferModeChange
+              }
+              disabled={
+                loadTransferLoading ||
+                loadTransferSaving
+              }
+            >
+              <option value="LOAD_TO_LOAD">
+                Load To Load
+              </option>
+
+              <option value="BILL_WISE">
+                Bill Wise
+              </option>
+            </select>
+          </div>
+
+          <div className="ltf-criteria-grid">
+            {/* SOURCE */}
+
+            <div className="ltf-load-field-group">
+              <label>
+                {isLoadToLoad
+                  ? "From Load"
+                  : "Bill Series & No."}
+                <span>*</span>
+              </label>
+
+              <div className="ltf-series-number-fields">
+                {isLoadToLoad ? (
+                  <>
+                    <input
+                      ref={
+                        loadTransferFirstInputRef
+                      }
+                      type="text"
+                      name="fromLoadSeries"
+                      value={
+                        loadTransferForm
+                          .fromLoadSeries
+                      }
+                      onChange={
+                        handleLoadTransferInputChange
+                      }
+                      onKeyDown={
+                        handleLoadTransferLookupKeyDown
+                      }
+                      placeholder="Series"
+                      autoComplete="off"
+                    />
+
+                    <input
+                      type="text"
+                      inputMode="numeric"
+                      name="fromLoadNo"
+                      value={
+                        loadTransferForm.fromLoadNo
+                      }
+                      onChange={
+                        handleLoadTransferInputChange
+                      }
+                      onKeyDown={
+                        handleLoadTransferLookupKeyDown
+                      }
+                      placeholder="No."
+                      autoComplete="off"
+                    />
+                  </>
+                ) : (
+                  <>
+                    <input
+                      ref={
+                        loadTransferFirstInputRef
+                      }
+                      type="text"
+                      name="billSeries"
+                      value={
+                        loadTransferForm.billSeries
+                      }
+                      onChange={
+                        handleLoadTransferInputChange
+                      }
+                      onKeyDown={
+                        handleLoadTransferLookupKeyDown
+                      }
+                      placeholder="Series"
+                      autoComplete="off"
+                    />
+
+                    <input
+                      type="text"
+                      inputMode="numeric"
+                      name="billNo"
+                      value={
+                        loadTransferForm.billNo
+                      }
+                      onChange={
+                        handleLoadTransferInputChange
+                      }
+                      onKeyDown={
+                        handleLoadTransferLookupKeyDown
+                      }
+                      placeholder="No."
+                      autoComplete="off"
+                    />
+                  </>
+                )}
+              </div>
+            </div>
+
+            {/* DESTINATION */}
+
+            <div className="ltf-load-field-group">
+              <label>
+                To Load
+                <span>*</span>
+              </label>
+
+              <div className="ltf-series-number-fields">
+                <input
+                  type="text"
+                  name="toLoadSeries"
+                  value={
+                    loadTransferForm.toLoadSeries
+                  }
+                  onChange={
+                    handleLoadTransferInputChange
+                  }
+                  placeholder="Series"
+                  autoComplete="off"
+                />
+
+                <input
+                  type="text"
+                  inputMode="numeric"
+                  name="toLoadNo"
+                  value={
+                    loadTransferForm.toLoadNo
+                  }
+                  onChange={
+                    handleLoadTransferInputChange
+                  }
+                  placeholder="No."
+                  autoComplete="off"
+                />
+              </div>
+            </div>
+
+            {/* GO */}
+
+            <button
+              type="button"
+              className="ltf-go-button"
+              onClick={fetchLoadTransferBills}
+              disabled={loadTransferLoading}
+            >
+              {loadTransferLoading ? (
+                <>
+                  <RefreshCw
+                    size={15}
+                    className="load-transfer-spin"
+                  />
+                  Loading
+                </>
+              ) : (
+                <>
+                  <Search size={15} />
+                  Go
+                </>
+              )}
+            </button>
+          </div>
+
+          {loadTransferError && (
+            <div className="ltf-error">
+              <AlertTriangle size={16} />
+
+              <span>
+                {loadTransferError}
+              </span>
+
+              <button
+                type="button"
+                onClick={() =>
+                  setLoadTransferError("")
+                }
+              >
+                <X size={14} />
+              </button>
+            </div>
+          )}
+        </section>
+
+        {/* =================================================
+            BILL LIST
+            ================================================= */}
+
+        <section className="ltf-card ltf-list-card">
+          <div className="ltf-list-header">
+            <div>
+              <h2>
+                {isLoadToLoad
+                  ? "Load To Load List"
+                  : "Bill Wise Transfer"}
+              </h2>
+
+              <p>
+                {isLoadToLoad
+                  ? "Select bills from the source load to transfer to the target load"
+                  : "Review the entered sales bill and transfer it to the target load"}
+              </p>
+            </div>
+
+            <div className="ltf-list-actions">
+              {loadTransferBills.length >
+                0 && (
+                <button
+                  type="button"
+                  className="ltf-select-all-button"
+                  onClick={
+                    toggleAllLoadTransferBills
+                  }
+                >
+                  <CheckCircle2 size={15} />
+
+                  {loadTransferAllSelected
+                    ? "Deselect All"
+                    : "Select All"}
+                </button>
+              )}
+
+              <div className="ltf-search-box">
+                <Search size={15} />
+
+                <input
+                  type="text"
+                  value={loadTransferSearchText}
+                  onChange={(event) =>
+                    setLoadTransferSearchText(
+                      event.target.value
+                    )
+                  }
+                  placeholder="Search bills..."
+                  disabled={
+                    loadTransferBills.length ===
+                    0
+                  }
+                />
+
+                {loadTransferSearchText && (
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setLoadTransferSearchText("")
+                    }
+                  >
+                    <X size={13} />
+                  </button>
+                )}
+              </div>
+            </div>
+          </div>
+
+          <div className="ltf-table-wrapper">
+            <table className="ltf-table">
+              <thead>
+                <tr>
+                  <th className="ltf-check-column">
+                    <label className="ltf-checkbox">
+                      <input
+                        type="checkbox"
+                        checked={
+                          loadTransferAllSelected
+                        }
+                        ref={(element) => {
+                          if (element) {
+                            element.indeterminate =
+                              loadTransferSomeSelected;
+                          }
+                        }}
+                        onChange={
+                          toggleAllLoadTransferBills
+                        }
+                        disabled={
+                          loadTransferBills.length ===
+                          0
+                        }
+                      />
+
+                      <span />
+                    </label>
+                  </th>
+
+                  <th className="ltf-serial-column">
+                    #
+                  </th>
+
+                  <th>Bill Date</th>
+                  <th>Series</th>
+                  <th className="ltf-bill-number">
+                    Bill No
+                  </th>
+                  <th>Party Code</th>
+                  <th className="ltf-party-name">
+                    Party Name
+                  </th>
+                  <th>Company</th>
+                  <th>Salesman</th>
+                  <th>Area</th>
+                  <th className="ltf-amount-column">
+                    Net Amount (₹)
+                  </th>
+                </tr>
+              </thead>
+
+              <tbody>
+                {loadTransferLoading ? (
+                  <tr>
+                    <td
+                      colSpan="11"
+                      className="ltf-table-state"
+                    >
+                      <RefreshCw
+                        size={23}
+                        className="load-transfer-spin"
+                      />
+
+                      <strong>
+                        Loading bills...
+                      </strong>
+
+                      <span>
+                        Please wait while bill details
+                        are being retrieved.
+                      </span>
+                    </td>
+                  </tr>
+                ) : filteredBills.length >
+                  0 ? (
+                  filteredBills.map(
+                    (bill, index) => {
+                      const billId =
+                        getLoadTransferBillId(
+                          bill
+                        );
+
+                      const billSeries =
+                        bill.BillSeries ??
+                        bill.billSeries ??
+                        "";
+
+                      const billNo =
+                        bill.BillNo ??
+                        bill.billNo ??
+                        "";
+
+                      const partyCode =
+                        bill.PartyCode ??
+                        bill.partyCode ??
+                        "";
+
+                      const partyName =
+                        bill.PartyName ??
+                        bill.partyName ??
+                        "";
+
+                      const companyName =
+                        bill.CompanyName ??
+                        bill.companyName ??
+                        "";
+
+                      const salesmanName =
+                        bill.SalesmanName ??
+                        bill.salesmanName ??
+                        "";
+
+                      const areaName =
+                        bill.AreaName ??
+                        bill.areaName ??
+                        "";
+
+                      const billAmount =
+                        getLoadTransferBillAmount(
+                          bill
+                        );
+
+                      return (
+                        <tr
+                          key={
+                            billId ||
+                            `${billSeries}-${billNo}-${index}`
+                          }
+                          className={
+                            bill.selected
+                              ? "selected"
+                              : ""
+                          }
+                          onClick={() =>
+                            toggleLoadTransferBill(
+                              billId
+                            )
+                          }
+                        >
+                          <td
+                            className="ltf-check-column"
+                            onClick={(event) =>
+                              event.stopPropagation()
+                            }
+                          >
+                            <label className="ltf-checkbox">
+                              <input
+                                type="checkbox"
+                                checked={
+                                  bill.selected ===
+                                  true
+                                }
+                                onChange={() =>
+                                  toggleLoadTransferBill(
+                                    billId
+                                  )
+                                }
+                              />
+
+                              <span />
+                            </label>
+                          </td>
+
+                          <td className="ltf-serial-column">
+                            {index + 1}
+                          </td>
+
+                          <td>
+                            {formatLoadTransferDate(
+                              bill.BillDate ??
+                                bill.billDate
+                            ) || "-"}
+                          </td>
+
+                          <td>
+                            <span className="ltf-series-badge">
+                              {billSeries || "-"}
+                            </span>
+                          </td>
+
+                          <td className="ltf-bill-number">
+                            {billNo || "-"}
+                          </td>
+
+                          <td>
+                            {partyCode || "-"}
+                          </td>
+
+                          <td className="ltf-party-name">
+                            <strong>
+                              {partyName || "-"}
+                            </strong>
+                          </td>
+
+                          <td>
+                            {companyName || "-"}
+                          </td>
+
+                          <td>
+                            {salesmanName || "-"}
+                          </td>
+
+                          <td>
+                            {areaName || "-"}
+                          </td>
+
+                          <td className="ltf-amount-column">
+                            ₹
+                            {formatLoadTransferAmount(
+                              billAmount
+                            )}
+                          </td>
+                        </tr>
+                      );
+                    }
+                  )
+                ) : (
+                  <tr>
+                    <td
+                      colSpan="11"
+                      className="ltf-table-state"
+                    >
+                      <div className="ltf-empty-icon">
+                        <ClipboardList size={25} />
+                      </div>
+
+                      <strong>
+                        {loadTransferHasSearched
+                          ? "No bills found"
+                          : "No bills loaded"}
+                      </strong>
+
+                      <span>
+                        {loadTransferHasSearched
+                          ? "No transferable bills were found for the entered details."
+                          : "Enter the source and destination details, then click Go."}
+                      </span>
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+
+          <div className="ltf-list-footer">
+            <span>
+              Showing{" "}
+              <strong>
+                {filteredBills.length}
+              </strong>{" "}
+              of{" "}
+              <strong>
+                {loadTransferBills.length}
+              </strong>{" "}
+              bills
+            </span>
+
+            <span>
+              <strong>
+                {loadTransferSelectedCount}
+              </strong>{" "}
+              bill(s) selected
+            </span>
+          </div>
+        </section>
+
+        {/* =================================================
+            BOTTOM SUMMARY
+            ================================================= */}
+
+        <section className="ltf-summary-bar">
+          <div className="ltf-summary-heading">
+            <div className="ltf-summary-icon">
+              <FileBarChart size={18} />
+            </div>
+
+            <div>
+              <strong>
+                Transfer Summary
+              </strong>
+
+              <span>
+                Overview of current bill selection
+              </span>
+            </div>
+          </div>
+
+          <div className="ltf-summary-items">
+            <div className="ltf-summary-item">
+              <span>
+                {isLoadToLoad
+                  ? "From Load"
+                  : "Selected Bill"}
+              </span>
+
+              <strong>
+                {sourceDisplay || "-"}
+              </strong>
+            </div>
+
+            <div className="ltf-summary-divider" />
+
+            <div className="ltf-summary-item">
+              <span>To Load</span>
+
+              <strong>
+                {destinationDisplay || "-"}
+              </strong>
+            </div>
+
+            <div className="ltf-summary-divider" />
+
+            <div className="ltf-summary-item">
+              <span>Total Bills</span>
+
+              <strong>
+                {loadTransferBills.length}
+              </strong>
+            </div>
+
+            <div className="ltf-summary-divider" />
+
+            <div className="ltf-summary-item">
+              <span>Total Amount</span>
+
+              <strong>
+                ₹
+                {formatLoadTransferAmount(
+                  totalLoadedAmount
+                )}
+              </strong>
+            </div>
+
+            <div className="ltf-summary-divider" />
+
+            <div className="ltf-summary-item">
+              <span>Selected Bills</span>
+
+              <strong>
+                {loadTransferSelectedCount}
+              </strong>
+            </div>
+
+            <div className="ltf-selected-summary">
+              <span>Selected Amount</span>
+
+              <strong>
+                ₹
+                {formatLoadTransferAmount(
+                  loadTransferSelectedAmount
+                )}
+              </strong>
+            </div>
+          </div>
+        </section>
+      </div>
+    );
+  };
   const renderDataTable = (title, data, columns, masterType, onDelete) => {
     const filteredData = data;
 
@@ -38888,6 +40652,8 @@ const Dashboard = ({ onLogout }) => {
       };
     };
 
+
+    
     const renderMasterPagination = (listKey, currentPage, totalPages) => (
       <div className="pagination-sticky-footer" style={{
         display: 'flex',
@@ -51704,29 +53470,25 @@ const Dashboard = ({ onLogout }) => {
                                   "Y";
 
                                 return (
-                                  <option
-                                    key={
-                                      mapping.accountCode
-                                    }
-                                    value={
-                                      mapping.accountCode
-                                    }
-                                    style={
-                                      isBlacklisted
-                                        ? {
-                                          color:
-                                            "#dc2626",
-                                          fontWeight:
-                                            "700",
-                                        }
-                                        : undefined
-                                    }
-                                  >
-                                    {mapping.accountName}
-                                    {isBlacklisted
-                                      ? " 🚫"
-                                      : ""}
-                                  </option>
+                               <option
+  key={mapping.accountCode}
+  value={mapping.accountCode}
+  style={
+    isBlacklisted
+      ? {
+          color: "#dc2626",
+          fontWeight: "700",
+        }
+      : undefined
+  }
+>
+  {mapping.accountCode} -{" "}
+  {account?.accountName ||
+    mapping.accountName ||
+    "Name not available"}
+
+  {isBlacklisted ? " 🚫" : ""}
+</option>
                                 );
                               })}
                           </select>
@@ -62394,41 +64156,43 @@ const Dashboard = ({ onLogout }) => {
                               Select party
                             </option>
 
-                            {invoiceAreaPartyMappings
-                              .filter(
-                                (mapping) =>
-                                  String(mapping.areaCode) ===
-                                  String(invoiceFormData.area)
-                              )
-                              .map((mapping) => {
-                                const account = accounts.find(
-                                  (item) =>
-                                    item.accountCode ===
-                                    mapping.accountCode
-                                );
+                           {invoiceAreaPartyMappings
+  .filter((mapping) => {
+    const sameArea =
+      String(mapping.areaCode || "").trim() ===
+      String(invoiceFormData.area || "").trim();
 
-                                const isBlacklisted =
-                                  account?.blackListed === "YES" ||
-                                  account?.blackListed === "Y";
+    const hasValidCode =
+      String(mapping.accountCode || "").trim() !== "";
 
-                                return (
-                                  <option
-                                    key={mapping.accountCode}
-                                    value={mapping.accountCode}
-                                    style={
-                                      isBlacklisted
-                                        ? {
-                                          color: "#dc2626",
-                                          fontWeight: "700",
-                                        }
-                                        : undefined
-                                    }
-                                  >
-                                    {mapping.accountName}
-                                    {isBlacklisted ? " 🚫" : ""}
-                                  </option>
-                                );
-                              })}
+    const hasValidName =
+      String(mapping.accountName || "").trim() !== "";
+
+    return sameArea && hasValidCode && hasValidName;
+  })
+  .map((mapping) => {
+    const isBlacklisted =
+      mapping.blackListed === "YES" ||
+      mapping.blackListed === "Y";
+
+    return (
+      <option
+        key={`${mapping.areaCode}-${mapping.accountCode}`}
+        value={mapping.accountCode}
+        style={
+          isBlacklisted
+            ? {
+                color: "#dc2626",
+                fontWeight: "700",
+              }
+            : undefined
+        }
+      >
+        {mapping.accountName}
+        {isBlacklisted ? " 🚫" : ""}
+      </option>
+    );
+  })}
                           </select>
 
                           {/* Opens Account Master */}
@@ -63827,6 +65591,10 @@ const Dashboard = ({ onLogout }) => {
                 </div>
               </div>
             )}
+
+{openFormFor === "Load Transfer" &&
+  activeSubMenu === "Load Transfer" &&
+  renderLoadTransfer()}
           {activeSubMenu === 'Purchase' && openFormFor === 'Purchase' && (
             <div className="purchase-billing-page">
               <div className="purchase-billing-card">

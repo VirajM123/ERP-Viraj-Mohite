@@ -369,13 +369,13 @@ app.get("/api/users", ensureConnection, async (req, res) => {
 
     const page =
       Number.isFinite(requestedPage) &&
-      requestedPage > 0
+        requestedPage > 0
         ? requestedPage
         : 1;
 
     const limit =
       Number.isFinite(requestedLimit) &&
-      requestedLimit > 0
+        requestedLimit > 0
         ? Math.min(requestedLimit, 100)
         : 10;
 
@@ -471,9 +471,9 @@ app.get("/api/users", ensureConnection, async (req, res) => {
           totalRecords === 0
             ? 0
             : Math.min(
-                skip + users.length,
-                totalRecords
-              ),
+              skip + users.length,
+              totalRecords
+            ),
       },
     });
   } catch (error) {
@@ -1113,23 +1113,23 @@ app.get(
       const accountMasters =
         mappedPartyCodes.length > 0
           ? await Account.find({
-              ...baseFilter,
-              accountCode: {
-                $in: mappedPartyCodes,
-              },
+            ...baseFilter,
+            accountCode: {
+              $in: mappedPartyCodes,
+            },
+          })
+            .select({
+              _id: 1,
+              accountCode: 1,
+              accountName: 1,
+              areaCode: 1,
+              town: 1,
+              address: 1,
+              mobileNo: 1,
+              phoneNo: 1,
+              gstNo: 1,
             })
-              .select({
-                _id: 1,
-                accountCode: 1,
-                accountName: 1,
-                areaCode: 1,
-                town: 1,
-                address: 1,
-                mobileNo: 1,
-                phoneNo: 1,
-                gstNo: 1,
-              })
-              .lean()
+            .lean()
           : [];
 
       const accountMasterMap = new Map(
@@ -1665,19 +1665,19 @@ app.get(
 
       const reportLevel = String(
         req.query.reportLevel ||
-          "salesSummary"
+        "salesSummary"
       ).trim();
 
       const productWise =
         String(
           req.query.productWise ||
-            "no"
+          "no"
         ).toLowerCase() === "yes";
 
       const withCreditNote =
         String(
           req.query.withCreditNote ||
-            "no"
+          "no"
         ).toLowerCase() === "yes";
 
       const fromDate = String(
@@ -1690,7 +1690,7 @@ app.get(
 
       const orderBy = String(
         req.query.orderBy ||
-          "partyName"
+        "partyName"
       ).trim();
 
       /*
@@ -1762,9 +1762,9 @@ app.get(
 
       if (
         reportLevel ===
-          "selectedParty" &&
+        "selectedParty" &&
         selectedPartyCodes.length ===
-          0
+        0
       ) {
         return res
           .status(400)
@@ -1896,7 +1896,7 @@ app.get(
         for (const key of keys) {
           if (
             item?.[key] !==
-              undefined &&
+            undefined &&
             item?.[key] !== null
           ) {
             return item[key];
@@ -1974,7 +1974,7 @@ app.get(
               combinedProduct
                 .slice(
                   separatorIndex +
-                    3
+                  3
                 )
                 .trim();
 
@@ -2034,23 +2034,23 @@ app.get(
        */
       const productMasters =
         soldProductCodes.length >
-        0
+          0
           ? await Product.find({
-              distributorId,
-              firmId,
+            distributorId,
+            firmId,
 
-              productCode: {
-                $in:
-                  soldProductCodes,
-              },
+            productCode: {
+              $in:
+                soldProductCodes,
+            },
+          })
+            .select({
+              productCode: 1,
+              productName: 1,
+              companyId: 1,
+              companyName: 1,
             })
-              .select({
-                productCode: 1,
-                productName: 1,
-                companyId: 1,
-                companyName: 1,
-              })
-              .lean()
+            .lean()
           : [];
 
       const productMasterMap =
@@ -2059,7 +2059,7 @@ app.get(
             (product) => [
               String(
                 product.productCode ||
-                  ""
+                ""
               ).trim(),
               product,
             ]
@@ -2075,32 +2075,32 @@ app.get(
        */
       const stockRows =
         soldProductCodes.length >
-        0
+          0
           ? await Stock.find({
-              distributorId,
-              firmId,
+            distributorId,
+            firmId,
 
-              ProdCode: {
-                $in:
-                  soldProductCodes,
-              },
+            ProdCode: {
+              $in:
+                soldProductCodes,
+            },
+          })
+            .select({
+              _id: 1,
+              GDCode: 1,
+              ProdCode: 1,
+              Batch: 1,
+              MRP: 1,
+              PRate: 1,
+              SRate: 1,
+              Qty: 1,
+              MfgDt: 1,
+              ExpDt: 1,
+              BoxPack: 1,
+              InBoxPack: 1,
+              IsLocked: 1,
             })
-              .select({
-                _id: 1,
-                GDCode: 1,
-                ProdCode: 1,
-                Batch: 1,
-                MRP: 1,
-                PRate: 1,
-                SRate: 1,
-                Qty: 1,
-                MfgDt: 1,
-                ExpDt: 1,
-                BoxPack: 1,
-                InBoxPack: 1,
-                IsLocked: 1,
-              })
-              .lean()
+            .lean()
           : [];
 
       /*
@@ -2116,7 +2116,7 @@ app.get(
           const productCode =
             String(
               stock.ProdCode ||
-                ""
+              ""
             ).trim();
 
           if (!productCode) {
@@ -2191,8 +2191,8 @@ app.get(
 
         const selectedBatch =
           item?.selectedBatch &&
-          typeof item
-            .selectedBatch ===
+            typeof item
+              .selectedBatch ===
             "object"
             ? item.selectedBatch
             : {};
@@ -2200,11 +2200,11 @@ app.get(
         const godownCode =
           String(
             bill.GDCode ||
-              item.GDCode ||
-              item.gdCode ||
-              selectedBatch.GDCode ||
-              selectedBatch.gdCode ||
-              ""
+            item.GDCode ||
+            item.gdCode ||
+            selectedBatch.GDCode ||
+            selectedBatch.gdCode ||
+            ""
           ).trim();
 
         const batch =
@@ -2216,10 +2216,10 @@ app.get(
               "batch",
               "Batch"
             ) ||
-              selectedBatch.batchNo ||
-              selectedBatch.BatchNo ||
-              selectedBatch.batch ||
-              selectedBatch.Batch
+            selectedBatch.batchNo ||
+            selectedBatch.BatchNo ||
+            selectedBatch.batch ||
+            selectedBatch.Batch
           );
 
         const mrp = toNumber(
@@ -2320,7 +2320,7 @@ app.get(
          */
         const productsRequired =
           reportLevel ===
-            "salesDetails" ||
+          "salesDetails" ||
           productWise;
 
         const reportItems =
@@ -2337,8 +2337,8 @@ app.get(
           ) => {
             const selectedBatch =
               item?.selectedBatch &&
-              typeof item
-                .selectedBatch ===
+                typeof item
+                  .selectedBatch ===
                 "object"
                 ? item.selectedBatch
                 : {};
@@ -2346,7 +2346,7 @@ app.get(
             const {
               productCode,
               productName:
-                savedProductName,
+              savedProductName,
             } =
               getProductDetails(
                 item
@@ -2463,30 +2463,30 @@ app.get(
                   "batch",
                   "Batch"
                 ) ||
-                  selectedBatch
-                    .batchNo ||
-                  selectedBatch
-                    .BatchNo ||
-                  selectedBatch
-                    .batch ||
-                  selectedBatch
-                    .Batch ||
-                  stockRow?.Batch
+                selectedBatch
+                  .batchNo ||
+                selectedBatch
+                  .BatchNo ||
+                selectedBatch
+                  .batch ||
+                selectedBatch
+                  .Batch ||
+                stockRow?.Batch
               );
 
             const godownCode =
               String(
                 bill.GDCode ||
-                  stockRow
-                    ?.GDCode ||
-                  ""
+                stockRow
+                  ?.GDCode ||
+                ""
               ).trim();
 
             const godownName =
               String(
                 bill.Godown ||
-                  godownCode ||
-                  ""
+                godownCode ||
+                ""
               ).trim();
 
             const stockQty =
@@ -2503,12 +2503,12 @@ app.get(
                   "MfgDt",
                   "manufacturingDate"
                 ) ||
-                  selectedBatch
-                    .mfgDate ||
-                  selectedBatch
-                    .MfgDt ||
-                  stockRow?.MfgDt ||
-                  ""
+                selectedBatch
+                  .mfgDate ||
+                selectedBatch
+                  .MfgDt ||
+                stockRow?.MfgDt ||
+                ""
               );
 
             const expiryDate =
@@ -2521,14 +2521,14 @@ app.get(
                   "ExpDate",
                   "ExpDt"
                 ) ||
-                  selectedBatch
-                    .expiryDate ||
-                  selectedBatch
-                    .expDate ||
-                  selectedBatch
-                    .ExpDt ||
-                  stockRow?.ExpDt ||
-                  ""
+                selectedBatch
+                  .expiryDate ||
+                selectedBatch
+                  .expDate ||
+                selectedBatch
+                  .ExpDt ||
+                stockRow?.ExpDt ||
+                ""
               );
 
             const grossAmount =
@@ -2654,7 +2654,7 @@ app.get(
             const gstPercent =
               igstPercent ||
               cgstPercent +
-                sgstPercent ||
+              sgstPercent ||
               toNumber(
                 getItemValue(
                   item,
@@ -2710,9 +2710,9 @@ app.get(
                   "TaxableValue"
                 ),
                 grossAmount -
-                  schemeAmount -
-                  cashDiscountAmount -
-                  tprAmount
+                schemeAmount -
+                cashDiscountAmount -
+                tprAmount
               );
 
             const calculatedNet =
@@ -2742,11 +2742,11 @@ app.get(
              */
             const creditNoteAmount =
               withCreditNote &&
-              itemIndex === 0
+                itemIndex === 0
                 ? toNumber(
-                    bill
-                      .CreditNoteAmount
-                  )
+                  bill
+                    .CreditNoteAmount
+                )
                 : 0;
 
             const netAmount =
@@ -2781,9 +2781,9 @@ app.get(
                 .filter(
                   (value) =>
                     value !==
-                      undefined &&
+                    undefined &&
                     value !==
-                      null &&
+                    null &&
                     value !== ""
                 )
                 .join("-"),
@@ -2895,7 +2895,7 @@ app.get(
               productWise
                 ? `${row.partyCode}__${row.productCode}`
                 : row.partyCode ||
-                  row.partyName;
+                row.partyName;
 
             if (
               !groupedRows.has(
@@ -2918,14 +2918,14 @@ app.get(
 
                   ...(productWise
                     ? {
-                        productCode:
-                          row.productCode,
+                      productCode:
+                        row.productCode,
 
-                        productName:
-                          row.productName,
+                      productName:
+                        row.productName,
 
-                        qty: 0,
-                      }
+                      qty: 0,
+                    }
                     : {}),
 
                   grossAmount: 0,
@@ -3098,11 +3098,11 @@ app.get(
             return (
               Number(
                 second.netAmount ||
-                  0
+                0
               ) -
               Number(
                 first.netAmount ||
-                  0
+                0
               )
             );
           }
@@ -3177,7 +3177,7 @@ app.get(
       const showProductDetails =
         productWise ||
         reportLevel ===
-          "salesDetails";
+        "salesDetails";
 
       /*
        * Detail columns are used by:
@@ -3461,7 +3461,7 @@ app.get(
 
         columns:
           reportLevel ===
-          "salesSummary"
+            "salesSummary"
             ? summaryColumns
             : detailColumns,
       });
@@ -4040,13 +4040,13 @@ app.get(
 
       const page =
         Number.isFinite(requestedPage) &&
-        requestedPage > 0
+          requestedPage > 0
           ? requestedPage
           : 1;
 
       const limit =
         Number.isFinite(requestedLimit) &&
-        requestedLimit > 0
+          requestedLimit > 0
           ? Math.min(requestedLimit, 100)
           : 10;
 
@@ -4148,9 +4148,9 @@ app.get(
             totalRecords === 0
               ? 0
               : Math.min(
-                  skip + companies.length,
-                  totalRecords
-                ),
+                skip + companies.length,
+                totalRecords
+              ),
         },
       });
     } catch (error) {
@@ -4356,13 +4356,13 @@ app.get(
 
       const page =
         Number.isFinite(requestedPage) &&
-        requestedPage > 0
+          requestedPage > 0
           ? requestedPage
           : 1;
 
       const limit =
         Number.isFinite(requestedLimit) &&
-        requestedLimit > 0
+          requestedLimit > 0
           ? Math.min(requestedLimit, 100)
           : 10;
 
@@ -4458,9 +4458,9 @@ app.get(
             totalRecords === 0
               ? 0
               : Math.min(
-                  skip + groups.length,
-                  totalRecords
-                ),
+                skip + groups.length,
+                totalRecords
+              ),
         },
       });
     } catch (error) {
@@ -4568,13 +4568,13 @@ app.get(
 
       const page =
         Number.isFinite(requestedPage) &&
-        requestedPage > 0
+          requestedPage > 0
           ? requestedPage
           : 1;
 
       const limit =
         Number.isFinite(requestedLimit) &&
-        requestedLimit > 0
+          requestedLimit > 0
           ? Math.min(requestedLimit, 100)
           : 10;
 
@@ -4671,9 +4671,9 @@ app.get(
             totalRecords === 0
               ? 0
               : Math.min(
-                  skip + categories.length,
-                  totalRecords
-                ),
+                skip + categories.length,
+                totalRecords
+              ),
         },
       });
     } catch (error) {
@@ -4803,13 +4803,13 @@ app.get(
 
       const page =
         Number.isFinite(requestedPage) &&
-        requestedPage > 0
+          requestedPage > 0
           ? requestedPage
           : 1;
 
       const limit =
         Number.isFinite(requestedLimit) &&
-        requestedLimit > 0
+          requestedLimit > 0
           ? Math.min(requestedLimit, 100)
           : 20;
 
@@ -5075,9 +5075,9 @@ app.get(
             totalRecords === 0
               ? 0
               : Math.min(
-                  skip + products.length,
-                  totalRecords
-                ),
+                skip + products.length,
+                totalRecords
+              ),
         },
       });
     } catch (error) {
@@ -5214,17 +5214,17 @@ app.get(
 
       const page =
         Number.isFinite(requestedPage) &&
-        requestedPage > 0
+          requestedPage > 0
           ? requestedPage
           : 1;
 
       const limit =
         Number.isFinite(requestedLimit) &&
-        requestedLimit > 0
+          requestedLimit > 0
           ? Math.min(
-              requestedLimit,
-              100
-            )
+            requestedLimit,
+            100
+          )
           : 20;
 
       if (!distributorId || !firmId) {
@@ -5448,10 +5448,10 @@ app.get(
             totalRecords === 0
               ? 0
               : Math.min(
-                  skip +
-                    accounts.length,
-                  totalRecords
-                ),
+                skip +
+                accounts.length,
+                totalRecords
+              ),
         },
       });
     } catch (error) {
@@ -5643,17 +5643,17 @@ app.get(
 
       const page =
         Number.isFinite(requestedPage) &&
-        requestedPage > 0
+          requestedPage > 0
           ? requestedPage
           : 1;
 
       const limit =
         Number.isFinite(requestedLimit) &&
-        requestedLimit > 0
+          requestedLimit > 0
           ? Math.min(
-              requestedLimit,
-              100
-            )
+            requestedLimit,
+            100
+          )
           : 20;
 
       if (!distributorId || !firmId) {
@@ -5822,10 +5822,10 @@ app.get(
             totalRecords === 0
               ? 0
               : Math.min(
-                  skip +
-                    otherAccounts.length,
-                  totalRecords
-                ),
+                skip +
+                otherAccounts.length,
+                totalRecords
+              ),
         },
       });
     } catch (error) {
@@ -5923,7 +5923,7 @@ app.get("/api/firms", ensureConnection, async (req, res) => {
 
     const page =
       Number.isFinite(requestedPage) &&
-      requestedPage > 0
+        requestedPage > 0
         ? requestedPage
         : 1;
 
@@ -5933,7 +5933,7 @@ app.get("/api/firms", ensureConnection, async (req, res) => {
      */
     const limit =
       Number.isFinite(requestedLimit) &&
-      requestedLimit > 0
+        requestedLimit > 0
         ? Math.min(requestedLimit, 100)
         : 10;
 
@@ -6044,9 +6044,9 @@ app.get("/api/firms", ensureConnection, async (req, res) => {
           totalRecords === 0
             ? 0
             : Math.min(
-                skip + firms.length,
-                totalRecords
-              ),
+              skip + firms.length,
+              totalRecords
+            ),
       },
     });
   } catch (error) {
@@ -6256,7 +6256,7 @@ app.get(
         Number.isFinite(
           requestedPage
         ) &&
-        requestedPage > 0
+          requestedPage > 0
           ? requestedPage
           : 1;
 
@@ -6264,11 +6264,11 @@ app.get(
         Number.isFinite(
           requestedLimit
         ) &&
-        requestedLimit > 0
+          requestedLimit > 0
           ? Math.min(
-              requestedLimit,
-              100
-            )
+            requestedLimit,
+            100
+          )
           : 10;
 
       if (
@@ -6355,7 +6355,7 @@ app.get(
           1,
           Math.ceil(
             totalRecords /
-              limit
+            limit
           )
         );
 
@@ -6420,10 +6420,10 @@ app.get(
               totalRecords === 0
                 ? 0
                 : Math.min(
-                    skip +
-                      gstList.length,
-                    totalRecords
-                  ),
+                  skip +
+                  gstList.length,
+                  totalRecords
+                ),
           },
         });
     } catch (error) {
@@ -6632,7 +6632,7 @@ app.get(
         Number.isFinite(
           requestedPage
         ) &&
-        requestedPage > 0
+          requestedPage > 0
           ? requestedPage
           : 1;
 
@@ -6640,11 +6640,11 @@ app.get(
         Number.isFinite(
           requestedLimit
         ) &&
-        requestedLimit > 0
+          requestedLimit > 0
           ? Math.min(
-              requestedLimit,
-              100
-            )
+            requestedLimit,
+            100
+          )
           : 20;
 
       if (
@@ -6752,7 +6752,7 @@ app.get(
           1,
           Math.ceil(
             totalRecords /
-              limit
+            limit
           )
         );
 
@@ -6817,10 +6817,10 @@ app.get(
               totalRecords === 0
                 ? 0
                 : Math.min(
-                    skip +
-                      salesmen.length,
-                    totalRecords
-                  ),
+                  skip +
+                  salesmen.length,
+                  totalRecords
+                ),
           },
         });
     } catch (error) {
@@ -7356,7 +7356,7 @@ app.get(
         Number.isFinite(
           requestedPage
         ) &&
-        requestedPage > 0
+          requestedPage > 0
           ? requestedPage
           : 1;
 
@@ -7364,11 +7364,11 @@ app.get(
         Number.isFinite(
           requestedLimit
         ) &&
-        requestedLimit > 0
+          requestedLimit > 0
           ? Math.min(
-              requestedLimit,
-              100
-            )
+            requestedLimit,
+            100
+          )
           : 10;
 
       if (
@@ -7440,7 +7440,7 @@ app.get(
           1,
           Math.ceil(
             totalRecords /
-              limit
+            limit
           )
         );
 
@@ -7505,10 +7505,10 @@ app.get(
             totalRecords === 0
               ? 0
               : Math.min(
-                  skip +
-                    areas.length,
-                  totalRecords
-                ),
+                skip +
+                areas.length,
+                totalRecords
+              ),
         },
       });
     } catch (error) {
@@ -7657,17 +7657,17 @@ app.get(
 
       const page =
         Number.isFinite(requestedPage) &&
-        requestedPage > 0
+          requestedPage > 0
           ? requestedPage
           : 1;
 
       const limit =
         Number.isFinite(requestedLimit) &&
-        requestedLimit > 0
+          requestedLimit > 0
           ? Math.min(
-              requestedLimit,
-              100
-            )
+            requestedLimit,
+            100
+          )
           : 20;
 
       if (!distributorId || !firmId) {
@@ -7795,10 +7795,10 @@ app.get(
             totalRecords === 0
               ? 0
               : Math.min(
-                  skip +
-                    godowns.length,
-                  totalRecords
-                ),
+                skip +
+                godowns.length,
+                totalRecords
+              ),
         },
       });
     } catch (error) {
@@ -7951,17 +7951,17 @@ app.get(
 
       const page =
         Number.isFinite(requestedPage) &&
-        requestedPage > 0
+          requestedPage > 0
           ? requestedPage
           : 1;
 
       const limit =
         Number.isFinite(requestedLimit) &&
-        requestedLimit > 0
+          requestedLimit > 0
           ? Math.min(
-              requestedLimit,
-              100
-            )
+            requestedLimit,
+            100
+          )
           : 20;
 
       if (!distributorId || !firmId) {
@@ -8137,10 +8137,10 @@ app.get(
             totalRecords === 0
               ? 0
               : Math.min(
-                  skip +
-                    customerBanks.length,
-                  totalRecords
-                ),
+                skip +
+                customerBanks.length,
+                totalRecords
+              ),
         },
       });
     } catch (error) {
@@ -8354,34 +8354,147 @@ app.post("/api/salesman-area-mappings", ensureConnection, async (req, res) => {
   }
 });
 
-app.get("/api/area-to-party-mappings", ensureConnection, async (req, res) => {
-  try {
-    const { distributorId, firmId, companyCode } = req.query;
+app.get(
+  "/api/area-to-party-mappings",
+  ensureConnection,
+  async (req, res) => {
+    try {
+      const distributorId = String(
+        req.query.distributorId || ""
+      ).trim();
 
-    if (!distributorId || !firmId) {
-      return res.status(400).json({
+      const firmId = String(
+        req.query.firmId || ""
+      ).trim();
+
+      const companyCode = String(
+        req.query.companyCode || ""
+      ).trim();
+
+      if (!distributorId || !firmId) {
+        return res.status(400).json({
+          success: false,
+          message: "distributorId and firmId are required",
+        });
+      }
+
+      const mappingFilter = {
+        distributorId,
+        firmId,
+        isActive: true,
+      };
+
+      if (companyCode) {
+        mappingFilter.companyCode = companyCode;
+      }
+
+      /*
+       * Load saved Area-to-Party mappings.
+       */
+      const savedMappings =
+        await AreaToPartyMapping.find(mappingFilter)
+          .lean();
+
+      /*
+       * Collect all mapped account codes.
+       */
+      const mappedAccountCodes = [
+        ...new Set(
+          savedMappings
+            .map((mapping) =>
+              String(mapping.accountCode || "").trim()
+            )
+            .filter(Boolean)
+        ),
+      ];
+
+      /*
+       * Load only accounts that currently exist in
+       * Account Master.
+       */
+      const existingAccounts =
+        mappedAccountCodes.length > 0
+          ? await Account.find({
+              distributorId,
+              firmId,
+              isActive: true,
+              accountCode: {
+                $in: mappedAccountCodes,
+              },
+            })
+              .select({
+                accountCode: 1,
+                accountName: 1,
+                blackListed: 1,
+                areaCode: 1,
+              })
+              .lean()
+          : [];
+
+      /*
+       * Create fast lookup using account code.
+       */
+      const accountMap = new Map(
+        existingAccounts.map((account) => [
+          String(account.accountCode || "").trim(),
+          account,
+        ])
+      );
+
+      /*
+       * Return only mappings whose accounts still
+       * exist in Account Master.
+       */
+      const mappings = savedMappings
+        .map((mapping) => {
+          const accountCode = String(
+            mapping.accountCode || ""
+          ).trim();
+
+          const account = accountMap.get(accountCode);
+
+          if (!account) {
+            return null;
+          }
+
+          return {
+            ...mapping,
+
+            accountCode,
+            accountName:
+              String(account.accountName || "").trim(),
+
+            blackListed:
+              account.blackListed || "NO",
+          };
+        })
+        .filter(Boolean)
+        .sort((first, second) =>
+          String(first.accountName || "").localeCompare(
+            String(second.accountName || "")
+          )
+        );
+
+      return res.json({
+        success: true,
+        count: mappings.length,
+        mappings,
+      });
+    } catch (error) {
+      console.error(
+        "Area To Party mapping load error:",
+        error
+      );
+
+      return res.status(500).json({
         success: false,
-        message: "distributorId and firmId are required",
+        message:
+          "Failed to fetch Area To Party mappings",
+        error: error.message,
       });
     }
-
-    const filter = { distributorId, firmId, isActive: true };
-
-    if (companyCode) filter.companyCode = companyCode;
-
-    const mappings = await AreaToPartyMapping.find(filter).sort({
-      accountName: 1,
-    });
-
-    res.json({ success: true, count: mappings.length, mappings });
-  } catch (error) {
-    res.status(500).json({
-      success: false,
-      message: "Failed to fetch Area To Party mappings",
-      error: error.message,
-    });
   }
-});
+);
 
 app.post("/api/area-to-party-mappings", ensureConnection, async (req, res) => {
   try {
@@ -8787,13 +8900,13 @@ app.get(
 
       const page =
         Number.isFinite(requestedPage) &&
-        requestedPage > 0
+          requestedPage > 0
           ? requestedPage
           : 1;
 
       const limit =
         Number.isFinite(requestedLimit) &&
-        requestedLimit > 0
+          requestedLimit > 0
           ? Math.min(requestedLimit, 100)
           : 10;
 
@@ -8877,37 +8990,37 @@ app.get(
           containsRegex(supplierName);
       }
 
-     if (company) {
-  const companyRegex =
-    containsRegex(company);
+      if (company) {
+        const companyRegex =
+          containsRegex(company);
 
-  /*
-   * Purchase records store company in
-   * companyCode and companyName.
-   *
-   * Some old records may contain company,
-   * so that field is also checked.
-   */
-  filter.$and =
-    filter.$and || [];
+        /*
+         * Purchase records store company in
+         * companyCode and companyName.
+         *
+         * Some old records may contain company,
+         * so that field is also checked.
+         */
+        filter.$and =
+          filter.$and || [];
 
-  filter.$and.push({
-    $or: [
-      {
-        companyCode:
-          companyRegex,
-      },
-      {
-        companyName:
-          companyRegex,
-      },
-      {
-        company:
-          companyRegex,
-      },
-    ],
-  });
-}
+        filter.$and.push({
+          $or: [
+            {
+              companyCode:
+                companyRegex,
+            },
+            {
+              companyName:
+                companyRegex,
+            },
+            {
+              company:
+                companyRegex,
+            },
+          ],
+        });
+      }
 
       if (gdCode) {
         filter.gdCode =
@@ -9038,13 +9151,13 @@ app.get(
           );
         }
 
-     filter.$and =
-  filter.$and || [];
+        filter.$and =
+          filter.$and || [];
 
-filter.$and.push({
-  $or:
-    searchConditions,
-});
+        filter.$and.push({
+          $or:
+            searchConditions,
+        });
       }
 
       /* =====================================================
@@ -9142,10 +9255,10 @@ filter.$and.push({
             totalRecords === 0
               ? 0
               : Math.min(
-                  skip +
-                  purchases.length,
-                  totalRecords
-                ),
+                skip +
+                purchases.length,
+                totalRecords
+              ),
         },
       });
     } catch (error) {
@@ -9534,17 +9647,17 @@ app.get("/api/sales", ensureConnection, async (req, res) => {
   }
 });
 
-  /* =========================================================
-   SALES BILLING LIST - BACKEND PAGINATION
+/* =========================================================
+ SALES BILLING LIST - BACKEND PAGINATION
 
-   Existing:
-   GET /api/sales
-   remains unchanged for existing full-list dependencies.
+ Existing:
+ GET /api/sales
+ remains unchanged for existing full-list dependencies.
 
-   New:
-   GET /api/sales/list
-   is used only by Sales -> Billing list.
-   ========================================================= */
+ New:
+ GET /api/sales/list
+ is used only by Sales -> Billing list.
+ ========================================================= */
 
 app.get(
   "/api/sales/list",
@@ -9675,17 +9788,17 @@ app.get(
 
       const page =
         Number.isFinite(requestedPage) &&
-        requestedPage > 0
+          requestedPage > 0
           ? requestedPage
           : 1;
 
       const limit =
         Number.isFinite(requestedLimit) &&
-        requestedLimit > 0
+          requestedLimit > 0
           ? Math.min(
-              requestedLimit,
-              100
-            )
+            requestedLimit,
+            100
+          )
           : 20;
 
       if (!distributorId || !firmId) {
@@ -10376,7 +10489,7 @@ app.get(
       if (
         paymentStatus &&
         paymentStatus.toLowerCase() !==
-          "all"
+        "all"
       ) {
         const normalizedStatus =
           paymentStatus.toLowerCase();
@@ -10779,10 +10892,10 @@ app.get(
             totalRecords === 0
               ? 0
               : Math.min(
-                  skip +
-                  sales.length,
-                  totalRecords
-                ),
+                skip +
+                sales.length,
+                totalRecords
+              ),
         },
 
         appliedFilters: {
@@ -11605,17 +11718,17 @@ app.get(
 
       const page =
         Number.isFinite(requestedPage) &&
-        requestedPage > 0
+          requestedPage > 0
           ? requestedPage
           : 1;
 
       const limit =
         Number.isFinite(requestedLimit) &&
-        requestedLimit > 0
+          requestedLimit > 0
           ? Math.min(
-              requestedLimit,
-              100
-            )
+            requestedLimit,
+            100
+          )
           : 20;
 
       if (!distributorId || !firmId) {
@@ -12399,10 +12512,10 @@ app.get(
             totalRecords === 0
               ? 0
               : Math.min(
-                  skip +
-                  quotations.length,
-                  totalRecords
-                ),
+                skip +
+                quotations.length,
+                totalRecords
+              ),
         },
 
         appliedFilters: {
@@ -13334,17 +13447,17 @@ app.get(
 
       const page =
         Number.isFinite(requestedPage) &&
-        requestedPage > 0
+          requestedPage > 0
           ? requestedPage
           : 1;
 
       const limit =
         Number.isFinite(requestedLimit) &&
-        requestedLimit > 0
+          requestedLimit > 0
           ? Math.min(
-              requestedLimit,
-              100
-            )
+            requestedLimit,
+            100
+          )
           : 10;
 
       if (
@@ -14030,10 +14143,10 @@ app.get(
             totalRecords === 0
               ? 0
               : Math.min(
-                  skip +
-                  loads.length,
-                  totalRecords
-                ),
+                skip +
+                loads.length,
+                totalRecords
+              ),
         },
 
         appliedFilters: {
@@ -14691,6 +14804,1355 @@ app.get("/api/settle-load", ensureConnection, async (req, res) => {
     });
   }
 });
+/* =========================================================
+   LOAD TRANSFER HELPERS
+   ========================================================= */
+
+const escapeLoadTransferRegex = (value = "") =>
+  String(value).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+
+const loadTransferExactRegex = (value = "") =>
+  new RegExp(
+    `^${escapeLoadTransferRegex(String(value).trim())}$`,
+    "i"
+  );
+
+/*
+ * Convert a Sales Header document into the same bill object
+ * format stored inside T_Load_Header.Bills.
+ */
+const createLoadTransferBillSnapshot = (bill) => {
+  const source = bill?.toObject
+    ? bill.toObject()
+    : bill || {};
+
+  const billSeries = String(
+    source.BillSeries ??
+    source.billSeries ??
+    source.Series ??
+    ""
+  ).trim();
+
+  const billNo = Number(
+    source.BillNo ??
+    source.billNo ??
+    0
+  );
+
+  const netAmount = Number(
+    source.NetAmount ??
+    source.netAmount ??
+    source.OriginalNetAmount ??
+    source.originalNetAmount ??
+    0
+  ) || 0;
+
+  return {
+    /*
+     * Keep MongoDB Sales Bill ID.
+     * This provides reliable future updates.
+     */
+    SalesBillId:
+      source._id
+        ? String(source._id)
+        : String(
+          source.SalesBillId ||
+          source.salesBillId ||
+          ""
+        ),
+
+    id:
+      source._id
+        ? String(source._id)
+        : String(
+          source.id ||
+          source.SalesBillId ||
+          source.salesBillId ||
+          `${billSeries}-${billNo}`
+        ),
+
+    _id:
+      source._id
+        ? String(source._id)
+        : undefined,
+
+    BillDate: String(
+      source.BillDate ??
+      source.billDate ??
+      ""
+    ),
+
+    BillSeries: billSeries,
+    BillNo: billNo,
+
+    PartyCode: String(
+      source.PartyCode ??
+      source.partyCode ??
+      ""
+    ),
+
+    PartyName: String(
+      source.PartyName ??
+      source.partyName ??
+      ""
+    ),
+
+    CompanyCode: String(
+      source.CompanyCode ??
+      source.companyCode ??
+      ""
+    ),
+
+    CompanyName: String(
+      source.CompanyName ??
+      source.companyName ??
+      ""
+    ),
+
+    AreaCode: String(
+      source.AreaCode ??
+      source.areaCode ??
+      ""
+    ),
+
+    AreaName: String(
+      source.AreaName ??
+      source.areaName ??
+      ""
+    ),
+
+    SalesmanCode: String(
+      source.SalesmanCode ??
+      source.salesmanCode ??
+      ""
+    ),
+
+    SalesmanName: String(
+      source.SalesmanName ??
+      source.salesmanName ??
+      ""
+    ),
+
+    BillType: String(
+      source.BillType ??
+      source.billType ??
+      ""
+    ),
+
+    NetAmount: netAmount,
+
+    amount: netAmount,
+    billAmount: netAmount,
+
+    selected: true,
+  };
+};
+
+
+/*
+ * Return a stable identifier for a bill stored in LoadHeader.Bills.
+ */
+const getLoadTransferBillKey = (
+  bill = {}
+) => {
+  /*
+   * Only SalesBillId represents the actual
+   * SalesHeader document.
+   *
+   * bill._id may belong to an embedded array row.
+   */
+  const salesBillId =
+    String(
+      bill.SalesBillId ||
+      bill.salesBillId ||
+      ""
+    ).trim();
+
+  if (
+    salesBillId &&
+    mongoose.Types.ObjectId.isValid(
+      salesBillId
+    )
+  ) {
+    return `ID:${salesBillId}`;
+  }
+
+  const billSeries =
+    String(
+      bill.BillSeries ??
+      bill.billSeries ??
+      bill.Series ??
+      ""
+    )
+      .trim()
+      .toUpperCase();
+
+  const billNo =
+    Number(
+      bill.BillNo ??
+      bill.billNo ??
+      0
+    );
+
+  return `BILL:${billSeries}:${billNo}`;
+};
+
+
+/*
+ * Calculate all LoadHeader totals after adding/removing bills.
+ */
+const calculateLoadTransferSummary = (bills = []) => {
+  const safeBills = Array.isArray(bills)
+    ? bills
+    : [];
+
+  const uniqueParties = new Set();
+  const uniqueSalesmen = new Set();
+  const uniqueAreas = new Set();
+
+  let totalAmount = 0;
+
+  safeBills.forEach((bill) => {
+    const partyValue = String(
+      bill.PartyCode ||
+      bill.partyCode ||
+      bill.PartyName ||
+      bill.partyName ||
+      ""
+    ).trim();
+
+    const salesmanValue = String(
+      bill.SalesmanCode ||
+      bill.salesmanCode ||
+      bill.SalesmanName ||
+      bill.salesmanName ||
+      ""
+    ).trim();
+
+    const areaValue = String(
+      bill.AreaCode ||
+      bill.areaCode ||
+      bill.AreaName ||
+      bill.areaName ||
+      ""
+    ).trim();
+
+    if (partyValue) {
+      uniqueParties.add(partyValue);
+    }
+
+    if (salesmanValue) {
+      uniqueSalesmen.add(salesmanValue);
+    }
+
+    if (areaValue) {
+      uniqueAreas.add(areaValue);
+    }
+
+    totalAmount += Number(
+      bill.NetAmount ??
+      bill.netAmount ??
+      bill.billAmount ??
+      bill.amount ??
+      0
+    ) || 0;
+  });
+
+  const totalBills = safeBills.length;
+  const totalParties = uniqueParties.size;
+  const totalSalesmen = uniqueSalesmen.size;
+  const totalAreas = uniqueAreas.size;
+
+  return {
+    TotalBills: totalBills,
+    TotalParties: totalParties,
+    TotalSalesmen: totalSalesmen,
+    TotalAreas: totalAreas,
+    TotalAmount: Number(totalAmount.toFixed(2)),
+
+    LoadSummary: {
+      totalBills,
+      totalParties,
+      totalSalesmen,
+      totalAreas,
+      totalAmount: Number(totalAmount.toFixed(2)),
+    },
+  };
+};
+
+
+/*
+ * Find one load using firm and Load Series + Load No.
+ */
+const findLoadForTransfer = async ({
+  distributorId,
+  firmId,
+  loadSeries,
+  loadNo,
+  session = null,
+}) => {
+  const filter = {
+    DistributorId: String(distributorId).trim(),
+    FirmId: String(firmId).trim(),
+    LoadNo: Number(loadNo),
+    IsCancelled: {
+      $ne: true,
+    },
+  };
+
+  const cleanSeries = String(
+    loadSeries || ""
+  ).trim();
+
+  if (cleanSeries) {
+    filter.LoadSeries =
+      loadTransferExactRegex(cleanSeries);
+  } else {
+    filter.$or = [
+      { LoadSeries: "" },
+      { LoadSeries: null },
+      { LoadSeries: { $exists: false } },
+    ];
+  }
+
+  let query = LoadHeader.findOne(filter);
+
+  if (session) {
+    query = query.session(session);
+  }
+
+  return query;
+};
+
+
+/* =========================================================
+   GET LOAD TRANSFER SOURCE BILLS
+   LOAD TO LOAD MODE
+   ========================================================= */
+
+/* =========================================================
+   GET LOAD TRANSFER SOURCE BILLS
+   SALES HEADER IS THE AUTHORITATIVE SOURCE
+   ========================================================= */
+
+/* =========================================================
+   GET LOAD TRANSFER SOURCE BILLS
+   SALES HEADER IS THE CURRENT SOURCE
+   ========================================================= */
+
+app.get(
+  "/api/load-transfer/load-bills",
+  ensureConnection,
+  async (req, res) => {
+    try {
+      const distributorId = String(
+        req.query.distributorId || ""
+      ).trim();
+
+      const firmId = String(
+        req.query.firmId || ""
+      ).trim();
+
+      const loadSeries = String(
+        req.query.loadSeries || ""
+      ).trim();
+
+      const loadNo = Number(
+        req.query.loadNo || 0
+      );
+
+      if (!distributorId || !firmId) {
+        return res.status(400).json({
+          success: false,
+          message:
+            "Distributor/Firm not found. Please login again.",
+        });
+      }
+
+      if (!loadNo) {
+        return res.status(400).json({
+          success: false,
+          message:
+            "From Load No is required.",
+        });
+      }
+
+      const sourceLoad =
+        await findLoadForTransfer({
+          distributorId,
+          firmId,
+          loadSeries,
+          loadNo,
+        });
+
+      if (!sourceLoad) {
+        return res.status(404).json({
+          success: false,
+          message:
+            "No load found for the entered Load Series and Load No.",
+        });
+      }
+
+      /*
+       * IMPORTANT:
+       * SalesHeader is the final source for current
+       * load assignment.
+       *
+       * Do not use sourceLoad.Bills to prepare the list,
+       * because it may contain an old transferred row.
+       */
+      const salesFilter = {
+        distributorId,
+        firmId,
+
+        LoadNo: Number(
+          sourceLoad.LoadNo
+        ),
+
+        IsLoaded: true,
+
+        isActive: true,
+
+        IsBillCancelled: {
+          $ne: true,
+        },
+      };
+
+      const actualLoadSeries = String(
+        sourceLoad.LoadSeries || ""
+      ).trim();
+
+      if (actualLoadSeries) {
+        salesFilter.LoadSeries =
+          loadTransferExactRegex(
+            actualLoadSeries
+          );
+      } else {
+        salesFilter.$or = [
+          {
+            LoadSeries: "",
+          },
+          {
+            LoadSeries: null,
+          },
+          {
+            LoadSeries: {
+              $exists: false,
+            },
+          },
+        ];
+      }
+
+      const salesBills =
+        await SalesHeader.find(
+          salesFilter
+        )
+          .sort({
+            BillDate: 1,
+            BillNo: 1,
+            _id: 1,
+          })
+          .lean();
+
+      const bills =
+        salesBills.map(
+          (salesBill) =>
+            createLoadTransferBillSnapshot(
+              salesBill
+            )
+        );
+
+      /*
+       * Repair LoadHeader.Bills automatically.
+       * Once a load is opened, stale embedded rows are removed.
+       */
+      const correctedSummary =
+        calculateLoadTransferSummary(
+          bills
+        );
+
+      sourceLoad.Bills = bills;
+
+      sourceLoad.TotalBills =
+        correctedSummary.TotalBills;
+
+      sourceLoad.TotalParties =
+        correctedSummary.TotalParties;
+
+      sourceLoad.TotalSalesmen =
+        correctedSummary.TotalSalesmen;
+
+      sourceLoad.TotalAreas =
+        correctedSummary.TotalAreas;
+
+      sourceLoad.TotalAmount =
+        correctedSummary.TotalAmount;
+
+      sourceLoad.LoadSummary =
+        correctedSummary.LoadSummary;
+
+      sourceLoad.UpdatedBy =
+        "LOAD_TRANSFER_RECONCILIATION";
+
+      await sourceLoad.save();
+
+      return res.json({
+        success: true,
+
+        sourceLoad: {
+          id:
+            String(sourceLoad._id),
+
+          loadSeries:
+            sourceLoad.LoadSeries || "",
+
+          loadNo:
+            sourceLoad.LoadNo || 0,
+
+          loadDate:
+            sourceLoad.LoadDate || "",
+
+          companyCode:
+            sourceLoad.CompanyCode || "",
+
+          companyName:
+            sourceLoad.CompanyName || "",
+
+          totalBills:
+            correctedSummary.TotalBills,
+
+          totalAmount:
+            correctedSummary.TotalAmount,
+        },
+
+        bills,
+
+        count:
+          bills.length,
+      });
+    } catch (error) {
+      console.error(
+        "Load Transfer load lookup error:",
+        error
+      );
+
+      return res.status(500).json({
+        success: false,
+
+        message:
+          "Failed to load bills from the entered load.",
+
+        error:
+          error.message,
+      });
+    }
+  }
+);
+
+/* =========================================================
+   GET LOAD TRANSFER BILL
+   BILL WISE MODE
+   ========================================================= */
+
+app.get(
+  "/api/load-transfer/bill",
+  ensureConnection,
+  async (req, res) => {
+    try {
+      const distributorId = String(
+        req.query.distributorId || ""
+      ).trim();
+
+      const firmId = String(
+        req.query.firmId || ""
+      ).trim();
+
+      const billSeries = String(
+        req.query.billSeries || ""
+      ).trim();
+
+      const billNo = Number(
+        req.query.billNo || 0
+      );
+
+      if (!distributorId || !firmId) {
+        return res.status(400).json({
+          success: false,
+          message:
+            "Distributor/Firm not found. Please login again.",
+        });
+      }
+
+      if (!billNo) {
+        return res.status(400).json({
+          success: false,
+          message: "Bill No is required.",
+        });
+      }
+
+      const billFilter = {
+        distributorId,
+        firmId,
+        BillNo: billNo,
+
+        isActive: true,
+
+        IsBillCancelled: {
+          $ne: true,
+        },
+      };
+
+      if (billSeries) {
+        billFilter.BillSeries =
+          loadTransferExactRegex(
+            billSeries
+          );
+      } else {
+        billFilter.$or = [
+          { BillSeries: "" },
+          { BillSeries: null },
+          {
+            BillSeries: {
+              $exists: false,
+            },
+          },
+        ];
+      }
+
+      const salesBill =
+        await SalesHeader.findOne(
+          billFilter
+        ).lean();
+
+      if (!salesBill) {
+        return res.status(404).json({
+          success: false,
+          message:
+            "Sales bill not found for the entered Bill Series and Bill No.",
+        });
+      }
+
+      const currentLoadSeries = String(
+        salesBill.LoadSeries || ""
+      ).trim();
+
+      const currentLoadNo = Number(
+        salesBill.LoadNo || 0
+      );
+
+      let sourceLoad = null;
+
+      if (currentLoadNo) {
+        sourceLoad =
+          await findLoadForTransfer({
+            distributorId,
+            firmId,
+            loadSeries:
+              currentLoadSeries,
+            loadNo:
+              currentLoadNo,
+          });
+      }
+
+      return res.json({
+        success: true,
+
+        sourceLoad: sourceLoad
+          ? {
+            id: String(sourceLoad._id),
+
+            loadSeries:
+              sourceLoad.LoadSeries || "",
+
+            loadNo:
+              sourceLoad.LoadNo || 0,
+
+            loadDate:
+              sourceLoad.LoadDate || "",
+          }
+          : null,
+
+        bill:
+          createLoadTransferBillSnapshot(
+            salesBill
+          ),
+      });
+    } catch (error) {
+      console.error(
+        "Load Transfer bill lookup error:",
+        error
+      );
+
+      return res.status(500).json({
+        success: false,
+        message:
+          "Failed to load the entered Sales Bill.",
+        error: error.message,
+      });
+    }
+  }
+);
+
+
+/* =========================================================
+   SAVE LOAD TRANSFER
+   ========================================================= */
+
+app.post(
+  "/api/load-transfer",
+  ensureConnection,
+  async (req, res) => {
+    const session =
+      await mongoose.startSession();
+
+    try {
+      session.startTransaction();
+
+      const distributorId = String(
+        req.body.distributorId || ""
+      ).trim();
+
+      const firmId = String(
+        req.body.firmId || ""
+      ).trim();
+
+      const transferMode = String(
+        req.body.transferMode ||
+        "LOAD_TO_LOAD"
+      )
+        .trim()
+        .toUpperCase();
+
+      const fromLoadSeries = String(
+        req.body.fromLoadSeries || ""
+      ).trim();
+
+      const fromLoadNo = Number(
+        req.body.fromLoadNo || 0
+      );
+
+      const toLoadSeries = String(
+        req.body.toLoadSeries || ""
+      ).trim();
+
+      const toLoadNo = Number(
+        req.body.toLoadNo || 0
+      );
+
+      const selectedBillIds =
+        Array.isArray(
+          req.body.selectedBillIds
+        )
+          ? req.body.selectedBillIds
+            .map((value) =>
+              String(value || "").trim()
+            )
+            .filter(Boolean)
+          : [];
+
+      const updatedBy = String(
+        req.body.updatedBy ||
+        req.body.userName ||
+        "ADMIN"
+      ).trim();
+
+      if (!distributorId || !firmId) {
+        throw new Error(
+          "Distributor/Firm not found. Please login again."
+        );
+      }
+
+      if (!toLoadNo) {
+        throw new Error(
+          "To Load No is required."
+        );
+      }
+
+      if (selectedBillIds.length === 0) {
+        throw new Error(
+          "Please select at least one bill to transfer."
+        );
+      }
+
+      const validBillObjectIds =
+        selectedBillIds
+          .filter((id) =>
+            mongoose.Types.ObjectId.isValid(
+              id
+            )
+          )
+          .map(
+            (id) =>
+              new mongoose.Types.ObjectId(id)
+          );
+
+      if (
+        validBillObjectIds.length !==
+        selectedBillIds.length
+      ) {
+        throw new Error(
+          "One or more selected Bill IDs are invalid."
+        );
+      }
+
+      const destinationLoad =
+        await findLoadForTransfer({
+          distributorId,
+          firmId,
+          loadSeries:
+            toLoadSeries,
+          loadNo:
+            toLoadNo,
+          session,
+        });
+
+      if (!destinationLoad) {
+        throw new Error(
+          "Destination load was not found. First create the To Load, then transfer bills into it."
+        );
+      }
+
+      if (
+        destinationLoad.IsLocked === true
+      ) {
+        throw new Error(
+          "Destination load is locked and cannot accept transferred bills."
+        );
+      }
+
+      if (
+        String(
+          destinationLoad.Status || ""
+        )
+          .trim()
+          .toUpperCase() === "SETTLED"
+      ) {
+        throw new Error(
+          "Destination load is already settled."
+        );
+      }
+
+      let sourceLoad = null;
+
+      if (fromLoadNo) {
+        sourceLoad =
+          await findLoadForTransfer({
+            distributorId,
+            firmId,
+            loadSeries:
+              fromLoadSeries,
+            loadNo:
+              fromLoadNo,
+            session,
+          });
+      }
+
+      if (
+        transferMode ===
+        "LOAD_TO_LOAD" &&
+        !sourceLoad
+      ) {
+        throw new Error(
+          "Source load was not found."
+        );
+      }
+
+      if (
+        sourceLoad &&
+        String(sourceLoad._id) ===
+        String(destinationLoad._id)
+      ) {
+        throw new Error(
+          "From Load and To Load cannot be the same."
+        );
+      }
+
+      if (
+        sourceLoad?.IsLocked === true
+      ) {
+        throw new Error(
+          "Source load is locked and cannot be changed."
+        );
+      }
+
+      if (
+        sourceLoad &&
+        String(
+          sourceLoad.Status || ""
+        )
+          .trim()
+          .toUpperCase() === "SETTLED"
+      ) {
+        throw new Error(
+          "Source load is already settled."
+        );
+      }
+
+      const selectedSalesBills =
+        await SalesHeader.find({
+          _id: {
+            $in:
+              validBillObjectIds,
+          },
+
+          distributorId,
+          firmId,
+
+          isActive: true,
+
+          IsBillCancelled: {
+            $ne: true,
+          },
+        }).session(session);
+
+      if (
+        selectedSalesBills.length !==
+        validBillObjectIds.length
+      ) {
+        throw new Error(
+          "One or more selected Sales Bills were not found."
+        );
+      }
+
+      /*
+       * In Load To Load mode, every selected bill must
+       * still belong to the entered source load.
+       */
+      if (
+        transferMode ===
+        "LOAD_TO_LOAD"
+      ) {
+        const invalidSourceBill =
+          selectedSalesBills.find(
+            (bill) =>
+              String(
+                bill.LoadSeries || ""
+              )
+                .trim()
+                .toUpperCase() !==
+              String(
+                sourceLoad.LoadSeries ||
+                ""
+              )
+                .trim()
+                .toUpperCase() ||
+              Number(
+                bill.LoadNo || 0
+              ) !==
+              Number(
+                sourceLoad.LoadNo || 0
+              )
+          );
+
+        if (invalidSourceBill) {
+          throw new Error(
+            `Bill ${invalidSourceBill.BillSeries ||
+            ""
+            }-${invalidSourceBill.BillNo ||
+            ""
+            } no longer belongs to the selected source load. Refresh and try again.`
+          );
+        }
+      }
+
+      /*
+       * Bill Wise mode also removes the bill from its
+       * actual current source load, when it has one.
+       */
+      const sourceLoadMap =
+        new Map();
+
+      if (sourceLoad) {
+        sourceLoadMap.set(
+          String(sourceLoad._id),
+          sourceLoad
+        );
+      }
+
+      if (
+        transferMode ===
+        "BILL_WISE"
+      ) {
+        for (
+          const salesBill of
+          selectedSalesBills
+        ) {
+          const billCurrentLoadNo =
+            Number(
+              salesBill.LoadNo || 0
+            );
+
+          if (!billCurrentLoadNo) {
+            continue;
+          }
+
+          const billCurrentLoad =
+            await findLoadForTransfer({
+              distributorId,
+              firmId,
+
+              loadSeries:
+                salesBill.LoadSeries ||
+                "",
+
+              loadNo:
+                billCurrentLoadNo,
+
+              session,
+            });
+
+          if (billCurrentLoad) {
+            if (
+              String(
+                billCurrentLoad._id
+              ) ===
+              String(
+                destinationLoad._id
+              )
+            ) {
+              throw new Error(
+                `Bill ${salesBill.BillSeries ||
+                ""
+                }-${salesBill.BillNo
+                } is already available in the destination load.`
+              );
+            }
+
+            sourceLoadMap.set(
+              String(
+                billCurrentLoad._id
+              ),
+              billCurrentLoad
+            );
+          }
+        }
+      }
+
+      const selectedIdSet =
+        new Set(
+          selectedSalesBills.map(
+            (bill) =>
+              String(bill._id)
+          )
+        );
+              const selectedBillKeySet =
+        new Set(
+          selectedSalesBills.map(
+            (bill) => {
+              const billSeries =
+                String(
+                  bill.BillSeries ||
+                  bill.billSeries ||
+                  bill.Series ||
+                  ""
+                )
+                  .trim()
+                  .toUpperCase();
+
+              const billNo =
+                Number(
+                  bill.BillNo ||
+                  bill.billNo ||
+                  0
+                );
+
+              return `${billSeries}:${billNo}`;
+            }
+          )
+        );
+
+      /*
+       * Remove selected bills from every source load.
+       */
+      for (
+        const currentSourceLoad of
+        sourceLoadMap.values()
+      ) {
+        if (
+          currentSourceLoad.IsLocked ===
+          true
+        ) {
+          throw new Error(
+            `Load ${currentSourceLoad.LoadSeries ||
+            ""
+            }-${currentSourceLoad.LoadNo
+            } is locked.`
+          );
+        }
+
+        const sourceBills =
+          Array.isArray(
+            currentSourceLoad.Bills
+          )
+            ? currentSourceLoad.Bills
+            : [];
+
+             const remainingBills =
+          sourceBills.filter(
+            (bill) => {
+              /*
+               * First try the explicit Sales Bill ID.
+               * Do not trust an embedded subdocument _id.
+               */
+              const salesBillId =
+                String(
+                  bill.SalesBillId ||
+                  bill.salesBillId ||
+                  ""
+                ).trim();
+
+              if (
+                salesBillId &&
+                selectedIdSet.has(
+                  salesBillId
+                )
+              ) {
+                return false;
+              }
+
+              /*
+               * Fallback for older LoadHeader rows:
+               * match using Bill Series + Bill No.
+               */
+              const billSeries =
+                String(
+                  bill.BillSeries ??
+                  bill.billSeries ??
+                  bill.Series ??
+                  ""
+                )
+                  .trim()
+                  .toUpperCase();
+
+              const billNo =
+                Number(
+                  bill.BillNo ??
+                  bill.billNo ??
+                  0
+                );
+
+              const billKey =
+                `${billSeries}:${billNo}`;
+
+              if (
+                selectedBillKeySet.has(
+                  billKey
+                )
+              ) {
+                return false;
+              }
+
+              return true;
+            }
+          );
+
+        const sourceSummary =
+          calculateLoadTransferSummary(
+            remainingBills
+          );
+
+        currentSourceLoad.Bills =
+          remainingBills;
+
+        currentSourceLoad.TotalBills =
+          sourceSummary.TotalBills;
+
+        currentSourceLoad.TotalParties =
+          sourceSummary.TotalParties;
+
+        currentSourceLoad.TotalSalesmen =
+          sourceSummary.TotalSalesmen;
+
+        currentSourceLoad.TotalAreas =
+          sourceSummary.TotalAreas;
+
+        currentSourceLoad.TotalAmount =
+          sourceSummary.TotalAmount;
+
+        currentSourceLoad.LoadSummary =
+          sourceSummary.LoadSummary;
+
+        currentSourceLoad.UpdatedBy =
+          updatedBy;
+
+        await currentSourceLoad.save({
+          session,
+        });
+      }
+
+      /*
+       * Add selected bills to destination load.
+       */
+      const destinationBills =
+        Array.isArray(
+          destinationLoad.Bills
+        )
+          ? [
+            ...destinationLoad.Bills,
+          ]
+          : [];
+
+      const destinationKeys =
+        new Set(
+          destinationBills.map(
+            getLoadTransferBillKey
+          )
+        );
+
+      selectedSalesBills.forEach(
+        (salesBill) => {
+          const snapshot =
+            createLoadTransferBillSnapshot(
+              salesBill
+            );
+
+          const key =
+            getLoadTransferBillKey(
+              snapshot
+            );
+
+          if (
+            destinationKeys.has(key)
+          ) {
+            throw new Error(
+              `Bill ${snapshot.BillSeries ||
+              ""
+              }-${snapshot.BillNo
+              } already exists in destination load.`
+            );
+          }
+
+          destinationKeys.add(key);
+          destinationBills.push(
+            snapshot
+          );
+        }
+      );
+
+      const destinationSummary =
+        calculateLoadTransferSummary(
+          destinationBills
+        );
+
+      destinationLoad.Bills =
+        destinationBills;
+
+      destinationLoad.TotalBills =
+        destinationSummary.TotalBills;
+
+      destinationLoad.TotalParties =
+        destinationSummary.TotalParties;
+
+      destinationLoad.TotalSalesmen =
+        destinationSummary.TotalSalesmen;
+
+      destinationLoad.TotalAreas =
+        destinationSummary.TotalAreas;
+
+      destinationLoad.TotalAmount =
+        destinationSummary.TotalAmount;
+
+      destinationLoad.LoadSummary =
+        destinationSummary.LoadSummary;
+
+      destinationLoad.UpdatedBy =
+        updatedBy;
+
+      await destinationLoad.save({
+        session,
+      });
+
+      /*
+       * Finally update the Sales Header load assignment.
+       */
+      await SalesHeader.updateMany(
+        {
+          _id: {
+            $in:
+              validBillObjectIds,
+          },
+
+          distributorId,
+          firmId,
+
+          isActive: true,
+        },
+
+        {
+          $set: {
+            IsLoaded: true,
+
+            LoadSeries:
+              String(
+                destinationLoad.LoadSeries ||
+                ""
+              ).trim(),
+
+            LoadNo:
+              Number(
+                destinationLoad.LoadNo
+              ),
+          },
+        },
+
+        {
+          session,
+        }
+      );
+
+      await session.commitTransaction();
+
+      return res.json({
+        success: true,
+
+        message:
+          selectedSalesBills.length === 1
+            ? "Bill transferred successfully."
+            : `${selectedSalesBills.length} bills transferred successfully.`,
+
+        transferredBills:
+          selectedSalesBills.length,
+
+        destinationLoad: {
+          id:
+            String(
+              destinationLoad._id
+            ),
+
+          loadSeries:
+            destinationLoad.LoadSeries ||
+            "",
+
+          loadNo:
+            destinationLoad.LoadNo,
+
+          totalBills:
+            destinationSummary.TotalBills,
+
+          totalAmount:
+            destinationSummary.TotalAmount,
+        },
+      });
+    } catch (error) {
+      await session.abortTransaction();
+
+      console.error(
+        "Load Transfer save error:",
+        error
+      );
+
+      return res.status(500).json({
+        success: false,
+        message:
+          error.message ||
+          "Load Transfer failed.",
+      });
+    } finally {
+      session.endSession();
+    }
+  }
+);
+
 app.get("/api/print-load", ensureConnection, async (req, res) => {
   try {
     const { distributorId, firmId, loadSeries, loadNo, reportLevel } = req.query;
@@ -16022,17 +17484,17 @@ app.get(
 
       const page =
         Number.isFinite(requestedPage) &&
-        requestedPage > 0
+          requestedPage > 0
           ? requestedPage
           : 1;
 
       const limit =
         Number.isFinite(requestedLimit) &&
-        requestedLimit > 0
+          requestedLimit > 0
           ? Math.min(
-              requestedLimit,
-              100
-            )
+            requestedLimit,
+            100
+          )
           : 10;
 
       if (
@@ -16667,10 +18129,10 @@ app.get(
             totalRecords === 0
               ? 0
               : Math.min(
-                  skip +
-                  records.length,
-                  totalRecords
-                ),
+                skip +
+                records.length,
+                totalRecords
+              ),
         },
 
         appliedFilters: {
@@ -18287,7 +19749,7 @@ app.get(
         Number.isFinite(
           requestedPage
         ) &&
-        requestedPage > 0
+          requestedPage > 0
           ? requestedPage
           : 1;
 
@@ -18295,11 +19757,11 @@ app.get(
         Number.isFinite(
           requestedLimit
         ) &&
-        requestedLimit > 0
+          requestedLimit > 0
           ? Math.min(
-              requestedLimit,
-              100
-            )
+            requestedLimit,
+            100
+          )
           : 10;
 
       if (
@@ -18754,10 +20216,10 @@ app.get(
             totalRecords === 0
               ? 0
               : Math.min(
-                  skip +
-                  debitNotes.length,
-                  totalRecords
-                ),
+                skip +
+                debitNotes.length,
+                totalRecords
+              ),
         },
       });
     } catch (error) {
@@ -21360,13 +22822,13 @@ app.get(
 
       const page =
         Number.isFinite(requestedPage) &&
-        requestedPage > 0
+          requestedPage > 0
           ? requestedPage
           : 1;
 
       const limit =
         Number.isFinite(requestedLimit) &&
-        requestedLimit > 0
+          requestedLimit > 0
           ? Math.min(requestedLimit, 100)
           : 10;
 
@@ -21793,10 +23255,10 @@ app.get(
             totalRecords === 0
               ? 0
               : Math.min(
-                  skip +
-                  creditNotes.length,
-                  totalRecords
-                ),
+                skip +
+                creditNotes.length,
+                totalRecords
+              ),
         },
       });
     } catch (error) {
