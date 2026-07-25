@@ -37975,3 +37975,119 @@ td {
     grid-template-columns: 1fr;
   }
 }
+/* =========================================================
+   SALES BILLING SELECTED PRODUCT DETAIL WINDOW
+   ========================================================= */
+
+.billing-grid-footer-with-detail {
+  display: grid;
+  grid-template-columns: auto minmax(440px, 1fr) auto;
+  align-items: stretch;
+  gap: 8px;
+  min-height: 48px;
+  padding: 4px 6px;
+}
+
+.billing-selected-product-area {
+  min-width: 0;
+  display: flex;
+  align-items: stretch;
+}
+
+.billing-selected-product-window {
+  width: 100%;
+  min-height: 40px;
+  padding: 5px 9px;
+  border: 1px solid #a9b9d0;
+  border-radius: 4px;
+  background: #eaf2ff;
+  color: #122c68;
+  overflow: hidden;
+}
+
+.billing-product-detail-top,
+.billing-product-detail-bottom {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 5px 20px;
+  font-size: 10px;
+  line-height: 1.25;
+}
+
+.billing-product-detail-top {
+  padding-bottom: 4px;
+  border-bottom: 1px solid #c5d5ed;
+}
+
+.billing-product-detail-bottom {
+  padding-top: 4px;
+}
+
+.billing-product-detail-top span,
+.billing-product-detail-bottom span {
+  white-space: nowrap;
+}
+
+.billing-product-detail-top b,
+.billing-product-detail-bottom b {
+  font-weight: 800;
+}
+
+.billing-detail-name {
+  flex: 1;
+  min-width: 190px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.billing-detail-net {
+  margin-left: auto;
+  font-weight: 800;
+}
+
+.billing-selected-product-placeholder {
+  width: 100%;
+  min-height: 40px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 5px 10px;
+  border: 1px dashed #c4cfe0;
+  border-radius: 4px;
+  background: #f8fafc;
+  color: #8190a8;
+  font-size: 10px;
+}
+
+.billing-grid-footer-with-detail
+.billing-grid-actions {
+  align-self: center;
+  white-space: nowrap;
+}
+
+.billing-grid-footer-with-detail
+.billing-grid-totals {
+  align-self: stretch;
+  white-space: nowrap;
+}
+
+.billing-table tbody tr {
+  cursor: pointer;
+}
+
+.billing-table tbody tr.billing-active-row {
+  background: #edf5ff;
+}
+
+@media (max-width: 1100px) {
+  .billing-grid-footer-with-detail {
+    grid-template-columns: auto 1fr;
+  }
+
+  .billing-grid-footer-with-detail
+  .billing-grid-totals {
+    grid-column: 1 / -1;
+    justify-content: flex-end;
+  }
+}

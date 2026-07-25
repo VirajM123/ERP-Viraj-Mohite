@@ -26,8 +26,8 @@ import {
   ChevronDown,
 } from "lucide-react";
 
-const API_URL = "https://total-solution-backend.onrender.com/api";
-// const API_URL = "http://localhost:5000/api";
+// const API_URL = "https://total-solution-backend.onrender.com/api";
+const API_URL = "http://localhost:5000/api";
 const Transaction = ({
   salesInvoices = [],
   salesmen = [],
@@ -271,24 +271,58 @@ const Transaction = ({
   const [partyNotFound, setPartyNotFound] = useState(false);
   const [activePartySuggestionIndex, setActivePartySuggestionIndex] =
     useState(-1);
-  const [receiptFormData, setReceiptFormData] = useState({
-    receiptDate: new Date().toISOString().split("T")[0],
-    rno: (state.receipts || []).length + 1,
-    billSeries: "",
-    billNo: "",
-    salesman: "",
-    partyName: "",
-    narration: "",
-    bankCash: "",
-    loadNo: "",
-    receiptAmount: "",
-    chequeNo: "",
-    chequeDate: "",
-    rloadNo: "",
-    drawerBank: "",
-    micr: "",
-    pdcType: "LOCAL BANK"
-  });
+  const [receiptFormData, setReceiptFormData] =
+    useState({
+      receiptDate:
+        new Date()
+          .toISOString()
+          .split("T")[0],
+
+      rno:
+        (state.receipts || []).length + 1,
+
+      billSeries: "",
+      billNo: "",
+
+      salesman: "",
+      salesmanId: "",
+      salesmanName: "",
+
+      partyId: "",
+      partyName: "",
+
+      narration: "",
+
+      /*
+       * Our Bank/Cash account
+       */
+      bankCash: "",
+
+      loadNo: "",
+
+      receiptAmount: "",
+
+      chequeNo: "",
+      chequeDate: "",
+
+      rloadNo: "",
+
+      /*
+       * Customer cheque bank
+       */
+      drawerBankId: "",
+      drawerBank: "",
+      drawerBankName: "",
+
+      micr: "",
+
+      pdcType:
+        "LOCAL BANK",
+
+      companyId: "",
+      firmId: "",
+      distributorId: ""
+    });
   const [receiptItems, setReceiptItems] = useState([]);
   const [receiptSummary, setReceiptSummary] = useState({
     totalAdjusted: 0,
@@ -802,20 +836,39 @@ const Transaction = ({
     );
   };
   const [editPDCDocketId, setEditPDCDocketId] = useState(null);
-  const [pdcDocketFormData, setPDCDocketFormData] = useState({
-    depositDate: new Date().toISOString().split("T")[0],
-    docSeries: "PDC",
-    docVNo: (state.pdcDockets?.length || 0) + 1,
-    fromDate: new Date().toISOString().split("T")[0],
-    toDate: new Date().toISOString().split("T")[0],
-    houseBank: "",
-    bankName: "",
-    narration: "",
-    clearingType: "SAME BANK",
-    clearingDate: "",
-    totalAmount: "0.00",
-    totalCheques: "0"
-  });
+  const [pdcDocketFormData, setPDCDocketFormData] =
+    useState({
+      depositDate:
+        new Date()
+          .toISOString()
+          .split("T")[0],
+
+      docSeries: "PDC",
+
+      docVNo:
+        (state.pdcDockets?.length || 0) + 1,
+
+      fromDate:
+        new Date()
+          .toISOString()
+          .split("T")[0],
+
+      toDate:
+        new Date()
+          .toISOString()
+          .split("T")[0],
+
+      houseBank: "",
+      bankName: "",
+      houseBankId: "",
+      houseBankName: "",
+
+      narration: "",
+      clearingType: "SAME BANK",
+      clearingDate: "",
+      totalAmount: "0.00",
+      totalCheques: "0"
+    });
 
   // =========================
   // CONTRA STATES
@@ -2432,38 +2485,46 @@ const Transaction = ({
 
     return true;
   };
-  const handleReceiptInput = (e) => {
-    const { name, value } = e.target;
+  const handleReceiptInput = (event) => {
+    const {
+      name,
+      value
+    } = event.target;
 
-    const updatedData = {
-      ...receiptFormData,
-      [name]: value
-    };
+    setReceiptFormData((previous) => {
+      const updatedData = {
+        ...previous,
+        [name]: value
+      };
 
-    if (name === "bankCash" && value === "Cash") {
-      updatedData.chequeNo = "";
-      updatedData.chequeDate = "";
-      updatedData.drawerBank = "";
-      updatedData.micr = "";
-    }
+      /*
+       * Keep drawerBank and drawerBankName synchronized.
+       */
+      if (name === "drawerBank") {
+        updatedData.drawerBank =
+          value;
 
-    setReceiptFormData(updatedData);
+        updatedData.drawerBankName =
+          value;
+      }
 
-    // When both Series and Bill No are available,
-    // automatically load the matching bill.
-    if (
-      (name === "billSeries" || name === "billNo") &&
-      updatedData.billSeries.trim() &&
-      updatedData.billNo.trim()
-    ) {
-      setTimeout(() => {
-        loadReceiptBillBySeriesNo(
-          updatedData.billSeries,
-          updatedData.billNo,
-          updatedData
-        );
-      }, 0);
-    }
+      /*
+       * Keep Bank/Cash clean when Cash is selected.
+       */
+      if (
+        name === "bankCash" &&
+        value === "Cash"
+      ) {
+        updatedData.chequeNo = "";
+        updatedData.chequeDate = "";
+        updatedData.drawerBank = "";
+        updatedData.drawerBankName = "";
+        updatedData.drawerBankId = "";
+        updatedData.micr = "";
+      }
+
+      return updatedData;
+    });
   };
   const handleReceiptBillKeyDown = (e) => {
     if (e.key !== "Enter") {
@@ -2693,227 +2754,293 @@ const Transaction = ({
 
   const saveReceipt = async () => {
     try {
-      /*
-        Save only bills where:
-        - nowAdjust is greater than zero, OR
-        - discount amount is greater than zero
-      */
-      const adjustedReceiptBills = receiptItems
-        .filter((item) => {
-          const nowAdjust = Number(item.nowAdjust) || 0;
+      const adjustedReceiptBills =
+        receiptItems
+          .filter((item) => {
+            const nowAdjust =
+              Number(
+                item.nowAdjust
+              ) || 0;
 
-          const discountAmount =
-            Number(item.discAmount) ||
-            Number(item.discAmt) ||
-            0;
+            const discAmt =
+              Number(
+                item.discAmt ??
+                item.discAmount
+              ) || 0;
 
-          return nowAdjust > 0 || discountAmount > 0;
-        })
-        .map((item, index) => {
-          const nowAdjust = Number(item.nowAdjust) || 0;
+            return (
+              nowAdjust > 0 ||
+              discAmt > 0
+            );
+          })
+          .map((item) => {
+            return {
+              trnSeries:
+                String(
+                  item.trnSeries ||
+                  item.billSeries ||
+                  ""
+                ).trim(),
 
-          const discountPercent =
-            Number(item.discountPercent) ||
-            Number(item.discount) ||
-            0;
+              trnNo:
+                String(
+                  item.trnNo ||
+                  item.billNo ||
+                  ""
+                ).trim(),
 
-          const discAmt =
-            Number(item.discAmt) ||
-            Number(item.discAmount) ||
-            0;
+              trnDate:
+                item.trnDate ||
+                item.billDate ||
+                "",
 
-          return {
-            srNo: index + 1,
+              amount:
+                Number(
+                  item.amount
+                ) || 0,
 
-            // Bill identification
-            trnSeries: String(
-              item.trnSeries ||
-              item.billSeries ||
-              ""
-            ).trim(),
+              adjustAmt:
+                Number(
+                  item.adjustAmt
+                ) || 0,
 
-            trnNo: String(
-              item.trnNo ||
-              item.billNo ||
-              ""
-            ).trim(),
+              balanceAmt:
+                Number(
+                  item.balanceAmt
+                ) || 0,
 
-            trnDate: item.trnDate || item.billDate || "",
+              nowAdjust:
+                Number(
+                  item.nowAdjust
+                ) || 0,
 
-            amount: Number(item.amount) || 0,
-            adjustAmt: Number(item.adjustAmt) || 0,
-            balanceAmt: Number(item.balanceAmt) || 0,
+              discountPercent:
+                Number(
+                  item.discountPercent ??
+                  item.discount
+                ) || 0,
 
-            nowAdjust,
+              discAmt:
+                Number(
+                  item.discAmt ??
+                  item.discAmount
+                ) || 0,
 
-            // Names must match backend schema
-            discountPercent,
-            discAmt,
+              remark:
+                String(
+                  item.remark || ""
+                ).trim()
+            };
+          });
 
-            remark: item.remark || ""
-          };
-        });
-
-      if (adjustedReceiptBills.length === 0) {
-        alert("Please adjust an amount against at least one bill.");
-        return;
-      }
-
-      const receiptAmount =
-        Number(receiptFormData.receiptAmount) || 0;
-
-      if (receiptAmount <= 0) {
-        alert("Please enter a valid receipt amount.");
-        return;
-      }
-
-      const totalAdjusted = adjustedReceiptBills.reduce(
-        (sum, item) =>
-          sum +
-          (Number(item.nowAdjust) || 0),
-        0
-      );
-
-      const totalDiscount = adjustedReceiptBills.reduce(
-        (sum, item) =>
-          sum +
-          (Number(item.discAmt) || 0),
-        0
-      );
-
-      if (totalAdjusted > receiptAmount + 0.001) {
+      if (
+        adjustedReceiptBills.length === 0
+      ) {
         alert(
-          `Adjusted amount ₹${totalAdjusted.toFixed(
-            2
-          )} cannot exceed receipt amount ₹${receiptAmount.toFixed(2)}.`
+          "Please adjust an amount against at least one bill."
         );
         return;
       }
 
-      /*
-        The receipt header can contain only one Bill Series/Bill No.
-        Therefore, put the first adjusted bill in the header.
-  
-        All adjusted bills are separately saved in receiptBills.
-      */
-      const firstAdjustedBill = adjustedReceiptBills[0];
+      const firstAdjustedBill =
+        adjustedReceiptBills[0];
+
+      const receiptAmount =
+        Number(
+          receiptFormData.receiptAmount
+        ) || 0;
+
+      if (receiptAmount <= 0) {
+        alert(
+          "Please enter a valid Receipt Amount."
+        );
+        return;
+      }
+
+      const distributorId =
+        receiptFormData.distributorId ||
+        localStorage.getItem(
+          "distributorId"
+        ) ||
+        "";
+
+      const firmId =
+        receiptFormData.firmId ||
+        localStorage.getItem(
+          "firmId"
+        ) ||
+        "";
+
+      if (
+        !distributorId ||
+        !firmId
+      ) {
+        alert(
+          "Distributor ID or Firm ID is missing."
+        );
+        return;
+      }
 
       const payload = {
         ...receiptFormData,
 
+        rno:
+          Number(
+            receiptFormData.rno
+          ) || 0,
+
         billSeries:
-          firstAdjustedBill.trnSeries || "",
+          firstAdjustedBill.trnSeries ||
+          receiptFormData.billSeries ||
+          "",
 
         billNo:
-          firstAdjustedBill.trnNo || "",
+          firstAdjustedBill.trnNo ||
+          receiptFormData.billNo ||
+          "",
+
+        salesmanName:
+          receiptFormData.salesmanName ||
+          receiptFormData.salesman ||
+          "",
+
+        bankCash:
+          receiptFormData.bankCash ||
+          "",
+
+        drawerBankId:
+          receiptFormData.drawerBankId ||
+          "",
+
+        drawerBank:
+          receiptFormData.drawerBank ||
+          receiptFormData.drawerBankName ||
+          "",
+
+        drawerBankName:
+          receiptFormData.drawerBank ||
+          receiptFormData.drawerBankName ||
+          "",
 
         receiptAmount,
 
-        receiptBills: adjustedReceiptBills
+        receiptBills:
+          adjustedReceiptBills,
+
+        distributorId,
+        firmId
       };
 
-      console.log("RECEIPT SAVE PAYLOAD =", payload);
+      const isEditing =
+        Boolean(editReceiptId);
+
+      const requestUrl =
+        isEditing
+          ? `${API_URL}/transaction/receipt/${encodeURIComponent(
+            editReceiptId
+          )}`
+          : `${API_URL}/transaction/receipt`;
+
       console.log(
-        "ADJUSTED RECEIPT BILLS =",
-        adjustedReceiptBills
+        "RECEIPT MODE =",
+        isEditing
+          ? "UPDATE"
+          : "CREATE"
       );
 
-      const response = await fetch(
-        `${API_URL}/transaction/receipt`,
-        {
-          method: "POST",
+      console.log(
+        "RECEIPT ID =",
+        editReceiptId
+      );
+
+      console.log(
+        "RECEIPT URL =",
+        requestUrl
+      );
+
+      console.log(
+        "RECEIPT PAYLOAD =",
+        payload
+      );
+
+      const response =
+        await fetch(requestUrl, {
+          method:
+            isEditing
+              ? "PUT"
+              : "POST",
+
           headers: {
-            "Content-Type": "application/json"
+            "Content-Type":
+              "application/json"
           },
-          body: JSON.stringify(payload)
-        }
+
+          body:
+            JSON.stringify(payload)
+        });
+
+      const result =
+        await response.json();
+
+      console.log(
+        "RECEIPT API RESULT =",
+        result
       );
 
-      const result = await response.json();
-
-      if (!response.ok || !result.success) {
+      if (
+        !response.ok ||
+        result.success === false
+      ) {
         throw new Error(
-          result.message || "Receipt save failed."
+          result.message ||
+          (isEditing
+            ? "Receipt update failed."
+            : "Receipt save failed.")
         );
       }
 
-      const savedReceipt = result.data;
+      alert(
+        isEditing
+          ? "Receipt Updated Successfully"
+          : "Receipt Saved Successfully"
+      );
 
-      const newReceipt = {
-        id: savedReceipt?._id || Date.now(),
-
-        header: {
-          ...receiptFormData,
-
-          billSeries:
-            savedReceipt?.billSeries ||
-            firstAdjustedBill.trnSeries ||
-            "",
-
-          billNo:
-            savedReceipt?.billNo ||
-            firstAdjustedBill.trnNo ||
-            ""
-        },
-
-        // Only adjusted bills in frontend state also
-        items:
-          savedReceipt?.receiptBills ||
-          adjustedReceiptBills,
-
-        receiptBills:
-          savedReceipt?.receiptBills ||
-          adjustedReceiptBills,
-
-        summary: {
-          totalAdjusted,
-          totalDiscount,
-
-          balanceAmount:
-            receiptAmount - totalAdjusted
-        }
-      };
-
-      dispatch({
-        type: "ADD_RECEIPT",
-        payload: newReceipt
-      });
-
-      alert("Receipt Saved Successfully");
+      /*
+       * Do not dispatch ADD_RECEIPT here.
+       * It causes duplicate frontend data during update.
+       */
 
       resetReceiptForm();
 
-      /*
- * Keep the existing complete Receipt refresh.
- */
       await loadReceipts();
-
-      /*
-       * Refresh the backend-paginated list separately.
-       */
-      await loadReceiptList({
-        page: 1,
-        limit:
-          receiptListRowsPerPage,
-        search:
-          receiptListSearchDebounced,
-        filters:
-          receiptAppliedFilters,
-      });
 
       setReceiptListCurrentPage(1);
 
-      // openTransactionList("Receipt");
+      await loadReceiptList({
+        page: 1,
 
-      // openTransactionList("Receipt");
+        limit:
+          receiptListRowsPerPage,
+
+        search:
+          receiptListSearchDebounced,
+
+        filters:
+          receiptAppliedFilters
+      });
+
+      openTransactionList(
+        "Receipt"
+      );
     } catch (error) {
       console.error(
-        "RECEIPT SAVE ERROR =",
+        "RECEIPT SAVE/UPDATE ERROR =",
         error
       );
 
       alert(
-        error.message || "Receipt Save Failed"
+        error.message ||
+        "Receipt operation failed."
       );
     }
   };
@@ -2948,29 +3075,288 @@ const Transaction = ({
     });
   };
   const editReceipt = (receipt) => {
-    setEditReceiptId(receipt.id);
+    const header =
+      receipt?.header || receipt || {};
+
+    const receiptId =
+      receipt?.id ||
+      receipt?._id ||
+      header?._id ||
+      "";
+
+    if (!receiptId) {
+      alert("Receipt ID was not found.");
+      return;
+    }
+
+    console.log(
+      "EDITING RECEIPT ID =",
+      receiptId
+    );
+
+    console.log(
+      "EDITING RECEIPT =",
+      receipt
+    );
+
+    setEditReceiptId(receiptId);
 
     setReceiptFormData({
-      ...receipt.header
+      receiptDate:
+        header.receiptDate ||
+        new Date()
+          .toISOString()
+          .split("T")[0],
+
+      rno:
+        header.rno || "",
+
+      billSeries:
+        header.billSeries || "",
+
+      billNo:
+        header.billNo || "",
+
+      salesman:
+        header.salesmanName ||
+        header.salesman ||
+        "",
+
+      salesmanId:
+        header.salesmanId || "",
+
+      salesmanName:
+        header.salesmanName ||
+        header.salesman ||
+        "",
+
+      partyId:
+        header.partyId || "",
+
+      partyName:
+        header.partyName || "",
+
+      narration:
+        header.narration || "",
+
+      bankCash:
+        header.bankCash || "",
+
+      drawerBankId:
+        header.drawerBankId || "",
+
+      drawerBank:
+        header.drawerBankName ||
+        header.drawerBank ||
+        "",
+
+      drawerBankName:
+        header.drawerBankName ||
+        header.drawerBank ||
+        "",
+
+      loadNo:
+        header.loadNo || "",
+
+      receiptAmount:
+        String(
+          Number(
+            header.receiptAmount || 0
+          )
+        ),
+
+      chequeNo:
+        header.chequeNo || "",
+
+      chequeDate:
+        header.chequeDate || "",
+
+      rloadNo:
+        header.rloadNo || "",
+
+      drawerBankId:
+        header.drawerBankId || "",
+
+      drawerBank:
+        header.drawerBankName ||
+        header.drawerBank ||
+        "",
+
+      drawerBankName:
+        header.drawerBankName ||
+        header.drawerBank ||
+        "",
+
+      micr:
+        header.micr || "",
+
+      pdcType:
+        header.pdcType ||
+        "LOCAL BANK",
+
+      docketNo:
+        header.docketNo || "",
+
+      addUser:
+        header.addUser || "",
+
+      editUser:
+        header.editUser || "",
+
+      companyId:
+        header.companyId || "",
+
+      firmId:
+        header.firmId ||
+        localStorage.getItem("firmId") ||
+        "",
+
+      distributorId:
+        header.distributorId ||
+        localStorage.getItem(
+          "distributorId"
+        ) ||
+        ""
     });
 
-    setReceiptItems((receipt.items || []).map((item, index) => ({
-      ...item,
-      srNo: index + 1
-    })));
+    const existingItems =
+      Array.isArray(
+        receipt?.receiptBills
+      )
+        ? receipt.receiptBills
+        : Array.isArray(receipt?.items)
+          ? receipt.items
+          : [];
+
+    const mappedItems =
+      existingItems.map(
+        (item, index) => {
+          const discAmt =
+            Number(
+              item.discAmt ??
+              item.discAmount ??
+              0
+            );
+
+          const discountPercent =
+            Number(
+              item.discountPercent ??
+              item.discount ??
+              0
+            );
+
+          return {
+            ...item,
+
+            id:
+              item._id ||
+              item.id ||
+              `${receiptId}-${index}`,
+
+            srNo:
+              index + 1,
+
+            trnSeries:
+              item.trnSeries ||
+              item.billSeries ||
+              "",
+
+            trnNo:
+              item.trnNo ||
+              item.billNo ||
+              "",
+
+            trnDate:
+              item.trnDate ||
+              item.billDate ||
+              "",
+
+            amount:
+              Number(
+                item.amount || 0
+              ),
+
+            adjustAmt:
+              Number(
+                item.adjustAmt || 0
+              ),
+
+            balanceAmt:
+              Number(
+                item.balanceAmt || 0
+              ),
+
+            nowAdjust:
+              Number(
+                item.nowAdjust || 0
+              ),
+
+            discount:
+              discountPercent,
+
+            discountPercent,
+
+            discAmt,
+
+            discAmount:
+              discAmt,
+
+            remark:
+              item.remark || ""
+          };
+        }
+      );
+
+    setReceiptItems(mappedItems);
+
+    const totalAdjusted =
+      mappedItems.reduce(
+        (sum, item) =>
+          sum +
+          Number(
+            item.nowAdjust || 0
+          ),
+        0
+      );
+
+    const totalDiscount =
+      mappedItems.reduce(
+        (sum, item) =>
+          sum +
+          Number(
+            item.discAmt || 0
+          ),
+        0
+      );
+
+    const receiptAmount =
+      Number(
+        header.receiptAmount || 0
+      );
 
     setReceiptSummary({
-      totalAdjusted: Number(receipt.summary?.totalAdjusted) || 0,
-      balanceAmount: Number(receipt.summary?.balanceAmount) || 0,
-      totalDiscount: Number(receipt.summary?.totalDiscount) || 0
+      totalAdjusted,
+
+      totalDiscount,
+
+      balanceAmount:
+        Math.max(
+          receiptAmount -
+          totalAdjusted,
+          0
+        )
     });
 
     setPartySuggestions([]);
+    setPartySearchActive(false);
+    setPartyNotFound(false);
 
-    setTransactionFormMode(prev => ({
-      ...prev,
-      Receipt: true
-    }));
+    setTransactionFormMode(
+      (previous) => ({
+        ...(previous || {}),
+        Receipt: true
+      })
+    );
   };
   const deleteReceipt = async (
     id
@@ -3975,32 +4361,81 @@ const Transaction = ({
   // =========================
   // PDC DOCKET FUNCTIONS
   // =========================
-  const handlePDCDocketInput = (e) => {
-    const { name, value } = e.target;
+  const handlePDCDocketInput = (
+    event
+  ) => {
+    const { name, value } =
+      event.target;
 
-    let updatedData = {
+    const normalizeValue = (
+      input
+    ) =>
+      String(input ?? "")
+        .trim()
+        .toLowerCase();
+
+    const updatedData = {
       ...pdcDocketFormData,
       [name]: value
     };
 
-    if (name === "houseBank") {
-      const selectedBank = bankCashAccounts.find(
-        acc => normalize(getBankAccountName(acc)) === normalize(value)
-      );
+    if (
+      name === "houseBank"
+    ) {
+      const selectedBank =
+        (
+          bankCashAccounts || []
+        ).find(
+          (account) =>
+            normalizeValue(
+              getBankAccountName(
+                account
+              )
+            ) ===
+            normalizeValue(value)
+        );
 
-      updatedData.bankName = getBankAccountName(selectedBank || {});
-      updatedData.houseBankAccountNo = getBankAccountNo(selectedBank || {});
-      updatedData.houseBankIFSC = getBankIFSC(selectedBank || {});
-      updatedData.houseBankBranch = getBankBranch(selectedBank || {});
+      const selectedBankName =
+        getBankAccountName(
+          selectedBank || {}
+        ) || value;
+
+      updatedData.houseBank =
+        selectedBankName;
+
+      updatedData.bankName =
+        selectedBankName;
+
+      updatedData.houseBankName =
+        selectedBankName;
+
+      updatedData.houseBankId =
+        selectedBank?._id ||
+        selectedBank?.id ||
+        selectedBank?.accountId ||
+        selectedBank?.SysAcCode ||
+        selectedBank?.sysAcCode ||
+        "";
     }
 
-    setPDCDocketFormData(updatedData);
+    setPDCDocketFormData(
+      updatedData
+    );
 
-    if (["houseBank", "fromDate", "toDate", "clearingType", "clearingDate"].includes(name)) {
-      setTimeout(() => loadPDCDocketGrid(updatedData), 0);
+    if (
+      [
+        "houseBank",
+        "fromDate",
+        "toDate",
+        "clearingType",
+        "clearingDate"
+      ].includes(name)
+    ) {
+      loadPDCDocketGrid(
+        updatedData
+      );
     }
   };
-
   const savePDCDocket =
     async () => {
       try {
@@ -4912,20 +5347,30 @@ const Transaction = ({
   const resetPDCDocketForm = () => {
     setPDCDocketFormData({
       depositDate: new Date().toISOString().split("T")[0],
+
       docSeries: "PDC",
+
       docVNo: (state.pdcDockets?.length || 0) + 1,
+
       fromDate: new Date().toISOString().split("T")[0],
+
       toDate: new Date().toISOString().split("T")[0],
+
       houseBank: "",
       bankName: "",
+
+      houseBankId: "",
+      houseBankName: "",
+
       narration: "",
+
       clearingType: "SAME BANK",
+
       clearingDate: "",
+
       totalAmount: "0.00",
-      totalCheques: "0",
-      houseBankAccountNo: "",
-      houseBankIFSC: "",
-      houseBankBranch: ""
+
+      totalCheques: "0"
     });
 
     setPDCDocketItems([]);
@@ -7966,7 +8411,7 @@ const Transaction = ({
               {receiptListLoading ? (
                 <tr>
                   <td
-                    colSpan={12}
+                    colSpan={18}
                     className="receipt-premium-empty-row"
                   >
                     Loading Receipt records...
@@ -7975,141 +8420,191 @@ const Transaction = ({
               ) : paginatedReceiptList.length === 0 ? (
                 <tr>
                   <td
-                    colSpan={12}
+                    colSpan={18}
                     className="receipt-premium-empty-row"
                   >
                     No Receipt records found
                   </td>
                 </tr>
               ) : (
-                paginatedReceiptList.map(
-                  (receipt, index) => {
-                    const header =
-                      receipt?.header || {};
+                paginatedReceiptList.map((receipt, index) => {
+                  const header = receipt?.header || {};
 
-                    const summary =
-                      receipt?.summary || {};
+                  const serialNumber =
+                    receiptListStartRecord > 0
+                      ? receiptListStartRecord + index
+                      : index + 1;
 
-                    const serialNumber =
-                      receiptListStartRecord +
-                      index;
+                  const receiptSeries =
+                    header.billSeries || "REC";
 
-                    return (
-                      <tr
-                        key={
-                          receipt.id ||
-                          receipt._id ||
-                          index
-                        }
-                      >
-                        <td>
-                          {serialNumber}
-                        </td>
+                  const voucherNo =
+                    header.rno || "-";
 
-                        <td>
-                          {header.receiptDate ||
-                            "-"}
-                        </td>
+                  const creditAccount =
+                    header.partyName || "-";
 
-                        <td>
-                          {header.rno || "-"}
-                        </td>
+                  const debitAccount =
+                    header.bankCash || "-";
 
-                        <td>
-                          {header.billSeries ||
-                            "-"}
-                        </td>
+                  const receiptAmount =
+                    Number(header.receiptAmount || 0);
 
-                        <td>
-                          {header.billNo || "-"}
-                        </td>
+                  return (
+                    <tr
+                      key={
+                        receipt.id ||
+                        receipt._id ||
+                        index
+                      }
+                    >
+                      {/* SrNo */}
+                      <td>
+                        {serialNumber}
+                      </td>
 
-                        <td>
-                          {header.partyName ||
-                            "-"}
-                        </td>
+                      {/* Date */}
+                      <td>
+                        {header.receiptDate || "-"}
+                      </td>
 
-                        <td>
-                          {header.salesman ||
-                            header.salesmanName ||
-                            "-"}
-                        </td>
+                      {/* Series */}
+                      <td>
+                        {receiptSeries}
+                      </td>
 
-                        <td>
-                          {header.bankCash ||
-                            "-"}
-                        </td>
+                      {/* Voucher No */}
+                      <td>
+                        {voucherNo}
+                      </td>
 
-                        <td className="amount-cell">
-                          ₹
-                          {Number(
-                            header.receiptAmount ||
-                            0
-                          ).toLocaleString(
-                            "en-IN",
-                            {
-                              minimumFractionDigits: 2,
-                              maximumFractionDigits: 2,
+                      {/* Credit Account */}
+                      <td>
+                        {creditAccount}
+                      </td>
+
+                      {/* Amount */}
+                      <td className="amount-cell">
+                        ₹
+                        {receiptAmount.toLocaleString(
+                          "en-IN",
+                          {
+                            minimumFractionDigits: 2,
+                            maximumFractionDigits: 2,
+                          }
+                        )}
+                      </td>
+
+                      {/* Debit Account */}
+                      <td>
+                        {debitAccount}
+                      </td>
+
+                      {/* Cheque No */}
+                      <td>
+                        {header.chequeNo || "-"}
+                      </td>
+
+                      {/* Cheque Date */}
+                      <td>
+                        {header.chequeDate || "-"}
+                      </td>
+
+                      {/* Salesman */}
+                      <td>
+                        {header.salesmanName ||
+                          header.salesman ||
+                          "-"}
+                      </td>
+
+                      {/* Narration */}
+                      <td>
+                        {header.narration || "-"}
+                      </td>
+
+                      {/* Bank Code / Drawer Bank */}
+                      <td>
+                        {header.drawerBankName ||
+                          header.drawerBank ||
+                          header.drawerBankId ||
+                          "-"}
+                      </td>
+
+                      {/* Load No */}
+                      <td>
+                        {header.loadNo || "-"}
+                      </td>
+
+                      {/* Add User */}
+                      <td>
+                        {header.addUser || "-"}
+                      </td>
+
+                      {/* Edit User */}
+                      <td>
+                        {header.editUser || "-"}
+                      </td>
+
+                      {/* Edit Date.Time */}
+                      <td>
+                        {header.updatedAt
+                          ? new Date(
+                            header.updatedAt
+                          ).toLocaleString("en-IN")
+                          : "-"}
+                      </td>
+
+                      {/* Docket No */}
+                      <td>
+                        {header.docketNo ||
+                          header.rloadNo ||
+                          "-"}
+                      </td>
+
+                      {/* Actions */}
+                      <td>
+                        <div className="receipt-premium-actions">
+                          <button
+                            type="button"
+                            className="receipt-premium-action-button view"
+                            title="View Receipt"
+                            onClick={() =>
+                              editReceipt(receipt)
                             }
-                          )}
-                        </td>
+                          >
+                            <Eye size={14} />
+                          </button>
 
-                        <td>
-                          {header.chequeNo ||
-                            "-"}
-                        </td>
+                          <button
+                            type="button"
+                            className="receipt-premium-action-button edit"
+                            title="Edit Receipt"
+                            onClick={() =>
+                              editReceipt(receipt)
+                            }
+                          >
+                            <Pencil size={14} />
+                          </button>
 
-                        <td>
-                          {header.chequeDate ||
-                            "-"}
-                        </td>
-
-                        <td>
-                          <div className="receipt-premium-actions">
-                            <button
-                              type="button"
-                              className="receipt-premium-action-button view"
-                              title="View Receipt"
-                              onClick={() => {
-                                editReceipt(receipt);
-                              }}
-                            >
-                              <Eye size={14} />
-                            </button>
-
-                            <button
-                              type="button"
-                              className="receipt-premium-action-button edit"
-                              title="Edit Receipt"
-                              onClick={() =>
-                                editReceipt(receipt)
-                              }
-                            >
-                              <Pencil size={14} />
-                            </button>
-
-                            <button
-                              type="button"
-                              className="receipt-premium-action-button delete"
-                              title="Delete Receipt"
-                              disabled={
-                                receiptListLoading
-                              }
-                              onClick={() =>
-                                deleteReceipt(
-                                  receipt.id ||
-                                  receipt._id
-                                )
-                              }
-                            >
-                              <Trash2 size={14} />
-                            </button>
-                          </div>
-                        </td>
-                      </tr>
-                    );
-                  }
-                )
+                          <button
+                            type="button"
+                            className="receipt-premium-action-button delete"
+                            title="Delete Receipt"
+                            disabled={receiptListLoading}
+                            onClick={() =>
+                              deleteReceipt(
+                                receipt.id ||
+                                receipt._id
+                              )
+                            }
+                          >
+                            <Trash2 size={14} />
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })
               )}
             </tbody>
           </table>
@@ -8425,95 +8920,344 @@ const Transaction = ({
       )
     );
 
-  const getPDCDocketReceipts = (formData = pdcDocketFormData) => {
-    const fromDate = getPdcDateValue(formData.fromDate);
-    const toDate = getPdcDateValue(formData.toDate);
-    const selectedHouseBank = clean(formData.houseBank || formData.bankName);
-    const clearingType = clean(formData.clearingType).replace(/\s+/g, " ");
+const getPdcDateValue = (value) => {
+  if (!value) {
+    return "";
+  }
 
-    if (!selectedHouseBank || !fromDate || !toDate) return [];
+  const rawValue =
+    String(value).trim();
 
-    return (state.receipts || [])
-      .filter((receipt) => {
-        const h = receipt.header || {};
+  if (!rawValue) {
+    return "";
+  }
 
-        if (!h.chequeNo) return false;
-        if (!h.bankCash || clean(h.bankCash) === "cash") return false;
-
-        const chequeDate = getPdcDateValue(h.chequeDate);
-        if (!chequeDate) return false;
-
-        if (chequeDate < fromDate || chequeDate > toDate) return false;
-
-        const distributorBank = clean(h.bankCash);
-        const customerBank = clean(h.drawerBank);
-
-        if (clearingType === "same bank") {
-          return (
-            distributorBank === selectedHouseBank &&
-            customerBank === selectedHouseBank
-          );
-        }
-
-        if (clearingType === "local bank") {
-          return (
-            distributorBank === selectedHouseBank &&
-            customerBank !== selectedHouseBank
-          );
-        }
-
-        if (clearingType === "outside bank") {
-          return distributorBank !== selectedHouseBank;
-        }
-
-        return distributorBank === selectedHouseBank;
-      })
-      .map((receipt, index) => {
-        const h = receipt.header || {};
-        const amount = Number(
-          receipt.summary?.totalAdjusted || h.receiptAmount || 0
-        );
-
-        return {
-          id: receipt.id,
-          selected: true,
-          srNo: index + 1,
-          chequeNo: h.chequeNo || "",
-          chequeDate: h.chequeDate || "",
-          amount,
-          clearingDate: formData.clearingDate || h.chequeDate || "",
-          recSeries: h.billSeries || "REC",
-          recNo: h.rno || "",
-
-          // CUSTOMER BANK should load here, not distributor bank
-          recTrnBank: h.drawerBank || "",
-
-          // BRANCH from Customer Bank Details
-          branch: getCustomerBankBranch(h.partyName, h.drawerBank),
-
-          partyCode: h.partyCode || "",
-          partyName: h.partyName || ""
-        };
-      });
-  };
-
-  const loadPDCDocketGrid = (formData = pdcDocketFormData) => {
-    const rows = getPDCDocketReceipts(formData);
-
-    const totalAmount = rows.reduce(
-      (sum, row) => sum + (Number(row.amount) || 0),
-      0
+  // Handles YYYY-MM-DD and ISO dates
+  const isoMatch =
+    rawValue.match(
+      /^(\d{4})-(\d{2})-(\d{2})/
     );
 
-    setPDCDocketItems(rows);
+  if (isoMatch) {
+    return `${isoMatch[1]}-${isoMatch[2]}-${isoMatch[3]}`;
+  }
 
-    setPDCDocketFormData((prev) => ({
-      ...prev,
-      ...formData,
-      totalAmount: totalAmount.toFixed(2),
-      totalCheques: rows.length
-    }));
-  };
+  // Handles DD/MM/YYYY
+  const slashMatch =
+    rawValue.match(
+      /^(\d{1,2})\/(\d{1,2})\/(\d{4})$/
+    );
+
+  if (slashMatch) {
+    const day =
+      String(slashMatch[1])
+        .padStart(2, "0");
+
+    const month =
+      String(slashMatch[2])
+        .padStart(2, "0");
+
+    const year =
+      slashMatch[3];
+
+    return `${year}-${month}-${day}`;
+  }
+
+  // Handles DD-MM-YYYY
+  const dashMatch =
+    rawValue.match(
+      /^(\d{1,2})-(\d{1,2})-(\d{4})$/
+    );
+
+  if (dashMatch) {
+    const day =
+      String(dashMatch[1])
+        .padStart(2, "0");
+
+    const month =
+      String(dashMatch[2])
+        .padStart(2, "0");
+
+    const year =
+      dashMatch[3];
+
+    return `${year}-${month}-${day}`;
+  }
+
+  return "";
+};
+
+
+const getPDCDocketReceipts = (
+  formData = pdcDocketFormData
+) => {
+  const fromDate =
+    getPdcDateValue(
+      formData.fromDate
+    );
+
+  const toDate =
+    getPdcDateValue(
+      formData.toDate
+    );
+
+  const selectedHouseBank =
+    clean(
+      formData.houseBank ||
+      formData.houseBankName ||
+      formData.bankName
+    );
+
+  const clearingType =
+    clean(
+      formData.clearingType
+    )
+      .replace(/\s+/g, " ");
+
+  /*
+   * Do not load the grid until required
+   * criteria have been entered.
+   */
+  if (
+    !selectedHouseBank ||
+    !fromDate ||
+    !toDate
+  ) {
+    return [];
+  }
+
+  const receipts =
+    Array.isArray(state.receipts)
+      ? state.receipts
+      : [];
+
+  return receipts
+    .filter((receipt) => {
+      const header =
+        receipt?.header ||
+        receipt ||
+        {};
+
+      const chequeNo =
+        String(
+          header.chequeNo || ""
+        ).trim();
+
+      if (!chequeNo) {
+        return false;
+      }
+
+      const chequeDate =
+        getPdcDateValue(
+          header.chequeDate
+        );
+
+      if (!chequeDate) {
+        return false;
+      }
+
+      if (
+        chequeDate < fromDate ||
+        chequeDate > toDate
+      ) {
+        return false;
+      }
+
+      /*
+       * The Receipt Bank/Cash field is the
+       * distributor's receiving bank.
+       */
+      const receiptBank =
+        clean(
+          header.bankCash ||
+          ""
+        );
+
+      /*
+       * Drawer Bank is the customer's cheque bank.
+       */
+      const drawerBank =
+        clean(
+          header.drawerBankName ||
+          header.drawerBank ||
+          ""
+        );
+
+      if (
+        !receiptBank ||
+        receiptBank === "cash"
+      ) {
+        return false;
+      }
+
+      if (
+        clearingType === "same bank"
+      ) {
+        return (
+          receiptBank ===
+            selectedHouseBank &&
+          drawerBank ===
+            selectedHouseBank
+        );
+      }
+
+      if (
+        clearingType === "local bank"
+      ) {
+        return (
+          receiptBank ===
+            selectedHouseBank &&
+          drawerBank !==
+            selectedHouseBank
+        );
+      }
+
+      if (
+        clearingType ===
+        "outside bank"
+      ) {
+        return (
+          receiptBank ===
+          selectedHouseBank
+        );
+      }
+
+      return (
+        receiptBank ===
+        selectedHouseBank
+      );
+    })
+    .map((receipt, index) => {
+      const header =
+        receipt?.header ||
+        receipt ||
+        {};
+
+      const drawerBankName =
+        header.drawerBankName ||
+        header.drawerBank ||
+        "";
+
+      return {
+        id:
+          receipt._id ||
+          receipt.id ||
+          `${header.rno || "REC"}-${index}`,
+
+        selected: true,
+
+        srNo:
+          index + 1,
+
+        chequeNo:
+          header.chequeNo || "",
+
+        chequeDate:
+          header.chequeDate || "",
+
+        amount:
+          Number(
+            header.receiptAmount ||
+            receipt.summary?.totalAdjusted ||
+            0
+          ),
+
+        clearingDate:
+          formData.clearingDate ||
+          "",
+
+        receiptSeries:
+          header.billSeries ||
+          "REC",
+
+        receiptNo:
+          header.rno || "",
+
+        receiptTrnBank:
+          drawerBankName,
+
+        branch:
+          header.drawerBankBranch ||
+          header.branch ||
+          "",
+
+        partyCode:
+          header.partyId ||
+          header.partyCode ||
+          "",
+
+        partyName:
+          header.partyName ||
+          ""
+      };
+    });
+};
+
+const loadPDCDocketGrid = (
+  formData = pdcDocketFormData
+) => {
+  try {
+    const rows =
+      getPDCDocketReceipts(
+        formData
+      );
+
+    const totalAmount =
+      rows.reduce(
+        (sum, row) =>
+          sum +
+          (
+            Number(
+              row.amount
+            ) || 0
+          ),
+        0
+      );
+
+    const numberedRows =
+      rows.map(
+        (row, index) => ({
+          ...row,
+          srNo: index + 1
+        })
+      );
+
+    setPDCDocketItems(
+      numberedRows
+    );
+
+    setPDCDocketFormData(
+      (previous) => ({
+        ...previous,
+        ...formData,
+
+        totalAmount:
+          totalAmount.toFixed(2),
+
+        totalCheques:
+          String(
+            numberedRows.length
+          )
+      })
+    );
+  } catch (error) {
+    console.error(
+      "LOAD PDC DOCKET GRID ERROR =",
+      error
+    );
+
+    setPDCDocketItems([]);
+
+    setPDCDocketFormData(
+      (previous) => ({
+        ...previous,
+        ...formData,
+        totalAmount: "0.00",
+        totalCheques: "0"
+      })
+    );
+  }
+};
   // Receipt Form
   // ======================================================
   // RECEIPT FORM - BILLING STYLE UI
@@ -8850,30 +9594,72 @@ const Transaction = ({
 
             <select
               name="drawerBank"
-              value={receiptFormData.drawerBank || ""}
-              onChange={handleReceiptInput}
-              disabled={receiptFormData.bankCash === "Cash"}
-            >
-              <option value="">Select Customer Bank</option>
+              value={
+                receiptFormData.drawerBank ||
+                receiptFormData.drawerBankName ||
+                ""
+              }
+              onChange={(event) => {
+                const selectedBankName =
+                  event.target.value;
 
-              {filteredCustomerBanks.map((bank, index) => {
-                const bankName = getCustomerBankName(bank);
+                const selectedBank =
+                  filteredCustomerBanks.find(
+                    (bank) =>
+                      getCustomerBankName(bank) ===
+                      selectedBankName
+                  );
 
-                if (!bankName) return null;
+                setReceiptFormData(
+                  (previous) => ({
+                    ...previous,
 
-                return (
-                  <option
-                    key={
-                      bank._id ||
-                      bank.id ||
-                      `${bankName}-${index}`
-                    }
-                    value={bankName}
-                  >
-                    {bankName}
-                  </option>
+                    drawerBank:
+                      selectedBankName,
+
+                    drawerBankName:
+                      selectedBankName,
+
+                    drawerBankId:
+                      selectedBank?._id ||
+                      selectedBank?.id ||
+                      selectedBank?.bankId ||
+                      ""
+                  })
                 );
-              })}
+              }}
+              disabled={
+                receiptFormData.bankCash ===
+                "Cash"
+              }
+            >
+              <option value="">
+                Select Customer Bank
+              </option>
+
+              {filteredCustomerBanks.map(
+                (bank, index) => {
+                  const bankName =
+                    getCustomerBankName(bank);
+
+                  if (!bankName) {
+                    return null;
+                  }
+
+                  return (
+                    <option
+                      key={
+                        bank._id ||
+                        bank.id ||
+                        `${bankName}-${index}`
+                      }
+                      value={bankName}
+                    >
+                      {bankName}
+                    </option>
+                  );
+                }
+              )}
             </select>
           </div>
 
@@ -13822,30 +14608,43 @@ const Transaction = ({
 
               <select
                 name="houseBank"
-                value={pdcDocketFormData.houseBank || ""}
-                onChange={handlePDCDocketInput}
+                value={
+                  pdcDocketFormData.houseBank ||
+                  ""
+                }
+                onChange={
+                  handlePDCDocketInput
+                }
               >
-                <option value="">Select Bank</option>
+                <option value="">
+                  Select Bank
+                </option>
 
-                {bankCashAccounts.map((account, index) => {
-                  const bankName = getBankAccountName(account);
+                {(bankCashAccounts || []).map(
+                  (account, index) => {
+                    const bankName =
+                      getBankAccountName(
+                        account
+                      );
 
-                  if (!bankName) return null;
+                    if (!bankName) {
+                      return null;
+                    }
 
-                  return (
-                    <option
-                      key={
-                        account._id ||
-                        account.id ||
-                        account.accountCode ||
-                        `${bankName}-${index}`
-                      }
-                      value={bankName}
-                    >
-                      {bankName}
-                    </option>
-                  );
-                })}
+                    return (
+                      <option
+                        key={
+                          account._id ||
+                          account.id ||
+                          `${bankName}-${index}`
+                        }
+                        value={bankName}
+                      >
+                        {bankName}
+                      </option>
+                    );
+                  }
+                )}
               </select>
             </div>
 

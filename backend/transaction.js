@@ -32,10 +32,35 @@ const receiptSchema = new mongoose.Schema(
         drawerBankId: String,
         drawerBankName: String,
 
-        micr: String,
-        narration: String,
+       micr: String,
+narration: String,
 
-       receiptBills: [
+loadNo: {
+  type: String,
+  default: ""
+},
+
+rloadNo: {
+  type: String,
+  default: ""
+},
+
+docketNo: {
+  type: String,
+  default: ""
+},
+
+addUser: {
+  type: String,
+  default: ""
+},
+
+editUser: {
+  type: String,
+  default: ""
+},
+
+receiptBills: [
   {
     trnSeries: {
       type: String,
@@ -656,11 +681,18 @@ router.post("/receipt", async (req, res) => {
         body.drawerBank ||
         "",
 
-      micr: body.micr || "",
-      narration: body.narration || "",
+    micr: body.micr || "",
+narration: body.narration || "",
 
-      // Only adjusted bills
-      receiptBills: adjustedBills,
+loadNo: body.loadNo || "",
+rloadNo: body.rloadNo || "",
+docketNo: body.docketNo || "",
+
+addUser: body.addUser || "",
+editUser: body.editUser || "",
+
+// Only adjusted bills
+receiptBills: adjustedBills,
 
       companyId: body.companyId || "",
       firmId: body.firmId || "",
@@ -1188,6 +1220,370 @@ router.get(
 /* ==========================
    GET SINGLE RECEIPT
 ========================== */
+/* ==========================
+   UPDATE RECEIPT
+========================== */
+/* ==========================
+   UPDATE RECEIPT
+========================== */
+
+router.put(
+  "/receipt/:id",
+  async (req, res) => {
+    try {
+      const receiptId =
+        String(
+          req.params.id || ""
+        ).trim();
+
+      if (
+        !mongoose.Types.ObjectId.isValid(
+          receiptId
+        )
+      ) {
+        return res.status(400).json({
+          success: false,
+          message:
+            "Invalid Receipt ID."
+        });
+      }
+
+      const existingReceipt =
+        await Receipt.findById(
+          receiptId
+        );
+
+      if (!existingReceipt) {
+        return res.status(404).json({
+          success: false,
+          message:
+            "Receipt not found."
+        });
+      }
+
+      const body =
+        req.body || {};
+
+      const incomingBills =
+        Array.isArray(
+          body.receiptBills
+        )
+          ? body.receiptBills
+          : Array.isArray(body.items)
+            ? body.items
+            : [];
+
+      const adjustedBills =
+        incomingBills
+          .filter((item) => {
+            const nowAdjust =
+              Number(
+                item.nowAdjust
+              ) || 0;
+
+            const discAmt =
+              Number(
+                item.discAmt ??
+                item.discAmount
+              ) || 0;
+
+            return (
+              nowAdjust > 0 ||
+              discAmt > 0
+            );
+          })
+          .map((item) => ({
+            trnSeries:
+              String(
+                item.trnSeries ??
+                item.billSeries ??
+                ""
+              ).trim(),
+
+            trnNo:
+              String(
+                item.trnNo ??
+                item.billNo ??
+                ""
+              ).trim(),
+
+            trnDate:
+              item.trnDate ||
+              item.billDate ||
+              "",
+
+            amount:
+              Number(
+                item.amount
+              ) || 0,
+
+            adjustAmt:
+              Number(
+                item.adjustAmt
+              ) || 0,
+
+            balanceAmt:
+              Number(
+                item.balanceAmt
+              ) || 0,
+
+            nowAdjust:
+              Number(
+                item.nowAdjust
+              ) || 0,
+
+            discountPercent:
+              Number(
+                item.discountPercent ??
+                item.discount
+              ) || 0,
+
+            discAmt:
+              Number(
+                item.discAmt ??
+                item.discAmount
+              ) || 0,
+
+            remark:
+              String(
+                item.remark || ""
+              ).trim()
+          }));
+
+      if (
+        adjustedBills.length === 0
+      ) {
+        return res.status(400).json({
+          success: false,
+          message:
+            "At least one adjusted bill is required."
+        });
+      }
+
+      const missingBillNumber =
+        adjustedBills.find(
+          (item) =>
+            !item.trnNo
+        );
+
+      if (missingBillNumber) {
+        return res.status(400).json({
+          success: false,
+          message:
+            "Bill number is missing in one adjusted bill."
+        });
+      }
+
+      const distributorId =
+        String(
+          body.distributorId ||
+          existingReceipt.distributorId ||
+          ""
+        ).trim();
+
+      const firmId =
+        String(
+          body.firmId ||
+          existingReceipt.firmId ||
+          ""
+        ).trim();
+
+      if (
+        !distributorId ||
+        !firmId
+      ) {
+        return res.status(400).json({
+          success: false,
+          message:
+            "Distributor ID and Firm ID are required."
+        });
+      }
+
+      const receiptNumber =
+        Number(body.rno) || 0;
+
+      if (receiptNumber <= 0) {
+        return res.status(400).json({
+          success: false,
+          message:
+            "Valid Receipt Number is required."
+        });
+      }
+
+      const duplicateReceipt =
+        await Receipt.findOne({
+          _id: {
+            $ne:
+              existingReceipt._id
+          },
+
+          distributorId,
+          firmId,
+
+          rno:
+            receiptNumber
+        }).lean();
+
+      if (duplicateReceipt) {
+        return res.status(409).json({
+          success: false,
+          message:
+            `Receipt No. ${receiptNumber} already exists.`
+        });
+      }
+
+      const firstAdjustedBill =
+        adjustedBills[0];
+
+      const updateData = {
+        receiptDate:
+          body.receiptDate || "",
+
+        rno:
+          receiptNumber,
+
+        billSeries:
+          String(
+            body.billSeries ||
+            firstAdjustedBill.trnSeries ||
+            ""
+          ).trim(),
+
+        billNo:
+          String(
+            body.billNo ||
+            firstAdjustedBill.trnNo ||
+            ""
+          ).trim(),
+
+        partyId:
+          body.partyId || "",
+
+        partyName:
+          body.partyName || "",
+
+        salesmanId:
+          body.salesmanId || "",
+
+        salesmanName:
+          body.salesmanName ||
+          body.salesman ||
+          "",
+
+        bankCash:
+  String(
+    body.bankCash || ""
+  ).trim(),
+
+drawerBankId:
+  String(
+    body.drawerBankId || ""
+  ).trim(),
+
+drawerBankName:
+  String(
+    body.drawerBank ||
+    body.drawerBankName ||
+    ""
+  ).trim(),
+
+        receiptAmount:
+          Number(
+            body.receiptAmount
+          ) || 0,
+
+        chequeNo:
+          body.chequeNo || "",
+
+        chequeDate:
+          body.chequeDate || "",
+
+        drawerBankId:
+          body.drawerBankId || "",
+
+      drawerBankName:
+  String(
+    body.drawerBank ||
+    body.drawerBankName ||
+    ""
+  ).trim(),
+
+        micr:
+          body.micr || "",
+
+        narration:
+          body.narration || "",
+
+        loadNo:
+          body.loadNo || "",
+
+        rloadNo:
+          body.rloadNo || "",
+
+        docketNo:
+          body.docketNo || "",
+
+        addUser:
+          body.addUser ||
+          existingReceipt.addUser ||
+          "",
+
+        editUser:
+          body.editUser || "",
+
+        receiptBills:
+          adjustedBills,
+
+        companyId:
+          body.companyId ||
+          existingReceipt.companyId ||
+          "",
+
+        firmId,
+
+        distributorId
+      };
+
+      const updatedReceipt =
+        await Receipt.findByIdAndUpdate(
+          receiptId,
+
+          {
+            $set:
+              updateData
+          },
+
+          {
+            new: true,
+            runValidators: true
+          }
+        );
+
+      return res.status(200).json({
+        success: true,
+
+        message:
+          "Receipt updated successfully.",
+
+        data:
+          updatedReceipt
+      });
+    } catch (error) {
+      console.error(
+        "UPDATE RECEIPT ERROR =",
+        error
+      );
+
+      return res.status(500).json({
+        success: false,
+
+        message:
+          error.message ||
+          "Receipt update failed."
+      });
+    }
+  }
+);
 
 router.get("/receipt/:id", async (req, res) => {
     try {

@@ -13,8 +13,8 @@ import Report from "./Report";
 // Note: Adjust the "../" or "./" depending on exactly where Dashboard.jsx sits relative to assets
 import SalesmanToAreaMapping from './SalesmanToAreaMapping';
 import Transaction from "./Transaction";
-const API_URL = "https://total-solution-backend.onrender.com/api";
-// const API_URL = "http://localhost:5000/api";
+// const API_URL = "https://total-solution-backend.onrender.com/api";
+const API_URL = "http://localhost:5000/api";
 
 
 import {
@@ -402,12 +402,12 @@ const Dashboard = ({ onLogout }) => {
     setShowPrintPreview(false);
   };
 
-    /* =========================================================
-     LOAD TRANSFER STATES
-     ========================================================= */
+  /* =========================================================
+   LOAD TRANSFER STATES
+   ========================================================= */
 
   const createDefaultLoadTransferForm = () => ({
-     transferMode: "LOAD_TO_LOAD",
+    transferMode: "LOAD_TO_LOAD",
 
     fromLoadSeries: "",
     fromLoadNo: "",
@@ -4041,6 +4041,10 @@ const Dashboard = ({ onLogout }) => {
       knows it was opened from Sales Invoice.
     */
     accountOpenedFromInvoiceRef.current = true;
+    sessionStorage.setItem(
+      "accountMasterReturnTo",
+      "Billing"
+    );
 
     masterReturnContextRef.current = returnContext;
     setMasterReturnContext(returnContext);
@@ -4268,35 +4272,94 @@ const Dashboard = ({ onLogout }) => {
     return true;
   };
 
-  const handleCancelAccountMaster = async () => {
+  const handleCancelAccountMaster = (event) => {
+    if (event) {
+      event.preventDefault();
+      event.stopPropagation();
+    }
+
     const returnContext =
-      masterReturnContextRef.current || masterReturnContext;
+      masterReturnContextRef.current ||
+      masterReturnContext;
 
-    // Account Master was opened from Sales Invoice
-    if (returnContext?.returnTo === "Billing") {
+    /*
+     * Important:
+     * activeMenu remains "sales" when Account Master
+     * is opened using the Party + button.
+     *
+     * This check prevents a missing/cleared ref from
+     * sending the user to the Account list.
+     */
+    const openedFromSalesBilling =
+      accountOpenedFromInvoiceRef.current === true ||
+      returnContext?.returnTo === "Billing" ||
+      sessionStorage.getItem("accountMasterReturnTo") ===
+      "Billing" ||
+      activeMenu === "sales";
+
+    if (openedFromSalesBilling) {
       setEditAccountId(null);
+      setAccountActiveTab("basic");
 
-      // Return directly to the same invoice
-      setActiveMenu("sales");
-      setActiveSubMenu("Billing");
-      setOpenFormFor("Billing");
-      setShowDashboard(false);
+      setShowPartySearchList(false);
+      setPartySearchIndex(-1);
+
+      setShowProductList(false);
+      setProductDropdownIndex(-1);
+      setFilteredProductList([]);
+      setProductListFilter("");
 
       setShowSalesList(false);
       setShowPurchaseList(false);
       setShowCreditNoteList(false);
       setShowDebitNoteList(false);
       setShowCreateLoadList(false);
+      setShowSettleLoadList(false);
       setShowPrintPreview(false);
 
+      /*
+       * Return to the existing Sales Bill.
+       * Do not reset invoiceFormData or invoiceItems.
+       */
+      setShowDashboard(false);
+      setActiveMenu("sales");
+      setActiveSubMenu("Billing");
+      setOpenFormFor("Billing");
+
+      /*
+       * Clear return tracking only after Billing
+       * navigation states have been assigned.
+       */
+      accountOpenedFromInvoiceRef.current = false;
       masterReturnContextRef.current = null;
       setMasterReturnContext(null);
+      accountOpenedFromInvoiceRef.current = false;
+      masterReturnContextRef.current = null;
+      setMasterReturnContext(null);
+
+      sessionStorage.removeItem(
+        "accountMasterReturnTo"
+      );
+
+      return;
 
       return;
     }
 
-    // Normal Account Master cancel
+    /*
+     * Account Master opened normally from:
+     * Master → Account
+     */
     setEditAccountId(null);
+    setAccountActiveTab("basic");
+
+    accountOpenedFromInvoiceRef.current = false;
+    masterReturnContextRef.current = null;
+    setMasterReturnContext(null);
+
+    setShowDashboard(false);
+    setActiveMenu("masters");
+    setActiveSubMenu("Account");
     setOpenFormFor(null);
   };
   /* =========================================================
@@ -5682,6 +5745,53 @@ const Dashboard = ({ onLogout }) => {
     });
   };
   const [activeRow, setActiveRow] = useState(-1);
+  const [
+    selectedSalesDetailRow,
+    setSelectedSalesDetailRow,
+  ] = useState(-1);
+  const selectedSalesDetailItem =
+    selectedSalesDetailRow >= 0
+      ? invoiceItems[selectedSalesDetailRow]
+      : null;
+
+  const getSalesDetailBatch = (item) =>
+    item?.batchNo ||
+    item?.selectedBatch?.batchNo ||
+    item?.selectedBatch?.batch ||
+    item?.selectedBatch?.Batch ||
+    ".";
+
+  const getSalesDetailStock = (item) =>
+    Number(
+      item?.selectedBatch?.stockQty ??
+      item?.selectedBatch?.qty ??
+      item?.selectedBatch?.Qty ??
+      0
+    );
+
+  const getSalesDetailPurchaseRate = (item) =>
+    Number(
+      item?.purchaseRate ??
+      item?.selectedBatch?.purchaseRate ??
+      item?.selectedBatch?.pRate ??
+      item?.selectedBatch?.PRate ??
+      0
+    );
+
+  const getSalesDetailNetAmount = (item) => {
+    if (!item) return 0;
+
+    const qty = Number(item.qty || 0);
+    const mrp = Number(item.mrp || 0);
+    const gstPercent = Number(item.gst || 0);
+
+    const grossAmount = qty * mrp;
+    const gstAmount =
+      grossAmount * (gstPercent / 100);
+
+    return grossAmount + gstAmount;
+  };
+
   const tableRef = useRef(null);
   const productInputRef = useRef(null);
   const [showProductList, setShowProductList] = useState(false);
@@ -10050,9 +10160,9 @@ const Dashboard = ({ onLogout }) => {
     setGodownForm({ ...godownForm, [name]: regexInputValue(name, value) });
   };
 
-    /* =========================================================
-     LOAD TRANSFER HELPERS
-     ========================================================= */
+  /* =========================================================
+   LOAD TRANSFER HELPERS
+   ========================================================= */
 
   const getLoadTransferBillId = (bill = {}) =>
     String(
@@ -10173,16 +10283,16 @@ const Dashboard = ({ onLogout }) => {
         bill.selected === true
     ) &&
     !loadTransferAllSelected;
-      const resetLoadTransferForm = ({
+  const resetLoadTransferForm = ({
     keepDestination = false,
   } = {}) => {
     setLoadTransferForm(
       (previous) => ({
         ...createDefaultLoadTransferForm(),
 
-transferMode:
-  previous.transferMode ||
-  "LOAD_TO_LOAD",
+        transferMode:
+          previous.transferMode ||
+          "LOAD_TO_LOAD",
 
         toLoadSeries:
           keepDestination
@@ -10208,7 +10318,7 @@ transferMode:
         ?.focus();
     }, 100);
   };
-    const handleLoadTransferInputChange = (
+  const handleLoadTransferInputChange = (
     event
   ) => {
     const {
@@ -10224,11 +10334,11 @@ transferMode:
      */
     if (
       name ===
-        "fromLoadSeries" ||
+      "fromLoadSeries" ||
       name ===
-        "billSeries" ||
+      "billSeries" ||
       name ===
-        "toLoadSeries"
+      "toLoadSeries"
     ) {
       normalizedValue =
         String(value || "")
@@ -10262,13 +10372,13 @@ transferMode:
      */
     if (
       name ===
-        "fromLoadSeries" ||
+      "fromLoadSeries" ||
       name ===
-        "fromLoadNo" ||
+      "fromLoadNo" ||
       name ===
-        "billSeries" ||
+      "billSeries" ||
       name ===
-        "billNo"
+      "billNo"
     ) {
       setLoadTransferBills([]);
       setLoadTransferSourceLoad(null);
@@ -10277,14 +10387,14 @@ transferMode:
       setLoadTransferSearchText("");
     }
   };
-    const handleLoadTransferModeChange = (
+  const handleLoadTransferModeChange = (
     event
   ) => {
-const transferMode =
-  String(
-    event.target.value ||
-    "LOAD_TO_LOAD"
-  );
+    const transferMode =
+      String(
+        event.target.value ||
+        "LOAD_TO_LOAD"
+      );
 
     setLoadTransferForm(
       (previous) => ({
@@ -10315,7 +10425,7 @@ const transferMode =
         ?.focus();
     }, 100);
   };
-    const toggleLoadTransferBill = (
+  const toggleLoadTransferBill = (
     billId
   ) => {
     setLoadTransferBills(
@@ -10325,12 +10435,12 @@ const transferMode =
             getLoadTransferBillId(
               bill
             ) ===
-            String(billId)
+              String(billId)
               ? {
-                  ...bill,
-                  selected:
-                    !bill.selected,
-                }
+                ...bill,
+                selected:
+                  !bill.selected,
+              }
               : bill
         )
     );
@@ -10353,7 +10463,7 @@ const transferMode =
           )
       );
     };
-      const getFilteredLoadTransferBills =
+  const getFilteredLoadTransferBills =
     () => {
       const searchValue =
         String(
@@ -10412,7 +10522,7 @@ const transferMode =
         }
       );
     };
-      const fetchLoadTransferBills =
+  const fetchLoadTransferBills =
     async () => {
       if (loadTransferLoading) {
         return;
@@ -10439,13 +10549,13 @@ const transferMode =
         return;
       }
 
-   const currentTransferMode =
-  loadTransferForm.transferMode ||
-  "LOAD_TO_LOAD";
+      const currentTransferMode =
+        loadTransferForm.transferMode ||
+        "LOAD_TO_LOAD";
 
-const isLoadToLoad =
-  currentTransferMode ===
-  "LOAD_TO_LOAD";
+      const isLoadToLoad =
+        currentTransferMode ===
+        "LOAD_TO_LOAD";
 
       if (
         isLoadToLoad &&
@@ -10554,17 +10664,17 @@ const isLoadToLoad =
         const returnedBills =
           isLoadToLoad
             ? (
-                Array.isArray(
-                  result.bills
-                )
-                  ? result.bills
-                  : []
+              Array.isArray(
+                result.bills
               )
+                ? result.bills
+                : []
+            )
             : (
-                result.bill
-                  ? [result.bill]
-                  : []
-              );
+              result.bill
+                ? [result.bill]
+                : []
+            );
 
         const normalizedBills =
           returnedBills.map(
@@ -10641,7 +10751,7 @@ const isLoadToLoad =
         setLoadTransferLoading(false);
       }
     };
-      const handleLoadTransferLookupKeyDown = (
+  const handleLoadTransferLookupKeyDown = (
     event
   ) => {
     if (event.key !== "Enter") {
@@ -10652,7 +10762,7 @@ const isLoadToLoad =
 
     fetchLoadTransferBills();
   };
-    const saveLoadTransfer =
+  const saveLoadTransfer =
     async () => {
       if (loadTransferSaving) {
         return;
@@ -10711,13 +10821,13 @@ const isLoadToLoad =
         return;
       }
 
-    const currentTransferMode =
-  loadTransferForm.transferMode ||
-  "LOAD_TO_LOAD";
+      const currentTransferMode =
+        loadTransferForm.transferMode ||
+        "LOAD_TO_LOAD";
 
-const isLoadToLoad =
-  currentTransferMode ===
-  "LOAD_TO_LOAD";
+      const isLoadToLoad =
+        currentTransferMode ===
+        "LOAD_TO_LOAD";
 
       if (
         isLoadToLoad &&
@@ -10725,10 +10835,10 @@ const isLoadToLoad =
           loadTransferForm.fromLoadNo ||
           0
         ) ===
-          Number(
-            loadTransferForm.toLoadNo ||
-            0
-          ) &&
+        Number(
+          loadTransferForm.toLoadNo ||
+          0
+        ) &&
         String(
           loadTransferForm
             .fromLoadSeries ||
@@ -10736,13 +10846,13 @@ const isLoadToLoad =
         )
           .trim()
           .toUpperCase() ===
-          String(
-            loadTransferForm
-              .toLoadSeries ||
-            ""
-          )
-            .trim()
-            .toUpperCase()
+        String(
+          loadTransferForm
+            .toLoadSeries ||
+          ""
+        )
+          .trim()
+          .toUpperCase()
       ) {
         alert(
           "From Load and To Load cannot be the same."
@@ -10792,8 +10902,8 @@ const isLoadToLoad =
           distributorId,
           firmId,
 
-        transferMode:
-  currentTransferMode,
+          transferMode:
+            currentTransferMode,
 
           fromLoadSeries:
             String(
@@ -10862,7 +10972,7 @@ const isLoadToLoad =
           );
         }
 
-               alert(
+        alert(
           result.message ||
           "Load Transfer completed successfully."
         );
@@ -10923,7 +11033,7 @@ const isLoadToLoad =
         setLoadTransferSaving(false);
       }
     };
-      const cancelLoadTransfer =
+  const cancelLoadTransfer =
     () => {
       const hasEnteredData =
         Boolean(
@@ -10947,12 +11057,12 @@ const isLoadToLoad =
 
       resetLoadTransferForm();
     };
-      useEffect(() => {
+  useEffect(() => {
     if (
       activeSubMenu !==
-        "Load Transfer" ||
+      "Load Transfer" ||
       openFormFor !==
-        "Load Transfer"
+      "Load Transfer"
     ) {
       return;
     }
@@ -17596,6 +17706,15 @@ const isLoadToLoad =
       batchNo: selectedBatch?.batchNo || selectedBatch?.batch || "",
       mrp: selectedBatch?.mrp || product.mrp || "",
       rate: selectedBatch?.salesRate || selectedBatch?.sRate || product.salesRate || "",
+      purchaseRate: Number(
+        selectedBatch?.purchaseRate ??
+        selectedBatch?.pRate ??
+        selectedBatch?.PRate ??
+        product.purchaseRate ??
+        product.pRate ??
+        product.PRate ??
+        0
+      ),
       gst: product.gst || "",
       units: product.basicUnit || "PCS",
       boxPack: Number(
@@ -17616,6 +17735,9 @@ const isLoadToLoad =
     };
 
     setInvoiceItems(updatedItems);
+
+    setSelectedSalesDetailRow(index);
+    setActiveRow(index);
     setShowProductList(false);
     setCurrentProductIndex(-1);
     setProductListFilter("");
@@ -34208,7 +34330,7 @@ const isLoadToLoad =
       return;
     }
 
-        if (item === "Load Transfer") {
+    if (item === "Load Transfer") {
       setActiveMenu("sales");
       setActiveSubMenu("Load Transfer");
       setOpenFormFor("Load Transfer");
@@ -39875,16 +39997,16 @@ const isLoadToLoad =
     setAreaToPartyEditingCell('');
     setShowAreaToPartyDropdown(false);
   };
-    /* =========================================================
-     LOAD TRANSFER PAGE
-     ========================================================= */
+  /* =========================================================
+   LOAD TRANSFER PAGE
+   ========================================================= */
   /* =========================================================
      LOAD TRANSFER PAGE
      ========================================================= */
 
-    /* =========================================================
-     LOAD TRANSFER PAGE
-     ========================================================= */
+  /* =========================================================
+   LOAD TRANSFER PAGE
+   ========================================================= */
 
   const renderLoadTransfer = () => {
     const transferMode =
@@ -39908,17 +40030,17 @@ const isLoadToLoad =
     const sourceDisplay =
       isLoadToLoad
         ? [
-            loadTransferForm.fromLoadSeries,
-            loadTransferForm.fromLoadNo,
-          ]
-            .filter(Boolean)
-            .join(" / ")
+          loadTransferForm.fromLoadSeries,
+          loadTransferForm.fromLoadNo,
+        ]
+          .filter(Boolean)
+          .join(" / ")
         : [
-            loadTransferForm.billSeries,
-            loadTransferForm.billNo,
-          ]
-            .filter(Boolean)
-            .join(" / ");
+          loadTransferForm.billSeries,
+          loadTransferForm.billNo,
+        ]
+          .filter(Boolean)
+          .join(" / ");
 
     const destinationDisplay = [
       loadTransferForm.toLoadSeries,
@@ -40230,20 +40352,20 @@ const isLoadToLoad =
             <div className="ltf-list-actions">
               {loadTransferBills.length >
                 0 && (
-                <button
-                  type="button"
-                  className="ltf-select-all-button"
-                  onClick={
-                    toggleAllLoadTransferBills
-                  }
-                >
-                  <CheckCircle2 size={15} />
+                  <button
+                    type="button"
+                    className="ltf-select-all-button"
+                    onClick={
+                      toggleAllLoadTransferBills
+                    }
+                  >
+                    <CheckCircle2 size={15} />
 
-                  {loadTransferAllSelected
-                    ? "Deselect All"
-                    : "Select All"}
-                </button>
-              )}
+                    {loadTransferAllSelected
+                      ? "Deselect All"
+                      : "Select All"}
+                  </button>
+                )}
 
               <div className="ltf-search-box">
                 <Search size={15} />
@@ -40448,7 +40570,7 @@ const isLoadToLoad =
                           <td>
                             {formatLoadTransferDate(
                               bill.BillDate ??
-                                bill.billDate
+                              bill.billDate
                             ) || "-"}
                           </td>
 
@@ -40653,7 +40775,7 @@ const isLoadToLoad =
     };
 
 
-    
+
     const renderMasterPagination = (listKey, currentPage, totalPages) => (
       <div className="pagination-sticky-footer" style={{
         display: 'flex',
@@ -53470,25 +53592,25 @@ const isLoadToLoad =
                                   "Y";
 
                                 return (
-                               <option
-  key={mapping.accountCode}
-  value={mapping.accountCode}
-  style={
-    isBlacklisted
-      ? {
-          color: "#dc2626",
-          fontWeight: "700",
-        }
-      : undefined
-  }
->
-  {mapping.accountCode} -{" "}
-  {account?.accountName ||
-    mapping.accountName ||
-    "Name not available"}
+                                  <option
+                                    key={mapping.accountCode}
+                                    value={mapping.accountCode}
+                                    style={
+                                      isBlacklisted
+                                        ? {
+                                          color: "#dc2626",
+                                          fontWeight: "700",
+                                        }
+                                        : undefined
+                                    }
+                                  >
+                                    {mapping.accountCode} -{" "}
+                                    {account?.accountName ||
+                                      mapping.accountName ||
+                                      "Name not available"}
 
-  {isBlacklisted ? " 🚫" : ""}
-</option>
+                                    {isBlacklisted ? " 🚫" : ""}
+                                  </option>
                                 );
                               })}
                           </select>
@@ -53691,17 +53813,82 @@ const isLoadToLoad =
                             </tr>
                           </thead>
 
-                          <tbody>
+                          <tbody
+                            onMouseDown={(event) => {
+                              const clickedElement = event.target;
+
+                              if (!(clickedElement instanceof Element)) {
+                                return;
+                              }
+
+                              /*
+                               * Ignore the Delete button.
+                               */
+                              if (
+                                clickedElement.closest(
+                                  ".billing-delete-button, [data-row-delete='true']"
+                                )
+                              ) {
+                                return;
+                              }
+
+                              /*
+                               * Find the Sales Billing row that contains
+                               * whichever input, cell or blank area was clicked.
+                               */
+                              const clickedRow = clickedElement.closest(
+                                "tr[data-sales-row-index]"
+                              );
+
+                              if (!clickedRow) {
+                                return;
+                              }
+
+                              const clickedIndex = Number(
+                                clickedRow.getAttribute(
+                                  "data-sales-row-index"
+                                )
+                              );
+
+                              if (
+                                !Number.isInteger(clickedIndex) ||
+                                clickedIndex < 0 ||
+                                clickedIndex >= invoiceItems.length
+                              ) {
+                                return;
+                              }
+
+                              const clickedItem =
+                                invoiceItems[clickedIndex];
+
+                              const hasProduct =
+                                String(
+                                  clickedItem?.product ||
+                                  clickedItem?.productName ||
+                                  clickedItem?.productCode ||
+                                  clickedItem?.productId ||
+                                  ""
+                                ).trim() !== "";
+
+                              if (!hasProduct) {
+                                return;
+                              }
+
+                              setActiveRow(clickedIndex);
+                              setSelectedSalesDetailRow(clickedIndex);
+                            }}
+                          >
                             {invoiceItems.map(
                               (item, index) => (
-                                <tr
-                                  key={item.id || index}
-                                  className={
-                                    index === activeRow
-                                      ? "billing-active-row"
-                                      : ""
-                                  }
-                                >
+                            <tr
+  key={item.id || `sales-item-${index}`}
+  data-sales-row-index={index}
+  className={
+    index === selectedSalesDetailRow
+      ? "billing-active-row"
+      : ""
+  }
+>
                                   {/* SR NUMBER */}
 
                                   <td className="billing-sticky-left billing-sr-cell">
@@ -54543,8 +54730,8 @@ const isLoadToLoad =
 
                       {/* GRID FOOTER */}
 
-                      <div className="billing-grid-footer">
-                        <div className="billing-grid-footer-actions">
+                      <div className="billing-grid-footer billing-grid-footer-with-detail">
+                        <div className="billing-grid-actions">
                           <button
                             type="button"
                             className="billing-grid-small-button"
@@ -54556,10 +54743,99 @@ const isLoadToLoad =
                           <button
                             type="button"
                             className="billing-grid-small-button billing-clear-all-button"
-                            onClick={handleClearInvoiceRows}
+                            onClick={() => {
+                              handleClearInvoiceRows();
+                              setSelectedSalesDetailRow(-1);
+                            }}
                           >
                             ♧ Clear All
                           </button>
+                        </div>
+
+                        <div className="billing-selected-product-area">
+                          {selectedSalesDetailItem &&
+                            String(
+                              selectedSalesDetailItem.product ||
+                              selectedSalesDetailItem.productCode ||
+                              ""
+                            ).trim() ? (
+                            <div className="billing-selected-product-window">
+                              <div className="billing-product-detail-top">
+                                <span>
+                                  <b>Batch:</b>{" "}
+                                  {getSalesDetailBatch(
+                                    selectedSalesDetailItem
+                                  )}
+                                </span>
+
+                                <span>
+                                  <b>MRP:</b>{" "}
+                                  ₹
+                                  {Number(
+                                    selectedSalesDetailItem.mrp || 0
+                                  ).toFixed(2)}
+                                </span>
+
+                                <span>
+                                  <b>Stock:</b>{" "}
+                                  {getSalesDetailStock(
+                                    selectedSalesDetailItem
+                                  ).toFixed(3)}
+                                </span>
+
+                                <span>
+                                  <b>Box Packing:</b>{" "}
+                                  {Number(
+                                    selectedSalesDetailItem.boxPack ||
+                                    1
+                                  )}
+                                  {" / "}
+                                  {Number(
+                                    selectedSalesDetailItem.inboxPack ||
+                                    1
+                                  )}
+                                </span>
+
+                                <span className="billing-detail-net">
+                                  <b>Net Amount:</b>{" "}
+                                  ₹
+                                  {getSalesDetailNetAmount(
+                                    selectedSalesDetailItem
+                                  ).toFixed(2)}
+                                </span>
+                              </div>
+
+                              <div className="billing-product-detail-bottom">
+                                <span className="billing-detail-name">
+                                  <b>Name:</b>{" "}
+                                  {selectedSalesDetailItem.product ||
+                                    selectedSalesDetailItem.productName ||
+                                    "-"}
+                                </span>
+
+                                <span>
+                                  <b>Purchase:</b>{" "}
+                                  ₹
+                                  {getSalesDetailPurchaseRate(
+                                    selectedSalesDetailItem
+                                  ).toFixed(2)}
+                                </span>
+
+                                <span>
+                                  <b>GST:</b>{" "}
+                                  {Number(
+                                    selectedSalesDetailItem.gst || 0
+                                  ).toFixed(2)}
+                                  %
+                                </span>
+                              </div>
+                            </div>
+                          ) : (
+                            <div className="billing-selected-product-placeholder">
+                              Click a product row to view Batch, MRP,
+                              Stock and Rate details
+                            </div>
+                          )}
                         </div>
 
                         <div className="billing-grid-totals">
@@ -54584,8 +54860,7 @@ const isLoadToLoad =
                                 .reduce(
                                   (total, row) =>
                                     total +
-                                    (Number(row.qty) ||
-                                      0),
+                                    (Number(row.qty) || 0),
                                   0
                                 )
                                 .toFixed(2)}
@@ -60493,7 +60768,7 @@ const isLoadToLoad =
                   <button
                     type="button"
                     className="compact-btn compact-btn-cancel"
-                    onClick={cancelAccountForm}
+                    onClick={handleCancelAccountMaster}
                   >
                     <X size={15} />
                     Cancel
@@ -64156,43 +64431,43 @@ const isLoadToLoad =
                               Select party
                             </option>
 
-                           {invoiceAreaPartyMappings
-  .filter((mapping) => {
-    const sameArea =
-      String(mapping.areaCode || "").trim() ===
-      String(invoiceFormData.area || "").trim();
+                            {invoiceAreaPartyMappings
+                              .filter((mapping) => {
+                                const sameArea =
+                                  String(mapping.areaCode || "").trim() ===
+                                  String(invoiceFormData.area || "").trim();
 
-    const hasValidCode =
-      String(mapping.accountCode || "").trim() !== "";
+                                const hasValidCode =
+                                  String(mapping.accountCode || "").trim() !== "";
 
-    const hasValidName =
-      String(mapping.accountName || "").trim() !== "";
+                                const hasValidName =
+                                  String(mapping.accountName || "").trim() !== "";
 
-    return sameArea && hasValidCode && hasValidName;
-  })
-  .map((mapping) => {
-    const isBlacklisted =
-      mapping.blackListed === "YES" ||
-      mapping.blackListed === "Y";
+                                return sameArea && hasValidCode && hasValidName;
+                              })
+                              .map((mapping) => {
+                                const isBlacklisted =
+                                  mapping.blackListed === "YES" ||
+                                  mapping.blackListed === "Y";
 
-    return (
-      <option
-        key={`${mapping.areaCode}-${mapping.accountCode}`}
-        value={mapping.accountCode}
-        style={
-          isBlacklisted
-            ? {
-                color: "#dc2626",
-                fontWeight: "700",
-              }
-            : undefined
-        }
-      >
-        {mapping.accountName}
-        {isBlacklisted ? " 🚫" : ""}
-      </option>
-    );
-  })}
+                                return (
+                                  <option
+                                    key={`${mapping.areaCode}-${mapping.accountCode}`}
+                                    value={mapping.accountCode}
+                                    style={
+                                      isBlacklisted
+                                        ? {
+                                          color: "#dc2626",
+                                          fontWeight: "700",
+                                        }
+                                        : undefined
+                                    }
+                                  >
+                                    {mapping.accountName}
+                                    {isBlacklisted ? " 🚫" : ""}
+                                  </option>
+                                );
+                              })}
                           </select>
 
                           {/* Opens Account Master */}
@@ -65277,8 +65552,27 @@ const isLoadToLoad =
                         </table>
                       </div>
 
-                      <div className="billing-grid-footer">
-                        <div className="billing-grid-footer-actions">
+                      <div
+                        className="billing-grid-footer"
+                        style={{
+                          display: "grid",
+                          gridTemplateColumns: "auto minmax(0, 1fr) auto",
+                          alignItems: "stretch",
+                          gap: "8px",
+                          minHeight: "58px",
+                          padding: "5px",
+                        }}
+                      >
+                        {/* LEFT ACTION BUTTONS */}
+                        <div
+                          className="billing-grid-footer-actions"
+                          style={{
+                            display: "flex",
+                            alignItems: "center",
+                            gap: "5px",
+                            whiteSpace: "nowrap",
+                          }}
+                        >
                           <button
                             type="button"
                             className="billing-grid-small-button"
@@ -65290,22 +65584,154 @@ const isLoadToLoad =
                           <button
                             type="button"
                             className="billing-grid-small-button billing-clear-all-button"
-                            onClick={handleClearInvoiceRows}
+                            onClick={() => {
+                              handleClearInvoiceRows();
+                              setSelectedSalesDetailRow(-1);
+                            }}
                           >
                             ♧ Clear All
                           </button>
                         </div>
 
-                        <div className="billing-grid-totals">
+                        {/* SELECTED PRODUCT DETAIL WINDOW */}
+                        <div
+                          style={{
+                            minWidth: 0,
+                            display: "flex",
+                            alignItems: "center",
+                          }}
+                        >
+                          {selectedSalesDetailItem &&
+                            String(
+                              selectedSalesDetailItem.product ||
+                              selectedSalesDetailItem.productCode ||
+                              selectedSalesDetailItem.productId ||
+                              ""
+                            ).trim() !== "" ? (
+                            <div
+                              style={{
+                                width: "100%",
+                                minHeight: "34px",
+                                display: "flex",
+                                alignItems: "center",
+                                gap: "16px",
+                                padding: "5px 10px",
+                                border: "1px solid #9eb4cf",
+                                borderRadius: "4px",
+                                background: "#dce9f8",
+                                color: "#113a73",
+                                fontSize: "10px",
+                                whiteSpace: "nowrap",
+                                overflowX: "auto",
+                                overflowY: "hidden",
+                              }}
+                            >
+                              <span>
+                                <strong>Batch:</strong>{" "}
+                                {getSalesDetailBatch(
+                                  selectedSalesDetailItem
+                                )}
+                              </span>
+
+                              <span>
+                                <strong>MRP:</strong> ₹
+                                {Number(
+                                  selectedSalesDetailItem.mrp || 0
+                                ).toFixed(2)}
+                              </span>
+
+                              <span>
+                                <strong>Stock:</strong>{" "}
+                                {getSalesDetailStock(
+                                  selectedSalesDetailItem
+                                ).toFixed(3)}
+                              </span>
+
+                              <span>
+                                <strong>Box Packing:</strong>{" "}
+                                {Number(
+                                  selectedSalesDetailItem.boxPack ||
+                                  selectedSalesDetailItem
+                                    .selectedBatch?.boxPack ||
+                                  selectedSalesDetailItem
+                                    .selectedBatch?.BoxPack ||
+                                  1
+                                )}
+                                {" / "}
+                                {Number(
+                                  selectedSalesDetailItem.inboxPack ||
+                                  selectedSalesDetailItem
+                                    .selectedBatch?.inboxPack ||
+                                  selectedSalesDetailItem
+                                    .selectedBatch?.InBoxPack ||
+                                  1
+                                )}
+                              </span>
+
+                              <span>
+                                <strong>Purchase:</strong> ₹
+                                {getSalesDetailPurchaseRate(
+                                  selectedSalesDetailItem
+                                ).toFixed(2)}
+                              </span>
+
+                              <span>
+                                <strong>GST:</strong>{" "}
+                                {Number(
+                                  selectedSalesDetailItem.gst || 0
+                                ).toFixed(2)}
+                                %
+                              </span>
+
+                              <span
+                                style={{
+                                  marginLeft: "auto",
+                                  fontWeight: "800",
+                                }}
+                              >
+                                <strong>Net Amount:</strong> ₹
+                                {getSalesDetailNetAmount(
+                                  selectedSalesDetailItem
+                                ).toFixed(2)}
+                              </span>
+                            </div>
+                          ) : (
+                            <div
+                              style={{
+                                width: "100%",
+                                minHeight: "34px",
+                                display: "flex",
+                                alignItems: "center",
+                                justifyContent: "center",
+                                padding: "5px 10px",
+                                border: "1px dashed #aebdd0",
+                                borderRadius: "4px",
+                                background: "#f8fafc",
+                                color: "#718096",
+                                fontSize: "10px",
+                              }}
+                            >
+                              Click a product row to view its details
+                            </div>
+                          )}
+                        </div>
+
+                        {/* RIGHT TOTALS */}
+                        <div
+                          className="billing-grid-totals"
+                          style={{
+                            display: "flex",
+                            alignItems: "stretch",
+                            whiteSpace: "nowrap",
+                          }}
+                        >
                           <span>
                             Total Items:
                             <strong>
                               {
                                 invoiceItems.filter(
                                   (row) =>
-                                    String(
-                                      row.product || ""
-                                    ).trim() !== ""
+                                    String(row.product || "").trim() !== ""
                                 ).length
                               }
                             </strong>
@@ -65317,8 +65743,7 @@ const isLoadToLoad =
                               {invoiceItems
                                 .reduce(
                                   (total, row) =>
-                                    total +
-                                    (Number(row.qty) || 0),
+                                    total + (Number(row.qty) || 0),
                                   0
                                 )
                                 .toFixed(2)}
@@ -65592,9 +66017,9 @@ const isLoadToLoad =
               </div>
             )}
 
-{openFormFor === "Load Transfer" &&
-  activeSubMenu === "Load Transfer" &&
-  renderLoadTransfer()}
+          {openFormFor === "Load Transfer" &&
+            activeSubMenu === "Load Transfer" &&
+            renderLoadTransfer()}
           {activeSubMenu === 'Purchase' && openFormFor === 'Purchase' && (
             <div className="purchase-billing-page">
               <div className="purchase-billing-card">
