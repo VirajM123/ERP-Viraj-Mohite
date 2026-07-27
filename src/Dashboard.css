@@ -38091,3 +38091,1284 @@ td {
     justify-content: flex-end;
   }
 }
+/* =========================================================
+   SALES PRINT FORMAT SELECTION MODAL
+   ========================================================= */
+
+.sales-print-format-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 99999;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  background: rgba(15, 23, 42, 0.58);
+  backdrop-filter: blur(3px);
+}
+
+.sales-print-format-modal {
+  width: min(880px, calc(100vw - 32px));
+  max-height: calc(100vh - 32px);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  border: 1px solid #d7e0ec;
+  border-radius: 14px;
+  background: #ffffff;
+  box-shadow:
+    0 30px 90px rgba(15, 23, 42, 0.34);
+  animation: sales-print-modal-open 0.2s ease;
+}
+
+@keyframes sales-print-modal-open {
+  from {
+    opacity: 0;
+    transform: translateY(12px) scale(0.985);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+.sales-print-format-header {
+  min-height: 72px;
+  padding: 14px 18px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 15px;
+  border-bottom: 1px solid #e3e9f2;
+  background: #ffffff;
+}
+
+.sales-print-format-heading {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.sales-print-format-header-icon {
+  width: 42px;
+  height: 42px;
+  flex: 0 0 42px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 9px;
+  color: #ffffff;
+  background: linear-gradient(
+    135deg,
+    #315ef4,
+    #2447c7
+  );
+  box-shadow:
+    0 7px 18px rgba(49, 94, 244, 0.25);
+}
+
+.sales-print-format-heading h3 {
+  margin: 0;
+  color: #17233b;
+  font-size: 18px;
+  font-weight: 750;
+}
+
+.sales-print-format-heading p {
+  margin: 4px 0 0;
+  color: #718096;
+  font-size: 11px;
+}
+
+.sales-print-format-close {
+  width: 34px;
+  height: 34px;
+  flex: 0 0 34px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid #dce3ec;
+  border-radius: 7px;
+  color: #64748b;
+  background: #ffffff;
+  cursor: pointer;
+}
+
+.sales-print-format-close:hover {
+  color: #dc2626;
+  border-color: #fecaca;
+  background: #fff5f5;
+}
+
+.sales-print-selected-bill {
+  display: grid;
+  grid-template-columns:
+    minmax(110px, 0.8fr)
+    minmax(220px, 2fr)
+    minmax(120px, 0.9fr);
+  gap: 12px;
+  padding: 10px 18px;
+  border-bottom: 1px solid #e6ebf2;
+  background: #f8faff;
+}
+
+.sales-print-selected-bill > div {
+  min-width: 0;
+}
+
+.sales-print-selected-bill span {
+  display: block;
+  margin-bottom: 3px;
+  color: #8895a8;
+  font-size: 8px;
+  font-weight: 700;
+  letter-spacing: 0.35px;
+  text-transform: uppercase;
+}
+
+.sales-print-selected-bill strong {
+  display: block;
+  overflow: hidden;
+  color: #22304a;
+  font-size: 11px;
+  font-weight: 750;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.sales-print-format-body {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 16px 18px;
+}
+
+.sales-print-format-section-title {
+  margin-bottom: 9px;
+  color: #34425a;
+  font-size: 10px;
+  font-weight: 750;
+  text-transform: uppercase;
+}
+
+.sales-print-layout-grid {
+  display: grid;
+  grid-template-columns:
+    repeat(3, minmax(0, 1fr));
+  gap: 11px;
+}
+
+.sales-print-layout-card {
+  position: relative;
+  min-width: 0;
+  padding: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+  border: 1px solid #dbe2ec;
+  border-radius: 10px;
+  color: inherit;
+  background: #ffffff;
+  text-align: left;
+  cursor: pointer;
+  transition: 0.18s ease;
+}
+
+.sales-print-layout-card:hover {
+  border-color: #9db6f8;
+  box-shadow:
+    0 7px 20px rgba(37, 99, 235, 0.09);
+  transform: translateY(-1px);
+}
+
+.sales-print-layout-card.selected {
+  border: 2px solid #315ef4;
+  padding: 9px;
+  background: #f7f9ff;
+  box-shadow:
+    0 8px 22px rgba(49, 94, 244, 0.12);
+}
+
+.sales-print-layout-preview {
+  height: 103px;
+  padding: 8px;
+  overflow: hidden;
+  border: 1px solid #cfd6df;
+  background: #ffffff;
+  box-shadow:
+    0 2px 6px rgba(15, 23, 42, 0.08);
+}
+
+.sales-print-mini-header {
+  padding-bottom: 4px;
+  border-bottom: 1px dashed #4b5563;
+  color: #111827;
+  font-family: "Courier New", monospace;
+  font-size: 7px;
+  font-weight: 800;
+  text-align: center;
+}
+
+.sales-print-mini-details {
+  height: 18px;
+  display: grid;
+  grid-template-columns: 1fr 0.8fr;
+  gap: 5px;
+  padding-top: 4px;
+}
+
+.sales-print-mini-details span,
+.sales-print-mini-parties span,
+.sales-print-mini-footer span {
+  display: block;
+  background: repeating-linear-gradient(
+    to bottom,
+    #64748b 0,
+    #64748b 1px,
+    transparent 1px,
+    transparent 4px
+  );
+  opacity: 0.65;
+}
+
+.sales-print-mini-parties {
+  height: 19px;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 5px;
+  padding: 3px 0;
+  border-top: 1px dashed #94a3b8;
+}
+
+.sales-print-mini-table {
+  height: 36px;
+  display: grid;
+  grid-template-columns:
+    1.8fr 0.7fr 0.7fr 0.7fr;
+  border: 1px solid #64748b;
+}
+
+.sales-print-mini-table i {
+  border-right: 1px solid #94a3b8;
+  background: repeating-linear-gradient(
+    to bottom,
+    #e2e8f0 0,
+    #e2e8f0 6px,
+    #ffffff 6px,
+    #ffffff 12px
+  );
+}
+
+.sales-print-mini-table i:last-child {
+  border-right: 0;
+}
+
+.sales-print-mini-footer {
+  height: 14px;
+  display: grid;
+  grid-template-columns: 1.4fr 0.8fr;
+  gap: 6px;
+  padding-top: 4px;
+}
+
+.sales-print-layout-content {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 7px;
+}
+
+.sales-print-layout-content > div {
+  min-width: 0;
+}
+
+.sales-print-layout-content strong {
+  display: block;
+  color: #1f2c43;
+  font-size: 11px;
+  font-weight: 750;
+}
+
+.sales-print-layout-content small {
+  display: block;
+  margin-top: 3px;
+  color: #7b8798;
+  font-size: 8px;
+}
+
+.sales-print-layout-badge {
+  flex: 0 0 auto;
+  padding: 3px 6px;
+  border-radius: 4px;
+  color: #3153c8;
+  background: #eaf0ff;
+  font-size: 7px;
+  font-weight: 750;
+}
+
+.sales-print-layout-radio {
+  position: absolute;
+  top: 7px;
+  right: 7px;
+  width: 20px;
+  height: 20px;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  color: #315ef4;
+  background: #ffffff;
+}
+
+.sales-print-layout-card.selected
+  .sales-print-layout-radio {
+  display: flex;
+}
+
+.sales-print-options-panel {
+  margin-top: 15px;
+  padding: 12px;
+  display: grid;
+  grid-template-columns:
+    minmax(145px, 0.9fr)
+    repeat(3, minmax(145px, 1fr));
+  gap: 10px;
+  align-items: center;
+  border: 1px solid #e0e7f0;
+  border-radius: 9px;
+  background: #f9fbfd;
+}
+
+.sales-print-option-field label {
+  display: block;
+  margin-bottom: 6px;
+  color: #43516a;
+  font-size: 9px;
+  font-weight: 700;
+}
+
+.sales-print-copy-control {
+  height: 32px;
+  display: grid;
+  grid-template-columns: 32px 1fr 32px;
+  overflow: hidden;
+  border: 1px solid #cbd6e4;
+  border-radius: 6px;
+  background: #ffffff;
+}
+
+.sales-print-copy-control button {
+  border: 0;
+  color: #315ef4;
+  background: #f1f5ff;
+  font-size: 16px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.sales-print-copy-control input {
+  width: 100%;
+  border: 0;
+  outline: 0;
+  color: #22304a;
+  background: #ffffff;
+  font-size: 11px;
+  font-weight: 700;
+  text-align: center;
+}
+
+.sales-print-copy-control
+  input::-webkit-inner-spin-button,
+.sales-print-copy-control
+  input::-webkit-outer-spin-button {
+  margin: 0;
+  appearance: none;
+}
+
+.sales-print-switch-option {
+  min-width: 0;
+  display: grid;
+  grid-template-columns: 31px minmax(0, 1fr);
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+}
+
+.sales-print-switch-option input {
+  display: none;
+}
+
+.sales-print-switch {
+  position: relative;
+  width: 31px;
+  height: 17px;
+  border-radius: 999px;
+  background: #cbd5e1;
+  transition: 0.18s ease;
+}
+
+.sales-print-switch::after {
+  content: "";
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 13px;
+  height: 13px;
+  border-radius: 50%;
+  background: #ffffff;
+  box-shadow:
+    0 1px 3px rgba(15, 23, 42, 0.2);
+  transition: 0.18s ease;
+}
+
+.sales-print-switch-option
+  input:checked
+  + .sales-print-switch {
+  background: #315ef4;
+}
+
+.sales-print-switch-option
+  input:checked
+  + .sales-print-switch::after {
+  transform: translateX(14px);
+}
+
+.sales-print-switch-option strong {
+  display: block;
+  overflow: hidden;
+  color: #35435b;
+  font-size: 9px;
+  font-weight: 700;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.sales-print-switch-option small {
+  display: block;
+  margin-top: 2px;
+  overflow: hidden;
+  color: #8a96a8;
+  font-size: 7px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.sales-print-format-footer {
+  min-height: 63px;
+  padding: 11px 18px;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 9px;
+  border-top: 1px solid #e0e6ef;
+  background: #ffffff;
+}
+
+.sales-print-format-footer button {
+  min-width: 108px;
+  height: 36px;
+  padding: 0 15px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  border-radius: 7px;
+  font-family: inherit;
+  font-size: 10px;
+  font-weight: 750;
+  cursor: pointer;
+}
+
+.sales-print-format-cancel {
+  border: 1px solid #d3dce8;
+  color: #536178;
+  background: #ffffff;
+}
+
+.sales-print-format-preview {
+  border: 1px solid #315ef4;
+  color: #315ef4;
+  background: #f4f7ff;
+}
+
+.sales-print-format-print {
+  border: 1px solid #2454df;
+  color: #ffffff;
+  background: linear-gradient(
+    135deg,
+    #315ef4,
+    #244bd2
+  );
+  box-shadow:
+    0 6px 15px rgba(49, 94, 244, 0.22);
+}
+
+.sales-print-format-footer
+  button:disabled {
+  cursor: not-allowed;
+  opacity: 0.58;
+}
+
+.sales-print-format-spin {
+  animation:
+    sales-print-format-spin 0.8s linear
+    infinite;
+}
+
+@keyframes sales-print-format-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@media (max-width: 800px) {
+  .sales-print-layout-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .sales-print-options-panel {
+    grid-template-columns: 1fr;
+  }
+
+  .sales-print-selected-bill {
+    grid-template-columns: 1fr;
+  }
+
+  .sales-print-format-footer {
+    flex-wrap: wrap;
+  }
+
+  .sales-print-format-footer button {
+    flex: 1;
+  }
+}
+/* =========================================================
+   SALES BILLING CLASSIC PRINT MODAL
+   KEEP AT ABSOLUTE END OF Dashboard.css
+   ========================================================= */
+
+.sales-print-format-overlay {
+  position: fixed !important;
+  inset: 0 !important;
+  z-index: 999999 !important;
+
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+
+  padding: 20px !important;
+
+  background: rgba(15, 23, 42, 0.52) !important;
+  backdrop-filter: blur(2px);
+}
+
+.sales-print-classic-modal {
+  width: 510px !important;
+  max-width: calc(100vw - 30px) !important;
+
+  overflow: hidden !important;
+
+  border: 1px solid #64748b !important;
+  border-radius: 4px !important;
+
+  background:
+    linear-gradient(
+      120deg,
+      rgba(255, 255, 255, 0.95),
+      rgba(219, 234, 254, 0.92)
+    ) !important;
+
+  box-shadow:
+    0 24px 60px rgba(15, 23, 42, 0.35) !important;
+
+  font-family:
+    Arial,
+    Helvetica,
+    sans-serif !important;
+}
+
+.sales-print-classic-titlebar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+
+  height: 38px;
+  padding: 0 10px;
+
+  border-bottom: 1px solid #94a3b8;
+
+  background: #ffffff;
+}
+
+.sales-print-classic-title {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+
+  color: #111827;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.sales-print-classic-close {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+
+  width: 28px;
+  height: 28px;
+
+  border: none;
+  border-radius: 3px;
+
+  background: transparent;
+  color: #334155;
+
+  cursor: pointer;
+}
+
+.sales-print-classic-close:hover {
+  background: #fee2e2;
+  color: #dc2626;
+}
+
+.sales-print-classic-body {
+  padding: 22px 42px 20px;
+  background:
+    linear-gradient(
+      120deg,
+      rgba(255, 255, 255, 0.64),
+      rgba(186, 230, 253, 0.44)
+    );
+}
+
+.sales-print-classic-form-row {
+  display: grid;
+  grid-template-columns:
+    128px
+    minmax(0, 1fr)
+    14px;
+
+  align-items: center;
+  gap: 8px;
+
+  margin-bottom: 7px;
+}
+
+.sales-print-classic-form-row > label {
+  color: #000000;
+  font-size: 13px;
+  font-weight: 700;
+  text-align: right;
+}
+
+.sales-print-highlight-label {
+  color: #b91c1c !important;
+  text-decoration: underline;
+}
+
+.sales-print-classic-form-row input {
+  width: 100%;
+  height: 25px;
+
+  padding: 2px 6px;
+
+  border: 1px solid #7c8796;
+  border-radius: 0;
+
+  background: #ffffff;
+  color: #111827;
+
+  font-family:
+    Arial,
+    Helvetica,
+    sans-serif;
+  font-size: 12px;
+}
+
+.sales-print-classic-form-row input:focus {
+  outline: 2px solid #2563eb;
+  outline-offset: -1px;
+}
+
+.sales-print-classic-form-row input[readonly] {
+  background: #f8fafc;
+}
+
+.sales-print-required {
+  color: #dc2626;
+  font-size: 13px;
+  font-weight: 900;
+}
+
+.sales-print-classic-options-grid {
+  display: grid;
+  grid-template-columns:
+    repeat(2, minmax(0, 1fr));
+
+  column-gap: 16px;
+  row-gap: 8px;
+
+  margin-top: 12px;
+}
+
+.sales-print-classic-option {
+  display: grid;
+  grid-template-columns:
+    minmax(0, 1fr)
+    61px;
+
+  align-items: center;
+  gap: 7px;
+}
+
+.sales-print-classic-option label {
+  color: #000000;
+  font-size: 12px;
+  font-weight: 700;
+  text-align: right;
+  white-space: nowrap;
+}
+
+.sales-print-classic-option select {
+  width: 61px;
+  height: 25px;
+
+  padding: 1px 5px;
+
+  border: 1px solid #94a3b8;
+  border-radius: 0;
+
+  background: #ffffff;
+  color: #111827;
+
+  font-size: 12px;
+}
+
+.sales-print-layout-selection {
+  display: grid;
+  grid-template-columns:
+    128px
+    minmax(0, 1fr);
+
+  align-items: center;
+  gap: 8px;
+
+  margin-top: 13px;
+}
+
+.sales-print-layout-selection label {
+  color: #000000;
+  font-size: 13px;
+  font-weight: 700;
+  text-align: right;
+}
+
+.sales-print-layout-selection select {
+  height: 28px;
+  padding: 2px 7px;
+
+  border: 1px solid #7c8796;
+  background: #ffffff;
+
+  color: #111827;
+  font-size: 12px;
+}
+
+.sales-print-classic-actions {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 28px;
+
+  margin-top: 27px;
+}
+
+.sales-print-classic-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+
+  min-width: 96px;
+  height: 31px;
+
+  padding: 0 16px;
+
+  border: 1px solid #1e3a5f;
+  border-radius: 2px;
+
+  color: #082f49;
+
+  font-family:
+    Georgia,
+    "Times New Roman",
+    serif;
+  font-size: 13px;
+  font-weight: 700;
+
+  cursor: pointer;
+
+  background:
+    linear-gradient(
+      to bottom,
+      #e0f7ff 0%,
+      #67e8f9 48%,
+      #06b6d4 52%,
+      #bae6fd 100%
+    );
+
+  box-shadow:
+    inset 0 0 0 1px rgba(255, 255, 255, 0.65);
+}
+
+.sales-print-classic-button:hover {
+  filter: brightness(1.04);
+}
+
+.sales-print-classic-button:disabled {
+  cursor: wait;
+  opacity: 0.7;
+}
+
+.sales-print-format-spin {
+  animation: salesPrintSpin 0.8s linear infinite;
+}
+
+@keyframes salesPrintSpin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@media (max-width: 560px) {
+  .sales-print-classic-body {
+    padding: 18px 15px;
+  }
+
+  .sales-print-classic-options-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .sales-print-classic-actions {
+    gap: 8px;
+  }
+
+  .sales-print-classic-button {
+    min-width: 0;
+    flex: 1;
+    padding: 0 8px;
+  }
+}
+/* =========================================================
+   COMPACT SALES BILL PRINT MODAL
+   ========================================================= */
+
+.bill-print-modal-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 99999;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 18px;
+  background: rgba(15, 23, 42, 0.55);
+  backdrop-filter: blur(2px);
+}
+
+.bill-print-modal {
+  width: min(570px, calc(100vw - 28px));
+  max-height: calc(100vh - 30px);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  background: #ffffff;
+  border: 1px solid #7891ad;
+  border-radius: 5px;
+  box-shadow: 0 18px 55px rgba(15, 23, 42, 0.28);
+  color: #172033;
+}
+
+.bill-print-modal-header {
+  min-height: 40px;
+  padding: 0 12px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: #ffffff;
+  border-bottom: 1px solid #9fb1c6;
+}
+
+.bill-print-modal-title {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.bill-print-modal-close {
+  width: 30px;
+  height: 30px;
+  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  border-radius: 3px;
+  background: transparent;
+  color: #334155;
+  cursor: pointer;
+}
+
+.bill-print-modal-close:hover {
+  background: #e8eef6;
+}
+
+.bill-print-modal-body {
+  padding: 14px 18px 12px;
+  overflow-y: auto;
+  background:
+    linear-gradient(
+      110deg,
+      #f9fcff 0%,
+      #e2f2ff 50%,
+      #f7fbff 100%
+    );
+}
+
+.bill-print-form-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 9px 14px;
+}
+
+.bill-print-field {
+  min-width: 0;
+  display: grid;
+  grid-template-columns: 112px minmax(0, 1fr);
+  align-items: center;
+  gap: 8px;
+}
+
+.bill-print-field > span,
+.bill-print-option > span,
+.bill-print-layout-field > span {
+  font-size: 12px;
+  font-weight: 600;
+  text-align: right;
+  white-space: nowrap;
+}
+
+.bill-print-field input,
+.bill-print-field select,
+.bill-print-option select,
+.bill-print-layout-field select {
+  width: 100%;
+  height: 32px;
+  min-width: 0;
+  padding: 0 9px;
+  border: 1px solid #b7c5d5;
+  border-radius: 5px;
+  outline: none;
+  background: #ffffff;
+  color: #1e293b;
+  font-family: Arial, Helvetica, sans-serif;
+  font-size: 12px;
+}
+
+.bill-print-field input:focus,
+.bill-print-field select:focus,
+.bill-print-option select:focus,
+.bill-print-layout-field select:focus {
+  border-color: #3478d4;
+  box-shadow: 0 0 0 2px rgba(52, 120, 212, 0.13);
+}
+
+.bill-print-field .required {
+  margin-left: 3px;
+  color: #dc2626;
+}
+
+.bill-print-option-grid {
+  margin-top: 12px;
+  padding-top: 11px;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px 20px;
+  border-top: 1px solid #bed0e2;
+}
+
+.bill-print-option {
+  display: grid;
+  grid-template-columns: 1fr 68px;
+  align-items: center;
+  gap: 9px;
+}
+
+.bill-print-option > span {
+  text-align: right;
+}
+
+.bill-print-layout-section {
+  margin-top: 11px;
+  padding-top: 11px;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: 10px;
+  border-top: 1px solid #bed0e2;
+}
+
+.bill-print-layout-field {
+  min-width: 0;
+  display: grid;
+  grid-template-columns: 132px minmax(0, 1fr);
+  align-items: center;
+  gap: 8px;
+}
+
+.bill-print-paper-option {
+  height: 32px;
+  padding: 0 10px;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  border: 1px solid #adc0d4;
+  border-radius: 4px;
+  background: #ffffff;
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.bill-print-paper-option input {
+  margin: 0;
+}
+
+.bill-print-loaded-summary,
+.bill-print-modal-error {
+  margin-top: 10px;
+  min-height: 30px;
+  padding: 6px 9px;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  border-radius: 4px;
+  font-size: 11px;
+}
+
+.bill-print-loaded-summary {
+  border: 1px solid #9ed1af;
+  background: #edfdf2;
+  color: #166534;
+}
+
+.bill-print-modal-error {
+  border: 1px solid #f2aaa7;
+  background: #fff1f1;
+  color: #b42318;
+}
+
+.bill-print-modal-footer {
+  min-height: 54px;
+  padding: 9px 18px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 26px;
+  border-top: 1px solid #91a9c2;
+  background: #eff7fd;
+}
+
+.bill-print-action-button {
+  min-width: 102px;
+  height: 32px;
+  padding: 0 14px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  border: 1px solid #417895;
+  border-radius: 2px;
+  color: #082f49;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+  background:
+    linear-gradient(
+      to bottom,
+      #f4fdff 0%,
+      #d9f8ff 45%,
+      #48d4eb 100%
+    );
+}
+
+.bill-print-action-button:hover:not(:disabled) {
+  filter: brightness(0.97);
+}
+
+.bill-print-action-button:disabled {
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+.bill-print-action-button.cancel {
+  border-color: #628297;
+}
+
+.bill-print-spin {
+  animation: billPrintSpin 0.8s linear infinite;
+}
+
+@keyframes billPrintSpin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@media (max-width: 650px) {
+  .bill-print-form-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .bill-print-layout-section {
+    grid-template-columns: 1fr auto auto;
+  }
+
+  .bill-print-modal-footer {
+    gap: 8px;
+  }
+
+  .bill-print-action-button {
+    min-width: 88px;
+  }
+}
+/* =========================================================
+   SALES BILL PRINT MODAL - REPORT NUMBER AND PAPER SIZE
+   ========================================================= */
+
+.sales-print-layout-fields {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 9px;
+  margin-top: 10px;
+}
+
+.sales-print-layout-selection {
+  display: grid;
+  grid-template-columns: 168px minmax(0, 1fr);
+  align-items: center;
+  gap: 10px;
+}
+
+.sales-print-layout-selection label {
+  margin: 0;
+  text-align: right;
+  font-size: 13px;
+  font-weight: 500;
+  color: #1e293b;
+}
+
+.sales-print-layout-selection select {
+  width: 100%;
+  height: 38px;
+  padding: 0 12px;
+  border: 1px solid #b6c4d5;
+  border-radius: 6px;
+  outline: none;
+  background: #ffffff;
+  color: #1e293b;
+  font-family: Calibri, "Segoe UI", Arial, sans-serif;
+  font-size: 14px;
+}
+
+.sales-print-layout-selection select:focus {
+  border-color: #3b82f6;
+  box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.12);
+}
+/* =========================================================
+   REPORT NUMBER AND PAPER SIZE - SAME ROW
+   ========================================================= */
+
+.sales-print-layout-fields {
+  width: 100%;
+  display: grid;
+  grid-template-columns:
+    minmax(0, 1fr)
+    minmax(0, 1fr);
+  align-items: center;
+  gap: 16px;
+  margin-top: 14px;
+  padding: 0 8px;
+}
+
+.sales-print-layout-selection {
+  min-width: 0;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  gap: 8px;
+}
+
+.sales-print-layout-selection label {
+  margin: 0;
+  text-align: right;
+  white-space: nowrap;
+  font-size: 13px;
+  font-weight: 500;
+  color: #1e293b;
+}
+
+.sales-print-layout-selection select {
+  width: 100%;
+  min-width: 0;
+  height: 38px;
+  padding: 0 30px 0 12px;
+  border: 1px solid #b6c4d5;
+  border-radius: 6px;
+  outline: none;
+  background: #ffffff;
+  color: #1e293b;
+  font-family:
+    Calibri,
+    "Segoe UI",
+    Arial,
+    sans-serif;
+  font-size: 14px;
+}
+
+.sales-print-layout-selection select:focus {
+  border-color: #3b82f6;
+  box-shadow:
+    0 0 0 2px
+    rgba(59, 130, 246, 0.12);
+}
+.print-load-preview-excel-button {
+  min-height: 38px;
+  padding: 0 16px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  border: 1px solid #16a34a;
+  border-radius: 7px;
+  background: #ffffff;
+  color: #15803d;
+  font-family: inherit;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.print-load-preview-excel-button:hover:not(:disabled) {
+  background: #f0fdf4;
+  border-color: #15803d;
+}
+
+.print-load-preview-excel-button:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}

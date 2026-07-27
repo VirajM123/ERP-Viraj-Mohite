@@ -4439,6 +4439,27 @@ const Transaction = ({
   const savePDCDocket =
     async () => {
       try {
+        const selectedCheques =
+          pdcDocketItems.filter(
+            (item) =>
+              item.selected === true
+          );
+
+        if (selectedCheques.length === 0) {
+          alert(
+            "Please select at least one cheque for the PDC Docket."
+          );
+
+          return;
+        }
+
+        const selectedTotalAmount =
+          selectedCheques.reduce(
+            (total, cheque) =>
+              total +
+              (Number(cheque.amount) || 0),
+            0
+          );
         const payload = {
           ...pdcDocketFormData,
 
@@ -4452,12 +4473,31 @@ const Transaction = ({
               "firmId"
             ) || "",
 
-          cheques:
-            Array.isArray(
-              pdcDocketItems
-            )
-              ? pdcDocketItems
-              : [],
+        totalCheques:
+  selectedCheques.length,
+
+totalAmount:
+  Number(
+    selectedTotalAmount.toFixed(2)
+  ),
+
+cheques:
+  selectedCheques.map(
+    (cheque, index) => {
+      /*
+       * Do not store frontend-only checkbox state.
+       */
+      const {
+        selected,
+        ...chequeData
+      } = cheque;
+
+      return {
+        ...chequeData,
+        srNo: index + 1
+      };
+    }
+  ),
         };
 
         console.log(
@@ -5377,25 +5417,64 @@ const Transaction = ({
     setEditPDCDocketId(null);
   };
 
-  const editPDCDocket = (docket) => {
+ const editPDCDocket = (
+  docket
+) => {
+  setEditPDCDocketId(
+    docket._id ||
+    docket.id ||
+    ""
+  );
 
-    setEditPDCDocketId(
-      docket._id ||
-      docket.id ||
-      ""
+  const existingCheques =
+    Array.isArray(
+      docket.cheques
+    )
+      ? docket.cheques.map(
+          (cheque, index) => ({
+            ...cheque,
+
+            srNo:
+              index + 1,
+
+            selected:
+              true
+          })
+        )
+      : [];
+
+  const existingTotalAmount =
+    existingCheques.reduce(
+      (total, cheque) =>
+        total +
+        (
+          Number(
+            cheque.amount
+          ) || 0
+        ),
+      0
     );
 
-    setPDCDocketFormData({
-      ...docket
-    });
+  setPDCDocketFormData({
+    ...docket,
 
-    setPDCDocketItems(
-      docket.cheques || []
-    );
+    totalCheques:
+      String(
+        existingCheques.length
+      ),
 
-    openTransactionEntry("PDC Docket");
-  };
+    totalAmount:
+      existingTotalAmount.toFixed(2)
+  });
 
+  setPDCDocketItems(
+    existingCheques
+  );
+
+  openTransactionEntry(
+    "PDC Docket"
+  );
+};
   const deletePDCDocket =
     async (id) => {
       if (!id) {
@@ -8920,344 +8999,438 @@ const Transaction = ({
       )
     );
 
-const getPdcDateValue = (value) => {
-  if (!value) {
+  const getPdcDateValue = (value) => {
+    if (!value) {
+      return "";
+    }
+
+    const rawValue =
+      String(value).trim();
+
+    if (!rawValue) {
+      return "";
+    }
+
+    // Handles YYYY-MM-DD and ISO dates
+    const isoMatch =
+      rawValue.match(
+        /^(\d{4})-(\d{2})-(\d{2})/
+      );
+
+    if (isoMatch) {
+      return `${isoMatch[1]}-${isoMatch[2]}-${isoMatch[3]}`;
+    }
+
+    // Handles DD/MM/YYYY
+    const slashMatch =
+      rawValue.match(
+        /^(\d{1,2})\/(\d{1,2})\/(\d{4})$/
+      );
+
+    if (slashMatch) {
+      const day =
+        String(slashMatch[1])
+          .padStart(2, "0");
+
+      const month =
+        String(slashMatch[2])
+          .padStart(2, "0");
+
+      const year =
+        slashMatch[3];
+
+      return `${year}-${month}-${day}`;
+    }
+
+    // Handles DD-MM-YYYY
+    const dashMatch =
+      rawValue.match(
+        /^(\d{1,2})-(\d{1,2})-(\d{4})$/
+      );
+
+    if (dashMatch) {
+      const day =
+        String(dashMatch[1])
+          .padStart(2, "0");
+
+      const month =
+        String(dashMatch[2])
+          .padStart(2, "0");
+
+      const year =
+        dashMatch[3];
+
+      return `${year}-${month}-${day}`;
+    }
+
     return "";
-  }
-
-  const rawValue =
-    String(value).trim();
-
-  if (!rawValue) {
-    return "";
-  }
-
-  // Handles YYYY-MM-DD and ISO dates
-  const isoMatch =
-    rawValue.match(
-      /^(\d{4})-(\d{2})-(\d{2})/
-    );
-
-  if (isoMatch) {
-    return `${isoMatch[1]}-${isoMatch[2]}-${isoMatch[3]}`;
-  }
-
-  // Handles DD/MM/YYYY
-  const slashMatch =
-    rawValue.match(
-      /^(\d{1,2})\/(\d{1,2})\/(\d{4})$/
-    );
-
-  if (slashMatch) {
-    const day =
-      String(slashMatch[1])
-        .padStart(2, "0");
-
-    const month =
-      String(slashMatch[2])
-        .padStart(2, "0");
-
-    const year =
-      slashMatch[3];
-
-    return `${year}-${month}-${day}`;
-  }
-
-  // Handles DD-MM-YYYY
-  const dashMatch =
-    rawValue.match(
-      /^(\d{1,2})-(\d{1,2})-(\d{4})$/
-    );
-
-  if (dashMatch) {
-    const day =
-      String(dashMatch[1])
-        .padStart(2, "0");
-
-    const month =
-      String(dashMatch[2])
-        .padStart(2, "0");
-
-    const year =
-      dashMatch[3];
-
-    return `${year}-${month}-${day}`;
-  }
-
-  return "";
-};
+  };
 
 
-const getPDCDocketReceipts = (
-  formData = pdcDocketFormData
-) => {
-  const fromDate =
-    getPdcDateValue(
-      formData.fromDate
-    );
+  const getPDCDocketReceipts = (
+    formData = pdcDocketFormData
+  ) => {
+    const fromDate =
+      getPdcDateValue(
+        formData.fromDate
+      );
 
-  const toDate =
-    getPdcDateValue(
-      formData.toDate
-    );
+    const toDate =
+      getPdcDateValue(
+        formData.toDate
+      );
 
-  const selectedHouseBank =
-    clean(
-      formData.houseBank ||
-      formData.houseBankName ||
-      formData.bankName
-    );
+    const selectedHouseBank =
+      clean(
+        formData.houseBank ||
+        formData.houseBankName ||
+        formData.bankName
+      );
 
-  const clearingType =
-    clean(
-      formData.clearingType
-    )
-      .replace(/\s+/g, " ");
+    const clearingType =
+      clean(
+        formData.clearingType
+      )
+        .replace(/\s+/g, " ");
 
-  /*
-   * Do not load the grid until required
-   * criteria have been entered.
-   */
-  if (
-    !selectedHouseBank ||
-    !fromDate ||
-    !toDate
-  ) {
-    return [];
-  }
+    /*
+     * Do not load the grid until required
+     * criteria have been entered.
+     */
+    if (
+      !selectedHouseBank ||
+      !fromDate ||
+      !toDate
+    ) {
+      return [];
+    }
 
-  const receipts =
-    Array.isArray(state.receipts)
-      ? state.receipts
-      : [];
+    const receipts =
+      Array.isArray(state.receipts)
+        ? state.receipts
+        : [];
 
-  return receipts
-    .filter((receipt) => {
-      const header =
-        receipt?.header ||
-        receipt ||
-        {};
+    return receipts
+      .filter((receipt) => {
+        const header =
+          receipt?.header ||
+          receipt ||
+          {};
 
-      const chequeNo =
-        String(
-          header.chequeNo || ""
-        ).trim();
+        const chequeNo =
+          String(
+            header.chequeNo || ""
+          ).trim();
 
-      if (!chequeNo) {
-        return false;
-      }
+        if (!chequeNo) {
+          return false;
+        }
 
-      const chequeDate =
-        getPdcDateValue(
-          header.chequeDate
-        );
+        const chequeDate =
+          getPdcDateValue(
+            header.chequeDate
+          );
 
-      if (!chequeDate) {
-        return false;
-      }
+        if (!chequeDate) {
+          return false;
+        }
 
-      if (
-        chequeDate < fromDate ||
-        chequeDate > toDate
-      ) {
-        return false;
-      }
+        if (
+          chequeDate < fromDate ||
+          chequeDate > toDate
+        ) {
+          return false;
+        }
 
-      /*
-       * The Receipt Bank/Cash field is the
-       * distributor's receiving bank.
-       */
-      const receiptBank =
-        clean(
-          header.bankCash ||
-          ""
-        );
+        /*
+         * The Receipt Bank/Cash field is the
+         * distributor's receiving bank.
+         */
+        const receiptBank =
+          clean(
+            header.bankCash ||
+            ""
+          );
 
-      /*
-       * Drawer Bank is the customer's cheque bank.
-       */
-      const drawerBank =
-        clean(
-          header.drawerBankName ||
-          header.drawerBank ||
-          ""
-        );
+        /*
+         * Drawer Bank is the customer's cheque bank.
+         */
+        const drawerBank =
+          clean(
+            header.drawerBankName ||
+            header.drawerBank ||
+            ""
+          );
 
-      if (
-        !receiptBank ||
-        receiptBank === "cash"
-      ) {
-        return false;
-      }
+        if (
+          !receiptBank ||
+          receiptBank === "cash"
+        ) {
+          return false;
+        }
 
-      if (
-        clearingType === "same bank"
-      ) {
-        return (
-          receiptBank ===
+        if (
+          clearingType === "same bank"
+        ) {
+          return (
+            receiptBank ===
             selectedHouseBank &&
-          drawerBank ===
+            drawerBank ===
             selectedHouseBank
-        );
-      }
+          );
+        }
 
-      if (
-        clearingType === "local bank"
-      ) {
-        return (
-          receiptBank ===
+        if (
+          clearingType === "local bank"
+        ) {
+          return (
+            receiptBank ===
             selectedHouseBank &&
-          drawerBank !==
+            drawerBank !==
             selectedHouseBank
-        );
-      }
+          );
+        }
 
-      if (
-        clearingType ===
-        "outside bank"
-      ) {
+        if (
+          clearingType ===
+          "outside bank"
+        ) {
+          return (
+            receiptBank ===
+            selectedHouseBank
+          );
+        }
+
         return (
           receiptBank ===
           selectedHouseBank
         );
-      }
+      })
+      .map((receipt, index) => {
+        const header =
+          receipt?.header ||
+          receipt ||
+          {};
 
-      return (
-        receiptBank ===
-        selectedHouseBank
+        const drawerBankName =
+          header.drawerBankName ||
+          header.drawerBank ||
+          "";
+
+        return {
+          id:
+            receipt._id ||
+            receipt.id ||
+            `${header.rno || "REC"}-${index}`,
+
+          selected: true,
+
+          srNo:
+            index + 1,
+
+          chequeNo:
+            header.chequeNo || "",
+
+          chequeDate:
+            header.chequeDate || "",
+
+          amount:
+            Number(
+              header.receiptAmount ||
+              receipt.summary?.totalAdjusted ||
+              0
+            ),
+
+          clearingDate:
+            formData.clearingDate ||
+            "",
+
+          receiptSeries:
+            header.billSeries ||
+            "REC",
+
+          receiptNo:
+            header.rno || "",
+
+          receiptTrnBank:
+            drawerBankName,
+
+          branch:
+            header.drawerBankBranch ||
+            header.branch ||
+            "",
+
+          partyCode:
+            header.partyId ||
+            header.partyCode ||
+            "",
+
+          partyName:
+            header.partyName ||
+            ""
+        };
+      });
+  };
+
+  const loadPDCDocketGrid = (
+    formData = pdcDocketFormData
+  ) => {
+    try {
+      const rows =
+        getPDCDocketReceipts(
+          formData
+        );
+
+      /*
+       * Load every eligible cheque, but keep it
+       * unselected until the user checks it.
+       */
+      const numberedRows =
+        rows.map(
+          (row, index) => ({
+            ...row,
+
+            srNo:
+              index + 1,
+
+            selected:
+              false
+          })
+        );
+
+      setPDCDocketItems(
+        numberedRows
       );
-    })
-    .map((receipt, index) => {
-      const header =
-        receipt?.header ||
-        receipt ||
-        {};
 
-      const drawerBankName =
-        header.drawerBankName ||
-        header.drawerBank ||
-        "";
+      /*
+       * No cheque is selected initially.
+       */
+      setPDCDocketFormData(
+        (previous) => ({
+          ...previous,
+          ...formData,
 
-      return {
-        id:
-          receipt._id ||
-          receipt.id ||
-          `${header.rno || "REC"}-${index}`,
+          totalAmount:
+            "0.00",
 
-        selected: true,
+          totalCheques:
+            "0"
+        })
+      );
+    } catch (error) {
+      console.error(
+        "LOAD PDC DOCKET GRID ERROR =",
+        error
+      );
 
-        srNo:
-          index + 1,
+      setPDCDocketItems([]);
 
-        chequeNo:
-          header.chequeNo || "",
+      setPDCDocketFormData(
+        (previous) => ({
+          ...previous,
+          ...formData,
 
-        chequeDate:
-          header.chequeDate || "",
+          totalAmount:
+            "0.00",
 
-        amount:
-          Number(
-            header.receiptAmount ||
-            receipt.summary?.totalAdjusted ||
-            0
-          ),
+          totalCheques:
+            "0"
+        })
+      );
+    }
+  };
+  /* =========================================================
+     PDC DOCKET CHEQUE SELECTION
+     ========================================================= */
 
-        clearingDate:
-          formData.clearingDate ||
-          "",
+  const recalculatePDCDocketSelection = (
+    rows
+  ) => {
+    const safeRows =
+      Array.isArray(rows)
+        ? rows
+        : [];
 
-        receiptSeries:
-          header.billSeries ||
-          "REC",
-
-        receiptNo:
-          header.rno || "",
-
-        receiptTrnBank:
-          drawerBankName,
-
-        branch:
-          header.drawerBankBranch ||
-          header.branch ||
-          "",
-
-        partyCode:
-          header.partyId ||
-          header.partyCode ||
-          "",
-
-        partyName:
-          header.partyName ||
-          ""
-      };
-    });
-};
-
-const loadPDCDocketGrid = (
-  formData = pdcDocketFormData
-) => {
-  try {
-    const rows =
-      getPDCDocketReceipts(
-        formData
+    const selectedRows =
+      safeRows.filter(
+        (row) => row.selected === true
       );
 
     const totalAmount =
-      rows.reduce(
-        (sum, row) =>
-          sum +
-          (
-            Number(
-              row.amount
-            ) || 0
-          ),
+      selectedRows.reduce(
+        (total, row) =>
+          total +
+          (Number(row.amount) || 0),
         0
       );
 
-    const numberedRows =
-      rows.map(
-        (row, index) => ({
-          ...row,
-          srNo: index + 1
-        })
-      );
-
-    setPDCDocketItems(
-      numberedRows
-    );
-
     setPDCDocketFormData(
       (previous) => ({
         ...previous,
-        ...formData,
-
-        totalAmount:
-          totalAmount.toFixed(2),
 
         totalCheques:
-          String(
-            numberedRows.length
-          )
+          String(selectedRows.length),
+
+        totalAmount:
+          totalAmount.toFixed(2)
       })
     );
-  } catch (error) {
-    console.error(
-      "LOAD PDC DOCKET GRID ERROR =",
-      error
-    );
+  };
 
-    setPDCDocketItems([]);
+  const handlePDCDocketChequeSelect = (
+    rowIndex
+  ) => {
+    setPDCDocketItems(
+      (previousRows) => {
+        const updatedRows =
+          previousRows.map(
+            (row, index) =>
+              index === rowIndex
+                ? {
+                  ...row,
+                  selected:
+                    !row.selected
+                }
+                : row
+          );
 
-    setPDCDocketFormData(
-      (previous) => ({
-        ...previous,
-        ...formData,
-        totalAmount: "0.00",
-        totalCheques: "0"
-      })
+        recalculatePDCDocketSelection(
+          updatedRows
+        );
+
+        return updatedRows;
+      }
     );
-  }
-};
+  };
+
+  const handlePDCDocketSelectAll = () => {
+    setPDCDocketItems(
+      (previousRows) => {
+        const allCurrentlySelected =
+          previousRows.length > 0 &&
+          previousRows.every(
+            (row) =>
+              row.selected === true
+          );
+
+        const updatedRows =
+          previousRows.map(
+            (row) => ({
+              ...row,
+
+              selected:
+                !allCurrentlySelected
+            })
+          );
+
+        recalculatePDCDocketSelection(
+          updatedRows
+        );
+
+        return updatedRows;
+      }
+    );
+  };
   // Receipt Form
   // ======================================================
   // RECEIPT FORM - BILLING STYLE UI
@@ -14751,10 +14924,32 @@ const loadPDCDocketGrid = (
 
           <div className="pdc-grid-scroll">
             <table className="pdc-entry-table">
-              <thead>
-                <tr>
-                  <th>Sr</th>
-                  <th>Cheque No</th>
+        <thead>
+  <tr>
+    <th
+      style={{
+        width: "48px",
+        textAlign: "center"
+      }}
+    >
+      <input
+        type="checkbox"
+        checked={
+          pdcDocketItems.length > 0 &&
+          pdcDocketItems.every(
+            (item) =>
+              item.selected === true
+          )
+        }
+        onChange={
+          handlePDCDocketSelectAll
+        }
+        title="Select all cheques"
+      />
+    </th>
+
+    <th>Sr</th>
+    <th>Cheque No</th>
                   <th>Cheque Date</th>
                   <th>Amount</th>
                   <th>Clearing Date</th>
@@ -14771,7 +14966,7 @@ const loadPDCDocketGrid = (
                 {pdcDocketItems.length === 0 ? (
                   <tr>
                     <td
-                      colSpan="11"
+                      colSpan="12"
                       className="pdc-empty-row"
                     >
                       Select House Bank, Clearing Type,
@@ -14779,9 +14974,50 @@ const loadPDCDocketGrid = (
                     </td>
                   </tr>
                 ) : (
-                  pdcDocketItems.map((item, index) => (
-                    <tr key={item.id || item._id || index}>
-                      <td>{index + 1}</td>
+               pdcDocketItems.map(
+  (item, index) => (
+    <tr
+      key={
+        item.id ||
+        item._id ||
+        `${item.chequeNo}-${item.receiptNo}-${index}`
+      }
+      onClick={() =>
+        handlePDCDocketChequeSelect(
+          index
+        )
+      }
+      style={{
+        cursor: "pointer",
+
+        background:
+          item.selected === true
+            ? "#e8f2ff"
+            : ""
+      }}
+    >
+      <td
+        style={{
+          textAlign: "center"
+        }}
+        onClick={(event) =>
+          event.stopPropagation()
+        }
+      >
+        <input
+          type="checkbox"
+          checked={
+            item.selected === true
+          }
+          onChange={() =>
+            handlePDCDocketChequeSelect(
+              index
+            )
+          }
+        />
+      </td>
+
+      <td>{index + 1}</td>
 
                       <td>{item.chequeNo || "-"}</td>
 

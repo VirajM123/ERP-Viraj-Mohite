@@ -7261,6 +7261,53 @@ app.put("/api/sales/:id", ensureConnection, async (req, res) => {
       },
       { new: true, session }
     );
+    /*
+---------------------------------------------------------
+Synchronize Load Header Bill Amount
+---------------------------------------------------------
+*/
+
+await LoadHeader.updateMany(
+  {
+    $or: [
+      {
+        DistributorId: distributorId,
+        FirmId: firmId,
+      },
+      {
+        distributorId,
+        firmId,
+      },
+    ],
+
+    Bills: {
+      $elemMatch: {
+        BillSeries: String(BillSeries),
+        BillNo: Number(BillNo),
+      },
+    },
+  },
+
+  {
+    $set: {
+      "Bills.$.BillAmount": Number(req.body.NetAmount || 0),
+      "Bills.$.billAmount": Number(req.body.NetAmount || 0),
+
+      "Bills.$.PendingAmount": Number(req.body.NetAmount || 0),
+      "Bills.$.pendingAmount": Number(req.body.NetAmount || 0),
+
+      "Bills.$.NetAmount": Number(req.body.NetAmount || 0),
+      "Bills.$.netAmount": Number(req.body.NetAmount || 0),
+
+      "Bills.$.BillType": BillType || "Credit",
+      "Bills.$.billType": BillType || "Credit",
+
+      UpdatedAt: new Date(),
+    },
+  },
+
+  { session }
+);
 
     await session.commitTransaction();
 
@@ -24548,6 +24595,653 @@ app.delete("/api/sales/:id", ensureConnection, async (req, res) => {
     session.endSession();
   }
 });
+/* =========================================================
+   GET ONE QUOTATION FOR EDIT
+   ========================================================= */
+
+app.get(
+  "/api/quotation/:id",
+  ensureConnection,
+  async (req, res) => {
+    try {
+      const quotationId = String(
+        req.params.id || ""
+      ).trim();
+
+      const distributorId = String(
+        req.query.distributorId || ""
+      ).trim();
+
+      const firmId = String(
+        req.query.firmId || ""
+      ).trim();
+
+      if (!distributorId || !firmId) {
+        return res.status(400).json({
+          success: false,
+          message:
+            "distributorId and firmId are required",
+        });
+      }
+
+      if (
+        !quotationId ||
+        !mongoose.Types.ObjectId.isValid(
+          quotationId
+        )
+      ) {
+        return res.status(400).json({
+          success: false,
+          message:
+            "Invalid quotation ID",
+        });
+      }
+
+      /*
+       * IMPORTANT:
+       * Your actual model is QuotationHeader,
+       * not Quotation.
+       */
+      const quotation =
+        await QuotationHeader.findOne({
+          _id: quotationId,
+          distributorId,
+          firmId,
+          isActive: true,
+        }).lean();
+
+      if (!quotation) {
+        return res.status(404).json({
+          success: false,
+          message:
+            "Quotation not found for this firm",
+        });
+      }
+
+      return res.json({
+        success: true,
+        quotation,
+      });
+    } catch (error) {
+      console.error(
+        "GET QUOTATION FOR EDIT ERROR:",
+        error
+      );
+
+      return res.status(500).json({
+        success: false,
+        message:
+          error.message ||
+          "Failed to load quotation",
+      });
+    }
+  }
+);
+
+/* =========================================================
+   UPDATE QUOTATION
+   ========================================================= */
+
+app.put(
+  "/api/quotation/:id",
+  ensureConnection,
+  async (req, res) => {
+    try {
+      const quotationId = String(
+        req.params.id || ""
+      ).trim();
+
+      const {
+        distributorId,
+        firmId,
+        firmName = "",
+
+        BillDate = "",
+        Godown = "",
+        GDCode = "",
+
+        CompanyCode = "",
+        CompanyName = "",
+
+        AreaCode = "",
+        AreaName = "",
+
+        PartyCode = "",
+        PartyName = "",
+
+        BillSeries = "",
+        BillNo,
+        BillType = "Credit",
+        DueDate = "",
+
+        SalesmanCode = "",
+        SalesmanName = "",
+        Narration = "",
+
+        items = [],
+      } = req.body;
+
+      if (!distributorId || !firmId) {
+        return res.status(400).json({
+          success: false,
+          message:
+            "Distributor/Firm not found",
+        });
+      }
+
+      if (
+        !quotationId ||
+        !mongoose.Types.ObjectId.isValid(
+          quotationId
+        )
+      ) {
+        return res.status(400).json({
+          success: false,
+          message:
+            "Invalid quotation ID",
+        });
+      }
+
+      if (!Number(BillNo)) {
+        return res.status(400).json({
+          success: false,
+          message:
+            "Quotation Bill No is required",
+        });
+      }
+
+      if (
+        !Array.isArray(items) ||
+        items.length === 0
+      ) {
+        return res.status(400).json({
+          success: false,
+          message:
+            "At least one product is required",
+        });
+      }
+
+      const existingQuotation =
+        await QuotationHeader.findOne({
+          _id: quotationId,
+          distributorId:
+            String(distributorId).trim(),
+          firmId:
+            String(firmId).trim(),
+          isActive: true,
+        });
+
+      if (!existingQuotation) {
+        return res.status(404).json({
+          success: false,
+          message:
+            "Quotation not found",
+        });
+      }
+
+      /*
+       * Prevent another quotation from using
+       * the same Series + Bill No.
+       */
+      const duplicateQuotation =
+        await QuotationHeader.findOne({
+          _id: {
+            $ne: quotationId,
+          },
+
+          distributorId:
+            String(distributorId).trim(),
+
+          firmId:
+            String(firmId).trim(),
+
+          BillSeries:
+            String(
+              BillSeries || ""
+            ).trim(),
+
+          BillNo:
+            Number(BillNo),
+
+          isActive: true,
+        });
+
+      if (duplicateQuotation) {
+        return res.status(409).json({
+          success: false,
+          message:
+            `Quotation ${BillSeries}-${BillNo} already exists`,
+        });
+      }
+
+      const normalizedItems =
+        items.map(
+          (item, index) => {
+            const combinedProduct =
+              String(
+                item.product || ""
+              ).trim();
+
+            const separatedProduct =
+              combinedProduct.split(
+                " - "
+              );
+
+            const productCode =
+              String(
+                item.productCode ||
+                item.productId ||
+                item.code ||
+                separatedProduct[0] ||
+                ""
+              ).trim();
+
+            const productName =
+              String(
+                item.productName ||
+                item.name ||
+                separatedProduct
+                  .slice(1)
+                  .join(" - ") ||
+                ""
+              ).trim();
+
+            return {
+              ...item,
+
+              sr:
+                Number(
+                  item.sr ||
+                  index + 1
+                ),
+
+              product:
+                combinedProduct ||
+                (
+                  productCode ||
+                  productName
+                    ? `${productCode}${
+                        productCode &&
+                        productName
+                          ? " - "
+                          : ""
+                      }${productName}`
+                    : ""
+                ),
+
+              productCode,
+              productId:
+                productCode,
+              productName,
+
+              batchNo:
+                String(
+                  item.batchNo ||
+                  item.batch ||
+                  item.selectedBatch
+                    ?.batchNo ||
+                  "."
+                ).trim(),
+
+              units:
+                item.units ||
+                item.unit ||
+                "PCS",
+
+              qty:
+                Number(
+                  item.qty ||
+                  item.quantity ||
+                  0
+                ),
+
+              quantity:
+                Number(
+                  item.qty ||
+                  item.quantity ||
+                  0
+                ),
+
+              free:
+                Number(
+                  item.free || 0
+                ),
+
+              mrp:
+                Number(
+                  item.mrp || 0
+                ),
+
+              rate:
+                Number(
+                  item.rate || 0
+                ),
+
+              rateGst:
+                Number(
+                  item.rateGst || 0
+                ),
+
+              tprAmt:
+                Number(
+                  item.tprAmt || 0
+                ),
+
+              schemePct:
+                Number(
+                  item.schemePct || 0
+                ),
+
+              schemeAmt:
+                Number(
+                  item.schemeAmt || 0
+                ),
+
+              cdPct:
+                Number(
+                  item.cdPct || 0
+                ),
+
+              cdAmt:
+                Number(
+                  item.cdAmt || 0
+                ),
+
+              starPct:
+                Number(
+                  item.starPct || 0
+                ),
+
+              starAmt:
+                Number(
+                  item.starAmt || 0
+                ),
+
+              taxable:
+                Number(
+                  item.taxable || 0
+                ),
+
+              gst:
+                Number(
+                  item.gst || 0
+                ),
+
+              sgst:
+                Number(
+                  item.sgst || 0
+                ),
+
+              cgst:
+                Number(
+                  item.cgst || 0
+                ),
+
+              igst:
+                Number(
+                  item.igst || 0
+                ),
+
+              amount:
+                Number(
+                  item.amount || 0
+                ),
+            };
+          }
+        );
+
+      const updateData = {
+        firmName:
+          String(
+            firmName || ""
+          ).trim(),
+
+        BillDate,
+        Godown,
+        GDCode,
+
+        CompanyCode:
+          String(
+            CompanyCode || ""
+          ).trim(),
+
+        CompanyName:
+          String(
+            CompanyName || ""
+          ).trim(),
+
+        AreaCode:
+          String(
+            AreaCode || ""
+          ).trim(),
+
+        AreaName:
+          String(
+            AreaName || ""
+          ).trim(),
+
+        PartyCode:
+          String(
+            PartyCode || ""
+          ).trim(),
+
+        PartyName:
+          String(
+            PartyName || ""
+          ).trim(),
+
+        BillSeries:
+          String(
+            BillSeries || ""
+          ).trim(),
+
+        BillNo:
+          Number(BillNo),
+
+        BillType:
+          BillType || "Credit",
+
+        DueDate,
+
+        SalesmanCode:
+          String(
+            SalesmanCode || ""
+          ).trim(),
+
+        SalesmanName:
+          String(
+            SalesmanName || ""
+          ).trim(),
+
+        Narration:
+          String(
+            Narration || ""
+          ).trim(),
+
+        GrossAmount:
+          Number(
+            req.body.GrossAmount || 0
+          ),
+
+        TPRAmount:
+          Number(
+            req.body.TPRAmount || 0
+          ),
+
+        SchemeAmount:
+          Number(
+            req.body.SchemeAmount || 0
+          ),
+
+        StarDiscountAmount:
+          Number(
+            req.body
+              .StarDiscountAmount ||
+            0
+          ),
+
+        CashDiscountAmount:
+          Number(
+            req.body
+              .CashDiscountAmount ||
+            0
+          ),
+
+        DisplayAmount:
+          Number(
+            req.body.DisplayAmount || 0
+          ),
+
+        CouponAmount:
+          Number(
+            req.body.CouponAmount || 0
+          ),
+
+        AddLessAmount:
+          Number(
+            req.body.AddLessAmount || 0
+          ),
+
+        TaxableValue:
+          Number(
+            req.body.TaxableValue || 0
+          ),
+
+        SGSTAmount:
+          Number(
+            req.body.SGSTAmount || 0
+          ),
+
+        CGSTAmount:
+          Number(
+            req.body.CGSTAmount || 0
+          ),
+
+        IGSTAmount:
+          Number(
+            req.body.IGSTAmount || 0
+          ),
+
+        OriginalNetAmount:
+          Number(
+            req.body
+              .OriginalNetAmount ??
+            req.body.NetAmount ??
+            0
+          ),
+
+        NetAmount:
+          Number(
+            req.body.NetAmount || 0
+          ),
+
+        TotalQty:
+          Number(
+            req.body.TotalQty ||
+            normalizedItems.reduce(
+              (
+                total,
+                item
+              ) =>
+                total +
+                Number(
+                  item.qty || 0
+                ),
+              0
+            )
+          ),
+
+        TotalFreeQty:
+          Number(
+            req.body.TotalFreeQty ||
+            normalizedItems.reduce(
+              (
+                total,
+                item
+              ) =>
+                total +
+                Number(
+                  item.free || 0
+                ),
+              0
+            )
+          ),
+
+        TotalItems:
+          normalizedItems.length,
+
+        items:
+          normalizedItems,
+
+        isActive: true,
+      };
+
+      const updatedQuotation =
+        await QuotationHeader.findOneAndUpdate(
+          {
+            _id: quotationId,
+            distributorId:
+              String(
+                distributorId
+              ).trim(),
+            firmId:
+              String(
+                firmId
+              ).trim(),
+          },
+          {
+            $set: updateData,
+          },
+          {
+            new: true,
+            runValidators: true,
+          }
+        ).lean();
+
+      if (!updatedQuotation) {
+        return res.status(404).json({
+          success: false,
+          message:
+            "Quotation not found during update",
+        });
+      }
+
+      return res.json({
+        success: true,
+        message:
+          "Quotation updated successfully",
+
+        quotation:
+          updatedQuotation,
+
+        data: {
+          header:
+            updatedQuotation,
+        },
+      });
+    } catch (error) {
+      console.error(
+        "UPDATE QUOTATION ERROR:",
+        error
+      );
+
+      if (error?.code === 11000) {
+        return res.status(409).json({
+          success: false,
+          message:
+            "Quotation Series and Bill No already exist",
+        });
+      }
+
+      return res.status(500).json({
+        success: false,
+        message:
+          error.message ||
+          "Quotation update failed",
+      });
+    }
+  }
+);
 // ---------- PERMANENT DELETE QUOTATION ----------
 app.delete("/api/quotation/:id", ensureConnection, async (req, res) => {
   try {

@@ -1,12 +1,13 @@
 // Dashboard.jsx
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { createPortal } from "react-dom";
-import * as XLSX from 'xlsx';
+import * as XLSX from "xlsx-js-style";
 import jsPDF from 'jspdf';
 import 'jspdf-autotable';
 import './Dashboard.css';
 import totalSolutionLogo from "./assets/images/Totalsolution.png";
 import Report from "./Report";
+
 
 // Change this at the top of Dashboard.jsx:
 //import logo from "./assets/TotalSolution.ico";
@@ -113,8 +114,178 @@ const Dashboard = ({ onLogout }) => {
   const [otherAccountActiveTab, setOtherAccountActiveTab] = useState('basic');
   const [transactionFormMode, setTransactionFormMode] = useState({});
   const [masterReturnContext, setMasterReturnContext] = useState(null);
+
+  
   const masterReturnContextRef = useRef(null);
   const accountOpenedFromInvoiceRef = useRef(false);
+
+/* =========================================================
+   SALES BILL PRINT FORMAT SELECTION
+   ========================================================= */
+
+const createDefaultSalesPrintOptions = () => ({
+  reportNumber: "1",
+  paperSize: "A4",
+  orientation: "portrait",
+
+  copies: 1,
+
+  /*
+   * Load-wise printing fields.
+   */
+  loadSeries: "",
+  loadNo: "",
+
+  trnSeries: "INV",
+  fromTrnNo: "",
+  toTrnNo: "",
+
+  showScheme: true,
+  showHsn: true,
+  showTaxSummary: true,
+  showBankDetails: true,
+  showDeclaration: true,
+
+  goodsReturn: true,
+  damageReturn: true,
+});
+
+const [
+  showSalesPrintFormatModal,
+  setShowSalesPrintFormatModal,
+] = useState(false);
+
+const [
+  selectedSalesPrintRow,
+  setSelectedSalesPrintRow,
+] = useState(null);
+
+const [
+  salesPrintOptions,
+  setSalesPrintOptions,
+] = useState(() =>
+  createDefaultSalesPrintOptions()
+);
+
+const [
+  salesPrintPreparing,
+  setSalesPrintPreparing,
+] = useState(false);
+
+const SALES_BILL_REPORT_NUMBERS = [
+  {
+    value: "1",
+    label: "1",
+  },
+ 
+];
+
+const SALES_BILL_PAPER_SIZES = [
+  {
+    value: "A4",
+    label: "A4 - Portrait",
+    orientation: "portrait",
+  },
+  {
+    value: "A5",
+    label: "A5 - Landscape",
+    orientation: "landscape",
+  },
+];
+const openSalesPrintFormatSelection = (
+  salesRow,
+  defaultAction = "preview"
+) => {
+  const actualSalesRow =
+    salesRow?.originalItem?.originalItem ||
+    salesRow?.originalItem ||
+    salesRow;
+
+  if (!actualSalesRow) {
+    alert("Sales Bill record was not found.");
+    return;
+  }
+
+  const billSeries = String(
+    actualSalesRow.BillSeries ||
+      actualSalesRow.billSeries ||
+      actualSalesRow.TrnSeries ||
+      actualSalesRow.trnSeries ||
+      "INV"
+  ).trim();
+
+  const billNo = String(
+    actualSalesRow.BillNo ??
+      actualSalesRow.billNo ??
+      actualSalesRow.TrnNo ??
+      actualSalesRow.trnNo ??
+      ""
+  ).trim();
+
+  const loadSeries = String(
+    actualSalesRow.LoadSeries ||
+      actualSalesRow.loadSeries ||
+      ""
+  ).trim();
+
+  const loadNo = String(
+    actualSalesRow.LoadNo ??
+      actualSalesRow.loadNo ??
+      ""
+  ).trim();
+
+  setSelectedSalesPrintRow(actualSalesRow);
+
+  setSalesPrintOptions({
+    ...createDefaultSalesPrintOptions(),
+
+    defaultAction,
+
+    trnSeries: billSeries || "INV",
+    fromTrnNo: billNo,
+    toTrnNo: billNo,
+
+    loadSeries,
+    loadNo,
+  });
+
+  setShowSalesPrintFormatModal(true);
+};
+
+/* ADD THIS FUNCTION HERE */
+const closeSalesPrintFormatSelection = () => {
+  if (salesPrintPreparing) {
+    return;
+  }
+
+  setShowSalesPrintFormatModal(false);
+  setSelectedSalesPrintRow(null);
+
+  setSalesPrintOptions(
+    createDefaultSalesPrintOptions()
+  );
+};
+const openSalesLoadPrintSelection = (
+  defaultAction = "print"
+) => {
+  /*
+   * No individual bill is selected because this
+   * button is for Load-wise / Range-wise printing.
+   */
+  setSelectedSalesPrintRow(null);
+
+  setSalesPrintOptions({
+    ...createDefaultSalesPrintOptions(),
+    defaultAction,
+    loadSeries: "",
+    loadNo: "",
+    trnSeries: "INV",
+    fromTrnNo: "",
+    toTrnNo: "",
+  });
+
+  setShowSalesPrintFormatModal(true);
+};  
 
   /* 2. REPORT STATES — add inside Dashboard component */
 
@@ -598,6 +769,49 @@ const Dashboard = ({ onLogout }) => {
       minAmount: "",
       maxAmount: "",
     });
+
+  const createEmptyInvoiceSummary = () => ({
+    gross: 0,
+    tpr: 0,
+
+    productScheme: 0,
+    productStar: 0,
+    productCd: 0,
+
+    scheme: 0,
+    star: 0,
+    cd: 0,
+
+    display: 0,
+    coupon: 0,
+    addLess: 0,
+
+    taxable: 0,
+    bottom: 0,
+
+    cgst: 0,
+    sgst: 0,
+    igst: 0,
+    gst: 0,
+
+    cess: 0,
+    tcs: 0,
+    rounding: 0,
+
+    originalNet: 0,
+    creditNote: 0,
+    net: 0,
+  });
+  const createEmptyInvoiceManualAdjustments =
+    () => ({
+      scheme: "",
+      star: "",
+      cd: "",
+      display: "",
+      coupon: "",
+      addLess: "",
+    });
+
 
   const [
     quotationListData,
@@ -1107,6 +1321,12 @@ const Dashboard = ({ onLogout }) => {
     SALES LIST ACTUAL BILL PREVIEW / PRINT
     ========================================================= */
 
+
+
+  /* =========================================================
+    SALES LIST ACTUAL BILL PREVIEW / PRINT
+    ========================================================= */
+
   const loadSalesInvoicePrintData = async (salesRow) => {
     try {
       const distributorId =
@@ -1170,2267 +1390,2429 @@ const Dashboard = ({ onLogout }) => {
     }
   };
 
-  const openSalesInvoicePreview = async (salesRow) => {
-    /*
-    * Open the popup immediately during the click event.
-    * This prevents browsers from blocking the popup after await.
-    */
-    const previewWindow = window.open(
-      "",
-      "_blank",
-      "width=1450,height=900"
+const loadSalesInvoicesByLoad = async () => {
+  const distributorId = String(
+    localStorage.getItem("distributorId") || ""
+  ).trim();
+
+  const firmId = String(
+    localStorage.getItem("firmId") || ""
+  ).trim();
+
+  const loadSeries = String(
+    salesPrintOptions.loadSeries || ""
+  ).trim();
+
+  const loadNo = String(
+    salesPrintOptions.loadNo || ""
+  ).trim();
+
+  const trnSeries = String(
+    salesPrintOptions.trnSeries || "INV"
+  )
+    .trim()
+    .toUpperCase();
+
+  const fromTrnNo = String(
+    salesPrintOptions.fromTrnNo || ""
+  ).trim();
+
+  const toTrnNo = String(
+    salesPrintOptions.toTrnNo || ""
+  ).trim();
+
+  if (!distributorId || !firmId) {
+    throw new Error(
+      "Distributor/Firm not found. Please login again."
     );
+  }
 
-    if (!previewWindow) {
-      alert(
-        "Preview popup was blocked. Please allow popups."
+  if (!loadNo) {
+    throw new Error("Please enter Load No.");
+  }
+
+  if (
+    fromTrnNo &&
+    toTrnNo &&
+    Number(fromTrnNo) > Number(toTrnNo)
+  ) {
+    throw new Error(
+      "From Trn No cannot be greater than To Trn No."
+    );
+  }
+
+  /*
+   * STEP 1:
+   * Load all current bills assigned to this load.
+   *
+   * This API already exists in server.js.
+   */
+  const loadQuery = new URLSearchParams({
+    distributorId,
+    firmId,
+    loadNo,
+  });
+
+  if (loadSeries) {
+    loadQuery.set(
+      "loadSeries",
+      loadSeries
+    );
+  }
+
+  const loadResponse = await fetch(
+    `${API_URL}/load-transfer/load-bills?${loadQuery.toString()}`
+  );
+
+  const contentType =
+    loadResponse.headers.get(
+      "content-type"
+    ) || "";
+
+  const loadResult =
+    contentType.includes(
+      "application/json"
+    )
+      ? await loadResponse.json()
+      : {
+          success: false,
+          message:
+            await loadResponse.text(),
+        };
+
+  if (
+    !loadResponse.ok ||
+    loadResult.success === false
+  ) {
+    throw new Error(
+      loadResult.message ||
+        "Unable to load bills for this load."
+    );
+  }
+
+  /*
+   * Your load-transfer API may return bills either
+   * directly or inside sourceLoad.
+   */
+  const sourceBills =
+    Array.isArray(loadResult.bills)
+      ? loadResult.bills
+      : Array.isArray(
+            loadResult.sourceLoad?.bills
+          )
+        ? loadResult.sourceLoad.bills
+        : Array.isArray(
+              loadResult.sourceLoad?.items
+            )
+          ? loadResult.sourceLoad.items
+          : [];
+
+  if (sourceBills.length === 0) {
+    throw new Error(
+      "No invoices were found for the entered Load Series and Load No."
+    );
+  }
+
+  /*
+   * STEP 2:
+   * Apply the optional transaction filters.
+   */
+  const filteredBills =
+    sourceBills.filter((bill) => {
+      const billSeries = String(
+        bill.BillSeries ??
+          bill.billSeries ??
+          bill.Series ??
+          bill.series ??
+          bill.TrnSeries ??
+          bill.trnSeries ??
+          ""
+      )
+        .trim()
+        .toUpperCase();
+
+      const billNoValue = Number(
+        bill.BillNo ??
+          bill.billNo ??
+          bill.TrnNo ??
+          bill.trnNo ??
+          0
       );
-      return;
-    }
 
-    previewWindow.document.open();
-
-    previewWindow.document.write(`
-      <!DOCTYPE html>
-      <html>
-        <head>
-          <title>Loading Invoice...</title>
-
-          <style>
-            body {
-              margin: 0;
-              min-height: 100vh;
-              display: flex;
-              align-items: center;
-              justify-content: center;
-              font-family: Arial, sans-serif;
-              background: #f8fafc;
-              color: #334155;
-            }
-          </style>
-        </head>
-
-        <body>
-          Loading invoice preview...
-        </body>
-      </html>
-    `);
-
-    previewWindow.document.close();
-
-    try {
-      const result =
-        await loadSalesInvoicePrintData(salesRow);
-
-      if (!result) {
-        previewWindow.close();
-        return;
+      if (
+        trnSeries &&
+        billSeries &&
+        billSeries !== trnSeries
+      ) {
+        return false;
       }
 
-      const html = generateInvoicePreviewHTML(result, {
-        paperSize: "A4",
-        orientation: "portrait",
-        includeButtons: true,
-      });
-
-      previewWindow.document.open();
-      previewWindow.document.write(html);
-      previewWindow.document.close();
-      previewWindow.focus();
-    } catch (error) {
-      console.error(
-        "Sales invoice preview error:",
-        error
-      );
-
-      previewWindow.document.open();
-
-      previewWindow.document.write(`
-        <!DOCTYPE html>
-        <html>
-          <body style="
-            padding: 30px;
-            font-family: Arial, sans-serif;
-            color: #b91c1c;
-          ">
-            <h3>Unable to open invoice preview</h3>
-
-            <p>
-              ${escapeInvoiceHtml(
-        error.message || "Unknown preview error"
-      )}
-            </p>
-          </body>
-        </html>
-      `);
-
-      previewWindow.document.close();
-    }
-  };
-
-  const printSalesInvoiceFromList = async (salesRow) => {
-    const printWindow = window.open(
-      "",
-      "_blank",
-      "width=1450,height=900"
-    );
-
-    if (!printWindow) {
-      alert(
-        "Print popup was blocked. Please allow popups."
-      );
-      return;
-    }
-
-    printWindow.document.open();
-
-    printWindow.document.write(`
-      <!DOCTYPE html>
-      <html>
-        <head>
-          <title>Loading Invoice...</title>
-
-          <style>
-            body {
-              margin: 0;
-              min-height: 100vh;
-              display: flex;
-              align-items: center;
-              justify-content: center;
-              font-family: Arial, sans-serif;
-              background: #ffffff;
-              color: #334155;
-            }
-          </style>
-        </head>
-
-        <body>
-          Preparing invoice for printing...
-        </body>
-      </html>
-    `);
-
-    printWindow.document.close();
-
-    try {
-      const result =
-        await loadSalesInvoicePrintData(salesRow);
-
-      if (!result) {
-        printWindow.close();
-        return;
+      if (
+        fromTrnNo &&
+        billNoValue <
+          Number(fromTrnNo)
+      ) {
+        return false;
       }
 
-      const html = generateInvoicePreviewHTML(
-        result,
-        {
-          paperSize: "A4",
-          orientation: "landscape",
-          includeButtons: false,
+      if (
+        toTrnNo &&
+        billNoValue >
+          Number(toTrnNo)
+      ) {
+        return false;
+      }
+
+      return true;
+    });
+
+  if (filteredBills.length === 0) {
+    throw new Error(
+      "The load was found, but no invoices matched the entered transaction range."
+    );
+  }
+
+  filteredBills.sort(
+    (firstBill, secondBill) => {
+      const firstSeries = String(
+        firstBill.BillSeries ??
+          firstBill.billSeries ??
+          firstBill.Series ??
+          ""
+      );
+
+      const secondSeries = String(
+        secondBill.BillSeries ??
+          secondBill.billSeries ??
+          secondBill.Series ??
+          ""
+      );
+
+      const seriesResult =
+        firstSeries.localeCompare(
+          secondSeries
+        );
+
+      if (seriesResult !== 0) {
+        return seriesResult;
+      }
+
+      return (
+        Number(
+          firstBill.BillNo ??
+            firstBill.billNo ??
+            0
+        ) -
+        Number(
+          secondBill.BillNo ??
+            secondBill.billNo ??
+            0
+        )
+      );
+    }
+  );
+
+  /*
+   * STEP 3:
+   * Load complete print details for every invoice.
+   */
+  const printResults =
+    await Promise.all(
+      filteredBills.map(
+        async (bill) => {
+          const salesId = String(
+            bill.SalesBillId ??
+              bill.salesBillId ??
+              bill.salesId ??
+              bill.SalesId ??
+              bill._id ??
+              bill.id ??
+              ""
+          ).trim();
+
+          if (!salesId) {
+            console.warn(
+              "Sales bill ID missing:",
+              bill
+            );
+
+            return null;
+          }
+
+          const printQuery =
+            new URLSearchParams({
+              distributorId,
+              firmId,
+            });
+
+          const response =
+            await fetch(
+              `${API_URL}/sales/${encodeURIComponent(
+                salesId
+              )}/print-details?${printQuery.toString()}`
+            );
+
+          const responseType =
+            response.headers.get(
+              "content-type"
+            ) || "";
+
+          const result =
+            responseType.includes(
+              "application/json"
+            )
+              ? await response.json()
+              : {
+                  success: false,
+                  message:
+                    await response.text(),
+                };
+
+          if (
+            !response.ok ||
+            result.success === false
+          ) {
+            console.error(
+              "Invoice print details failed:",
+              {
+                salesId,
+                bill,
+                result,
+              }
+            );
+
+            return null;
+          }
+
+          return result;
         }
-      );
+      )
+    );
 
-      printWindow.document.open();
-      printWindow.document.write(html);
-      printWindow.document.close();
+  const validPrintResults =
+    printResults.filter(Boolean);
 
-      window.setTimeout(() => {
-        printWindow.focus();
-        printWindow.print();
-      }, 500);
-    } catch (error) {
-      console.error(
-        "Sales invoice print error:",
-        error
-      );
+  if (
+    validPrintResults.length === 0
+  ) {
+    throw new Error(
+      "Bills were found in the load, but their print details could not be loaded."
+    );
+  }
 
-      printWindow.close();
+  /*
+   * Update the visible bill range in the modal.
+   */
+  const firstBill =
+    filteredBills[0];
 
-      alert(
-        error.message ||
-        "Unable to print Sales Invoice."
-      );
-    }
+  const lastBill =
+    filteredBills[
+      filteredBills.length - 1
+    ];
+
+  const actualLoadSeries = String(
+    loadResult.sourceLoad
+      ?.loadSeries ??
+      loadResult.sourceLoad
+        ?.LoadSeries ??
+      loadSeries
+  ).trim();
+
+  const detectedTrnSeries =
+    String(
+      firstBill.BillSeries ??
+        firstBill.billSeries ??
+        firstBill.Series ??
+        firstBill.TrnSeries ??
+        trnSeries ??
+        "INV"
+    )
+      .trim()
+      .toUpperCase();
+
+  const firstBillNo = String(
+    firstBill.BillNo ??
+      firstBill.billNo ??
+      firstBill.TrnNo ??
+      firstBill.trnNo ??
+      ""
+  );
+
+  const lastBillNo = String(
+    lastBill.BillNo ??
+      lastBill.billNo ??
+      lastBill.TrnNo ??
+      lastBill.trnNo ??
+      ""
+  );
+
+  setSalesPrintOptions(
+    (previous) => ({
+      ...previous,
+
+      loadSeries:
+        actualLoadSeries ||
+        previous.loadSeries,
+
+      trnSeries:
+        detectedTrnSeries ||
+        "INV",
+
+      fromTrnNo:
+        previous.fromTrnNo ||
+        firstBillNo,
+
+      toTrnNo:
+        previous.toTrnNo ||
+        lastBillNo,
+    })
+  );
+
+  return {
+    success: true,
+
+    sourceLoad:
+      loadResult.sourceLoad || null,
+
+    bills:
+      validPrintResults,
+
+    totalBills:
+      validPrintResults.length,
   };
+};
+
+const createCombinedSalesInvoiceHTML = (
+  invoicePayloads,
+  printOptions
+) => {
+  const documents = invoicePayloads.map(
+    (invoicePayload) =>
+      generateInvoicePreviewHTML(
+        invoicePayload,
+        {
+          ...printOptions,
+          includeButtons: false,
+
+          /*
+           * Copies are handled here for every bill.
+           */
+          copies: Math.max(
+            1,
+            Number(printOptions.copies) || 1
+          ),
+        }
+      )
+  );
+
+  const firstDocument =
+    documents[0] || "";
+
+  /*
+   * Copy the styles from the first generated invoice.
+   */
+  const styleBlocks =
+    firstDocument.match(
+      /<style[\s\S]*?<\/style>/gi
+    ) || [];
+
+  /*
+   * Every generated invoice contains one or more
+   * invoice-page main elements.
+   */
+  const invoicePages = documents
+    .flatMap(
+      (documentHtml) =>
+        documentHtml.match(
+          /<main class="invoice-page[\s\S]*?<\/main>/gi
+        ) || []
+    )
+    .join("\n");
+
+  if (!invoicePages) {
+    throw new Error(
+      "Invoice pages could not be generated."
+    );
+  }
+
+  const paperSize = String(
+    printOptions.paperSize || "A4"
+  ).toUpperCase();
+
+  const orientation =
+    paperSize === "A5"
+      ? "landscape"
+      : "portrait";
+
+  return `
+    <!DOCTYPE html>
+    <html lang="en">
+      <head>
+        <meta charset="UTF-8" />
+
+        <meta
+          name="viewport"
+          content="width=device-width, initial-scale=1.0"
+        />
+
+        <title>
+          Load ${escapeInvoiceHtml(
+            salesPrintOptions.loadSeries || ""
+          )}${escapeInvoiceHtml(
+            salesPrintOptions.loadNo || ""
+          )} Invoices
+        </title>
+
+        ${styleBlocks.join("\n")}
+
+        <style>
+          @page {
+            size: ${paperSize} ${orientation};
+            margin: ${
+              paperSize === "A5"
+                ? "5mm"
+                : "7mm"
+            };
+          }
+
+          .invoice-page {
+            page-break-after: always;
+            break-after: page;
+          }
+
+          .invoice-page:last-child {
+            page-break-after: auto;
+            break-after: auto;
+          }
+
+          @media print {
+            .invoice-preview-toolbar {
+              display: none !important;
+            }
+          }
+        </style>
+      </head>
+
+      <body>
+        ${
+          printOptions.includeButtons
+            ? `
+              <div class="invoice-preview-toolbar">
+                <div>
+                  <div class="preview-title">
+                    Load Invoice Preview
+                  </div>
+
+                  <div class="preview-subtitle">
+                    Load
+                    ${escapeInvoiceHtml(
+                      salesPrintOptions.loadSeries || ""
+                    )}
+                    -
+                    ${escapeInvoiceHtml(
+                      salesPrintOptions.loadNo || ""
+                    )}
+                    · ${invoicePayloads.length} invoice(s)
+                  </div>
+                </div>
+
+                <div class="toolbar-actions">
+                  <button
+                    type="button"
+                    class="print-button"
+                    onclick="window.print()"
+                  >
+                    Print
+                  </button>
+
+                  <button
+                    type="button"
+                    onclick="window.close()"
+                  >
+                    Close
+                  </button>
+                </div>
+              </div>
+            `
+            : ""
+        }
+
+        <div class="preview-shell">
+          ${invoicePages}
+        </div>
+      </body>
+    </html>
+  `;
+};
+  /* =========================================================
+   OPEN SELECTED SALES BILL FORMAT
+   ========================================================= */
+
+const openSelectedSalesInvoiceFormat = async ({
+  action = "preview",
+} = {}) => {
+  const enteredLoadNo = String(
+    salesPrintOptions.loadNo || ""
+  ).trim();
+
+  /*
+   * When Load No exists, print the whole load.
+   * Otherwise print only the selected invoice.
+   */
+  if (!enteredLoadNo && !selectedSalesPrintRow) {
+    alert(
+      "Please select a Sales Bill or enter Load Series and Load No."
+    );
+    return;
+  }
+
+  const selectedReportNumber = String(
+    salesPrintOptions.reportNumber || "1"
+  );
+
+  const selectedPaper =
+    SALES_BILL_PAPER_SIZES.find(
+      (paper) =>
+        paper.value ===
+        String(
+          salesPrintOptions.paperSize || "A4"
+        )
+    ) || SALES_BILL_PAPER_SIZES[0];
+
+  const invoiceWindow = window.open(
+    "",
+    "_blank",
+    "width=1200,height=900,left=60,top=30"
+  );
+
+  if (!invoiceWindow) {
+    alert(
+      "Invoice popup was blocked. Please allow popups for this website."
+    );
+    return;
+  }
+
+  invoiceWindow.document.open();
+
+  invoiceWindow.document.write(`
+    <!DOCTYPE html>
+    <html>
+      <head>
+        <title>Preparing Invoice...</title>
+
+        <style>
+          * {
+            box-sizing: border-box;
+          }
+
+          body {
+            margin: 0;
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-family: Calibri, Arial, sans-serif;
+            background: #eef2f7;
+            color: #334155;
+          }
+
+          .loading-box {
+            min-width: 320px;
+            padding: 28px;
+            border: 1px solid #dbe3ee;
+            background: #ffffff;
+            text-align: center;
+          }
+
+          .spinner {
+            width: 34px;
+            height: 34px;
+            margin: 0 auto 14px;
+            border: 4px solid #dbeafe;
+            border-top-color: #2563eb;
+            border-radius: 50%;
+            animation: invoiceSpin 0.8s linear infinite;
+          }
+
+          @keyframes invoiceSpin {
+            to {
+              transform: rotate(360deg);
+            }
+          }
+        </style>
+      </head>
+
+      <body>
+        <div class="loading-box">
+          <div class="spinner"></div>
+
+          <strong>
+            ${
+              enteredLoadNo
+                ? "Loading invoices from load..."
+                : "Preparing Sales Invoice..."
+            }
+          </strong>
+        </div>
+      </body>
+    </html>
+  `);
+
+  invoiceWindow.document.close();
+
+  try {
+    setSalesPrintPreparing(true);
+
+    const commonPrintOptions = {
+      reportNumber:
+        selectedReportNumber,
+
+      layout:
+        `REPORT_${selectedReportNumber}`,
+
+      paperSize:
+        selectedPaper.value,
+
+      orientation:
+        selectedPaper.orientation,
+
+      includeButtons:
+        action === "preview",
+
+      copies: Math.max(
+        1,
+        Number(
+          salesPrintOptions.copies
+        ) || 1
+      ),
+
+      showScheme:
+        salesPrintOptions.showScheme,
+
+      showHsn:
+        salesPrintOptions.showHsn,
+
+      showTaxSummary:
+        salesPrintOptions.showTaxSummary,
+
+      showBankDetails:
+        salesPrintOptions.showBankDetails,
+
+      showDeclaration:
+        salesPrintOptions.showDeclaration,
+    };
+
+    let invoiceHtml = "";
+
+    if (enteredLoadNo) {
+      /*
+       * LOAD-WISE PRINTING
+       */
+      const loadResult =
+        await loadSalesInvoicesByLoad();
+
+      invoiceHtml =
+        createCombinedSalesInvoiceHTML(
+          loadResult.bills,
+          commonPrintOptions
+        );
+    } else {
+      /*
+       * SINGLE INVOICE PRINTING
+       */
+      const result =
+        await loadSalesInvoicePrintData(
+          selectedSalesPrintRow
+        );
+
+      if (!result) {
+        invoiceWindow.close();
+        return;
+      }
+
+      invoiceHtml =
+        generateInvoicePreviewHTML(
+          result,
+          commonPrintOptions
+        );
+    }
+
+    invoiceWindow.document.open();
+    invoiceWindow.document.write(
+      invoiceHtml
+    );
+    invoiceWindow.document.close();
+    invoiceWindow.focus();
+
+    setShowSalesPrintFormatModal(false);
+
+    if (action === "print") {
+      window.setTimeout(() => {
+        invoiceWindow.focus();
+        invoiceWindow.print();
+      }, 700);
+    }
+  } catch (error) {
+    console.error(
+      "Sales Invoice print error:",
+      error
+    );
+
+    invoiceWindow.document.open();
+
+    invoiceWindow.document.write(`
+      <!DOCTYPE html>
+      <html>
+        <body style="
+          margin: 0;
+          padding: 35px;
+          font-family: Calibri, Arial, sans-serif;
+          color: #991b1b;
+          background: #ffffff;
+        ">
+          <h2>Unable to prepare invoice</h2>
+
+          <p>
+            ${escapeInvoiceHtml(
+              error?.message ||
+                "An unexpected error occurred."
+            )}
+          </p>
+        </body>
+      </html>
+    `);
+
+    invoiceWindow.document.close();
+  } finally {
+    setSalesPrintPreparing(false);
+  }
+};
+const openSalesPrintModal = (
+  salesRow,
+  defaultAction = "preview"
+) => {
+  const actualSalesRow =
+    salesRow?.originalItem || salesRow;
+
+  if (!actualSalesRow) {
+    alert("Sales Bill record was not found.");
+    return;
+  }
+
+  setSelectedSalesPrintRow(actualSalesRow);
+
+  setSalesPrintOptions({
+    ...createDefaultSalesPrintOptions(),
+
+    /*
+     * Used only to remember which list button
+     * originally opened the modal.
+     */
+    defaultAction,
+  });
+
+  setShowSalesPrintFormatModal(true);
+};
+
+/* =========================================================
+   BILL PRINT DEFAULT FORM AND LAYOUTS
+   ========================================================= */
+
+/* =========================================================
+   BILL PRINT DEFAULT FORM AND LAYOUTS
+   ========================================================= */
+
+const BILL_PRINT_LAYOUTS = [
+  {
+    value: "1",
+    label: "Layout 1 - Crystal Compact",
+  },
+  {
+    value: "2",
+    label: "Layout 2 - Crystal Standard",
+  },
+  {
+    value: "3",
+    label: "Layout 3 - Crystal Detailed",
+  },
+  {
+    value: "4",
+    label: "Layout 4 - Crystal Tax Summary",
+  },
+  {
+    value: "5",
+    label: "Layout 5 - Crystal With Bank / QR",
+  },
+  {
+    value: "6",
+    label: "Layout 6 - Crystal Full Report",
+  },
+];
+
+const BILL_PRINT_PAPER_SIZES = [
+  {
+    value: "A4",
+    label: "A4 - Portrait",
+  },
+  {
+    value: "A5",
+    label: "A5 - Landscape",
+  },
+];
+
+const createDefaultBillPrintForm = () => ({
+  FirmCode:
+    localStorage.getItem("firmCode") ||
+    localStorage.getItem("firmId") ||
+    "",
+
+  FinancialYear:
+    localStorage.getItem("financialYear") || "",
+
+  LoadSeries: "",
+  loadNo: "",
+
+  TrnSeries: "INV",
+  FromTrnNo: "",
+  ToTrnNo: "",
+
+  NoOfCopies: "1",
+
+  GoodsReturn: "Y",
+  DamageReturn: "Y",
+  SchemeSummary: "Y",
+  VatSummary: "Y",
+  HSNSummary: "Y",
+
+  BillPrintLayout: "1",
+
+  /*
+   * A4 must be portrait.
+   * A5 remains landscape.
+   */
+  PaperSize: "A4",
+  Orientation: "portrait",
+});
+
+const [
+  billPrintFormData,
+  setBillPrintFormData,
+] = useState(() => createDefaultBillPrintForm());
+const [
+  showBillPrintModal,
+  setShowBillPrintModal,
+] = useState(false);
+
+const [
+  billPrintData,
+  setBillPrintData,
+] = useState(null);
+
+const [
+  showBillPrintPreview,
+  setShowBillPrintPreview,
+] = useState(false);
+
+const [
+  billPrintLoading,
+  setBillPrintLoading,
+] = useState(false);
+
+const [
+  billPrintError,
+  setBillPrintError,
+] = useState("");
+
+const [
+  billPrintAction,
+  setBillPrintAction,
+] = useState("preview");
+
+const billPrintPreviewRef = useRef(null);
 
 
-  const normalizeInvoicePrintData = (payload) => {
-    const bill = payload?.bill || payload || {};
-    const firm = payload?.firm || {};
-    const party = payload?.party || {};
-    const salesman = payload?.salesman || {};
-    const bank = payload?.bank || {};
-    const area = payload?.area || {};
+ const normalizeInvoicePrintData = (payload) => {
+  const bill = payload?.bill || payload || {};
+  const firm = payload?.firm || {};
+  const party = payload?.party || {};
+  const salesman = payload?.salesman || {};
+  const bank = payload?.bank || {};
+  const area = payload?.area || {};
 
-    const sourceItems = Array.isArray(bill.items)
-      ? bill.items
-      : Array.isArray(bill.Items)
-        ? bill.Items
-        : [];
+  const sourceItems = Array.isArray(bill.items)
+    ? bill.items
+    : Array.isArray(bill.Items)
+      ? bill.Items
+      : [];
 
-    const items = sourceItems.map((item, index) => {
-      const qty = Number(
-        getInvoiceValue(item, [
-          "qty",
-          "Qty",
-          "quantity",
-        ], 0)
-      );
+  const items = sourceItems.map((item, index) => {
+    const qty = Number(
+      getInvoiceValue(item, ["qty", "Qty", "quantity"], 0)
+    );
 
-      const rate = Number(
-        getInvoiceValue(item, [
-          "rate",
-          "Rate",
-          "salesRate",
-        ], 0)
-      );
+    const rate = Number(
+      getInvoiceValue(item, ["rate", "Rate", "salesRate"], 0)
+    );
 
-      const schemeAmount = Number(
-        getInvoiceValue(item, [
-          "schemeAmount",
-          "schemeAmt",
-          "SchemeAmount",
-        ], 0)
-      );
+    const schemeAmount = Number(
+      getInvoiceValue(
+        item,
+        ["schemeAmount", "schemeAmt", "SchemeAmount"],
+        0
+      )
+    );
 
-      const cashDiscountAmount = Number(
-        getInvoiceValue(item, [
-          "cashDiscountAmount",
-          "cdAmt",
-          "CashDiscountAmount",
-        ], 0)
-      );
+    const cashDiscountAmount = Number(
+      getInvoiceValue(
+        item,
+        ["cashDiscountAmount", "cdAmt", "CashDiscountAmount"],
+        0
+      )
+    );
 
-      const grossAmount = Number(
-        getInvoiceValue(item, [
-          "grossAmount",
-          "GrossAmount",
-          "gross",
-        ], qty * rate)
-      );
+    const grossAmount = Number(
+      getInvoiceValue(
+        item,
+        ["grossAmount", "GrossAmount", "gross"],
+        qty * rate
+      )
+    );
 
-      const taxableAmount = Number(
-        getInvoiceValue(item, [
-          "taxableAmount",
-          "taxable",
-          "TaxableAmount",
-        ], grossAmount - schemeAmount - cashDiscountAmount)
-      );
+    const taxableAmount = Number(
+      getInvoiceValue(
+        item,
+        ["taxableAmount", "taxable", "TaxableAmount"],
+        grossAmount - schemeAmount - cashDiscountAmount
+      )
+    );
 
-      return {
-        srNo: index + 1,
+   const cgstAmount = Number(
+  getInvoiceValue(
+    item,
+    [
+      "cgstAmount",
+      "cgstAmt",
+      "CGSTAmount",
+      "CGSTAmt",
+      "CgstAmount",
+      "CgstAmt",
+      "cgst",
+      "CGST",
+    ],
+    0
+  )
+);
 
-        productCode: getInvoiceValue(item, [
-          "productCode",
-          "ProdCode",
-          "productId",
-          "itemCode",
-        ]),
+const sgstAmount = Number(
+  getInvoiceValue(
+    item,
+    [
+      "sgstAmount",
+      "sgstAmt",
+      "SGSTAmount",
+      "SGSTAmt",
+      "SgstAmount",
+      "SgstAmt",
+      "sgst",
+      "SGST",
+    ],
+    0
+  )
+);
 
-        productName: getInvoiceValue(item, [
-          "productName",
-          "ProdName",
-          "name",
-          "product",
-        ]),
+const igstAmount = Number(
+  getInvoiceValue(
+    item,
+    [
+      "igstAmount",
+      "igstAmt",
+      "IGSTAmount",
+      "IGSTAmt",
+      "IgstAmount",
+      "IgstAmt",
+      "igst",
+      "IGST",
+    ],
+    0
+  )
+);
 
-        hsn: getInvoiceValue(item, [
-          "hsn",
-          "hsnCode",
-          "HSN",
-          "HSNCode",
-        ]),
+    return {
+      srNo: index + 1,
 
-        mrp: Number(
-          getInvoiceValue(item, [
-            "mrp",
-            "MRP",
-          ], 0)
-        ),
+      productCode: getInvoiceValue(item, [
+        "productCode",
+        "ProdCode",
+        "productId",
+        "itemCode",
+      ]),
 
-        unit: getInvoiceValue(item, [
-          "unit",
-          "units",
-          "basicUnit",
-          "Unit",
-        ], "PCS"),
+      productName: getInvoiceValue(item, [
+        "productName",
+        "ProdName",
+        "name",
+        "product",
+      ]),
 
-        qty,
+      hsn: getInvoiceValue(item, [
+        "hsn",
+        "hsnCode",
+        "HSN",
+        "HSNCode",
+      ]),
 
-        free: Number(
-          getInvoiceValue(item, [
-            "free",
-            "Free",
-          ], 0)
-        ),
+      mrp: Number(
+        getInvoiceValue(item, ["mrp", "MRP"], 0)
+      ),
 
-        rate,
-        grossAmount,
-        taxableAmount,
+      unit: getInvoiceValue(
+        item,
+        ["unit", "units", "basicUnit", "Unit"],
+        "PCS"
+      ),
 
-        schemePercent: Number(
-          getInvoiceValue(item, [
-            "schemePercent",
-            "schemePct",
-            "SchemePercent",
-          ], 0)
-        ),
+      qty,
 
-        schemeAmount,
+      free: Number(
+        getInvoiceValue(item, ["free", "Free"], 0)
+      ),
 
-        cashDiscountPercent: Number(
-          getInvoiceValue(item, [
+      rate,
+      grossAmount,
+      taxableAmount,
+
+      schemePercent: Number(
+        getInvoiceValue(
+          item,
+          ["schemePercent", "schemePct", "SchemePercent"],
+          0
+        )
+      ),
+
+      schemeAmount,
+
+      cashDiscountPercent: Number(
+        getInvoiceValue(
+          item,
+          [
             "cashDiscountPercent",
             "cdPct",
             "CashDiscountPercent",
-          ], 0)
-        ),
+          ],
+          0
+        )
+      ),
 
-        cashDiscountAmount,
+      cashDiscountAmount,
 
-        cgstPercent: Number(
-          getInvoiceValue(item, [
-            "cgstPercent",
-            "CGSTPercent",
-          ], 0)
-        ),
+     cgstPercent: Number(
+  getInvoiceValue(
+    item,
+    [
+      "cgstPercent",
+      "cgstPercentage",
+      "cgstPer",
+      "cgstPct",
+      "CGSTPercent",
+      "CGSTPercentage",
+      "CGSTPer",
+      "CGSTPct",
+      "CgstPer",
+    ],
+    0
+  )
+),
 
-        cgstAmount: Number(
-          getInvoiceValue(item, [
-            "cgstAmount",
-            "cgst",
-            "CGSTAmount",
-          ], 0)
-        ),
+cgstAmount,
 
-        sgstPercent: Number(
-          getInvoiceValue(item, [
-            "sgstPercent",
-            "SGSTPercent",
-          ], 0)
-        ),
+sgstPercent: Number(
+  getInvoiceValue(
+    item,
+    [
+      "sgstPercent",
+      "sgstPercentage",
+      "sgstPer",
+      "sgstPct",
+      "SGSTPercent",
+      "SGSTPercentage",
+      "SGSTPer",
+      "SGSTPct",
+      "SgstPer",
+    ],
+    0
+  )
+),
 
-        sgstAmount: Number(
-          getInvoiceValue(item, [
-            "sgstAmount",
-            "sgst",
-            "SGSTAmount",
-          ], 0)
-        ),
+sgstAmount,
 
-        igstPercent: Number(
-          getInvoiceValue(item, [
-            "igstPercent",
-            "IGSTPercent",
-          ], 0)
-        ),
+igstPercent: Number(
+  getInvoiceValue(
+    item,
+    [
+      "igstPercent",
+      "igstPercentage",
+      "igstPer",
+      "igstPct",
+      "IGSTPercent",
+      "IGSTPercentage",
+      "IGSTPer",
+      "IGSTPct",
+      "IgstPer",
+    ],
+    0
+  )
+),
 
-        igstAmount: Number(
-          getInvoiceValue(item, [
-            "igstAmount",
-            "igst",
-            "IGSTAmount",
-          ], 0)
-        ),
+igstAmount,
 
-        netAmount: Number(
-          getInvoiceValue(
-            item,
-            [
-              "netAmount",
-              "amount",
-              "NetAmount",
-              "Amount",
-            ],
-            taxableAmount +
-            Number(
-              getInvoiceValue(
-                item,
-                ["cgstAmount", "cgst", "CGSTAmount"],
-                0
-              )
-            ) +
-            Number(
-              getInvoiceValue(
-                item,
-                ["sgstAmount", "sgst", "SGSTAmount"],
-                0
-              )
-            ) +
-            Number(
-              getInvoiceValue(
-                item,
-                ["igstAmount", "igst", "IGSTAmount"],
-                0
-              )
-            )
-          )
-        ),
-      };
-    });
-
-    return {
-      bill,
-      firm,
-      party,
-      salesman,
-      bank,
-      area,
-      items,
+     netAmount: Number(
+  getInvoiceValue(
+    item,
+    [
+      "netAmount",
+      "NetAmount",
+      "netAmt",
+      "NetAmt",
+      "lineNetAmount",
+      "LineNetAmount",
+      "amount",
+      "Amount",
+    ],
+    taxableAmount +
+      cgstAmount +
+      sgstAmount +
+      igstAmount
+  )
+),
     };
+  });
+
+  return {
+    bill,
+    firm,
+    party,
+    salesman,
+    bank,
+    area,
+    items,
+  };
+};
+
+
+const generateInvoicePreviewHTML = (
+  payload,
+  {
+    reportNumber = "1",
+    layout = "REPORT_1",
+    paperSize = "A4",
+    orientation = "portrait",
+    includeButtons = true,
+    copies = 1,
+    showScheme = true,
+    showHsn = true,
+    showTaxSummary = true,
+    showBankDetails = true,
+    showDeclaration = true,
+  } = {}
+) => {
+const normalizedPaperSize = String(
+  paperSize || "A4"
+).toUpperCase();
+
+const normalizedOrientation =
+  String(orientation || "portrait").toLowerCase() ===
+  "landscape"
+    ? "landscape"
+    : "portrait";
+
+const normalizedReportNumber = ["1", "2", "3", "4", "5", "6"].includes(
+  String(reportNumber)
+)
+  ? String(reportNumber)
+  : "1";
+
+const isA5 =
+  normalizedPaperSize === "A5";
+
+const pageClass = [
+  "invoice-page",
+  isA5 ? "invoice-a5" : "invoice-a4",
+  `invoice-report-${normalizedReportNumber}`,
+].join(" ");
+
+  const {
+    bill,
+    firm,
+    party,
+    salesman,
+    bank,
+    area,
+    items,
+  } = normalizeInvoicePrintData(payload);
+
+  const readBillValue = (keys, fallback = "") =>
+    getInvoiceValue(bill, keys, fallback);
+
+  const safeNumber = (value) => {
+    const number = Number(value || 0);
+    return Number.isFinite(number) ? number : 0;
   };
 
-  /* =========================================================
-    SALES INVOICE HTML GENERATOR
-    Used by Sales List Preview and Print
-    ========================================================= */
+  const money = (value) =>
+    safeNumber(value).toLocaleString("en-IN", {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    });
 
-  const generateInvoicePreviewHTML = (
-    payload,
-    {
-      paperSize = "A4",
-      orientation = "landscape",
-      includeButtons = true,
-    } = {}
-  ) => {
-    const {
-      bill,
-      firm,
-      party,
-      salesman,
-      bank,
-      area,
-      items,
-    } = normalizeInvoicePrintData(payload);
+  const qty = (value) =>
+    safeNumber(value).toLocaleString("en-IN", {
+      minimumFractionDigits: Number.isInteger(safeNumber(value)) ? 0 : 2,
+      maximumFractionDigits: 2,
+    });
 
-    const readBillValue = (keys, fallback = "") =>
-      getInvoiceValue(bill, keys, fallback);
+  const text = (value, fallback = "-") => {
+    const result = String(value ?? "").trim();
+    return result ? escapeInvoiceHtml(result) : fallback;
+  };
 
-    const safeNumber = (value) => {
-      const number = Number(value || 0);
-      return Number.isFinite(number) ? number : 0;
-    };
+  const percent = (value) => {
+    const number = safeNumber(value);
+    return number > 0 ? money(number) : "-";
+  };
 
-    const formatQty = (value) => {
-      const number = safeNumber(value);
+  const joinAddress = (lines) =>
+    lines
+      .map((line) => String(line || "").trim())
+      .filter(Boolean)
+      .map((line) => `<div>${escapeInvoiceHtml(line)}</div>`)
+      .join("");
 
-      return number.toLocaleString("en-IN", {
-        minimumFractionDigits: Number.isInteger(number) ? 0 : 2,
-        maximumFractionDigits: 2,
-      });
-    };
+  const billSeries = readBillValue([
+    "BillSeries",
+    "billSeries",
+    "TrnSeries",
+    "trnSeries",
+  ]);
 
-    const displayValue = (value, fallback = "-") => {
-      const text = String(value ?? "").trim();
-      return text ? escapeInvoiceHtml(text) : fallback;
-    };
+  const billNo = readBillValue([
+    "BillNo",
+    "billNo",
+    "TrnNo",
+    "trnNo",
+  ]);
 
-    const getPercent = (value) => {
-      const number = safeNumber(value);
+  const billDate = readBillValue([
+    "BillDate",
+    "billDate",
+    "TrnDate",
+    "trnDate",
+  ]);
 
-      return number > 0
-        ? number.toLocaleString("en-IN", {
-          minimumFractionDigits: 2,
-          maximumFractionDigits: 2,
-        })
-        : "-";
-    };
+  const poNumber = readBillValue([
+    "PONumber",
+    "poNumber",
+    "PoNumber",
+    "poNo",
+    "PONo",
+  ]);
 
-    const billSeries = readBillValue([
-      "BillSeries",
-      "billSeries",
-      "TrnSeries",
-      "trnSeries",
-    ]);
+  const invoiceType = readBillValue(
+    ["BillType", "billType", "InvoiceType", "invoiceType"],
+    "TAX-INVOICE"
+  );
 
-    const billNo = readBillValue([
-      "BillNo",
-      "billNo",
-      "TrnNo",
-      "trnNo",
-    ]);
+  const grossAmount = safeNumber(
+    readBillValue(
+      ["GrossAmount", "grossAmount"],
+      items.reduce((sum, item) => sum + safeNumber(item.grossAmount), 0)
+    )
+  );
 
-    const billDate = readBillValue([
-      "BillDate",
-      "billDate",
-      "TrnDate",
-      "trnDate",
-    ]);
+  const schemeAmount = safeNumber(
+    readBillValue(
+      ["SchemeAmount", "schemeAmount"],
+      items.reduce((sum, item) => sum + safeNumber(item.schemeAmount), 0)
+    )
+  );
 
-    const dueDate = readBillValue([
-      "DueDate",
-      "dueDate",
-    ]);
+  const cashDiscountAmount = safeNumber(
+    readBillValue(
+      ["CashDiscountAmount", "cashDiscountAmount"],
+      items.reduce(
+        (sum, item) => sum + safeNumber(item.cashDiscountAmount),
+        0
+      )
+    )
+  );
 
-    const invoiceType = readBillValue(
+  const starDiscountAmount = safeNumber(
+    readBillValue(
       [
-        "BillType",
-        "billType",
-        "InvoiceType",
-        "invoiceType",
+        "StarDiscountAmount",
+        "starDiscountAmount",
+        "StarAmount",
+        "starAmount",
       ],
-      "TAX INVOICE"
-    );
+      0
+    )
+  );
 
-    const narration = readBillValue([
-      "Narration",
-      "narration",
-      "Narr",
-      "narr",
-    ]);
+  const creditNoteAmount = safeNumber(
+    readBillValue(["CreditNoteAmount", "creditNoteAmount"], 0)
+  );
 
-    const companyInvoiceNo = readBillValue([
-      "CompanyInvoiceNo",
-      "companyInvoiceNo",
-      "CompInvNo",
-      "compInvNo",
-    ]);
+  const displayAmount = safeNumber(
+    readBillValue(["DisplayAmount", "displayAmount"], 0)
+  );
 
-    const grossAmount = safeNumber(
-      readBillValue(
-        ["GrossAmount", "grossAmount"],
-        items.reduce(
-          (total, item) =>
-            total + safeNumber(item.grossAmount),
-          0
-        )
-      )
-    );
+  const couponAmount = safeNumber(
+    readBillValue(["CouponAmount", "couponAmount"], 0)
+  );
 
-    const schemeAmount = safeNumber(
-      readBillValue(
-        ["SchemeAmount", "schemeAmount"],
-        items.reduce(
-          (total, item) =>
-            total + safeNumber(item.schemeAmount),
-          0
-        )
-      )
-    );
+  const taxableValue = safeNumber(
+    readBillValue(
+      ["TaxableValue", "taxableValue"],
+      items.reduce((sum, item) => sum + safeNumber(item.taxableAmount), 0)
+    )
+  );
 
-    const cashDiscountAmount = safeNumber(
-      readBillValue(
-        [
-          "CashDiscountAmount",
-          "cashDiscountAmount",
-        ],
-        items.reduce(
-          (total, item) =>
-            total +
-            safeNumber(item.cashDiscountAmount),
-          0
-        )
-      )
-    );
+  const cgstAmount = safeNumber(
+    readBillValue(
+      ["CGSTAmount", "cgstAmount"],
+      items.reduce((sum, item) => sum + safeNumber(item.cgstAmount), 0)
+    )
+  );
 
-    const starDiscountAmount = safeNumber(
-      readBillValue(
-        [
-          "StarDiscountAmount",
-          "starDiscountAmount",
-          "StarAmount",
-          "starAmount",
-        ],
-        0
-      )
-    );
+  const sgstAmount = safeNumber(
+    readBillValue(
+      ["SGSTAmount", "sgstAmount"],
+      items.reduce((sum, item) => sum + safeNumber(item.sgstAmount), 0)
+    )
+  );
 
-    const tprAmount = safeNumber(
-      readBillValue(
-        ["TPRAmount", "tprAmount", "TprAmount"],
-        0
-      )
-    );
+  const igstAmount = safeNumber(
+    readBillValue(
+      ["IGSTAmount", "igstAmount"],
+      items.reduce((sum, item) => sum + safeNumber(item.igstAmount), 0)
+    )
+  );
 
-    const taxableValue = safeNumber(
-      readBillValue(
-        ["TaxableValue", "taxableValue"],
-        items.reduce(
-          (total, item) =>
-            total + safeNumber(item.taxableAmount),
-          0
-        )
-      )
-    );
+  const tcsAmount = safeNumber(
+    readBillValue(["TCSAmount", "tcsAmount"], 0)
+  );
 
-    const cgstAmount = safeNumber(
-      readBillValue(
-        ["CGSTAmount", "cgstAmount"],
-        items.reduce(
-          (total, item) =>
-            total + safeNumber(item.cgstAmount),
-          0
-        )
-      )
-    );
+  const roundingAmount = safeNumber(
+    readBillValue(
+      ["RoundingAmount", "roundingAmount", "Rounding"],
+      0
+    )
+  );
 
-    const sgstAmount = safeNumber(
-      readBillValue(
-        ["SGSTAmount", "sgstAmount"],
-        items.reduce(
-          (total, item) =>
-            total + safeNumber(item.sgstAmount),
-          0
-        )
-      )
-    );
+  const addLessAmount = safeNumber(
+    readBillValue(["AddLessAmount", "addLessAmount"], 0)
+  );
 
-    const igstAmount = safeNumber(
-      readBillValue(
-        ["IGSTAmount", "igstAmount"],
-        items.reduce(
-          (total, item) =>
-            total + safeNumber(item.igstAmount),
-          0
-        )
-      )
-    );
-
-    const displayAmount = safeNumber(
-      readBillValue(
-        ["DisplayAmount", "displayAmount"],
-        0
-      )
-    );
-
-    const couponAmount = safeNumber(
-      readBillValue(
-        ["CouponAmount", "couponAmount"],
-        0
-      )
-    );
-
-    const addLessAmount = safeNumber(
-      readBillValue(
-        ["AddLessAmount", "addLessAmount"],
-        0
-      )
-    );
-
-    const creditNoteAmount = safeNumber(
-      readBillValue(
-        ["CreditNoteAmount", "creditNoteAmount"],
-        0
-      )
-    );
-
-    const tcsAmount = safeNumber(
-      readBillValue(
-        ["TCSAmount", "tcsAmount"],
-        0
-      )
-    );
-
-    const roundingAmount = safeNumber(
-      readBillValue(
-        ["RoundingAmount", "roundingAmount", "Rounding"],
-        0
-      )
-    );
-
-    const netAmount = safeNumber(
-      readBillValue(
-        ["NetAmount", "netAmount"],
-        taxableValue +
+  const netAmount = safeNumber(
+    readBillValue(
+      ["NetAmount", "netAmount"],
+      taxableValue +
         cgstAmount +
         sgstAmount +
         igstAmount +
         tcsAmount +
         addLessAmount +
-        roundingAmount -
-        schemeAmount -
-        cashDiscountAmount -
-        starDiscountAmount -
-        displayAmount -
-        couponAmount -
-        creditNoteAmount
-      )
-    );
+        roundingAmount
+    )
+  );
 
-    const amountInWords =
-      typeof convertAmountToWords === "function"
-        ? convertAmountToWords(netAmount)
-        : "";
+  const totalSchemeCash = schemeAmount + cashDiscountAmount;
+  const totalCnStarDis =
+    starDiscountAmount +
+    creditNoteAmount +
+    displayAmount +
+    couponAmount;
 
-    const firmName = getInvoiceValue(
-      firm,
-      ["firmName", "FirmName", "name"],
-      readBillValue(["firmName", "FirmName"])
-    );
-
-    const firmAddressLines = [
-      getInvoiceValue(firm, [
-        "address1",
-        "Address1",
-        "address",
-      ]),
-      getInvoiceValue(firm, [
-        "address2",
-        "Address2",
-      ]),
-      [
-        getInvoiceValue(firm, ["city", "City"]),
-        getInvoiceValue(firm, [
-          "pinCode",
-          "PinCode",
-        ]),
-      ]
-        .filter(Boolean)
-        .join(" - "),
-    ].filter(Boolean);
-
-    const firmState = getInvoiceValue(
-      firm,
-      ["state", "State"],
-      ""
-    );
-
-    const firmStateCode = getInvoiceValue(
-      firm,
-      ["stateCode", "StateCode", "gstStateCode"],
-      ""
-    );
-
-    const firmPhone = getInvoiceValue(
-      firm,
-      [
-        "phoneNo",
-        "PhoneNo",
-        "contactNo",
-        "ContactNo",
-      ],
-      ""
-    );
-
-    const firmMobile = getInvoiceValue(
-      firm,
-      [
-        "mobileNo",
-        "MobileNo",
-        "mobile",
-        "Mobile",
-      ],
-      ""
-    );
-
-    const firmEmail = getInvoiceValue(
-      firm,
-      ["emailId", "email", "EmailId", "Email"],
-      ""
-    );
-
-    const firmGstNo = getInvoiceValue(
-      firm,
-      ["gstNo", "GSTNo", "gstin", "GSTIN"],
-      ""
-    );
-
-    const firmPanNo = getInvoiceValue(
-      firm,
-      ["panNo", "PANNo", "pan", "PAN"],
-      ""
-    );
-
-    const partyName = getInvoiceValue(
-      party,
-      [
-        "partyName",
-        "accountName",
-        "PartyName",
-        "AccountName",
-      ],
-      readBillValue(["PartyName", "partyName"])
-    );
-
-    const partyCode = getInvoiceValue(
-      party,
-      [
-        "partyCode",
-        "accountCode",
-        "PartyCode",
-        "AccountCode",
-      ],
-      readBillValue(["PartyCode", "partyCode"])
-    );
-
-    const partyAddressLines = [
-      getInvoiceValue(party, [
-        "address",
-        "address1",
-        "Address",
-        "Address1",
-      ]),
-      getInvoiceValue(party, [
-        "address2",
-        "add2",
-        "billToAdd1",
-        "Address2",
-      ]),
-      [
-        getInvoiceValue(party, [
-          "town",
-          "city",
-          "Town",
-          "City",
-        ]),
-        getInvoiceValue(party, [
-          "pinCode",
-          "PinCode",
-        ]),
-      ]
-        .filter(Boolean)
-        .join(" - "),
-    ].filter(Boolean);
-
-    const partyState = getInvoiceValue(
-      party,
-      ["state", "State"],
-      ""
-    );
-
-    const partyStateCode = getInvoiceValue(
-      party,
-      [
-        "stateCode",
-        "StateCode",
-        "gstStateCode",
-      ],
-      ""
-    );
-
-    const partyPhone = getInvoiceValue(
-      party,
-      [
-        "phoneNo",
-        "PhoneNo",
-        "contactNo",
-        "ContactNo",
-      ],
-      ""
-    );
-
-    const partyMobile = getInvoiceValue(
-      party,
-      [
-        "mobileNo",
-        "MobileNo",
-        "mobile",
-        "Mobile",
-      ],
-      ""
-    );
-
-    const partyGstNo = getInvoiceValue(
-      party,
-      ["gstNo", "GSTNo", "gstin", "GSTIN"],
-      ""
-    );
-
-    const salesmanName = getInvoiceValue(
-      salesman,
-      [
-        "salesmanName",
-        "SalesmanName",
-        "name",
-      ],
-      readBillValue([
-        "SalesmanName",
-        "salesmanName",
-      ])
-    );
-
-    const salesmanMobile = getInvoiceValue(
-      salesman,
-      [
-        "mobileNo",
-        "MobileNo",
-        "phoneNo",
-        "PhoneNo",
-      ],
-      ""
-    );
-
-    const areaName = getInvoiceValue(
-      area,
-      ["areaName", "AreaName", "name"],
-      readBillValue(["AreaName", "areaName"])
-    );
-
-    const bankName = getInvoiceValue(
-      bank,
-      [
-        "bankName",
-        "BankName",
-        "name",
-      ],
-      getInvoiceValue(firm, [
-        "bankName",
-        "BankName",
-      ])
-    );
-
-    const bankAccountName = getInvoiceValue(
-      bank,
-      [
-        "accountName",
-        "AccountName",
-        "bankAccountName",
-      ],
-      firmName
-    );
-
-    const bankAccountNo = getInvoiceValue(
-      bank,
-      [
-        "accountNo",
-        "AccountNo",
-        "bankAccountNo",
-      ],
-      getInvoiceValue(firm, [
-        "bankAccountNo",
-        "accountNo",
-      ])
-    );
-
-    const bankIfsc = getInvoiceValue(
-      bank,
-      [
-        "ifscCode",
-        "IFSCCode",
-        "ifsc",
-        "IFSC",
-      ],
-      getInvoiceValue(firm, [
-        "ifscCode",
-        "IFSCCode",
-      ])
-    );
-
-    const bankBranch = getInvoiceValue(
-      bank,
-      [
-        "branch",
-        "branchName",
-        "Branch",
-        "BranchName",
-      ],
-      getInvoiceValue(firm, [
-        "branch",
-        "branchName",
-      ])
-    );
-
-    const bankAccountType = getInvoiceValue(
-      bank,
-      [
-        "accountType",
-        "AccountType",
-        "acType",
-      ],
-      ""
-    );
-
-    const qrCode = getInvoiceValue(
-      payload,
-      [
-        "qrCode",
-        "qrCodeUrl",
-        "firmQrCode",
-        "upiQrCode",
-      ],
-      getInvoiceValue(firm, [
-        "qrCode",
-        "qrCodeUrl",
-        "upiQrCode",
-      ])
-    );
-
-    const totalDiscount =
-      schemeAmount +
-      cashDiscountAmount +
-      starDiscountAmount +
-      creditNoteAmount +
-      displayAmount +
-      couponAmount;
-
-    const tableRows =
-      items.length > 0
-        ? items
-          .map(
-            (item) => `
-                <tr>
-                  <td class="center">${item.srNo}</td>
-
-                  <td class="center product-code-column">
-                    ${displayValue(item.productCode)}
-                  </td>
-
-                  <td class="product-name-column">
-                    ${displayValue(item.productName)}
-                  </td>
-
-                  <td class="center">
-                    ${displayValue(item.hsn)}
-                  </td>
-
-                  <td class="number">
-                    ${invoiceNumber(item.mrp)}
-                  </td>
-
-                  <td class="center">
-                    ${displayValue(item.unit)}
-                  </td>
-
-                  <td class="number">
-                    ${formatQty(item.qty)}
-                  </td>
-
-                  <td class="number">
-                    ${safeNumber(item.free) > 0
-                ? formatQty(item.free)
-                : "-"
-              }
-                  </td>
-
-                  <td class="number">
-                    ${invoiceNumber(item.rate)}
-                  </td>
-
-                  <td class="number">
-                    ${invoiceNumber(item.grossAmount)}
-                  </td>
-
-                  <td class="number">
-                    ${invoiceNumber(item.taxableAmount)}
-                  </td>
-
-                  <td class="number">
-                    ${getPercent(item.schemePercent)}
-                  </td>
-
-                  <td class="number">
-                    ${invoiceNumber(item.schemeAmount)}
-                  </td>
-
-                  <td class="number">
-                    ${getPercent(
-                item.cashDiscountPercent
-              )}
-                  </td>
-
-                  <td class="number">
-                    ${invoiceNumber(
-                item.cashDiscountAmount
-              )}
-                  </td>
-
-                  <td class="number">
-                    ${getPercent(item.cgstPercent)}
-                  </td>
-
-                  <td class="number">
-                    ${invoiceNumber(item.cgstAmount)}
-                  </td>
-
-                  <td class="number">
-                    ${getPercent(item.sgstPercent)}
-                  </td>
-
-                  <td class="number">
-                    ${invoiceNumber(item.sgstAmount)}
-                  </td>
-
-                  <td class="number">
-                    ${getPercent(item.igstPercent)}
-                  </td>
-
-                  <td class="number">
-                    ${invoiceNumber(item.igstAmount)}
-                  </td>
-
-                  <td class="number strong">
-                    ${invoiceNumber(item.netAmount)}
-                  </td>
-                </tr>
-              `
-          )
-          .join("")
-        : `
-          <tr>
-            <td colspan="22" class="empty-row">
-              No invoice products found.
-            </td>
-          </tr>
-        `;
-
-    const actionButtons = includeButtons
-      ? `
-        <div class="preview-toolbar no-print">
-          <div>
-            <strong>Sales Invoice Preview</strong>
-
-            <span>
-              ${escapeInvoiceHtml(
-        `${billSeries || ""}${billSeries && billNo ? "-" : ""
-        }${billNo || ""}`
-      )}
-            </span>
-          </div>
-
-          <div class="toolbar-actions">
-            <button
-              type="button"
-              onclick="window.close()"
-            >
-              Close
-            </button>
-
-            <button
-              type="button"
-              class="print-button"
-              onclick="window.print()"
-            >
-              Print Invoice
-            </button>
-          </div>
-        </div>
-      `
+  const amountInWords =
+    typeof convertAmountToWords === "function"
+      ? convertAmountToWords(netAmount)
       : "";
 
-    const pageSize =
-      String(paperSize).toUpperCase() === "A5"
-        ? "A5"
-        : "A4";
-
-    const pageOrientation =
-      String(orientation).toLowerCase() === "landscape"
-        ? "landscape"
-        : "portrait";
-
-    return `
-      <!DOCTYPE html>
-      <html lang="en">
-        <head>
-          <meta charset="UTF-8" />
-
-          <meta
-            name="viewport"
-            content="width=device-width, initial-scale=1"
-          />
-
-          <title>
-            Invoice ${escapeInvoiceHtml(
-      `${billSeries || ""}${billSeries && billNo ? "-" : ""
-      }${billNo || ""}`
-    )}
-          </title>
-
-          <style>
-            @page {
-              size: ${pageSize} ${pageOrientation};
-              margin: 5mm;
-            }
-
-            * {
-              box-sizing: border-box;
-            }
-
-            html,
-            body {
-              margin: 0;
-              padding: 0;
-              background: #e8edf3;
-              color: #111111;
-              font-family: Arial, Helvetica, sans-serif;
-            }
-
-            body {
-              padding: 14px;
-            }
-
-            .preview-toolbar {
-              width: 100%;
-              max-width: 1120px;
-              margin: 0 auto 12px;
-              padding: 10px 14px;
-              background: #ffffff;
-              border: 1px solid #cbd5e1;
-              border-radius: 7px;
-              display: flex;
-              align-items: center;
-              justify-content: space-between;
-            }
-
-            .preview-toolbar > div:first-child {
-              display: flex;
-              flex-direction: column;
-              gap: 2px;
-            }
-
-            .preview-toolbar strong {
-              font-size: 14px;
-            }
-
-            .preview-toolbar span {
-              color: #64748b;
-              font-size: 11px;
-            }
-
-            .toolbar-actions {
-              display: flex;
-              gap: 8px;
-            }
-
-            .toolbar-actions button {
-              height: 36px;
-              padding: 0 17px;
-              border: 1px solid #cbd5e1;
-              border-radius: 6px;
-              background: #ffffff;
-              color: #1e293b;
-              font-size: 12px;
-              font-weight: 700;
-              cursor: pointer;
-            }
-
-            .toolbar-actions .print-button {
-              border-color: #2563eb;
-              background: #2563eb;
-              color: #ffffff;
-            }
-
-            .invoice-page {
-              width: 100%;
-              max-width: 1120px;
-              min-height: 285mm;
-              margin: 0 auto;
-              padding: 4mm;
-              background: #ffffff;
-              border: 1px solid #222222;
-              box-shadow: 0 8px 25px rgba(15, 23, 42, 0.16);
-            }
-
-            .invoice-heading {
-              display: flex;
-              align-items: center;
-              justify-content: center;
-              height: 31px;
-              margin-bottom: 3px;
-            }
-
-            .invoice-heading span {
-              padding: 4px 16px;
-              border: 1px solid #555555;
-              background: #f8f8f8;
-              font-family: Georgia, "Times New Roman", serif;
-              font-size: 18px;
-              font-weight: 900;
-              letter-spacing: 3px;
-              line-height: 1;
-            }
-
-            .top-information-grid {
-              display: grid;
-              grid-template-columns:
-                minmax(0, 1.06fr)
-                minmax(0, 0.92fr)
-                minmax(0, 1.25fr);
-              gap: 14px;
-              margin-bottom: 10px;
-            }
-
-            .top-information-box {
-              min-height: 181px;
-              padding: 10px 11px;
-              border: 1px solid #555555;
-            }
-
-            .box-heading {
-              margin: 0 0 8px;
-              font-size: 11px;
-              font-weight: 900;
-              text-transform: uppercase;
-            }
-
-            .box-party-name {
-              margin-bottom: 7px;
-              font-size: 14px;
-              font-weight: 900;
-              line-height: 1.25;
-              text-transform: uppercase;
-            }
-
-            .address-block {
-              min-height: 51px;
-              margin-bottom: 7px;
-              font-size: 10px;
-              line-height: 1.45;
-            }
-
-            .detail-line {
-              display: grid;
-              grid-template-columns: 74px 8px minmax(0, 1fr);
-              gap: 2px;
-              margin-top: 5px;
-              font-size: 10px;
-              line-height: 1.25;
-            }
-
-            .detail-line .detail-label {
-              white-space: nowrap;
-            }
-
-            .detail-line .detail-value {
-              min-width: 0;
-              word-break: break-word;
-            }
-
-            .main-product-table {
-              width: 100%;
-              border-collapse: collapse;
-              table-layout: fixed;
-            }
-
-            .main-product-table thead {
-              display: table-header-group;
-            }
-
-            .main-product-table tr {
-              page-break-inside: avoid;
-            }
-
-            .main-product-table th,
-            .main-product-table td {
-              border: 1px solid #777777;
-              padding: 4px 3px;
-              font-size: 7px;
-              vertical-align: middle;
-            }
-
-            .main-product-table th {
-              background: #fafafa;
-              font-weight: 900;
-              line-height: 1.2;
-              text-align: center;
-            }
-
-            .main-product-table tbody td {
-              height: 28px;
-            }
-
-            .main-product-table .sub-heading th {
-              height: 20px;
-              padding: 2px;
-            }
-
-            .main-product-table th:nth-child(1) {
-              width: 32px;
-            }
-
-            .main-product-table th:nth-child(2) {
-              width: 56px;
-            }
-
-            .main-product-table th:nth-child(3) {
-              width: 86px;
-            }
-
-            .main-product-table th:nth-child(4) {
-              width: 48px;
-            }
-
-            .main-product-table th:nth-child(5) {
-              width: 44px;
-            }
-
-            .main-product-table th:nth-child(6) {
-              width: 38px;
-            }
-
-            .main-product-table th:nth-child(7),
-            .main-product-table th:nth-child(8) {
-              width: 35px;
-            }
-
-            .main-product-table th:nth-child(9) {
-              width: 49px;
-            }
-
-            .main-product-table th:nth-child(10),
-            .main-product-table th:nth-child(11) {
-              width: 57px;
-            }
-
-            .main-product-table th:nth-child(12),
-            .main-product-table th:nth-child(13),
-            .main-product-table th:nth-child(14),
-            .main-product-table th:nth-child(15),
-            .main-product-table th:nth-child(16),
-            .main-product-table th:nth-child(17),
-            .main-product-table th:nth-child(18),
-            .main-product-table th:nth-child(19),
-            .main-product-table th:nth-child(20),
-            .main-product-table th:nth-child(21) {
-              width: 36px;
-            }
-
-            .main-product-table th:nth-child(22) {
-              width: 64px;
-            }
-
-            .center {
-              text-align: center;
-            }
-
-            .number {
-              text-align: right;
-              font-variant-numeric: tabular-nums;
-            }
-
-            .strong {
-              font-weight: 900;
-            }
-
-            .product-code-column,
-            .product-name-column {
-              overflow-wrap: anywhere;
-            }
-
-            .product-name-column {
-              font-weight: 700;
-            }
-
-            .empty-row {
-              height: 70px !important;
-              text-align: center;
-              color: #64748b;
-              font-size: 10px !important;
-            }
-
-            .totals-row td {
-              height: 28px !important;
-              background: #fafafa;
-              font-size: 9px !important;
-              font-weight: 900;
-            }
-
-            .totals-row .total-label {
-              text-align: right;
-              padding-right: 14px;
-            }
-
-            .invoice-summary-strip {
-              display: grid;
-              grid-template-columns:
-                repeat(7, minmax(0, 1fr))
-                minmax(0, 1.2fr);
-              min-height: 57px;
-              margin-top: 10px;
-              border: 1px solid #555555;
-            }
-
-            .summary-strip-item {
-              position: relative;
-              display: flex;
-              flex-direction: column;
-              align-items: center;
-              justify-content: center;
-              gap: 9px;
-              padding: 7px 4px;
-              text-align: center;
-            }
-
-            .summary-strip-item:not(:last-child)::after {
-              content: "";
-              position: absolute;
-              top: 16px;
-              right: 0;
-              width: 1px;
-              height: 29px;
-              background: #777777;
-            }
-
-            .summary-strip-label {
-              font-size: 9px;
-              text-transform: uppercase;
-            }
-
-            .summary-strip-value {
-              font-size: 11px;
-              font-weight: 700;
-              font-variant-numeric: tabular-nums;
-            }
-
-            .summary-strip-item.net {
-              border-left: 1px solid #555555;
-            }
-
-            .summary-strip-item.net .summary-strip-label {
-              font-size: 11px;
-              font-weight: 900;
-            }
-
-            .summary-strip-item.net .summary-strip-value {
-              font-size: 17px;
-              font-weight: 900;
-            }
-
-            .amount-words-line {
-              min-height: 35px;
-              padding: 13px 5px 7px;
-              border-bottom: 1px solid #777777;
-              font-size: 10px;
-            }
-
-            .amount-words-line strong {
-              margin-right: 4px;
-            }
-
-            .bottom-information-grid {
-              display: grid;
-              grid-template-columns:
-                145px
-                275px
-                minmax(0, 1fr);
-              gap: 10px;
-              min-height: 118px;
-              margin-top: 10px;
-            }
-
-            .bottom-box {
-              border: 1px solid #555555;
-            }
-
-            .qr-box {
-              display: flex;
-              flex-direction: column;
-              align-items: center;
-              padding: 7px;
-              text-align: center;
-            }
-
-            .qr-heading {
-              font-size: 11px;
-              font-weight: 900;
-            }
-
-            .qr-subheading {
-              margin-top: 2px;
-              font-size: 9px;
-            }
-
-            .qr-image {
-              width: 76px;
-              height: 76px;
-              margin-top: 5px;
-              object-fit: contain;
-            }
-
-            .qr-placeholder {
-              width: 76px;
-              height: 76px;
-              margin-top: 5px;
-              border: 1px dashed #777777;
-              display: flex;
-              align-items: center;
-              justify-content: center;
-              color: #777777;
-              font-size: 8px;
-            }
-
-            .bank-box {
-              padding: 7px 11px;
-            }
-
-            .bank-box-title {
-              margin-bottom: 6px;
-              text-align: center;
-              font-size: 11px;
-              font-weight: 900;
-            }
-
-            .bank-detail-line {
-              display: grid;
-              grid-template-columns: 78px 8px minmax(0, 1fr);
-              margin-top: 6px;
-              font-size: 9px;
-            }
-
-            .declaration-box {
-              display: flex;
-              flex-direction: column;
-            }
-
-            .account-bank-line {
-              min-height: 32px;
-              padding: 10px 9px;
-              border-bottom: 1px solid #777777;
-              font-size: 9px;
-              word-spacing: 2px;
-            }
-
-            .declaration-content {
-              flex: 1;
-              position: relative;
-              padding: 20px 9px 7px;
-              font-size: 8px;
-              line-height: 1.45;
-            }
-
-            .declaration-content strong {
-              margin-right: 4px;
-            }
-
-            .signature-area {
-              position: absolute;
-              right: 24px;
-              bottom: 10px;
-              width: 170px;
-              padding-top: 18px;
-              border-top: 1px solid #555555;
-              text-align: center;
-              font-size: 9px;
-            }
-
-            .small-reference {
-              margin-top: 5px;
-              font-size: 8px;
-            }
-
-            @media print {
-              html,
-              body {
-                background: #ffffff !important;
-              }
-
-              body {
-                padding: 0 !important;
-              }
-
-              .no-print {
-                display: none !important;
-              }
-
-              .invoice-page {
-                width: 100%;
-                max-width: none;
-                min-height: auto;
-                margin: 0;
-                padding: 2mm;
-                border: 0;
-                box-shadow: none;
-              }
-
-              * {
-                -webkit-print-color-adjust: exact !important;
-                print-color-adjust: exact !important;
-              }
-            }
-          </style>
-        </head>
-
-        <body>
-          ${actionButtons}
-
-          <main class="invoice-page">
-            <div class="invoice-heading">
-              <span>
-                ${String(invoiceType || "")
-        .toUpperCase()
-        .includes("TAX")
-        ? "TAX INVOICE"
-        : escapeInvoiceHtml(
-          String(
-            invoiceType || "TAX INVOICE"
-          ).toUpperCase()
-        )
-      }
-              </span>
+  const firmName = getInvoiceValue(
+    firm,
+    ["firmName", "FirmName", "name"],
+    readBillValue(["firmName", "FirmName"])
+  );
+
+  const firmAddressLines = [
+    getInvoiceValue(firm, ["address1", "Address1", "address"]),
+    getInvoiceValue(firm, ["address2", "Address2"]),
+    [
+      getInvoiceValue(firm, ["city", "City", "town", "Town"]),
+      getInvoiceValue(firm, ["pinCode", "PinCode", "pin", "Pin"]),
+    ]
+      .filter(Boolean)
+      .join(" - "),
+  ];
+
+  const firmState = getInvoiceValue(firm, ["state", "State"], "");
+  const firmStateCode = getInvoiceValue(
+    firm,
+    ["stateCode", "StateCode", "gstStateCode"],
+    ""
+  );
+
+  const firmPhone = getInvoiceValue(
+    firm,
+    ["phoneNo", "PhoneNo", "contactNo", "ContactNo"],
+    ""
+  );
+
+  const firmMobile = getInvoiceValue(
+    firm,
+    ["mobileNo", "MobileNo", "mobile", "Mobile"],
+    ""
+  );
+
+  const firmGstNo = getInvoiceValue(
+    firm,
+    ["gstNo", "GSTNo", "gstin", "GSTIN"],
+    ""
+  );
+
+  const firmFoodLicence = getInvoiceValue(
+    firm,
+    [
+      "foodLicenceNo",
+      "FoodLicenceNo",
+      "foodLicNo",
+      "FoodLicNo",
+      "fssaiNo",
+      "FSSAINo",
+    ],
+    ""
+  );
+
+  const partyName = getInvoiceValue(
+    party,
+    ["partyName", "accountName", "PartyName", "AccountName"],
+    readBillValue(["PartyName", "partyName"])
+  );
+
+  const partyAddressLines = [
+    getInvoiceValue(party, [
+      "address",
+      "address1",
+      "Address",
+      "Address1",
+    ]),
+    getInvoiceValue(party, ["address2", "add2", "Address2"]),
+    [
+      getInvoiceValue(party, ["town", "city", "Town", "City"]),
+      getInvoiceValue(party, ["pinCode", "PinCode", "pin", "Pin"]),
+    ]
+      .filter(Boolean)
+      .join(" - "),
+  ];
+
+  const partyState = getInvoiceValue(party, ["state", "State"], "");
+  const partyStateCode = getInvoiceValue(
+    party,
+    ["stateCode", "StateCode", "gstStateCode"],
+    ""
+  );
+
+  const partyPhone = getInvoiceValue(
+    party,
+    ["phoneNo", "PhoneNo", "contactNo", "ContactNo"],
+    ""
+  );
+
+  const partyGstNo = getInvoiceValue(
+    party,
+    ["gstNo", "GSTNo", "gstin", "GSTIN"],
+    ""
+  );
+
+  const partyFoodLicence = getInvoiceValue(
+    party,
+    [
+      "foodLicenceNo",
+      "FoodLicenceNo",
+      "foodLicNo",
+      "FoodLicNo",
+      "fssaiNo",
+      "FSSAINo",
+    ],
+    ""
+  );
+
+  const salesmanName = getInvoiceValue(
+    salesman,
+    ["salesmanName", "SalesmanName", "name"],
+    readBillValue(["SalesmanName", "salesmanName"])
+  );
+
+  const areaName = getInvoiceValue(
+    area,
+    ["areaName", "AreaName", "name"],
+    readBillValue(["AreaName", "areaName"])
+  );
+
+  const bankName = getInvoiceValue(
+    bank,
+    ["bankName", "BankName", "name"],
+    getInvoiceValue(firm, ["bankName", "BankName"], "")
+  );
+
+  const bankAccountNo = getInvoiceValue(
+    bank,
+    ["accountNo", "AccountNo", "bankAccountNo"],
+    getInvoiceValue(firm, ["bankAccountNo", "accountNo"], "")
+  );
+
+  const bankIfsc = getInvoiceValue(
+    bank,
+    ["ifscCode", "IFSCCode", "ifsc", "IFSC"],
+    getInvoiceValue(firm, ["ifscCode", "IFSCCode"], "")
+  );
+
+  const bankBranch = getInvoiceValue(
+    bank,
+    ["branch", "branchName", "Branch", "BranchName"],
+    getInvoiceValue(firm, ["branch", "branchName"], "")
+  );
+
+  const bankAccountType = getInvoiceValue(
+    bank,
+    ["accountType", "AccountType", "acType"],
+    ""
+  );
+
+  const visibleItems = items || [];
+  const minimumRows = isA5 ? 6 : 10;
+  const emptyRowCount = Math.max(0, minimumRows - visibleItems.length);
+
+  const itemRows = visibleItems
+    .map(
+      (item, index) => `
+        <tr class="item-row">
+          <td class="center">${index + 1}</td>
+          <td class="product-name">${text(item.productName)}</td>
+          ${showHsn ? `<td class="center">${text(item.hsn)}</td>` : ""}
+          <td class="number">${money(item.mrp)}</td>
+          <td class="center">${text(item.unit)}</td>
+          <td class="number">${qty(item.qty)}</td>
+          <td class="number">${
+            safeNumber(item.free) > 0 ? qty(item.free) : "-"
+          }</td>
+          <td class="number">${money(item.rate)}</td>
+          <td class="number">
+            ${
+              showScheme
+                ? money(
+                    safeNumber(item.schemeAmount) +
+                      safeNumber(item.cashDiscountAmount)
+                  )
+                : money(0)
+            }
+          </td>
+          <td class="number">${money(item.taxableAmount)}</td>
+          <td class="tax-cell">
+            <div class="tax-cell-inner">
+              <span class="tax-percent">${percent(item.cgstPercent)}</span>
+              <span class="tax-amount">${money(item.cgstAmount)}</span>
             </div>
+          </td>
 
-            <section class="top-information-grid">
-              <div class="top-information-box">
-                <div class="box-heading">
-                  From (Supplier)
-                </div>
-
-                <div class="box-party-name">
-                  ${displayValue(firmName, "FIRM NAME")}
-                </div>
-
-                <div class="address-block">
-                  ${firmAddressLines.length
-        ? firmAddressLines
-          .map(
-            (line) => `
-                              <div>${escapeInvoiceHtml(
-              line
-            )}</div>
-                            `
-          )
-          .join("")
-        : "-"
-      }
-                </div>
-
-                <div class="detail-line">
-                  <span class="detail-label">
-                    Contact No
-                  </span>
-                  <span>:</span>
-                  <span class="detail-value">
-                    ${displayValue(firmPhone)}
-                  </span>
-                </div>
-
-                <div class="detail-line">
-                  <span class="detail-label">
-                    Mobile No
-                  </span>
-                  <span>:</span>
-                  <span class="detail-value">
-                    ${displayValue(firmMobile)}
-                  </span>
-                </div>
-
-                <div class="detail-line">
-                  <span class="detail-label">
-                    State Code
-                  </span>
-                  <span>:</span>
-                  <span class="detail-value">
-                    ${displayValue(
-        [
-          firmStateCode,
-          firmState,
-        ]
-          .filter(Boolean)
-          .join(" - ")
-      )}
-                  </span>
-                </div>
-
-                <div class="detail-line">
-                  <span class="detail-label">GSTIN</span>
-                  <span>:</span>
-                  <span class="detail-value">
-                    ${displayValue(firmGstNo)}
-                  </span>
-                </div>
-
-                <div class="detail-line">
-                  <span class="detail-label">
-                    Email Id
-                  </span>
-                  <span>:</span>
-                  <span class="detail-value">
-                    ${displayValue(firmEmail)}
-                  </span>
-                </div>
-              </div>
-
-              <div class="top-information-box">
-                <div class="box-heading">
-                  Invoice Details
-                </div>
-
-                <div class="detail-line">
-                  <span class="detail-label">
-                    Invoice No
-                  </span>
-                  <span>:</span>
-                  <span class="detail-value">
-                    ${displayValue(billNo)}
-                  </span>
-                </div>
-
-                <div class="detail-line">
-                  <span class="detail-label">
-                    Invoice Date
-                  </span>
-                  <span>:</span>
-                  <span class="detail-value">
-                    ${displayValue(
-        formatInvoiceDate(billDate)
-      )}
-                  </span>
-                </div>
-
-                <div class="detail-line">
-                  <span class="detail-label">
-                    Bill Series
-                  </span>
-                  <span>:</span>
-                  <span class="detail-value">
-                    ${displayValue(billSeries)}
-                  </span>
-                </div>
-
-                <div class="detail-line">
-                  <span class="detail-label">
-                    Bill Date
-                  </span>
-                  <span>:</span>
-                  <span class="detail-value">
-                    ${displayValue(
-        formatInvoiceDate(billDate)
-      )}
-                  </span>
-                </div>
-
-                <div class="detail-line">
-                  <span class="detail-label">PAN No</span>
-                  <span>:</span>
-                  <span class="detail-value">
-                    ${displayValue(firmPanNo)}
-                  </span>
-                </div>
-
-                <div class="detail-line">
-                  <span class="detail-label">
-                    Salesman
-                  </span>
-                  <span>:</span>
-                  <span class="detail-value">
-                    ${displayValue(salesmanName)}
-                  </span>
-                </div>
-
-                <div class="detail-line">
-                  <span class="detail-label">
-                    SSM Mob No
-                  </span>
-                  <span>:</span>
-                  <span class="detail-value">
-                    ${displayValue(salesmanMobile)}
-                  </span>
-                </div>
-
-                ${dueDate
-        ? `
-                      <div class="detail-line">
-                        <span class="detail-label">
-                          Due Date
-                        </span>
-                        <span>:</span>
-                        <span class="detail-value">
-                          ${displayValue(
-          formatInvoiceDate(dueDate)
-        )}
-                        </span>
-                      </div>
-                    `
-        : ""
-      }
-
-                ${companyInvoiceNo
-        ? `
-                      <div class="small-reference">
-                        Company Inv No:
-                        ${displayValue(companyInvoiceNo)}
-                      </div>
-                    `
-        : ""
-      }
-              </div>
-
-              <div class="top-information-box">
-                <div class="box-heading">
-                  To (Consignee / Billed To)
-                </div>
-
-                <div class="box-party-name">
-                  ${displayValue(
-        partyName,
-        "PARTY NAME"
-      )}
-                </div>
-
-                <div class="address-block">
-                  ${partyAddressLines.length
-        ? partyAddressLines
-          .map(
-            (line) => `
-                              <div>${escapeInvoiceHtml(
-              line
-            )}</div>
-                            `
-          )
-          .join("")
-        : "-"
-      }
-
-                  ${areaName
-        ? `
-                        <div>
-                          Area: ${escapeInvoiceHtml(
-          areaName
-        )}
-                        </div>
-                      `
-        : ""
-      }
-                </div>
-
-                <div class="detail-line">
-                  <span class="detail-label">
-                    Contact No
-                  </span>
-                  <span>:</span>
-                  <span class="detail-value">
-                    ${displayValue(partyPhone)}
-                  </span>
-                </div>
-
-                <div class="detail-line">
-                  <span class="detail-label">
-                    Mobile No
-                  </span>
-                  <span>:</span>
-                  <span class="detail-value">
-                    ${displayValue(partyMobile)}
-                  </span>
-                </div>
-
-                <div class="detail-line">
-                  <span class="detail-label">
-                    State Code
-                  </span>
-                  <span>:</span>
-                  <span class="detail-value">
-                    ${displayValue(
-        [
-          partyStateCode,
-          partyState,
-        ]
-          .filter(Boolean)
-          .join(" - ")
-      )}
-                  </span>
-                </div>
-
-                <div class="detail-line">
-                  <span class="detail-label">GSTIN</span>
-                  <span>:</span>
-                  <span class="detail-value">
-                    ${displayValue(partyGstNo)}
-                  </span>
-                </div>
-
-                <div class="detail-line">
-                  <span class="detail-label">
-                    Party Code
-                  </span>
-                  <span>:</span>
-                  <span class="detail-value">
-                    ${displayValue(partyCode)}
-                  </span>
-                </div>
-              </div>
-            </section>
-
-            <table class="main-product-table">
-              <thead>
-                <tr>
-                  <th rowspan="2">Sr<br />No</th>
-                  <th rowspan="2">Prod Code</th>
-                  <th rowspan="2">Prod Name</th>
-                  <th rowspan="2">HSN</th>
-                  <th rowspan="2">MRP</th>
-                  <th rowspan="2">Unit</th>
-                  <th rowspan="2">Qty</th>
-                  <th rowspan="2">Free</th>
-                  <th rowspan="2">Rate</th>
-                  <th rowspan="2">Gross Amt</th>
-                  <th rowspan="2">Taxable Amt</th>
-                  <th colspan="2">Scheme</th>
-                  <th colspan="2">Cash Disc</th>
-                  <th colspan="2">CGST</th>
-                  <th colspan="2">SGST</th>
-                  <th colspan="2">IGST</th>
-                  <th rowspan="2">Net<br />Amount</th>
-                </tr>
-
-                <tr class="sub-heading">
-                  <th>%</th>
-                  <th>Amt</th>
-                  <th>%</th>
-                  <th>Amt</th>
-                  <th>%</th>
-                  <th>Amt</th>
-                  <th>%</th>
-                  <th>Amt</th>
-                  <th>%</th>
-                  <th>Amt</th>
-                </tr>
-              </thead>
-
-              <tbody>
-                ${tableRows}
-
-                <tr class="totals-row">
-                  <td
-                    colspan="9"
-                    class="total-label"
-                  >
-                    TOTAL
-                  </td>
-
-                  <td class="number">
-                    ₹${invoiceNumber(grossAmount)}
-                  </td>
-
-                  <td class="number">
-                    ₹${invoiceNumber(taxableValue)}
-                  </td>
-
-                  <td></td>
-
-                  <td class="number">
-                    ₹${invoiceNumber(schemeAmount)}
-                  </td>
-
-                  <td></td>
-
-                  <td class="number">
-                    ₹${invoiceNumber(
-        cashDiscountAmount
-      )}
-                  </td>
-
-                  <td></td>
-
-                  <td class="number">
-                    ₹${invoiceNumber(cgstAmount)}
-                  </td>
-
-                  <td></td>
-
-                  <td class="number">
-                    ₹${invoiceNumber(sgstAmount)}
-                  </td>
-
-                  <td></td>
-
-                  <td class="number">
-                    ₹${invoiceNumber(igstAmount)}
-                  </td>
-
-                  <td class="number">
-                    ₹${invoiceNumber(netAmount)}
-                  </td>
-                </tr>
-              </tbody>
-            </table>
-
-            <section class="invoice-summary-strip">
-              <div class="summary-strip-item">
-                <div class="summary-strip-label">
-                  Taxable Amt
-                </div>
-
-                <div class="summary-strip-value">
-                  ₹${invoiceNumber(taxableValue)}
-                </div>
-              </div>
-
-              <div class="summary-strip-item">
-                <div class="summary-strip-label">
-                  Sche/Cash
-                </div>
-
-                <div class="summary-strip-value">
-                  ₹${invoiceNumber(
-        schemeAmount +
-        cashDiscountAmount
-      )}
-                </div>
-              </div>
-
-              <div class="summary-strip-item">
-                <div class="summary-strip-label">
-                  CGST Amt
-                </div>
-
-                <div class="summary-strip-value">
-                  ₹${invoiceNumber(cgstAmount)}
-                </div>
-              </div>
-
-              <div class="summary-strip-item">
-                <div class="summary-strip-label">
-                  SGST Amt
-                </div>
-
-                <div class="summary-strip-value">
-                  ₹${invoiceNumber(sgstAmount)}
-                </div>
-              </div>
-
-              <div class="summary-strip-item">
-                <div class="summary-strip-label">
-                  CN/Star/Dis
-                </div>
-
-                <div class="summary-strip-value">
-                  ₹${invoiceNumber(
-        creditNoteAmount +
-        starDiscountAmount +
-        displayAmount +
-        couponAmount
-      )}
-                </div>
-              </div>
-
-              <div class="summary-strip-item">
-                <div class="summary-strip-label">
-                  TCS Amt
-                </div>
-
-                <div class="summary-strip-value">
-                  ₹${invoiceNumber(tcsAmount)}
-                </div>
-              </div>
-
-              <div class="summary-strip-item">
-                <div class="summary-strip-label">
-                  Rounding
-                </div>
-
-                <div class="summary-strip-value">
-                  ₹${invoiceNumber(roundingAmount)}
-                </div>
-              </div>
-
-              <div class="summary-strip-item net">
-                <div class="summary-strip-label">
-                  Net Amount
-                </div>
-
-                <div class="summary-strip-value">
-                  ₹${invoiceNumber(netAmount)}
-                </div>
-              </div>
-            </section>
-
-            <div class="amount-words-line">
-              <strong>Total Amount in Words:</strong>
-              ${displayValue(amountInWords)}
+          <td class="tax-cell">
+            <div class="tax-cell-inner">
+              <span class="tax-percent">${percent(item.sgstPercent)}</span>
+              <span class="tax-amount">${money(item.sgstAmount)}</span>
             </div>
+          </td>
+          <td class="number strong">${money(item.netAmount)}</td>
+        </tr>
+      `
+    )
+    .join("");
 
-            ${narration
-        ? `
-                  <div class="amount-words-line">
-                    <strong>Narration:</strong>
-                    ${displayValue(narration)}
+  const emptyRows = Array.from({ length: emptyRowCount })
+    .map(
+      () => `
+        <tr class="item-row empty-row">
+          <td>&nbsp;</td>
+          <td></td>
+          ${showHsn ? "<td></td>" : ""}
+          <td></td>
+          <td></td>
+          <td></td>
+          <td></td>
+          <td></td>
+          <td></td>
+          <td></td>
+          <td></td>
+          <td></td>
+          <td></td>
+        </tr>
+      `
+    )
+    .join("");
+
+  const oneInvoice = (copyNumber) => `
+    <main class="${pageClass}">
+      ${
+        copies > 1
+          ? `<div class="copy-label">COPY ${copyNumber} OF ${copies}</div>`
+          : ""
+      }
+
+      <section class="report-top">
+        <div class="firm-block">
+          <div class="firm-name">${text(firmName)}</div>
+          <div class="compact-lines">
+            ${joinAddress(firmAddressLines)}
+          </div>
+
+          <div class="info-line">
+            <span>State</span><b>:</b>
+            <span>${text(firmState)}</span>
+            <span class="push-label">State Code</span><b>:</b>
+            <span>${text(firmStateCode)}</span>
+          </div>
+
+          <div class="info-line">
+            <span>Ph</span><b>:</b>
+            <span>${text(firmPhone || firmMobile)}</span>
+            <span class="push-label">FIRM GSTIN</span><b>:</b>
+            <strong>${text(firmGstNo)}</strong>
+          </div>
+        </div>
+
+        <div class="invoice-block">
+          <div class="tax-heading">${text(invoiceType, "TAX-INVOICE")}</div>
+
+          <div class="label-value">
+            <span>INVOICE NO</span><b>:</b>
+            <strong>${text(`${billSeries || ""}${billNo || ""}`)}</strong>
+          </div>
+
+          <div class="label-value">
+            <span>INVOICE DATE</span><b>:</b>
+            <strong>${text(formatInvoiceDate(billDate))}</strong>
+          </div>
+
+          <div class="label-value">
+            <span>PO Number</span><b>:</b>
+            <span>${text(poNumber)}</span>
+          </div>
+
+          <div class="label-value">
+            <span>Firm Food Lic No</span><b>:</b>
+            <span>${text(firmFoodLicence)}</span>
+          </div>
+        </div>
+      </section>
+
+      <div class="long-dash"></div>
+
+      <section class="party-grid">
+        <div class="party-block">
+          <div class="party-heading">Details of Receiver (Billed to)</div>
+          <div class="party-name">${text(partyName)}</div>
+          <div class="compact-lines">${joinAddress(partyAddressLines)}</div>
+
+          <div class="info-line">
+            <span>STATE</span><b>:</b>
+            <span>${text(partyState)}</span>
+            <span class="push-label">STATE CODE</span><b>:</b>
+            <span>${text(partyStateCode)}</span>
+          </div>
+
+          <div class="info-line">
+            <strong>GSTIN/UNIQUE ID</strong><b>:</b>
+            <strong>${text(partyGstNo)}</strong>
+          </div>
+
+          <div class="info-line">
+            <span>Phone</span><b>:</b>
+            <span>${text(partyPhone)}</span>
+          </div>
+        </div>
+
+        <div class="middle-party-details">
+          <div class="info-line">
+            <span>BEAT</span><b>:</b>
+            <span>${text(areaName)}</span>
+          </div>
+
+          <div class="info-line">
+            <span>PC NAME</span><b>:</b>
+            <span>${text(salesmanName)}</span>
+          </div>
+        </div>
+
+        <div class="party-block">
+          <div class="party-heading">Details of Consignee (Shipped to)</div>
+          <div class="party-name">${text(partyName)}</div>
+          <div class="compact-lines">${joinAddress(partyAddressLines)}</div>
+
+          <div class="info-line">
+            <span>STATE</span><b>:</b>
+            <span>${text(partyState)}</span>
+            <span class="push-label">STATE CODE</span><b>:</b>
+            <span>${text(partyStateCode)}</span>
+          </div>
+
+          <div class="info-line">
+            <strong>GSTIN/UNIQUE ID</strong><b>:</b>
+            <strong>${text(partyGstNo)}</strong>
+          </div>
+
+          <div class="info-line">
+            <span>Food Lic No</span><b>:</b>
+            <span>${text(partyFoodLicence)}</span>
+          </div>
+        </div>
+      </section>
+
+      <section class="items-wrap">
+        <table class="crystal-table">
+          <colgroup>
+            <col style="width:3.2%">
+            <col style="width:${showHsn ? "18.4%" : "24.4%"}">
+            ${showHsn ? '<col style="width:7.4%">' : ""}
+            <col style="width:6.2%">
+            <col style="width:5.4%">
+            <col style="width:4.2%">
+            <col style="width:4.2%">
+            <col style="width:7.0%">
+            <col style="width:7.0%">
+            <col style="width:8.3%">
+            <col style="width:9.0%">
+            <col style="width:9.0%">
+            <col style="width:10.7%">
+          </colgroup>
+
+          <thead>
+            <tr>
+              <th>SR</th>
+              <th class="left">Product Name</th>
+              ${showHsn ? "<th>HSN</th>" : ""}
+              <th>MRP</th>
+              <th>Unit</th>
+              <th>Qty</th>
+              <th>Fr.</th>
+              <th>Rate</th>
+              <th>Disc</th>
+              <th>Taxable</th>
+              <th>CGST<br><small>% &nbsp;&nbsp; Amt</small></th>
+              <th>SGST<br><small>% &nbsp;&nbsp; Amt</small></th>
+              <th>Net Amt</th>
+            </tr>
+          </thead>
+
+          <tbody>
+            ${itemRows}
+            ${emptyRows}
+          </tbody>
+        </table>
+      </section>
+
+      <section class="invoice-bottom">
+        <div class="total-words-row">
+          <strong>Tot Value (Words)</strong>
+          <span>RS. ${text(amountInWords, "Zero Only")}</span>
+        </div>
+
+        <div class="bottom-middle-grid">
+          <div class="bottom-notes">
+            ${
+              showDeclaration
+                ? `
+                  <div class="declaration-text">
+                    <strong>Declaration:</strong>
+                    Certified that the particulars given above are true and
+                    correct and the amount indicated.
                   </div>
                 `
-        : ""
-      }
+                : ""
+            }
 
-            <section class="bottom-information-grid">
-              <div class="bottom-box qr-box">
-                <div class="qr-heading">
-                  SCAN TO PAY
-                </div>
+            <div class="receiver-label">
+              <strong>Receivers Stamp &amp; Sign.</strong>
+            </div>
+          </div>
 
-                <div class="qr-subheading">
-                  (UPI / QR Code)
-                </div>
-
-                ${qrCode
-        ? `
-                      <img
-                        class="qr-image"
-                        src="${escapeInvoiceHtml(qrCode)}"
-                        alt="Payment QR Code"
-                      />
-                    `
-        : `
-                      <div class="qr-placeholder">
-                        QR CODE
-                      </div>
-                    `
-      }
-              </div>
-
-              <div class="bottom-box bank-box">
-                <div class="bank-box-title">
-                  BANK DETAILS
-                </div>
-
-                <div class="bank-detail-line">
-                  <span>Bank Name</span>
-                  <span>:</span>
-                  <span>${displayValue(bankName)}</span>
-                </div>
-
-                <div class="bank-detail-line">
-                  <span>Account Name</span>
-                  <span>:</span>
-                  <span>
-                    ${displayValue(bankAccountName)}
-                  </span>
-                </div>
-
-                <div class="bank-detail-line">
-                  <span>Account No</span>
-                  <span>:</span>
-                  <span>
-                    ${displayValue(bankAccountNo)}
-                  </span>
-                </div>
-
-                <div class="bank-detail-line">
-                  <span>IFSC Code</span>
-                  <span>:</span>
-                  <span>${displayValue(bankIfsc)}</span>
-                </div>
-
-                <div class="bank-detail-line">
-                  <span>Branch</span>
-                  <span>:</span>
-                  <span>${displayValue(bankBranch)}</span>
-                </div>
-              </div>
-
-              <div class="bottom-box declaration-box">
-                <div class="account-bank-line">
-                  A/C No:
-                  ${displayValue(bankAccountNo)}
-                  &nbsp;&nbsp; | &nbsp;&nbsp;
-
-                  IFSC:
-                  ${displayValue(bankIfsc)}
-                  &nbsp;&nbsp; | &nbsp;&nbsp;
-
-                  Branch:
-                  ${displayValue(bankBranch)}
-                  &nbsp;&nbsp; | &nbsp;&nbsp;
-
-                  A/c Type:
-                  ${displayValue(bankAccountType)}
-                </div>
-
-                <div class="declaration-content">
-                  <strong>Declaration:</strong>
-
-                  Certified that the particulars given
-                  above are true and correct and the
-                  amount indicated.
-
-                  <div class="signature-area">
-                    Authorised Signatory
+          ${
+            showTaxSummary
+              ? `
+                <div class="amount-summary">
+                  <div class="amount-summary-row">
+                    <span>TAXABLE AMT</span><b>:</b><strong>${money(taxableValue)}</strong>
+                  </div>
+                  <div class="amount-summary-row">
+                    <span>SCHE/CASH</span><b>:</b><strong>${money(totalSchemeCash)}</strong>
+                  </div>
+                  <div class="amount-summary-row">
+                    <span>CGST AMT</span><b>:</b><strong>${money(cgstAmount)}</strong>
+                  </div>
+                  <div class="amount-summary-row">
+                    <span>SGST AMT</span><b>:</b><strong>${money(sgstAmount)}</strong>
+                  </div>
+                  ${
+                    igstAmount !== 0
+                      ? `
+                        <div class="amount-summary-row">
+                          <span>IGST AMT</span><b>:</b><strong>${money(igstAmount)}</strong>
+                        </div>
+                      `
+                      : ""
+                  }
+                  <div class="amount-summary-row">
+                    <span>CN/STAR/DIS</span><b>:</b><strong>${money(totalCnStarDis)}</strong>
+                  </div>
+                  <div class="amount-summary-row">
+                    <span>TCS AMT</span><b>:</b><strong>${money(tcsAmount)}</strong>
+                  </div>
+                  <div class="amount-summary-row">
+                    <span>ROUNDING</span><b>:</b><strong>${money(roundingAmount)}</strong>
+                  </div>
+                  <div class="amount-summary-row net-amount-row">
+                    <span>NET AMOUNT</span><b>:</b><strong>${money(netAmount)}</strong>
                   </div>
                 </div>
-              </div>
-            </section>
-          </main>
-        </body>
-      </html>
-    `;
-  };
+              `
+              : ""
+          }
+        </div>
 
+        <div class="invoice-footer-grid">
+          <div class="receiver-section">
+            <strong>Receivers Stamp &amp; Sign.</strong>
+          </div>
+
+          <div class="footer-detail-section">
+            ${
+              showBankDetails
+                ? `
+                  <div class="footer-bank-row">
+                    <span><strong>BANK NAME:</strong> ${text(bankName)}</span>
+                    <span><strong>A/C NO:</strong> ${text(bankAccountNo)}</span>
+                    <span><strong>IFSC CODE:</strong> ${text(bankIfsc)}</span>
+                    <span><strong>BRANCH:</strong> ${text(bankBranch)}</span>
+                    ${
+                      bankAccountType
+                        ? `<span><strong>A/C TYPE:</strong> ${text(bankAccountType)}</span>`
+                        : ""
+                    }
+                  </div>
+                `
+                : ""
+            }
+
+            <div class="footer-declaration-row">
+              <div class="footer-declaration">
+                ${
+                  showDeclaration
+                    ? `
+                      <strong>Declaration:</strong>
+                      Certified that the particulars given above are true and
+                      correct and the amount indicated.
+                    `
+                    : ""
+                }
+              </div>
+
+              <div class="footer-signature">
+                <strong>FOR ${text(firmName)}</strong>
+                <div class="authorised-line"></div>
+                <span>Authorised Signatory</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+    </main>
+  `;
+
+  const pages = Array.from(
+    { length: Math.max(1, Number(copies) || 1) },
+    (_, index) => oneInvoice(index + 1)
+  ).join("");
+
+  return `
+    <!DOCTYPE html>
+    <html lang="en">
+      <head>
+        <meta charset="UTF-8" />
+        <meta
+          name="viewport"
+          content="width=device-width, initial-scale=1.0"
+        />
+
+        <title>
+          Invoice ${escapeInvoiceHtml(
+            `${billSeries || ""}${billNo || ""}`
+          )}
+        </title>
+
+        <style>
+          @page {
+  size: ${normalizedPaperSize} ${normalizedOrientation};
+  margin: ${isA5 ? "5mm" : "7mm"};
+}
+
+          * { box-sizing: border-box; }
+
+          html, body { margin: 0; padding: 0; }
+
+          body {
+            background: #e7edf4;
+            color: #000;
+            font-family: Calibri, "Segoe UI", Arial, sans-serif;
+            font-size: 10px;
+            line-height: 1.2;
+          }
+
+          .invoice-page,
+          .invoice-page table,
+          .invoice-page th,
+          .invoice-page td,
+          .invoice-page div,
+          .invoice-page span,
+          .invoice-page strong {
+            font-family: Calibri, "Segoe UI", Arial, sans-serif;
+          }
+
+          .invoice-preview-toolbar {
+            width: min(97vw, 1320px);
+            margin: 16px auto 12px;
+            padding: 10px 14px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            background: #fff;
+            border: 1px solid #b9c4d1;
+          }
+
+          .preview-title { font-size: 14px; font-weight: 700; }
+          .preview-subtitle { margin-top: 2px; color: #334155; font-size: 11px; }
+          .toolbar-actions { display: flex; gap: 8px; }
+
+          .toolbar-actions button {
+            height: 34px;
+            padding: 0 17px;
+            border: 1px solid #9aa9bb;
+            background: #fff;
+            color: #111;
+            font-weight: 700;
+            cursor: pointer;
+          }
+
+          .toolbar-actions .print-button {
+            background: #2f5fe3;
+            border-color: #2f5fe3;
+            color: #fff;
+          }
+
+          .preview-shell { padding: 0 12px 24px; }
+
+          .invoice-page {
+  position: relative;
+  margin: 0 auto 14px;
+  overflow: hidden;
+  background: #ffffff;
+  color: #000000;
+  break-after: page;
+  page-break-after: always;
+  box-sizing: border-box;
+}
+
+.invoice-page:last-child {
+  break-after: auto;
+  page-break-after: auto;
+}
+
+/*
+ * Full A4 portrait printable area.
+ * 210mm × 297mm paper minus print margins.
+ */
+/*
+ * A4 Portrait:
+ * Paper size 210mm × 297mm.
+ */
+.invoice-a4 {
+  width: 196mm;
+  min-height: 283mm;
+  padding: 4mm 5mm;
+  font-size: 10px;
+}
+
+/*
+ * A5 Landscape:
+ * Paper size 210mm × 148mm.
+ * The same report design is fitted to the complete A5 landscape page.
+ */
+.invoice-a5 {
+  width: 200mm;
+  min-height: 138mm;
+  padding: 3mm 4mm;
+  font-size: 8px;
+}
+
+/*
+ * A5 Landscape fitting.
+ * Keeps the same report design, only scales spacing and font.
+ */
+.invoice-a5 .report-top {
+  min-height: 25mm;
+}
+
+.invoice-a5 .firm-block,
+.invoice-a5 .invoice-block {
+  padding-top: 0.7mm;
+  padding-bottom: 0.7mm;
+}
+
+.invoice-a5 .firm-block {
+  padding-left: 2mm;
+}
+
+.invoice-a5 .invoice-block {
+  padding-left: 4mm;
+}
+
+.invoice-a5 .firm-name {
+  font-size: 10px;
+  margin-bottom: 0.6mm;
+}
+
+.invoice-a5 .tax-heading {
+  font-size: 11px;
+  margin-bottom: 1mm;
+}
+
+.invoice-a5 .compact-lines {
+  min-height: 6mm;
+  line-height: 1.2;
+}
+
+.invoice-a5 .label-value {
+  grid-template-columns: 22mm 2mm minmax(0, 1fr);
+  min-height: 3.2mm;
+  column-gap: 0.5mm;
+}
+
+.invoice-a5 .info-line {
+  min-height: 3.2mm;
+  gap: 0.8mm;
+}
+
+.invoice-a5 .push-label {
+  margin-left: 3mm;
+}
+
+.invoice-a5 .party-grid {
+  min-height: 27mm;
+  padding: 1mm 2mm;
+  column-gap: 2mm;
+}
+
+.invoice-a5 .middle-party-details {
+  padding-top: 8mm;
+}
+
+.invoice-a5 .party-heading,
+.invoice-a5 .party-name {
+  font-size: 8px;
+  margin-bottom: 0.6mm;
+}
+
+.invoice-a5 .crystal-table th {
+  height: 7mm;
+  padding: 0.4mm 0.25mm;
+  font-size: 6.8px;
+  line-height: 1.05;
+}
+
+.invoice-a5 .crystal-table th small {
+  font-size: 5.7px;
+}
+
+.invoice-a5 .crystal-table td {
+  height: 4.5mm;
+  padding: 0.3mm 0.25mm;
+  font-size: 6.8px;
+  line-height: 1.05;
+}
+
+.invoice-a5 .total-words-row {
+  min-height: 6mm;
+  padding: 1mm 2mm;
+}
+
+.invoice-a5 .bottom-middle-grid {
+  min-height: 26mm;
+}
+
+.invoice-a5 .amount-summary-row {
+  min-height: 2.8mm;
+}
+
+.invoice-a5 .invoice-footer-grid {
+  min-height: 25mm;
+}
+
+.invoice-a5 .footer-bank-row {
+  min-height: 6mm;
+  padding: 1mm;
+  gap: 2mm;
+}
+
+.invoice-a5 .footer-declaration-row {
+  min-height: 18mm;
+}
+
+          .copy-label { position: absolute; right: 4mm; top: 1.5mm; font-size: 7px; }
+
+          .report-top {
+            display: grid;
+            grid-template-columns: minmax(0, 58%) minmax(0, 42%);
+            width: 100%;
+            min-height: 30mm;
+          }
+
+          .firm-block, .invoice-block { min-width: 0; padding: 1mm 2mm; }
+          .firm-block { padding-left: 4mm; }
+          .invoice-block { padding-left: 7mm; }
+          .firm-name { margin: 0 0 1mm; font-size: 12px; line-height: 1.2; font-weight: 700; }
+          .tax-heading { margin: 0 0 2mm; font-size: 14px; line-height: 1.2; font-weight: 700; }
+          .compact-lines { min-height: 9mm; line-height: 1.35; }
+
+          .label-value {
+            display: grid;
+            grid-template-columns: 28mm 3mm minmax(0, 1fr);
+            align-items: baseline;
+            min-height: 4.2mm;
+            column-gap: 1mm;
+          }
+
+          .label-value > span, .label-value > strong { min-width: 0; overflow-wrap: anywhere; }
+
+          .info-line {
+            display: flex;
+            align-items: baseline;
+            min-height: 4.2mm;
+            gap: 1.3mm;
+            white-space: normal;
+          }
+
+          .info-line > span, .info-line > strong { min-width: 0; }
+          .push-label { margin-left: 7mm; }
+
+          .long-dash {
+            width: 100%;
+            height: 1px;
+            margin: 0;
+            background: repeating-linear-gradient(to right, #000 0, #000 7mm, transparent 7mm, transparent 10mm);
+          }
+
+          .party-grid {
+            display: grid;
+            grid-template-columns: minmax(0, 39%) minmax(0, 22%) minmax(0, 39%);
+            width: 100%;
+            min-height: 34mm;
+            padding: 2mm 4mm 1.5mm;
+            column-gap: 3mm;
+          }
+
+          .party-block, .middle-party-details { min-width: 0; }
+          .middle-party-details { padding: 12mm 1mm 0; }
+          .party-heading { margin: 0 0 1.4mm; font-size: 10px; line-height: 1.2; }
+          .party-name { margin: 0 0 1mm; font-size: 10px; line-height: 1.2; font-weight: 700; }
+
+          .items-wrap {
+            width: 100%;
+            border-top: 1px dotted #000;
+            border-bottom: 1px solid #000;
+          }
+
+          .crystal-table {
+            width: 100%;
+            border-spacing: 0;
+            border-collapse: collapse;
+            table-layout: fixed;
+          }
+
+          .crystal-table thead { display: table-header-group; }
+          .crystal-table th, .crystal-table td { border-right: 1px solid #000; }
+          .crystal-table th:last-child, .crystal-table td:last-child { border-right: 0; }
+
+          .crystal-table th {
+            height: 9mm;
+            padding: 0.8mm 0.5mm;
+            border-bottom: 1px dotted #000;
+            overflow: hidden;
+            text-align: center;
+            vertical-align: middle;
+            font-size: 8px;
+            line-height: 1.15;
+            font-weight: 400;
+            white-space: normal;
+          }
+
+          .crystal-table th small { display: block; margin-top: 0.4mm; font-size: 6.5px; line-height: 1; }
+
+          .crystal-table td {
+            height: 5.6mm;
+            padding: 0.5mm 0.6mm;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            vertical-align: middle;
+            font-size: 8px;
+            line-height: 1.15;
+            white-space: nowrap;
+          }
+
+          .crystal-table .product-name { text-align: left; font-weight: 700; }
+          .left { text-align: left !important; }
+          .center { text-align: center !important; }
+          .number { text-align: right !important; font-variant-numeric: tabular-nums; }
+          .strong { font-weight: 700; }
+          .empty-row td { color: transparent; }
+
+          .tax-cell { padding: 0 !important; }
+          .tax-cell-inner { display: grid; grid-template-columns: 36% 64%; width: 100%; height: 100%; align-items: stretch; }
+          .tax-percent { display: flex; align-items: center; justify-content: center; padding: 0.4mm; border-right: 1px dotted #777; }
+          .tax-amount { display: flex; align-items: center; justify-content: flex-end; padding: 0.4mm 0.7mm; font-variant-numeric: tabular-nums; }
+
+          .invoice-bottom { width: 100%; font-size: 8px; }
+
+          .total-words-row {
+            display: grid;
+            grid-template-columns: 34mm minmax(0, 1fr);
+            align-items: center;
+            min-height: 7mm;
+            padding: 0 1.5mm;
+            border-bottom: 1px solid #000;
+          }
+
+          .bottom-middle-grid {
+            display: grid;
+            grid-template-columns: minmax(0, 1fr) 57mm;
+            min-height: 33mm;
+            border-bottom: 1px solid #000;
+          }
+
+          .bottom-notes { position: relative; min-width: 0; padding: 1.5mm 2mm; }
+          .declaration-text { max-width: 150mm; line-height: 1.4; }
+          .receiver-label { position: absolute; left: 2mm; bottom: 2mm; }
+          .amount-summary { padding: 1.2mm 1.8mm; border-left: 1px solid #000; }
+
+          .amount-summary-row {
+            display: grid;
+            grid-template-columns: minmax(0, 1fr) 3mm 24mm;
+            align-items: baseline;
+            min-height: 3.4mm;
+          }
+
+          .amount-summary-row span { white-space: nowrap; }
+          .amount-summary-row strong { text-align: right; font-variant-numeric: tabular-nums; }
+          .net-amount-row { margin-top: 0.7mm; padding-top: 0.8mm; border-top: 1px solid #000; font-weight: 700; }
+
+          .invoice-footer-grid { display: grid; grid-template-columns: 29% 71%; min-height: 31mm; }
+          .receiver-section { padding: 3mm 2mm; }
+          .footer-detail-section { border-left: 1px solid #000; }
+
+          .footer-bank-row {
+            display: flex;
+            flex-wrap: wrap;
+            align-items: center;
+            min-height: 8mm;
+            padding: 1.5mm 2mm;
+            gap: 1mm 4mm;
+            border-bottom: 1px solid #000;
+            font-size: 7.5px;
+          }
+
+          .footer-declaration-row { display: grid; grid-template-columns: minmax(0, 1fr) 44mm; min-height: 22mm; }
+          .footer-declaration { padding: 2.5mm 2mm; line-height: 1.4; }
+
+          .footer-signature {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: space-between;
+            padding: 2mm;
+            text-align: center;
+          }
+
+          .footer-signature > strong { align-self: stretch; text-align: right; }
+          .authorised-line { width: 34mm; margin-top: auto; margin-bottom: 1.3mm; border-top: 1px solid #000; }
+
+          .invoice-a5 .report-top, .invoice-half .report-top { min-height: 22mm; }
+          .invoice-a5 .party-grid, .invoice-half .party-grid { min-height: 25mm; padding-top: 1mm; }
+          .invoice-a5 .crystal-table th, .invoice-half .crystal-table th { height: 7mm; font-size: 6px; }
+          .invoice-a5 .crystal-table td, .invoice-half .crystal-table td { height: 4mm; font-size: 6px; }
+          .invoice-a5 .firm-name, .invoice-half .firm-name { font-size: 10px; }
+          .invoice-a5 .tax-heading, .invoice-half .tax-heading { font-size: 12px; }
+          .invoice-a5 .bottom-middle-grid, .invoice-half .bottom-middle-grid { min-height: 25mm; grid-template-columns: minmax(0, 1fr) 45mm; }
+          .invoice-a5 .invoice-footer-grid, .invoice-half .invoice-footer-grid { min-height: 24mm; }
+
+          @media print {
+            html, body { width: 100%; margin: 0 !important; padding: 0 !important; background: #fff !important; }
+            body { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+            .invoice-preview-toolbar { display: none !important; }
+            .preview-shell { width: 100%; margin: 0 !important; padding: 0 !important; background: #fff !important; }
+            .invoice-page { margin: 0 auto !important; box-shadow: none !important; }
+            .report-top, .party-grid, .items-wrap, .invoice-bottom, .invoice-footer-grid, .item-row {
+              break-inside: avoid;
+              page-break-inside: avoid;
+            }
+          }
+        </style>
+      </head>
+
+      <body>
+        ${
+          includeButtons
+            ? `
+              <header class="invoice-preview-toolbar">
+                <div>
+                  <div class="preview-title">Sales Invoice Preview</div>
+                  <div class="preview-subtitle">
+                    ${escapeInvoiceHtml(
+                      `${billSeries || ""}-${billNo || ""}`
+                    )}
+                  </div>
+                </div>
+
+                <div class="toolbar-actions">
+                  <button type="button" onclick="window.close()">
+                    Close
+                  </button>
+
+                  <button
+                    type="button"
+                    class="print-button"
+                    onclick="window.print()"
+                  >
+                    Print Invoice
+                  </button>
+                </div>
+              </header>
+            `
+            : ""
+        }
+
+        <div class="preview-shell">
+          ${pages}
+        </div>
+      </body>
+    </html>
+  `;
+};
   /* =========================================================
     PRINT LOAD COLUMN DEFINITIONS
     ========================================================= */
@@ -3981,23 +4363,54 @@ const Dashboard = ({ onLogout }) => {
     });
   };
 
-  const handleAddInvoiceRow = () => {
-    const newRowIndex = invoiceItems.length;
+ const handleAddInvoiceRow = () => {
+  const newRowIndex =
+    invoiceItems.length;
 
-    setInvoiceItems((previousRows) => [
-      ...previousRows,
-      createEmptyInvoiceRow(previousRows.length + 1),
-    ]);
+  const updatedRows = [
+    ...cloneInvoiceDraftValue(
+      invoiceItems
+    ),
 
-    setActiveRow(newRowIndex);
-    setCurrentProductIndex(newRowIndex);
-    setProductDropdownIndex(-1);
-    setProductListFilter("");
-    setFilteredProductList([]);
-    setShowProductList(false);
+    createEmptyInvoiceRow(
+      invoiceItems.length + 1
+    ),
+  ];
 
-    focusInvoiceProductRow(newRowIndex);
-  };
+  setInvoiceItems(
+    updatedRows
+  );
+
+  updateActiveInvoiceDraft({
+    items:
+      cloneInvoiceDraftValue(
+        updatedRows
+      ),
+
+    selectedRow:
+      newRowIndex,
+
+    activeRow:
+      newRowIndex,
+  });
+
+  setActiveRow(
+    newRowIndex
+  );
+
+  setCurrentProductIndex(
+    newRowIndex
+  );
+
+  setProductDropdownIndex(-1);
+  setProductListFilter("");
+  setFilteredProductList([]);
+  setShowProductList(false);
+
+  focusInvoiceProductRow(
+    newRowIndex
+  );
+};
 
   /* Opens Product Master instead of adding an invoice row */
   const handleAddInvoiceProduct = (event) => {
@@ -4502,34 +4915,78 @@ const Dashboard = ({ onLogout }) => {
   };
 
 
-  const handleClearInvoiceRows = () => {
-    const hasEnteredData = invoiceItems.some(
+ const handleClearInvoiceRows = () => {
+  const hasEnteredData =
+    invoiceItems.some(
       (row) =>
-        String(row.product || "").trim() !== "" ||
-        Number(row.qty || 0) !== 0 ||
-        Number(row.free || 0) !== 0 ||
-        Number(row.rate || 0) !== 0 ||
-        Number(row.amount || 0) !== 0
+        String(
+          row.product || ""
+        ).trim() !== "" ||
+        Number(
+          row.qty || 0
+        ) !== 0 ||
+        Number(
+          row.free || 0
+        ) !== 0 ||
+        Number(
+          row.rate || 0
+        ) !== 0 ||
+        Number(
+          row.amount || 0
+        ) !== 0
     );
 
-    if (hasEnteredData) {
-      const shouldClear = window.confirm(
+  if (hasEnteredData) {
+    const shouldClear =
+      window.confirm(
         "Clear all products from this invoice?"
       );
 
-      if (!shouldClear) return;
+    if (!shouldClear) {
+      return;
     }
+  }
 
-    setInvoiceItems([createEmptyInvoiceRow(1)]);
-    setActiveRow(0);
-    setCurrentProductIndex(0);
-    setProductDropdownIndex(-1);
-    setProductListFilter("");
-    setFilteredProductList([]);
-    setShowProductList(false);
+  const emptyRows = [
+    createEmptyInvoiceRow(1),
+  ];
 
-    focusInvoiceProductRow(0);
-  };
+  const emptySummary =
+    createEmptyInvoiceSummary();
+
+  setInvoiceItems(
+    emptyRows
+  );
+
+  setInvoiceSummary(
+    emptySummary
+  );
+
+  updateActiveInvoiceDraft({
+    items:
+      cloneInvoiceDraftValue(
+        emptyRows
+      ),
+
+    summary:
+      cloneInvoiceDraftValue(
+        emptySummary
+      ),
+
+    selectedRow: -1,
+    activeRow: 0,
+  });
+
+  setSelectedSalesDetailRow(-1);
+  setActiveRow(0);
+  setCurrentProductIndex(0);
+  setProductDropdownIndex(-1);
+  setProductListFilter("");
+  setFilteredProductList([]);
+  setShowProductList(false);
+
+  focusInvoiceProductRow(0);
+};
 
   const getFilteredFirms = () => {
     return Array.isArray(firms)
@@ -5097,6 +5554,7 @@ const Dashboard = ({ onLogout }) => {
   };
 
 
+
   // Sample saved data for voucher lists (replace with your actual saved data)
   const [salesListData, setSalesListData] = useState([]);
   const [purchaseListData, setPurchaseListData] = useState([]);
@@ -5128,6 +5586,58 @@ const Dashboard = ({ onLogout }) => {
     };
   };
 
+
+  const resetCurrentInvoiceEntry = (
+    formName = openFormFor
+  ) => {
+    const freshDraft =
+      createInvoiceEntryDraft();
+
+    if (formName === "Quotation") {
+      quotationEntryDraftRef.current =
+        cloneInvoiceDraftValue(
+          freshDraft
+        );
+    } else {
+      billingEntryDraftRef.current =
+        cloneInvoiceDraftValue(
+          freshDraft
+        );
+    }
+
+    setInvoiceFormData(
+      cloneInvoiceDraftValue(
+        freshDraft.formData
+      )
+    );
+
+    setInvoiceItems(
+      cloneInvoiceDraftValue(
+        freshDraft.items
+      )
+    );
+
+    setInvoiceSummary(
+      cloneInvoiceDraftValue(
+        freshDraft.summary
+      )
+    );
+
+    setInvoiceManualAdjustments(
+      cloneInvoiceDraftValue(
+        freshDraft.manualAdjustments
+      )
+    );
+
+    setSelectedSalesDetailRow(-1);
+    setActiveRow(0);
+
+    setShowProductList(false);
+    setCurrentProductIndex(-1);
+    setProductDropdownIndex(-1);
+    setFilteredProductList([]);
+    setProductListFilter("");
+  };
   const renderPagination = (listKey, currentPage, totalPages) => (
     <div className="pagination-sticky-footer">
       <div className="pagination-box">
@@ -5206,49 +5716,17 @@ const Dashboard = ({ onLogout }) => {
     BILL PRINT STATE
     ========================================================= */
 
-  const createDefaultBillPrintForm = () => ({
-    LoadSeries: "",
-    loadNo: "",
 
-    TrnSeries: "",
-    FromTrnNo: "",
-    ToTrnNo: "",
+ 
 
-    NoOfCopies: "1",
 
-    GoodsReturn: "N",
-    DamageReturn: "N",
-    SchemeSummary: "Y",
-    VatSummary: "Y",
-    HSNSummary: "Y",
 
-    /*
-    * A4 portrait
-    * A5 landscape
-    */
-    PaperSize: "A4",
-    Orientation: "portrait",
-  });
 
-  const [billPrintFormData, setBillPrintFormData] = useState(
-    createDefaultBillPrintForm
-  );
 
-  const [billPrintData, setBillPrintData] = useState(null);
 
-  const [showBillPrintPreview, setShowBillPrintPreview] =
-    useState(false);
 
-  const [billPrintLoading, setBillPrintLoading] =
-    useState(false);
 
-  const [billPrintError, setBillPrintError] =
-    useState("");
 
-  const [billPrintAction, setBillPrintAction] =
-    useState("preview");
-
-  const billPrintPreviewRef = useRef(null);
 
   const [productDropdownPos, setProductDropdownPos] = useState({
     top: 0,
@@ -5671,77 +6149,183 @@ const Dashboard = ({ onLogout }) => {
     invoiceNetBeforeCreditNote -
     Number(invoiceSummary.creditNote || 0)
   );
-  const handleInvoiceManualAdjustmentChange = (field, value) => {
-    /*
-      Permit blank value and an incomplete sign while the user types.
-      Examples:
-      ""
-      "+"
-      "-"
-      "+25"
-      "-25"
-    */
-    if (field === "addLess") {
-      const signedValuePattern = /^[+-]?\d*(\.\d{0,2})?$/;
+  /* =========================================================
+   ACTIVE BILLING / QUOTATION DRAFT HELPERS
+   ========================================================= */
 
-      if (!signedValuePattern.test(value)) {
+  const getActiveInvoiceEntryType = () => {
+    /*
+     * openFormFor is the only reliable source.
+     * Do not use activeSubMenu or the old active ref
+     * to decide which draft receives the data.
+     */
+    if (openFormFor === "Quotation") {
+      return "Quotation";
+    }
+
+    if (openFormFor === "Billing") {
+      return "Billing";
+    }
+
+    return null;
+  };
+  const updateActiveInvoiceDraft = (
+    updates
+  ) => {
+    const entryType =
+      getActiveInvoiceEntryType();
+
+    /*
+     * When a list is visible, do not save the
+     * shared screen state into any entry draft.
+     */
+    if (!entryType) {
+      return;
+    }
+
+    const targetRef =
+      entryType === "Quotation"
+        ? quotationEntryDraftRef
+        : billingEntryDraftRef;
+
+    const currentDraft =
+      targetRef.current
+        ? cloneInvoiceDraftValue(
+          targetRef.current
+        )
+        : createInvoiceEntryDraft();
+
+    targetRef.current = {
+      ...currentDraft,
+      ...cloneInvoiceDraftValue(
+        updates
+      ),
+    };
+  };
+  const handleInvoiceManualAdjustmentChange = (
+    field,
+    value
+  ) => {
+    if (field === "addLess") {
+      const signedValuePattern =
+        /^[+-]?\d*(\.\d{0,2})?$/;
+
+      if (
+        !signedValuePattern.test(value)
+      ) {
         return;
       }
     } else {
-      const amountPattern = /^\d*(\.\d{0,2})?$/;
+      const amountPattern =
+        /^\d*(\.\d{0,2})?$/;
 
-      if (!amountPattern.test(value)) {
+      if (
+        !amountPattern.test(value)
+      ) {
         return;
       }
     }
 
-    setInvoiceManualAdjustments((previous) => ({
-      ...previous,
+    const numericValue =
+      parseSignedAmount(value);
+
+    /*
+     * Prepare manual-adjustment values first.
+     */
+    const updatedManualAdjustments = {
+      ...invoiceManualAdjustments,
       [field]: value,
-    }));
+    };
 
-    const numericValue = parseSignedAmount(value);
+    /*
+     * Prepare summary using the currently
+     * visible Billing or Quotation summary.
+     */
+    const updatedSummaryBase = {
+      ...invoiceSummary,
+      [field]: numericValue,
+    };
 
-    setInvoiceSummary((previous) => {
-      const updatedSummary = {
-        ...previous,
-        [field]: numericValue,
-      };
+    const taxable = Math.max(
+      0,
+      Number(
+        updatedSummaryBase.gross || 0
+      ) -
+      Number(
+        updatedSummaryBase.tpr || 0
+      ) -
+      Number(
+        updatedSummaryBase.scheme || 0
+      ) -
+      Number(
+        updatedSummaryBase.star || 0
+      ) -
+      Number(
+        updatedSummaryBase.cd || 0
+      ) -
+      Number(
+        updatedSummaryBase.display || 0
+      ) -
+      Number(
+        updatedSummaryBase.coupon || 0
+      )
+    );
 
-      const taxable = Math.max(
-        0,
-        Number(updatedSummary.gross || 0) -
-        Number(updatedSummary.tpr || 0) -
-        Number(updatedSummary.scheme || 0) -
-        Number(updatedSummary.star || 0) -
-        Number(updatedSummary.cd || 0) -
-        Number(updatedSummary.display || 0) -
-        Number(updatedSummary.coupon || 0)
+    const gst =
+      Number(
+        updatedSummaryBase.cgst || 0
+      ) +
+      Number(
+        updatedSummaryBase.sgst || 0
+      ) +
+      Number(
+        updatedSummaryBase.igst || 0
       );
 
-      const gst =
-        Number(updatedSummary.cgst || 0) +
-        Number(updatedSummary.sgst || 0) +
-        Number(updatedSummary.igst || 0);
-
-      const originalNet =
-        taxable +
-        gst +
-        Number(updatedSummary.addLess || 0);
-
-      const finalNet = Math.max(
-        0,
-        originalNet -
-        Number(updatedSummary.creditNote || 0)
+    const originalNet =
+      taxable +
+      gst +
+      Number(
+        updatedSummaryBase.addLess || 0
       );
 
-      return {
-        ...updatedSummary,
-        taxable,
-        gst,
-        originalNet,
-        net: finalNet,
-      };
+    const finalNet = Math.max(
+      0,
+      originalNet -
+      Number(
+        updatedSummaryBase.creditNote ||
+        0
+      )
+    );
+    const updatedSummary = {
+      ...updatedSummaryBase,
+      taxable,
+      gst,
+      originalNet,
+      net: finalNet,
+    };
+
+    /*
+     * Update only the currently visible screen.
+     */
+    setInvoiceManualAdjustments(
+      updatedManualAdjustments
+    );
+
+    setInvoiceSummary(
+      updatedSummary
+    );
+
+    /*
+     * Most important:
+     * save the values only in the active module.
+     */
+    updateActiveInvoiceDraft({
+      manualAdjustments:
+        updatedManualAdjustments,
+
+      summary:
+        updatedSummary,
     });
   };
   const [activeRow, setActiveRow] = useState(-1);
@@ -5797,6 +6381,290 @@ const Dashboard = ({ onLogout }) => {
   const [showProductList, setShowProductList] = useState(false);
   const [productListFilter, setProductListFilter] = useState('');
   const [currentProductIndex, setCurrentProductIndex] = useState(-1);
+  /* =========================================================
+   BILLING AND QUOTATION INDEPENDENT DRAFTS
+   ========================================================= */
+
+  const cloneInvoiceDraftValue = (value) => {
+    if (value === undefined || value === null) {
+      return value;
+    }
+
+    return JSON.parse(
+      JSON.stringify(value)
+    );
+  };
+
+  const createInvoiceEntryDraft = () => ({
+    formData: {
+      billDate:
+        new Date()
+          .toISOString()
+          .split("T")[0],
+
+      godown: "G1",
+
+      company: "",
+      companyCode: "",
+
+      area: "",
+      areaCode: "",
+
+      party: "",
+      partyCode: "",
+      partyName: "",
+
+      BillSeries: "",
+      billSeries: "",
+
+      billNo: "",
+      billType: "Credit",
+      dueDate: "",
+
+      salesman: "",
+      salesmanCode: "",
+      salesmanName: "",
+
+      narration: "",
+    },
+
+    items: [
+      createEmptyInvoiceRow(1),
+    ],
+
+    summary:
+      createEmptyInvoiceSummary(),
+
+    manualAdjustments:
+      createEmptyInvoiceManualAdjustments(),
+
+    selectedRow: -1,
+    activeRow: 0,
+  });
+
+  const billingEntryDraftRef =
+    useRef(null);
+
+  const quotationEntryDraftRef =
+    useRef(null);
+
+
+
+  /*
+   * Stores which entry form currently owns
+   * the shared invoice React states.
+   */
+  const activeInvoiceDraftFormRef =
+    useRef(null);
+
+  const getInvoiceDraftRef = (
+    formName
+  ) => {
+    return formName === "Quotation"
+      ? quotationEntryDraftRef
+      : billingEntryDraftRef;
+  };
+
+  const getCurrentInvoiceDraft = () => ({
+    formData:
+      cloneInvoiceDraftValue(
+        invoiceFormData
+      ),
+
+    items:
+      cloneInvoiceDraftValue(
+        Array.isArray(invoiceItems)
+          ? invoiceItems
+          : []
+      ),
+
+    summary:
+      cloneInvoiceDraftValue(
+        invoiceSummary
+      ),
+
+    manualAdjustments:
+      cloneInvoiceDraftValue(
+        invoiceManualAdjustments
+      ),
+
+    selectedRow:
+      selectedSalesDetailRow,
+
+    activeRow,
+  });
+
+  const saveInvoiceDraft = (
+    formName
+  ) => {
+    /*
+     * Save only when that exact form is
+     * currently displayed.
+     */
+    if (
+      formName !== "Billing" &&
+      formName !== "Quotation"
+    ) {
+      return;
+    }
+
+    if (openFormFor !== formName) {
+      return;
+    }
+
+    const targetRef =
+      formName === "Quotation"
+        ? quotationEntryDraftRef
+        : billingEntryDraftRef;
+
+    targetRef.current = {
+      formData:
+        cloneInvoiceDraftValue(
+          invoiceFormData
+        ),
+
+      items:
+        cloneInvoiceDraftValue(
+          Array.isArray(invoiceItems)
+            ? invoiceItems
+            : []
+        ),
+
+      summary:
+        cloneInvoiceDraftValue(
+          invoiceSummary
+        ),
+
+      manualAdjustments:
+        cloneInvoiceDraftValue(
+          invoiceManualAdjustments
+        ),
+
+      selectedRow:
+        selectedSalesDetailRow,
+
+      activeRow,
+    };
+  };
+
+  const restoreInvoiceDraft = (
+    formName
+  ) => {
+    if (
+      formName !== "Billing" &&
+      formName !== "Quotation"
+    ) {
+      return;
+    }
+
+    const sourceRef =
+      formName === "Quotation"
+        ? quotationEntryDraftRef
+        : billingEntryDraftRef;
+
+    if (!sourceRef.current) {
+      sourceRef.current =
+        createInvoiceEntryDraft();
+    }
+
+    const draft =
+      cloneInvoiceDraftValue(
+        sourceRef.current
+      );
+
+    setInvoiceFormData(
+      draft.formData ||
+      createInvoiceEntryDraft()
+        .formData
+    );
+
+    setInvoiceItems(
+      Array.isArray(draft.items) &&
+        draft.items.length > 0
+        ? draft.items
+        : [createEmptyInvoiceRow(1)]
+    );
+
+    setInvoiceSummary(
+      draft.summary ||
+      createEmptyInvoiceSummary()
+    );
+
+    setInvoiceManualAdjustments(
+      draft.manualAdjustments ||
+      createEmptyInvoiceManualAdjustments()
+    );
+
+    setSelectedSalesDetailRow(
+      Number.isInteger(
+        draft.selectedRow
+      )
+        ? draft.selectedRow
+        : -1
+    );
+
+    setActiveRow(
+      Number.isInteger(
+        draft.activeRow
+      )
+        ? draft.activeRow
+        : 0
+    );
+
+    setShowProductList(false);
+    setCurrentProductIndex(-1);
+    setProductDropdownIndex(-1);
+    setFilteredProductList([]);
+    setProductListFilter("");
+  };
+  const switchInvoiceEntryForm = (
+    nextForm
+  ) => {
+    if (
+      nextForm !== "Billing" &&
+      nextForm !== "Quotation"
+    ) {
+      return;
+    }
+
+    const currentForm =
+      activeInvoiceDraftFormRef.current;
+
+    /*
+     * First save the form currently visible
+     * on screen.
+     */
+    if (
+      currentForm === "Billing" ||
+      currentForm === "Quotation"
+    ) {
+      saveInvoiceDraft(
+        currentForm
+      );
+    }
+
+    /*
+     * Then restore the independent target draft.
+     */
+    restoreInvoiceDraft(
+      nextForm
+    );
+
+    /*
+     * Change ownership only after saving and
+     * initiating restoration.
+     */
+    activeInvoiceDraftFormRef.current =
+      nextForm;
+  };
+
+  /*
+   * Keep the active Billing/Quotation draft updated
+   * whenever any header, product or summary value changes.
+   *
+   * This prevents data loss before a tab change.
+   */
+
 
   const [purchaseFormData, setPurchaseFormData] = useState({
     supplier: '',
@@ -16736,10 +17604,23 @@ const Dashboard = ({ onLogout }) => {
       return;
     }
 
-    setInvoiceFormData((prev) => ({
-      ...prev,
+  setInvoiceFormData(
+  (previousFormData) => {
+    const updatedFormData = {
+      ...previousFormData,
       [name]: cleanValue,
-    }));
+    };
+
+    updateActiveInvoiceDraft({
+      formData:
+        cloneInvoiceDraftValue(
+          updatedFormData
+        ),
+    });
+
+    return updatedFormData;
+  }
+);
   };
   useEffect(() => {
     // Load sales bills for validation
@@ -16820,111 +17701,392 @@ const Dashboard = ({ onLogout }) => {
     return qty + free;
   };
 
-  const updateInvoiceItem = (index, field, value) => {
-    const newItems = [...invoiceItems];
-    newItems[index][field] = value;
+  const updateInvoiceItem = (
+    index,
+    field,
+    value
+  ) => {
+      setInvoiceItems((previousItems) => {
+      const updatedItems =
+        previousItems.map(
+          (existingItem, itemIndex) => {
+            if (itemIndex !== index) {
+              return existingItem;
+            }
 
-    const customerAccount = getSelectedPartyAccount(invoiceFormData.party);
+            /*
+             * Always create a new object.
+             * Do not directly mutate the existing React state row.
+             */
+            const updatedItem = {
+              ...existingItem,
+              [field]: value,
+            };
 
-    const invType = (
-      customerAccount?.invType ||
-      customerAccount?.taxType ||
-      "TAXABLE"
-    ).toUpperCase();
+            const customerAccount =
+              getSelectedPartyAccount(
+                invoiceFormData.party
+              );
 
-    const isIGST =
-      invType === "CST" ||
-      invType === "IGST" ||
-      invType === "INTERSTATE" ||
-      invType.includes("CST") ||
-      invType.includes("IGST");
+            const invType = String(
+              customerAccount?.invType ||
+              customerAccount?.taxType ||
+              "TAXABLE"
+            ).toUpperCase();
 
-    const recalculateSalesItem = (item) => {
-      const qty = getSalesItemTotalQty(item);
-      const rate = parseFloat(item.rate) || 0;
-      const gstPct = parseFloat(item.gst) || 0;
+            const isIGST =
+              invType === "CST" ||
+              invType === "IGST" ||
+              invType === "INTERSTATE" ||
+              invType.includes("CST") ||
+              invType.includes("IGST");
 
-      const baseAmount = qty * rate;
-      const tprAmt = parseFloat(item.tprAmt) || 0;
+            const qty =
+              getSalesItemTotalQty(
+                updatedItem
+              );
 
-      let schemeAmt = 0;
-      if (item.schemePct) {
-        schemeAmt = baseAmount * ((parseFloat(item.schemePct) || 0) / 100);
-        item.schemeAmt = schemeAmt.toFixed(2);
-      } else {
-        schemeAmt = parseFloat(item.schemeAmt) || 0;
-      }
+            const rate =
+              Number(updatedItem.rate) ||
+              0;
 
-      let cdAmt = 0;
-      if (item.cdPct) {
-        cdAmt = baseAmount * ((parseFloat(item.cdPct) || 0) / 100);
-        item.cdAmt = cdAmt.toFixed(2);
-      } else {
-        cdAmt = parseFloat(item.cdAmt) || 0;
-      }
+            const gstPct =
+              Number(updatedItem.gst) ||
+              0;
 
-      const starAmt = parseFloat(item.starAmt) || 0;
-      const taxable = baseAmount - tprAmt - schemeAmt - cdAmt - starAmt;
+            const baseAmount =
+              qty * rate;
 
-      item.taxable = taxable.toFixed(2);
+            const tprAmt =
+              Number(
+                updatedItem.tprAmt
+              ) || 0;
 
-      const gstAmount = taxable > 0 ? taxable * (gstPct / 100) : 0;
+            /* =========================
+               SCHEME
+               ========================= */
 
-      if (isIGST) {
-        item.igst = gstAmount.toFixed(2);
-        item.cgst = "0.00";
-        item.sgst = "0.00";
-      } else {
-        item.igst = "0.00";
-        item.cgst = (gstAmount / 2).toFixed(2);
-        item.sgst = (gstAmount / 2).toFixed(2);
-      }
+            let schemeAmt = 0;
 
-      item.rateGst = (rate + rate * (gstPct / 100)).toFixed(2);
+            if (field === "schemePct") {
+              schemeAmt =
+                baseAmount *
+                (
+                  (
+                    Number(value) ||
+                    0
+                  ) / 100
+                );
 
-      item.amount = (
-        taxable +
-        (parseFloat(item.cgst) || 0) +
-        (parseFloat(item.sgst) || 0) +
-        (parseFloat(item.igst) || 0)
-      ).toFixed(2);
-    };
+              updatedItem.schemeAmt =
+                schemeAmt.toFixed(2);
+            } else if (
+              field === "schemeAmt"
+            ) {
+              schemeAmt =
+                Number(value) || 0;
 
-    if (
-      [
-        "qty",
-        "rate",
-        "tprAmt",
-        "schemePct",
-        "schemeAmt",
-        "cdPct",
-        "cdAmt",
-        "starAmt",
-        "gst"
-      ].includes(field)
-    ) {
-      if (field === "schemeAmt" && parseFloat(value) > 0) {
-        newItems[index].schemePct = "";
-      }
+              /*
+               * Direct Scheme Amount overrides Scheme %.
+               */
+              if (String(value).trim() !== "") {
+                updatedItem.schemePct = "";
+              }
+            } else if (
+              String(
+                updatedItem.schemePct ??
+                ""
+              ).trim() !== ""
+            ) {
+              schemeAmt =
+                baseAmount *
+                (
+                  (
+                    Number(
+                      updatedItem.schemePct
+                    ) || 0
+                  ) / 100
+                );
 
-      if (field === "cdAmt" && parseFloat(value) > 0) {
-        newItems[index].cdPct = "";
-      }
+              updatedItem.schemeAmt =
+                schemeAmt.toFixed(2);
+            } else {
+              schemeAmt =
+                Number(
+                  updatedItem.schemeAmt
+                ) || 0;
+            }
 
-      recalculateSalesItem(newItems[index]);
-    }
+            /* =========================
+               CASH DISCOUNT
+               ========================= */
 
-    calcInvoiceSummary(newItems);
-    setInvoiceItems(newItems);
+            let cdAmt = 0;
+
+            if (field === "cdPct") {
+              cdAmt =
+                baseAmount *
+                (
+                  (
+                    Number(value) ||
+                    0
+                  ) / 100
+                );
+
+              updatedItem.cdAmt =
+                cdAmt.toFixed(2);
+            } else if (
+              field === "cdAmt"
+            ) {
+              cdAmt =
+                Number(value) || 0;
+
+              /*
+               * Direct CD Amount overrides CD %.
+               */
+              if (String(value).trim() !== "") {
+                updatedItem.cdPct = "";
+              }
+            } else if (
+              String(
+                updatedItem.cdPct ??
+                ""
+              ).trim() !== ""
+            ) {
+              cdAmt =
+                baseAmount *
+                (
+                  (
+                    Number(
+                      updatedItem.cdPct
+                    ) || 0
+                  ) / 100
+                );
+
+              updatedItem.cdAmt =
+                cdAmt.toFixed(2);
+            } else {
+              cdAmt =
+                Number(
+                  updatedItem.cdAmt
+                ) || 0;
+            }
+
+            /* =========================
+               STAR DISCOUNT
+               ========================= */
+
+            let starAmt = 0;
+
+            if (field === "starPct") {
+              starAmt =
+                baseAmount *
+                (
+                  (
+                    Number(value) ||
+                    0
+                  ) / 100
+                );
+
+              updatedItem.starAmt =
+                starAmt.toFixed(2);
+            } else if (
+              field === "starAmt"
+            ) {
+              starAmt =
+                Number(value) || 0;
+
+              /*
+               * Direct Star Amount overrides Star %.
+               */
+              if (String(value).trim() !== "") {
+                updatedItem.starPct = "";
+              }
+            } else if (
+              String(
+                updatedItem.starPct ??
+                ""
+              ).trim() !== ""
+            ) {
+              starAmt =
+                baseAmount *
+                (
+                  (
+                    Number(
+                      updatedItem.starPct
+                    ) || 0
+                  ) / 100
+                );
+
+              updatedItem.starAmt =
+                starAmt.toFixed(2);
+            } else {
+              starAmt =
+                Number(
+                  updatedItem.starAmt
+                ) || 0;
+            }
+
+            /* =========================
+               TAXABLE AND GST
+               ========================= */
+
+            const taxable = Math.max(
+              0,
+              baseAmount -
+              tprAmt -
+              schemeAmt -
+              cdAmt -
+              starAmt
+            );
+
+            updatedItem.taxable =
+              taxable.toFixed(2);
+
+            const gstAmount =
+              taxable *
+              (gstPct / 100);
+
+            if (isIGST) {
+              updatedItem.igst =
+                gstAmount.toFixed(2);
+
+              updatedItem.cgst =
+                "0.00";
+
+              updatedItem.sgst =
+                "0.00";
+            } else {
+              updatedItem.igst =
+                "0.00";
+
+              updatedItem.cgst =
+                (
+                  gstAmount / 2
+                ).toFixed(2);
+
+              updatedItem.sgst =
+                (
+                  gstAmount / 2
+                ).toFixed(2);
+            }
+
+            updatedItem.rateGst =
+              (
+                rate +
+                (
+                  rate *
+                  gstPct /
+                  100
+                )
+              ).toFixed(2);
+
+            updatedItem.amount =
+              (
+                taxable +
+                (
+                  Number(
+                    updatedItem.cgst
+                  ) || 0
+                ) +
+                (
+                  Number(
+                    updatedItem.sgst
+                  ) || 0
+                ) +
+                (
+                  Number(
+                    updatedItem.igst
+                  ) || 0
+                )
+              ).toFixed(2);
+
+            return updatedItem;
+          }
+        );
+
+      /*
+       * Calculate using the freshly updated rows,
+       * not the previous invoiceItems state.
+       */
+      /*
+   * Recalculate the visible summary.
+   */
+      calcInvoiceSummary(
+        updatedItems
+      );
+
+      /*
+       * Save the freshly changed rows only into
+       * the form currently visible.
+       *
+       * This handles Qty, Rate, Scheme, CD, Star,
+       * Units and all other table inputs.
+       */
+      updateActiveInvoiceDraft({
+        items:
+          cloneInvoiceDraftValue(
+            updatedItems
+          ),
+
+        selectedRow: index,
+        activeRow: index,
+      });
+
+      return updatedItems;
+    });
+
     setActiveRow(index);
+    setSelectedSalesDetailRow(index);
   };
+const deleteInvoiceItem = (
+  index
+) => {
+  let updatedItems =
+    cloneInvoiceDraftValue(
+      invoiceItems
+    ).filter(
+      (_, itemIndex) =>
+        itemIndex !== index
+    );
 
-  const deleteInvoiceItem = (index) => {
-    const newItems = invoiceItems.filter((_, i) => i !== index);
-    newItems.forEach((item, i) => { item.sr = i + 1; });
-    setInvoiceItems(newItems);
-    calcInvoiceSummary(newItems);
-  };
+  if (
+    updatedItems.length === 0
+  ) {
+    updatedItems = [
+      createEmptyInvoiceRow(1),
+    ];
+  }
+
+  updatedItems =
+    updatedItems.map(
+      (item, itemIndex) => ({
+        ...item,
+        sr: itemIndex + 1,
+      })
+    );
+
+  setInvoiceItems(
+    updatedItems
+  );
+
+  updateActiveInvoiceDraft({
+    items:
+      cloneInvoiceDraftValue(
+        updatedItems
+      ),
+
+    selectedRow: -1,
+    activeRow: 0,
+  });
+
+  setSelectedSalesDetailRow(-1);
+  setActiveRow(0);
+
+  calcInvoiceSummary(
+    updatedItems
+  );
+};
 
   const calcInvoiceSummary = (currentItems) => {
     let gross = 0;
@@ -16951,110 +18113,178 @@ const Dashboard = ({ onLogout }) => {
       igst += parseFloat(item.igst) || 0;
     });
 
-    setInvoiceSummary((previousSummary) => {
-      /*
-        Product discounts remain the normal source.
-  
-        Manual Scheme, Star or Cash Discount are only used where
-        the products do not already contain those discounts.
-        This prevents double deduction.
-      */
-      const scheme = productHasScheme
-        ? productScheme
-        : parseSignedAmount(
+   setInvoiceSummary((previousSummary) => {
+  const currentProductHasScheme =
+    currentItems.some(
+      (item) =>
+        Number(
+          item.schemePct || 0
+        ) !== 0 ||
+        Number(
+          item.schemeAmt || 0
+        ) !== 0
+    );
+
+  const currentProductHasStar =
+    currentItems.some(
+      (item) =>
+        Number(
+          item.starPct || 0
+        ) !== 0 ||
+        Number(
+          item.starAmt || 0
+        ) !== 0
+    );
+
+  const currentProductHasCashDiscount =
+    currentItems.some(
+      (item) =>
+        Number(
+          item.cdPct || 0
+        ) !== 0 ||
+        Number(
+          item.cdAmt || 0
+        ) !== 0
+    );
+
+  const scheme =
+    currentProductHasScheme
+      ? productScheme
+      : parseSignedAmount(
           invoiceManualAdjustments.scheme
         );
 
-      const star = productHasStar
-        ? productStar
-        : parseSignedAmount(
+  const star =
+    currentProductHasStar
+      ? productStar
+      : parseSignedAmount(
           invoiceManualAdjustments.star
         );
 
-      const cd = productHasCashDiscount
-        ? productCd
-        : parseSignedAmount(
+  const cd =
+    currentProductHasCashDiscount
+      ? productCd
+      : parseSignedAmount(
           invoiceManualAdjustments.cd
         );
 
-      const display = parseSignedAmount(
-        invoiceManualAdjustments.display
-      );
+  const display =
+    parseSignedAmount(
+      invoiceManualAdjustments.display
+    );
 
-      const coupon = parseSignedAmount(
-        invoiceManualAdjustments.coupon
-      );
+  const coupon =
+    parseSignedAmount(
+      invoiceManualAdjustments.coupon
+    );
 
-      const addLess = parseSignedAmount(
-        invoiceManualAdjustments.addLess
-      );
+  const addLess =
+    parseSignedAmount(
+      invoiceManualAdjustments.addLess
+    );
 
-      const taxable = Math.max(
-        0,
-        gross -
-        tpr -
-        scheme -
-        star -
-        cd -
-        display -
-        coupon
-      );
+  const taxable = Math.max(
+    0,
+    gross -
+      tpr -
+      scheme -
+      star -
+      cd -
+      display -
+      coupon
+  );
 
-      const gst = cgst + sgst + igst;
+  const gst =
+    cgst +
+    sgst +
+    igst;
 
-      const originalNet =
-        taxable +
-        gst +
-        addLess;
+  const originalNet =
+    taxable +
+    gst +
+    addLess;
 
-      const creditNote = Number(
-        previousSummary.creditNote || 0
-      );
+  const creditNote =
+    Number(
+      previousSummary.creditNote || 0
+    );
 
-      const finalNet = Math.max(
-        0,
-        originalNet - creditNote
-      );
+  const finalNet = Math.max(
+    0,
+    originalNet -
+      creditNote
+  );
 
-      return {
-        ...previousSummary,
+  const updatedSummary = {
+    ...previousSummary,
 
-        gross,
-        tpr,
+    gross,
+    tpr,
 
-        productScheme,
-        productStar,
-        productCd,
+    productScheme,
+    productStar,
+    productCd,
 
-        scheme,
-        star,
-        cd,
+    scheme,
+    star,
+    cd,
 
-        display,
-        coupon,
-        addLess,
+    display,
+    coupon,
+    addLess,
 
-        taxable,
-        bottom: taxable,
+    taxable,
+    bottom: taxable,
 
-        cgst,
-        sgst,
-        igst,
-        gst,
+    cgst,
+    sgst,
+    igst,
+    gst,
 
-        cess: Number(previousSummary.cess || 0),
-        tcs: Number(previousSummary.tcs || 0),
-        rounding: Number(
-          previousSummary.rounding || 0
-        ),
+    cess:
+      Number(
+        previousSummary.cess || 0
+      ),
 
-        originalNet:
-          Math.round(originalNet * 100) / 100,
+    tcs:
+      Number(
+        previousSummary.tcs || 0
+      ),
 
-        net:
-          Math.round(finalNet * 100) / 100,
-      };
-    });
+    rounding:
+      Number(
+        previousSummary.rounding || 0
+      ),
+
+    originalNet:
+      Math.round(
+        originalNet * 100
+      ) / 100,
+
+    net:
+      Math.round(
+        finalNet * 100
+      ) / 100,
+  };
+
+  /*
+   * Save the calculated summary into only
+   * the currently visible form draft.
+   */
+  updateActiveInvoiceDraft({
+    items:
+      cloneInvoiceDraftValue(
+        currentItems
+      ),
+
+    summary:
+      cloneInvoiceDraftValue(
+        updatedSummary
+      ),
+  });
+
+  return updatedSummary;
+});
   };
   const handleInvoiceKeyDown = (e, index, field) => {
     if (e.key === 'Enter') {
@@ -17690,22 +18920,65 @@ const Dashboard = ({ onLogout }) => {
   };
 
 
-  const handleProductSelect = (index, product) => {
-    const selectedBatch = product.selectedBatch || null;
+  const handleProductSelect = (
+    index,
+    product
+  ) => {
+    const selectedBatch =
+      product.selectedBatch || null;
 
-    const itemCode = getProductCode(product);
-    const itemName = getProductName(product);
+    const itemCode =
+      getProductCode(product);
 
-    const updatedItems = [...invoiceItems];
+    const itemName =
+      getProductName(product);
+
+    /*
+     * Deep-copy rows so row objects are not
+     * shared between Billing and Quotation.
+     */
+    const updatedItems =
+      cloneInvoiceDraftValue(
+        Array.isArray(invoiceItems)
+          ? invoiceItems
+          : []
+      );
+
+    while (
+      updatedItems.length <= index
+    ) {
+      updatedItems.push(
+        createEmptyInvoiceRow(
+          updatedItems.length + 1
+        )
+      );
+    }
 
     updatedItems[index] = {
       ...updatedItems[index],
-      product: `${itemCode} - ${itemName}`,
+
+      product:
+        `${itemCode} - ${itemName}`,
+
       productId: itemCode,
       productCode: itemCode,
-      batchNo: selectedBatch?.batchNo || selectedBatch?.batch || "",
-      mrp: selectedBatch?.mrp || product.mrp || "",
-      rate: selectedBatch?.salesRate || selectedBatch?.sRate || product.salesRate || "",
+
+      batchNo:
+        selectedBatch?.batchNo ||
+        selectedBatch?.batch ||
+        "",
+
+      mrp:
+        selectedBatch?.mrp ||
+        product.mrp ||
+        "",
+
+      rate:
+        selectedBatch?.salesRate ||
+        selectedBatch?.sRate ||
+        product.salesRate ||
+        "",
+
       purchaseRate: Number(
         selectedBatch?.purchaseRate ??
         selectedBatch?.pRate ??
@@ -17715,8 +18988,13 @@ const Dashboard = ({ onLogout }) => {
         product.PRate ??
         0
       ),
-      gst: product.gst || "",
-      units: product.basicUnit || "PCS",
+
+      gst:
+        product.gst || "",
+
+      units:
+        product.basicUnit || "PCS",
+
       boxPack: Number(
         product.boxPack ||
         product.BoxPack ||
@@ -17724,6 +19002,7 @@ const Dashboard = ({ onLogout }) => {
         selectedBatch?.BoxPack ||
         1
       ),
+
       inboxPack: Number(
         product.inboxPack ||
         product.InBoxPack ||
@@ -17731,20 +19010,72 @@ const Dashboard = ({ onLogout }) => {
         selectedBatch?.InBoxPack ||
         1
       ),
-      selectedBatch,
+
+      selectedBatch:
+        cloneInvoiceDraftValue(
+          selectedBatch
+        ),
     };
 
-    setInvoiceItems(updatedItems);
+    /*
+     * Ensure one blank row exists after
+     * the selected product row.
+     */
+    const nextRow =
+      updatedItems[index + 1];
+
+    const nextRowHasProduct =
+      String(
+        nextRow?.product ||
+        nextRow?.productCode ||
+        nextRow?.productId ||
+        ""
+      ).trim() !== "";
+
+    if (
+      index ===
+      updatedItems.length - 1 ||
+      nextRowHasProduct
+    ) {
+      updatedItems.splice(
+        index + 1,
+        0,
+        createEmptyInvoiceRow(
+          index + 2
+        )
+      );
+    }
+
+    setInvoiceItems(
+      updatedItems
+    );
+
+    /*
+     * Save product rows only into the active
+     * Billing or Quotation draft.
+     */
+    updateActiveInvoiceDraft({
+      items: updatedItems,
+      selectedRow: index,
+      activeRow: index,
+    });
 
     setSelectedSalesDetailRow(index);
     setActiveRow(index);
+
     setShowProductList(false);
     setCurrentProductIndex(-1);
     setProductListFilter("");
     setProductDropdownIndex(-1);
     setFilteredProductList([]);
 
-    addBlankSalesRowAfterSelect(index);
+    /*
+     * Do not call addBlankSalesRowAfterSelect here.
+     * The blank row has already been added above.
+     * Calling it again can update shared invoiceItems
+     * with stale data.
+     */
+
     focusSalesQty(index);
   };
 
@@ -18123,24 +19454,151 @@ const Dashboard = ({ onLogout }) => {
       });
 
       if (isSettleAdjustMode) {
-        if (settleAdjustRowIndex !== null) {
-          const updatedItems = [...settleLoadItems];
+        if (
+          settleAdjustRowIndex !== null &&
+          settleAdjustRowIndex >= 0
+        ) {
+          /*
+           * Read the latest saved bill amount.
+           *
+           * Prefer the backend response, but fall back to
+           * the amount that was just sent to the backend.
+           */
+          const updatedBillAmount = Number(
+            result?.bill?.NetAmount ??
+            result?.bill?.netAmount ??
+            result?.sales?.NetAmount ??
+            result?.sales?.netAmount ??
+            result?.record?.NetAmount ??
+            result?.record?.netAmount ??
+            salesData.NetAmount ??
+            invoiceNetPayable ??
+            0
+          );
 
-          updatedItems[settleAdjustRowIndex] = {
-            ...updatedItems[settleAdjustRowIndex],
-            adjust: "Y",
-            pending: "N",
-            cancel: "N",
-            status: "Adjusted",
-            receiptAmount: Number(updatedItems[settleAdjustRowIndex].billAmount || 0),
-            transferToNextLoad: false,
-          };
+          const updatedBillType =
+            result?.bill?.BillType ||
+            result?.bill?.billType ||
+            salesData.BillType ||
+            invoiceFormData.billType ||
+            "Credit";
+
+          const updatedItems = settleLoadItems.map(
+            (currentItem, currentIndex) => {
+              if (
+                currentIndex !== settleAdjustRowIndex
+              ) {
+                return currentItem;
+              }
+
+              /*
+               * Updating the Sales Bill amount is different
+               * from receiving/adjusting its payment.
+               *
+               * Therefore:
+               * Bill Amount    = newly updated invoice amount
+               * Receipt Amount = keep already received amount
+               * Pending Amount = new bill amount - receipt
+               */
+              const existingReceiptAmount = Math.min(
+                Number(
+                  currentItem.receiptAmount || 0
+                ),
+                updatedBillAmount
+              );
+
+              const updatedPendingAmount = Math.max(
+                updatedBillAmount -
+                existingReceiptAmount,
+                0
+              );
+
+              let updatedStatus = "Pending";
+
+              if (
+                updatedBillAmount <= 0 ||
+                updatedPendingAmount <= 0
+              ) {
+                updatedStatus = "Received";
+              } else if (existingReceiptAmount > 0) {
+                updatedStatus = "Partial";
+              }
+
+              return {
+                ...currentItem,
+
+                originalBillAmount:
+                  updatedBillAmount,
+
+                billAmount:
+                  updatedBillAmount,
+
+                BillAmount:
+                  updatedBillAmount,
+
+                amount:
+                  updatedBillAmount,
+
+                receiptAmount:
+                  existingReceiptAmount,
+
+                pendingAmount:
+                  updatedPendingAmount,
+
+                billType:
+                  updatedBillType,
+
+                BillType:
+                  updatedBillType,
+
+                /*
+                 * Editing the invoice must not automatically
+                 * mark the bill as fully adjusted.
+                 */
+                adjust:
+                  existingReceiptAmount > 0 &&
+                    updatedPendingAmount <= 0
+                    ? "Y"
+                    : "N",
+
+                pending:
+                  updatedPendingAmount > 0
+                    ? "Y"
+                    : "N",
+
+                cancel: "N",
+
+                transferToNextLoad: false,
+
+                status:
+                  updatedStatus,
+
+                /*
+                 * Indicates that the load row amount was
+                 * changed by Sales Billing adjustment.
+                 */
+                billAmountUpdated: true,
+              };
+            }
+          );
 
           setSettleLoadItems(updatedItems);
-          calculateSettleLoadSummary(updatedItems);
+
+          setOriginalSettleLoadItems(
+            JSON.parse(
+              JSON.stringify(updatedItems)
+            )
+          );
+
+          calculateSettleLoadSummary(
+            updatedItems
+          );
         }
 
-        alert("Invoice updated successfully.");
+        alert(
+          "Invoice updated and Settle Load amount refreshed successfully."
+        );
+
         closeSettleAdjustInvoice();
         return;
       }
@@ -33796,60 +35254,304 @@ const Dashboard = ({ onLogout }) => {
     await loadPrintLoadData(printLoadFormData, true);
   };
 
-  const generatePrintLayout = () => {
-    const items = [...printLoadItems];
+const generatePrintLayout = () => {
+  const items = [...printLoadItems];
 
-    if (printLoadFormData.reportLevel === "party_wise") {
-      return items.map((item, index) => ({
-        sr: index + 1,
-        billDate: item.billDate || item.BillDate || "",
-        companyName: item.companyName || item.CompanyName || "",
-        billSeries: item.billSeries || item.BillSeries || item.series || "",
-        billNo: item.billNo || item.BillNo || "",
-        billType: item.billType || item.BillType || "CREDIT",
-        partyCode: item.partyCode || item.PartyCode || "",
-        partyName: item.partyName || item.PartyName || "",
-        amount: Number(item.billAmount || item.amount || item.Amount || item.netAmount || 0),
-        cash: item.cash || "",
-        area: item.area || item.AreaName || "",
-        salesman: item.salesman || item.SalesmanName || "",
-      }));
+  /*
+   * PARTY-WISE REPORT
+   */
+  if (
+    printLoadFormData.reportLevel ===
+    "party_wise"
+  ) {
+    return items.map((item, index) => ({
+      sr: index + 1,
+
+      billDate:
+        item.billDate ||
+        item.BillDate ||
+        "",
+
+      companyName:
+        item.companyName ||
+        item.CompanyName ||
+        "",
+
+      billSeries:
+        item.billSeries ||
+        item.BillSeries ||
+        item.series ||
+        "",
+
+      billNo:
+        item.billNo ||
+        item.BillNo ||
+        "",
+
+      billType:
+        item.billType ||
+        item.BillType ||
+        "CREDIT",
+
+      partyCode:
+        item.partyCode ||
+        item.PartyCode ||
+        "",
+
+      partyName:
+        item.partyName ||
+        item.PartyName ||
+        "",
+
+      amount: Number(
+        item.billAmount ||
+        item.amount ||
+        item.Amount ||
+        item.netAmount ||
+        item.NetAmount ||
+        0
+      ),
+
+      cash:
+        item.cash ||
+        item.Cash ||
+        "",
+
+      area:
+        item.area ||
+        item.AreaName ||
+        item.areaName ||
+        "",
+
+      salesman:
+        item.salesman ||
+        item.SalesmanName ||
+        item.salesmanName ||
+        "",
+    }));
+  }
+
+  /*
+   * PRODUCT-WISE REPORT
+   */
+  const productMap = {};
+
+  items.forEach((bill) => {
+    const products =
+      bill.products ||
+      bill.items ||
+      bill.Items ||
+      bill.Products ||
+      [];
+
+    if (!Array.isArray(products)) {
+      return;
     }
 
-    const productMap = {};
+    products.forEach((product) => {
+      const productCode = String(
+        product.productCode ||
+        product.ProdCode ||
+        product.prodCode ||
+        product.itemCode ||
+        ""
+      ).trim();
 
-    items.forEach((bill) => {
-      const products = bill.products || bill.items || bill.Items || bill.Products || [];
+      const productName = String(
+        product.productName ||
+        product.ProdName ||
+        product.prodName ||
+        product.name ||
+        product.ProductName ||
+        ""
+      ).trim();
 
-      products.forEach((p) => {
-        const key = `${p.productCode || p.ProdCode || ""}_${p.mrp || p.MRP || ""}`;
+      const mrp = Number(
+        product.mrp ||
+        product.MRP ||
+        0
+      );
 
-        if (!productMap[key]) {
-          productMap[key] = {
-            mrp: Number(p.mrp || p.MRP || 0),
-            prodName: p.productName || p.ProdName || p.name || "",
-            hsnCode: p.hsnCode || p.HSNCode || "",
-            cases: 0,
-            outer: 0,
-            unitQty: 0,
-            totalQty: 0,
-            netAmt: 0,
-          };
-        }
+      /*
+       * Keep the same product with different MRP
+       * as separate report rows.
+       */
+      const key = `${
+        productCode || productName
+      }_${mrp}`;
 
-        productMap[key].cases += Number(p.cases || p.Cases || 0);
-        productMap[key].outer += Number(p.outer || p.Outer || 0);
-        productMap[key].unitQty += Number(p.unitQty || p.UnitQty || 0);
-        productMap[key].totalQty += Number(p.totalQty || p.qty || p.Qty || 0);
-        productMap[key].netAmt += Number(p.netAmt || p.amount || p.Amount || 0);
-      });
+      /*
+       * Product Master packing values.
+       *
+       * CASE/BOX should display BoxPack.
+       * INBOX should display InBoxPack.
+       */
+      const boxPack = Number(
+        product.boxPack ??
+        product.BoxPack ??
+        product.boxPacking ??
+        product.BoxPacking ??
+        product.caseBox ??
+        product.CaseBox ??
+        product.packSize ??
+        product.PackSize ??
+        product.cases ??
+        product.Cases ??
+        0
+      );
+
+      const inBoxPack = Number(
+        product.inBoxPack ??
+        product.InBoxPack ??
+        product.inboxPack ??
+        product.InboxPack ??
+        product.inBoxPacking ??
+        product.InBoxPacking ??
+        product.outer ??
+        product.Outer ??
+        product.inbox ??
+        product.Inbox ??
+        0
+      );
+
+      /*
+       * Actual billed quantity.
+       */
+      const unitQty = Number(
+        product.unitQty ??
+        product.UnitQty ??
+        product.unitQuantity ??
+        product.UnitQuantity ??
+        product.saleQty ??
+        product.SaleQty ??
+        product.qty ??
+        product.Qty ??
+        product.quantity ??
+        product.Quantity ??
+        0
+      );
+
+      /*
+       * Free quantity entered in the bill.
+       */
+      const freeQty = Number(
+        product.freeQty ??
+        product.FreeQty ??
+        product.freeQuantity ??
+        product.FreeQuantity ??
+        product.free ??
+        product.Free ??
+        product.schemeQty ??
+        product.SchemeQty ??
+        product.freeUnits ??
+        product.FreeUnits ??
+        0
+      );
+
+      /*
+       * Use API total quantity when available.
+       * Otherwise calculate Sale Qty + Free Qty.
+       */
+      const suppliedTotalQty =
+        product.totalQty ??
+        product.TotalQty ??
+        product.totalQuantity ??
+        product.TotalQuantity;
+
+      const totalQty =
+        suppliedTotalQty !== undefined &&
+        suppliedTotalQty !== null &&
+        suppliedTotalQty !== ""
+          ? Number(suppliedTotalQty)
+          : unitQty + freeQty;
+
+      const netAmount = Number(
+        product.netAmt ??
+        product.NetAmt ??
+        product.netAmount ??
+        product.NetAmount ??
+        product.lineNetAmount ??
+        product.LineNetAmount ??
+        product.amount ??
+        product.Amount ??
+        0
+      );
+
+      if (!productMap[key]) {
+        productMap[key] = {
+          productCode,
+
+          mrp,
+
+          prodName: productName,
+
+          hsnCode:
+            product.hsnCode ||
+            product.HSNCode ||
+            product.hsn ||
+            product.HSN ||
+            "",
+
+          /*
+           * Packing values must not be added
+           * for every bill.
+           */
+          cases: boxPack,
+          outer: inBoxPack,
+
+          unitQty: 0,
+          freeQty: 0,
+          totalQty: 0,
+          netAmt: 0,
+        };
+      }
+
+      const currentProduct =
+        productMap[key];
+
+      /*
+       * Retain packing values if the first bill
+       * did not contain BoxPack or InBoxPack.
+       */
+      if (
+        !Number(currentProduct.cases) &&
+        boxPack
+      ) {
+        currentProduct.cases = boxPack;
+      }
+
+      if (
+        !Number(currentProduct.outer) &&
+        inBoxPack
+      ) {
+        currentProduct.outer =
+          inBoxPack;
+      }
+
+      /*
+       * Add quantities from all bills.
+       */
+      currentProduct.unitQty +=
+        unitQty;
+
+      currentProduct.freeQty +=
+        freeQty;
+
+      currentProduct.totalQty +=
+        totalQty;
+
+      currentProduct.netAmt +=
+        netAmount;
     });
+  });
 
-    return Object.values(productMap).map((item, index) => ({
-      sr: index + 1,
-      ...item,
-    }));
-  };
+  return Object.values(
+    productMap
+  ).map((item, index) => ({
+    sr: index + 1,
+    ...item,
+  }));
+};
 
   const formatPrintLoadDate = (dateValue) => {
     if (!dateValue) return "";
@@ -34289,28 +35991,674 @@ const Dashboard = ({ onLogout }) => {
       printWindow.print();
     }, 300);
   };
-  const handleExportToExcel = () => {
-    const sortedData = generatePrintLayout();
-    const exportData = sortedData.map((item, index) => ({
-      'Sr No': index + 1,
-      'Party Name': item.partyName,
-      'Bill No': item.billNo,
-      'Amount': item.amount,
-      'Area': item.area,
-      'Salesman': item.salesman
-    }));
+const handleExportToExcel = () => {
+  /*
+   * Print Load API already returns the final rows
+   * displayed in the preview.
+   *
+   * Do not call generatePrintLayout() here because
+   * product-wise API rows do not contain nested
+   * products/items arrays.
+   */
+  const reportRows = Array.isArray(printLoadItems)
+    ? [...printLoadItems]
+    : [];
 
-    const worksheet = XLSX.utils.json_to_sheet(exportData);
-    const workbook = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(workbook, worksheet, 'Print Load');
-    XLSX.writeFile(workbook, `Print_Load_${printLoadFormData.loadSeries}_${printLoadFormData.loadNo}.xlsx`);
+  if (reportRows.length === 0) {
+    alert(
+      "No Print Load data is available to export."
+    );
+    return;
+  }
+
+  const isPartyWise =
+    printLoadFormData.reportLevel ===
+    "party_wise";
+
+const columns =
+  selectedPrintLoadColumnOptions.length > 0
+    ? selectedPrintLoadColumnOptions
+    : isPartyWise
+      ? partyWiseColumnOptions
+      : productWiseColumnOptions;
+
+  const reportTitle = isPartyWise
+    ? "PRINT LOAD - PARTY WISE"
+    : "PRINT LOAD - PRODUCT WISE";
+
+  const loadNumber = `${
+    printLoadHeader.loadSeries ||
+    printLoadFormData.loadSeries ||
+    ""
+  }-${
+    printLoadHeader.loadNo ||
+    printLoadFormData.loadNo ||
+    ""
+  }`;
+
+  const firmName =
+    printLoadFirmName ||
+    loggedFirmName ||
+    "FIRM NAME";
+
+  const loadDate = formatPrintLoadDate(
+    printLoadHeader.loadDate ||
+    printLoadFormData.loadDate
+  );
+
+  /*
+   * Calculate Excel bottom totals.
+   */
+  const totalUnitQty = reportRows.reduce(
+    (total, row) =>
+      total +
+      Number(
+        getPrintLoadValue(
+          row,
+          "unitQty",
+          0
+        ) || 0
+      ),
+    0
+  );
+
+  const totalFreeQty = reportRows.reduce(
+    (total, row) =>
+      total +
+      Number(
+        getPrintLoadValue(
+          row,
+          "freeQty",
+          0
+        ) || 0
+      ),
+    0
+  );
+
+  const totalQty = reportRows.reduce(
+    (total, row) =>
+      total +
+      Number(
+        getPrintLoadValue(
+          row,
+          "totalQty",
+          0
+        ) || 0
+      ),
+    0
+  );
+
+  const totalNetAmount = reportRows.reduce(
+    (total, row) =>
+      total +
+      Number(
+        getPrintLoadValue(
+          row,
+          isPartyWise
+            ? "billAmount"
+            : "netAmount",
+          0
+        ) || 0
+      ),
+    0
+  );
+
+  /*
+   * Build the bottom total row according to
+   * the currently selected report columns.
+   */
+  const totalExcelRow = columns.map(
+    (column, columnIndex) => {
+      if (column.key === "unitQty") {
+        return totalUnitQty;
+      }
+
+      if (column.key === "freeQty") {
+        return totalFreeQty;
+      }
+
+      if (column.key === "totalQty") {
+        return totalQty;
+      }
+
+      if (
+        column.key === "netAmount" ||
+        column.key === "billAmount"
+      ) {
+        return totalNetAmount;
+      }
+
+      /*
+       * Put TOTAL immediately before the first
+       * quantity/amount column.
+       */
+      const firstTotalColumnIndex =
+        columns.findIndex((item) =>
+          [
+            "unitQty",
+            "freeQty",
+            "totalQty",
+            "netAmount",
+            "billAmount",
+          ].includes(item.key)
+        );
+
+      if (
+        columnIndex ===
+        Math.max(
+          0,
+          firstTotalColumnIndex - 1
+        )
+      ) {
+        return "TOTAL";
+      }
+
+      return "";
+    }
+  );
+
+  /*
+   * Excel rows:
+   * 1 = Firm
+   * 2 = Report heading
+   * 3 = Load details
+   * 4 = Summary
+   * 5 = Blank
+   * 6 = Table headings
+   * 7 onward = Data
+   * Last row = Total
+   */
+  const worksheetData = [
+    [firmName],
+    [reportTitle],
+    [
+      `Load No: ${loadNumber}`,
+      `Load Date: ${loadDate}`,
+      `Print Date: ${new Date().toLocaleDateString(
+        "en-GB"
+      )}`,
+    ],
+    [
+      `Total Bills: ${printLoadTotalBills}`,
+      `Total Parties: ${printLoadTotalParty}`,
+      `Total Amount: ${formatPrintLoadNumber(
+        printLoadTotalAmount,
+        2
+      )}`,
+    ],
+    [],
+    columns.map(
+      (column) => column.label
+    ),
+
+    ...reportRows.map(
+      (row, rowIndex) =>
+        columns.map((column) => {
+          const value = getPrintLoadValue(
+            row,
+            column.key,
+            rowIndex
+          );
+
+          if (
+            isPrintLoadNumericColumn(
+              column.key
+            )
+          ) {
+            return Number(value || 0);
+          }
+
+          return value ?? "";
+        })
+    ),
+
+    /*
+     * Bottom total row.
+     */
+    totalExcelRow,
+  ];
+
+  const worksheet =
+    XLSX.utils.aoa_to_sheet(
+      worksheetData
+    );
+
+  const lastColumnIndex =
+    columns.length - 1;
+
+  const headerRowIndex = 5;
+  const firstDataRowIndex = 6;
+
+  /*
+   * Zero-based Excel row index of total row.
+   */
+  const totalRowIndex =
+    firstDataRowIndex +
+    reportRows.length;
+
+  worksheet["!merges"] = [
+    {
+      s: { r: 0, c: 0 },
+      e: {
+        r: 0,
+        c: lastColumnIndex,
+      },
+    },
+    {
+      s: { r: 1, c: 0 },
+      e: {
+        r: 1,
+        c: lastColumnIndex,
+      },
+    },
+  ];
+
+  const thinBorder = {
+    top: {
+      style: "thin",
+      color: { rgb: "7F8C8D" },
+    },
+    bottom: {
+      style: "thin",
+      color: { rgb: "7F8C8D" },
+    },
+    left: {
+      style: "thin",
+      color: { rgb: "7F8C8D" },
+    },
+    right: {
+      style: "thin",
+      color: { rgb: "7F8C8D" },
+    },
   };
 
+  /*
+   * Firm heading.
+   */
+  const firmCell = worksheet["A1"];
+
+  if (firmCell) {
+    firmCell.s = {
+      font: {
+        name: "Calibri",
+        sz: 16,
+        bold: true,
+        color: { rgb: "FFFFFF" },
+      },
+      fill: {
+        patternType: "solid",
+        fgColor: { rgb: "17365D" },
+      },
+      alignment: {
+        horizontal: "center",
+        vertical: "center",
+      },
+    };
+  }
+
+  /*
+   * Report title.
+   */
+  const reportCell = worksheet["A2"];
+
+  if (reportCell) {
+    reportCell.s = {
+      font: {
+        name: "Calibri",
+        sz: 12,
+        bold: true,
+        color: { rgb: "FFFFFF" },
+      },
+      fill: {
+        patternType: "solid",
+        fgColor: { rgb: "2F75B5" },
+      },
+      alignment: {
+        horizontal: "center",
+        vertical: "center",
+      },
+    };
+  }
+
+  /*
+   * Load information and summary rows.
+   */
+  for (
+    let rowNumber = 3;
+    rowNumber <= 4;
+    rowNumber += 1
+  ) {
+    for (
+      let columnIndex = 0;
+      columnIndex < columns.length;
+      columnIndex += 1
+    ) {
+      const cellAddress =
+        XLSX.utils.encode_cell({
+          r: rowNumber - 1,
+          c: columnIndex,
+        });
+
+      const cell = worksheet[cellAddress];
+
+      if (!cell) continue;
+
+      cell.s = {
+        font: {
+          name: "Calibri",
+          sz: 10,
+          bold: true,
+          color: { rgb: "1F1F1F" },
+        },
+        fill: {
+          patternType: "solid",
+          fgColor: {
+            rgb:
+              rowNumber === 3
+                ? "D9EAF7"
+                : "E2F0D9",
+          },
+        },
+        alignment: {
+          vertical: "center",
+        },
+        border: thinBorder,
+      };
+    }
+  }
+
+  /*
+   * Excel table heading:
+   * Light blue background as requested.
+   */
+  columns.forEach(
+    (column, columnIndex) => {
+      const cellAddress =
+        XLSX.utils.encode_cell({
+          r: headerRowIndex,
+          c: columnIndex,
+        });
+
+      const cell = worksheet[cellAddress];
+
+      if (!cell) return;
+
+      cell.s = {
+        font: {
+          name: "Calibri",
+          sz: 10,
+          bold: true,
+          color: { rgb: "000000" },
+        },
+        fill: {
+          patternType: "solid",
+
+          /*
+           * Light blue.
+           */
+          fgColor: { rgb: "BDD7EE" },
+        },
+        alignment: {
+          horizontal: "center",
+          vertical: "center",
+          wrapText: true,
+        },
+        border: thinBorder,
+      };
+    }
+  );
+
+  /*
+   * Data rows.
+   */
+  reportRows.forEach(
+    (row, rowIndex) => {
+      columns.forEach(
+        (column, columnIndex) => {
+          const cellAddress =
+            XLSX.utils.encode_cell({
+              r:
+                firstDataRowIndex +
+                rowIndex,
+              c: columnIndex,
+            });
+
+          const cell =
+            worksheet[cellAddress];
+
+          if (!cell) return;
+
+          const numeric =
+            isPrintLoadNumericColumn(
+              column.key
+            );
+
+          cell.s = {
+            font: {
+              name: "Calibri",
+              sz: 10,
+              color: { rgb: "000000" },
+            },
+            fill: {
+              patternType: "solid",
+              fgColor: {
+                rgb:
+                  rowIndex % 2 === 0
+                    ? "FFFFFF"
+                    : "F3F8FC",
+              },
+            },
+            alignment: {
+              horizontal: numeric
+                ? "right"
+                : column.key === "srNo"
+                  ? "center"
+                  : "left",
+
+              vertical: "center",
+
+              wrapText:
+                column.key ===
+                  "productName" ||
+                column.key ===
+                  "partyName" ||
+                column.key ===
+                  "remark",
+            },
+            border: thinBorder,
+
+            numFmt: numeric
+              ? "#,##0.00"
+              : "@",
+          };
+        }
+      );
+    }
+  );
+
+  /*
+   * Bottom total:
+   * Light brown background as requested.
+   */
+  columns.forEach(
+    (column, columnIndex) => {
+      const cellAddress =
+        XLSX.utils.encode_cell({
+          r: totalRowIndex,
+          c: columnIndex,
+        });
+
+      const cell = worksheet[cellAddress];
+
+      if (!cell) return;
+
+      const numeric =
+        isPrintLoadNumericColumn(
+          column.key
+        );
+
+      cell.s = {
+        font: {
+          name: "Calibri",
+          sz: 10,
+          bold: true,
+          color: { rgb: "000000" },
+        },
+        fill: {
+          patternType: "solid",
+
+          /*
+           * Light brown/tan.
+           */
+          fgColor: { rgb: "E6D5B8" },
+        },
+        alignment: {
+          horizontal: numeric
+            ? "right"
+            : "center",
+          vertical: "center",
+        },
+        border: thinBorder,
+        numFmt: numeric
+          ? "#,##0.00"
+          : "@",
+      };
+    }
+  );
+
+  const productWidths = {
+    srNo: 8,
+    productCode: 16,
+    productName: 35,
+    caseBox: 12,
+    inbox: 11,
+    unitQty: 12,
+    freeQty: 12,
+    totalQty: 13,
+    netAmount: 16,
+  };
+
+  const partyWidths = {
+    srNo: 8,
+    billDate: 13,
+    companyName: 24,
+    billSeries: 12,
+    billNo: 10,
+    billType: 13,
+    partyCode: 14,
+    partyName: 30,
+    salesman: 22,
+    billAmount: 15,
+    cash: 13,
+    cheque: 13,
+    online: 13,
+    remark: 28,
+  };
+
+  const activeWidths = isPartyWise
+    ? partyWidths
+    : productWidths;
+
+  worksheet["!cols"] =
+    columns.map((column) => ({
+      wch:
+        activeWidths[column.key] ||
+        14,
+    }));
+
+  worksheet["!rows"] = [
+    { hpt: 25 },
+    { hpt: 21 },
+    { hpt: 19 },
+    { hpt: 19 },
+    { hpt: 7 },
+    { hpt: 28 },
+  ];
+
+  /*
+   * Include table data and total row
+   * in the automatic filter range.
+   */
+  worksheet["!autofilter"] = {
+    ref: XLSX.utils.encode_range({
+      s: {
+        r: headerRowIndex,
+        c: 0,
+      },
+      e: {
+        r: totalRowIndex,
+        c: lastColumnIndex,
+      },
+    }),
+  };
+
+  /*
+   * Freeze column heading.
+   */
+  worksheet["!freeze"] = {
+    xSplit: 0,
+    ySplit: 6,
+    topLeftCell: "A7",
+    activePane: "bottomLeft",
+    state: "frozen",
+  };
+
+  const workbook =
+    XLSX.utils.book_new();
+
+  XLSX.utils.book_append_sheet(
+    workbook,
+    worksheet,
+    isPartyWise
+      ? "Party Wise"
+      : "Product Wise"
+  );
+
+  const safeLoadNumber =
+    loadNumber.replace(
+      /[^a-zA-Z0-9_-]/g,
+      "_"
+    );
+
+  XLSX.writeFile(
+    workbook,
+    `Print_Load_${safeLoadNumber}_${
+      isPartyWise
+        ? "Party_Wise"
+        : "Product_Wise"
+    }.xlsx`
+  );
+};
+
   const handleSubMenuClick = async (item) => {
+    /*
+     * Save the current entry before changing modules.
+     */
+    /*
+  * Save only the form that is actually visible.
+  */
+    if (openFormFor === "Billing") {
+      saveInvoiceDraft("Billing");
+    }
+
+    if (openFormFor === "Quotation") {
+      saveInvoiceDraft("Quotation");
+    }
+
     setMasterGridPage({});
     setShowDashboard(false);
     setActiveSubMenu(item);
-    setOpenFormFor(null);
+
+    /*
+     * Billing and Quotation handle openFormFor
+     * inside their own blocks.
+     */
+    if (
+      item !== "Billing" &&
+      item !== "Quotation"
+    ) {
+      setOpenFormFor(null);
+    }
     setAccountActiveTab("basic");
     setOtherAccountActiveTab("basic");
     setEditGstId(null);
@@ -34362,38 +36710,64 @@ const Dashboard = ({ onLogout }) => {
       return;
     }
     if (item === "Billing") {
-      // Clear previous data before showing list
+      if (openFormFor === "Quotation") {
+        saveInvoiceDraft("Quotation");
+      }
+
       setEditingInvoiceId(null);
-      setInvoiceItems([]);
-      setInvoiceFormData({
-        billDate: new Date().toISOString().split('T')[0],
-        godown: 'G1',
-        company: '',
-        area: '',
-        party: '',
-        BillSeries: '',
-        billNo: '',
-        billType: 'Credit',
-        dueDate: '',
-        salesman: '',
-        narration: ''
-      });
-      setInvoiceSummary({
-        gross: 0, tpr: 0, scheme: 0, bottom: 0, star: 0, cd: 0, cgst: 0, sgst: 0, igst: 0, gst: 0, cess: 0, tcs: 0, rounding: 0, net: 0
-      });
-      await loadSalesBills();
+
       setOpenFormFor(null);
+      setShowDashboard(false);
       setShowSalesList(true);
+
+      setActiveMenu("sales");
+      setActiveSubMenu("Billing");
+
+      activeInvoiceDraftFormRef.current =
+        null;
+
+      setSalesCurrentPage(1);
+
+      await loadSalesBills({
+        page: 1,
+        limit: salesRowsPerPage,
+        filters: salesAppliedFilters,
+        search: salesSearchDebounced,
+      });
+
       return;
     }
 
     if (item === "Quotation") {
-      await loadQuotationBills();
+      if (openFormFor === "Billing") {
+        saveInvoiceDraft("Billing");
+      }
+
+      setEditingInvoiceId(null);
+
       setOpenFormFor(null);
+      setShowDashboard(false);
       setShowSalesList(true);
+
+      setActiveMenu("sales");
+      setActiveSubMenu("Quotation");
+
+      activeInvoiceDraftFormRef.current =
+        null;
+
+      setQuotationCurrentPage(1);
+
+      await loadQuotationBills({
+        page: 1,
+        limit: quotationRowsPerPage,
+        filters:
+          quotationAppliedFilters,
+        search:
+          quotationSearchDebounced,
+      });
+
       return;
     }
-
     // IMPORTANT: show Create Load LIST first, not form
     if (item === "Create Load") {
       setOpenFormFor(null);
@@ -34646,7 +37020,27 @@ const Dashboard = ({ onLogout }) => {
 
   // Replace the handlePlusClick function with this complete version
   const handlePlusClick = (item, e) => {
-    if (e) e.stopPropagation();
+    e?.preventDefault();
+    e?.stopPropagation();
+
+    /*
+     * Billing and Quotation must use their own
+     * independent new-entry functions.
+     *
+     * Return immediately so the common reset code
+     * below cannot overwrite their drafts.
+     */
+    if (item === "Billing") {
+      openNewSalesInvoice(e);
+      return;
+    }
+
+    if (item === "Quotation") {
+      openNewQuotation(e);
+      return;
+    }
+
+    // Reset ALL list views FIRST
 
     // Reset ALL list views FIRST
     setEditingInvoiceId(null);
@@ -34897,46 +37291,8 @@ const Dashboard = ({ onLogout }) => {
         reEnterPassword: ''
       });
     }
-    else if (item === 'Billing') {
-      setInvoiceItems([]);
-      setInvoiceFormData({
-        billDate: new Date().toISOString().split('T')[0],
-        godown: 'G1',
-        company: '',
-        area: '',
-        party: '',
-        BillSeries: '',
-        billNo: '',
-        billType: 'Credit',
-        dueDate: '',
-        salesman: '',
-        narration: ''
-      });
-      setInvoiceSummary({
-        gross: 0, tpr: 0, scheme: 0, bottom: 0, star: 0, cd: 0, cgst: 0, sgst: 0, igst: 0, gst: 0, cess: 0, tcs: 0, rounding: 0, net: 0
-      });
-      //setTimeout(() => addInvoiceItem(), 50);
-    }
-    else if (item === 'Quotation') {
-      setInvoiceItems([]);
-      setInvoiceFormData({
-        billDate: new Date().toISOString().split('T')[0],
-        godown: 'G1',
-        company: '',
-        area: '',
-        party: '',
-        BillSeries: '',
-        billNo: '',
-        billType: 'Credit',
-        dueDate: '',
-        salesman: '',
-        narration: ''
-      });
-      setInvoiceSummary({
-        gross: 0, tpr: 0, scheme: 0, bottom: 0, star: 0, cd: 0, cgst: 0, sgst: 0, igst: 0, gst: 0, cess: 0, tcs: 0, rounding: 0, net: 0
-      });
-      setTimeout(() => addInvoiceItem(), 50);
-    }
+
+
     else if (item === 'Purchase') {
       setPurchaseItems([]);
       setPurchaseFormData({
@@ -40057,6 +42413,13 @@ const Dashboard = ({ onLogout }) => {
         loadTransferForm.toLoadNo || ""
       ).trim();
 
+       /* =========================================================
+   SALES BILL PRINT FORMAT MODAL RENDERER
+   IMPORTANT: KEEP OUTSIDE renderVoucherList()
+   ========================================================= */
+
+
+
     return (
       <div className="ltf-page">
         {/* =================================================
@@ -41327,135 +43690,241 @@ const Dashboard = ({ onLogout }) => {
     SALES / QUOTATION LIST NAVIGATION
   ========================================================= */
 
-  const openNewSalesInvoice = (event) => {
+  const openNewSalesInvoice = (
+    event
+  ) => {
     event?.preventDefault();
     event?.stopPropagation();
 
+    /*
+     * Save Quotation only when Quotation
+     * is actually visible.
+     */
+    if (openFormFor === "Quotation") {
+      saveInvoiceDraft("Quotation");
+    }
+
+    const freshDraft =
+      createInvoiceEntryDraft();
+
+    billingEntryDraftRef.current =
+      cloneInvoiceDraftValue(
+        freshDraft
+      );
+
+    activeInvoiceDraftFormRef.current =
+      "Billing";
+
     setEditingInvoiceId(null);
 
-    setInvoiceFormData({
-      billDate: new Date().toISOString().split("T")[0],
-      godown: "G1",
-      company: "",
-      area: "",
-      party: "",
-      BillSeries: "",
-      billNo: "",
-      billType: "Credit",
-      dueDate: "",
-      salesman: "",
-      narration: "",
-    });
+    setInvoiceFormData(
+      cloneInvoiceDraftValue(
+        freshDraft.formData
+      )
+    );
 
-    setInvoiceItems([
-      createEmptyInvoiceRow(1),
-    ]);
+    setInvoiceItems(
+      cloneInvoiceDraftValue(
+        freshDraft.items
+      )
+    );
 
-    setInvoiceSummary({
-      gross: 0,
-      tpr: 0,
-      scheme: 0,
-      bottom: 0,
-      star: 0,
-      cd: 0,
-      cgst: 0,
-      sgst: 0,
-      igst: 0,
-      gst: 0,
-      cess: 0,
-      tcs: 0,
-      rounding: 0,
-      net: 0,
-    });
+    setInvoiceSummary(
+      cloneInvoiceDraftValue(
+        freshDraft.summary
+      )
+    );
 
-    setSalesFiltersVisible(false);
-    setSelectedSalesRows([]);
+    setInvoiceManualAdjustments(
+      cloneInvoiceDraftValue(
+        freshDraft.manualAdjustments
+      )
+    );
 
-    setShowDashboard(false);
+    setSelectedSalesDetailRow(-1);
+    setActiveRow(0);
+
+    setShowProductList(false);
+    setCurrentProductIndex(-1);
+    setProductDropdownIndex(-1);
+    setFilteredProductList([]);
+    setProductListFilter("");
+
     setShowSalesList(false);
+    setShowDashboard(false);
 
     setActiveMenu("sales");
     setActiveSubMenu("Billing");
-
-    // Important: your Sales Billing JSX uses "Billing"
     setOpenFormFor("Billing");
   };
 
-  const openNewQuotation = (event) => {
+  const openNewQuotation = (
+    event
+  ) => {
     event?.preventDefault();
     event?.stopPropagation();
 
+    /*
+     * Save Billing only when Billing
+     * is actually visible.
+     */
+    if (openFormFor === "Billing") {
+      saveInvoiceDraft("Billing");
+    }
+
+    const freshDraft =
+      createInvoiceEntryDraft();
+
+    quotationEntryDraftRef.current =
+      cloneInvoiceDraftValue(
+        freshDraft
+      );
+
+    activeInvoiceDraftFormRef.current =
+      "Quotation";
+
     setEditingInvoiceId(null);
 
-    setInvoiceFormData({
-      billDate: new Date().toISOString().split("T")[0],
-      godown: "G1",
-      company: "",
-      area: "",
-      party: "",
-      BillSeries: "",
-      billNo: "",
-      billType: "Credit",
-      dueDate: "",
-      salesman: "",
-      narration: "",
-    });
+    setInvoiceFormData(
+      cloneInvoiceDraftValue(
+        freshDraft.formData
+      )
+    );
 
-    setInvoiceItems([
-      createEmptyInvoiceRow(1),
-    ]);
+    setInvoiceItems(
+      cloneInvoiceDraftValue(
+        freshDraft.items
+      )
+    );
 
-    setInvoiceSummary({
-      gross: 0,
-      tpr: 0,
-      scheme: 0,
-      bottom: 0,
-      star: 0,
-      cd: 0,
-      cgst: 0,
-      sgst: 0,
-      igst: 0,
-      gst: 0,
-      cess: 0,
-      tcs: 0,
-      rounding: 0,
-      net: 0,
-    });
+    setInvoiceSummary(
+      cloneInvoiceDraftValue(
+        freshDraft.summary
+      )
+    );
 
-    setSalesFiltersVisible(false);
-    setShowDashboard(false);
+    setInvoiceManualAdjustments(
+      cloneInvoiceDraftValue(
+        freshDraft.manualAdjustments
+      )
+    );
+
+    setSelectedSalesDetailRow(-1);
+    setActiveRow(0);
+
+    setShowProductList(false);
+    setCurrentProductIndex(-1);
+    setProductDropdownIndex(-1);
+    setFilteredProductList([]);
+    setProductListFilter("");
+
     setShowSalesList(false);
+    setShowDashboard(false);
 
     setActiveMenu("sales");
     setActiveSubMenu("Quotation");
     setOpenFormFor("Quotation");
   };
 
-  const returnToSalesInvoiceList = async () => {
-    setEditingInvoiceId(null);
-    setOpenFormFor(null);
+  const returnToSalesInvoiceList =
+    async () => {
+      /*
+       * Save the current Billing entry before
+       * returning to the list.
+       */
+      if (
+        openFormFor === "Billing"
+      ) {
+        updateActiveInvoiceDraft({
+          formData:
+            invoiceFormData,
 
-    setShowDashboard(false);
-    setShowSalesList(true);
+          items:
+            invoiceItems,
 
-    setActiveMenu("sales");
-    setActiveSubMenu("Billing");
+          summary:
+            invoiceSummary,
 
-    await loadSalesBills();
-  };
+          manualAdjustments:
+            invoiceManualAdjustments,
 
-  const returnToQuotationList = async () => {
-    setEditingInvoiceId(null);
-    setOpenFormFor(null);
+          selectedRow:
+            selectedSalesDetailRow,
 
-    setShowDashboard(false);
-    setShowSalesList(true);
+          activeRow,
+        });
+      }
 
-    setActiveMenu("sales");
-    setActiveSubMenu("Quotation");
+      setEditingInvoiceId(null);
+      setOpenFormFor(null);
 
-    await loadQuotationBills();
-  };
+      setShowDashboard(false);
+      setShowSalesList(true);
+
+      setActiveMenu("sales");
+      setActiveSubMenu("Billing");
+
+      await loadSalesBills({
+        page: salesCurrentPage,
+        limit: salesRowsPerPage,
+        filters: salesAppliedFilters,
+        search: salesSearchDebounced,
+      });
+    };
+
+  const returnToQuotationList =
+    async () => {
+      /*
+       * Save the current Quotation entry before
+       * returning to the list.
+       */
+      if (
+        openFormFor === "Quotation"
+      ) {
+        updateActiveInvoiceDraft({
+          formData:
+            invoiceFormData,
+
+          items:
+            invoiceItems,
+
+          summary:
+            invoiceSummary,
+
+          manualAdjustments:
+            invoiceManualAdjustments,
+
+          selectedRow:
+            selectedSalesDetailRow,
+
+          activeRow,
+        });
+      }
+
+      setEditingInvoiceId(null);
+      setOpenFormFor(null);
+
+      setShowDashboard(false);
+      setShowSalesList(true);
+
+      setActiveMenu("sales");
+      setActiveSubMenu("Quotation");
+
+      await loadQuotationBills({
+        page:
+          quotationCurrentPage,
+
+        limit:
+          quotationRowsPerPage,
+
+        filters:
+          quotationAppliedFilters,
+
+        search:
+          quotationSearchDebounced,
+      });
+    };
+
   const renderVoucherList = (title, data, columns) => {
     // Calculate maximum content width for each column dynamically
     const calculateColumnWidths = (items) => {
@@ -43436,50 +45905,55 @@ const Dashboard = ({ onLogout }) => {
     // =========================================================
     // SALES LIST ACTUAL PRINT
     // =========================================================
-    const handlePrintVoucher = async (item) => {
-      if (type === "Quotation") {
-        handleEditVoucher("Quotation", item);
-        return;
-      }
+const handlePrintVoucher = (item) => {
+  if (type === "Quotation") {
+    handleEditVoucher("Quotation", item);
+    return;
+  }
 
-      if (type !== "Sales") {
-        alert(
-          `${type} print format is not configured yet.`
-        );
-        return;
-      }
+  if (type !== "Sales") {
+    alert(
+      `${type} print format is not configured yet.`
+    );
+    return;
+  }
 
-      const actualSalesBill =
-        item?.originalItem || item;
+  const actualSalesBill =
+    item?.originalItem?.originalItem ||
+    item?.originalItem ||
+    item;
 
-      await printSalesInvoiceFromList(
-        actualSalesBill
-      );
-    };
-
+  openSalesPrintFormatSelection(
+    actualSalesBill,
+    "print"
+  );
+};
     // =========================================================
     // SALES LIST ACTUAL PREVIEW
     // =========================================================
-    const handlePreviewVoucher = async (item) => {
-      if (type === "Quotation") {
-        handleEditVoucher("Quotation", item);
-        return;
-      }
+const handlePreviewVoucher = (item) => {
+  if (type === "Quotation") {
+    handleEditVoucher("Quotation", item);
+    return;
+  }
 
-      if (type !== "Sales") {
-        alert(
-          `${type} preview format is not configured yet.`
-        );
-        return;
-      }
+  if (type !== "Sales") {
+    alert(
+      `${type} preview format is not configured yet.`
+    );
+    return;
+  }
 
-      const actualSalesBill =
-        item?.originalItem || item;
+  const actualSalesBill =
+    item?.originalItem?.originalItem ||
+    item?.originalItem ||
+    item;
 
-      await openSalesInvoicePreview(
-        actualSalesBill
-      );
-    };
+  openSalesPrintFormatSelection(
+    actualSalesBill,
+    "preview"
+  );
+};
     const getSalesOutstandingAmount = (item) => {
       const source = item?.originalItem || {};
 
@@ -47043,68 +49517,138 @@ const Dashboard = ({ onLogout }) => {
                                   <Eye size={15} />
                                 </button>
 
-                                <button
-                                  type="button"
-                                  className="edit"
-                                  title="Edit"
-                                  onClick={async () => {
-                                    if (isDebitNoteList) {
-                                      const actualDebitNote =
-                                        source?.databaseDebitNote ||
-                                        source?.originalItem
-                                          ?.databaseDebitNote ||
-                                        source?.originalItem
-                                          ?.originalItem ||
-                                        source?.originalItem ||
-                                        source;
+                               <button
+  type="button"
+  className="edit"
+  title="Edit"
+  onClick={async () => {
+    if (isDebitNoteList) {
+      const actualDebitNote =
+        source?.databaseDebitNote ||
+        source?.originalItem?.databaseDebitNote ||
+        source?.originalItem?.originalItem ||
+        source?.originalItem ||
+        source;
 
-                                      await loadDebitNoteForEdit(
-                                        actualDebitNote
-                                      );
+      await loadDebitNoteForEdit(
+        actualDebitNote
+      );
 
-                                      return;
-                                    }
+      return;
+    }
 
-                                    if (isCreditNoteList) {
-                                      const actualCreditNote =
-                                        source?.databaseCreditNote ||
-                                        source?.originalItem
-                                          ?.databaseCreditNote ||
-                                        source?.originalItem
-                                          ?.originalItem ||
-                                        source?.originalItem ||
-                                        source;
+    if (isCreditNoteList) {
+      const actualCreditNote =
+        source?.databaseCreditNote ||
+        source?.originalItem?.databaseCreditNote ||
+        source?.originalItem?.originalItem ||
+        source?.originalItem ||
+        source;
 
-                                      await loadCreditNoteForEdit(
-                                        actualCreditNote
-                                      );
+      await loadCreditNoteForEdit(
+        actualCreditNote
+      );
 
-                                      return;
-                                    }
+      return;
+    }
 
-                                    await handleEditVoucher(
-                                      type,
-                                      source
-                                    );
-                                  }}
-                                >
-                                  <Pencil size={15} />
-                                </button>
+    /*
+     * Quotation must always use the
+     * Quotation edit API, not Sales Billing.
+     */
+    if (isQuotationList) {
+      await handleEditVoucher(
+        "Quotation",
+        source
+      );
+
+      return;
+    }
+
+    await handleEditVoucher(
+      type,
+      source
+    );
+  }}
+>
+  <Pencil size={15} />
+</button>
 
                                 {!isQuotationList && (
                                   <>
-                                    <button
-                                      type="button"
-                                      className="print"
-                                      title="Print"
-                                      onClick={() =>
-                                        handlePrintVoucher(
-                                          item
-                                        )
-                                      }
-                                    >
-                                      <Printer size={15} />
-                                    </button>
+             <button
+  type="button"
+  className="print"
+  title="Print Sales Invoice"
+  onMouseDown={(event) => {
+    event.preventDefault();
+    event.stopPropagation();
+  }}
+  onClick={(event) => {
+    event.preventDefault();
+    event.stopPropagation();
+
+    const actualSalesBill =
+      item?.originalItem?.originalItem ||
+      item?.originalItem ||
+      item;
+
+    console.log(
+      "OPEN SALES PRINT MODAL:",
+      actualSalesBill
+    );
+
+    setSelectedSalesPrintRow(
+      actualSalesBill
+    );
+
+    setSalesPrintOptions({
+      ...createDefaultSalesPrintOptions(),
+
+      defaultAction: "print",
+
+      trnSeries: String(
+        actualSalesBill?.BillSeries ||
+          actualSalesBill?.billSeries ||
+          actualSalesBill?.TrnSeries ||
+          actualSalesBill?.trnSeries ||
+          "INV"
+      ).trim(),
+
+      fromTrnNo: String(
+        actualSalesBill?.BillNo ??
+          actualSalesBill?.billNo ??
+          actualSalesBill?.TrnNo ??
+          actualSalesBill?.trnNo ??
+          ""
+      ).trim(),
+
+      toTrnNo: String(
+        actualSalesBill?.BillNo ??
+          actualSalesBill?.billNo ??
+          actualSalesBill?.TrnNo ??
+          actualSalesBill?.trnNo ??
+          ""
+      ).trim(),
+
+      loadSeries: String(
+        actualSalesBill?.LoadSeries ||
+          actualSalesBill?.loadSeries ||
+          ""
+      ).trim(),
+
+      loadNo: String(
+        actualSalesBill?.LoadNo ??
+          actualSalesBill?.loadNo ??
+          ""
+      ).trim(),
+    });
+
+    setShowSalesPrintFormatModal(true);
+  }}
+>
+  <Printer size={15} />
+</button>
 
                                     <button
                                       type="button"
@@ -48520,14 +51064,16 @@ const Dashboard = ({ onLogout }) => {
               Export PDF
             </button>
 
-            <button
-              type="button"
-              className="ts-load-outline-btn"
-              onClick={() => window.print()}
-            >
-              <Printer size={15} />
-              Print List
-            </button>
+           <button
+  type="button"
+  className="ts-btn"
+  onClick={() =>
+    openSalesLoadPrintSelection("print")
+  }
+>
+  <Printer size={15} />
+  Print Bills
+</button>
           </div>
         </div>
 
@@ -49225,8 +51771,629 @@ const Dashboard = ({ onLogout }) => {
     console.log("Editing voucher:", type, item);
 
     setIsSettleAdjustMode(false); // Sales List edit = header editable
+    /* =========================================================
+   EDIT QUOTATION FROM QUOTATION DATABASE
+   ========================================================= */
 
-    if (type === "Sales" || type === "Billing" || type === "Quotation") {
+if (type === "Quotation") {
+  try {
+    const {
+      distributorId,
+      firmId,
+    } = getFirmSession();
+
+    if (
+      !distributorId ||
+      !firmId
+    ) {
+      alert(
+        "Distributor/Firm not found. Please login again."
+      );
+
+      return;
+    }
+
+    const quotationId =
+      item?._id ||
+      item?.id ||
+      item?.raw?._id ||
+      item?.originalItem?._id ||
+      "";
+
+    if (!quotationId) {
+      alert(
+        "Quotation ID not found."
+      );
+
+      return;
+    }
+
+    const query =
+      new URLSearchParams({
+        distributorId:
+          String(distributorId),
+
+        firmId:
+          String(firmId),
+      });
+
+    const response = await fetch(
+      `${API_URL}/quotation/${encodeURIComponent(
+        quotationId
+      )}?${query.toString()}`
+    );
+
+   const responseText =
+  await response.text();
+
+let result = {};
+
+try {
+  result = responseText
+    ? JSON.parse(responseText)
+    : {};
+} catch (parseError) {
+  console.error(
+    "Quotation response was not JSON:",
+    responseText
+  );
+}
+
+if (
+  !response.ok ||
+  !result.success
+) {
+  console.error(
+    "Quotation edit API failed:",
+    {
+      status: response.status,
+      result,
+      quotationId,
+    }
+  );
+
+  alert(
+    result.message ||
+    `Failed to load quotation. HTTP ${response.status}`
+  );
+
+  return;
+}
+
+    const quotation =
+      result.quotation ||
+      result.bill ||
+      result.data ||
+      result;
+
+    const companyCode =
+      quotation.CompanyCode ||
+      quotation.companyCode ||
+      quotation.company ||
+      "";
+
+    const areaCode =
+      quotation.AreaCode ||
+      quotation.areaCode ||
+      quotation.area ||
+      "";
+
+    const partyCode =
+      quotation.PartyCode ||
+      quotation.partyCode ||
+      quotation.party ||
+      "";
+
+    const salesmanName =
+      quotation.SalesmanName ||
+      quotation.salesmanName ||
+      quotation.salesman ||
+      "";
+
+    const loadedFormData = {
+      billDate:
+        quotation.BillDate ||
+        quotation.billDate ||
+        quotation.QuotationDate ||
+        quotation.quotationDate ||
+        new Date()
+          .toISOString()
+          .split("T")[0],
+
+      godown:
+        quotation.GDCode ||
+        quotation.Godown ||
+        quotation.godown ||
+        "G1",
+
+      company:
+        companyCode,
+
+      companyCode:
+        companyCode,
+
+      area:
+        areaCode,
+
+      areaCode:
+        areaCode,
+
+      party:
+        partyCode,
+
+      partyCode:
+        partyCode,
+
+      partyName:
+        quotation.PartyName ||
+        quotation.partyName ||
+        "",
+
+      BillSeries:
+        quotation.BillSeries ||
+        quotation.billSeries ||
+        quotation.QuotationSeries ||
+        quotation.quotationSeries ||
+        "",
+
+      billSeries:
+        quotation.BillSeries ||
+        quotation.billSeries ||
+        quotation.QuotationSeries ||
+        quotation.quotationSeries ||
+        "",
+
+      billNo:
+        quotation.BillNo ||
+        quotation.billNo ||
+        quotation.QuotationNo ||
+        quotation.quotationNo ||
+        "",
+
+      billType:
+        quotation.BillType ||
+        quotation.billType ||
+        quotation.QuotationType ||
+        quotation.quotationType ||
+        "Credit",
+
+      dueDate:
+        quotation.DueDate ||
+        quotation.dueDate ||
+        quotation.ValidUntil ||
+        quotation.validUntil ||
+        "",
+
+      salesman:
+        salesmanName,
+
+      salesmanName:
+        salesmanName,
+
+      salesmanCode:
+        quotation.SalesmanCode ||
+        quotation.salesmanCode ||
+        "",
+
+      narration:
+        quotation.Narration ||
+        quotation.narration ||
+        "",
+    };
+
+    const sourceItems =
+      Array.isArray(
+        quotation.items
+      )
+        ? quotation.items
+        : Array.isArray(
+            quotation.Items
+          )
+          ? quotation.Items
+          : [];
+
+    const loadedItems =
+      sourceItems.map(
+        (
+          sourceItem,
+          index
+        ) => {
+          const productCode =
+            sourceItem.productCode ||
+            sourceItem.ProductCode ||
+            sourceItem.productId ||
+            sourceItem.ProdCode ||
+            "";
+
+          const productName =
+            sourceItem.productName ||
+            sourceItem.ProductName ||
+            sourceItem.name ||
+            sourceItem.ProdName ||
+            "";
+
+          return {
+            ...createEmptyInvoiceRow(
+              index + 1
+            ),
+
+            ...sourceItem,
+
+            id:
+              sourceItem.id ||
+              sourceItem._id ||
+              `quotation-edit-row-${Date.now()}-${index}`,
+
+            sr:
+              index + 1,
+
+            product:
+              sourceItem.product ||
+              (
+                productCode ||
+                productName
+                  ? `${productCode}${
+                      productCode &&
+                      productName
+                        ? " - "
+                        : ""
+                    }${productName}`
+                  : ""
+              ),
+
+            productId:
+              sourceItem.productId ||
+              productCode,
+
+            productCode,
+
+            batch:
+              sourceItem.batch ||
+              sourceItem.Batch ||
+              sourceItem.batchNo ||
+              "",
+
+            batchNo:
+              sourceItem.batchNo ||
+              sourceItem.BatchNo ||
+              sourceItem.batch ||
+              "",
+
+            units:
+              sourceItem.units ||
+              sourceItem.unit ||
+              sourceItem.basicUnit ||
+              "PCS",
+
+            qty:
+              sourceItem.qty ??
+              sourceItem.quantity ??
+              "",
+
+            free:
+              sourceItem.free ??
+              "",
+
+            mrp:
+              sourceItem.mrp ??
+              sourceItem.MRP ??
+              "",
+
+            rate:
+              sourceItem.rate ??
+              sourceItem.salesRate ??
+              "",
+
+            rateGst:
+              sourceItem.rateGst ??
+              "",
+
+            tprAmt:
+              sourceItem.tprAmt ??
+              sourceItem.tprAmount ??
+              "",
+
+            schemePct:
+              sourceItem.schemePct ??
+              sourceItem.schemePercent ??
+              "",
+
+            schemeAmt:
+              sourceItem.schemeAmt ??
+              sourceItem.schemeAmount ??
+              "",
+
+            cdPct:
+              sourceItem.cdPct ??
+              sourceItem.cashDiscountPercent ??
+              "",
+
+            cdAmt:
+              sourceItem.cdAmt ??
+              sourceItem.cashDiscountAmount ??
+              "",
+
+            starPct:
+              sourceItem.starPct ??
+              sourceItem.starPercent ??
+              "",
+
+            starAmt:
+              sourceItem.starAmt ??
+              sourceItem.starAmount ??
+              "",
+
+            taxable:
+              sourceItem.taxable ??
+              sourceItem.taxableAmount ??
+              "",
+
+            gst:
+              sourceItem.gst ??
+              sourceItem.gstPercent ??
+              "",
+
+            cgst:
+              sourceItem.cgst ??
+              sourceItem.cgstAmount ??
+              "",
+
+            sgst:
+              sourceItem.sgst ??
+              sourceItem.sgstAmount ??
+              "",
+
+            igst:
+              sourceItem.igst ??
+              sourceItem.igstAmount ??
+              "",
+
+            amount:
+              sourceItem.amount ??
+              sourceItem.netAmount ??
+              "",
+          };
+        }
+      );
+
+    if (
+      loadedItems.length === 0
+    ) {
+      loadedItems.push(
+        createEmptyInvoiceRow(1)
+      );
+    }
+
+    const loadedSummary = {
+      ...createEmptyInvoiceSummary(),
+
+      gross:
+        Number(
+          quotation.GrossAmount ??
+          quotation.grossAmount ??
+          quotation.gross ??
+          0
+        ),
+
+      tpr:
+        Number(
+          quotation.TPRAmount ??
+          quotation.tprAmount ??
+          quotation.tpr ??
+          0
+        ),
+
+      scheme:
+        Number(
+          quotation.SchemeAmount ??
+          quotation.schemeAmount ??
+          quotation.scheme ??
+          0
+        ),
+
+      star:
+        Number(
+          quotation.StarAmount ??
+          quotation.starAmount ??
+          quotation.star ??
+          0
+        ),
+
+      cd:
+        Number(
+          quotation.CashDiscountAmount ??
+          quotation.cashDiscountAmount ??
+          quotation.cd ??
+          0
+        ),
+
+      display:
+        Number(
+          quotation.DisplayAmount ??
+          quotation.displayAmount ??
+          quotation.display ??
+          0
+        ),
+
+      coupon:
+        Number(
+          quotation.CouponAmount ??
+          quotation.couponAmount ??
+          quotation.coupon ??
+          0
+        ),
+
+      addLess:
+        Number(
+          quotation.AddLessAmount ??
+          quotation.addLessAmount ??
+          quotation.addLess ??
+          0
+        ),
+
+      taxable:
+        Number(
+          quotation.TaxableAmount ??
+          quotation.taxableAmount ??
+          quotation.taxable ??
+          0
+        ),
+
+      cgst:
+        Number(
+          quotation.CGSTAmount ??
+          quotation.cgstAmount ??
+          quotation.cgst ??
+          0
+        ),
+
+      sgst:
+        Number(
+          quotation.SGSTAmount ??
+          quotation.sgstAmount ??
+          quotation.sgst ??
+          0
+        ),
+
+      igst:
+        Number(
+          quotation.IGSTAmount ??
+          quotation.igstAmount ??
+          quotation.igst ??
+          0
+        ),
+
+      originalNet:
+        Number(
+          quotation.OriginalNetAmount ??
+          quotation.originalNet ??
+          quotation.NetAmount ??
+          quotation.netAmount ??
+          0
+        ),
+
+      net:
+        Number(
+          quotation.NetAmount ??
+          quotation.netAmount ??
+          quotation.amount ??
+          0
+        ),
+    };
+
+    const loadedAdjustments = {
+      scheme:
+        quotation.ManualScheme ??
+        quotation.manualScheme ??
+        "",
+
+      star:
+        quotation.ManualStar ??
+        quotation.manualStar ??
+        "",
+
+      cd:
+        quotation.ManualCd ??
+        quotation.manualCd ??
+        "",
+
+      display:
+        quotation.DisplayAmount ??
+        quotation.displayAmount ??
+        "",
+
+      coupon:
+        quotation.CouponAmount ??
+        quotation.couponAmount ??
+        "",
+
+      addLess:
+        quotation.AddLessAmount ??
+        quotation.addLessAmount ??
+        "",
+    };
+
+    setEditingInvoiceId(
+      quotation._id ||
+      quotation.id ||
+      quotationId
+    );
+
+    setInvoiceFormData(
+      loadedFormData
+    );
+
+    setInvoiceItems(
+      loadedItems
+    );
+
+    setInvoiceSummary(
+      loadedSummary
+    );
+
+    setInvoiceManualAdjustments(
+      loadedAdjustments
+    );
+
+    quotationEntryDraftRef.current = {
+      formData:
+        cloneInvoiceDraftValue(
+          loadedFormData
+        ),
+
+      items:
+        cloneInvoiceDraftValue(
+          loadedItems
+        ),
+
+      summary:
+        cloneInvoiceDraftValue(
+          loadedSummary
+        ),
+
+      manualAdjustments:
+        cloneInvoiceDraftValue(
+          loadedAdjustments
+        ),
+
+      selectedRow: -1,
+      activeRow: 0,
+    };
+
+    activeInvoiceDraftFormRef.current =
+      "Quotation";
+
+    setSelectedSalesDetailRow(-1);
+    setActiveRow(0);
+
+    setShowSalesList(false);
+    setShowDashboard(false);
+    setShowSettleLoad(false);
+
+    setActiveMenu("sales");
+    setActiveSubMenu("Quotation");
+    setOpenFormFor("Quotation");
+
+    return;
+  } catch (error) {
+    console.error(
+      "Quotation edit load error:",
+      error
+    );
+
+    alert(
+      error.message ||
+      "Unable to load quotation for editing."
+    );
+
+    return;
+  }
+}
+
+if (
+  type === "Sales" ||
+  type === "Billing"
+) {
       try {
         const { distributorId, firmId } = getFirmSession();
 
@@ -50022,7 +53189,564 @@ const Dashboard = ({ onLogout }) => {
 
     }
   };
-  return (
+  const renderSalesPrintFormatModal = () => {
+  if (!showSalesPrintFormatModal) {
+    return null;
+  }
+
+  const selectedRow =
+    selectedSalesPrintRow?.originalItem ||
+    selectedSalesPrintRow ||
+    {};
+
+  const billSeries = String(
+    selectedRow?.billSeries ??
+    selectedRow?.BillSeries ??
+    selectedRow?.trnSeries ??
+    selectedRow?.TrnSeries ??
+    ""
+  ).trim();
+
+  const billNo = String(
+    selectedRow?.billNo ??
+    selectedRow?.BillNo ??
+    selectedRow?.trnNo ??
+    selectedRow?.TrnNo ??
+    ""
+  ).trim();
+
+  const loadSeries = String(
+    selectedRow?.loadSeries ??
+    selectedRow?.LoadSeries ??
+    ""
+  ).trim();
+
+  const loadNo = String(
+    selectedRow?.loadNo ??
+    selectedRow?.LoadNo ??
+    ""
+  ).trim();
+
+  const firmCode = String(
+    selectedRow?.firmCode ??
+    selectedRow?.FirmCode ??
+    localStorage.getItem("firmCode") ??
+    ""
+  ).trim();
+
+  const financialYear = String(
+    selectedRow?.financialYear ??
+    selectedRow?.FinancialYear ??
+    selectedRow?.finYear ??
+    localStorage.getItem("financialYear") ??
+    ""
+  ).trim();
+
+  return createPortal(
+    <div
+      className="sales-print-format-overlay"
+      onMouseDown={(event) => {
+        if (
+          event.target === event.currentTarget
+        ) {
+          closeSalesPrintFormatSelection();
+        }
+      }}
+    >
+      <div
+        className="sales-print-classic-modal"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="sales-print-modal-title"
+        onMouseDown={(event) =>
+          event.stopPropagation()
+        }
+      >
+        <div className="sales-print-classic-titlebar">
+          <div
+            id="sales-print-modal-title"
+            className="sales-print-classic-title"
+          >
+            <Printer size={16} />
+
+            <span>Sales Billing</span>
+          </div>
+
+          <button
+            type="button"
+            className="sales-print-classic-close"
+            disabled={salesPrintPreparing}
+            onClick={
+              closeSalesPrintFormatSelection
+            }
+          >
+            <X size={16} />
+          </button>
+        </div>
+
+        <div className="sales-print-classic-body">
+          <div className="sales-print-classic-form-row">
+            <label>Firm Code :</label>
+
+            <input
+              type="text"
+              value={firmCode}
+              readOnly
+            />
+
+            <span className="sales-print-required">
+              *
+            </span>
+          </div>
+
+          <div className="sales-print-classic-form-row">
+            <label>Financial Year :</label>
+
+            <input
+              type="text"
+              value={financialYear}
+              readOnly
+            />
+
+            <span className="sales-print-required">
+              *
+            </span>
+          </div>
+
+         <div className="sales-print-classic-form-row">
+  <label>Load Series :</label>
+
+  <input
+    type="text"
+    value={
+      salesPrintOptions.loadSeries || ""
+    }
+    disabled={salesPrintPreparing}
+    onChange={(event) => {
+      const value =
+        event.target.value.toUpperCase();
+
+      setSalesPrintOptions(
+        (previous) => ({
+          ...previous,
+          loadSeries: value,
+        })
+      );
+    }}
+    placeholder="Enter load series"
+  />
+
+  <span />
+</div>
+
+<div className="sales-print-classic-form-row">
+  <label>Load No :</label>
+
+  <input
+    type="text"
+    inputMode="numeric"
+    value={
+      salesPrintOptions.loadNo || ""
+    }
+    disabled={salesPrintPreparing}
+    onChange={(event) => {
+      const value =
+        event.target.value.replace(
+          /[^0-9]/g,
+          ""
+        );
+
+      setSalesPrintOptions(
+        (previous) => ({
+          ...previous,
+          loadNo: value,
+
+          /*
+           * Clear invoice range when the user
+           * starts load-wise printing.
+           */
+          fromTrnNo:
+            value
+              ? ""
+              : previous.fromTrnNo,
+
+          toTrnNo:
+            value
+              ? ""
+              : previous.toTrnNo,
+        })
+      );
+    }}
+    placeholder="Enter load number"
+  />
+
+  <span />
+</div>
+
+         <div className="sales-print-classic-form-row">
+  <label>Trn Series :</label>
+
+  <input
+    type="text"
+    value={
+      salesPrintOptions.trnSeries || "INV"
+    }
+    disabled={salesPrintPreparing}
+    onChange={(event) => {
+      setSalesPrintOptions(
+        (previous) => ({
+          ...previous,
+          trnSeries:
+            event.target.value.toUpperCase(),
+        })
+      );
+    }}
+  />
+
+  <span className="sales-print-required">
+    *
+  </span>
+</div>
+
+<div className="sales-print-classic-form-row">
+  <label>From Trn No :</label>
+
+  <input
+    type="text"
+    inputMode="numeric"
+    value={
+      salesPrintOptions.fromTrnNo || ""
+    }
+    disabled={salesPrintPreparing}
+    onChange={(event) => {
+      const value =
+        event.target.value.replace(
+          /[^0-9]/g,
+          ""
+        );
+
+      setSalesPrintOptions(
+        (previous) => ({
+          ...previous,
+          fromTrnNo: value,
+        })
+      );
+    }}
+    placeholder={
+      salesPrintOptions.loadNo
+        ? "Blank = first bill"
+        : ""
+    }
+  />
+
+  <span />
+</div>
+
+<div className="sales-print-classic-form-row">
+  <label>To Trn No :</label>
+
+  <input
+    type="text"
+    inputMode="numeric"
+    value={
+      salesPrintOptions.toTrnNo || ""
+    }
+    disabled={salesPrintPreparing}
+    onChange={(event) => {
+      const value =
+        event.target.value.replace(
+          /[^0-9]/g,
+          ""
+        );
+
+      setSalesPrintOptions(
+        (previous) => ({
+          ...previous,
+          toTrnNo: value,
+        })
+      );
+    }}
+    placeholder={
+      salesPrintOptions.loadNo
+        ? "Blank = last bill"
+        : ""
+    }
+  />
+
+  <span />
+</div>
+
+          <div className="sales-print-classic-form-row">
+            <label>No of Copies :</label>
+
+            <input
+              type="number"
+              min="1"
+              max="10"
+              value={salesPrintOptions.copies}
+              onChange={(event) => {
+                const value = Math.max(
+                  1,
+                  Math.min(
+                    10,
+                    Number(
+                      event.target.value
+                    ) || 1
+                  )
+                );
+
+                setSalesPrintOptions(
+                  (previous) => ({
+                    ...previous,
+                    copies: value,
+                  })
+                );
+              }}
+            />
+
+            <span />
+          </div>
+
+          <div className="sales-print-classic-options-grid">
+            <div className="sales-print-classic-option">
+              <label>Goods Return :</label>
+
+              <select
+                value={
+                  salesPrintOptions.goodsReturn
+                    ? "Y"
+                    : "N"
+                }
+                onChange={(event) => {
+                  setSalesPrintOptions(
+                    (previous) => ({
+                      ...previous,
+                      goodsReturn:
+                        event.target.value ===
+                        "Y",
+                    })
+                  );
+                }}
+              >
+                <option value="Y">Y</option>
+                <option value="N">N</option>
+              </select>
+            </div>
+
+            <div className="sales-print-classic-option">
+              <label>Damage Return :</label>
+
+              <select
+                value={
+                  salesPrintOptions.damageReturn
+                    ? "Y"
+                    : "N"
+                }
+                onChange={(event) => {
+                  setSalesPrintOptions(
+                    (previous) => ({
+                      ...previous,
+                      damageReturn:
+                        event.target.value ===
+                        "Y",
+                    })
+                  );
+                }}
+              >
+                <option value="Y">Y</option>
+                <option value="N">N</option>
+              </select>
+            </div>
+
+            <div className="sales-print-classic-option">
+              <label>Scheme Summary :</label>
+
+              <select
+                value={
+                  salesPrintOptions.showScheme
+                    ? "Y"
+                    : "N"
+                }
+                onChange={(event) => {
+                  setSalesPrintOptions(
+                    (previous) => ({
+                      ...previous,
+                      showScheme:
+                        event.target.value ===
+                        "Y",
+                    })
+                  );
+                }}
+              >
+                <option value="Y">Y</option>
+                <option value="N">N</option>
+              </select>
+            </div>
+
+            <div className="sales-print-classic-option">
+              <label>Vat Summary :</label>
+
+              <select
+                value={
+                  salesPrintOptions.showTaxSummary
+                    ? "Y"
+                    : "N"
+                }
+                onChange={(event) => {
+                  setSalesPrintOptions(
+                    (previous) => ({
+                      ...previous,
+                      showTaxSummary:
+                        event.target.value ===
+                        "Y",
+                    })
+                  );
+                }}
+              >
+                <option value="Y">Y</option>
+                <option value="N">N</option>
+              </select>
+            </div>
+          </div>
+
+         <div className="sales-print-layout-fields">
+  {/* REPORT NUMBER */}
+  <div className="sales-print-layout-selection">
+    <label>Report No. :</label>
+
+    <select
+      value={
+        salesPrintOptions.reportNumber || "1"
+      }
+      onChange={(event) => {
+        setSalesPrintOptions(
+          (previous) => ({
+            ...previous,
+            reportNumber: event.target.value,
+          })
+        );
+      }}
+    >
+      {SALES_BILL_REPORT_NUMBERS.map(
+        (report) => (
+          <option
+            key={report.value}
+            value={report.value}
+          >
+            {report.value}
+          </option>
+        )
+      )}
+    </select>
+  </div>
+
+  {/* PAPER SIZE */}
+  <div className="sales-print-layout-selection">
+    <label>Paper Size :</label>
+
+    <select
+      value={
+        salesPrintOptions.paperSize || "A4"
+      }
+      onChange={(event) => {
+        const selectedPaper =
+          SALES_BILL_PAPER_SIZES.find(
+            (paper) =>
+              paper.value === event.target.value
+          ) || SALES_BILL_PAPER_SIZES[0];
+
+        setSalesPrintOptions(
+          (previous) => ({
+            ...previous,
+            paperSize: selectedPaper.value,
+            orientation:
+              selectedPaper.orientation,
+          })
+        );
+      }}
+    >
+      {SALES_BILL_PAPER_SIZES.map(
+        (paper) => (
+          <option
+            key={paper.value}
+            value={paper.value}
+          >
+            {paper.label}
+          </option>
+        )
+      )}
+    </select>
+  </div>
+</div>
+
+          <div className="sales-print-classic-actions">
+            <button
+              type="button"
+              className="sales-print-classic-button print"
+              disabled={salesPrintPreparing}
+              onClick={() => {
+                openSelectedSalesInvoiceFormat({
+                  action: "print",
+                });
+              }}
+            >
+              {salesPrintPreparing ? (
+                <RefreshCw
+                  size={16}
+                  className="sales-print-format-spin"
+                />
+              ) : (
+                <Printer size={16} />
+              )}
+
+              Print
+            </button>
+
+            <button
+              type="button"
+              className="sales-print-classic-button preview"
+              disabled={salesPrintPreparing}
+              onClick={() => {
+                openSelectedSalesInvoiceFormat({
+                  action: "preview",
+                });
+              }}
+            >
+              {salesPrintPreparing ? (
+                <RefreshCw
+                  size={16}
+                  className="sales-print-format-spin"
+                />
+              ) : (
+                <Eye size={16} />
+              )}
+
+              Preview
+            </button>
+
+            <button
+              type="button"
+              className="sales-print-classic-button cancel"
+              disabled={salesPrintPreparing}
+              onClick={
+                closeSalesPrintFormatSelection
+              }
+            >
+              <X size={16} />
+
+              Cancel
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>,
+    document.body
+  );
+}
+return (
+  <>
+    {renderSalesPrintFormatModal()}
+
     <div className="dashboard-container">
       <aside className="sidebar">
         {/* ==================== SIDEBAR BRAND ==================== */}
@@ -53794,8 +57518,13 @@ const Dashboard = ({ onLogout }) => {
                               <th>Rate</th>
                               <th>Rate GST</th>
                               <th>TPR Amt</th>
-                              <th>Scheme %</th>
-                              <th>Scheme Amt</th>
+                              <th className="billing-scheme-percent-column">
+                                Scheme %
+                              </th>
+
+                              <th className="billing-scheme-amount-column">
+                                Scheme Amt
+                              </th>
                               <th>CD %</th>
                               <th>CD Amt</th>
                               <th>Star %</th>
@@ -53880,15 +57609,15 @@ const Dashboard = ({ onLogout }) => {
                           >
                             {invoiceItems.map(
                               (item, index) => (
-                            <tr
-  key={item.id || `sales-item-${index}`}
-  data-sales-row-index={index}
-  className={
-    index === selectedSalesDetailRow
-      ? "billing-active-row"
-      : ""
-  }
->
+                                <tr
+                                  key={item.id || `sales-item-${index}`}
+                                  data-sales-row-index={index}
+                                  className={
+                                    index === selectedSalesDetailRow
+                                      ? "billing-active-row"
+                                      : ""
+                                  }
+                                >
                                   {/* SR NUMBER */}
 
                                   <td className="billing-sticky-left billing-sr-cell">
@@ -54752,89 +58481,120 @@ const Dashboard = ({ onLogout }) => {
                           </button>
                         </div>
 
-                        <div className="billing-selected-product-area">
+                        <div
+                          className="billing-selected-product-area"
+                          style={{
+                            minWidth: 0,
+                            flex: 1,
+                            display: "flex",
+                            alignItems: "center",
+                          }}
+                        >
                           {selectedSalesDetailItem &&
                             String(
                               selectedSalesDetailItem.product ||
+                              selectedSalesDetailItem.productName ||
                               selectedSalesDetailItem.productCode ||
+                              selectedSalesDetailItem.productId ||
                               ""
-                            ).trim() ? (
-                            <div className="billing-selected-product-window">
-                              <div className="billing-product-detail-top">
-                                <span>
-                                  <b>Batch:</b>{" "}
-                                  {getSalesDetailBatch(
-                                    selectedSalesDetailItem
-                                  )}
-                                </span>
+                            ).trim() !== "" ? (
+                            <div
+                              className="billing-selected-product-window"
+                              style={{
+                                width: "100%",
+                                minWidth: 0,
+                                minHeight: "34px",
+                                padding: "5px 10px",
+                                display: "flex",
+                                alignItems: "center",
+                                gap: "17px",
+                                overflow: "hidden",
+                                border: "1px solid #9eb4cf",
+                                borderRadius: "4px",
+                                background: "#dce9f8",
+                                color: "#113a73",
+                                fontSize: "10px",
+                                whiteSpace: "nowrap",
+                              }}
+                            >
+                              <span>
+                                <b>Batch:</b>{" "}
+                                {getSalesDetailBatch(
+                                  selectedSalesDetailItem
+                                )}
+                              </span>
 
-                                <span>
-                                  <b>MRP:</b>{" "}
-                                  ₹
-                                  {Number(
-                                    selectedSalesDetailItem.mrp || 0
-                                  ).toFixed(2)}
-                                </span>
+                              <span>
+                                <b>MRP:</b>{" "}
+                                ₹
+                                {Number(
+                                  selectedSalesDetailItem.mrp || 0
+                                ).toFixed(2)}
+                              </span>
 
-                                <span>
-                                  <b>Stock:</b>{" "}
-                                  {getSalesDetailStock(
-                                    selectedSalesDetailItem
-                                  ).toFixed(3)}
-                                </span>
+                              <span>
+                                <b>Stock:</b>{" "}
+                                {getSalesDetailStock(
+                                  selectedSalesDetailItem
+                                ).toFixed(3)}
+                              </span>
 
-                                <span>
-                                  <b>Box Packing:</b>{" "}
-                                  {Number(
-                                    selectedSalesDetailItem.boxPack ||
-                                    1
-                                  )}
-                                  {" / "}
-                                  {Number(
-                                    selectedSalesDetailItem.inboxPack ||
-                                    1
-                                  )}
-                                </span>
+                              <span>
+                                <b>Box Packing:</b>{" "}
+                                {Number(
+                                  selectedSalesDetailItem.boxPack || 1
+                                )}
+                                {" / "}
+                                {Number(
+                                  selectedSalesDetailItem.inboxPack || 1
+                                )}
+                              </span>
 
-                                <span className="billing-detail-net">
-                                  <b>Net Amount:</b>{" "}
-                                  ₹
-                                  {getSalesDetailNetAmount(
-                                    selectedSalesDetailItem
-                                  ).toFixed(2)}
-                                </span>
-                              </div>
+                              <span>
+                                <b>Purchase:</b>{" "}
+                                ₹
+                                {getSalesDetailPurchaseRate(
+                                  selectedSalesDetailItem
+                                ).toFixed(2)}
+                              </span>
 
-                              <div className="billing-product-detail-bottom">
-                                <span className="billing-detail-name">
-                                  <b>Name:</b>{" "}
-                                  {selectedSalesDetailItem.product ||
-                                    selectedSalesDetailItem.productName ||
-                                    "-"}
-                                </span>
+                              <span>
+                                <b>GST:</b>{" "}
+                                {Number(
+                                  selectedSalesDetailItem.gst ||
+                                  selectedSalesDetailItem.gstPercent ||
+                                  selectedSalesDetailItem.gstRate ||
+                                  selectedSalesDetailItem.taxPercent ||
+                                  0
+                                ).toFixed(2)}
+                                %
+                              </span>
 
-                                <span>
-                                  <b>Purchase:</b>{" "}
-                                  ₹
-                                  {getSalesDetailPurchaseRate(
-                                    selectedSalesDetailItem
-                                  ).toFixed(2)}
-                                </span>
-
-                                <span>
-                                  <b>GST:</b>{" "}
-                                  {Number(
-                                    selectedSalesDetailItem.gst || 0
-                                  ).toFixed(2)}
-                                  %
-                                </span>
-                              </div>
+                              <span
+                                style={{
+                                  marginLeft: "auto",
+                                  paddingLeft: "12px",
+                                  fontWeight: 800,
+                                  color: "#083a76",
+                                }}
+                              >
+                                <b>Net Amount:</b>{" "}
+                                ₹
+                                {getSalesDetailNetAmount(
+                                  selectedSalesDetailItem
+                                ).toFixed(2)}
+                              </span>
                             </div>
                           ) : (
-                            <div className="billing-selected-product-placeholder">
-                              Click a product row to view Batch, MRP,
-                              Stock and Rate details
-                            </div>
+                            <div
+                              style={{
+                                width: "100%",
+                                minHeight: "34px",
+                                border: "1px solid #cbd9e8",
+                                borderRadius: "4px",
+                                background: "#edf4fc",
+                              }}
+                            />
                           )}
                         </div>
 
@@ -56847,6 +60607,15 @@ const Dashboard = ({ onLogout }) => {
                           </div>
 
                           <div className="print-load-preview-modal-actions">
+                            <button
+  type="button"
+  className="print-load-preview-excel-button"
+  onClick={handleExportToExcel}
+  disabled={printLoadLoading}
+>
+  <FileSpreadsheet size={16} />
+  Export Excel
+</button>
                             <button
                               type="button"
                               className="print-load-preview-modal-print-button"
@@ -64755,15 +68524,52 @@ const Dashboard = ({ onLogout }) => {
                           </thead>
 
                           <tbody>
-                            {invoiceItems.map(
-                              (item, index) => (
+                            {invoiceItems.map((item, index) => {
+                              const rowHasProduct =
+                                String(
+                                  item?.product ||
+                                  item?.productName ||
+                                  item?.productCode ||
+                                  item?.productId ||
+                                  ""
+                                ).trim() !== "";
+
+                              return (
                                 <tr
-                                  key={item.id}
+                                  key={item.id || `sales-invoice-row-${index}`}
+                                  data-sales-row-index={index}
                                   className={
-                                    index === activeRow
+                                    index === selectedSalesDetailRow
                                       ? "billing-active-row"
                                       : ""
                                   }
+                                  onMouseDown={(event) => {
+                                    /*
+                                     * Do not select the row when the Delete button
+                                     * itself is being pressed.
+                                     */
+                                    if (
+                                      event.target.closest(
+                                        ".billing-delete-button, [data-row-delete='true']"
+                                      )
+                                    ) {
+                                      return;
+                                    }
+
+                                    /*
+                                     * Empty rows should not clear or change
+                                     * the currently displayed product details.
+                                     */
+                                    if (!rowHasProduct) {
+                                      return;
+                                    }
+
+                                    setActiveRow(index);
+                                    setSelectedSalesDetailRow(index);
+                                  }}
+                                  style={{
+                                    cursor: rowHasProduct ? "pointer" : "default",
+                                  }}
                                 >
                                   <td className="billing-sticky-left billing-sr-cell">
                                     {index + 1}
@@ -65310,22 +69116,14 @@ const Dashboard = ({ onLogout }) => {
                                   {/* Scheme Percentage */}
                                   <td>
                                     <input
-                                      className="billing-table-control billing-numeric-control"
-                                      data-field="schemePct"
-                                      data-index={index}
-                                      value={item.schemePct}
+                                      type="text"
+                                      inputMode="decimal"
+                                      value={item.schemePct || ""}
                                       onChange={(event) =>
                                         updateInvoiceItem(
                                           index,
                                           "schemePct",
                                           event.target.value
-                                        )
-                                      }
-                                      onKeyDown={(event) =>
-                                        handleInvoiceKeyDown(
-                                          event,
-                                          index,
-                                          "schemePct"
                                         )
                                       }
                                     />
@@ -65334,22 +69132,14 @@ const Dashboard = ({ onLogout }) => {
                                   {/* Scheme Amount */}
                                   <td>
                                     <input
-                                      className="billing-table-control billing-numeric-control"
-                                      data-field="schemeAmt"
-                                      data-index={index}
-                                      value={item.schemeAmt}
+                                      type="text"
+                                      inputMode="decimal"
+                                      value={item.schemeAmt || ""}
                                       onChange={(event) =>
                                         updateInvoiceItem(
                                           index,
                                           "schemeAmt",
                                           event.target.value
-                                        )
-                                      }
-                                      onKeyDown={(event) =>
-                                        handleInvoiceKeyDown(
-                                          event,
-                                          index,
-                                          "schemeAmt"
                                         )
                                       }
                                     />
@@ -65535,19 +69325,22 @@ const Dashboard = ({ onLogout }) => {
                                     <button
                                       type="button"
                                       className="billing-delete-row-button"
-                                      onClick={() =>
-                                        deleteInvoiceItem(
-                                          index
-                                        )
-                                      }
+                                      data-row-delete="true"
+                                      onMouseDown={(event) => {
+                                        event.stopPropagation();
+                                      }}
+                                      onClick={(event) => {
+                                        event.stopPropagation();
+                                        deleteInvoiceItem(index);
+                                      }}
                                       title="Delete row"
                                     >
                                       🗑
                                     </button>
                                   </td>
                                 </tr>
-                              )
-                            )}
+                              );
+                            })}
                           </tbody>
                         </table>
                       </div>
@@ -71755,7 +75548,8 @@ const Dashboard = ({ onLogout }) => {
           document.body
         )}
 
-    </div>
-  );
-}
+       </div>
+  </>
+);
+};
 export default Dashboard;
