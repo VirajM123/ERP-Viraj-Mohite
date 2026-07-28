@@ -148,9 +148,8 @@ const GeneralSetup1 = ({
     onSettingsSaved,
     isAdmin = false,
 }) => {
-    const API_URL =
-        "http://localhost:5000/api";
-
+    // const API_URL ="http://localhost:5000/api";
+const API_URL = "https://total-solution-backend.onrender.com/api";
     const [generalSetup, setGeneralSetup] =
         React.useState(() =>
             createDefaultGeneralSetup()

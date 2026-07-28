@@ -15,8 +15,8 @@ import Report from "./Report";
 import SalesmanToAreaMapping from './SalesmanToAreaMapping';
 import Transaction from "./Transaction";
 import GeneralSetup1 from "./GeneralSetup1";
-// const API_URL = "https://total-solution-backend.onrender.com/api";
-const API_URL = "http://localhost:5000/api";
+const API_URL = "https://total-solution-backend.onrender.com/api";
+// const API_URL = "http://localhost:5000/api";
 
 
 import {
