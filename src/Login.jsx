@@ -1,8 +1,8 @@
 import React, { useEffect, useRef, useState } from "react";
 import "./Login.css";
 
-const API_URL = "https://total-solution-backend.onrender.com/api";
-// const API_URL = "http://localhost:5000/api";
+// const API_URL = "https://total-solution-backend.onrender.com/api";
+const API_URL = "http://localhost:5000/api";
 
 
 const getTodayDate = () => {
@@ -391,6 +391,15 @@ const Login = ({ onLoginSuccess }) => {
       });
 
       const result = await response.json();
+      console.log(
+  "Login API response:",
+  result
+);
+
+console.log(
+  "Login role received:",
+  result?.user?.role
+);
 
       if (!response.ok) {
         alert(result.message || "Login failed");
@@ -407,7 +416,29 @@ const Login = ({ onLoginSuccess }) => {
         "workingDate",
         formData.workingDate || getTodayDate()
       );
-      localStorage.setItem("role", result.user.role || "DISTRIBUTOR_ADMIN");
+    const receivedRole = String(
+  result?.user?.role || ""
+)
+  .trim()
+  .toUpperCase();
+
+if (!receivedRole) {
+  alert(
+    "User role was not received from the server."
+  );
+
+  return;
+}
+
+localStorage.setItem(
+  "role",
+  receivedRole
+);
+
+localStorage.setItem(
+  "userSource",
+  result?.user?.userSource || ""
+);
 
       onLoginSuccess();
     } catch (error) {

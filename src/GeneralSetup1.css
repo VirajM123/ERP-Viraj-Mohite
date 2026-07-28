@@ -1,0 +1,711 @@
+/* =========================================================
+   GENERAL SETUP PAGE
+========================================================= */
+
+.general-setup-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+  margin-bottom: 15px;
+  padding: 2px 2px 10px;
+}
+
+.general-setup-heading h1 {
+  margin: 0;
+  color: #102a56;
+  font-size: 23px;
+  font-weight: 700;
+  line-height: 1.15;
+}
+
+.general-setup-heading p {
+  margin: 5px 0 0;
+  color: #64748b;
+  font-size: 12px;
+}
+
+.general-setup-toolbar-actions {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+}
+
+.gs-button {
+  min-width: 128px;
+  height: 36px;
+  padding: 0 15px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  border: 1px solid transparent;
+  border-radius: 5px;
+  font-family: inherit;
+  font-size: 12.5px;
+  font-weight: 600;
+  cursor: pointer;
+  transition:
+    background-color 0.15s ease,
+    border-color 0.15s ease,
+    box-shadow 0.15s ease;
+}
+
+.gs-button:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
+.gs-button-primary {
+  color: #ffffff;
+  background: #2563eb;
+  border-color: #2563eb;
+  box-shadow: 0 2px 5px rgba(37, 99, 235, 0.2);
+}
+
+.gs-button-primary:hover:not(:disabled) {
+  background: #1d4ed8;
+  border-color: #1d4ed8;
+}
+
+.gs-button-secondary {
+  color: #1d4ed8;
+  background: #ffffff;
+  border-color: #cbd7e6;
+}
+
+.gs-button-secondary:hover:not(:disabled) {
+  background: #f8fbff;
+  border-color: #93b4e8;
+}   
+
+/* =========================================================
+   PAGE TOOLBAR
+========================================================= */
+
+.general-setup-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+  margin-bottom: 15px;
+  padding: 4px 2px 10px;
+}
+
+.general-setup-heading h1 {
+  margin: 0;
+  color: #14213d;
+  font-size: 24px;
+  font-weight: 700;
+  line-height: 1.1;
+}
+
+.general-setup-heading p {
+  margin: 6px 0 0;
+  color: #64748b;
+  font-size: 12.5px;
+}
+
+.general-setup-toolbar-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.gs-button {
+  min-width: 130px;
+  height: 36px;
+  padding: 0 16px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  border: 1px solid transparent;
+  border-radius: 5px;
+  font-family: inherit;
+  font-size: 12.5px;
+  font-weight: 600;
+  cursor: pointer;
+  transition:
+    background-color 0.2s ease,
+    border-color 0.2s ease,
+    transform 0.1s ease;
+}
+
+.gs-button:hover:not(:disabled) {
+  transform: translateY(-1px);
+}
+
+.gs-button:disabled {
+  cursor: not-allowed;
+  opacity: 0.56;
+}
+
+.gs-button-icon {
+  font-size: 15px;
+  line-height: 1;
+}
+
+.gs-button-primary {
+  color: #ffffff;
+  background: #2563eb;
+  border-color: #2563eb;
+  box-shadow: 0 3px 8px rgba(37, 99, 235, 0.2);
+}
+
+.gs-button-primary:hover:not(:disabled) {
+  background: #1d4ed8;
+  border-color: #1d4ed8;
+}
+
+.gs-button-secondary {
+  color: #1d4ed8;
+  background: #ffffff;
+  border-color: #cbd7ea;
+}
+
+.gs-button-secondary:hover:not(:disabled) {
+  background: #f7faff;
+  border-color: #93b4ec;
+}
+
+/* =========================================================
+   THREE COLUMN LAYOUT
+========================================================= */
+
+.general-setup-grid {
+  display: grid;
+  grid-template-columns:
+    minmax(275px, 0.9fr)
+    minmax(340px, 1.2fr)
+    minmax(290px, 0.95fr);
+  gap: 14px;
+  align-items: start;
+}
+
+.gs-column {
+  min-width: 0;
+}
+
+/* =========================================================
+   SECTION CARDS
+========================================================= */
+
+.gs-section,
+.gs-system-card {
+  margin-bottom: 14px;
+  background: #ffffff;
+  border: 1px solid #dbe3ee;
+  border-radius: 6px;
+  overflow: hidden;
+  box-shadow: none;
+}
+
+.gs-section-header,
+.gs-system-card-title {
+  padding: 12px 14px;
+  color: #1555d6;
+  background: #ffffff;
+  border-bottom: 1px solid #e4eaf2;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.25px;
+  text-transform: uppercase;
+}
+
+.gs-section-body {
+  background: #ffffff;
+}
+
+/* =========================================================
+   SETTING ROWS
+========================================================= */
+
+.gs-setting-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 148px;
+  align-items: center;
+  min-height: 50px;
+  gap: 12px;
+  padding: 7px 14px;
+  border-bottom: 1px solid #edf1f6;
+  box-sizing: border-box;
+  transition: background-color 0.14s ease;
+}
+
+.gs-setting-row:last-child {
+  border-bottom: 0;
+}
+
+.gs-setting-row:hover {
+  background: #f8fbff;
+}
+
+.gs-setting-label-area {
+  min-width: 0;
+}
+
+.gs-setting-label-line {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  min-width: 0;
+}
+
+.gs-setting-label {
+  color: #263754;
+  font-size: 12.5px;
+  font-weight: 600;
+  line-height: 1.3;
+}
+
+.gs-info-icon {
+  width: 13px;
+  height: 13px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  border: 1px solid #9aa9bc;
+  border-radius: 50%;
+  color: #718096;
+  background: #ffffff;
+  font-family: Arial, sans-serif;
+  font-size: 8px;
+  font-weight: 700;
+  line-height: 1;
+  cursor: help;
+}
+
+.gs-setting-description {
+  display: none;
+  margin-top: 4px;
+  color: #748196;
+  font-size: 10.5px;
+  line-height: 1.3;
+}
+
+.gs-setting-control {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  min-width: 0;
+}
+
+/* =========================================================
+   SELECTS AND INPUTS
+========================================================= */
+
+.gs-control {
+  width: 100%;
+  height: 32px;
+  padding: 4px 9px;
+  border: 1px solid #c7d2e1;
+  border-radius: 4px;
+  background: #ffffff;
+  color: #263754;
+  font-family: inherit;
+  font-size: 11.5px;
+  outline: none;
+  box-sizing: border-box;
+  transition:
+    border-color 0.15s ease,
+    box-shadow 0.15s ease;
+}
+
+.gs-control:hover {
+  border-color: #a8b8cd;
+}
+
+.gs-control:focus {
+  border-color: #3b82f6;
+  box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.12);
+}
+
+select.gs-control {
+  cursor: pointer;
+}
+
+input[type="date"].gs-control,
+input[type="number"].gs-control {
+  font-variant-numeric: tabular-nums;
+}
+
+/* =========================================================
+   ON / OFF SWITCH
+========================================================= */
+/* =========================================================
+   PRODUCTION TOGGLE SWITCH
+========================================================= */
+
+.gs-toggle {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 42px;
+  height: 24px;
+  flex-shrink: 0;
+  cursor: pointer;
+  user-select: none;
+}
+
+.gs-toggle input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: 0;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.gs-toggle-track {
+  position: relative;
+  display: block;
+  width: 38px;
+  height: 20px;
+  border: 1px solid #cbd5e1;
+  border-radius: 999px;
+  background: #e2e8f0;
+  box-sizing: border-box;
+  transition:
+    background-color 0.18s ease,
+    border-color 0.18s ease,
+    box-shadow 0.18s ease;
+}
+
+.gs-toggle-thumb {
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: #ffffff;
+  box-shadow:
+    0 1px 2px rgba(15, 23, 42, 0.25),
+    0 1px 4px rgba(15, 23, 42, 0.12);
+  transition: transform 0.18s ease;
+}
+
+/* Enabled */
+
+.gs-toggle.is-on .gs-toggle-track {
+  background: #2563eb;
+  border-color: #2563eb;
+  box-shadow: 0 1px 3px rgba(37, 99, 235, 0.25);
+}
+
+.gs-toggle.is-on .gs-toggle-thumb {
+  transform: translateX(18px);
+}
+
+/* Hover */
+
+.gs-toggle:hover:not(.is-disabled)
+  .gs-toggle-track {
+  border-color: #94a3b8;
+}
+
+.gs-toggle.is-on:hover:not(.is-disabled)
+  .gs-toggle-track {
+  background: #1d4ed8;
+  border-color: #1d4ed8;
+}
+
+/* Keyboard focus */
+
+.gs-toggle input:focus-visible
+  + .gs-toggle-track {
+  outline: 3px solid rgba(37, 99, 235, 0.2);
+  outline-offset: 2px;
+}
+
+/* Disabled */
+
+.gs-toggle.is-disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+/* =========================================================
+   SYSTEM INFORMATION CARD
+========================================================= */
+
+.gs-system-card {
+  padding-bottom: 4px;
+}
+
+.gs-system-row {
+  min-height: 42px;
+  padding: 7px 14px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 15px;
+  border-bottom: 1px solid #edf1f6;
+  color: #64748b;
+  font-size: 11.5px;
+}
+
+.gs-system-row:last-child {
+  border-bottom: 0;
+}
+
+.gs-system-row strong {
+  max-width: 55%;
+  color: #34445f;
+  font-size: 11.5px;
+  font-weight: 600;
+  text-align: right;
+  overflow-wrap: anywhere;
+}
+
+.gs-connected-status {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 6px;
+  color: #15803d !important;
+}
+
+.gs-connected-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #22c55e;
+  box-shadow: 0 0 0 2px rgba(34, 197, 94, 0.15);
+}
+
+/* =========================================================
+   PAGE FOOTER
+========================================================= */
+
+.general-setup-footer {
+  min-height: 45px;
+  margin-top: 2px;
+  padding: 10px 13px;
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  border: 1px solid #cfe0ff;
+  border-radius: 6px;
+  background: #f4f8ff;
+  color: #40516f;
+  font-size: 11.5px;
+  box-sizing: border-box;
+}
+
+.general-setup-footer.has-changes {
+  border-color: #f4cf82;
+  background: #fffaf0;
+  color: #7c5310;
+}
+
+.general-setup-footer-icon {
+  width: 18px;
+  height: 18px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  border-radius: 50%;
+  background: #2563eb;
+  color: #ffffff;
+  font-family: Arial, sans-serif;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.general-setup-footer.has-changes
+  .general-setup-footer-icon {
+  background: #d97706;
+}
+
+/* =========================================================
+   LARGE DESKTOP
+========================================================= */
+
+@media (min-width: 1500px) {
+  .general-setup-container {
+    padding: 20px 24px;
+  }
+
+  .general-setup-grid {
+    grid-template-columns:
+      minmax(300px, 0.9fr)
+      minmax(380px, 1.18fr)
+      minmax(320px, 0.95fr);
+    gap: 16px;
+  }
+
+  .gs-setting-row {
+    grid-template-columns:
+      minmax(0, 1fr)
+      160px;
+  }
+}
+
+/* =========================================================
+   MEDIUM DESKTOP / TABLET
+========================================================= */
+
+@media (max-width: 1200px) {
+  .general-setup-grid {
+    grid-template-columns:
+      repeat(2, minmax(0, 1fr));
+  }
+
+  .general-setup-grid .gs-column:last-child {
+    grid-column: 1 / -1;
+    display: grid;
+    grid-template-columns:
+      repeat(2, minmax(0, 1fr));
+    gap: 14px;
+  }
+
+  .general-setup-grid
+    .gs-column:last-child
+    .gs-section,
+  .general-setup-grid
+    .gs-column:last-child
+    .gs-system-card {
+    margin-bottom: 0;
+  }
+}
+
+/* =========================================================
+   MOBILE
+========================================================= */
+
+@media (max-width: 760px) {
+  .general-setup-container {
+    padding: 12px;
+  }
+
+  .general-setup-toolbar {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .general-setup-toolbar-actions {
+    width: 100%;
+  }
+
+  .gs-button {
+    flex: 1;
+    min-width: 0;
+  }
+
+  .general-setup-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .general-setup-grid .gs-column:last-child {
+    grid-column: auto;
+    display: block;
+  }
+
+  .general-setup-grid
+    .gs-column:last-child
+    .gs-section,
+  .general-setup-grid
+    .gs-column:last-child
+    .gs-system-card {
+    margin-bottom: 14px;
+  }
+
+  .gs-setting-row {
+    grid-template-columns:
+      minmax(0, 1fr)
+      138px;
+  }
+}
+
+@media (max-width: 480px) {
+  .general-setup-toolbar-actions {
+    flex-direction: column;
+  }
+
+  .gs-button {
+    width: 100%;
+  }
+
+  .gs-setting-row {
+    grid-template-columns: 1fr;
+    gap: 8px;
+  }
+
+  .gs-setting-control {
+    justify-content: flex-start;
+  }
+
+  .gs-control {
+    max-width: none;
+  }
+
+  .gs-toggle {
+    justify-content: flex-start;
+  }
+}
+/* =========================================================
+   GENERAL SETUP ACCESS RESTRICTION
+========================================================= */
+
+.gs-access-denied {
+  max-width: 520px;
+  margin: 70px auto 0;
+  padding: 38px 32px;
+  background: #ffffff;
+  border: 1px solid #dbe3ee;
+  border-radius: 8px;
+  text-align: center;
+}
+
+.gs-access-denied-icon {
+  width: 54px;
+  height: 54px;
+  margin: 0 auto 17px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  background: #eff6ff;
+  font-size: 25px;
+}
+
+.gs-access-denied h2 {
+  margin: 0;
+  color: #172554;
+  font-size: 21px;
+  font-weight: 700;
+}
+
+.gs-access-denied p {
+  margin: 10px 0 0;
+  color: #475569;
+  font-size: 13px;
+}
+
+.gs-access-denied-note {
+  margin-top: 18px;
+  padding: 10px 12px;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  color: #64748b;
+  font-size: 12px;
+}
+.gs-loading-spinner {
+  width: 32px;
+  height: 32px;
+  border: 4px solid #dbeafe;
+  border-top-color: #2563eb;
+  border-radius: 50%;
+  animation: gs-spin 0.8s linear infinite;
+}
+
+@keyframes gs-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
