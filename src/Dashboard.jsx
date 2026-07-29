@@ -16,8 +16,8 @@ import SalesmanToAreaMapping from './SalesmanToAreaMapping';
 import Transaction from "./Transaction";
 import GeneralSetup1 from "./GeneralSetup1";
 import SecuritySetup from "./SecuritySetup";
-const API_URL = "https://total-solution-backend.onrender.com/api";
-// const API_URL = "http://localhost:5000/api";
+// const API_URL = "https://total-solution-backend.onrender.com/api";
+const API_URL = "http://localhost:5000/api";
 
 
 import {
@@ -107,6 +107,25 @@ import {
 } from "lucide-react";
 
 
+/* =========================================================
+   RUNTIME GENERAL SETUP DEFAULTS
+========================================================= */
+
+const DEFAULT_VAT_ON =
+  "GROSS_AMOUNT";
+
+const DEFAULT_CASH_DISCOUNT_ON =
+  "BILL_NET_AMOUNT";
+
+const DEFAULT_PRODUCT_SELECTION_ON =
+  "PRODUCT_NAME";
+const DEFAULT_SELECTION =
+  "AREA";
+
+const DEFAULT_SELECTION_VALUES = [
+  "AREA",
+  "ROUTE",
+];
 const Dashboard = ({ onLogout }) => {
   const loggedInRole = String(
     localStorage.getItem("role") || ""
@@ -134,14 +153,23 @@ const Dashboard = ({ onLogout }) => {
       allowChangeSaleRate: false,
       allowMixBilling: false,
 
-      /*
-       * Permit editing a bill after it has
-       * been assigned to a load.
-       */
       allowEditBillAfterLoad: false,
       editProductAfterLoad: false,
-      vatOn: "NET_AMOUNT",
-      cashDiscountOn: "BILL_NET_AMOUNT",
+
+      vatOn:
+        DEFAULT_VAT_ON,
+
+      cashDiscountOn:
+        DEFAULT_CASH_DISCOUNT_ON,
+
+      productSelectionOn:
+        DEFAULT_PRODUCT_SELECTION_ON,
+      defaultCompany: "",
+      defaultGodown: "",
+      defaultSelection:
+        DEFAULT_SELECTION,
+      saveAndPrint: false,
+      allowSRateLessThanPRate: false,
     });
 
 
@@ -5135,8 +5163,114 @@ const Dashboard = ({ onLogout }) => {
   const [selectedProductForMapping, setSelectedProductForMapping] = useState(null);
   const [mappedRows, setMappedRows] = useState([{ companyProdCode: "", companyProdName: "", seqNo: 1 }]);
 
-  const getProductCode = (p) => String(p?.productCode || p?.code || p?.ProdCode || "").trim();
-  const getProductName = (p) => String(p?.productName || p?.name || p?.ProdName || "").trim();
+  // const getProductCode = (p) => String(p?.productCode || p?.code || p?.ProdCode || "").trim();
+  // const getProductName = (p) => String(p?.productName || p?.name || p?.ProdName || "").trim();
+  /* =========================================================
+   PRODUCT SEARCH FIELD HELPERS
+========================================================= */
+
+  const PRODUCT_SELECTION_MODES = [
+    "PRODUCT_CODE",
+    "COMPANY_PRODUCT_CODE",
+    "SHORT_CODE",
+    "LOCAL_PRODUCT_NAME",
+    "EAN_NO",
+    "PRODUCT_NAME",
+  ];
+
+  const getProductCode = (product) =>
+    String(
+      product?.productCode ??
+      product?.ProductCode ??
+      product?.prodCode ??
+      product?.ProdCode ??
+      product?.code ??
+      product?.Code ??
+      ""
+    ).trim();
+
+  const getProductName = (product) =>
+    String(
+      product?.productName ??
+      product?.ProductName ??
+      product?.prodName ??
+      product?.ProdName ??
+      product?.name ??
+      product?.Name ??
+      ""
+    ).trim();
+
+  const getProductCompanyCode = (product) =>
+    String(
+      product?.companyProductCode ??
+      product?.CompanyProductCode ??
+      product?.companyProdCode ??
+      product?.CompanyProdCode ??
+      product?.compProductCode ??
+      product?.CompProductCode ??
+      product?.compProdCode ??
+      product?.CompProdCode ??
+      product?.mappedProductCode ??
+      product?.MappedProductCode ??
+      ""
+    ).trim();
+
+  const getProductShortCode = (product) =>
+    String(
+      product?.shortCode ??
+      product?.ShortCode ??
+      product?.productShortCode ??
+      product?.ProductShortCode ??
+      product?.prodShortCode ??
+      product?.ProdShortCode ??
+      ""
+    ).trim();
+
+  const getProductLocalName = (product) =>
+    String(
+      product?.localProductName ??
+      product?.LocalProductName ??
+      product?.localProdName ??
+      product?.LocalProdName ??
+      product?.productLocalName ??
+      product?.ProductLocalName ??
+      ""
+    ).trim();
+
+  const getProductEanNo = (product) =>
+    String(
+      product?.eanNo ??
+      product?.EANNo ??
+      product?.eanCode ??
+      product?.EANCode ??
+      product?.barcode ??
+      product?.Barcode ??
+      product?.barCode ??
+      product?.BarCode ??
+      ""
+    ).trim();
+
+  const normalizeProductSelectionMode = (
+    value
+  ) => {
+    const normalized = String(
+      value ||
+      DEFAULT_PRODUCT_SELECTION_ON
+    )
+      .trim()
+      .toUpperCase();
+
+    return PRODUCT_SELECTION_MODES.includes(
+      normalized
+    )
+      ? normalized
+      : DEFAULT_PRODUCT_SELECTION_ON;
+  };
+
+  const getRuntimeProductSelectionMode = () =>
+    normalizeProductSelectionMode(
+      runtimeGeneralSetup.productSelectionOn
+    );
 
   const openProductMappingModal = async (product) => {
     if (!product) return alert("Please click Map button from product list row.");
@@ -5176,44 +5310,179 @@ const Dashboard = ({ onLogout }) => {
     return `${code}|${batchNo}|${mrp}`;
   };
 
-  const buildFilteredProductList = (searchTerm, editingIndex = -1) => {
+  /* =========================================================
+    SALES PRODUCT SEARCH ACCORDING TO GENERAL SETUP
+ ========================================================= */
+
+  const buildFilteredProductList = (
+    searchTerm,
+    editingIndex = -1
+  ) => {
     const search = norm(searchTerm);
+
+    const selectionMode =
+      getRuntimeProductSelectionMode();
 
     const usedKeys = new Set(
       invoiceItems
-        .filter((_, i) => i !== editingIndex)
-        .filter((item) => item?.productCode || item?.productId)
+        .filter(
+          (_, itemIndex) =>
+            itemIndex !== editingIndex
+        )
+        .filter(
+          (item) =>
+            item?.productCode ||
+            item?.productId
+        )
         .map(getInvoiceItemKey)
     );
 
-    const entries = getFilteredSalesProducts()
-      .filter((p) => {
-        if (!search) return true;
-        return (
-          norm(getProductCode(p)).includes(search) ||
-          norm(getProductName(p)).includes(search)
-        );
-      })
-      .flatMap((product) => {
-        const batches = getCachedSalesBatches(product);
+    const getSelectedSearchValue = (
+      product
+    ) => {
+      switch (selectionMode) {
+        case "COMPANY_PRODUCT_CODE":
+          return getProductCompanyCode(
+            product
+          );
 
-        if (batches.length > 0) {
-          return batches.map((batch) => ({
-            product,
-            batch,
-            isAlreadySelected: usedKeys.has(getSalesProductKey(product, batch)),
-          }));
-        }
+        case "SHORT_CODE":
+          return getProductShortCode(
+            product
+          );
 
-        return [{
-          product,
-          batch: null,
-          isAlreadySelected: usedKeys.has(getSalesProductKey(product, null)),
-        }];
-      });
+        case "LOCAL_PRODUCT_NAME":
+          return getProductLocalName(
+            product
+          );
 
-    setFilteredProductList(entries);
-    setProductDropdownIndex(entries.length > 0 ? 0 : -1);
+        case "EAN_NO":
+          return getProductEanNo(
+            product
+          );
+
+        case "PRODUCT_NAME":
+          return getProductName(
+            product
+          );
+
+        case "PRODUCT_CODE":
+        default:
+          return getProductCode(
+            product
+          );
+      }
+    };
+
+    const entries =
+      getFilteredSalesProducts()
+        .filter((product) => {
+          if (!search) {
+            return true;
+          }
+
+          const selectedValue =
+            getSelectedSearchValue(
+              product
+            );
+
+          return norm(
+            selectedValue
+          ).includes(search);
+        })
+        .sort(
+          (
+            firstProduct,
+            secondProduct
+          ) => {
+            const firstValue =
+              getSelectedSearchValue(
+                firstProduct
+              );
+
+            const secondValue =
+              getSelectedSearchValue(
+                secondProduct
+              );
+
+            return String(
+              firstValue || ""
+            ).localeCompare(
+              String(
+                secondValue || ""
+              ),
+              undefined,
+              {
+                numeric: true,
+                sensitivity: "base",
+              }
+            );
+          }
+        )
+        .flatMap((product) => {
+          const productBatches =
+            getCachedSalesBatches(
+              product
+            );
+
+          if (
+            productBatches.length > 0
+          ) {
+            return productBatches.map(
+              (batch) => ({
+                product,
+                batch,
+
+                searchValue:
+                  getSelectedSearchValue(
+                    product
+                  ),
+
+                selectionMode,
+
+                isAlreadySelected:
+                  usedKeys.has(
+                    getSalesProductKey(
+                      product,
+                      batch
+                    )
+                  ),
+              })
+            );
+          }
+
+          return [
+            {
+              product,
+              batch: null,
+
+              searchValue:
+                getSelectedSearchValue(
+                  product
+                ),
+
+              selectionMode,
+
+              isAlreadySelected:
+                usedKeys.has(
+                  getSalesProductKey(
+                    product,
+                    null
+                  )
+                ),
+            },
+          ];
+        });
+
+    setFilteredProductList(
+      entries
+    );
+
+    setProductDropdownIndex(
+      entries.length > 0
+        ? 0
+        : -1
+    );
   };
   // Replace the existing loadAreasForAccount function with this version
   const loadAreasForAccount = async () => {
@@ -6084,7 +6353,8 @@ const Dashboard = ({ onLogout }) => {
   const [invoiceFormData, setInvoiceFormData] = useState({
     billDate: new Date().toISOString().split('T')[0],
     godown: 'G1',
-    company: '',
+    company: "",
+    companyCode: "",
     area: '',
     party: '',
     BillSeries: '',
@@ -6499,6 +6769,33 @@ const Dashboard = ({ onLogout }) => {
       JSON.stringify(value)
     );
   };
+  const getDefaultInvoiceCompany = () => {
+    const defaultCompany =
+      String(
+        runtimeGeneralSetup.defaultCompany ||
+        ""
+      ).trim();
+
+    if (!defaultCompany) {
+      return "";
+    }
+
+    if (
+      isMixCompany(defaultCompany) &&
+      runtimeGeneralSetup.allowMixBilling !== true
+    ) {
+      return "";
+    }
+
+    return defaultCompany;
+  };
+  const getDefaultInvoiceGodown = () => {
+    return String(
+      runtimeGeneralSetup.defaultGodown ||
+      ""
+    ).trim();
+  };
+
 
   const createInvoiceEntryDraft = () => ({
     formData: {
@@ -6507,10 +6804,17 @@ const Dashboard = ({ onLogout }) => {
           .toISOString()
           .split("T")[0],
 
-      godown: "G1",
+      godown:
+        getDefaultInvoiceGodown(),
 
-      company: "",
-      companyCode: "",
+      godownCode:
+        getDefaultInvoiceGodown(),
+
+      company:
+        getDefaultInvoiceCompany(),
+
+      companyCode:
+        getDefaultInvoiceCompany(),
 
       area: "",
       areaCode: "",
@@ -15531,6 +15835,62 @@ const Dashboard = ({ onLogout }) => {
       alert("Server not connected. Failed to load godowns.");
     }
   };
+  /* =========================================================
+   VALIDATE DEFAULT GODOWN
+========================================================= */
+
+  useEffect(() => {
+    const defaultGodown =
+      String(
+        runtimeGeneralSetup.defaultGodown ||
+        ""
+      ).trim();
+
+    if (!defaultGodown) {
+      return;
+    }
+
+    if (
+      !Array.isArray(godowns) ||
+      godowns.length === 0
+    ) {
+      return;
+    }
+
+    const exists =
+      godowns.some((godown) => {
+        const godownCode =
+          String(
+            godown.godownCode ||
+            godown.code ||
+            ""
+          ).trim();
+
+        return (
+          godownCode === defaultGodown
+        );
+      });
+
+    if (!exists) {
+      setRuntimeGeneralSetup(
+        (previous) => ({
+          ...previous,
+          defaultGodown: "",
+        })
+      );
+
+      setInvoiceFormData(
+        (previous) => ({
+          ...previous,
+          godown: "",
+          godownCode: "",
+        })
+      );
+    }
+  }, [
+    godowns,
+    runtimeGeneralSetup.defaultGodown,
+  ]);
   const loadGodownMaster = useCallback(
     async ({
       page = 1,
@@ -16606,6 +16966,30 @@ const Dashboard = ({ onLogout }) => {
       },
     ];
 
+    const getProductSelectionLabel = (
+      mode = getRuntimeProductSelectionMode()
+    ) => {
+      switch (mode) {
+        case "COMPANY_PRODUCT_CODE":
+          return "Company Code";
+
+        case "SHORT_CODE":
+          return "Short Code";
+
+        case "LOCAL_PRODUCT_NAME":
+          return "Local Name";
+
+        case "EAN_NO":
+          return "EAN No.";
+
+        case "PRODUCT_NAME":
+          return "Product Name";
+
+        case "PRODUCT_CODE":
+        default:
+          return "Product Code";
+      }
+    };
     const topCustomerRows = [
       {
         name: "ABC Traders",
@@ -17835,9 +18219,7 @@ const Dashboard = ({ onLogout }) => {
        * MIX:
        * Load mappings from every company.
        */
-      await loadInvoiceMappingsByCompany(
-        selectedCompanyCode
-      );
+
 
       return;
     }
@@ -18049,6 +18431,10 @@ const Dashboard = ({ onLogout }) => {
    SALES VAT / GST CALCULATION HELPERS
 ========================================================= */
 
+  /* =========================================================
+    SALES VAT / GST CALCULATION HELPERS
+ ========================================================= */
+
   function invoiceRound(value) {
     const number = Number(value || 0);
 
@@ -18061,15 +18447,22 @@ const Dashboard = ({ onLogout }) => {
     ) / 100;
   }
 
+  /*
+   * Returns the VAT/GST calculation method selected
+   * from General Setup.
+   *
+   * GROSS_AMOUNT is the default calculation mode.
+   */
   const getInvoiceVatMode = () => {
     const selectedMode = String(
       runtimeGeneralSetup.vatOn ||
-      "NET_AMOUNT"
+      DEFAULT_VAT_ON
     )
       .trim()
       .toUpperCase();
 
     const validModes = [
+      "GROSS_AMOUNT",
       "NET_AMOUNT",
       "GROSS_SCHEME",
       "GROSS_SCHEME_STAR",
@@ -18077,15 +18470,17 @@ const Dashboard = ({ onLogout }) => {
       "GROSS_CASH",
     ];
 
-    return validModes.includes(selectedMode)
+    return validModes.includes(
+      selectedMode
+    )
       ? selectedMode
-      : "NET_AMOUNT";
+      : DEFAULT_VAT_ON;
   };
 
   const getInvoiceCashDiscountMode = () => {
     const selectedMode = String(
       runtimeGeneralSetup.cashDiscountOn ||
-      "BILL_NET_AMOUNT"
+      DEFAULT_CASH_DISCOUNT_ON
     )
       .trim()
       .toUpperCase();
@@ -18098,13 +18493,18 @@ const Dashboard = ({ onLogout }) => {
       "BILL_GROSS_SCHEME_VAT",
     ];
 
-    return validModes.includes(selectedMode)
+    return validModes.includes(
+      selectedMode
+    )
       ? selectedMode
-      : "BILL_NET_AMOUNT";
+      : DEFAULT_CASH_DISCOUNT_ON;
   };
+
   /*
-   * TPR is treated as a trade-price reduction and is
-   * always deducted before GST.
+   * VAT / GST TAXABLE BASE RULES
+   *
+   * GROSS_AMOUNT:
+   * Gross Amount
    *
    * NET_AMOUNT:
    * Gross - TPR - Scheme - Star - Cash Discount
@@ -18133,13 +18533,22 @@ const Dashboard = ({ onLogout }) => {
       invoiceRound(gross);
 
     const tprAmount =
-      Math.max(0, invoiceRound(tpr));
+      Math.max(
+        0,
+        invoiceRound(tpr)
+      );
 
     const schemeAmount =
-      Math.max(0, invoiceRound(scheme));
+      Math.max(
+        0,
+        invoiceRound(scheme)
+      );
 
     const starAmount =
-      Math.max(0, invoiceRound(star));
+      Math.max(
+        0,
+        invoiceRound(star)
+      );
 
     const cashAmount =
       Math.max(
@@ -18147,38 +18556,83 @@ const Dashboard = ({ onLogout }) => {
         invoiceRound(cashDiscount)
       );
 
-    let taxableAmount =
-      grossAmount - tprAmount;
+    let taxableAmount = grossAmount;
 
-    switch (vatMode) {
+    switch (
+    String(vatMode || "GROSS_AMOUNT")
+      .trim()
+      .toUpperCase()
+    ) {
+      /*
+       * GST directly on gross amount.
+       * No TPR, Scheme, Star or Cash Discount
+       * is deducted from the taxable base.
+       */
+      case "GROSS_AMOUNT":
+        taxableAmount =
+          grossAmount;
+        break;
+
+      /*
+       * Gross - TPR - Scheme
+       */
       case "GROSS_SCHEME":
-        taxableAmount -=
+        taxableAmount =
+          grossAmount -
+          tprAmount -
           schemeAmount;
         break;
 
+      /*
+       * Gross - TPR - Scheme - Star
+       */
       case "GROSS_SCHEME_STAR":
-        taxableAmount -=
-          schemeAmount +
+        taxableAmount =
+          grossAmount -
+          tprAmount -
+          schemeAmount -
           starAmount;
         break;
 
+      /*
+       * Gross - TPR - Scheme - Cash Discount
+       */
       case "GROSS_SCHEME_CASH":
-        taxableAmount -=
-          schemeAmount +
+        taxableAmount =
+          grossAmount -
+          tprAmount -
+          schemeAmount -
           cashAmount;
         break;
 
+      /*
+       * Gross - TPR - Cash Discount
+       */
       case "GROSS_CASH":
-        taxableAmount -=
+        taxableAmount =
+          grossAmount -
+          tprAmount -
           cashAmount;
         break;
 
+      /*
+       * Gross - TPR - Scheme - Star - Cash Discount
+       */
       case "NET_AMOUNT":
-      default:
-        taxableAmount -=
-          schemeAmount +
-          starAmount +
+        taxableAmount =
+          grossAmount -
+          tprAmount -
+          schemeAmount -
+          starAmount -
           cashAmount;
+        break;
+
+      /*
+       * Safe default is Gross Amount.
+       */
+      default:
+        taxableAmount =
+          grossAmount;
         break;
     }
 
@@ -19024,13 +19478,15 @@ const Dashboard = ({ onLogout }) => {
     if (loadedBillProductReadOnly) {
       return;
     }
-    if (
-      field === "rate" &&
-      !runtimeGeneralSetup.allowChangeSaleRate
-    ) {
-      return;
-    }
-    setInvoiceItems((previousItems) => {
+
+
+  if (
+    field === "rate" &&
+    !runtimeGeneralSetup.allowChangeSaleRate
+  ) {
+    return;
+  }
+setInvoiceItems((previousItems) => {
       const updatedItems =
         previousItems.map(
           (existingItem, itemIndex) => {
@@ -19676,51 +20132,51 @@ const Dashboard = ({ onLogout }) => {
     invoiceManualAdjustments.coupon,
     invoiceManualAdjustments.addLess,
   ]);
-useEffect(() => {
-  if (
-    !Array.isArray(invoiceItems) ||
-    invoiceItems.length === 0
-  ) {
-    return;
-  }
+  useEffect(() => {
+    if (
+      !Array.isArray(invoiceItems) ||
+      invoiceItems.length === 0
+    ) {
+      return;
+    }
 
-  const hasActualProduct =
-    invoiceItems.some((item) =>
-      String(
-        item.productCode ||
-        item.productId ||
-        item.product ||
-        ""
-      ).trim()
-  );
+    const hasActualProduct =
+      invoiceItems.some((item) =>
+        String(
+          item.productCode ||
+          item.productId ||
+          item.product ||
+          ""
+        ).trim()
+      );
 
-  if (!hasActualProduct) {
-    return;
-  }
+    if (!hasActualProduct) {
+      return;
+    }
 
-  const recalculatedItems =
-    recalculateInvoiceCashDiscount(
-      invoiceItems
+    const recalculatedItems =
+      recalculateInvoiceCashDiscount(
+        invoiceItems
+      );
+
+    setInvoiceItems(
+      recalculatedItems
     );
 
-  setInvoiceItems(
-    recalculatedItems
-  );
+    calcInvoiceSummary(
+      recalculatedItems
+    );
 
-  calcInvoiceSummary(
-    recalculatedItems
-  );
-
-  updateActiveInvoiceDraft({
-    items:
-      cloneInvoiceDraftValue(
-        recalculatedItems
-      ),
-  });
-}, [
-  runtimeGeneralSetup.vatOn,
-  runtimeGeneralSetup.cashDiscountOn,
-]);
+    updateActiveInvoiceDraft({
+      items:
+        cloneInvoiceDraftValue(
+          recalculatedItems
+        ),
+    });
+  }, [
+    runtimeGeneralSetup.vatOn,
+    runtimeGeneralSetup.cashDiscountOn,
+  ]);
 
   const handleInvoiceKeyDown = (e, index, field) => {
     if (e.key === 'Enter') {
@@ -19801,6 +20257,22 @@ useEffect(() => {
     purchaseRate: Number(b.purchaseRate ?? b.pRate ?? b.PRate ?? 0),
     isLocked: b.isLocked ?? b.IsLocked ?? "N",
   });
+  const normalizeDefaultSelection = (
+    value
+  ) => {
+    const normalized = String(
+      value ||
+      DEFAULT_SELECTION
+    )
+      .trim()
+      .toUpperCase();
+
+    return DEFAULT_SELECTION_VALUES.includes(
+      normalized
+    )
+      ? normalized
+      : DEFAULT_SELECTION;
+  };
 
   const loadSalesBatchesForProduct = async (product) => {
     const prodCode = getProductCode(product);
@@ -20081,8 +20553,21 @@ useEffect(() => {
             setup.editProductAfterLoad === "Y" ||
             setup.editProductAfterLoad === "YES" ||
             setup.editProductAfterLoad === 1,
+          saveAndPrint:
+            setup.saveAndPrint === true ||
+            setup.saveAndPrint === "true" ||
+            setup.saveAndPrint === "Y" ||
+            setup.saveAndPrint === "YES" ||
+            setup.saveAndPrint === 1,
+            allowSRateLessThanPRate:
+  setup.allowSRateLessThanPRate === true ||
+  setup.allowSRateLessThanPRate === "true" ||
+  setup.allowSRateLessThanPRate === "Y" ||
+  setup.allowSRateLessThanPRate === "YES" ||
+  setup.allowSRateLessThanPRate === 1,
           vatOn:
             [
+              "GROSS_AMOUNT",
               "NET_AMOUNT",
               "GROSS_SCHEME",
               "GROSS_SCHEME_STAR",
@@ -20090,8 +20575,7 @@ useEffect(() => {
               "GROSS_CASH",
             ].includes(
               String(
-                setup.vatOn ||
-                ""
+                setup.vatOn || ""
               )
                 .trim()
                 .toUpperCase()
@@ -20101,7 +20585,8 @@ useEffect(() => {
               )
                 .trim()
                 .toUpperCase()
-              : "NET_AMOUNT",
+              : DEFAULT_VAT_ON,
+
           cashDiscountOn:
             [
               "BILL_NET_AMOUNT",
@@ -20111,8 +20596,7 @@ useEffect(() => {
               "BILL_GROSS_SCHEME_VAT",
             ].includes(
               String(
-                setup.cashDiscountOn ||
-                ""
+                setup.cashDiscountOn || ""
               )
                 .trim()
                 .toUpperCase()
@@ -20122,7 +20606,26 @@ useEffect(() => {
               )
                 .trim()
                 .toUpperCase()
-              : "BILL_NET_AMOUNT",
+              : DEFAULT_CASH_DISCOUNT_ON,
+
+          productSelectionOn:
+            normalizeProductSelectionMode(
+              setup.productSelectionOn
+            ),
+          defaultCompany:
+            String(
+              setup.defaultCompany ||
+              ""
+            ).trim(),
+          defaultGodown:
+            String(
+              setup.defaultGodown ||
+              ""
+            ).trim(),
+          defaultSelection:
+            normalizeDefaultSelection(
+              setup.defaultSelection
+            ),
         });
       } catch (error) {
         console.error(
@@ -20143,8 +20646,21 @@ useEffect(() => {
           allowMixBilling: false,
           allowEditBillAfterLoad: false,
           editProductAfterLoad: false,
-          vatOn: "NET_AMOUNT",
-          cashDiscountOn: "BILL_NET_AMOUNT",
+            saveAndPrint: false,
+            allowSRateLessThanPRate: false,
+
+          vatOn:
+            DEFAULT_VAT_ON,
+
+          cashDiscountOn:
+            DEFAULT_CASH_DISCOUNT_ON,
+
+          productSelectionOn:
+            DEFAULT_PRODUCT_SELECTION_ON,
+          defaultCompany: "",
+          defaultGodown: "",
+          defaultSelection:
+            DEFAULT_SELECTION,
         });
       }
     }, []);
@@ -20355,6 +20871,36 @@ useEffect(() => {
       setInvoiceSalesmanAreaMappings([]);
     }
   };
+  /* =========================================================
+   LOAD DEFAULT COMPANY MAPPINGS FOR NEW BILL
+========================================================= */
+
+  useEffect(() => {
+    const isBillingForm =
+      openFormFor === "Billing" ||
+      openFormFor === "Quotation";
+
+    if (!isBillingForm) {
+      return;
+    }
+
+    const selectedCompany =
+      String(
+        invoiceFormData.company ||
+        ""
+      ).trim();
+
+    if (!selectedCompany) {
+      return;
+    }
+
+    loadInvoiceMappingsByCompany(
+      selectedCompany
+    );
+  }, [
+    openFormFor,
+    invoiceFormData.company,
+  ]);
 
   const getCreditItemKey = (item) => {
     const productCode = String(
@@ -20852,15 +21398,27 @@ useEffect(() => {
         product.SRate ??
         "",
 
-      purchaseRate: Number(
-        selectedBatch?.purchaseRate ??
-        selectedBatch?.pRate ??
-        selectedBatch?.PRate ??
-        product.purchaseRate ??
-        product.pRate ??
-        product.PRate ??
-        0
-      ),
+    purchaseRate: Number(
+  selectedBatch?.purchaseRate ??
+  selectedBatch?.PurchaseRate ??
+  selectedBatch?.purRate ??
+  selectedBatch?.PurRate ??
+  selectedBatch?.pRate ??
+  selectedBatch?.PRate ??
+  selectedBatch?.Rate_Per_Unit ??
+  selectedBatch?.purchasePrice ??
+  selectedBatch?.PurchasePrice ??
+  product.purchaseRate ??
+  product.PurchaseRate ??
+  product.purRate ??
+  product.PurRate ??
+  product.pRate ??
+  product.PRate ??
+  product.Rate_Per_Unit ??
+  product.purchasePrice ??
+  product.PurchasePrice ??
+  0
+),
 
       gst:
         product.gst ??
@@ -20890,10 +21448,47 @@ useEffect(() => {
         1
       ),
 
-      selectedBatch:
-        cloneInvoiceDraftValue(
-          selectedBatch
-        ),
+      selectedBatch: {
+  ...cloneInvoiceDraftValue(
+    selectedBatch || {}
+  ),
+
+  purchaseRate: Number(
+    selectedBatch?.purchaseRate ??
+    selectedBatch?.PurchaseRate ??
+    selectedBatch?.purRate ??
+    selectedBatch?.PurRate ??
+    selectedBatch?.pRate ??
+    selectedBatch?.PRate ??
+    selectedBatch?.Rate_Per_Unit ??
+    product.purchaseRate ??
+    product.PurchaseRate ??
+    product.purRate ??
+    product.PurRate ??
+    product.pRate ??
+    product.PRate ??
+    product.Rate_Per_Unit ??
+    0
+  ),
+
+  PRate: Number(
+    selectedBatch?.purchaseRate ??
+    selectedBatch?.PurchaseRate ??
+    selectedBatch?.purRate ??
+    selectedBatch?.PurRate ??
+    selectedBatch?.pRate ??
+    selectedBatch?.PRate ??
+    selectedBatch?.Rate_Per_Unit ??
+    product.purchaseRate ??
+    product.PurchaseRate ??
+    product.purRate ??
+    product.PurRate ??
+    product.pRate ??
+    product.PRate ??
+    product.Rate_Per_Unit ??
+    0
+  ),
+},
     };
 
     /*
@@ -21308,11 +21903,59 @@ useEffect(() => {
 
             mrp: Number(item.mrp || item.MRP || 0),
             MRP: Number(item.mrp || item.MRP || 0),
+rate: Number(
+  item.rate ||
+  item.salesRate ||
+  item.srate ||
+  item.SRate ||
+  0
+),
 
-            rate: Number(item.rate || item.salesRate || item.srate || 0),
-            salesRate: Number(item.rate || item.salesRate || item.srate || 0),
+salesRate: Number(
+  item.rate ||
+  item.salesRate ||
+  item.srate ||
+  item.SRate ||
+  0
+),
 
-            taxable: Number(item.taxable || 0),
+purchaseRate: Number(
+  item.purchaseRate ??
+  item.PurchaseRate ??
+  item.purRate ??
+  item.PurRate ??
+  item.pRate ??
+  item.PRate ??
+  item.prate ??
+  item.Rate_Per_Unit ??
+  item.selectedBatch?.purchaseRate ??
+  item.selectedBatch?.PurchaseRate ??
+  item.selectedBatch?.purRate ??
+  item.selectedBatch?.pRate ??
+  item.selectedBatch?.PRate ??
+  item.selectedBatch?.Rate_Per_Unit ??
+  0
+),
+
+PRate: Number(
+  item.purchaseRate ??
+  item.PurchaseRate ??
+  item.purRate ??
+  item.PurRate ??
+  item.pRate ??
+  item.PRate ??
+  item.prate ??
+  item.Rate_Per_Unit ??
+  item.selectedBatch?.purchaseRate ??
+  item.selectedBatch?.PurchaseRate ??
+  item.selectedBatch?.purRate ??
+  item.selectedBatch?.pRate ??
+  item.selectedBatch?.PRate ??
+  item.selectedBatch?.Rate_Per_Unit ??
+  0
+),
+
+taxable: Number(item.taxable || 0),
             gst: Number(item.gst || item.gstPercent || 0),
             sgst: Number(item.sgst || 0),
             cgst: Number(item.cgst || 0),
@@ -21321,10 +21964,189 @@ useEffect(() => {
           };
         });
 
-      if (validItems.length === 0) {
-        alert("Please add at least one product");
-        return;
-      }
+     /* =========================================================
+   SALES PRODUCT ROW VALIDATION
+========================================================= */
+
+if (validItems.length === 0) {
+  const selectedProductRow =
+    invoiceItems.find((item) => {
+      const productCode = String(
+        item.productCode ||
+        item.productId ||
+        item.code ||
+        String(item.product || "")
+          .split(" - ")[0] ||
+        ""
+      ).trim();
+
+      return productCode !== "";
+    });
+
+  /*
+   * A product is selected, but Qty/Free is missing.
+   */
+  if (selectedProductRow) {
+    const qty = Number(
+      selectedProductRow.qty ??
+      selectedProductRow.quantity ??
+      selectedProductRow.Qty ??
+      0
+    );
+
+    const free = Number(
+      selectedProductRow.free ??
+      selectedProductRow.Free ??
+      0
+    );
+
+    const rate = Number(
+      selectedProductRow.rate ??
+      selectedProductRow.salesRate ??
+      selectedProductRow.srate ??
+      selectedProductRow.SRate ??
+      0
+    );
+
+    if (qty <= 0 && free <= 0) {
+      alert(
+        "Please enter Quantity or Free Quantity for the selected product."
+      );
+      return;
+    }
+
+    if (rate <= 0) {
+      alert(
+        "Please enter a valid Sales Rate for the selected product."
+      );
+      return;
+    }
+  }
+
+  alert(
+    "Please select at least one product."
+  );
+
+  return;
+}
+      /* =========================================================
+   S.RATE BELOW P.RATE — FINAL SAVE VALIDATION
+
+   Setting OFF:
+   1. Purchase Rate must be available.
+   2. Sales Rate cannot be below Purchase Rate.
+
+   This final validation prevents saving even if live
+   input validation was bypassed.
+========================================================= */
+
+if (
+  runtimeGeneralSetup
+    .allowSRateLessThanPRate !== true
+) {
+  const readSalesPurchaseRate = (item) =>
+    Number(
+      item.purchaseRate ??
+      item.PurchaseRate ??
+      item.purRate ??
+      item.PurRate ??
+      item.pRate ??
+      item.PRate ??
+      item.prate ??
+      item.selectedBatch?.purchaseRate ??
+      item.selectedBatch?.PurchaseRate ??
+      item.selectedBatch?.purRate ??
+      item.selectedBatch?.PurRate ??
+      item.selectedBatch?.pRate ??
+      item.selectedBatch?.PRate ??
+      item.selectedBatch?.prate ??
+      0
+    );
+
+  const readSalesRate = (item) =>
+    Number(
+      item.rate ??
+      item.salesRate ??
+      item.SalesRate ??
+      item.srate ??
+      item.sRate ??
+      item.SRate ??
+      0
+    );
+
+  /*
+   * Do not permit save when Purchase Rate is missing.
+   * Otherwise a zero Purchase Rate would bypass the rule.
+   */
+  const missingPurchaseRateItem =
+    validItems.find((item) => {
+      const purchaseRate =
+        readSalesPurchaseRate(item);
+
+      return (
+        !Number.isFinite(purchaseRate) ||
+        purchaseRate <= 0
+      );
+    });
+
+  if (missingPurchaseRateItem) {
+    alert(
+      `Invoice cannot be saved.\n\n` +
+      `Purchase Rate was not found for:\n` +
+      `${
+        missingPurchaseRateItem.productName ||
+        missingPurchaseRateItem.product ||
+        missingPurchaseRateItem.productCode ||
+        "Selected Product"
+      }\n\n` +
+      `Please check the Purchase Rate in Stock/Batch Master.`
+    );
+
+    return;
+  }
+
+  const belowPurchaseRateItem =
+    validItems.find((item) => {
+      const salesRate =
+        readSalesRate(item);
+
+      const purchaseRate =
+        readSalesPurchaseRate(item);
+
+      return (
+        Number.isFinite(salesRate) &&
+        Number.isFinite(purchaseRate) &&
+        salesRate < purchaseRate
+      );
+    });
+
+  if (belowPurchaseRateItem) {
+    const salesRate =
+      readSalesRate(
+        belowPurchaseRateItem
+      );
+
+    const purchaseRate =
+      readSalesPurchaseRate(
+        belowPurchaseRateItem
+      );
+
+    alert(
+      `Invoice cannot be saved.\n\n` +
+      `Product: ${
+        belowPurchaseRateItem.productName ||
+        belowPurchaseRateItem.product ||
+        belowPurchaseRateItem.productCode ||
+        "Selected Product"
+      }\n` +
+      `Purchase Rate: ₹${purchaseRate.toFixed(2)}\n` +
+      `Sales Rate: ₹${salesRate.toFixed(2)}\n\n` +
+      `Enable "S.Rate Below P.Rate" in General Setup to allow this.`
+    );
+
+    return;
+  }
+}
       /* =========================================================
    ALLOW MIX BILLING VALIDATION
    ADD THIS BLOCK HERE
@@ -21747,14 +22569,133 @@ useEffect(() => {
         return;
       }
 
-      alert(isEditMode ? "Sales bill updated successfully!" : "Sales saved successfully!");
+alert(
+  isEditMode
+    ? "Sales bill updated successfully!"
+    : "Sales saved successfully!"
+);
 
-      // ✅ STORE COMPANY VALUE BEFORE RESET
-      const companyValue = invoiceFormData.company;
-      const billSeriesValue = invoiceFormData.BillSeries;
-      const godownValue = invoiceFormData.godown;
-      const billTypeValue = invoiceFormData.billType;
-      const nextBillNo = result.nextBillNo || Number(invoiceFormData.billNo || 0) + 1;
+/* =========================================================
+   PREPARE SAVED BILL FOR SAVE AND PRINT
+========================================================= */
+
+/*
+ * Different backend versions may return the saved bill
+ * under bill, sales, record, data or invoice.
+ */
+const savedSalesBill =
+  result?.bill ||
+  result?.savedBill ||
+  result?.sales ||
+  result?.record ||
+  result?.data?.header ||
+  result?.data?.bill ||
+  result?.data?.sales ||
+  result?.invoice ||
+  null;
+
+/*
+ * Create a safe fallback using the data that was sent.
+ * Print-details still requires the saved MongoDB ID,
+ * therefore prefer the backend returned record.
+ */
+const savedSalesBillForPrint = {
+  ...salesData,
+  ...(savedSalesBill || {}),
+
+_id:
+  savedSalesBill?._id ||
+  savedSalesBill?.id ||
+  result?.savedBillId ||
+  result?._id ||
+  result?.id ||
+  editingInvoiceId ||
+  "",
+
+id:
+  savedSalesBill?.id ||
+  savedSalesBill?._id ||
+  result?.savedBillId ||
+  result?.id ||
+  result?._id ||
+  editingInvoiceId ||
+  "",
+
+  BillSeries:
+    savedSalesBill?.BillSeries ||
+    savedSalesBill?.billSeries ||
+    salesData.BillSeries ||
+    invoiceFormData.BillSeries ||
+    "INV",
+
+  BillNo:
+    savedSalesBill?.BillNo ??
+    savedSalesBill?.billNo ??
+    salesData.BillNo ??
+    invoiceFormData.billNo ??
+    "",
+
+  LoadSeries:
+    savedSalesBill?.LoadSeries ||
+    savedSalesBill?.loadSeries ||
+    "",
+
+  LoadNo:
+    savedSalesBill?.LoadNo ??
+    savedSalesBill?.loadNo ??
+    "",
+};
+
+/*
+ * Store the setting before resetting the bill form.
+ */
+const shouldOpenPrintAfterSave =
+  runtimeGeneralSetup.saveAndPrint === true &&
+  !isEditMode;
+
+/*
+ * Keep the current saved bill reference.
+ * The modal will use this record after the form reset.
+ */
+if (shouldOpenPrintAfterSave) {
+  if (
+    savedSalesBillForPrint._id ||
+    savedSalesBillForPrint.id
+  ) {
+    openSalesPrintFormatSelection(
+      savedSalesBillForPrint,
+      "print"
+    );
+  } else {
+    console.error(
+      "Save and Print could not start because the Sales save API did not return the saved bill ID.",
+      result
+    );
+
+    alert(
+      "Sales Bill was saved, but the print window could not open because the saved Bill ID was not returned by the server."
+    );
+  }
+}
+
+// ✅ STORE COMPANY VALUE BEFORE RESET
+const companyValue =
+  invoiceFormData.company;
+
+const billSeriesValue =
+  invoiceFormData.BillSeries;
+
+const godownValue =
+  invoiceFormData.godown;
+
+const billTypeValue =
+  invoiceFormData.billType;
+
+const nextBillNo =
+  result.nextBillNo ||
+  Number(
+    invoiceFormData.billNo || 0
+  ) + 1;
 
       // ✅ RESET EDITING STATE
       setEditingInvoiceId(null);
@@ -21869,27 +22810,97 @@ useEffect(() => {
     }
   };
   // ✅ FOCUS ON PARTY FIELD WHEN BILLING FORM OPENS
+  /* =========================================================
+     APPLY DEFAULT BILLING SELECTION
+     AREA  -> Focus Area dropdown
+     ROUTE -> Focus Party selection
+  ========================================================= */
+
   useEffect(() => {
-    // Only for Billing form, not in edit mode, and not in settle adjust mode
-    if (openFormFor === 'Billing' && !editingInvoiceId && !isSettleAdjustMode) {
-      // Wait for DOM to render
-      setTimeout(() => {
-        const partySelect = document.querySelector('[name="party"]');
-        if (partySelect) {
-          partySelect.focus();
-          // Visual highlight
-          partySelect.style.transition = 'all 0.3s ease';
-          partySelect.style.borderColor = '#3b82f6';
-          partySelect.style.boxShadow = '0 0 0 3px rgba(59, 130, 246, 0.3)';
-          setTimeout(() => {
-            partySelect.style.borderColor = '';
-            partySelect.style.boxShadow = '';
-          }, 2000);
-          console.log('✅ Initial focus on Party field');
-        }
-      }, 500);
+    const isInvoiceFormOpen =
+      openFormFor === "Billing" ||
+      openFormFor === "Quotation";
+
+    if (!isInvoiceFormOpen) {
+      return;
     }
-  }, [openFormFor, editingInvoiceId, isSettleAdjustMode]);
+
+    /*
+     * Do not change focus while editing an
+     * existing bill or adjusting settlement.
+     */
+    if (
+      editingInvoiceId ||
+      isSettleAdjustMode
+    ) {
+      return;
+    }
+
+    const selectionMode =
+      normalizeDefaultSelection(
+        runtimeGeneralSetup.defaultSelection
+      );
+
+    const timerId = window.setTimeout(
+      () => {
+        let targetElement = null;
+
+        if (selectionMode === "AREA") {
+          targetElement =
+            document.querySelector(
+              '[name="area"]'
+            );
+        } else {
+          /*
+           * ROUTE mode uses the current mapped
+           * Party selection flow.
+           */
+          targetElement =
+            document.querySelector(
+              '[name="party"]'
+            );
+        }
+
+        if (!targetElement) {
+          return;
+        }
+
+        targetElement.focus();
+
+        targetElement.style.transition =
+          "border-color 0.3s ease, box-shadow 0.3s ease";
+
+        targetElement.style.borderColor =
+          "#3b82f6";
+
+        targetElement.style.boxShadow =
+          "0 0 0 3px rgba(59, 130, 246, 0.25)";
+
+        window.setTimeout(() => {
+          targetElement.style.borderColor =
+            "";
+
+          targetElement.style.boxShadow =
+            "";
+        }, 1500);
+      },
+      600
+    );
+
+    return () => {
+      window.clearTimeout(timerId);
+    };
+  }, [
+    openFormFor,
+    editingInvoiceId,
+    isSettleAdjustMode,
+    runtimeGeneralSetup.defaultSelection,
+  ]);
+  /* =========================================================
+   APPLY DEFAULT COMPANY TO NEW BILL
+========================================================= */
+
+
 
   const loadSalesBills =
     useCallback(
@@ -24370,9 +25381,50 @@ useEffect(() => {
         `${API_URL}/stock/batches?distributorId=${encodeURIComponent(distributorId)}&firmId=${encodeURIComponent(firmId)}&gdCode=${encodeURIComponent(gdCode)}&prodCode=${encodeURIComponent(prodCode)}&includeLocked=Y`
       );
 
-      const result = await res.json();
-      const loadedBatches = res.ok && result.success ? result.batches || [] : [];
+     const result = await res.json();
 
+console.log(
+  "RAW STOCK BATCH API RESPONSE:",
+  result
+);
+
+const loadedBatches =
+  res.ok &&
+  result.success &&
+  Array.isArray(result.batches)
+    ? result.batches
+    : [];
+
+console.table(
+  loadedBatches.map((batch) => ({
+    Batch:
+      batch.batchNo ??
+      batch.batch ??
+      "",
+
+    MRP:
+      batch.mrp ?? 0,
+
+    SalesRate:
+      batch.salesRate ??
+      batch.sRate ??
+      0,
+
+    PurchaseRate:
+      batch.purchaseRate ?? 0,
+
+    Stock:
+      batch.stockQty ??
+      batch.qty ??
+      0,
+
+    Godown:
+      batch.gdCode ?? "",
+
+    Product:
+      batch.prodCode ?? "",
+  }))
+);
       setCurrentBatchRow(index);
       setSelectedProductForBatch(product);
 
@@ -24413,14 +25465,9 @@ useEffect(() => {
       addPurchaseItem();
     }
 
-    window.setTimeout(() => {
-      if (
-        showBatchModal ||
-        loadedBatches.length > 0
-      ) {
-        purchaseBatchModalRef.current?.focus();
-      }
-    }, 100);
+   window.setTimeout(() => {
+  purchaseBatchModalRef.current?.focus();
+}, 100);
   };
 
   const openBatchModal = (index) => {
@@ -59662,29 +60709,46 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                           </label>
 
                           <select
-                            id="quotation-godown"
                             name="godown"
                             className="billing-control"
-                            value={invoiceFormData.godown}
-                            onChange={handleInvoiceInputChange}
+                            value={
+                              invoiceFormData.godown ||
+                              ""
+                            }
+                            onChange={
+                              handleInvoiceInputChange
+                            }
                           >
-                            <option value="">Select</option>
+                            <option value="">
+                              Select Godown
+                            </option>
 
                             {godowns.map((godown) => {
                               const godownCode =
-                                godown.code ||
-                                godown.godownCode ||
-                                godown.id ||
-                                godown._id;
+                                String(
+                                  godown.godownCode ||
+                                  godown.code ||
+                                  ""
+                                ).trim();
 
                               const godownName =
-                                godown.name ||
-                                godown.godownName ||
-                                godownCode;
+                                String(
+                                  godown.godownName ||
+                                  godown.name ||
+                                  godownCode
+                                ).trim();
+
+                              if (!godownCode) {
+                                return null;
+                              }
 
                               return (
                                 <option
-                                  key={godownCode}
+                                  key={
+                                    godown._id ||
+                                    godown.id ||
+                                    godownCode
+                                  }
                                   value={godownCode}
                                 >
                                   {godownName}
@@ -59702,91 +60766,58 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                           </label>
 
                           <select
+                            id="quotation-company"
                             name="company"
-                            value={invoiceFormData.company || ""}
-                            onChange={(event) => {
-                              const value = event.target.value;
-
-                              setInvoiceFormData((previous) => ({
-                                ...previous,
-                                company: value,
-                              }));
-
-                              /*
-                               * Remove existing product rows when company changes.
-                               * This prevents products from the previous company
-                               * remaining inside a non-mixed bill.
-                               */
-                              setInvoiceItems((previousItems) => {
-                                const hasSelectedProducts =
-                                  previousItems.some((item) =>
-                                    String(
-                                      item.productCode ||
-                                      item.productId ||
-                                      item.product ||
-                                      ""
-                                    ).trim()
-                                  );
-
-                                if (!hasSelectedProducts) {
-                                  return previousItems;
-                                }
-
-                                const confirmed = window.confirm(
-                                  "Changing the company will clear the selected products. Continue?"
-                                );
-
-                                if (!confirmed) {
-                                  return previousItems;
-                                }
-
-                                return [
-                                  createEmptyInvoiceRow(1),
-                                  createEmptyInvoiceRow(2),
-                                  createEmptyInvoiceRow(3),
-                                  createEmptyInvoiceRow(4),
-                                  createEmptyInvoiceRow(5),
-                                ];
-                              });
-
-                              setProductListFilter("");
-                              setShowProductList(false);
-                              setProductDropdownIndex(-1);
-                            }}
+                            className="billing-control"
+                            value={
+                              invoiceFormData.company ||
+                              ""
+                            }
+                            onChange={handleInvoiceInputChange}
                           >
-                            <option value="">Select Company</option>
+                            <option value="">
+                              Select Company
+                            </option>
 
-                            {runtimeGeneralSetup.allowMixBilling && (
+                            {runtimeGeneralSetup.allowMixBilling === true && (
                               <option value="MIX">
-                                MIX - Multiple Companies
+                                MIX BILLING
                               </option>
                             )}
 
                             {companies.map((company) => {
-                              const companyValue =
-                                company.companyName ||
-                                company.name ||
-                                company.companyCode ||
-                                company.code ||
-                                "";
+                              const companyCode =
+                                String(
+                                  company.companyCode ||
+                                  company.CompanyCode ||
+                                  company.code ||
+                                  company.Code ||
+                                  ""
+                                ).trim();
 
-                              const companyLabel = [
-                                company.companyCode || company.code,
-                                company.companyName || company.name,
-                              ]
-                                .filter(Boolean)
-                                .join(" - ");
+                              const companyName =
+                                String(
+                                  company.companyName ||
+                                  company.CompanyName ||
+                                  company.name ||
+                                  company.Name ||
+                                  companyCode
+                                ).trim();
+
+                              if (!companyCode) {
+                                return null;
+                              }
 
                               return (
                                 <option
                                   key={
                                     company._id ||
                                     company.id ||
-                                    companyValue
+                                    companyCode
                                   }
-                                  value={companyValue}
+                                  value={companyCode}
                                 >
-                                  {companyLabel || companyValue}
+                                  {companyName}
                                 </option>
                               );
                             })}
@@ -61348,7 +62379,10 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                           }}
                         >
                           <div className="billing-product-dropdown-header">
-                            <span>Code</span>
+                            <span>
+                              {getProductSelectionLabel()}
+                            </span>
+
                             <span>Product</span>
                             <span>Batch</span>
                             <span>MRP</span>
@@ -61361,8 +62395,8 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                               {
                                 product,
                                 batch,
+                                searchValue,
                                 isAlreadySelected,
-                                isDuplicate,
                               },
                               rowIndex
                             ) => {
@@ -61445,7 +62479,7 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                                   }}
                                 >
                                   <span className="billing-product-code">
-                                    {itemCode}
+                                    {searchValue || itemCode || "-"}
                                   </span>
 
                                   <span>{itemName}</span>
@@ -64797,12 +65831,38 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                         savedSetup?.allowEditBillAfterLoad === true,
                       editProductAfterLoad:
                         savedSetup?.editProductAfterLoad === true,
+                        saveAndPrint:
+  savedSetup?.saveAndPrint === true,
+  allowSRateLessThanPRate:
+  savedSetup?.allowSRateLessThanPRate === true,
+
                       vatOn:
                         savedSetup?.vatOn ||
-                        "NET_AMOUNT",
+                        DEFAULT_VAT_ON,
+
                       cashDiscountOn:
                         savedSetup?.cashDiscountOn ||
-                        "BILL_NET_AMOUNT",
+                        DEFAULT_CASH_DISCOUNT_ON,
+
+                      productSelectionOn:
+                        normalizeProductSelectionMode(
+                          savedSetup?.productSelectionOn ||
+                          DEFAULT_PRODUCT_SELECTION_ON
+                        ),
+                      defaultCompany:
+                        String(
+                          savedSetup?.defaultCompany ||
+                          ""
+                        ).trim(),
+                      defaultGodown:
+                        String(
+                          savedSetup?.defaultGodown ||
+                          ""
+                        ).trim(),
+                      defaultSelection:
+                        normalizeDefaultSelection(
+                          savedSetup?.defaultSelection
+                        ),
                     }));
                   }}
                 />
@@ -64819,18 +65879,18 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                 </div>
               )}
 
-           {activeSubMenu === "Security Setup" &&
-  openFormFor === "Security Setup" && (
-    <SecuritySetup
-      isAdmin={isAdminUser}
-      onPermissionsSaved={(savedPermissions) => {
-        console.log(
-          "Security permissions saved:",
-          savedPermissions
-        );
-      }}
-    />
-)}
+            {activeSubMenu === "Security Setup" &&
+              openFormFor === "Security Setup" && (
+                <SecuritySetup
+                  isAdmin={isAdminUser}
+                  onPermissionsSaved={(savedPermissions) => {
+                    console.log(
+                      "Security permissions saved:",
+                      savedPermissions
+                    );
+                  }}
+                />
+              )}
             {activeSubMenu === 'Customer Bank Master' && openFormFor === 'Customer Bank Master' && (
               <div className="compact-master-page">
                 <div className="compact-master-heading">
@@ -70805,39 +71865,55 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                             id="billing-company"
                             name="company"
                             className="billing-control"
-                            value={invoiceFormData.company || ""}
+                            value={
+                              invoiceFormData.company ||
+                              ""
+                            }
                             onChange={handleInvoiceInputChange}
-                            disabled={settleAdjustHeaderReadOnly}
                           >
-                            <option value="">Select</option>
+                            <option value="">
+                              Select Company
+                            </option>
 
                             {runtimeGeneralSetup.allowMixBilling === true && (
                               <option value="MIX">
-                                MIX - Multiple Companies
+                                MIX BILLING
                               </option>
                             )}
 
                             {companies.map((company) => {
-                              const code = String(
-                                company.companyCode ||
-                                company.code ||
-                                company.id ||
-                                company._id ||
-                                ""
-                              ).trim();
+                              const companyCode =
+                                String(
+                                  company.companyCode ||
+                                  company.CompanyCode ||
+                                  company.code ||
+                                  company.Code ||
+                                  ""
+                                ).trim();
 
-                              const name = String(
-                                company.companyName ||
-                                company.name ||
-                                code
-                              ).trim();
+                              const companyName =
+                                String(
+                                  company.companyName ||
+                                  company.CompanyName ||
+                                  company.name ||
+                                  company.Name ||
+                                  companyCode
+                                ).trim();
+
+                              if (!companyCode) {
+                                return null;
+                              }
 
                               return (
                                 <option
-                                  key={company._id || code}
-                                  value={code}
+                                  key={
+                                    company._id ||
+                                    company.id ||
+                                    companyCode
+                                  }
+                                  value={companyCode}
                                 >
-                                  {name}
+                                  {companyName}
                                 </option>
                               );
                             })}
@@ -73620,28 +74696,52 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
 
                           <select
                             name="godown"
-                            className="erp-select"
-                            value={creditNoteFormData?.godown || ""}
-                            onChange={handleCreditNoteInputChange}
-                            required
+                            className="billing-control"
+                            value={
+                              invoiceFormData.godown ||
+                              ""
+                            }
+                            onChange={
+                              handleInvoiceInputChange
+                            }
                           >
-                            <option value="">Select Godown</option>
+                            <option value="">
+                              Select Godown
+                            </option>
 
-                            {godowns.map((godown) => (
-                              <option
-                                key={
-                                  godown.id ||
-                                  godown._id ||
+                            {godowns.map((godown) => {
+                              const godownCode =
+                                String(
+                                  godown.godownCode ||
                                   godown.code ||
-                                  godown.name
-                                }
-                                value={godown.code || godown.name}
-                              >
-                                {godown.name}
-                              </option>
-                            ))}
-                          </select>
-                        </div>
+                                  ""
+                                ).trim();
+
+                              const godownName =
+                                String(
+                                  godown.godownName ||
+                                  godown.name ||
+                                  godownCode
+                                ).trim();
+
+                              if (!godownCode) {
+                                return null;
+                              }
+
+                              return (
+                                <option
+                                  key={
+                                    godown._id ||
+                                    godown.id ||
+                                    godownCode
+                                  }
+                                  value={godownCode}
+                                >
+                                  {godownName}
+                                </option>
+                              );
+                            })}
+                          </select>              </div>
 
                         {/* 3. Credit Note Series */}
                         <div className="labeled-input">

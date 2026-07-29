@@ -4,6 +4,75 @@ import mongoose from "mongoose";
 const router = express.Router();
 
 /* =========================================================
+   GENERAL SETUP ALLOWED VALUES AND DEFAULTS
+========================================================= */
+
+const DEFAULT_VAT_ON =
+  "GROSS_AMOUNT";
+
+const DEFAULT_CASH_DISCOUNT_ON =
+  "BILL_NET_AMOUNT";
+
+const DEFAULT_PRODUCT_SELECTION_ON =
+  "PRODUCT_NAME";
+
+const VAT_ON_VALUES = [
+  "GROSS_AMOUNT",
+  "NET_AMOUNT",
+  "GROSS_SCHEME",
+  "GROSS_SCHEME_STAR",
+  "GROSS_SCHEME_CASH",
+  "GROSS_CASH",
+];
+
+const CASH_DISCOUNT_ON_VALUES = [
+  "BILL_NET_AMOUNT",
+  "ITEM_WISE_GROSS",
+  "ITEM_WISE_GROSS_SCHEME",
+  "BILL_GROSS_AMOUNT",
+  "BILL_GROSS_SCHEME_VAT",
+];
+
+
+const PRODUCT_SELECTION_ON_VALUES = [
+  "PRODUCT_CODE",
+  "COMPANY_PRODUCT_CODE",
+  "SHORT_CODE",
+  "LOCAL_PRODUCT_NAME",
+  "EAN_NO",
+  "PRODUCT_NAME",
+];
+const DEFAULT_SELECTION =
+  "AREA";
+
+const DEFAULT_SELECTION_VALUES = [
+  "AREA",
+  "ROUTE",
+];
+/* =========================================================
+   PRODUCT SELECTION MODES
+========================================================= */
+
+
+
+const normalizeProductSelectionMode = (
+  value,
+  fallback = "PRODUCT_NAME"
+) => {
+  const normalized = String(
+    value || fallback
+  )
+    .trim()
+    .toUpperCase();
+
+  return PRODUCT_SELECTION_MODES.includes(
+    normalized
+  )
+    ? normalized
+    : fallback;
+};
+
+/* =========================================================
    GENERAL SETUP 1 SCHEMA
    One setup document per distributor + firm
    ========================================================= */
@@ -76,23 +145,29 @@ defaultSalesman: {
       default: false,
     },
 
-    vatOn: {
-      type: String,
-      default: "GROSS_SCHEME_STAR",
-      trim: true,
-    },
+vatOn: {
+  type: String,
+  enum: VAT_ON_VALUES,
+  default: DEFAULT_VAT_ON,
+  trim: true,
+  uppercase: true,
+},
 
-    cashDiscountOn: {
-      type: String,
-      default: "BILL_GROSS_SCHEME",
-      trim: true,
-    },
+cashDiscountOn: {
+  type: String,
+  enum: CASH_DISCOUNT_ON_VALUES,
+  default: DEFAULT_CASH_DISCOUNT_ON,
+  trim: true,
+  uppercase: true,
+},
 
-    productSelectionOn: {
-      type: String,
-      default: "PRODUCT_CODE",
-      trim: true,
-    },
+productSelectionOn: {
+  type: String,
+  enum: PRODUCT_SELECTION_ON_VALUES,
+  default: DEFAULT_PRODUCT_SELECTION_ON,
+  trim: true,
+  uppercase: true,
+},
 
     defaultCompany: {
       type: String,
@@ -106,11 +181,13 @@ defaultSalesman: {
       trim: true,
     },
 
-    defaultSelection: {
-      type: String,
-      default: "ROUTE",
-      trim: true,
-    },
+ defaultSelection: {
+  type: String,
+  enum: DEFAULT_SELECTION_VALUES,
+  default: DEFAULT_SELECTION,
+  trim: true,
+  uppercase: true,
+},
 
     saveAndPrint: {
       type: Boolean,
@@ -227,13 +304,20 @@ const createDefaultGeneralSetup = ({
   saveInvoiceAfterLoad: false,
   allowEditBillAfterLoad: false,
 
-  editProductAfterLoad: false,
-  vatOn: "GROSS_SCHEME_STAR",
-  cashDiscountOn: "BILL_GROSS_SCHEME",
-  productSelectionOn: "PRODUCT_CODE",
+editProductAfterLoad: false,
+
+vatOn:
+  DEFAULT_VAT_ON,
+
+cashDiscountOn:
+  DEFAULT_CASH_DISCOUNT_ON,
+
+productSelectionOn:
+  DEFAULT_PRODUCT_SELECTION_ON,
   defaultCompany: "",
   defaultGodown: "",
-  defaultSelection: "ROUTE",
+ defaultSelection:
+  DEFAULT_SELECTION,
   saveAndPrint: false,
   allowSRateLessThanPRate: false,
   updateLoadQtyAfterBillEdit: false,
@@ -299,7 +383,23 @@ const readString = (value, fallback = "") => {
 
   return String(value).trim();
 };
+const readAllowedString = (
+  value,
+  allowedValues,
+  fallback
+) => {
+  const normalized = String(
+    value ?? fallback
+  )
+    .trim()
+    .toUpperCase();
 
+  return allowedValues.includes(
+    normalized
+  )
+    ? normalized
+    : fallback;
+};
 const readNonNegativeNumber = (
   value,
   fallback = 0
@@ -380,24 +480,38 @@ const buildSetupUpdate = (
         body.editProductAfterLoad,
         current.editProductAfterLoad
       ),
+vatOn:
+  readAllowedString(
+    body.vatOn,
+    VAT_ON_VALUES,
+    readAllowedString(
+      current.vatOn,
+      VAT_ON_VALUES,
+      DEFAULT_VAT_ON
+    )
+  ),
 
-    vatOn:
-      readString(
-        body.vatOn,
-        current.vatOn
-      ),
+cashDiscountOn:
+  readAllowedString(
+    body.cashDiscountOn,
+    CASH_DISCOUNT_ON_VALUES,
+    readAllowedString(
+      current.cashDiscountOn,
+      CASH_DISCOUNT_ON_VALUES,
+      DEFAULT_CASH_DISCOUNT_ON
+    )
+  ),
 
-    cashDiscountOn:
-      readString(
-        body.cashDiscountOn,
-        current.cashDiscountOn
-      ),
-
-    productSelectionOn:
-      readString(
-        body.productSelectionOn,
-        current.productSelectionOn
-      ),
+productSelectionOn:
+  readAllowedString(
+    body.productSelectionOn,
+    PRODUCT_SELECTION_ON_VALUES,
+    readAllowedString(
+      current.productSelectionOn,
+      PRODUCT_SELECTION_ON_VALUES,
+      DEFAULT_PRODUCT_SELECTION_ON
+    )
+  ),
 
     defaultCompany:
       readString(
@@ -411,11 +525,16 @@ const buildSetupUpdate = (
         current.defaultGodown
       ),
 
-    defaultSelection:
-      readString(
-        body.defaultSelection,
-        current.defaultSelection
-      ),
+defaultSelection:
+  readAllowedString(
+    body.defaultSelection,
+    DEFAULT_SELECTION_VALUES,
+    readAllowedString(
+      current.defaultSelection,
+      DEFAULT_SELECTION_VALUES,
+      DEFAULT_SELECTION
+    )
+  ),
 
     saveAndPrint:
       readBoolean(

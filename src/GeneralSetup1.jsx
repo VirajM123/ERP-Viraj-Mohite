@@ -5,11 +5,69 @@ import "./GeneralSetup1.css";
    DEFAULT GENERAL SETUP VALUES
    ========================================================= */
 
+/* =========================================================
+PRODUCT SELECTION MODES
+========================================================= */
+
+const PRODUCT_SELECTION_MODES = [
+    "PRODUCT_CODE",
+    "COMPANY_PRODUCT_CODE",
+    "SHORT_CODE",
+    "LOCAL_PRODUCT_NAME",
+    "EAN_NO",
+    "PRODUCT_NAME",
+];
+/* =========================================================
+   GENERAL SETUP DEFAULTS
+========================================================= */
+
+const DEFAULT_VAT_ON =
+    "GROSS_AMOUNT";
+
+const DEFAULT_CASH_DISCOUNT_ON =
+    "BILL_NET_AMOUNT";
+
+const DEFAULT_PRODUCT_SELECTION_ON =
+    "PRODUCT_NAME";
+
+const VAT_ON_VALUES = [
+    "GROSS_AMOUNT",
+    "NET_AMOUNT",
+    "GROSS_SCHEME",
+    "GROSS_SCHEME_STAR",
+    "GROSS_SCHEME_CASH",
+    "GROSS_CASH",
+];
+const DEFAULT_SELECTION =
+    "AREA";
+
+const DEFAULT_SELECTION_VALUES = [
+    "AREA",
+    "ROUTE",
+];
+
+const CASH_DISCOUNT_ON_VALUES = [
+    "BILL_NET_AMOUNT",
+    "ITEM_WISE_GROSS",
+    "ITEM_WISE_GROSS_SCHEME",
+    "BILL_GROSS_AMOUNT",
+    "BILL_GROSS_SCHEME_VAT",
+];
+
+const PRODUCT_SELECTION_ON_VALUES = [
+    "PRODUCT_CODE",
+    "COMPANY_PRODUCT_CODE",
+    "SHORT_CODE",
+    "LOCAL_PRODUCT_NAME",
+    "EAN_NO",
+    "PRODUCT_NAME",
+];
+
 export const createDefaultGeneralSetup = () => ({
 
 
 
-      
+
     /* Sales */
     billAllowBlacklistParty: false,
     allowChangeBillType: false,
@@ -22,13 +80,18 @@ export const createDefaultGeneralSetup = () => ({
     /* Billing / Transaction */
     editProductAfterLoad: true,
 
-    vatOn: "NET_AMOUNT",
-    cashDiscountOn: "BILL_NET_AMOUNT",
-    productSelectionOn: "PRODUCT_CODE",
+    vatOn:
+        DEFAULT_VAT_ON,
+
+    cashDiscountOn:
+        DEFAULT_CASH_DISCOUNT_ON,
+
+    productSelectionOn:
+        DEFAULT_PRODUCT_SELECTION_ON,
 
     defaultCompany: "",
     defaultGodown: "",
-    defaultSelection: "ROUTE",
+    defaultSelection: DEFAULT_SELECTION,
 
     saveAndPrint: false,
     allowSRateLessThanPRate: false,
@@ -133,9 +196,8 @@ const CompactToggleSetting = ({
 }) => {
     return (
         <div
-            className={`gs-compact-toggle-card ${
-                checked ? "is-enabled" : ""
-            }`}
+            className={`gs-compact-toggle-card ${checked ? "is-enabled" : ""
+                }`}
             title={description}
         >
             <div className="gs-compact-toggle-top">
@@ -193,8 +255,8 @@ const GeneralSetup1 = ({
     onSettingsSaved,
     isAdmin = false,
 }) => {
-    // const API_URL ="http://localhost:5000/api";
-const API_URL = "https://total-solution-backend.onrender.com/api";
+    const API_URL = "http://localhost:5000/api";
+    // const API_URL = "https://total-solution-backend.onrender.com/api";
     const [generalSetup, setGeneralSetup] =
         React.useState(() =>
             createDefaultGeneralSetup()
@@ -214,9 +276,19 @@ const API_URL = "https://total-solution-backend.onrender.com/api";
         React.useState("");
     const onSettingsSavedRef =
         React.useRef(onSettingsSaved);
-        const [activeSetupMenu, setActiveSetupMenu] =
-    React.useState("all");
+    const [activeSetupMenu, setActiveSetupMenu] =
+        React.useState("all");
+    const [companyOptions, setCompanyOptions] =
+        React.useState([]);
 
+    const [companiesLoading, setCompaniesLoading] =
+        React.useState(false);
+
+    const [godownOptions, setGodownOptions] =
+        React.useState([]);
+
+    const [godownsLoading, setGodownsLoading] =
+        React.useState(false);
     React.useEffect(() => {
         onSettingsSavedRef.current =
             onSettingsSaved;
@@ -237,6 +309,255 @@ const API_URL = "https://total-solution-backend.onrender.com/api";
             firmId,
         };
     };
+    /* =========================================================
+   LOAD ACTIVE COMPANIES FOR DEFAULT COMPANY
+========================================================= */
+
+    const loadDefaultCompanyOptions =
+        React.useCallback(async () => {
+            const {
+                distributorId,
+                firmId,
+            } = getSetupSession();
+
+            if (!distributorId || !firmId) {
+                setCompanyOptions([]);
+                return;
+            }
+
+            try {
+                setCompaniesLoading(true);
+
+                const query =
+                    new URLSearchParams({
+                        distributorId,
+                        firmId,
+                    });
+
+                const response =
+                    await fetchWithTimeout(
+                        `${API_URL}/companies?${query.toString()}`
+                    );
+
+                const contentType =
+                    response.headers.get(
+                        "content-type"
+                    ) || "";
+
+                const result =
+                    contentType.includes(
+                        "application/json"
+                    )
+                        ? await response.json()
+                        : {
+                            success: false,
+                            message:
+                                await response.text(),
+                        };
+
+                if (
+                    !response.ok ||
+                    result.success === false
+                ) {
+                    throw new Error(
+                        result.message ||
+                        "Unable to load companies."
+                    );
+                }
+
+                const loadedCompanies =
+                    Array.isArray(result.companies)
+                        ? result.companies
+                        : Array.isArray(result.data)
+                            ? result.data
+                            : [];
+
+                const normalizedCompanies =
+                    loadedCompanies
+                        .map((company) => {
+                            const companyCode =
+                                String(
+                                    company.companyCode ||
+                                    company.code ||
+                                    ""
+                                ).trim();
+
+                            const companyName =
+                                String(
+                                    company.companyName ||
+                                    company.name ||
+                                    ""
+                                ).trim();
+
+                            return {
+                                ...company,
+                                companyCode,
+                                companyName,
+                            };
+                        })
+                        .filter(
+                            (company) =>
+                                company.companyCode ||
+                                company.companyName
+                        )
+                        .sort(
+                            (
+                                firstCompany,
+                                secondCompany
+                            ) =>
+                                String(
+                                    firstCompany.companyName ||
+                                    firstCompany.companyCode
+                                ).localeCompare(
+                                    String(
+                                        secondCompany.companyName ||
+                                        secondCompany.companyCode
+                                    ),
+                                    undefined,
+                                    {
+                                        numeric: true,
+                                        sensitivity: "base",
+                                    }
+                                )
+                        );
+
+                setCompanyOptions(
+                    normalizedCompanies
+                );
+            } catch (error) {
+                console.error(
+                    "Default Company load error:",
+                    error
+                );
+
+                setCompanyOptions([]);
+            } finally {
+                setCompaniesLoading(false);
+            }
+        }, []);
+    /* =========================================================
+LOAD ACTIVE GODOWNS FOR DEFAULT GODOWN
+========================================================= */
+
+    const loadDefaultGodownOptions =
+        React.useCallback(async () => {
+            const {
+                distributorId,
+                firmId,
+            } = getSetupSession();
+
+            if (!distributorId || !firmId) {
+                setGodownOptions([]);
+                return;
+            }
+
+            try {
+                setGodownsLoading(true);
+
+                const query =
+                    new URLSearchParams({
+                        distributorId,
+                        firmId,
+                    });
+
+                const response =
+                    await fetchWithTimeout(
+                        `${API_URL}/godowns?${query.toString()}`
+                    );
+
+                const contentType =
+                    response.headers.get(
+                        "content-type"
+                    ) || "";
+
+                const result =
+                    contentType.includes(
+                        "application/json"
+                    )
+                        ? await response.json()
+                        : {
+                            success: false,
+                            message:
+                                await response.text(),
+                        };
+
+                if (
+                    !response.ok ||
+                    result.success === false
+                ) {
+                    throw new Error(
+                        result.message ||
+                        "Unable to load godowns."
+                    );
+                }
+
+                const loadedGodowns =
+                    Array.isArray(result.godowns)
+                        ? result.godowns
+                        : Array.isArray(result.data)
+                            ? result.data
+                            : [];
+
+                const normalizedGodowns =
+                    loadedGodowns
+                        .map((godown) => {
+                            const godownCode =
+                                String(
+                                    godown.godownCode ||
+                                    godown.code ||
+                                    ""
+                                ).trim();
+
+                            const godownName =
+                                String(
+                                    godown.godownName ||
+                                    godown.name ||
+                                    godownCode
+                                ).trim();
+
+                            return {
+                                ...godown,
+                                godownCode,
+                                godownName,
+                            };
+                        })
+                        .filter(
+                            (godown) =>
+                                godown.godownCode
+                        )
+                        .sort(
+                            (
+                                firstGodown,
+                                secondGodown
+                            ) =>
+                                String(
+                                    firstGodown.godownName
+                                ).localeCompare(
+                                    String(
+                                        secondGodown.godownName
+                                    ),
+                                    undefined,
+                                    {
+                                        numeric: true,
+                                        sensitivity: "base",
+                                    }
+                                )
+                        );
+
+                setGodownOptions(
+                    normalizedGodowns
+                );
+            } catch (error) {
+                console.error(
+                    "Default Godown load error:",
+                    error
+                );
+
+                setGodownOptions([]);
+            } finally {
+                setGodownsLoading(false);
+            }
+        }, []);
     const fetchWithTimeout = async (
         url,
         options = {},
@@ -268,6 +589,7 @@ const API_URL = "https://total-solution-backend.onrender.com/api";
             result ||
             {};
         const validVatOnValues = [
+            "GROSS_AMOUNT",
             "NET_AMOUNT",
             "GROSS_SCHEME",
             "GROSS_SCHEME_STAR",
@@ -281,19 +603,52 @@ const API_URL = "https://total-solution-backend.onrender.com/api";
             "BILL_GROSS_AMOUNT",
             "BILL_GROSS_SCHEME_VAT",
         ];
-
-        const normalizedCashDiscountOn =
+        const validProductSelectionValues = [
+            "PRODUCT_CODE",
+            "COMPANY_PRODUCT_CODE",
+            "SHORT_CODE",
+            "LOCAL_PRODUCT_NAME",
+            "EAN_NO",
+            "PRODUCT_NAME",
+        ];
+        const normalizedDefaultCompany =
             String(
-                source.cashDiscountOn ||
-                "BILL_NET_AMOUNT"
-            )
-                .trim()
-                .toUpperCase();
+                source.defaultCompany ||
+                ""
+            ).trim();
 
         const normalizedVatOn =
             String(
                 source.vatOn ||
-                "NET_AMOUNT"
+                DEFAULT_VAT_ON
+            )
+                .trim()
+                .toUpperCase();
+
+        const normalizedCashDiscountOn =
+            String(
+                source.cashDiscountOn ||
+                DEFAULT_CASH_DISCOUNT_ON
+            )
+                .trim()
+                .toUpperCase();
+
+        const normalizedProductSelectionOn =
+            String(
+                source.productSelectionOn ||
+                DEFAULT_PRODUCT_SELECTION_ON
+            )
+                .trim()
+                .toUpperCase();
+        const normalizedDefaultGodown =
+            String(
+                source.defaultGodown ||
+                ""
+            ).trim();
+        const normalizedDefaultSelection =
+            String(
+                source.defaultSelection ||
+                DEFAULT_SELECTION
             )
                 .trim()
                 .toUpperCase();
@@ -301,19 +656,36 @@ const API_URL = "https://total-solution-backend.onrender.com/api";
         return {
             ...createDefaultGeneralSetup(),
             ...source,
+            defaultSelection:
+                DEFAULT_SELECTION_VALUES.includes(
+                    normalizedDefaultSelection
+                )
+                    ? normalizedDefaultSelection
+                    : DEFAULT_SELECTION,
+            defaultGodown:
+                normalizedDefaultGodown,
             vatOn:
-                validVatOnValues.includes(
+                VAT_ON_VALUES.includes(
                     normalizedVatOn
                 )
                     ? normalizedVatOn
-                    : "NET_AMOUNT",
+                    : DEFAULT_VAT_ON,
 
             cashDiscountOn:
-                validCashDiscountValues.includes(
+                CASH_DISCOUNT_ON_VALUES.includes(
                     normalizedCashDiscountOn
                 )
                     ? normalizedCashDiscountOn
-                    : "BILL_NET_AMOUNT",
+                    : DEFAULT_CASH_DISCOUNT_ON,
+
+            productSelectionOn:
+                PRODUCT_SELECTION_ON_VALUES.includes(
+                    normalizedProductSelectionOn
+                )
+                    ? normalizedProductSelectionOn
+                    : DEFAULT_PRODUCT_SELECTION_ON,
+            defaultCompany:
+                normalizedDefaultCompany,
 
             billAllowBlacklistParty:
                 source.billAllowBlacklistParty === true ||
@@ -356,11 +728,19 @@ const API_URL = "https://total-solution-backend.onrender.com/api";
                 source.editProductAfterLoad === "Y" ||
                 source.editProductAfterLoad === "YES" ||
                 source.editProductAfterLoad === 1,
-            billAllowBlacklistParty:
-                source.billAllowBlacklistParty === true ||
-                source.billAllowBlacklistParty === "true" ||
-                source.billAllowBlacklistParty === "Y" ||
-                source.billAllowBlacklistParty === "YES",
+        
+            saveAndPrint:
+                source.saveAndPrint === true ||
+                source.saveAndPrint === "true" ||
+                source.saveAndPrint === "Y" ||
+                source.saveAndPrint === "YES" ||
+                source.saveAndPrint === 1,
+                allowSRateLessThanPRate:
+    source.allowSRateLessThanPRate === true ||
+    source.allowSRateLessThanPRate === "true" ||
+    source.allowSRateLessThanPRate === "Y" ||
+    source.allowSRateLessThanPRate === "YES" ||
+    source.allowSRateLessThanPRate === 1,
         };
     };
 
@@ -438,7 +818,7 @@ const API_URL = "https://total-solution-backend.onrender.com/api";
                 console.error(
                     "General Setup load error:",
                     error
-                    
+
                 );
 
                 const errorMessage =
@@ -456,6 +836,12 @@ const API_URL = "https://total-solution-backend.onrender.com/api";
     React.useEffect(() => {
         loadGeneralSetup();
     }, [loadGeneralSetup]);
+    React.useEffect(() => {
+        loadDefaultCompanyOptions();
+    }, [loadDefaultCompanyOptions]);
+    React.useEffect(() => {
+        loadDefaultGodownOptions();
+    }, [loadDefaultGodownOptions]);
 
 
     const updateSetting = (name, value) => {
@@ -556,31 +942,80 @@ const API_URL = "https://total-solution-backend.onrender.com/api";
                                 ),
 
                             vatOn:
-                                String(
-                                    generalSetup.vatOn ||
-                                    "NET_AMOUNT"
+                                VAT_ON_VALUES.includes(
+                                    String(
+                                        generalSetup.vatOn ||
+                                        ""
+                                    )
+                                        .trim()
+                                        .toUpperCase()
                                 )
-                                    .trim()
-                                    .toUpperCase(),
+                                    ? String(
+                                        generalSetup.vatOn
+                                    )
+                                        .trim()
+                                        .toUpperCase()
+                                    : DEFAULT_VAT_ON,
+
                             cashDiscountOn:
-  String(
-    generalSetup.cashDiscountOn ||
-    "BILL_NET_AMOUNT"
-  )
-    .trim()
-    .toUpperCase(),
+                                CASH_DISCOUNT_ON_VALUES.includes(
+                                    String(
+                                        generalSetup.cashDiscountOn ||
+                                        ""
+                                    )
+                                        .trim()
+                                        .toUpperCase()
+                                )
+                                    ? String(
+                                        generalSetup.cashDiscountOn
+                                    )
+                                        .trim()
+                                        .toUpperCase()
+                                    : DEFAULT_CASH_DISCOUNT_ON,
 
                             productSelectionOn:
-                                generalSetup.productSelectionOn,
+                                PRODUCT_SELECTION_ON_VALUES.includes(
+                                    String(
+                                        generalSetup.productSelectionOn ||
+                                        ""
+                                    )
+                                        .trim()
+                                        .toUpperCase()
+                                )
+                                    ? String(
+                                        generalSetup.productSelectionOn
+                                    )
+                                        .trim()
+                                        .toUpperCase()
+                                    : DEFAULT_PRODUCT_SELECTION_ON,
 
                             defaultCompany:
-                                generalSetup.defaultCompany,
+                                String(
+                                    generalSetup.defaultCompany ||
+                                    ""
+                                ).trim(),
 
                             defaultGodown:
-                                generalSetup.defaultGodown,
+                                String(
+                                    generalSetup.defaultGodown ||
+                                    ""
+                                ).trim(),
 
                             defaultSelection:
-                                generalSetup.defaultSelection,
+                                DEFAULT_SELECTION_VALUES.includes(
+                                    String(
+                                        generalSetup.defaultSelection ||
+                                        ""
+                                    )
+                                        .trim()
+                                        .toUpperCase()
+                                )
+                                    ? String(
+                                        generalSetup.defaultSelection
+                                    )
+                                        .trim()
+                                        .toUpperCase()
+                                    : DEFAULT_SELECTION,
 
                             saveAndPrint:
                                 Boolean(
@@ -670,23 +1105,35 @@ const API_URL = "https://total-solution-backend.onrender.com/api";
                 );
             }
 
-         /*
- * Reload the saved record from the database.
- * This prevents partial/stale API responses from
- * changing VAT On or Cash Discount On temporarily.
+            /*
+    * Reload the saved record from the database.
+    * This prevents partial/stale API responses from
+    * changing VAT On or Cash Discount On temporarily.
+    */
+            const savedSetup =
+                await loadGeneralSetup();
+
+            if (!savedSetup) {
+                throw new Error(
+                    "Settings were saved, but the saved values could not be reloaded."
+                );
+            }
+
+            /*
+ * Notify Dashboard.jsx immediately so runtime settings,
+ * including Save and Print, update without refreshing.
  */
-const savedSetup =
-  await loadGeneralSetup();
-
-if (!savedSetup) {
-  throw new Error(
-    "Settings were saved, but the saved values could not be reloaded."
-  );
+if (
+    typeof onSettingsSavedRef.current ===
+    "function"
+) {
+    onSettingsSavedRef.current(
+        savedSetup
+    );
 }
-
-setMessage(
-  "General Setup saved successfully."
-);
+            setMessage(
+                "General Setup saved successfully."
+            );
         } catch (error) {
             console.error(
                 "General Setup load error:",
@@ -708,7 +1155,7 @@ setMessage(
     if (!isAdmin) {
         return (
             <div className="general-setup-container">
-            
+
                 <div className="gs-access-denied">
                     <div className="gs-access-denied-icon">
                         🔒
@@ -730,163 +1177,163 @@ setMessage(
         );
     }
     const setupMenus = [
-    {
-        key: "all",
-        label: "All Settings",
-        icon: "▦",
-    },
-    {
-        key: "general",
-        label: "General",
-        icon: "⚙",
-    },
-    {
-        key: "billing",
-        label: "Billing",
-        icon: "▤",
-    },
-    {
-        key: "inventory",
-        label: "Inventory",
-        icon: "▣",
-    },
-    {
-        key: "accounts",
-        label: "Accounts",
-        icon: "▰",
-    },
-    {
-        key: "gst",
-        label: "GST",
-        icon: "%",
-    },
-    {
-        key: "printing",
-        label: "Printing",
-        icon: "▧",
-    },
-    {
-        key: "system",
-        label: "System",
-        icon: "◉",
-    },
-];
+        {
+            key: "all",
+            label: "All Settings",
+            icon: "▦",
+        },
+        {
+            key: "general",
+            label: "General",
+            icon: "⚙",
+        },
+        {
+            key: "billing",
+            label: "Billing",
+            icon: "▤",
+        },
+        {
+            key: "inventory",
+            label: "Inventory",
+            icon: "▣",
+        },
+        {
+            key: "accounts",
+            label: "Accounts",
+            icon: "▰",
+        },
+        {
+            key: "gst",
+            label: "GST",
+            icon: "%",
+        },
+        {
+            key: "printing",
+            label: "Printing",
+            icon: "▧",
+        },
+        {
+            key: "system",
+            label: "System",
+            icon: "◉",
+        },
+    ];
 
-const setupOverviewCards = [
-    {
-        key: "general",
-        title: "General",
-        description: "Basic company and system preferences",
-        count: 4,
-        icon: "⚙",
-        color: "purple",
-    },
-    {
-        key: "billing",
-        title: "Billing",
-        description: "Invoice, billing and transaction preferences",
-        count: 18,
-        icon: "▤",
-        color: "blue",
-    },
-    {
-        key: "inventory",
-        title: "Inventory",
-        description: "Stock, godown and inventory preferences",
-        count: 0,
-        icon: "▣",
-        color: "green",
-    },
-    {
-        key: "accounts",
-        title: "Accounts",
-        description: "Accounting and financial preferences",
-        count: 0,
-        icon: "▰",
-        color: "orange",
-    },
-    {
-        key: "gst",
-        title: "GST",
-        description: "GST rates, rules and tax preferences",
-        count: 0,
-        icon: "%",
-        color: "violet",
-    },
-    {
-        key: "printing",
-        title: "Printing",
-        description: "Print formats and document layouts",
-        count: 5,
-        icon: "▧",
-        color: "pink",
-    },
-    {
-        key: "system",
-        title: "Users & Security",
-        description: "User roles, permissions and system security",
-        count: 0,
-        icon: "♙",
-        color: "cyan",
-    },
-    {
-        key: "system",
-        title: "System",
-        description: "System configuration and information",
-        count: 3,
-        icon: "▣",
-        color: "slate",
-    },
-];
+    const setupOverviewCards = [
+        {
+            key: "general",
+            title: "General",
+            description: "Basic company and system preferences",
+            count: 4,
+            icon: "⚙",
+            color: "purple",
+        },
+        {
+            key: "billing",
+            title: "Billing",
+            description: "Invoice, billing and transaction preferences",
+            count: 18,
+            icon: "▤",
+            color: "blue",
+        },
+        {
+            key: "inventory",
+            title: "Inventory",
+            description: "Stock, godown and inventory preferences",
+            count: 0,
+            icon: "▣",
+            color: "green",
+        },
+        {
+            key: "accounts",
+            title: "Accounts",
+            description: "Accounting and financial preferences",
+            count: 0,
+            icon: "▰",
+            color: "orange",
+        },
+        {
+            key: "gst",
+            title: "GST",
+            description: "GST rates, rules and tax preferences",
+            count: 0,
+            icon: "%",
+            color: "violet",
+        },
+        {
+            key: "printing",
+            title: "Printing",
+            description: "Print formats and document layouts",
+            count: 5,
+            icon: "▧",
+            color: "pink",
+        },
+        {
+            key: "system",
+            title: "Users & Security",
+            description: "User roles, permissions and system security",
+            count: 0,
+            icon: "♙",
+            color: "cyan",
+        },
+        {
+            key: "system",
+            title: "System",
+            description: "System configuration and information",
+            count: 3,
+            icon: "▣",
+            color: "slate",
+        },
+    ];
 
-const renderEmptyCategory = (
-    title,
-    description
-) => (
-    <div className="gs-empty-category">
-        <div className="gs-empty-category-icon">
-            ⚙
+    const renderEmptyCategory = (
+        title,
+        description
+    ) => (
+        <div className="gs-empty-category">
+            <div className="gs-empty-category-icon">
+                ⚙
+            </div>
+
+            <h3>{title}</h3>
+
+            <p>{description}</p>
+
+            <span>
+                Settings for this category can be added here.
+            </span>
         </div>
-
-        <h3>{title}</h3>
-
-        <p>{description}</p>
-
-        <span>
-            Settings for this category can be added here.
-        </span>
-    </div>
-);
+    );
     /*
  * Do not render default values while the saved
  * General Setup is still loading from the database.
  */
-if (loading) {
-  return (
-    <div className="general-setup-container">
-      <div
-        style={{
-          minHeight: "320px",
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-          flexDirection: "column",
-          gap: "10px",
-        }}
-      >
-        <div className="gs-loading-spinner" />
+    if (loading) {
+        return (
+            <div className="general-setup-container">
+                <div
+                    style={{
+                        minHeight: "320px",
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        flexDirection: "column",
+                        gap: "10px",
+                    }}
+                >
+                    <div className="gs-loading-spinner" />
 
-        <strong>
-          Loading General Setup...
-        </strong>
+                    <strong>
+                        Loading General Setup...
+                    </strong>
 
-        <span>
-          Please wait while saved settings are loaded.
-        </span>
-      </div>
-    </div>
-  );
-}
+                    <span>
+                        Please wait while saved settings are loaded.
+                    </span>
+                </div>
+            </div>
+        );
+    }
     return (
         <div className="general-setup-container">
             {/* =====================================================
@@ -940,935 +1387,1072 @@ if (loading) {
                 </div>
             </div>
 
-           {/* =====================================================
+            {/* =====================================================
     SETUP CATEGORY NAVIGATION
 ===================================================== */}
 
-<div className="gs-category-navigation">
-    {setupMenus.map((menu) => (
-        <button
-            key={menu.key}
-            type="button"
-            className={`gs-category-button ${
-                activeSetupMenu === menu.key
-                    ? "is-active"
-                    : ""
-            }`}
-            onClick={() =>
-                setActiveSetupMenu(menu.key)
-            }
-        >
-            <span className="gs-category-button-icon">
-                {menu.icon}
-            </span>
+            <div className="gs-category-navigation">
+                {setupMenus.map((menu) => (
+                    <button
+                        key={menu.key}
+                        type="button"
+                        className={`gs-category-button ${activeSetupMenu === menu.key
+                            ? "is-active"
+                            : ""
+                            }`}
+                        onClick={() =>
+                            setActiveSetupMenu(menu.key)
+                        }
+                    >
+                        <span className="gs-category-button-icon">
+                            {menu.icon}
+                        </span>
 
-            <span>{menu.label}</span>
-        </button>
-    ))}
-</div>
+                        <span>{menu.label}</span>
+                    </button>
+                ))}
+            </div>
 
-{/* =====================================================
+            {/* =====================================================
     ALL SETTINGS OVERVIEW
 ===================================================== */}
 
-{activeSetupMenu === "all" && (
-    <>
-        <section className="gs-overview-panel">
-            <div className="gs-overview-header">
-                <div>
-                    <h2>
-                        General Settings Overview
-                    </h2>
+            {activeSetupMenu === "all" && (
+                <>
+                    <section className="gs-overview-panel">
+                        <div className="gs-overview-header">
+                            <div>
+                                <h2>
+                                    General Settings Overview
+                                </h2>
 
-                    <p>
-                        Manage all your business
-                        preferences in one place.
-                    </p>
-                </div>
-            </div>
+                                <p>
+                                    Manage all your business
+                                    preferences in one place.
+                                </p>
+                            </div>
+                        </div>
 
-            <div className="gs-overview-card-grid">
-                {setupOverviewCards.map(
-                    (card, index) => (
-                        <button
-                            key={`${card.key}-${index}`}
-                            type="button"
-                            className="gs-overview-card"
-                            onClick={() =>
-                                setActiveSetupMenu(
-                                    card.key
+                        <div className="gs-overview-card-grid">
+                            {setupOverviewCards.map(
+                                (card, index) => (
+                                    <button
+                                        key={`${card.key}-${index}`}
+                                        type="button"
+                                        className="gs-overview-card"
+                                        onClick={() =>
+                                            setActiveSetupMenu(
+                                                card.key
+                                            )
+                                        }
+                                    >
+                                        <span
+                                            className={`gs-overview-card-icon ${card.color}`}
+                                        >
+                                            {card.icon}
+                                        </span>
+
+                                        <span className="gs-overview-card-content">
+                                            <strong>
+                                                {card.title}
+                                            </strong>
+
+                                            <small>
+                                                {card.description}
+                                            </small>
+
+                                            <span className="gs-overview-card-count">
+                                                {card.count > 0
+                                                    ? `${card.count} Settings`
+                                                    : "Coming Soon"}
+                                            </span>
+                                        </span>
+
+                                        <span className="gs-overview-card-arrow">
+                                            ›
+                                        </span>
+                                    </button>
                                 )
-                            }
-                        >
-                            <span
-                                className={`gs-overview-card-icon ${card.color}`}
+                            )}
+                        </div>
+                    </section>
+
+                    <section className="gs-quick-actions-panel">
+                        <div className="gs-quick-actions-heading">
+                            <span className="gs-quick-actions-icon">
+                                ⚡
+                            </span>
+
+                            <div>
+                                <h3>Quick Actions</h3>
+
+                                <p>
+                                    Frequently used setup options
+                                </p>
+                            </div>
+                        </div>
+
+                        <div className="gs-quick-actions-grid">
+                            <button
+                                type="button"
+                                className="gs-quick-action"
+                                onClick={() =>
+                                    setActiveSetupMenu("general")
+                                }
                             >
-                                {card.icon}
-                            </span>
+                                <span>▣</span>
 
-                            <span className="gs-overview-card-content">
-                                <strong>
-                                    {card.title}
-                                </strong>
+                                <div>
+                                    <strong>
+                                        Auto Voucher Number
+                                    </strong>
 
-                                <small>
-                                    {card.description}
-                                </small>
+                                    <small>
+                                        {generalSetup.autoVoucherNo
+                                            ? "Enabled"
+                                            : "Disabled"}
+                                    </small>
+                                </div>
+                            </button>
 
-                                <span className="gs-overview-card-count">
-                                    {card.count > 0
-                                        ? `${card.count} Settings`
-                                        : "Coming Soon"}
-                                </span>
-                            </span>
+                            <button
+                                type="button"
+                                className="gs-quick-action"
+                                onClick={() =>
+                                    setActiveSetupMenu("billing")
+                                }
+                            >
+                                <span>%</span>
 
-                            <span className="gs-overview-card-arrow">
-                                ›
-                            </span>
-                        </button>
-                    )
-                )}
-            </div>
-        </section>
+                                <div>
+                                    <strong>
+                                        GST Calculation
+                                    </strong>
 
-        <section className="gs-quick-actions-panel">
-            <div className="gs-quick-actions-heading">
-                <span className="gs-quick-actions-icon">
-                    ⚡
-                </span>
+                                    <small>
+                                        {generalSetup.vatOn
+                                            ?.replaceAll("_", " ") ||
+                                            "Gross Amount"}
+                                    </small>
+                                </div>
+                            </button>
 
-                <div>
-                    <h3>Quick Actions</h3>
+                            <button
+                                type="button"
+                                className="gs-quick-action"
+                                onClick={() =>
+                                    setActiveSetupMenu("billing")
+                                }
+                            >
+                                <span>▣</span>
 
-                    <p>
-                        Frequently used setup options
-                    </p>
-                </div>
-            </div>
+                                <div>
+                                    <strong>
+                                        Default Godown
+                                    </strong>
 
-            <div className="gs-quick-actions-grid">
-                <button
-                    type="button"
-                    className="gs-quick-action"
-                    onClick={() =>
-                        setActiveSetupMenu("general")
-                    }
-                >
-                    <span>▣</span>
+                                    <small>
+                                        {generalSetup.defaultGodown ||
+                                            "Not selected"}
+                                    </small>
+                                </div>
+                            </button>
 
-                    <div>
-                        <strong>
-                            Auto Voucher Number
-                        </strong>
+                            <button
+                                type="button"
+                                className="gs-quick-action"
+                                onClick={() =>
+                                    setActiveSetupMenu("billing")
+                                }
+                            >
+                                <span>#</span>
 
-                        <small>
-                            {generalSetup.autoVoucherNo
-                                ? "Enabled"
-                                : "Disabled"}
-                        </small>
-                    </div>
-                </button>
+                                <div>
+                                    <strong>
+                                        Product Selection
+                                    </strong>
 
-                <button
-                    type="button"
-                    className="gs-quick-action"
-                    onClick={() =>
-                        setActiveSetupMenu("billing")
-                    }
-                >
-                    <span>%</span>
+                                    <small>
+                                        {generalSetup.productSelectionOn
+                                            ?.replaceAll("_", " ") ||
+                                            "Product Name"}
+                                    </small>
+                                </div>
+                            </button>
 
-                    <div>
-                        <strong>
-                           GST Calculation
-                        </strong>
+                            <button
+                                type="button"
+                                className="gs-quick-action"
+                                onClick={() =>
+                                    setActiveSetupMenu("printing")
+                                }
+                            >
+                                <span>▧</span>
 
-                        <small>
-                            {generalSetup.vatOn
-                                ?.replaceAll("_", " ") ||
-                                "Net Amount"}
-                        </small>
-                    </div>
-                </button>
+                                <div>
+                                    <strong>
+                                        Save and Print
+                                    </strong>
 
-                <button
-                    type="button"
-                    className="gs-quick-action"
-                    onClick={() =>
-                        setActiveSetupMenu("billing")
-                    }
-                >
-                    <span>▣</span>
+                                    <small>
+                                        {generalSetup.saveAndPrint
+                                            ? "Enabled"
+                                            : "Disabled"}
+                                    </small>
+                                </div>
+                            </button>
 
-                    <div>
-                        <strong>
-                            Default Godown
-                        </strong>
+                            <button
+                                type="button"
+                                className="gs-quick-action"
+                                onClick={() =>
+                                    setActiveSetupMenu("printing")
+                                }
+                            >
+                                <span>▤</span>
 
-                        <small>
-                            {generalSetup.defaultGodown ||
-                                "Not selected"}
-                        </small>
-                    </div>
-                </button>
+                                <div>
+                                    <strong>
+                                        Print Summary
+                                    </strong>
 
-                <button
-                    type="button"
-                    className="gs-quick-action"
-                    onClick={() =>
-                        setActiveSetupMenu("billing")
-                    }
-                >
-                    <span>#</span>
+                                    <small>
+                                        {generalSetup.vatSummary
+                                            ? "VAT Summary On"
+                                            : "VAT Summary Off"}
+                                    </small>
+                                </div>
+                            </button>
+                        </div>
+                    </section>
+                </>
+            )}
 
-                    <div>
-                        <strong>
-                            Product Selection
-                        </strong>
-
-                        <small>
-                            {generalSetup.productSelectionOn
-                                ?.replaceAll("_", " ") ||
-                                "Product Code"}
-                        </small>
-                    </div>
-                </button>
-
-                <button
-                    type="button"
-                    className="gs-quick-action"
-                    onClick={() =>
-                        setActiveSetupMenu("printing")
-                    }
-                >
-                    <span>▧</span>
-
-                    <div>
-                        <strong>
-                            Save and Print
-                        </strong>
-
-                        <small>
-                            {generalSetup.saveAndPrint
-                                ? "Enabled"
-                                : "Disabled"}
-                        </small>
-                    </div>
-                </button>
-
-                <button
-                    type="button"
-                    className="gs-quick-action"
-                    onClick={() =>
-                        setActiveSetupMenu("printing")
-                    }
-                >
-                    <span>▤</span>
-
-                    <div>
-                        <strong>
-                            Print Summary
-                        </strong>
-
-                        <small>
-                            {generalSetup.vatSummary
-                                ? "VAT Summary On"
-                                : "VAT Summary Off"}
-                        </small>
-                    </div>
-                </button>
-            </div>
-        </section>
-    </>
-)}
-
-{/* =====================================================
+            {/* =====================================================
     GENERAL CATEGORY
 ===================================================== */}
 
-{activeSetupMenu === "general" && (
-    <div className="gs-selected-category">
-        <div className="gs-selected-category-header">
-            <div>
-                <span className="gs-selected-category-icon">
-                    ⚙
-                </span>
+            {activeSetupMenu === "general" && (
+                <div className="gs-selected-category">
+                    <div className="gs-selected-category-header">
+                        <div>
+                            <span className="gs-selected-category-icon">
+                                ⚙
+                            </span>
 
-                <div>
-                    <h2>General Settings</h2>
+                            <div>
+                                <h2>General Settings</h2>
 
-                    <p>
-                        Basic voucher and transaction
-                        entry preferences.
-                    </p>
+                                <p>
+                                    Basic voucher and transaction
+                                    entry preferences.
+                                </p>
+                            </div>
+                        </div>
+
+                        <button
+                            type="button"
+                            className="gs-back-overview-button"
+                            onClick={() =>
+                                setActiveSetupMenu("all")
+                            }
+                        >
+                            ← All Settings
+                        </button>
+                    </div>
+
+                    <SettingSection title="GENERAL">
+                        <SettingRow
+                            label="Auto Voucher No"
+                            description="Automatically generate voucher numbers."
+                        >
+                            <ToggleSwitch
+                                checked={
+                                    generalSetup.autoVoucherNo
+                                }
+                                disabled={loading || saving}
+                                onChange={(value) =>
+                                    updateSetting(
+                                        "autoVoucherNo",
+                                        value
+                                    )
+                                }
+                            />
+                        </SettingRow>
+
+                        <SettingRow
+                            label="Date Locking"
+                            description="Prevent entries or edits before the selected date."
+                        >
+                            <input
+                                type="date"
+                                className="gs-control"
+                                value={
+                                    generalSetup.dateLocking
+                                }
+                                disabled={loading || saving}
+                                onChange={(event) =>
+                                    updateSetting(
+                                        "dateLocking",
+                                        event.target.value
+                                    )
+                                }
+                            />
+                        </SettingRow>
+
+                        <SettingRow
+                            label="Show Entry Days"
+                            description="Number of previous days available for transaction entry."
+                        >
+                            <input
+                                type="number"
+                                min="0"
+                                step="1"
+                                className="gs-control"
+                                value={
+                                    generalSetup.showEntryDays
+                                }
+                                disabled={loading || saving}
+                                onChange={(event) =>
+                                    updateSetting(
+                                        "showEntryDays",
+                                        event.target.value
+                                    )
+                                }
+                            />
+                        </SettingRow>
+
+                        <SettingRow
+                            label="Billing Without HSN Code"
+                            description="Allow saving bills when a product does not have an HSN code."
+                        >
+                            <ToggleSwitch
+                                checked={
+                                    generalSetup.billingWithoutHsnCode
+                                }
+                                disabled={loading || saving}
+                                onChange={(value) =>
+                                    updateSetting(
+                                        "billingWithoutHsnCode",
+                                        value
+                                    )
+                                }
+                            />
+                        </SettingRow>
+                    </SettingSection>
                 </div>
-            </div>
+            )}
 
-            <button
-                type="button"
-                className="gs-back-overview-button"
-                onClick={() =>
-                    setActiveSetupMenu("all")
-                }
-            >
-                ← All Settings
-            </button>
-        </div>
-
-        <SettingSection title="GENERAL">
-            <SettingRow
-                label="Auto Voucher No"
-                description="Automatically generate voucher numbers."
-            >
-                <ToggleSwitch
-                    checked={
-                        generalSetup.autoVoucherNo
-                    }
-                    disabled={loading || saving}
-                    onChange={(value) =>
-                        updateSetting(
-                            "autoVoucherNo",
-                            value
-                        )
-                    }
-                />
-            </SettingRow>
-
-            <SettingRow
-                label="Date Locking"
-                description="Prevent entries or edits before the selected date."
-            >
-                <input
-                    type="date"
-                    className="gs-control"
-                    value={
-                        generalSetup.dateLocking
-                    }
-                    disabled={loading || saving}
-                    onChange={(event) =>
-                        updateSetting(
-                            "dateLocking",
-                            event.target.value
-                        )
-                    }
-                />
-            </SettingRow>
-
-            <SettingRow
-                label="Show Entry Days"
-                description="Number of previous days available for transaction entry."
-            >
-                <input
-                    type="number"
-                    min="0"
-                    step="1"
-                    className="gs-control"
-                    value={
-                        generalSetup.showEntryDays
-                    }
-                    disabled={loading || saving}
-                    onChange={(event) =>
-                        updateSetting(
-                            "showEntryDays",
-                            event.target.value
-                        )
-                    }
-                />
-            </SettingRow>
-
-            <SettingRow
-                label="Billing Without HSN Code"
-                description="Allow saving bills when a product does not have an HSN code."
-            >
-                <ToggleSwitch
-                    checked={
-                        generalSetup.billingWithoutHsnCode
-                    }
-                    disabled={loading || saving}
-                    onChange={(value) =>
-                        updateSetting(
-                            "billingWithoutHsnCode",
-                            value
-                        )
-                    }
-                />
-            </SettingRow>
-        </SettingSection>
-    </div>
-)}
-
-{/* =====================================================
+            {/* =====================================================
     BILLING CATEGORY
 ===================================================== */}
 
-{activeSetupMenu === "billing" && (
-    <div className="gs-selected-category gs-billing-category">
-        <div className="gs-selected-category-header">
-            <div>
-                <span className="gs-selected-category-icon billing">
-                    ▤
-                </span>
+            {activeSetupMenu === "billing" && (
+                <div className="gs-selected-category gs-billing-category">
+                    <div className="gs-selected-category-header">
+                        <div>
+                            <span className="gs-selected-category-icon billing">
+                                ▤
+                            </span>
 
-                <div>
-                    <h2>Billing Settings</h2>
-                    <p>
-                        Configure invoice, sales, stock and transaction preferences.
-                    </p>
+                            <div>
+                                <h2>Billing Settings</h2>
+                                <p>
+                                    Configure invoice, sales, stock and transaction preferences.
+                                </p>
+                            </div>
+                        </div>
+
+                        <button
+                            type="button"
+                            className="gs-back-overview-button"
+                            onClick={() => setActiveSetupMenu("all")}
+                        >
+                            ← All Settings
+                        </button>
+                    </div>
+
+                    <section className="gs-compact-settings-section">
+                        <div className="gs-compact-section-header">
+                            <div>
+                                <h3>Billing Rules</h3>
+                                <p>Enable or disable billing behaviour.</p>
+                            </div>
+
+                            <span className="gs-compact-section-count">
+                                12 Switch Settings
+                            </span>
+                        </div>
+
+                        <div className="gs-compact-toggle-grid">
+                            <CompactToggleSetting
+                                label="Blacklist Party Billing"
+                                description="Allow billing for parties marked as blacklisted."
+                                checked={generalSetup.billAllowBlacklistParty}
+                                disabled={loading || saving}
+                                onChange={(value) =>
+                                    updateSetting("billAllowBlacklistParty", value)
+                                }
+                            />
+
+                            <CompactToggleSetting
+                                label="Change Bill Type"
+                                description="Allow changing Credit or Cash bill type."
+                                checked={generalSetup.allowChangeBillType}
+                                disabled={loading || saving}
+                                onChange={(value) =>
+                                    updateSetting("allowChangeBillType", value)
+                                }
+                            />
+
+                            <CompactToggleSetting
+                                label="Default Salesman"
+                                description="Automatically select the default salesman."
+                                checked={generalSetup.defaultSalesman}
+                                disabled={loading || saving}
+                                onChange={(value) =>
+                                    updateSetting("defaultSalesman", value)
+                                }
+                            />
+
+                            <CompactToggleSetting
+                                label="Change Sale Rate"
+                                description="Allow users to manually change sale rate."
+                                checked={generalSetup.allowChangeSaleRate}
+                                disabled={loading || saving}
+                                onChange={(value) =>
+                                    updateSetting("allowChangeSaleRate", value)
+                                }
+                            />
+
+                            <CompactToggleSetting
+                                label="Mix Billing"
+                                description="Allow products from multiple companies in one bill."
+                                checked={generalSetup.allowMixBilling}
+                                disabled={loading || saving}
+                                onChange={(value) =>
+                                    updateSetting("allowMixBilling", value)
+                                }
+                            />
+
+                            <CompactToggleSetting
+                                label="Save After Load"
+                                description="Allow saving an invoice after load assignment."
+                                checked={generalSetup.saveInvoiceAfterLoad}
+                                disabled={loading || saving}
+                                onChange={(value) =>
+                                    updateSetting("saveInvoiceAfterLoad", value)
+                                }
+                            />
+
+                            <CompactToggleSetting
+                                label="Edit Bill After Load"
+                                description="Allow editing bills assigned to a load."
+                                checked={generalSetup.allowEditBillAfterLoad}
+                                disabled={loading || saving}
+                                onChange={(value) =>
+                                    updateSetting("allowEditBillAfterLoad", value)
+                                }
+                            />
+
+                            <CompactToggleSetting
+                                label="Edit Product After Load"
+                                description="Allow product rows to be edited after loading."
+                                checked={generalSetup.editProductAfterLoad}
+                                disabled={loading || saving}
+                                onChange={(value) =>
+                                    updateSetting("editProductAfterLoad", value)
+                                }
+                            />
+
+                            <CompactToggleSetting
+                                label="Save and Print"
+                                description="Open print format automatically after saving."
+                                checked={generalSetup.saveAndPrint}
+                                disabled={loading || saving}
+                                onChange={(value) =>
+                                    updateSetting("saveAndPrint", value)
+                                }
+                            />
+
+                            <CompactToggleSetting
+                                label="S.Rate Below P.Rate"
+                                description="Allow sale rate below purchase rate."
+                                checked={generalSetup.allowSRateLessThanPRate}
+                                disabled={loading || saving}
+                                onChange={(value) =>
+                                    updateSetting("allowSRateLessThanPRate", value)
+                                }
+                            />
+
+                            <CompactToggleSetting
+                                label="Update Load Quantity"
+                                description="Update load quantity after bill editing."
+                                checked={generalSetup.updateLoadQtyAfterBillEdit}
+                                disabled={loading || saving}
+                                onChange={(value) =>
+                                    updateSetting("updateLoadQtyAfterBillEdit", value)
+                                }
+                            />
+
+                            <CompactToggleSetting
+                                label="Negative Stock"
+                                description="Allow billing when stock becomes negative."
+                                checked={generalSetup.allowNegativeStock}
+                                disabled={loading || saving}
+                                onChange={(value) =>
+                                    updateSetting("allowNegativeStock", value)
+                                }
+                            />
+                        </div>
+                    </section>
+
+                    <section className="gs-compact-settings-section">
+                        <div className="gs-compact-section-header">
+                            <div>
+                                <h3>Calculation and Default Settings</h3>
+                                <p>Select calculation methods and default values.</p>
+                            </div>
+
+                            <span className="gs-compact-section-count">
+                                6 Selection Settings
+                            </span>
+                        </div>
+
+                        <div className="gs-compact-field-grid">
+                            <label className="gs-compact-field">
+                                <span className="gs-compact-field-label">VAT On</span>
+                                <span className="gs-compact-field-help">
+                                    GST calculation base
+                                </span>
+
+                                <select
+                                    className="gs-control"
+                                    value={
+                                        generalSetup.vatOn ||
+                                        DEFAULT_VAT_ON
+                                    }
+                                    disabled={loading || saving}
+                                    onChange={(event) =>
+                                        updateSetting("vatOn", event.target.value)
+                                    }
+                                >
+                                    <option value="GROSS_AMOUNT">
+                                        Gross Amount
+                                    </option>
+                                    <option value="NET_AMOUNT">Net Amount</option>
+                                    <option value="GROSS_SCHEME">Gross - Scheme</option>
+                                    <option value="GROSS_SCHEME_STAR">
+                                        Gross - Scheme - Star
+                                    </option>
+                                    <option value="GROSS_SCHEME_CASH">
+                                        Gross - Scheme - Cash
+                                    </option>
+                                    <option value="GROSS_CASH">Gross - Cash</option>
+                                </select>
+                            </label>
+
+                            <label className="gs-compact-field">
+                                <span className="gs-compact-field-label">
+                                    Cash Discount
+                                </span>
+                                <span className="gs-compact-field-help">
+                                    Discount calculation base
+                                </span>
+
+                                <select
+                                    className="gs-control"
+                                    value={
+                                        generalSetup.cashDiscountOn ||
+                                        DEFAULT_CASH_DISCOUNT_ON
+                                    }
+                                    disabled={loading || saving}
+                                    onChange={(event) =>
+                                        updateSetting(
+                                            "cashDiscountOn",
+                                            event.target.value
+                                        )
+                                    }
+                                >
+                                    <option value="BILL_NET_AMOUNT">
+                                        Bill Net Amount
+                                    </option>
+                                    <option value="ITEM_WISE_GROSS">
+                                        Item Wise Gross
+                                    </option>
+                                    <option value="ITEM_WISE_GROSS_SCHEME">
+                                        Item Wise Gross - Scheme
+                                    </option>
+                                    <option value="BILL_GROSS_AMOUNT">
+                                        Bill Gross Amount
+                                    </option>
+                                    <option value="BILL_GROSS_SCHEME_VAT">
+                                        Bill Gross - Scheme + VAT
+                                    </option>
+                                </select>
+                            </label>
+
+                            <label className="gs-compact-field">
+                                <span className="gs-compact-field-label">
+                                    Product Selection
+                                </span>
+                                <span className="gs-compact-field-help">
+                                    Default search method
+                                </span>
+
+                                <select
+                                    className="gs-control"
+                                    value={
+                                        generalSetup.productSelectionOn ||
+                                        DEFAULT_PRODUCT_SELECTION_ON
+                                    }
+                                    disabled={loading || saving}
+                                    onChange={(event) =>
+                                        updateSetting(
+                                            "productSelectionOn",
+                                            event.target.value
+                                        )
+                                    }
+                                >
+                                    <option value="PRODUCT_CODE">
+                                        Product Code Wise
+                                    </option>
+
+                                    <option value="COMPANY_PRODUCT_CODE">
+                                        Company Product Code Wise
+                                    </option>
+
+                                    <option value="SHORT_CODE">
+                                        Short Code Wise
+                                    </option>
+
+                                    <option value="LOCAL_PRODUCT_NAME">
+                                        Local Product Name Wise
+                                    </option>
+
+                                    <option value="EAN_NO">
+                                        EAN No. Wise
+                                    </option>
+
+                                    <option value="PRODUCT_NAME">
+                                        Product Name Wise
+                                    </option>
+                                </select>
+                            </label>
+
+                            <label className="gs-compact-field">
+                                <span className="gs-compact-field-label">
+                                    Default Company
+                                </span>
+
+                                <span className="gs-compact-field-help">
+                                    Selected automatically when billing opens
+                                </span>
+
+                                <select
+                                    className="gs-control"
+                                    value={
+                                        generalSetup.defaultCompany ||
+                                        ""
+                                    }
+                                    disabled={
+                                        loading ||
+                                        saving ||
+                                        companiesLoading
+                                    }
+                                    onChange={(event) =>
+                                        updateSetting(
+                                            "defaultCompany",
+                                            event.target.value
+                                        )
+                                    }
+                                >
+                                    <option value="">
+                                        {companiesLoading
+                                            ? "Loading Companies..."
+                                            : "Select Company"}
+                                    </option>
+
+                                    <option value="MIX">
+                                        MIX BILLING
+                                    </option>
+
+                                    {companyOptions.map(
+                                        (company) => {
+                                            const companyCode =
+                                                String(
+                                                    company.companyCode ||
+                                                    company.code ||
+                                                    ""
+                                                ).trim();
+
+                                            const companyName =
+                                                String(
+                                                    company.companyName ||
+                                                    company.name ||
+                                                    companyCode
+                                                ).trim();
+
+                                            /*
+                                             * Save company code because Billing
+                                             * already works company-code-wise.
+                                             */
+                                            const optionValue =
+                                                companyCode ||
+                                                companyName;
+
+                                            const optionLabel = [
+                                                companyCode,
+                                                companyName,
+                                            ]
+                                                .filter(Boolean)
+                                                .join(" - ");
+
+                                            return (
+                                                <option
+                                                    key={
+                                                        company._id ||
+                                                        optionValue
+                                                    }
+                                                    value={optionValue}
+                                                >
+                                                    {optionLabel ||
+                                                        optionValue}
+                                                </option>
+                                            );
+                                        }
+                                    )}
+                                </select>
+                            </label>
+
+                            <label className="gs-compact-field">
+                                <span className="gs-compact-field-label">
+                                    Default Godown
+                                </span>
+
+                                <span className="gs-compact-field-help">
+                                    Selected automatically when billing opens
+                                </span>
+
+                                <select
+                                    className="gs-control"
+                                    value={
+                                        generalSetup.defaultGodown ||
+                                        ""
+                                    }
+                                    disabled={
+                                        loading ||
+                                        saving ||
+                                        godownsLoading
+                                    }
+                                    onChange={(event) =>
+                                        updateSetting(
+                                            "defaultGodown",
+                                            event.target.value
+                                        )
+                                    }
+                                >
+                                    <option value="">
+                                        {godownsLoading
+                                            ? "Loading Godowns..."
+                                            : "Select Godown"}
+                                    </option>
+
+                                    {godownOptions.map(
+                                        (godown) => {
+                                            const godownCode =
+                                                String(
+                                                    godown.godownCode ||
+                                                    godown.code ||
+                                                    ""
+                                                ).trim();
+
+                                            const godownName =
+                                                String(
+                                                    godown.godownName ||
+                                                    godown.name ||
+                                                    godownCode
+                                                ).trim();
+
+                                            if (!godownCode) {
+                                                return null;
+                                            }
+
+                                            return (
+                                                <option
+                                                    key={
+                                                        godown._id ||
+                                                        godown.id ||
+                                                        godownCode
+                                                    }
+                                                    value={godownCode}
+                                                >
+                                                    {godownName}
+                                                </option>
+                                            );
+                                        }
+                                    )}
+                                </select>
+                            </label>
+
+                            <label className="gs-compact-field">
+                                <span className="gs-compact-field-label">
+                                    Default Selection
+                                </span>
+                                <span className="gs-compact-field-help">
+                                    Default billing selection mode
+                                </span>
+
+                                <select
+                                    className="gs-control"
+                                    value={
+                                        generalSetup.defaultSelection ||
+                                        DEFAULT_SELECTION
+                                    }
+                                    disabled={loading || saving}
+                                    onChange={(event) =>
+                                        updateSetting(
+                                            "defaultSelection",
+                                            event.target.value
+                                        )
+                                    }
+                                >
+                                    <option value="AREA">
+                                        Area
+                                    </option>
+
+                                    <option value="ROUTE">
+                                        Route
+                                    </option>
+                                </select>
+                            </label>
+                        </div>
+                    </section>
                 </div>
-            </div>
+            )}
 
-            <button
-                type="button"
-                className="gs-back-overview-button"
-                onClick={() => setActiveSetupMenu("all")}
-            >
-                ← All Settings
-            </button>
-        </div>
-
-        <section className="gs-compact-settings-section">
-            <div className="gs-compact-section-header">
-                <div>
-                    <h3>Billing Rules</h3>
-                    <p>Enable or disable billing behaviour.</p>
-                </div>
-
-                <span className="gs-compact-section-count">
-                    12 Switch Settings
-                </span>
-            </div>
-
-            <div className="gs-compact-toggle-grid">
-                <CompactToggleSetting
-                    label="Blacklist Party Billing"
-                    description="Allow billing for parties marked as blacklisted."
-                    checked={generalSetup.billAllowBlacklistParty}
-                    disabled={loading || saving}
-                    onChange={(value) =>
-                        updateSetting("billAllowBlacklistParty", value)
-                    }
-                />
-
-                <CompactToggleSetting
-                    label="Change Bill Type"
-                    description="Allow changing Credit or Cash bill type."
-                    checked={generalSetup.allowChangeBillType}
-                    disabled={loading || saving}
-                    onChange={(value) =>
-                        updateSetting("allowChangeBillType", value)
-                    }
-                />
-
-                <CompactToggleSetting
-                    label="Default Salesman"
-                    description="Automatically select the default salesman."
-                    checked={generalSetup.defaultSalesman}
-                    disabled={loading || saving}
-                    onChange={(value) =>
-                        updateSetting("defaultSalesman", value)
-                    }
-                />
-
-                <CompactToggleSetting
-                    label="Change Sale Rate"
-                    description="Allow users to manually change sale rate."
-                    checked={generalSetup.allowChangeSaleRate}
-                    disabled={loading || saving}
-                    onChange={(value) =>
-                        updateSetting("allowChangeSaleRate", value)
-                    }
-                />
-
-                <CompactToggleSetting
-                    label="Mix Billing"
-                    description="Allow products from multiple companies in one bill."
-                    checked={generalSetup.allowMixBilling}
-                    disabled={loading || saving}
-                    onChange={(value) =>
-                        updateSetting("allowMixBilling", value)
-                    }
-                />
-
-                <CompactToggleSetting
-                    label="Save After Load"
-                    description="Allow saving an invoice after load assignment."
-                    checked={generalSetup.saveInvoiceAfterLoad}
-                    disabled={loading || saving}
-                    onChange={(value) =>
-                        updateSetting("saveInvoiceAfterLoad", value)
-                    }
-                />
-
-                <CompactToggleSetting
-                    label="Edit Bill After Load"
-                    description="Allow editing bills assigned to a load."
-                    checked={generalSetup.allowEditBillAfterLoad}
-                    disabled={loading || saving}
-                    onChange={(value) =>
-                        updateSetting("allowEditBillAfterLoad", value)
-                    }
-                />
-
-                <CompactToggleSetting
-                    label="Edit Product After Load"
-                    description="Allow product rows to be edited after loading."
-                    checked={generalSetup.editProductAfterLoad}
-                    disabled={loading || saving}
-                    onChange={(value) =>
-                        updateSetting("editProductAfterLoad", value)
-                    }
-                />
-
-                <CompactToggleSetting
-                    label="Save and Print"
-                    description="Open print format automatically after saving."
-                    checked={generalSetup.saveAndPrint}
-                    disabled={loading || saving}
-                    onChange={(value) =>
-                        updateSetting("saveAndPrint", value)
-                    }
-                />
-
-                <CompactToggleSetting
-                    label="S.Rate Below P.Rate"
-                    description="Allow sale rate below purchase rate."
-                    checked={generalSetup.allowSRateLessThanPRate}
-                    disabled={loading || saving}
-                    onChange={(value) =>
-                        updateSetting("allowSRateLessThanPRate", value)
-                    }
-                />
-
-                <CompactToggleSetting
-                    label="Update Load Quantity"
-                    description="Update load quantity after bill editing."
-                    checked={generalSetup.updateLoadQtyAfterBillEdit}
-                    disabled={loading || saving}
-                    onChange={(value) =>
-                        updateSetting("updateLoadQtyAfterBillEdit", value)
-                    }
-                />
-
-                <CompactToggleSetting
-                    label="Negative Stock"
-                    description="Allow billing when stock becomes negative."
-                    checked={generalSetup.allowNegativeStock}
-                    disabled={loading || saving}
-                    onChange={(value) =>
-                        updateSetting("allowNegativeStock", value)
-                    }
-                />
-            </div>
-        </section>
-
-        <section className="gs-compact-settings-section">
-            <div className="gs-compact-section-header">
-                <div>
-                    <h3>Calculation and Default Settings</h3>
-                    <p>Select calculation methods and default values.</p>
-                </div>
-
-                <span className="gs-compact-section-count">
-                    6 Selection Settings
-                </span>
-            </div>
-
-            <div className="gs-compact-field-grid">
-                <label className="gs-compact-field">
-                    <span className="gs-compact-field-label">VAT On</span>
-                    <span className="gs-compact-field-help">
-                        GST calculation base
-                    </span>
-
-                    <select
-                        className="gs-control"
-                        value={generalSetup.vatOn || "NET_AMOUNT"}
-                        disabled={loading || saving}
-                        onChange={(event) =>
-                            updateSetting("vatOn", event.target.value)
-                        }
-                    >
-                        <option value="NET_AMOUNT">Net Amount</option>
-                        <option value="GROSS_SCHEME">Gross - Scheme</option>
-                        <option value="GROSS_SCHEME_STAR">
-                            Gross - Scheme - Star
-                        </option>
-                        <option value="GROSS_SCHEME_CASH">
-                            Gross - Scheme - Cash
-                        </option>
-                        <option value="GROSS_CASH">Gross - Cash</option>
-                    </select>
-                </label>
-
-                <label className="gs-compact-field">
-                    <span className="gs-compact-field-label">
-                        Cash Discount
-                    </span>
-                    <span className="gs-compact-field-help">
-                        Discount calculation base
-                    </span>
-
-                    <select
-                        className="gs-control"
-                        value={
-                            generalSetup.cashDiscountOn ||
-                            "BILL_NET_AMOUNT"
-                        }
-                        disabled={loading || saving}
-                        onChange={(event) =>
-                            updateSetting(
-                                "cashDiscountOn",
-                                event.target.value
-                            )
-                        }
-                    >
-                        <option value="BILL_NET_AMOUNT">
-                            Bill Net Amount
-                        </option>
-                        <option value="ITEM_WISE_GROSS">
-                            Item Wise Gross
-                        </option>
-                        <option value="ITEM_WISE_GROSS_SCHEME">
-                            Item Wise Gross - Scheme
-                        </option>
-                        <option value="BILL_GROSS_AMOUNT">
-                            Bill Gross Amount
-                        </option>
-                        <option value="BILL_GROSS_SCHEME_VAT">
-                            Bill Gross - Scheme + VAT
-                        </option>
-                    </select>
-                </label>
-
-                <label className="gs-compact-field">
-                    <span className="gs-compact-field-label">
-                        Product Selection
-                    </span>
-                    <span className="gs-compact-field-help">
-                        Default search method
-                    </span>
-
-                    <select
-                        className="gs-control"
-                        value={generalSetup.productSelectionOn}
-                        disabled={loading || saving}
-                        onChange={(event) =>
-                            updateSetting(
-                                "productSelectionOn",
-                                event.target.value
-                            )
-                        }
-                    >
-                        <option value="PRODUCT_CODE">
-                            Product Code Wise
-                        </option>
-                        <option value="PRODUCT_NAME">
-                            Product Name Wise
-                        </option>
-                        <option value="BARCODE">Barcode Wise</option>
-                    </select>
-                </label>
-
-                <label className="gs-compact-field">
-                    <span className="gs-compact-field-label">
-                        Default Company
-                    </span>
-                    <span className="gs-compact-field-help">
-                        Selected when billing opens
-                    </span>
-
-                    <select
-                        className="gs-control"
-                        value={generalSetup.defaultCompany}
-                        disabled={loading || saving}
-                        onChange={(event) =>
-                            updateSetting(
-                                "defaultCompany",
-                                event.target.value
-                            )
-                        }
-                    >
-                        <option value="">Select Company</option>
-                        <option value="ALL">All Companies</option>
-                    </select>
-                </label>
-
-                <label className="gs-compact-field">
-                    <span className="gs-compact-field-label">
-                        Default Godown
-                    </span>
-                    <span className="gs-compact-field-help">
-                        Selected when billing opens
-                    </span>
-
-                    <select
-                        className="gs-control"
-                        value={generalSetup.defaultGodown}
-                        disabled={loading || saving}
-                        onChange={(event) =>
-                            updateSetting(
-                                "defaultGodown",
-                                event.target.value
-                            )
-                        }
-                    >
-                        <option value="">Select Godown</option>
-                        <option value="G1">Main Godown</option>
-                    </select>
-                </label>
-
-                <label className="gs-compact-field">
-                    <span className="gs-compact-field-label">
-                        Default Selection
-                    </span>
-                    <span className="gs-compact-field-help">
-                        Default billing selection mode
-                    </span>
-
-                    <select
-                        className="gs-control"
-                        value={generalSetup.defaultSelection}
-                        disabled={loading || saving}
-                        onChange={(event) =>
-                            updateSetting(
-                                "defaultSelection",
-                                event.target.value
-                            )
-                        }
-                    >
-                        <option value="ROUTE">Route</option>
-                        <option value="AREA">Area</option>
-                        <option value="PARTY">Party</option>
-                        <option value="SALESMAN">Salesman</option>
-                    </select>
-                </label>
-            </div>
-        </section>
-    </div>
-)}
-
-{/* =====================================================
+            {/* =====================================================
     PRINTING CATEGORY
 ===================================================== */}
 
-{activeSetupMenu === "printing" && (
-    <div className="gs-selected-category">
-        <div className="gs-selected-category-header">
-            <div>
-                <span className="gs-selected-category-icon printing">
-                    ▧
-                </span>
+            {activeSetupMenu === "printing" && (
+                <div className="gs-selected-category">
+                    <div className="gs-selected-category-header">
+                        <div>
+                            <span className="gs-selected-category-icon printing">
+                                ▧
+                            </span>
 
-                <div>
-                    <h2>Printing Settings</h2>
+                            <div>
+                                <h2>Printing Settings</h2>
 
-                    <p>
-                        Configure bill print content and
-                        summaries.
-                    </p>
+                                <p>
+                                    Configure bill print content and
+                                    summaries.
+                                </p>
+                            </div>
+                        </div>
+
+                        <button
+                            type="button"
+                            className="gs-back-overview-button"
+                            onClick={() =>
+                                setActiveSetupMenu("all")
+                            }
+                        >
+                            ← All Settings
+                        </button>
+                    </div>
+
+                    <SettingSection title="BILL PRINT">
+                        <SettingRow
+                            label="Goods Return"
+                            description="Show Goods Return information in the bill print."
+                        >
+                            <ToggleSwitch
+                                checked={
+                                    generalSetup.goodsReturn
+                                }
+                                disabled={loading || saving}
+                                onChange={(value) =>
+                                    updateSetting(
+                                        "goodsReturn",
+                                        value
+                                    )
+                                }
+                            />
+                        </SettingRow>
+
+                        <SettingRow
+                            label="Damage Return"
+                            description="Show Damage Return information in the bill print."
+                        >
+                            <ToggleSwitch
+                                checked={
+                                    generalSetup.damageReturn
+                                }
+                                disabled={loading || saving}
+                                onChange={(value) =>
+                                    updateSetting(
+                                        "damageReturn",
+                                        value
+                                    )
+                                }
+                            />
+                        </SettingRow>
+
+                        <SettingRow
+                            label="Scheme Summary"
+                            description="Show scheme summary in the bill print."
+                        >
+                            <ToggleSwitch
+                                checked={
+                                    generalSetup.schemeSummary
+                                }
+                                disabled={loading || saving}
+                                onChange={(value) =>
+                                    updateSetting(
+                                        "schemeSummary",
+                                        value
+                                    )
+                                }
+                            />
+                        </SettingRow>
+
+                        <SettingRow
+                            label="VAT Summary"
+                            description="Show tax summary in the bill print."
+                        >
+                            <ToggleSwitch
+                                checked={
+                                    generalSetup.vatSummary
+                                }
+                                disabled={loading || saving}
+                                onChange={(value) =>
+                                    updateSetting(
+                                        "vatSummary",
+                                        value
+                                    )
+                                }
+                            />
+                        </SettingRow>
+
+                        <SettingRow
+                            label="Serial No"
+                            description="Show serial numbers in printed product rows."
+                        >
+                            <ToggleSwitch
+                                checked={
+                                    generalSetup.serialNo
+                                }
+                                disabled={loading || saving}
+                                onChange={(value) =>
+                                    updateSetting(
+                                        "serialNo",
+                                        value
+                                    )
+                                }
+                            />
+                        </SettingRow>
+                    </SettingSection>
                 </div>
-            </div>
+            )}
 
-            <button
-                type="button"
-                className="gs-back-overview-button"
-                onClick={() =>
-                    setActiveSetupMenu("all")
-                }
-            >
-                ← All Settings
-            </button>
-        </div>
-
-        <SettingSection title="BILL PRINT">
-            <SettingRow
-                label="Goods Return"
-                description="Show Goods Return information in the bill print."
-            >
-                <ToggleSwitch
-                    checked={
-                        generalSetup.goodsReturn
-                    }
-                    disabled={loading || saving}
-                    onChange={(value) =>
-                        updateSetting(
-                            "goodsReturn",
-                            value
-                        )
-                    }
-                />
-            </SettingRow>
-
-            <SettingRow
-                label="Damage Return"
-                description="Show Damage Return information in the bill print."
-            >
-                <ToggleSwitch
-                    checked={
-                        generalSetup.damageReturn
-                    }
-                    disabled={loading || saving}
-                    onChange={(value) =>
-                        updateSetting(
-                            "damageReturn",
-                            value
-                        )
-                    }
-                />
-            </SettingRow>
-
-            <SettingRow
-                label="Scheme Summary"
-                description="Show scheme summary in the bill print."
-            >
-                <ToggleSwitch
-                    checked={
-                        generalSetup.schemeSummary
-                    }
-                    disabled={loading || saving}
-                    onChange={(value) =>
-                        updateSetting(
-                            "schemeSummary",
-                            value
-                        )
-                    }
-                />
-            </SettingRow>
-
-            <SettingRow
-                label="VAT Summary"
-                description="Show tax summary in the bill print."
-            >
-                <ToggleSwitch
-                    checked={
-                        generalSetup.vatSummary
-                    }
-                    disabled={loading || saving}
-                    onChange={(value) =>
-                        updateSetting(
-                            "vatSummary",
-                            value
-                        )
-                    }
-                />
-            </SettingRow>
-
-            <SettingRow
-                label="Serial No"
-                description="Show serial numbers in printed product rows."
-            >
-                <ToggleSwitch
-                    checked={
-                        generalSetup.serialNo
-                    }
-                    disabled={loading || saving}
-                    onChange={(value) =>
-                        updateSetting(
-                            "serialNo",
-                            value
-                        )
-                    }
-                />
-            </SettingRow>
-        </SettingSection>
-    </div>
-)}
-
-{/* =====================================================
+            {/* =====================================================
     SYSTEM CATEGORY
 ===================================================== */}
 
-{activeSetupMenu === "system" && (
-    <div className="gs-selected-category">
-        <div className="gs-selected-category-header">
-            <div>
-                <span className="gs-selected-category-icon system">
-                    ◉
-                </span>
+            {activeSetupMenu === "system" && (
+                <div className="gs-selected-category">
+                    <div className="gs-selected-category-header">
+                        <div>
+                            <span className="gs-selected-category-icon system">
+                                ◉
+                            </span>
 
-                <div>
-                    <h2>System Settings</h2>
+                            <div>
+                                <h2>System Settings</h2>
 
-                    <p>
-                        Current user, firm and database
-                        information.
-                    </p>
+                                <p>
+                                    Current user, firm and database
+                                    information.
+                                </p>
+                            </div>
+                        </div>
+
+                        <button
+                            type="button"
+                            className="gs-back-overview-button"
+                            onClick={() =>
+                                setActiveSetupMenu("all")
+                            }
+                        >
+                            ← All Settings
+                        </button>
+                    </div>
+
+                    <section className="gs-system-card">
+                        <div className="gs-system-card-title">
+                            SYSTEM INFORMATION
+                        </div>
+
+                        <div className="gs-system-row">
+                            <span>Logged In User</span>
+
+                            <strong>
+                                {localStorage.getItem(
+                                    "userName"
+                                ) ||
+                                    localStorage.getItem(
+                                        "username"
+                                    ) ||
+                                    "Administrator"}
+                            </strong>
+                        </div>
+
+                        <div className="gs-system-row">
+                            <span>Firm</span>
+
+                            <strong>
+                                {localStorage.getItem(
+                                    "firmName"
+                                ) || "Current Firm"}
+                            </strong>
+                        </div>
+
+                        <div className="gs-system-row">
+                            <span>Database</span>
+
+                            <strong className="gs-connected-status">
+                                <span className="gs-connected-dot" />
+                                Connected
+                            </strong>
+                        </div>
+                    </section>
                 </div>
-            </div>
+            )}
 
-            <button
-                type="button"
-                className="gs-back-overview-button"
-                onClick={() =>
-                    setActiveSetupMenu("all")
-                }
-            >
-                ← All Settings
-            </button>
-        </div>
-
-        <section className="gs-system-card">
-            <div className="gs-system-card-title">
-                SYSTEM INFORMATION
-            </div>
-
-            <div className="gs-system-row">
-                <span>Logged In User</span>
-
-                <strong>
-                    {localStorage.getItem(
-                        "userName"
-                    ) ||
-                        localStorage.getItem(
-                            "username"
-                        ) ||
-                        "Administrator"}
-                </strong>
-            </div>
-
-            <div className="gs-system-row">
-                <span>Firm</span>
-
-                <strong>
-                    {localStorage.getItem(
-                        "firmName"
-                    ) || "Current Firm"}
-                </strong>
-            </div>
-
-            <div className="gs-system-row">
-                <span>Database</span>
-
-                <strong className="gs-connected-status">
-                    <span className="gs-connected-dot" />
-                    Connected
-                </strong>
-            </div>
-        </section>
-    </div>
-)}
-
-{/* =====================================================
+            {/* =====================================================
     EMPTY FUTURE CATEGORIES
 ===================================================== */}
 
-{activeSetupMenu === "inventory" &&
-    renderEmptyCategory(
-        "Inventory Settings",
-        "Configure stock, godown and inventory-related preferences."
-    )}
+            {activeSetupMenu === "inventory" &&
+                renderEmptyCategory(
+                    "Inventory Settings",
+                    "Configure stock, godown and inventory-related preferences."
+                )}
 
-{activeSetupMenu === "accounts" &&
-    renderEmptyCategory(
-        "Accounts Settings",
-        "Configure financial, ledger and accounting preferences."
-    )}
+            {activeSetupMenu === "accounts" &&
+                renderEmptyCategory(
+                    "Accounts Settings",
+                    "Configure financial, ledger and accounting preferences."
+                )}
 
-{activeSetupMenu === "gst" &&
-    renderEmptyCategory(
-        "GST Settings",
-        "Configure GST calculation, tax rates and return preferences."
-    )}
+            {activeSetupMenu === "gst" &&
+                renderEmptyCategory(
+                    "GST Settings",
+                    "Configure GST calculation, tax rates and return preferences."
+                )}
 
             {/* =====================================================
           PAGE FOOTER MESSAGE
