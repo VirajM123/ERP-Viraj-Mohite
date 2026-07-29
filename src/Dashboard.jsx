@@ -15,6 +15,7 @@ import Report from "./Report";
 import SalesmanToAreaMapping from './SalesmanToAreaMapping';
 import Transaction from "./Transaction";
 import GeneralSetup1 from "./GeneralSetup1";
+import SecuritySetup from "./SecuritySetup";
 const API_URL = "https://total-solution-backend.onrender.com/api";
 // const API_URL = "http://localhost:5000/api";
 
@@ -64818,17 +64819,18 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                 </div>
               )}
 
-            {activeSubMenu === "Security Setup" &&
-              openFormFor === "Security Setup" && (
-                <div
-                  style={{
-                    padding: "24px",
-                  }}
-                >
-                  <h2>Security Setup</h2>
-                  <p>This setup page will be developed later.</p>
-                </div>
-              )}
+           {activeSubMenu === "Security Setup" &&
+  openFormFor === "Security Setup" && (
+    <SecuritySetup
+      isAdmin={isAdminUser}
+      onPermissionsSaved={(savedPermissions) => {
+        console.log(
+          "Security permissions saved:",
+          savedPermissions
+        );
+      }}
+    />
+)}
             {activeSubMenu === 'Customer Bank Master' && openFormFor === 'Customer Bank Master' && (
               <div className="compact-master-page">
                 <div className="compact-master-heading">
