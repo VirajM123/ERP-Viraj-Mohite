@@ -5,8 +5,8 @@ import "./SecuritySetup.css";
    API CONFIGURATION
 ========================================================= */
 
-const API_URL = "http://localhost:5000/api";
-// const API_URL = "https://total-solution-backend.onrender.com/api";
+// const API_URL = "http://localhost:5000/api";
+const API_URL = "https://total-solution-backend.onrender.com/api";
 
 /* =========================================================
    PERMISSION COLUMNS
