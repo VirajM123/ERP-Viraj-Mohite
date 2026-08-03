@@ -16,8 +16,8 @@ import SalesmanToAreaMapping from './SalesmanToAreaMapping';
 import Transaction from "./Transaction";
 import GeneralSetup1 from "./GeneralSetup1";
 import SecuritySetup from "./SecuritySetup";
-const API_URL = "https://total-solution-backend.onrender.com/api";
-// const API_URL = "http://localhost:5000/api";
+// const API_URL = "https://total-solution-backend.onrender.com/api";
+const API_URL = "http://localhost:5000/api";
 
 
 import {
@@ -126,6 +126,78 @@ const DEFAULT_SELECTION_VALUES = [
   "AREA",
   "ROUTE",
 ];
+
+/* =========================================================
+   AVAILABLE REPORT DEFINITIONS (merged from old Dashboard)
+   Keep this outside Dashboard so it is initialized first.
+========================================================= */
+
+const allReportItems = [
+  {
+    name: "Party Wise Sales Report",
+    category: "Sales",
+    description:
+      "Detailed party-wise sales analysis with configurable criteria.",
+    icon: Users,
+  },
+  {
+    name: "All Party Wise Sales Report",
+    category: "Sales",
+    description:
+      "Consolidated sales report covering all parties.",
+    icon: FileBarChart,
+  },
+  {
+    name: "Product Wise Sales Report",
+    category: "Sales",
+    description:
+      "Product-wise sales quantity, value and transaction analysis.",
+    icon: Package,
+  },
+  {
+    name: "All Product Wise Sales Report",
+    category: "Sales",
+    description:
+      "Consolidated sales report covering all products.",
+    icon: BarChart,
+  },
+  {
+    name: "Company Wise Purchase Report",
+    category: "Purchase",
+    description:
+      "Company-wise purchase details and supplier analysis.",
+    icon: ShoppingCart,
+  },
+  {
+    name: "Current Stock Report",
+    category: "Stock",
+    description:
+      "View currently available product stock.",
+    icon: Warehouse,
+  },
+  {
+    name: "As On Date Stock Report",
+    category: "Stock",
+    description:
+      "View product stock balance as on a selected date.",
+    icon: CalendarDays,
+  },
+  {
+    name: "Damage Stock Report",
+    category: "Stock",
+    description:
+      "View damaged and non-saleable stock information.",
+    icon: AlertTriangle,
+  },
+  {
+    name: "Product Ledger",
+    category: "Stock",
+    description:
+      "Complete inward and outward product movement ledger.",
+    icon: ClipboardList,
+  },
+];
+
 const Dashboard = ({ onLogout }) => {
   const loggedInRole = String(
     localStorage.getItem("role") || ""
@@ -170,6 +242,19 @@ const Dashboard = ({ onLogout }) => {
         DEFAULT_SELECTION,
       saveAndPrint: false,
       allowSRateLessThanPRate: false,
+      updateLoadQtyAfterBillEdit: false,
+      allowNegativeStock: false,
+
+      /* Bill Print */
+      goodsReturn: true,
+      damageReturn: true,
+      schemeSummary: true,
+      vatSummary: true,
+      serialNo: false,
+      autoVoucherNo: true,
+      billingWithoutHsnCode: false,
+      editGrossPurchase: false,
+      allowChangeStarAmount: false,
     });
 
 
@@ -189,16 +274,15 @@ const Dashboard = ({ onLogout }) => {
      SALES BILL PRINT FORMAT SELECTION
      ========================================================= */
 
-  const createDefaultSalesPrintOptions = () => ({
+  const createDefaultSalesPrintOptions = (
+    setup = null
+  ) => ({
     reportNumber: "1",
     paperSize: "A4",
     orientation: "portrait",
 
     copies: 1,
 
-    /*
-     * Load-wise printing fields.
-     */
     loadSeries: "",
     loadNo: "",
 
@@ -206,14 +290,24 @@ const Dashboard = ({ onLogout }) => {
     fromTrnNo: "",
     toTrnNo: "",
 
-    showScheme: true,
+    goodsReturn:
+      setup?.goodsReturn === true,
+
+    damageReturn:
+      setup?.damageReturn === true,
+
+    showScheme:
+      setup?.schemeSummary === true,
+
+    showTaxSummary:
+      setup?.vatSummary === true,
+
+    showSerialNo:
+      setup?.serialNo === true,
+
     showHsn: true,
-    showTaxSummary: true,
     showBankDetails: true,
     showDeclaration: true,
-
-    goodsReturn: true,
-    damageReturn: true,
   });
 
   const [
@@ -232,6 +326,24 @@ const Dashboard = ({ onLogout }) => {
   ] = useState(() =>
     createDefaultSalesPrintOptions()
   );
+  useEffect(() => {
+    if (showSalesPrintFormatModal) {
+      return;
+    }
+
+    setSalesPrintOptions(
+      createDefaultSalesPrintOptions(
+        runtimeGeneralSetup
+      )
+    );
+  }, [
+    runtimeGeneralSetup.goodsReturn,
+    runtimeGeneralSetup.damageReturn,
+    runtimeGeneralSetup.schemeSummary,
+    runtimeGeneralSetup.vatSummary,
+    runtimeGeneralSetup.serialNo,
+    showSalesPrintFormatModal,
+  ]);
 
   const [
     salesPrintPreparing,
@@ -258,7 +370,169 @@ const Dashboard = ({ onLogout }) => {
       orientation: "landscape",
     },
   ];
-  const openSalesPrintFormatSelection = (
+  /* =========================================================
+   LOAD LATEST BILL PRINT GENERAL SETUP
+========================================================= */
+
+const readSetupBoolean = (
+  value,
+  fallback = false
+) => {
+  if (typeof value === "boolean") {
+    return value;
+  }
+
+  if (typeof value === "number") {
+    return value === 1;
+  }
+
+  const normalizedValue = String(
+    value ?? ""
+  )
+    .trim()
+    .toUpperCase();
+
+  if (
+    ["TRUE", "1", "Y", "YES", "ON"].includes(
+      normalizedValue
+    )
+  ) {
+    return true;
+  }
+
+  if (
+    ["FALSE", "0", "N", "NO", "OFF"].includes(
+      normalizedValue
+    )
+  ) {
+    return false;
+  }
+
+  return fallback;
+};
+
+const loadLatestSalesPrintSetup =
+  async () => {
+    const distributorId = String(
+      localStorage.getItem("distributorId") ||
+      ""
+    ).trim();
+
+    const firmId = String(
+      localStorage.getItem("firmId") ||
+      ""
+    ).trim();
+
+    if (!distributorId || !firmId) {
+      return {
+        ...runtimeGeneralSetup,
+      };
+    }
+
+    try {
+      const query = new URLSearchParams({
+        distributorId,
+        firmId,
+        _time: String(Date.now()),
+      });
+
+      const response = await fetch(
+        `${API_URL}/general-setup?${query.toString()}`,
+        {
+          method: "GET",
+          cache: "no-store",
+          headers: {
+            Accept: "application/json",
+          },
+        }
+      );
+
+      const contentType =
+        response.headers.get(
+          "content-type"
+        ) || "";
+
+      const result =
+        contentType.includes(
+          "application/json"
+        )
+          ? await response.json()
+          : null;
+
+      if (
+        !response.ok ||
+        result?.success === false
+      ) {
+        throw new Error(
+          result?.message ||
+          "Unable to load print settings."
+        );
+      }
+
+      const setup =
+        result?.setup ||
+        result?.generalSetup ||
+        result?.data ||
+        result ||
+        {};
+
+      const latestSetup = {
+        ...runtimeGeneralSetup,
+
+        goodsReturn:
+          readSetupBoolean(
+            setup.goodsReturn,
+            true
+          ),
+
+        damageReturn:
+          readSetupBoolean(
+            setup.damageReturn,
+            true
+          ),
+
+        schemeSummary:
+          readSetupBoolean(
+            setup.schemeSummary,
+            true
+          ),
+
+        vatSummary:
+          readSetupBoolean(
+            setup.vatSummary,
+            true
+          ),
+
+        serialNo:
+          readSetupBoolean(
+            setup.serialNo,
+            false
+          ),
+      };
+
+      setRuntimeGeneralSetup(
+        latestSetup
+      );
+
+      console.log(
+        "Latest bill print setup:",
+        latestSetup
+      );
+
+      return latestSetup;
+    } catch (error) {
+      console.error(
+        "Latest print setup load error:",
+        error
+      );
+
+      return {
+        ...runtimeGeneralSetup,
+      };
+    }
+  };
+const openSalesPrintFormatSelection =
+  async (
     salesRow,
     defaultAction = "preview"
   ) => {
@@ -268,7 +542,9 @@ const Dashboard = ({ onLogout }) => {
       salesRow;
 
     if (!actualSalesRow) {
-      alert("Sales Bill record was not found.");
+      alert(
+        "Sales Bill record was not found."
+      );
       return;
     }
 
@@ -300,22 +576,40 @@ const Dashboard = ({ onLogout }) => {
       ""
     ).trim();
 
-    setSelectedSalesPrintRow(actualSalesRow);
+    /*
+     * Always load the latest saved General Setup
+     * before opening the print modal.
+     */
+    const latestSetup =
+      await loadLatestSalesPrintSetup();
+
+    setSelectedSalesPrintRow(
+      actualSalesRow
+    );
 
     setSalesPrintOptions({
-      ...createDefaultSalesPrintOptions(),
+      ...createDefaultSalesPrintOptions(
+        latestSetup
+      ),
 
       defaultAction,
 
-      trnSeries: billSeries || "INV",
-      fromTrnNo: billNo,
-      toTrnNo: billNo,
+      trnSeries:
+        billSeries || "INV",
+
+      fromTrnNo:
+        billNo,
+
+      toTrnNo:
+        billNo,
 
       loadSeries,
       loadNo,
     });
 
-    setShowSalesPrintFormatModal(true);
+    setShowSalesPrintFormatModal(
+      true
+    );
   };
 
   /* ADD THIS FUNCTION HERE */
@@ -328,31 +622,39 @@ const Dashboard = ({ onLogout }) => {
     setSelectedSalesPrintRow(null);
 
     setSalesPrintOptions(
-      createDefaultSalesPrintOptions()
+      createDefaultSalesPrintOptions(
+        runtimeGeneralSetup
+      )
     );
   };
-  const openSalesLoadPrintSelection = (
+const openSalesLoadPrintSelection =
+  async (
     defaultAction = "print"
   ) => {
-    /*
-     * No individual bill is selected because this
-     * button is for Load-wise / Range-wise printing.
-     */
+    const latestSetup =
+      await loadLatestSalesPrintSetup();
+
     setSelectedSalesPrintRow(null);
 
     setSalesPrintOptions({
-      ...createDefaultSalesPrintOptions(),
+      ...createDefaultSalesPrintOptions(
+        latestSetup
+      ),
+
       defaultAction,
+
       loadSeries: "",
       loadNo: "",
+
       trnSeries: "INV",
       fromTrnNo: "",
       toTrnNo: "",
     });
 
-    setShowSalesPrintFormatModal(true);
+    setShowSalesPrintFormatModal(
+      true
+    );
   };
-
   /* 2. REPORT STATES — add inside Dashboard component */
 
 
@@ -372,12 +674,36 @@ const Dashboard = ({ onLogout }) => {
   const [selectedReport, setSelectedReport] =
     useState(null);
 
+  /* ===== My Reports page states (merged from old Dashboard) ===== */
+  const [showMyReports, setShowMyReports] =
+    useState(false);
 
+  const [reportSearchText, setReportSearchText] =
+    useState("");
 
+  const [showReportSearchDropdown, setShowReportSearchDropdown] =
+    useState(false);
 
+  const [reportSearchActiveIndex, setReportSearchActiveIndex] =
+    useState(-1);
 
+  const [reportCategoryFilter, setReportCategoryFilter] =
+    useState("All");
 
+  const REPORT_RESULTS_PER_PAGE = 5;
 
+  const [reportCurrentPage, setReportCurrentPage] =
+    useState(1);
+
+  const [favoriteReports, setFavoriteReports] =
+    useState([
+      "Party Wise Sales Report",
+      "Product Wise Sales Report",
+      "Company Wise Purchase Report",
+      "Current Stock Report",
+      "As On Date Stock Report",
+    ]);
+  /* ===== end My Reports page states ===== */
 
   const [showDebitBatchModal, setShowDebitBatchModal] =
     useState(false);
@@ -629,6 +955,7 @@ const Dashboard = ({ onLogout }) => {
     setActiveSubMenu(reportName);
     setOpenFormFor("Report");
     setShowDashboard(false);
+    setShowMyReports(false);
 
     setShowSalesList(false);
     setShowPurchaseList(false);
@@ -638,6 +965,150 @@ const Dashboard = ({ onLogout }) => {
     setShowSettleLoadList(false);
     setShowPrintPreview(false);
   };
+
+  /* =========================================================
+     MY REPORTS NAVIGATION (merged from old Dashboard)
+     ========================================================= */
+
+  const openMyReportsPage = () => {
+    setActiveMenu("reports");
+    setActiveSubMenu("My Reports");
+
+    setSelectedReport(null);
+    setOpenFormFor(null);
+    setExpandedReportCategory(null);
+
+    setShowMyReports(true);
+    setShowDashboard(false);
+
+    setReportSearchText("");
+    setReportCategoryFilter("All");
+
+    setShowSalesList(false);
+    setShowPurchaseList(false);
+    setShowCreditNoteList(false);
+    setShowDebitNoteList(false);
+    setShowCreateLoadList(false);
+    setShowSettleLoadList(false);
+    setShowPrintPreview(false);
+  };
+
+  const handleReportSearchSubmit = (event) => {
+    event?.preventDefault();
+
+    const selectedReportFromSearch =
+      reportSearchActiveIndex >= 0
+        ? reportSearchResults[reportSearchActiveIndex]
+        : reportSearchResults[0];
+
+    if (!selectedReportFromSearch) {
+      return;
+    }
+
+    setReportSearchText(selectedReportFromSearch.name);
+    setShowReportSearchDropdown(false);
+    setReportSearchActiveIndex(-1);
+
+    handleReportClick(selectedReportFromSearch.name);
+  };
+
+  const toggleFavoriteReport = (reportName) => {
+    setFavoriteReports((previousReports) => {
+      if (previousReports.includes(reportName)) {
+        return previousReports.filter(
+          (name) => name !== reportName
+        );
+      }
+
+      return [...previousReports, reportName];
+    });
+  };
+
+  /* =========================================================
+     MY REPORTS SEARCH, FILTER AND PAGINATION (merged from old Dashboard)
+  ========================================================= */
+
+  const normalizeReportText = (value = "") =>
+    String(value ?? "")
+      .toLowerCase()
+      .trim()
+      .replace(/\s+/g, " ");
+
+  /* Search results shown directly below the search textbox. */
+  const reportSearchResults =
+    reportSearchText.trim() === ""
+      ? []
+      : allReportItems
+          .filter((report) => {
+            const searchValue = normalizeReportText(reportSearchText);
+
+            const searchableValue = normalizeReportText(
+              [report.name, report.category, report.description].join(" ")
+            );
+
+            return searchableValue.includes(searchValue);
+          })
+          .slice(0, 8);
+
+  /*
+   * Bottom My Reports table is filtered only by category.
+   * Typing in the search box now affects only the dropdown.
+   */
+  const filteredMyReports = allReportItems.filter((report) => {
+    const selectedCategory = normalizeReportText(reportCategoryFilter);
+    const reportCategory = normalizeReportText(report.category);
+
+    return (
+      reportCategoryFilter === "All" ||
+      reportCategory === selectedCategory
+    );
+  });
+
+  /* Total pages */
+  const reportTotalPages = Math.max(
+    1,
+    Math.ceil(filteredMyReports.length / REPORT_RESULTS_PER_PAGE)
+  );
+
+  /* Safe current page */
+  const reportSafeCurrentPage = Math.min(
+    Math.max(1, reportCurrentPage),
+    reportTotalPages
+  );
+
+  /* Start index */
+  const reportStartIndex =
+    (reportSafeCurrentPage - 1) * REPORT_RESULTS_PER_PAGE;
+
+  /* End index */
+  const reportEndIndex = reportStartIndex + REPORT_RESULTS_PER_PAGE;
+
+  /* Current page rows */
+  const paginatedMyReports = filteredMyReports.slice(
+    reportStartIndex,
+    reportEndIndex
+  );
+
+  /* Footer values */
+  const reportStartRecord =
+    filteredMyReports.length === 0 ? 0 : reportStartIndex + 1;
+
+  const reportEndRecord =
+    filteredMyReports.length === 0
+      ? 0
+      : Math.min(reportEndIndex, filteredMyReports.length);
+
+  /*
+   * Reset pagination only when category changes.
+   * Search text should not filter the bottom table.
+   */
+  useEffect(() => {
+    setReportCurrentPage(1);
+  }, [reportCategoryFilter]);
+
+  const quickAccessReports = allReportItems.filter((report) =>
+    favoriteReports.includes(report.name)
+  );
 
   /* =========================================================
    LOAD TRANSFER STATES
@@ -2155,9 +2626,17 @@ const Dashboard = ({ onLogout }) => {
 
         showHsn:
           salesPrintOptions.showHsn,
-
         showTaxSummary:
           salesPrintOptions.showTaxSummary,
+
+        showSerialNo:
+          salesPrintOptions.showSerialNo,
+
+        goodsReturn:
+          salesPrintOptions.goodsReturn,
+
+        damageReturn:
+          salesPrintOptions.damageReturn,
 
         showBankDetails:
           salesPrintOptions.showBankDetails,
@@ -2251,33 +2730,42 @@ const Dashboard = ({ onLogout }) => {
       setSalesPrintPreparing(false);
     }
   };
-  const openSalesPrintModal = (
+const openSalesPrintModal =
+  async (
     salesRow,
     defaultAction = "preview"
   ) => {
     const actualSalesRow =
-      salesRow?.originalItem || salesRow;
+      salesRow?.originalItem?.originalItem ||
+      salesRow?.originalItem ||
+      salesRow;
 
     if (!actualSalesRow) {
-      alert("Sales Bill record was not found.");
+      alert(
+        "Sales Bill record was not found."
+      );
       return;
     }
 
-    setSelectedSalesPrintRow(actualSalesRow);
+    const latestSetup =
+      await loadLatestSalesPrintSetup();
+
+    setSelectedSalesPrintRow(
+      actualSalesRow
+    );
 
     setSalesPrintOptions({
-      ...createDefaultSalesPrintOptions(),
+      ...createDefaultSalesPrintOptions(
+        latestSetup
+      ),
 
-      /*
-       * Used only to remember which list button
-       * originally opened the modal.
-       */
       defaultAction,
     });
 
-    setShowSalesPrintFormatModal(true);
+    setShowSalesPrintFormatModal(
+      true
+    );
   };
-
   /* =========================================================
      BILL PRINT DEFAULT FORM AND LAYOUTS
      ========================================================= */
@@ -2324,14 +2812,17 @@ const Dashboard = ({ onLogout }) => {
     },
   ];
 
-  const createDefaultBillPrintForm = () => ({
+  const createDefaultBillPrintForm = (
+    setup = runtimeGeneralSetup
+  ) => ({
     FirmCode:
       localStorage.getItem("firmCode") ||
       localStorage.getItem("firmId") ||
       "",
 
     FinancialYear:
-      localStorage.getItem("financialYear") || "",
+      localStorage.getItem("financialYear") ||
+      "",
 
     LoadSeries: "",
     loadNo: "",
@@ -2342,18 +2833,34 @@ const Dashboard = ({ onLogout }) => {
 
     NoOfCopies: "1",
 
-    GoodsReturn: "Y",
-    DamageReturn: "Y",
-    SchemeSummary: "Y",
-    VatSummary: "Y",
+    GoodsReturn:
+      setup?.goodsReturn === true
+        ? "Y"
+        : "N",
+
+    DamageReturn:
+      setup?.damageReturn === true
+        ? "Y"
+        : "N",
+
+    SchemeSummary:
+      setup?.schemeSummary === true
+        ? "Y"
+        : "N",
+
+    VatSummary:
+      setup?.vatSummary === true
+        ? "Y"
+        : "N",
+
+    SerialNo:
+      setup?.serialNo === true
+        ? "Y"
+        : "N",
+
     HSNSummary: "Y",
 
     BillPrintLayout: "1",
-
-    /*
-     * A4 must be portrait.
-     * A5 remains landscape.
-     */
     PaperSize: "A4",
     Orientation: "portrait",
   });
@@ -2677,6 +3184,10 @@ const Dashboard = ({ onLogout }) => {
       showTaxSummary = true,
       showBankDetails = true,
       showDeclaration = true,
+
+      goodsReturn = true,
+      damageReturn = true,
+      showSerialNo = false,
     } = {}
   ) => {
     const normalizedPaperSize = String(
@@ -2888,6 +3399,31 @@ const Dashboard = ({ onLogout }) => {
         roundingAmount
       )
     );
+    const goodsReturnAmount = safeNumber(
+      readBillValue(
+        [
+          "GoodsReturnAmount",
+          "goodsReturnAmount",
+          "GoodReturnAmount",
+          "goodReturnAmount",
+          "GDRAmount",
+          "gdrAmount",
+        ],
+        0
+      )
+    );
+
+    const damageReturnAmount = safeNumber(
+      readBillValue(
+        [
+          "DamageReturnAmount",
+          "damageReturnAmount",
+          "DGRAmount",
+          "dgrAmount",
+        ],
+        0
+      )
+    );
 
     const totalSchemeCash = schemeAmount + cashDiscountAmount;
     const totalCnStarDis =
@@ -3060,7 +3596,10 @@ const Dashboard = ({ onLogout }) => {
       .map(
         (item, index) => `
         <tr class="item-row">
-          <td class="center">${index + 1}</td>
+        ${showSerialNo
+            ? `<td class="center">${index + 1}</td>`
+            : ""
+          }
           <td class="product-name">${text(item.productName)}</td>
           ${showHsn ? `<td class="center">${text(item.hsn)}</td>` : ""}
           <td class="number">${money(item.mrp)}</td>
@@ -3102,7 +3641,10 @@ const Dashboard = ({ onLogout }) => {
       .map(
         () => `
         <tr class="item-row empty-row">
-          <td>&nbsp;</td>
+         ${showSerialNo
+            ? `<td>&nbsp;</td>`
+            : ""
+          }
           <td></td>
           ${showHsn ? "<td></td>" : ""}
           <td></td>
@@ -3256,7 +3798,10 @@ const Dashboard = ({ onLogout }) => {
 
           <thead>
             <tr>
-              <th>SR</th>
+             ${showSerialNo
+        ? `<th>SR NO</th>`
+        : ""
+      }
               <th class="left">Product Name</th>
               ${showHsn ? "<th>HSN</th>" : ""}
               <th>MRP</th>
@@ -3302,10 +3847,10 @@ const Dashboard = ({ onLogout }) => {
               <strong>Receivers Stamp &amp; Sign.</strong>
             </div>
           </div>
-
+<div class="amount-summary">
           ${showTaxSummary
         ? `
-                <div class="amount-summary">
+                
                   <div class="amount-summary-row">
                     <span>TAXABLE AMT</span><b>:</b><strong>${money(taxableValue)}</strong>
                   </div>
@@ -3329,12 +3874,39 @@ const Dashboard = ({ onLogout }) => {
                   <div class="amount-summary-row">
                     <span>CN/STAR/DIS</span><b>:</b><strong>${money(totalCnStarDis)}</strong>
                   </div>
-                  <div class="amount-summary-row">
-                    <span>TCS AMT</span><b>:</b><strong>${money(tcsAmount)}</strong>
-                  </div>
-                  <div class="amount-summary-row">
-                    <span>ROUNDING</span><b>:</b><strong>${money(roundingAmount)}</strong>
-                  </div>
+               <div class="amount-summary-row">
+  <span>TCS AMT</span>
+  <b>:</b>
+  <strong>${money(tcsAmount)}</strong>
+</div>
+
+${goodsReturn
+          ? `
+      <div class="amount-summary-row">
+        <span>GOODS RETURN</span>
+        <b>:</b>
+        <strong>${money(goodsReturnAmount)}</strong>
+      </div>
+    `
+          : ""
+        }
+
+${damageReturn
+          ? `
+      <div class="amount-summary-row">
+        <span>DAMAGE RETURN</span>
+        <b>:</b>
+        <strong>${money(damageReturnAmount)}</strong>
+      </div>
+    `
+          : ""
+        }
+
+<div class="amount-summary-row">
+  <span>ROUNDING</span>
+  <b>:</b>
+  <strong>${money(roundingAmount)}</strong>
+</div>
                   <div class="amount-summary-row net-amount-row">
                     <span>NET AMOUNT</span><b>:</b><strong>${money(netAmount)}</strong>
                   </div>
@@ -5867,6 +6439,10 @@ const Dashboard = ({ onLogout }) => {
   const [showCreateLoadList, setShowCreateLoadList] = useState(false);
   const [createLoadListData, setCreateLoadListData] = useState([]);
   const [editingInvoiceId, setEditingInvoiceId] = useState(null);
+  const [
+    originalEditingPartyCode,
+    setOriginalEditingPartyCode,
+  ] = useState("");
   /*
  * True only when the currently edited Sales Bill
  * is already assigned to a load.
@@ -6737,19 +7313,36 @@ const Dashboard = ({ onLogout }) => {
       0
     );
 
-  const getSalesDetailNetAmount = (item) => {
-    if (!item) return 0;
+const getSalesDetailNetAmount = (item) => {
+  if (!item) {
+    return 0;
+  }
 
-    const qty = Number(item.qty || 0);
-    const mrp = Number(item.mrp || 0);
-    const gstPercent = Number(item.gst || 0);
+  /*
+   * Show the same final amount that is calculated
+   * for the selected product row.
+   *
+   * This includes:
+   * - Sales Rate
+   * - Actual total quantity
+   * - TPR
+   * - Scheme
+   * - Cash Discount
+   * - Star Discount
+   * - CGST / SGST / IGST
+   * - VAT On General Setup
+   */
+  const calculatedRow =
+    calculateInvoiceRowAmounts(item);
 
-    const grossAmount = qty * mrp;
-    const gstAmount =
-      grossAmount * (gstPercent / 100);
-
-    return grossAmount + gstAmount;
-  };
+  return invoiceRound(
+    Number(
+      calculatedRow.amount ??
+      item.amount ??
+      0
+    ) || 0
+  );
+};
 
   const tableRef = useRef(null);
   const productInputRef = useRef(null);
@@ -9114,6 +9707,13 @@ const Dashboard = ({ onLogout }) => {
 
       const bill = result.bill;
       setEditingInvoiceId(bill._id);
+      setOriginalEditingPartyCode(
+        String(
+          bill.PartyCode ||
+          bill.partyCode ||
+          ""
+        ).trim()
+      );
 
       const companyCode = bill.CompanyCode || "";
       const companyName = bill.CompanyName || "";
@@ -10905,16 +11505,31 @@ const Dashboard = ({ onLogout }) => {
       runtimeGeneralSetup
         ?.billAllowBlacklistParty === true;
 
+    const selectedPartyCode = String(
+      account.accountCode ||
+      partyCode ||
+      ""
+    ).trim();
+
+    const isEditingSameOriginalParty =
+      Boolean(editingInvoiceId) &&
+      selectedPartyCode !== "" &&
+      selectedPartyCode ===
+      String(
+        originalEditingPartyCode || ""
+      ).trim();
+
     if (
       isBlacklisted &&
-      !allowBlacklistParty
+      !allowBlacklistParty &&
+      !isEditingSameOriginalParty
     ) {
       return {
         valid: false,
 
         message:
           `Party "${account.accountName}" is blacklisted. ` +
-          `Billing is not allowed because "Bill Allow Blacklist Party" is disabled.`,
+          `New billing or changing an existing bill to this party is not allowed.`,
       };
     }
 
@@ -11464,22 +12079,19 @@ const Dashboard = ({ onLogout }) => {
       title: "Reports",
       icon: "📈",
       items: [
-        "Sales",
-        "Purchase",
-        "Stock",
-        "GST Report"
+        "My Reports",
+        
       ]
     },
 
-    tools: {
-      title: "Tools",
-      icon: "⚙️",
-      items: [
-        "General Setup 1",
-        "General Setup 2",
-        "Security Setup"
-      ]
-    },
+tools: {
+  title: "Tools",
+  icon: "⚙️",
+  items: [
+    "General Setup",
+    "Security Setup"
+  ]
+},
 
     logout: {
       title: "Logout",
@@ -18709,15 +19321,14 @@ const Dashboard = ({ onLogout }) => {
           cashDiscount
         )
       );
-    const gstPercent =
-      Math.max(
-        0,
-        Number(
-          row.gst ??
-          row.gstPercent ??
-          0
-        )
-      );
+   const gstPercent = Math.max(
+  0,
+  Number(
+    row.gst ??
+    row.gstPercent ??
+    0
+  )
+);
 
     const taxable =
       calculateInvoiceTaxableBase({
@@ -18856,6 +19467,10 @@ const Dashboard = ({ onLogout }) => {
         return {
           ...row,
 
+          rateGst: (
+    Number(row.rate || 0) *
+    (1 + Number(row.gst || row.gstPercent || 0) / 100)
+).toFixed(2),
           grossAmt:
             gross.toFixed(2),
 
@@ -18930,29 +19545,26 @@ const Dashboard = ({ onLogout }) => {
             tax.igst
           );
 
-        return {
-          ...row,
+  return {
+  ...row,
 
-          cdAmt:
-            invoiceRound(
-              cdAmount
-            ).toFixed(2),
+rateGst: invoiceRound(
+  Number(row.rate || 0) *
+  (1 + Number(row.gst || row.gstPercent || 0) / 100)
+).toFixed(2),
 
-          taxable:
-            tax.taxable.toFixed(2),
+  cdAmt: rowCdAmount.toFixed(2),
 
-          cgst:
-            tax.cgst.toFixed(2),
+  taxable: tax.taxable.toFixed(2),
 
-          sgst:
-            tax.sgst.toFixed(2),
+  cgst: tax.cgst.toFixed(2),
 
-          igst:
-            tax.igst.toFixed(2),
+  sgst: tax.sgst.toFixed(2),
 
-          amount:
-            amount.toFixed(2),
-        };
+  igst: tax.igst.toFixed(2),
+
+  amount: amount.toFixed(2),
+};
       });
     }
 
@@ -19349,15 +19961,14 @@ const Dashboard = ({ onLogout }) => {
         )
       );
 
-    const gstPercent =
-      Math.max(
-        0,
-        Number(
-          row.gst ??
-          row.gstPercent ??
-          0
-        )
-      );
+const gstPercent = Math.max(
+  0,
+  Number(
+    row.gst ??
+    row.gstPercent ??
+    0
+  )
+);
 
     const taxable =
       calculateInvoiceTaxableBase({
@@ -19432,15 +20043,12 @@ const Dashboard = ({ onLogout }) => {
         sgst +
         igst
       );
-    const rateGst =
-      invoiceRound(
-        rate +
-        (
-          rate *
-          gstPercent /
-          100
-        )
-      );
+const rateGst =
+  invoiceRound(
+    totalQty *
+    rate *
+    (1 + gstPercent / 100)
+  );
 
     return {
       ...row,
@@ -19480,13 +20088,24 @@ const Dashboard = ({ onLogout }) => {
     }
 
 
-  if (
-    field === "rate" &&
-    !runtimeGeneralSetup.allowChangeSaleRate
-  ) {
-    return;
-  }
-setInvoiceItems((previousItems) => {
+    if (
+      field === "rate" &&
+      !runtimeGeneralSetup.allowChangeSaleRate
+    ) {
+      return;
+    }
+    /*
+ * Star percentage can still calculate Star Amount.
+ * Only direct manual editing of Star Amount is controlled.
+ */
+if (
+  field === "starAmt" &&
+  runtimeGeneralSetup
+    .allowChangeStarAmount !== true
+) {
+  return;
+}
+    setInvoiceItems((previousItems) => {
       const updatedItems =
         previousItems.map(
           (existingItem, itemIndex) => {
@@ -19533,6 +20152,11 @@ setInvoiceItems((previousItems) => {
             const gstPct =
               Number(updatedItem.gst) ||
               0;
+         
+
+updatedItem.rateGst = invoiceRound(
+  rate * (1 + gstPct / 100)
+).toFixed(2);
 
             const baseAmount =
               qty * rate;
@@ -19663,17 +20287,41 @@ setInvoiceItems((previousItems) => {
               updatedItem.starAmt =
                 starAmt.toFixed(2);
             } else if (
-              field === "starAmt"
-            ) {
-              starAmt =
-                Number(value) || 0;
+  field === "starAmt"
+) {
+  /*
+   * Direct Star Amount is accepted only when
+   * General Setup allows manual modification.
+   */
+  if (
+    runtimeGeneralSetup
+      .allowChangeStarAmount === true
+  ) {
+    starAmt =
+      Math.max(
+        0,
+        Number(value) || 0
+      );
 
-              /*
-               * Direct Star Amount overrides Star %.
-               */
-              if (String(value).trim() !== "") {
-                updatedItem.starPct = "";
-              }
+    updatedItem.starAmt =
+      value;
+
+    /*
+     * Direct amount overrides Star Percentage.
+     */
+    if (String(value).trim() !== "") {
+      updatedItem.starPct = "";
+    }
+  } else {
+    /*
+     * When manual editing is disabled, retain the
+     * amount calculated from Star Percentage.
+     */
+    starAmt =
+      Number(
+        updatedItem.starAmt
+      ) || 0;
+  }
             } else if (
               String(
                 updatedItem.starPct ??
@@ -20559,12 +21207,82 @@ setInvoiceItems((previousItems) => {
             setup.saveAndPrint === "Y" ||
             setup.saveAndPrint === "YES" ||
             setup.saveAndPrint === 1,
-            allowSRateLessThanPRate:
-  setup.allowSRateLessThanPRate === true ||
-  setup.allowSRateLessThanPRate === "true" ||
-  setup.allowSRateLessThanPRate === "Y" ||
-  setup.allowSRateLessThanPRate === "YES" ||
-  setup.allowSRateLessThanPRate === 1,
+          allowSRateLessThanPRate:
+            setup.allowSRateLessThanPRate === true ||
+            setup.allowSRateLessThanPRate === "true" ||
+            setup.allowSRateLessThanPRate === "Y" ||
+            setup.allowSRateLessThanPRate === "YES" ||
+            setup.allowSRateLessThanPRate === 1,
+          updateLoadQtyAfterBillEdit:
+            setup.updateLoadQtyAfterBillEdit === true ||
+            setup.updateLoadQtyAfterBillEdit === "true" ||
+            setup.updateLoadQtyAfterBillEdit === "Y" ||
+            setup.updateLoadQtyAfterBillEdit === "YES" ||
+            setup.updateLoadQtyAfterBillEdit === 1,
+          allowNegativeStock:
+            setup.allowNegativeStock === true ||
+            setup.allowNegativeStock === "true" ||
+            setup.allowNegativeStock === "Y" ||
+            setup.allowNegativeStock === "YES" ||
+            setup.allowNegativeStock === 1,
+          goodsReturn:
+            setup.goodsReturn === true ||
+            setup.goodsReturn === "true" ||
+            setup.goodsReturn === "Y" ||
+            setup.goodsReturn === "YES" ||
+            setup.goodsReturn === 1,
+
+          damageReturn:
+            setup.damageReturn === true ||
+            setup.damageReturn === "true" ||
+            setup.damageReturn === "Y" ||
+            setup.damageReturn === "YES" ||
+            setup.damageReturn === 1,
+
+          schemeSummary:
+            setup.schemeSummary === true ||
+            setup.schemeSummary === "true" ||
+            setup.schemeSummary === "Y" ||
+            setup.schemeSummary === "YES" ||
+            setup.schemeSummary === 1,
+
+          vatSummary:
+            setup.vatSummary === true ||
+            setup.vatSummary === "true" ||
+            setup.vatSummary === "Y" ||
+            setup.vatSummary === "YES" ||
+            setup.vatSummary === 1,
+
+          serialNo:
+            setup.serialNo === true ||
+            setup.serialNo === "true" ||
+            setup.serialNo === "Y" ||
+            setup.serialNo === "YES" ||
+            setup.serialNo === 1,
+            autoVoucherNo:
+  setup.autoVoucherNo === true ||
+  setup.autoVoucherNo === "true" ||
+  setup.autoVoucherNo === "Y" ||
+  setup.autoVoucherNo === "YES" ||
+  setup.autoVoucherNo === 1,
+  billingWithoutHsnCode:
+  setup.billingWithoutHsnCode === true ||
+  setup.billingWithoutHsnCode === "true" ||
+  setup.billingWithoutHsnCode === "Y" ||
+  setup.billingWithoutHsnCode === "YES" ||
+  setup.billingWithoutHsnCode === 1,
+  editGrossPurchase:
+  setup.editGrossPurchase === true ||
+  setup.editGrossPurchase === "true" ||
+  setup.editGrossPurchase === "Y" ||
+  setup.editGrossPurchase === "YES" ||
+  setup.editGrossPurchase === 1,
+  allowChangeStarAmount:
+  setup.allowChangeStarAmount === true ||
+  setup.allowChangeStarAmount === "true" ||
+  setup.allowChangeStarAmount === "Y" ||
+  setup.allowChangeStarAmount === "YES" ||
+  setup.allowChangeStarAmount === 1,
           vatOn:
             [
               "GROSS_AMOUNT",
@@ -20646,8 +21364,19 @@ setInvoiceItems((previousItems) => {
           allowMixBilling: false,
           allowEditBillAfterLoad: false,
           editProductAfterLoad: false,
-            saveAndPrint: false,
-            allowSRateLessThanPRate: false,
+          saveAndPrint: false,
+          allowSRateLessThanPRate: false,
+          updateLoadQtyAfterBillEdit: false,
+          allowNegativeStock: false,
+          goodsReturn: true,
+          damageReturn: true,
+          schemeSummary: true,
+          vatSummary: true,
+          serialNo: false,
+          autoVoucherNo: true,
+          billingWithoutHsnCode: false,  
+          editGrossPurchase: false,
+          allowChangeStarAmount: false,
 
           vatOn:
             DEFAULT_VAT_ON,
@@ -21398,34 +22127,65 @@ setInvoiceItems((previousItems) => {
         product.SRate ??
         "",
 
-    purchaseRate: Number(
-  selectedBatch?.purchaseRate ??
-  selectedBatch?.PurchaseRate ??
-  selectedBatch?.purRate ??
-  selectedBatch?.PurRate ??
-  selectedBatch?.pRate ??
-  selectedBatch?.PRate ??
-  selectedBatch?.Rate_Per_Unit ??
-  selectedBatch?.purchasePrice ??
-  selectedBatch?.PurchasePrice ??
-  product.purchaseRate ??
-  product.PurchaseRate ??
-  product.purRate ??
-  product.PurRate ??
-  product.pRate ??
-  product.PRate ??
-  product.Rate_Per_Unit ??
-  product.purchasePrice ??
-  product.PurchasePrice ??
+      purchaseRate: Number(
+        selectedBatch?.purchaseRate ??
+        selectedBatch?.PurchaseRate ??
+        selectedBatch?.purRate ??
+        selectedBatch?.PurRate ??
+        selectedBatch?.pRate ??
+        selectedBatch?.PRate ??
+        selectedBatch?.Rate_Per_Unit ??
+        selectedBatch?.purchasePrice ??
+        selectedBatch?.PurchasePrice ??
+        product.purchaseRate ??
+        product.PurchaseRate ??
+        product.purRate ??
+        product.PurRate ??
+        product.pRate ??
+        product.PRate ??
+        product.Rate_Per_Unit ??
+        product.purchasePrice ??
+        product.PurchasePrice ??
+        0
+      ),
+
+gst: Number(
+  selectedBatch?.gst ??
+  selectedBatch?.gstPercent ??
+  selectedBatch?.GSTPercent ??
+  selectedBatch?.GST ??
+  product.gst ??
+  product.gstPercent ??
+  product.GSTPercent ??
+  product.GST ??
   0
 ),
 
-      gst:
-        product.gst ??
-        product.gstPercent ??
-        product.GSTPercent ??
-        product.GST ??
-        "",
+rateGst: invoiceRound(
+  Number(
+    selectedBatch?.salesRate ??
+    selectedBatch?.sRate ??
+    selectedBatch?.SRate ??
+    product.salesRate ??
+    product.sRate ??
+    product.SRate ??
+    0
+  ) *
+  (
+    1 +
+    Number(
+      selectedBatch?.gst ??
+      selectedBatch?.gstPercent ??
+      selectedBatch?.GSTPercent ??
+      selectedBatch?.GST ??
+      product.gst ??
+      product.gstPercent ??
+      product.GSTPercent ??
+      product.GST ??
+      0
+    ) / 100
+  )
+).toFixed(2),
 
       units:
         product.basicUnit ||
@@ -21449,46 +22209,46 @@ setInvoiceItems((previousItems) => {
       ),
 
       selectedBatch: {
-  ...cloneInvoiceDraftValue(
-    selectedBatch || {}
-  ),
+        ...cloneInvoiceDraftValue(
+          selectedBatch || {}
+        ),
 
-  purchaseRate: Number(
-    selectedBatch?.purchaseRate ??
-    selectedBatch?.PurchaseRate ??
-    selectedBatch?.purRate ??
-    selectedBatch?.PurRate ??
-    selectedBatch?.pRate ??
-    selectedBatch?.PRate ??
-    selectedBatch?.Rate_Per_Unit ??
-    product.purchaseRate ??
-    product.PurchaseRate ??
-    product.purRate ??
-    product.PurRate ??
-    product.pRate ??
-    product.PRate ??
-    product.Rate_Per_Unit ??
-    0
-  ),
+        purchaseRate: Number(
+          selectedBatch?.purchaseRate ??
+          selectedBatch?.PurchaseRate ??
+          selectedBatch?.purRate ??
+          selectedBatch?.PurRate ??
+          selectedBatch?.pRate ??
+          selectedBatch?.PRate ??
+          selectedBatch?.Rate_Per_Unit ??
+          product.purchaseRate ??
+          product.PurchaseRate ??
+          product.purRate ??
+          product.PurRate ??
+          product.pRate ??
+          product.PRate ??
+          product.Rate_Per_Unit ??
+          0
+        ),
 
-  PRate: Number(
-    selectedBatch?.purchaseRate ??
-    selectedBatch?.PurchaseRate ??
-    selectedBatch?.purRate ??
-    selectedBatch?.PurRate ??
-    selectedBatch?.pRate ??
-    selectedBatch?.PRate ??
-    selectedBatch?.Rate_Per_Unit ??
-    product.purchaseRate ??
-    product.PurchaseRate ??
-    product.purRate ??
-    product.PurRate ??
-    product.pRate ??
-    product.PRate ??
-    product.Rate_Per_Unit ??
-    0
-  ),
-},
+        PRate: Number(
+          selectedBatch?.purchaseRate ??
+          selectedBatch?.PurchaseRate ??
+          selectedBatch?.purRate ??
+          selectedBatch?.PurRate ??
+          selectedBatch?.pRate ??
+          selectedBatch?.PRate ??
+          selectedBatch?.Rate_Per_Unit ??
+          product.purchaseRate ??
+          product.PurchaseRate ??
+          product.purRate ??
+          product.PurRate ??
+          product.pRate ??
+          product.PRate ??
+          product.Rate_Per_Unit ??
+          0
+        ),
+      },
     };
 
     /*
@@ -21651,6 +22411,7 @@ setInvoiceItems((previousItems) => {
 
     // Reset editing mode after save
     setEditingInvoiceId(null);
+    setOriginalEditingPartyCode("");
     setEditingLoadedSalesBill(false);
     setOriginalLoadedInvoiceItems([]);
 
@@ -21672,6 +22433,121 @@ setInvoiceItems((previousItems) => {
 
     return productCode !== "" && (qty > 0 || free > 0) && rate > 0;
   };
+  /* =========================================================
+   BILLING WITHOUT HSN CODE VALIDATION
+========================================================= */
+
+const getInvoiceItemHsnCode = (item) => {
+  return String(
+    item?.hsn ??
+    item?.HSN ??
+    item?.hsnCode ??
+    item?.HSNCode ??
+    item?.HsnCode ??
+    item?.productHsn ??
+    item?.ProductHSN ??
+    ""
+  ).trim();
+};
+
+const getInvoiceItemProductName = (
+  item,
+  index
+) => {
+  return String(
+    item?.productName ??
+    item?.ProdName ??
+    item?.itemName ??
+    item?.name ??
+    item?.productCode ??
+    item?.ProdCode ??
+    `Row ${index + 1}`
+  ).trim();
+};
+
+const validateBillingItemHsnCodes = (
+  items = []
+) => {
+  /*
+   * ON means bills without HSN are allowed.
+   */
+  if (
+    runtimeGeneralSetup
+      .billingWithoutHsnCode === true
+  ) {
+    return true;
+  }
+
+  const actualItems = Array.isArray(items)
+    ? items.filter((item) => {
+        const productCode = String(
+          item?.productCode ??
+          item?.ProdCode ??
+          item?.itemCode ??
+          item?.productId ??
+          ""
+        ).trim();
+
+        const productName = String(
+          item?.productName ??
+          item?.ProdName ??
+          item?.itemName ??
+          item?.name ??
+          ""
+        ).trim();
+
+        return Boolean(
+          productCode ||
+          productName
+        );
+      })
+    : [];
+
+  const missingHsnItems =
+    actualItems
+      .map((item, index) => ({
+        rowNumber: index + 1,
+        productName:
+          getInvoiceItemProductName(
+            item,
+            index
+          ),
+        hsnCode:
+          getInvoiceItemHsnCode(item),
+      }))
+      .filter(
+        (item) => !item.hsnCode
+      );
+
+  if (missingHsnItems.length === 0) {
+    return true;
+  }
+
+  const missingProductList =
+    missingHsnItems
+      .slice(0, 5)
+      .map(
+        (item) =>
+          `${item.rowNumber}. ${item.productName}`
+      )
+      .join("\n");
+
+  const remainingCount =
+    missingHsnItems.length - 5;
+
+  alert(
+    `HSN Code is required for the following product(s):\n\n` +
+    `${missingProductList}` +
+    `${
+      remainingCount > 0
+        ? `\n...and ${remainingCount} more product(s).`
+        : ""
+    }\n\n` +
+    `Enable "Billing Without HSN Code" in General Setup to allow saving without HSN.`
+  );
+
+  return false;
+};
 
   const saveInvoice = async () => {
     try {
@@ -21903,59 +22779,59 @@ setInvoiceItems((previousItems) => {
 
             mrp: Number(item.mrp || item.MRP || 0),
             MRP: Number(item.mrp || item.MRP || 0),
-rate: Number(
-  item.rate ||
-  item.salesRate ||
-  item.srate ||
-  item.SRate ||
-  0
-),
+            rate: Number(
+              item.rate ||
+              item.salesRate ||
+              item.srate ||
+              item.SRate ||
+              0
+            ),
 
-salesRate: Number(
-  item.rate ||
-  item.salesRate ||
-  item.srate ||
-  item.SRate ||
-  0
-),
+            salesRate: Number(
+              item.rate ||
+              item.salesRate ||
+              item.srate ||
+              item.SRate ||
+              0
+            ),
 
-purchaseRate: Number(
-  item.purchaseRate ??
-  item.PurchaseRate ??
-  item.purRate ??
-  item.PurRate ??
-  item.pRate ??
-  item.PRate ??
-  item.prate ??
-  item.Rate_Per_Unit ??
-  item.selectedBatch?.purchaseRate ??
-  item.selectedBatch?.PurchaseRate ??
-  item.selectedBatch?.purRate ??
-  item.selectedBatch?.pRate ??
-  item.selectedBatch?.PRate ??
-  item.selectedBatch?.Rate_Per_Unit ??
-  0
-),
+            purchaseRate: Number(
+              item.purchaseRate ??
+              item.PurchaseRate ??
+              item.purRate ??
+              item.PurRate ??
+              item.pRate ??
+              item.PRate ??
+              item.prate ??
+              item.Rate_Per_Unit ??
+              item.selectedBatch?.purchaseRate ??
+              item.selectedBatch?.PurchaseRate ??
+              item.selectedBatch?.purRate ??
+              item.selectedBatch?.pRate ??
+              item.selectedBatch?.PRate ??
+              item.selectedBatch?.Rate_Per_Unit ??
+              0
+            ),
 
-PRate: Number(
-  item.purchaseRate ??
-  item.PurchaseRate ??
-  item.purRate ??
-  item.PurRate ??
-  item.pRate ??
-  item.PRate ??
-  item.prate ??
-  item.Rate_Per_Unit ??
-  item.selectedBatch?.purchaseRate ??
-  item.selectedBatch?.PurchaseRate ??
-  item.selectedBatch?.purRate ??
-  item.selectedBatch?.pRate ??
-  item.selectedBatch?.PRate ??
-  item.selectedBatch?.Rate_Per_Unit ??
-  0
-),
+            PRate: Number(
+              item.purchaseRate ??
+              item.PurchaseRate ??
+              item.purRate ??
+              item.PurRate ??
+              item.pRate ??
+              item.PRate ??
+              item.prate ??
+              item.Rate_Per_Unit ??
+              item.selectedBatch?.purchaseRate ??
+              item.selectedBatch?.PurchaseRate ??
+              item.selectedBatch?.purRate ??
+              item.selectedBatch?.pRate ??
+              item.selectedBatch?.PRate ??
+              item.selectedBatch?.Rate_Per_Unit ??
+              0
+            ),
 
-taxable: Number(item.taxable || 0),
+            taxable: Number(item.taxable || 0),
             gst: Number(item.gst || item.gstPercent || 0),
             sgst: Number(item.sgst || 0),
             cgst: Number(item.cgst || 0),
@@ -21964,70 +22840,171 @@ taxable: Number(item.taxable || 0),
           };
         });
 
-     /* =========================================================
-   SALES PRODUCT ROW VALIDATION
+      /* =========================================================
+    SALES PRODUCT ROW VALIDATION
+ ========================================================= */
+
+      if (validItems.length === 0) {
+        const selectedProductRow =
+          invoiceItems.find((item) => {
+            const productCode = String(
+              item.productCode ||
+              item.productId ||
+              item.code ||
+              String(item.product || "")
+                .split(" - ")[0] ||
+              ""
+            ).trim();
+
+            return productCode !== "";
+          });
+
+        /*
+         * A product is selected, but Qty/Free is missing.
+         */
+        if (selectedProductRow) {
+          const qty = Number(
+            selectedProductRow.qty ??
+            selectedProductRow.quantity ??
+            selectedProductRow.Qty ??
+            0
+          );
+
+          const free = Number(
+            selectedProductRow.free ??
+            selectedProductRow.Free ??
+            0
+          );
+
+          const rate = Number(
+            selectedProductRow.rate ??
+            selectedProductRow.salesRate ??
+            selectedProductRow.srate ??
+            selectedProductRow.SRate ??
+            0
+          );
+
+          if (qty <= 0 && free <= 0) {
+            alert(
+              "Please enter Quantity or Free Quantity for the selected product."
+            );
+            return;
+          }
+
+          if (rate <= 0) {
+            alert(
+              "Please enter a valid Sales Rate for the selected product."
+            );
+            return;
+          }
+        }
+
+        alert(
+          "Please select at least one product."
+        );
+
+        return;
+      }
+        /* =========================================================
+   ALLOW CHANGE STAR AMOUNT — FINAL SAVE PROTECTION
 ========================================================= */
 
-if (validItems.length === 0) {
-  const selectedProductRow =
-    invoiceItems.find((item) => {
-      const productCode = String(
-        item.productCode ||
-        item.productId ||
-        item.code ||
-        String(item.product || "")
-          .split(" - ")[0] ||
+if (
+  runtimeGeneralSetup
+    .allowChangeStarAmount !== true
+) {
+  const invalidManualStarItem =
+    validItems.find((item) => {
+      const starPercentage =
+        Number(item.starPct || 0);
+
+      const savedStarAmount =
+        invoiceRound(
+          Number(item.starAmt || 0)
+        );
+
+      const grossAmount =
+        invoiceRound(
+          getSalesItemTotalQty(item) *
+          Number(item.rate || 0)
+        );
+
+      const calculatedStarAmount =
+        invoiceRound(
+          grossAmount *
+          starPercentage /
+          100
+        );
+
+      /*
+       * Only validate rows having Star Percentage.
+       * Rows with no Star Percentage may legitimately
+       * contain a backend/master-calculated Star Amount.
+       */
+      return (
+        starPercentage > 0 &&
+        Math.abs(
+          savedStarAmount -
+          calculatedStarAmount
+        ) > 0.01
+      );
+    });
+
+  if (invalidManualStarItem) {
+    alert(
+      `Invoice cannot be saved.\n\n` +
+      `Star Amount was manually changed for:\n` +
+      `${
+        invalidManualStarItem.productName ||
+        invalidManualStarItem.product ||
+        invalidManualStarItem.productCode ||
+        "Selected Product"
+      }\n\n` +
+      `Enable "Allow Change Star Amount" in General Setup to allow this.`
+    );
+
+    return;
+  }
+}
+      /* =========================================================
+   BILLING WITHOUT HSN CODE — FINAL SAVE VALIDATION
+========================================================= */
+
+if (
+  runtimeGeneralSetup
+    .billingWithoutHsnCode !== true
+) {
+  const missingHsnItem =
+    validItems.find((item) => {
+      const hsnCode = String(
+        item.hsn ??
+        item.HSN ??
+        item.hsnCode ??
+        item.HSNCode ??
+        item.HsnCode ??
         ""
       ).trim();
 
-      return productCode !== "";
+      return !hsnCode;
     });
 
-  /*
-   * A product is selected, but Qty/Free is missing.
-   */
-  if (selectedProductRow) {
-    const qty = Number(
-      selectedProductRow.qty ??
-      selectedProductRow.quantity ??
-      selectedProductRow.Qty ??
-      0
+  if (missingHsnItem) {
+    const productName = String(
+      missingHsnItem.productName ||
+      missingHsnItem.product ||
+      missingHsnItem.productCode ||
+      "Selected Product"
+    ).trim();
+
+    alert(
+      `Invoice cannot be saved.\n\n` +
+      `HSN Code was not found for:\n` +
+      `${productName}\n\n` +
+      `Enable "Billing Without HSN Code" in General Setup to allow this.`
     );
 
-    const free = Number(
-      selectedProductRow.free ??
-      selectedProductRow.Free ??
-      0
-    );
-
-    const rate = Number(
-      selectedProductRow.rate ??
-      selectedProductRow.salesRate ??
-      selectedProductRow.srate ??
-      selectedProductRow.SRate ??
-      0
-    );
-
-    if (qty <= 0 && free <= 0) {
-      alert(
-        "Please enter Quantity or Free Quantity for the selected product."
-      );
-      return;
-    }
-
-    if (rate <= 0) {
-      alert(
-        "Please enter a valid Sales Rate for the selected product."
-      );
-      return;
-    }
+    return;
   }
-
-  alert(
-    "Please select at least one product."
-  );
-
-  return;
 }
       /* =========================================================
    S.RATE BELOW P.RATE — FINAL SAVE VALIDATION
@@ -22040,113 +23017,111 @@ if (validItems.length === 0) {
    input validation was bypassed.
 ========================================================= */
 
-if (
-  runtimeGeneralSetup
-    .allowSRateLessThanPRate !== true
-) {
-  const readSalesPurchaseRate = (item) =>
-    Number(
-      item.purchaseRate ??
-      item.PurchaseRate ??
-      item.purRate ??
-      item.PurRate ??
-      item.pRate ??
-      item.PRate ??
-      item.prate ??
-      item.selectedBatch?.purchaseRate ??
-      item.selectedBatch?.PurchaseRate ??
-      item.selectedBatch?.purRate ??
-      item.selectedBatch?.PurRate ??
-      item.selectedBatch?.pRate ??
-      item.selectedBatch?.PRate ??
-      item.selectedBatch?.prate ??
-      0
-    );
+      if (
+        runtimeGeneralSetup
+          .allowSRateLessThanPRate !== true
+      ) {
+        const readSalesPurchaseRate = (item) =>
+          Number(
+            item.purchaseRate ??
+            item.PurchaseRate ??
+            item.purRate ??
+            item.PurRate ??
+            item.pRate ??
+            item.PRate ??
+            item.prate ??
+            item.selectedBatch?.purchaseRate ??
+            item.selectedBatch?.PurchaseRate ??
+            item.selectedBatch?.purRate ??
+            item.selectedBatch?.PurRate ??
+            item.selectedBatch?.pRate ??
+            item.selectedBatch?.PRate ??
+            item.selectedBatch?.prate ??
+            0
+          );
 
-  const readSalesRate = (item) =>
-    Number(
-      item.rate ??
-      item.salesRate ??
-      item.SalesRate ??
-      item.srate ??
-      item.sRate ??
-      item.SRate ??
-      0
-    );
+        const readSalesRate = (item) =>
+          Number(
+            item.rate ??
+            item.salesRate ??
+            item.SalesRate ??
+            item.srate ??
+            item.sRate ??
+            item.SRate ??
+            0
+          );
 
-  /*
-   * Do not permit save when Purchase Rate is missing.
-   * Otherwise a zero Purchase Rate would bypass the rule.
-   */
-  const missingPurchaseRateItem =
-    validItems.find((item) => {
-      const purchaseRate =
-        readSalesPurchaseRate(item);
+        /*
+         * Do not permit save when Purchase Rate is missing.
+         * Otherwise a zero Purchase Rate would bypass the rule.
+         */
+        const missingPurchaseRateItem =
+          validItems.find((item) => {
+            const purchaseRate =
+              readSalesPurchaseRate(item);
 
-      return (
-        !Number.isFinite(purchaseRate) ||
-        purchaseRate <= 0
-      );
-    });
+            return (
+              !Number.isFinite(purchaseRate) ||
+              purchaseRate <= 0
+            );
+          });
 
-  if (missingPurchaseRateItem) {
-    alert(
-      `Invoice cannot be saved.\n\n` +
-      `Purchase Rate was not found for:\n` +
-      `${
-        missingPurchaseRateItem.productName ||
-        missingPurchaseRateItem.product ||
-        missingPurchaseRateItem.productCode ||
-        "Selected Product"
-      }\n\n` +
-      `Please check the Purchase Rate in Stock/Batch Master.`
-    );
+        if (missingPurchaseRateItem) {
+          alert(
+            `Invoice cannot be saved.\n\n` +
+            `Purchase Rate was not found for:\n` +
+            `${missingPurchaseRateItem.productName ||
+            missingPurchaseRateItem.product ||
+            missingPurchaseRateItem.productCode ||
+            "Selected Product"
+            }\n\n` +
+            `Please check the Purchase Rate in Stock/Batch Master.`
+          );
 
-    return;
-  }
+          return;
+        }
 
-  const belowPurchaseRateItem =
-    validItems.find((item) => {
-      const salesRate =
-        readSalesRate(item);
+        const belowPurchaseRateItem =
+          validItems.find((item) => {
+            const salesRate =
+              readSalesRate(item);
 
-      const purchaseRate =
-        readSalesPurchaseRate(item);
+            const purchaseRate =
+              readSalesPurchaseRate(item);
 
-      return (
-        Number.isFinite(salesRate) &&
-        Number.isFinite(purchaseRate) &&
-        salesRate < purchaseRate
-      );
-    });
+            return (
+              Number.isFinite(salesRate) &&
+              Number.isFinite(purchaseRate) &&
+              salesRate < purchaseRate
+            );
+          });
 
-  if (belowPurchaseRateItem) {
-    const salesRate =
-      readSalesRate(
-        belowPurchaseRateItem
-      );
+        if (belowPurchaseRateItem) {
+          const salesRate =
+            readSalesRate(
+              belowPurchaseRateItem
+            );
 
-    const purchaseRate =
-      readSalesPurchaseRate(
-        belowPurchaseRateItem
-      );
+          const purchaseRate =
+            readSalesPurchaseRate(
+              belowPurchaseRateItem
+            );
 
-    alert(
-      `Invoice cannot be saved.\n\n` +
-      `Product: ${
-        belowPurchaseRateItem.productName ||
-        belowPurchaseRateItem.product ||
-        belowPurchaseRateItem.productCode ||
-        "Selected Product"
-      }\n` +
-      `Purchase Rate: ₹${purchaseRate.toFixed(2)}\n` +
-      `Sales Rate: ₹${salesRate.toFixed(2)}\n\n` +
-      `Enable "S.Rate Below P.Rate" in General Setup to allow this.`
-    );
+          alert(
+            `Invoice cannot be saved.\n\n` +
+            `Product: ${belowPurchaseRateItem.productName ||
+            belowPurchaseRateItem.product ||
+            belowPurchaseRateItem.productCode ||
+            "Selected Product"
+            }\n` +
+            `Purchase Rate: ₹${purchaseRate.toFixed(2)}\n` +
+            `Sales Rate: ₹${salesRate.toFixed(2)}\n\n` +
+            `Enable "S.Rate Below P.Rate" in General Setup to allow this.`
+          );
 
-    return;
-  }
-}
+          return;
+        }
+      }
       /* =========================================================
    ALLOW MIX BILLING VALIDATION
    ADD THIS BLOCK HERE
@@ -22569,136 +23544,137 @@ if (
         return;
       }
 
-alert(
-  isEditMode
-    ? "Sales bill updated successfully!"
-    : "Sales saved successfully!"
-);
+      alert(
+        isEditMode
+          ? "Sales bill updated successfully!"
+          : "Sales saved successfully!"
+      );
 
-/* =========================================================
-   PREPARE SAVED BILL FOR SAVE AND PRINT
-========================================================= */
+      /* =========================================================
+         PREPARE SAVED BILL FOR SAVE AND PRINT
+      ========================================================= */
 
-/*
- * Different backend versions may return the saved bill
- * under bill, sales, record, data or invoice.
- */
-const savedSalesBill =
-  result?.bill ||
-  result?.savedBill ||
-  result?.sales ||
-  result?.record ||
-  result?.data?.header ||
-  result?.data?.bill ||
-  result?.data?.sales ||
-  result?.invoice ||
-  null;
+      /*
+       * Different backend versions may return the saved bill
+       * under bill, sales, record, data or invoice.
+       */
+      const savedSalesBill =
+        result?.bill ||
+        result?.savedBill ||
+        result?.sales ||
+        result?.record ||
+        result?.data?.header ||
+        result?.data?.bill ||
+        result?.data?.sales ||
+        result?.invoice ||
+        null;
 
-/*
- * Create a safe fallback using the data that was sent.
- * Print-details still requires the saved MongoDB ID,
- * therefore prefer the backend returned record.
- */
-const savedSalesBillForPrint = {
-  ...salesData,
-  ...(savedSalesBill || {}),
+      /*
+       * Create a safe fallback using the data that was sent.
+       * Print-details still requires the saved MongoDB ID,
+       * therefore prefer the backend returned record.
+       */
+      const savedSalesBillForPrint = {
+        ...salesData,
+        ...(savedSalesBill || {}),
 
-_id:
-  savedSalesBill?._id ||
-  savedSalesBill?.id ||
-  result?.savedBillId ||
-  result?._id ||
-  result?.id ||
-  editingInvoiceId ||
-  "",
+        _id:
+          savedSalesBill?._id ||
+          savedSalesBill?.id ||
+          result?.savedBillId ||
+          result?._id ||
+          result?.id ||
+          editingInvoiceId ||
+          "",
 
-id:
-  savedSalesBill?.id ||
-  savedSalesBill?._id ||
-  result?.savedBillId ||
-  result?.id ||
-  result?._id ||
-  editingInvoiceId ||
-  "",
+        id:
+          savedSalesBill?.id ||
+          savedSalesBill?._id ||
+          result?.savedBillId ||
+          result?.id ||
+          result?._id ||
+          editingInvoiceId ||
+          "",
 
-  BillSeries:
-    savedSalesBill?.BillSeries ||
-    savedSalesBill?.billSeries ||
-    salesData.BillSeries ||
-    invoiceFormData.BillSeries ||
-    "INV",
+        BillSeries:
+          savedSalesBill?.BillSeries ||
+          savedSalesBill?.billSeries ||
+          salesData.BillSeries ||
+          invoiceFormData.BillSeries ||
+          "INV",
 
-  BillNo:
-    savedSalesBill?.BillNo ??
-    savedSalesBill?.billNo ??
-    salesData.BillNo ??
-    invoiceFormData.billNo ??
-    "",
+        BillNo:
+          savedSalesBill?.BillNo ??
+          savedSalesBill?.billNo ??
+          salesData.BillNo ??
+          invoiceFormData.billNo ??
+          "",
 
-  LoadSeries:
-    savedSalesBill?.LoadSeries ||
-    savedSalesBill?.loadSeries ||
-    "",
+        LoadSeries:
+          savedSalesBill?.LoadSeries ||
+          savedSalesBill?.loadSeries ||
+          "",
 
-  LoadNo:
-    savedSalesBill?.LoadNo ??
-    savedSalesBill?.loadNo ??
-    "",
-};
+        LoadNo:
+          savedSalesBill?.LoadNo ??
+          savedSalesBill?.loadNo ??
+          "",
+      };
 
-/*
- * Store the setting before resetting the bill form.
- */
-const shouldOpenPrintAfterSave =
-  runtimeGeneralSetup.saveAndPrint === true &&
-  !isEditMode;
+      /*
+       * Store the setting before resetting the bill form.
+       */
+      const shouldOpenPrintAfterSave =
+        runtimeGeneralSetup.saveAndPrint === true &&
+        !isEditMode;
 
-/*
- * Keep the current saved bill reference.
- * The modal will use this record after the form reset.
- */
-if (shouldOpenPrintAfterSave) {
-  if (
-    savedSalesBillForPrint._id ||
-    savedSalesBillForPrint.id
-  ) {
-    openSalesPrintFormatSelection(
-      savedSalesBillForPrint,
-      "print"
-    );
-  } else {
-    console.error(
-      "Save and Print could not start because the Sales save API did not return the saved bill ID.",
-      result
-    );
+      /*
+       * Keep the current saved bill reference.
+       * The modal will use this record after the form reset.
+       */
+      if (shouldOpenPrintAfterSave) {
+        if (
+          savedSalesBillForPrint._id ||
+          savedSalesBillForPrint.id
+        ) {
+          openSalesPrintFormatSelection(
+            savedSalesBillForPrint,
+            "print"
+          );
+        } else {
+          console.error(
+            "Save and Print could not start because the Sales save API did not return the saved bill ID.",
+            result
+          );
 
-    alert(
-      "Sales Bill was saved, but the print window could not open because the saved Bill ID was not returned by the server."
-    );
-  }
-}
+          alert(
+            "Sales Bill was saved, but the print window could not open because the saved Bill ID was not returned by the server."
+          );
+        }
+      }
 
-// ✅ STORE COMPANY VALUE BEFORE RESET
-const companyValue =
-  invoiceFormData.company;
+      // ✅ STORE COMPANY VALUE BEFORE RESET
+      const companyValue =
+        invoiceFormData.company;
 
-const billSeriesValue =
-  invoiceFormData.BillSeries;
+      const billSeriesValue =
+        invoiceFormData.BillSeries;
 
-const godownValue =
-  invoiceFormData.godown;
+      const godownValue =
+        invoiceFormData.godown;
 
-const billTypeValue =
-  invoiceFormData.billType;
+      const billTypeValue =
+        invoiceFormData.billType;
 
-const nextBillNo =
-  result.nextBillNo ||
-  Number(
-    invoiceFormData.billNo || 0
-  ) + 1;
+      const nextBillNo =
+        result.nextBillNo ||
+        Number(
+          invoiceFormData.billNo || 0
+        ) + 1;
 
       // ✅ RESET EDITING STATE
       setEditingInvoiceId(null);
+      setOriginalEditingPartyCode("");
       setEditingLoadedSalesBill(false);
       setOriginalLoadedInvoiceItems([]);
 
@@ -24579,6 +25555,7 @@ const nextBillNo =
       purRate: '',
       salesRate: '',
       grossAmount: '0.00',
+      grossAmountManuallyEdited: false,
       disc1: '',
       disc2: '',
       disc3: '',
@@ -24599,9 +25576,48 @@ const nextBillNo =
     setPurchaseActiveRow(purchaseItems.length);
   }, [purchaseItems.length]);
 
-  const updatePurchaseItem = (index, field, value) => {
-    const newItems = [...purchaseItems];
-    newItems[index][field] = value;
+const updatePurchaseItem = (
+  index,
+  field,
+  value
+) => {
+  const newItems = [...purchaseItems];
+
+  newItems[index] = {
+    ...newItems[index],
+    [field]: value,
+  };
+
+  /*
+   * Remember that Gross was manually changed.
+   */
+  if (field === "grossAmount") {
+    if (
+      runtimeGeneralSetup
+        .editGrossPurchase !== true
+    ) {
+      return;
+    }
+
+    newItems[index]
+      .grossAmountManuallyEdited = true;
+  }
+
+  /*
+   * Changing Quantity, Rate, MRP or Unit resets
+   * Gross to automatic calculation.
+   */
+  if (
+    [
+      "quantity",
+      "purRate",
+      "mrp",
+      "unitId",
+    ].includes(field)
+  ) {
+    newItems[index]
+      .grossAmountManuallyEdited = false;
+  }
 
     const supplierAccount = otherAccounts.find(
       (acc) =>
@@ -24641,9 +25657,26 @@ const nextBillNo =
         taxOn === "MRP"
           ? mrp
           : effectivePurchaseRate;
-      const grossAmt = qty * baseRate;
+   const calculatedGrossAmount =
+  qty * baseRate;
 
-      item.grossAmount = grossAmt.toFixed(2);
+const canUseManualGross =
+  runtimeGeneralSetup
+    .editGrossPurchase === true &&
+  item.grossAmountManuallyEdited === true;
+
+const enteredGrossAmount =
+  Number(item.grossAmount);
+
+const grossAmt =
+  canUseManualGross &&
+  Number.isFinite(enteredGrossAmount) &&
+  enteredGrossAmount >= 0
+    ? enteredGrossAmount
+    : calculatedGrossAmount;
+
+item.grossAmount =
+  grossAmt.toFixed(2);
 
       // Calculate discounts
       let disc1 = parseFloat(item.disc1) || 0;
@@ -24704,9 +25737,21 @@ const nextBillNo =
     };
 
     // Recalculate when any of these fields change
-    if (['quantity', 'purRate', 'mrp', 'tax', 'disc1', 'disc2', 'disc3', 'unitId'].includes(field)) {
-      recalculateItem(newItems[index]);
-    }
+ if (
+  [
+    "quantity",
+    "purRate",
+    "mrp",
+    "grossAmount",
+    "tax",
+    "disc1",
+    "disc2",
+    "disc3",
+    "unitId",
+  ].includes(field)
+) {
+  recalculateItem(newItems[index]);
+}
 
     setPurchaseItems(newItems);
     setPurchaseActiveRow(index);
@@ -24834,8 +25879,23 @@ const nextBillNo =
               ? mrp
               : effectivePurchaseRate;
 
-          const grossAmount =
-            qty * baseRate;
+      const calculatedGrossAmount =
+  qty * baseRate;
+
+const enteredGrossAmount =
+  Number(item.grossAmount);
+
+const useManualGross =
+  runtimeGeneralSetup
+    .editGrossPurchase === true &&
+  item.grossAmountManuallyEdited === true &&
+  Number.isFinite(enteredGrossAmount) &&
+  enteredGrossAmount >= 0;
+
+const grossAmount =
+  useManualGross
+    ? enteredGrossAmount
+    : calculatedGrossAmount;
 
           const disc1 =
             Number(item.disc1 || 0);
@@ -25193,6 +26253,7 @@ const nextBillNo =
               purRate: "",
               salesRate: "",
               grossAmount: "0.00",
+              grossAmountManuallyEdited: false,
               disc1: "",
               disc2: "",
               disc3: "",
@@ -25381,50 +26442,50 @@ const nextBillNo =
         `${API_URL}/stock/batches?distributorId=${encodeURIComponent(distributorId)}&firmId=${encodeURIComponent(firmId)}&gdCode=${encodeURIComponent(gdCode)}&prodCode=${encodeURIComponent(prodCode)}&includeLocked=Y`
       );
 
-     const result = await res.json();
+      const result = await res.json();
 
-console.log(
-  "RAW STOCK BATCH API RESPONSE:",
-  result
-);
+      console.log(
+        "RAW STOCK BATCH API RESPONSE:",
+        result
+      );
 
-const loadedBatches =
-  res.ok &&
-  result.success &&
-  Array.isArray(result.batches)
-    ? result.batches
-    : [];
+      const loadedBatches =
+        res.ok &&
+          result.success &&
+          Array.isArray(result.batches)
+          ? result.batches
+          : [];
 
-console.table(
-  loadedBatches.map((batch) => ({
-    Batch:
-      batch.batchNo ??
-      batch.batch ??
-      "",
+      console.table(
+        loadedBatches.map((batch) => ({
+          Batch:
+            batch.batchNo ??
+            batch.batch ??
+            "",
 
-    MRP:
-      batch.mrp ?? 0,
+          MRP:
+            batch.mrp ?? 0,
 
-    SalesRate:
-      batch.salesRate ??
-      batch.sRate ??
-      0,
+          SalesRate:
+            batch.salesRate ??
+            batch.sRate ??
+            0,
 
-    PurchaseRate:
-      batch.purchaseRate ?? 0,
+          PurchaseRate:
+            batch.purchaseRate ?? 0,
 
-    Stock:
-      batch.stockQty ??
-      batch.qty ??
-      0,
+          Stock:
+            batch.stockQty ??
+            batch.qty ??
+            0,
 
-    Godown:
-      batch.gdCode ?? "",
+          Godown:
+            batch.gdCode ?? "",
 
-    Product:
-      batch.prodCode ?? "",
-  }))
-);
+          Product:
+            batch.prodCode ?? "",
+        }))
+      );
       setCurrentBatchRow(index);
       setSelectedProductForBatch(product);
 
@@ -25465,9 +26526,9 @@ console.table(
       addPurchaseItem();
     }
 
-   window.setTimeout(() => {
-  purchaseBatchModalRef.current?.focus();
-}, 100);
+    window.setTimeout(() => {
+      purchaseBatchModalRef.current?.focus();
+    }, 100);
   };
 
   const openBatchModal = (index) => {
@@ -39866,41 +40927,23 @@ console.table(
       handleLogout();
       return;
     }
-    if (item === "General Setup 1") {
-      setActiveMenu("tools");
-      setActiveSubMenu("General Setup 1");
-      setOpenFormFor("General Setup 1");
-      setShowDashboard(false);
+    if (item === "General Setup") {
+  setActiveMenu("tools");
+  setActiveSubMenu("General Setup");
+  setOpenFormFor("General Setup");
+  setShowDashboard(false);
 
-      setShowSalesList(false);
-      setShowPurchaseList(false);
-      setShowCreditNoteList(false);
-      setShowDebitNoteList(false);
-      setShowCreateLoadList(false);
-      setShowSettleLoadList(false);
-      setShowSettleLoad(false);
-      setShowPrintPreview(false);
+  setShowSalesList(false);
+  setShowPurchaseList(false);
+  setShowCreditNoteList(false);
+  setShowDebitNoteList(false);
+  setShowCreateLoadList(false);
+  setShowSettleLoadList(false);
+  setShowSettleLoad(false);
+  setShowPrintPreview(false);
 
-      return;
-    }
-
-    if (item === "General Setup 2") {
-      setActiveMenu("tools");
-      setActiveSubMenu("General Setup 2");
-      setOpenFormFor("General Setup 2");
-      setShowDashboard(false);
-
-      setShowSalesList(false);
-      setShowPurchaseList(false);
-      setShowCreditNoteList(false);
-      setShowDebitNoteList(false);
-      setShowCreateLoadList(false);
-      setShowSettleLoadList(false);
-      setShowSettleLoad(false);
-      setShowPrintPreview(false);
-
-      return;
-    }
+  return;
+}
 
     if (item === "Security Setup") {
       setActiveMenu("tools");
@@ -39957,6 +41000,7 @@ console.table(
       }
 
       setEditingInvoiceId(null);
+      setOriginalEditingPartyCode("");
       setEditingLoadedSalesBill(false);
       setOriginalLoadedInvoiceItems([]);
 
@@ -52821,79 +53865,36 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
 
                                 {!isQuotationList && (
                                   <>
-                                    <button
-                                      type="button"
-                                      className="print"
-                                      title="Print Sales Invoice"
-                                      onMouseDown={(event) => {
-                                        event.preventDefault();
-                                        event.stopPropagation();
-                                      }}
-                                      onClick={(event) => {
-                                        event.preventDefault();
-                                        event.stopPropagation();
+                                   <button
+  type="button"
+  className="print"
+  title="Print Sales Invoice"
+  onMouseDown={(event) => {
+    event.preventDefault();
+    event.stopPropagation();
+  }}
+  onClick={async (event) => {
+    event.preventDefault();
+    event.stopPropagation();
 
-                                        const actualSalesBill =
-                                          item?.originalItem?.originalItem ||
-                                          item?.originalItem ||
-                                          item;
+    const actualSalesBill =
+      item?.originalItem?.originalItem ||
+      item?.originalItem ||
+      item;
 
-                                        console.log(
-                                          "OPEN SALES PRINT MODAL:",
-                                          actualSalesBill
-                                        );
+    console.log(
+      "OPEN SALES PRINT MODAL:",
+      actualSalesBill
+    );
 
-                                        setSelectedSalesPrintRow(
-                                          actualSalesBill
-                                        );
-
-                                        setSalesPrintOptions({
-                                          ...createDefaultSalesPrintOptions(),
-
-                                          defaultAction: "print",
-
-                                          trnSeries: String(
-                                            actualSalesBill?.BillSeries ||
-                                            actualSalesBill?.billSeries ||
-                                            actualSalesBill?.TrnSeries ||
-                                            actualSalesBill?.trnSeries ||
-                                            "INV"
-                                          ).trim(),
-
-                                          fromTrnNo: String(
-                                            actualSalesBill?.BillNo ??
-                                            actualSalesBill?.billNo ??
-                                            actualSalesBill?.TrnNo ??
-                                            actualSalesBill?.trnNo ??
-                                            ""
-                                          ).trim(),
-
-                                          toTrnNo: String(
-                                            actualSalesBill?.BillNo ??
-                                            actualSalesBill?.billNo ??
-                                            actualSalesBill?.TrnNo ??
-                                            actualSalesBill?.trnNo ??
-                                            ""
-                                          ).trim(),
-
-                                          loadSeries: String(
-                                            actualSalesBill?.LoadSeries ||
-                                            actualSalesBill?.loadSeries ||
-                                            ""
-                                          ).trim(),
-
-                                          loadNo: String(
-                                            actualSalesBill?.LoadNo ??
-                                            actualSalesBill?.loadNo ??
-                                            ""
-                                          ).trim(),
-                                        });
-
-                                        setShowSalesPrintFormatModal(true);
-                                      }}
-                                    >
-                                      <Printer size={15} />
-                                    </button>
+    await openSalesPrintFormatSelection(
+      actualSalesBill,
+      "print"
+    );
+  }}
+>
+  <Printer size={15} />
+</button>
 
                                     <button
                                       type="button"
@@ -57425,6 +58426,37 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                        * Special nested layout only for Reports.
                        */
                       if (key === "reports") {
+                        /*
+                         * MY REPORTS (merged from old Dashboard)
+                         * Opens the complete report selection page.
+                         */
+                        if (item === "My Reports") {
+                          return (
+                            <div
+                              key={item}
+                              className="nav-subitem-wrapper report-menu-group"
+                            >
+                              <div
+                                className={`nav-subitem report-category-row ${
+                                  showMyReports &&
+                                  activeSubMenu === "My Reports"
+                                    ? "active"
+                                    : ""
+                                }`}
+                                onClick={() => openMyReportsPage()}
+                              >
+                                <span className="submenu-text">
+                                  {item}
+                                </span>
+
+                                <span className="report-menu-arrow">
+                                  <ChevronRight size={16} />
+                                </span>
+                              </div>
+                            </div>
+                          );
+                        }
+
                         const childReports =
                           reportMenuItems[item] || [];
 
@@ -57884,6 +58916,909 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                   }}
                 />
               )}
+
+            {activeMenu === "reports" &&
+  showMyReports &&
+  !selectedReport &&
+  openFormFor !== "Report" && (
+    <div className="report-dashboard-page">
+      {/* =====================================================
+          PAGE TITLE AND TOP ACTIONS
+      ===================================================== */}
+      <div className="report-dashboard-title-row">
+        <div>
+          <h1>Reports</h1>
+          <p>
+            Create, view and analyze your business reports
+          </p>
+        </div>
+
+        <div className="report-dashboard-title-actions">
+          <button type="button">
+            <Download size={14} />
+            Import Report
+          </button>
+
+          <button type="button">
+            <Settings size={14} />
+            Manage Categories
+          </button>
+        </div>
+      </div>
+
+      {/* =====================================================
+          SUMMARY CARDS
+      ===================================================== */}
+      <div className="report-summary-grid">
+        <article className="report-summary-card">
+          <div>
+            <span>Total Sales (MTD)</span>
+            <strong>₹ 42,85,620</strong>
+
+            <small className="positive">
+              <ArrowUpRight size={12} />
+              12.5%
+              <em>vs last month</em>
+            </small>
+          </div>
+
+          <div className="report-summary-icon blue">
+            <IndianRupee size={22} />
+          </div>
+        </article>
+
+        <article className="report-summary-card">
+          <div>
+            <span>Total Invoices (MTD)</span>
+            <strong>1,245</strong>
+
+            <small className="positive">
+              <ArrowUpRight size={12} />
+              8.3%
+              <em>vs last month</em>
+            </small>
+          </div>
+
+          <div className="report-summary-icon green">
+            <ClipboardList size={21} />
+          </div>
+        </article>
+
+        <article className="report-summary-card">
+          <div>
+            <span>Active Customers</span>
+            <strong>892</strong>
+
+            <small className="positive">
+              <ArrowUpRight size={12} />
+              15.2%
+              <em>vs last month</em>
+            </small>
+          </div>
+
+          <div className="report-summary-icon orange">
+            <Users size={22} />
+          </div>
+        </article>
+
+        <article className="report-summary-card">
+          <div>
+            <span>Top Product Sales</span>
+            <strong>Parle-G</strong>
+
+            <small>
+              15,682 Qty
+            </small>
+          </div>
+
+          <div className="report-summary-icon purple">
+            <Package size={21} />
+          </div>
+        </article>
+
+        <article className="report-summary-card">
+          <div>
+            <span>Outstanding Amount</span>
+            <strong>₹ 18,92,450</strong>
+
+            <small className="negative">
+              <ArrowUpRight size={12} />
+              5.4%
+              <em>vs last month</em>
+            </small>
+          </div>
+
+          <div className="report-summary-icon pink">
+            <FileText size={21} />
+          </div>
+        </article>
+      </div>
+
+      {/* =====================================================
+    SEARCH AND FILTER BAR
+===================================================== */}
+<div className="report-search-filter-bar">
+
+  {/* REPORT SEARCH WITH DROPDOWN */}
+  <div className="report-search-dropdown-wrapper">
+    <form
+      className="report-dashboard-search"
+      onSubmit={handleReportSearchSubmit}
+    >
+      <Search size={16} />
+
+      <input
+        type="text"
+        value={reportSearchText}
+        onFocus={() => {
+          if (reportSearchText.trim() !== "") {
+            setShowReportSearchDropdown(true);
+          }
+        }}
+        onChange={(event) => {
+          const value = event.target.value;
+
+          setReportSearchText(value);
+
+          setShowReportSearchDropdown(
+            value.trim() !== ""
+          );
+
+          setReportSearchActiveIndex(-1);
+        }}
+        onKeyDown={(event) => {
+          if (!showReportSearchDropdown) {
+            return;
+          }
+
+          if (event.key === "ArrowDown") {
+            event.preventDefault();
+
+            setReportSearchActiveIndex(
+              (previousIndex) =>
+                Math.min(
+                  previousIndex + 1,
+                  reportSearchResults.length - 1
+                )
+            );
+          }
+
+          if (event.key === "ArrowUp") {
+            event.preventDefault();
+
+            setReportSearchActiveIndex(
+              (previousIndex) =>
+                Math.max(
+                  previousIndex - 1,
+                  0
+                )
+            );
+          }
+
+          if (event.key === "Escape") {
+            setShowReportSearchDropdown(false);
+            setReportSearchActiveIndex(-1);
+          }
+        }}
+        placeholder="Search report name..."
+        autoComplete="off"
+      />
+
+      {reportSearchText.trim() !== "" && (
+        <button
+          type="button"
+          className="report-search-clear-button"
+          onClick={() => {
+            setReportSearchText("");
+            setShowReportSearchDropdown(false);
+            setReportSearchActiveIndex(-1);
+          }}
+          title="Clear search"
+          aria-label="Clear search"
+        >
+          <X size={14} />
+        </button>
+      )}
+    </form>
+
+    {showReportSearchDropdown && (
+      <div className="report-search-results-dropdown">
+        {reportSearchResults.length === 0 ? (
+          <div className="report-search-no-result">
+            No matching report found
+          </div>
+        ) : (
+          reportSearchResults.map(
+            (report, index) => {
+              const ReportIcon =
+                report.icon || FileBarChart;
+
+              return (
+                <button
+                  key={report.name}
+                  type="button"
+                  className={`report-search-result-item ${
+                    reportSearchActiveIndex === index
+                      ? "active"
+                      : ""
+                  }`}
+                  onMouseEnter={() => {
+                    setReportSearchActiveIndex(index);
+                  }}
+                  onMouseDown={(event) => {
+                    event.preventDefault();
+                  }}
+                  onClick={() => {
+                    setReportSearchText(report.name);
+                    setShowReportSearchDropdown(false);
+                    setReportSearchActiveIndex(-1);
+
+                    handleReportClick(report.name);
+                  }}
+                >
+                 <div className="report-search-result-item-content">
+  <div className="report-search-result-icon">
+    <ReportIcon size={15} />
+  </div>
+
+  <div className="report-search-result-text">
+    <div className="report-search-result-name">
+      {report.name}
+    </div>
+
+    <div className="report-search-result-category">
+      {report.category}
+    </div>
+  </div>
+</div>
+                </button>
+              );
+            }
+          )
+        )}
+      </div>
+    )}
+  </div>
+
+  {/* CATEGORY FILTER */}
+  <label>
+    <span></span>
+
+    <select
+      value={reportCategoryFilter}
+      onChange={(event) => {
+        setReportCategoryFilter(
+          event.target.value
+        );
+
+        setReportCurrentPage(1);
+      }}
+    >
+      <option value="All">All</option>
+      <option value="Sales">Sales</option>
+      <option value="Purchase">Purchase</option>
+      <option value="Stock">Stock</option>
+      <option value="GST Report">
+        GST Report
+      </option>
+    </select>
+  </label>
+
+  {/* TYPE FILTER */}
+  <label>
+    <span></span>
+
+    <select defaultValue="All">
+      <option value="All">All</option>
+      <option value="Summary">
+        Summary
+      </option>
+      <option value="Detailed">
+        Detailed
+      </option>
+    </select>
+  </label>
+
+  {/* CREATED BY FILTER */}
+  <label>
+    <span></span>
+
+    <select defaultValue="All">
+      <option value="All">All</option>
+      <option value="Administrator">
+        Administrator
+      </option>
+      <option value="User">
+        User
+      </option>
+    </select>
+  </label>
+
+  {/* RESET BUTTON */}
+  <button
+    type="button"
+    className="report-filter-reset"
+    onClick={() => {
+      setReportSearchText("");
+      setShowReportSearchDropdown(false);
+      setReportSearchActiveIndex(-1);
+      setReportCategoryFilter("All");
+      setReportCurrentPage(1);
+    }}
+  >
+    <RotateCcw size={14} />
+    Reset
+  </button>
+</div>
+      {/* =====================================================
+          MAIN CONTENT GRID
+      ===================================================== */}
+      <div className="report-dashboard-main-grid">
+        <div className="report-dashboard-left">
+          {/* SALES TREND AND CATEGORIES */}
+          <div className="report-analysis-grid">
+            <article className="report-dashboard-panel">
+              <div className="report-panel-heading">
+                <h3>
+                  Sales Trend
+                  <span>Last 6 Months</span>
+                </h3>
+              </div>
+
+              <div className="report-trend-chart">
+                <ResponsiveContainer
+                  width="100%"
+                  height="100%"
+                >
+                  <LineChart
+                    data={[
+                      { month: "Jan", sales: 20000 },
+                      { month: "Feb", sales: 27000 },
+                      { month: "Mar", sales: 25000 },
+                      { month: "Apr", sales: 33000 },
+                      { month: "May", sales: 22000 },
+                      { month: "Jun", sales: 41000 },
+                    ]}
+                    margin={{
+                      top: 15,
+                      right: 18,
+                      left: -14,
+                      bottom: 0,
+                    }}
+                  >
+                    <CartesianGrid
+                      strokeDasharray="0"
+                      vertical={false}
+                      stroke="#e8edf6"
+                    />
+
+                    <XAxis
+                      dataKey="month"
+                      tick={{
+                        fontSize: 10,
+                        fill: "#76839b",
+                      }}
+                      axisLine={false}
+                      tickLine={false}
+                    />
+
+                    <YAxis
+                      tick={{
+                        fontSize: 9,
+                        fill: "#76839b",
+                      }}
+                      axisLine={false}
+                      tickLine={false}
+                    />
+
+                    <Tooltip />
+
+                    <Line
+                      type="monotone"
+                      dataKey="sales"
+                      stroke="#1559f5"
+                      strokeWidth={2.2}
+                      dot={{
+                        r: 2.5,
+                        fill: "#1559f5",
+                      }}
+                      activeDot={{ r: 4 }}
+                    />
+                  </LineChart>
+                </ResponsiveContainer>
+              </div>
+            </article>
+
+            <article className="report-dashboard-panel">
+              <div className="report-panel-heading report-category-heading">
+                <h3>Report Categories</h3>
+
+                <button type="button">
+                  View all
+                </button>
+              </div>
+
+              <div className="report-category-list">
+                {[
+                  {
+                    name: "Sales Reports",
+                    count: 18,
+                    icon: FileBarChart,
+                  },
+                  {
+                    name: "Purchase Reports",
+                    count: 12,
+                    icon: ShoppingCart,
+                  },
+                  {
+                    name: "Stock Reports",
+                    count: 16,
+                    icon: Package,
+                  },
+                  {
+                    name: "Customer Reports",
+                    count: 14,
+                    icon: Users,
+                  },
+                  {
+                    name: "Financial Reports",
+                    count: 10,
+                    icon: IndianRupee,
+                  },
+                  {
+                    name: "GST Reports",
+                    count: 8,
+                    icon: FileText,
+                  },
+                ].map((category) => {
+                  const CategoryIcon = category.icon;
+
+                  return (
+                    <button
+                      type="button"
+                      key={category.name}
+                      className="report-category-item"
+                    >
+                      <span>
+                        <CategoryIcon size={13} />
+                        {category.name}
+                      </span>
+
+                      <em>{category.count}</em>
+                    </button>
+                  );
+                })}
+              </div>
+            </article>
+          </div>
+
+          {/* =================================================
+              MY REPORTS TABLE
+          ================================================= */}
+          <article className="report-list-panel">
+            <div className="report-list-tabs">
+              <button
+                type="button"
+                className="active"
+              >
+                My Reports
+              </button>
+
+              <button type="button">
+                Favorites
+              </button>
+
+              <button type="button">
+                Shared With Me
+              </button>
+            </div>
+
+            <div className="report-list-table">
+              <div className="report-list-header">
+                <span>Report Name</span>
+                <span>Category</span>
+                <span>Type</span>
+                <span>Created On</span>
+                <span>Actions</span>
+              </div>
+
+              {paginatedMyReports.length === 0 ? (
+                <div className="report-list-empty">
+                  <FileBarChart size={32} />
+                  <strong>No reports found</strong>
+                  <span>
+                    Try another report name or
+                    category.
+                  </span>
+                </div>
+              ) : (
+                paginatedMyReports.map(
+                  (report, index) => {
+                    const isFavorite =
+                      favoriteReports.includes(
+                        report.name
+                      );
+
+                    return (
+                      <div
+                        key={report.name}
+                        className="report-list-row"
+                        onClick={() =>
+                          handleReportClick(
+                            report.name
+                          )
+                        }
+                      >
+                        <div className="report-list-name">
+                          <button
+                            type="button"
+                            className={`report-table-favorite ${
+                              isFavorite
+                                ? "selected"
+                                : ""
+                            }`}
+                            onClick={(event) => {
+                              event.stopPropagation();
+
+                              toggleFavoriteReport(
+                                report.name
+                              );
+                            }}
+                          >
+                            ★
+                          </button>
+
+                          <span>
+                            <strong>
+                              {report.name}
+                            </strong>
+
+                            <small>
+                              {report.description}
+                            </small>
+                          </span>
+                        </div>
+
+                        <div>
+                          <span
+                            className={`report-table-category category-${report.category.toLowerCase()}`}
+                          >
+                            {report.category}
+                          </span>
+                        </div>
+
+                        <span>
+                          {index % 2 === 0
+                            ? "Summary"
+                            : "Detailed"}
+                        </span>
+
+                        <span>
+                          {25 - index} Jun 2025
+                        </span>
+
+                        <div className="report-table-actions">
+                          <button
+                            type="button"
+                            onClick={(event) => {
+                              event.stopPropagation();
+
+                              handleReportClick(
+                                report.name
+                              );
+                            }}
+                            title="View report"
+                          >
+                            <Eye size={13} />
+                          </button>
+
+                          <button
+                            type="button"
+                            onClick={(event) =>
+                              event.stopPropagation()
+                            }
+                            title="Export report"
+                          >
+                            <Download size={13} />
+                          </button>
+
+                          <button
+                            type="button"
+                            onClick={(event) =>
+                              event.stopPropagation()
+                            }
+                            title="More options"
+                          >
+                            <MoreVertical size={14} />
+                          </button>
+                        </div>
+                      </div>
+                    );
+                  }
+                )
+              )}
+            </div>
+
+            {filteredMyReports.length > 0 && (
+              <div className="report-list-footer">
+                <span>
+                  Showing {reportStartRecord} to{" "}
+                  {reportEndRecord} of{" "}
+                  {filteredMyReports.length} reports
+                </span>
+
+                <div className="report-table-pagination">
+                  <button
+                    type="button"
+                    disabled={
+                      reportSafeCurrentPage === 1
+                    }
+                    onClick={() =>
+                      setReportCurrentPage(
+                        (previousPage) =>
+                          Math.max(
+                            1,
+                            previousPage - 1
+                          )
+                      )
+                    }
+                  >
+                    <ChevronLeft size={13} />
+                  </button>
+
+                  {Array.from(
+                    { length: reportTotalPages },
+                    (_, index) => index + 1
+                  ).map((pageNumber) => (
+                    <button
+                      type="button"
+                      key={pageNumber}
+                      className={
+                        reportSafeCurrentPage ===
+                        pageNumber
+                          ? "active"
+                          : ""
+                      }
+                      onClick={() =>
+                        setReportCurrentPage(
+                          pageNumber
+                        )
+                      }
+                    >
+                      {pageNumber}
+                    </button>
+                  ))}
+
+                  <button
+                    type="button"
+                    disabled={
+                      reportSafeCurrentPage ===
+                      reportTotalPages
+                    }
+                    onClick={() =>
+                      setReportCurrentPage(
+                        (previousPage) =>
+                          Math.min(
+                            reportTotalPages,
+                            previousPage + 1
+                          )
+                      )
+                    }
+                  >
+                    <ChevronRight size={13} />
+                  </button>
+                </div>
+              </div>
+            )}
+          </article>
+        </div>
+
+        {/* =====================================================
+            RIGHT SIDEBAR
+        ===================================================== */}
+        <aside className="report-dashboard-right">
+          <article className="report-right-panel report-filter-panel">
+            <h3>Filters</h3>
+
+            <label>
+              <span>Date Range</span>
+
+              <div className="report-date-control">
+                <CalendarDays size={14} />
+                <input
+                  type="text"
+                  defaultValue="01/06/2025 - 30/06/2025"
+                />
+                <ChevronDown size={13} />
+              </div>
+            </label>
+
+            <label>
+              <span>Compare With</span>
+
+              <select defaultValue="Previous Month">
+                <option>Previous Month</option>
+                <option>Previous Quarter</option>
+                <option>Previous Year</option>
+              </select>
+            </label>
+
+            <div className="report-view-mode">
+              <span>View</span>
+
+              <div>
+                <button
+                  type="button"
+                  className="active"
+                >
+                  Summary
+                </button>
+
+                <button type="button">
+                  Detailed
+                </button>
+              </div>
+            </div>
+
+            <button
+              type="button"
+              className="report-apply-filter-button"
+            >
+              Apply Filters
+            </button>
+          </article>
+
+          <article className="report-right-panel report-recent-panel">
+            <div className="report-recent-heading">
+              <h3>Recent Reports</h3>
+              <ChevronUp size={14} />
+            </div>
+
+            <div className="report-recent-list">
+              {[
+                {
+                  name: "Sales Summary Report",
+                  time: "2 hours ago",
+                  icon: TrendingUp,
+                  className: "green",
+                },
+                {
+                  name: "Party Outstanding Report",
+                  time: "5 hours ago",
+                  icon: Package,
+                  className: "orange",
+                },
+                {
+                  name: "Stock Movement Report",
+                  time: "1 day ago",
+                  icon: Users,
+                  className: "blue",
+                },
+                {
+                  name: "GST Return Summary",
+                  time: "2 days ago",
+                  icon: FileText,
+                  className: "pink",
+                },
+                {
+                  name: "Top 10 Products Report",
+                  time: "3 days ago",
+                  icon: Crown,
+                  className: "green",
+                },
+              ].map((recentReport) => {
+                const RecentIcon =
+                  recentReport.icon;
+
+                return (
+                  <button
+                    type="button"
+                    key={recentReport.name}
+                    className="report-recent-item"
+                  >
+                    <span
+                      className={`report-recent-icon ${recentReport.className}`}
+                    >
+                      <RecentIcon size={15} />
+                    </span>
+
+                    <span>
+                      <strong>
+                        {recentReport.name}
+                      </strong>
+
+                      <small>
+                        {recentReport.time}
+                      </small>
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+
+            <button
+              type="button"
+              className="report-view-all-button"
+            >
+              View All
+            </button>
+          </article>
+        </aside>
+      </div>
+
+      {/* =====================================================
+          BOTTOM FEATURE BAR
+      ===================================================== */}
+      <div className="report-bottom-feature-bar">
+        <div>
+          <span>
+            <TrendingUp size={21} />
+          </span>
+
+          <p>
+            <strong>Smart Insights</strong>
+            <small>
+              AI-powered business insights and
+              recommendations
+            </small>
+          </p>
+        </div>
+
+        <div>
+          <span>
+            <Clock3 size={21} />
+          </span>
+
+          <p>
+            <strong>Scheduled Reports</strong>
+            <small>
+              Automate report delivery via email
+            </small>
+          </p>
+        </div>
+
+        <div>
+          <span>
+            <Download size={21} />
+          </span>
+
+          <p>
+            <strong>Export Options</strong>
+            <small>
+              Export to Excel, PDF, CSV and more
+            </small>
+          </p>
+        </div>
+
+        <div>
+          <span>
+            <SlidersHorizontal size={21} />
+          </span>
+
+          <p>
+            <strong>Report Builder</strong>
+            <small>
+              Create custom reports with drag and
+              drop
+            </small>
+          </p>
+        </div>
+
+        <div className="report-bottom-help">
+          <p>
+            <strong>Need help?</strong>
+            <small>
+              View guide or contact support
+            </small>
+          </p>
+
+          <button type="button">
+            Help Center
+          </button>
+        </div>
+      </div>
+    </div>
+  )}
 
             {activeSubMenu === 'GoDown Master' && openFormFor === 'GoDown Master' && (
               <div className="compact-master-page">
@@ -65805,68 +67740,104 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                   </div>
                 </div>
               )}
-            {activeSubMenu === "General Setup 1" &&
-              openFormFor === "General Setup 1" && (
-                <GeneralSetup1
-                  isAdmin={isAdminUser}
-                  onSettingsSaved={(savedSetup) => {
-                    setRuntimeGeneralSetup((previous) => ({
-                      ...previous,
+          {activeSubMenu === "General Setup" &&
+  openFormFor === "General Setup" && (
+    <GeneralSetup1
+      isAdmin={isAdminUser}
+      onSettingsSaved={(savedSetup) => {
+        setRuntimeGeneralSetup((previous) => ({
+          ...previous,
 
-                      billAllowBlacklistParty:
-                        savedSetup?.billAllowBlacklistParty === true,
+          billAllowBlacklistParty:
+            savedSetup?.billAllowBlacklistParty === true,
 
-                      allowChangeBillType:
-                        savedSetup?.allowChangeBillType === true,
+          allowChangeBillType:
+            savedSetup?.allowChangeBillType === true,
 
-                      defaultSalesman:
-                        savedSetup?.defaultSalesman === true,
+          defaultSalesman:
+            savedSetup?.defaultSalesman === true,
 
-                      allowChangeSaleRate:
-                        savedSetup?.allowChangeSaleRate === true,
+          allowChangeSaleRate:
+            savedSetup?.allowChangeSaleRate === true,
 
-                      allowMixBilling:
-                        savedSetup?.allowMixBilling === true,
-                      allowEditBillAfterLoad:
-                        savedSetup?.allowEditBillAfterLoad === true,
-                      editProductAfterLoad:
-                        savedSetup?.editProductAfterLoad === true,
-                        saveAndPrint:
-  savedSetup?.saveAndPrint === true,
-  allowSRateLessThanPRate:
-  savedSetup?.allowSRateLessThanPRate === true,
+          allowMixBilling:
+            savedSetup?.allowMixBilling === true,
 
-                      vatOn:
-                        savedSetup?.vatOn ||
-                        DEFAULT_VAT_ON,
+          allowEditBillAfterLoad:
+            savedSetup?.allowEditBillAfterLoad === true,
 
-                      cashDiscountOn:
-                        savedSetup?.cashDiscountOn ||
-                        DEFAULT_CASH_DISCOUNT_ON,
+          editProductAfterLoad:
+            savedSetup?.editProductAfterLoad === true,
 
-                      productSelectionOn:
-                        normalizeProductSelectionMode(
-                          savedSetup?.productSelectionOn ||
-                          DEFAULT_PRODUCT_SELECTION_ON
-                        ),
-                      defaultCompany:
-                        String(
-                          savedSetup?.defaultCompany ||
-                          ""
-                        ).trim(),
-                      defaultGodown:
-                        String(
-                          savedSetup?.defaultGodown ||
-                          ""
-                        ).trim(),
-                      defaultSelection:
-                        normalizeDefaultSelection(
-                          savedSetup?.defaultSelection
-                        ),
-                    }));
-                  }}
-                />
-              )}
+          saveAndPrint:
+            savedSetup?.saveAndPrint === true,
+
+          allowSRateLessThanPRate:
+            savedSetup?.allowSRateLessThanPRate === true,
+
+          updateLoadQtyAfterBillEdit:
+            savedSetup?.updateLoadQtyAfterBillEdit === true,
+
+          allowNegativeStock:
+            savedSetup?.allowNegativeStock === true,
+
+          goodsReturn:
+            savedSetup?.goodsReturn === true,
+
+          damageReturn:
+            savedSetup?.damageReturn === true,
+
+          schemeSummary:
+            savedSetup?.schemeSummary === true,
+
+          vatSummary:
+            savedSetup?.vatSummary === true,
+            
+
+          serialNo:
+            savedSetup?.serialNo === true,
+
+          autoVoucherNo:
+            savedSetup?.autoVoucherNo === true,
+            billingWithoutHsnCode:
+  savedSetup?.billingWithoutHsnCode === true,
+          editGrossPurchase:
+  savedSetup?.editGrossPurchase === true, 
+  allowChangeStarAmount:
+  savedSetup?.allowChangeStarAmount === true,
+
+          vatOn:
+            savedSetup?.vatOn ||
+            DEFAULT_VAT_ON,
+
+          cashDiscountOn:
+            savedSetup?.cashDiscountOn ||
+            DEFAULT_CASH_DISCOUNT_ON,
+
+          productSelectionOn:
+            normalizeProductSelectionMode(
+              savedSetup?.productSelectionOn ||
+              DEFAULT_PRODUCT_SELECTION_ON
+            ),
+
+          defaultCompany:
+            String(
+              savedSetup?.defaultCompany || ""
+            ).trim(),
+
+          defaultGodown:
+            String(
+              savedSetup?.defaultGodown || ""
+            ).trim(),
+
+          defaultSelection:
+            normalizeDefaultSelection(
+              savedSetup?.defaultSelection
+            ),
+        }));
+      }}
+    />
+  )}
             {activeSubMenu === "General Setup 2" &&
               openFormFor === "General Setup 2" && (
                 <div
@@ -67546,6 +69517,9 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                 setShowReceiptForm={setShowReceiptForm}
                 transactionFormMode={transactionFormMode}
                 setTransactionFormMode={setTransactionFormMode}
+                autoVoucherNo={
+  runtimeGeneralSetup.autoVoucherNo === true
+}
               />
             )}
 
@@ -72836,7 +74810,7 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                                     <td>
                                       <select
                                         className="billing-table-control"
-                                        disabled={loadedBillProductReadOnly}
+                                        
                                         data-field="units"
                                         data-index={index}
                                         value={item.units}
@@ -73122,26 +75096,55 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
 
                                     {/* Star Amount */}
                                     <td>
-                                      <input
-                                        className="billing-table-control billing-numeric-control"
-                                        data-field="starAmt"
-                                        data-index={index}
-                                        value={item.starAmt}
-                                        onChange={(event) =>
-                                          updateInvoiceItem(
-                                            index,
-                                            "starAmt",
-                                            event.target.value
-                                          )
-                                        }
-                                        onKeyDown={(event) =>
-                                          handleInvoiceKeyDown(
-                                            event,
-                                            index,
-                                            "starAmt"
-                                          )
-                                        }
-                                      />
+                                     <input
+  className="erp-input numeric"
+  type="number"
+  min="0"
+  step="0.01"
+  value={item.starAmt ?? ""}
+  readOnly={
+    runtimeGeneralSetup
+      .allowChangeStarAmount !== true ||
+    loadedBillProductReadOnly
+  }
+  onChange={(event) =>
+    updateInvoiceItem(
+      index,
+      "starAmt",
+      event.target.value
+    )
+  }
+  title={
+    runtimeGeneralSetup
+      .allowChangeStarAmount === true
+      ? "Star Amount can be edited manually."
+      : "Enable Allow Change Star Amount in General Setup."
+  }
+  style={{
+    backgroundColor:
+      runtimeGeneralSetup
+        .allowChangeStarAmount === true &&
+      !loadedBillProductReadOnly
+        ? "#ffffff"
+        : "#eef2f7",
+
+    color:
+      runtimeGeneralSetup
+        .allowChangeStarAmount === true &&
+      !loadedBillProductReadOnly
+        ? "#166534"
+        : "#64748b",
+
+    cursor:
+      runtimeGeneralSetup
+        .allowChangeStarAmount === true &&
+      !loadedBillProductReadOnly
+        ? "text"
+        : "not-allowed",
+
+    fontWeight: 700,
+  }}
+/>
                                     </td>
 
                                     {/* Taxable */}
@@ -73955,8 +75958,19 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                               <th style={{ minWidth: '100px' }}>QUANTITY</th>
                               <th style={{ minWidth: '80px' }}>FREE</th>
                               <th style={{ minWidth: '100px' }}>MRP</th>
-                              <th style={{ minWidth: '100px' }}>PUR RATE</th>
-                              <th style={{ minWidth: '100px' }}>DISC 1</th>
+                           
+                              <th style={{ minWidth: "100px" }}>
+  PUR RATE
+</th>
+
+<th style={{ minWidth: "110px" }}>
+  GROSS AMT
+</th>
+
+<th style={{ minWidth: "100px" }}>
+  DISC 1
+</th>
+                             
                               <th style={{ minWidth: '100px' }}>DISC 2</th>
                               <th style={{ minWidth: '100px' }}>DISC 3</th>
                               <th style={{ minWidth: '100px' }}>TAXABLE</th>
@@ -74361,6 +76375,57 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                                     style={{ width: '100%' }}
                                   />
                                 </td>
+                                {/* Gross Amount */}
+<td>
+  <input
+    className="erp-input numeric"
+    type="number"
+    min="0"
+    step="0.01"
+    data-purchase-field="grossAmount"
+    data-purchase-index={index}
+    placeholder="Gross Amount"
+    value={item.grossAmount || "0.00"}
+    readOnly={
+      runtimeGeneralSetup
+        .editGrossPurchase !== true
+    }
+    onChange={(event) =>
+      updatePurchaseItem(
+        index,
+        "grossAmount",
+        event.target.value
+      )
+    }
+    onKeyDown={(event) =>
+      handlePurchaseKeyDown(
+        event,
+        index,
+        "grossAmount"
+      )
+    }
+    title={
+      runtimeGeneralSetup
+        .editGrossPurchase === true
+        ? "Gross Amount can be edited."
+        : "Enable Edit Gross (Purchase) in General Setup."
+    }
+    style={{
+      width: "100%",
+      backgroundColor:
+        runtimeGeneralSetup
+          .editGrossPurchase === true
+          ? "#ffffff"
+          : "#f3f4f6",
+      cursor:
+        runtimeGeneralSetup
+          .editGrossPurchase === true
+          ? "text"
+          : "not-allowed",
+      fontWeight: 700,
+    }}
+  />
+</td>
 
                                 {/* Disc 1 */}
                                 <td>

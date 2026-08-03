@@ -223,15 +223,20 @@ productSelectionOn: {
       default: true,
     },
 
-    schemeSummary: {
-      type: Boolean,
-      default: true,
-    },
+schemeSummary: {
+  type: Boolean,
+  default: true,
+},
 
-    serialNo: {
-      type: Boolean,
-      default: false,
-    },
+vatSummary: {
+  type: Boolean,
+  default: true,
+},
+
+serialNo: {
+  type: Boolean,
+  default: false,
+},
 
     autoVoucherNo: {
       type: Boolean,
@@ -254,6 +259,71 @@ productSelectionOn: {
       type: Boolean,
       default: false,
     },
+    /* =========================
+   GENERAL SETUP 2
+========================= */
+
+allowCessInPurchase: {
+  type: Boolean,
+  default: true,
+},
+
+allowCessInSale: {
+  type: Boolean,
+  default: false,
+},
+
+reverseScheme: {
+  type: Boolean,
+  default: false,
+},
+
+editGrossPurchase: {
+  type: Boolean,
+  default: false,
+},
+
+importNegative: {
+  type: Boolean,
+  default: true,
+},
+
+allowChangeStarAmount: {
+  type: Boolean,
+  default: false,
+},
+
+settleLoadNegative: {
+  type: Boolean,
+  default: true,
+},
+
+qrCodeFolderName: {
+  type: String,
+  default: "",
+  trim: true,
+},
+
+saleSeriesByGst: {
+  type: Boolean,
+  default: false,
+},
+
+importWithZero: {
+  type: Boolean,
+  default: false,
+},
+
+autoBillLockDays: {
+  type: Number,
+  default: 0,
+  min: 0,
+},
+
+allowGstRate: {
+  type: Boolean,
+  default: false,
+},
 
     isActive: {
       type: Boolean,
@@ -323,14 +393,27 @@ productSelectionOn:
   updateLoadQtyAfterBillEdit: false,
   allowNegativeStock: false,
 
-  goodsReturn: true,
-  damageReturn: true,
-  schemeSummary: true,
-  serialNo: false,
+goodsReturn: true,
+damageReturn: true,
+schemeSummary: true,
+vatSummary: true,
+serialNo: false,
   autoVoucherNo: true,
   dateLocking: "",
   showEntryDays: 10,
   billingWithoutHsnCode: false,
+  allowCessInPurchase: true,
+allowCessInSale: false,
+reverseScheme: false,
+editGrossPurchase: false,
+importNegative: true,
+allowChangeStarAmount: false,
+settleLoadNegative: true,
+qrCodeFolderName: "",
+saleSeriesByGst: false,
+importWithZero: false,
+autoBillLockDays: 0,
+allowGstRate: false,
 
   isActive: true,
 });
@@ -572,17 +655,23 @@ defaultSelection:
         current.damageReturn
       ),
 
-    schemeSummary:
-      readBoolean(
-        body.schemeSummary,
-        current.schemeSummary
-      ),
+ schemeSummary:
+  readBoolean(
+    body.schemeSummary,
+    current.schemeSummary
+  ),
 
-    serialNo:
-      readBoolean(
-        body.serialNo,
-        current.serialNo
-      ),
+vatSummary:
+  readBoolean(
+    body.vatSummary,
+    current.vatSummary
+  ),
+
+serialNo:
+  readBoolean(
+    body.serialNo,
+    current.serialNo
+  ),
 
     autoVoucherNo:
       readBoolean(
@@ -607,6 +696,77 @@ defaultSelection:
         body.billingWithoutHsnCode,
         current.billingWithoutHsnCode
       ),
+      allowCessInPurchase:
+  readBoolean(
+    body.allowCessInPurchase,
+    current.allowCessInPurchase
+  ),
+
+allowCessInSale:
+  readBoolean(
+    body.allowCessInSale,
+    current.allowCessInSale
+  ),
+
+reverseScheme:
+  readBoolean(
+    body.reverseScheme,
+    current.reverseScheme
+  ),
+
+editGrossPurchase:
+  readBoolean(
+    body.editGrossPurchase,
+    current.editGrossPurchase
+  ),
+
+importNegative:
+  readBoolean(
+    body.importNegative,
+    current.importNegative
+  ),
+
+allowChangeStarAmount:
+  readBoolean(
+    body.allowChangeStarAmount,
+    current.allowChangeStarAmount
+  ),
+
+settleLoadNegative:
+  readBoolean(
+    body.settleLoadNegative,
+    current.settleLoadNegative
+  ),
+
+qrCodeFolderName:
+  readString(
+    body.qrCodeFolderName,
+    current.qrCodeFolderName
+  ),
+
+saleSeriesByGst:
+  readBoolean(
+    body.saleSeriesByGst,
+    current.saleSeriesByGst
+  ),
+
+importWithZero:
+  readBoolean(
+    body.importWithZero,
+    current.importWithZero
+  ),
+
+autoBillLockDays:
+  readNonNegativeNumber(
+    body.autoBillLockDays,
+    current.autoBillLockDays
+  ),
+
+allowGstRate:
+  readBoolean(
+    body.allowGstRate,
+    current.allowGstRate
+  ),
 
     isActive: true,
   };

@@ -105,11 +105,26 @@ export const createDefaultGeneralSetup = () => ({
     vatSummary: true,
     serialNo: false,
 
+    billingWithoutHsnCode: false,
+
     /* General */
     autoVoucherNo: true,
     dateLocking: "",
     showEntryDays: "10",
     billingWithoutHsnCode: false,
+    /* General Setup 2 */
+allowCessInPurchase: true,
+allowCessInSale: false,
+reverseScheme: false,
+editGrossPurchase: false,
+importNegative: true,
+allowChangeStarAmount: false,
+settleLoadNegative: true,
+qrCodeFolderName: "",
+saleSeriesByGst: false,
+importWithZero: false,
+autoBillLockDays: 0,
+allowGstRate: false,
 });
 
 /* =========================================================
@@ -255,8 +270,8 @@ const GeneralSetup1 = ({
     onSettingsSaved,
     isAdmin = false,
 }) => {
-    // const API_URL = "http://localhost:5000/api";
-    const API_URL = "https://total-solution-backend.onrender.com/api";
+    const API_URL = "http://localhost:5000/api";
+    // const API_URL = "https://total-solution-backend.onrender.com/api";
     const [generalSetup, setGeneralSetup] =
         React.useState(() =>
             createDefaultGeneralSetup()
@@ -278,6 +293,10 @@ const GeneralSetup1 = ({
         React.useRef(onSettingsSaved);
     const [activeSetupMenu, setActiveSetupMenu] =
         React.useState("all");
+        const [activeGeneralSetupPage, setActiveGeneralSetupPage] =
+    React.useState("setup1");
+    const [activeSetup2Menu, setActiveSetup2Menu] =
+    React.useState("all");
     const [companyOptions, setCompanyOptions] =
         React.useState([]);
 
@@ -741,6 +760,104 @@ LOAD ACTIVE GODOWNS FOR DEFAULT GODOWN
     source.allowSRateLessThanPRate === "Y" ||
     source.allowSRateLessThanPRate === "YES" ||
     source.allowSRateLessThanPRate === 1,
+    updateLoadQtyAfterBillEdit:
+    source.updateLoadQtyAfterBillEdit === true ||
+    source.updateLoadQtyAfterBillEdit === "true" ||
+    source.updateLoadQtyAfterBillEdit === "Y" ||
+    source.updateLoadQtyAfterBillEdit === "YES" ||
+    source.updateLoadQtyAfterBillEdit === 1,
+    allowNegativeStock:
+  source.allowNegativeStock === true ||
+  source.allowNegativeStock === "true" ||
+  source.allowNegativeStock === "Y" ||
+  source.allowNegativeStock === "YES" ||
+  source.allowNegativeStock === 1,
+  goodsReturn:
+  source.goodsReturn === true ||
+  source.goodsReturn === "true" ||
+  source.goodsReturn === "Y" ||
+  source.goodsReturn === "YES" ||
+  source.goodsReturn === 1,
+  allowCessInPurchase:
+    source.allowCessInPurchase === true ||
+    source.allowCessInPurchase === "true" ||
+    source.allowCessInPurchase === "Y" ||
+    source.allowCessInPurchase === "YES" ||
+    source.allowCessInPurchase === 1,
+
+allowCessInSale:
+    source.allowCessInSale === true ||
+    source.allowCessInSale === "true" ||
+    source.allowCessInSale === "Y" ||
+    source.allowCessInSale === "YES" ||
+    source.allowCessInSale === 1,
+
+reverseScheme:
+    source.reverseScheme === true ||
+    source.reverseScheme === "true" ||
+    source.reverseScheme === "Y" ||
+    source.reverseScheme === "YES" ||
+    source.reverseScheme === 1,
+
+editGrossPurchase:
+    source.editGrossPurchase === true ||
+    source.editGrossPurchase === "true" ||
+    source.editGrossPurchase === "Y" ||
+    source.editGrossPurchase === "YES" ||
+    source.editGrossPurchase === 1,
+
+importNegative:
+    source.importNegative === true ||
+    source.importNegative === "true" ||
+    source.importNegative === "Y" ||
+    source.importNegative === "YES" ||
+    source.importNegative === 1,
+
+allowChangeStarAmount:
+    source.allowChangeStarAmount === true ||
+    source.allowChangeStarAmount === "true" ||
+    source.allowChangeStarAmount === "Y" ||
+    source.allowChangeStarAmount === "YES" ||
+    source.allowChangeStarAmount === 1,
+
+settleLoadNegative:
+    source.settleLoadNegative === true ||
+    source.settleLoadNegative === "true" ||
+    source.settleLoadNegative === "Y" ||
+    source.settleLoadNegative === "YES" ||
+    source.settleLoadNegative === 1,
+
+qrCodeFolderName:
+    String(
+        source.qrCodeFolderName || ""
+    ).trim(),
+
+saleSeriesByGst:
+    source.saleSeriesByGst === true ||
+    source.saleSeriesByGst === "true" ||
+    source.saleSeriesByGst === "Y" ||
+    source.saleSeriesByGst === "YES" ||
+    source.saleSeriesByGst === 1,
+
+importWithZero:
+    source.importWithZero === true ||
+    source.importWithZero === "true" ||
+    source.importWithZero === "Y" ||
+    source.importWithZero === "YES" ||
+    source.importWithZero === 1,
+
+autoBillLockDays:
+    Math.max(
+        0,
+        Number(source.autoBillLockDays || 0)
+    ),
+
+allowGstRate:
+    source.allowGstRate === true ||
+    source.allowGstRate === "true" ||
+    source.allowGstRate === "Y" ||
+    source.allowGstRate === "YES" ||
+    source.allowGstRate === 1,
         };
     };
 
@@ -1079,6 +1196,68 @@ LOAD ACTIVE GODOWNS FOR DEFAULT GODOWN
                                 Boolean(
                                     generalSetup.billingWithoutHsnCode
                                 ),
+                                allowCessInPurchase:
+    Boolean(
+        generalSetup.allowCessInPurchase
+    ),
+
+allowCessInSale:
+    Boolean(
+        generalSetup.allowCessInSale
+    ),
+
+reverseScheme:
+    Boolean(
+        generalSetup.reverseScheme
+    ),
+
+editGrossPurchase:
+    Boolean(
+        generalSetup.editGrossPurchase
+    ),
+
+importNegative:
+    Boolean(
+        generalSetup.importNegative
+    ),
+
+allowChangeStarAmount:
+    Boolean(
+        generalSetup.allowChangeStarAmount
+    ),
+
+settleLoadNegative:
+    Boolean(
+        generalSetup.settleLoadNegative
+    ),
+
+qrCodeFolderName:
+    String(
+        generalSetup.qrCodeFolderName || ""
+    ).trim(),
+
+saleSeriesByGst:
+    Boolean(
+        generalSetup.saleSeriesByGst
+    ),
+
+importWithZero:
+    Boolean(
+        generalSetup.importWithZero
+    ),
+
+autoBillLockDays:
+    Math.max(
+        0,
+        Number(
+            generalSetup.autoBillLockDays || 0
+        )
+    ),
+
+allowGstRate:
+    Boolean(
+        generalSetup.allowGstRate
+    ),
                         }),
                     },
                     10000
@@ -1285,6 +1464,62 @@ if (
             color: "slate",
         },
     ];
+    /* =========================================================
+   GENERAL SETUP 2 NAVIGATION
+========================================================= */
+
+const setup2Menus = [
+    {
+        key: "all",
+        label: "All Settings",
+        icon: "▦",
+    },
+    {
+        key: "purchaseSales",
+        label: "Purchase & Sales",
+        icon: "▤",
+    },
+    {
+        key: "importGst",
+        label: "Import & GST",
+        icon: "%",
+    },
+    {
+        key: "system",
+        label: "System",
+        icon: "⚙",
+    },
+];
+
+const setup2OverviewCards = [
+    {
+        key: "purchaseSales",
+        title: "Purchase & Sales",
+        description:
+            "Cess, scheme, gross amount and sales-series preferences",
+        count: 7,
+        icon: "▤",
+        color: "blue",
+    },
+    {
+        key: "importGst",
+        title: "Import & GST",
+        description:
+            "Negative imports, zero imports and GST-rate preferences",
+        count: 3,
+        icon: "%",
+        color: "violet",
+    },
+    {
+        key: "system",
+        title: "System",
+        description:
+            "QR-code folder and automatic bill-locking preferences",
+        count: 2,
+        icon: "⚙",
+        color: "slate",
+    },
+];
 
     const renderEmptyCategory = (
         title,
@@ -1387,31 +1622,94 @@ if (
                 </div>
             </div>
 
+<div className="gs-page-tabs">
+    <button
+        type="button"
+        className={`gs-page-tab ${
+            activeGeneralSetupPage === "setup1"
+                ? "is-active"
+                : ""
+        }`}
+        onClick={() => {
+            setActiveGeneralSetupPage("setup1");
+            setActiveSetupMenu("all");
+        }}
+    >
+        <span className="gs-page-tab-number">1</span>
+        General Setup 1
+    </button>
+
+    <button
+        type="button"
+        className={`gs-page-tab ${
+            activeGeneralSetupPage === "setup2"
+                ? "is-active"
+                : ""
+        }`}
+       onClick={() => {
+    setActiveGeneralSetupPage("setup2");
+    setActiveSetup2Menu("all");
+}}
+    >
+        <span className="gs-page-tab-number">2</span>
+        General Setup 2
+    </button>
+</div>
             {/* =====================================================
     SETUP CATEGORY NAVIGATION
 ===================================================== */}
 
-            <div className="gs-category-navigation">
-                {setupMenus.map((menu) => (
-                    <button
-                        key={menu.key}
-                        type="button"
-                        className={`gs-category-button ${activeSetupMenu === menu.key
-                            ? "is-active"
-                            : ""
-                            }`}
-                        onClick={() =>
-                            setActiveSetupMenu(menu.key)
-                        }
-                    >
-                        <span className="gs-category-button-icon">
-                            {menu.icon}
-                        </span>
+       {activeGeneralSetupPage === "setup1" && (
+    <div className="gs-category-navigation">
+        {setupMenus.map((menu) => (
+            <button
+                key={menu.key}
+                type="button"
+                className={`gs-category-button ${
+                    activeSetupMenu === menu.key
+                        ? "is-active"
+                        : ""
+                }`}
+                onClick={() =>
+                    setActiveSetupMenu(menu.key)
+                }
+            >
+                <span className="gs-category-button-icon">
+                    {menu.icon}
+                </span>
 
-                        <span>{menu.label}</span>
-                    </button>
-                ))}
-            </div>
+                <span>{menu.label}</span>
+            </button>
+        ))}
+    </div>
+)}
+{activeGeneralSetupPage === "setup2" && (
+    <div className="gs-category-navigation">
+        {setup2Menus.map((menu) => (
+            <button
+                key={menu.key}
+                type="button"
+                className={`gs-category-button ${
+                    activeSetup2Menu === menu.key
+                        ? "is-active"
+                        : ""
+                }`}
+                onClick={() =>
+                    setActiveSetup2Menu(menu.key)
+                }
+            >
+                <span className="gs-category-button-icon">
+                    {menu.icon}
+                </span>
+
+                <span>{menu.label}</span>
+            </button>
+        ))}
+    </div>
+)}
+
+{activeGeneralSetupPage === "setup1" && (
+    <>
 
             {/* =====================================================
     ALL SETTINGS OVERVIEW
@@ -2454,6 +2752,622 @@ if (
                     "Configure GST calculation, tax rates and return preferences."
                 )}
 
+ </>
+)}
+
+{activeGeneralSetupPage === "setup2" && (
+    <>
+        {/* =====================================================
+            GENERAL SETUP 2 OVERVIEW
+        ===================================================== */}
+
+        {activeSetup2Menu === "all" && (
+            <>
+                <section className="gs-overview-panel">
+                    <div className="gs-overview-header">
+                        <div>
+                            <h2>
+                                General Setup 2 Overview
+                            </h2>
+
+                            <p>
+                                Manage purchase, sales, import,
+                                GST and system preferences in one place.
+                            </p>
+                        </div>
+                    </div>
+
+                    <div className="gs-overview-card-grid">
+                        {setup2OverviewCards.map(
+                            (card) => (
+                                <button
+                                    key={card.key}
+                                    type="button"
+                                    className="gs-overview-card"
+                                    onClick={() =>
+                                        setActiveSetup2Menu(
+                                            card.key
+                                        )
+                                    }
+                                >
+                                    <span
+                                        className={`gs-overview-card-icon ${card.color}`}
+                                    >
+                                        {card.icon}
+                                    </span>
+
+                                    <span className="gs-overview-card-content">
+                                        <strong>
+                                            {card.title}
+                                        </strong>
+
+                                        <small>
+                                            {card.description}
+                                        </small>
+
+                                        <span className="gs-overview-card-count">
+                                            {card.count} Settings
+                                        </span>
+                                    </span>
+
+                                    <span className="gs-overview-card-arrow">
+                                        ›
+                                    </span>
+                                </button>
+                            )
+                        )}
+                    </div>
+                </section>
+
+                {/* =====================================================
+                    GENERAL SETUP 2 QUICK ACTIONS
+                ===================================================== */}
+
+                <section className="gs-quick-actions-panel">
+                    <div className="gs-quick-actions-heading">
+                        <span className="gs-quick-actions-icon">
+                            ⚡
+                        </span>
+
+                        <div>
+                            <h3>Quick Actions</h3>
+
+                            <p>
+                                Frequently used General Setup 2 options
+                            </p>
+                        </div>
+                    </div>
+
+                    <div className="gs-quick-actions-grid">
+                        <button
+                            type="button"
+                            className="gs-quick-action"
+                            onClick={() =>
+                                setActiveSetup2Menu(
+                                    "purchaseSales"
+                                )
+                            }
+                        >
+                            <span>%</span>
+
+                            <div>
+                                <strong>
+                                    Cess in Purchase
+                                </strong>
+
+                                <small>
+                                    {generalSetup.allowCessInPurchase
+                                        ? "Enabled"
+                                        : "Disabled"}
+                                </small>
+                            </div>
+                        </button>
+
+                        <button
+                            type="button"
+                            className="gs-quick-action"
+                            onClick={() =>
+                                setActiveSetup2Menu(
+                                    "purchaseSales"
+                                )
+                            }
+                        >
+                            <span>▤</span>
+
+                            <div>
+                                <strong>
+                                    Cess in Sale
+                                </strong>
+
+                                <small>
+                                    {generalSetup.allowCessInSale
+                                        ? "Enabled"
+                                        : "Disabled"}
+                                </small>
+                            </div>
+                        </button>
+
+                        <button
+                            type="button"
+                            className="gs-quick-action"
+                            onClick={() =>
+                                setActiveSetup2Menu(
+                                    "purchaseSales"
+                                )
+                            }
+                        >
+                            <span>↶</span>
+
+                            <div>
+                                <strong>
+                                    Reverse Scheme
+                                </strong>
+
+                                <small>
+                                    {generalSetup.reverseScheme
+                                        ? "Enabled"
+                                        : "Disabled"}
+                                </small>
+                            </div>
+                        </button>
+
+                        <button
+                            type="button"
+                            className="gs-quick-action"
+                            onClick={() =>
+                                setActiveSetup2Menu(
+                                    "importGst"
+                                )
+                            }
+                        >
+                            <span>⇩</span>
+
+                            <div>
+                                <strong>
+                                    Import Negative
+                                </strong>
+
+                                <small>
+                                    {generalSetup.importNegative
+                                        ? "Enabled"
+                                        : "Disabled"}
+                                </small>
+                            </div>
+                        </button>
+
+                        <button
+                            type="button"
+                            className="gs-quick-action"
+                            onClick={() =>
+                                setActiveSetup2Menu(
+                                    "system"
+                                )
+                            }
+                        >
+                            <span>▣</span>
+
+                            <div>
+                                <strong>
+                                    QR Code Folder
+                                </strong>
+
+                                <small>
+                                    {generalSetup.qrCodeFolderName ||
+                                        "Not selected"}
+                                </small>
+                            </div>
+                        </button>
+
+                        <button
+                            type="button"
+                            className="gs-quick-action"
+                            onClick={() =>
+                                setActiveSetup2Menu(
+                                    "system"
+                                )
+                            }
+                        >
+                            <span>◷</span>
+
+                            <div>
+                                <strong>
+                                    Auto Bill Lock
+                                </strong>
+
+                                <small>
+                                    {Number(
+                                        generalSetup.autoBillLockDays ||
+                                        0
+                                    )}{" "}
+                                    Days
+                                </small>
+                            </div>
+                        </button>
+                    </div>
+                </section>
+            </>
+        )}
+
+        {/* =====================================================
+            PURCHASE AND SALES SETTINGS
+        ===================================================== */}
+
+        {activeSetup2Menu === "purchaseSales" && (
+            <div className="gs-selected-category gs-billing-category">
+                <div className="gs-selected-category-header">
+                    <div>
+                        <span className="gs-selected-category-icon billing">
+                            ▤
+                        </span>
+
+                        <div>
+                            <h2>
+                                Purchase & Sales Settings
+                            </h2>
+
+                            <p>
+                                Configure cess, scheme, gross editing
+                                and sales-series preferences.
+                            </p>
+                        </div>
+                    </div>
+
+                    <button
+                        type="button"
+                        className="gs-back-overview-button"
+                        onClick={() =>
+                            setActiveSetup2Menu("all")
+                        }
+                    >
+                        ← All Settings
+                    </button>
+                </div>
+
+                <section className="gs-compact-settings-section">
+                    <div className="gs-compact-section-header">
+                        <div>
+                            <h3>
+                                PURCHASE AND SALES
+                            </h3>
+
+                            <p>
+                                Transaction calculation and editing controls.
+                            </p>
+                        </div>
+
+                        <span className="gs-compact-section-count">
+                            7 Settings
+                        </span>
+                    </div>
+
+                    <div className="gs-compact-toggle-grid">
+                        <CompactToggleSetting
+                            label="Allow Cess in Purchase"
+                            description="Allow cess calculation in purchase entries."
+                            checked={
+                                generalSetup.allowCessInPurchase
+                            }
+                            disabled={loading || saving}
+                            onChange={(value) =>
+                                updateSetting(
+                                    "allowCessInPurchase",
+                                    value
+                                )
+                            }
+                        />
+
+                        <CompactToggleSetting
+                            label="Allow Cess in Sale"
+                            description="Allow cess calculation in sales billing."
+                            checked={
+                                generalSetup.allowCessInSale
+                            }
+                            disabled={loading || saving}
+                            onChange={(value) =>
+                                updateSetting(
+                                    "allowCessInSale",
+                                    value
+                                )
+                            }
+                        />
+
+                        <CompactToggleSetting
+                            label="Reverse Scheme"
+                            description="Apply scheme amount using reverse calculation."
+                            checked={
+                                generalSetup.reverseScheme
+                            }
+                            disabled={loading || saving}
+                            onChange={(value) =>
+                                updateSetting(
+                                    "reverseScheme",
+                                    value
+                                )
+                            }
+                        />
+
+                        <CompactToggleSetting
+                            label="Edit Gross (Purchase)"
+                            description="Allow gross amount editing in purchase."
+                            checked={
+                                generalSetup.editGrossPurchase
+                            }
+                            disabled={loading || saving}
+                            onChange={(value) =>
+                                updateSetting(
+                                    "editGrossPurchase",
+                                    value
+                                )
+                            }
+                        />
+
+                        <CompactToggleSetting
+                            label="Allow Change Star Amount"
+                            description="Allow modification of the calculated star amount."
+                            checked={
+                                generalSetup.allowChangeStarAmount
+                            }
+                            disabled={loading || saving}
+                            onChange={(value) =>
+                                updateSetting(
+                                    "allowChangeStarAmount",
+                                    value
+                                )
+                            }
+                        />
+
+                        <CompactToggleSetting
+                            label="Settle Load Negative"
+                            description="Allow negative values while settling load."
+                            checked={
+                                generalSetup.settleLoadNegative
+                            }
+                            disabled={loading || saving}
+                            onChange={(value) =>
+                                updateSetting(
+                                    "settleLoadNegative",
+                                    value
+                                )
+                            }
+                        />
+
+                        <CompactToggleSetting
+                            label="Sale Series by GST"
+                            description="Choose sales series according to GST."
+                            checked={
+                                generalSetup.saleSeriesByGst
+                            }
+                            disabled={loading || saving}
+                            onChange={(value) =>
+                                updateSetting(
+                                    "saleSeriesByGst",
+                                    value
+                                )
+                            }
+                        />
+                    </div>
+                </section>
+            </div>
+        )}
+
+        {/* =====================================================
+            IMPORT AND GST SETTINGS
+        ===================================================== */}
+
+        {activeSetup2Menu === "importGst" && (
+            <div className="gs-selected-category">
+                <div className="gs-selected-category-header">
+                    <div>
+                        <span className="gs-selected-category-icon">
+                            %
+                        </span>
+
+                        <div>
+                            <h2>
+                                Import & GST Settings
+                            </h2>
+
+                            <p>
+                                Configure import validation and
+                                GST-rate modification preferences.
+                            </p>
+                        </div>
+                    </div>
+
+                    <button
+                        type="button"
+                        className="gs-back-overview-button"
+                        onClick={() =>
+                            setActiveSetup2Menu("all")
+                        }
+                    >
+                        ← All Settings
+                    </button>
+                </div>
+
+                <section className="gs-compact-settings-section">
+                    <div className="gs-compact-section-header">
+                        <div>
+                            <h3>IMPORT AND GST</h3>
+
+                            <p>
+                                Import-value and tax-rate controls.
+                            </p>
+                        </div>
+
+                        <span className="gs-compact-section-count">
+                            3 Settings
+                        </span>
+                    </div>
+
+                    <div className="gs-compact-toggle-grid">
+                        <CompactToggleSetting
+                            label="Import Negative"
+                            description="Allow importing negative-value records."
+                            checked={
+                                generalSetup.importNegative
+                            }
+                            disabled={loading || saving}
+                            onChange={(value) =>
+                                updateSetting(
+                                    "importNegative",
+                                    value
+                                )
+                            }
+                        />
+
+                        <CompactToggleSetting
+                            label="Import With Zero"
+                            description="Allow importing zero-value records."
+                            checked={
+                                generalSetup.importWithZero
+                            }
+                            disabled={loading || saving}
+                            onChange={(value) =>
+                                updateSetting(
+                                    "importWithZero",
+                                    value
+                                )
+                            }
+                        />
+
+                        <CompactToggleSetting
+                            label="Allow GST Rate"
+                            description="Allow GST-rate modification during transactions."
+                            checked={
+                                generalSetup.allowGstRate
+                            }
+                            disabled={loading || saving}
+                            onChange={(value) =>
+                                updateSetting(
+                                    "allowGstRate",
+                                    value
+                                )
+                            }
+                        />
+                    </div>
+                </section>
+            </div>
+        )}
+
+        {/* =====================================================
+            GENERAL SETUP 2 SYSTEM SETTINGS
+        ===================================================== */}
+
+        {activeSetup2Menu === "system" && (
+            <div className="gs-selected-category">
+                <div className="gs-selected-category-header">
+                    <div>
+                        <span className="gs-selected-category-icon system">
+                            ⚙
+                        </span>
+
+                        <div>
+                            <h2>System Settings</h2>
+
+                            <p>
+                                Configure the QR-code folder and
+                                automatic bill-locking period.
+                            </p>
+                        </div>
+                    </div>
+
+                    <button
+                        type="button"
+                        className="gs-back-overview-button"
+                        onClick={() =>
+                            setActiveSetup2Menu("all")
+                        }
+                    >
+                        ← All Settings
+                    </button>
+                </div>
+
+                <section className="gs-compact-settings-section">
+                    <div className="gs-compact-section-header">
+                        <div>
+                            <h3>
+                                FOLDER AND BILL LOCKING
+                            </h3>
+
+                            <p>
+                                File-storage and transaction-lock controls.
+                            </p>
+                        </div>
+
+                        <span className="gs-compact-section-count">
+                            2 Settings
+                        </span>
+                    </div>
+
+                    <div className="gs-compact-field-grid">
+                        <label className="gs-compact-field">
+                            <span className="gs-compact-field-label">
+                                QR Code Folder Name
+                            </span>
+
+                            <span className="gs-compact-field-help">
+                                Folder used to store generated QR-code files.
+                            </span>
+
+                            <input
+                                type="text"
+                                className="gs-control"
+                                value={
+                                    generalSetup.qrCodeFolderName ||
+                                    ""
+                                }
+                                disabled={loading || saving}
+                                maxLength={100}
+                                placeholder="Example: QRCodes"
+                                onChange={(event) =>
+                                    updateSetting(
+                                        "qrCodeFolderName",
+                                        event.target.value
+                                    )
+                                }
+                            />
+                        </label>
+
+                        <label className="gs-compact-field">
+                            <span className="gs-compact-field-label">
+                                Auto Bill Lock Days
+                            </span>
+
+                            <span className="gs-compact-field-help">
+                                Automatically lock bills after the entered days.
+                            </span>
+
+                            <input
+                                type="number"
+                                className="gs-control"
+                                min="0"
+                                step="1"
+                                value={
+                                    generalSetup.autoBillLockDays ??
+                                    0
+                                }
+                                disabled={loading || saving}
+                                onChange={(event) =>
+                                    updateSetting(
+                                        "autoBillLockDays",
+                                        Math.max(
+                                            0,
+                                            Number(
+                                                event.target.value ||
+                                                0
+                                            )
+                                        )
+                                    )
+                                }
+                            />
+                        </label>
+                    </div>
+                </section>
+            </div>
+        )}
+    </>
+)}
             {/* =====================================================
           PAGE FOOTER MESSAGE
           ===================================================== */}

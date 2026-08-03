@@ -4,6 +4,7 @@ import cors from "cors";
 import dotenv from "dotenv";
 import transactionRoutes from "./transaction.js";
 import generalSetupRoutes from "./generalSetup.js";
+import createSecuritySetupRouter from "./securitySetup.js";
 dotenv.config();
 
 const app = express();
@@ -13,6 +14,7 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use("/api/transaction", transactionRoutes);
 app.use("/api/general-setup", generalSetupRoutes);
+
 
 const PORT = process.env.PORT || 5000;
 
@@ -494,28 +496,19 @@ app.post(
           success: true,
           message: "Login successful",
 
-          user: {
-            id: registerUser._id,
+         user: {
+    id: registerUser._id,
 
-            distributorId:
-              registerUser.distributorId,
+    userId: registerUser.userName,   // <-- ADD THIS
 
-            firmId:
-              registerUser.firmId,
-
-            firmCode:
-              registerUser.firmCode || "",
-
-            firmName:
-              registerUser.firmName,
-
-            userName:
-              registerUser.userName,
-
-            role,
-
-            userSource: "REGISTER",
-          },
+    distributorId: registerUser.distributorId,
+    firmId: registerUser.firmId,
+    firmCode: registerUser.firmCode,
+    firmName: registerUser.firmName,
+    userName: registerUser.userName,
+    role,
+    userSource: "REGISTER",
+},
         });
       }
 
@@ -6449,6 +6442,11 @@ const User = mongoose.model("Mas_User", userSchema);
 const Company = mongoose.model("Mas_Company", companySchema);
 
 
+app.use(
+    "/api/security-setup",
+    createSecuritySetupRouter(User)
+);
+
 app.get("/api/gst", ensureConnection, async (req, res) => {
   try {
     const { distributorId, firmId } = req.query;
@@ -7346,6 +7344,17 @@ app.put("/api/sales/:id", ensureConnection, async (req, res) => {
 
     const allowEditBillAfterLoad =
       generalSetup?.allowEditBillAfterLoad === true;
+      const allowNegativeStock =
+  readSetupBoolean(
+    generalSetup?.allowNegativeStock,
+    false
+  );
+      const updateLoadQtyAfterBillEdit =
+  generalSetup?.updateLoadQtyAfterBillEdit === true ||
+  generalSetup?.updateLoadQtyAfterBillEdit === "true" ||
+  generalSetup?.updateLoadQtyAfterBillEdit === "Y" ||
+  generalSetup?.updateLoadQtyAfterBillEdit === "YES" ||
+  generalSetup?.updateLoadQtyAfterBillEdit === 1;
 
     /*
      * Consider the bill loaded when IsLoaded is true
@@ -7375,67 +7384,61 @@ app.put("/api/sales/:id", ensureConnection, async (req, res) => {
     }
 
     // Restore old stock first
-    for (const oldItem of oldBill.items || []) {
-      const prodCode = String(oldItem.productCode || oldItem.productId || "").trim();
-      const batchNo = String(oldItem.batchNo || oldItem.selectedBatch?.batchNo || ".").trim() || ".";
-      const mrp = Number(oldItem.mrp || 0);
-      const qty = Number(oldItem.qty || oldItem.quantity || 0) + Number(oldItem.free || 0);
+  /* =========================================================
+   RESTORE OLD BILL STOCK
 
-      if (prodCode && qty > 0) {
-        await Stock.updateOne(
-          {
-            distributorId,
-            firmId,
-            GDCode: oldBill.GDCode,
-            ProdCode: prodCode,
-            Batch: batchNo,
-            MRP: mrp,
-          },
-          { $inc: { Qty: qty } },
-          { session }
-        );
-      }
-    }
+   Example:
+   Current stock = -10
+   Old bill sold 10
+   Restore gives 0 before applying edited bill.
+========================================================= */
 
-    // Deduct new stock
-    for (const item of items) {
-      const prodCode = String(
-        item.productCode ||
-        item.productId ||
-        item.code ||
-        String(item.product || "").split(" - ")[0] ||
-        ""
-      ).trim();
+await applySalesStockMovement({
+  items:
+    oldBill.items || [],
 
-      const batchNo = String(item.batchNo || item.selectedBatch?.batchNo || ".").trim() || ".";
-      const mrp = Number(item.mrp || 0);
-      const qty = Number(item.qty || item.quantity || 0) + Number(item.free || 0);
+  distributorId,
+  firmId,
 
-      if (!prodCode) throw new Error("Product code missing in sales item");
-      if (qty <= 0) throw new Error(`Qty required for product ${prodCode}`);
+  firmName:
+    oldBill.firmName ||
+    firmName,
 
-      const stockRow = await Stock.findOne({
-        distributorId,
-        firmId,
-        GDCode,
-        ProdCode: prodCode,
-        Batch: batchNo,
-        MRP: mrp,
-        IsLocked: { $ne: "Y" },
-      }).session(session);
+  gdCode:
+    oldBill.GDCode,
 
-      if (!stockRow) throw new Error(`Stock batch not found for product ${prodCode}, batch ${batchNo}`);
+  direction:
+    1,
 
-      if (Number(stockRow.Qty || 0) < qty) {
-        throw new Error(`Insufficient stock for product ${prodCode}. Available: ${stockRow.Qty}, Sales Qty: ${qty}`);
-      }
+  allowNegativeStock:
+    true,
 
-      await Stock.updateOne(
-        { _id: stockRow._id },
-        { $inc: { Qty: -qty } },
-        { session }
-      );
-    }
+  session,
+});
+
+/* =========================================================
+   APPLY EDITED BILL STOCK
+========================================================= */
+
+await applySalesStockMovement({
+  items,
+
+  distributorId,
+  firmId,
+  firmName,
+
+  gdCode:
+    GDCode,
+
+  direction:
+    -1,
+
+  allowNegativeStock,
+
+  session,
+});
+
+
     const normalizedItems = items.map((item, index) => {
       const finalQty = Number(item.qty ?? item.quantity ?? item.Qty ?? 0);
       const finalFree = Number(item.free ?? item.Free ?? 0);
@@ -7582,47 +7585,288 @@ Synchronize Load Header Bill Amount
 ---------------------------------------------------------
 */
 
-    await LoadHeader.updateMany(
+  /* =========================================================
+   SYNCHRONIZE EDITED SALES BILL WITH LOAD
+
+   Bill amount is always synchronized.
+
+   Bill quantity, free quantity, item count and product rows
+   are synchronized only when:
+   Update Load Qty After Bill Edit = ON
+========================================================= */
+
+if (
+  oldBillIsLoaded &&
+  updateLoadQtyAfterBillEdit
+) {
+  const editedBillSeries = String(
+    BillSeries ||
+    oldBill.BillSeries ||
+    ""
+  ).trim();
+
+  const editedBillNo = Number(
+    BillNo ||
+    oldBill.BillNo ||
+    0
+  );
+
+  const editedNetAmount = Number(
+    req.body.NetAmount ??
+    updatedBill?.NetAmount ??
+    oldBill.NetAmount ??
+    0
+  );
+
+  const editedTotalQty = Number(
+    req.body.TotalQty ??
+    updatedBill?.TotalQty ??
+    0
+  );
+
+  const editedTotalFreeQty = Number(
+    req.body.TotalFreeQty ??
+    updatedBill?.TotalFreeQty ??
+    0
+  );
+
+  const editedTotalItems = Number(
+    updatedBill?.TotalItems ??
+    normalizedItems.length ??
+    0
+  );
+
+  /*
+   * Find all active loads containing this invoice.
+   *
+   * Both old and new distributor/firm field formats
+   * are supported because your LoadHeader uses capitalized
+   * DistributorId/FirmId while some older records may not.
+   */
+  const matchingLoads = await LoadHeader.find({
+    $or: [
       {
+        DistributorId: String(distributorId),
+        FirmId: String(firmId),
+      },
+      {
+        distributorId: String(distributorId),
+        firmId: String(firmId),
+      },
+    ],
+
+    IsCancelled: {
+      $ne: true,
+    },
+
+    Bills: {
+      $elemMatch: {
         $or: [
           {
-            DistributorId: distributorId,
-            FirmId: firmId,
+            BillSeries: editedBillSeries,
+            BillNo: editedBillNo,
           },
           {
-            distributorId,
-            firmId,
+            BillSeries: editedBillSeries,
+            BillNo: String(editedBillNo),
+          },
+          {
+            billSeries: editedBillSeries,
+            billNo: editedBillNo,
+          },
+          {
+            billSeries: editedBillSeries,
+            billNo: String(editedBillNo),
+          },
+          {
+            Series: editedBillSeries,
+            BillNo: editedBillNo,
+          },
+          {
+            Series: editedBillSeries,
+            BillNo: String(editedBillNo),
           },
         ],
-
-        Bills: {
-          $elemMatch: {
-            BillSeries: String(BillSeries),
-            BillNo: Number(BillNo),
-          },
-        },
       },
+    },
+  }).session(session);
 
-      {
-        $set: {
-          "Bills.$.BillAmount": Number(req.body.NetAmount || 0),
-          "Bills.$.billAmount": Number(req.body.NetAmount || 0),
+  for (const load of matchingLoads) {
+    const loadBills =
+      Array.isArray(load.Bills)
+        ? load.Bills
+        : [];
 
-          "Bills.$.PendingAmount": Number(req.body.NetAmount || 0),
-          "Bills.$.pendingAmount": Number(req.body.NetAmount || 0),
+    let matchingBillFound = false;
 
-          "Bills.$.NetAmount": Number(req.body.NetAmount || 0),
-          "Bills.$.netAmount": Number(req.body.NetAmount || 0),
+    const synchronizedBills =
+      loadBills.map((loadBill) => {
+        const loadBillSeries = String(
+          loadBill.BillSeries ??
+          loadBill.billSeries ??
+          loadBill.Series ??
+          ""
+        ).trim();
 
-          "Bills.$.BillType": BillType || "Credit",
-          "Bills.$.billType": BillType || "Credit",
+        const loadBillNo = Number(
+          loadBill.BillNo ??
+          loadBill.billNo ??
+          0
+        );
 
-          UpdatedAt: new Date(),
-        },
-      },
+        const isMatchingBill =
+          loadBillSeries === editedBillSeries &&
+          loadBillNo === editedBillNo;
 
-      { session }
-    );
+        if (!isMatchingBill) {
+          return loadBill;
+        }
+
+        matchingBillFound = true;
+
+        const synchronizedBill = {
+          ...loadBill,
+
+          BillSeries:
+            editedBillSeries,
+
+          BillNo:
+            editedBillNo,
+
+          BillType:
+            BillType ||
+            updatedBill?.BillType ||
+            "Credit",
+
+          billType:
+            BillType ||
+            updatedBill?.BillType ||
+            "Credit",
+
+          BillAmount:
+            editedNetAmount,
+
+          billAmount:
+            editedNetAmount,
+
+          PendingAmount:
+            editedNetAmount,
+
+          pendingAmount:
+            editedNetAmount,
+
+          NetAmount:
+            editedNetAmount,
+
+          netAmount:
+            editedNetAmount,
+
+          amount:
+            editedNetAmount,
+        };
+
+        /*
+         * Quantity-related values must change only when
+         * Update Load Qty After Bill Edit is ON.
+         */
+       synchronizedBill.TotalQty =
+  editedTotalQty;
+
+synchronizedBill.totalQty =
+  editedTotalQty;
+
+synchronizedBill.Qty =
+  editedTotalQty;
+
+synchronizedBill.qty =
+  editedTotalQty;
+
+synchronizedBill.TotalFreeQty =
+  editedTotalFreeQty;
+
+synchronizedBill.totalFreeQty =
+  editedTotalFreeQty;
+
+synchronizedBill.FreeQty =
+  editedTotalFreeQty;
+
+synchronizedBill.freeQty =
+  editedTotalFreeQty;
+
+synchronizedBill.TotalItems =
+  editedTotalItems;
+
+synchronizedBill.totalItems =
+  editedTotalItems;
+
+synchronizedBill.items =
+  normalizedItems;
+
+synchronizedBill.Items =
+  normalizedItems;
+
+        return synchronizedBill;
+      });
+
+    if (!matchingBillFound) {
+      continue;
+    }
+
+    /*
+     * Recalculate the total load amount from every bill.
+     */
+    const synchronizedTotalAmount =
+      synchronizedBills.reduce(
+        (total, loadBill) =>
+          total +
+          Number(
+            loadBill.NetAmount ??
+            loadBill.netAmount ??
+            loadBill.BillAmount ??
+            loadBill.billAmount ??
+            loadBill.amount ??
+            0
+          ),
+        0
+      );
+
+    load.Bills =
+      synchronizedBills;
+
+    load.TotalAmount =
+      Number(
+        synchronizedTotalAmount.toFixed(2)
+      );
+
+    load.LoadSummary = {
+      ...(load.LoadSummary?.toObject
+        ? load.LoadSummary.toObject()
+        : load.LoadSummary || {}),
+
+      totalAmount:
+        Number(
+          synchronizedTotalAmount.toFixed(2)
+        ),
+    };
+
+    load.UpdatedBy =
+      String(
+        req.body.UpdatedBy ||
+        req.body.updatedBy ||
+        "SALES_BILL_EDIT"
+      );
+
+    load.UpdatedAt =
+      new Date();
+
+    load.markModified("Bills");
+    load.markModified("LoadSummary");
+
+    await load.save({
+      session,
+    });
+  }
+}
 
     await session.commitTransaction();
 
@@ -7633,12 +7877,25 @@ Synchronize Load Header Bill Amount
 
     return res.json({
       success: true,
-      message:
-        "Sales bill updated successfully",
-
+     message:
+  oldBillIsLoaded &&
+  updateLoadQtyAfterBillEdit
+    ? "Sales bill and load quantity updated successfully"
+    : oldBillIsLoaded
+      ? "Sales bill updated. Load quantity was not changed because the setting is OFF."
+      : "Sales bill updated successfully",
       /*
        * Used by Save and Print after bill update.
        */
+      loadQuantitySetting:
+  updateLoadQtyAfterBillEdit,
+
+loadedBill:
+  oldBillIsLoaded,
+
+loadQuantityUpdated:
+  oldBillIsLoaded &&
+  updateLoadQtyAfterBillEdit,
       bill: savedUpdatedBill,
 
       /*
@@ -9962,87 +10219,459 @@ app.get("/api/sales/next-bill-no", ensureConnection, async (req, res) => {
     });
   }
 });
+/* =========================================================
+   READ GENERAL SETUP BOOLEAN
+========================================================= */
 
-app.post("/api/sales", ensureConnection, async (req, res) => {
-  const session = await mongoose.startSession();
+const readSetupBoolean = (
+  value,
+  fallback = false
+) => {
+  if (typeof value === "boolean") {
+    return value;
+  }
 
-  try {
-    session.startTransaction();
+  if (typeof value === "number") {
+    return value === 1;
+  }
 
-    const {
-      distributorId,
-      firmId,
-      firmName,
-      BillDate,
-      Godown,
-      GDCode,
-      CompanyCode,
-      CompanyName,
-      AreaCode,
-      AreaName,
-      PartyCode,
-      PartyName,
-      BillSeries = "",
-      BillNo,
-      BillType,
-      DueDate,
-      SalesmanCode,
-      SalesmanName,
-      Narration,
-      items = [],
-    } = req.body;
+  const normalized = String(
+    value ?? ""
+  )
+    .trim()
+    .toUpperCase();
 
-    if (!distributorId || !firmId) throw new Error("Distributor/Firm not found");
-    if (!BillNo) throw new Error("Bill No is required");
-    if (!PartyName) throw new Error("Party is required");
-    if (!GDCode) throw new Error("Godown code is required");
-    if (!items.length) throw new Error("At least one product is required");
+  if (
+    ["TRUE", "1", "Y", "YES", "ON"].includes(
+      normalized
+    )
+  ) {
+    return true;
+  }
 
-    for (const item of items) {
-      const prodCode = String(
-        item.productCode ||
-        item.productId ||
-        item.code ||
-        String(item.product || "").split(" - ")[0] ||
-        ""
-      ).trim();
+  if (
+    ["FALSE", "0", "N", "NO", "OFF"].includes(
+      normalized
+    )
+  ) {
+    return false;
+  }
 
-      const batchNo = String(item.batchNo || item.selectedBatch?.batchNo || ".").trim() || ".";
-      const mrp = Number(item.mrp || 0);
-      const qty = Number(item.qty || item.quantity || 0) + Number(item.free || 0);
+  return fallback;
+};
 
-      if (!prodCode) throw new Error("Product code missing in sales item");
-      if (qty <= 0) throw new Error(`Qty required for product ${prodCode}`);
+const loadFirmGeneralSetup = async ({
+  distributorId,
+  firmId,
+  session = null,
+}) => {
+  let query = mongoose.connection
+    .collection("Mas_GeneralSetup1")
+    .findOne({
+      distributorId:
+        String(distributorId || "").trim(),
 
-      const stockRow = await Stock.findOne({
-        distributorId,
-        firmId,
-        GDCode,
-        ProdCode: prodCode,
-        Batch: batchNo,
-        MRP: mrp,
-        IsLocked: { $ne: "Y" },
-      }).session(session);
+      firmId:
+        String(firmId || "").trim(),
 
-      if (!stockRow) {
-        throw new Error(`Stock batch not found for product ${prodCode}, batch ${batchNo}`);
-      }
+      isActive: {
+        $ne: false,
+      },
+    });
 
-      if (Number(stockRow.Qty || 0) < qty) {
-        throw new Error(
-          `Insufficient stock for product ${prodCode}, batch ${batchNo}. Available: ${stockRow.Qty}, Sales Qty: ${qty}`
-        );
-      }
+  /*
+   * Native collection findOne accepts session
+   * inside its options.
+   */
+  if (session) {
+    return mongoose.connection
+      .collection("Mas_GeneralSetup1")
+      .findOne(
+        {
+          distributorId:
+            String(distributorId || "").trim(),
 
-      await Stock.updateOne(
-        { _id: stockRow._id },
-        { $inc: { Qty: -qty } },
-        { session }
+          firmId:
+            String(firmId || "").trim(),
+
+          isActive: {
+            $ne: false,
+          },
+        },
+        {
+          session,
+        }
+      );
+  }
+
+  return query;
+};
+/* =========================================================
+   APPLY SALES STOCK MOVEMENT
+
+   direction:
+   -1 = deduct stock while saving/editing Sales Bill
+   +1 = restore stock while editing/deleting Sales Bill
+========================================================= */
+
+const applySalesStockMovement = async ({
+  items,
+  distributorId,
+  firmId,
+  firmName = "",
+  gdCode,
+  direction,
+  allowNegativeStock = false,
+  session,
+}) => {
+  const safeItems =
+    Array.isArray(items)
+      ? items
+      : [];
+
+  for (const item of safeItems) {
+    const prodCode = String(
+      item.productCode ||
+      item.productId ||
+      item.code ||
+      String(item.product || "")
+        .split(" - ")[0] ||
+      ""
+    ).trim();
+
+    const batchNo = String(
+      item.batchNo ||
+      item.Batch ||
+      item.selectedBatch?.batchNo ||
+      item.selectedBatch?.Batch ||
+      "."
+    ).trim() || ".";
+
+    const mrp = Number(
+      item.mrp ??
+      item.MRP ??
+      item.selectedBatch?.mrp ??
+      item.selectedBatch?.MRP ??
+      0
+    );
+
+    const salesQty = Number(
+      item.qty ??
+      item.quantity ??
+      item.Qty ??
+      0
+    );
+
+    const freeQty = Number(
+      item.free ??
+      item.Free ??
+      item.freeQty ??
+      0
+    );
+
+    const totalQty =
+      salesQty + freeQty;
+
+    const purchaseRate = Number(
+      item.purchaseRate ??
+      item.purRate ??
+      item.PRate ??
+      item.selectedBatch?.purchaseRate ??
+      item.selectedBatch?.PRate ??
+      0
+    );
+
+    const salesRate = Number(
+      item.rate ??
+      item.salesRate ??
+      item.SRate ??
+      item.selectedBatch?.salesRate ??
+      item.selectedBatch?.SRate ??
+      0
+    );
+
+    const boxPack = Number(
+      item.boxPack ??
+      item.BoxPack ??
+      item.selectedBatch?.boxPack ??
+      item.selectedBatch?.BoxPack ??
+      1
+    ) || 1;
+
+    const inBoxPack = Number(
+      item.inBoxPack ??
+      item.inboxPack ??
+      item.InBoxPack ??
+      item.selectedBatch?.inBoxPack ??
+      item.selectedBatch?.InBoxPack ??
+      1
+    ) || 1;
+
+    if (!prodCode) {
+      throw new Error(
+        "Product code missing in Sales item."
       );
     }
 
-    const header = await SalesHeader.create(
-      [{
+    if (
+      !Number.isFinite(totalQty) ||
+      totalQty <= 0
+    ) {
+      throw new Error(
+        `Quantity is required for product ${prodCode}.`
+      );
+    }
+
+    const stockFilter = {
+      distributorId:
+        String(distributorId).trim(),
+
+      firmId:
+        String(firmId).trim(),
+
+      GDCode:
+        String(gdCode).trim(),
+
+      ProdCode:
+        prodCode,
+
+      Batch:
+        batchNo,
+
+      MRP:
+        Number.isFinite(mrp)
+          ? mrp
+          : 0,
+    };
+
+    /*
+     * Restoring old Sales stock always increases quantity.
+     */
+    if (direction > 0) {
+      await Stock.findOneAndUpdate(
+        stockFilter,
+        {
+          $setOnInsert: {
+            distributorId:
+              String(distributorId).trim(),
+
+            firmId:
+              String(firmId).trim(),
+
+            firmName:
+              String(firmName || "").trim(),
+
+            GDCode:
+              String(gdCode).trim(),
+
+            ProdCode:
+              prodCode,
+
+            Batch:
+              batchNo,
+
+            MRP:
+              Number.isFinite(mrp)
+                ? mrp
+                : 0,
+          },
+
+          $set: {
+            PRate:
+              purchaseRate,
+
+            SRate:
+              salesRate,
+
+            BoxPack:
+              boxPack,
+
+            InBoxPack:
+              inBoxPack,
+
+            IsLocked:
+              "N",
+          },
+
+          $inc: {
+            Qty:
+              totalQty,
+          },
+        },
+        {
+          upsert: true,
+          new: true,
+          session,
+          setDefaultsOnInsert: true,
+        }
+      );
+
+      continue;
+    }
+
+    /*
+     * Negative stock ON:
+     *
+     * The stock record is created when it does not exist,
+     * and the Sales quantity is deducted even when Qty is 0.
+     */
+    if (allowNegativeStock) {
+      await Stock.findOneAndUpdate(
+        stockFilter,
+        {
+         $setOnInsert: {
+  distributorId:
+    String(distributorId).trim(),
+
+  firmId:
+    String(firmId).trim(),
+
+  firmName:
+    String(firmName || "").trim(),
+
+  GDCode:
+    String(gdCode).trim(),
+
+  ProdCode:
+    prodCode,
+
+  Batch:
+    batchNo,
+
+  MRP:
+    Number.isFinite(mrp)
+      ? mrp
+      : 0,
+},
+
+          $set: {
+            /*
+             * Do not overwrite a valid purchase rate with zero.
+             */
+            ...(purchaseRate > 0
+              ? {
+                PRate:
+                  purchaseRate,
+              }
+              : {}),
+
+            ...(salesRate > 0
+              ? {
+                SRate:
+                  salesRate,
+              }
+              : {}),
+
+            BoxPack:
+              boxPack,
+
+            InBoxPack:
+              inBoxPack,
+
+            IsLocked:
+              "N",
+          },
+
+          $inc: {
+            Qty:
+              -totalQty,
+          },
+        },
+        {
+          upsert: true,
+          new: true,
+          session,
+          setDefaultsOnInsert: true,
+        }
+      );
+
+      continue;
+    }
+
+    /*
+     * Negative stock OFF:
+     *
+     * Use one atomic update with Qty >= totalQty.
+     * This prevents two simultaneous Sales Bills from
+     * both using the same available stock.
+     */
+    const stockResult =
+      await Stock.updateOne(
+        {
+          ...stockFilter,
+
+          IsLocked: {
+            $ne: "Y",
+          },
+
+          Qty: {
+            $gte:
+              totalQty,
+          },
+        },
+        {
+          $inc: {
+            Qty:
+              -totalQty,
+          },
+        },
+        {
+          session,
+        }
+      );
+
+    if (
+      stockResult.modifiedCount !== 1
+    ) {
+      const currentStock =
+        await Stock.findOne(
+          stockFilter
+        )
+          .session(session)
+          .lean();
+
+      if (!currentStock) {
+        throw new Error(
+          `Stock batch not found for product ${prodCode}, ` +
+          `batch ${batchNo}, MRP ${mrp}. ` +
+          `Enable "Negative Stock" in General Setup to allow billing.`
+        );
+      }
+
+      if (
+        String(
+          currentStock.IsLocked || "N"
+        )
+          .trim()
+          .toUpperCase() === "Y"
+      ) {
+        throw new Error(
+          `Stock batch is locked for product ${prodCode}, batch ${batchNo}.`
+        );
+      }
+
+      throw new Error(
+        `Insufficient stock for product ${prodCode}, ` +
+        `batch ${batchNo}. Available: ${Number(
+          currentStock.Qty || 0
+        )}, Sales Qty: ${totalQty}. ` +
+        `Enable "Negative Stock" in General Setup to allow billing.`
+      );
+    }
+  }
+};
+
+app.post(
+  "/api/sales",
+  ensureConnection,
+  async (req, res) => {
+    const session =
+      await mongoose.startSession();
+
+    try {
+      session.startTransaction();
+
+      const {
         distributorId,
         firmId,
         firmName,
@@ -10051,145 +10680,429 @@ app.post("/api/sales", ensureConnection, async (req, res) => {
         Godown,
         GDCode,
 
-        CompanyCode: CompanyCode || "",
-        CompanyName: CompanyName || "",
-        AreaCode: AreaCode || "",
-        AreaName: AreaName || "",
-        PartyCode: PartyCode || "",
+        CompanyCode,
+        CompanyName,
+
+        AreaCode,
+        AreaName,
+
+        PartyCode,
         PartyName,
 
-        BillSeries: String(BillSeries || "").trim(),
-        BillNo: Number(BillNo),
-        BillType: BillType || "Credit",
+        BillSeries = "",
+        BillNo,
+        BillType,
         DueDate,
 
-        SalesmanCode: SalesmanCode || "",
-        SalesmanName: SalesmanName || "",
-        Narration: Narration || "",
+        SalesmanCode,
+        SalesmanName,
 
-        GrossAmount: Number(
-          req.body.GrossAmount || 0
-        ),
+        Narration,
 
-        TPRAmount: Number(
-          req.body.TPRAmount || 0
-        ),
+        items = [],
+      } = req.body;
 
-        SchemeAmount: Number(
-          req.body.SchemeAmount || 0
-        ),
+      /* =====================================================
+         BASIC VALIDATION
+      ===================================================== */
 
-        StarDiscountAmount: Number(
-          req.body.StarDiscountAmount || 0
-        ),
+      if (
+        !distributorId ||
+        !firmId
+      ) {
+        throw new Error(
+          "Distributor/Firm not found"
+        );
+      }
 
-        CashDiscountAmount: Number(
-          req.body.CashDiscountAmount || 0
-        ),
+      if (!BillNo) {
+        throw new Error(
+          "Bill No is required"
+        );
+      }
 
-        DisplayAmount: Number(
-          req.body.DisplayAmount || 0
-        ),
+      if (!PartyName) {
+        throw new Error(
+          "Party is required"
+        );
+      }
 
-        CouponAmount: Number(
-          req.body.CouponAmount || 0
-        ),
+      if (!GDCode) {
+        throw new Error(
+          "Godown code is required"
+        );
+      }
 
-        // Number("-25") remains -25
-        // Number("+25") becomes 25
-        AddLessAmount: Number(
-          req.body.AddLessAmount || 0
-        ),
+      if (
+        !Array.isArray(items) ||
+        items.length === 0
+      ) {
+        throw new Error(
+          "At least one product is required"
+        );
+      }
 
-        TaxableValue: Number(
-          req.body.TaxableValue || 0
-        ),
+      /* =====================================================
+         READ NEGATIVE STOCK SETTING
 
-        SGSTAmount: Number(
-          req.body.SGSTAmount || 0
-        ),
+         OFF:
+         Available stock must be enough.
 
-        CGSTAmount: Number(
-          req.body.CGSTAmount || 0
-        ),
+         ON:
+         Bill is allowed even when stock is zero,
+         missing or already negative.
+      ===================================================== */
 
-        IGSTAmount: Number(
-          req.body.IGSTAmount || 0
-        ),
+      const generalSetup =
+        await loadFirmGeneralSetup({
+          distributorId,
+          firmId,
+          session,
+        });
 
-        OriginalNetAmount: Number(
-          req.body.OriginalNetAmount ??
-          req.body.NetAmount ??
-          0
-        ),
+      const allowNegativeStock =
+        readSetupBoolean(
+          generalSetup
+            ?.allowNegativeStock,
+          false
+        );
 
-        CreditNoteAmount: Number(
-          req.body.CreditNoteAmount || 0
-        ),
+      /* =====================================================
+         APPLY SALES STOCK MOVEMENT
 
-        NetAmount: Number(
-          req.body.NetAmount || 0
-        ),
-        TotalQty: Number(req.body.TotalQty || 0),
-        TotalFreeQty: Number(req.body.TotalFreeQty || 0),
-        TotalItems: items.length,
+         This must run before creating the bill.
 
+         If any stock validation fails, an error is thrown
+         and the entire MongoDB transaction is cancelled.
+      ===================================================== */
+
+      await applySalesStockMovement({
         items,
-        isActive: true,
-      }],
-      { session }
-    );
 
-    await session.commitTransaction();
+        distributorId,
+        firmId,
+        firmName,
 
-    const savedBill =
-      header[0].toObject
-        ? header[0].toObject()
-        : header[0];
+        gdCode:
+          GDCode,
 
-    return res.status(201).json({
-      success: true,
-      message: "Sales saved successfully",
+        direction:
+          -1,
 
-      /*
-       * Main saved Sales Bill record.
-       * Dashboard Save and Print reads this property.
-       */
-      bill: savedBill,
+        allowNegativeStock,
 
-      /*
-       * Keep the existing structure so older frontend
-       * logic is not affected.
-       */
-      data: {
-        header: savedBill,
-      },
-
-      savedBillId:
-        String(savedBill._id || ""),
-
-      nextBillNo:
-        Number(BillNo) + 1,
-    });
-  } catch (error) {
-    await session.abortTransaction();
-
-    if (error.code === 11000) {
-      return res.status(409).json({
-        success: false,
-        message: "This sales bill number already exists for this series",
+        session,
       });
+
+      /* =====================================================
+         CREATE SALES BILL
+      ===================================================== */
+
+      const header =
+        await SalesHeader.create(
+          [
+            {
+              distributorId,
+              firmId,
+              firmName,
+
+              BillDate,
+              Godown,
+              GDCode,
+
+              CompanyCode:
+                CompanyCode || "",
+
+              CompanyName:
+                CompanyName || "",
+
+              AreaCode:
+                AreaCode || "",
+
+              AreaName:
+                AreaName || "",
+
+              PartyCode:
+                PartyCode || "",
+
+              PartyName,
+
+              BillSeries:
+                String(
+                  BillSeries || ""
+                ).trim(),
+
+              BillNo:
+                Number(BillNo),
+
+              BillType:
+                BillType || "Credit",
+
+              DueDate,
+
+              SalesmanCode:
+                SalesmanCode || "",
+
+              SalesmanName:
+                SalesmanName || "",
+
+              Narration:
+                Narration || "",
+
+              GrossAmount:
+                Number(
+                  req.body
+                    .GrossAmount ||
+                  0
+                ),
+
+              TPRAmount:
+                Number(
+                  req.body
+                    .TPRAmount ||
+                  0
+                ),
+
+              SchemeAmount:
+                Number(
+                  req.body
+                    .SchemeAmount ||
+                  0
+                ),
+
+              StarDiscountAmount:
+                Number(
+                  req.body
+                    .StarDiscountAmount ||
+                  0
+                ),
+
+              CashDiscountAmount:
+                Number(
+                  req.body
+                    .CashDiscountAmount ||
+                  0
+                ),
+
+              DisplayAmount:
+                Number(
+                  req.body
+                    .DisplayAmount ||
+                  0
+                ),
+
+              CouponAmount:
+                Number(
+                  req.body
+                    .CouponAmount ||
+                  0
+                ),
+
+              AddLessAmount:
+                Number(
+                  req.body
+                    .AddLessAmount ||
+                  0
+                ),
+
+              TaxableValue:
+                Number(
+                  req.body
+                    .TaxableValue ||
+                  0
+                ),
+
+              SGSTAmount:
+                Number(
+                  req.body
+                    .SGSTAmount ||
+                  0
+                ),
+
+              CGSTAmount:
+                Number(
+                  req.body
+                    .CGSTAmount ||
+                  0
+                ),
+
+              IGSTAmount:
+                Number(
+                  req.body
+                    .IGSTAmount ||
+                  0
+                ),
+
+              OriginalNetAmount:
+                Number(
+                  req.body
+                    .OriginalNetAmount ??
+                  req.body
+                    .NetAmount ??
+                  0
+                ),
+
+              CreditNoteAmount:
+                Number(
+                  req.body
+                    .CreditNoteAmount ||
+                  0
+                ),
+
+              NetAmount:
+                Number(
+                  req.body
+                    .NetAmount ||
+                  0
+                ),
+
+              TotalQty:
+                Number(
+                  req.body
+                    .TotalQty ||
+                  0
+                ),
+
+              TotalFreeQty:
+                Number(
+                  req.body
+                    .TotalFreeQty ||
+                  0
+                ),
+
+              TotalItems:
+                items.length,
+
+              items,
+
+              isActive:
+                true,
+            },
+          ],
+          {
+            session,
+          }
+        );
+
+      /* =====================================================
+         COMMIT BOTH OPERATIONS
+
+         This commits:
+         1. Stock deduction
+         2. Sales Bill creation
+      ===================================================== */
+
+      await session
+        .commitTransaction();
+
+      const savedBill =
+        header[0]?.toObject
+          ? header[0].toObject()
+          : header[0];
+
+      return res
+        .status(201)
+        .json({
+          success:
+            true,
+
+          message:
+            allowNegativeStock
+              ? "Sales saved successfully. Negative stock was allowed according to General Setup."
+              : "Sales saved successfully",
+
+          allowNegativeStock,
+
+          bill:
+            savedBill,
+
+          data: {
+            header:
+              savedBill,
+          },
+
+          savedBillId:
+            String(
+              savedBill?._id ||
+              ""
+            ),
+
+          nextBillNo:
+            Number(BillNo) +
+            1,
+        });
+    } catch (error) {
+      /*
+       * Roll back both stock and Sales Bill changes.
+       */
+      if (
+        session.inTransaction()
+      ) {
+        await session
+          .abortTransaction();
+      }
+
+      console.error(
+        "Sales save error:",
+        error
+      );
+
+      if (
+        error.code === 11000
+      ) {
+        return res
+          .status(409)
+          .json({
+            success:
+              false,
+
+            message:
+              "This sales bill number already exists for this series",
+          });
+      }
+
+      /*
+       * Stock and validation errors are request errors.
+       */
+      const message =
+        error.message ||
+        "Sales save failed";
+
+      const isValidationError =
+        message.includes(
+          "required"
+        ) ||
+        message.includes(
+          "Stock batch"
+        ) ||
+        message.includes(
+          "Insufficient stock"
+        ) ||
+        message.includes(
+          "locked"
+        ) ||
+        message.includes(
+          "Product code"
+        );
+
+      return res
+        .status(
+          isValidationError
+            ? 400
+            : 500
+        )
+        .json({
+          success:
+            false,
+
+          message,
+        });
+    } finally {
+      await session
+        .endSession();
     }
-
-    res.status(500).json({
-      success: false,
-      message: error.message || "Sales save failed",
-    });
-  } finally {
-    session.endSession();
   }
-});
-
+);
 app.get("/api/sales", ensureConnection, async (req, res) => {
   try {
     const { distributorId, firmId } = req.query;

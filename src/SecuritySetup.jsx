@@ -5,9 +5,8 @@ import "./SecuritySetup.css";
    API CONFIGURATION
 ========================================================= */
 
-// const API_URL = "http://localhost:5000/api";
-const API_URL =
-    "https://total-solution-backend.onrender.com/api";
+const API_URL = "http://localhost:5000/api";
+// const API_URL = "https://total-solution-backend.onrender.com/api";
 
 /* =========================================================
    PERMISSION COLUMNS
@@ -814,154 +813,47 @@ const SecuritySetup = ({
        NORMALIZE API PERMISSIONS
     ===================================================== */
 
-    const normalizePermissions = React.useCallback(
-        (
-            rawPermissions,
-            normalizedGroups,
-            normalizedUsers
-        ) => {
-            const permissionMap = {};
+   const normalizePermissions = React.useCallback(
+    (normalizedGroups, normalizedUsers) => {
+        const permissionMap = {};
+
+        normalizedUsers.forEach((user) => {
+
+            const userPermissions =
+                user.permissions || {};
 
             normalizedGroups.forEach((group) => {
-                group.operations.forEach(
-                    (operation) => {
-                        normalizedUsers.forEach(
-                            (user) => {
-                                const key =
-                                    getPermissionKey(
-                                        operation.id,
-                                        user.userId
-                                    );
 
-                                permissionMap[key] =
-                                    user.isAdministrator
-                                        ? createFullPermission()
-                                        : createBlankPermission();
-                            }
-                        );
-                    }
-                );
-            });
+                const groupPermissions =
+                    userPermissions[group.id] || {};
 
-            if (Array.isArray(rawPermissions)) {
-                rawPermissions.forEach((item) => {
-                    const operationId = String(
-                        item?.operationId ||
-                            item?.operation?.id ||
-                            item?.operationCode ||
-                            item?.screenId ||
-                            ""
+                group.operations.forEach((operation) => {
+
+                    const key = getPermissionKey(
+                        operation.id,
+                        user.userId
                     );
 
-                    const moduleCode = String(
-                        item?.module ||
-                            item?.moduleCode ||
-                            ""
-                    )
-                        .trim()
-                        .toUpperCase();
-
-                    const operationCode = String(
-                        item?.operation ||
-                            item?.operationCode ||
-                            item?.screenCode ||
-                            ""
-                    )
-                        .trim()
-                        .toUpperCase();
-
-                    const matchedOperation =
-                        normalizedGroups
-                            .flatMap(
-                                (group) =>
-                                    group.operations
-                            )
-                            .find(
-                                (operation) =>
-                                    operation.id ===
-                                        operationId ||
-                                    (operation.module ===
-                                        moduleCode &&
-                                        operation.operation ===
-                                            operationCode)
-                            );
-
-                    const userId = String(
-                        item?.userId ||
-                            item?.user?._id ||
-                            item?.user?.id ||
-                            item?.SysUserCode ||
-                            ""
-                    );
-
-                    const matchedUser =
-                        normalizedUsers.find(
-                            (user) =>
-                                String(
-                                    user.userId
-                                ) === userId
-                        );
-
-                    if (
-                        !matchedOperation ||
-                        !matchedUser
-                    ) {
+                    if (user.isAdministrator) {
+                        permissionMap[key] =
+                            createFullPermission();
                         return;
                     }
 
-                    const key =
-                        getPermissionKey(
-                            matchedOperation.id,
-                            matchedUser.userId
-                        );
-
                     permissionMap[key] =
-                        matchedUser.isAdministrator
-                            ? createFullPermission()
-                            : normalizePermission(item);
-                });
-            } else if (
-                rawPermissions &&
-                typeof rawPermissions === "object"
-            ) {
-                Object.entries(
-                    rawPermissions
-                ).forEach(([key, value]) => {
-                    if (
-                        permissionMap[key] !==
-                        undefined
-                    ) {
-                        permissionMap[key] =
-                            normalizePermission(value);
-                    }
-                });
-            }
-
-            normalizedUsers.forEach((user) => {
-                if (!user.isAdministrator) {
-                    return;
-                }
-
-                normalizedGroups.forEach((group) => {
-                    group.operations.forEach(
-                        (operation) => {
-                            permissionMap[
-                                getPermissionKey(
-                                    operation.id,
-                                    user.userId
-                                )
-                            ] =
-                                createFullPermission();
-                        }
-                    );
+                        normalizePermission(
+                            groupPermissions[
+                                operation.operation
+                            ] || {}
+                        );
                 });
             });
+        });
 
-            return permissionMap;
-        },
-        []
-    );
-
+        return permissionMap;
+    },
+    []
+);
     /* =====================================================
        LOAD SECURITY SETUP
     ===================================================== */
@@ -1040,19 +932,11 @@ const SecuritySetup = ({
                             : DEFAULT_USERS
                     ).map(normalizeUser);
 
-                const rawPermissions =
-                    result?.permissions ||
-                    result?.authorities ||
-                    result?.data
-                        ?.permissions ||
-                    [];
-
                 const normalizedPermissionMap =
-                    normalizePermissions(
-                        rawPermissions,
-                        normalizedGroups,
-                        normalizedUsers
-                    );
+    normalizePermissions(
+        normalizedGroups,
+        normalizedUsers
+    );
 
                 setOperationGroups(
                     normalizedGroups
@@ -1138,12 +1022,11 @@ const SecuritySetup = ({
                         normalizeUser
                     );
 
-                const fallbackPermissions =
-                    normalizePermissions(
-                        [],
-                        DEFAULT_OPERATION_GROUPS,
-                        normalizedUsers
-                    );
+           const fallbackPermissions =
+    normalizePermissions(
+        DEFAULT_OPERATION_GROUPS,
+        normalizedUsers
+    );
 
                 setOperationGroups(
                     DEFAULT_OPERATION_GROUPS
@@ -1664,72 +1547,44 @@ const SecuritySetup = ({
        BUILD SAVE PAYLOAD
     ===================================================== */
 
-    const buildPermissionPayload = () => {
-        const authorityRows = [];
+ const buildPermissionPayload = () => {
+    return users.map((user) => {
+
+        const userPermissions = {};
 
         operationGroups.forEach((group) => {
-            group.operations.forEach(
-                (operation) => {
-                    users.forEach((user) => {
-                        const permissionKey =
-                            getPermissionKey(
-                                operation.id,
-                                user.userId
-                            );
 
-                        const permission =
-                            permissions[
-                                permissionKey
-                            ] ||
-                            createBlankPermission();
+            userPermissions[group.id] = {};
 
-                        authorityRows.push({
-                            userId: user.userId,
-                            userName:
-                                user.userName,
-                            roleName:
-                                user.roleName,
+            group.operations.forEach((operation) => {
 
-                            groupId:
-                                group.id,
-                            groupName:
-                                group.name,
+                const permissionKey =
+                    getPermissionKey(
+                        operation.id,
+                        user.userId
+                    );
 
-                            operationId:
-                                operation.id,
-                            operationName:
-                                operation.name,
-                            module:
-                                operation.module,
-                            operation:
-                                operation.operation,
+                userPermissions[group.id][
+                    operation.operation
+                ] =
+                    permissions[
+                        permissionKey
+                    ] ||
+                    createBlankPermission();
 
-                            view: Boolean(
-                                permission.view
-                            ),
-                            add: Boolean(
-                                permission.add
-                            ),
-                            edit: Boolean(
-                                permission.edit
-                            ),
-                            delete: Boolean(
-                                permission.delete
-                            ),
-                            print: Boolean(
-                                permission.print
-                            ),
-                            export: Boolean(
-                                permission.export
-                            ),
-                        });
-                    });
-                }
-            );
+            });
+
         });
 
-        return authorityRows;
-    };
+        return {
+            userId: user.userId,
+            userName: user.userName,
+            role: user.roleName,
+            permissions: userPermissions,
+        };
+
+    });
+};
 
     /* =====================================================
        SAVE SECURITY SETUP
@@ -1754,8 +1609,8 @@ const SecuritySetup = ({
             setSaving(true);
             setMessage("");
 
-            const authorityRows =
-                buildPermissionPayload();
+           const usersPayload =
+    buildPermissionPayload();
 
             const response =
                 await fetchWithTimeout(
@@ -1766,14 +1621,12 @@ const SecuritySetup = ({
                             "Content-Type":
                                 "application/json",
                         },
-                        body: JSON.stringify({
-                            distributorId,
-                            firmId,
-                            updatedBy:
-                                currentUserId,
-                            permissions:
-                                authorityRows,
-                        }),
+                   body: JSON.stringify({
+    distributorId,
+    firmId,
+    updatedBy: currentUserId,
+    users: usersPayload,
+}),
                     },
                     15000
                 );
@@ -1809,10 +1662,10 @@ const SecuritySetup = ({
                 typeof onPermissionsSavedRef.current ===
                 "function"
             ) {
-                onPermissionsSavedRef.current({
-                    permissions,
-                    authorityRows,
-                });
+             onPermissionsSavedRef.current({
+    permissions,
+    users: usersPayload,
+});
             }
         } catch (error) {
             console.error(
@@ -2522,4 +2375,46 @@ const SecuritySetup = ({
     );
 };
 
+export const hasPermission = (
+    permissions,
+    module,
+    operation,
+    action
+) => {
+
+    const role = String(
+        localStorage.getItem("role") || ""
+    ).toUpperCase();
+
+    // Distributor Admin always has full access
+    if (role === "DISTRIBUTOR_ADMIN") {
+        return true;
+    }
+
+    if (!permissions) {
+        return false;
+    }
+
+    const modulePermissions =
+        permissions[
+            String(module).toLowerCase()
+        ];
+
+    if (!modulePermissions) {
+        return false;
+    }
+
+    const operationPermissions =
+        modulePermissions[
+            String(operation).toUpperCase()
+        ];
+
+    if (!operationPermissions) {
+        return false;
+    }
+
+    return Boolean(
+        operationPermissions[action]
+    );
+};
 export default SecuritySetup;

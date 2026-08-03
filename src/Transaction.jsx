@@ -26,8 +26,8 @@ import {
   ChevronDown,
 } from "lucide-react";
 
-const API_URL = "https://total-solution-backend.onrender.com/api";
-// const API_URL = "http://localhost:5000/api";
+// const API_URL = "https://total-solution-backend.onrender.com/api";
+const API_URL = "http://localhost:5000/api";
 const Transaction = ({
   salesInvoices = [],
   salesmen = [],
@@ -41,7 +41,8 @@ const Transaction = ({
   openFormFor,
   transactionFormMode,
   setActiveTransaction,
-  setTransactionFormMode
+  setTransactionFormMode,
+  autoVoucherNo = true,
 }) => {
   const erpContext = useERP();
   console.log("ERP CONTEXT =", erpContext);
@@ -50,6 +51,35 @@ const Transaction = ({
 
 
   const { state, dispatch } = useERP();
+  /* =========================================================
+   AUTO VOUCHER NUMBER COMMON HELPERS
+========================================================= */
+
+  const cleanVoucherNumber = (value) =>
+    String(value ?? "").replace(
+      /[^0-9]/g,
+      ""
+    );
+
+  const requireVoucherNumber = (
+    value,
+    voucherName
+  ) => {
+    const voucherNumber =
+      cleanVoucherNumber(value);
+
+    if (!voucherNumber) {
+      alert(
+        autoVoucherNo === true
+          ? `${voucherName} number could not be generated.`
+          : `Please enter ${voucherName} number.`
+      );
+
+      return null;
+    }
+
+    return voucherNumber;
+  };
 
   const openTransactionList = (menu) => {
     setActiveTransaction(menu);
@@ -101,6 +131,96 @@ const Transaction = ({
       setTotalChequeCollection(0);
       setTotalBills(0);
     }
+    if (menu === "Receipt") {
+  setEditReceiptId(null);
+
+  setReceiptFormData(
+    (previous) => ({
+      ...previous,
+
+      receiptDate:
+        new Date()
+          .toISOString()
+          .split("T")[0],
+
+      rno:
+        autoVoucherNo === true
+          ? String(
+              (state.receipts || [])
+                .length + 1
+            )
+          : "",
+    })
+  );
+}
+
+if (menu === "Payment") {
+  setPaymentFormData(
+    (previous) => ({
+      ...previous,
+
+      vDate:
+        new Date()
+          .toISOString()
+          .split("T")[0],
+
+      vNo:
+        autoVoucherNo === true
+          ? String(
+              (state.payments?.length ||
+                0) + 1
+            )
+          : "",
+    })
+  );
+}
+
+if (
+  menu === "Journal Voucher" ||
+  menu === "Journal"
+) {
+  setJournalFormData(
+    (previous) => ({
+      ...previous,
+
+      vDate:
+        new Date()
+          .toISOString()
+          .split("T")[0],
+
+      vNo:
+        autoVoucherNo === true
+          ? String(
+              (state.journals?.length ||
+                0) + 1
+            )
+          : "",
+    })
+  );
+}
+
+if (menu === "PDC Docket") {
+  setEditPDCDocketId(null);
+
+  setPDCDocketFormData(
+    (previous) => ({
+      ...previous,
+
+      depositDate:
+        new Date()
+          .toISOString()
+          .split("T")[0],
+
+      docVNo:
+        autoVoucherNo === true
+          ? String(
+              (state.pdcDockets?.length ||
+                0) + 1
+            )
+          : "",
+    })
+  );
+}
 
     setTransactionFormMode((previous) => ({
       ...previous,
@@ -279,7 +399,9 @@ const Transaction = ({
           .split("T")[0],
 
       rno:
-        (state.receipts || []).length + 1,
+        autoVoucherNo === true
+          ? (state.receipts || []).length + 1
+          : "",
 
       billSeries: "",
       billNo: "",
@@ -323,6 +445,38 @@ const Transaction = ({
       firmId: "",
       distributorId: ""
     });
+  useEffect(() => {
+    const receiptFormIsOpen =
+      activeTransaction === "Receipt" &&
+      showReceiptForm === true;
+
+    if (
+      !receiptFormIsOpen ||
+      editReceiptId
+    ) {
+      return;
+    }
+
+    setReceiptFormData(
+      (previous) => ({
+        ...previous,
+
+        rno:
+          autoVoucherNo === true
+            ? String(
+              (state.receipts || [])
+                .length + 1
+            )
+            : "",
+      })
+    );
+  }, [
+    activeTransaction,
+    showReceiptForm,
+    editReceiptId,
+    autoVoucherNo,
+    state.receipts?.length,
+  ]);
   const [receiptItems, setReceiptItems] = useState([]);
   const [receiptSummary, setReceiptSummary] = useState({
     totalAdjusted: 0,
@@ -407,7 +561,10 @@ const Transaction = ({
   const [paymentPartySuggestions, setPaymentPartySuggestions] = useState([]);
   const [paymentFormData, setPaymentFormData] = useState({
     vDate: new Date().toISOString().split("T")[0],
-    vNo: state.payments?.length + 1 || 1,
+    vNo:
+      autoVoucherNo === true
+        ? (state.payments?.length || 0) + 1
+        : "",
     narr: "",
     partyName: "",
     drAmt: "",
@@ -423,6 +580,34 @@ const Transaction = ({
     partyBankName: "",
     bankAccountNo: ""
   });
+  useEffect(() => {
+    const paymentFormIsOpen =
+      activeTransaction === "Payment" &&
+      transactionFormMode?.["Payment"];
+
+    if (!paymentFormIsOpen) {
+      return;
+    }
+
+    setPaymentFormData(
+      (previous) => ({
+        ...previous,
+
+        vNo:
+          autoVoucherNo === true
+            ? String(
+              (state.payments?.length || 0) +
+              1
+            )
+            : "",
+      })
+    );
+  }, [
+    activeTransaction,
+    transactionFormMode?.["Payment"],
+    autoVoucherNo,
+    state.payments?.length,
+  ]);
   const [paymentItems, setPaymentItems] = useState([{
     id: Date.now(),
     srNo: 1,
@@ -522,10 +707,46 @@ const Transaction = ({
   const [activeAccountRow, setActiveAccountRow] = useState(null);
   const [journalFormData, setJournalFormData] = useState({
     vDate: new Date().toISOString().split("T")[0],
-    vNo: state.journals?.length + 1 || 1,
+    vNo:
+      autoVoucherNo === true
+        ? (state.journals?.length || 0) + 1
+        : "",
     narr: "",
     isGst: "N"
   });
+  useEffect(() => {
+    const journalFormIsOpen =
+      activeTransaction ===
+      "Journal Voucher" &&
+      transactionFormMode?.[
+      "Journal Voucher"
+      ];
+
+    if (!journalFormIsOpen) {
+      return;
+    }
+
+    setJournalFormData(
+      (previous) => ({
+        ...previous,
+
+        vNo:
+          autoVoucherNo === true
+            ? String(
+              (state.journals?.length || 0) +
+              1
+            )
+            : "",
+      })
+    );
+  }, [
+    activeTransaction,
+    transactionFormMode?.[
+    "Journal Voucher"
+    ],
+    autoVoucherNo,
+    state.journals?.length,
+  ]);
   const [journalItems, setJournalItems] = useState([{
     id: Date.now(),
     seqNo: 1,
@@ -551,34 +772,60 @@ const Transaction = ({
   );
   const [editChequeBounceId, setEditChequeBounceId] = useState(null);
 
-  useEffect(() => {
-    if (
-      activeTransaction !== "Cheque Bounce" ||
-      !transactionFormMode?.["Cheque Bounce"] ||
-      editChequeBounceId
-    ) {
-      return;
-    }
+ useEffect(() => {
+  const chequeBounceFormIsOpen =
+    activeTransaction ===
+      "Cheque Bounce" &&
+    transactionFormMode?.[
+      "Cheque Bounce"
+    ];
 
-    const savedSeries = String(
-      currentSeries ||
-      localStorage.getItem("chequeBounceSeries") ||
-      ""
-    )
-      .trim()
-      .toUpperCase();
+  if (
+    !chequeBounceFormIsOpen ||
+    editChequeBounceId
+  ) {
+    return;
+  }
 
-    if (!savedSeries) {
-      return;
-    }
+  const savedSeries = String(
+    currentSeries ||
+    localStorage.getItem(
+      "chequeBounceSeries"
+    ) ||
+    ""
+  )
+    .trim()
+    .toUpperCase();
 
-    loadNextChequeBounceNo(savedSeries);
-  }, [
-    activeTransaction,
-    transactionFormMode,
-    editChequeBounceId,
-    currentSeries
-  ]);
+  if (autoVoucherNo !== true) {
+    setChequeBounceFormData(
+      (previous) => ({
+        ...previous,
+        trnNo: "",
+        chqBounceNo: "",
+        isAutoGenerated: false,
+      })
+    );
+
+    return;
+  }
+
+  if (!savedSeries) {
+    return;
+  }
+
+  loadNextChequeBounceNo(
+    savedSeries
+  );
+}, [
+  activeTransaction,
+  transactionFormMode?.[
+    "Cheque Bounce"
+  ],
+  editChequeBounceId,
+  currentSeries,
+  autoVoucherNo,
+]);
   /* =========================================================
    CHEQUE BOUNCE LIST STATES
    ========================================================= */
@@ -845,8 +1092,11 @@ const Transaction = ({
 
       docSeries: "PDC",
 
-      docVNo:
-        (state.pdcDockets?.length || 0) + 1,
+ docVNo:
+  autoVoucherNo === true
+    ? (state.pdcDockets?.length || 0) +
+      1
+    : "",
 
       fromDate:
         new Date()
@@ -869,6 +1119,43 @@ const Transaction = ({
       totalAmount: "0.00",
       totalCheques: "0"
     });
+    useEffect(() => {
+  const pdcFormIsOpen =
+    activeTransaction ===
+      "PDC Docket" &&
+    transactionFormMode?.[
+      "PDC Docket"
+    ];
+
+  if (
+    !pdcFormIsOpen ||
+    editPDCDocketId
+  ) {
+    return;
+  }
+
+  setPDCDocketFormData(
+    (previous) => ({
+      ...previous,
+
+      docVNo:
+        autoVoucherNo === true
+          ? String(
+              (state.pdcDockets?.length ||
+                0) + 1
+            )
+          : "",
+    })
+  );
+}, [
+  activeTransaction,
+  transactionFormMode?.[
+    "PDC Docket"
+  ],
+  editPDCDocketId,
+  autoVoucherNo,
+  state.pdcDockets?.length,
+]);
 
   // =========================
   // CONTRA STATES
@@ -1006,12 +1293,28 @@ const Transaction = ({
       activeTransaction === "Contra" &&
       transactionFormMode?.["Contra"];
 
-    /*
-     * Do not generate a new number while editing.
-     */
     if (
       !contraFormIsOpen ||
       editContraId
+    ) {
+      return;
+    }
+
+    if (autoVoucherNo !== true) {
+      setContraFormData(
+        (previous) => ({
+          ...previous,
+          tranVNo: "",
+        })
+      );
+
+      return;
+    }
+
+    if (
+      String(
+        contraFormData.tranVNo || ""
+      ).trim()
     ) {
       return;
     }
@@ -1021,6 +1324,8 @@ const Transaction = ({
     activeTransaction,
     transactionFormMode?.["Contra"],
     editContraId,
+    autoVoucherNo,
+    contraFormData.tranVNo,
   ]);
 
   // =========================
@@ -1158,8 +1463,11 @@ const Transaction = ({
   });
   useEffect(() => {
     const collectionVoucherFormIsOpen =
-      activeTransaction === "Collection Voucher" &&
-      transactionFormMode?.["Collection Voucher"];
+      activeTransaction ===
+      "Collection Voucher" &&
+      transactionFormMode?.[
+      "Collection Voucher"
+      ];
 
     if (
       !collectionVoucherFormIsOpen ||
@@ -1168,11 +1476,43 @@ const Transaction = ({
       return;
     }
 
+    /*
+     * Auto Voucher No OFF:
+     * Keep the field empty for manual input.
+     */
+    if (autoVoucherNo !== true) {
+      setCollectionVoucherFormData(
+        (previous) => ({
+          ...previous,
+          colVNo: "",
+        })
+      );
+
+      return;
+    }
+
+    /*
+     * Auto Voucher No ON:
+     * Generate only when the field is empty.
+     */
+    if (
+      String(
+        collectionVoucherFormData.colVNo ||
+        ""
+      ).trim()
+    ) {
+      return;
+    }
+
     loadNextCollectionVoucherNo();
   }, [
     activeTransaction,
-    transactionFormMode?.["Collection Voucher"],
+    transactionFormMode?.[
+    "Collection Voucher"
+    ],
     editCollectionVoucherId,
+    autoVoucherNo,
+    collectionVoucherFormData.colVNo,
   ]);
   const [showCollectionReceiptModal, setShowCollectionReceiptModal] = useState(false);
   const [collectionReceiptBillId, setCollectionReceiptBillId] = useState(null);
@@ -2356,11 +2696,10 @@ const Transaction = ({
       };
     });
   };
-  const loadReceiptBillBySeriesNo = (
-    billSeries,
-    billNo,
-    baseData = receiptFormData
-  ) => {
+ const loadReceiptBillBySeriesNo = (
+  billSeries,
+  billNo
+) => {
     const enteredSeries = String(billSeries || "").trim();
     const enteredBillNo = String(billNo || "").trim();
 
@@ -2395,22 +2734,17 @@ const Transaction = ({
       }
     }
 
-    if (matchingBills.length === 0) {
-      setReceiptItems([]);
-      setReceiptSummary({
-        totalAdjusted: 0,
-        balanceAmount: 0,
-        totalDiscount: 0
-      });
+ if (
+  matchingBills.length === 0
+) {
+  alert(
+    enteredSeries
+      ? `Outstanding bill ${enteredSeries}-${enteredBillNo} was not found.`
+      : `Outstanding Bill No ${enteredBillNo} was not found.`
+  );
 
-      alert(
-        enteredSeries
-          ? `Outstanding bill ${enteredSeries}-${enteredBillNo} was not found.`
-          : `Outstanding Bill No ${enteredBillNo} was not found.`
-      );
-
-      return false;
-    }
+  return false;
+}
 
     // When Bill No exists in multiple series, ask for the series.
     if (!enteredSeries && matchingBills.length > 1) {
@@ -2459,14 +2793,35 @@ const Transaction = ({
 
     setReceiptItems(billRows);
 
-    setReceiptFormData({
-      ...baseData,
-      billSeries: selectedBill.billSeries || "",
-      billNo: selectedBill.billNo || "",
-      partyName: selectedBill.party || "",
-      salesman: selectedBill.salesman || "",
-      receiptAmount
-    });
+ setReceiptFormData(
+  (previous) => ({
+    ...previous,
+
+    billSeries:
+      selectedBill
+        .billSeries ||
+      "",
+
+    billNo:
+      selectedBill
+        .billNo ||
+      "",
+
+    partyName:
+      selectedBill
+        .party ||
+      "",
+
+    salesman:
+      selectedBill
+        .salesman ||
+      previous.salesman ||
+      "",
+
+    receiptAmount:
+      receiptAmount,
+  })
+);
 
     calculateReceiptSummary(billRows);
 
@@ -2543,63 +2898,87 @@ const Transaction = ({
       return;
     }
 
-    loadReceiptBillBySeriesNo(
-      enteredBillSeries,
-      enteredBillNo,
-      receiptFormData
-    );
+   loadReceiptBillBySeriesNo(
+  enteredBillSeries,
+  enteredBillNo
+);
   };
-  const handlePartyTyping = (e) => {
-    const value = e.target.value;
-    const searchText = clean(value);
+const handlePartyTyping = (event) => {
+  const value =
+    event.target.value;
 
-    setPartySearchActive(true);
-    setActivePartySuggestionIndex(-1);
-    setPartyNotFound(false);
+  const searchText =
+    clean(value);
 
-    setReceiptFormData((prev) => ({
-      ...prev,
+  setPartySearchActive(true);
+  setActivePartySuggestionIndex(-1);
+  setPartyNotFound(false);
+
+  /*
+   * Only update the typed party name.
+   *
+   * Do not clear:
+   * - Bill Series
+   * - Bill No
+   * - Salesman
+   * - Receipt Amount
+   * - Existing receipt rows
+   */
+  setReceiptFormData(
+    (previous) => ({
+      ...previous,
       partyName: value,
-      billSeries: "",
-      billNo: "",
-      salesman: "",
-      receiptAmount: ""
-    }));
+    })
+  );
 
-    setReceiptItems([]);
+  if (!searchText) {
+    setPartySuggestions([]);
+    setPartyNotFound(false);
+    return;
+  }
 
-    setReceiptSummary({
-      totalAdjusted: 0,
-      balanceAmount: 0,
-      totalDiscount: 0
-    });
+  const matchingBills =
+    pendingBills.filter(
+      (bill) =>
+        clean(
+          bill.party
+        ).includes(
+          searchText
+        )
+    );
 
-    if (!searchText) {
-      setPartySuggestions([]);
-      setPartyNotFound(false);
-      return;
-    }
-
-    const matchingBills = pendingBills.filter((bill) => {
-      const partyName = clean(bill.party);
-
-      return partyName.includes(searchText);
-    });
-
-    const uniqueParties = Array.from(
+  const uniqueParties =
+    Array.from(
       new Map(
         matchingBills
-          .filter((bill) => String(bill.party || "").trim())
-          .map((bill) => [
-            clean(bill.party),
-            String(bill.party).trim()
-          ])
+          .filter(
+            (bill) =>
+              String(
+                bill.party || ""
+              ).trim()
+          )
+          .map(
+            (bill) => [
+              clean(
+                bill.party
+              ),
+
+              String(
+                bill.party
+              ).trim(),
+            ]
+          )
       ).values()
     ).slice(0, 20);
 
-    setPartySuggestions(uniqueParties);
-    setPartyNotFound(uniqueParties.length === 0);
-  };
+  setPartySuggestions(
+    uniqueParties
+  );
+
+  setPartyNotFound(
+    uniqueParties.length === 0
+  );
+};
   const handlePartyKeyDown = (e) => {
     if (!partySearchActive) return;
 
@@ -2674,86 +3053,232 @@ const Transaction = ({
       setActivePartySuggestionIndex(-1);
     }
   };
-  const selectParty = (selectedParty) => {
-    const filteredBills = pendingBills.filter(
-      (bill) => clean(bill.party) === clean(selectedParty)
+const selectParty = (
+  selectedParty
+) => {
+  const normalizedParty =
+    clean(selectedParty);
+
+  const filteredBills =
+    pendingBills.filter(
+      (bill) =>
+        clean(
+          bill.party
+        ) === normalizedParty
     );
 
-    // Completely close suggestion and no-result messages
-    setPartySuggestions([]);
-    setPartyNotFound(false);
-    setPartySearchActive(false);
-    setActivePartySuggestionIndex(-1);
+  setPartySuggestions([]);
+  setPartyNotFound(false);
+  setPartySearchActive(false);
+  setActivePartySuggestionIndex(-1);
 
-    if (filteredBills.length === 0) {
-      setReceiptItems([]);
+  if (
+    filteredBills.length === 0
+  ) {
+    /*
+     * Preserve all existing bill and receipt data.
+     * Only update the party text.
+     */
+    setReceiptFormData(
+      (previous) => ({
+        ...previous,
+        partyName:
+          selectedParty,
+      })
+    );
 
-      setReceiptSummary({
-        totalAdjusted: 0,
-        balanceAmount: 0,
-        totalDiscount: 0
-      });
+    return;
+  }
 
-      setReceiptFormData((prev) => ({
-        ...prev,
-        partyName: selectedParty,
-        billSeries: "",
-        billNo: "",
-        salesman: "",
-        receiptAmount: ""
-      }));
+  const currentBillSeries =
+    String(
+      receiptFormData
+        .billSeries || ""
+    ).trim();
 
-      return;
-    }
+  const currentBillNo =
+    String(
+      receiptFormData
+        .billNo || ""
+    ).trim();
 
-    const billRows = filteredBills.map((bill, index) => {
-      const amount = Number(bill.amount) || 0;
-      const adjusted = Number(bill.adjusted) || 0;
-      const originalBalance = Math.max(amount - adjusted, 0);
+  /*
+   * Check whether a bill was already loaded
+   * using Bill Series + Bill No.
+   */
+  const alreadyLoadedBill =
+    filteredBills.find(
+      (bill) =>
+        clean(
+          bill.billSeries
+        ) ===
+          clean(
+            currentBillSeries
+          ) &&
+        clean(
+          bill.billNo
+        ) ===
+          clean(
+            currentBillNo
+          )
+    );
 
-      return {
-        id: `${bill.billSeries || "NO-SERIES"}-${bill.billNo}-${index}`,
-        srNo: index + 1,
-        trnSeries: bill.billSeries || "",
-        trnNo: bill.billNo || "",
-        trnDate: bill.trnDate || "",
-        amount,
-        adjustAmt: adjusted,
-        balanceAmt: originalBalance,
-        nowAdjust: 0,
-        discount: 0,
-        discAmount: 0,
-        remark: ""
-      };
-    });
+  /*
+   * When the currently loaded bill belongs
+   * to the selected party, preserve everything.
+   */
+  if (alreadyLoadedBill) {
+    setReceiptFormData(
+      (previous) => ({
+        ...previous,
 
-    setReceiptItems(billRows);
+        partyName:
+          selectedParty,
 
-    setReceiptFormData((prev) => ({
-      ...prev,
-      partyName: selectedParty,
+        salesman:
+          previous.salesman ||
+          alreadyLoadedBill
+            .salesman ||
+          "",
+      })
+    );
+
+    return;
+  }
+
+  /*
+   * Party-wise loading:
+   * Load all outstanding bills for the party.
+   */
+  const billRows =
+    filteredBills.map(
+      (bill, index) => {
+        const amount =
+          Number(
+            bill.amount
+          ) || 0;
+
+        const adjusted =
+          Number(
+            bill.adjusted
+          ) || 0;
+
+        const originalBalance =
+          Math.max(
+            amount -
+              adjusted,
+            0
+          );
+
+        return {
+          id:
+            `${
+              bill.billSeries ||
+              "NO-SERIES"
+            }-${
+              bill.billNo
+            }-${index}`,
+
+          srNo:
+            index + 1,
+
+          trnSeries:
+            bill.billSeries ||
+            "",
+
+          trnNo:
+            bill.billNo ||
+            "",
+
+          trnDate:
+            bill.trnDate ||
+            "",
+
+          amount,
+          adjustAmt:
+            adjusted,
+
+          balanceAmt:
+            originalBalance,
+
+          nowAdjust: 0,
+
+          discount: 0,
+          discAmount: 0,
+
+          remark: "",
+        };
+      }
+    );
+
+  setReceiptItems(
+    billRows
+  );
+
+  /*
+   * Preserve unrelated form fields such as:
+   * Receipt No, Receipt Date, Bank/Cash,
+   * Cheque details, Narration, etc.
+   */
+  setReceiptFormData(
+    (previous) => ({
+      ...previous,
+
+      partyName:
+        selectedParty,
+
+      /*
+       * Party-wise mode does not represent one
+       * specific bill, so clear only these fields.
+       */
       billSeries: "",
       billNo: "",
-      salesman: filteredBills[0]?.salesman || "",
-      receiptAmount: ""
-    }));
 
-    calculateReceiptSummary(billRows);
+      salesman:
+        filteredBills[0]
+          ?.salesman ||
+        previous.salesman ||
+        "",
 
-    setTimeout(() => {
-      const receiptAmountInput = document.querySelector(
+      /*
+       * Do not automatically delete a manually
+       * entered receipt amount.
+       */
+      receiptAmount:
+        previous.receiptAmount,
+    })
+  );
+
+  calculateReceiptSummary(
+    billRows
+  );
+
+  setTimeout(() => {
+    const receiptAmountInput =
+      document.querySelector(
         'input[name="receiptAmount"]'
       );
 
-      if (receiptAmountInput) {
-        receiptAmountInput.focus();
-        receiptAmountInput.select();
-      }
-    }, 100);
-  };
+    if (
+      receiptAmountInput
+    ) {
+      receiptAmountInput.focus();
+      receiptAmountInput.select();
+    }
+  }, 100);
+};
 
   const saveReceipt = async () => {
     try {
+      const receiptNumber =
+        requireVoucherNumber(
+          receiptFormData.rno,
+          "Receipt"
+        );
+
+      if (!receiptNumber) {
+        return;
+      }
       const adjustedReceiptBills =
         receiptItems
           .filter((item) => {
@@ -2884,10 +3409,7 @@ const Transaction = ({
       const payload = {
         ...receiptFormData,
 
-        rno:
-          Number(
-            receiptFormData.rno
-          ) || 0,
+        rno: Number(receiptNumber),
 
         billSeries:
           firstAdjustedBill.trnSeries ||
@@ -3045,35 +3567,75 @@ const Transaction = ({
     }
   };
   const resetReceiptForm = () => {
-    setEditReceiptId(null);
+  setEditReceiptId(null);
 
-    setReceiptFormData({
-      receiptDate: new Date().toISOString().split("T")[0],
-      rno: (state.receipts?.length || 0) + 1,
-      billSeries: "",
-      billNo: "",
-      salesman: "",
-      partyName: "",
-      narration: "",
-      bankCash: "",
-      loadNo: "",
-      receiptAmount: "",
-      chequeNo: "",
-      chequeDate: "",
-      rloadNo: "",
-      drawerBank: "",
-      micr: "",
-      pdcType: "LOCAL BANK"
-    });
+  setReceiptFormData({
+    receiptDate:
+      new Date()
+        .toISOString()
+        .split("T")[0],
 
-    setReceiptItems([]);
-    setPartySuggestions([]);
-    setReceiptSummary({
-      totalAdjusted: 0,
-      balanceAmount: 0,
-      totalDiscount: 0
-    });
-  };
+    rno:
+      autoVoucherNo === true
+        ? String(
+            (state.receipts?.length ||
+              0) + 1
+          )
+        : "",
+
+    billSeries: "",
+    billNo: "",
+
+    salesman: "",
+    salesmanId: "",
+    salesmanName: "",
+
+    partyId: "",
+    partyName: "",
+
+    narration: "",
+
+    bankCash: "",
+    loadNo: "",
+
+    receiptAmount: "",
+
+    chequeNo: "",
+    chequeDate: "",
+
+    rloadNo: "",
+
+    drawerBankId: "",
+    drawerBank: "",
+    drawerBankName: "",
+
+    micr: "",
+
+    pdcType:
+      "LOCAL BANK",
+
+    companyId: "",
+
+    firmId:
+      localStorage.getItem(
+        "firmId"
+      ) || "",
+
+    distributorId:
+      localStorage.getItem(
+        "distributorId"
+      ) || "",
+  });
+
+  setReceiptItems([]);
+  setPartySuggestions([]);
+
+  setReceiptSummary({
+    totalAdjusted: 0,
+    balanceAmount: 0,
+    totalDiscount: 0,
+  });
+};
   const editReceipt = (receipt) => {
     const header =
       receipt?.header || receipt || {};
@@ -3616,35 +4178,167 @@ const Transaction = ({
     setActiveAccountRow(null);
   };
   const saveJournalVoucher = () => {
-    const validItems = journalItems.filter(
-      i => i.accountName && ((Number(i.drAmount) || 0) > 0 || (Number(i.crAmount) || 0) > 0)
+  const journalNumber =
+    requireVoucherNumber(
+      journalFormData.vNo,
+      "Journal Voucher"
     );
 
-    if (validItems.length < 2) {
-      alert("Please enter at least 2 journal rows.");
-      return;
-    }
+  if (!journalNumber) {
+    return;
+  }
 
-    if (Number(journalSummary.totalDr) !== Number(journalSummary.totalCr)) {
-      alert("Debit and Credit total must be equal.");
-      return;
-    }
+  const validItems =
+    journalItems.filter(
+      (item) =>
+        String(
+          item.accountName || ""
+        ).trim() &&
+        (
+          Number(item.drAmount) > 0 ||
+          Number(item.crAmount) > 0
+        )
+    );
 
-    const resetJournalForm = () => {
-      setJournalFormData({
-        vDate: new Date().toISOString().split("T")[0],
-        vNo: state.journals?.length + 2 || 1, narr: "", isGst: "N"
-      });
-      setJournalItems([{ id: Date.now(), seqNo: 1, accountCode: "", accountName: "", drAmount: 0, crAmount: 0 }]);
-      setJournalSummary({
-        totalDr: 0,
-        totalCr: 0,
-        difference: 0,
-        totalEntries: 0
-      });
-    };
+  if (validItems.length < 2) {
+    alert(
+      "Please enter at least 2 journal rows."
+    );
+    return;
+  }
 
-    // =========================
+  const totalDebit =
+    Number(
+      journalSummary.totalDr
+    ) || 0;
+
+  const totalCredit =
+    Number(
+      journalSummary.totalCr
+    ) || 0;
+
+  if (
+    Math.abs(
+      totalDebit - totalCredit
+    ) > 0.01
+  ) {
+    alert(
+      "Debit and Credit total must be equal."
+    );
+    return;
+  }
+
+  const payload = {
+    id: Date.now(),
+
+    header: {
+      ...journalFormData,
+
+      /*
+       * Always send the validated number.
+       */
+      vNo:
+        Number(journalNumber),
+    },
+
+    items:
+      validItems.map(
+        (item, index) => ({
+          ...item,
+          seqNo: index + 1,
+
+          drAmount:
+            Number(
+              item.drAmount
+            ) || 0,
+
+          crAmount:
+            Number(
+              item.crAmount
+            ) || 0,
+        })
+      ),
+
+    summary: {
+      ...journalSummary,
+
+      totalDr:
+        totalDebit,
+
+      totalCr:
+        totalCredit,
+
+      difference:
+        Number(
+          (
+            totalDebit -
+            totalCredit
+          ).toFixed(2)
+        ),
+    },
+
+    affectsOutstanding: true,
+  };
+
+  console.log(
+    "JOURNAL PAYLOAD =",
+    payload
+  );
+
+  dispatch({
+    type: "ADD_JOURNAL",
+    payload,
+  });
+
+  alert(
+    "Journal Voucher Saved Successfully"
+  );
+
+  resetJournalForm();
+
+  openTransactionList(
+    "Journal Voucher"
+  );
+};
+
+const resetJournalForm = () => {
+  setJournalFormData({
+    vDate:
+      new Date()
+        .toISOString()
+        .split("T")[0],
+
+    vNo:
+      autoVoucherNo === true
+        ? String(
+            (state.journals?.length ||
+              0) + 1
+          )
+        : "",
+
+    narr: "",
+    isGst: "N",
+  });
+
+  setJournalItems([
+    {
+      id: Date.now(),
+      seqNo: 1,
+      accountCode: "",
+      accountName: "",
+      drAmount: 0,
+      crAmount: 0,
+    },
+  ]);
+
+  setJournalSummary({
+    totalDr: 0,
+    totalCr: 0,
+    difference: 0,
+    totalEntries: 0,
+  });
+};
+  // =========================
     // PAYMENT FUNCTIONS
     // =========================
     const handlePaymentInput = (e) => {
@@ -3697,27 +4391,32 @@ const Transaction = ({
     };
 
     const savePayment = () => {
-      const payload = { id: Date.now(), header: paymentFormData, items: paymentItems, summary: paymentSummary };
+      const paymentNumber =
+        requireVoucherNumber(
+          paymentFormData.vNo,
+          "Payment Voucher"
+        );
+
+      if (!paymentNumber) {
+        return;
+      }
+
+      const payload = {
+        id: Date.now(),
+
+        header: {
+          ...paymentFormData,
+          vNo: Number(paymentNumber),
+        },
+
+        items: paymentItems,
+        summary: paymentSummary,
+      };
       dispatch({ type: "ADD_PAYMENT", payload });
       alert("Payment Saved Successfully");
       resetPaymentForm();
       openTransactionList("Payment");
     };
-    const payload = {
-      id: Date.now(),
-      header: journalFormData,
-      items: validItems,
-      summary: journalSummary,
-      affectsOutstanding: true
-    };
-
-    dispatch({ type: "ADD_JOURNAL", payload });
-
-    alert("Journal Voucher Saved Successfully");
-    resetJournalForm();
-
-    openTransactionList("Journal Voucher");
-  };
   const resetPaymentForm = () => {
     setPaymentFormData({
       vDate: new Date().toISOString().split("T")[0], vNo: state.payments.length + 2, narr: "", partyName: "",
@@ -3796,17 +4495,14 @@ const Transaction = ({
     };
   };
 
-  const handleSeriesChange = async (e) => {
+const handleSeriesChange =
+  async (event) => {
     const series = String(
-      e.target.value || ""
+      event.target.value || ""
     )
       .toUpperCase()
       .trim();
 
-    /*
-     * Save the series permanently in this browser.
-     * It will remain selected until the user changes it.
-     */
     localStorage.setItem(
       "chequeBounceSeries",
       series
@@ -3814,88 +4510,36 @@ const Transaction = ({
 
     setCurrentSeries(series);
 
-    /*
-     * When the series is empty, clear the generated number.
-     */
-    if (!series) {
-      setChequeBounceFormData((previous) => ({
+    setChequeBounceFormData(
+      (previous) => ({
         ...previous,
-        trnSeries: "",
+
+        trnSeries:
+          series,
+
         trnNo: "",
         chqBounceNo: "",
-        isAutoGenerated: false,
-      }));
 
+        isAutoGenerated:
+          false,
+      })
+    );
+
+    if (!series) {
       return;
     }
 
     /*
-     * Immediately show the entered series.
+     * Auto Voucher No OFF:
+     * Do not call next-number API.
      */
-    setChequeBounceFormData((previous) => ({
-      ...previous,
-      trnSeries: series,
-    }));
-
-    try {
-      const distributorId =
-        localStorage.getItem("distributorId") || "";
-
-      const firmId =
-        localStorage.getItem("firmId") || "";
-
-      const params = new URLSearchParams({
-        distributorId,
-        firmId,
-      });
-
-      const response = await fetch(
-        `${API_URL}/transaction/cheque-bounce-next-no/${encodeURIComponent(
-          series
-        )}?${params.toString()}`
-      );
-
-      const result = await response.json();
-
-      if (!response.ok || result.success === false) {
-        throw new Error(
-          result.message ||
-          "Unable to generate Cheque Bounce number."
-        );
-      }
-
-      setChequeBounceFormData((previous) => ({
-        ...previous,
-
-        trnSeries: series,
-
-        /*
-         * Store only the numeric part in both number fields.
-         * Example:
-         * Series = CHB
-         * Number = 1
-         */
-        trnNo: Number(result.nextNo) || 1,
-        chqBounceNo: String(
-          Number(result.nextNo) || 1
-        ),
-
-        isAutoGenerated: true,
-      }));
-    } catch (error) {
-      console.error(
-        "Cheque Bounce number generation error:",
-        error
-      );
-
-      setChequeBounceFormData((previous) => ({
-        ...previous,
-        trnSeries: series,
-        trnNo: "",
-        chqBounceNo: "",
-        isAutoGenerated: false,
-      }));
+    if (autoVoucherNo !== true) {
+      return;
     }
+
+    await loadNextChequeBounceNo(
+      series
+    );
   };
 
   const handleChequeBounceInput = (e) => {
@@ -3922,106 +4566,211 @@ const Transaction = ({
     setChequeBounceFormData(updatedData);
   };
 
+const saveChequeBounce =
+  async () => {
+    const chequeBounceNumber =
+      requireVoucherNumber(
+        chequeBounceFormData
+          .chqBounceNo ||
+        chequeBounceFormData.trnNo,
 
-  const saveChequeBounce = async () => {
+        "Cheque Bounce"
+      );
+
+    if (!chequeBounceNumber) {
+      return;
+    }
+
     const numericTrnNo =
-      Number(chequeBounceFormData.trnNo) || 0;
+      Number(
+        chequeBounceNumber
+      );
 
-    const payload = {
-      ...chequeBounceFormData,
-
-      trnSeries: String(
-        chequeBounceFormData.trnSeries || ""
+    const transactionSeries =
+      String(
+        chequeBounceFormData
+          .trnSeries || ""
       )
         .trim()
-        .toUpperCase(),
+        .toUpperCase();
 
-      trnNo: numericTrnNo,
+    const distributorId =
+      String(
+        localStorage.getItem(
+          "distributorId"
+        ) || ""
+      ).trim();
 
-      // Save number only, without series.
-      chqBounceNo: String(numericTrnNo),
+    const firmId =
+      String(
+        localStorage.getItem(
+          "firmId"
+        ) || ""
+      ).trim();
 
-      distributorId:
-        localStorage.getItem("distributorId") || "",
-
-      firmId:
-        localStorage.getItem("firmId") || "",
-    };
-
-    if (!chequeBounceFormData.trnSeries?.trim()) {
-      alert("Enter Transaction Series");
+    if (!transactionSeries) {
+      alert(
+        "Enter Transaction Series"
+      );
       return;
     }
 
-    if (!chequeBounceFormData.trnNo) {
-      alert("Enter Transaction Number");
+    if (
+      !Number.isFinite(
+        numericTrnNo
+      ) ||
+      numericTrnNo <= 0
+    ) {
+      alert(
+        "Enter a valid Transaction Number"
+      );
       return;
     }
 
-    if (!chequeBounceFormData.partyName?.trim()) {
+    if (
+      !String(
+        chequeBounceFormData
+          .partyName || ""
+      ).trim()
+    ) {
       alert("Select Party");
       return;
     }
 
-    if (!chequeBounceFormData.chequeNo?.trim()) {
-      alert("Enter Cheque Number");
+    if (
+      !String(
+        chequeBounceFormData
+          .chequeNo || ""
+      ).trim()
+    ) {
+      alert(
+        "Enter Cheque Number"
+      );
       return;
     }
-    try {
-      const response = await fetch(
-        `${API_URL}/transaction/cheque-bounce`,
-        {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json"
-          },
-          body: JSON.stringify(payload)
-        }
+
+    if (
+      !distributorId ||
+      !firmId
+    ) {
+      alert(
+        "Distributor ID or Firm ID is missing."
       );
+      return;
+    }
+
+    const payload = {
+      ...chequeBounceFormData,
+
+      trnSeries:
+        transactionSeries,
+
+      trnNo:
+        numericTrnNo,
+
+      chqBounceNo:
+        String(
+          numericTrnNo
+        ),
+
+      isAutoGenerated:
+        autoVoucherNo === true,
+
+      chqBounceCharges:
+        Number(
+          chequeBounceFormData
+            .chqBounceCharges
+        ) || 0,
+
+      chequeAmt:
+        Number(
+          chequeBounceFormData
+            .chequeAmt
+        ) || 0,
+
+      totalAmt:
+        Number(
+          chequeBounceFormData
+            .totalAmt
+        ) || 0,
+
+      distributorId,
+      firmId,
+    };
+
+    console.log(
+      "CHEQUE BOUNCE PAYLOAD =",
+      payload
+    );
+
+    try {
+      const response =
+        await fetch(
+          `${API_URL}/transaction/cheque-bounce`,
+          {
+            method: "POST",
+
+            headers: {
+              "Content-Type":
+                "application/json",
+            },
+
+            body:
+              JSON.stringify(
+                payload
+              ),
+          }
+        );
 
       const result =
         await response.json();
 
-      if (result.success) {
-        alert(
-          "Cheque Bounce Saved Successfully"
-        );
-
-        /*
- * Keep the existing full refresh.
- */
-        await loadChequeBounces();
-
-        /*
-         * Refresh the backend-paginated list.
-         */
-        await loadChequeBounceList({
-          page: 1,
-
-          limit:
-            chequeBounceListRowsPerPage,
-
-          search:
-            chequeBounceListSearchDebounced,
-
-          filters:
-            chequeBounceAppliedFilters,
-        });
-
-        setChequeBounceListCurrentPage(
-          1
-        );
-
-        resetChequeBounceForm();
-
-        openTransactionList(
-          "Cheque Bounce"
+      if (
+        !response.ok ||
+        result.success === false
+      ) {
+        throw new Error(
+          result.message ||
+          "Cheque Bounce Save Failed"
         );
       }
-    } catch (error) {
-      console.log(error);
 
       alert(
+        "Cheque Bounce Saved Successfully"
+      );
+
+      await loadChequeBounces();
+
+      await loadChequeBounceList({
+        page: 1,
+
+        limit:
+          chequeBounceListRowsPerPage,
+
+        search:
+          chequeBounceListSearchDebounced,
+
+        filters:
+          chequeBounceAppliedFilters,
+      });
+
+      setChequeBounceListCurrentPage(
+        1
+      );
+
+      await resetChequeBounceForm();
+
+      openTransactionList(
+        "Cheque Bounce"
+      );
+    } catch (error) {
+      console.error(
+        "Cheque Bounce save error:",
+        error
+      );
+
+      alert(
+        error.message ||
         "Cheque Bounce Save Failed"
       );
     }
@@ -4030,6 +4779,9 @@ const Transaction = ({
   const loadNextChequeBounceNo = async (
     requestedSeries = ""
   ) => {
+    if (autoVoucherNo !== true) {
+  return;
+}
     const savedSeries = String(
       requestedSeries ||
       currentSeries ||
@@ -4160,11 +4912,14 @@ const Transaction = ({
       totalAmt: "",
     });
 
-    if (savedSeries) {
-      await loadNextChequeBounceNo(
-        savedSeries
-      );
-    }
+   if (
+  autoVoucherNo === true &&
+  savedSeries
+) {
+  await loadNextChequeBounceNo(
+    savedSeries
+  );
+}
   };
   const editChequeBounce = (chequeBounce) => {
     const series = String(
@@ -4439,6 +5194,15 @@ const Transaction = ({
   const savePDCDocket =
     async () => {
       try {
+        const docketNumber =
+  requireVoucherNumber(
+    pdcDocketFormData.docVNo,
+    "PDC Docket"
+  );
+
+if (!docketNumber) {
+  return;
+}
         const selectedCheques =
           pdcDocketItems.filter(
             (item) =>
@@ -4460,45 +5224,81 @@ const Transaction = ({
               (Number(cheque.amount) || 0),
             0
           );
-        const payload = {
-          ...pdcDocketFormData,
+       const distributorId =
+  String(
+    localStorage.getItem(
+      "distributorId"
+    ) || ""
+  ).trim();
 
-          distributorId:
-            localStorage.getItem(
-              "distributorId"
-            ) || "",
+const firmId =
+  String(
+    localStorage.getItem(
+      "firmId"
+    ) || ""
+  ).trim();
 
-          firmId:
-            localStorage.getItem(
-              "firmId"
-            ) || "",
+if (
+  !distributorId ||
+  !firmId
+) {
+  alert(
+    "Distributor ID or Firm ID is missing."
+  );
 
-        totalCheques:
-  selectedCheques.length,
+  return;
+}
 
-totalAmount:
-  Number(
-    selectedTotalAmount.toFixed(2)
-  ),
+const payload = {
+  ...pdcDocketFormData,
 
-cheques:
-  selectedCheques.map(
-    (cheque, index) => {
-      /*
-       * Do not store frontend-only checkbox state.
-       */
-      const {
-        selected,
-        ...chequeData
-      } = cheque;
+  /*
+   * Always send validated voucher number.
+   */
+  docVNo:
+    Number(docketNumber),
 
-      return {
-        ...chequeData,
-        srNo: index + 1
-      };
-    }
-  ),
+  docSeries:
+    String(
+      pdcDocketFormData.docSeries ||
+      "PDC"
+    )
+      .trim()
+      .toUpperCase(),
+
+  distributorId,
+  firmId,
+
+  totalCheques:
+    selectedCheques.length,
+
+  totalAmount:
+    Number(
+      selectedTotalAmount.toFixed(2)
+    ),
+
+  cheques:
+    selectedCheques.map(
+      (cheque, index) => {
+        const {
+          selected,
+          ...chequeData
+        } = cheque;
+
+        return {
+          ...chequeData,
+
+          srNo:
+            index + 1,
+
+          amount:
+            Number(
+              chequeData.amount
+            ) || 0,
         };
+      }
+    ),
+};
 
         console.log(
           "PDC SAVE =",
@@ -5385,52 +6185,67 @@ cheques:
   ]);
 
   const resetPDCDocketForm = () => {
-    setPDCDocketFormData({
-      depositDate: new Date().toISOString().split("T")[0],
+  setPDCDocketFormData({
+    depositDate:
+      new Date()
+        .toISOString()
+        .split("T")[0],
 
-      docSeries: "PDC",
+    docSeries: "PDC",
 
-      docVNo: (state.pdcDockets?.length || 0) + 1,
+    docVNo:
+      autoVoucherNo === true
+        ? String(
+            (state.pdcDockets?.length ||
+              0) + 1
+          )
+        : "",
 
-      fromDate: new Date().toISOString().split("T")[0],
+    fromDate:
+      new Date()
+        .toISOString()
+        .split("T")[0],
 
-      toDate: new Date().toISOString().split("T")[0],
+    toDate:
+      new Date()
+        .toISOString()
+        .split("T")[0],
 
-      houseBank: "",
-      bankName: "",
+    houseBank: "",
+    bankName: "",
 
-      houseBankId: "",
-      houseBankName: "",
+    houseBankId: "",
+    houseBankName: "",
 
-      narration: "",
+    narration: "",
 
-      clearingType: "SAME BANK",
+    clearingType:
+      "SAME BANK",
 
-      clearingDate: "",
+    clearingDate: "",
 
-      totalAmount: "0.00",
+    totalAmount: "0.00",
+    totalCheques: "0",
+  });
 
-      totalCheques: "0"
-    });
+  setPDCDocketItems([]);
+  setEditPDCDocketId(null);
+};
 
-    setPDCDocketItems([]);
-    setEditPDCDocketId(null);
-  };
+  const editPDCDocket = (
+    docket
+  ) => {
+    setEditPDCDocketId(
+      docket._id ||
+      docket.id ||
+      ""
+    );
 
- const editPDCDocket = (
-  docket
-) => {
-  setEditPDCDocketId(
-    docket._id ||
-    docket.id ||
-    ""
-  );
-
-  const existingCheques =
-    Array.isArray(
-      docket.cheques
-    )
-      ? docket.cheques.map(
+    const existingCheques =
+      Array.isArray(
+        docket.cheques
+      )
+        ? docket.cheques.map(
           (cheque, index) => ({
             ...cheque,
 
@@ -5441,40 +6256,40 @@ cheques:
               true
           })
         )
-      : [];
+        : [];
 
-  const existingTotalAmount =
-    existingCheques.reduce(
-      (total, cheque) =>
-        total +
-        (
-          Number(
-            cheque.amount
-          ) || 0
+    const existingTotalAmount =
+      existingCheques.reduce(
+        (total, cheque) =>
+          total +
+          (
+            Number(
+              cheque.amount
+            ) || 0
+          ),
+        0
+      );
+
+    setPDCDocketFormData({
+      ...docket,
+
+      totalCheques:
+        String(
+          existingCheques.length
         ),
-      0
+
+      totalAmount:
+        existingTotalAmount.toFixed(2)
+    });
+
+    setPDCDocketItems(
+      existingCheques
     );
 
-  setPDCDocketFormData({
-    ...docket,
-
-    totalCheques:
-      String(
-        existingCheques.length
-      ),
-
-    totalAmount:
-      existingTotalAmount.toFixed(2)
-  });
-
-  setPDCDocketItems(
-    existingCheques
-  );
-
-  openTransactionEntry(
-    "PDC Docket"
-  );
-};
+    openTransactionEntry(
+      "PDC Docket"
+    );
+  };
   const deletePDCDocket =
     async (id) => {
       if (!id) {
@@ -5588,6 +6403,10 @@ cheques:
     };
 
   const loadNextContraNo = async () => {
+    if (autoVoucherNo !== true) {
+      return;
+    }
+
     try {
       const distributorId = String(
         localStorage.getItem(
@@ -5680,6 +6499,15 @@ cheques:
   const saveContra =
     async () => {
       try {
+        const contraNumber =
+          requireVoucherNumber(
+            contraFormData.tranVNo,
+            "Contra Voucher"
+          );
+
+        if (!contraNumber) {
+          return;
+        }
         const distributorId =
           localStorage.getItem(
             "distributorId"
@@ -5707,10 +6535,10 @@ cheques:
             ""
           ).trim();
 
-        const tranVNo =
-          Number(
-            contraFormData.tranVNo
-          );
+   const tranVNo =
+  Number(
+    contraNumber
+  );
 
         const transactionType =
           String(
@@ -5767,7 +6595,7 @@ cheques:
           distributorId,
           firmId,
 
-          tranVNo,
+          tranVNo: Number(contraNumber),
           amount,
 
           transactionDate,
@@ -6180,6 +7008,30 @@ cheques:
         alert(
           "Please select at least one bill."
         );
+        return;
+      }
+      const enteredVoucherNo = String(
+        collectionVoucherFormData.colVNo ||
+        ""
+      ).trim();
+
+      if (!enteredVoucherNo) {
+        alert(
+          autoVoucherNo === true
+            ? "Voucher number could not be generated."
+            : "Please enter Collection Voucher number."
+        );
+
+        return;
+      }
+
+      if (
+        !/^\d+$/.test(enteredVoucherNo)
+      ) {
+        alert(
+          "Collection Voucher number must contain numbers only."
+        );
+
         return;
       }
 
@@ -6838,6 +7690,9 @@ cheques:
   ]);
 
   const loadNextCollectionVoucherNo = async () => {
+    if (autoVoucherNo !== true) {
+      return;
+    }
     try {
       const distributorId = String(
         localStorage.getItem("distributorId") || ""
@@ -9535,9 +10390,37 @@ cheques:
 
             <input
               type="text"
+              inputMode="numeric"
               name="rno"
-              value={receiptFormData.rno || ""}
-              onChange={handleReceiptInput}
+              value={
+                receiptFormData.rno || ""
+              }
+              readOnly={
+                autoVoucherNo === true ||
+                Boolean(editReceiptId)
+              }
+              placeholder={
+                autoVoucherNo === true
+                  ? "Auto generated"
+                  : "Enter receipt number"
+              }
+              onChange={(event) => {
+                if (
+                  autoVoucherNo === true ||
+                  editReceiptId
+                ) {
+                  return;
+                }
+
+                setReceiptFormData(
+                  (previous) => ({
+                    ...previous,
+                    rno: cleanVoucherNumber(
+                      event.target.value
+                    ),
+                  })
+                );
+              }}
             />
           </div>
 
@@ -11290,10 +12173,33 @@ cheques:
 
               <input
                 type="text"
+                inputMode="numeric"
                 name="vNo"
-                value={journalFormData.vNo || ""}
-                onChange={handleJournalInput}
-                placeholder="Enter voucher no"
+                value={
+                  journalFormData.vNo || ""
+                }
+                readOnly={
+                  autoVoucherNo === true
+                }
+                placeholder={
+                  autoVoucherNo === true
+                    ? "Auto generated"
+                    : "Enter voucher no"
+                }
+                onChange={(event) => {
+                  if (autoVoucherNo === true) {
+                    return;
+                  }
+
+                  setJournalFormData(
+                    (previous) => ({
+                      ...previous,
+                      vNo: cleanVoucherNumber(
+                        event.target.value
+                      ),
+                    })
+                  );
+                }}
               />
             </div>
 
@@ -12445,7 +13351,36 @@ cheques:
   const renderPaymentForm = () => (
     <div className="payment-section"><div className="form-section"><div className="section-header">Add Payment Information</div>
       <div className="payment-header-grid"><div className="labeled-input"><label>VDate</label><input type="date" name="vDate" value={paymentFormData.vDate} onChange={handlePaymentInput} /></div>
-        <div className="labeled-input"><label>VNo</label><input name="vNo" value={paymentFormData.vNo} onChange={handlePaymentInput} /></div>
+        <div className="labeled-input"><label>VNo</label><input
+          type="text"
+          inputMode="numeric"
+          name="vNo"
+          value={
+            paymentFormData.vNo || ""
+          }
+          readOnly={
+            autoVoucherNo === true
+          }
+          placeholder={
+            autoVoucherNo === true
+              ? "Auto generated"
+              : "Enter payment number"
+          }
+          onChange={(event) => {
+            if (autoVoucherNo === true) {
+              return;
+            }
+
+            setPaymentFormData(
+              (previous) => ({
+                ...previous,
+                vNo: cleanVoucherNumber(
+                  event.target.value
+                ),
+              })
+            );
+          }}
+        /></div>
         <div className="labeled-input payment-narration"><label>Narr</label><input name="narr" value={paymentFormData.narr} onChange={handlePaymentInput} /></div>
         <div className="labeled-input"><label>Party Name</label><div className="live-search-box"><input value={paymentFormData.partyName} onChange={(e) => { const value = e.target.value; setPaymentFormData(prev => ({ ...prev, partyName: value })); if (!value.trim()) { setPaymentPartySuggestions([]); return; } const matches = pendingPurchaseBills.filter((bill) => bill.party?.toLowerCase().includes(value.toLowerCase())).map((bill) => bill.party); setPaymentPartySuggestions([...new Set(matches)]); }} />
           {paymentPartySuggestions.length > 0 && (<div className="live-dropdown">{paymentPartySuggestions.map((party, idx) => (<div key={idx} className="live-item" onClick={() => selectPaymentParty(party)}>{party}</div>))}</div>)}</div></div>
@@ -13422,13 +14357,57 @@ cheques:
             <div className="cheque-bounce-field">
               <label>Chq Bounce No.</label>
 
-              <input
-                type="text"
-                name="chqBounceNo"
-                value={chequeBounceFormData.chqBounceNo || ""}
-                readOnly
-                className="cheque-bounce-readonly"
-              />
+           <input
+  type="text"
+  inputMode="numeric"
+  name="chqBounceNo"
+  value={
+    chequeBounceFormData.chqBounceNo ||
+    ""
+  }
+  readOnly={
+    autoVoucherNo === true ||
+    Boolean(editChequeBounceId)
+  }
+  placeholder={
+    autoVoucherNo === true
+      ? "Auto generated"
+      : "Enter bounce number"
+  }
+  className={
+    autoVoucherNo === true ||
+    editChequeBounceId
+      ? "cheque-bounce-readonly"
+      : ""
+  }
+  onChange={(event) => {
+    if (
+      autoVoucherNo === true ||
+      editChequeBounceId
+    ) {
+      return;
+    }
+
+    const enteredNumber =
+      cleanVoucherNumber(
+        event.target.value
+      );
+
+    setChequeBounceFormData(
+      (previous) => ({
+        ...previous,
+
+        chqBounceNo:
+          enteredNumber,
+
+        trnNo:
+          enteredNumber,
+
+        isAutoGenerated: false,
+      })
+    );
+  }}
+/>
             </div>
 
             <div className="cheque-bounce-field">
@@ -14765,13 +15744,42 @@ cheques:
                 Doc VNo <span>*</span>
               </label>
 
-              <input
-                type="text"
-                name="docVNo"
-                value={pdcDocketFormData.docVNo || ""}
-                onChange={handlePDCDocketInput}
-                placeholder="Enter docket no"
-              />
+             <input
+  type="text"
+  inputMode="numeric"
+  name="docVNo"
+  value={
+    pdcDocketFormData.docVNo || ""
+  }
+  readOnly={
+    autoVoucherNo === true ||
+    Boolean(editPDCDocketId)
+  }
+  placeholder={
+    autoVoucherNo === true
+      ? "Auto generated"
+      : "Enter docket no"
+  }
+  onChange={(event) => {
+    if (
+      autoVoucherNo === true ||
+      editPDCDocketId
+    ) {
+      return;
+    }
+
+    setPDCDocketFormData(
+      (previous) => ({
+        ...previous,
+
+        docVNo:
+          cleanVoucherNumber(
+            event.target.value
+          ),
+      })
+    );
+  }}
+/>
             </div>
 
             <div className="pdc-field">
@@ -14924,32 +15932,32 @@ cheques:
 
           <div className="pdc-grid-scroll">
             <table className="pdc-entry-table">
-        <thead>
-  <tr>
-    <th
-      style={{
-        width: "48px",
-        textAlign: "center"
-      }}
-    >
-      <input
-        type="checkbox"
-        checked={
-          pdcDocketItems.length > 0 &&
-          pdcDocketItems.every(
-            (item) =>
-              item.selected === true
-          )
-        }
-        onChange={
-          handlePDCDocketSelectAll
-        }
-        title="Select all cheques"
-      />
-    </th>
+              <thead>
+                <tr>
+                  <th
+                    style={{
+                      width: "48px",
+                      textAlign: "center"
+                    }}
+                  >
+                    <input
+                      type="checkbox"
+                      checked={
+                        pdcDocketItems.length > 0 &&
+                        pdcDocketItems.every(
+                          (item) =>
+                            item.selected === true
+                        )
+                      }
+                      onChange={
+                        handlePDCDocketSelectAll
+                      }
+                      title="Select all cheques"
+                    />
+                  </th>
 
-    <th>Sr</th>
-    <th>Cheque No</th>
+                  <th>Sr</th>
+                  <th>Cheque No</th>
                   <th>Cheque Date</th>
                   <th>Amount</th>
                   <th>Clearing Date</th>
@@ -14974,80 +15982,80 @@ cheques:
                     </td>
                   </tr>
                 ) : (
-               pdcDocketItems.map(
-  (item, index) => (
-    <tr
-      key={
-        item.id ||
-        item._id ||
-        `${item.chequeNo}-${item.receiptNo}-${index}`
-      }
-      onClick={() =>
-        handlePDCDocketChequeSelect(
-          index
-        )
-      }
-      style={{
-        cursor: "pointer",
+                  pdcDocketItems.map(
+                    (item, index) => (
+                      <tr
+                        key={
+                          item.id ||
+                          item._id ||
+                          `${item.chequeNo}-${item.receiptNo}-${index}`
+                        }
+                        onClick={() =>
+                          handlePDCDocketChequeSelect(
+                            index
+                          )
+                        }
+                        style={{
+                          cursor: "pointer",
 
-        background:
-          item.selected === true
-            ? "#e8f2ff"
-            : ""
-      }}
-    >
-      <td
-        style={{
-          textAlign: "center"
-        }}
-        onClick={(event) =>
-          event.stopPropagation()
-        }
-      >
-        <input
-          type="checkbox"
-          checked={
-            item.selected === true
-          }
-          onChange={() =>
-            handlePDCDocketChequeSelect(
-              index
-            )
-          }
-        />
-      </td>
+                          background:
+                            item.selected === true
+                              ? "#e8f2ff"
+                              : ""
+                        }}
+                      >
+                        <td
+                          style={{
+                            textAlign: "center"
+                          }}
+                          onClick={(event) =>
+                            event.stopPropagation()
+                          }
+                        >
+                          <input
+                            type="checkbox"
+                            checked={
+                              item.selected === true
+                            }
+                            onChange={() =>
+                              handlePDCDocketChequeSelect(
+                                index
+                              )
+                            }
+                          />
+                        </td>
 
-      <td>{index + 1}</td>
+                        <td>{index + 1}</td>
 
-                      <td>{item.chequeNo || "-"}</td>
+                        <td>{item.chequeNo || "-"}</td>
 
-                      <td>{item.chequeDate || "-"}</td>
+                        <td>{item.chequeDate || "-"}</td>
 
-                      <td className="pdc-amount-cell">
-                        ₹
-                        {Number(
-                          item.amount || 0
-                        ).toLocaleString("en-IN", {
-                          minimumFractionDigits: 2,
-                          maximumFractionDigits: 2
-                        })}
-                      </td>
+                        <td className="pdc-amount-cell">
+                          ₹
+                          {Number(
+                            item.amount || 0
+                          ).toLocaleString("en-IN", {
+                            minimumFractionDigits: 2,
+                            maximumFractionDigits: 2
+                          })}
+                        </td>
 
-                      <td>{item.clearingDate || "-"}</td>
+                        <td>{item.clearingDate || "-"}</td>
 
-                      <td>{item.recSeries || "-"}</td>
+                        <td>{item.recSeries || "-"}</td>
 
-                      <td>{item.recNo || "-"}</td>
+                        <td>{item.recNo || "-"}</td>
 
-                      <td>{item.recTrnBank || "-"}</td>
+                        <td>{item.recTrnBank || "-"}</td>
 
-                      <td>{item.branch || "-"}</td>
+                        <td>{item.branch || "-"}</td>
 
-                      <td>{item.partyCode || "-"}</td>
+                        <td>{item.partyCode || "-"}</td>
 
-                      <td>{item.partyName || "-"}</td>
-                    </tr>
-                  ))
+                        <td>{item.partyName || "-"}</td>
+                      </tr>
+                    ))
                 )}
               </tbody>
             </table>
@@ -16094,10 +17102,38 @@ cheques:
 
               <input
                 type="text"
+                inputMode="numeric"
                 name="tranVNo"
-                value={contraFormData.tranVNo || ""}
-                readOnly
-                placeholder="Auto generated"
+                value={
+                  contraFormData.tranVNo || ""
+                }
+                readOnly={
+                  autoVoucherNo === true ||
+                  Boolean(editContraId)
+                }
+                placeholder={
+                  autoVoucherNo === true
+                    ? "Auto generated"
+                    : "Enter number"
+                }
+                onChange={(event) => {
+                  if (
+                    autoVoucherNo === true ||
+                    editContraId
+                  ) {
+                    return;
+                  }
+
+                  setContraFormData(
+                    (previous) => ({
+                      ...previous,
+                      tranVNo:
+                        cleanVoucherNumber(
+                          event.target.value
+                        ),
+                    })
+                  );
+                }}
               />
             </div>
 
@@ -17084,9 +18120,37 @@ cheques:
           <label>RNo</label>
           <input
             type="text"
+            inputMode="numeric"
             name="rno"
-            value={receiptFormData.rno}
-            onChange={handleReceiptInput}
+            value={
+              receiptFormData.rno || ""
+            }
+            readOnly={
+              autoVoucherNo === true ||
+              Boolean(editReceiptId)
+            }
+            placeholder={
+              autoVoucherNo === true
+                ? "Auto generated"
+                : "Enter receipt number"
+            }
+            onChange={(event) => {
+              if (
+                autoVoucherNo === true ||
+                editReceiptId
+              ) {
+                return;
+              }
+
+              setReceiptFormData(
+                (previous) => ({
+                  ...previous,
+                  rno: cleanVoucherNumber(
+                    event.target.value
+                  ),
+                })
+              );
+            }}
           />
         </div>
 
@@ -17303,12 +18367,45 @@ cheques:
 
               <div className="collection-field">
                 <label>Col VNo. :</label>
+
                 <input
                   type="text"
+                  inputMode="numeric"
                   name="colVNo"
-                  value={collectionVoucherFormData.colVNo || ""}
-                  readOnly
-                  placeholder="Auto generated"
+                  value={
+                    collectionVoucherFormData.colVNo ||
+                    ""
+                  }
+                  readOnly={
+                    autoVoucherNo === true ||
+                    Boolean(editCollectionVoucherId)
+                  }
+                  placeholder={
+                    autoVoucherNo === true
+                      ? "Auto generated"
+                      : "Enter voucher number"
+                  }
+                  onChange={(event) => {
+                    if (
+                      autoVoucherNo === true ||
+                      editCollectionVoucherId
+                    ) {
+                      return;
+                    }
+
+                    const value =
+                      event.target.value.replace(
+                        /[^0-9]/g,
+                        ""
+                      );
+
+                    setCollectionVoucherFormData(
+                      (previous) => ({
+                        ...previous,
+                        colVNo: value,
+                      })
+                    );
+                  }}
                 />
               </div>
 

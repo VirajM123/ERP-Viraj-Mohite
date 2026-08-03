@@ -1,8 +1,8 @@
 import React, { useEffect, useRef, useState } from "react";
 import "./Login.css";
 
-const API_URL = "https://total-solution-backend.onrender.com/api";
-// const API_URL = "http://localhost:5000/api";
+// const API_URL = "https://total-solution-backend.onrender.com/api";
+const API_URL = "http://localhost:5000/api";
 
 
 const getTodayDate = () => {
@@ -438,6 +438,53 @@ localStorage.setItem(
 localStorage.setItem(
   "userSource",
   result?.user?.userSource || ""
+);
+localStorage.setItem(
+  "userId",
+  result.user.userId || result.user.userName
+);
+const loadMyPermissions = async (
+    loginUser
+) => {
+    try {
+        const response = await fetch(
+            `${API_URL}/security-setup/my-permissions?distributorId=${loginUser.distributorId}&firmId=${loginUser.firmId}&userId=${
+    loginUser.userId ||
+    loginUser.userName
+}&role=${loginUser.role}`
+        );
+
+        const result =
+            await response.json();
+
+        if (
+            response.ok &&
+            result.success
+        ) {
+            localStorage.setItem(
+                "permissions",
+                JSON.stringify(
+                    result.permissions
+                )
+            );
+        } else {
+            localStorage.removeItem(
+                "permissions"
+            );
+        }
+    } catch (error) {
+        console.error(
+            "Permission Load Error:",
+            error
+        );
+
+        localStorage.removeItem(
+            "permissions"
+        );
+    }
+};
+await loadMyPermissions(
+    result.user
 );
 
       onLoginSuccess();

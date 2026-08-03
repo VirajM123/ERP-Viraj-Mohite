@@ -195,6 +195,11 @@ const [partyReportZoom, setPartyReportZoom] =
 
 const [partyCurrentPage, setPartyCurrentPage] =
   useState(1);
+  const [partyRowsPerPage, setPartyRowsPerPage] =
+  useState(10);
+
+const [showAdvancedPartyFilters, setShowAdvancedPartyFilters] =
+  useState(false);
 
 const [showPartySelector, setShowPartySelector] =
   useState(false);
@@ -3337,33 +3342,239 @@ const printPartyReport = () => {
   }
 };
 
+const partyTotalPages = Math.max(
+  1,
+  Math.ceil(
+    filteredPartySalesRows.length /
+      partyRowsPerPage
+  )
+);
 
+const partySafeCurrentPage = Math.min(
+  partyCurrentPage,
+  partyTotalPages
+);
+
+const partyPageStart =
+  (partySafeCurrentPage - 1) *
+  partyRowsPerPage;
+
+const partyPageRows =
+  filteredPartySalesRows.slice(
+    partyPageStart,
+    partyPageStart +
+      partyRowsPerPage
+  );
+
+const partyStartRecord =
+  filteredPartySalesRows.length === 0
+    ? 0
+    : partyPageStart + 1;
+
+const partyEndRecord = Math.min(
+  partyPageStart + partyRowsPerPage,
+  filteredPartySalesRows.length
+);
+
+const partyQuickSummary = useMemo(() => {
+  const partyCodes = new Set();
+  const invoices = new Set();
+
+  let totalAmount = 0;
+  let totalQuantity = 0;
+
+  partyReportRows.forEach((row) => {
+    const partyCode = String(
+      row.partyCode ||
+        row.accountCode ||
+        row.acCode ||
+        row.partyName ||
+        ""
+    ).trim();
+
+    if (partyCode) {
+      partyCodes.add(partyCode);
+    }
+
+    const invoiceKey = [
+      row.billSeries,
+      row.billNo,
+    ]
+      .filter(
+        (value) =>
+          value !== undefined &&
+          value !== null &&
+          value !== ""
+      )
+      .join("-");
+
+    if (invoiceKey) {
+      invoices.add(invoiceKey);
+    }
+
+    totalAmount += Number(
+      row.netAmount ||
+        row.billAmount ||
+        row.amount ||
+        0
+    );
+
+    totalQuantity += Number(
+      row.qty ||
+        row.quantity ||
+        row.totalQty ||
+        0
+    );
+  });
+
+  return {
+    totalParties: partyCodes.size,
+    totalInvoices: invoices.size,
+    totalAmount,
+    totalQuantity,
+  };
+}, [partyReportRows]);
+
+const setPartyQuickDateRange = (
+  rangeType
+) => {
+  const today = new Date();
+
+  let fromDate = new Date(today);
+  let toDate = new Date(today);
+
+  if (rangeType === "month") {
+    fromDate = new Date(
+      today.getFullYear(),
+      today.getMonth(),
+      1
+    );
+  }
+
+  if (
+    rangeType === "financialYear"
+  ) {
+    const startYear =
+      today.getMonth() >= 3
+        ? today.getFullYear()
+        : today.getFullYear() - 1;
+
+    fromDate = new Date(
+      startYear,
+      3,
+      1
+    );
+  }
+
+  const formatDate = (date) => {
+    const year = date.getFullYear();
+
+    const month = String(
+      date.getMonth() + 1
+    ).padStart(2, "0");
+
+    const day = String(
+      date.getDate()
+    ).padStart(2, "0");
+
+    return `${year}-${month}-${day}`;
+  };
+
+  setPartySalesFilters(
+    (previous) => ({
+      ...previous,
+      fromDate:
+        formatDate(fromDate),
+      toDate:
+        formatDate(toDate),
+    })
+  );
+
+  setPartyReportRows([]);
+  setPartyReportColumns([]);
+  setIsPartyReportGenerated(false);
+  setPartyCurrentPage(1);
+};
 
   if (selectedReport === "Party Wise Sales Report") {
   return (
     <div className="party-classic-report-page">
       <div className="party-classic-report-window">
-        <div className="party-classic-titlebar">
-          <button
-            type="button"
-            className="party-title-back"
-            onClick={onBack}
-            title="Back to reports"
-          >
-            <ArrowLeft size={16} />
-          </button>
+       <div className="party-classic-titlebar">
+  <div className="party-report-title-left">
+    <button
+      type="button"
+      className="party-title-back"
+      onClick={onBack}
+      title="Back to reports"
+      aria-label="Back to reports"
+    >
+      <ArrowLeft size={18} />
+    </button>
 
-          <Users size={17} />
+    <div className="party-title-icon">
+      <Users size={21} />
+    </div>
 
-          <div>
-            <span>Sales Report</span>
-            <h1>Party Wise Sales Report</h1>
-          </div>
-        </div>
+    <div className="party-title-content">
+      <span>Sales Report</span>
 
+      <h1>Party Wise Sales Report</h1>
+
+      <p>
+        Detailed party-wise sales analysis with advanced
+        filtering and insights
+      </p>
+    </div>
+  </div>
+
+  <div className="party-title-actions">
+    <button
+      type="button"
+      className="party-title-secondary-button"
+      title="Clear current filters"
+      onClick={clearPartySalesFilters}
+    >
+      <RefreshCw size={15} />
+      Reset Filter
+    </button>
+
+    <button
+      type="button"
+      className="party-title-generate-button"
+      onClick={generatePartySalesReport}
+      disabled={
+        isPartyReportLoading ||
+        isCriteriaLoading
+      }
+    >
+      {isPartyReportLoading ? (
+        <RefreshCw
+          size={16}
+          className="party-spinning-icon"
+        />
+      ) : (
+        <FileBarChart size={16} />
+      )}
+
+      {isPartyReportLoading
+        ? "Generating..."
+        : "Generate Report"}
+    </button>
+  </div>
+</div>
+
+        <div className="party-report-content-layout">
+          <main className="party-report-main-column">
         <div className="party-report-filter-panel">
-         <fieldset className="party-filter-group">
-  <legend>Report Criteria</legend>
+  <fieldset className="party-filter-group">
+    <legend>
+      <span className="party-filter-legend-icon">
+        <FileBarChart size={15} />
+      </span>
+
+      Report Filters
+    </legend>
 
   <div className="party-report-form-grid">
   {/* 1. COMPANY */}
@@ -4213,104 +4424,8 @@ const printPartyReport = () => {
     </div>
   </div>
 )}
-<fieldset className="party-filter-group party-quick-options">
-            <legend>Quick Options</legend>
 
-            <button
-              type="button"
-              onClick={() => {
-                const today = getTodayDate();
 
-                setPartySalesFilters((previous) => ({
-                  ...previous,
-                  fromDate: today,
-                  toDate: today,
-                }));
-              }}
-            >
-              Today
-            </button>
-
-            <button
-              type="button"
-              onClick={() => {
-                const today = new Date();
-                const firstDay = new Date(
-                  today.getFullYear(),
-                  today.getMonth(),
-                  1
-                )
-                  .toISOString()
-                  .split("T")[0];
-
-                setPartySalesFilters((previous) => ({
-                  ...previous,
-                  fromDate: firstDay,
-                  toDate: getTodayDate(),
-                }));
-              }}
-            >
-              This Month
-            </button>
-
-            <button
-              type="button"
-              onClick={() =>
-                setPartySalesFilters((previous) => ({
-                  ...previous,
-                  fromDate: getFinancialYearStart(),
-                  toDate: getTodayDate(),
-                }))
-              }
-            >
-              This Financial Year
-            </button>
-
-            <button
-              type="button"
-              onClick={() =>
-                setPartySalesFilters((previous) => ({
-                  ...previous,
-                  fromDate: "",
-                  toDate: "",
-                }))
-              }
-            >
-              Custom Range
-            </button>
-          </fieldset>
-
-          <div className="party-filter-actions">
-            <button
-              type="button"
-              className="party-clear-button"
-              onClick={clearPartySalesFilters}
-              disabled={isPartyReportLoading}
-            >
-              <RefreshCw size={15} />
-              Clear
-            </button>
-
-            <button
-              type="button"
-              className="party-cancel-button"
-              onClick={onBack}
-              disabled={isPartyReportLoading}
-            >
-              <X size={15} />
-              Cancel
-            </button>
-
-            <button
-              type="button"
-              className="party-generate-button"
-              onClick={generatePartySalesReport}
-              disabled={isPartyReportLoading}
-            >
-              <FileBarChart size={15} />
-              {isPartyReportLoading ? "Generating..." : "Generate Report"}
-            </button>
-          </div>
         </div>
 
         {partyReportError && (
@@ -4325,154 +4440,140 @@ const printPartyReport = () => {
           </div>
 
           <div className="party-report-toolbar">
-            <div className="party-toolbar-navigation">
-              <button
-                type="button"
-                title="First page"
-                onClick={() => setPartyCurrentPage(1)}
-              >
-                <ChevronFirst size={15} />
-              </button>
+  <div className="party-grid-heading">
+    <div className="party-grid-heading-icon">
+      <FileBarChart size={17} />
+    </div>
 
-              <button
-                type="button"
-                title="Previous page"
-                onClick={() =>
-                  setPartyCurrentPage((page) =>
-                    Math.max(1, page - 1)
-                  )
-                }
-              >
-                <ChevronLeft size={15} />
-              </button>
+    <div>
+      <strong>Report Results</strong>
 
-              <input
-                type="number"
-                min="1"
-                value={partyCurrentPage}
-                onChange={(event) =>
-                  setPartyCurrentPage(
-                    Math.max(
-                      1,
-                      Number(event.target.value) || 1
-                    )
-                  )
-                }
-              />
+      <span>
+        {isPartyReportGenerated
+          ? `${filteredPartySalesRows.length} records found`
+          : "Generate the report to view results"}
+      </span>
+    </div>
+  </div>
 
-              <span>of 1</span>
+  <div className="party-grid-toolbar-actions">
+    <div className="party-report-search">
+      <Search size={15} />
 
-              <button
-                type="button"
-                title="Next page"
-                onClick={() => setPartyCurrentPage(1)}
-              >
-                <ChevronRight size={15} />
-              </button>
+      <input
+        type="text"
+        value={partyReportSearch}
+        onChange={(event) => {
+          setPartyReportSearch(
+            event.target.value
+          );
 
-              <button
-                type="button"
-                title="Last page"
-                onClick={() => setPartyCurrentPage(1)}
-              >
-                <ChevronLast size={15} />
-              </button>
+          setPartyCurrentPage(1);
+        }}
+        placeholder="Search in results..."
+      />
 
-              <button
-                type="button"
-                title="Refresh report"
-              >
-                <RefreshCw size={14} />
-              </button>
+      {partyReportSearch.trim() !== "" && (
+        <button
+          type="button"
+          className="party-grid-search-clear"
+          onClick={() => {
+            setPartyReportSearch("");
+            setPartyCurrentPage(1);
+          }}
+          title="Clear search"
+          aria-label="Clear search"
+        >
+          <X size={14} />
+        </button>
+      )}
+    </div>
 
-              <select
-                value={partyReportZoom}
-                onChange={(event) =>
-                  setPartyReportZoom(event.target.value)
-                }
-              >
-                <option value="75">75%</option>
-                <option value="90">90%</option>
-                <option value="100">100%</option>
-                <option value="125">125%</option>
-                <option value="150">150%</option>
-              </select>
+    <select
+      className="party-grid-zoom-select"
+      value={partyReportZoom}
+      onChange={(event) =>
+        setPartyReportZoom(
+          event.target.value
+        )
+      }
+      title="Grid zoom"
+    >
+      <option value="75">75%</option>
+      <option value="90">90%</option>
+      <option value="100">100%</option>
+      <option value="125">125%</option>
+      <option value="150">150%</option>
+    </select>
 
-              <div className="party-report-search">
-                <Search size={14} />
+    <button
+      type="button"
+      className="party-grid-refresh-button"
+      onClick={generatePartySalesReport}
+      disabled={
+        isPartyReportLoading ||
+        !partySalesFilters.company
+      }
+      title="Refresh report"
+    >
+      <RefreshCw size={15} />
+    </button>
 
-                <input
-                  type="text"
-                  value={partyReportSearch}
-                  onChange={(event) =>
-                    setPartyReportSearch(event.target.value)
-                  }
-                  placeholder="Find bill, party, product, batch or salesman"
-                />
-              </div>
-            </div>
+    <div className="party-toolbar-export">
+      <button
+        type="button"
+        className="party-export-excel"
+        onClick={exportPartyReportToExcel}
+        disabled={
+          !isPartyReportGenerated ||
+          filteredPartySalesRows.length === 0
+        }
+      >
+        <FileSpreadsheet size={15} />
+        Excel
+      </button>
 
-           <div className="party-toolbar-export">
-  <button
-    type="button"
-    className="party-export-excel"
-    onClick={
-      exportPartyReportToExcel
-    }
-    disabled={
-      !isPartyReportGenerated ||
-      filteredPartySalesRows.length === 0
-    }
-  >
-    <FileSpreadsheet size={15} />
-    Excel
-  </button>
+      <button
+        type="button"
+        className="party-export-csv"
+        onClick={exportPartyReportToCsv}
+        disabled={
+          !isPartyReportGenerated ||
+          filteredPartySalesRows.length === 0
+        }
+      >
+        <Download size={15} />
+        CSV
+      </button>
 
-  <button
-    type="button"
-    className="party-export-csv"
-    onClick={
-      exportPartyReportToCsv
-    }
-    disabled={
-      !isPartyReportGenerated ||
-      filteredPartySalesRows.length === 0
-    }
-  >
-    <Download size={15} />
-    CSV
-  </button>
+      <button
+        type="button"
+        className="party-export-pdf"
+        onClick={exportPartyReportToPdf}
+        disabled={
+          !isPartyReportGenerated ||
+          filteredPartySalesRows.length === 0
+        }
+      >
+        <FileText size={15} />
+        PDF
+      </button>
 
-  <button
-    type="button"
-    className="party-export-pdf"
-    onClick={
-      exportPartyReportToPdf
-    }
-    disabled={
-      !isPartyReportGenerated ||
-      filteredPartySalesRows.length === 0
-    }
-  >
-    <FileText size={15} />
-    PDF
-  </button>
-
-  <button
-    type="button"
-    className="party-export-print"
-    onClick={printPartyReport}
-    disabled={
-      !isPartyReportGenerated ||
-      filteredPartySalesRows.length === 0
-    }
-  >
-    <Printer size={15} />
-    Print
-  </button>
+      <button
+        type="button"
+        className="party-export-print"
+        onClick={printPartyReport}
+        disabled={
+          !isPartyReportGenerated ||
+          filteredPartySalesRows.length === 0
+        }
+      >
+        <Printer size={15} />
+        Print
+      </button>
+    </div>
+  </div>
 </div>
-          </div>
-
           <div className="party-report-grid-container">
             {!isPartyReportGenerated ? (
               <div className="party-empty-report">
@@ -4730,6 +4831,39 @@ if (
               {partySalesFilters.toDate || "--"}
             </span>
           </div>
+        </div>
+          </main>
+
+          <aside className="party-report-sidebar">
+            <section className="party-sidebar-card">
+              <div className="party-sidebar-card-title">
+                <BarChart3 size={18} />
+                <strong>Quick Summary</strong>
+              </div>
+
+              <div className="party-summary-item">
+                <span className="party-summary-icon"><Users size={17} /></span>
+                <div><small>Total Records</small><strong>{filteredPartySalesRows.length.toLocaleString("en-IN")}</strong></div>
+              </div>
+
+              <div className="party-summary-item">
+                <span className="party-summary-icon"><FileText size={17} /></span>
+                <div><small>Report Level</small><strong>{partySalesFilters.reportLevel === "salesSummary" ? "Sales Summary" : partySalesFilters.reportLevel === "salesDetails" ? "Sales Details" : "Selected Party"}</strong></div>
+              </div>
+
+              <div className="party-summary-item">
+                <span className="party-summary-icon"><ShoppingCart size={17} /></span>
+                <div><small>Total Quantity</small><strong>{formatReportNumber(partySalesTotals.qty || 0)}</strong></div>
+              </div>
+
+              <div className="party-summary-item">
+                <span className="party-summary-icon"><FileBarChart size={17} /></span>
+                <div><small>Total Amount</small><strong>₹ {formatReportNumber(partySalesTotals.netAmount || 0)}</strong></div>
+              </div>
+            </section>
+
+            
+          </aside>
         </div>
       </div>
     </div>
