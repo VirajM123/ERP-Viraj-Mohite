@@ -1,5 +1,6 @@
 import express from "express";
 import mongoose from "mongoose";
+export default function createTransactionRouter(securityRouter) {
 
 const router = express.Router();
 
@@ -526,7 +527,10 @@ const CollectionVoucher =
    SAVE RECEIPT
 ========================== */
 
-router.post("/receipt", async (req, res) => {
+router.post(
+  "/receipt",
+  securityRouter.authorizeRequest("TRANSACTIONS", "RECEIPT", "add"),
+  async (req, res) => {
   try {
     const body = req.body || {};
 
@@ -727,7 +731,11 @@ receiptBills: adjustedBills,
    GET ALL RECEIPTS
 ========================== */
 
-router.get("/receipt", async (req, res) => {
+// AFTER
+router.get(
+  "/receipt",
+  securityRouter.authorizeRequest("TRANSACTIONS", "RECEIPT", "view"),
+  async (req, res) => {
     try {
         const receipts = await Receipt.find()
             .sort({ createdAt: -1 });
@@ -758,6 +766,7 @@ router.get("/receipt", async (req, res) => {
 
 router.get(
   "/receipt/list",
+  securityRouter.authorizeRequest("TRANSACTIONS", "RECEIPT", "view"),
   async (req, res) => {
     try {
       const distributorId = String(
@@ -1229,6 +1238,7 @@ router.get(
 
 router.put(
   "/receipt/:id",
+  securityRouter.authorizeRequest("TRANSACTIONS", "RECEIPT", "edit"),
   async (req, res) => {
     try {
       const receiptId =
@@ -1585,7 +1595,10 @@ drawerBankName:
   }
 );
 
-router.get("/receipt/:id", async (req, res) => {
+router.get(
+  "/receipt/:id",
+  securityRouter.authorizeRequest("TRANSACTIONS", "RECEIPT", "view"),
+  async (req, res) => {
     try {
         const receipt = await Receipt.findById(
             req.params.id
@@ -1607,7 +1620,10 @@ router.get("/receipt/:id", async (req, res) => {
    DELETE RECEIPT
 ========================== */
 
-router.delete("/receipt/:id", async (req, res) => {
+router.delete(
+  "/receipt/:id",
+  securityRouter.authorizeRequest("TRANSACTIONS", "RECEIPT", "delete"),
+  async (req, res) => {
     try {
         await Receipt.findByIdAndDelete(
             req.params.id
@@ -1707,6 +1723,7 @@ router.get(
 
 router.post(
   "/cheque-bounce",
+  securityRouter.authorizeRequest("TRANSACTIONS", "CHEQUE_BOUNCE", "add"),
   async (req, res) => {
     try {
       const trnSeries = String(
@@ -1791,7 +1808,108 @@ router.post(
   }
 );
 
-router.get("/cheque-bounce", async (req, res) => {
+// INSERT — right after POST /cheque-bounce's closing `);` and before `router.get("/cheque-bounce", ...)`
+
+/* ==========================
+   UPDATE CHEQUE BOUNCE
+========================== */
+
+router.put(
+  "/cheque-bounce/:id",
+  securityRouter.authorizeRequest("TRANSACTIONS", "CHEQUE_BOUNCE", "edit"),
+  async (req, res) => {
+    try {
+      const chequeBounceId = String(req.params.id || "").trim();
+
+      if (!mongoose.Types.ObjectId.isValid(chequeBounceId)) {
+        return res.status(400).json({
+          success: false,
+          message: "Invalid Cheque Bounce ID.",
+        });
+      }
+
+      const existingChequeBounce = await ChequeBounce.findById(chequeBounceId);
+
+      if (!existingChequeBounce) {
+        return res.status(404).json({
+          success: false,
+          message: "Cheque Bounce record not found.",
+        });
+      }
+
+      const body = req.body || {};
+
+      const trnSeries = String(body.trnSeries || "").toUpperCase().trim();
+      const trnNo = Number(body.trnNo) || 0;
+
+      if (!trnSeries) {
+        return res.status(400).json({
+          success: false,
+          message: "Transaction Series is required.",
+        });
+      }
+
+      if (trnNo <= 0) {
+        return res.status(400).json({
+          success: false,
+          message: "Transaction Number is required.",
+        });
+      }
+
+      const distributorId = String(
+        body.distributorId || existingChequeBounce.distributorId || ""
+      ).trim();
+
+      const firmId = String(
+        body.firmId || existingChequeBounce.firmId || ""
+      ).trim();
+
+      // If series/number changed, block collision with a DIFFERENT record only
+      const duplicate = await ChequeBounce.findOne({
+        _id: { $ne: chequeBounceId },
+        distributorId,
+        firmId,
+        trnSeries,
+        trnNo,
+      });
+
+      if (duplicate) {
+        return res.status(400).json({
+          success: false,
+          message: `${trnSeries}-${trnNo} already exists.`,
+        });
+      }
+
+      const updatePayload = {
+        ...body,
+        distributorId,
+        firmId,
+        trnSeries,
+        trnNo,
+        chqBounceNo: String(trnNo),
+      };
+
+      // Never let the client overwrite the Mongo _id
+      delete updatePayload._id;
+      delete updatePayload.id;
+
+      const updated = await ChequeBounce.findByIdAndUpdate(
+        chequeBounceId,
+        updatePayload,
+        { new: true }
+      );
+
+      return res.json({ success: true, data: updated });
+    } catch (error) {
+      console.error("Update Cheque Bounce error:", error);
+      return res.status(500).json({ success: false, message: error.message });
+    }
+  }
+);
+router.get(
+  "/cheque-bounce",
+  securityRouter.authorizeRequest("TRANSACTIONS", "CHEQUE_BOUNCE", "view"),
+  async (req, res) => {
     try {
         const records = await ChequeBounce.find()
             .sort({ createdAt: -1 });
@@ -1821,6 +1939,7 @@ router.get("/cheque-bounce", async (req, res) => {
 
 router.get(
   "/cheque-bounce/list",
+  securityRouter.authorizeRequest("TRANSACTIONS", "CHEQUE_BOUNCE", "view"),
   async (req, res) => {
     try {
       const distributorId = String(
@@ -2272,7 +2391,10 @@ router.get(
   }
 );
 
-router.get("/cheque-bounce/:id", async (req, res) => {
+router.get(
+  "/cheque-bounce/:id",
+  securityRouter.authorizeRequest("TRANSACTIONS", "CHEQUE_BOUNCE", "view"),
+  async (req, res) => {
     try {
         const record =
             await ChequeBounce.findById(
@@ -2293,7 +2415,10 @@ router.get("/cheque-bounce/:id", async (req, res) => {
 
 
 
-router.delete("/cheque-bounce/:id", async (req, res) => {
+router.delete(
+  "/cheque-bounce/:id",
+  securityRouter.authorizeRequest("TRANSACTIONS", "CHEQUE_BOUNCE", "delete"),
+  async (req, res) => {
     try {
         await ChequeBounce.findByIdAndDelete(
             req.params.id
@@ -2311,7 +2436,10 @@ router.delete("/cheque-bounce/:id", async (req, res) => {
     }
 });
 
-router.post("/pdc-docket", async (req, res) => {
+router.post(
+  "/pdc-docket",
+  securityRouter.authorizeRequest("TRANSACTIONS", "PDC_DOCKET", "add"),
+  async (req, res) => {
     try {
 
         const data = await PDCDocket.create(req.body);
@@ -2330,8 +2458,130 @@ router.post("/pdc-docket", async (req, res) => {
 
     }
 });
+/* ==========================
+   UPDATE PDC DOCKET
+========================== */
 
-router.get("/pdc-docket", async (req, res) => {
+router.put(
+  "/pdc-docket/:id",
+  securityRouter.authorizeRequest(
+    "TRANSACTIONS",
+    "PDC_DOCKET",
+    "edit"
+  ),
+  async (req, res) => {
+    try {
+      const pdcId = String(req.params.id || "").trim();
+
+      if (!mongoose.Types.ObjectId.isValid(pdcId)) {
+        return res.status(400).json({
+          success: false,
+          message: "Invalid PDC Docket ID."
+        });
+      }
+
+      const existing = await PDCDocket.findById(pdcId);
+
+      if (!existing) {
+        return res.status(404).json({
+          success: false,
+          message: "PDC Docket not found."
+        });
+      }
+
+      const body = req.body || {};
+
+      const distributorId =
+        body.distributorId ||
+        existing.distributorId;
+
+      const firmId =
+        body.firmId ||
+        existing.firmId;
+
+      const docSeries = String(
+        body.docSeries || ""
+      ).trim();
+
+      const docVNo =
+        Number(body.docVNo) || 0;
+
+      const duplicate =
+        await PDCDocket.findOne({
+          _id: { $ne: pdcId },
+
+          distributorId,
+          firmId,
+
+          docSeries,
+          docVNo
+        });
+
+      if (duplicate) {
+        return res.status(400).json({
+          success: false,
+          message:
+            `${docSeries}-${docVNo} already exists.`
+        });
+      }
+
+      const updateData = {
+        ...body,
+
+        distributorId,
+        firmId,
+
+        docSeries,
+        docVNo,
+
+        totalAmount:
+          Number(body.totalAmount) || 0,
+
+        totalCheques:
+          Number(body.totalCheques) || 0,
+
+        cheques:
+          Array.isArray(body.cheques)
+            ? body.cheques
+            : []
+      };
+
+      delete updateData._id;
+      delete updateData.id;
+
+      const updated =
+        await PDCDocket.findByIdAndUpdate(
+          pdcId,
+          updateData,
+          {
+            new: true,
+            runValidators: true
+          }
+        );
+
+      res.json({
+        success: true,
+        message:
+          "PDC Docket Updated Successfully",
+        data: updated
+      });
+
+    } catch (err) {
+
+      console.error(err);
+
+      res.status(500).json({
+        success: false,
+        message: err.message
+      });
+
+    }
+  }
+);
+router.get(
+  "/pdc-docket",
+  securityRouter.authorizeRequest("TRANSACTIONS", "PDC_DOCKET", "view"),
+  async (req, res) => {
     try {
 
         const records = await PDCDocket
@@ -2367,6 +2617,7 @@ router.get("/pdc-docket", async (req, res) => {
 
 router.get(
     "/pdc-docket/list",
+    securityRouter.authorizeRequest("TRANSACTIONS", "PDC_DOCKET", "view"),
     async (req, res) => {
         try {
             const distributorId = String(
@@ -2883,7 +3134,10 @@ router.get(
     }
 );
 
-router.delete("/pdc-docket/:id", async (req, res) => {
+router.delete(
+  "/pdc-docket/:id",
+  securityRouter.authorizeRequest("TRANSACTIONS", "PDC_DOCKET", "delete"),
+  async (req, res) => {
     try {
 
         await PDCDocket.findByIdAndDelete(
@@ -2904,7 +3158,10 @@ router.delete("/pdc-docket/:id", async (req, res) => {
     }
 });
 
-router.post("/contra", async (req, res) => {
+router.post(
+  "/contra",
+  securityRouter.authorizeRequest("TRANSACTIONS", "CONTRA", "add"),
+  async (req, res) => {
   try {
 
     const data = await Contra.create(req.body);
@@ -2924,7 +3181,102 @@ router.post("/contra", async (req, res) => {
   }
 });
 
-router.get("/contra", async (req, res) => {
+router.put(
+  "/contra/:id",
+  securityRouter.authorizeRequest(
+    "TRANSACTIONS",
+    "CONTRA",
+    "edit"
+  ),
+  async (req, res) => {
+    try {
+      const contraId = String(req.params.id || "").trim();
+
+      if (!mongoose.Types.ObjectId.isValid(contraId)) {
+        return res.status(400).json({
+          success: false,
+          message: "Invalid Contra ID."
+        });
+      }
+
+      const existing = await Contra.findById(contraId);
+
+      if (!existing) {
+        return res.status(404).json({
+          success: false,
+          message: "Contra Voucher not found."
+        });
+      }
+
+      const body = req.body || {};
+
+      const distributorId =
+        body.distributorId || existing.distributorId;
+
+      const firmId =
+        body.firmId || existing.firmId;
+
+      const tranVNo =
+        Number(body.tranVNo) || 0;
+
+      const duplicate =
+        await Contra.findOne({
+          _id: { $ne: contraId },
+          distributorId,
+          firmId,
+          tranVNo
+        });
+
+      if (duplicate) {
+        return res.status(400).json({
+          success: false,
+          message: `Contra Voucher No ${tranVNo} already exists.`
+        });
+      }
+
+      const updateData = {
+        ...body,
+        distributorId,
+        firmId,
+        tranVNo
+      };
+
+      delete updateData._id;
+      delete updateData.id;
+
+      const updated =
+        await Contra.findByIdAndUpdate(
+          contraId,
+          updateData,
+          {
+            new: true,
+            runValidators: true
+          }
+        );
+
+      res.json({
+        success: true,
+        message: "Contra Updated Successfully",
+        data: updated
+      });
+
+    } catch (error) {
+
+      console.error(error);
+
+      res.status(500).json({
+        success: false,
+        message: error.message
+      });
+
+    }
+  }
+);
+
+router.get(
+  "/contra",
+  securityRouter.authorizeRequest("TRANSACTIONS", "CONTRA", "view"),
+  async (req, res) => {
   try {
 
     const records = await Contra
@@ -2958,6 +3310,7 @@ router.get("/contra", async (req, res) => {
 
 router.get(
   "/contra/list",
+  securityRouter.authorizeRequest("TRANSACTIONS", "CONTRA", "view"),
   async (req, res) => {
     try {
       const distributorId =
@@ -3390,7 +3743,10 @@ router.get(
   }
 );
 
-router.delete("/contra/:id", async (req, res) => {
+router.delete(
+  "/contra/:id",
+  securityRouter.authorizeRequest("TRANSACTIONS", "CONTRA", "delete"),
+  async (req, res) => {
   try {
 
     await Contra.findByIdAndDelete(
@@ -3475,7 +3831,10 @@ router.get(
     }
   }
 );
-router.post("/collection-voucher", async (req, res) => {
+router.post(
+  "/collection-voucher",
+  securityRouter.authorizeRequest("TRANSACTIONS", "COLLECTION_VOUCHER", "add"),
+  async (req, res) => {
     try {
 
         const data = await CollectionVoucher.create(req.body);
@@ -3494,8 +3853,116 @@ router.post("/collection-voucher", async (req, res) => {
 
     }
 });
+router.put(
+  "/collection-voucher/:id",
+  securityRouter.authorizeRequest(
+    "TRANSACTIONS",
+    "COLLECTION_VOUCHER",
+    "edit"
+  ),
+  async (req, res) => {
+    try {
+      const voucherId = String(req.params.id || "").trim();
 
-router.get("/collection-voucher", async (req, res) => {
+      if (!mongoose.Types.ObjectId.isValid(voucherId)) {
+        return res.status(400).json({
+          success: false,
+          message: "Invalid Collection Voucher ID."
+        });
+      }
+
+      const existing =
+        await CollectionVoucher.findById(voucherId);
+
+      if (!existing) {
+        return res.status(404).json({
+          success: false,
+          message: "Collection Voucher not found."
+        });
+      }
+
+      const body = req.body || {};
+
+      const distributorId =
+        body.distributorId ||
+        existing.distributorId;
+
+      const firmId =
+        body.firmId ||
+        existing.firmId;
+
+      const colVNo =
+        Number(body.colVNo) || 0;
+
+      const duplicate =
+        await CollectionVoucher.findOne({
+          _id: { $ne: voucherId },
+
+          distributorId,
+          firmId,
+
+          colVNo
+        });
+
+      if (duplicate) {
+        return res.status(400).json({
+          success: false,
+          message:
+            `Collection Voucher No ${colVNo} already exists.`
+        });
+      }
+
+      const updateData = {
+        ...body,
+
+        distributorId,
+        firmId,
+
+        colVNo,
+
+        bills:
+          Array.isArray(body.bills)
+            ? body.bills
+            : []
+      };
+
+      delete updateData._id;
+      delete updateData.id;
+
+      const updated =
+        await CollectionVoucher.findByIdAndUpdate(
+          voucherId,
+          updateData,
+          {
+            new: true,
+            runValidators: true
+          }
+        );
+
+      res.json({
+        success: true,
+        message:
+          "Collection Voucher Updated Successfully",
+        data: updated
+      });
+
+    } catch (error) {
+
+      console.error(error);
+
+      res.status(500).json({
+        success: false,
+        message: error.message
+      });
+
+    }
+  }
+);
+
+router.get(
+  "/collection-voucher",
+  securityRouter.authorizeRequest("TRANSACTIONS", "COLLECTION_VOUCHER", "view"),
+  async (req, res) => {
 
     try {
 
@@ -3525,6 +3992,7 @@ router.get("/collection-voucher", async (req, res) => {
 
 router.get(
   "/collection-voucher/list",
+  securityRouter.authorizeRequest("TRANSACTIONS", "COLLECTION_VOUCHER", "view"),
   async (req, res) => {
     try {
       const distributorId =
@@ -3995,7 +4463,10 @@ router.get(
     }
   }
 );
-router.delete("/collection-voucher/:id", async (req, res) => {
+router.delete(
+  "/collection-voucher/:id",
+  securityRouter.authorizeRequest("TRANSACTIONS", "COLLECTION_VOUCHER", "delete"),
+  async (req, res) => {
 
     try {
 
@@ -4087,4 +4558,5 @@ router.get(
 );
 
 
-export default router;      
+return router;
+}     

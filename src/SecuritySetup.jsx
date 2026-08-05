@@ -8,9 +8,11 @@ import "./SecuritySetup.css";
 // const API_URL = "http://localhost:5000/api";
 const API_URL = "https://total-solution-backend.onrender.com/api";
 
+
 /* =========================================================
    PERMISSION COLUMNS
 ========================================================= */
+
 
 const PERMISSION_COLUMNS = [
     {
@@ -54,12 +56,6 @@ const DEFAULT_OPERATION_GROUPS = [
                 name: "Company",
                 module: "MASTER",
                 operation: "COMPANY",
-            },
-            {
-                id: "master-party",
-                name: "Party",
-                module: "MASTER",
-                operation: "PARTY",
             },
             {
                 id: "master-product",
@@ -117,31 +113,25 @@ const DEFAULT_OPERATION_GROUPS = [
             },
         ],
     },
-    {
-        id: "mapping",
-        name: "Mapping",
-        icon: "📁",
-        operations: [
-            {
-                id: "mapping-area-party",
-                name: "Area Party Mapping",
-                module: "MAPPING",
-                operation: "AREA_PARTY_MAPPING",
-            },
-            {
-                id: "mapping-company-product",
-                name: "Company Product Mapping",
-                module: "MAPPING",
-                operation: "COMPANY_PRODUCT_MAPPING",
-            },
-            {
-                id: "mapping-user-firm",
-                name: "User Firm Mapping",
-                module: "MAPPING",
-                operation: "USER_FIRM_MAPPING",
-            },
-        ],
-    },
+{
+    id: "mapping",
+    name: "Mapping",
+    icon: "📁",
+    operations: [
+        {
+            id: "mapping-salesman-area",
+            name: "Salesman To Area",
+            module: "MAPPING",
+            operation: "SALESMAN_TO_AREA",
+        },
+        {
+            id: "mapping-area-party",
+            name: "Area To Party",
+            module: "MAPPING",
+            operation: "AREA_TO_PARTY",
+        },
+    ],
+},
     {
         id: "sales",
         name: "Sales",
@@ -409,7 +399,7 @@ const DEFAULT_USERS = [
 ========================================================= */
 
 const createBlankPermission = () => ({
-    view: false,
+    view: true,
     add: false,
     edit: false,
     delete: false,
@@ -440,36 +430,36 @@ const parseBoolean = (value) => {
 const normalizeUser = (user, index) => {
     const userId = String(
         user?.userId ||
-            user?._id ||
-            user?.id ||
-            user?.SysUserCode ||
-            user?.UserCode ||
-            user?.username ||
-            `user-${index + 1}`
+        user?._id ||
+        user?.id ||
+        user?.SysUserCode ||
+        user?.UserCode ||
+        user?.username ||
+        `user-${index + 1}`
     );
 
     const userName = String(
         user?.userName ||
-            user?.username ||
-            user?.name ||
-            user?.UserName ||
-            user?.LoginName ||
-            `User ${index + 1}`
+        user?.username ||
+        user?.name ||
+        user?.UserName ||
+        user?.LoginName ||
+        `User ${index + 1}`
     );
 
     const roleName = String(
         user?.roleName ||
-            user?.role ||
-            user?.RoleName ||
-            user?.UserType ||
-            "User"
+        user?.role ||
+        user?.RoleName ||
+        user?.UserType ||
+        "User"
     );
 
     const isAdministrator =
         parseBoolean(
             user?.isAdministrator ||
-                user?.isAdmin ||
-                user?.administrator
+            user?.isAdmin ||
+            user?.administrator
         ) ||
         roleName.toUpperCase() === "ADMINISTRATOR" ||
         roleName.toUpperCase() === "ADMIN";
@@ -492,52 +482,52 @@ const normalizeOperationGroups = (groups) => {
     return groups.map((group, groupIndex) => ({
         id: String(
             group?.id ||
-                group?.groupId ||
-                group?.module ||
-                `group-${groupIndex + 1}`
+            group?.groupId ||
+            group?.module ||
+            `group-${groupIndex + 1}`
         ),
         name: String(
             group?.name ||
-                group?.groupName ||
-                group?.moduleName ||
-                group?.module ||
-                `Module ${groupIndex + 1}`
+            group?.groupName ||
+            group?.moduleName ||
+            group?.module ||
+            `Module ${groupIndex + 1}`
         ),
         icon: group?.icon || "📁",
         operations: Array.isArray(group?.operations)
             ? group.operations.map((operation, operationIndex) => ({
-                  id: String(
-                      operation?.id ||
-                          operation?.operationId ||
-                          operation?.code ||
-                          `${groupIndex}-${operationIndex}`
-                  ),
-                  name: String(
-                      operation?.name ||
-                          operation?.operationName ||
-                          operation?.label ||
-                          operation?.code ||
-                          `Operation ${operationIndex + 1}`
-                  ),
-                  module: String(
-                      operation?.module ||
-                          operation?.moduleCode ||
-                          group?.module ||
-                          group?.name ||
-                          ""
-                  )
-                      .trim()
-                      .toUpperCase(),
-                  operation: String(
-                      operation?.operation ||
-                          operation?.operationCode ||
-                          operation?.code ||
-                          operation?.id ||
-                          ""
-                  )
-                      .trim()
-                      .toUpperCase(),
-              }))
+                id: String(
+                    operation?.id ||
+                    operation?.operationId ||
+                    operation?.code ||
+                    `${groupIndex}-${operationIndex}`
+                ),
+                name: String(
+                    operation?.name ||
+                    operation?.operationName ||
+                    operation?.label ||
+                    operation?.code ||
+                    `Operation ${operationIndex + 1}`
+                ),
+                module: String(
+                    operation?.module ||
+                    operation?.moduleCode ||
+                    group?.module ||
+                    group?.name ||
+                    ""
+                )
+                    .trim()
+                    .toUpperCase(),
+                operation: String(
+                    operation?.operation ||
+                    operation?.operationCode ||
+                    operation?.code ||
+                    operation?.id ||
+                    ""
+                )
+                    .trim()
+                    .toUpperCase(),
+            }))
             : [],
     }));
 };
@@ -545,33 +535,39 @@ const normalizeOperationGroups = (groups) => {
 const normalizePermission = (permission) => ({
     view: parseBoolean(
         permission?.view ??
-            permission?.canView ??
-            permission?.View
+        permission?.canView ??
+        permission?.View ??
+        true
     ),
+
     add: parseBoolean(
         permission?.add ??
-            permission?.canAdd ??
-            permission?.Add
+        permission?.canAdd ??
+        permission?.Add
     ),
+
     edit: parseBoolean(
         permission?.edit ??
-            permission?.canEdit ??
-            permission?.Edit
+        permission?.canEdit ??
+        permission?.Edit
     ),
+
     delete: parseBoolean(
         permission?.delete ??
-            permission?.canDelete ??
-            permission?.Delete
+        permission?.canDelete ??
+        permission?.Delete
     ),
+
     print: parseBoolean(
         permission?.print ??
-            permission?.canPrint ??
-            permission?.Print
+        permission?.canPrint ??
+        permission?.Print
     ),
+
     export: parseBoolean(
         permission?.export ??
-            permission?.canExport ??
-            permission?.Export
+        permission?.canExport ??
+        permission?.Export
     ),
 });
 
@@ -597,9 +593,8 @@ const PermissionCheckbox = ({
 
     return (
         <label
-            className={`security-checkbox ${
-                disabled ? "is-disabled" : ""
-            }`}
+            className={`security-checkbox ${disabled ? "is-disabled" : ""
+                }`}
             title={title}
         >
             <input
@@ -648,6 +643,7 @@ const SecuritySetup = ({
     isAdmin = false,
     onPermissionsSaved,
 }) => {
+
     const [operationGroups, setOperationGroups] =
         React.useState(DEFAULT_OPERATION_GROUPS);
 
@@ -706,8 +702,8 @@ const SecuritySetup = ({
 
         const currentUserId = String(
             localStorage.getItem("userId") ||
-                localStorage.getItem("sysUserCode") ||
-                ""
+            localStorage.getItem("sysUserCode") ||
+            ""
         ).trim();
 
         return {
@@ -813,47 +809,47 @@ const SecuritySetup = ({
        NORMALIZE API PERMISSIONS
     ===================================================== */
 
-   const normalizePermissions = React.useCallback(
-    (normalizedGroups, normalizedUsers) => {
-        const permissionMap = {};
+    const normalizePermissions = React.useCallback(
+        (normalizedGroups, normalizedUsers) => {
+            const permissionMap = {};
 
-        normalizedUsers.forEach((user) => {
+            normalizedUsers.forEach((user) => {
 
-            const userPermissions =
-                user.permissions || {};
+                const userPermissions =
+                    user.permissions || {};
 
-            normalizedGroups.forEach((group) => {
+                normalizedGroups.forEach((group) => {
 
-                const groupPermissions =
-                    userPermissions[group.id] || {};
+                    const groupPermissions =
+                        userPermissions[group.id] || {};
 
-                group.operations.forEach((operation) => {
+                    group.operations.forEach((operation) => {
 
-                    const key = getPermissionKey(
-                        operation.id,
-                        user.userId
-                    );
-
-                    if (user.isAdministrator) {
-                        permissionMap[key] =
-                            createFullPermission();
-                        return;
-                    }
-
-                    permissionMap[key] =
-                        normalizePermission(
-                            groupPermissions[
-                                operation.operation
-                            ] || {}
+                        const key = getPermissionKey(
+                            operation.id,
+                            user.userId
                         );
+
+                        if (user.isAdministrator) {
+                            permissionMap[key] =
+                                createFullPermission();
+                            return;
+                        }
+
+                        permissionMap[key] =
+                            normalizePermission(
+                                groupPermissions[
+                                operation.operation
+                                ] || {}
+                            );
+                    });
                 });
             });
-        });
 
-        return permissionMap;
-    },
-    []
-);
+            return permissionMap;
+        },
+        []
+    );
     /* =====================================================
        LOAD SECURITY SETUP
     ===================================================== */
@@ -901,7 +897,7 @@ const SecuritySetup = ({
                 ) {
                     throw new Error(
                         result?.message ||
-                            "Unable to load Security Setup."
+                        "Unable to load Security Setup."
                     );
                 }
 
@@ -927,16 +923,16 @@ const SecuritySetup = ({
                         Array.isArray(
                             returnedUsers
                         ) &&
-                        returnedUsers.length > 0
+                            returnedUsers.length > 0
                             ? returnedUsers
                             : DEFAULT_USERS
                     ).map(normalizeUser);
 
                 const normalizedPermissionMap =
-    normalizePermissions(
-        normalizedGroups,
-        normalizedUsers
-    );
+                    normalizePermissions(
+                        normalizedGroups,
+                        normalizedUsers
+                    );
 
                 setOperationGroups(
                     normalizedGroups
@@ -1006,10 +1002,10 @@ const SecuritySetup = ({
 
                 const errorMessage =
                     error?.name ===
-                    "AbortError"
+                        "AbortError"
                         ? "The Security Setup server did not respond within 15 seconds."
                         : error?.message ||
-                          "Unable to load Security Setup.";
+                        "Unable to load Security Setup.";
 
                 setMessage(errorMessage);
 
@@ -1022,11 +1018,11 @@ const SecuritySetup = ({
                         normalizeUser
                     );
 
-           const fallbackPermissions =
-    normalizePermissions(
-        DEFAULT_OPERATION_GROUPS,
-        normalizedUsers
-    );
+                const fallbackPermissions =
+                    normalizePermissions(
+                        DEFAULT_OPERATION_GROUPS,
+                        normalizedUsers
+                    );
 
                 setOperationGroups(
                     DEFAULT_OPERATION_GROUPS
@@ -1092,13 +1088,13 @@ const SecuritySetup = ({
                         groupMatches
                             ? group.operations
                             : group.operations.filter(
-                                  (operation) =>
-                                      operation.name
-                                          .toLowerCase()
-                                          .includes(
-                                              searchValue
-                                          )
-                              );
+                                (operation) =>
+                                    operation.name
+                                        .toLowerCase()
+                                        .includes(
+                                            searchValue
+                                        )
+                            );
 
                     return {
                         ...group,
@@ -1205,6 +1201,9 @@ const SecuritySetup = ({
         ) {
             return;
         }
+        if (permissionName === "view") {
+            return;
+        }
 
         const permissionKey =
             getPermissionKey(
@@ -1304,7 +1303,7 @@ const SecuritySetup = ({
 
                 return Boolean(
                     permissions[
-                        permissionKey
+                    permissionKey
                     ]?.[permissionName]
                 );
             }).length;
@@ -1316,7 +1315,7 @@ const SecuritySetup = ({
             indeterminate:
                 selectedCount > 0 &&
                 selectedCount <
-                    editableUsers.length,
+                editableUsers.length,
         };
     };
 
@@ -1328,6 +1327,9 @@ const SecuritySetup = ({
         permissionName,
         checked
     ) => {
+        if (permissionName === "view") {
+            return;
+        }
         if (!selectedOperation) {
             return;
         }
@@ -1352,13 +1354,13 @@ const SecuritySetup = ({
 
                 const currentPermission =
                     updated[
-                        permissionKey
+                    permissionKey
                     ] ||
                     createBlankPermission();
 
                 if (
                     permissionName ===
-                        "view" &&
+                    "view" &&
                     !checked
                 ) {
                     updated[
@@ -1380,7 +1382,7 @@ const SecuritySetup = ({
                 if (
                     checked &&
                     permissionName !==
-                        "view"
+                    "view"
                 ) {
                     updated[
                         permissionKey
@@ -1429,7 +1431,7 @@ const SecuritySetup = ({
             PERMISSION_COLUMNS.filter(
                 (column) =>
                     currentPermission[
-                        column.key
+                    column.key
                     ]
             ).length;
 
@@ -1440,7 +1442,7 @@ const SecuritySetup = ({
             indeterminate:
                 selectedCount > 0 &&
                 selectedCount <
-                    PERMISSION_COLUMNS.length,
+                PERMISSION_COLUMNS.length,
         };
     };
 
@@ -1494,7 +1496,7 @@ const SecuritySetup = ({
 
                 updated[permissionKey] =
                     initialPermissions[
-                        permissionKey
+                    permissionKey
                     ] ||
                     (user.isAdministrator
                         ? createFullPermission()
@@ -1526,9 +1528,16 @@ const SecuritySetup = ({
                                 user.userId
                             )
                         ] =
-                            user.isAdministrator
-                                ? createFullPermission()
-                                : createBlankPermission();
+                          user.isAdministrator
+    ? createFullPermission()
+    : {
+          view: true,
+          add: false,
+          edit: false,
+          delete: false,
+          print: false,
+          export: false,
+      };
                     });
                 }
             );
@@ -1547,44 +1556,44 @@ const SecuritySetup = ({
        BUILD SAVE PAYLOAD
     ===================================================== */
 
- const buildPermissionPayload = () => {
-    return users.map((user) => {
+    const buildPermissionPayload = () => {
+        return users.map((user) => {
 
-        const userPermissions = {};
+            const userPermissions = {};
 
-        operationGroups.forEach((group) => {
+            operationGroups.forEach((group) => {
 
-            userPermissions[group.id] = {};
+                userPermissions[group.id] = {};
 
-            group.operations.forEach((operation) => {
+                group.operations.forEach((operation) => {
 
-                const permissionKey =
-                    getPermissionKey(
-                        operation.id,
-                        user.userId
-                    );
+                    const permissionKey =
+                        getPermissionKey(
+                            operation.id,
+                            user.userId
+                        );
 
-                userPermissions[group.id][
-                    operation.operation
-                ] =
-                    permissions[
+                    userPermissions[group.id][
+                        operation.operation
+                    ] =
+                        permissions[
                         permissionKey
-                    ] ||
-                    createBlankPermission();
+                        ] ||
+                        createBlankPermission();
+
+                });
 
             });
 
+            return {
+                userId: user.userId,
+                userName: user.userName,
+                role: user.roleName,
+                permissions: userPermissions,
+            };
+
         });
-
-        return {
-            userId: user.userId,
-            userName: user.userName,
-            role: user.roleName,
-            permissions: userPermissions,
-        };
-
-    });
-};
+    };
 
     /* =====================================================
        SAVE SECURITY SETUP
@@ -1609,8 +1618,8 @@ const SecuritySetup = ({
             setSaving(true);
             setMessage("");
 
-           const usersPayload =
-    buildPermissionPayload();
+            const usersPayload =
+                buildPermissionPayload();
 
             const response =
                 await fetchWithTimeout(
@@ -1621,12 +1630,12 @@ const SecuritySetup = ({
                             "Content-Type":
                                 "application/json",
                         },
-                   body: JSON.stringify({
-    distributorId,
-    firmId,
-    updatedBy: currentUserId,
-    users: usersPayload,
-}),
+                        body: JSON.stringify({
+                            distributorId,
+                            firmId,
+                            updatedBy: currentUserId,
+                            users: usersPayload,
+                        }),
                     },
                     15000
                 );
@@ -1642,7 +1651,7 @@ const SecuritySetup = ({
             ) {
                 throw new Error(
                     result?.message ||
-                        "Unable to save Security Setup."
+                    "Unable to save Security Setup."
                 );
             }
 
@@ -1662,10 +1671,10 @@ const SecuritySetup = ({
                 typeof onPermissionsSavedRef.current ===
                 "function"
             ) {
-             onPermissionsSavedRef.current({
-    permissions,
-    users: usersPayload,
-});
+                onPermissionsSavedRef.current({
+                    permissions,
+                    users: usersPayload,
+                });
             }
         } catch (error) {
             console.error(
@@ -1675,10 +1684,10 @@ const SecuritySetup = ({
 
             const errorMessage =
                 error?.name ===
-                "AbortError"
+                    "AbortError"
                     ? "The Security Setup server did not respond within 15 seconds."
                     : error?.message ||
-                      "Unable to save Security Setup.";
+                    "Unable to save Security Setup.";
 
             setMessage(errorMessage);
         } finally {
@@ -1857,7 +1866,7 @@ const SecuritySetup = ({
 
                     <div className="security-operation-tree">
                         {filteredOperationGroups.length ===
-                        0 ? (
+                            0 ? (
                             <div className="security-empty-tree">
                                 No matching operation
                                 found.
@@ -1869,11 +1878,11 @@ const SecuritySetup = ({
                                         operationSearch
                                             ? true
                                             : Boolean(
-                                                  expandedGroups[
-                                                      group
-                                                          .id
-                                                  ]
-                                              );
+                                                expandedGroups[
+                                                group
+                                                    .id
+                                                ]
+                                            );
 
                                     return (
                                         <div
@@ -1892,11 +1901,10 @@ const SecuritySetup = ({
                                                 }
                                             >
                                                 <span
-                                                    className={`security-group-arrow ${
-                                                        isExpanded
+                                                    className={`security-group-arrow ${isExpanded
                                                             ? "is-expanded"
                                                             : ""
-                                                    }`}
+                                                        }`}
                                                 >
                                                     ›
                                                 </span>
@@ -1933,12 +1941,11 @@ const SecuritySetup = ({
                                                                     operation.id
                                                                 }
                                                                 type="button"
-                                                                className={`security-operation-button ${
-                                                                    selectedOperationId ===
-                                                                    operation.id
+                                                                className={`security-operation-button ${selectedOperationId ===
+                                                                        operation.id
                                                                         ? "is-active"
                                                                         : ""
-                                                                }`}
+                                                                    }`}
                                                                 onClick={() =>
                                                                     handleSelectOperation(
                                                                         group.id,
@@ -1950,7 +1957,7 @@ const SecuritySetup = ({
 
                                                                 <span className="security-operation-indicator">
                                                                     {selectedOperationId ===
-                                                                    operation.id
+                                                                        operation.id
                                                                         ? "✓"
                                                                         : ""}
                                                                 </span>
@@ -2125,14 +2132,17 @@ const SecuritySetup = ({
 
                                                             <PermissionCheckbox
                                                                 checked={
-                                                                    columnState.checked
+                                                                    column.key === "view"
+                                                                        ? true
+                                                                        : columnState.checked
                                                                 }
                                                                 indeterminate={
                                                                     columnState.indeterminate
                                                                 }
-                                                                disabled={
-                                                                    saving
-                                                                }
+                                                             disabled={
+    saving ||
+    column.key === "view"
+}
                                                                 title={`Select ${column.label} permission for all visible users`}
                                                                 onChange={(
                                                                     checked
@@ -2153,7 +2163,7 @@ const SecuritySetup = ({
 
                                 <tbody>
                                     {filteredUsers.length ===
-                                    0 ? (
+                                        0 ? (
                                         <tr>
                                             <td
                                                 colSpan={
@@ -2181,7 +2191,7 @@ const SecuritySetup = ({
 
                                                 const currentPermission =
                                                     permissions[
-                                                        permissionKey
+                                                    permissionKey
                                                     ] ||
                                                     createBlankPermission();
 
@@ -2270,16 +2280,16 @@ const SecuritySetup = ({
                                                                 >
                                                                     <PermissionCheckbox
                                                                         checked={
-                                                                            user.isAdministrator
+                                                                            column.key === "view"
                                                                                 ? true
-                                                                                : currentPermission[
-                                                                                      column
-                                                                                          .key
-                                                                                  ]
+                                                                                : user.isAdministrator
+                                                                                    ? true
+                                                                                    : currentPermission[column.key]
                                                                         }
                                                                         disabled={
                                                                             user.isAdministrator ||
-                                                                            saving
+                                                                            saving ||
+                                                                            column.key === "view"
                                                                         }
                                                                         title={`${column.label} permission for ${user.userName}`}
                                                                         onChange={(
@@ -2348,15 +2358,13 @@ const SecuritySetup = ({
             ================================================= */}
 
             <div
-                className={`security-page-footer ${
-                    hasChanges
+                className={`security-page-footer ${hasChanges
                         ? "has-changes"
                         : ""
-                } ${
-                    message
+                    } ${message
                         ? "has-message"
                         : ""
-                }`}
+                    }`}
             >
                 <span className="security-footer-icon">
                     i
@@ -2367,54 +2375,314 @@ const SecuritySetup = ({
                         (hasChanges
                             ? "You have unsaved permission changes. Click Save Changes to apply them."
                             : selectedOperation
-                            ? `Select or clear authorities for ${selectedOperation.name}.`
-                            : "Select an operation/module and set user authorities by enabling or disabling permissions.")}
+                                ? `Select or clear authorities for ${selectedOperation.name}.`
+                                : "Select an operation/module and set user authorities by enabling or disabling permissions.")}
                 </span>
             </div>
         </div>
     );
 };
 
+// export const hasPermission = (
+//     permissions,
+//     module,
+//     operation,
+//     action
+// ) => {
+
+//     const role = String(
+//         localStorage.getItem("role") || ""
+//     ).toUpperCase();
+
+//     // Distributor Admin always has full access
+//     if (role === "DISTRIBUTOR_ADMIN") {
+//         return true;
+//     }
+
+//     if (!permissions) {
+//         return false;
+//     }
+
+//     const modulePermissions =
+//         permissions[
+//             String(module).toLowerCase()
+//         ];
+
+//     if (!modulePermissions) {
+//         return false;
+//     }
+
+//     const operationPermissions =
+//         modulePermissions[
+//             String(operation).toUpperCase()
+//         ];
+
+//     if (!operationPermissions) {
+//         return false;
+//     }
+
+//     return Boolean(
+//         operationPermissions[action]
+//     );
+// };
+/* =========================================================
+   CHECK USER PERMISSION
+========================================================= */
+
+let lastPermissionSync = 0;
+
+const PERMISSION_CACHE_TIME = 30000; // 30 seconds
+
+const syncPermissions = async () => {
+
+    const now = Date.now();
+
+    if (
+        now - lastPermissionSync <
+        PERMISSION_CACHE_TIME
+    ) {
+        return;
+    }
+
+    const distributorId =
+        localStorage.getItem(
+            "distributorId"
+        );
+
+    const firmId =
+        localStorage.getItem(
+            "firmId"
+        );
+
+    const userId =
+        localStorage.getItem(
+            "userId"
+        );
+
+    const role =
+        localStorage.getItem(
+            "role"
+        );
+
+    const query =
+        new URLSearchParams({
+            distributorId,
+            firmId,
+            userId,
+            role,
+        });
+
+    const response =
+        await secureFetch(
+            `${API_URL}/security-setup/my-permissions?${query}`
+        );
+
+    if (!response.ok) {
+        return;
+    }
+
+    const result =
+        await response.json();
+
+    permissionCache =
+        result.permissions || {};
+
+    localStorage.setItem(
+        "permissions",
+        JSON.stringify(
+            permissionCache
+        )
+    );
+
+    lastPermissionSync = now;
+};
 export const hasPermission = (
-    permissions,
     module,
     operation,
     action
 ) => {
 
-    const role = String(
-        localStorage.getItem("role") || ""
-    ).toUpperCase();
+    try {
 
-    // Distributor Admin always has full access
-    if (role === "DISTRIBUTOR_ADMIN") {
-        return true;
-    }
 
-    if (!permissions) {
-        return false;
-    }
 
-    const modulePermissions =
-        permissions[
+        const permissions =
+            Object.keys(permissionCache).length
+                ? permissionCache
+                : loadPermissions();
+
+
+
+
+        const modulePermissions =
+            permissions[
             String(module).toLowerCase()
-        ];
+            ];
 
-    if (!modulePermissions) {
-        return false;
-    }
+        if (!modulePermissions) {
+            return false;
+        }
 
-    const operationPermissions =
-        modulePermissions[
+        const operationPermissions =
+            modulePermissions[
             String(operation).toUpperCase()
-        ];
+            ];
 
-    if (!operationPermissions) {
+        if (!operationPermissions) {
+            return false;
+        }
+
+        return Boolean(
+            operationPermissions[action]
+        );
+
+    } catch (error) {
+
+        console.error(
+            "Permission Check Error:",
+            error
+        );
+
         return false;
     }
+};
 
-    return Boolean(
-        operationPermissions[action]
+/* =========================================================
+REFRESH PERMISSIONS
+========================================================= */
+
+export const refreshPermissions = async () => {
+    try {
+        const distributorId =
+            localStorage.getItem("distributorId") || "";
+
+        const firmId =
+            localStorage.getItem("firmId") || "";
+
+        const userId =
+            localStorage.getItem("userId") || "";
+
+        const role =
+            localStorage.getItem("role") || "";
+
+        const query = new URLSearchParams({
+            distributorId,
+            firmId,
+            userId,
+            role,
+        });
+
+        const response = await secureFetch(
+            `${API_URL}/security-setup/my-permissions?${query}`
+        );
+
+        if (!response.ok) {
+            return false;
+        }
+
+        const result = await response.json();
+
+        permissionCache = result.permissions || {};
+
+        localStorage.setItem(
+            "permissions",
+            JSON.stringify(permissionCache)
+        );
+
+        return true;
+    } catch (error) {
+        console.error(
+            "Permission Refresh Error:",
+            error
+        );
+
+        return false;
+    }
+};
+/* =========================================================
+SECURE API FETCH
+========================================================= */
+
+export const secureFetch = async (
+  url,
+  options = {}
+) => {
+  const headers = {
+    ...(options.headers || {}),
+
+    "x-distributor-id":
+      localStorage.getItem("distributorId") || "",
+
+    "x-firm-id":
+      localStorage.getItem("firmId") || "",
+
+    "x-user-id":
+      localStorage.getItem("userId") || "",
+
+    "x-user-role":
+      localStorage.getItem("role") || "",
+  };
+
+  const response = await fetch(url, {
+    ...options,
+    headers,
+  });
+
+  // Authentication expired
+  if (response.status === 401) {
+    alert("Your session has expired. Please login again.");
+
+    localStorage.clear();
+
+    window.location.reload();
+  }
+
+  // Permission denied
+  if (response.status === 403) {
+    const result = await response.clone().json();
+
+    alert(result.message || "Permission denied.");
+  }
+
+  return response;
+};
+/* =========================================================
+SECURITY CACHE
+========================================================= */
+
+let permissionCache = {};
+/* =========================================================
+LOAD PERMISSIONS
+========================================================= */
+
+export const loadPermissions = () => {
+    try {
+        permissionCache = JSON.parse(
+            localStorage.getItem("permissions") || "{}"
+        );
+    } catch {
+        permissionCache = {};
+    }
+
+    return permissionCache;
+};
+export const usePermission = (
+    module,
+    operation
+) => {
+    const permissions = loadPermissions();
+
+    const moduleKey = String(module).toLowerCase();
+
+    return (
+        permissions?.[moduleKey]?.[operation] || {
+            view: true,
+            add: false,
+            edit: false,
+            delete: false,
+            print: false,
+            export: false,
+        }
     );
 };
 export default SecuritySetup;

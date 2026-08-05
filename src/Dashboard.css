@@ -27737,11 +27737,10 @@ button.premium-sales-apply-button {
 .content-body{
     flex:1;
     min-height:0;
-    overflow:hidden;
-
+    overflow-y:auto;
+    overflow-x:hidden;
     padding:18px 22px 18px 22px;
     background:#f4f7fc;
-
     display:flex;
     flex-direction:column;
 }
@@ -34416,7 +34415,7 @@ body > .credit-product-dropdown {
   max-width: none !important;
   margin: 0 !important;
   padding: 0 !important;
-  overflow: hidden !important;
+  overflow: visible !important;
   border: 1px solid #d8e1ec !important;
   border-radius: 10px !important;
   background: #ffffff !important;

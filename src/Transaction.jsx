@@ -1,4 +1,5 @@
 import React, { useState, useCallback, useEffect } from "react";
+import { secureFetch, usePermission } from "./SecuritySetup";
 import "./Transaction.css";
 import { useERP } from "./context/ERPContext";
 import {
@@ -44,6 +45,11 @@ const Transaction = ({
   setTransactionFormMode,
   autoVoucherNo = true,
 }) => {
+  const receiptPermission = usePermission("TRANSACTIONS", "RECEIPT");
+  const chequeBouncePermission = usePermission("TRANSACTIONS", "CHEQUE_BOUNCE");
+  const pdcDocketPermission = usePermission("TRANSACTIONS", "PDC_DOCKET");           // NEW
+const contraPermission = usePermission("TRANSACTIONS", "CONTRA");                 // NEW
+const collectionVoucherPermission = usePermission("TRANSACTIONS", "COLLECTION_VOUCHER"); // NEW
   const erpContext = useERP();
   console.log("ERP CONTEXT =", erpContext);
   console.log("ERP STATE =", erpContext?.state);
@@ -3486,7 +3492,7 @@ const selectParty = (
       );
 
       const response =
-        await fetch(requestUrl, {
+        await secureFetch(requestUrl, {
           method:
             isEditing
               ? "PUT"
@@ -3940,7 +3946,7 @@ const selectParty = (
     }
 
     try {
-      const response = await fetch(
+      const response = await secureFetch(
         `${API_URL}/transaction/receipt/${encodeURIComponent(
           id
         )}`,
@@ -4698,45 +4704,44 @@ const saveChequeBounce =
       firmId,
     };
 
+   // AFTER
+    const isEditingChequeBounce = Boolean(editChequeBounceId);
+
+    const requestUrl = isEditingChequeBounce
+      ? `${API_URL}/transaction/cheque-bounce/${encodeURIComponent(editChequeBounceId)}`
+      : `${API_URL}/transaction/cheque-bounce`;
+
     console.log(
-      "CHEQUE BOUNCE PAYLOAD =",
-      payload
+      "CHEQUE BOUNCE MODE =",
+      isEditingChequeBounce ? "UPDATE" : "CREATE"
     );
+
+    console.log("CHEQUE BOUNCE PAYLOAD =", payload);
 
     try {
       const response =
-        await fetch(
-          `${API_URL}/transaction/cheque-bounce`,
+        await secureFetch(
+          requestUrl,
           {
-            method: "POST",
-
-            headers: {
-              "Content-Type":
-                "application/json",
-            },
-
-            body:
-              JSON.stringify(
-                payload
-              ),
+            method: isEditingChequeBounce ? "PUT" : "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(payload),
           }
         );
 
-      const result =
-        await response.json();
+      const result = await response.json();
 
-      if (
-        !response.ok ||
-        result.success === false
-      ) {
+      if (!response.ok || result.success === false) {
         throw new Error(
           result.message ||
-          "Cheque Bounce Save Failed"
+          (isEditingChequeBounce ? "Cheque Bounce Update Failed" : "Cheque Bounce Save Failed")
         );
       }
 
       alert(
-        "Cheque Bounce Saved Successfully"
+        isEditingChequeBounce
+          ? "Cheque Bounce Updated Successfully"
+          : "Cheque Bounce Saved Successfully"
       );
 
       await loadChequeBounces();
@@ -5034,7 +5039,7 @@ const saveChequeBounce =
 
       try {
         const response =
-          await fetch(
+          await secureFetch(
             `${API_URL}/transaction/cheque-bounce/${encodeURIComponent(
               id
             )}`,
@@ -5305,23 +5310,23 @@ const payload = {
           payload
         );
 
-        const response =
-          await fetch(
-            `${API_URL}/transaction/pdc-docket`,
-            {
-              method: "POST",
+       const url = editPDCDocketId
+  ? `${API_URL}/transaction/pdc-docket/${editPDCDocketId}`
+  : `${API_URL}/transaction/pdc-docket`;
 
-              headers: {
-                "Content-Type":
-                  "application/json",
-              },
+const method = editPDCDocketId
+  ? "PUT"
+  : "POST";
 
-              body:
-                JSON.stringify(
-                  payload
-                ),
-            }
-          );
+const response = await secureFetch(url, {
+  method,
+
+  headers: {
+    "Content-Type": "application/json",
+  },
+
+  body: JSON.stringify(payload),
+});
 
         const result =
           await response.json();
@@ -5336,9 +5341,11 @@ const payload = {
           );
         }
 
-        alert(
-          "PDC Docket Saved Successfully"
-        );
+       alert(
+    editPDCDocketId
+        ? "PDC Docket Updated Successfully"
+        : "PDC Docket Saved Successfully"
+);
 
         await loadPDCDockets();
 
@@ -5358,6 +5365,7 @@ const payload = {
           filters:
             pdcDocketAppliedFilters,
         });
+        setEditPDCDocketId(null);
 
         resetPDCDocketForm();
 
@@ -5380,7 +5388,7 @@ const payload = {
 
     try {
 
-      const response = await fetch(
+      const response = await secureFetch(
         `${API_URL}/transaction/pdc-docket`
       );
 
@@ -5557,7 +5565,7 @@ const payload = {
         );
 
         const response =
-          await fetch(
+          await secureFetch(
             `${API_URL}/transaction/pdc-docket/list?${query.toString()}`
           );
 
@@ -5793,7 +5801,7 @@ const payload = {
 
     try {
 
-      const response = await fetch(
+      const response = await secureFetch(
         `${API_URL}/transaction/contra`,
       );
 
@@ -5959,7 +5967,7 @@ const payload = {
         );
 
         const response =
-          await fetch(
+          await secureFetch(
             `${API_URL}/transaction/contra/list?${query.toString()}`
           );
 
@@ -6230,6 +6238,7 @@ const payload = {
 
   setPDCDocketItems([]);
   setEditPDCDocketId(null);
+
 };
 
   const editPDCDocket = (
@@ -6286,9 +6295,12 @@ const payload = {
       existingCheques
     );
 
-    openTransactionEntry(
-      "PDC Docket"
-    );
+ setActiveTransaction("PDC Docket");
+
+setTransactionFormMode((prev) => ({
+  ...prev,
+  "PDC Docket": true,
+}));
   };
   const deletePDCDocket =
     async (id) => {
@@ -6311,7 +6323,7 @@ const payload = {
 
       try {
         const response =
-          await fetch(
+          await secureFetch(
             `${API_URL}/transaction/pdc-docket/${encodeURIComponent(
               id
             )}`,
@@ -6608,23 +6620,21 @@ const payload = {
             ).trim(),
         };
 
-        const response =
-          await fetch(
-            `${API_URL}/transaction/contra`,
-            {
-              method: "POST",
+       const url = editContraId
+  ? `${API_URL}/transaction/contra/${editContraId}`
+  : `${API_URL}/transaction/contra`;
 
-              headers: {
-                "Content-Type":
-                  "application/json",
-              },
+const method = editContraId
+  ? "PUT"
+  : "POST";
 
-              body:
-                JSON.stringify(
-                  payload
-                ),
-            }
-          );
+const response = await secureFetch(url, {
+  method,
+  headers: {
+    "Content-Type": "application/json",
+  },
+  body: JSON.stringify(payload),
+});
 
         const result =
           await response.json();
@@ -6640,8 +6650,10 @@ const payload = {
         }
 
         alert(
-          "Contra saved successfully."
-        );
+  editContraId
+    ? "Contra Updated Successfully"
+    : "Contra Saved Successfully"
+);
 
         /*
          * Newly saved records are normally shown
@@ -6652,6 +6664,7 @@ const payload = {
           1
         );
 
+        setEditContraId(null);
         resetContraForm();
 
         openTransactionList(
@@ -6692,49 +6705,51 @@ const payload = {
     setEditContraId(null);
   };
 
-  const editContra =
-    (contra) => {
-      if (!contra) {
-        return;
-      }
+const editContra = (contra) => {
+  if (!contra) {
+    return;
+  }
 
-      setEditContraId(
-        contra._id ||
-        contra.id ||
+  setEditContraId(
+    contra._id ||
+    contra.id ||
+    ""
+  );
+
+  setContraFormData({
+    transactionDate:
+      String(
+        contra.transactionDate ||
+        contra.vDate ||
         ""
-      );
+      ).slice(0, 10),
 
-      setContraFormData({
-        transactionDate:
-          String(
-            contra.transactionDate ||
-            contra.vDate ||
-            ""
-          ).slice(0, 10),
+    tranVNo:
+      contra.tranVNo ||
+      contra.vNo ||
+      "",
 
-        tranVNo:
-          contra.tranVNo ||
-          contra.vNo ||
-          "",
+    transactionType:
+      contra.transactionType ||
+      contra.type ||
+      "CASH DEPOSIT",
 
-        transactionType:
-          contra.transactionType ||
-          contra.type ||
-          "CASH DEPOSIT",
+    amount:
+      contra.amount ?? "",
 
-        amount:
-          contra.amount ??
-          "",
+    narration:
+      contra.narration || "",
+  });
 
-        narration:
-          contra.narration ||
-          "",
-      });
+  // DON'T call openTransactionEntry()
 
-      openTransactionEntry(
-        "Contra"
-      );
-    };
+  setActiveTransaction("Contra");
+
+  setTransactionFormMode((prev) => ({
+    ...prev,
+    "Contra": true,
+  }));
+};
 
   const deleteContra =
     async (id) => {
@@ -6757,7 +6772,7 @@ const payload = {
 
       try {
         const response =
-          await fetch(
+          await secureFetch(
             `${API_URL}/transaction/contra/${encodeURIComponent(
               id
             )}`,
@@ -7060,19 +7075,28 @@ const payload = {
         bills: selectedBills,
       };
 
-      const response = await fetch(
-        `${API_URL}/transaction/collection-voucher`,
-        {
-          method: "POST",
+     const url = editCollectionVoucherId
+  ? `${API_URL}/transaction/collection-voucher/${editCollectionVoucherId}`
+  : `${API_URL}/transaction/collection-voucher`;
 
-          headers: {
-            "Content-Type":
-              "application/json",
-          },
+const method =
+  editCollectionVoucherId
+    ? "PUT"
+    : "POST";
 
-          body: JSON.stringify(payload),
-        }
-      );
+const response = await secureFetch(
+  url,
+  {
+    method,
+
+    headers: {
+      "Content-Type":
+        "application/json",
+    },
+
+    body: JSON.stringify(payload),
+  }
+);
 
       const result =
         await response.json();
@@ -7088,8 +7112,10 @@ const payload = {
       }
 
       alert(
-        "Collection Voucher Saved Successfully"
-      );
+  editCollectionVoucherId
+    ? "Collection Voucher Updated Successfully"
+    : "Collection Voucher Saved Successfully"
+);
 
       /*
        * Reset page first because newly saved
@@ -7102,6 +7128,7 @@ const payload = {
       /*
        * Reset the entry form.
        */
+      setEditCollectionVoucherId(null);
       resetCollectionVoucherForm();
 
       /*
@@ -7239,7 +7266,7 @@ const payload = {
   const loadPendingBills = async () => {
     try {
 
-      const response = await fetch(
+      const response = await secureFetch(
         `${API_URL}/transaction/collection-voucher`
       );
 
@@ -7257,7 +7284,7 @@ const payload = {
     async () => {
       try {
         const response =
-          await fetch(
+          await secureFetch(
             `${API_URL}/transaction/collection-voucher`
           );
 
@@ -7435,7 +7462,7 @@ const payload = {
           );
 
           const response =
-            await fetch(
+            await secureFetch(
               `${API_URL}/transaction/collection-voucher/list?${query.toString()}`
             );
 
@@ -7871,9 +7898,14 @@ const payload = {
       )
     );
 
-    openTransactionEntry(
-      "Collection Voucher"
-    );
+   setActiveTransaction(
+  "Collection Voucher"
+);
+
+setTransactionFormMode((prev) => ({
+  ...prev,
+  "Collection Voucher": true,
+}));
   };
 
   const deleteCollectionVoucher =
@@ -7896,7 +7928,7 @@ const payload = {
 
       try {
         const response =
-          await fetch(
+          await secureFetch(
             `${API_URL}/transaction/collection-voucher/${encodeURIComponent(
               id
             )}`,
@@ -7982,7 +8014,7 @@ const payload = {
     try {
       console.log("LOAD RECEIPTS START");
 
-      const response = await fetch(
+      const response = await secureFetch(
         `${API_URL}/transaction/receipt`
       );
 
@@ -8126,7 +8158,7 @@ const payload = {
           );
         }
 
-        const response = await fetch(
+        const response = await secureFetch(
           `${API_URL}/transaction/receipt/list?${query.toString()}`
         );
 
@@ -8523,7 +8555,7 @@ const payload = {
 
   const loadChequeBounces = async () => {
     try {
-      const res = await fetch(
+      const res = await secureFetch(
         `${API_URL}/transaction/cheque-bounce`
       );
 
@@ -8676,7 +8708,7 @@ const payload = {
         }
 
         const response =
-          await fetch(
+          await secureFetch(
             `${API_URL}/transaction/cheque-bounce/list?${query.toString()}`
           );
 
@@ -8916,6 +8948,7 @@ const payload = {
         </div>
 
         <div className="receipt-premium-heading-actions">
+          {receiptPermission.add && (
           <button
             type="button"
             className="receipt-premium-button receipt-premium-add-button"
@@ -8927,7 +8960,7 @@ const payload = {
             <Plus size={14} />
             New Receipt
           </button>
-
+          )}
           <button
             type="button"
             className="receipt-premium-button receipt-premium-excel-button"
@@ -9508,7 +9541,7 @@ const payload = {
                           >
                             <Eye size={14} />
                           </button>
-
+{receiptPermission.edit && (
                           <button
                             type="button"
                             className="receipt-premium-action-button edit"
@@ -9519,7 +9552,8 @@ const payload = {
                           >
                             <Pencil size={14} />
                           </button>
-
+)}
+{receiptPermission.delete && (
                           <button
                             type="button"
                             className="receipt-premium-action-button delete"
@@ -9534,6 +9568,7 @@ const payload = {
                           >
                             <Trash2 size={14} />
                           </button>
+)}
                         </div>
                       </td>
                     </tr>
@@ -13471,6 +13506,7 @@ const payload = {
           </div>
 
           <div className="cheque-bounce-heading-actions">
+            {chequeBouncePermission.add && (
             <button
               type="button"
               className="cheque-bounce-main-button cheque-bounce-add-button"
@@ -13488,7 +13524,7 @@ const payload = {
               <Plus size={15} />
               New Cheque Bounce
             </button>
-
+            )}
             <button
               type="button"
               className="cheque-bounce-main-button cheque-bounce-excel-button"
@@ -14006,7 +14042,7 @@ const payload = {
                               >
                                 <Eye size={16} />
                               </button>
-
+{chequeBouncePermission.edit && (
                               <button
                                 type="button"
                                 className="cheque-bounce-action-button edit"
@@ -14019,7 +14055,8 @@ const payload = {
                               >
                                 <Pencil size={16} />
                               </button>
-
+)}
+{chequeBouncePermission.delete && (
                               <button
                                 type="button"
                                 className="cheque-bounce-action-button delete"
@@ -14032,6 +14069,7 @@ const payload = {
                               >
                                 <Trash2 size={16} />
                               </button>
+)}
                             </div>
                           </td>
                         </tr>
@@ -14964,6 +15002,7 @@ const payload = {
           </div>
 
           <div className="pdc-docket-heading-actions">
+              {pdcDocketPermission.add && (
             <button
               type="button"
               className="pdc-docket-main-button pdc-docket-add-button"
@@ -14975,7 +15014,7 @@ const payload = {
               <Plus size={16} />
               New PDC Docket
             </button>
-
+              )}
             <button
               type="button"
               className="pdc-docket-main-button pdc-docket-excel-button"
@@ -15445,7 +15484,7 @@ const payload = {
                               >
                                 <Eye size={16} />
                               </button>
-
+{pdcDocketPermission.edit && ( 
                               <button
                                 type="button"
                                 className="pdc-docket-action-button edit"
@@ -15463,6 +15502,7 @@ const payload = {
                               >
                                 <Pencil size={16} />
                               </button>
+)}
 
                               <button
                                 type="button"
@@ -15474,7 +15514,7 @@ const payload = {
                               >
                                 <Printer size={16} />
                               </button>
-
+{pdcDocketPermission.delete && (
                               <button
                                 type="button"
                                 className="pdc-docket-action-button delete"
@@ -15491,6 +15531,7 @@ const payload = {
                               >
                                 <Trash2 size={16} />
                               </button>
+)}
                             </div>
                           </td>
                         </tr>
@@ -16286,6 +16327,8 @@ const payload = {
           </div>
 
           <div className="contra-heading-actions">
+            {contraPermission.add && (
+
             <button
               type="button"
               className="contra-main-button contra-add-button"
@@ -16297,7 +16340,7 @@ const payload = {
               <Plus size={16} />
               New Transaction
             </button>
-
+            )}
             <button
               type="button"
               className="contra-main-button contra-excel-button"
@@ -16811,7 +16854,7 @@ const payload = {
                               >
                                 <Eye size={16} />
                               </button>
-
+{contraPermission.edit && (
                               <button
                                 type="button"
                                 className="contra-action-button edit"
@@ -16831,7 +16874,8 @@ const payload = {
                               >
                                 <Pencil size={16} />
                               </button>
-
+)}
+{contraPermission.delete && (
                               <button
                                 type="button"
                                 className="contra-action-button delete"
@@ -16848,6 +16892,7 @@ const payload = {
                               >
                                 <Trash2 size={16} />
                               </button>
+)}
                             </div>
                           </td>
                         </tr>
@@ -17411,6 +17456,7 @@ const payload = {
           </div>
 
           <div className="collection-voucher-heading-actions">
+            {collectionVoucherPermission.add && (
             <button
               type="button"
               className="collection-voucher-main-button collection-voucher-add-button"
@@ -17425,7 +17471,7 @@ const payload = {
               <Plus size={16} />
               New Collection Voucher
             </button>
-
+            )}
             <button
               type="button"
               className="collection-voucher-main-button collection-voucher-excel-button"
@@ -17924,7 +17970,7 @@ const payload = {
                                 >
                                   <Eye size={16} />
                                 </button>
-
+{collectionVoucherPermission.edit && (
                                 <button
                                   type="button"
                                   className="collection-voucher-action-button edit"
@@ -17945,7 +17991,8 @@ const payload = {
                                 >
                                   <Pencil size={16} />
                                 </button>
-
+)}
+{collectionVoucherPermission.delete && (
                                 <button
                                   type="button"
                                   className="collection-voucher-action-button delete"
@@ -17959,6 +18006,7 @@ const payload = {
                                 >
                                   <Trash2 size={16} />
                                 </button>
+)}
                               </div>
                             </td>
                           </tr>

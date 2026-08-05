@@ -270,8 +270,8 @@ const GeneralSetup1 = ({
     onSettingsSaved,
     isAdmin = false,
 }) => {
-    const API_URL = "http://localhost:5000/api";
-    // const API_URL = "https://total-solution-backend.onrender.com/api";
+    // const API_URL = "http://localhost:5000/api";
+    const API_URL = "https://total-solution-backend.onrender.com/api";
     const [generalSetup, setGeneralSetup] =
         React.useState(() =>
             createDefaultGeneralSetup()
@@ -577,29 +577,46 @@ LOAD ACTIVE GODOWNS FOR DEFAULT GODOWN
                 setGodownsLoading(false);
             }
         }, []);
-    const fetchWithTimeout = async (
-        url,
-        options = {},
-        timeoutMs = 10000
-    ) => {
-        const controller =
-            new AbortController();
+const fetchWithTimeout = async (
+    url,
+    options = {},
+    timeoutMs = 10000
+) => {
+    const controller = new AbortController();
 
-        const timeoutId = window.setTimeout(
-            () => controller.abort(),
-            timeoutMs
-        );
+    const timeoutId = window.setTimeout(
+        () => controller.abort(),
+        timeoutMs
+    );
 
-        try {
-            return await fetch(url, {
-                ...options,
-                signal: controller.signal,
-            });
-        } finally {
-            window.clearTimeout(timeoutId);
-        }
-    };
+    try {
 
+        const headers = {
+            ...(options.headers || {}),
+
+            "x-distributor-id":
+                localStorage.getItem("distributorId") || "",
+
+            "x-firm-id":
+                localStorage.getItem("firmId") || "",
+
+            "x-user-id":
+                localStorage.getItem("userId") || "",
+
+            "x-user-role":
+                localStorage.getItem("role") || "",
+        };
+
+        return await fetch(url, {
+            ...options,
+            headers,
+            signal: controller.signal,
+        });
+
+    } finally {
+        window.clearTimeout(timeoutId);
+    }
+};
     const normalizeSetupResponse = (result) => {
         const source =
             result?.setup ||

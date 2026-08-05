@@ -2,7 +2,7 @@ import express from "express";
 import mongoose from "mongoose";
 import cors from "cors";
 import dotenv from "dotenv";
-import transactionRoutes from "./transaction.js";
+import createTransactionRouter from "./transaction.js"; 
 import generalSetupRoutes from "./generalSetup.js";
 import createSecuritySetupRouter from "./securitySetup.js";
 dotenv.config();
@@ -12,7 +12,7 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
-app.use("/api/transaction", transactionRoutes);
+//app.use("/api/transaction", transactionRoutes);
 app.use("/api/general-setup", generalSetupRoutes);
 
 
@@ -67,6 +67,48 @@ const ensureConnection = (req, res, next) => {
     message: "Database not connected. Please try again.",
   });
 };
+const userSchema = new mongoose.Schema(
+  {
+    userId: { type: String, default: "" },
+    distributorId: { type: String, required: true },
+    firmId: { type: String, required: true },
+    firmName: { type: String, default: "" },
+    userName: { type: String, required: true, trim: true },
+    oldPassword: { type: String, default: "" },
+    password: { type: String, required: true },
+    role: { type: String, default: "USER" },
+    isActive: { type: Boolean, default: true },
+  },
+  { timestamps: true, collection: "Mas_User" }
+);
+
+const companySchema = new mongoose.Schema(
+  {
+    companyCode: String,
+    companyName: String,
+    companyAddress: String,
+    branchOfficeAddress: String,
+    distributorId: String,
+    firmId: String,
+    firmName: String,
+    isActive: { type: Boolean, default: true },
+  },
+  { timestamps: true, collection: "Mas_Company" }
+);
+
+const User = mongoose.model("Mas_User", userSchema);
+const Company = mongoose.model("Mas_Company", companySchema);
+
+const securityRouter =
+    createSecuritySetupRouter(User);
+
+app.use(
+    "/api/security-setup",
+    ensureConnection,
+    securityRouter
+);
+const transactionRoutes = createTransactionRouter(securityRouter);   // NEW — after securityRouter exists
+app.use("/api/transaction", transactionRoutes);         
 const registerSchema = new mongoose.Schema(
   {
     distributorId: { type: String, default: null },
@@ -4223,7 +4265,20 @@ const OtherAccount = mongoose.model("Mas_OtherAccount", otherAccountSchema);
 app.get(
   "/api/companies",
   ensureConnection,
+
+  securityRouter.authorizeRequest(
+    "MASTER",
+    "COMPANY",
+    "view"
+  ),
+
   async (req, res) => {
+
+    const {
+      distributorId,
+      firmId,
+    } = req.security;
+
     try {
       const distributorId = String(
         req.query.distributorId || ""
@@ -4430,9 +4485,30 @@ app.get(
   }
 );
 
-app.post("/api/companies", ensureConnection, async (req, res) => {
+app.post(
+    "/api/companies",
+    ensureConnection,
+
+    securityRouter.authorizeRequest(
+        "MASTER",
+        "COMPANY",
+        "add"
+    ),
+
+    async (req,res)=>{
   try {
-    const { distributorId, firmId, firmName, code, name, address, branchAddress } = req.body;
+ const {
+    distributorId,
+    firmId,
+} = req.security;
+
+const {
+    firmName,
+    code,
+    name,
+    address,
+    branchAddress,
+} = req.body;
 
     if (!distributorId || !firmId || !code || !name) {
       return res.status(400).json({
@@ -4458,7 +4534,15 @@ app.post("/api/companies", ensureConnection, async (req, res) => {
   }
 });
 
-app.put("/api/companies/:id", ensureConnection, async (req, res) => {
+app.put(
+    "/api/companies/:id",
+    ensureConnection,
+
+    securityRouter.authorizeRequest(
+        "MASTER",
+        "COMPANY",
+        "edit"
+    ), async (req, res) => {
   try {
     const { code, name, address, branchAddress } = req.body;
 
@@ -4491,7 +4575,15 @@ app.put("/api/companies/:id", ensureConnection, async (req, res) => {
 });
 
 // ---------- COMPANY ----------
-app.delete("/api/companies/:id", ensureConnection, async (req, res) => {
+app.delete(
+    "/api/companies/:id",
+    ensureConnection,
+
+    securityRouter.authorizeRequest(
+        "MASTER",
+        "COMPANY",
+        "delete"
+    ), async (req, res) => {
   try {
     const company = await Company.findById(req.params.id);
 
@@ -4561,7 +4653,15 @@ app.delete("/api/companies/:id", ensureConnection, async (req, res) => {
   }
 });
 
-app.get("/api/groups", ensureConnection, async (req, res) => {
+app.get(
+  "/api/groups",
+  ensureConnection,
+  securityRouter.authorizeRequest(
+    "master",
+    "GROUP",
+    "view"
+  ),
+  async (req, res) => {
   try {
     const { distributorId, firmId } = req.query;
 
@@ -4591,6 +4691,11 @@ app.get("/api/groups", ensureConnection, async (req, res) => {
 app.get(
   "/api/groups/list",
   ensureConnection,
+  securityRouter.authorizeRequest(
+    "master",
+    "GROUP",
+    "view"
+  ),
   async (req, res) => {
     try {
       const distributorId = String(
@@ -4740,7 +4845,15 @@ app.get(
   }
 );
 
-app.post("/api/groups", ensureConnection, async (req, res) => {
+app.post(
+  "/api/groups",
+  ensureConnection,
+  securityRouter.authorizeRequest(
+    "master",
+    "GROUP",
+    "add"
+  ),
+  async (req, res) => {
   try {
     const { distributorId, firmId, firmName, code, name } = req.body;
 
@@ -4774,7 +4887,15 @@ app.post("/api/groups", ensureConnection, async (req, res) => {
   }
 });
 
-app.get("/api/categories", ensureConnection, async (req, res) => {
+app.get(
+  "/api/categories",
+  ensureConnection,
+  securityRouter.authorizeRequest(
+    "master",
+    "CATEGORY",
+    "view"
+  ),
+  async (req, res) => {
   try {
     const { distributorId, firmId } = req.query;
 
@@ -4803,6 +4924,11 @@ app.get("/api/categories", ensureConnection, async (req, res) => {
 app.get(
   "/api/categories/list",
   ensureConnection,
+  securityRouter.authorizeRequest(
+    "master",
+    "CATEGORY",
+    "view"
+  ),
   async (req, res) => {
     try {
       const distributorId = String(
@@ -4953,7 +5079,15 @@ app.get(
   }
 );
 
-app.post("/api/categories", ensureConnection, async (req, res) => {
+app.post(
+  "/api/categories",
+  ensureConnection,
+  securityRouter.authorizeRequest(
+    "master",
+    "CATEGORY",
+    "add"
+  ),
+  async (req, res) => {
   try {
     const { distributorId, firmId, firmName, code, name } = req.body;
 
@@ -4987,7 +5121,15 @@ app.post("/api/categories", ensureConnection, async (req, res) => {
   }
 });
 
-app.get("/api/products", ensureConnection, async (req, res) => {
+app.get(
+  "/api/products",
+  ensureConnection,
+  securityRouter.authorizeRequest(
+    "master",
+    "PRODUCT",
+    "view"
+  ),
+  async (req, res) => {
   try {
     const { distributorId, firmId, companyCode = "", companyName = "" } = req.query;
 
@@ -5026,6 +5168,11 @@ app.get("/api/products", ensureConnection, async (req, res) => {
 app.get(
   "/api/products/list",
   ensureConnection,
+  securityRouter.authorizeRequest(
+    "master",
+    "PRODUCT",
+    "view"
+  ),
   async (req, res) => {
     try {
       const distributorId = String(
@@ -5357,7 +5504,14 @@ app.get(
   }
 );
 
-app.post("/api/products", ensureConnection, async (req, res) => {
+app.post(
+  "/api/products",
+  ensureConnection,
+  securityRouter.authorizeRequest(
+    "master",
+    "PRODUCT",
+    "add"
+  ), async (req, res) => {
   try {
     const { distributorId, firmId, firmName, code, name } = req.body;
 
@@ -5392,7 +5546,15 @@ app.post("/api/products", ensureConnection, async (req, res) => {
   }
 });
 // ==================== GET ACCOUNTS WITH AREA DATA ====================
-app.get("/api/accounts", ensureConnection, async (req, res) => {
+app.get(
+  "/api/accounts",
+  ensureConnection,
+  securityRouter.authorizeRequest(
+    "MASTER",
+    "ACCOUNT",
+    "view"
+  ),
+  async (req, res) => {
   try {
     const { distributorId, firmId } = req.query;
 
@@ -5449,6 +5611,11 @@ app.get("/api/accounts", ensureConnection, async (req, res) => {
 app.get(
   "/api/accounts/list",
   ensureConnection,
+  securityRouter.authorizeRequest(
+    "MASTER",
+    "ACCOUNT",
+    "view"
+  ),
   async (req, res) => {
     try {
       const distributorId = String(
@@ -5730,7 +5897,14 @@ app.get(
     }
   }
 );
-app.post("/api/accounts", ensureConnection, async (req, res) => {
+app.post(
+    "/api/accounts",
+    ensureConnection,
+    securityRouter.authorizeRequest(
+        "MASTER",
+        "ACCOUNT",
+        "add"
+    ), async (req, res) => {
   try {
     const distributorId = String(req.body.distributorId || "").trim();
     const firmId = String(req.body.firmId || "").trim();
@@ -5833,7 +6007,15 @@ app.post("/api/accounts", ensureConnection, async (req, res) => {
     });
   }
 });
-app.get("/api/other-accounts", ensureConnection, async (req, res) => {
+app.get(
+  "/api/other-accounts",
+  ensureConnection,
+  securityRouter.authorizeRequest(
+    "master",
+    "OTHER_ACCOUNT",
+    "view"
+  ),
+  async (req, res) => {
   try {
     const { distributorId, firmId } = req.query;
 
@@ -5878,6 +6060,11 @@ app.get("/api/other-accounts", ensureConnection, async (req, res) => {
 app.get(
   "/api/other-accounts/list",
   ensureConnection,
+  securityRouter.authorizeRequest(
+    "master",
+    "OTHER_ACCOUNT",
+    "view"
+  ),
   async (req, res) => {
     try {
       const distributorId = String(
@@ -6105,7 +6292,15 @@ app.get(
   }
 );
 
-app.post("/api/other-accounts", ensureConnection, async (req, res) => {
+app.post(
+  "/api/other-accounts",
+  ensureConnection,
+  securityRouter.authorizeRequest(
+    "master",
+    "OTHER_ACCOUNT",
+    "add"
+  ),
+  async (req, res) => {
   try {
     const distributorId = String(req.body.distributorId || "").trim();
     const firmId = String(req.body.firmId || "").trim();
@@ -6409,45 +6604,17 @@ app.post("/api/firms", ensureConnection, async (req, res) => {
   }
 });
 
-const userSchema = new mongoose.Schema(
-  {
-    userId: { type: String, default: "" },
-    distributorId: { type: String, required: true },
-    firmId: { type: String, required: true },
-    firmName: { type: String, default: "" },
-    userName: { type: String, required: true, trim: true },
-    oldPassword: { type: String, default: "" },
-    password: { type: String, required: true },
-    role: { type: String, default: "USER" },
-    isActive: { type: Boolean, default: true },
-  },
-  { timestamps: true, collection: "Mas_User" }
-);
-
-const companySchema = new mongoose.Schema(
-  {
-    companyCode: String,
-    companyName: String,
-    companyAddress: String,
-    branchOfficeAddress: String,
-    distributorId: String,
-    firmId: String,
-    firmName: String,
-    isActive: { type: Boolean, default: true },
-  },
-  { timestamps: true, collection: "Mas_Company" }
-);
-
-const User = mongoose.model("Mas_User", userSchema);
-const Company = mongoose.model("Mas_Company", companySchema);
 
 
-app.use(
-    "/api/security-setup",
-    createSecuritySetupRouter(User)
-);
-
-app.get("/api/gst", ensureConnection, async (req, res) => {
+app.get(
+  "/api/gst",
+  ensureConnection,
+  securityRouter.authorizeRequest(
+    "master",
+    "GST",
+    "view"
+  ),
+  async (req, res) => {
   try {
     const { distributorId, firmId } = req.query;
 
@@ -6492,6 +6659,11 @@ app.get("/api/gst", ensureConnection, async (req, res) => {
 app.get(
   "/api/gst/list",
   ensureConnection,
+  securityRouter.authorizeRequest(
+    "master",
+    "GST",
+    "view"
+  ),
   async (req, res) => {
     try {
       const distributorId = String(
@@ -6711,7 +6883,15 @@ app.get(
   }
 );
 
-app.post("/api/gst", ensureConnection, async (req, res) => {
+app.post(
+  "/api/gst",
+  ensureConnection,
+  securityRouter.authorizeRequest(
+    "master",
+    "GST",
+    "add"
+  ),
+  async (req, res) => {
   try {
     const distributorId = String(req.body.distributorId || "").trim();
     const firmId = String(req.body.firmId || "").trim();
@@ -6823,7 +7003,15 @@ app.get("/api/sales/bill", ensureConnection, async (req, res) => {
 });
 
 
-app.get("/api/salesmen", ensureConnection, async (req, res) => {
+app.get(
+  "/api/salesmen",
+  ensureConnection,
+  securityRouter.authorizeRequest(
+    "master",
+    "SALESMAN",
+    "view"
+  ),
+  async (req, res) => {
   try {
     const { distributorId, firmId } = req.query;
 
@@ -6868,6 +7056,11 @@ app.get("/api/salesmen", ensureConnection, async (req, res) => {
 app.get(
   "/api/salesmen/list",
   ensureConnection,
+  securityRouter.authorizeRequest(
+    "master",
+    "SALESMAN",
+    "view"
+  ),
   async (req, res) => {
     try {
       const distributorId = String(
@@ -7108,7 +7301,15 @@ app.get(
   }
 );
 
-app.post("/api/salesmen", ensureConnection, async (req, res) => {
+app.post(
+  "/api/salesmen",
+  ensureConnection,
+  securityRouter.authorizeRequest(
+    "master",
+    "SALESMAN",
+    "add"
+  ),
+  async (req, res) => {
   try {
     const distributorId = String(req.body.distributorId || "").trim();
     const firmId = String(req.body.firmId || "").trim();
@@ -7280,7 +7481,15 @@ app.get("/api/sales/change-bill-type", ensureConnection, (req, res) => {
     message: "Route exists. This API must be called using PUT from React F4, not browser GET.",
   });
 });
-app.put("/api/sales/:id", ensureConnection, async (req, res) => {
+app.put(
+  "/api/sales/:id",
+  ensureConnection,
+  securityRouter.authorizeRequest(
+    "SALES",
+    "SALES_BILLING",
+    "edit"
+  ),
+  async (req, res) => {
   const session = await mongoose.startSession();
 
   try {
@@ -7928,7 +8137,15 @@ loadQuantityUpdated:
     session.endSession();
   }
 });
-app.get("/api/areas", ensureConnection, async (req, res) => {
+app.get(
+  "/api/areas",
+  ensureConnection,
+  securityRouter.authorizeRequest(
+    "master",
+    "AREA",
+    "view"
+  ),
+  async (req, res) => {
   try {
     const { distributorId, firmId } = req.query;
 
@@ -7967,6 +8184,11 @@ app.get("/api/areas", ensureConnection, async (req, res) => {
 app.get(
   "/api/areas/list",
   ensureConnection,
+  securityRouter.authorizeRequest(
+    "master",
+    "AREA",
+    "view"
+  ),
   async (req, res) => {
     try {
       const distributorId = String(
@@ -8173,7 +8395,15 @@ app.get(
   }
 );
 
-app.post("/api/areas", ensureConnection, async (req, res) => {
+app.post(
+  "/api/areas",
+  ensureConnection,
+  securityRouter.authorizeRequest(
+    "master",
+    "AREA",
+    "add"
+  ),
+  async (req, res) => {
   try {
     const distributorId = String(req.body.distributorId || "").trim();
     const firmId = String(req.body.firmId || "").trim();
@@ -8226,7 +8456,15 @@ app.post("/api/areas", ensureConnection, async (req, res) => {
   }
 });
 
-app.get("/api/godowns", ensureConnection, async (req, res) => {
+app.get(
+  "/api/godowns",
+  ensureConnection,
+  securityRouter.authorizeRequest(
+    "master",
+    "GODOWN",
+    "view"
+  ),
+  async (req, res) => {
   try {
     const { distributorId, firmId } = req.query;
 
@@ -8272,6 +8510,11 @@ app.get("/api/godowns", ensureConnection, async (req, res) => {
 app.get(
   "/api/godowns/list",
   ensureConnection,
+  securityRouter.authorizeRequest(
+    "master",
+    "GODOWN",
+    "view"
+  ),
   async (req, res) => {
     try {
       const distributorId = String(
@@ -8458,7 +8701,15 @@ app.get(
     }
   }
 );
-app.post("/api/godowns", ensureConnection, async (req, res) => {
+app.post(
+  "/api/godowns",
+  ensureConnection,
+  securityRouter.authorizeRequest(
+    "master",
+    "GODOWN",
+    "add"
+  ),
+  async (req, res) => {
   try {
     const distributorId = String(req.body.distributorId || "").trim();
     const firmId = String(req.body.firmId || "").trim();
@@ -9247,7 +9498,11 @@ app.get("/api/purchase/next-vou-no", ensureConnection, async (req, res) => {
   }
 });
 
-app.post("/api/purchase", ensureConnection, async (req, res) => {
+app.post(
+  "/api/purchase",
+  ensureConnection,
+  securityRouter.authorizeRequest("VOUCHERS", "PURCHASE", "add"),
+  async (req, res) => {
   const session = await mongoose.startSession();
 
   try {
@@ -9519,36 +9774,7 @@ app.post("/api/purchase", ensureConnection, async (req, res) => {
           }
         );
 
-      console.log(
-        "PURCHASE STOCK SAVED:",
-        {
-          id:
-            String(
-              updatedStock?._id || ""
-            ),
-
-          ProdCode:
-            updatedStock?.ProdCode,
-
-          GDCode:
-            updatedStock?.GDCode,
-
-          Batch:
-            updatedStock?.Batch,
-
-          MRP:
-            updatedStock?.MRP,
-
-          PRate:
-            updatedStock?.PRate,
-
-          SRate:
-            updatedStock?.SRate,
-
-          Qty:
-            updatedStock?.Qty,
-        }
-      );
+     
     }
 
     await session.commitTransaction();
@@ -9582,8 +9808,295 @@ app.post("/api/purchase", ensureConnection, async (req, res) => {
   }
 });
 
+/* =========================================================
+   APPLY PURCHASE STOCK MOVEMENT
 
-app.get("/api/purchase", ensureConnection, async (req, res) => {
+   direction:
+   -1 = reverse a previously-applied purchase (old items,
+        before an edit is saved) — always allowed, even
+        if it pushes Qty negative, since some of that
+        stock may already have been sold elsewhere
+   +1 = apply purchase quantity onto stock (new/edited items)
+
+   Example: Purchased 100, sold 30 -> stock 70
+            Edit purchase to 200
+              reverse old 100 -> stock -30
+              apply new 200   -> stock 170
+========================================================= */
+const applyPurchaseStockMovement = async ({
+  items,
+  distributorId,
+  firmId,
+  firmName = "",
+  gdCode,
+  direction,
+  session,
+}) => {
+  const safeItems = Array.isArray(items) ? items : [];
+
+  for (const item of safeItems) {
+    const prodCode = String(
+      item.productCode ||
+      item.code ||
+      item.productId ||
+      String(item.product || "").split(" - ")[0] ||
+      ""
+    ).trim();
+
+    const batchNo = String(
+      item.batchNo ||
+      item.batch ||
+      item.selectedBatch?.batchNo ||
+      item.selectedBatch?.Batch ||
+      "."
+    ).trim() || ".";
+
+    const mrp = Number(
+      item.mrp ?? item.MRP ??
+      item.selectedBatch?.mrp ?? item.selectedBatch?.MRP ?? 0
+    );
+
+    const qty =
+      Number(item.quantity ?? item.qty ?? item.Qty ?? 0) +
+      Number(item.free ?? item.Free ?? 0);
+
+    if (!prodCode) {
+      throw new Error("Product code is missing in Purchase item.");
+    }
+
+    if (!Number.isFinite(qty) || qty <= 0) {
+      throw new Error(`Quantity is required for product ${prodCode}.`);
+    }
+
+    const stockFilter = {
+      distributorId: String(distributorId).trim(),
+      firmId: String(firmId).trim(),
+      GDCode: String(gdCode).trim(),
+      ProdCode: prodCode,
+      Batch: batchNo,
+      MRP: Number.isFinite(mrp) ? mrp : 0,
+    };
+
+    if (direction < 0) {
+      // Reverse an old item — subtract only, no availability gating.
+      await Stock.findOneAndUpdate(
+        stockFilter,
+        {
+          $setOnInsert: {
+            distributorId: String(distributorId).trim(),
+            firmId: String(firmId).trim(),
+            firmName: String(firmName || "").trim(),
+            GDCode: String(gdCode).trim(),
+            ProdCode: prodCode,
+            Batch: batchNo,
+            MRP: Number.isFinite(mrp) ? mrp : 0,
+          },
+          $inc: { Qty: -qty },
+        },
+        { upsert: true, new: true, session, setDefaultsOnInsert: true }
+      );
+      continue;
+    }
+
+    // Apply the (edited) item — purchases always add to stock.
+    if (!Number.isFinite(mrp) || mrp <= 0) {
+      throw new Error(`Valid MRP is required for product ${prodCode}.`);
+    }
+
+    const finalPurchaseRate = Number(
+      item.purRate ?? item.purchaseRate ?? item.PurchaseRate ??
+      item.pRate ?? item.PRate ?? item.prate ??
+      item.selectedBatch?.purRate ?? item.selectedBatch?.purchaseRate ??
+      item.selectedBatch?.PurchaseRate ?? item.selectedBatch?.pRate ??
+      item.selectedBatch?.PRate ?? 0
+    );
+
+    if (!Number.isFinite(finalPurchaseRate) || finalPurchaseRate <= 0) {
+      throw new Error(
+        `Purchase Rate is required for product ${prodCode}, batch ${batchNo}, MRP ${mrp}.`
+      );
+    }
+
+    const finalSalesRate = Number(
+      item.salesRate ?? item.SalesRate ?? item.sRate ?? item.SRate ??
+      item.rate ?? item.selectedBatch?.salesRate ??
+      item.selectedBatch?.SalesRate ?? item.selectedBatch?.sRate ??
+      item.selectedBatch?.SRate ?? 0
+    );
+
+    const boxPack = Number(
+      item.boxPack ?? item.BoxPack ?? item.selectedBatch?.boxPack ??
+      item.selectedBatch?.BoxPack ?? 1
+    ) || 1;
+
+    const inBoxPack = Number(
+      item.inBoxPack ?? item.inboxPack ?? item.InBoxPack ??
+      item.selectedBatch?.inBoxPack ?? item.selectedBatch?.inboxPack ??
+      item.selectedBatch?.InBoxPack ?? item.ratePerUnit ?? 1
+    ) || 1;
+
+    await Stock.findOneAndUpdate(
+      stockFilter,
+      {
+        $setOnInsert: {
+          distributorId: String(distributorId).trim(),
+          firmId: String(firmId).trim(),
+          GDCode: String(gdCode).trim(),
+          ProdCode: prodCode,
+          Batch: batchNo,
+          MRP: Number.isFinite(mrp) ? mrp : 0,
+        },
+        $set: {
+          firmName: String(firmName || "").trim(),
+          isActive: true,
+          ExpDt: item.expDate || item.selectedBatch?.expDate || null,
+          MfgDt: item.mfgDate || item.selectedBatch?.mfgDate || null,
+          PRate: finalPurchaseRate,
+          SRate: finalSalesRate,
+          IsLocked: item.isLocked || item.selectedBatch?.isLocked || "N",
+          BoxPack: boxPack,
+          InBoxPack: inBoxPack,
+        },
+        $inc: { Qty: qty },
+      },
+      { upsert: true, new: true, session, runValidators: true, setDefaultsOnInsert: true }
+    );
+  }
+};
+
+app.put(
+  "/api/purchase/:id",
+  ensureConnection,
+  securityRouter.authorizeRequest("VOUCHERS", "PURCHASE", "edit"),
+  async (req, res) => {
+    const session = await mongoose.startSession();
+
+    try {
+      session.startTransaction();
+
+      const { id } = req.params;
+      const {
+        distributorId,
+        firmId,
+        firmName,
+        invoiceDate,
+        vouSer,
+        vouNo,
+        vno,
+        supplierCode,
+        supplierName,
+        company,
+        gdCode,
+        godownName,
+        isIgst,
+        invoiceNumber,
+        narration,
+        items = [],
+      } = req.body;
+
+      if (!distributorId || !firmId) throw new Error("Distributor/Firm not found");
+      if (!vouNo) throw new Error("Vou No is required");
+      if (!supplierName) throw new Error("Supplier is required");
+      if (!gdCode) throw new Error("Godown code is required");
+      if (!items.length) throw new Error("At least one product is required");
+
+      const oldPurchase = await PurchaseHeader.findOne({
+        _id: id,
+        distributorId,
+        firmId,
+        isActive: true,
+      }).session(session);
+
+      if (!oldPurchase) throw new Error("Original purchase not found");
+
+      // Reverse old items first (subtract; allowed to go temporarily negative).
+      await applyPurchaseStockMovement({
+        items: oldPurchase.items || [],
+        distributorId,
+        firmId,
+        firmName: oldPurchase.firmName || firmName,
+        gdCode: oldPurchase.gdCode,
+        direction: -1,
+        session,
+      });
+
+      // Apply the edited items.
+      await applyPurchaseStockMovement({
+        items,
+        distributorId,
+        firmId,
+        firmName,
+        gdCode,
+        direction: 1,
+        session,
+      });
+
+      const updatedPurchase = await PurchaseHeader.findOneAndUpdate(
+        { _id: id, distributorId, firmId, isActive: true },
+        {
+          $set: {
+            firmName,
+            invoiceDate,
+            vouSer: String(vouSer).trim(),
+            vouNo: Number(vouNo),
+            vno: vno || "",
+            supplierCode: supplierCode || "",
+            supplierName,
+            company,
+            gdCode,
+            godownName,
+            isIgst: isIgst || "N",
+            invoiceNumber,
+            narration,
+
+            mrpTotal: Number(req.body.mrpTotal || 0),
+            grossAmount: Number(req.body.grossAmount || 0),
+            cgstAmt: Number(req.body.cgstAmt || 0),
+            sgstAmt: Number(req.body.sgstAmt || 0),
+            igstAmt: Number(req.body.igstAmt || 0),
+            qbtAmt: Number(req.body.qbtAmt || 0),
+            rounding: Number(req.body.rounding || 0),
+            netAmt: Number(req.body.netAmt || 0),
+
+            items,
+          },
+        },
+        { new: true, session }
+      );
+
+      if (!updatedPurchase) throw new Error("Purchase not found during update");
+
+      await session.commitTransaction();
+
+      res.json({
+        success: true,
+        message: "Purchase updated successfully",
+        data: { header: updatedPurchase },
+      });
+    } catch (error) {
+      await session.abortTransaction();
+
+      if (error.code === 11000) {
+        return res.status(409).json({
+          success: false,
+          message: "This purchase voucher number already exists for this series",
+        });
+      }
+
+      res.status(500).json({
+        success: false,
+        message: error.message || "Purchase update failed",
+      });
+    } finally {
+      session.endSession();
+    }
+  }
+);
+app.get(
+  "/api/purchase",
+  ensureConnection,
+  securityRouter.authorizeRequest("VOUCHERS", "PURCHASE", "view"),
+  async (req, res) => {
   try {
     const { distributorId, firmId } = req.query;
 
@@ -9630,6 +10143,7 @@ app.get("/api/purchase", ensureConnection, async (req, res) => {
 app.get(
   "/api/purchase/list",
   ensureConnection,
+  securityRouter.authorizeRequest("VOUCHERS", "PURCHASE", "view"),
   async (req, res) => {
     try {
       const distributorId = String(
@@ -10664,6 +11178,11 @@ const applySalesStockMovement = async ({
 app.post(
   "/api/sales",
   ensureConnection,
+  securityRouter.authorizeRequest(
+    "SALES",
+    "SALES_BILLING",
+    "add"
+  ),
   async (req, res) => {
     const session =
       await mongoose.startSession();
@@ -11103,7 +11622,15 @@ app.post(
     }
   }
 );
-app.get("/api/sales", ensureConnection, async (req, res) => {
+app.get(
+  "/api/sales",
+  ensureConnection,
+  securityRouter.authorizeRequest(
+     "SALES",
+    "SALES_BILLING",
+    "view"
+  ),
+  async (req, res) => {
   try {
     const { distributorId, firmId } = req.query;
 
@@ -11152,6 +11679,11 @@ is used only by Sales -> Billing list.
 app.get(
   "/api/sales/list",
   ensureConnection,
+  securityRouter.authorizeRequest(
+    "SALES",
+    "SALES_BILLING",
+    "view"
+  ),
   async (req, res) => {
     try {
       /* =====================================================
@@ -12786,6 +13318,7 @@ app.get("/api/quotation/next-bill-no", ensureConnection, async (req, res) => {
 app.post(
   "/api/quotation",
   ensureConnection,
+  securityRouter.authorizeRequest("SALES", "QUOTATION", "add"),
   async (req, res) => {
     try {
       const {
@@ -13097,7 +13630,11 @@ app.post(
   }
 );
 
-app.get("/api/quotation", ensureConnection, async (req, res) => {
+app.get(
+  "/api/quotation",
+  ensureConnection,
+  securityRouter.authorizeRequest("SALES", "QUOTATION", "view"),
+  async (req, res) => {
   try {
     const { distributorId, firmId } = req.query;
 
@@ -13132,6 +13669,7 @@ app.get("/api/quotation", ensureConnection, async (req, res) => {
 app.get(
   "/api/quotation/list",
   ensureConnection,
+  securityRouter.authorizeRequest("SALES", "QUOTATION", "view"),
   async (req, res) => {
     try {
       /* =====================================================
@@ -14271,6 +14809,7 @@ app.get(
 app.put(
   "/api/create-load/:id",
   ensureConnection,
+  securityRouter.authorizeRequest("SALES", "CREATE_LOAD", "edit"),
   async (req, res) => {
     const session =
       await mongoose.startSession();
@@ -14846,7 +15385,11 @@ app.put(
     }
   }
 );
-app.get("/api/create-load", ensureConnection, async (req, res) => {
+app.get(
+  "/api/create-load",
+  ensureConnection,
+  securityRouter.authorizeRequest("SALES", "CREATE_LOAD", "view"),
+  async (req, res) => {
   try {
     const { distributorId, firmId } = req.query;
 
@@ -14881,6 +15424,7 @@ app.get("/api/create-load", ensureConnection, async (req, res) => {
 app.get(
   "/api/create-load/list",
   ensureConnection,
+  securityRouter.authorizeRequest("SALES", "CREATE_LOAD", "view"),
   async (req, res) => {
     try {
       /* =====================================================
@@ -15786,6 +16330,7 @@ const buildCreateLoadBillCondition = (bill) => {
 app.post(
   "/api/create-load",
   ensureConnection,
+  securityRouter.authorizeRequest("SALES", "CREATE_LOAD", "add"),
   async (req, res) => {
     const session = await mongoose.startSession();
 
@@ -16265,7 +16810,11 @@ app.post(
     }
   }
 );
-app.get("/api/settle-load", ensureConnection, async (req, res) => {
+app.get(
+  "/api/settle-load",
+  ensureConnection,
+  securityRouter.authorizeRequest("SALES", "SETTLE_LOAD", "view"),
+  async (req, res) => {
   try {
     const distributorId = String(req.query.distributorId || "").trim();
     const firmId = String(req.query.firmId || "").trim();
@@ -17954,6 +18503,7 @@ const Receipt =
 app.post(
   "/api/settle-load/save",
   ensureConnection,
+  securityRouter.authorizeRequest("SALES", "SETTLE_LOAD", "add"),
   async (req, res) => {
     const session =
       await mongoose.startSession();
@@ -18881,7 +19431,11 @@ app.post("/api/settle-load", ensureConnection, async (req, res) => {
     });
   }
 });
-app.get("/api/settle-load/list", ensureConnection, async (req, res) => {
+app.get(
+  "/api/settle-load/list",
+  ensureConnection,
+  securityRouter.authorizeRequest("SALES", "SETTLE_LOAD", "view"),
+  async (req, res) => {
   try {
     const distributorId = String(req.query.distributorId || "").trim();
     const firmId = String(req.query.firmId || "").trim();
@@ -18913,803 +19467,807 @@ app.get("/api/settle-load/list", ensureConnection, async (req, res) => {
     });
   }
 });
+// app.get(
+//   "/api/settle-load/list",
+//   ensureConnection,
+//   async (req, res) => {
+//     try {
+//       /* =====================================================
+//         REQUEST PARAMETERS
+//         ===================================================== */
+
+//       const distributorId = String(
+//         req.query.distributorId || ""
+//       ).trim();
+
+//       const firmId = String(
+//         req.query.firmId || ""
+//       ).trim();
+
+//       const search = String(
+//         req.query.search || ""
+//       ).trim();
+
+//       const fromDate = String(
+//         req.query.fromDate || ""
+//       ).trim();
+
+//       const toDate = String(
+//         req.query.toDate || ""
+//       ).trim();
+
+//       const settlementFromDate = String(
+//         req.query.settlementFromDate || ""
+//       ).trim();
+
+//       const settlementToDate = String(
+//         req.query.settlementToDate || ""
+//       ).trim();
+
+//       const loadSeries = String(
+//         req.query.loadSeries || ""
+//       ).trim();
+
+//       const loadNoText = String(
+//         req.query.loadNo || ""
+//       ).trim();
+
+//       const status = String(
+//         req.query.status || ""
+//       ).trim();
+
+//       const createdBy = String(
+//         req.query.createdBy ||
+//         req.query.addUser ||
+//         ""
+//       ).trim();
+
+//       const minAmountText = String(
+//         req.query.minAmount || ""
+//       ).trim();
+
+//       const maxAmountText = String(
+//         req.query.maxAmount || ""
+//       ).trim();
+
+//       const minReceiptText = String(
+//         req.query.minReceiptAmount || ""
+//       ).trim();
+
+//       const maxReceiptText = String(
+//         req.query.maxReceiptAmount || ""
+//       ).trim();
+
+//       const minPendingText = String(
+//         req.query.minPendingAmount || ""
+//       ).trim();
+
+//       const maxPendingText = String(
+//         req.query.maxPendingAmount || ""
+//       ).trim();
+
+//       const requestedPage =
+//         Number.parseInt(
+//           req.query.page,
+//           10
+//         );
+
+//       const requestedLimit =
+//         Number.parseInt(
+//           req.query.limit,
+//           10
+//         );
+
+//       const page =
+//         Number.isFinite(requestedPage) &&
+//           requestedPage > 0
+//           ? requestedPage
+//           : 1;
+
+//       const limit =
+//         Number.isFinite(requestedLimit) &&
+//           requestedLimit > 0
+//           ? Math.min(
+//             requestedLimit,
+//             100
+//           )
+//           : 10;
+
+//       if (
+//         !distributorId ||
+//         !firmId
+//       ) {
+//         return res.status(400).json({
+//           success: false,
+//           message:
+//             "Distributor/Firm not found",
+//         });
+//       }
+
+//       /* =====================================================
+//         REGEX HELPERS
+//         ===================================================== */
+
+//       const escapeRegex = (value) =>
+//         String(value || "").replace(
+//           /[.*+?^${}()|[\]\\]/g,
+//           "\\$&"
+//         );
+
+//       const exactRegex = (value) =>
+//         new RegExp(
+//           `^${escapeRegex(
+//             String(value || "").trim()
+//           )}$`,
+//           "i"
+//         );
+
+//       const containsRegex = (value) =>
+//         new RegExp(
+//           escapeRegex(
+//             String(value || "").trim()
+//           ),
+//           "i"
+//         );
+
+//       /* =====================================================
+//         BASE FILTER
+//         ===================================================== */
+
+//       const filter = {
+//         distributorId,
+//         firmId,
+
+//         isActive: {
+//           $ne: false,
+//         },
+//       };
+
+//       const andConditions = [];
+
+//       /* =====================================================
+//         LOAD DATE FILTER
+//         ===================================================== */
+
+//       if (
+//         fromDate ||
+//         toDate
+//       ) {
+//         const dateCondition = {};
+
+//         if (fromDate) {
+//           const startDate =
+//             new Date(
+//               `${fromDate}T00:00:00.000Z`
+//             );
+
+//           if (
+//             !Number.isNaN(
+//               startDate.getTime()
+//             )
+//           ) {
+//             dateCondition.$gte =
+//               startDate;
+//           }
+//         }
+
+//         if (toDate) {
+//           const endDate =
+//             new Date(
+//               `${toDate}T23:59:59.999Z`
+//             );
+
+//           if (
+//             !Number.isNaN(
+//               endDate.getTime()
+//             )
+//           ) {
+//             dateCondition.$lte =
+//               endDate;
+//           }
+//         }
+
+//         if (
+//           Object.keys(
+//             dateCondition
+//           ).length > 0
+//         ) {
+//           andConditions.push({
+//             $or: [
+//               {
+//                 loadDate:
+//                   dateCondition,
+//               },
+//               {
+//                 LoadDate:
+//                   dateCondition,
+//               },
+//             ],
+//           });
+//         }
+//       }
+
+//       /* =====================================================
+//         SETTLEMENT DATE FILTER
+//         ===================================================== */
+
+//       if (
+//         settlementFromDate ||
+//         settlementToDate
+//       ) {
+//         const dateCondition = {};
+
+//         if (settlementFromDate) {
+//           const startDate =
+//             new Date(
+//               `${settlementFromDate}T00:00:00.000Z`
+//             );
+
+//           if (
+//             !Number.isNaN(
+//               startDate.getTime()
+//             )
+//           ) {
+//             dateCondition.$gte =
+//               startDate;
+//           }
+//         }
+
+//         if (settlementToDate) {
+//           const endDate =
+//             new Date(
+//               `${settlementToDate}T23:59:59.999Z`
+//             );
+
+//           if (
+//             !Number.isNaN(
+//               endDate.getTime()
+//             )
+//           ) {
+//             dateCondition.$lte =
+//               endDate;
+//           }
+//         }
+
+//         if (
+//           Object.keys(
+//             dateCondition
+//           ).length > 0
+//         ) {
+//           andConditions.push({
+//             $or: [
+//               {
+//                 settlementDate:
+//                   dateCondition,
+//               },
+//               {
+//                 SettlementDate:
+//                   dateCondition,
+//               },
+//             ],
+//           });
+//         }
+//       }
+
+//       /* =====================================================
+//         LOAD SERIES
+//         ===================================================== */
+
+//       if (loadSeries) {
+//         const regex =
+//           exactRegex(
+//             loadSeries
+//           );
+
+//         andConditions.push({
+//           $or: [
+//             {
+//               loadSeries:
+//                 regex,
+//             },
+//             {
+//               LoadSeries:
+//                 regex,
+//             },
+//           ],
+//         });
+//       }
+
+//       /* =====================================================
+//         LOAD NUMBER
+//         ===================================================== */
+
+//       if (loadNoText) {
+//         const numericLoadNo =
+//           Number(loadNoText);
+
+//         const loadNoConditions = [
+//           {
+//             loadNo:
+//               exactRegex(
+//                 loadNoText
+//               ),
+//           },
+//           {
+//             LoadNo:
+//               exactRegex(
+//                 loadNoText
+//               ),
+//           },
+//         ];
+
+//         if (
+//           Number.isFinite(
+//             numericLoadNo
+//           )
+//         ) {
+//           loadNoConditions.push(
+//             {
+//               loadNo:
+//                 numericLoadNo,
+//             },
+//             {
+//               LoadNo:
+//                 numericLoadNo,
+//             }
+//           );
+//         }
+
+//         andConditions.push({
+//           $or:
+//             loadNoConditions,
+//         });
+//       }
+
+//       /* =====================================================
+//         STATUS
+//         ===================================================== */
+
+//       if (status) {
+//         const regex =
+//           exactRegex(
+//             status
+//           );
+
+//         andConditions.push({
+//           $or: [
+//             {
+//               status:
+//                 regex,
+//             },
+//             {
+//               Status:
+//                 regex,
+//             },
+//           ],
+//         });
+//       }
+
+//       /* =====================================================
+//         CREATED BY
+//         ===================================================== */
+
+//       if (createdBy) {
+//         const regex =
+//           exactRegex(
+//             createdBy
+//           );
+
+//         andConditions.push({
+//           $or: [
+//             {
+//               createdBy:
+//                 regex,
+//             },
+//             {
+//               CreatedBy:
+//                 regex,
+//             },
+//             {
+//               updatedBy:
+//                 regex,
+//             },
+//             {
+//               UpdatedBy:
+//                 regex,
+//             },
+//           ],
+//         });
+//       }
+
+//       /* =====================================================
+//         TOTAL AMOUNT
+//         ===================================================== */
+
+//       const minAmount =
+//         Number(minAmountText);
+
+//       const maxAmount =
+//         Number(maxAmountText);
+
+//       if (
+//         minAmountText !== "" &&
+//         Number.isFinite(
+//           minAmount
+//         )
+//       ) {
+//         andConditions.push({
+//           totalAmount: {
+//             $gte:
+//               minAmount,
+//           },
+//         });
+//       }
+
+//       if (
+//         maxAmountText !== "" &&
+//         Number.isFinite(
+//           maxAmount
+//         )
+//       ) {
+//         andConditions.push({
+//           totalAmount: {
+//             $lte:
+//               maxAmount,
+//           },
+//         });
+//       }
+
+//       /* =====================================================
+//         RECEIPT AMOUNT
+//         ===================================================== */
+
+//       const minReceiptAmount =
+//         Number(minReceiptText);
+
+//       const maxReceiptAmount =
+//         Number(maxReceiptText);
+
+//       if (
+//         minReceiptText !== "" &&
+//         Number.isFinite(
+//           minReceiptAmount
+//         )
+//       ) {
+//         andConditions.push({
+//           totalReceiptAmount: {
+//             $gte:
+//               minReceiptAmount,
+//           },
+//         });
+//       }
+
+//       if (
+//         maxReceiptText !== "" &&
+//         Number.isFinite(
+//           maxReceiptAmount
+//         )
+//       ) {
+//         andConditions.push({
+//           totalReceiptAmount: {
+//             $lte:
+//               maxReceiptAmount,
+//           },
+//         });
+//       }
+
+//       /* =====================================================
+//         PENDING AMOUNT
+//         ===================================================== */
+
+//       const minPendingAmount =
+//         Number(minPendingText);
+
+//       const maxPendingAmount =
+//         Number(maxPendingText);
+
+//       if (
+//         minPendingText !== "" &&
+//         Number.isFinite(
+//           minPendingAmount
+//         )
+//       ) {
+//         andConditions.push({
+//           totalPendingAmount: {
+//             $gte:
+//               minPendingAmount,
+//           },
+//         });
+//       }
+
+//       if (
+//         maxPendingText !== "" &&
+//         Number.isFinite(
+//           maxPendingAmount
+//         )
+//       ) {
+//         andConditions.push({
+//           totalPendingAmount: {
+//             $lte:
+//               maxPendingAmount,
+//           },
+//         });
+//       }
+
+//       /* =====================================================
+//         GENERAL SEARCH
+//         ===================================================== */
+
+//       if (search) {
+//         const regex =
+//           containsRegex(
+//             search
+//           );
+
+//         const searchConditions = [
+//           {
+//             loadSeries:
+//               regex,
+//           },
+//           {
+//             LoadSeries:
+//               regex,
+//           },
+//           {
+//             status:
+//               regex,
+//           },
+//           {
+//             Status:
+//               regex,
+//           },
+//           {
+//             narration:
+//               regex,
+//           },
+//           {
+//             Narration:
+//               regex,
+//           },
+//           {
+//             firmName:
+//               regex,
+//           },
+//           {
+//             FirmName:
+//               regex,
+//           },
+//           {
+//             createdBy:
+//               regex,
+//           },
+//           {
+//             CreatedBy:
+//               regex,
+//           },
+//           {
+//             "bills.partyCode":
+//               regex,
+//           },
+//           {
+//             "bills.partyName":
+//               regex,
+//           },
+//           {
+//             "bills.salesman":
+//               regex,
+//           },
+//           {
+//             "bills.billSeries":
+//               regex,
+//           },
+//           {
+//             "bills.receiptSeries":
+//               regex,
+//           },
+//           {
+//             "bills.receiptNo":
+//               regex,
+//           },
+//           {
+//             "bills.chequeNo":
+//               regex,
+//           },
+//           {
+//             "bills.transactionNo":
+//               regex,
+//           },
+//         ];
+
+//         const numericSearch =
+//           Number(search);
+
+//         if (
+//           Number.isFinite(
+//             numericSearch
+//           )
+//         ) {
+//           searchConditions.push(
+//             {
+//               loadNo:
+//                 numericSearch,
+//             },
+//             {
+//               LoadNo:
+//                 numericSearch,
+//             },
+//             {
+//               "bills.billNo":
+//                 numericSearch,
+//             }
+//           );
+//         }
+
+//         andConditions.push({
+//           $or:
+//             searchConditions,
+//         });
+//       }
+
+//       if (
+//         andConditions.length > 0
+//       ) {
+//         filter.$and =
+//           andConditions;
+//       }
+
+//       /* =====================================================
+//         RECORD COUNT
+//         ===================================================== */
+
+//       const totalRecords =
+//         await SettleLoad.countDocuments(
+//           filter
+//         );
+
+//       const totalPages =
+//         Math.max(
+//           1,
+//           Math.ceil(
+//             totalRecords /
+//             limit
+//           )
+//         );
+
+//       const currentPage =
+//         Math.min(
+//           page,
+//           totalPages
+//         );
+
+//       const skip =
+//         (
+//           currentPage -
+//           1
+//         ) *
+//         limit;
+
+//       /* =====================================================
+//         LOAD CURRENT PAGE
+//         ===================================================== */
+
+//       const records =
+//         await SettleLoad.find(
+//           filter
+//         )
+//           /*
+//           * Edit already loads the complete record using
+//           * GET /api/settle-load/:id.
+//           *
+//           * Do not send all bill details in the list.
+//           */
+//           .select({
+//             bills: 0,
+//             Bills: 0,
+//           })
+//           .sort({
+//             settlementDate: -1,
+//             createdAt: -1,
+//             _id: -1,
+//           })
+//           .skip(skip)
+//           .limit(limit)
+//           .lean();
+
+//       /* =====================================================
+//         RESPONSE
+//         ===================================================== */
+
+//       return res.json({
+//         success: true,
+
+//         records,
+
+//         count:
+//           records.length,
+
+//         pagination: {
+//           currentPage,
+//           page:
+//             currentPage,
+//           limit,
+//           totalRecords,
+//           totalPages,
+
+//           hasPreviousPage:
+//             currentPage > 1,
+
+//           hasNextPage:
+//             currentPage <
+//             totalPages,
+
+//           startRecord:
+//             totalRecords === 0
+//               ? 0
+//               : skip + 1,
+
+//           endRecord:
+//             totalRecords === 0
+//               ? 0
+//               : Math.min(
+//                 skip +
+//                 records.length,
+//                 totalRecords
+//               ),
+//         },
+
+//         appliedFilters: {
+//           search,
+
+//           fromDate,
+//           toDate,
+
+//           settlementFromDate,
+//           settlementToDate,
+
+//           loadSeries,
+//           loadNo:
+//             loadNoText,
+
+//           status,
+//           createdBy,
+
+//           minAmount:
+//             minAmountText,
+
+//           maxAmount:
+//             maxAmountText,
+
+//           minReceiptAmount:
+//             minReceiptText,
+
+//           maxReceiptAmount:
+//             maxReceiptText,
+
+//           minPendingAmount:
+//             minPendingText,
+
+//           maxPendingAmount:
+//             maxPendingText,
+//         },
+//       });
+//     } catch (error) {
+//       console.error(
+//         "Settle Load paginated list error:",
+//         error
+//       );
+
+//       return res.status(500).json({
+//         success: false,
+//         message:
+//           "Failed to load Settle Load list",
+//         error:
+//           error.message,
+//       });
+//     }
+//   }
+// );
+
 app.get(
-  "/api/settle-load/list",
+  "/api/settle-load/:id",
   ensureConnection,
+  securityRouter.authorizeRequest("SALES", "SETTLE_LOAD", "view"),
   async (req, res) => {
-    try {
-      /* =====================================================
-        REQUEST PARAMETERS
-        ===================================================== */
-
-      const distributorId = String(
-        req.query.distributorId || ""
-      ).trim();
-
-      const firmId = String(
-        req.query.firmId || ""
-      ).trim();
-
-      const search = String(
-        req.query.search || ""
-      ).trim();
-
-      const fromDate = String(
-        req.query.fromDate || ""
-      ).trim();
-
-      const toDate = String(
-        req.query.toDate || ""
-      ).trim();
-
-      const settlementFromDate = String(
-        req.query.settlementFromDate || ""
-      ).trim();
-
-      const settlementToDate = String(
-        req.query.settlementToDate || ""
-      ).trim();
-
-      const loadSeries = String(
-        req.query.loadSeries || ""
-      ).trim();
-
-      const loadNoText = String(
-        req.query.loadNo || ""
-      ).trim();
-
-      const status = String(
-        req.query.status || ""
-      ).trim();
-
-      const createdBy = String(
-        req.query.createdBy ||
-        req.query.addUser ||
-        ""
-      ).trim();
-
-      const minAmountText = String(
-        req.query.minAmount || ""
-      ).trim();
-
-      const maxAmountText = String(
-        req.query.maxAmount || ""
-      ).trim();
-
-      const minReceiptText = String(
-        req.query.minReceiptAmount || ""
-      ).trim();
-
-      const maxReceiptText = String(
-        req.query.maxReceiptAmount || ""
-      ).trim();
-
-      const minPendingText = String(
-        req.query.minPendingAmount || ""
-      ).trim();
-
-      const maxPendingText = String(
-        req.query.maxPendingAmount || ""
-      ).trim();
-
-      const requestedPage =
-        Number.parseInt(
-          req.query.page,
-          10
-        );
-
-      const requestedLimit =
-        Number.parseInt(
-          req.query.limit,
-          10
-        );
-
-      const page =
-        Number.isFinite(requestedPage) &&
-          requestedPage > 0
-          ? requestedPage
-          : 1;
-
-      const limit =
-        Number.isFinite(requestedLimit) &&
-          requestedLimit > 0
-          ? Math.min(
-            requestedLimit,
-            100
-          )
-          : 10;
-
-      if (
-        !distributorId ||
-        !firmId
-      ) {
-        return res.status(400).json({
-          success: false,
-          message:
-            "Distributor/Firm not found",
-        });
-      }
-
-      /* =====================================================
-        REGEX HELPERS
-        ===================================================== */
-
-      const escapeRegex = (value) =>
-        String(value || "").replace(
-          /[.*+?^${}()|[\]\\]/g,
-          "\\$&"
-        );
-
-      const exactRegex = (value) =>
-        new RegExp(
-          `^${escapeRegex(
-            String(value || "").trim()
-          )}$`,
-          "i"
-        );
-
-      const containsRegex = (value) =>
-        new RegExp(
-          escapeRegex(
-            String(value || "").trim()
-          ),
-          "i"
-        );
-
-      /* =====================================================
-        BASE FILTER
-        ===================================================== */
-
-      const filter = {
-        distributorId,
-        firmId,
-
-        isActive: {
-          $ne: false,
-        },
-      };
-
-      const andConditions = [];
-
-      /* =====================================================
-        LOAD DATE FILTER
-        ===================================================== */
-
-      if (
-        fromDate ||
-        toDate
-      ) {
-        const dateCondition = {};
-
-        if (fromDate) {
-          const startDate =
-            new Date(
-              `${fromDate}T00:00:00.000Z`
-            );
-
-          if (
-            !Number.isNaN(
-              startDate.getTime()
-            )
-          ) {
-            dateCondition.$gte =
-              startDate;
-          }
-        }
-
-        if (toDate) {
-          const endDate =
-            new Date(
-              `${toDate}T23:59:59.999Z`
-            );
-
-          if (
-            !Number.isNaN(
-              endDate.getTime()
-            )
-          ) {
-            dateCondition.$lte =
-              endDate;
-          }
-        }
-
-        if (
-          Object.keys(
-            dateCondition
-          ).length > 0
-        ) {
-          andConditions.push({
-            $or: [
-              {
-                loadDate:
-                  dateCondition,
-              },
-              {
-                LoadDate:
-                  dateCondition,
-              },
-            ],
-          });
-        }
-      }
-
-      /* =====================================================
-        SETTLEMENT DATE FILTER
-        ===================================================== */
-
-      if (
-        settlementFromDate ||
-        settlementToDate
-      ) {
-        const dateCondition = {};
-
-        if (settlementFromDate) {
-          const startDate =
-            new Date(
-              `${settlementFromDate}T00:00:00.000Z`
-            );
-
-          if (
-            !Number.isNaN(
-              startDate.getTime()
-            )
-          ) {
-            dateCondition.$gte =
-              startDate;
-          }
-        }
-
-        if (settlementToDate) {
-          const endDate =
-            new Date(
-              `${settlementToDate}T23:59:59.999Z`
-            );
-
-          if (
-            !Number.isNaN(
-              endDate.getTime()
-            )
-          ) {
-            dateCondition.$lte =
-              endDate;
-          }
-        }
-
-        if (
-          Object.keys(
-            dateCondition
-          ).length > 0
-        ) {
-          andConditions.push({
-            $or: [
-              {
-                settlementDate:
-                  dateCondition,
-              },
-              {
-                SettlementDate:
-                  dateCondition,
-              },
-            ],
-          });
-        }
-      }
-
-      /* =====================================================
-        LOAD SERIES
-        ===================================================== */
-
-      if (loadSeries) {
-        const regex =
-          exactRegex(
-            loadSeries
-          );
-
-        andConditions.push({
-          $or: [
-            {
-              loadSeries:
-                regex,
-            },
-            {
-              LoadSeries:
-                regex,
-            },
-          ],
-        });
-      }
-
-      /* =====================================================
-        LOAD NUMBER
-        ===================================================== */
-
-      if (loadNoText) {
-        const numericLoadNo =
-          Number(loadNoText);
-
-        const loadNoConditions = [
-          {
-            loadNo:
-              exactRegex(
-                loadNoText
-              ),
-          },
-          {
-            LoadNo:
-              exactRegex(
-                loadNoText
-              ),
-          },
-        ];
-
-        if (
-          Number.isFinite(
-            numericLoadNo
-          )
-        ) {
-          loadNoConditions.push(
-            {
-              loadNo:
-                numericLoadNo,
-            },
-            {
-              LoadNo:
-                numericLoadNo,
-            }
-          );
-        }
-
-        andConditions.push({
-          $or:
-            loadNoConditions,
-        });
-      }
-
-      /* =====================================================
-        STATUS
-        ===================================================== */
-
-      if (status) {
-        const regex =
-          exactRegex(
-            status
-          );
-
-        andConditions.push({
-          $or: [
-            {
-              status:
-                regex,
-            },
-            {
-              Status:
-                regex,
-            },
-          ],
-        });
-      }
-
-      /* =====================================================
-        CREATED BY
-        ===================================================== */
-
-      if (createdBy) {
-        const regex =
-          exactRegex(
-            createdBy
-          );
-
-        andConditions.push({
-          $or: [
-            {
-              createdBy:
-                regex,
-            },
-            {
-              CreatedBy:
-                regex,
-            },
-            {
-              updatedBy:
-                regex,
-            },
-            {
-              UpdatedBy:
-                regex,
-            },
-          ],
-        });
-      }
-
-      /* =====================================================
-        TOTAL AMOUNT
-        ===================================================== */
-
-      const minAmount =
-        Number(minAmountText);
-
-      const maxAmount =
-        Number(maxAmountText);
-
-      if (
-        minAmountText !== "" &&
-        Number.isFinite(
-          minAmount
-        )
-      ) {
-        andConditions.push({
-          totalAmount: {
-            $gte:
-              minAmount,
-          },
-        });
-      }
-
-      if (
-        maxAmountText !== "" &&
-        Number.isFinite(
-          maxAmount
-        )
-      ) {
-        andConditions.push({
-          totalAmount: {
-            $lte:
-              maxAmount,
-          },
-        });
-      }
-
-      /* =====================================================
-        RECEIPT AMOUNT
-        ===================================================== */
-
-      const minReceiptAmount =
-        Number(minReceiptText);
-
-      const maxReceiptAmount =
-        Number(maxReceiptText);
-
-      if (
-        minReceiptText !== "" &&
-        Number.isFinite(
-          minReceiptAmount
-        )
-      ) {
-        andConditions.push({
-          totalReceiptAmount: {
-            $gte:
-              minReceiptAmount,
-          },
-        });
-      }
-
-      if (
-        maxReceiptText !== "" &&
-        Number.isFinite(
-          maxReceiptAmount
-        )
-      ) {
-        andConditions.push({
-          totalReceiptAmount: {
-            $lte:
-              maxReceiptAmount,
-          },
-        });
-      }
-
-      /* =====================================================
-        PENDING AMOUNT
-        ===================================================== */
-
-      const minPendingAmount =
-        Number(minPendingText);
-
-      const maxPendingAmount =
-        Number(maxPendingText);
-
-      if (
-        minPendingText !== "" &&
-        Number.isFinite(
-          minPendingAmount
-        )
-      ) {
-        andConditions.push({
-          totalPendingAmount: {
-            $gte:
-              minPendingAmount,
-          },
-        });
-      }
-
-      if (
-        maxPendingText !== "" &&
-        Number.isFinite(
-          maxPendingAmount
-        )
-      ) {
-        andConditions.push({
-          totalPendingAmount: {
-            $lte:
-              maxPendingAmount,
-          },
-        });
-      }
-
-      /* =====================================================
-        GENERAL SEARCH
-        ===================================================== */
-
-      if (search) {
-        const regex =
-          containsRegex(
-            search
-          );
-
-        const searchConditions = [
-          {
-            loadSeries:
-              regex,
-          },
-          {
-            LoadSeries:
-              regex,
-          },
-          {
-            status:
-              regex,
-          },
-          {
-            Status:
-              regex,
-          },
-          {
-            narration:
-              regex,
-          },
-          {
-            Narration:
-              regex,
-          },
-          {
-            firmName:
-              regex,
-          },
-          {
-            FirmName:
-              regex,
-          },
-          {
-            createdBy:
-              regex,
-          },
-          {
-            CreatedBy:
-              regex,
-          },
-          {
-            "bills.partyCode":
-              regex,
-          },
-          {
-            "bills.partyName":
-              regex,
-          },
-          {
-            "bills.salesman":
-              regex,
-          },
-          {
-            "bills.billSeries":
-              regex,
-          },
-          {
-            "bills.receiptSeries":
-              regex,
-          },
-          {
-            "bills.receiptNo":
-              regex,
-          },
-          {
-            "bills.chequeNo":
-              regex,
-          },
-          {
-            "bills.transactionNo":
-              regex,
-          },
-        ];
-
-        const numericSearch =
-          Number(search);
-
-        if (
-          Number.isFinite(
-            numericSearch
-          )
-        ) {
-          searchConditions.push(
-            {
-              loadNo:
-                numericSearch,
-            },
-            {
-              LoadNo:
-                numericSearch,
-            },
-            {
-              "bills.billNo":
-                numericSearch,
-            }
-          );
-        }
-
-        andConditions.push({
-          $or:
-            searchConditions,
-        });
-      }
-
-      if (
-        andConditions.length > 0
-      ) {
-        filter.$and =
-          andConditions;
-      }
-
-      /* =====================================================
-        RECORD COUNT
-        ===================================================== */
-
-      const totalRecords =
-        await SettleLoad.countDocuments(
-          filter
-        );
-
-      const totalPages =
-        Math.max(
-          1,
-          Math.ceil(
-            totalRecords /
-            limit
-          )
-        );
-
-      const currentPage =
-        Math.min(
-          page,
-          totalPages
-        );
-
-      const skip =
-        (
-          currentPage -
-          1
-        ) *
-        limit;
-
-      /* =====================================================
-        LOAD CURRENT PAGE
-        ===================================================== */
-
-      const records =
-        await SettleLoad.find(
-          filter
-        )
-          /*
-          * Edit already loads the complete record using
-          * GET /api/settle-load/:id.
-          *
-          * Do not send all bill details in the list.
-          */
-          .select({
-            bills: 0,
-            Bills: 0,
-          })
-          .sort({
-            settlementDate: -1,
-            createdAt: -1,
-            _id: -1,
-          })
-          .skip(skip)
-          .limit(limit)
-          .lean();
-
-      /* =====================================================
-        RESPONSE
-        ===================================================== */
-
-      return res.json({
-        success: true,
-
-        records,
-
-        count:
-          records.length,
-
-        pagination: {
-          currentPage,
-          page:
-            currentPage,
-          limit,
-          totalRecords,
-          totalPages,
-
-          hasPreviousPage:
-            currentPage > 1,
-
-          hasNextPage:
-            currentPage <
-            totalPages,
-
-          startRecord:
-            totalRecords === 0
-              ? 0
-              : skip + 1,
-
-          endRecord:
-            totalRecords === 0
-              ? 0
-              : Math.min(
-                skip +
-                records.length,
-                totalRecords
-              ),
-        },
-
-        appliedFilters: {
-          search,
-
-          fromDate,
-          toDate,
-
-          settlementFromDate,
-          settlementToDate,
-
-          loadSeries,
-          loadNo:
-            loadNoText,
-
-          status,
-          createdBy,
-
-          minAmount:
-            minAmountText,
-
-          maxAmount:
-            maxAmountText,
-
-          minReceiptAmount:
-            minReceiptText,
-
-          maxReceiptAmount:
-            maxReceiptText,
-
-          minPendingAmount:
-            minPendingText,
-
-          maxPendingAmount:
-            maxPendingText,
-        },
-      });
-    } catch (error) {
-      console.error(
-        "Settle Load paginated list error:",
-        error
-      );
-
-      return res.status(500).json({
-        success: false,
-        message:
-          "Failed to load Settle Load list",
-        error:
-          error.message,
-      });
-    }
-  }
-);
-
-app.get("/api/settle-load/:id", ensureConnection, async (req, res) => {
   try {
     const record = await SettleLoad.findById(req.params.id).lean();
 
@@ -19733,7 +20291,11 @@ app.get("/api/settle-load/:id", ensureConnection, async (req, res) => {
   }
 });
 
-app.put("/api/settle-load/:id", ensureConnection, async (req, res) => {
+app.put(
+  "/api/settle-load/:id",
+  ensureConnection,
+  securityRouter.authorizeRequest("SALES", "SETTLE_LOAD", "edit"),
+  async (req, res) => {
   try {
     const {
       settlementDate = "",
@@ -21103,6 +21665,7 @@ app.get(
 app.get(
   "/api/debit-note",
   ensureConnection,
+    securityRouter.authorizeRequest("VOUCHERS", "DEBIT_NOTE", "view"),   
   async (req, res) => {
     try {
       const distributorId = String(
@@ -21167,6 +21730,7 @@ app.get(
 app.get(
   "/api/debit-note/list",
   ensureConnection,
+  securityRouter.authorizeRequest("VOUCHERS", "DEBIT_NOTE", "view"),   // ADD THIS
   async (req, res) => {
     try {
       const distributorId = String(
@@ -21764,6 +22328,7 @@ app.get(
 app.post(
   "/api/debit-note",
   ensureConnection,
+  securityRouter.authorizeRequest("VOUCHERS", "DEBIT_NOTE", "add"),   // ADD THIS
   async (req, res) => {
     const session =
       await mongoose.startSession();
@@ -22000,6 +22565,7 @@ app.post(
 app.put(
   "/api/debit-note/:id",
   ensureConnection,
+  securityRouter.authorizeRequest("VOUCHERS", "DEBIT_NOTE", "edit"),   // ADD THIS
   async (req, res) => {
     const session =
       await mongoose.startSession();
@@ -22293,6 +22859,7 @@ app.put(
 app.delete(
   "/api/debit-note/:id",
   ensureConnection,
+  securityRouter.authorizeRequest("VOUCHERS", "DEBIT_NOTE", "delete"),   // ADD THIS
   async (req, res) => {
     const session =
       await mongoose.startSession();
@@ -23040,6 +23607,7 @@ app.get("/api/credit-note/next-bill-no", ensureConnection, async (req, res) => {
 app.post(
   "/api/credit-note",
   ensureConnection,
+  securityRouter.authorizeRequest("VOUCHERS", "CREDIT_NOTE", "add"),   // ADD THIS
   async (req, res) => {
     const session =
       await mongoose.startSession();
@@ -23714,6 +24282,7 @@ app.post(
 app.put(
   "/api/credit-note/:id",
   ensureConnection,
+  securityRouter.authorizeRequest("VOUCHERS", "CREDIT_NOTE", "edit"),   // ADD THIS
   async (req, res) => {
     const session =
       await mongoose.startSession();
@@ -24213,7 +24782,11 @@ app.put(
 );
 
 // Get Credit Notes list
-app.get("/api/credit-note", ensureConnection, async (req, res) => {
+app.get(
+  "/api/credit-note/list",
+  ensureConnection,
+  securityRouter.authorizeRequest("VOUCHERS", "CREDIT_NOTE", "view"),   // ADD THIS
+  async (req, res) => {
   try {
     const { distributorId, firmId } = req.query;
 
@@ -24251,7 +24824,8 @@ app.get("/api/credit-note", ensureConnection, async (req, res) => {
 
 app.get(
   "/api/credit-note/list",
-  ensureConnection,
+  ensureConnection,                                                    // 1st
+  securityRouter.authorizeRequest("VOUCHERS", "CREDIT_NOTE", "view"),  // 2nd
   async (req, res) => {
     try {
       const distributorId = String(
@@ -24896,7 +25470,15 @@ app.delete("/api/firms/:id", ensureConnection, async (req, res) => {
 // ==================== MASTER FORMS EDIT & DELETE ENDPOINTS ====================
 
 // ---------- GROUP MASTER ----------
-app.put("/api/groups/:id", ensureConnection, async (req, res) => {
+app.put(
+  "/api/groups/:id",
+  ensureConnection,
+  securityRouter.authorizeRequest(
+    "master",
+    "GROUP",
+    "edit"
+  ),
+  async (req, res) => {
   try {
     const { id } = req.params;
     const { code, name } = req.body;
@@ -24936,7 +25518,15 @@ app.put("/api/groups/:id", ensureConnection, async (req, res) => {
 });
 
 // ---------- GROUP MASTER ----------
-app.delete("/api/groups/:id", ensureConnection, async (req, res) => {
+app.delete(
+  "/api/groups/:id",
+  ensureConnection,
+  securityRouter.authorizeRequest(
+    "master",
+    "GROUP",
+    "delete"
+  ),
+  async (req, res) => {
   try {
     const deletedGroup = await Group.findByIdAndDelete(req.params.id);
 
@@ -24955,7 +25545,15 @@ app.delete("/api/groups/:id", ensureConnection, async (req, res) => {
 });
 
 // ---------- CATEGORY MASTER ----------
-app.put("/api/categories/:id", ensureConnection, async (req, res) => {
+app.put(
+  "/api/categories/:id",
+  ensureConnection,
+  securityRouter.authorizeRequest(
+    "master",
+    "CATEGORY",
+    "edit"
+  ),
+  async (req, res) => {
   try {
     const { id } = req.params;
     const { code, name } = req.body;
@@ -24995,7 +25593,15 @@ app.put("/api/categories/:id", ensureConnection, async (req, res) => {
 });
 
 // ---------- CATEGORY MASTER ----------
-app.delete("/api/categories/:id", ensureConnection, async (req, res) => {
+app.delete(
+  "/api/categories/:id",
+  ensureConnection,
+  securityRouter.authorizeRequest(
+    "master",
+    "CATEGORY",
+    "delete"
+  ),
+  async (req, res) => {
   try {
     const deletedCategory = await Category.findByIdAndDelete(req.params.id);
 
@@ -25014,7 +25620,14 @@ app.delete("/api/categories/:id", ensureConnection, async (req, res) => {
 });
 
 // ---------- PRODUCT ----------
-app.put("/api/products/:id", ensureConnection, async (req, res) => {
+app.put(
+  "/api/products/:id",
+  ensureConnection,
+  securityRouter.authorizeRequest(
+    "master",
+    "PRODUCT",
+    "edit"
+  ), async (req, res) => {
   try {
     const updateData = {
       ...req.body,
@@ -25052,7 +25665,14 @@ app.put("/api/products/:id", ensureConnection, async (req, res) => {
 });
 
 // ---------- PRODUCT ----------
-app.delete("/api/products/:id", ensureConnection, async (req, res) => {
+app.delete(
+  "/api/products/:id",
+  ensureConnection,
+  securityRouter.authorizeRequest(
+    "master",
+    "PRODUCT",
+    "delete"
+  ), async (req, res) => {
   try {
     const deletedProduct = await Product.findByIdAndDelete(req.params.id);
 
@@ -25071,7 +25691,14 @@ app.delete("/api/products/:id", ensureConnection, async (req, res) => {
 });
 
 // ---------- ACCOUNT ----------
-app.put("/api/accounts/:id", ensureConnection, async (req, res) => {
+app.put(
+    "/api/accounts/:id",
+    ensureConnection,
+    securityRouter.authorizeRequest(
+        "MASTER",
+        "ACCOUNT",
+        "edit"
+    ), async (req, res) => {
   try {
     const { id } = req.params;
     const distributorId = String(req.body.distributorId || "").trim();
@@ -25219,7 +25846,14 @@ app.get("/api/areas-for-account", ensureConnection, async (req, res) => {
   }
 });
 // ---------- ACCOUNT ----------
-app.delete("/api/accounts/:id", ensureConnection, async (req, res) => {
+app.delete(
+    "/api/accounts/:id",
+    ensureConnection,
+    securityRouter.authorizeRequest(
+        "MASTER",
+        "ACCOUNT",
+        "delete"
+    ), async (req, res) => {
   try {
     const deletedAccount = await Account.findByIdAndDelete(req.params.id);
 
@@ -25238,7 +25872,15 @@ app.delete("/api/accounts/:id", ensureConnection, async (req, res) => {
 });
 
 // ---------- OTHER ACCOUNT ----------
-app.put("/api/other-accounts/:id", ensureConnection, async (req, res) => {
+app.put(
+  "/api/other-accounts/:id",
+  ensureConnection,
+  securityRouter.authorizeRequest(
+    "master",
+    "OTHER_ACCOUNT",
+    "edit"
+  ),
+  async (req, res) => {
   try {
     const { id } = req.params;
     const updateData = { ...req.body };
@@ -25272,7 +25914,15 @@ app.put("/api/other-accounts/:id", ensureConnection, async (req, res) => {
 });
 
 // ---------- OTHER ACCOUNT ----------
-app.delete("/api/other-accounts/:id", ensureConnection, async (req, res) => {
+app.delete(
+  "/api/other-accounts/:id",
+  ensureConnection,
+  securityRouter.authorizeRequest(
+    "master",
+    "OTHER_ACCOUNT",
+    "delete"
+  ),
+  async (req, res) => {
   try {
     const deletedOtherAccount = await OtherAccount.findByIdAndDelete(req.params.id);
 
@@ -25291,7 +25941,15 @@ app.delete("/api/other-accounts/:id", ensureConnection, async (req, res) => {
 });
 
 // ---------- GST MASTER ----------
-app.put("/api/gst/:id", ensureConnection, async (req, res) => {
+app.put(
+  "/api/gst/:id",
+  ensureConnection,
+  securityRouter.authorizeRequest(
+    "master",
+    "GST",
+    "edit"
+  ),
+  async (req, res) => {
   try {
     const { id } = req.params;
     const { gstCode, vatPercent, purchaseType, salesType } = req.body;
@@ -25339,7 +25997,15 @@ app.put("/api/gst/:id", ensureConnection, async (req, res) => {
 });
 
 // ---------- GST MASTER ----------
-app.delete("/api/gst/:id", ensureConnection, async (req, res) => {
+app.delete(
+  "/api/gst/:id",
+  ensureConnection,
+  securityRouter.authorizeRequest(
+    "master",
+    "GST",
+    "delete"
+  ),
+  async (req, res) => {
   try {
     const deletedGst = await GST.findByIdAndDelete(req.params.id);
 
@@ -25358,7 +26024,15 @@ app.delete("/api/gst/:id", ensureConnection, async (req, res) => {
 });
 
 // ---------- SALESMAN ----------
-app.put("/api/salesmen/:id", ensureConnection, async (req, res) => {
+app.put(
+  "/api/salesmen/:id",
+  ensureConnection,
+  securityRouter.authorizeRequest(
+    "master",
+    "SALESMAN",
+    "edit"
+  ),
+  async (req, res) => {
   try {
     const { id } = req.params;
     const updateData = { ...req.body };
@@ -25398,7 +26072,15 @@ app.put("/api/salesmen/:id", ensureConnection, async (req, res) => {
 });
 
 // ---------- SALESMAN ----------
-app.delete("/api/salesmen/:id", ensureConnection, async (req, res) => {
+app.delete(
+  "/api/salesmen/:id",
+  ensureConnection,
+  securityRouter.authorizeRequest(
+    "master",
+    "SALESMAN",
+    "delete"
+  ),
+  async (req, res) => {
   try {
     const deletedSalesman = await Salesman.findByIdAndDelete(req.params.id);
 
@@ -25417,7 +26099,15 @@ app.delete("/api/salesmen/:id", ensureConnection, async (req, res) => {
 });
 
 // ---------- AREA ----------
-app.put("/api/areas/:id", ensureConnection, async (req, res) => {
+app.put(
+  "/api/areas/:id",
+  ensureConnection,
+  securityRouter.authorizeRequest(
+    "master",
+    "AREA",
+    "edit"
+  ),
+  async (req, res) => {
   try {
     const { id } = req.params;
     const { areaCode, areaName } = req.body;
@@ -25463,7 +26153,15 @@ app.put("/api/areas/:id", ensureConnection, async (req, res) => {
 });
 
 // ---------- AREA ----------
-app.delete("/api/areas/:id", ensureConnection, async (req, res) => {
+app.delete(
+  "/api/areas/:id",
+  ensureConnection,
+  securityRouter.authorizeRequest(
+    "master",
+    "AREA",
+    "delete"
+  ),
+  async (req, res) => {
   try {
     const deletedArea = await Area.findByIdAndDelete(req.params.id);
 
@@ -25482,7 +26180,15 @@ app.delete("/api/areas/:id", ensureConnection, async (req, res) => {
 });
 
 // ---------- GODOWN MASTER ----------
-app.put("/api/godowns/:id", ensureConnection, async (req, res) => {
+app.put(
+  "/api/godowns/:id",
+  ensureConnection,
+  securityRouter.authorizeRequest(
+    "master",
+    "GODOWN",
+    "edit"
+  ),
+  async (req, res) => {
   try {
     const { id } = req.params;
     const { godownCode, godownName, address, location } = req.body;
@@ -25529,7 +26235,15 @@ app.put("/api/godowns/:id", ensureConnection, async (req, res) => {
   }
 });
 // ---------- GODOWN MASTER ----------
-app.delete("/api/godowns/:id", ensureConnection, async (req, res) => {
+app.delete(
+  "/api/godowns/:id",
+  ensureConnection,
+  securityRouter.authorizeRequest(
+    "master",
+    "GODOWN",
+    "delete"
+  ),
+  async (req, res) => {
   try {
     const deletedGodown = await Godown.findByIdAndDelete(req.params.id);
 
@@ -25965,7 +26679,15 @@ app.get("/api/product-mappings/:productCode", async (req, res) => {
   }
 });
 // ---------- PERMANENT DELETE SALES BILL ----------
-app.delete("/api/sales/:id", ensureConnection, async (req, res) => {
+app.delete(
+  "/api/sales/:id",
+  ensureConnection,
+  securityRouter.authorizeRequest(
+     "SALES",
+    "SALES_BILLING",
+    "delete"
+  ),
+  async (req, res) => {
   const session = await mongoose.startSession();
 
   try {
@@ -26077,6 +26799,7 @@ app.delete("/api/sales/:id", ensureConnection, async (req, res) => {
 app.get(
   "/api/quotation/:id",
   ensureConnection,
+  securityRouter.authorizeRequest("SALES", "QUOTATION", "view"),
   async (req, res) => {
     try {
       const quotationId = String(
@@ -26160,6 +26883,7 @@ app.get(
 app.put(
   "/api/quotation/:id",
   ensureConnection,
+  securityRouter.authorizeRequest("SALES", "QUOTATION", "edit"),
   async (req, res) => {
     try {
       const quotationId = String(
@@ -26717,7 +27441,11 @@ app.put(
   }
 );
 // ---------- PERMANENT DELETE QUOTATION ----------
-app.delete("/api/quotation/:id", ensureConnection, async (req, res) => {
+app.delete(
+  "/api/quotation/:id",
+  ensureConnection,
+  securityRouter.authorizeRequest("SALES", "QUOTATION", "delete"),
+  async (req, res) => {
   try {
     const { id } = req.params;
     const { distributorId, firmId } = req.body;
@@ -26760,7 +27488,11 @@ app.delete("/api/quotation/:id", ensureConnection, async (req, res) => {
   }
 });
 // ---------- PERMANENT DELETE PURCHASE ----------
-app.delete("/api/purchase/:id", ensureConnection, async (req, res) => {
+app.delete(
+  "/api/purchase/:id",
+  ensureConnection,
+  securityRouter.authorizeRequest("VOUCHERS", "PURCHASE", "delete"),
+  async (req, res) => {
   const session = await mongoose.startSession();
 
   try {
@@ -26791,10 +27523,26 @@ app.delete("/api/purchase/:id", ensureConnection, async (req, res) => {
     }
 
     // Restore stock for each item (remove the added stock)
+ // Restore stock for each item (remove the added stock)
     for (const item of purchase.items || []) {
-      const prodCode = String(item.productCode || item.productId || "").trim();
-      const batchNo = String(item.batchNo || item.selectedBatch?.batchNo || ".").trim() || ".";
-      const qty = Number(item.quantity || 0) + Number(item.free || 0);
+      const prodCode = String(
+        item.productCode || item.code || item.productId ||
+        String(item.product || "").split(" - ")[0] || ""
+      ).trim();
+
+      const batchNo = String(
+        item.batchNo || item.batch || item.selectedBatch?.batchNo ||
+        item.selectedBatch?.Batch || "."
+      ).trim() || ".";
+
+      const mrp = Number(
+        item.mrp ?? item.MRP ??
+        item.selectedBatch?.mrp ?? item.selectedBatch?.MRP ?? 0
+      );
+
+      const qty =
+        Number(item.quantity ?? item.qty ?? item.Qty ?? 0) +
+        Number(item.free ?? item.Free ?? 0);
 
       if (prodCode && qty > 0) {
         await Stock.updateOne(
@@ -26804,6 +27552,7 @@ app.delete("/api/purchase/:id", ensureConnection, async (req, res) => {
             GDCode: purchase.gdCode,
             ProdCode: prodCode,
             Batch: batchNo,
+            MRP: Number.isFinite(mrp) ? mrp : 0,
           },
           { $inc: { Qty: -qty } }
         ).session(session);
@@ -26842,6 +27591,7 @@ app.delete("/api/purchase/:id", ensureConnection, async (req, res) => {
 app.delete(
   "/api/credit-note/:id",
   ensureConnection,
+  securityRouter.authorizeRequest("VOUCHERS", "CREDIT_NOTE", "delete"),   // ADD THIS
   async (req, res) => {
     const session =
       await mongoose.startSession();
@@ -27104,7 +27854,11 @@ app.delete(
   }
 );
 // ---------- PERMANENT DELETE CREATE LOAD ----------
-app.delete("/api/create-load/:id", ensureConnection, async (req, res) => {
+app.delete(
+  "/api/create-load/:id",
+  ensureConnection,
+  securityRouter.authorizeRequest("SALES", "CREATE_LOAD", "delete"),
+  async (req, res) => {
   const session = await mongoose.startSession();
 
   try {
@@ -27198,7 +27952,11 @@ app.delete("/api/create-load/:id", ensureConnection, async (req, res) => {
   }
 });
 // ---------- PERMANENT DELETE SETTLE LOAD ----------
-app.delete("/api/settle-load/:id", ensureConnection, async (req, res) => {
+app.delete(
+  "/api/settle-load/:id",
+  ensureConnection,
+  securityRouter.authorizeRequest("SALES", "SETTLE_LOAD", "delete"),
+  async (req, res) => {
   try {
     const { id } = req.params;
     const { distributorId, firmId } = req.body;

@@ -6,6 +6,13 @@ import jsPDF from 'jspdf';
 import 'jspdf-autotable';
 import './Dashboard.css';
 import totalSolutionLogo from "./assets/images/Totalsolution.png";
+import {
+  loadPermissions,
+  hasPermission,
+  usePermission,
+  secureFetch,
+  refreshPermissions,
+} from "./SecuritySetup";
 import Report from "./Report";
 
 
@@ -108,7 +115,7 @@ import {
 
 
 /* =========================================================
-   RUNTIME GENERAL SETUP DEFAULTS
+  RUNTIME GENERAL SETUP DEFAULTS
 ========================================================= */
 
 const DEFAULT_VAT_ON =
@@ -128,8 +135,8 @@ const DEFAULT_SELECTION_VALUES = [
 ];
 
 /* =========================================================
-   AVAILABLE REPORT DEFINITIONS (merged from old Dashboard)
-   Keep this outside Dashboard so it is initialized first.
+  AVAILABLE REPORT DEFINITIONS (merged from old Dashboard)
+  Keep this outside Dashboard so it is initialized first.
 ========================================================= */
 
 const allReportItems = [
@@ -217,6 +224,7 @@ const Dashboard = ({ onLogout }) => {
   const [otherAccountActiveTab, setOtherAccountActiveTab] = useState('basic');
   const [transactionFormMode, setTransactionFormMode] = useState({});
   const [masterReturnContext, setMasterReturnContext] = useState(null);
+
   const [runtimeGeneralSetup, setRuntimeGeneralSetup] =
     useState({
       billAllowBlacklistParty: false,
@@ -271,8 +279,8 @@ const Dashboard = ({ onLogout }) => {
 
 
   /* =========================================================
-     SALES BILL PRINT FORMAT SELECTION
-     ========================================================= */
+    SALES BILL PRINT FORMAT SELECTION
+    ========================================================= */
 
   const createDefaultSalesPrintOptions = (
     setup = null
@@ -371,246 +379,295 @@ const Dashboard = ({ onLogout }) => {
     },
   ];
   /* =========================================================
-   LOAD LATEST BILL PRINT GENERAL SETUP
+  LOAD LATEST BILL PRINT GENERAL SETUP
 ========================================================= */
 
-const readSetupBoolean = (
-  value,
-  fallback = false
-) => {
-  if (typeof value === "boolean") {
-    return value;
-  }
 
-  if (typeof value === "number") {
-    return value === 1;
-  }
+  /* =========================================================
+    COMPANY PERMISSIONS
+  ========================================================= */
+  const companyPermission = usePermission(
+    "MASTER",
+    "COMPANY"
+  );
 
-  const normalizedValue = String(
-    value ?? ""
-  )
-    .trim()
-    .toUpperCase();
+  const accountPermission = usePermission(
+    "MASTER",
+    "ACCOUNT"
+  );
+  const productPermission = usePermission(
+    "MASTER",
+    "PRODUCT"
+  );
+  const otherAccountPermission = usePermission(
+    "MASTER",
+    "OTHER_ACCOUNT"
+  );
+  const groupPermission = usePermission("MASTER", "GROUP");
+  const categoryPermission = usePermission(
+    "MASTER",
+    "CATEGORY"
+  );
+  const gstPermission = usePermission("MASTER", "GST");
+  const salesmanPermission = usePermission(
+    "MASTER",
+    "SALESMAN"
+  );
+  const areaPermission = usePermission(
+    "MASTER",
+    "AREA"
+  );
+  const godownPermission = usePermission(
+    "MASTER",
+    "GODOWN"
+  );
+const salesBillingPermission = usePermission("SALES", "SALES_BILLING");
+const quotationPermission = usePermission("SALES", "QUOTATION");
+const createLoadPermission = usePermission("SALES", "CREATE_LOAD");
+const settleLoadPermission = usePermission("SALES", "SETTLE_LOAD");
+const purchasePermission = usePermission("VOUCHERS", "PURCHASE");
+const creditNotePermission = usePermission("VOUCHERS", "CREDIT_NOTE");
+const debitNotePermission = usePermission("VOUCHERS", "DEBIT_NOTE");
 
-  if (
-    ["TRUE", "1", "Y", "YES", "ON"].includes(
-      normalizedValue
-    )
-  ) {
-    return true;
-  }
+  // console.log("ACCOUNT PERMISSION:", accountPermission);
 
-  if (
-    ["FALSE", "0", "N", "NO", "OFF"].includes(
-      normalizedValue
-    )
-  ) {
-    return false;
-  }
-
-  return fallback;
-};
-
-const loadLatestSalesPrintSetup =
-  async () => {
-    const distributorId = String(
-      localStorage.getItem("distributorId") ||
-      ""
-    ).trim();
-
-    const firmId = String(
-      localStorage.getItem("firmId") ||
-      ""
-    ).trim();
-
-    if (!distributorId || !firmId) {
-      return {
-        ...runtimeGeneralSetup,
-      };
+  const readSetupBoolean = (
+    value,
+    fallback = false
+  ) => {
+    if (typeof value === "boolean") {
+      return value;
     }
 
-    try {
-      const query = new URLSearchParams({
-        distributorId,
-        firmId,
-        _time: String(Date.now()),
-      });
+    if (typeof value === "number") {
+      return value === 1;
+    }
 
-      const response = await fetch(
-        `${API_URL}/general-setup?${query.toString()}`,
-        {
-          method: "GET",
-          cache: "no-store",
-          headers: {
-            Accept: "application/json",
-          },
-        }
-      );
+    const normalizedValue = String(
+      value ?? ""
+    )
+      .trim()
+      .toUpperCase();
 
-      const contentType =
-        response.headers.get(
-          "content-type"
-        ) || "";
+    if (
+      ["TRUE", "1", "Y", "YES", "ON"].includes(
+        normalizedValue
+      )
+    ) {
+      return true;
+    }
 
-      const result =
-        contentType.includes(
-          "application/json"
-        )
-          ? await response.json()
-          : null;
+    if (
+      ["FALSE", "0", "N", "NO", "OFF"].includes(
+        normalizedValue
+      )
+    ) {
+      return false;
+    }
 
-      if (
-        !response.ok ||
-        result?.success === false
-      ) {
-        throw new Error(
-          result?.message ||
-          "Unable to load print settings."
-        );
+    return fallback;
+  };
+
+  const loadLatestSalesPrintSetup =
+    async () => {
+      const distributorId = String(
+        localStorage.getItem("distributorId") ||
+        ""
+      ).trim();
+
+      const firmId = String(
+        localStorage.getItem("firmId") ||
+        ""
+      ).trim();
+
+      if (!distributorId || !firmId) {
+        return {
+          ...runtimeGeneralSetup,
+        };
       }
 
-      const setup =
-        result?.setup ||
-        result?.generalSetup ||
-        result?.data ||
-        result ||
-        {};
+      try {
+        const query = new URLSearchParams({
+          distributorId,
+          firmId,
+          _time: String(Date.now()),
+        });
 
-      const latestSetup = {
-        ...runtimeGeneralSetup,
+        const response = await fetch(
+          `${API_URL}/general-setup?${query.toString()}`,
+          {
+            method: "GET",
+            cache: "no-store",
+            headers: {
+              Accept: "application/json",
+            },
+          }
+        );
 
-        goodsReturn:
-          readSetupBoolean(
-            setup.goodsReturn,
-            true
-          ),
+        const contentType =
+          response.headers.get(
+            "content-type"
+          ) || "";
 
-        damageReturn:
-          readSetupBoolean(
-            setup.damageReturn,
-            true
-          ),
+        const result =
+          contentType.includes(
+            "application/json"
+          )
+            ? await response.json()
+            : null;
 
-        schemeSummary:
-          readSetupBoolean(
-            setup.schemeSummary,
-            true
-          ),
+        if (
+          !response.ok ||
+          result?.success === false
+        ) {
+          throw new Error(
+            result?.message ||
+            "Unable to load print settings."
+          );
+        }
 
-        vatSummary:
-          readSetupBoolean(
-            setup.vatSummary,
-            true
-          ),
+        const setup =
+          result?.setup ||
+          result?.generalSetup ||
+          result?.data ||
+          result ||
+          {};
 
-        serialNo:
-          readSetupBoolean(
-            setup.serialNo,
-            false
-          ),
-      };
+        const latestSetup = {
+          ...runtimeGeneralSetup,
 
-      setRuntimeGeneralSetup(
-        latestSetup
+          goodsReturn:
+            readSetupBoolean(
+              setup.goodsReturn,
+              true
+            ),
+
+          damageReturn:
+            readSetupBoolean(
+              setup.damageReturn,
+              true
+            ),
+
+          schemeSummary:
+            readSetupBoolean(
+              setup.schemeSummary,
+              true
+            ),
+
+          vatSummary:
+            readSetupBoolean(
+              setup.vatSummary,
+              true
+            ),
+
+          serialNo:
+            readSetupBoolean(
+              setup.serialNo,
+              false
+            ),
+        };
+
+        setRuntimeGeneralSetup(
+          latestSetup
+        );
+
+        console.log(
+          "Latest bill print setup:",
+          latestSetup
+        );
+
+        return latestSetup;
+      } catch (error) {
+        console.error(
+          "Latest print setup load error:",
+          error
+        );
+
+        return {
+          ...runtimeGeneralSetup,
+        };
+      }
+    };
+  const openSalesPrintFormatSelection =
+    async (
+      salesRow,
+      defaultAction = "preview"
+    ) => {
+      const actualSalesRow =
+        salesRow?.originalItem?.originalItem ||
+        salesRow?.originalItem ||
+        salesRow;
+
+      if (!actualSalesRow) {
+        alert(
+          "Sales Bill record was not found."
+        );
+        return;
+      }
+
+      const billSeries = String(
+        actualSalesRow.BillSeries ||
+        actualSalesRow.billSeries ||
+        actualSalesRow.TrnSeries ||
+        actualSalesRow.trnSeries ||
+        "INV"
+      ).trim();
+
+      const billNo = String(
+        actualSalesRow.BillNo ??
+        actualSalesRow.billNo ??
+        actualSalesRow.TrnNo ??
+        actualSalesRow.trnNo ??
+        ""
+      ).trim();
+
+      const loadSeries = String(
+        actualSalesRow.LoadSeries ||
+        actualSalesRow.loadSeries ||
+        ""
+      ).trim();
+
+      const loadNo = String(
+        actualSalesRow.LoadNo ??
+        actualSalesRow.loadNo ??
+        ""
+      ).trim();
+
+      /*
+      * Always load the latest saved General Setup
+      * before opening the print modal.
+      */
+      const latestSetup =
+        await loadLatestSalesPrintSetup();
+
+      setSelectedSalesPrintRow(
+        actualSalesRow
       );
 
-      console.log(
-        "Latest bill print setup:",
-        latestSetup
+      setSalesPrintOptions({
+        ...createDefaultSalesPrintOptions(
+          latestSetup
+        ),
+
+        defaultAction,
+
+        trnSeries:
+          billSeries || "INV",
+
+        fromTrnNo:
+          billNo,
+
+        toTrnNo:
+          billNo,
+
+        loadSeries,
+        loadNo,
+      });
+
+      setShowSalesPrintFormatModal(
+        true
       );
-
-      return latestSetup;
-    } catch (error) {
-      console.error(
-        "Latest print setup load error:",
-        error
-      );
-
-      return {
-        ...runtimeGeneralSetup,
-      };
-    }
-  };
-const openSalesPrintFormatSelection =
-  async (
-    salesRow,
-    defaultAction = "preview"
-  ) => {
-    const actualSalesRow =
-      salesRow?.originalItem?.originalItem ||
-      salesRow?.originalItem ||
-      salesRow;
-
-    if (!actualSalesRow) {
-      alert(
-        "Sales Bill record was not found."
-      );
-      return;
-    }
-
-    const billSeries = String(
-      actualSalesRow.BillSeries ||
-      actualSalesRow.billSeries ||
-      actualSalesRow.TrnSeries ||
-      actualSalesRow.trnSeries ||
-      "INV"
-    ).trim();
-
-    const billNo = String(
-      actualSalesRow.BillNo ??
-      actualSalesRow.billNo ??
-      actualSalesRow.TrnNo ??
-      actualSalesRow.trnNo ??
-      ""
-    ).trim();
-
-    const loadSeries = String(
-      actualSalesRow.LoadSeries ||
-      actualSalesRow.loadSeries ||
-      ""
-    ).trim();
-
-    const loadNo = String(
-      actualSalesRow.LoadNo ??
-      actualSalesRow.loadNo ??
-      ""
-    ).trim();
-
-    /*
-     * Always load the latest saved General Setup
-     * before opening the print modal.
-     */
-    const latestSetup =
-      await loadLatestSalesPrintSetup();
-
-    setSelectedSalesPrintRow(
-      actualSalesRow
-    );
-
-    setSalesPrintOptions({
-      ...createDefaultSalesPrintOptions(
-        latestSetup
-      ),
-
-      defaultAction,
-
-      trnSeries:
-        billSeries || "INV",
-
-      fromTrnNo:
-        billNo,
-
-      toTrnNo:
-        billNo,
-
-      loadSeries,
-      loadNo,
-    });
-
-    setShowSalesPrintFormatModal(
-      true
-    );
-  };
+    };
 
   /* ADD THIS FUNCTION HERE */
   const closeSalesPrintFormatSelection = () => {
@@ -627,34 +684,34 @@ const openSalesPrintFormatSelection =
       )
     );
   };
-const openSalesLoadPrintSelection =
-  async (
-    defaultAction = "print"
-  ) => {
-    const latestSetup =
-      await loadLatestSalesPrintSetup();
+  const openSalesLoadPrintSelection =
+    async (
+      defaultAction = "print"
+    ) => {
+      const latestSetup =
+        await loadLatestSalesPrintSetup();
 
-    setSelectedSalesPrintRow(null);
+      setSelectedSalesPrintRow(null);
 
-    setSalesPrintOptions({
-      ...createDefaultSalesPrintOptions(
-        latestSetup
-      ),
+      setSalesPrintOptions({
+        ...createDefaultSalesPrintOptions(
+          latestSetup
+        ),
 
-      defaultAction,
+        defaultAction,
 
-      loadSeries: "",
-      loadNo: "",
+        loadSeries: "",
+        loadNo: "",
 
-      trnSeries: "INV",
-      fromTrnNo: "",
-      toTrnNo: "",
-    });
+        trnSeries: "INV",
+        fromTrnNo: "",
+        toTrnNo: "",
+      });
 
-    setShowSalesPrintFormatModal(
-      true
-    );
-  };
+      setShowSalesPrintFormatModal(
+        true
+      );
+    };
   /* 2. REPORT STATES — add inside Dashboard component */
 
 
@@ -663,8 +720,8 @@ const openSalesLoadPrintSelection =
 
 
   /* =========================================================
-   DEBIT NOTE PRODUCT SEARCH AND BATCH MODAL STATES
-   ========================================================= */
+  DEBIT NOTE PRODUCT SEARCH AND BATCH MODAL STATES
+  ========================================================= */
 
   const [debitFilteredProductList, setDebitFilteredProductList] =
     useState([]);
@@ -967,8 +1024,8 @@ const openSalesLoadPrintSelection =
   };
 
   /* =========================================================
-     MY REPORTS NAVIGATION (merged from old Dashboard)
-     ========================================================= */
+    MY REPORTS NAVIGATION (merged from old Dashboard)
+    ========================================================= */
 
   const openMyReportsPage = () => {
     setActiveMenu("reports");
@@ -1025,7 +1082,7 @@ const openSalesLoadPrintSelection =
   };
 
   /* =========================================================
-     MY REPORTS SEARCH, FILTER AND PAGINATION (merged from old Dashboard)
+    MY REPORTS SEARCH, FILTER AND PAGINATION (merged from old Dashboard)
   ========================================================= */
 
   const normalizeReportText = (value = "") =>
@@ -1039,21 +1096,21 @@ const openSalesLoadPrintSelection =
     reportSearchText.trim() === ""
       ? []
       : allReportItems
-          .filter((report) => {
-            const searchValue = normalizeReportText(reportSearchText);
+        .filter((report) => {
+          const searchValue = normalizeReportText(reportSearchText);
 
-            const searchableValue = normalizeReportText(
-              [report.name, report.category, report.description].join(" ")
-            );
+          const searchableValue = normalizeReportText(
+            [report.name, report.category, report.description].join(" ")
+          );
 
-            return searchableValue.includes(searchValue);
-          })
-          .slice(0, 8);
+          return searchableValue.includes(searchValue);
+        })
+        .slice(0, 8);
 
   /*
-   * Bottom My Reports table is filtered only by category.
-   * Typing in the search box now affects only the dropdown.
-   */
+  * Bottom My Reports table is filtered only by category.
+  * Typing in the search box now affects only the dropdown.
+  */
   const filteredMyReports = allReportItems.filter((report) => {
     const selectedCategory = normalizeReportText(reportCategoryFilter);
     const reportCategory = normalizeReportText(report.category);
@@ -1099,9 +1156,9 @@ const openSalesLoadPrintSelection =
       : Math.min(reportEndIndex, filteredMyReports.length);
 
   /*
-   * Reset pagination only when category changes.
-   * Search text should not filter the bottom table.
-   */
+  * Reset pagination only when category changes.
+  * Search text should not filter the bottom table.
+  */
   useEffect(() => {
     setReportCurrentPage(1);
   }, [reportCategoryFilter]);
@@ -1111,8 +1168,8 @@ const openSalesLoadPrintSelection =
   );
 
   /* =========================================================
-   LOAD TRANSFER STATES
-   ========================================================= */
+  LOAD TRANSFER STATES
+  ========================================================= */
 
   const createDefaultLoadTransferForm = () => ({
     transferMode: "LOAD_TO_LOAD",
@@ -1449,8 +1506,8 @@ const openSalesLoadPrintSelection =
   const [salesRowsPerPage, setSalesRowsPerPage] =
     useState(10);
   /* =========================================================
-     SALES BILLING BACKEND PAGINATION STATES
-     ========================================================= */
+    SALES BILLING BACKEND PAGINATION STATES
+    ========================================================= */
 
   const [
     salesCurrentPage,
@@ -1498,9 +1555,9 @@ const openSalesLoadPrintSelection =
   ] = useState(0);
 
   /*
-   * Keeps the latest highlighted batch available
-   * inside the window keyboard event.
-   */
+  * Keeps the latest highlighted batch available
+  * inside the window keyboard event.
+  */
   const purchaseBatchSelectedIndexRef =
     useRef(0);
 
@@ -1527,8 +1584,8 @@ const openSalesLoadPrintSelection =
 
   const [editingCreateLoadBills, setEditingCreateLoadBills] = useState([]);
   /* =========================================================
-   PURCHASE LIST BACKEND PAGINATION STATES
-   ========================================================= */
+  PURCHASE LIST BACKEND PAGINATION STATES
+  ========================================================= */
 
   const createDefaultPurchaseListFilters =
     () => ({
@@ -1536,8 +1593,8 @@ const openSalesLoadPrintSelection =
       toDate: "",
 
       /*
-       * Main search box.
-       */
+      * Main search box.
+      */
       search: "",
 
       vouSer: "",
@@ -1612,8 +1669,8 @@ const openSalesLoadPrintSelection =
 
 
   /* =========================================================
-   CREDIT NOTE LIST BACKEND PAGINATION STATES
-   ========================================================= */
+  CREDIT NOTE LIST BACKEND PAGINATION STATES
+  ========================================================= */
 
   const createDefaultCreditNoteListFilters =
     () => ({
@@ -1706,8 +1763,8 @@ const openSalesLoadPrintSelection =
 
 
   /* =========================================================
-   DEBIT NOTE LIST BACKEND PAGINATION STATES
-   ========================================================= */
+  DEBIT NOTE LIST BACKEND PAGINATION STATES
+  ========================================================= */
 
   const createDefaultDebitNoteListFilters =
     () => ({
@@ -1979,11 +2036,11 @@ const openSalesLoadPrintSelection =
     }
 
     /*
-     * STEP 1:
-     * Load all current bills assigned to this load.
-     *
-     * This API already exists in server.js.
-     */
+    * STEP 1:
+    * Load all current bills assigned to this load.
+    *
+    * This API already exists in server.js.
+    */
     const loadQuery = new URLSearchParams({
       distributorId,
       firmId,
@@ -2028,9 +2085,9 @@ const openSalesLoadPrintSelection =
     }
 
     /*
-     * Your load-transfer API may return bills either
-     * directly or inside sourceLoad.
-     */
+    * Your load-transfer API may return bills either
+    * directly or inside sourceLoad.
+    */
     const sourceBills =
       Array.isArray(loadResult.bills)
         ? loadResult.bills
@@ -2051,9 +2108,9 @@ const openSalesLoadPrintSelection =
     }
 
     /*
-     * STEP 2:
-     * Apply the optional transaction filters.
-     */
+    * STEP 2:
+    * Apply the optional transaction filters.
+    */
     const filteredBills =
       sourceBills.filter((bill) => {
         const billSeries = String(
@@ -2150,9 +2207,9 @@ const openSalesLoadPrintSelection =
     );
 
     /*
-     * STEP 3:
-     * Load complete print details for every invoice.
-     */
+    * STEP 3:
+    * Load complete print details for every invoice.
+    */
     const printResults =
       await Promise.all(
         filteredBills.map(
@@ -2238,8 +2295,8 @@ const openSalesLoadPrintSelection =
     }
 
     /*
-     * Update the visible bill range in the modal.
-     */
+    * Update the visible bill range in the modal.
+    */
     const firstBill =
       filteredBills[0];
 
@@ -2333,8 +2390,8 @@ const openSalesLoadPrintSelection =
             includeButtons: false,
 
             /*
-             * Copies are handled here for every bill.
-             */
+            * Copies are handled here for every bill.
+            */
             copies: Math.max(
               1,
               Number(printOptions.copies) || 1
@@ -2347,17 +2404,17 @@ const openSalesLoadPrintSelection =
       documents[0] || "";
 
     /*
-     * Copy the styles from the first generated invoice.
-     */
+    * Copy the styles from the first generated invoice.
+    */
     const styleBlocks =
       firstDocument.match(
         /<style[\s\S]*?<\/style>/gi
       ) || [];
 
     /*
-     * Every generated invoice contains one or more
-     * invoice-page main elements.
-     */
+    * Every generated invoice contains one or more
+    * invoice-page main elements.
+    */
     const invoicePages = documents
       .flatMap(
         (documentHtml) =>
@@ -2383,106 +2440,106 @@ const openSalesLoadPrintSelection =
         : "portrait";
 
     return `
-    <!DOCTYPE html>
-    <html lang="en">
-      <head>
-        <meta charset="UTF-8" />
+      <!DOCTYPE html>
+      <html lang="en">
+        <head>
+          <meta charset="UTF-8" />
 
-        <meta
-          name="viewport"
-          content="width=device-width, initial-scale=1.0"
-        />
+          <meta
+            name="viewport"
+            content="width=device-width, initial-scale=1.0"
+          />
 
-        <title>
-          Load ${escapeInvoiceHtml(
+          <title>
+            Load ${escapeInvoiceHtml(
       salesPrintOptions.loadSeries || ""
     )}${escapeInvoiceHtml(
       salesPrintOptions.loadNo || ""
     )} Invoices
-        </title>
+          </title>
 
-        ${styleBlocks.join("\n")}
+          ${styleBlocks.join("\n")}
 
-        <style>
-          @page {
-            size: ${paperSize} ${orientation};
-            margin: ${paperSize === "A5"
+          <style>
+            @page {
+              size: ${paperSize} ${orientation};
+              margin: ${paperSize === "A5"
         ? "5mm"
         : "7mm"
       };
-          }
-
-          .invoice-page {
-            page-break-after: always;
-            break-after: page;
-          }
-
-          .invoice-page:last-child {
-            page-break-after: auto;
-            break-after: auto;
-          }
-
-          @media print {
-            .invoice-preview-toolbar {
-              display: none !important;
             }
-          }
-        </style>
-      </head>
 
-      <body>
-        ${printOptions.includeButtons
+            .invoice-page {
+              page-break-after: always;
+              break-after: page;
+            }
+
+            .invoice-page:last-child {
+              page-break-after: auto;
+              break-after: auto;
+            }
+
+            @media print {
+              .invoice-preview-toolbar {
+                display: none !important;
+              }
+            }
+          </style>
+        </head>
+
+        <body>
+          ${printOptions.includeButtons
         ? `
-              <div class="invoice-preview-toolbar">
-                <div>
-                  <div class="preview-title">
-                    Load Invoice Preview
-                  </div>
+                <div class="invoice-preview-toolbar">
+                  <div>
+                    <div class="preview-title">
+                      Load Invoice Preview
+                    </div>
 
-                  <div class="preview-subtitle">
-                    Load
-                    ${escapeInvoiceHtml(
+                    <div class="preview-subtitle">
+                      Load
+                      ${escapeInvoiceHtml(
           salesPrintOptions.loadSeries || ""
         )}
-                    -
-                    ${escapeInvoiceHtml(
+                      -
+                      ${escapeInvoiceHtml(
           salesPrintOptions.loadNo || ""
         )}
-                    · ${invoicePayloads.length} invoice(s)
+                      · ${invoicePayloads.length} invoice(s)
+                    </div>
+                  </div>
+
+                  <div class="toolbar-actions">
+                    <button
+                      type="button"
+                      class="print-button"
+                      onclick="window.print()"
+                    >
+                      Print
+                    </button>
+
+                    <button
+                      type="button"
+                      onclick="window.close()"
+                    >
+                      Close
+                    </button>
                   </div>
                 </div>
-
-                <div class="toolbar-actions">
-                  <button
-                    type="button"
-                    class="print-button"
-                    onclick="window.print()"
-                  >
-                    Print
-                  </button>
-
-                  <button
-                    type="button"
-                    onclick="window.close()"
-                  >
-                    Close
-                  </button>
-                </div>
-              </div>
-            `
+              `
         : ""
       }
 
-        <div class="preview-shell">
-          ${invoicePages}
-        </div>
-      </body>
-    </html>
-  `;
+          <div class="preview-shell">
+            ${invoicePages}
+          </div>
+        </body>
+      </html>
+    `;
   };
   /* =========================================================
-   OPEN SELECTED SALES BILL FORMAT
-   ========================================================= */
+  OPEN SELECTED SALES BILL FORMAT
+  ========================================================= */
 
   const openSelectedSalesInvoiceFormat = async ({
     action = "preview",
@@ -2492,9 +2549,9 @@ const openSalesLoadPrintSelection =
     ).trim();
 
     /*
-     * When Load No exists, print the whole load.
-     * Otherwise print only the selected invoice.
-     */
+    * When Load No exists, print the whole load.
+    * Otherwise print only the selected invoice.
+    */
     if (!enteredLoadNo && !selectedSalesPrintRow) {
       alert(
         "Please select a Sales Bill or enter Load Series and Load No."
@@ -2531,67 +2588,67 @@ const openSalesLoadPrintSelection =
     invoiceWindow.document.open();
 
     invoiceWindow.document.write(`
-    <!DOCTYPE html>
-    <html>
-      <head>
-        <title>Preparing Invoice...</title>
+      <!DOCTYPE html>
+      <html>
+        <head>
+          <title>Preparing Invoice...</title>
 
-        <style>
-          * {
-            box-sizing: border-box;
-          }
-
-          body {
-            margin: 0;
-            min-height: 100vh;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-family: Calibri, Arial, sans-serif;
-            background: #eef2f7;
-            color: #334155;
-          }
-
-          .loading-box {
-            min-width: 320px;
-            padding: 28px;
-            border: 1px solid #dbe3ee;
-            background: #ffffff;
-            text-align: center;
-          }
-
-          .spinner {
-            width: 34px;
-            height: 34px;
-            margin: 0 auto 14px;
-            border: 4px solid #dbeafe;
-            border-top-color: #2563eb;
-            border-radius: 50%;
-            animation: invoiceSpin 0.8s linear infinite;
-          }
-
-          @keyframes invoiceSpin {
-            to {
-              transform: rotate(360deg);
+          <style>
+            * {
+              box-sizing: border-box;
             }
-          }
-        </style>
-      </head>
 
-      <body>
-        <div class="loading-box">
-          <div class="spinner"></div>
+            body {
+              margin: 0;
+              min-height: 100vh;
+              display: flex;
+              align-items: center;
+              justify-content: center;
+              font-family: Calibri, Arial, sans-serif;
+              background: #eef2f7;
+              color: #334155;
+            }
 
-          <strong>
-            ${enteredLoadNo
+            .loading-box {
+              min-width: 320px;
+              padding: 28px;
+              border: 1px solid #dbe3ee;
+              background: #ffffff;
+              text-align: center;
+            }
+
+            .spinner {
+              width: 34px;
+              height: 34px;
+              margin: 0 auto 14px;
+              border: 4px solid #dbeafe;
+              border-top-color: #2563eb;
+              border-radius: 50%;
+              animation: invoiceSpin 0.8s linear infinite;
+            }
+
+            @keyframes invoiceSpin {
+              to {
+                transform: rotate(360deg);
+              }
+            }
+          </style>
+        </head>
+
+        <body>
+          <div class="loading-box">
+            <div class="spinner"></div>
+
+            <strong>
+              ${enteredLoadNo
         ? "Loading invoices from load..."
         : "Preparing Sales Invoice..."
       }
-          </strong>
-        </div>
-      </body>
-    </html>
-  `);
+            </strong>
+          </div>
+        </body>
+      </html>
+    `);
 
     invoiceWindow.document.close();
 
@@ -2649,8 +2706,8 @@ const openSalesLoadPrintSelection =
 
       if (enteredLoadNo) {
         /*
-         * LOAD-WISE PRINTING
-         */
+        * LOAD-WISE PRINTING
+        */
         const loadResult =
           await loadSalesInvoicesByLoad();
 
@@ -2661,8 +2718,8 @@ const openSalesLoadPrintSelection =
           );
       } else {
         /*
-         * SINGLE INVOICE PRINTING
-         */
+        * SINGLE INVOICE PRINTING
+        */
         const result =
           await loadSalesInvoicePrintData(
             selectedSalesPrintRow
@@ -2704,75 +2761,75 @@ const openSalesLoadPrintSelection =
       invoiceWindow.document.open();
 
       invoiceWindow.document.write(`
-      <!DOCTYPE html>
-      <html>
-        <body style="
-          margin: 0;
-          padding: 35px;
-          font-family: Calibri, Arial, sans-serif;
-          color: #991b1b;
-          background: #ffffff;
-        ">
-          <h2>Unable to prepare invoice</h2>
+        <!DOCTYPE html>
+        <html>
+          <body style="
+            margin: 0;
+            padding: 35px;
+            font-family: Calibri, Arial, sans-serif;
+            color: #991b1b;
+            background: #ffffff;
+          ">
+            <h2>Unable to prepare invoice</h2>
 
-          <p>
-            ${escapeInvoiceHtml(
+            <p>
+              ${escapeInvoiceHtml(
         error?.message ||
         "An unexpected error occurred."
       )}
-          </p>
-        </body>
-      </html>
-    `);
+            </p>
+          </body>
+        </html>
+      `);
 
       invoiceWindow.document.close();
     } finally {
       setSalesPrintPreparing(false);
     }
   };
-const openSalesPrintModal =
-  async (
-    salesRow,
-    defaultAction = "preview"
-  ) => {
-    const actualSalesRow =
-      salesRow?.originalItem?.originalItem ||
-      salesRow?.originalItem ||
-      salesRow;
+  const openSalesPrintModal =
+    async (
+      salesRow,
+      defaultAction = "preview"
+    ) => {
+      const actualSalesRow =
+        salesRow?.originalItem?.originalItem ||
+        salesRow?.originalItem ||
+        salesRow;
 
-    if (!actualSalesRow) {
-      alert(
-        "Sales Bill record was not found."
+      if (!actualSalesRow) {
+        alert(
+          "Sales Bill record was not found."
+        );
+        return;
+      }
+
+      const latestSetup =
+        await loadLatestSalesPrintSetup();
+
+      setSelectedSalesPrintRow(
+        actualSalesRow
       );
-      return;
-    }
 
-    const latestSetup =
-      await loadLatestSalesPrintSetup();
+      setSalesPrintOptions({
+        ...createDefaultSalesPrintOptions(
+          latestSetup
+        ),
 
-    setSelectedSalesPrintRow(
-      actualSalesRow
-    );
+        defaultAction,
+      });
 
-    setSalesPrintOptions({
-      ...createDefaultSalesPrintOptions(
-        latestSetup
-      ),
-
-      defaultAction,
-    });
-
-    setShowSalesPrintFormatModal(
-      true
-    );
-  };
+      setShowSalesPrintFormatModal(
+        true
+      );
+    };
   /* =========================================================
-     BILL PRINT DEFAULT FORM AND LAYOUTS
-     ========================================================= */
+    BILL PRINT DEFAULT FORM AND LAYOUTS
+    ========================================================= */
 
   /* =========================================================
-     BILL PRINT DEFAULT FORM AND LAYOUTS
-     ========================================================= */
+    BILL PRINT DEFAULT FORM AND LAYOUTS
+    ========================================================= */
 
   const BILL_PRINT_LAYOUTS = [
     {
@@ -3595,372 +3652,372 @@ const openSalesPrintModal =
     const itemRows = visibleItems
       .map(
         (item, index) => `
-        <tr class="item-row">
-        ${showSerialNo
+          <tr class="item-row">
+          ${showSerialNo
             ? `<td class="center">${index + 1}</td>`
             : ""
           }
-          <td class="product-name">${text(item.productName)}</td>
-          ${showHsn ? `<td class="center">${text(item.hsn)}</td>` : ""}
-          <td class="number">${money(item.mrp)}</td>
-          <td class="center">${text(item.unit)}</td>
-          <td class="number">${qty(item.qty)}</td>
-          <td class="number">${safeNumber(item.free) > 0 ? qty(item.free) : "-"
+            <td class="product-name">${text(item.productName)}</td>
+            ${showHsn ? `<td class="center">${text(item.hsn)}</td>` : ""}
+            <td class="number">${money(item.mrp)}</td>
+            <td class="center">${text(item.unit)}</td>
+            <td class="number">${qty(item.qty)}</td>
+            <td class="number">${safeNumber(item.free) > 0 ? qty(item.free) : "-"
           }</td>
-          <td class="number">${money(item.rate)}</td>
-          <td class="number">
-            ${showScheme
+            <td class="number">${money(item.rate)}</td>
+            <td class="number">
+              ${showScheme
             ? money(
               safeNumber(item.schemeAmount) +
               safeNumber(item.cashDiscountAmount)
             )
             : money(0)
           }
-          </td>
-          <td class="number">${money(item.taxableAmount)}</td>
-          <td class="tax-cell">
-            <div class="tax-cell-inner">
-              <span class="tax-percent">${percent(item.cgstPercent)}</span>
-              <span class="tax-amount">${money(item.cgstAmount)}</span>
-            </div>
-          </td>
+            </td>
+            <td class="number">${money(item.taxableAmount)}</td>
+            <td class="tax-cell">
+              <div class="tax-cell-inner">
+                <span class="tax-percent">${percent(item.cgstPercent)}</span>
+                <span class="tax-amount">${money(item.cgstAmount)}</span>
+              </div>
+            </td>
 
-          <td class="tax-cell">
-            <div class="tax-cell-inner">
-              <span class="tax-percent">${percent(item.sgstPercent)}</span>
-              <span class="tax-amount">${money(item.sgstAmount)}</span>
-            </div>
-          </td>
-          <td class="number strong">${money(item.netAmount)}</td>
-        </tr>
-      `
+            <td class="tax-cell">
+              <div class="tax-cell-inner">
+                <span class="tax-percent">${percent(item.sgstPercent)}</span>
+                <span class="tax-amount">${money(item.sgstAmount)}</span>
+              </div>
+            </td>
+            <td class="number strong">${money(item.netAmount)}</td>
+          </tr>
+        `
       )
       .join("");
 
     const emptyRows = Array.from({ length: emptyRowCount })
       .map(
         () => `
-        <tr class="item-row empty-row">
-         ${showSerialNo
+          <tr class="item-row empty-row">
+          ${showSerialNo
             ? `<td>&nbsp;</td>`
             : ""
           }
-          <td></td>
-          ${showHsn ? "<td></td>" : ""}
-          <td></td>
-          <td></td>
-          <td></td>
-          <td></td>
-          <td></td>
-          <td></td>
-          <td></td>
-          <td></td>
-          <td></td>
-          <td></td>
-        </tr>
-      `
+            <td></td>
+            ${showHsn ? "<td></td>" : ""}
+            <td></td>
+            <td></td>
+            <td></td>
+            <td></td>
+            <td></td>
+            <td></td>
+            <td></td>
+            <td></td>
+            <td></td>
+            <td></td>
+          </tr>
+        `
       )
       .join("");
 
     const oneInvoice = (copyNumber) => `
-    <main class="${pageClass}">
-      ${copies > 1
+      <main class="${pageClass}">
+        ${copies > 1
         ? `<div class="copy-label">COPY ${copyNumber} OF ${copies}</div>`
         : ""
       }
 
-      <section class="report-top">
-        <div class="firm-block">
-          <div class="firm-name">${text(firmName)}</div>
-          <div class="compact-lines">
-            ${joinAddress(firmAddressLines)}
+        <section class="report-top">
+          <div class="firm-block">
+            <div class="firm-name">${text(firmName)}</div>
+            <div class="compact-lines">
+              ${joinAddress(firmAddressLines)}
+            </div>
+
+            <div class="info-line">
+              <span>State</span><b>:</b>
+              <span>${text(firmState)}</span>
+              <span class="push-label">State Code</span><b>:</b>
+              <span>${text(firmStateCode)}</span>
+            </div>
+
+            <div class="info-line">
+              <span>Ph</span><b>:</b>
+              <span>${text(firmPhone || firmMobile)}</span>
+              <span class="push-label">FIRM GSTIN</span><b>:</b>
+              <strong>${text(firmGstNo)}</strong>
+            </div>
           </div>
 
-          <div class="info-line">
-            <span>State</span><b>:</b>
-            <span>${text(firmState)}</span>
-            <span class="push-label">State Code</span><b>:</b>
-            <span>${text(firmStateCode)}</span>
+          <div class="invoice-block">
+            <div class="tax-heading">${text(invoiceType, "TAX-INVOICE")}</div>
+
+            <div class="label-value">
+              <span>INVOICE NO</span><b>:</b>
+              <strong>${text(`${billSeries || ""}${billNo || ""}`)}</strong>
+            </div>
+
+            <div class="label-value">
+              <span>INVOICE DATE</span><b>:</b>
+              <strong>${text(formatInvoiceDate(billDate))}</strong>
+            </div>
+
+            <div class="label-value">
+              <span>PO Number</span><b>:</b>
+              <span>${text(poNumber)}</span>
+            </div>
+
+            <div class="label-value">
+              <span>Firm Food Lic No</span><b>:</b>
+              <span>${text(firmFoodLicence)}</span>
+            </div>
+          </div>
+        </section>
+
+        <div class="long-dash"></div>
+
+        <section class="party-grid">
+          <div class="party-block">
+            <div class="party-heading">Details of Receiver (Billed to)</div>
+            <div class="party-name">${text(partyName)}</div>
+            <div class="compact-lines">${joinAddress(partyAddressLines)}</div>
+
+            <div class="info-line">
+              <span>STATE</span><b>:</b>
+              <span>${text(partyState)}</span>
+              <span class="push-label">STATE CODE</span><b>:</b>
+              <span>${text(partyStateCode)}</span>
+            </div>
+
+            <div class="info-line">
+              <strong>GSTIN/UNIQUE ID</strong><b>:</b>
+              <strong>${text(partyGstNo)}</strong>
+            </div>
+
+            <div class="info-line">
+              <span>Phone</span><b>:</b>
+              <span>${text(partyPhone)}</span>
+            </div>
           </div>
 
-          <div class="info-line">
-            <span>Ph</span><b>:</b>
-            <span>${text(firmPhone || firmMobile)}</span>
-            <span class="push-label">FIRM GSTIN</span><b>:</b>
-            <strong>${text(firmGstNo)}</strong>
-          </div>
-        </div>
+          <div class="middle-party-details">
+            <div class="info-line">
+              <span>BEAT</span><b>:</b>
+              <span>${text(areaName)}</span>
+            </div>
 
-        <div class="invoice-block">
-          <div class="tax-heading">${text(invoiceType, "TAX-INVOICE")}</div>
-
-          <div class="label-value">
-            <span>INVOICE NO</span><b>:</b>
-            <strong>${text(`${billSeries || ""}${billNo || ""}`)}</strong>
+            <div class="info-line">
+              <span>PC NAME</span><b>:</b>
+              <span>${text(salesmanName)}</span>
+            </div>
           </div>
 
-          <div class="label-value">
-            <span>INVOICE DATE</span><b>:</b>
-            <strong>${text(formatInvoiceDate(billDate))}</strong>
+          <div class="party-block">
+            <div class="party-heading">Details of Consignee (Shipped to)</div>
+            <div class="party-name">${text(partyName)}</div>
+            <div class="compact-lines">${joinAddress(partyAddressLines)}</div>
+
+            <div class="info-line">
+              <span>STATE</span><b>:</b>
+              <span>${text(partyState)}</span>
+              <span class="push-label">STATE CODE</span><b>:</b>
+              <span>${text(partyStateCode)}</span>
+            </div>
+
+            <div class="info-line">
+              <strong>GSTIN/UNIQUE ID</strong><b>:</b>
+              <strong>${text(partyGstNo)}</strong>
+            </div>
+
+            <div class="info-line">
+              <span>Food Lic No</span><b>:</b>
+              <span>${text(partyFoodLicence)}</span>
+            </div>
           </div>
+        </section>
 
-          <div class="label-value">
-            <span>PO Number</span><b>:</b>
-            <span>${text(poNumber)}</span>
-          </div>
+        <section class="items-wrap">
+          <table class="crystal-table">
+            <colgroup>
+              <col style="width:3.2%">
+              <col style="width:${showHsn ? "18.4%" : "24.4%"}">
+              ${showHsn ? '<col style="width:7.4%">' : ""}
+              <col style="width:6.2%">
+              <col style="width:5.4%">
+              <col style="width:4.2%">
+              <col style="width:4.2%">
+              <col style="width:7.0%">
+              <col style="width:7.0%">
+              <col style="width:8.3%">
+              <col style="width:9.0%">
+              <col style="width:9.0%">
+              <col style="width:10.7%">
+            </colgroup>
 
-          <div class="label-value">
-            <span>Firm Food Lic No</span><b>:</b>
-            <span>${text(firmFoodLicence)}</span>
-          </div>
-        </div>
-      </section>
-
-      <div class="long-dash"></div>
-
-      <section class="party-grid">
-        <div class="party-block">
-          <div class="party-heading">Details of Receiver (Billed to)</div>
-          <div class="party-name">${text(partyName)}</div>
-          <div class="compact-lines">${joinAddress(partyAddressLines)}</div>
-
-          <div class="info-line">
-            <span>STATE</span><b>:</b>
-            <span>${text(partyState)}</span>
-            <span class="push-label">STATE CODE</span><b>:</b>
-            <span>${text(partyStateCode)}</span>
-          </div>
-
-          <div class="info-line">
-            <strong>GSTIN/UNIQUE ID</strong><b>:</b>
-            <strong>${text(partyGstNo)}</strong>
-          </div>
-
-          <div class="info-line">
-            <span>Phone</span><b>:</b>
-            <span>${text(partyPhone)}</span>
-          </div>
-        </div>
-
-        <div class="middle-party-details">
-          <div class="info-line">
-            <span>BEAT</span><b>:</b>
-            <span>${text(areaName)}</span>
-          </div>
-
-          <div class="info-line">
-            <span>PC NAME</span><b>:</b>
-            <span>${text(salesmanName)}</span>
-          </div>
-        </div>
-
-        <div class="party-block">
-          <div class="party-heading">Details of Consignee (Shipped to)</div>
-          <div class="party-name">${text(partyName)}</div>
-          <div class="compact-lines">${joinAddress(partyAddressLines)}</div>
-
-          <div class="info-line">
-            <span>STATE</span><b>:</b>
-            <span>${text(partyState)}</span>
-            <span class="push-label">STATE CODE</span><b>:</b>
-            <span>${text(partyStateCode)}</span>
-          </div>
-
-          <div class="info-line">
-            <strong>GSTIN/UNIQUE ID</strong><b>:</b>
-            <strong>${text(partyGstNo)}</strong>
-          </div>
-
-          <div class="info-line">
-            <span>Food Lic No</span><b>:</b>
-            <span>${text(partyFoodLicence)}</span>
-          </div>
-        </div>
-      </section>
-
-      <section class="items-wrap">
-        <table class="crystal-table">
-          <colgroup>
-            <col style="width:3.2%">
-            <col style="width:${showHsn ? "18.4%" : "24.4%"}">
-            ${showHsn ? '<col style="width:7.4%">' : ""}
-            <col style="width:6.2%">
-            <col style="width:5.4%">
-            <col style="width:4.2%">
-            <col style="width:4.2%">
-            <col style="width:7.0%">
-            <col style="width:7.0%">
-            <col style="width:8.3%">
-            <col style="width:9.0%">
-            <col style="width:9.0%">
-            <col style="width:10.7%">
-          </colgroup>
-
-          <thead>
-            <tr>
-             ${showSerialNo
+            <thead>
+              <tr>
+              ${showSerialNo
         ? `<th>SR NO</th>`
         : ""
       }
-              <th class="left">Product Name</th>
-              ${showHsn ? "<th>HSN</th>" : ""}
-              <th>MRP</th>
-              <th>Unit</th>
-              <th>Qty</th>
-              <th>Fr.</th>
-              <th>Rate</th>
-              <th>Disc</th>
-              <th>Taxable</th>
-              <th>CGST<br><small>% &nbsp;&nbsp; Amt</small></th>
-              <th>SGST<br><small>% &nbsp;&nbsp; Amt</small></th>
-              <th>Net Amt</th>
-            </tr>
-          </thead>
+                <th class="left">Product Name</th>
+                ${showHsn ? "<th>HSN</th>" : ""}
+                <th>MRP</th>
+                <th>Unit</th>
+                <th>Qty</th>
+                <th>Fr.</th>
+                <th>Rate</th>
+                <th>Disc</th>
+                <th>Taxable</th>
+                <th>CGST<br><small>% &nbsp;&nbsp; Amt</small></th>
+                <th>SGST<br><small>% &nbsp;&nbsp; Amt</small></th>
+                <th>Net Amt</th>
+              </tr>
+            </thead>
 
-          <tbody>
-            ${itemRows}
-            ${emptyRows}
-          </tbody>
-        </table>
-      </section>
+            <tbody>
+              ${itemRows}
+              ${emptyRows}
+            </tbody>
+          </table>
+        </section>
 
-      <section class="invoice-bottom">
-        <div class="total-words-row">
-          <strong>Tot Value (Words)</strong>
-          <span>RS. ${text(amountInWords, "Zero Only")}</span>
-        </div>
-
-        <div class="bottom-middle-grid">
-          <div class="bottom-notes">
-            ${showDeclaration
-        ? `
-                  <div class="declaration-text">
-                    <strong>Declaration:</strong>
-                    Certified that the particulars given above are true and
-                    correct and the amount indicated.
-                  </div>
-                `
-        : ""
-      }
-
-            <div class="receiver-label">
-              <strong>Receivers Stamp &amp; Sign.</strong>
-            </div>
-          </div>
-<div class="amount-summary">
-          ${showTaxSummary
-        ? `
-                
-                  <div class="amount-summary-row">
-                    <span>TAXABLE AMT</span><b>:</b><strong>${money(taxableValue)}</strong>
-                  </div>
-                  <div class="amount-summary-row">
-                    <span>SCHE/CASH</span><b>:</b><strong>${money(totalSchemeCash)}</strong>
-                  </div>
-                  <div class="amount-summary-row">
-                    <span>CGST AMT</span><b>:</b><strong>${money(cgstAmount)}</strong>
-                  </div>
-                  <div class="amount-summary-row">
-                    <span>SGST AMT</span><b>:</b><strong>${money(sgstAmount)}</strong>
-                  </div>
-                  ${igstAmount !== 0
-          ? `
-                        <div class="amount-summary-row">
-                          <span>IGST AMT</span><b>:</b><strong>${money(igstAmount)}</strong>
-                        </div>
-                      `
-          : ""
-        }
-                  <div class="amount-summary-row">
-                    <span>CN/STAR/DIS</span><b>:</b><strong>${money(totalCnStarDis)}</strong>
-                  </div>
-               <div class="amount-summary-row">
-  <span>TCS AMT</span>
-  <b>:</b>
-  <strong>${money(tcsAmount)}</strong>
-</div>
-
-${goodsReturn
-          ? `
-      <div class="amount-summary-row">
-        <span>GOODS RETURN</span>
-        <b>:</b>
-        <strong>${money(goodsReturnAmount)}</strong>
-      </div>
-    `
-          : ""
-        }
-
-${damageReturn
-          ? `
-      <div class="amount-summary-row">
-        <span>DAMAGE RETURN</span>
-        <b>:</b>
-        <strong>${money(damageReturnAmount)}</strong>
-      </div>
-    `
-          : ""
-        }
-
-<div class="amount-summary-row">
-  <span>ROUNDING</span>
-  <b>:</b>
-  <strong>${money(roundingAmount)}</strong>
-</div>
-                  <div class="amount-summary-row net-amount-row">
-                    <span>NET AMOUNT</span><b>:</b><strong>${money(netAmount)}</strong>
-                  </div>
-                </div>
-              `
-        : ""
-      }
-        </div>
-
-        <div class="invoice-footer-grid">
-          <div class="receiver-section">
-            <strong>Receivers Stamp &amp; Sign.</strong>
+        <section class="invoice-bottom">
+          <div class="total-words-row">
+            <strong>Tot Value (Words)</strong>
+            <span>RS. ${text(amountInWords, "Zero Only")}</span>
           </div>
 
-          <div class="footer-detail-section">
-            ${showBankDetails
+          <div class="bottom-middle-grid">
+            <div class="bottom-notes">
+              ${showDeclaration
         ? `
-                  <div class="footer-bank-row">
-                    <span><strong>BANK NAME:</strong> ${text(bankName)}</span>
-                    <span><strong>A/C NO:</strong> ${text(bankAccountNo)}</span>
-                    <span><strong>IFSC CODE:</strong> ${text(bankIfsc)}</span>
-                    <span><strong>BRANCH:</strong> ${text(bankBranch)}</span>
-                    ${bankAccountType
-          ? `<span><strong>A/C TYPE:</strong> ${text(bankAccountType)}</span>`
-          : ""
-        }
-                  </div>
-                `
-        : ""
-      }
-
-            <div class="footer-declaration-row">
-              <div class="footer-declaration">
-                ${showDeclaration
-        ? `
+                    <div class="declaration-text">
                       <strong>Declaration:</strong>
                       Certified that the particulars given above are true and
                       correct and the amount indicated.
-                    `
+                    </div>
+                  `
         : ""
       }
-              </div>
 
-              <div class="footer-signature">
-                <strong>FOR ${text(firmName)}</strong>
-                <div class="authorised-line"></div>
-                <span>Authorised Signatory</span>
+              <div class="receiver-label">
+                <strong>Receivers Stamp &amp; Sign.</strong>
+              </div>
+            </div>
+  <div class="amount-summary">
+            ${showTaxSummary
+        ? `
+                  
+                    <div class="amount-summary-row">
+                      <span>TAXABLE AMT</span><b>:</b><strong>${money(taxableValue)}</strong>
+                    </div>
+                    <div class="amount-summary-row">
+                      <span>SCHE/CASH</span><b>:</b><strong>${money(totalSchemeCash)}</strong>
+                    </div>
+                    <div class="amount-summary-row">
+                      <span>CGST AMT</span><b>:</b><strong>${money(cgstAmount)}</strong>
+                    </div>
+                    <div class="amount-summary-row">
+                      <span>SGST AMT</span><b>:</b><strong>${money(sgstAmount)}</strong>
+                    </div>
+                    ${igstAmount !== 0
+          ? `
+                          <div class="amount-summary-row">
+                            <span>IGST AMT</span><b>:</b><strong>${money(igstAmount)}</strong>
+                          </div>
+                        `
+          : ""
+        }
+                    <div class="amount-summary-row">
+                      <span>CN/STAR/DIS</span><b>:</b><strong>${money(totalCnStarDis)}</strong>
+                    </div>
+                <div class="amount-summary-row">
+    <span>TCS AMT</span>
+    <b>:</b>
+    <strong>${money(tcsAmount)}</strong>
+  </div>
+
+  ${goodsReturn
+          ? `
+        <div class="amount-summary-row">
+          <span>GOODS RETURN</span>
+          <b>:</b>
+          <strong>${money(goodsReturnAmount)}</strong>
+        </div>
+      `
+          : ""
+        }
+
+  ${damageReturn
+          ? `
+        <div class="amount-summary-row">
+          <span>DAMAGE RETURN</span>
+          <b>:</b>
+          <strong>${money(damageReturnAmount)}</strong>
+        </div>
+      `
+          : ""
+        }
+
+  <div class="amount-summary-row">
+    <span>ROUNDING</span>
+    <b>:</b>
+    <strong>${money(roundingAmount)}</strong>
+  </div>
+                    <div class="amount-summary-row net-amount-row">
+                      <span>NET AMOUNT</span><b>:</b><strong>${money(netAmount)}</strong>
+                    </div>
+                  </div>
+                `
+        : ""
+      }
+          </div>
+
+          <div class="invoice-footer-grid">
+            <div class="receiver-section">
+              <strong>Receivers Stamp &amp; Sign.</strong>
+            </div>
+
+            <div class="footer-detail-section">
+              ${showBankDetails
+        ? `
+                    <div class="footer-bank-row">
+                      <span><strong>BANK NAME:</strong> ${text(bankName)}</span>
+                      <span><strong>A/C NO:</strong> ${text(bankAccountNo)}</span>
+                      <span><strong>IFSC CODE:</strong> ${text(bankIfsc)}</span>
+                      <span><strong>BRANCH:</strong> ${text(bankBranch)}</span>
+                      ${bankAccountType
+          ? `<span><strong>A/C TYPE:</strong> ${text(bankAccountType)}</span>`
+          : ""
+        }
+                    </div>
+                  `
+        : ""
+      }
+
+              <div class="footer-declaration-row">
+                <div class="footer-declaration">
+                  ${showDeclaration
+        ? `
+                        <strong>Declaration:</strong>
+                        Certified that the particulars given above are true and
+                        correct and the amount indicated.
+                      `
+        : ""
+      }
+                </div>
+
+                <div class="footer-signature">
+                  <strong>FOR ${text(firmName)}</strong>
+                  <div class="authorised-line"></div>
+                  <span>Authorised Signatory</span>
+                </div>
               </div>
             </div>
           </div>
-        </div>
-      </section>
-    </main>
-  `;
+        </section>
+      </main>
+    `;
 
     const pages = Array.from(
       { length: Math.max(1, Number(copies) || 1) },
@@ -3968,475 +4025,475 @@ ${damageReturn
     ).join("");
 
     return `
-    <!DOCTYPE html>
-    <html lang="en">
-      <head>
-        <meta charset="UTF-8" />
-        <meta
-          name="viewport"
-          content="width=device-width, initial-scale=1.0"
-        />
+      <!DOCTYPE html>
+      <html lang="en">
+        <head>
+          <meta charset="UTF-8" />
+          <meta
+            name="viewport"
+            content="width=device-width, initial-scale=1.0"
+          />
 
-        <title>
-          Invoice ${escapeInvoiceHtml(
+          <title>
+            Invoice ${escapeInvoiceHtml(
       `${billSeries || ""}${billNo || ""}`
     )}
-        </title>
-
-        <style>
-          @page {
-  size: ${normalizedPaperSize} ${normalizedOrientation};
-  margin: ${isA5 ? "5mm" : "7mm"};
-}
-
-          * { box-sizing: border-box; }
-
-          html, body { margin: 0; padding: 0; }
-
-          body {
-            background: #e7edf4;
-            color: #000;
-            font-family: Calibri, "Segoe UI", Arial, sans-serif;
-            font-size: 10px;
-            line-height: 1.2;
-          }
-
-          .invoice-page,
-          .invoice-page table,
-          .invoice-page th,
-          .invoice-page td,
-          .invoice-page div,
-          .invoice-page span,
-          .invoice-page strong {
-            font-family: Calibri, "Segoe UI", Arial, sans-serif;
-          }
-
-          .invoice-preview-toolbar {
-            width: min(97vw, 1320px);
-            margin: 16px auto 12px;
-            padding: 10px 14px;
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            background: #fff;
-            border: 1px solid #b9c4d1;
-          }
-
-          .preview-title { font-size: 14px; font-weight: 700; }
-          .preview-subtitle { margin-top: 2px; color: #334155; font-size: 11px; }
-          .toolbar-actions { display: flex; gap: 8px; }
-
-          .toolbar-actions button {
-            height: 34px;
-            padding: 0 17px;
-            border: 1px solid #9aa9bb;
-            background: #fff;
-            color: #111;
-            font-weight: 700;
-            cursor: pointer;
-          }
-
-          .toolbar-actions .print-button {
-            background: #2f5fe3;
-            border-color: #2f5fe3;
-            color: #fff;
-          }
-
-          .preview-shell { padding: 0 12px 24px; }
-
-          .invoice-page {
-  position: relative;
-  margin: 0 auto 14px;
-  overflow: hidden;
-  background: #ffffff;
-  color: #000000;
-  break-after: page;
-  page-break-after: always;
-  box-sizing: border-box;
-}
-
-.invoice-page:last-child {
-  break-after: auto;
-  page-break-after: auto;
-}
-
-/*
- * Full A4 portrait printable area.
- * 210mm × 297mm paper minus print margins.
- */
-/*
- * A4 Portrait:
- * Paper size 210mm × 297mm.
- */
-.invoice-a4 {
-  width: 196mm;
-  min-height: 283mm;
-  padding: 4mm 5mm;
-  font-size: 10px;
-}
-
-/*
- * A5 Landscape:
- * Paper size 210mm × 148mm.
- * The same report design is fitted to the complete A5 landscape page.
- */
-.invoice-a5 {
-  width: 200mm;
-  min-height: 138mm;
-  padding: 3mm 4mm;
-  font-size: 8px;
-}
-
-/*
- * A5 Landscape fitting.
- * Keeps the same report design, only scales spacing and font.
- */
-.invoice-a5 .report-top {
-  min-height: 25mm;
-}
-
-.invoice-a5 .firm-block,
-.invoice-a5 .invoice-block {
-  padding-top: 0.7mm;
-  padding-bottom: 0.7mm;
-}
-
-.invoice-a5 .firm-block {
-  padding-left: 2mm;
-}
-
-.invoice-a5 .invoice-block {
-  padding-left: 4mm;
-}
-
-.invoice-a5 .firm-name {
-  font-size: 10px;
-  margin-bottom: 0.6mm;
-}
-
-.invoice-a5 .tax-heading {
-  font-size: 11px;
-  margin-bottom: 1mm;
-}
-
-.invoice-a5 .compact-lines {
-  min-height: 6mm;
-  line-height: 1.2;
-}
-
-.invoice-a5 .label-value {
-  grid-template-columns: 22mm 2mm minmax(0, 1fr);
-  min-height: 3.2mm;
-  column-gap: 0.5mm;
-}
-
-.invoice-a5 .info-line {
-  min-height: 3.2mm;
-  gap: 0.8mm;
-}
-
-.invoice-a5 .push-label {
-  margin-left: 3mm;
-}
-
-.invoice-a5 .party-grid {
-  min-height: 27mm;
-  padding: 1mm 2mm;
-  column-gap: 2mm;
-}
-
-.invoice-a5 .middle-party-details {
-  padding-top: 8mm;
-}
-
-.invoice-a5 .party-heading,
-.invoice-a5 .party-name {
-  font-size: 8px;
-  margin-bottom: 0.6mm;
-}
-
-.invoice-a5 .crystal-table th {
-  height: 7mm;
-  padding: 0.4mm 0.25mm;
-  font-size: 6.8px;
-  line-height: 1.05;
-}
-
-.invoice-a5 .crystal-table th small {
-  font-size: 5.7px;
-}
-
-.invoice-a5 .crystal-table td {
-  height: 4.5mm;
-  padding: 0.3mm 0.25mm;
-  font-size: 6.8px;
-  line-height: 1.05;
-}
-
-.invoice-a5 .total-words-row {
-  min-height: 6mm;
-  padding: 1mm 2mm;
-}
-
-.invoice-a5 .bottom-middle-grid {
-  min-height: 26mm;
-}
-
-.invoice-a5 .amount-summary-row {
-  min-height: 2.8mm;
-}
-
-.invoice-a5 .invoice-footer-grid {
-  min-height: 25mm;
-}
-
-.invoice-a5 .footer-bank-row {
-  min-height: 6mm;
-  padding: 1mm;
-  gap: 2mm;
-}
-
-.invoice-a5 .footer-declaration-row {
-  min-height: 18mm;
-}
-
-          .copy-label { position: absolute; right: 4mm; top: 1.5mm; font-size: 7px; }
-
-          .report-top {
-            display: grid;
-            grid-template-columns: minmax(0, 58%) minmax(0, 42%);
-            width: 100%;
-            min-height: 30mm;
-          }
-
-          .firm-block, .invoice-block { min-width: 0; padding: 1mm 2mm; }
-          .firm-block { padding-left: 4mm; }
-          .invoice-block { padding-left: 7mm; }
-          .firm-name { margin: 0 0 1mm; font-size: 12px; line-height: 1.2; font-weight: 700; }
-          .tax-heading { margin: 0 0 2mm; font-size: 14px; line-height: 1.2; font-weight: 700; }
-          .compact-lines { min-height: 9mm; line-height: 1.35; }
-
-          .label-value {
-            display: grid;
-            grid-template-columns: 28mm 3mm minmax(0, 1fr);
-            align-items: baseline;
-            min-height: 4.2mm;
-            column-gap: 1mm;
-          }
-
-          .label-value > span, .label-value > strong { min-width: 0; overflow-wrap: anywhere; }
-
-          .info-line {
-            display: flex;
-            align-items: baseline;
-            min-height: 4.2mm;
-            gap: 1.3mm;
-            white-space: normal;
-          }
-
-          .info-line > span, .info-line > strong { min-width: 0; }
-          .push-label { margin-left: 7mm; }
-
-          .long-dash {
-            width: 100%;
-            height: 1px;
-            margin: 0;
-            background: repeating-linear-gradient(to right, #000 0, #000 7mm, transparent 7mm, transparent 10mm);
-          }
-
-          .party-grid {
-            display: grid;
-            grid-template-columns: minmax(0, 39%) minmax(0, 22%) minmax(0, 39%);
-            width: 100%;
-            min-height: 34mm;
-            padding: 2mm 4mm 1.5mm;
-            column-gap: 3mm;
-          }
-
-          .party-block, .middle-party-details { min-width: 0; }
-          .middle-party-details { padding: 12mm 1mm 0; }
-          .party-heading { margin: 0 0 1.4mm; font-size: 10px; line-height: 1.2; }
-          .party-name { margin: 0 0 1mm; font-size: 10px; line-height: 1.2; font-weight: 700; }
-
-          .items-wrap {
-            width: 100%;
-            border-top: 1px dotted #000;
-            border-bottom: 1px solid #000;
-          }
-
-          .crystal-table {
-            width: 100%;
-            border-spacing: 0;
-            border-collapse: collapse;
-            table-layout: fixed;
-          }
-
-          .crystal-table thead { display: table-header-group; }
-          .crystal-table th, .crystal-table td { border-right: 1px solid #000; }
-          .crystal-table th:last-child, .crystal-table td:last-child { border-right: 0; }
-
-          .crystal-table th {
-            height: 9mm;
-            padding: 0.8mm 0.5mm;
-            border-bottom: 1px dotted #000;
-            overflow: hidden;
-            text-align: center;
-            vertical-align: middle;
-            font-size: 8px;
-            line-height: 1.15;
-            font-weight: 400;
-            white-space: normal;
-          }
-
-          .crystal-table th small { display: block; margin-top: 0.4mm; font-size: 6.5px; line-height: 1; }
-
-          .crystal-table td {
-            height: 5.6mm;
-            padding: 0.5mm 0.6mm;
-            overflow: hidden;
-            text-overflow: ellipsis;
-            vertical-align: middle;
-            font-size: 8px;
-            line-height: 1.15;
-            white-space: nowrap;
-          }
-
-          .crystal-table .product-name { text-align: left; font-weight: 700; }
-          .left { text-align: left !important; }
-          .center { text-align: center !important; }
-          .number { text-align: right !important; font-variant-numeric: tabular-nums; }
-          .strong { font-weight: 700; }
-          .empty-row td { color: transparent; }
-
-          .tax-cell { padding: 0 !important; }
-          .tax-cell-inner { display: grid; grid-template-columns: 36% 64%; width: 100%; height: 100%; align-items: stretch; }
-          .tax-percent { display: flex; align-items: center; justify-content: center; padding: 0.4mm; border-right: 1px dotted #777; }
-          .tax-amount { display: flex; align-items: center; justify-content: flex-end; padding: 0.4mm 0.7mm; font-variant-numeric: tabular-nums; }
-
-          .invoice-bottom { width: 100%; font-size: 8px; }
-
-          .total-words-row {
-            display: grid;
-            grid-template-columns: 34mm minmax(0, 1fr);
-            align-items: center;
-            min-height: 7mm;
-            padding: 0 1.5mm;
-            border-bottom: 1px solid #000;
-          }
-
-          .bottom-middle-grid {
-            display: grid;
-            grid-template-columns: minmax(0, 1fr) 57mm;
-            min-height: 33mm;
-            border-bottom: 1px solid #000;
-          }
-
-          .bottom-notes { position: relative; min-width: 0; padding: 1.5mm 2mm; }
-          .declaration-text { max-width: 150mm; line-height: 1.4; }
-          .receiver-label { position: absolute; left: 2mm; bottom: 2mm; }
-          .amount-summary { padding: 1.2mm 1.8mm; border-left: 1px solid #000; }
-
-          .amount-summary-row {
-            display: grid;
-            grid-template-columns: minmax(0, 1fr) 3mm 24mm;
-            align-items: baseline;
-            min-height: 3.4mm;
-          }
-
-          .amount-summary-row span { white-space: nowrap; }
-          .amount-summary-row strong { text-align: right; font-variant-numeric: tabular-nums; }
-          .net-amount-row { margin-top: 0.7mm; padding-top: 0.8mm; border-top: 1px solid #000; font-weight: 700; }
-
-          .invoice-footer-grid { display: grid; grid-template-columns: 29% 71%; min-height: 31mm; }
-          .receiver-section { padding: 3mm 2mm; }
-          .footer-detail-section { border-left: 1px solid #000; }
-
-          .footer-bank-row {
-            display: flex;
-            flex-wrap: wrap;
-            align-items: center;
-            min-height: 8mm;
-            padding: 1.5mm 2mm;
-            gap: 1mm 4mm;
-            border-bottom: 1px solid #000;
-            font-size: 7.5px;
-          }
-
-          .footer-declaration-row { display: grid; grid-template-columns: minmax(0, 1fr) 44mm; min-height: 22mm; }
-          .footer-declaration { padding: 2.5mm 2mm; line-height: 1.4; }
-
-          .footer-signature {
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            justify-content: space-between;
-            padding: 2mm;
-            text-align: center;
-          }
-
-          .footer-signature > strong { align-self: stretch; text-align: right; }
-          .authorised-line { width: 34mm; margin-top: auto; margin-bottom: 1.3mm; border-top: 1px solid #000; }
-
-          .invoice-a5 .report-top, .invoice-half .report-top { min-height: 22mm; }
-          .invoice-a5 .party-grid, .invoice-half .party-grid { min-height: 25mm; padding-top: 1mm; }
-          .invoice-a5 .crystal-table th, .invoice-half .crystal-table th { height: 7mm; font-size: 6px; }
-          .invoice-a5 .crystal-table td, .invoice-half .crystal-table td { height: 4mm; font-size: 6px; }
-          .invoice-a5 .firm-name, .invoice-half .firm-name { font-size: 10px; }
-          .invoice-a5 .tax-heading, .invoice-half .tax-heading { font-size: 12px; }
-          .invoice-a5 .bottom-middle-grid, .invoice-half .bottom-middle-grid { min-height: 25mm; grid-template-columns: minmax(0, 1fr) 45mm; }
-          .invoice-a5 .invoice-footer-grid, .invoice-half .invoice-footer-grid { min-height: 24mm; }
-
-          @media print {
-            html, body { width: 100%; margin: 0 !important; padding: 0 !important; background: #fff !important; }
-            body { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-            .invoice-preview-toolbar { display: none !important; }
-            .preview-shell { width: 100%; margin: 0 !important; padding: 0 !important; background: #fff !important; }
-            .invoice-page { margin: 0 auto !important; box-shadow: none !important; }
-            .report-top, .party-grid, .items-wrap, .invoice-bottom, .invoice-footer-grid, .item-row {
-              break-inside: avoid;
-              page-break-inside: avoid;
+          </title>
+
+          <style>
+            @page {
+    size: ${normalizedPaperSize} ${normalizedOrientation};
+    margin: ${isA5 ? "5mm" : "7mm"};
+  }
+
+            * { box-sizing: border-box; }
+
+            html, body { margin: 0; padding: 0; }
+
+            body {
+              background: #e7edf4;
+              color: #000;
+              font-family: Calibri, "Segoe UI", Arial, sans-serif;
+              font-size: 10px;
+              line-height: 1.2;
             }
-          }
-        </style>
-      </head>
 
-      <body>
-        ${includeButtons
+            .invoice-page,
+            .invoice-page table,
+            .invoice-page th,
+            .invoice-page td,
+            .invoice-page div,
+            .invoice-page span,
+            .invoice-page strong {
+              font-family: Calibri, "Segoe UI", Arial, sans-serif;
+            }
+
+            .invoice-preview-toolbar {
+              width: min(97vw, 1320px);
+              margin: 16px auto 12px;
+              padding: 10px 14px;
+              display: flex;
+              align-items: center;
+              justify-content: space-between;
+              background: #fff;
+              border: 1px solid #b9c4d1;
+            }
+
+            .preview-title { font-size: 14px; font-weight: 700; }
+            .preview-subtitle { margin-top: 2px; color: #334155; font-size: 11px; }
+            .toolbar-actions { display: flex; gap: 8px; }
+
+            .toolbar-actions button {
+              height: 34px;
+              padding: 0 17px;
+              border: 1px solid #9aa9bb;
+              background: #fff;
+              color: #111;
+              font-weight: 700;
+              cursor: pointer;
+            }
+
+            .toolbar-actions .print-button {
+              background: #2f5fe3;
+              border-color: #2f5fe3;
+              color: #fff;
+            }
+
+            .preview-shell { padding: 0 12px 24px; }
+
+            .invoice-page {
+    position: relative;
+    margin: 0 auto 14px;
+    overflow: hidden;
+    background: #ffffff;
+    color: #000000;
+    break-after: page;
+    page-break-after: always;
+    box-sizing: border-box;
+  }
+
+  .invoice-page:last-child {
+    break-after: auto;
+    page-break-after: auto;
+  }
+
+  /*
+  * Full A4 portrait printable area.
+  * 210mm × 297mm paper minus print margins.
+  */
+  /*
+  * A4 Portrait:
+  * Paper size 210mm × 297mm.
+  */
+  .invoice-a4 {
+    width: 196mm;
+    min-height: 283mm;
+    padding: 4mm 5mm;
+    font-size: 10px;
+  }
+
+  /*
+  * A5 Landscape:
+  * Paper size 210mm × 148mm.
+  * The same report design is fitted to the complete A5 landscape page.
+  */
+  .invoice-a5 {
+    width: 200mm;
+    min-height: 138mm;
+    padding: 3mm 4mm;
+    font-size: 8px;
+  }
+
+  /*
+  * A5 Landscape fitting.
+  * Keeps the same report design, only scales spacing and font.
+  */
+  .invoice-a5 .report-top {
+    min-height: 25mm;
+  }
+
+  .invoice-a5 .firm-block,
+  .invoice-a5 .invoice-block {
+    padding-top: 0.7mm;
+    padding-bottom: 0.7mm;
+  }
+
+  .invoice-a5 .firm-block {
+    padding-left: 2mm;
+  }
+
+  .invoice-a5 .invoice-block {
+    padding-left: 4mm;
+  }
+
+  .invoice-a5 .firm-name {
+    font-size: 10px;
+    margin-bottom: 0.6mm;
+  }
+
+  .invoice-a5 .tax-heading {
+    font-size: 11px;
+    margin-bottom: 1mm;
+  }
+
+  .invoice-a5 .compact-lines {
+    min-height: 6mm;
+    line-height: 1.2;
+  }
+
+  .invoice-a5 .label-value {
+    grid-template-columns: 22mm 2mm minmax(0, 1fr);
+    min-height: 3.2mm;
+    column-gap: 0.5mm;
+  }
+
+  .invoice-a5 .info-line {
+    min-height: 3.2mm;
+    gap: 0.8mm;
+  }
+
+  .invoice-a5 .push-label {
+    margin-left: 3mm;
+  }
+
+  .invoice-a5 .party-grid {
+    min-height: 27mm;
+    padding: 1mm 2mm;
+    column-gap: 2mm;
+  }
+
+  .invoice-a5 .middle-party-details {
+    padding-top: 8mm;
+  }
+
+  .invoice-a5 .party-heading,
+  .invoice-a5 .party-name {
+    font-size: 8px;
+    margin-bottom: 0.6mm;
+  }
+
+  .invoice-a5 .crystal-table th {
+    height: 7mm;
+    padding: 0.4mm 0.25mm;
+    font-size: 6.8px;
+    line-height: 1.05;
+  }
+
+  .invoice-a5 .crystal-table th small {
+    font-size: 5.7px;
+  }
+
+  .invoice-a5 .crystal-table td {
+    height: 4.5mm;
+    padding: 0.3mm 0.25mm;
+    font-size: 6.8px;
+    line-height: 1.05;
+  }
+
+  .invoice-a5 .total-words-row {
+    min-height: 6mm;
+    padding: 1mm 2mm;
+  }
+
+  .invoice-a5 .bottom-middle-grid {
+    min-height: 26mm;
+  }
+
+  .invoice-a5 .amount-summary-row {
+    min-height: 2.8mm;
+  }
+
+  .invoice-a5 .invoice-footer-grid {
+    min-height: 25mm;
+  }
+
+  .invoice-a5 .footer-bank-row {
+    min-height: 6mm;
+    padding: 1mm;
+    gap: 2mm;
+  }
+
+  .invoice-a5 .footer-declaration-row {
+    min-height: 18mm;
+  }
+
+            .copy-label { position: absolute; right: 4mm; top: 1.5mm; font-size: 7px; }
+
+            .report-top {
+              display: grid;
+              grid-template-columns: minmax(0, 58%) minmax(0, 42%);
+              width: 100%;
+              min-height: 30mm;
+            }
+
+            .firm-block, .invoice-block { min-width: 0; padding: 1mm 2mm; }
+            .firm-block { padding-left: 4mm; }
+            .invoice-block { padding-left: 7mm; }
+            .firm-name { margin: 0 0 1mm; font-size: 12px; line-height: 1.2; font-weight: 700; }
+            .tax-heading { margin: 0 0 2mm; font-size: 14px; line-height: 1.2; font-weight: 700; }
+            .compact-lines { min-height: 9mm; line-height: 1.35; }
+
+            .label-value {
+              display: grid;
+              grid-template-columns: 28mm 3mm minmax(0, 1fr);
+              align-items: baseline;
+              min-height: 4.2mm;
+              column-gap: 1mm;
+            }
+
+            .label-value > span, .label-value > strong { min-width: 0; overflow-wrap: anywhere; }
+
+            .info-line {
+              display: flex;
+              align-items: baseline;
+              min-height: 4.2mm;
+              gap: 1.3mm;
+              white-space: normal;
+            }
+
+            .info-line > span, .info-line > strong { min-width: 0; }
+            .push-label { margin-left: 7mm; }
+
+            .long-dash {
+              width: 100%;
+              height: 1px;
+              margin: 0;
+              background: repeating-linear-gradient(to right, #000 0, #000 7mm, transparent 7mm, transparent 10mm);
+            }
+
+            .party-grid {
+              display: grid;
+              grid-template-columns: minmax(0, 39%) minmax(0, 22%) minmax(0, 39%);
+              width: 100%;
+              min-height: 34mm;
+              padding: 2mm 4mm 1.5mm;
+              column-gap: 3mm;
+            }
+
+            .party-block, .middle-party-details { min-width: 0; }
+            .middle-party-details { padding: 12mm 1mm 0; }
+            .party-heading { margin: 0 0 1.4mm; font-size: 10px; line-height: 1.2; }
+            .party-name { margin: 0 0 1mm; font-size: 10px; line-height: 1.2; font-weight: 700; }
+
+            .items-wrap {
+              width: 100%;
+              border-top: 1px dotted #000;
+              border-bottom: 1px solid #000;
+            }
+
+            .crystal-table {
+              width: 100%;
+              border-spacing: 0;
+              border-collapse: collapse;
+              table-layout: fixed;
+            }
+
+            .crystal-table thead { display: table-header-group; }
+            .crystal-table th, .crystal-table td { border-right: 1px solid #000; }
+            .crystal-table th:last-child, .crystal-table td:last-child { border-right: 0; }
+
+            .crystal-table th {
+              height: 9mm;
+              padding: 0.8mm 0.5mm;
+              border-bottom: 1px dotted #000;
+              overflow: hidden;
+              text-align: center;
+              vertical-align: middle;
+              font-size: 8px;
+              line-height: 1.15;
+              font-weight: 400;
+              white-space: normal;
+            }
+
+            .crystal-table th small { display: block; margin-top: 0.4mm; font-size: 6.5px; line-height: 1; }
+
+            .crystal-table td {
+              height: 5.6mm;
+              padding: 0.5mm 0.6mm;
+              overflow: hidden;
+              text-overflow: ellipsis;
+              vertical-align: middle;
+              font-size: 8px;
+              line-height: 1.15;
+              white-space: nowrap;
+            }
+
+            .crystal-table .product-name { text-align: left; font-weight: 700; }
+            .left { text-align: left !important; }
+            .center { text-align: center !important; }
+            .number { text-align: right !important; font-variant-numeric: tabular-nums; }
+            .strong { font-weight: 700; }
+            .empty-row td { color: transparent; }
+
+            .tax-cell { padding: 0 !important; }
+            .tax-cell-inner { display: grid; grid-template-columns: 36% 64%; width: 100%; height: 100%; align-items: stretch; }
+            .tax-percent { display: flex; align-items: center; justify-content: center; padding: 0.4mm; border-right: 1px dotted #777; }
+            .tax-amount { display: flex; align-items: center; justify-content: flex-end; padding: 0.4mm 0.7mm; font-variant-numeric: tabular-nums; }
+
+            .invoice-bottom { width: 100%; font-size: 8px; }
+
+            .total-words-row {
+              display: grid;
+              grid-template-columns: 34mm minmax(0, 1fr);
+              align-items: center;
+              min-height: 7mm;
+              padding: 0 1.5mm;
+              border-bottom: 1px solid #000;
+            }
+
+            .bottom-middle-grid {
+              display: grid;
+              grid-template-columns: minmax(0, 1fr) 57mm;
+              min-height: 33mm;
+              border-bottom: 1px solid #000;
+            }
+
+            .bottom-notes { position: relative; min-width: 0; padding: 1.5mm 2mm; }
+            .declaration-text { max-width: 150mm; line-height: 1.4; }
+            .receiver-label { position: absolute; left: 2mm; bottom: 2mm; }
+            .amount-summary { padding: 1.2mm 1.8mm; border-left: 1px solid #000; }
+
+            .amount-summary-row {
+              display: grid;
+              grid-template-columns: minmax(0, 1fr) 3mm 24mm;
+              align-items: baseline;
+              min-height: 3.4mm;
+            }
+
+            .amount-summary-row span { white-space: nowrap; }
+            .amount-summary-row strong { text-align: right; font-variant-numeric: tabular-nums; }
+            .net-amount-row { margin-top: 0.7mm; padding-top: 0.8mm; border-top: 1px solid #000; font-weight: 700; }
+
+            .invoice-footer-grid { display: grid; grid-template-columns: 29% 71%; min-height: 31mm; }
+            .receiver-section { padding: 3mm 2mm; }
+            .footer-detail-section { border-left: 1px solid #000; }
+
+            .footer-bank-row {
+              display: flex;
+              flex-wrap: wrap;
+              align-items: center;
+              min-height: 8mm;
+              padding: 1.5mm 2mm;
+              gap: 1mm 4mm;
+              border-bottom: 1px solid #000;
+              font-size: 7.5px;
+            }
+
+            .footer-declaration-row { display: grid; grid-template-columns: minmax(0, 1fr) 44mm; min-height: 22mm; }
+            .footer-declaration { padding: 2.5mm 2mm; line-height: 1.4; }
+
+            .footer-signature {
+              display: flex;
+              flex-direction: column;
+              align-items: center;
+              justify-content: space-between;
+              padding: 2mm;
+              text-align: center;
+            }
+
+            .footer-signature > strong { align-self: stretch; text-align: right; }
+            .authorised-line { width: 34mm; margin-top: auto; margin-bottom: 1.3mm; border-top: 1px solid #000; }
+
+            .invoice-a5 .report-top, .invoice-half .report-top { min-height: 22mm; }
+            .invoice-a5 .party-grid, .invoice-half .party-grid { min-height: 25mm; padding-top: 1mm; }
+            .invoice-a5 .crystal-table th, .invoice-half .crystal-table th { height: 7mm; font-size: 6px; }
+            .invoice-a5 .crystal-table td, .invoice-half .crystal-table td { height: 4mm; font-size: 6px; }
+            .invoice-a5 .firm-name, .invoice-half .firm-name { font-size: 10px; }
+            .invoice-a5 .tax-heading, .invoice-half .tax-heading { font-size: 12px; }
+            .invoice-a5 .bottom-middle-grid, .invoice-half .bottom-middle-grid { min-height: 25mm; grid-template-columns: minmax(0, 1fr) 45mm; }
+            .invoice-a5 .invoice-footer-grid, .invoice-half .invoice-footer-grid { min-height: 24mm; }
+
+            @media print {
+              html, body { width: 100%; margin: 0 !important; padding: 0 !important; background: #fff !important; }
+              body { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+              .invoice-preview-toolbar { display: none !important; }
+              .preview-shell { width: 100%; margin: 0 !important; padding: 0 !important; background: #fff !important; }
+              .invoice-page { margin: 0 auto !important; box-shadow: none !important; }
+              .report-top, .party-grid, .items-wrap, .invoice-bottom, .invoice-footer-grid, .item-row {
+                break-inside: avoid;
+                page-break-inside: avoid;
+              }
+            }
+          </style>
+        </head>
+
+        <body>
+          ${includeButtons
         ? `
-              <header class="invoice-preview-toolbar">
-                <div>
-                  <div class="preview-title">Sales Invoice Preview</div>
-                  <div class="preview-subtitle">
-                    ${escapeInvoiceHtml(
+                <header class="invoice-preview-toolbar">
+                  <div>
+                    <div class="preview-title">Sales Invoice Preview</div>
+                    <div class="preview-subtitle">
+                      ${escapeInvoiceHtml(
           `${billSeries || ""}-${billNo || ""}`
         )}
+                    </div>
                   </div>
-                </div>
 
-                <div class="toolbar-actions">
-                  <button type="button" onclick="window.close()">
-                    Close
-                  </button>
+                  <div class="toolbar-actions">
+                    <button type="button" onclick="window.close()">
+                      Close
+                    </button>
 
-                  <button
-                    type="button"
-                    class="print-button"
-                    onclick="window.print()"
-                  >
-                    Print Invoice
-                  </button>
-                </div>
-              </header>
-            `
+                    <button
+                      type="button"
+                      class="print-button"
+                      onclick="window.print()"
+                    >
+                      Print Invoice
+                    </button>
+                  </div>
+                </header>
+              `
         : ""
       }
 
-        <div class="preview-shell">
-          ${pages}
-        </div>
-      </body>
-    </html>
-  `;
+          <div class="preview-shell">
+            ${pages}
+          </div>
+        </body>
+      </html>
+    `;
   };
   /* =========================================================
     PRINT LOAD COLUMN DEFINITIONS
@@ -5324,13 +5381,13 @@ ${damageReturn
       masterReturnContext;
 
     /*
-     * Important:
-     * activeMenu remains "sales" when Account Master
-     * is opened using the Party + button.
-     *
-     * This check prevents a missing/cleared ref from
-     * sending the user to the Account list.
-     */
+    * Important:
+    * activeMenu remains "sales" when Account Master
+    * is opened using the Party + button.
+    *
+    * This check prevents a missing/cleared ref from
+    * sending the user to the Account list.
+    */
     const openedFromSalesBilling =
       accountOpenedFromInvoiceRef.current === true ||
       returnContext?.returnTo === "Billing" ||
@@ -5359,18 +5416,18 @@ ${damageReturn
       setShowPrintPreview(false);
 
       /*
-       * Return to the existing Sales Bill.
-       * Do not reset invoiceFormData or invoiceItems.
-       */
+      * Return to the existing Sales Bill.
+      * Do not reset invoiceFormData or invoiceItems.
+      */
       setShowDashboard(false);
       setActiveMenu("sales");
       setActiveSubMenu("Billing");
       setOpenFormFor("Billing");
 
       /*
-       * Clear return tracking only after Billing
-       * navigation states have been assigned.
-       */
+      * Clear return tracking only after Billing
+      * navigation states have been assigned.
+      */
       accountOpenedFromInvoiceRef.current = false;
       masterReturnContextRef.current = null;
       setMasterReturnContext(null);
@@ -5388,9 +5445,9 @@ ${damageReturn
     }
 
     /*
-     * Account Master opened normally from:
-     * Master → Account
-     */
+    * Account Master opened normally from:
+    * Master → Account
+    */
     setEditAccountId(null);
     setAccountActiveTab("basic");
 
@@ -5738,7 +5795,7 @@ ${damageReturn
   // const getProductCode = (p) => String(p?.productCode || p?.code || p?.ProdCode || "").trim();
   // const getProductName = (p) => String(p?.productName || p?.name || p?.ProdName || "").trim();
   /* =========================================================
-   PRODUCT SEARCH FIELD HELPERS
+  PRODUCT SEARCH FIELD HELPERS
 ========================================================= */
 
   const PRODUCT_SELECTION_MODES = [
@@ -5884,7 +5941,7 @@ ${damageReturn
 
   /* =========================================================
     SALES PRODUCT SEARCH ACCORDING TO GENERAL SETUP
- ========================================================= */
+========================================================= */
 
   const buildFilteredProductList = (
     searchTerm,
@@ -6168,7 +6225,7 @@ ${damageReturn
           );
         }
 
-        const response = await fetch(
+        const response = await secureFetch(
           `${API_URL}/areas/list?${params.toString()}`
         );
 
@@ -6439,32 +6496,33 @@ ${damageReturn
   const [showCreateLoadList, setShowCreateLoadList] = useState(false);
   const [createLoadListData, setCreateLoadListData] = useState([]);
   const [editingInvoiceId, setEditingInvoiceId] = useState(null);
+  const [editingPurchaseId, setEditingPurchaseId] = useState(null);
   const [
     originalEditingPartyCode,
     setOriginalEditingPartyCode,
   ] = useState("");
   /*
- * True only when the currently edited Sales Bill
- * is already assigned to a load.
- */
+* True only when the currently edited Sales Bill
+* is already assigned to a load.
+*/
   const [
     editingLoadedSalesBill,
     setEditingLoadedSalesBill,
   ] = useState(false);
   /*
-   * Original product rows of a loaded invoice.
-   * Used to verify that locked product rows were not changed.
-   */
+  * Original product rows of a loaded invoice.
+  * Used to verify that locked product rows were not changed.
+  */
   const [
     originalLoadedInvoiceItems,
     setOriginalLoadedInvoiceItems,
   ] = useState([]);
   /*
-   * Product rows are locked only when:
-   * 1. This is an existing Sales Bill.
-   * 2. The bill is assigned to a load.
-   * 3. Edit Product After Load is OFF.
-   */
+  * Product rows are locked only when:
+  * 1. This is an existing Sales Bill.
+  * 2. The bill is assigned to a load.
+  * 3. Edit Product After Load is OFF.
+  */
   const loadedBillProductReadOnly =
     Boolean(editingInvoiceId) &&
     editingLoadedSalesBill === true &&
@@ -6855,11 +6913,11 @@ ${damageReturn
   // GoDown Master State
 
   /*
-   * Complete Godown list.
-   *
-   * Keep this for Billing, Purchase, Reports,
-   * Credit Note, Debit Note and dropdowns.
-   */
+  * Complete Godown list.
+  *
+  * Keep this for Billing, Purchase, Reports,
+  * Credit Note, Debit Note and dropdowns.
+  */
   const [godowns, setGodowns] =
     useState([]);
 
@@ -6875,11 +6933,11 @@ ${damageReturn
     useState(null);
 
   /*
-   * Backend-paginated GoDown Master grid.
-   *
-   * These states are used only by the
-   * GoDown Master list page.
-   */
+  * Backend-paginated GoDown Master grid.
+  *
+  * These states are used only by the
+  * GoDown Master list page.
+  */
   const [
     godownMasterRows,
     setGodownMasterRows,
@@ -7030,17 +7088,17 @@ ${damageReturn
   };
 
   /* =========================================================
-     FINAL INVOICE TOTALS
-     Taxable value already follows VAT On at product-row level.
+    FINAL INVOICE TOTALS
+    Taxable value already follows VAT On at product-row level.
   ========================================================= */
   /* =========================================================
-     FINAL INVOICE TOTALS
+    FINAL INVOICE TOTALS
   ========================================================= */
 
   /*
-   * GST taxable value.
-   * This is already calculated according to VAT On.
-   */
+  * GST taxable value.
+  * This is already calculated according to VAT On.
+  */
   const invoiceTaxableValue =
     invoiceRound(
       Number(
@@ -7049,8 +7107,8 @@ ${damageReturn
     );
 
   /*
-   * Total GST shown separately.
-   */
+  * Total GST shown separately.
+  */
   const invoiceGstAmount =
     invoiceRound(
       Number(
@@ -7065,19 +7123,19 @@ ${damageReturn
     );
 
   /*
-   * Actual commercial net before Credit Note.
-   *
-   * This already includes:
-   * Gross
-   * - TPR
-   * - Scheme
-   * - Star
-   * - Cash Discount
-   * + GST
-   * - Display
-   * - Coupon
-   * + Add/Less
-   */
+  * Actual commercial net before Credit Note.
+  *
+  * This already includes:
+  * Gross
+  * - TPR
+  * - Scheme
+  * - Star
+  * - Cash Discount
+  * + GST
+  * - Display
+  * - Coupon
+  * + Add/Less
+  */
   const invoiceNetBeforeCreditNote =
     invoiceRound(
       Number(
@@ -7086,8 +7144,8 @@ ${damageReturn
     );
 
   /*
-   * Final payable after Credit Note.
-   */
+  * Final payable after Credit Note.
+  */
   const invoiceNetPayable =
     invoiceRound(
       Math.max(
@@ -7101,15 +7159,15 @@ ${damageReturn
 
 
   /* =========================================================
-   ACTIVE BILLING / QUOTATION DRAFT HELPERS
-   ========================================================= */
+  ACTIVE BILLING / QUOTATION DRAFT HELPERS
+  ========================================================= */
 
   const getActiveInvoiceEntryType = () => {
     /*
-     * openFormFor is the only reliable source.
-     * Do not use activeSubMenu or the old active ref
-     * to decide which draft receives the data.
-     */
+    * openFormFor is the only reliable source.
+    * Do not use activeSubMenu or the old active ref
+    * to decide which draft receives the data.
+    */
     if (openFormFor === "Quotation") {
       return "Quotation";
     }
@@ -7127,9 +7185,9 @@ ${damageReturn
       getActiveInvoiceEntryType();
 
     /*
-     * When a list is visible, do not save the
-     * shared screen state into any entry draft.
-     */
+    * When a list is visible, do not save the
+    * shared screen state into any entry draft.
+    */
     if (!entryType) {
       return;
     }
@@ -7181,26 +7239,26 @@ ${damageReturn
       parseSignedAmount(value);
 
     /*
-     * Prepare manual-adjustment values first.
-     */
+    * Prepare manual-adjustment values first.
+    */
     const updatedManualAdjustments = {
       ...invoiceManualAdjustments,
       [field]: value,
     };
 
     /*
-     * Prepare summary using the currently
-     * visible Billing or Quotation summary.
-     */
+    * Prepare summary using the currently
+    * visible Billing or Quotation summary.
+    */
     const updatedSummaryBase = {
       ...invoiceSummary,
       [field]: numericValue,
     };
 
     /*
-     * The taxable amount must come from product rows,
-     * because every product row already follows VAT On.
-     */
+    * The taxable amount must come from product rows,
+    * because every product row already follows VAT On.
+    */
     const taxable =
       invoiceRound(
         invoiceItems.reduce(
@@ -7257,8 +7315,8 @@ ${damageReturn
     };
 
     /*
-     * Update only the currently visible screen.
-     */
+    * Update only the currently visible screen.
+    */
     setInvoiceManualAdjustments(
       updatedManualAdjustments
     );
@@ -7268,9 +7326,9 @@ ${damageReturn
     );
 
     /*
-     * Most important:
-     * save the values only in the active module.
-     */
+    * Most important:
+    * save the values only in the active module.
+    */
     updateActiveInvoiceDraft({
       manualAdjustments:
         updatedManualAdjustments,
@@ -7313,36 +7371,36 @@ ${damageReturn
       0
     );
 
-const getSalesDetailNetAmount = (item) => {
-  if (!item) {
-    return 0;
-  }
+  const getSalesDetailNetAmount = (item) => {
+    if (!item) {
+      return 0;
+    }
 
-  /*
-   * Show the same final amount that is calculated
-   * for the selected product row.
-   *
-   * This includes:
-   * - Sales Rate
-   * - Actual total quantity
-   * - TPR
-   * - Scheme
-   * - Cash Discount
-   * - Star Discount
-   * - CGST / SGST / IGST
-   * - VAT On General Setup
-   */
-  const calculatedRow =
-    calculateInvoiceRowAmounts(item);
+    /*
+    * Show the same final amount that is calculated
+    * for the selected product row.
+    *
+    * This includes:
+    * - Sales Rate
+    * - Actual total quantity
+    * - TPR
+    * - Scheme
+    * - Cash Discount
+    * - Star Discount
+    * - CGST / SGST / IGST
+    * - VAT On General Setup
+    */
+    const calculatedRow =
+      calculateInvoiceRowAmounts(item);
 
-  return invoiceRound(
-    Number(
-      calculatedRow.amount ??
-      item.amount ??
-      0
-    ) || 0
-  );
-};
+    return invoiceRound(
+      Number(
+        calculatedRow.amount ??
+        item.amount ??
+        0
+      ) || 0
+    );
+  };
 
   const tableRef = useRef(null);
   const productInputRef = useRef(null);
@@ -7350,8 +7408,8 @@ const getSalesDetailNetAmount = (item) => {
   const [productListFilter, setProductListFilter] = useState('');
   const [currentProductIndex, setCurrentProductIndex] = useState(-1);
   /* =========================================================
-   BILLING AND QUOTATION INDEPENDENT DRAFTS
-   ========================================================= */
+  BILLING AND QUOTATION INDEPENDENT DRAFTS
+  ========================================================= */
 
   const cloneInvoiceDraftValue = (value) => {
     if (value === undefined || value === null) {
@@ -7453,9 +7511,9 @@ const getSalesDetailNetAmount = (item) => {
 
 
   /*
-   * Stores which entry form currently owns
-   * the shared invoice React states.
-   */
+  * Stores which entry form currently owns
+  * the shared invoice React states.
+  */
   const activeInvoiceDraftFormRef =
     useRef(null);
 
@@ -7500,9 +7558,9 @@ const getSalesDetailNetAmount = (item) => {
     formName
   ) => {
     /*
-     * Save only when that exact form is
-     * currently displayed.
-     */
+    * Save only when that exact form is
+    * currently displayed.
+    */
     if (
       formName !== "Billing" &&
       formName !== "Quotation"
@@ -7633,9 +7691,9 @@ const getSalesDetailNetAmount = (item) => {
       activeInvoiceDraftFormRef.current;
 
     /*
-     * First save the form currently visible
-     * on screen.
-     */
+    * First save the form currently visible
+    * on screen.
+    */
     if (
       currentForm === "Billing" ||
       currentForm === "Quotation"
@@ -7646,26 +7704,26 @@ const getSalesDetailNetAmount = (item) => {
     }
 
     /*
-     * Then restore the independent target draft.
-     */
+    * Then restore the independent target draft.
+    */
     restoreInvoiceDraft(
       nextForm
     );
 
     /*
-     * Change ownership only after saving and
-     * initiating restoration.
-     */
+    * Change ownership only after saving and
+    * initiating restoration.
+    */
     activeInvoiceDraftFormRef.current =
       nextForm;
   };
 
   /*
-   * Keep the active Billing/Quotation draft updated
-   * whenever any header, product or summary value changes.
-   *
-   * This prevents data loss before a tab change.
-   */
+  * Keep the active Billing/Quotation draft updated
+  * whenever any header, product or summary value changes.
+  *
+  * This prevents data loss before a tab change.
+  */
 
 
   const [purchaseFormData, setPurchaseFormData] = useState({
@@ -8016,6 +8074,54 @@ const getSalesDetailNetAmount = (item) => {
   const [showDebitProductList, setShowDebitProductList] = useState(false);
   const [debitProductListFilter, setDebitProductListFilter] = useState('');
   const [currentDebitProductIndex, setCurrentDebitProductIndex] = useState(-1);
+  const debitProductAnchorRef = useRef(null);
+  const creditProductAnchorRef = useRef(null);
+  const purchaseProductAnchorRef = useRef(null);
+  useEffect(() => {
+    const anyOpen =
+      showPurchaseProductList ||
+      showCreditProductList ||
+      showDebitProductList;
+
+    if (!anyOpen) return;
+
+    const dropdownHeight = 340;
+
+    const reposition = (anchorRef, isOpen, setPos, fixedWidth) => {
+      if (!isOpen || !anchorRef.current) return;
+
+      const rect = anchorRef.current.getBoundingClientRect();
+      const width =
+        fixedWidth ||
+        Math.max(420, Math.min(820, window.innerWidth - rect.left - 20));
+
+      let top = rect.bottom + 4;
+      if (top + dropdownHeight > window.innerHeight - 10) {
+        top = Math.max(10, rect.top - dropdownHeight - 4);
+      }
+
+      let left = Math.max(10, rect.left);
+      if (left + width > window.innerWidth - 10) {
+        left = Math.max(10, window.innerWidth - width - 10);
+      }
+
+      setPos({ top, left, width });
+    };
+
+    const handleReposition = () => {
+      reposition(purchaseProductAnchorRef, showPurchaseProductList, setPurchaseProductDropdownPos, 650);
+      reposition(creditProductAnchorRef, showCreditProductList, setCreditProductDropdownPos);
+      reposition(debitProductAnchorRef, showDebitProductList, setDebitProductDropdownPos);
+    };
+
+    window.addEventListener("scroll", handleReposition, true);
+    window.addEventListener("resize", handleReposition);
+
+    return () => {
+      window.removeEventListener("scroll", handleReposition, true);
+      window.removeEventListener("resize", handleReposition);
+    };
+  }, [showPurchaseProductList, showCreditProductList, showDebitProductList]);
 
   const [filters, setFilters] = useState({
     company: "",
@@ -8036,8 +8142,8 @@ const getSalesDetailNetAmount = (item) => {
   // Master data state
   const [companies, setCompanies] = useState([]);
   /* =========================================================
-   COMPANY MASTER BACKEND PAGINATION
-   ========================================================= */
+  COMPANY MASTER BACKEND PAGINATION
+  ========================================================= */
 
   const [companyMasterRows, setCompanyMasterRows] =
     useState([]);
@@ -8073,10 +8179,10 @@ const getSalesDetailNetAmount = (item) => {
     { id: 5, code: 'P005', name: 'Surf Excel 2kg', basicUnit: 'KG', mrp: 450, gst: 18, Rate_Per_Unit: 380, salesRate: 380 },
   ]);
   /* =========================================================
-   PRODUCT MASTER BACKEND PAGINATION
-   Only used by Product Master list.
-   Existing products state remains unchanged for billing.
-   ========================================================= */
+  PRODUCT MASTER BACKEND PAGINATION
+  Only used by Product Master list.
+  Existing products state remains unchanged for billing.
+  ========================================================= */
 
   const [productMasterRows, setProductMasterRows] =
     useState([]);
@@ -8123,8 +8229,8 @@ const getSalesDetailNetAmount = (item) => {
   ] = useState("");
   const [groupsState, setGroupsState] = useState([]);
   /* =========================================================
-   GROUP MASTER BACKEND PAGINATION
-   ========================================================= */
+  GROUP MASTER BACKEND PAGINATION
+  ========================================================= */
 
   const [groupMasterRows, setGroupMasterRows] =
     useState([]);
@@ -8154,8 +8260,8 @@ const getSalesDetailNetAmount = (item) => {
     useState("");
   const [categoriesState, setCategoriesState] = useState([]);
   /* =========================================================
-   CATEGORY MASTER BACKEND PAGINATION
-   ========================================================= */
+  CATEGORY MASTER BACKEND PAGINATION
+  ========================================================= */
 
   const [categoryMasterRows, setCategoryMasterRows] =
     useState([]);
@@ -8187,10 +8293,10 @@ const getSalesDetailNetAmount = (item) => {
   ] = useState("");
   const [accounts, setAccounts] = useState([]);
   /* =========================================================
-   ACCOUNT MASTER BACKEND PAGINATION
-   Used only by Account Master List.
-   Existing accounts state remains unchanged.
-   ========================================================= */
+  ACCOUNT MASTER BACKEND PAGINATION
+  Used only by Account Master List.
+  Existing accounts state remains unchanged.
+  ========================================================= */
 
   const [accountMasterRows, setAccountMasterRows] =
     useState([]);
@@ -8223,10 +8329,10 @@ const getSalesDetailNetAmount = (item) => {
   const [otherAccounts, setOtherAccounts] = useState([]);
 
   /* =========================================================
-     OTHER ACCOUNT MASTER BACKEND PAGINATION
-     Used only by Other Account Master list.
-     Existing otherAccounts state remains unchanged.
-     ========================================================= */
+    OTHER ACCOUNT MASTER BACKEND PAGINATION
+    Used only by Other Account Master list.
+    Existing otherAccounts state remains unchanged.
+    ========================================================= */
 
   const [
     otherAccountMasterRows,
@@ -8283,12 +8389,12 @@ const getSalesDetailNetAmount = (item) => {
     { id: 5, srNo: 5, code: '5', vat: 28.00, purchaseType: 'VAT ON PURCHASE PRICE', salesType: 'VAT ON SALES PRICE' }
   ]);
   /* =========================================================
-   GST MASTER BACKEND PAGINATION
-   Used only by GST Master list.
+  GST MASTER BACKEND PAGINATION
+  Used only by GST Master list.
 
-   Existing gstList remains unchanged because it is used
-   by Product, Sales and Purchase GST dropdowns.
-   ========================================================= */
+  Existing gstList remains unchanged because it is used
+  by Product, Sales and Purchase GST dropdowns.
+  ========================================================= */
 
   const [
     gstMasterRows,
@@ -8396,11 +8502,11 @@ const getSalesDetailNetAmount = (item) => {
   // Area Master State
 
   /*
-   * Complete area list used by dropdowns, mappings,
-   * Account Master, Billing and Reports.
-   *
-   * Do not convert this state to paginated data.
-   */
+  * Complete area list used by dropdowns, mappings,
+  * Account Master, Billing and Reports.
+  *
+  * Do not convert this state to paginated data.
+  */
   // const [areas, setAreas] = useState([]);
 
   // const [areaForm, setAreaForm] = useState({
@@ -8412,10 +8518,10 @@ const getSalesDetailNetAmount = (item) => {
   //   useState(null);
 
   /*
-   * Paginated Area Master grid states.
-   *
-   * These states are used only by the Area Master list.
-   */
+  * Paginated Area Master grid states.
+  *
+  * These states are used only by the Area Master list.
+  */
   const [areaMasterRows, setAreaMasterRows] =
     useState([]);
 
@@ -8454,9 +8560,9 @@ const getSalesDetailNetAmount = (item) => {
         );
 
         /*
-         * Every new search must begin
-         * from the first backend page.
-         */
+        * Every new search must begin
+        * from the first backend page.
+        */
         setAreaCurrentPage(1);
       }, 400);
 
@@ -8466,12 +8572,12 @@ const getSalesDetailNetAmount = (item) => {
   }, [filters.area]);
   useEffect(() => {
     /*
-     * Load paginated data only when the
-     * Area Master list page is visible.
-     *
-     * Do not call this API while the
-     * Add/Edit Area form is open.
-     */
+    * Load paginated data only when the
+    * Area Master list page is visible.
+    *
+    * Do not call this API while the
+    * Add/Edit Area form is open.
+    */
     if (
       activeSubMenu !== "Area" ||
       openFormFor === "Area"
@@ -10085,7 +10191,7 @@ const getSalesDetailNetAmount = (item) => {
         loadNo,
       });
 
-      const res = await fetch(`${API_URL}/settle-load?${params.toString()}`);
+      const res = await secureFetch(`${API_URL}/settle-load?${params.toString()}`);
       const result = await res.json();
 
       if (!res.ok || !result.success) {
@@ -10450,7 +10556,7 @@ const getSalesDetailNetAmount = (item) => {
         }
       );
 
-      const response = await fetch(
+      const response = await secureFetch(
         `${API_URL}/settle-load/save`,
         {
           method: "POST",
@@ -10730,7 +10836,7 @@ const getSalesDetailNetAmount = (item) => {
           );
 
           const response =
-            await fetch(
+            await secureFetch(
               `${API_URL}/settle-load/list?${query.toString()}`
             );
 
@@ -11019,7 +11125,7 @@ const getSalesDetailNetAmount = (item) => {
 
   const editSettleLoadRecord = async (recordId) => {
     try {
-      const res = await fetch(`${API_URL}/settle-load/${recordId}`);
+      const res = await secureFetch(`${API_URL}/settle-load/${recordId}`);
       const result = await res.json();
 
       if (!res.ok || !result.success) {
@@ -11190,8 +11296,8 @@ const getSalesDetailNetAmount = (item) => {
   const [firms, setFirms] = useState([]);
 
   /* =========================================================
-     FIRM MASTER BACKEND PAGINATION
-     ========================================================= */
+    FIRM MASTER BACKEND PAGINATION
+    ========================================================= */
 
   const [firmCurrentPage, setFirmCurrentPage] =
     useState(1);
@@ -11215,9 +11321,9 @@ const getSalesDetailNetAmount = (item) => {
     useState(false);
 
   /*
-   * This separate value is used for debounced
-   * backend search.
-   */
+  * This separate value is used for debounced
+  * backend search.
+  */
   const [firmBackendSearch, setFirmBackendSearch] =
     useState("");
 
@@ -11228,8 +11334,8 @@ const getSalesDetailNetAmount = (item) => {
     },
   ]);
   /* =========================================================
-     USER MASTER BACKEND PAGINATION
-     ========================================================= */
+    USER MASTER BACKEND PAGINATION
+    ========================================================= */
 
   const [userCurrentPage, setUserCurrentPage] =
     useState(1);
@@ -11390,9 +11496,9 @@ const getSalesDetailNetAmount = (item) => {
   );
 
   /*
-   * Wait briefly after typing before requesting
-   * Firm Master data from the backend.
-   */
+  * Wait briefly after typing before requesting
+  * Firm Master data from the backend.
+  */
   useEffect(() => {
     const timer = window.setTimeout(() => {
       const searchText = String(
@@ -11402,8 +11508,8 @@ const getSalesDetailNetAmount = (item) => {
       setFirmBackendSearch(searchText);
 
       /*
-       * Every new search must begin from page 1.
-       */
+      * Every new search must begin from page 1.
+      */
       setFirmCurrentPage(1);
     }, 400);
 
@@ -11413,9 +11519,9 @@ const getSalesDetailNetAmount = (item) => {
   }, [filters.firm]);
 
   /*
-   * Load Firm Master whenever page, page size,
-   * or debounced search changes.
-   */
+  * Load Firm Master whenever page, page size,
+  * or debounced search changes.
+  */
   useEffect(() => {
     if (
       activeSubMenu !== "Firm Master" ||
@@ -12080,18 +12186,18 @@ const getSalesDetailNetAmount = (item) => {
       icon: "📈",
       items: [
         "My Reports",
-        
+
       ]
     },
 
-tools: {
-  title: "Tools",
-  icon: "⚙️",
-  items: [
-    "General Setup",
-    "Security Setup"
-  ]
-},
+    tools: {
+      title: "Tools",
+      icon: "⚙️",
+      items: [
+        "General Setup",
+        "Security Setup"
+      ]
+    },
 
     logout: {
       title: "Logout",
@@ -12105,8 +12211,8 @@ tools: {
   };
 
   /* =========================================================
-   LOAD TRANSFER HELPERS
-   ========================================================= */
+  LOAD TRANSFER HELPERS
+  ========================================================= */
 
   const getLoadTransferBillId = (bill = {}) =>
     String(
@@ -12146,8 +12252,8 @@ tools: {
       String(value).trim();
 
     /*
-     * Handle YYYY-MM-DD directly without timezone conversion.
-     */
+    * Handle YYYY-MM-DD directly without timezone conversion.
+    */
     const isoDateMatch =
       rawValue.match(
         /^(\d{4})-(\d{2})-(\d{2})/
@@ -12274,8 +12380,8 @@ tools: {
       value;
 
     /*
-     * Series values must remain uppercase.
-     */
+    * Series values must remain uppercase.
+    */
     if (
       name ===
       "fromLoadSeries" ||
@@ -12291,8 +12397,8 @@ tools: {
     }
 
     /*
-     * Number fields accept digits only.
-     */
+    * Number fields accept digits only.
+    */
     if (
       name === "fromLoadNo" ||
       name === "billNo" ||
@@ -12312,8 +12418,8 @@ tools: {
     );
 
     /*
-     * Clear old lookup results when source criteria changes.
-     */
+    * Clear old lookup results when source criteria changes.
+    */
     if (
       name ===
       "fromLoadSeries" ||
@@ -12347,8 +12453,8 @@ tools: {
         transferMode,
 
         /*
-         * Keep destination load while switching mode.
-         */
+        * Keep destination load while switching mode.
+        */
         toLoadSeries:
           previous.toLoadSeries,
 
@@ -12645,8 +12751,8 @@ tools: {
         );
 
         /*
-         * In Bill Wise mode, show its current source load.
-         */
+        * In Bill Wise mode, show its current source load.
+        */
         if (
           !isLoadToLoad &&
           result.sourceLoad
@@ -12922,9 +13028,9 @@ tools: {
         );
 
         /*
-         * Remove transferred bills immediately from
-         * the currently visible table.
-         */
+        * Remove transferred bills immediately from
+        * the currently visible table.
+        */
         const transferredIdSet =
           new Set(
             selectedBillIds
@@ -12943,9 +13049,9 @@ tools: {
         );
 
         /*
-         * In Load To Load mode, reload the same source
-         * load from the corrected backend API.
-         */
+        * In Load To Load mode, reload the same source
+        * load from the corrected backend API.
+        */
         if (
           currentTransferMode ===
           "LOAD_TO_LOAD"
@@ -13311,73 +13417,73 @@ tools: {
       .join("\n");
 
     return `
-      <!DOCTYPE html>
-      <html>
-        <head>
-          <meta charset="UTF-8" />
+        <!DOCTYPE html>
+        <html>
+          <head>
+            <meta charset="UTF-8" />
 
-          <title>
-            Bill Print ${billPrintFormData.LoadSeries || ""
+            <title>
+              Bill Print ${billPrintFormData.LoadSeries || ""
       }-${billPrintFormData.loadNo || ""}
-          </title>
+            </title>
 
-          ${linkedStyles}
+            ${linkedStyles}
 
-          <style>
-            ${getBillPrintPageRule()}
+            <style>
+              ${getBillPrintPageRule()}
 
-            html,
-            body {
-              margin: 0 !important;
-              padding: 0 !important;
-              background: #ffffff !important;
-              font-family: Arial, Helvetica, sans-serif;
-            }
+              html,
+              body {
+                margin: 0 !important;
+                padding: 0 !important;
+                background: #ffffff !important;
+                font-family: Arial, Helvetica, sans-serif;
+              }
 
-            .bill-print-document {
-              width: 100% !important;
-              max-width: none !important;
-              min-height: auto !important;
-              margin: 0 !important;
-              padding: 0 !important;
-              box-shadow: none !important;
-              border: none !important;
-            }
+              .bill-print-document {
+                width: 100% !important;
+                max-width: none !important;
+                min-height: auto !important;
+                margin: 0 !important;
+                padding: 0 !important;
+                box-shadow: none !important;
+                border: none !important;
+              }
 
-            .bill-print-no-print,
-            .bill-print-preview-toolbar {
-              display: none !important;
-            }
+              .bill-print-no-print,
+              .bill-print-preview-toolbar {
+                display: none !important;
+              }
 
-            table {
-              page-break-inside: auto;
-            }
+              table {
+                page-break-inside: auto;
+              }
 
-            tr {
-              page-break-inside: avoid;
-              page-break-after: auto;
-            }
+              tr {
+                page-break-inside: avoid;
+                page-break-after: auto;
+              }
 
-            thead {
-              display: table-header-group;
-            }
+              thead {
+                display: table-header-group;
+              }
 
-            tfoot {
-              display: table-footer-group;
-            }
+              tfoot {
+                display: table-footer-group;
+              }
 
-            * {
-              -webkit-print-color-adjust: exact !important;
-              print-color-adjust: exact !important;
-            }
-          </style>
-        </head>
+              * {
+                -webkit-print-color-adjust: exact !important;
+                print-color-adjust: exact !important;
+              }
+            </style>
+          </head>
 
-        <body>
-          ${previewElement.outerHTML}
-        </body>
-      </html>
-    `;
+          <body>
+            ${previewElement.outerHTML}
+          </body>
+        </html>
+      `;
   };
   /* =========================================================
     DIRECT PRINT
@@ -13700,12 +13806,12 @@ tools: {
 
     if (bills.length === 0) {
       return `
-        <tr>
-          <td colspan="12" style="text-align:center; padding:20px;">
-            No bill products found
-          </td>
-        </tr>
-      `;
+          <tr>
+            <td colspan="12" style="text-align:center; padding:20px;">
+              No bill products found
+            </td>
+          </tr>
+        `;
     }
 
     let serialNumber = 0;
@@ -13798,50 +13904,50 @@ tools: {
           ).toFixed(2);
 
           return `
-            <tr>
-              <td>${serialNumber}</td>
+              <tr>
+                <td>${serialNumber}</td>
 
-              <td class="bill-product-name">
-                ${productName}
-              </td>
+                <td class="bill-product-name">
+                  ${productName}
+                </td>
 
-              <td>${batchNo}</td>
+                <td>${batchNo}</td>
 
-              <td>${hsnCode}</td>
+                <td>${hsnCode}</td>
 
-              <td class="number-cell">
-                ${mrp}
-              </td>
+                <td class="number-cell">
+                  ${mrp}
+                </td>
 
-              <td class="number-cell">
-                ${qty}
-              </td>
+                <td class="number-cell">
+                  ${qty}
+                </td>
 
-              <td class="number-cell">
-                ${freeQty}
-              </td>
+                <td class="number-cell">
+                  ${freeQty}
+                </td>
 
-              <td class="number-cell">
-                ${rate}
-              </td>
+                <td class="number-cell">
+                  ${rate}
+                </td>
 
-              <td class="number-cell">
-                ${schemeAmount}
-              </td>
+                <td class="number-cell">
+                  ${schemeAmount}
+                </td>
 
-              <td class="number-cell">
-                ${discountAmount}
-              </td>
+                <td class="number-cell">
+                  ${discountAmount}
+                </td>
 
-              <td class="number-cell">
-                ${gst}
-              </td>
+                <td class="number-cell">
+                  ${gst}
+                </td>
 
-              <td class="number-cell">
-                ${amount}
-              </td>
-            </tr>
-          `;
+                <td class="number-cell">
+                  ${amount}
+                </td>
+              </tr>
+            `;
         });
       })
       .join("");
@@ -13853,404 +13959,404 @@ tools: {
     const data = billPrintData;
 
     return `<!DOCTYPE html>
-      <html>
-      <head>
-        <title>Invoice - ${data.invoice.number}</title>
-        <style>
-          /* Use !important and specific selectors to prevent style leakage */
-          .bill-print-wrapper * {
-            all: revert;
-          }
-          
-          .bill-print-wrapper {
-            font-family: 'Courier New', 'Segoe UI', Arial, sans-serif !important;
-            background: #e2e8f0 !important;
-            padding: 20px !important;
-            font-size: 11px !important;
-            max-width: 1100px !important;
-            margin: 0 auto !important;
-          }
-          
-          .bill-print-wrapper .invoice-container {
-            max-width: 1100px;
-            margin: 0 auto;
-            background: white;
-            box-shadow: 0 10px 25px rgba(0,0,0,0.1);
-          }
-          
-          .bill-print-wrapper .invoice {
-            padding: 15px 20px;
-            background: white;
-          }
-          
-          .bill-print-wrapper .company-header {
-            text-align: center;
-            border-bottom: 2px solid #1e3a8a;
-            padding-bottom: 12px;
-            margin-bottom: 12px;
-          }
-          
-          .bill-print-wrapper .company-name {
-            font-size: 22px;
-            font-weight: bold;
-            color: #1e3a8a;
-            margin-bottom: 5px;
-            letter-spacing: 1px;
-          }
-          
-          .bill-print-wrapper .company-details {
-            font-size: 10px;
-            color: #4b5563;
-            line-height: 1.4;
-          }
-          
-          .bill-print-wrapper .gst-fssai {
-            display: flex;
-            justify-content: center;
-            gap: 20px;
-            margin-top: 6px;
-            font-size: 9px;
-            font-weight: bold;
-          }
-          
-          .bill-print-wrapper .invoice-title {
-            text-align: center;
-            font-size: 16px;
-            font-weight: bold;
-            background: #1e3a8a;
-            color: white;
-            padding: 6px;
-            margin: 10px 0;
-            letter-spacing: 2px;
-          }
-          
-          .bill-print-wrapper .info-grid {
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 12px;
-            margin-bottom: 12px;
-          }
-          
-          .bill-print-wrapper .info-box {
-            border: 1px solid #d1d5db;
-            padding: 8px 10px;
-            background: #f9fafb;
-          }
-          
-          .bill-print-wrapper .info-title {
-            font-weight: bold;
-            font-size: 10px;
-            background: #e5e7eb;
-            padding: 3px 6px;
-            margin-bottom: 6px;
-            display: inline-block;
-          }
-          
-          .bill-print-wrapper .info-row {
-            display: flex;
-            justify-content: space-between;
-            margin-bottom: 4px;
-            font-size: 10px;
-            line-height: 1.3;
-          }
-          
-          .bill-print-wrapper .info-label {
-            font-weight: 600;
-            min-width: 90px;
-          }
-          
-          .bill-print-wrapper .product-table {
-            width: 100%;
-            border-collapse: collapse;
-            margin: 12px 0;
-            font-size: 9px;
-          }
-          
-          .bill-print-wrapper .product-table th {
-            background: #1e3a8a;
-            color: white;
-            padding: 6px 3px;
-            border: 1px solid #2563eb;
-            font-weight: bold;
-            text-align: center;
-          }
-          
-          .bill-print-wrapper .product-table td {
-            border: 1px solid #d1d5db;
-            padding: 5px 3px;
-            text-align: center;
-          }
-          
-          .bill-print-wrapper .scheme-section {
-            background: #fef3c7;
-            border: 1px solid #f59e0b;
-            padding: 6px 10px;
-            margin: 10px 0;
-            font-size: 9px;
-          }
-          
-          .bill-print-wrapper .scheme-title {
-            font-weight: bold;
-            color: #92400e;
-            margin-bottom: 4px;
-          }
-          
-          .bill-print-wrapper .summary-grid {
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 12px;
-            margin: 12px 0;
-          }
-          
-          .bill-print-wrapper .summary-box {
-            border: 1px solid #d1d5db;
-            padding: 8px;
-          }
-          
-          .bill-print-wrapper .summary-row {
-            display: flex;
-            justify-content: space-between;
-            margin-bottom: 4px;
-            font-size: 10px;
-          }
-          
-          .bill-print-wrapper .net-amount {
-            font-size: 14px;
-            font-weight: bold;
-            color: #1e3a8a;
-            border-top: 2px solid #1e3a8a;
-            padding-top: 6px;
-            margin-top: 6px;
-          }
-          
-          .bill-print-wrapper .signature-section {
-            display: flex;
-            justify-content: space-between;
-            margin: 15px 0 10px;
-            padding-top: 10px;
-          }
-          
-          .bill-print-wrapper .signature-box {
-            width: 45%;
-            text-align: center;
-          }
-          
-          .bill-print-wrapper .signature-line {
-            border-top: 1px solid #000;
-            margin-top: 25px;
-            padding-top: 5px;
-            font-size: 9px;
-          }
-          
-          .bill-print-wrapper .footer {
-            margin-top: 15px;
-            padding-top: 8px;
-            border-top: 1px solid #d1d5db;
-            font-size: 8px;
-            text-align: center;
-            color: #6b7280;
-          }
-          
-          .bill-print-wrapper .terms {
-            font-size: 8px;
-            margin-top: 8px;
-            padding: 6px;
-            background: #f3f4f6;
-          }
-          
-          .bill-print-wrapper .col-sr { width: 4%; }
-          .bill-print-wrapper .col-code { width: 8%; }
-          .bill-print-wrapper .col-name { width: 20%; }
-          .bill-print-wrapper .col-batch { width: 8%; }
-          .bill-print-wrapper .col-expiry { width: 6%; }
-          .bill-print-wrapper .col-qty { width: 5%; }
-          .bill-print-wrapper .col-free { width: 5%; }
-          .bill-print-wrapper .col-rate { width: 6%; }
-          .bill-print-wrapper .col-mrp { width: 6%; }
-          .bill-print-wrapper .col-disc { width: 5%; }
-          .bill-print-wrapper .col-gst { width: 5%; }
-          .bill-print-wrapper .col-taxable { width: 8%; }
-          .bill-print-wrapper .col-total { width: 9%; }
-          
-          .bill-print-wrapper .no-print {
-            text-align: center;
-            margin-top: 20px;
-          }
-          
-          .bill-print-wrapper .no-print button {
-            padding: 10px 20px;
-            margin: 10px;
-            background: #1e3a8a;
-            color: white;
-            border: none;
-            border-radius: 5px;
-            cursor: pointer;
-          }
-          
-          @media print {
-            .bill-print-wrapper .no-print {
-              display: none;
+        <html>
+        <head>
+          <title>Invoice - ${data.invoice.number}</title>
+          <style>
+            /* Use !important and specific selectors to prevent style leakage */
+            .bill-print-wrapper * {
+              all: revert;
             }
-          }
-        </style>
-      </head>
-      <body style="margin: 0; padding: 0; background: #e2e8f0;">
-        <div class="bill-print-wrapper">
-          <div class="invoice-container">
-            <div class="invoice">
-              <!-- Company Header -->
-              <div class="company-header">
-                <div class="company-name">${data.company.name}</div>
-                <div class="company-details">${data.company.address}</div>
-                <div class="company-details">📞 ${data.company.phone} | ✉ ${data.company.email}</div>
-                <div class="gst-fssai">
-                  <span>GSTIN: ${data.company.gstin}</span>
-                  <span>FSSAI: ${data.company.fssai}</span>
-                </div>
-              </div>
-              
-              <div class="invoice-title">${data.company.invoiceTitle} - ${billPrintFormData.printType.toUpperCase()}</div>
-              
-              <!-- Invoice & Customer Info -->
-              <div class="info-grid">
-                <div class="info-box">
-                  <div class="info-title">📄 INVOICE INFORMATION</div>
-                  <div class="info-row"><span class="info-label">Invoice No:</span><span>${data.invoice.number}</span></div>
-                  <div class="info-row"><span class="info-label">Invoice Date:</span><span>${data.invoice.date}</span></div>
-                  <div class="info-row"><span class="info-label">Order No:</span><span>${data.invoice.orderNumber}</span></div>
-                  <div class="info-row"><span class="info-label">Delivery Date:</span><span>${data.invoice.deliveryDate}</span></div>
-                  <div class="info-row"><span class="info-label">Route:</span><span>${data.invoice.route}</span></div>
-                  <div class="info-row"><span class="info-label">Salesman:</span><span>${data.invoice.salesman}</span></div>
-                  <div class="info-row"><span class="info-label">Vehicle No:</span><span>${data.invoice.vehicleNumber}</span></div>
-                  <div class="info-row"><span class="info-label">Beat/Area:</span><span>${data.invoice.beat}</span></div>
+            
+            .bill-print-wrapper {
+              font-family: 'Courier New', 'Segoe UI', Arial, sans-serif !important;
+              background: #e2e8f0 !important;
+              padding: 20px !important;
+              font-size: 11px !important;
+              max-width: 1100px !important;
+              margin: 0 auto !important;
+            }
+            
+            .bill-print-wrapper .invoice-container {
+              max-width: 1100px;
+              margin: 0 auto;
+              background: white;
+              box-shadow: 0 10px 25px rgba(0,0,0,0.1);
+            }
+            
+            .bill-print-wrapper .invoice {
+              padding: 15px 20px;
+              background: white;
+            }
+            
+            .bill-print-wrapper .company-header {
+              text-align: center;
+              border-bottom: 2px solid #1e3a8a;
+              padding-bottom: 12px;
+              margin-bottom: 12px;
+            }
+            
+            .bill-print-wrapper .company-name {
+              font-size: 22px;
+              font-weight: bold;
+              color: #1e3a8a;
+              margin-bottom: 5px;
+              letter-spacing: 1px;
+            }
+            
+            .bill-print-wrapper .company-details {
+              font-size: 10px;
+              color: #4b5563;
+              line-height: 1.4;
+            }
+            
+            .bill-print-wrapper .gst-fssai {
+              display: flex;
+              justify-content: center;
+              gap: 20px;
+              margin-top: 6px;
+              font-size: 9px;
+              font-weight: bold;
+            }
+            
+            .bill-print-wrapper .invoice-title {
+              text-align: center;
+              font-size: 16px;
+              font-weight: bold;
+              background: #1e3a8a;
+              color: white;
+              padding: 6px;
+              margin: 10px 0;
+              letter-spacing: 2px;
+            }
+            
+            .bill-print-wrapper .info-grid {
+              display: grid;
+              grid-template-columns: 1fr 1fr;
+              gap: 12px;
+              margin-bottom: 12px;
+            }
+            
+            .bill-print-wrapper .info-box {
+              border: 1px solid #d1d5db;
+              padding: 8px 10px;
+              background: #f9fafb;
+            }
+            
+            .bill-print-wrapper .info-title {
+              font-weight: bold;
+              font-size: 10px;
+              background: #e5e7eb;
+              padding: 3px 6px;
+              margin-bottom: 6px;
+              display: inline-block;
+            }
+            
+            .bill-print-wrapper .info-row {
+              display: flex;
+              justify-content: space-between;
+              margin-bottom: 4px;
+              font-size: 10px;
+              line-height: 1.3;
+            }
+            
+            .bill-print-wrapper .info-label {
+              font-weight: 600;
+              min-width: 90px;
+            }
+            
+            .bill-print-wrapper .product-table {
+              width: 100%;
+              border-collapse: collapse;
+              margin: 12px 0;
+              font-size: 9px;
+            }
+            
+            .bill-print-wrapper .product-table th {
+              background: #1e3a8a;
+              color: white;
+              padding: 6px 3px;
+              border: 1px solid #2563eb;
+              font-weight: bold;
+              text-align: center;
+            }
+            
+            .bill-print-wrapper .product-table td {
+              border: 1px solid #d1d5db;
+              padding: 5px 3px;
+              text-align: center;
+            }
+            
+            .bill-print-wrapper .scheme-section {
+              background: #fef3c7;
+              border: 1px solid #f59e0b;
+              padding: 6px 10px;
+              margin: 10px 0;
+              font-size: 9px;
+            }
+            
+            .bill-print-wrapper .scheme-title {
+              font-weight: bold;
+              color: #92400e;
+              margin-bottom: 4px;
+            }
+            
+            .bill-print-wrapper .summary-grid {
+              display: grid;
+              grid-template-columns: 1fr 1fr;
+              gap: 12px;
+              margin: 12px 0;
+            }
+            
+            .bill-print-wrapper .summary-box {
+              border: 1px solid #d1d5db;
+              padding: 8px;
+            }
+            
+            .bill-print-wrapper .summary-row {
+              display: flex;
+              justify-content: space-between;
+              margin-bottom: 4px;
+              font-size: 10px;
+            }
+            
+            .bill-print-wrapper .net-amount {
+              font-size: 14px;
+              font-weight: bold;
+              color: #1e3a8a;
+              border-top: 2px solid #1e3a8a;
+              padding-top: 6px;
+              margin-top: 6px;
+            }
+            
+            .bill-print-wrapper .signature-section {
+              display: flex;
+              justify-content: space-between;
+              margin: 15px 0 10px;
+              padding-top: 10px;
+            }
+            
+            .bill-print-wrapper .signature-box {
+              width: 45%;
+              text-align: center;
+            }
+            
+            .bill-print-wrapper .signature-line {
+              border-top: 1px solid #000;
+              margin-top: 25px;
+              padding-top: 5px;
+              font-size: 9px;
+            }
+            
+            .bill-print-wrapper .footer {
+              margin-top: 15px;
+              padding-top: 8px;
+              border-top: 1px solid #d1d5db;
+              font-size: 8px;
+              text-align: center;
+              color: #6b7280;
+            }
+            
+            .bill-print-wrapper .terms {
+              font-size: 8px;
+              margin-top: 8px;
+              padding: 6px;
+              background: #f3f4f6;
+            }
+            
+            .bill-print-wrapper .col-sr { width: 4%; }
+            .bill-print-wrapper .col-code { width: 8%; }
+            .bill-print-wrapper .col-name { width: 20%; }
+            .bill-print-wrapper .col-batch { width: 8%; }
+            .bill-print-wrapper .col-expiry { width: 6%; }
+            .bill-print-wrapper .col-qty { width: 5%; }
+            .bill-print-wrapper .col-free { width: 5%; }
+            .bill-print-wrapper .col-rate { width: 6%; }
+            .bill-print-wrapper .col-mrp { width: 6%; }
+            .bill-print-wrapper .col-disc { width: 5%; }
+            .bill-print-wrapper .col-gst { width: 5%; }
+            .bill-print-wrapper .col-taxable { width: 8%; }
+            .bill-print-wrapper .col-total { width: 9%; }
+            
+            .bill-print-wrapper .no-print {
+              text-align: center;
+              margin-top: 20px;
+            }
+            
+            .bill-print-wrapper .no-print button {
+              padding: 10px 20px;
+              margin: 10px;
+              background: #1e3a8a;
+              color: white;
+              border: none;
+              border-radius: 5px;
+              cursor: pointer;
+            }
+            
+            @media print {
+              .bill-print-wrapper .no-print {
+                display: none;
+              }
+            }
+          </style>
+        </head>
+        <body style="margin: 0; padding: 0; background: #e2e8f0;">
+          <div class="bill-print-wrapper">
+            <div class="invoice-container">
+              <div class="invoice">
+                <!-- Company Header -->
+                <div class="company-header">
+                  <div class="company-name">${data.company.name}</div>
+                  <div class="company-details">${data.company.address}</div>
+                  <div class="company-details">📞 ${data.company.phone} | ✉ ${data.company.email}</div>
+                  <div class="gst-fssai">
+                    <span>GSTIN: ${data.company.gstin}</span>
+                    <span>FSSAI: ${data.company.fssai}</span>
+                  </div>
                 </div>
                 
-                <div class="info-box">
-                  <div class="info-title">👤 CUSTOMER INFORMATION</div>
-                  <div class="info-row"><span class="info-label">Customer Code:</span><span>${data.customer.code}</span></div>
-                  <div class="info-row"><span class="info-label">Customer Name:</span><span>${data.customer.name}</span></div>
-                  <div class="info-row"><span class="info-label">Billing Address:</span><span>${data.customer.billingAddress}</span></div>
-                  <div class="info-row"><span class="info-label">Shipping Address:</span><span>${data.customer.shippingAddress}</span></div>
-                  <div class="info-row"><span class="info-label">Mobile No:</span><span>${data.customer.mobile}</span></div>
-                  <div class="info-row"><span class="info-label">GSTIN:</span><span>${data.customer.gstin}</span></div>
+                <div class="invoice-title">${data.company.invoiceTitle} - ${billPrintFormData.printType.toUpperCase()}</div>
+                
+                <!-- Invoice & Customer Info -->
+                <div class="info-grid">
+                  <div class="info-box">
+                    <div class="info-title">📄 INVOICE INFORMATION</div>
+                    <div class="info-row"><span class="info-label">Invoice No:</span><span>${data.invoice.number}</span></div>
+                    <div class="info-row"><span class="info-label">Invoice Date:</span><span>${data.invoice.date}</span></div>
+                    <div class="info-row"><span class="info-label">Order No:</span><span>${data.invoice.orderNumber}</span></div>
+                    <div class="info-row"><span class="info-label">Delivery Date:</span><span>${data.invoice.deliveryDate}</span></div>
+                    <div class="info-row"><span class="info-label">Route:</span><span>${data.invoice.route}</span></div>
+                    <div class="info-row"><span class="info-label">Salesman:</span><span>${data.invoice.salesman}</span></div>
+                    <div class="info-row"><span class="info-label">Vehicle No:</span><span>${data.invoice.vehicleNumber}</span></div>
+                    <div class="info-row"><span class="info-label">Beat/Area:</span><span>${data.invoice.beat}</span></div>
+                  </div>
+                  
+                  <div class="info-box">
+                    <div class="info-title">👤 CUSTOMER INFORMATION</div>
+                    <div class="info-row"><span class="info-label">Customer Code:</span><span>${data.customer.code}</span></div>
+                    <div class="info-row"><span class="info-label">Customer Name:</span><span>${data.customer.name}</span></div>
+                    <div class="info-row"><span class="info-label">Billing Address:</span><span>${data.customer.billingAddress}</span></div>
+                    <div class="info-row"><span class="info-label">Shipping Address:</span><span>${data.customer.shippingAddress}</span></div>
+                    <div class="info-row"><span class="info-label">Mobile No:</span><span>${data.customer.mobile}</span></div>
+                    <div class="info-row"><span class="info-label">GSTIN:</span><span>${data.customer.gstin}</span></div>
+                  </div>
                 </div>
-              </div>
-              
-              <!-- Product Table -->
-              <table class="product-table">
-                <thead>
-                  <tr>
-                    <th class="col-sr">Sr</th>
-                    <th class="col-code">Code</th>
-                    <th class="col-name">Product Name</th>
-                    <th class="col-batch">Batch</th>
-                    <th class="col-expiry">Expiry</th>
-                    <th class="col-qty">Qty</th>
-                    <th class="col-free">Free</th>
-                    <th class="col-rate">Rate</th>
-                    <th class="col-mrp">MRP</th>
-                    <th class="col-disc">Disc%</th>
-                    <th class="col-gst">GST%</th>
-                    <th class="col-taxable">Taxable</th>
-                    <th class="col-total">Total</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  ${data.products.map(p => `
+                
+                <!-- Product Table -->
+                <table class="product-table">
+                  <thead>
                     <tr>
-                      <td class="col-sr">${p.sr}</td>
-                      <td class="col-code">${p.code}</td>
-                      <td class="col-name" style="text-align:left">${p.name}</td>
-                      <td class="col-batch">${p.batch}</td>
-                      <td class="col-expiry">${p.expiry}</td>
-                      <td class="col-qty">${p.qty}</td>
-                      <td class="col-free">${p.free}</td>
-                      <td class="col-rate">₹${p.rate}</td>
-                      <td class="col-mrp">₹${p.mrp}</td>
-                      <td class="col-disc">${p.disc}%</td>
-                      <td class="col-gst">${p.gst}%</td>
-                      <td class="col-taxable">₹${p.taxable.toFixed(2)}</td>
-                      <td class="col-total">₹${p.total.toFixed(2)}</td>
+                      <th class="col-sr">Sr</th>
+                      <th class="col-code">Code</th>
+                      <th class="col-name">Product Name</th>
+                      <th class="col-batch">Batch</th>
+                      <th class="col-expiry">Expiry</th>
+                      <th class="col-qty">Qty</th>
+                      <th class="col-free">Free</th>
+                      <th class="col-rate">Rate</th>
+                      <th class="col-mrp">MRP</th>
+                      <th class="col-disc">Disc%</th>
+                      <th class="col-gst">GST%</th>
+                      <th class="col-taxable">Taxable</th>
+                      <th class="col-total">Total</th>
                     </tr>
+                  </thead>
+                  <tbody>
+                    ${data.products.map(p => `
+                      <tr>
+                        <td class="col-sr">${p.sr}</td>
+                        <td class="col-code">${p.code}</td>
+                        <td class="col-name" style="text-align:left">${p.name}</td>
+                        <td class="col-batch">${p.batch}</td>
+                        <td class="col-expiry">${p.expiry}</td>
+                        <td class="col-qty">${p.qty}</td>
+                        <td class="col-free">${p.free}</td>
+                        <td class="col-rate">₹${p.rate}</td>
+                        <td class="col-mrp">₹${p.mrp}</td>
+                        <td class="col-disc">${p.disc}%</td>
+                        <td class="col-gst">${p.gst}%</td>
+                        <td class="col-taxable">₹${p.taxable.toFixed(2)}</td>
+                        <td class="col-total">₹${p.total.toFixed(2)}</td>
+                      </tr>
+                    `).join('')}
+                  </tbody>
+                </table>
+                
+                <!-- Scheme Section -->
+                <div class="scheme-section">
+                  <div class="scheme-title">🎯 SCHEME / OFFER DETAILS</div>
+                  ${data.schemes.map(s => `
+                    <div>• ${s.name} | Discount: ${s.discount > 0 ? s.discount + '%' : 'N/A'} | Free: ${s.freeItem}</div>
                   `).join('')}
-                </tbody>
-              </table>
-              
-              <!-- Scheme Section -->
-              <div class="scheme-section">
-                <div class="scheme-title">🎯 SCHEME / OFFER DETAILS</div>
-                ${data.schemes.map(s => `
-                  <div>• ${s.name} | Discount: ${s.discount > 0 ? s.discount + '%' : 'N/A'} | Free: ${s.freeItem}</div>
-                `).join('')}
-              </div>
-              
-              <!-- Summary & Payment -->
-              <div class="summary-grid">
-                <div class="summary-box">
-                  <div class="info-title">💰 BILL SUMMARY</div>
-                  <div class="summary-row"><span>Total Quantity:</span><span>${data.summary.totalQty} Pcs</span></div>
-                  <div class="summary-row"><span>Free Quantity:</span><span>${data.summary.totalFree} Pcs</span></div>
-                  <div class="summary-row"><span>Gross Amount:</span><span>₹${data.summary.grossAmount.toFixed(2)}</span></div>
-                  <div class="summary-row"><span>Discount Amount:</span><span>-₹${data.summary.discountAmount.toFixed(2)}</span></div>
-                  <div class="summary-row"><span>Taxable Amount:</span><span>₹${data.summary.taxableAmount.toFixed(2)}</span></div>
-                  <div class="summary-row"><span>CGST (9%):</span><span>+₹${data.summary.cgst.toFixed(2)}</span></div>
-                  <div class="summary-row"><span>SGST (9%):</span><span>+₹${data.summary.sgst.toFixed(2)}</span></div>
-                  <div class="summary-row"><span>Round Off:</span><span>₹${data.summary.roundOff.toFixed(2)}</span></div>
-                  <div class="net-amount summary-row"><span>NET AMOUNT:</span><span>₹${data.summary.netAmount.toFixed(2)}</span></div>
                 </div>
                 
-                <div class="summary-box">
-                  <div class="info-title">💳 PAYMENT INFORMATION</div>
-                  <div class="summary-row"><span>Payment Mode:</span><span>${data.payment.mode}</span></div>
-                  <div class="summary-row"><span>Credit Days:</span><span>${data.payment.creditDays} Days</span></div>
-                  <div class="summary-row"><span>Due Date:</span><span>${data.payment.dueDate}</span></div>
-                  <div class="summary-row"><span>Outstanding Balance:</span><span>₹${data.payment.outstandingBalance.toFixed(2)}</span></div>
+                <!-- Summary & Payment -->
+                <div class="summary-grid">
+                  <div class="summary-box">
+                    <div class="info-title">💰 BILL SUMMARY</div>
+                    <div class="summary-row"><span>Total Quantity:</span><span>${data.summary.totalQty} Pcs</span></div>
+                    <div class="summary-row"><span>Free Quantity:</span><span>${data.summary.totalFree} Pcs</span></div>
+                    <div class="summary-row"><span>Gross Amount:</span><span>₹${data.summary.grossAmount.toFixed(2)}</span></div>
+                    <div class="summary-row"><span>Discount Amount:</span><span>-₹${data.summary.discountAmount.toFixed(2)}</span></div>
+                    <div class="summary-row"><span>Taxable Amount:</span><span>₹${data.summary.taxableAmount.toFixed(2)}</span></div>
+                    <div class="summary-row"><span>CGST (9%):</span><span>+₹${data.summary.cgst.toFixed(2)}</span></div>
+                    <div class="summary-row"><span>SGST (9%):</span><span>+₹${data.summary.sgst.toFixed(2)}</span></div>
+                    <div class="summary-row"><span>Round Off:</span><span>₹${data.summary.roundOff.toFixed(2)}</span></div>
+                    <div class="net-amount summary-row"><span>NET AMOUNT:</span><span>₹${data.summary.netAmount.toFixed(2)}</span></div>
+                  </div>
+                  
+                  <div class="summary-box">
+                    <div class="info-title">💳 PAYMENT INFORMATION</div>
+                    <div class="summary-row"><span>Payment Mode:</span><span>${data.payment.mode}</span></div>
+                    <div class="summary-row"><span>Credit Days:</span><span>${data.payment.creditDays} Days</span></div>
+                    <div class="summary-row"><span>Due Date:</span><span>${data.payment.dueDate}</span></div>
+                    <div class="summary-row"><span>Outstanding Balance:</span><span>₹${data.payment.outstandingBalance.toFixed(2)}</span></div>
+                  </div>
                 </div>
-              </div>
-              
-              <!-- Logistics Details -->
-              <div class="info-box" style="margin-bottom: 12px;">
-                <div class="info-title">🚚 LOGISTICS / DELIVERY DETAILS</div>
-                <div style="display: flex; justify-content: space-between; flex-wrap: wrap;">
-                  <span>Transport: ${data.logistics.transport}</span>
-                  <span>LR No: ${data.logistics.lrNumber}</span>
-                  <span>Delivered By: ${data.logistics.deliveredBy}</span>
-                  <span>Vehicle No: ${data.logistics.vehicleNumber}</span>
-                  <span>Received By: ${data.logistics.receivedBy}</span>
+                
+                <!-- Logistics Details -->
+                <div class="info-box" style="margin-bottom: 12px;">
+                  <div class="info-title">🚚 LOGISTICS / DELIVERY DETAILS</div>
+                  <div style="display: flex; justify-content: space-between; flex-wrap: wrap;">
+                    <span>Transport: ${data.logistics.transport}</span>
+                    <span>LR No: ${data.logistics.lrNumber}</span>
+                    <span>Delivered By: ${data.logistics.deliveredBy}</span>
+                    <span>Vehicle No: ${data.logistics.vehicleNumber}</span>
+                    <span>Received By: ${data.logistics.receivedBy}</span>
+                  </div>
                 </div>
-              </div>
-              
-              <!-- Signature Section -->
-              <div class="signature-section">
-                <div class="signature-box">
-                  <div class="signature-line">Customer Signature</div>
+                
+                <!-- Signature Section -->
+                <div class="signature-section">
+                  <div class="signature-box">
+                    <div class="signature-line">Customer Signature</div>
+                  </div>
+                  <div class="signature-box">
+                    <div class="signature-line">Authorised Signatory</div>
+                  </div>
                 </div>
-                <div class="signature-box">
-                  <div class="signature-line">Authorised Signatory</div>
-                </div>
-              </div>
-              
-              <!-- Footer -->
-              <div class="footer">
-                <div class="terms">
-                  <strong>Terms & Conditions:</strong><br>
-                  ${data.footer.terms.replace(/\n/g, '<br>')}
-                </div>
-                <div style="margin-top: 8px;">
-                  ${data.footer.thankYou}<br>
-                  ${data.footer.software} | Page ${data.footer.pageNumber}
+                
+                <!-- Footer -->
+                <div class="footer">
+                  <div class="terms">
+                    <strong>Terms & Conditions:</strong><br>
+                    ${data.footer.terms.replace(/\n/g, '<br>')}
+                  </div>
+                  <div style="margin-top: 8px;">
+                    ${data.footer.thankYou}<br>
+                    ${data.footer.software} | Page ${data.footer.pageNumber}
+                  </div>
                 </div>
               </div>
             </div>
+            
+            <div class="no-print">
+              <button onclick="window.print()">🖨️ Print</button>
+              <button onclick="window.close()">❌ Close</button>
+            </div>
           </div>
-          
-          <div class="no-print">
-            <button onclick="window.print()">🖨️ Print</button>
-            <button onclick="window.close()">❌ Close</button>
-          </div>
-        </div>
-      </body>
-      </html>`;
+        </body>
+        </html>`;
   };
 
   const closeBillPrint = () => {
@@ -14904,9 +15010,9 @@ tools: {
       }
 
       /*
- * After adding a new firm, show page 1.
- * After editing, keep the current page.
- */
+* After adding a new firm, show page 1.
+* After editing, keep the current page.
+*/
       const refreshPage = editFirmId
         ? firmCurrentPage
         : 1;
@@ -15007,9 +15113,9 @@ tools: {
       }
 
       /*
- * When deleting the only row on a page,
- * return to the previous valid page.
- */
+* When deleting the only row on a page,
+* return to the previous valid page.
+*/
       const pageAfterDelete =
         firms.length === 1 &&
           firmCurrentPage > 1
@@ -15208,6 +15314,22 @@ tools: {
     loadUsers,
   ]);
   const loadCompanies = async () => {
+
+    if (
+      !(await hasPermission(
+        "MASTER",
+        "COMPANY",
+        "view"
+      ))
+    ) {
+      setCompanies([]);
+
+      alert(
+        "You don't have permission to view Company Master."
+      );
+
+      return;
+    }
     try {
       const distributorId = localStorage.getItem("distributorId");
       const firmId = localStorage.getItem("firmId");
@@ -15217,7 +15339,7 @@ tools: {
         return;
       }
 
-      const res = await fetch(`${API_URL}/companies?distributorId=${distributorId}&firmId=${firmId}`);
+      const res = await secureFetch(`${API_URL}/companies?distributorId=${distributorId}&firmId=${firmId}`);
       const result = await res.json();
 
       if (!res.ok) {
@@ -15241,10 +15363,25 @@ tools: {
   };
   const loadCompanyMaster = useCallback(
     async ({
+
       page = companyCurrentPage,
       limit = companyRowsPerPage,
       search = companyBackendSearch,
     } = {}) => {
+      if (
+        !(await hasPermission(
+          "MASTER",
+          "COMPANY",
+          "view"
+        ))
+      ) {
+        setCompanyMasterRows([]);
+        setCompanyTotalRecords(0);
+        setCompanyTotalPages(1);
+        setCompanyStartRecord(0);
+        setCompanyEndRecord(0);
+        return;
+      }
       try {
         const distributorId =
           localStorage.getItem("distributorId");
@@ -15455,7 +15592,7 @@ tools: {
         return;
       }
 
-      const res = await fetch(
+      const res = await secureFetch(
         `${API_URL}/groups?distributorId=${distributorId}&firmId=${firmId}`
       );
 
@@ -15517,7 +15654,7 @@ tools: {
           query.set("search", cleanSearch);
         }
 
-        const response = await fetch(
+        const response = await secureFetch(
           `${API_URL}/groups/list?${query.toString()}`
         );
 
@@ -15564,6 +15701,7 @@ tools: {
           : [];
 
         setGroupMasterRows(rows);
+        console.log("Group Rows:", rows);
 
         setGroupCurrentPage(
           Number(
@@ -15684,7 +15822,7 @@ tools: {
         return;
       }
 
-      const res = await fetch(
+      const res = await secureFetch(
         `${API_URL}/categories?distributorId=${distributorId}&firmId=${firmId}`
       );
 
@@ -15745,7 +15883,7 @@ tools: {
           query.set("search", cleanSearch);
         }
 
-        const response = await fetch(
+        const response = await secureFetch(
           `${API_URL}/categories/list?${query.toString()}`
         );
 
@@ -15928,7 +16066,7 @@ tools: {
         return;
       }
 
-      const res = await fetch(
+      const res = await secureFetch(
         `${API_URL}/products?distributorId=${distributorId}&firmId=${firmId}`
       );
 
@@ -16025,7 +16163,7 @@ tools: {
           );
         }
 
-        const response = await fetch(
+        const response = await secureFetch(
           `${API_URL}/products/list?${query.toString()}`
         );
 
@@ -16415,7 +16553,7 @@ tools: {
         return;
       }
 
-      const res = await fetch(
+      const res = await secureFetch(
         `${API_URL}/godowns?distributorId=${distributorId}&firmId=${firmId}`
       );
 
@@ -16448,7 +16586,7 @@ tools: {
     }
   };
   /* =========================================================
-   VALIDATE DEFAULT GODOWN
+  VALIDATE DEFAULT GODOWN
 ========================================================= */
 
   useEffect(() => {
@@ -16549,7 +16687,7 @@ tools: {
           );
         }
 
-        const response = await fetch(
+        const response = await secureFetch(
           `${API_URL}/godowns/list?${params.toString()}`
         );
 
@@ -16690,8 +16828,8 @@ tools: {
     },
     []
   );/*
- * GODOWN MASTER SEARCH DEBOUNCE
- */
+  * GODOWN MASTER SEARCH DEBOUNCE
+  */
   useEffect(() => {
     const timer =
       window.setTimeout(() => {
@@ -16714,13 +16852,13 @@ tools: {
 
 
   /*
-   * GODOWN MASTER BACKEND PAGINATION LOAD
-   */
+  * GODOWN MASTER BACKEND PAGINATION LOAD
+  */
   useEffect(() => {
     /*
-     * Load only when the GoDown Master list
-     * is open, not while Add/Edit form is open.
-     */
+    * Load only when the GoDown Master list
+    * is open, not while Add/Edit form is open.
+    */
     if (
       activeSubMenu !==
       "GoDown Master" ||
@@ -16811,7 +16949,7 @@ tools: {
         ? "PUT"
         : "POST";
 
-      const response = await fetch(
+      const response = await secureFetch(
         url,
         {
           method,
@@ -16858,9 +16996,9 @@ tools: {
       }
 
       /*
-       * Refresh complete godown data used
-       * by all transaction dropdowns.
-       */
+      * Refresh complete godown data used
+      * by all transaction dropdowns.
+      */
       await loadGodowns();
 
       const refreshPage =
@@ -16962,7 +17100,7 @@ tools: {
     }
 
     try {
-      const response = await fetch(
+      const response = await secureFetch(
         `${API_URL}/godowns/${id}`,
         {
           method: "DELETE",
@@ -16983,8 +17121,8 @@ tools: {
       }
 
       /*
-       * Refresh the complete dropdown list.
-       */
+      * Refresh the complete dropdown list.
+      */
       await loadGodowns();
 
       const recordsAfterDelete =
@@ -17034,9 +17172,9 @@ tools: {
   };
   const getFilteredGodowns = () => {
     /*
-     * Search and pagination are now
-     * performed by the backend.
-     */
+    * Search and pagination are now
+    * performed by the backend.
+    */
     return Array.isArray(
       godownMasterRows
     )
@@ -17432,7 +17570,30 @@ tools: {
 
     setOpenFormFor("Purchase");
   };
+  const getProductSelectionLabel = (
+    mode = getRuntimeProductSelectionMode()
+  ) => {
+    switch (mode) {
+      case "COMPANY_PRODUCT_CODE":
+        return "Company Code";
 
+      case "SHORT_CODE":
+        return "Short Code";
+
+      case "LOCAL_PRODUCT_NAME":
+        return "Local Name";
+
+      case "EAN_NO":
+        return "EAN No.";
+
+      case "PRODUCT_NAME":
+        return "Product Name";
+
+      case "PRODUCT_CODE":
+      default:
+        return "Product Code";
+    }
+  };
 
   const renderDashboard = () => {
     const userFirstName =
@@ -17578,30 +17739,7 @@ tools: {
       },
     ];
 
-    const getProductSelectionLabel = (
-      mode = getRuntimeProductSelectionMode()
-    ) => {
-      switch (mode) {
-        case "COMPANY_PRODUCT_CODE":
-          return "Company Code";
 
-        case "SHORT_CODE":
-          return "Short Code";
-
-        case "LOCAL_PRODUCT_NAME":
-          return "Local Name";
-
-        case "EAN_NO":
-          return "EAN No.";
-
-        case "PRODUCT_NAME":
-          return "Product Name";
-
-        case "PRODUCT_CODE":
-        default:
-          return "Product Code";
-      }
-    };
     const topCustomerRows = [
       {
         name: "ABC Traders",
@@ -17773,8 +17911,8 @@ tools: {
     return (
       <section className="advanced-dashboard">
         {/* =====================================================
-            DASHBOARD HEADING
-        ====================================================== */}
+              DASHBOARD HEADING
+          ====================================================== */}
 
         <div className="advanced-dashboard-heading">
           <div>
@@ -17816,8 +17954,8 @@ tools: {
         </div>
 
         {/* =====================================================
-            KPI CARDS
-        ====================================================== */}
+              KPI CARDS
+          ====================================================== */}
 
         <div className="advanced-kpi-grid">
           {kpiCards.map((card) => {
@@ -17875,8 +18013,8 @@ tools: {
         </div>
 
         {/* =====================================================
-            MAIN CHARTS
-        ====================================================== */}
+              MAIN CHARTS
+          ====================================================== */}
 
         <div className="advanced-main-chart-grid">
           {/* REVENUE OVERVIEW */}
@@ -18225,8 +18363,8 @@ tools: {
         </div>
 
         {/* =====================================================
-            INFORMATION CARDS
-        ====================================================== */}
+              INFORMATION CARDS
+          ====================================================== */}
 
         <div className="advanced-information-grid">
           {/* TOP CUSTOMERS */}
@@ -18406,8 +18544,8 @@ tools: {
         </div>
 
         {/* =====================================================
-            BUSINESS AND SYSTEM INFORMATION
-        ====================================================== */}
+              BUSINESS AND SYSTEM INFORMATION
+          ====================================================== */}
 
         <div className="advanced-bottom-grid">
           {/* BUSINESS OVERVIEW */}
@@ -18764,9 +18902,9 @@ tools: {
         isMixCompany(selectedCompanyCode);
 
       /*
-       * Prevent MIX selection when General Setup has
-       * disabled Mix Billing.
-       */
+      * Prevent MIX selection when General Setup has
+      * disabled Mix Billing.
+      */
       if (
         mixSelected &&
         runtimeGeneralSetup.allowMixBilling !== true
@@ -18806,8 +18944,8 @@ tools: {
       }));
 
       /*
-       * Clear rows only when changing between companies.
-       */
+      * Clear rows only when changing between companies.
+      */
       if (openFormFor !== "Quotation") {
         setInvoiceItems([]);
       } else if (invoiceItems.length === 0) {
@@ -18825,12 +18963,12 @@ tools: {
       setProductDropdownIndex(-1);
 
       /*
-       * Normal company:
-       * Load only that company's mappings.
-       *
-       * MIX:
-       * Load mappings from every company.
-       */
+      * Normal company:
+      * Load only that company's mappings.
+      *
+      * MIX:
+      * Load mappings from every company.
+      */
 
 
       return;
@@ -18890,10 +19028,10 @@ tools: {
       }
 
       /*
-       * All blacklist, credit-day, lock-day,
-       * credit-bill and credit-amount checks
-       * are handled inside this one validator.
-       */
+      * All blacklist, credit-day, lock-day,
+      * credit-bill and credit-amount checks
+      * are handled inside this one validator.
+      */
       const validation =
         validatePartyForBilling(
           selectedAccount.accountCode,
@@ -18961,7 +19099,7 @@ tools: {
         const { distributorId, firmId } = getFirmSession();
         if (!distributorId || !firmId) return;
 
-        const res = await fetch(
+        const res = await secureFetch(
           `${API_URL}/sales?distributorId=${distributorId}&firmId=${firmId}`
         );
         const result = await res.json();
@@ -19040,12 +19178,12 @@ tools: {
   };
 
   /* =========================================================
-   SALES VAT / GST CALCULATION HELPERS
+  SALES VAT / GST CALCULATION HELPERS
 ========================================================= */
 
   /* =========================================================
     SALES VAT / GST CALCULATION HELPERS
- ========================================================= */
+========================================================= */
 
   function invoiceRound(value) {
     const number = Number(value || 0);
@@ -19060,11 +19198,11 @@ tools: {
   }
 
   /*
-   * Returns the VAT/GST calculation method selected
-   * from General Setup.
-   *
-   * GROSS_AMOUNT is the default calculation mode.
-   */
+  * Returns the VAT/GST calculation method selected
+  * from General Setup.
+  *
+  * GROSS_AMOUNT is the default calculation mode.
+  */
   const getInvoiceVatMode = () => {
     const selectedMode = String(
       runtimeGeneralSetup.vatOn ||
@@ -19113,26 +19251,26 @@ tools: {
   };
 
   /*
-   * VAT / GST TAXABLE BASE RULES
-   *
-   * GROSS_AMOUNT:
-   * Gross Amount
-   *
-   * NET_AMOUNT:
-   * Gross - TPR - Scheme - Star - Cash Discount
-   *
-   * GROSS_SCHEME:
-   * Gross - TPR - Scheme
-   *
-   * GROSS_SCHEME_STAR:
-   * Gross - TPR - Scheme - Star
-   *
-   * GROSS_SCHEME_CASH:
-   * Gross - TPR - Scheme - Cash Discount
-   *
-   * GROSS_CASH:
-   * Gross - TPR - Cash Discount
-   */
+  * VAT / GST TAXABLE BASE RULES
+  *
+  * GROSS_AMOUNT:
+  * Gross Amount
+  *
+  * NET_AMOUNT:
+  * Gross - TPR - Scheme - Star - Cash Discount
+  *
+  * GROSS_SCHEME:
+  * Gross - TPR - Scheme
+  *
+  * GROSS_SCHEME_STAR:
+  * Gross - TPR - Scheme - Star
+  *
+  * GROSS_SCHEME_CASH:
+  * Gross - TPR - Scheme - Cash Discount
+  *
+  * GROSS_CASH:
+  * Gross - TPR - Cash Discount
+  */
   const calculateInvoiceTaxableBase = ({
     gross = 0,
     tpr = 0,
@@ -19176,18 +19314,18 @@ tools: {
       .toUpperCase()
     ) {
       /*
-       * GST directly on gross amount.
-       * No TPR, Scheme, Star or Cash Discount
-       * is deducted from the taxable base.
-       */
+      * GST directly on gross amount.
+      * No TPR, Scheme, Star or Cash Discount
+      * is deducted from the taxable base.
+      */
       case "GROSS_AMOUNT":
         taxableAmount =
           grossAmount;
         break;
 
       /*
-       * Gross - TPR - Scheme
-       */
+      * Gross - TPR - Scheme
+      */
       case "GROSS_SCHEME":
         taxableAmount =
           grossAmount -
@@ -19196,8 +19334,8 @@ tools: {
         break;
 
       /*
-       * Gross - TPR - Scheme - Star
-       */
+      * Gross - TPR - Scheme - Star
+      */
       case "GROSS_SCHEME_STAR":
         taxableAmount =
           grossAmount -
@@ -19207,8 +19345,8 @@ tools: {
         break;
 
       /*
-       * Gross - TPR - Scheme - Cash Discount
-       */
+      * Gross - TPR - Scheme - Cash Discount
+      */
       case "GROSS_SCHEME_CASH":
         taxableAmount =
           grossAmount -
@@ -19218,8 +19356,8 @@ tools: {
         break;
 
       /*
-       * Gross - TPR - Cash Discount
-       */
+      * Gross - TPR - Cash Discount
+      */
       case "GROSS_CASH":
         taxableAmount =
           grossAmount -
@@ -19228,8 +19366,8 @@ tools: {
         break;
 
       /*
-       * Gross - TPR - Scheme - Star - Cash Discount
-       */
+      * Gross - TPR - Scheme - Star - Cash Discount
+      */
       case "NET_AMOUNT":
         taxableAmount =
           grossAmount -
@@ -19240,8 +19378,8 @@ tools: {
         break;
 
       /*
-       * Safe default is Gross Amount.
-       */
+      * Safe default is Gross Amount.
+      */
       default:
         taxableAmount =
           grossAmount;
@@ -19304,12 +19442,12 @@ tools: {
       );
 
     /*
- * Actual product value after all commercial discounts.
- *
- * VAT On controls only the GST taxable base.
- * It must not decide whether Scheme, Star or CD
- * reduce the amount payable.
- */
+* Actual product value after all commercial discounts.
+*
+* VAT On controls only the GST taxable base.
+* It must not decide whether Scheme, Star or CD
+* reduce the amount payable.
+*/
     const commercialNet =
       invoiceRound(
         Math.max(
@@ -19321,14 +19459,14 @@ tools: {
           cashDiscount
         )
       );
-   const gstPercent = Math.max(
-  0,
-  Number(
-    row.gst ??
-    row.gstPercent ??
-    0
-  )
-);
+    const gstPercent = Math.max(
+      0,
+      Number(
+        row.gst ??
+        row.gstPercent ??
+        0
+      )
+    );
 
     const taxable =
       calculateInvoiceTaxableBase({
@@ -19377,13 +19515,13 @@ tools: {
       gross,
 
       /*
-       * Amount used to calculate GST.
-       */
+      * Amount used to calculate GST.
+      */
       taxable,
 
       /*
-       * Amount payable before GST.
-       */
+      * Amount payable before GST.
+      */
       commercialNet,
 
       gstAmount,
@@ -19411,8 +19549,8 @@ tools: {
       getInvoiceCashDiscountMode();
 
     /*
-     * Recalculate Scheme and Star amounts first.
-     */
+    * Recalculate Scheme and Star amounts first.
+    */
     const preparedRows =
       rows.map((sourceRow) => {
         const row = {
@@ -19468,9 +19606,9 @@ tools: {
           ...row,
 
           rateGst: (
-    Number(row.rate || 0) *
-    (1 + Number(row.gst || row.gstPercent || 0) / 100)
-).toFixed(2),
+            Number(row.rate || 0) *
+            (1 + Number(row.gst || row.gstPercent || 0) / 100)
+          ).toFixed(2),
           grossAmt:
             gross.toFixed(2),
 
@@ -19487,10 +19625,10 @@ tools: {
       });
 
     /*
-     * ITEM-WISE MODES
-     *
-     * Every row keeps its own CD percentage.
-     */
+    * ITEM-WISE MODES
+    *
+    * Every row keeps its own CD percentage.
+    */
     if (
       cashMode ===
       "ITEM_WISE_GROSS" ||
@@ -19545,36 +19683,36 @@ tools: {
             tax.igst
           );
 
-  return {
-  ...row,
+        return {
+          ...row,
 
-rateGst: invoiceRound(
-  Number(row.rate || 0) *
-  (1 + Number(row.gst || row.gstPercent || 0) / 100)
-).toFixed(2),
+          rateGst: invoiceRound(
+            Number(row.rate || 0) *
+            (1 + Number(row.gst || row.gstPercent || 0) / 100)
+          ).toFixed(2),
 
-  cdAmt: rowCdAmount.toFixed(2),
+          cdAmt: rowCdAmount.toFixed(2),
 
-  taxable: tax.taxable.toFixed(2),
+          taxable: tax.taxable.toFixed(2),
 
-  cgst: tax.cgst.toFixed(2),
+          cgst: tax.cgst.toFixed(2),
 
-  sgst: tax.sgst.toFixed(2),
+          sgst: tax.sgst.toFixed(2),
 
-  igst: tax.igst.toFixed(2),
+          igst: tax.igst.toFixed(2),
 
-  amount: amount.toFixed(2),
-};
+          amount: amount.toFixed(2),
+        };
       });
     }
 
     /*
-     * BILL-WISE MODES
-     *
-     * Use the CD percentage entered in the changed row.
-     * If another calculation triggers, use the first
-     * non-empty CD percentage found in the bill.
-     */
+    * BILL-WISE MODES
+    *
+    * Use the CD percentage entered in the changed row.
+    * If another calculation triggers, use the first
+    * non-empty CD percentage found in the bill.
+    */
     const changedRow =
       changedIndex >= 0
         ? preparedRows[changedIndex]
@@ -19604,9 +19742,9 @@ rateGst: invoiceRound(
       );
 
     /*
-     * Keep the same bill-level CD percentage visible
-     * on product rows containing products.
-     */
+    * Keep the same bill-level CD percentage visible
+    * on product rows containing products.
+    */
     preparedRows.forEach((row) => {
       const hasProduct =
         String(
@@ -19627,11 +19765,11 @@ rateGst: invoiceRound(
     });
 
     /*
-     * First calculate GST without Cash Discount.
-     * This is needed for:
-     * - Bill Net Amount
-     * - Bill Gross - Scheme + VAT
-     */
+    * First calculate GST without Cash Discount.
+    * This is needed for:
+    * - Bill Net Amount
+    * - Bill Gross - Scheme + VAT
+    */
     const provisionalRows =
       preparedRows.map((row) => {
         const tax =
@@ -19728,8 +19866,7 @@ rateGst: invoiceRound(
             billGross -
             billTpr -
             billScheme -
-            billStar +
-            provisionalGst
+            billStar
           );
         break;
     }
@@ -19742,19 +19879,19 @@ rateGst: invoiceRound(
       );
 
     /*
-     * Allocate bill-level Cash Discount across rows.
-     *
-     * Allocation basis:
-     * BILL_GROSS_AMOUNT:
-     *   Row Gross
-     *
-     * BILL_GROSS_SCHEME_VAT:
-     *   Row Gross - Scheme + provisional GST
-     *
-     * BILL_NET_AMOUNT:
-     *   Row Gross - TPR - Scheme - Star
-     *   + provisional GST
-     */
+    * Allocate bill-level Cash Discount across rows.
+    *
+    * Allocation basis:
+    * BILL_GROSS_AMOUNT:
+    *   Row Gross
+    *
+    * BILL_GROSS_SCHEME_VAT:
+    *   Row Gross - Scheme + provisional GST
+    *
+    * BILL_NET_AMOUNT:
+    *   Row Gross - TPR - Scheme - Star
+    *   + provisional GST
+    */
     const allocationBases =
       provisionalRows.map(
         ({ row, tax }) => {
@@ -19843,9 +19980,9 @@ rateGst: invoiceRound(
         ) {
           if (isLastActualRow) {
             /*
-             * Give remaining paise to the final product
-             * so allocated rows exactly equal bill CD.
-             */
+            * Give remaining paise to the final product
+            * so allocated rows exactly equal bill CD.
+            */
             rowCdAmount =
               invoiceRound(
                 billCdAmount -
@@ -19961,14 +20098,14 @@ rateGst: invoiceRound(
         )
       );
 
-const gstPercent = Math.max(
-  0,
-  Number(
-    row.gst ??
-    row.gstPercent ??
-    0
-  )
-);
+    const gstPercent = Math.max(
+      0,
+      Number(
+        row.gst ??
+        row.gstPercent ??
+        0
+      )
+    );
 
     const taxable =
       calculateInvoiceTaxableBase({
@@ -20004,9 +20141,9 @@ const gstPercent = Math.max(
       igst = gstAmount;
     } else {
       /*
-       * Calculate one half and assign the remaining
-       * paise to SGST so CGST + SGST exactly equals GST.
-       */
+      * Calculate one half and assign the remaining
+      * paise to SGST so CGST + SGST exactly equals GST.
+      */
       cgst =
         invoiceRound(
           gstAmount / 2
@@ -20019,11 +20156,11 @@ const gstPercent = Math.max(
     }
 
     /*
-   * VAT taxable and commercial payable are different.
-   *
-   * All commercial discounts reduce payable even when
-   * they do not reduce the GST taxable base.
-   */
+  * VAT taxable and commercial payable are different.
+  *
+  * All commercial discounts reduce payable even when
+  * they do not reduce the GST taxable base.
+  */
     const commercialNet =
       invoiceRound(
         Math.max(
@@ -20043,12 +20180,12 @@ const gstPercent = Math.max(
         sgst +
         igst
       );
-const rateGst =
-  invoiceRound(
-    totalQty *
-    rate *
-    (1 + gstPercent / 100)
-  );
+    const rateGst =
+      invoiceRound(
+        totalQty *
+        rate *
+        (1 + gstPercent / 100)
+      );
 
     return {
       ...row,
@@ -20095,16 +20232,16 @@ const rateGst =
       return;
     }
     /*
- * Star percentage can still calculate Star Amount.
- * Only direct manual editing of Star Amount is controlled.
- */
-if (
-  field === "starAmt" &&
-  runtimeGeneralSetup
-    .allowChangeStarAmount !== true
-) {
-  return;
-}
+* Star percentage can still calculate Star Amount.
+* Only direct manual editing of Star Amount is controlled.
+*/
+    if (
+      field === "starAmt" &&
+      runtimeGeneralSetup
+        .allowChangeStarAmount !== true
+    ) {
+      return;
+    }
     setInvoiceItems((previousItems) => {
       const updatedItems =
         previousItems.map(
@@ -20114,9 +20251,9 @@ if (
             }
 
             /*
-             * Always create a new object.
-             * Do not directly mutate the existing React state row.
-             */
+            * Always create a new object.
+            * Do not directly mutate the existing React state row.
+            */
             const updatedItem = {
               ...existingItem,
               [field]: value,
@@ -20152,11 +20289,11 @@ if (
             const gstPct =
               Number(updatedItem.gst) ||
               0;
-         
 
-updatedItem.rateGst = invoiceRound(
-  rate * (1 + gstPct / 100)
-).toFixed(2);
+
+            updatedItem.rateGst = invoiceRound(
+              rate * (1 + gstPct / 100)
+            ).toFixed(2);
 
             const baseAmount =
               qty * rate;
@@ -20167,8 +20304,8 @@ updatedItem.rateGst = invoiceRound(
               ) || 0;
 
             /* =========================
-               SCHEME
-               ========================= */
+              SCHEME
+              ========================= */
 
             let schemeAmt = 0;
 
@@ -20191,8 +20328,8 @@ updatedItem.rateGst = invoiceRound(
                 Number(value) || 0;
 
               /*
-               * Direct Scheme Amount overrides Scheme %.
-               */
+              * Direct Scheme Amount overrides Scheme %.
+              */
               if (String(value).trim() !== "") {
                 updatedItem.schemePct = "";
               }
@@ -20222,12 +20359,12 @@ updatedItem.rateGst = invoiceRound(
             }
 
             /* =========================
-               CASH DISCOUNT
-               ========================= */
+              CASH DISCOUNT
+              ========================= */
             /* =========================
-               CASH DISCOUNT
-               Final amount is calculated after all rows
-               are prepared according to General Setup.
+              CASH DISCOUNT
+              Final amount is calculated after all rows
+              are prepared according to General Setup.
             ========================= */
 
             let cdAmt =
@@ -20240,9 +20377,9 @@ updatedItem.rateGst = invoiceRound(
                 value;
 
               /*
-               * CD amount will be calculated centrally after
-               * the complete updatedItems array is ready.
-               */
+              * CD amount will be calculated centrally after
+              * the complete updatedItems array is ready.
+              */
             } else if (
               field === "cdAmt"
             ) {
@@ -20253,9 +20390,9 @@ updatedItem.rateGst = invoiceRound(
                 value;
 
               /*
-               * Direct amount overrides percentage only in
-               * item-wise modes.
-               */
+              * Direct amount overrides percentage only in
+              * item-wise modes.
+              */
               if (
                 [
                   "ITEM_WISE_GROSS",
@@ -20269,8 +20406,8 @@ updatedItem.rateGst = invoiceRound(
               }
             }
             /* =========================
-               STAR DISCOUNT
-               ========================= */
+              STAR DISCOUNT
+              ========================= */
 
             let starAmt = 0;
 
@@ -20287,41 +20424,41 @@ updatedItem.rateGst = invoiceRound(
               updatedItem.starAmt =
                 starAmt.toFixed(2);
             } else if (
-  field === "starAmt"
-) {
-  /*
-   * Direct Star Amount is accepted only when
-   * General Setup allows manual modification.
-   */
-  if (
-    runtimeGeneralSetup
-      .allowChangeStarAmount === true
-  ) {
-    starAmt =
-      Math.max(
-        0,
-        Number(value) || 0
-      );
+              field === "starAmt"
+            ) {
+              /*
+              * Direct Star Amount is accepted only when
+              * General Setup allows manual modification.
+              */
+              if (
+                runtimeGeneralSetup
+                  .allowChangeStarAmount === true
+              ) {
+                starAmt =
+                  Math.max(
+                    0,
+                    Number(value) || 0
+                  );
 
-    updatedItem.starAmt =
-      value;
+                updatedItem.starAmt =
+                  value;
 
-    /*
-     * Direct amount overrides Star Percentage.
-     */
-    if (String(value).trim() !== "") {
-      updatedItem.starPct = "";
-    }
-  } else {
-    /*
-     * When manual editing is disabled, retain the
-     * amount calculated from Star Percentage.
-     */
-    starAmt =
-      Number(
-        updatedItem.starAmt
-      ) || 0;
-  }
+                /*
+                * Direct amount overrides Star Percentage.
+                */
+                if (String(value).trim() !== "") {
+                  updatedItem.starPct = "";
+                }
+              } else {
+                /*
+                * When manual editing is disabled, retain the
+                * amount calculated from Star Percentage.
+                */
+                starAmt =
+                  Number(
+                    updatedItem.starAmt
+                  ) || 0;
+              }
             } else if (
               String(
                 updatedItem.starPct ??
@@ -20348,13 +20485,13 @@ updatedItem.rateGst = invoiceRound(
             }
 
             /* =========================
-               TAXABLE AND GST
-               ========================= */
+              TAXABLE AND GST
+              ========================= */
 
             /* =========================
       TAXABLE AND GST
       Controlled by General Setup VAT On
-   ========================= */
+  ========================= */
 
             updatedItem.tprAmt =
               invoiceRound(
@@ -20383,25 +20520,25 @@ updatedItem.rateGst = invoiceRound(
               isIGST;
 
             /*
-   * Scheme, Star and other row values are ready.
-   * Cash Discount is calculated after all rows
-   * have been updated.
-   */
+  * Scheme, Star and other row values are ready.
+  * Cash Discount is calculated after all rows
+  * have been updated.
+  */
             return updatedItem;
           }
         );
 
       /*
-       * Calculate using the freshly updated rows,
-       * not the previous invoiceItems state.
-       */
+      * Calculate using the freshly updated rows,
+      * not the previous invoiceItems state.
+      */
       /*
-   * Recalculate the visible summary.
-   */
+  * Recalculate the visible summary.
+  */
       /*
-     * Apply the selected Cash Discount mode
-     * across the complete invoice.
-     */
+    * Apply the selected Cash Discount mode
+    * across the complete invoice.
+    */
       const recalculatedItems =
         recalculateInvoiceCashDiscount(
           updatedItems,
@@ -20462,9 +20599,9 @@ updatedItem.rateGst = invoiceRound(
       );
 
     /*
-     * Recalculate and redistribute bill-level CD
-     * after deleting a product.
-     */
+    * Recalculate and redistribute bill-level CD
+    * after deleting a product.
+    */
     updatedItems =
       recalculateInvoiceCashDiscount(
         updatedItems
@@ -20667,12 +20804,12 @@ updatedItem.rateGst = invoiceRound(
           );
 
         /*
-         * Product-row taxable is authoritative because
-         * GST has been calculated against these values.
-         *
-         * Manual Display and Coupon are treated as
-         * post-tax bill discounts.
-         */
+        * Product-row taxable is authoritative because
+        * GST has been calculated against these values.
+        *
+        * Manual Display and Coupon are treated as
+        * post-tax bill discounts.
+        */
         const taxable =
           rowTaxable;
 
@@ -20684,18 +20821,18 @@ updatedItem.rateGst = invoiceRound(
           );
 
         /*
-   * Item amount already contains:
-   *
-   * Gross
-   * - TPR
-   * - Scheme
-   * - Star
-   * - Cash Discount
-   * + GST
-   *
-   * VAT taxable is shown separately and must not
-   * be used as the payable amount.
-   */
+  * Item amount already contains:
+  *
+  * Gross
+  * - TPR
+  * - Scheme
+  * - Star
+  * - Cash Discount
+  * + GST
+  *
+  * VAT taxable is shown separately and must not
+  * be used as the payable amount.
+  */
         const originalNet =
           invoiceRound(
             rowNetAmount -
@@ -20970,9 +21107,9 @@ updatedItem.rateGst = invoiceRound(
   const MIX_COMPANY_VALUE = "MIX";
 
   /*
-   * Only checks whether the selected dropdown value is MIX.
-   * Setup permission is checked separately where required.
-   */
+  * Only checks whether the selected dropdown value is MIX.
+  * Setup permission is checked separately where required.
+  */
   const isMixCompany = (value) =>
     String(value || "")
       .trim()
@@ -21001,8 +21138,8 @@ updatedItem.rateGst = invoiceRound(
     }
 
     /*
-     * MIX mode shows products from every company.
-     */
+    * MIX mode shows products from every company.
+    */
     if (
       isMixCompany(selectedCompanyValue) &&
       runtimeGeneralSetup.allowMixBilling === true
@@ -21259,30 +21396,30 @@ updatedItem.rateGst = invoiceRound(
             setup.serialNo === "Y" ||
             setup.serialNo === "YES" ||
             setup.serialNo === 1,
-            autoVoucherNo:
-  setup.autoVoucherNo === true ||
-  setup.autoVoucherNo === "true" ||
-  setup.autoVoucherNo === "Y" ||
-  setup.autoVoucherNo === "YES" ||
-  setup.autoVoucherNo === 1,
-  billingWithoutHsnCode:
-  setup.billingWithoutHsnCode === true ||
-  setup.billingWithoutHsnCode === "true" ||
-  setup.billingWithoutHsnCode === "Y" ||
-  setup.billingWithoutHsnCode === "YES" ||
-  setup.billingWithoutHsnCode === 1,
-  editGrossPurchase:
-  setup.editGrossPurchase === true ||
-  setup.editGrossPurchase === "true" ||
-  setup.editGrossPurchase === "Y" ||
-  setup.editGrossPurchase === "YES" ||
-  setup.editGrossPurchase === 1,
-  allowChangeStarAmount:
-  setup.allowChangeStarAmount === true ||
-  setup.allowChangeStarAmount === "true" ||
-  setup.allowChangeStarAmount === "Y" ||
-  setup.allowChangeStarAmount === "YES" ||
-  setup.allowChangeStarAmount === 1,
+          autoVoucherNo:
+            setup.autoVoucherNo === true ||
+            setup.autoVoucherNo === "true" ||
+            setup.autoVoucherNo === "Y" ||
+            setup.autoVoucherNo === "YES" ||
+            setup.autoVoucherNo === 1,
+          billingWithoutHsnCode:
+            setup.billingWithoutHsnCode === true ||
+            setup.billingWithoutHsnCode === "true" ||
+            setup.billingWithoutHsnCode === "Y" ||
+            setup.billingWithoutHsnCode === "YES" ||
+            setup.billingWithoutHsnCode === 1,
+          editGrossPurchase:
+            setup.editGrossPurchase === true ||
+            setup.editGrossPurchase === "true" ||
+            setup.editGrossPurchase === "Y" ||
+            setup.editGrossPurchase === "YES" ||
+            setup.editGrossPurchase === 1,
+          allowChangeStarAmount:
+            setup.allowChangeStarAmount === true ||
+            setup.allowChangeStarAmount === "true" ||
+            setup.allowChangeStarAmount === "Y" ||
+            setup.allowChangeStarAmount === "YES" ||
+            setup.allowChangeStarAmount === 1,
           vatOn:
             [
               "GROSS_AMOUNT",
@@ -21352,10 +21489,10 @@ updatedItem.rateGst = invoiceRound(
         );
 
         /*
-         * Safe default:
-         * Blacklisted parties remain blocked
-         * if setup cannot be loaded.
-         */
+        * Safe default:
+        * Blacklisted parties remain blocked
+        * if setup cannot be loaded.
+        */
         setRuntimeGeneralSetup({
           billAllowBlacklistParty: false,
           allowChangeBillType: false,
@@ -21374,7 +21511,7 @@ updatedItem.rateGst = invoiceRound(
           vatSummary: true,
           serialNo: false,
           autoVoucherNo: true,
-          billingWithoutHsnCode: false,  
+          billingWithoutHsnCode: false,
           editGrossPurchase: false,
           allowChangeStarAmount: false,
 
@@ -21392,7 +21529,7 @@ updatedItem.rateGst = invoiceRound(
             DEFAULT_SELECTION,
         });
       }
-    }, []);
+    }, [accountPermission.view]);
   useEffect(() => {
     loadRuntimeGeneralSetup();
   }, [loadRuntimeGeneralSetup]);
@@ -21457,18 +21594,18 @@ updatedItem.rateGst = invoiceRound(
       ).trim();
 
       /*
-       * MIX mode:
-       * Do not send companyCode.
-       * Backend will return mappings for all companies.
-       */
+      * MIX mode:
+      * Do not send companyCode.
+      * Backend will return mappings for all companies.
+      */
       const useAllCompanies =
         isMixCompany(companyCode) &&
         runtimeGeneralSetup.allowMixBilling === true;
 
       /*
-       * No company selected:
-       * Clear mapping dropdowns.
-       */
+      * No company selected:
+      * Clear mapping dropdowns.
+      */
       if (!companyCode) {
         setInvoiceAreaPartyMappings([]);
         setInvoiceSalesmanAreaMappings([]);
@@ -21488,9 +21625,9 @@ updatedItem.rateGst = invoiceRound(
         });
 
       /*
-       * Add companyCode only for a normal company.
-       * Never send companyCode=MIX.
-       */
+      * Add companyCode only for a normal company.
+      * Never send companyCode=MIX.
+      */
       if (!useAllCompanies) {
         partyQuery.set(
           "companyCode",
@@ -21553,8 +21690,8 @@ updatedItem.rateGst = invoiceRound(
         : [];
 
       /*
-       * Remove duplicate records that can occur in MIX mode.
-       */
+      * Remove duplicate records that can occur in MIX mode.
+      */
       const uniquePartyMappings =
         Array.from(
           new Map(
@@ -21601,7 +21738,7 @@ updatedItem.rateGst = invoiceRound(
     }
   };
   /* =========================================================
-   LOAD DEFAULT COMPANY MAPPINGS FOR NEW BILL
+  LOAD DEFAULT COMPANY MAPPINGS FOR NEW BILL
 ========================================================= */
 
   useEffect(() => {
@@ -21692,9 +21829,9 @@ updatedItem.rateGst = invoiceRound(
     );
 
     /*
-     * Never show every product when the
-     * search field is empty.
-     */
+    * Never show every product when the
+    * search field is empty.
+    */
     if (!rawSearchText) {
       setCreditFilteredProductList([]);
       setCreditProductDropdownIndex(-1);
@@ -21753,9 +21890,9 @@ updatedItem.rateGst = invoiceRound(
       }
 
       /*
-       * Company may sometimes be populated
-       * as an object instead of a string.
-       */
+      * Company may sometimes be populated
+      * as an object instead of a string.
+      */
       if (
         typeof value === "object"
       ) {
@@ -21854,9 +21991,9 @@ updatedItem.rateGst = invoiceRound(
           .filter(Boolean);
 
         /*
-         * Allow products from every company only
-         * when no company is selected.
-         */
+        * Allow products from every company only
+        * when no company is selected.
+        */
         const selectedCompany =
           findCreditCompany(
             selectedCompanyValue
@@ -21928,9 +22065,9 @@ updatedItem.rateGst = invoiceRound(
             product,
 
             /*
-             * Batch selection is handled by
-             * the separate batch modal.
-             */
+            * Batch selection is handled by
+            * the separate batch modal.
+            */
             batch: null,
 
             isAlreadySelected:
@@ -22048,9 +22185,9 @@ updatedItem.rateGst = invoiceRound(
       getProductName(product);
 
     /*
-     * Deep-copy rows so row objects are not
-     * shared between Billing and Quotation.
-     */
+    * Deep-copy rows so row objects are not
+    * shared between Billing and Quotation.
+    */
     const updatedItems =
       cloneInvoiceDraftValue(
         Array.isArray(invoiceItems)
@@ -22093,8 +22230,8 @@ updatedItem.rateGst = invoiceRound(
       productName: itemName,
 
       /*
-       * Required for mixed-company invoices.
-       */
+      * Required for mixed-company invoices.
+      */
       companyCode: productCompanyCode,
       CompanyCode: productCompanyCode,
 
@@ -22149,43 +22286,43 @@ updatedItem.rateGst = invoiceRound(
         0
       ),
 
-gst: Number(
-  selectedBatch?.gst ??
-  selectedBatch?.gstPercent ??
-  selectedBatch?.GSTPercent ??
-  selectedBatch?.GST ??
-  product.gst ??
-  product.gstPercent ??
-  product.GSTPercent ??
-  product.GST ??
-  0
-),
+      gst: Number(
+        selectedBatch?.gst ??
+        selectedBatch?.gstPercent ??
+        selectedBatch?.GSTPercent ??
+        selectedBatch?.GST ??
+        product.gst ??
+        product.gstPercent ??
+        product.GSTPercent ??
+        product.GST ??
+        0
+      ),
 
-rateGst: invoiceRound(
-  Number(
-    selectedBatch?.salesRate ??
-    selectedBatch?.sRate ??
-    selectedBatch?.SRate ??
-    product.salesRate ??
-    product.sRate ??
-    product.SRate ??
-    0
-  ) *
-  (
-    1 +
-    Number(
-      selectedBatch?.gst ??
-      selectedBatch?.gstPercent ??
-      selectedBatch?.GSTPercent ??
-      selectedBatch?.GST ??
-      product.gst ??
-      product.gstPercent ??
-      product.GSTPercent ??
-      product.GST ??
-      0
-    ) / 100
-  )
-).toFixed(2),
+      rateGst: invoiceRound(
+        Number(
+          selectedBatch?.salesRate ??
+          selectedBatch?.sRate ??
+          selectedBatch?.SRate ??
+          product.salesRate ??
+          product.sRate ??
+          product.SRate ??
+          0
+        ) *
+        (
+          1 +
+          Number(
+            selectedBatch?.gst ??
+            selectedBatch?.gstPercent ??
+            selectedBatch?.GSTPercent ??
+            selectedBatch?.GST ??
+            product.gst ??
+            product.gstPercent ??
+            product.GSTPercent ??
+            product.GST ??
+            0
+          ) / 100
+        )
+      ).toFixed(2),
 
       units:
         product.basicUnit ||
@@ -22252,16 +22389,16 @@ rateGst: invoiceRound(
     };
 
     /*
-     * Apply VAT On calculation immediately
-     * after selecting the product.
-     */
+    * Apply VAT On calculation immediately
+    * after selecting the product.
+    */
     updatedItems[index] =
       selectedProductRow;
 
     /*
-     * Ensure one blank row exists after
-     * the selected product row.
-     */
+    * Ensure one blank row exists after
+    * the selected product row.
+    */
     const nextRow =
       updatedItems[index + 1];
 
@@ -22304,9 +22441,9 @@ rateGst: invoiceRound(
     );
 
     /*
-     * Save product rows only into the active
-     * Billing or Quotation draft.
-     */
+    * Save product rows only into the active
+    * Billing or Quotation draft.
+    */
     updateActiveInvoiceDraft({
       items:
         cloneInvoiceDraftValue(
@@ -22327,11 +22464,11 @@ rateGst: invoiceRound(
     setFilteredProductList([]);
 
     /*
-     * Do not call addBlankSalesRowAfterSelect here.
-     * The blank row has already been added above.
-     * Calling it again can update shared invoiceItems
-     * with stale data.
-     */
+    * Do not call addBlankSalesRowAfterSelect here.
+    * The blank row has already been added above.
+    * Calling it again can update shared invoiceItems
+    * with stale data.
+    */
 
     focusSalesQty(index);
   };
@@ -22434,52 +22571,52 @@ rateGst: invoiceRound(
     return productCode !== "" && (qty > 0 || free > 0) && rate > 0;
   };
   /* =========================================================
-   BILLING WITHOUT HSN CODE VALIDATION
+  BILLING WITHOUT HSN CODE VALIDATION
 ========================================================= */
 
-const getInvoiceItemHsnCode = (item) => {
-  return String(
-    item?.hsn ??
-    item?.HSN ??
-    item?.hsnCode ??
-    item?.HSNCode ??
-    item?.HsnCode ??
-    item?.productHsn ??
-    item?.ProductHSN ??
-    ""
-  ).trim();
-};
+  const getInvoiceItemHsnCode = (item) => {
+    return String(
+      item?.hsn ??
+      item?.HSN ??
+      item?.hsnCode ??
+      item?.HSNCode ??
+      item?.HsnCode ??
+      item?.productHsn ??
+      item?.ProductHSN ??
+      ""
+    ).trim();
+  };
 
-const getInvoiceItemProductName = (
-  item,
-  index
-) => {
-  return String(
-    item?.productName ??
-    item?.ProdName ??
-    item?.itemName ??
-    item?.name ??
-    item?.productCode ??
-    item?.ProdCode ??
-    `Row ${index + 1}`
-  ).trim();
-};
+  const getInvoiceItemProductName = (
+    item,
+    index
+  ) => {
+    return String(
+      item?.productName ??
+      item?.ProdName ??
+      item?.itemName ??
+      item?.name ??
+      item?.productCode ??
+      item?.ProdCode ??
+      `Row ${index + 1}`
+    ).trim();
+  };
 
-const validateBillingItemHsnCodes = (
-  items = []
-) => {
-  /*
-   * ON means bills without HSN are allowed.
-   */
-  if (
-    runtimeGeneralSetup
-      .billingWithoutHsnCode === true
-  ) {
-    return true;
-  }
+  const validateBillingItemHsnCodes = (
+    items = []
+  ) => {
+    /*
+    * ON means bills without HSN are allowed.
+    */
+    if (
+      runtimeGeneralSetup
+        .billingWithoutHsnCode === true
+    ) {
+      return true;
+    }
 
-  const actualItems = Array.isArray(items)
-    ? items.filter((item) => {
+    const actualItems = Array.isArray(items)
+      ? items.filter((item) => {
         const productCode = String(
           item?.productCode ??
           item?.ProdCode ??
@@ -22501,59 +22638,58 @@ const validateBillingItemHsnCodes = (
           productName
         );
       })
-    : [];
+      : [];
 
-  const missingHsnItems =
-    actualItems
-      .map((item, index) => ({
-        rowNumber: index + 1,
-        productName:
-          getInvoiceItemProductName(
-            item,
-            index
-          ),
-        hsnCode:
-          getInvoiceItemHsnCode(item),
-      }))
-      .filter(
-        (item) => !item.hsnCode
-      );
+    const missingHsnItems =
+      actualItems
+        .map((item, index) => ({
+          rowNumber: index + 1,
+          productName:
+            getInvoiceItemProductName(
+              item,
+              index
+            ),
+          hsnCode:
+            getInvoiceItemHsnCode(item),
+        }))
+        .filter(
+          (item) => !item.hsnCode
+        );
 
-  if (missingHsnItems.length === 0) {
-    return true;
-  }
+    if (missingHsnItems.length === 0) {
+      return true;
+    }
 
-  const missingProductList =
-    missingHsnItems
-      .slice(0, 5)
-      .map(
-        (item) =>
-          `${item.rowNumber}. ${item.productName}`
-      )
-      .join("\n");
+    const missingProductList =
+      missingHsnItems
+        .slice(0, 5)
+        .map(
+          (item) =>
+            `${item.rowNumber}. ${item.productName}`
+        )
+        .join("\n");
 
-  const remainingCount =
-    missingHsnItems.length - 5;
+    const remainingCount =
+      missingHsnItems.length - 5;
 
-  alert(
-    `HSN Code is required for the following product(s):\n\n` +
-    `${missingProductList}` +
-    `${
-      remainingCount > 0
+    alert(
+      `HSN Code is required for the following product(s):\n\n` +
+      `${missingProductList}` +
+      `${remainingCount > 0
         ? `\n...and ${remainingCount} more product(s).`
         : ""
-    }\n\n` +
-    `Enable "Billing Without HSN Code" in General Setup to allow saving without HSN.`
-  );
+      }\n\n` +
+      `Enable "Billing Without HSN Code" in General Setup to allow saving without HSN.`
+    );
 
-  return false;
-};
+    return false;
+  };
 
   const saveInvoice = async () => {
     try {
       /*
- * Protect loaded Sales Bills during update.
- */
+* Protect loaded Sales Bills during update.
+*/
       if (editingInvoiceId) {
         const editingSalesBill =
           salesListData.find((bill) => {
@@ -22590,9 +22726,9 @@ const validateBillingItemHsnCodes = (
         }
       }
       /*
- * Product rows of a loaded bill must remain unchanged
- * when Edit Product After Load is disabled.
- */
+* Product rows of a loaded bill must remain unchanged
+* when Edit Product After Load is disabled.
+*/
       if (loadedBillProductReadOnly) {
         const currentProductSnapshot =
           invoiceItems
@@ -22842,7 +22978,7 @@ const validateBillingItemHsnCodes = (
 
       /* =========================================================
     SALES PRODUCT ROW VALIDATION
- ========================================================= */
+========================================================= */
 
       if (validItems.length === 0) {
         const selectedProductRow =
@@ -22860,8 +22996,8 @@ const validateBillingItemHsnCodes = (
           });
 
         /*
-         * A product is selected, but Qty/Free is missing.
-         */
+        * A product is selected, but Qty/Free is missing.
+        */
         if (selectedProductRow) {
           const qty = Number(
             selectedProductRow.qty ??
@@ -22905,116 +23041,115 @@ const validateBillingItemHsnCodes = (
 
         return;
       }
-        /* =========================================================
-   ALLOW CHANGE STAR AMOUNT — FINAL SAVE PROTECTION
+      /* =========================================================
+ALLOW CHANGE STAR AMOUNT — FINAL SAVE PROTECTION
 ========================================================= */
 
-if (
-  runtimeGeneralSetup
-    .allowChangeStarAmount !== true
-) {
-  const invalidManualStarItem =
-    validItems.find((item) => {
-      const starPercentage =
-        Number(item.starPct || 0);
+      if (
+        runtimeGeneralSetup
+          .allowChangeStarAmount !== true
+      ) {
+        const invalidManualStarItem =
+          validItems.find((item) => {
+            const starPercentage =
+              Number(item.starPct || 0);
 
-      const savedStarAmount =
-        invoiceRound(
-          Number(item.starAmt || 0)
-        );
+            const savedStarAmount =
+              invoiceRound(
+                Number(item.starAmt || 0)
+              );
 
-      const grossAmount =
-        invoiceRound(
-          getSalesItemTotalQty(item) *
-          Number(item.rate || 0)
-        );
+            const grossAmount =
+              invoiceRound(
+                getSalesItemTotalQty(item) *
+                Number(item.rate || 0)
+              );
 
-      const calculatedStarAmount =
-        invoiceRound(
-          grossAmount *
-          starPercentage /
-          100
-        );
+            const calculatedStarAmount =
+              invoiceRound(
+                grossAmount *
+                starPercentage /
+                100
+              );
 
-      /*
-       * Only validate rows having Star Percentage.
-       * Rows with no Star Percentage may legitimately
-       * contain a backend/master-calculated Star Amount.
-       */
-      return (
-        starPercentage > 0 &&
-        Math.abs(
-          savedStarAmount -
-          calculatedStarAmount
-        ) > 0.01
-      );
-    });
+            /*
+            * Only validate rows having Star Percentage.
+            * Rows with no Star Percentage may legitimately
+            * contain a backend/master-calculated Star Amount.
+            */
+            return (
+              starPercentage > 0 &&
+              Math.abs(
+                savedStarAmount -
+                calculatedStarAmount
+              ) > 0.01
+            );
+          });
 
-  if (invalidManualStarItem) {
-    alert(
-      `Invoice cannot be saved.\n\n` +
-      `Star Amount was manually changed for:\n` +
-      `${
-        invalidManualStarItem.productName ||
-        invalidManualStarItem.product ||
-        invalidManualStarItem.productCode ||
-        "Selected Product"
-      }\n\n` +
-      `Enable "Allow Change Star Amount" in General Setup to allow this.`
-    );
+        if (invalidManualStarItem) {
+          alert(
+            `Invoice cannot be saved.\n\n` +
+            `Star Amount was manually changed for:\n` +
+            `${invalidManualStarItem.productName ||
+            invalidManualStarItem.product ||
+            invalidManualStarItem.productCode ||
+            "Selected Product"
+            }\n\n` +
+            `Enable "Allow Change Star Amount" in General Setup to allow this.`
+          );
 
-    return;
-  }
-}
+          return;
+        }
+      }
       /* =========================================================
-   BILLING WITHOUT HSN CODE — FINAL SAVE VALIDATION
+  BILLING WITHOUT HSN CODE — FINAL SAVE VALIDATION
 ========================================================= */
 
-if (
-  runtimeGeneralSetup
-    .billingWithoutHsnCode !== true
-) {
-  const missingHsnItem =
-    validItems.find((item) => {
-      const hsnCode = String(
-        item.hsn ??
-        item.HSN ??
-        item.hsnCode ??
-        item.HSNCode ??
-        item.HsnCode ??
-        ""
-      ).trim();
+      if (
+        runtimeGeneralSetup
+          .billingWithoutHsnCode !== true
+      ) {
+        const missingHsnItem =
+          validItems.find((item) => {
+            const hsnCode = String(
+              item.hsn ??
+              item.HSN ??
+              item.hsnCode ??
+              item.HSNCode ??
+              item.HsnCode ??
+              ""
+            ).trim();
 
-      return !hsnCode;
-    });
+            return !hsnCode;
+          });
 
-  if (missingHsnItem) {
-    const productName = String(
-      missingHsnItem.productName ||
-      missingHsnItem.product ||
-      missingHsnItem.productCode ||
-      "Selected Product"
-    ).trim();
+        if (missingHsnItem) {
+          const productName = String(
+            missingHsnItem.productName ||
+            missingHsnItem.product ||
+            missingHsnItem.productCode ||
+            "Selected Product"
+          ).trim();
 
-    alert(
-      `Invoice cannot be saved.\n\n` +
-      `HSN Code was not found for:\n` +
-      `${productName}\n\n` +
-      `Enable "Billing Without HSN Code" in General Setup to allow this.`
-    );
+          alert(
+            `Invoice cannot be saved.\n\n` +
+            `HSN Code was not found for:\n` +
+            `${productName}\n\n` +
+            `Enable "Billing Without HSN Code" in General Setup to allow this.`
+          );
 
-    return;
-  }
-}
+          return;
+        }
+      }
       /* =========================================================
-   S.RATE BELOW P.RATE — FINAL SAVE VALIDATION
+  S.RATE BELOW P.RATE — FINAL SAVE VALIDATION
 
-   Setting OFF:
-   1. Purchase Rate must be available.
-   2. Sales Rate cannot be below Purchase Rate.
+  Setting OFF:
+  1. Purchase Rate must be available.
+  2. Sales Rate cannot be below Purchase Rate.
 
-   This final validation prevents saving even if live
-   input validation was bypassed.
+  This final validation prevents saving even if live
+  input validation was bypassed.
 ========================================================= */
 
       if (
@@ -23052,9 +23187,9 @@ if (
           );
 
         /*
-         * Do not permit save when Purchase Rate is missing.
-         * Otherwise a zero Purchase Rate would bypass the rule.
-         */
+        * Do not permit save when Purchase Rate is missing.
+        * Otherwise a zero Purchase Rate would bypass the rule.
+        */
         const missingPurchaseRateItem =
           validItems.find((item) => {
             const purchaseRate =
@@ -23123,8 +23258,8 @@ if (
         }
       }
       /* =========================================================
-   ALLOW MIX BILLING VALIDATION
-   ADD THIS BLOCK HERE
+  ALLOW MIX BILLING VALIDATION
+  ADD THIS BLOCK HERE
 ========================================================= */
 
       if (validItems.length === 0) {
@@ -23145,9 +23280,9 @@ if (
         selectedBillCompany.toUpperCase() === "MIX";
 
       /*
-       * MIX company cannot be used when the
-       * Allow Mix Billing setting is disabled.
-       */
+      * MIX company cannot be used when the
+      * Allow Mix Billing setting is disabled.
+      */
       if (
         isMixSelected &&
         runtimeGeneralSetup.allowMixBilling !== true
@@ -23159,9 +23294,9 @@ if (
       }
 
       /*
-       * When MIX is not selected, every product
-       * must belong to the selected bill company.
-       */
+      * When MIX is not selected, every product
+      * must belong to the selected bill company.
+      */
       if (!isMixSelected) {
         const invalidProduct =
           validItems.find((item) => {
@@ -23188,9 +23323,9 @@ if (
               });
 
             /*
-             * Do not block old records when their
-             * product master cannot be located.
-             */
+            * Do not block old records when their
+            * product master cannot be located.
+            */
             if (!productMaster) {
               return false;
             }
@@ -23338,7 +23473,7 @@ if (
 
       const isEditMode = Boolean(editingInvoiceId);
 
-      const res = await fetch(
+      const res = await secureFetch(
         isEditMode ? `${API_URL}/sales/${editingInvoiceId}` : `${API_URL}/sales`,
         {
           method: isEditMode ? "PUT" : "POST",
@@ -23359,12 +23494,12 @@ if (
       }
 
       /*
-       * A newly created invoice should reload page 1
-       * because the list is sorted newest first.
-       *
-       * An edited invoice should remain on the
-       * currently selected page.
-       */
+      * A newly created invoice should reload page 1
+      * because the list is sorted newest first.
+      *
+      * An edited invoice should remain on the
+      * currently selected page.
+      */
       const salesPageAfterSave =
         isEditMode
           ? salesCurrentPage
@@ -23400,11 +23535,11 @@ if (
           settleAdjustRowIndex >= 0
         ) {
           /*
-           * Read the latest saved bill amount.
-           *
-           * Prefer the backend response, but fall back to
-           * the amount that was just sent to the backend.
-           */
+          * Read the latest saved bill amount.
+          *
+          * Prefer the backend response, but fall back to
+          * the amount that was just sent to the backend.
+          */
           const updatedBillAmount = Number(
             result?.bill?.NetAmount ??
             result?.bill?.netAmount ??
@@ -23433,14 +23568,14 @@ if (
               }
 
               /*
-               * Updating the Sales Bill amount is different
-               * from receiving/adjusting its payment.
-               *
-               * Therefore:
-               * Bill Amount    = newly updated invoice amount
-               * Receipt Amount = keep already received amount
-               * Pending Amount = new bill amount - receipt
-               */
+              * Updating the Sales Bill amount is different
+              * from receiving/adjusting its payment.
+              *
+              * Therefore:
+              * Bill Amount    = newly updated invoice amount
+              * Receipt Amount = keep already received amount
+              * Pending Amount = new bill amount - receipt
+              */
               const existingReceiptAmount = Math.min(
                 Number(
                   currentItem.receiptAmount || 0
@@ -23493,9 +23628,9 @@ if (
                   updatedBillType,
 
                 /*
-                 * Editing the invoice must not automatically
-                 * mark the bill as fully adjusted.
-                 */
+                * Editing the invoice must not automatically
+                * mark the bill as fully adjusted.
+                */
                 adjust:
                   existingReceiptAmount > 0 &&
                     updatedPendingAmount <= 0
@@ -23515,9 +23650,9 @@ if (
                   updatedStatus,
 
                 /*
-                 * Indicates that the load row amount was
-                 * changed by Sales Billing adjustment.
-                 */
+                * Indicates that the load row amount was
+                * changed by Sales Billing adjustment.
+                */
                 billAmountUpdated: true,
               };
             }
@@ -23551,13 +23686,13 @@ if (
       );
 
       /* =========================================================
-         PREPARE SAVED BILL FOR SAVE AND PRINT
+        PREPARE SAVED BILL FOR SAVE AND PRINT
       ========================================================= */
 
       /*
-       * Different backend versions may return the saved bill
-       * under bill, sales, record, data or invoice.
-       */
+      * Different backend versions may return the saved bill
+      * under bill, sales, record, data or invoice.
+      */
       const savedSalesBill =
         result?.bill ||
         result?.savedBill ||
@@ -23570,10 +23705,10 @@ if (
         null;
 
       /*
-       * Create a safe fallback using the data that was sent.
-       * Print-details still requires the saved MongoDB ID,
-       * therefore prefer the backend returned record.
-       */
+      * Create a safe fallback using the data that was sent.
+      * Print-details still requires the saved MongoDB ID,
+      * therefore prefer the backend returned record.
+      */
       const savedSalesBillForPrint = {
         ...salesData,
         ...(savedSalesBill || {}),
@@ -23622,16 +23757,16 @@ if (
       };
 
       /*
-       * Store the setting before resetting the bill form.
-       */
+      * Store the setting before resetting the bill form.
+      */
       const shouldOpenPrintAfterSave =
         runtimeGeneralSetup.saveAndPrint === true &&
         !isEditMode;
 
       /*
-       * Keep the current saved bill reference.
-       * The modal will use this record after the form reset.
-       */
+      * Keep the current saved bill reference.
+      * The modal will use this record after the form reset.
+      */
       if (shouldOpenPrintAfterSave) {
         if (
           savedSalesBillForPrint._id ||
@@ -23787,9 +23922,9 @@ if (
   };
   // ✅ FOCUS ON PARTY FIELD WHEN BILLING FORM OPENS
   /* =========================================================
-     APPLY DEFAULT BILLING SELECTION
-     AREA  -> Focus Area dropdown
-     ROUTE -> Focus Party selection
+    APPLY DEFAULT BILLING SELECTION
+    AREA  -> Focus Area dropdown
+    ROUTE -> Focus Party selection
   ========================================================= */
 
   useEffect(() => {
@@ -23802,9 +23937,9 @@ if (
     }
 
     /*
-     * Do not change focus while editing an
-     * existing bill or adjusting settlement.
-     */
+    * Do not change focus while editing an
+    * existing bill or adjusting settlement.
+    */
     if (
       editingInvoiceId ||
       isSettleAdjustMode
@@ -23828,9 +23963,9 @@ if (
             );
         } else {
           /*
-           * ROUTE mode uses the current mapped
-           * Party selection flow.
-           */
+          * ROUTE mode uses the current mapped
+          * Party selection flow.
+          */
           targetElement =
             document.querySelector(
               '[name="party"]'
@@ -23873,7 +24008,7 @@ if (
     runtimeGeneralSetup.defaultSelection,
   ]);
   /* =========================================================
-   APPLY DEFAULT COMPANY TO NEW BILL
+  APPLY DEFAULT COMPANY TO NEW BILL
 ========================================================= */
 
 
@@ -24043,7 +24178,7 @@ if (
           );
 
           const response =
-            await fetch(
+            await secureFetch(
               `${API_URL}/sales/list?${query.toString()}`
             );
 
@@ -24285,9 +24420,9 @@ if (
                     "Invoice",
 
                   /*
-                   * Items are intentionally not returned
-                   * by /api/sales/list.
-                   */
+                  * Items are intentionally not returned
+                  * by /api/sales/list.
+                  */
                   items: [],
 
                   originalItem,
@@ -24339,9 +24474,9 @@ if (
           );
 
           /*
-           * Keep your existing generic list-page state
-           * synchronized if other code reads it.
-           */
+          * Keep your existing generic list-page state
+          * synchronized if other code reads it.
+          */
           setListPage(
             (previous) => ({
               ...previous,
@@ -24592,7 +24727,7 @@ if (
           );
 
           const response =
-            await fetch(
+            await secureFetch(
               `${API_URL}/quotation/list?${query.toString()}`
             );
 
@@ -24792,9 +24927,9 @@ if (
                     "Quotation",
 
                   /*
-                   * Items are intentionally excluded
-                   * from /api/quotation/list.
-                   */
+                  * Items are intentionally excluded
+                  * from /api/quotation/list.
+                  */
                   items: [],
 
                   raw:
@@ -24811,10 +24946,10 @@ if (
           );
 
           /*
-           * Keep old shared data clean.
-           * Quotations now live only in
-           * quotationListData.
-           */
+          * Keep old shared data clean.
+          * Quotations now live only in
+          * quotationListData.
+          */
           setSalesListData(
             (previous) =>
               previous.filter(
@@ -25576,48 +25711,48 @@ if (
     setPurchaseActiveRow(purchaseItems.length);
   }, [purchaseItems.length]);
 
-const updatePurchaseItem = (
-  index,
-  field,
-  value
-) => {
-  const newItems = [...purchaseItems];
+  const updatePurchaseItem = (
+    index,
+    field,
+    value
+  ) => {
+    const newItems = [...purchaseItems];
 
-  newItems[index] = {
-    ...newItems[index],
-    [field]: value,
-  };
+    newItems[index] = {
+      ...newItems[index],
+      [field]: value,
+    };
 
-  /*
-   * Remember that Gross was manually changed.
-   */
-  if (field === "grossAmount") {
-    if (
-      runtimeGeneralSetup
-        .editGrossPurchase !== true
-    ) {
-      return;
+    /*
+    * Remember that Gross was manually changed.
+    */
+    if (field === "grossAmount") {
+      if (
+        runtimeGeneralSetup
+          .editGrossPurchase !== true
+      ) {
+        return;
+      }
+
+      newItems[index]
+        .grossAmountManuallyEdited = true;
     }
 
-    newItems[index]
-      .grossAmountManuallyEdited = true;
-  }
-
-  /*
-   * Changing Quantity, Rate, MRP or Unit resets
-   * Gross to automatic calculation.
-   */
-  if (
-    [
-      "quantity",
-      "purRate",
-      "mrp",
-      "unitId",
-    ].includes(field)
-  ) {
-    newItems[index]
-      .grossAmountManuallyEdited = false;
-  }
+    /*
+    * Changing Quantity, Rate, MRP or Unit resets
+    * Gross to automatic calculation.
+    */
+    if (
+      [
+        "quantity",
+        "purRate",
+        "mrp",
+        "unitId",
+      ].includes(field)
+    ) {
+      newItems[index]
+        .grossAmountManuallyEdited = false;
+    }
 
     const supplierAccount = otherAccounts.find(
       (acc) =>
@@ -25657,26 +25792,26 @@ const updatePurchaseItem = (
         taxOn === "MRP"
           ? mrp
           : effectivePurchaseRate;
-   const calculatedGrossAmount =
-  qty * baseRate;
+      const calculatedGrossAmount =
+        qty * baseRate;
 
-const canUseManualGross =
-  runtimeGeneralSetup
-    .editGrossPurchase === true &&
-  item.grossAmountManuallyEdited === true;
+      const canUseManualGross =
+        runtimeGeneralSetup
+          .editGrossPurchase === true &&
+        item.grossAmountManuallyEdited === true;
 
-const enteredGrossAmount =
-  Number(item.grossAmount);
+      const enteredGrossAmount =
+        Number(item.grossAmount);
 
-const grossAmt =
-  canUseManualGross &&
-  Number.isFinite(enteredGrossAmount) &&
-  enteredGrossAmount >= 0
-    ? enteredGrossAmount
-    : calculatedGrossAmount;
+      const grossAmt =
+        canUseManualGross &&
+          Number.isFinite(enteredGrossAmount) &&
+          enteredGrossAmount >= 0
+          ? enteredGrossAmount
+          : calculatedGrossAmount;
 
-item.grossAmount =
-  grossAmt.toFixed(2);
+      item.grossAmount =
+        grossAmt.toFixed(2);
 
       // Calculate discounts
       let disc1 = parseFloat(item.disc1) || 0;
@@ -25737,21 +25872,21 @@ item.grossAmount =
     };
 
     // Recalculate when any of these fields change
- if (
-  [
-    "quantity",
-    "purRate",
-    "mrp",
-    "grossAmount",
-    "tax",
-    "disc1",
-    "disc2",
-    "disc3",
-    "unitId",
-  ].includes(field)
-) {
-  recalculateItem(newItems[index]);
-}
+    if (
+      [
+        "quantity",
+        "purRate",
+        "mrp",
+        "grossAmount",
+        "tax",
+        "disc1",
+        "disc2",
+        "disc3",
+        "unitId",
+      ].includes(field)
+    ) {
+      recalculateItem(newItems[index]);
+    }
 
     setPurchaseItems(newItems);
     setPurchaseActiveRow(index);
@@ -25858,9 +25993,9 @@ item.grossAmount =
             ) || 0;
 
           /*
-           * Use MRP only when Supplier Master taxOn is MRP.
-           * Otherwise use Purchase Rate.
-           */
+          * Use MRP only when Supplier Master taxOn is MRP.
+          * Otherwise use Purchase Rate.
+          */
           /*
   * Some existing stock batches currently have
   * Purchase Rate = 0.
@@ -25879,23 +26014,23 @@ item.grossAmount =
               ? mrp
               : effectivePurchaseRate;
 
-      const calculatedGrossAmount =
-  qty * baseRate;
+          const calculatedGrossAmount =
+            qty * baseRate;
 
-const enteredGrossAmount =
-  Number(item.grossAmount);
+          const enteredGrossAmount =
+            Number(item.grossAmount);
 
-const useManualGross =
-  runtimeGeneralSetup
-    .editGrossPurchase === true &&
-  item.grossAmountManuallyEdited === true &&
-  Number.isFinite(enteredGrossAmount) &&
-  enteredGrossAmount >= 0;
+          const useManualGross =
+            runtimeGeneralSetup
+              .editGrossPurchase === true &&
+            item.grossAmountManuallyEdited === true &&
+            Number.isFinite(enteredGrossAmount) &&
+            enteredGrossAmount >= 0;
 
-const grossAmount =
-  useManualGross
-    ? enteredGrossAmount
-    : calculatedGrossAmount;
+          const grossAmount =
+            useManualGross
+              ? enteredGrossAmount
+              : calculatedGrossAmount;
 
           const disc1 =
             Number(item.disc1 || 0);
@@ -26036,8 +26171,8 @@ const grossAmount =
       setPurchaseItems(
         (currentItems) => {
           /*
-           * Avoid unnecessary repeated state updates.
-           */
+          * Avoid unnecessary repeated state updates.
+          */
           const hasDifference =
             JSON.stringify(currentItems) !==
             JSON.stringify(recalculatedItems);
@@ -26768,9 +26903,9 @@ const grossAmount =
     setPurchaseItems(updatedItems);
 
     /*
-     * This function now calculates Taxable,
-     * GST and Net itself.
-     */
+    * This function now calculates Taxable,
+    * GST and Net itself.
+    */
     calcPurchaseSummary(updatedItems);
 
     setShowBatchModal(false);
@@ -26796,9 +26931,9 @@ const grossAmount =
     }
 
     /*
-     * Select the first row only once,
-     * when the modal initially opens.
-     */
+    * Select the first row only once,
+    * when the modal initially opens.
+    */
     purchaseBatchSelectedIndexRef.current = 0;
     setPurchaseBatchSelectedIndex(0);
 
@@ -26821,9 +26956,9 @@ const grossAmount =
       }
 
       /*
-       * Prevent the Quantity number input
-       * from receiving Arrow Up/Arrow Down.
-       */
+      * Prevent the Quantity number input
+      * from receiving Arrow Up/Arrow Down.
+      */
       event.preventDefault();
       event.stopPropagation();
 
@@ -26907,9 +27042,9 @@ const grossAmount =
     };
 
     /*
-     * Capture phase receives the key before
-     * the Quantity input can change itself.
-     */
+    * Capture phase receives the key before
+    * the Quantity input can change itself.
+    */
     window.addEventListener(
       "keydown",
       handlePurchaseBatchKeyboard,
@@ -27104,8 +27239,14 @@ const grossAmount =
         amount: Number(purchaseFormData.netAmt || 0),
       };
 
-      const res = await fetch(`${API_URL}/purchase`, {
-        method: "POST",
+      const isEditMode = Boolean(editingPurchaseId);
+
+      const url = isEditMode
+        ? `${API_URL}/purchase/${editingPurchaseId}`
+        : `${API_URL}/purchase`;
+
+      const res = await secureFetch(url, {
+        method: isEditMode ? "PUT" : "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(purchaseData),
       });
@@ -27113,11 +27254,11 @@ const grossAmount =
       const result = await res.json();
 
       if (!res.ok || !result.success) {
-        alert(result.message || "Purchase save failed");
+        alert(result.message || (isEditMode ? "Purchase update failed" : "Purchase save failed"));
         return;
       }
 
-      alert(result.message || "Purchase saved successfully");
+      alert(result.message || (isEditMode ? "Purchase updated successfully" : "Purchase saved successfully"));
       /*
   * A new Purchase is sorted at the top,
   * so return to page 1 before reloading.
@@ -27142,6 +27283,7 @@ const grossAmount =
       });
 
       setPurchaseItems([]);
+       setEditingPurchaseId(null);
       setTimeout(() => addPurchaseItem(), 100);
 
       setPurchaseFormData((prev) => ({
@@ -27558,7 +27700,7 @@ const grossAmount =
           );
 
           const response =
-            await fetch(
+            await secureFetch(
               `${API_URL}/purchase/list?${query.toString()}`
             );
 
@@ -27709,9 +27851,9 @@ const grossAmount =
           );
 
           /*
-           * Keep old shared list-page state synchronized,
-           * but do not use it to slice backend rows.
-           */
+          * Keep old shared list-page state synchronized,
+          * but do not use it to slice backend rows.
+          */
           setListPage(
             (previous) => ({
               ...previous,
@@ -27931,7 +28073,7 @@ const grossAmount =
           );
 
           const response =
-            await fetch(
+            await secureFetch(
               `${API_URL}/credit-note/list?${query.toString()}`
             );
 
@@ -28175,8 +28317,8 @@ const grossAmount =
     );
 
   /* =========================================================
-   CREDIT NOTE SEARCH DEBOUNCE
-   ========================================================= */
+  CREDIT NOTE SEARCH DEBOUNCE
+  ========================================================= */
 
   useEffect(() => {
     const timer =
@@ -28210,8 +28352,8 @@ const grossAmount =
   ]);
 
   /* =========================================================
-     CREDIT NOTE PAGINATED LIST LOADING
-     ========================================================= */
+    CREDIT NOTE PAGINATED LIST LOADING
+    ========================================================= */
 
   useEffect(() => {
     const creditNoteListIsVisible =
@@ -28446,7 +28588,7 @@ const grossAmount =
           );
 
           const response =
-            await fetch(
+            await secureFetch(
               `${API_URL}/debit-note/list?${query.toString()}`
             );
 
@@ -28725,8 +28867,8 @@ const grossAmount =
       ]
     );
   /* =========================================================
-   DEBIT NOTE SEARCH DEBOUNCE
-   ========================================================= */
+  DEBIT NOTE SEARCH DEBOUNCE
+  ========================================================= */
 
   useEffect(() => {
     const timer =
@@ -28760,8 +28902,8 @@ const grossAmount =
   ]);
 
   /* =========================================================
-     DEBIT NOTE PAGINATED LIST LOADING
-     ========================================================= */
+    DEBIT NOTE PAGINATED LIST LOADING
+    ========================================================= */
 
   useEffect(() => {
     const debitNoteListIsVisible =
@@ -29860,9 +30002,9 @@ const grossAmount =
       );
 
       /*
-       * This must match the value used inside:
-       * <option value={...}>
-       */
+      * This must match the value used inside:
+      * <option value={...}>
+      */
       const resolvedPartyValue = matchedParty
         ? (
           matchedParty.accountCode ||
@@ -29962,9 +30104,9 @@ const grossAmount =
       }
 
       /*
-       * Ensure the saved party remains available even when
-       * the mapping API does not return it.
-       */
+      * Ensure the saved party remains available even when
+      * the mapping API does not return it.
+      */
       const savedPartyExists =
         loadedPartyMappings.some(
           (mapping) =>
@@ -30026,10 +30168,10 @@ const grossAmount =
             "",
 
           /*
-           * These are the original Sales Bill
-           * reference values, not the Credit Note
-           * voucher number.
-           */
+          * These are the original Sales Bill
+          * reference values, not the Credit Note
+          * voucher number.
+          */
           billSeries:
             creditNote.BillSeries ||
             creditNote.billSeries ||
@@ -30535,64 +30677,67 @@ const grossAmount =
 
       return;
     }
+    debitProductAnchorRef.current = element;
 
-    const rect =
-      element.getBoundingClientRect();
+    window.requestAnimationFrame(() => {
+      const rect =
+        element.getBoundingClientRect();
 
-    const availableWidth =
-      window.innerWidth -
-      rect.left -
-      20;
-
-    const dropdownWidth = Math.max(
-      420,
-      Math.min(
-        820,
-        availableWidth
-      )
-    );
-
-    const dropdownHeight = 340;
-
-    let top =
-      rect.bottom + 4;
-
-    if (
-      top + dropdownHeight >
-      window.innerHeight - 10
-    ) {
-      top = Math.max(
-        10,
-        rect.top -
-        dropdownHeight -
-        4
-      );
-    }
-
-    let left = Math.max(
-      10,
-      rect.left
-    );
-
-    if (
-      left + dropdownWidth >
-      window.innerWidth - 10
-    ) {
-      left = Math.max(
-        10,
+      const availableWidth =
         window.innerWidth -
-        dropdownWidth -
-        10
+        rect.left -
+        20;
+
+      const dropdownWidth = Math.max(
+        420,
+        Math.min(
+          820,
+          availableWidth
+        )
       );
-    }
 
-    setDebitProductDropdownPos({
-      top,
-      left,
-      width:
-        dropdownWidth,
+      const dropdownHeight = 340;
+
+      let top =
+        rect.bottom + 4;
+
+      if (
+        top + dropdownHeight >
+        window.innerHeight - 10
+      ) {
+        top = Math.max(
+          10,
+          rect.top -
+          dropdownHeight -
+          4
+        );
+      }
+
+      let left = Math.max(
+        10,
+        rect.left
+      );
+
+      if (
+        left + dropdownWidth >
+        window.innerWidth - 10
+      ) {
+        left = Math.max(
+          10,
+          window.innerWidth -
+          dropdownWidth -
+          10
+        );
+      }
+
+      setDebitProductDropdownPos({
+        top,
+        left,
+        width:
+          dropdownWidth,
+      });
+
     });
-
     setDebitNoteActiveRow(index);
 
     setCurrentDebitProductIndex(
@@ -30927,9 +31072,9 @@ const grossAmount =
                   ) || 0;
 
                 /*
-                 * Debit Note against Purchase Bill:
-                 * use Purchase Rate from the original bill.
-                 */
+                * Debit Note against Purchase Bill:
+                * use Purchase Rate from the original bill.
+                */
                 const rate =
                   Number(
                     sourceItem.purRate ??
@@ -31324,8 +31469,8 @@ const grossAmount =
       ]
     );
   /* =========================================================
-     PURCHASE SEARCH DEBOUNCE
-     ========================================================= */
+    PURCHASE SEARCH DEBOUNCE
+    ========================================================= */
 
   useEffect(() => {
     const timer =
@@ -31339,8 +31484,8 @@ const grossAmount =
         );
 
         /*
-         * A new search always begins from page 1.
-         */
+        * A new search always begins from page 1.
+        */
         setPurchaseCurrentPage(1);
 
         setListPage(
@@ -31361,8 +31506,8 @@ const grossAmount =
   ]);
 
   /* =========================================================
-     PURCHASE PAGINATED LIST LOADING
-     ========================================================= */
+    PURCHASE PAGINATED LIST LOADING
+    ========================================================= */
 
   useEffect(() => {
     const purchaseListIsVisible =
@@ -31428,8 +31573,8 @@ const grossAmount =
       };
 
       /*
-       * COMPANY CHANGE
-       */
+      * COMPANY CHANGE
+      */
 
       if (name === "company") {
 
@@ -31447,9 +31592,9 @@ const grossAmount =
           companyName,
 
           /*
-           * Clear old party because it may belong
-           * to another company.
-           */
+          * Clear old party because it may belong
+          * to another company.
+          */
           party: "",
           partyName: "",
           partyCode: "",
@@ -31464,9 +31609,9 @@ const grossAmount =
         );
 
         /*
-         * Reload referenced bill when a bill number
-         * has already been entered.
-         */
+        * Reload referenced bill when a bill number
+        * has already been entered.
+        */
         if (
           String(updatedForm.billNo || "").trim()
         ) {
@@ -31485,13 +31630,13 @@ const grossAmount =
       setCreditProductDropdownIndex(-1);
 
       /*
-       * Clear products belonging to the previous company.
-       */
+      * Clear products belonging to the previous company.
+      */
       setCreditNoteItems([]);
       calcCreditNoteSummary([]);
       /*
-       * Credit Note voucher number.
-       */
+      * Credit Note voucher number.
+      */
       if (name === "creditNoteSeries") {
         await getNextCreditNoteNo(
           cleanValue || "CN"
@@ -31499,8 +31644,8 @@ const grossAmount =
       }
 
       /*
-       * Original Sales Bill lookup.
-       */
+      * Original Sales Bill lookup.
+      */
       if (
         name === "billSeries" ||
         name === "billNo"
@@ -31612,10 +31757,10 @@ const grossAmount =
               };
 
               /*
-               * MAS_STOCK and MAS_DAMSTOCK are different
-               * batch sources. Therefore, changing TRN must
-               * clear the previously selected batch.
-               */
+              * MAS_STOCK and MAS_DAMSTOCK are different
+              * batch sources. Therefore, changing TRN must
+              * clear the previously selected batch.
+              */
               if (
                 field === "trn" &&
                 String(row.trn || "GDR")
@@ -31697,9 +31842,9 @@ const grossAmount =
     }
   };
   /* =========================================================
-     CREDIT NOTE ROW CALCULATION
-     Keep this above updateCreditNoteItem and
-     handleCreditProductSelect
+    CREDIT NOTE ROW CALCULATION
+    Keep this above updateCreditNoteItem and
+    handleCreditProductSelect
   ========================================================= */
 
   const creditNumber = (value) => {
@@ -31900,7 +32045,7 @@ const grossAmount =
         return;
       }
 
-      const response = await fetch(
+      const response = await secureFetch(
         `${API_URL}/debit-note/${encodeURIComponent(
           debitNoteId
         )}`,
@@ -32150,9 +32295,9 @@ const grossAmount =
     ).trim();
 
     /*
-     * Do not open the dropdown when the
-     * Product field is empty.
-     */
+    * Do not open the dropdown when the
+    * Product field is empty.
+    */
     if (!typedValue) {
       setShowCreditProductList(false);
       setCreditFilteredProductList([]);
@@ -32172,8 +32317,8 @@ const grossAmount =
       );
 
     /*
-     * Do not open an empty dropdown.
-     */
+    * Do not open an empty dropdown.
+    */
     if (
       !Array.isArray(dropdownRows) ||
       dropdownRows.length === 0
@@ -32188,7 +32333,7 @@ const grossAmount =
 
       return;
     }
-
+    creditProductAnchorRef.current = element;
     const rect =
       element.getBoundingClientRect();
 
@@ -32358,15 +32503,15 @@ const grossAmount =
     }
 
     /*
-     * Dropdown rows may contain:
-     * {
-     *   product,
-     *   batch,
-     *   isAlreadySelected
-     * }
-     *
-     * Or they may contain the product directly.
-     */
+    * Dropdown rows may contain:
+    * {
+    *   product,
+    *   batch,
+    *   isAlreadySelected
+    * }
+    *
+    * Or they may contain the product directly.
+    */
     const product =
       selectedEntry.product ||
       selectedEntry;
@@ -32434,8 +32579,8 @@ const grossAmount =
     }
 
     /*
-     * Product Master details.
-     */
+    * Product Master details.
+    */
     const productHsn = String(
       product.hsn ??
       product.HSN ??
@@ -32476,9 +32621,9 @@ const grossAmount =
     );
 
     /*
-     * These are only fallbacks.
-     * The selected stock batch will overwrite them.
-     */
+    * These are only fallbacks.
+    * The selected stock batch will overwrite them.
+    */
     const productMrp = creditNumber(
       dropdownBatch?.mrp ??
       dropdownBatch?.MRP ??
@@ -32525,8 +32670,8 @@ const grossAmount =
     );
 
     /*
-     * Fill the selected product immediately.
-     */
+    * Fill the selected product immediately.
+    */
     setCreditNoteItems(
       (previousItems) =>
         previousItems.map(
@@ -32561,9 +32706,9 @@ const grossAmount =
                 productGstPercent,
 
               /*
-               * Keep blank until a stock batch is
-               * selected when the dropdown row has no batch.
-               */
+              * Keep blank until a stock batch is
+              * selected when the dropdown row has no batch.
+              */
               batchNo: dropdownBatch
                 ? String(
                   dropdownBatch.batchNo ||
@@ -32601,8 +32746,8 @@ const grossAmount =
     );
 
     /*
-     * Close Product Search dropdown.
-     */
+    * Close Product Search dropdown.
+    */
     setShowCreditProductList(false);
     setCreditProductListFilter("");
     setCreditFilteredProductList([]);
@@ -32610,9 +32755,9 @@ const grossAmount =
     setCurrentCreditProductIndex(-1);
 
     /*
-     * Store the complete selected product for the
-     * Credit Note batch modal.
-     */
+    * Store the complete selected product for the
+    * Credit Note batch modal.
+    */
     setCreditBatchProduct({
       ...product,
 
@@ -32699,15 +32844,15 @@ const grossAmount =
 
       if (loadedBatches.length === 0) {
         /*
-         * No existing stock batch:
-         * directly open New Batch form.
-         */
+        * No existing stock batch:
+        * directly open New Batch form.
+        */
         openCreditNewBatchForm();
       } else {
         /*
-         * Existing batches are available:
-         * show the selection table.
-         */
+        * Existing batches are available:
+        * show the selection table.
+        */
         setCreditBatchView(
           "existing"
         );
@@ -32718,9 +32863,9 @@ const grossAmount =
       }, 0);
 
       /*
-       * Do not auto-select the first batch.
-       * Let the user select MRP/batch like Purchase.
-       */
+      * Do not auto-select the first batch.
+      * Let the user select MRP/batch like Purchase.
+      */
     } catch (error) {
       console.error(
         "Credit Note batch load error:",
@@ -32772,9 +32917,9 @@ const grossAmount =
         "",
 
       /*
-       * The returned quantity comes from the Credit
-       * Note product grid, not from this form.
-       */
+      * The returned quantity comes from the Credit
+      * Note product grid, not from this form.
+      */
       stockQty:
         "0",
 
@@ -32957,9 +33102,9 @@ const grossAmount =
       creditBatchProduct;
 
     /*
-     * Read Product Code from every possible
-     * Product Master property.
-     */
+    * Read Product Code from every possible
+    * Product Master property.
+    */
     const productCode = String(
       getProductCode(product) ||
       product.productCode ||
@@ -32974,9 +33119,9 @@ const grossAmount =
     ).trim();
 
     /*
-     * Read Product Name from every possible
-     * Product Master property.
-     */
+    * Read Product Name from every possible
+    * Product Master property.
+    */
     const productName = String(
       getProductName(product) ||
       product.productName ||
@@ -33017,9 +33162,9 @@ const grossAmount =
     );
 
     /*
-     * For GDR, rate comes from MAS_STOCK SRate.
-     * For DGR, rate comes from MAS_DAMSTOCK SRate.
-     */
+    * For GDR, rate comes from MAS_STOCK SRate.
+    * For DGR, rate comes from MAS_DAMSTOCK SRate.
+    */
     const salesRate = creditNumber(
       batch.salesRate ??
       batch.SalesRate ??
@@ -33144,9 +33289,9 @@ const grossAmount =
                 itemCode: productCode,
 
                 /*
-                 * This is the value displayed in
-                 * the Product Name column.
-                 */
+                * This is the value displayed in
+                * the Product Name column.
+                */
                 itemName:
                   productName ||
                   row.itemName ||
@@ -33224,9 +33369,9 @@ const grossAmount =
                 mrp,
 
                 /*
-                 * Credit Note rate comes from the
-                 * selected stock batch SRate.
-                 */
+                * Credit Note rate comes from the
+                * selected stock batch SRate.
+                */
                 rate: salesRate,
                 salesRate,
                 purchaseRate,
@@ -33290,9 +33435,9 @@ const grossAmount =
           );
 
         /*
-         * Recalculate the complete Credit Note
-         * after applying batch information.
-         */
+        * Recalculate the complete Credit Note
+        * after applying batch information.
+        */
         window.setTimeout(() => {
           calcCreditNoteSummary(
             updatedItems
@@ -33304,8 +33449,8 @@ const grossAmount =
     );
 
     /*
-     * Close and reset the batch modal.
-     */
+    * Close and reset the batch modal.
+    */
     setShowCreditBatchModal(false);
     setCreditBatchView("existing");
     setCreditBatchRows([]);
@@ -33314,9 +33459,9 @@ const grossAmount =
     setCreditBatchLoading(false);
 
     /*
-     * Move focus to Quantity after the
-     * batch has been selected.
-     */
+    * Move focus to Quantity after the
+    * batch has been selected.
+    */
     window.setTimeout(() => {
       const qtyInput =
         document.querySelector(
@@ -33857,10 +34002,10 @@ const grossAmount =
         );
 
         /*
-         * Do not force the currently selected company into
-         * the bill lookup. The referenced bill itself will
-         * supply the correct company.
-         */
+        * Do not force the currently selected company into
+        * the bill lookup. The referenced bill itself will
+        * supply the correct company.
+        */
         const params = new URLSearchParams({
           distributorId: String(distributorId),
           firmId: String(firmId),
@@ -34011,15 +34156,15 @@ const grossAmount =
                 : [];
 
         /*
-         * Convert Sales Invoice products to Credit Note rows.
-         * Batch is stored internally, but there is no Batch
-         * column in the Credit Note grid.
-         */
+        * Convert Sales Invoice products to Credit Note rows.
+        * Batch is stored internally, but there is no Batch
+        * column in the Credit Note grid.
+        */
         const loadedCreditItems =
           sourceItems.map((sourceItem, index) => {
             /*
-       * Read Product Code from all possible old and new
-       * Sales Bill item field names.
+      * Read Product Code from all possible old and new
+      * Sales Bill item field names.
         */
             const rawProductCode = String(
               sourceItem.productCode ??
@@ -34037,9 +34182,9 @@ const grossAmount =
             ).trim();
 
             /*
-             * productId can sometimes contain the Product Master MongoDB
-             * _id instead of the actual product code.
-             */
+            * productId can sometimes contain the Product Master MongoDB
+            * _id instead of the actual product code.
+            */
             const rawProductId = String(
               sourceItem.productId?._id ??
               sourceItem.productId ??
@@ -34056,11 +34201,11 @@ const grossAmount =
                 .toLowerCase();
 
             /*
-             * Find the matching Product Master using either:
-             * 1. Product Code
-             * 2. Product Master _id/id
-             * 3. Old product-code field names
-             */
+            * Find the matching Product Master using either:
+            * 1. Product Code
+            * 2. Product Master _id/id
+            * 3. Old product-code field names
+            */
             const matchedProduct = products.find((product) => {
               const masterIds = [
                 product._id,
@@ -34104,9 +34249,9 @@ const grossAmount =
             });
 
             /*
-             * Use the real Product Code from Product Master when the
-             * bill contains only productId.
-             */
+            * Use the real Product Code from Product Master when the
+            * bill contains only productId.
+            */
             const productCode = String(
               rawProductCode ||
               matchedProduct?.productCode ||
@@ -34125,9 +34270,9 @@ const grossAmount =
             ).trim();
 
             /*
-             * First use the name saved in the bill.
-             * If it is missing, obtain it from Product Master.
-             */
+            * First use the name saved in the bill.
+            * If it is missing, obtain it from Product Master.
+            */
             const productName = String(
               sourceItem.productName ??
               sourceItem.ProductName ??
@@ -34385,8 +34530,8 @@ const grossAmount =
         }));
 
         /*
-         * This is the missing part in your old function.
-         */
+        * This is the missing part in your old function.
+        */
         setCreditNoteItems(
           loadedCreditItems
         );
@@ -34412,8 +34557,8 @@ const grossAmount =
         }));
 
         /*
-         * Refresh party mapping for the bill company.
-         */
+        * Refresh party mapping for the bill company.
+        */
         if (companyCode) {
           loadCreditNotePartiesByCompany(
             companyCode
@@ -35039,7 +35184,7 @@ const grossAmount =
           : `${API_URL}/credit-note`;
 
       const response =
-        await fetch(
+        await secureFetch(
           requestUrl,
           {
             method:
@@ -35110,9 +35255,9 @@ const grossAmount =
       );
 
       /*
-       * When the Credit Note was opened from
-       * an unsaved Sales Invoice, return there.
-       */
+      * When the Credit Note was opened from
+      * an unsaved Sales Invoice, return there.
+      */
       if (
         creditNoteReturnToBilling
       ) {
@@ -35134,9 +35279,9 @@ const grossAmount =
       }
 
       /*
-       * Normal menu-based Credit Note:
-       * clear form and open list.
-       */
+      * Normal menu-based Credit Note:
+      * clear form and open list.
+      */
       setCreditNoteItems([]);
       setCreditNoteActiveRow(-1);
       setCurrentCreditProductIndex(-1);
@@ -35190,9 +35335,9 @@ const grossAmount =
       );
 
       /*
-       * Do not call closeForm() here.
-       * It can hide the Credit Note list.
-       */
+      * Do not call closeForm() here.
+      * It can hide the Credit Note list.
+      */
     } catch (error) {
       console.error(
         "Credit Note save error:",
@@ -35253,7 +35398,7 @@ const grossAmount =
         return;
       }
 
-      const response = await fetch(
+      const response = await secureFetch(
         `${API_URL}/credit-note/${encodeURIComponent(
           creditNoteId
         )}`,
@@ -35520,9 +35665,9 @@ const grossAmount =
     }
 
     /*
- * Recalculate whenever these fields change
- * from Batch Selection or Manual Entry.
- */
+* Recalculate whenever these fields change
+* from Batch Selection or Manual Entry.
+*/
     if (
       [
         "mrp",
@@ -35804,11 +35949,11 @@ const grossAmount =
       debitNoteItems[index] || {};
 
     /*
-     * Debit Note default transaction:
-     *
-     * DGR = Damaged Goods Return
-     * GDR = Good Goods Return
-     */
+    * Debit Note default transaction:
+    *
+    * DGR = Damaged Goods Return
+    * GDR = Good Goods Return
+    */
     const transactionType = String(
       selectedRow.trn || "DGR"
     )
@@ -35816,8 +35961,8 @@ const grossAmount =
       .toUpperCase();
 
     /*
-     * Read selected Debit Note godown.
-     */
+    * Read selected Debit Note godown.
+    */
     const selectedGodownValue =
       debitNoteFormData.godownCode ||
       debitNoteFormData.godown ||
@@ -35902,10 +36047,10 @@ const grossAmount =
     ) || 0;
 
     /*
-     * Fill only Product Master information first.
-     * Batch, MRP, Rate and Stock will come from
-     * MAS_STOCK or MAS_DAMSTOCK.
-     */
+    * Fill only Product Master information first.
+    * Batch, MRP, Rate and Stock will come from
+    * MAS_STOCK or MAS_DAMSTOCK.
+    */
     setDebitNoteItems((previousItems) =>
       previousItems.map((row, rowIndex) => {
         if (rowIndex !== index) {
@@ -35942,8 +36087,8 @@ const grossAmount =
     );
 
     /*
-     * Close Product Master dropdown.
-     */
+    * Close Product Master dropdown.
+    */
     setShowDebitProductList(false);
     setDebitProductListFilter("");
     setDebitFilteredProductList([]);
@@ -35951,8 +36096,8 @@ const grossAmount =
     setCurrentDebitProductIndex(-1);
 
     /*
-     * Prepare batch modal.
-     */
+    * Prepare batch modal.
+    */
     setDebitBatchProduct({
       ...product,
       productCode,
@@ -35999,10 +36144,10 @@ const grossAmount =
         });
 
       /*
-       * This endpoint already reads:
-       * GDR -> MAS_STOCK
-       * DGR -> MAS_DAMSTOCK
-       */
+      * This endpoint already reads:
+      * GDR -> MAS_STOCK
+      * DGR -> MAS_DAMSTOCK
+      */
       const response = await fetch(
         `${API_URL}/stock/credit-note-batches?${query.toString()}`
       );
@@ -36143,14 +36288,14 @@ const grossAmount =
     ) || 0;
 
     /*
-     * For Debit Note manual entry:
-     *
-     * GDR uses MAS_STOCK.
-     * DGR uses MAS_DAMSTOCK.
-     *
-     * Rate remains SRate, matching the
-     * Credit Note batch behavior you requested.
-     */
+    * For Debit Note manual entry:
+    *
+    * GDR uses MAS_STOCK.
+    * DGR uses MAS_DAMSTOCK.
+    *
+    * Rate remains SRate, matching the
+    * Credit Note batch behavior you requested.
+    */
     const debitRate =
       salesRate;
 
@@ -36485,9 +36630,9 @@ const grossAmount =
     };
   useEffect(() => {
     /*
-     * Generate a number whenever a new Debit Note
-     * form is open without a voucher number.
-     */
+    * Generate a number whenever a new Debit Note
+    * form is open without a voucher number.
+    */
     if (
       openFormFor !== "Debit Note" ||
       editingDebitNoteId
@@ -36969,7 +37114,7 @@ const grossAmount =
           : `${API_URL}/debit-note`;
 
       const response =
-        await fetch(
+        await secureFetch(
           url,
           {
             method:
@@ -37016,9 +37161,9 @@ const grossAmount =
       setEditingDebitNoteId(null);
 
       /*
-       * Completely clear the selected product,
-       * batch modal and product dropdown states.
-       */
+      * Completely clear the selected product,
+      * batch modal and product dropdown states.
+      */
       setDebitNoteItems([]);
       setDebitNoteActiveRow(-1);
       setCurrentDebitProductIndex(-1);
@@ -37035,8 +37180,8 @@ const grossAmount =
       setDebitBatchSelectedIndex(0);
 
       /*
-       * Reset calculated summary.
-       */
+      * Reset calculated summary.
+      */
       setDebitNoteSummary({
         grossAmt: 0,
         gstAmt: 0,
@@ -37051,8 +37196,8 @@ const grossAmount =
       });
 
       /*
-       * Clear form data, but remember the selected series.
-       */
+      * Clear form data, but remember the selected series.
+      */
       setDebitNoteFormData(
         (previous) => ({
           ...previous,
@@ -37116,8 +37261,8 @@ const grossAmount =
       );
 
       /*
-       * Reload database list after save.
-       */
+      * Reload database list after save.
+      */
       setDebitNoteCurrentPage(
         1
       );
@@ -37143,8 +37288,8 @@ const grossAmount =
       });
 
       /*
-       * Close form and show Debit Note list.
-       */
+      * Close form and show Debit Note list.
+      */
       setOpenFormFor(null);
 
       setShowDebitNoteList(true);
@@ -38455,7 +38600,7 @@ const grossAmount =
         ? `${API_URL}/create-load/${editingCreateLoadId}`
         : `${API_URL}/create-load`;
 
-      const response = await fetch(endpoint, {
+      const response = await secureFetch(endpoint, {
         method: isEditing ? "PUT" : "POST",
 
         headers: {
@@ -38679,7 +38824,7 @@ const grossAmount =
           );
 
           const response =
-            await fetch(
+            await secureFetch(
               `${API_URL}/create-load/list?${query.toString()}`
             );
 
@@ -38903,9 +39048,9 @@ const grossAmount =
                   totalBills,
 
                   /*
-                   * Bills are excluded by
-                   * /api/create-load/list.
-                   */
+                  * Bills are excluded by
+                  * /api/create-load/list.
+                  */
                   items: [],
 
                   status:
@@ -39209,9 +39354,9 @@ const grossAmount =
 
   const getFilteredAreas = () => {
     /*
-     * Search and pagination are now handled
-     * by the backend Area Master list API.
-     */
+    * Search and pagination are now handled
+    * by the backend Area Master list API.
+    */
     return Array.isArray(areaMasterRows)
       ? areaMasterRows
       : [];
@@ -39512,8 +39657,8 @@ const grossAmount =
     const items = [...printLoadItems];
 
     /*
-     * PARTY-WISE REPORT
-     */
+    * PARTY-WISE REPORT
+    */
     if (
       printLoadFormData.reportLevel ===
       "party_wise"
@@ -39586,8 +39731,8 @@ const grossAmount =
     }
 
     /*
-     * PRODUCT-WISE REPORT
-     */
+    * PRODUCT-WISE REPORT
+    */
     const productMap = {};
 
     items.forEach((bill) => {
@@ -39627,18 +39772,18 @@ const grossAmount =
         );
 
         /*
-         * Keep the same product with different MRP
-         * as separate report rows.
-         */
+        * Keep the same product with different MRP
+        * as separate report rows.
+        */
         const key = `${productCode || productName
           }_${mrp}`;
 
         /*
-         * Product Master packing values.
-         *
-         * CASE/BOX should display BoxPack.
-         * INBOX should display InBoxPack.
-         */
+        * Product Master packing values.
+        *
+        * CASE/BOX should display BoxPack.
+        * INBOX should display InBoxPack.
+        */
         const boxPack = Number(
           product.boxPack ??
           product.BoxPack ??
@@ -39668,8 +39813,8 @@ const grossAmount =
         );
 
         /*
-         * Actual billed quantity.
-         */
+        * Actual billed quantity.
+        */
         const unitQty = Number(
           product.unitQty ??
           product.UnitQty ??
@@ -39685,8 +39830,8 @@ const grossAmount =
         );
 
         /*
-         * Free quantity entered in the bill.
-         */
+        * Free quantity entered in the bill.
+        */
         const freeQty = Number(
           product.freeQty ??
           product.FreeQty ??
@@ -39702,9 +39847,9 @@ const grossAmount =
         );
 
         /*
-         * Use API total quantity when available.
-         * Otherwise calculate Sale Qty + Free Qty.
-         */
+        * Use API total quantity when available.
+        * Otherwise calculate Sale Qty + Free Qty.
+        */
         const suppliedTotalQty =
           product.totalQty ??
           product.TotalQty ??
@@ -39746,9 +39891,9 @@ const grossAmount =
               "",
 
             /*
-             * Packing values must not be added
-             * for every bill.
-             */
+            * Packing values must not be added
+            * for every bill.
+            */
             cases: boxPack,
             outer: inBoxPack,
 
@@ -39763,9 +39908,9 @@ const grossAmount =
           productMap[key];
 
         /*
-         * Retain packing values if the first bill
-         * did not contain BoxPack or InBoxPack.
-         */
+        * Retain packing values if the first bill
+        * did not contain BoxPack or InBoxPack.
+        */
         if (
           !Number(currentProduct.cases) &&
           boxPack
@@ -39782,8 +39927,8 @@ const grossAmount =
         }
 
         /*
-         * Add quantities from all bills.
-         */
+        * Add quantities from all bills.
+        */
         currentProduct.unitQty +=
           unitQty;
 
@@ -40200,42 +40345,42 @@ const grossAmount =
     const printWindow = window.open("", "_blank", "width=1100,height=700");
 
     printWindow.document.write(`
-      <html>
-        <head>
-          <title>Print Load</title>
-          <style>
-            body {
-              margin: 0;
-              padding: 20px;
-              background: #e2e8f0;
-              font-family: 'Courier New', Arial, sans-serif;
-            }
-            table {
-              width: 100%;
-              border-collapse: collapse;
-            }
-            th, td {
-              border: 1px solid #d1d5db;
-              padding: 5px;
-            }
-            th {
-              background: #1e3a8a !important;
-              color: white !important;
-            }
-            @media print {
+        <html>
+          <head>
+            <title>Print Load</title>
+            <style>
               body {
-                background: white;
-                padding: 0;
+                margin: 0;
+                padding: 20px;
+                background: #e2e8f0;
+                font-family: 'Courier New', Arial, sans-serif;
               }
-              .no-print {
-                display: none !important;
+              table {
+                width: 100%;
+                border-collapse: collapse;
               }
-            }
-          </style>
-        </head>
-        <body>${printContent.innerHTML}</body>
-      </html>
-    `);
+              th, td {
+                border: 1px solid #d1d5db;
+                padding: 5px;
+              }
+              th {
+                background: #1e3a8a !important;
+                color: white !important;
+              }
+              @media print {
+                body {
+                  background: white;
+                  padding: 0;
+                }
+                .no-print {
+                  display: none !important;
+                }
+              }
+            </style>
+          </head>
+          <body>${printContent.innerHTML}</body>
+        </html>
+      `);
 
     printWindow.document.close();
     printWindow.focus();
@@ -40246,13 +40391,13 @@ const grossAmount =
   };
   const handleExportToExcel = () => {
     /*
-     * Print Load API already returns the final rows
-     * displayed in the preview.
-     *
-     * Do not call generatePrintLayout() here because
-     * product-wise API rows do not contain nested
-     * products/items arrays.
-     */
+    * Print Load API already returns the final rows
+    * displayed in the preview.
+    *
+    * Do not call generatePrintLayout() here because
+    * product-wise API rows do not contain nested
+    * products/items arrays.
+    */
     const reportRows = Array.isArray(printLoadItems)
       ? [...printLoadItems]
       : [];
@@ -40298,8 +40443,8 @@ const grossAmount =
     );
 
     /*
-     * Calculate Excel bottom totals.
-     */
+    * Calculate Excel bottom totals.
+    */
     const totalUnitQty = reportRows.reduce(
       (total, row) =>
         total +
@@ -40355,9 +40500,9 @@ const grossAmount =
     );
 
     /*
-     * Build the bottom total row according to
-     * the currently selected report columns.
-     */
+    * Build the bottom total row according to
+    * the currently selected report columns.
+    */
     const totalExcelRow = columns.map(
       (column, columnIndex) => {
         if (column.key === "unitQty") {
@@ -40380,9 +40525,9 @@ const grossAmount =
         }
 
         /*
-         * Put TOTAL immediately before the first
-         * quantity/amount column.
-         */
+        * Put TOTAL immediately before the first
+        * quantity/amount column.
+        */
         const firstTotalColumnIndex =
           columns.findIndex((item) =>
             [
@@ -40409,16 +40554,16 @@ const grossAmount =
     );
 
     /*
-     * Excel rows:
-     * 1 = Firm
-     * 2 = Report heading
-     * 3 = Load details
-     * 4 = Summary
-     * 5 = Blank
-     * 6 = Table headings
-     * 7 onward = Data
-     * Last row = Total
-     */
+    * Excel rows:
+    * 1 = Firm
+    * 2 = Report heading
+    * 3 = Load details
+    * 4 = Summary
+    * 5 = Blank
+    * 6 = Table headings
+    * 7 onward = Data
+    * Last row = Total
+    */
     const worksheetData = [
       [firmName],
       [reportTitle],
@@ -40464,8 +40609,8 @@ const grossAmount =
       ),
 
       /*
-       * Bottom total row.
-       */
+      * Bottom total row.
+      */
       totalExcelRow,
     ];
 
@@ -40481,8 +40626,8 @@ const grossAmount =
     const firstDataRowIndex = 6;
 
     /*
-     * Zero-based Excel row index of total row.
-     */
+    * Zero-based Excel row index of total row.
+    */
     const totalRowIndex =
       firstDataRowIndex +
       reportRows.length;
@@ -40524,8 +40669,8 @@ const grossAmount =
     };
 
     /*
-     * Firm heading.
-     */
+    * Firm heading.
+    */
     const firmCell = worksheet["A1"];
 
     if (firmCell) {
@@ -40548,8 +40693,8 @@ const grossAmount =
     }
 
     /*
-     * Report title.
-     */
+    * Report title.
+    */
     const reportCell = worksheet["A2"];
 
     if (reportCell) {
@@ -40572,8 +40717,8 @@ const grossAmount =
     }
 
     /*
-     * Load information and summary rows.
-     */
+    * Load information and summary rows.
+    */
     for (
       let rowNumber = 3;
       rowNumber <= 4;
@@ -40619,9 +40764,9 @@ const grossAmount =
     }
 
     /*
-     * Excel table heading:
-     * Light blue background as requested.
-     */
+    * Excel table heading:
+    * Light blue background as requested.
+    */
     columns.forEach(
       (column, columnIndex) => {
         const cellAddress =
@@ -40645,8 +40790,8 @@ const grossAmount =
             patternType: "solid",
 
             /*
-             * Light blue.
-             */
+            * Light blue.
+            */
             fgColor: { rgb: "BDD7EE" },
           },
           alignment: {
@@ -40660,8 +40805,8 @@ const grossAmount =
     );
 
     /*
-     * Data rows.
-     */
+    * Data rows.
+    */
     reportRows.forEach(
       (row, rowIndex) => {
         columns.forEach(
@@ -40728,9 +40873,9 @@ const grossAmount =
     );
 
     /*
-     * Bottom total:
-     * Light brown background as requested.
-     */
+    * Bottom total:
+    * Light brown background as requested.
+    */
     columns.forEach(
       (column, columnIndex) => {
         const cellAddress =
@@ -40759,8 +40904,8 @@ const grossAmount =
             patternType: "solid",
 
             /*
-             * Light brown/tan.
-             */
+            * Light brown/tan.
+            */
             fgColor: { rgb: "E6D5B8" },
           },
           alignment: {
@@ -40827,9 +40972,9 @@ const grossAmount =
     ];
 
     /*
-     * Include table data and total row
-     * in the automatic filter range.
-     */
+    * Include table data and total row
+    * in the automatic filter range.
+    */
     worksheet["!autofilter"] = {
       ref: XLSX.utils.encode_range({
         s: {
@@ -40844,8 +40989,8 @@ const grossAmount =
     };
 
     /*
-     * Freeze column heading.
-     */
+    * Freeze column heading.
+    */
     worksheet["!freeze"] = {
       xSplit: 0,
       ySplit: 6,
@@ -40881,9 +41026,10 @@ const grossAmount =
   };
 
   const handleSubMenuClick = async (item) => {
+    await refreshPermissions();
     /*
-     * Save the current entry before changing modules.
-     */
+    * Save the current entry before changing modules.
+    */
     /*
   * Save only the form that is actually visible.
   */
@@ -40900,9 +41046,9 @@ const grossAmount =
     setActiveSubMenu(item);
 
     /*
-     * Billing and Quotation handle openFormFor
-     * inside their own blocks.
-     */
+    * Billing and Quotation handle openFormFor
+    * inside their own blocks.
+    */
     if (
       item !== "Billing" &&
       item !== "Quotation"
@@ -40928,22 +41074,22 @@ const grossAmount =
       return;
     }
     if (item === "General Setup") {
-  setActiveMenu("tools");
-  setActiveSubMenu("General Setup");
-  setOpenFormFor("General Setup");
-  setShowDashboard(false);
+      setActiveMenu("tools");
+      setActiveSubMenu("General Setup");
+      setOpenFormFor("General Setup");
+      setShowDashboard(false);
 
-  setShowSalesList(false);
-  setShowPurchaseList(false);
-  setShowCreditNoteList(false);
-  setShowDebitNoteList(false);
-  setShowCreateLoadList(false);
-  setShowSettleLoadList(false);
-  setShowSettleLoad(false);
-  setShowPrintPreview(false);
+      setShowSalesList(false);
+      setShowPurchaseList(false);
+      setShowCreditNoteList(false);
+      setShowDebitNoteList(false);
+      setShowCreateLoadList(false);
+      setShowSettleLoadList(false);
+      setShowSettleLoad(false);
+      setShowPrintPreview(false);
 
-  return;
-}
+      return;
+    }
 
     if (item === "Security Setup") {
       setActiveMenu("tools");
@@ -41094,9 +41240,9 @@ const grossAmount =
       setShowPrintPreview(false);
 
       /*
-       * Begin Purchase List from page 1 when
-       * the user opens it from the menu.
-       */
+      * Begin Purchase List from page 1 when
+      * the user opens it from the menu.
+      */
       setPurchaseCurrentPage(1);
 
       setListPage(
@@ -41312,12 +41458,12 @@ const grossAmount =
     e?.stopPropagation();
 
     /*
-     * Billing and Quotation must use their own
-     * independent new-entry functions.
-     *
-     * Return immediately so the common reset code
-     * below cannot overwrite their drafts.
-     */
+    * Billing and Quotation must use their own
+    * independent new-entry functions.
+    *
+    * Return immediately so the common reset code
+    * below cannot overwrite their drafts.
+    */
     if (item === "Billing") {
       openNewSalesInvoice(e);
       return;
@@ -42142,7 +42288,7 @@ const grossAmount =
         ? "PUT"
         : "POST";
 
-      const res = await fetch(url, {
+      const res = await secureFetch(url, {
         method,
         headers: {
           "Content-Type": "application/json",
@@ -42503,7 +42649,7 @@ const grossAmount =
         return;
       }
 
-      const res = await fetch(
+      const res = await secureFetch(
         `${API_URL}/gst?distributorId=${distributorId}&firmId=${firmId}`
       );
 
@@ -42587,7 +42733,7 @@ const grossAmount =
           }
 
           const response =
-            await fetch(
+            await secureFetch(
               `${API_URL}/gst/list?${params.toString()}`
             );
 
@@ -42796,7 +42942,7 @@ const grossAmount =
         : `${API_URL}/gst`;
       const method = editGstId ? "PUT" : "POST";
 
-      const res = await fetch(url, {
+      const res = await secureFetch(url, {
         method,
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
@@ -42809,9 +42955,9 @@ const grossAmount =
       }
 
       /*
-       * Refresh the complete GST list used
-       * by Product, Sales and Purchase forms.
-       */
+      * Refresh the complete GST list used
+      * by Product, Sales and Purchase forms.
+      */
       await loadGst();
 
       const refreshPage =
@@ -42886,7 +43032,7 @@ const grossAmount =
         return;
       }
 
-      const res = await fetch(
+      const res = await secureFetch(
         `${API_URL}/salesmen?distributorId=${distributorId}&firmId=${firmId}`
       );
 
@@ -42970,7 +43116,7 @@ const grossAmount =
           );
         }
 
-        const response = await fetch(
+        const response = await secureFetch(
           `${API_URL}/salesmen/list?${params.toString()}`
         );
 
@@ -43205,7 +43351,7 @@ const grossAmount =
         ? "PUT"
         : "POST";
 
-      const response = await fetch(
+      const response = await secureFetch(
         url,
         {
           method,
@@ -43285,14 +43431,14 @@ const grossAmount =
           : 1;
 
       /*
-       * Refresh complete salesman list used
-       * by Billing, Reports and mappings.
-       */
+      * Refresh complete salesman list used
+      * by Billing, Reports and mappings.
+      */
       await loadSalesmen();
 
       /*
-       * Refresh Salesman Master paginated grid.
-       */
+      * Refresh Salesman Master paginated grid.
+      */
       setSalesmanCurrentPage(
         refreshPage
       );
@@ -43391,7 +43537,7 @@ const grossAmount =
         return;
       }
 
-      const res = await fetch(
+      const res = await secureFetch(
         `${API_URL}/areas?distributorId=${distributorId}&firmId=${firmId}`
       );
 
@@ -43473,7 +43619,7 @@ const grossAmount =
         ? "PUT"
         : "POST";
 
-      const response = await fetch(
+      const response = await secureFetch(
         url,
         {
           method,
@@ -43507,17 +43653,17 @@ const grossAmount =
       }
 
       /*
-       * Refresh the complete area list used
-       * by mappings, dropdowns and other forms.
-       */
+      * Refresh the complete area list used
+      * by mappings, dropdowns and other forms.
+      */
       await loadAreas();
 
       /*
-       * After adding a new area, return to page 1
-       * because backend sorting decides its position.
-       *
-       * While editing, remain on the same page.
-       */
+      * After adding a new area, return to page 1
+      * because backend sorting decides its position.
+      *
+      * While editing, remain on the same page.
+      */
       const refreshPage =
         wasEditing
           ? areaCurrentPage
@@ -43625,6 +43771,18 @@ const grossAmount =
     setCompanyForm({ ...companyForm, [name]: regexInputValue(name, value) });
   };
   const saveCompany = async (e) => {
+    if (
+      !(editCompanyId
+        ? companyPermission.edit
+        : companyPermission.add)
+    ) {
+      alert(
+        editCompanyId
+          ? "You don't have Edit permission."
+          : "You don't have Add permission."
+      );
+      return;
+    }
     e.preventDefault();
 
     if (!companyForm.code || !companyForm.name) {
@@ -43647,7 +43805,7 @@ const grossAmount =
 
       const method = editCompanyId ? "PUT" : "POST";
 
-      const res = await fetch(url, {
+      const res = await secureFetch(url, {
         method,
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -43669,13 +43827,13 @@ const grossAmount =
         : 1;
 
       /*
-       * Refresh full company dropdown data.
-       */
+      * Refresh full company dropdown data.
+      */
       await loadCompanies();
 
       /*
-       * Refresh Company Master grid.
-       */
+      * Refresh Company Master grid.
+      */
       setCompanyCurrentPage(refreshPage);
 
       await loadCompanyMaster({
@@ -43728,13 +43886,17 @@ const grossAmount =
   };
 
   const deleteCompany = async (company) => {
+    if (!companyPermission.delete) {
+      alert("You don't have Delete permission.");
+      return;
+    }
     const id = company.id || company._id;
     if (!id) return alert("Company ID not found");
 
     if (!window.confirm(`Delete company "${company.name || company.companyName}"?`)) return;
 
     try {
-      const res = await fetch(`${API_URL}/companies/${id}`, {
+      const res = await secureFetch(`${API_URL}/companies/${id}`, {
         method: "DELETE",
       });
 
@@ -43751,13 +43913,13 @@ const grossAmount =
           : companyCurrentPage;
 
       /*
-       * Refresh full dropdown data.
-       */
+      * Refresh full dropdown data.
+      */
       await loadCompanies();
 
       /*
-       * Refresh Company Master grid.
-       */
+      * Refresh Company Master grid.
+      */
       setCompanyCurrentPage(pageAfterDelete);
 
       await loadCompanyMaster({
@@ -44086,7 +44248,7 @@ const grossAmount =
     });
 
     setAccountActiveTab("gst");
-    setOpenFormFor("Account");
+
 
     setTimeout(() => {
       loadAreasForAccount();
@@ -44142,7 +44304,7 @@ const grossAmount =
   const deleteGroup = async (id) => {
     if (!window.confirm('Are you sure you want to delete this group?')) return;
     try {
-      const res = await fetch(`${API_URL}/groups/${id}`, { method: 'DELETE' });
+      const res = await secureFetch(`${API_URL}/groups/${id}`, { method: 'DELETE' });
       const result = await res.json();
       if (!res.ok || !result.success) {
         return alert(result.message || "Group delete failed");
@@ -44154,13 +44316,13 @@ const grossAmount =
           : groupCurrentPage;
 
       /*
-       * Refresh complete group options.
-       */
+      * Refresh complete group options.
+      */
       await loadGroups();
 
       /*
-       * Refresh the correct Group Master page.
-       */
+      * Refresh the correct Group Master page.
+      */
       setGroupCurrentPage(pageAfterDelete);
 
       await loadGroupMaster({
@@ -44200,7 +44362,7 @@ const grossAmount =
     }
 
     try {
-      const response = await fetch(
+      const response = await secureFetch(
         `${API_URL}/categories/${id}`,
         {
           method: "DELETE",
@@ -44227,13 +44389,13 @@ const grossAmount =
           : categoryCurrentPage;
 
       /*
-       * Refresh full categories for dropdowns.
-       */
+      * Refresh full categories for dropdowns.
+      */
       await loadCategories();
 
       /*
-       * Refresh correct paginated page.
-       */
+      * Refresh correct paginated page.
+      */
       setCategoryCurrentPage(
         pageAfterDelete
       );
@@ -44279,7 +44441,7 @@ const grossAmount =
     if (!window.confirm(`Delete product "${productName}"?`)) return;
 
     try {
-      const res = await fetch(`${API_URL}/products/${id}`, {
+      const res = await secureFetch(`${API_URL}/products/${id}`, {
         method: "DELETE",
       });
 
@@ -44296,14 +44458,14 @@ const grossAmount =
           : productCurrentPage;
 
       /*
-       * Refresh global products for existing
-       * billing and transaction flows.
-       */
+      * Refresh global products for existing
+      * billing and transaction flows.
+      */
       await loadProducts();
 
       /*
-       * Refresh Product Master page.
-       */
+      * Refresh Product Master page.
+      */
       setProductCurrentPage(
         pageAfterDelete
       );
@@ -44329,6 +44491,10 @@ const grossAmount =
   const deleteAccount = async (
     accountOrId
   ) => {
+    if (!accountPermission.delete) {
+      alert("You don't have Delete permission.");
+      return;
+    }
     const id =
       typeof accountOrId === "object"
         ? accountOrId._id ||
@@ -44356,7 +44522,7 @@ const grossAmount =
     }
 
     try {
-      const response = await fetch(
+      const response = await secureFetch(
         `${API_URL}/accounts/${id}`,
         {
           method: "DELETE",
@@ -44377,9 +44543,9 @@ const grossAmount =
       }
 
       /*
-       * If the final row of a page is deleted,
-       * return to the previous available page.
-       */
+      * If the final row of a page is deleted,
+      * return to the previous available page.
+      */
       const pageAfterDelete =
         accountMasterRows.length === 1 &&
           accountCurrentPage > 1
@@ -44387,14 +44553,14 @@ const grossAmount =
           : accountCurrentPage;
 
       /*
-       * Refresh the complete account list used
-       * by billing and existing dropdowns.
-       */
+      * Refresh the complete account list used
+      * by billing and existing dropdowns.
+      */
       await loadAccounts();
 
       /*
-       * Refresh Account Master paginated list.
-       */
+      * Refresh Account Master paginated list.
+      */
       setAccountCurrentPage(
         pageAfterDelete
       );
@@ -44452,7 +44618,7 @@ const grossAmount =
 
       try {
         const response =
-          await fetch(
+          await secureFetch(
             `${API_URL}/other-accounts/${id}`,
             {
               method: "DELETE",
@@ -44481,14 +44647,14 @@ const grossAmount =
             : otherAccountCurrentPage;
 
         /*
-         * Refresh full list used by
-         * existing application modules.
-         */
+        * Refresh full list used by
+        * existing application modules.
+        */
         await loadOtherAccounts();
 
         /*
-         * Refresh paginated master list.
-         */
+        * Refresh paginated master list.
+        */
         setOtherAccountCurrentPage(
           pageAfterDelete
         );
@@ -44548,7 +44714,7 @@ const grossAmount =
 
     try {
       const response =
-        await fetch(
+        await secureFetch(
           `${API_URL}/gst/${id}`,
           {
             method: "DELETE",
@@ -44569,9 +44735,9 @@ const grossAmount =
       }
 
       /*
-       * If the last GST row on the page
-       * is deleted, move to previous page.
-       */
+      * If the last GST row on the page
+      * is deleted, move to previous page.
+      */
       const pageAfterDelete =
         gstMasterRows.length === 1 &&
           gstCurrentPage > 1
@@ -44579,14 +44745,14 @@ const grossAmount =
           : gstCurrentPage;
 
       /*
-       * Refresh full GST list used by
-       * other application forms.
-       */
+      * Refresh full GST list used by
+      * other application forms.
+      */
       await loadGst();
 
       /*
-       * Refresh GST Master paginated list.
-       */
+      * Refresh GST Master paginated list.
+      */
       setGstCurrentPage(
         pageAfterDelete
       );
@@ -44645,7 +44811,7 @@ const grossAmount =
     }
 
     try {
-      const response = await fetch(
+      const response = await secureFetch(
         `${API_URL}/salesmen/${id}`,
         {
           method: "DELETE",
@@ -44673,14 +44839,14 @@ const grossAmount =
           : salesmanCurrentPage;
 
       /*
-       * Refresh complete salesman list used
-       * by other modules.
-       */
+      * Refresh complete salesman list used
+      * by other modules.
+      */
       await loadSalesmen();
 
       /*
-       * Refresh Salesman Master paginated grid.
-       */
+      * Refresh Salesman Master paginated grid.
+      */
       setSalesmanCurrentPage(
         pageAfterDelete
       );
@@ -44743,7 +44909,7 @@ const grossAmount =
     }
 
     try {
-      const response = await fetch(
+      const response = await secureFetch(
         `${API_URL}/areas/${id}`,
         {
           method: "DELETE",
@@ -44764,9 +44930,9 @@ const grossAmount =
       }
 
       /*
-       * Refresh the complete area collection used
-       * in mappings and dropdowns.
-       */
+      * Refresh the complete area collection used
+      * in mappings and dropdowns.
+      */
       await loadAreas();
 
       const recordsAfterDelete =
@@ -44785,9 +44951,9 @@ const grossAmount =
         );
 
       /*
-       * When the last record of the last page is
-       * deleted, move to the previous valid page.
-       */
+      * When the last record of the last page is
+      * deleted, move to the previous valid page.
+      */
       const pageAfterDelete =
         Math.min(
           areaCurrentPage,
@@ -44914,7 +45080,7 @@ const grossAmount =
 
       const method = editProductId ? "PUT" : "POST";
 
-      const res = await fetch(url, {
+      const res = await secureFetch(url, {
         method,
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
@@ -45133,6 +45299,14 @@ const grossAmount =
     }));
   };
   const loadAccounts = async () => {
+    if (!accountPermission.view) {
+      setAccountMasterRows([]);
+      setAccountTotalRecords(0);
+      setAccountTotalPages(1);
+      setAccountStartRecord(0);
+      setAccountEndRecord(0);
+      return;
+    }
     try {
       const distributorId = localStorage.getItem("distributorId");
       const firmId = localStorage.getItem("firmId");
@@ -45142,7 +45316,7 @@ const grossAmount =
         return;
       }
 
-      const res = await fetch(
+      const res = await secureFetch(
         `${API_URL}/accounts?distributorId=${distributorId}&firmId=${firmId}`
       );
 
@@ -45164,11 +45338,16 @@ const grossAmount =
     }
   };
   const loadAccountMaster = useCallback(
+
     async ({
       page = 1,
       limit = 20,
       search = "",
     } = {}) => {
+      if (!accountPermission.view) {
+        setAccountMasterRows([]);
+        return;
+      }
       try {
         const distributorId =
           localStorage.getItem("distributorId");
@@ -45206,7 +45385,7 @@ const grossAmount =
         }
 
         const response =
-          await fetch(
+          await secureFetch(
             `${API_URL}/accounts/list?${query.toString()}`
           );
 
@@ -45334,6 +45513,19 @@ const grossAmount =
     loadAccountMaster,
   ]);
   const saveAccount = async (e) => {
+    if (
+      !(editAccountId
+        ? accountPermission.edit
+        : accountPermission.add)
+    ) {
+      alert(
+        editAccountId
+          ? "You don't have Edit permission."
+          : "You don't have Add permission."
+      );
+
+      return;
+    }
     e.preventDefault();
 
     // Validate form
@@ -45418,7 +45610,7 @@ const grossAmount =
         creditAmt: payload.creditAmt
       });
 
-      const res = await fetch(url, {
+      const res = await secureFetch(url, {
         method,
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
@@ -45737,7 +45929,7 @@ const grossAmount =
         return;
       }
 
-      const res = await fetch(
+      const res = await secureFetch(
         `${API_URL}/other-accounts?distributorId=${distributorId}&firmId=${firmId}`
       );
 
@@ -45825,7 +46017,7 @@ const grossAmount =
           }
 
           const response =
-            await fetch(
+            await secureFetch(
               `${API_URL}/other-accounts/list?${params.toString()}`
             );
 
@@ -46009,7 +46201,7 @@ const grossAmount =
 
       const method = editOtherAccountId ? "PUT" : "POST";
 
-      const res = await fetch(url, {
+      const res = await secureFetch(url, {
         method,
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -46032,9 +46224,9 @@ const grossAmount =
       }
 
       /*
-   * Keep full-list data refreshed for
-   * existing modules.
-   */
+  * Keep full-list data refreshed for
+  * existing modules.
+  */
       await loadOtherAccounts();
 
       const refreshPage =
@@ -46134,7 +46326,7 @@ const grossAmount =
         : `${API_URL}/groups`;
       const method = editGroupId ? "PUT" : "POST";
 
-      const res = await fetch(url, {
+      const res = await secureFetch(url, {
         method,
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -46158,13 +46350,13 @@ const grossAmount =
         : 1;
 
       /*
-       * Refresh full group options.
-       */
+      * Refresh full group options.
+      */
       await loadGroups();
 
       /*
-       * Refresh paginated Group Master grid.
-       */
+      * Refresh paginated Group Master grid.
+      */
       setGroupCurrentPage(refreshPage);
 
       await loadGroupMaster({
@@ -46231,7 +46423,7 @@ const grossAmount =
         ? "PUT"
         : "POST";
 
-      const response = await fetch(
+      const response = await secureFetch(
         url,
         {
           method,
@@ -46270,14 +46462,14 @@ const grossAmount =
           : 1;
 
       /*
-       * Refresh complete Category data for
-       * Product Master and dropdowns.
-       */
+      * Refresh complete Category data for
+      * Product Master and dropdowns.
+      */
       await loadCategories();
 
       /*
-       * Refresh Category Master paginated grid.
-       */
+      * Refresh Category Master paginated grid.
+      */
       setCategoryCurrentPage(
         refreshPage
       );
@@ -46633,6 +46825,106 @@ const grossAmount =
       alert("Server not connected. Area To Party mapping save failed.");
     }
   };
+  /* =========================================================
+  VIEW SETTLE LOAD RECORD
+  ========================================================= */
+  const viewSettleLoadRecord = (recordId) => {
+    if (!recordId) {
+      alert("Record ID not found.");
+      return;
+    }
+
+    // Find the record from the current list data
+    const record = settleLoadListData.find(
+      (item) => String(item._id || item.id) === String(recordId)
+    );
+
+    if (!record) {
+      alert("Settle Load record not found in the current list.");
+      return;
+    }
+
+    // Reuse the existing view modal logic
+    setViewData(record);
+    setViewType("Settle Load");
+    setShowViewModal(true);
+  };
+
+  /* =========================================================
+    DELETE SETTLE LOAD RECORD
+    ========================================================= */
+  const deleteSettleLoadRecord = async (recordId) => {
+    if (!recordId) {
+      alert("Record ID not found.");
+      return;
+    }
+
+    // Find the record to show the user what they are deleting
+    const record = settleLoadListData.find(
+      (item) => String(item._id || item.id) === String(recordId)
+    );
+    const displayName = record?.loadSeries && record?.loadNo
+      ? `${record.loadSeries}-${record.loadNo}`
+      : "this record";
+
+    // Confirm with the user
+    const confirmed = window.confirm(
+      `Are you sure you want to permanently delete Settle Load ${displayName}?\n\nThis action cannot be undone!`
+    );
+
+    if (!confirmed) {
+      return;
+    }
+
+    try {
+      const { distributorId, firmId } = getFirmSession();
+
+      if (!distributorId || !firmId) {
+        alert("Distributor/Firm not found. Please login again.");
+        return;
+      }
+
+      // Make the DELETE request to the backend
+      const res = await secureFetch(`${API_URL}/settle-load/${recordId}`, {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ distributorId, firmId }),
+      });
+
+      const result = await res.json();
+
+      if (!res.ok || !result.success) {
+        alert(result.message || "Settle Load deletion failed");
+        return;
+      }
+
+      alert(`Settle Load ${displayName} deleted successfully.`);
+
+      // --- Refresh the list after deletion ---
+      const recordsAfterDelete = Math.max(settleLoadTotalRecords - 1, 0);
+      const pagesAfterDelete = Math.max(Math.ceil(recordsAfterDelete / settleListRowsPerPage), 1);
+      const pageAfterDelete = Math.min(settleLoadCurrentPage, pagesAfterDelete);
+
+      setSettleLoadCurrentPage(pageAfterDelete);
+      setListPage((previous) => ({ ...previous, settleLoad: pageAfterDelete }));
+
+      await loadSettleLoadList({
+        page: pageAfterDelete,
+        limit: settleListRowsPerPage,
+        filters: settleLoadAppliedFilters,
+        search: settleLoadSearchDebounced,
+      });
+
+      // Ensure the list view remains open
+      setShowSettleLoadList(true);
+      setShowSettleLoad(false);
+      setActiveSubMenu("Settle Load");
+
+    } catch (error) {
+      console.error("Delete settle load error:", error);
+      alert("Server not connected. Failed to delete Settle Load.");
+    }
+  };
 
   const resetAreaToPartyMapping = () => {
     setAreaToPartyCompany(null);
@@ -46642,15 +46934,15 @@ const grossAmount =
     setShowAreaToPartyDropdown(false);
   };
   /* =========================================================
-   LOAD TRANSFER PAGE
-   ========================================================= */
+  LOAD TRANSFER PAGE
+  ========================================================= */
   /* =========================================================
-     LOAD TRANSFER PAGE
-     ========================================================= */
+    LOAD TRANSFER PAGE
+    ========================================================= */
 
   /* =========================================================
-   LOAD TRANSFER PAGE
-   ========================================================= */
+  LOAD TRANSFER PAGE
+  ========================================================= */
 
   const renderLoadTransfer = () => {
     const transferMode =
@@ -46711,8 +47003,8 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
     return (
       <div className="ltf-page">
         {/* =================================================
-            PAGE HEADER
-            ================================================= */}
+              PAGE HEADER
+              ================================================= */}
 
         <div className="ltf-page-header">
           <div className="ltf-page-heading">
@@ -46773,8 +47065,8 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
         </div>
 
         {/* =================================================
-            TRANSFER DETAILS
-            ================================================= */}
+              TRANSFER DETAILS
+              ================================================= */}
 
         <section className="ltf-card ltf-criteria-card">
           <div className="ltf-mode-field">
@@ -46981,8 +47273,8 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
         </section>
 
         {/* =================================================
-            BILL LIST
-            ================================================= */}
+              BILL LIST
+              ================================================= */}
 
         <section className="ltf-card ltf-list-card">
           <div className="ltf-list-header">
@@ -47318,8 +47610,8 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
         </section>
 
         {/* =================================================
-            BOTTOM SUMMARY
-            ================================================= */}
+              BOTTOM SUMMARY
+              ================================================= */}
 
         <section className="ltf-summary-bar">
           <div className="ltf-summary-heading">
@@ -47568,11 +47860,11 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
       }
     };
 
+
     const handleDelete = (item) => {
       const deleteFn = getDeleteFunction();
       if (deleteFn) deleteFn(item);
     };
-
     // Get paged data
     const { currentPage, totalPages, pagedRows } = getMasterPagedRows(masterType, filteredData);
 
@@ -47985,9 +48277,9 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
     event?.stopPropagation();
 
     /*
-     * Save Quotation only when Quotation
-     * is actually visible.
-     */
+    * Save Quotation only when Quotation
+    * is actually visible.
+    */
     if (openFormFor === "Quotation") {
       saveInvoiceDraft("Quotation");
     }
@@ -48054,9 +48346,9 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
     event?.stopPropagation();
 
     /*
-     * Save Billing only when Billing
-     * is actually visible.
-     */
+    * Save Billing only when Billing
+    * is actually visible.
+    */
     if (openFormFor === "Billing") {
       saveInvoiceDraft("Billing");
     }
@@ -48118,9 +48410,9 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
   const returnToSalesInvoiceList =
     async () => {
       /*
-       * Save the current Billing entry before
-       * returning to the list.
-       */
+      * Save the current Billing entry before
+      * returning to the list.
+      */
       if (
         openFormFor === "Billing"
       ) {
@@ -48164,9 +48456,9 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
   const returnToQuotationList =
     async () => {
       /*
-       * Save the current Quotation entry before
-       * returning to the list.
-       */
+      * Save the current Quotation entry before
+      * returning to the list.
+      */
       if (
         openFormFor === "Quotation"
       ) {
@@ -48663,9 +48955,9 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
       return fallback;
     };
     /*
-     * Filtering, sorting and pagination are now
-     * handled by GET /api/sales/list.
-     */
+    * Filtering, sorting and pagination are now
+    * handled by GET /api/sales/list.
+    */
 
 
 
@@ -48702,9 +48994,9 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
       targetType = type
     ) => {
       /*
-       * Applying or clearing filters must keep
-       * the user on the current list.
-       */
+      * Applying or clearing filters must keep
+      * the user on the current list.
+      */
       const normalizedType =
         String(
           targetType || ""
@@ -48803,8 +49095,8 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
         String(value || "");
 
       /* =========================================
-         PURCHASE SEARCH
-         ========================================= */
+        PURCHASE SEARCH
+        ========================================= */
 
       if (isPurchaseList) {
         setPurchaseAdvancedFilters(
@@ -48840,8 +49132,8 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
       }
 
       /* =========================================
-         QUOTATION SEARCH
-         ========================================= */
+        QUOTATION SEARCH
+        ========================================= */
 
       if (isQuotationList) {
         setQuotationAdvancedFilters(
@@ -48881,8 +49173,8 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
       }
 
       /* =========================================
-         SALES SEARCH
-         ========================================= */
+        SALES SEARCH
+        ========================================= */
 
       setSalesAdvancedFilters(
         (previous) => ({
@@ -49323,490 +49615,490 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
           ? items
             .map(
               (row) => `
-                <tr>
-                  <td class="center">${row.srNo}</td>
-                  <td>${escapeInvoiceHtml(
+                  <tr>
+                    <td class="center">${row.srNo}</td>
+                    <td>${escapeInvoiceHtml(
                 row.productCode
               )}</td>
-                  <td>${escapeInvoiceHtml(
+                    <td>${escapeInvoiceHtml(
                 row.productName
               )}</td>
-                  <td class="center">${escapeInvoiceHtml(
+                    <td class="center">${escapeInvoiceHtml(
                 row.hsn
               )}</td>
-                  <td class="right">${invoiceNumber(
+                    <td class="right">${invoiceNumber(
                 row.mrp
               )}</td>
-                  <td class="center">${escapeInvoiceHtml(
+                    <td class="center">${escapeInvoiceHtml(
                 row.unit
               )}</td>
-                  <td class="right">${invoiceNumber(
+                    <td class="right">${invoiceNumber(
                 row.qty
               )}</td>
-                  <td class="right">${invoiceNumber(
+                    <td class="right">${invoiceNumber(
                 row.free
               )}</td>
-                  <td class="right">${invoiceNumber(
+                    <td class="right">${invoiceNumber(
                 row.rate
               )}</td>
-                  <td class="right">${invoiceNumber(
+                    <td class="right">${invoiceNumber(
                 row.grossAmount
               )}</td>
-                  <td class="right">${invoiceNumber(
+                    <td class="right">${invoiceNumber(
                 row.taxableAmount
               )}</td>
 
-                  <td class="right">${invoiceNumber(
+                    <td class="right">${invoiceNumber(
                 row.schemePercent
               )}</td>
-                  <td class="right">${invoiceNumber(
+                    <td class="right">${invoiceNumber(
                 row.schemeAmount
               )}</td>
 
-                  <td class="right">${invoiceNumber(
+                    <td class="right">${invoiceNumber(
                 row.cashDiscountPercent
               )}</td>
-                  <td class="right">${invoiceNumber(
+                    <td class="right">${invoiceNumber(
                 row.cashDiscountAmount
               )}</td>
 
-                  <td class="right">${invoiceNumber(
+                    <td class="right">${invoiceNumber(
                 row.cgstPercent
               )}</td>
-                  <td class="right">${invoiceNumber(
+                    <td class="right">${invoiceNumber(
                 row.cgstAmount
               )}</td>
 
-                  <td class="right">${invoiceNumber(
+                    <td class="right">${invoiceNumber(
                 row.sgstPercent
               )}</td>
-                  <td class="right">${invoiceNumber(
+                    <td class="right">${invoiceNumber(
                 row.sgstAmount
               )}</td>
 
-                  <td class="right">${invoiceNumber(
+                    <td class="right">${invoiceNumber(
                 row.igstPercent
               )}</td>
-                  <td class="right">${invoiceNumber(
+                    <td class="right">${invoiceNumber(
                 row.igstAmount
               )}</td>
 
-                  <td class="right strong">${invoiceNumber(
+                    <td class="right strong">${invoiceNumber(
                 row.netAmount
               )}</td>
-                </tr>
-              `
+                  </tr>
+                `
             )
             .join("")
           : `
-            <tr>
-              <td colspan="22" class="empty">
-                No product items found for this bill.
-              </td>
-            </tr>
-          `;
+              <tr>
+                <td colspan="22" class="empty">
+                  No product items found for this bill.
+                </td>
+              </tr>
+            `;
 
       return `
-      <!DOCTYPE html>
-      <html>
-        <head>
-          <meta charset="UTF-8" />
+        <!DOCTYPE html>
+        <html>
+          <head>
+            <meta charset="UTF-8" />
 
-          <title>
-            Tax Invoice ${escapeInvoiceHtml(
+            <title>
+              Tax Invoice ${escapeInvoiceHtml(
         billSeries
       )}-${escapeInvoiceHtml(billNo)}
-          </title>
+            </title>
 
-          <style>
-            * {
-              box-sizing: border-box;
-            }
-
-            html,
-            body {
-              margin: 0;
-              padding: 0;
-              background: #ffffff;
-              color: #111827;
-              font-family: Arial, Helvetica, sans-serif;
-            }
-
-            body {
-              padding: 5mm;
-            }
-
-            .invoice-document {
-              width: 100%;
-              margin: 0 auto;
-              background: #ffffff;
-            }
-
-            .invoice-title {
-              display: flex;
-              justify-content: center;
-              margin-bottom: -1px;
-            }
-
-            .invoice-title span {
-              padding: 5px 22px;
-              border: 1px solid #334155;
-              background: #f8fafc;
-              font-family: Georgia, serif;
-              font-size: 17px;
-              font-weight: 800;
-              letter-spacing: 4px;
-            }
-
-            .top-grid {
-              display: grid;
-              grid-template-columns: 1fr 0.86fr 1.18fr;
-              gap: 10px;
-            }
-
-            .info-box {
-              min-height: 165px;
-              border: 1px solid #475569;
-              padding: 10px 11px;
-            }
-
-            .info-heading {
-              margin-bottom: 7px;
-              font-size: 10px;
-              font-weight: 800;
-              text-transform: uppercase;
-            }
-
-            .primary-name {
-              margin-bottom: 7px;
-              font-size: 13px;
-              font-weight: 800;
-            }
-
-            .address {
-              min-height: 45px;
-              font-size: 9.5px;
-              line-height: 1.45;
-            }
-
-            .detail-row {
-              display: grid;
-              grid-template-columns: 88px 8px 1fr;
-              margin-top: 6px;
-              font-size: 9px;
-              line-height: 1.2;
-            }
-
-            .invoice-table-wrap {
-              margin-top: 14px;
-              overflow: hidden;
-              border: 1px solid #475569;
-            }
-
-            table {
-              width: 100%;
-              border-collapse: collapse;
-            }
-
-            .invoice-table {
-              table-layout: fixed;
-              font-size: 7.5px;
-            }
-
-            .invoice-table th,
-            .invoice-table td {
-              padding: 4px 3px;
-              border-right: 1px solid #64748b;
-              border-bottom: 1px solid #94a3b8;
-              vertical-align: middle;
-            }
-
-            .invoice-table th:last-child,
-            .invoice-table td:last-child {
-              border-right: none;
-            }
-
-            .invoice-table thead th {
-              background: #f8fafc;
-              font-weight: 800;
-              text-align: center;
-            }
-
-            .invoice-table tbody tr {
-              page-break-inside: avoid;
-            }
-
-            .center {
-              text-align: center;
-            }
-
-            .right {
-              text-align: right;
-            }
-
-            .strong {
-              font-weight: 800;
-            }
-
-            .empty {
-              padding: 22px !important;
-              color: #64748b;
-              text-align: center;
-            }
-
-            .totals-row td {
-              background: #f8fafc;
-              font-weight: 800;
-            }
-
-            .summary-strip {
-              display: grid;
-              grid-template-columns:
-                repeat(7, minmax(0, 1fr))
-                1.25fr;
-              margin-top: 14px;
-              border: 1px solid #475569;
-            }
-
-            .summary-cell {
-              min-height: 51px;
-              padding: 8px 5px;
-              border-right: 1px solid #94a3b8;
-              text-align: center;
-            }
-
-            .summary-cell:last-child {
-              border-right: none;
-            }
-
-            .summary-cell span {
-              display: block;
-              margin-bottom: 7px;
-              font-size: 8.5px;
-              font-weight: 700;
-            }
-
-            .summary-cell strong {
-              font-size: 11px;
-            }
-
-            .summary-cell.net strong {
-              font-size: 15px;
-            }
-
-            .amount-words {
-              margin-top: 11px;
-              padding: 8px 5px 10px;
-              border-bottom: 1px solid #64748b;
-              font-size: 9px;
-            }
-
-            .footer-grid {
-              display: grid;
-              grid-template-columns: 135px 250px 1fr;
-              gap: 9px;
-              margin-top: 10px;
-            }
-
-            .footer-box {
-              min-height: 114px;
-              border: 1px solid #475569;
-              padding: 9px 10px;
-            }
-
-            .footer-heading {
-              margin-bottom: 7px;
-              font-size: 9px;
-              font-weight: 800;
-              text-align: center;
-            }
-
-            .qr-space {
-              display: flex;
-              height: 78px;
-              align-items: center;
-              justify-content: center;
-              border: 1px dashed #94a3b8;
-              color: #64748b;
-              font-size: 8px;
-              text-align: center;
-            }
-
-            .bank-row {
-              display: grid;
-              grid-template-columns: 75px 8px 1fr;
-              margin-bottom: 6px;
-              font-size: 8.5px;
-            }
-
-            .declaration-box {
-              position: relative;
-              font-size: 8.5px;
-            }
-
-            .account-line {
-              padding-bottom: 9px;
-              border-bottom: 1px solid #cbd5e1;
-              line-height: 1.6;
-            }
-
-            .declaration {
-              margin-top: 17px;
-            }
-
-            .signature {
-              position: absolute;
-              right: 20px;
-              bottom: 9px;
-              width: 155px;
-              padding-top: 8px;
-              border-top: 1px solid #334155;
-              text-align: center;
-            }
-
-            .print-actions {
-              display: flex;
-              justify-content: center;
-              gap: 10px;
-              margin-top: 14px;
-            }
-
-            .print-actions button {
-              padding: 8px 18px;
-              border: 0;
-              border-radius: 5px;
-              cursor: pointer;
-            }
-
-            @media print {
-              body {
-                padding: 0;
+            <style>
+              * {
+                box-sizing: border-box;
               }
 
-              .print-actions {
-                display: none !important;
+              html,
+              body {
+                margin: 0;
+                padding: 0;
+                background: #ffffff;
+                color: #111827;
+                font-family: Arial, Helvetica, sans-serif;
+              }
+
+              body {
+                padding: 5mm;
               }
 
               .invoice-document {
                 width: 100%;
+                margin: 0 auto;
+                background: #ffffff;
               }
 
-              thead {
-                display: table-header-group;
+              .invoice-title {
+                display: flex;
+                justify-content: center;
+                margin-bottom: -1px;
               }
-            }
 
-            @page {
-              size: ${paperSize} ${orientation};
-              margin: 5mm;
-            }
-          </style>
-        </head>
+              .invoice-title span {
+                padding: 5px 22px;
+                border: 1px solid #334155;
+                background: #f8fafc;
+                font-family: Georgia, serif;
+                font-size: 17px;
+                font-weight: 800;
+                letter-spacing: 4px;
+              }
 
-        <body>
-          <main class="invoice-document">
-            <div class="invoice-title">
-              <span>TAX INVOICE</span>
-            </div>
+              .top-grid {
+                display: grid;
+                grid-template-columns: 1fr 0.86fr 1.18fr;
+                gap: 10px;
+              }
 
-            <section class="top-grid">
-              <div class="info-box">
-                <div class="info-heading">
-                  From (Supplier)
-                </div>
+              .info-box {
+                min-height: 165px;
+                border: 1px solid #475569;
+                padding: 10px 11px;
+              }
 
-                <div class="primary-name">
-                  ${escapeInvoiceHtml(
+              .info-heading {
+                margin-bottom: 7px;
+                font-size: 10px;
+                font-weight: 800;
+                text-transform: uppercase;
+              }
+
+              .primary-name {
+                margin-bottom: 7px;
+                font-size: 13px;
+                font-weight: 800;
+              }
+
+              .address {
+                min-height: 45px;
+                font-size: 9.5px;
+                line-height: 1.45;
+              }
+
+              .detail-row {
+                display: grid;
+                grid-template-columns: 88px 8px 1fr;
+                margin-top: 6px;
+                font-size: 9px;
+                line-height: 1.2;
+              }
+
+              .invoice-table-wrap {
+                margin-top: 14px;
+                overflow: hidden;
+                border: 1px solid #475569;
+              }
+
+              table {
+                width: 100%;
+                border-collapse: collapse;
+              }
+
+              .invoice-table {
+                table-layout: fixed;
+                font-size: 7.5px;
+              }
+
+              .invoice-table th,
+              .invoice-table td {
+                padding: 4px 3px;
+                border-right: 1px solid #64748b;
+                border-bottom: 1px solid #94a3b8;
+                vertical-align: middle;
+              }
+
+              .invoice-table th:last-child,
+              .invoice-table td:last-child {
+                border-right: none;
+              }
+
+              .invoice-table thead th {
+                background: #f8fafc;
+                font-weight: 800;
+                text-align: center;
+              }
+
+              .invoice-table tbody tr {
+                page-break-inside: avoid;
+              }
+
+              .center {
+                text-align: center;
+              }
+
+              .right {
+                text-align: right;
+              }
+
+              .strong {
+                font-weight: 800;
+              }
+
+              .empty {
+                padding: 22px !important;
+                color: #64748b;
+                text-align: center;
+              }
+
+              .totals-row td {
+                background: #f8fafc;
+                font-weight: 800;
+              }
+
+              .summary-strip {
+                display: grid;
+                grid-template-columns:
+                  repeat(7, minmax(0, 1fr))
+                  1.25fr;
+                margin-top: 14px;
+                border: 1px solid #475569;
+              }
+
+              .summary-cell {
+                min-height: 51px;
+                padding: 8px 5px;
+                border-right: 1px solid #94a3b8;
+                text-align: center;
+              }
+
+              .summary-cell:last-child {
+                border-right: none;
+              }
+
+              .summary-cell span {
+                display: block;
+                margin-bottom: 7px;
+                font-size: 8.5px;
+                font-weight: 700;
+              }
+
+              .summary-cell strong {
+                font-size: 11px;
+              }
+
+              .summary-cell.net strong {
+                font-size: 15px;
+              }
+
+              .amount-words {
+                margin-top: 11px;
+                padding: 8px 5px 10px;
+                border-bottom: 1px solid #64748b;
+                font-size: 9px;
+              }
+
+              .footer-grid {
+                display: grid;
+                grid-template-columns: 135px 250px 1fr;
+                gap: 9px;
+                margin-top: 10px;
+              }
+
+              .footer-box {
+                min-height: 114px;
+                border: 1px solid #475569;
+                padding: 9px 10px;
+              }
+
+              .footer-heading {
+                margin-bottom: 7px;
+                font-size: 9px;
+                font-weight: 800;
+                text-align: center;
+              }
+
+              .qr-space {
+                display: flex;
+                height: 78px;
+                align-items: center;
+                justify-content: center;
+                border: 1px dashed #94a3b8;
+                color: #64748b;
+                font-size: 8px;
+                text-align: center;
+              }
+
+              .bank-row {
+                display: grid;
+                grid-template-columns: 75px 8px 1fr;
+                margin-bottom: 6px;
+                font-size: 8.5px;
+              }
+
+              .declaration-box {
+                position: relative;
+                font-size: 8.5px;
+              }
+
+              .account-line {
+                padding-bottom: 9px;
+                border-bottom: 1px solid #cbd5e1;
+                line-height: 1.6;
+              }
+
+              .declaration {
+                margin-top: 17px;
+              }
+
+              .signature {
+                position: absolute;
+                right: 20px;
+                bottom: 9px;
+                width: 155px;
+                padding-top: 8px;
+                border-top: 1px solid #334155;
+                text-align: center;
+              }
+
+              .print-actions {
+                display: flex;
+                justify-content: center;
+                gap: 10px;
+                margin-top: 14px;
+              }
+
+              .print-actions button {
+                padding: 8px 18px;
+                border: 0;
+                border-radius: 5px;
+                cursor: pointer;
+              }
+
+              @media print {
+                body {
+                  padding: 0;
+                }
+
+                .print-actions {
+                  display: none !important;
+                }
+
+                .invoice-document {
+                  width: 100%;
+                }
+
+                thead {
+                  display: table-header-group;
+                }
+              }
+
+              @page {
+                size: ${paperSize} ${orientation};
+                margin: 5mm;
+              }
+            </style>
+          </head>
+
+          <body>
+            <main class="invoice-document">
+              <div class="invoice-title">
+                <span>TAX INVOICE</span>
+              </div>
+
+              <section class="top-grid">
+                <div class="info-box">
+                  <div class="info-heading">
+                    From (Supplier)
+                  </div>
+
+                  <div class="primary-name">
+                    ${escapeInvoiceHtml(
         firm.firmName ||
         bill.firmName ||
         ""
       )}
-                </div>
+                  </div>
 
-                <div class="address">
-                  ${escapeInvoiceHtml(firmAddress)}
-                </div>
+                  <div class="address">
+                    ${escapeInvoiceHtml(firmAddress)}
+                  </div>
 
-                <div class="detail-row">
-                  <span>Contact No</span>
-                  <span>:</span>
-                  <strong>${escapeInvoiceHtml(
+                  <div class="detail-row">
+                    <span>Contact No</span>
+                    <span>:</span>
+                    <strong>${escapeInvoiceHtml(
         firm.phoneNo ||
         firm.mobileNo ||
         ""
       )}</strong>
-                </div>
+                  </div>
 
-                <div class="detail-row">
-                  <span>Mobile No</span>
-                  <span>:</span>
-                  <strong>${escapeInvoiceHtml(
+                  <div class="detail-row">
+                    <span>Mobile No</span>
+                    <span>:</span>
+                    <strong>${escapeInvoiceHtml(
         firm.mobileNo || ""
       )}</strong>
-                </div>
+                  </div>
 
-                <div class="detail-row">
-                  <span>State</span>
-                  <span>:</span>
-                  <strong>${escapeInvoiceHtml(
+                  <div class="detail-row">
+                    <span>State</span>
+                    <span>:</span>
+                    <strong>${escapeInvoiceHtml(
         firm.state || ""
       )}</strong>
-                </div>
+                  </div>
 
-                <div class="detail-row">
-                  <span>GSTIN</span>
-                  <span>:</span>
-                  <strong>${escapeInvoiceHtml(
+                  <div class="detail-row">
+                    <span>GSTIN</span>
+                    <span>:</span>
+                    <strong>${escapeInvoiceHtml(
         firm.gstNo || ""
       )}</strong>
-                </div>
+                  </div>
 
-                <div class="detail-row">
-                  <span>Email Id</span>
-                  <span>:</span>
-                  <strong>${escapeInvoiceHtml(
+                  <div class="detail-row">
+                    <span>Email Id</span>
+                    <span>:</span>
+                    <strong>${escapeInvoiceHtml(
         firm.email || ""
       )}</strong>
-                </div>
-              </div>
-
-              <div class="info-box">
-                <div class="info-heading">
-                  Invoice Details
+                  </div>
                 </div>
 
-                <div class="detail-row">
-                  <span>Invoice No</span>
-                  <span>:</span>
-                  <strong>${escapeInvoiceHtml(
+                <div class="info-box">
+                  <div class="info-heading">
+                    Invoice Details
+                  </div>
+
+                  <div class="detail-row">
+                    <span>Invoice No</span>
+                    <span>:</span>
+                    <strong>${escapeInvoiceHtml(
         `${billSeries || ""}${billSeries ? "-" : ""
         }${billNo || ""}`
       )}</strong>
-                </div>
+                  </div>
 
-                <div class="detail-row">
-                  <span>Invoice Date</span>
-                  <span>:</span>
-                  <strong>${escapeInvoiceHtml(
+                  <div class="detail-row">
+                    <span>Invoice Date</span>
+                    <span>:</span>
+                    <strong>${escapeInvoiceHtml(
         formatInvoiceDate(billDate)
       )}</strong>
-                </div>
+                  </div>
 
-                <div class="detail-row">
-                  <span>Bill Type</span>
-                  <span>:</span>
-                  <strong>${escapeInvoiceHtml(
+                  <div class="detail-row">
+                    <span>Bill Type</span>
+                    <span>:</span>
+                    <strong>${escapeInvoiceHtml(
         getInvoiceValue(bill, [
           "BillType",
           "billType",
         ])
       )}</strong>
-                </div>
+                  </div>
 
-                <div class="detail-row">
-                  <span>Due Date</span>
-                  <span>:</span>
-                  <strong>${escapeInvoiceHtml(
+                  <div class="detail-row">
+                    <span>Due Date</span>
+                    <span>:</span>
+                    <strong>${escapeInvoiceHtml(
         formatInvoiceDate(
           getInvoiceValue(bill, [
             "DueDate",
@@ -49814,381 +50106,381 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
           ])
         )
       )}</strong>
-                </div>
+                  </div>
 
-                <div class="detail-row">
-                  <span>PAN No</span>
-                  <span>:</span>
-                  <strong>${escapeInvoiceHtml(
+                  <div class="detail-row">
+                    <span>PAN No</span>
+                    <span>:</span>
+                    <strong>${escapeInvoiceHtml(
         party.panNo || ""
       )}</strong>
-                </div>
+                  </div>
 
-                <div class="detail-row">
-                  <span>Salesman</span>
-                  <span>:</span>
-                  <strong>${escapeInvoiceHtml(
+                  <div class="detail-row">
+                    <span>Salesman</span>
+                    <span>:</span>
+                    <strong>${escapeInvoiceHtml(
         salesman.salesmanName ||
         getInvoiceValue(bill, [
           "SalesmanName",
           "salesmanName",
         ])
       )}</strong>
-                </div>
+                  </div>
 
-                <div class="detail-row">
-                  <span>SSM Mob No</span>
-                  <span>:</span>
-                  <strong>${escapeInvoiceHtml(
+                  <div class="detail-row">
+                    <span>SSM Mob No</span>
+                    <span>:</span>
+                    <strong>${escapeInvoiceHtml(
         salesman.mobileNo || ""
       )}</strong>
-                </div>
-              </div>
-
-              <div class="info-box">
-                <div class="info-heading">
-                  To (Consignee / Billed To)
+                  </div>
                 </div>
 
-                <div class="primary-name">
-                  ${escapeInvoiceHtml(
+                <div class="info-box">
+                  <div class="info-heading">
+                    To (Consignee / Billed To)
+                  </div>
+
+                  <div class="primary-name">
+                    ${escapeInvoiceHtml(
         party.partyName ||
         getInvoiceValue(bill, [
           "PartyName",
           "partyName",
         ])
       )}
-                </div>
+                  </div>
 
-                <div class="address">
-                  ${escapeInvoiceHtml(partyAddress)}
-                </div>
+                  <div class="address">
+                    ${escapeInvoiceHtml(partyAddress)}
+                  </div>
 
-                <div class="detail-row">
-                  <span>Contact No</span>
-                  <span>:</span>
-                  <strong>${escapeInvoiceHtml(
+                  <div class="detail-row">
+                    <span>Contact No</span>
+                    <span>:</span>
+                    <strong>${escapeInvoiceHtml(
         party.phoneNo || ""
       )}</strong>
-                </div>
+                  </div>
 
-                <div class="detail-row">
-                  <span>Mobile No</span>
-                  <span>:</span>
-                  <strong>${escapeInvoiceHtml(
+                  <div class="detail-row">
+                    <span>Mobile No</span>
+                    <span>:</span>
+                    <strong>${escapeInvoiceHtml(
         party.mobileNo || ""
       )}</strong>
-                </div>
+                  </div>
 
-                <div class="detail-row">
-                  <span>Area</span>
-                  <span>:</span>
-                  <strong>${escapeInvoiceHtml(
+                  <div class="detail-row">
+                    <span>Area</span>
+                    <span>:</span>
+                    <strong>${escapeInvoiceHtml(
         area.areaName ||
         getInvoiceValue(bill, [
           "AreaName",
           "areaName",
         ])
       )}</strong>
-                </div>
+                  </div>
 
-                <div class="detail-row">
-                  <span>State</span>
-                  <span>:</span>
-                  <strong>${escapeInvoiceHtml(
+                  <div class="detail-row">
+                    <span>State</span>
+                    <span>:</span>
+                    <strong>${escapeInvoiceHtml(
         party.state || ""
       )}</strong>
-                </div>
+                  </div>
 
-                <div class="detail-row">
-                  <span>GSTIN</span>
-                  <span>:</span>
-                  <strong>${escapeInvoiceHtml(
+                  <div class="detail-row">
+                    <span>GSTIN</span>
+                    <span>:</span>
+                    <strong>${escapeInvoiceHtml(
         party.gstNo || ""
       )}</strong>
+                  </div>
                 </div>
-              </div>
-            </section>
+              </section>
 
-            <div class="invoice-table-wrap">
-              <table class="invoice-table">
-                <thead>
-                  <tr>
-                    <th rowspan="2">Sr<br>No</th>
-                    <th rowspan="2">Prod Code</th>
-                    <th rowspan="2">Prod Name</th>
-                    <th rowspan="2">HSN</th>
-                    <th rowspan="2">MRP</th>
-                    <th rowspan="2">Unit</th>
-                    <th rowspan="2">Qty</th>
-                    <th rowspan="2">Free</th>
-                    <th rowspan="2">Rate</th>
-                    <th rowspan="2">Gross Amt</th>
-                    <th rowspan="2">Taxable Amt</th>
-                    <th colspan="2">Scheme</th>
-                    <th colspan="2">Cash Disc</th>
-                    <th colspan="2">CGST</th>
-                    <th colspan="2">SGST</th>
-                    <th colspan="2">IGST</th>
-                    <th rowspan="2">Net Amount</th>
-                  </tr>
+              <div class="invoice-table-wrap">
+                <table class="invoice-table">
+                  <thead>
+                    <tr>
+                      <th rowspan="2">Sr<br>No</th>
+                      <th rowspan="2">Prod Code</th>
+                      <th rowspan="2">Prod Name</th>
+                      <th rowspan="2">HSN</th>
+                      <th rowspan="2">MRP</th>
+                      <th rowspan="2">Unit</th>
+                      <th rowspan="2">Qty</th>
+                      <th rowspan="2">Free</th>
+                      <th rowspan="2">Rate</th>
+                      <th rowspan="2">Gross Amt</th>
+                      <th rowspan="2">Taxable Amt</th>
+                      <th colspan="2">Scheme</th>
+                      <th colspan="2">Cash Disc</th>
+                      <th colspan="2">CGST</th>
+                      <th colspan="2">SGST</th>
+                      <th colspan="2">IGST</th>
+                      <th rowspan="2">Net Amount</th>
+                    </tr>
 
-                  <tr>
-                    <th>%</th>
-                    <th>Amt</th>
-                    <th>%</th>
-                    <th>Amt</th>
-                    <th>%</th>
-                    <th>Amt</th>
-                    <th>%</th>
-                    <th>Amt</th>
-                    <th>%</th>
-                    <th>Amt</th>
-                  </tr>
-                </thead>
+                    <tr>
+                      <th>%</th>
+                      <th>Amt</th>
+                      <th>%</th>
+                      <th>Amt</th>
+                      <th>%</th>
+                      <th>Amt</th>
+                      <th>%</th>
+                      <th>Amt</th>
+                      <th>%</th>
+                      <th>Amt</th>
+                    </tr>
+                  </thead>
 
-                <tbody>
-                  ${rowsHtml}
-                </tbody>
+                  <tbody>
+                    ${rowsHtml}
+                  </tbody>
 
-                <tfoot>
-                  <tr class="totals-row">
-                    <td colspan="9" class="right">
-                      TOTAL
-                    </td>
+                  <tfoot>
+                    <tr class="totals-row">
+                      <td colspan="9" class="right">
+                        TOTAL
+                      </td>
 
-                    <td class="right">
-                      ₹${invoiceNumber(grossAmount)}
-                    </td>
+                      <td class="right">
+                        ₹${invoiceNumber(grossAmount)}
+                      </td>
 
-                    <td class="right">
-                      ₹${invoiceNumber(taxableAmount)}
-                    </td>
+                      <td class="right">
+                        ₹${invoiceNumber(taxableAmount)}
+                      </td>
 
-                    <td></td>
+                      <td></td>
 
-                    <td class="right">
-                      ₹${invoiceNumber(schemeAmount)}
-                    </td>
+                      <td class="right">
+                        ₹${invoiceNumber(schemeAmount)}
+                      </td>
 
-                    <td></td>
+                      <td></td>
 
-                    <td class="right">
-                      ₹${invoiceNumber(
+                      <td class="right">
+                        ₹${invoiceNumber(
         cashDiscountAmount
       )}
-                    </td>
+                      </td>
 
-                    <td></td>
+                      <td></td>
 
-                    <td class="right">
-                      ₹${invoiceNumber(cgstAmount)}
-                    </td>
+                      <td class="right">
+                        ₹${invoiceNumber(cgstAmount)}
+                      </td>
 
-                    <td></td>
+                      <td></td>
 
-                    <td class="right">
-                      ₹${invoiceNumber(sgstAmount)}
-                    </td>
+                      <td class="right">
+                        ₹${invoiceNumber(sgstAmount)}
+                      </td>
 
-                    <td></td>
+                      <td></td>
 
-                    <td class="right">
-                      ₹${invoiceNumber(igstAmount)}
-                    </td>
+                      <td class="right">
+                        ₹${invoiceNumber(igstAmount)}
+                      </td>
 
-                    <td class="right">
-                      ₹${invoiceNumber(netAmount)}
-                    </td>
-                  </tr>
-                </tfoot>
-              </table>
-            </div>
-
-            <section class="summary-strip">
-              <div class="summary-cell">
-                <span>TAXABLE AMT</span>
-                <strong>₹${invoiceNumber(
-        taxableAmount
-      )}</strong>
+                      <td class="right">
+                        ₹${invoiceNumber(netAmount)}
+                      </td>
+                    </tr>
+                  </tfoot>
+                </table>
               </div>
 
-              <div class="summary-cell">
-                <span>SCHE/CASH</span>
-                <strong>₹${invoiceNumber(
+              <section class="summary-strip">
+                <div class="summary-cell">
+                  <span>TAXABLE AMT</span>
+                  <strong>₹${invoiceNumber(
+        taxableAmount
+      )}</strong>
+                </div>
+
+                <div class="summary-cell">
+                  <span>SCHE/CASH</span>
+                  <strong>₹${invoiceNumber(
         schemeAmount +
         cashDiscountAmount
       )}</strong>
-              </div>
+                </div>
 
-              <div class="summary-cell">
-                <span>CGST AMT</span>
-                <strong>₹${invoiceNumber(
+                <div class="summary-cell">
+                  <span>CGST AMT</span>
+                  <strong>₹${invoiceNumber(
         cgstAmount
       )}</strong>
-              </div>
+                </div>
 
-              <div class="summary-cell">
-                <span>SGST AMT</span>
-                <strong>₹${invoiceNumber(
+                <div class="summary-cell">
+                  <span>SGST AMT</span>
+                  <strong>₹${invoiceNumber(
         sgstAmount
       )}</strong>
-              </div>
+                </div>
 
-              <div class="summary-cell">
-                <span>CN/STAR/DIS</span>
-                <strong>₹${invoiceNumber(
+                <div class="summary-cell">
+                  <span>CN/STAR/DIS</span>
+                  <strong>₹${invoiceNumber(
         totalDiscount
       )}</strong>
-              </div>
+                </div>
 
-              <div class="summary-cell">
-                <span>TCS AMT</span>
-                <strong>₹${invoiceNumber(
+                <div class="summary-cell">
+                  <span>TCS AMT</span>
+                  <strong>₹${invoiceNumber(
         tcsAmount
       )}</strong>
-              </div>
+                </div>
 
-              <div class="summary-cell">
-                <span>ROUNDING</span>
-                <strong>₹${invoiceNumber(
+                <div class="summary-cell">
+                  <span>ROUNDING</span>
+                  <strong>₹${invoiceNumber(
         roundingAmount
       )}</strong>
-              </div>
+                </div>
 
-              <div class="summary-cell net">
-                <span>NET AMOUNT</span>
-                <strong>₹${invoiceNumber(
+                <div class="summary-cell net">
+                  <span>NET AMOUNT</span>
+                  <strong>₹${invoiceNumber(
         netAmount
       )}</strong>
-              </div>
-            </section>
-
-            <div class="amount-words">
-              Total Amount in Words:
-              <strong>
-                ${escapeInvoiceHtml(amountInWords)}
-              </strong>
-            </div>
-
-            <section class="footer-grid">
-              <div class="footer-box">
-                <div class="footer-heading">
-                  SCAN TO PAY
                 </div>
+              </section>
 
-                <div class="qr-space">
-                  ${firm.qrCodeUrl
+              <div class="amount-words">
+                Total Amount in Words:
+                <strong>
+                  ${escapeInvoiceHtml(amountInWords)}
+                </strong>
+              </div>
+
+              <section class="footer-grid">
+                <div class="footer-box">
+                  <div class="footer-heading">
+                    SCAN TO PAY
+                  </div>
+
+                  <div class="qr-space">
+                    ${firm.qrCodeUrl
           ? `<img
-                          src="${escapeInvoiceHtml(
+                            src="${escapeInvoiceHtml(
             firm.qrCodeUrl
           )}"
-                          alt="Firm QR Code"
-                          style="max-width:74px;max-height:74px;"
-                        />`
+                            alt="Firm QR Code"
+                            style="max-width:74px;max-height:74px;"
+                          />`
           : "Firm QR / UPI Code"
         }
-                </div>
-              </div>
-
-              <div class="footer-box">
-                <div class="footer-heading">
-                  BANK DETAILS
+                  </div>
                 </div>
 
-                <div class="bank-row">
-                  <span>Bank Name</span>
-                  <span>:</span>
-                  <strong>${escapeInvoiceHtml(
+                <div class="footer-box">
+                  <div class="footer-heading">
+                    BANK DETAILS
+                  </div>
+
+                  <div class="bank-row">
+                    <span>Bank Name</span>
+                    <span>:</span>
+                    <strong>${escapeInvoiceHtml(
           bank.bankName || ""
         )}</strong>
-                </div>
+                  </div>
 
-                <div class="bank-row">
-                  <span>Account Name</span>
-                  <span>:</span>
-                  <strong>${escapeInvoiceHtml(
+                  <div class="bank-row">
+                    <span>Account Name</span>
+                    <span>:</span>
+                    <strong>${escapeInvoiceHtml(
           bank.accountName ||
           firm.firmName ||
           ""
         )}</strong>
-                </div>
+                  </div>
 
-                <div class="bank-row">
-                  <span>Account No</span>
-                  <span>:</span>
-                  <strong>${escapeInvoiceHtml(
+                  <div class="bank-row">
+                    <span>Account No</span>
+                    <span>:</span>
+                    <strong>${escapeInvoiceHtml(
           bank.accountNo || ""
         )}</strong>
-                </div>
+                  </div>
 
-                <div class="bank-row">
-                  <span>IFSC Code</span>
-                  <span>:</span>
-                  <strong>${escapeInvoiceHtml(
+                  <div class="bank-row">
+                    <span>IFSC Code</span>
+                    <span>:</span>
+                    <strong>${escapeInvoiceHtml(
           bank.ifscCode || ""
         )}</strong>
-                </div>
+                  </div>
 
-                <div class="bank-row">
-                  <span>Branch</span>
-                  <span>:</span>
-                  <strong>${escapeInvoiceHtml(
+                  <div class="bank-row">
+                    <span>Branch</span>
+                    <span>:</span>
+                    <strong>${escapeInvoiceHtml(
           bank.branch || ""
         )}</strong>
+                  </div>
                 </div>
-              </div>
 
-              <div class="footer-box declaration-box">
-                <div class="account-line">
-                  A/C No:
-                  <strong>${escapeInvoiceHtml(
+                <div class="footer-box declaration-box">
+                  <div class="account-line">
+                    A/C No:
+                    <strong>${escapeInvoiceHtml(
           bank.accountNo || ""
         )}</strong>
-                  &nbsp; | &nbsp;
+                    &nbsp; | &nbsp;
 
-                  IFSC:
-                  <strong>${escapeInvoiceHtml(
+                    IFSC:
+                    <strong>${escapeInvoiceHtml(
           bank.ifscCode || ""
         )}</strong>
-                  &nbsp; | &nbsp;
+                    &nbsp; | &nbsp;
 
-                  Branch:
-                  <strong>${escapeInvoiceHtml(
+                    Branch:
+                    <strong>${escapeInvoiceHtml(
           bank.branch || ""
         )}</strong>
-                </div>
+                  </div>
 
-                <div class="declaration">
-                  <strong>Declaration:</strong>
-                  Certified that the particulars given above
-                  are true and correct and the amount indicated.
-                </div>
+                  <div class="declaration">
+                    <strong>Declaration:</strong>
+                    Certified that the particulars given above
+                    are true and correct and the amount indicated.
+                  </div>
 
-                <div class="signature">
-                  Authorised Signatory
+                  <div class="signature">
+                    Authorised Signatory
+                  </div>
                 </div>
-              </div>
-            </section>
+              </section>
 
-            ${options.includeButtons === false
+              ${options.includeButtons === false
           ? ""
           : `
-                    <div class="print-actions">
-                      <button onclick="window.print()">
-                        Print
-                      </button>
+                      <div class="print-actions">
+                        <button onclick="window.print()">
+                          Print
+                        </button>
 
-                      <button onclick="window.close()">
-                        Close
-                      </button>
-                    </div>
-                  `
+                        <button onclick="window.close()">
+                          Close
+                        </button>
+                      </div>
+                    `
         }
-          </main>
-        </body>
-      </html>
-    `;
+            </main>
+          </body>
+        </html>
+      `;
     };
 
     // =========================================================
@@ -50288,9 +50580,9 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
 
 
       /*
-       * Sales and Quotation use separate
-       * backend-pagination states.
-       */
+      * Sales and Quotation use separate
+      * backend-pagination states.
+      */
       const activeBackendListData =
         isDebitNoteList
           ? debitNoteListData
@@ -50604,8 +50896,8 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
             setShowDashboard(false);
 
             /*
-             * Start with a clean product grid.
-             */
+            * Start with a clean product grid.
+            */
             setDebitNoteItems([]);
             setDebitNoteActiveRow(-1);
             setCurrentDebitProductIndex(-1);
@@ -50684,8 +50976,8 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
             );
 
             /*
-             * Add one blank row after clearing.
-             */
+            * Add one blank row after clearing.
+            */
             window.setTimeout(() => {
               addDebitNoteItem();
             }, 0);
@@ -50729,6 +51021,7 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                 setShowCreditNoteList(false);
                 setShowDebitNoteList(false);
 
+                setEditingPurchaseId(null);
                 setOpenFormFor("Purchase");
                 setActiveSubMenu("Purchase");
                 setShowDashboard(false);
@@ -50849,8 +51142,8 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
         ).values()
       );
       /* =========================================================
-   PURCHASE FILTER DROPDOWN OPTIONS
-   ========================================================= */
+  PURCHASE FILTER DROPDOWN OPTIONS
+  ========================================================= */
 
       const purchaseSupplierOptions =
         Array.from(
@@ -50950,8 +51243,8 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
         );
 
       /*
-       * Series found in currently loaded Purchase rows.
-       */
+      * Series found in currently loaded Purchase rows.
+      */
       const purchaseBillSeriesOptions =
         Array.from(
           new Set(
@@ -51350,8 +51643,8 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
           return;
         }
         /* =========================================
-           PURCHASE APPLY FILTERS
-           ========================================= */
+          PURCHASE APPLY FILTERS
+          ========================================= */
 
         if (isPurchaseList) {
           const nextFilters = {
@@ -51418,9 +51711,9 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
           );
 
           /*
-           * Keep this if the panel should close.
-           * Remove it if the panel should stay open.
-           */
+          * Keep this if the panel should close.
+          * Remove it if the panel should stay open.
+          */
           setPurchaseFiltersVisible(
             false
           );
@@ -51428,8 +51721,8 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
           return;
         }
         /* =========================================
-           QUOTATION APPLY FILTERS
-           ========================================= */
+          QUOTATION APPLY FILTERS
+          ========================================= */
 
         if (isQuotationList) {
           const nextFilters = {
@@ -51468,8 +51761,8 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
         }
 
         /* =========================================
-           SALES APPLY FILTERS
-           ========================================= */
+          SALES APPLY FILTERS
+          ========================================= */
 
         const nextFilters = {
           ...salesAdvancedFilters,
@@ -51576,8 +51869,8 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
         }
 
         /* =========================================
-           PURCHASE CLEAR FILTERS
-           ========================================= */
+          PURCHASE CLEAR FILTERS
+          ========================================= */
 
         if (isPurchaseList) {
           const emptyFilters =
@@ -51612,8 +51905,8 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
         }
 
         /* =========================================
-           QUOTATION CLEAR FILTERS
-           ========================================= */
+          QUOTATION CLEAR FILTERS
+          ========================================= */
 
         if (isQuotationList) {
           const emptyFilters =
@@ -51659,8 +51952,8 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
         }
 
         /* =========================================
-           SALES CLEAR FILTERS
-           ========================================= */
+          SALES CLEAR FILTERS
+          ========================================= */
 
         const emptyFilters =
           createDefaultSalesListFilters();
@@ -51720,10 +52013,16 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
             </div>
 
             <div className="ts-sales-page-actions">
-              <button type="button" className="ts-btn primary" onClick={createHandler}>
-                <Plus size={16} />
-                {createButtonText}
-              </button>
+              {(!isSalesBillingList || salesBillingPermission.add) &&
+               (!isQuotationList || quotationPermission.add) &&
+               (!isPurchaseList || purchasePermission.add) &&
+               (!isCreditNoteList || creditNotePermission.add) &&
+               (!isDebitNoteList || debitNotePermission.add) && (
+                <button type="button" className="ts-btn primary" onClick={createHandler}>
+                  <Plus size={16} />
+                  {createButtonText}
+                </button>
+              )}
 
               <button
                 type="button"
@@ -51763,9 +52062,9 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
           </div>
 
           {/* ================================================
-      FILTER OPEN BUTTON
-      Filters remain hidden until this is clicked.
-  ================================================ */}
+        FILTER OPEN BUTTON
+        Filters remain hidden until this is clicked.
+    ================================================ */}
           {!activeFiltersVisible && (
             <div className="ts-filter-launch-row">
               <button
@@ -51792,9 +52091,9 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
           )}
 
           {/* ================================================
-      FILTER FIELDS
-      Render only when Apply Filter is clicked.
-  ================================================ */}
+        FILTER FIELDS
+        Render only when Apply Filter is clicked.
+    ================================================ */}
           {activeFiltersVisible && (
             <div className="ts-filter-panel">
               <div className="ts-filter-panel-heading">
@@ -53322,9 +53621,9 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                 ) : (
                   <>
                     {/*
-        KEEP YOUR COMPLETE EXISTING
-        SALES / QUOTATION FILTER FIELDS HERE.
-      */}
+          KEEP YOUR COMPLETE EXISTING
+          SALES / QUOTATION FILTER FIELDS HERE.
+        */}
                   </>
                 )}
               </div>
@@ -53805,96 +54104,101 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                                 >
                                   <Eye size={15} />
                                 </button>
+                                {(type !== 'Sales' || salesBillingPermission.edit) && 
+                                (type !== 'Quotation' || quotationPermission.edit) &&
+                                (type !== 'Purchase' || purchasePermission.edit) &&
+                                 (type !== 'Credit Note' || creditNotePermission.edit) &&
+                                 (type !== 'Debit Note' || debitNotePermission.edit) && (
+                                  <button
+                                    type="button"
+                                    className="edit"
+                                    title="Edit"
+                                    onClick={async () => {
+                                      if (isDebitNoteList) {
+                                        const actualDebitNote =
+                                          source?.databaseDebitNote ||
+                                          source?.originalItem?.databaseDebitNote ||
+                                          source?.originalItem?.originalItem ||
+                                          source?.originalItem ||
+                                          source;
 
-                                <button
-                                  type="button"
-                                  className="edit"
-                                  title="Edit"
-                                  onClick={async () => {
-                                    if (isDebitNoteList) {
-                                      const actualDebitNote =
-                                        source?.databaseDebitNote ||
-                                        source?.originalItem?.databaseDebitNote ||
-                                        source?.originalItem?.originalItem ||
-                                        source?.originalItem ||
-                                        source;
+                                        await loadDebitNoteForEdit(
+                                          actualDebitNote
+                                        );
 
-                                      await loadDebitNoteForEdit(
-                                        actualDebitNote
-                                      );
+                                        return;
+                                      }
 
-                                      return;
-                                    }
+                                      if (isCreditNoteList) {
+                                        const actualCreditNote =
+                                          source?.databaseCreditNote ||
+                                          source?.originalItem?.databaseCreditNote ||
+                                          source?.originalItem?.originalItem ||
+                                          source?.originalItem ||
+                                          source;
 
-                                    if (isCreditNoteList) {
-                                      const actualCreditNote =
-                                        source?.databaseCreditNote ||
-                                        source?.originalItem?.databaseCreditNote ||
-                                        source?.originalItem?.originalItem ||
-                                        source?.originalItem ||
-                                        source;
+                                        await loadCreditNoteForEdit(
+                                          actualCreditNote
+                                        );
 
-                                      await loadCreditNoteForEdit(
-                                        actualCreditNote
-                                      );
+                                        return;
+                                      }
 
-                                      return;
-                                    }
+                                      /*
+                                      * Quotation must always use the
+                                      * Quotation edit API, not Sales Billing.
+                                      */
+                                      if (isQuotationList) {
+                                        await handleEditVoucher(
+                                          "Quotation",
+                                          source
+                                        );
 
-                                    /*
-                                     * Quotation must always use the
-                                     * Quotation edit API, not Sales Billing.
-                                     */
-                                    if (isQuotationList) {
+                                        return;
+                                      }
+
                                       await handleEditVoucher(
-                                        "Quotation",
+                                        type,
                                         source
                                       );
-
-                                      return;
-                                    }
-
-                                    await handleEditVoucher(
-                                      type,
-                                      source
-                                    );
-                                  }}
-                                >
-                                  <Pencil size={15} />
-                                </button>
+                                    }}
+                                  >
+                                    <Pencil size={15} />
+                                  </button>
+                                )}
 
                                 {!isQuotationList && (
                                   <>
-                                   <button
-  type="button"
-  className="print"
-  title="Print Sales Invoice"
-  onMouseDown={(event) => {
-    event.preventDefault();
-    event.stopPropagation();
-  }}
-  onClick={async (event) => {
-    event.preventDefault();
-    event.stopPropagation();
+                                    <button
+                                      type="button"
+                                      className="print"
+                                      title="Print Sales Invoice"
+                                      onMouseDown={(event) => {
+                                        event.preventDefault();
+                                        event.stopPropagation();
+                                      }}
+                                      onClick={async (event) => {
+                                        event.preventDefault();
+                                        event.stopPropagation();
 
-    const actualSalesBill =
-      item?.originalItem?.originalItem ||
-      item?.originalItem ||
-      item;
+                                        const actualSalesBill =
+                                          item?.originalItem?.originalItem ||
+                                          item?.originalItem ||
+                                          item;
 
-    console.log(
-      "OPEN SALES PRINT MODAL:",
-      actualSalesBill
-    );
+                                        console.log(
+                                          "OPEN SALES PRINT MODAL:",
+                                          actualSalesBill
+                                        );
 
-    await openSalesPrintFormatSelection(
-      actualSalesBill,
-      "print"
-    );
-  }}
->
-  <Printer size={15} />
-</button>
+                                        await openSalesPrintFormatSelection(
+                                          actualSalesBill,
+                                          "print"
+                                        );
+                                      }}
+                                    >
+                                      <Printer size={15} />
+                                    </button>
 
                                     <button
                                       type="button"
@@ -53910,38 +54214,43 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                                     </button>
                                   </>
                                 )}
+                                {(type !== 'Sales' || salesBillingPermission.delete) && 
+                                (type !== 'Quotation' || quotationPermission.delete) &&
+                                (type !== 'Purchase' || purchasePermission.delete) &&
+                                (type !== 'Credit Note' || creditNotePermission.delete) &&
+                                (type !== 'Debit Note' || debitNotePermission.delete) && (
+                                  <button
+                                    type="button"
+                                    className="delete"
+                                    title="Delete"
+                                    onClick={async () => {
+                                      if (isDebitNoteList) {
+                                        await deleteDebitNote(
+                                          source
+                                        );
 
-                                <button
-                                  type="button"
-                                  className="delete"
-                                  title="Delete"
-                                  onClick={async () => {
-                                    if (isDebitNoteList) {
-                                      await deleteDebitNote(
-                                        source
+                                        return;
+                                      }
+
+                                      if (isCreditNoteList) {
+                                        await deleteCreditNote(
+                                          source
+                                        );
+
+                                        return;
+                                      }
+
+                                      await handleDeleteVoucher(
+                                        type,
+                                        item.id ||
+                                        source._id ||
+                                        source.id
                                       );
-
-                                      return;
-                                    }
-
-                                    if (isCreditNoteList) {
-                                      await deleteCreditNote(
-                                        source
-                                      );
-
-                                      return;
-                                    }
-
-                                    await handleDeleteVoucher(
-                                      type,
-                                      item.id ||
-                                      source._id ||
-                                      source.id
-                                    );
-                                  }}
-                                >
-                                  <Trash2 size={15} />
-                                </button>
+                                    }}
+                                  >
+                                    <Trash2 size={15} />
+                                  </button>
+                                )}
                               </div>
                             </td>
                           </tr>
@@ -54814,7 +55123,7 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
           }
 
           const response =
-            await fetch(
+            await secureFetch(
               `${API_URL}/create-load/${id}`,
               {
                 method:
@@ -55052,9 +55361,9 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
       filteredData;
 
     /*
-     * Used only as a fallback for serial numbers.
-     * The API loader already supplies item.serialNumber.
-     */
+    * Used only as a fallback for serial numbers.
+    * The API loader already supplies item.serialNumber.
+    */
     const startIndex =
       (
         createLoadCurrentPage -
@@ -55258,8 +55567,8 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
     return (
       <div className="ts-load-list-page">
         {/* =====================================================
-            PAGE HEADER
-            ===================================================== */}
+              PAGE HEADER
+              ===================================================== */}
         <div className="ts-load-page-header">
           <div className="ts-load-page-title">
             <h2>Create Load List</h2>
@@ -55271,6 +55580,7 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
           </div>
 
           <div className="ts-load-header-actions">
+            {createLoadPermission.add && (
             <button
               type="button"
               className="ts-load-primary-btn"
@@ -55279,7 +55589,7 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
               <Plus size={16} />
               New Create Load
             </button>
-
+)}
             <button
               type="button"
               className="ts-load-outline-btn excel"
@@ -55324,8 +55634,8 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
         </div>
 
         {/* =====================================================
-            SEARCH AND FILTER BUTTON
-            ===================================================== */}
+              SEARCH AND FILTER BUTTON
+              ===================================================== */}
         <div className="ts-load-toolbar-row">
           <div className="ts-load-search-box">
             <Search size={17} />
@@ -55390,8 +55700,8 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
         </div>
 
         {/* =====================================================
-            ADVANCED FILTERS
-            ===================================================== */}
+              ADVANCED FILTERS
+              ===================================================== */}
         {loadFiltersVisible && (
           <div className="ts-load-filter-panel">
             <div className="ts-load-filter-field">
@@ -55498,8 +55808,8 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
         )}
 
         {/* =====================================================
-            SUMMARY CARDS
-            ===================================================== */}
+              SUMMARY CARDS
+              ===================================================== */}
         <div className="ts-load-summary-grid">
           <div className="ts-load-summary-card">
             <div className="ts-load-summary-icon blue">
@@ -55571,8 +55881,8 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
         </div>
 
         {/* =====================================================
-            DATA GRID
-            ===================================================== */}
+              DATA GRID
+              ===================================================== */}
         <div className="ts-load-grid-card">
           <div className="ts-load-table-scroll">
             <table className="ts-load-table">
@@ -55734,7 +56044,7 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                             >
                               <Eye size={15} />
                             </button>
-
+{createLoadPermission.edit && (
                             <button
                               type="button"
                               className="edit"
@@ -55747,6 +56057,7 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                             >
                               <Pencil size={15} />
                             </button>
+)}
 
                             {String(item.status).toLowerCase() !==
                               "settled" && (
@@ -55772,7 +56083,7 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                             >
                               <Printer size={15} />
                             </button>
-
+{createLoadPermission.delete && (
                             <button
                               type="button"
                               className="delete"
@@ -55783,6 +56094,7 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                             >
                               <Trash2 size={15} />
                             </button>
+)}
                           </div>
                         </td>
                       </tr>
@@ -55810,8 +56122,8 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
           </div>
 
           {/* ===================================================
-              GRID FOOTER
-              =================================================== */}
+                GRID FOOTER
+                =================================================== */}
           <div className="ts-load-grid-footer">
             <div className="ts-load-entry-info">
               Showing{" "}
@@ -56064,10 +56376,10 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
       {};
 
     /*
-     * Apply this restriction only to Sales Billing.
-     * Do not apply it to Quotation, Purchase,
-     * Credit Note or Debit Note.
-     */
+    * Apply this restriction only to Sales Billing.
+    * Do not apply it to Quotation, Purchase,
+    * Credit Note or Debit Note.
+    */
     const isSalesBill =
       type === "Sales" ||
       type === "Billing";
@@ -56119,8 +56431,8 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
     setIsSettleAdjustMode(false);
 
     /* =========================================================
-       KEEP YOUR EXISTING HANDLE EDIT CODE BELOW
-       ========================================================= */
+      KEEP YOUR EXISTING HANDLE EDIT CODE BELOW
+      ========================================================= */
 
     if (type === "Quotation") {
       try {
@@ -56164,7 +56476,7 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
               String(firmId),
           });
 
-        const response = await fetch(
+        const response = await secureFetch(
           `${API_URL}/quotation/${encodeURIComponent(
             quotationId
           )}?${query.toString()}`
@@ -56768,8 +57080,8 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
         const bill = result.bill;
 
         /* =========================================================
-           SET LOADED BILL STATUS
-           ADD THIS BLOCK HERE
+          SET LOADED BILL STATUS
+          ADD THIS BLOCK HERE
         ========================================================= */
 
         const loadedFlagFromDatabase =
@@ -56808,7 +57120,7 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
         );
 
         /* =========================================================
-           KEEP EXISTING CODE BELOW
+          KEEP EXISTING CODE BELOW
         ========================================================= */
 
         setEditingInvoiceId(
@@ -57305,12 +57617,18 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
       }
     }
     else if (type === 'Purchase') {
-      setPurchaseFormData({
-        supplier: item.supplier || item.partyName || '',
-        company: item.company || '',
-        storageLocation: item.storageLocation || item.branchName || '',
+     setPurchaseFormData({
+        supplier: item.supplierName || item.partyName || item.supplier || '',
+        company: item.company || item.companyName || '',
+        storageLocation: item.godownName || item.storageLocation || item.branchName || '',
         invoiceDate: item.invoiceDate || item.billDate || new Date().toISOString().split('T')[0],
+
+        vouSer: item.vouSer || item.billSeries || '',
+        vouNo: item.vouNo ?? item.billNo ?? '',
         vno: item.vno || '',
+
+        isIgst: item.isIgst || 'N',
+
         invoiceNumber: item.invoiceNumber || item.billNo || '',
         narration: item.narration || '',
         discountPercent: item.discountPercent || '',
@@ -57328,9 +57646,13 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
         diBc3: item.diBc3 || 0,
         afterDiBc3: item.afterDiBc3 || 0,
         ceBsAmt: item.ceBsAmt || 0,
+        cgstAmt: item.cgstAmt || 0,
+        sgstAmt: item.sgstAmt || 0,
+        igstAmt: item.igstAmt || 0,
         netAmt: item.netAmt || item.amount || 0
       });
       setPurchaseItems(item.items || []);
+        setEditingPurchaseId(item._id || item.id || null);
       setOpenFormFor('Purchase');
       setActiveSubMenu('Purchase');
     }
@@ -57479,7 +57801,7 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
       }
 
       // Make DELETE request to the server
-      const res = await fetch(endpoint, {
+      const res = await secureFetch(endpoint, {
         method: "DELETE",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -57552,9 +57874,9 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
         type === "Billing"
       ) {
         /*
-         * Calculate how many records and pages remain
-         * after deleting one Sales bill.
-         */
+        * Calculate how many records and pages remain
+        * after deleting one Sales bill.
+        */
         const recordsAfterDelete =
           Math.max(
             salesTotalRecords - 1,
@@ -57571,9 +57893,9 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
           );
 
         /*
-         * If the last record on the final page was
-         * deleted, move back to the previous page.
-         */
+        * If the last record on the final page was
+        * deleted, move back to the previous page.
+        */
         const pageAfterDelete =
           Math.min(
             salesCurrentPage,
@@ -57679,9 +58001,9 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
 
       } else if (type === 'Purchase') {
         /*
- * If the only record on the current page was deleted,
- * move safely to the previous page.
- */
+* If the only record on the current page was deleted,
+* move safely to the previous page.
+*/
         const targetPage =
           purchaseListData.length === 1 &&
             purchaseCurrentPage > 1
@@ -57976,9 +58298,9 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                       loadNo: value,
 
                       /*
-                       * Clear invoice range when the user
-                       * starts load-wise printing.
-                       */
+                      * Clear invoice range when the user
+                      * starts load-wise printing.
+                      */
                       fromTrnNo:
                         value
                           ? ""
@@ -58423,13 +58745,13 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                   <div className="nav-submenu">
                     {menu.items.map((item, idx) => {
                       /*
-                       * Special nested layout only for Reports.
-                       */
+                      * Special nested layout only for Reports.
+                      */
                       if (key === "reports") {
                         /*
-                         * MY REPORTS (merged from old Dashboard)
-                         * Opens the complete report selection page.
-                         */
+                        * MY REPORTS (merged from old Dashboard)
+                        * Opens the complete report selection page.
+                        */
                         if (item === "My Reports") {
                           return (
                             <div
@@ -58437,12 +58759,11 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                               className="nav-subitem-wrapper report-menu-group"
                             >
                               <div
-                                className={`nav-subitem report-category-row ${
-                                  showMyReports &&
-                                  activeSubMenu === "My Reports"
+                                className={`nav-subitem report-category-row ${showMyReports &&
+                                    activeSubMenu === "My Reports"
                                     ? "active"
                                     : ""
-                                }`}
+                                  }`}
                                 onClick={() => openMyReportsPage()}
                               >
                                 <span className="submenu-text">
@@ -58520,8 +58841,8 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                       }
 
                       /*
-                       * Existing handling for every other menu.
-                       */
+                      * Existing handling for every other menu.
+                      */
                       return (
                         <div
                           key={idx}
@@ -58918,907 +59239,905 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
               )}
 
             {activeMenu === "reports" &&
-  showMyReports &&
-  !selectedReport &&
-  openFormFor !== "Report" && (
-    <div className="report-dashboard-page">
-      {/* =====================================================
-          PAGE TITLE AND TOP ACTIONS
-      ===================================================== */}
-      <div className="report-dashboard-title-row">
-        <div>
-          <h1>Reports</h1>
-          <p>
-            Create, view and analyze your business reports
-          </p>
-        </div>
+              showMyReports &&
+              !selectedReport &&
+              openFormFor !== "Report" && (
+                <div className="report-dashboard-page">
+                  {/* =====================================================
+            PAGE TITLE AND TOP ACTIONS
+        ===================================================== */}
+                  <div className="report-dashboard-title-row">
+                    <div>
+                      <h1>Reports</h1>
+                      <p>
+                        Create, view and analyze your business reports
+                      </p>
+                    </div>
 
-        <div className="report-dashboard-title-actions">
-          <button type="button">
-            <Download size={14} />
-            Import Report
-          </button>
+                    <div className="report-dashboard-title-actions">
+                      <button type="button">
+                        <Download size={14} />
+                        Import Report
+                      </button>
 
-          <button type="button">
-            <Settings size={14} />
-            Manage Categories
-          </button>
-        </div>
-      </div>
+                      <button type="button">
+                        <Settings size={14} />
+                        Manage Categories
+                      </button>
+                    </div>
+                  </div>
 
-      {/* =====================================================
-          SUMMARY CARDS
-      ===================================================== */}
-      <div className="report-summary-grid">
-        <article className="report-summary-card">
-          <div>
-            <span>Total Sales (MTD)</span>
-            <strong>₹ 42,85,620</strong>
+                  {/* =====================================================
+            SUMMARY CARDS
+        ===================================================== */}
+                  <div className="report-summary-grid">
+                    <article className="report-summary-card">
+                      <div>
+                        <span>Total Sales (MTD)</span>
+                        <strong>₹ 42,85,620</strong>
 
-            <small className="positive">
-              <ArrowUpRight size={12} />
-              12.5%
-              <em>vs last month</em>
-            </small>
-          </div>
+                        <small className="positive">
+                          <ArrowUpRight size={12} />
+                          12.5%
+                          <em>vs last month</em>
+                        </small>
+                      </div>
 
-          <div className="report-summary-icon blue">
-            <IndianRupee size={22} />
-          </div>
-        </article>
+                      <div className="report-summary-icon blue">
+                        <IndianRupee size={22} />
+                      </div>
+                    </article>
 
-        <article className="report-summary-card">
-          <div>
-            <span>Total Invoices (MTD)</span>
-            <strong>1,245</strong>
+                    <article className="report-summary-card">
+                      <div>
+                        <span>Total Invoices (MTD)</span>
+                        <strong>1,245</strong>
 
-            <small className="positive">
-              <ArrowUpRight size={12} />
-              8.3%
-              <em>vs last month</em>
-            </small>
-          </div>
+                        <small className="positive">
+                          <ArrowUpRight size={12} />
+                          8.3%
+                          <em>vs last month</em>
+                        </small>
+                      </div>
 
-          <div className="report-summary-icon green">
-            <ClipboardList size={21} />
-          </div>
-        </article>
+                      <div className="report-summary-icon green">
+                        <ClipboardList size={21} />
+                      </div>
+                    </article>
 
-        <article className="report-summary-card">
-          <div>
-            <span>Active Customers</span>
-            <strong>892</strong>
+                    <article className="report-summary-card">
+                      <div>
+                        <span>Active Customers</span>
+                        <strong>892</strong>
 
-            <small className="positive">
-              <ArrowUpRight size={12} />
-              15.2%
-              <em>vs last month</em>
-            </small>
-          </div>
+                        <small className="positive">
+                          <ArrowUpRight size={12} />
+                          15.2%
+                          <em>vs last month</em>
+                        </small>
+                      </div>
 
-          <div className="report-summary-icon orange">
-            <Users size={22} />
-          </div>
-        </article>
+                      <div className="report-summary-icon orange">
+                        <Users size={22} />
+                      </div>
+                    </article>
 
-        <article className="report-summary-card">
-          <div>
-            <span>Top Product Sales</span>
-            <strong>Parle-G</strong>
+                    <article className="report-summary-card">
+                      <div>
+                        <span>Top Product Sales</span>
+                        <strong>Parle-G</strong>
 
-            <small>
-              15,682 Qty
-            </small>
-          </div>
+                        <small>
+                          15,682 Qty
+                        </small>
+                      </div>
 
-          <div className="report-summary-icon purple">
-            <Package size={21} />
-          </div>
-        </article>
+                      <div className="report-summary-icon purple">
+                        <Package size={21} />
+                      </div>
+                    </article>
 
-        <article className="report-summary-card">
-          <div>
-            <span>Outstanding Amount</span>
-            <strong>₹ 18,92,450</strong>
+                    <article className="report-summary-card">
+                      <div>
+                        <span>Outstanding Amount</span>
+                        <strong>₹ 18,92,450</strong>
 
-            <small className="negative">
-              <ArrowUpRight size={12} />
-              5.4%
-              <em>vs last month</em>
-            </small>
-          </div>
+                        <small className="negative">
+                          <ArrowUpRight size={12} />
+                          5.4%
+                          <em>vs last month</em>
+                        </small>
+                      </div>
 
-          <div className="report-summary-icon pink">
-            <FileText size={21} />
-          </div>
-        </article>
-      </div>
+                      <div className="report-summary-icon pink">
+                        <FileText size={21} />
+                      </div>
+                    </article>
+                  </div>
 
-      {/* =====================================================
-    SEARCH AND FILTER BAR
-===================================================== */}
-<div className="report-search-filter-bar">
+                  {/* =====================================================
+      SEARCH AND FILTER BAR
+  ===================================================== */}
+                  <div className="report-search-filter-bar">
 
-  {/* REPORT SEARCH WITH DROPDOWN */}
-  <div className="report-search-dropdown-wrapper">
-    <form
-      className="report-dashboard-search"
-      onSubmit={handleReportSearchSubmit}
-    >
-      <Search size={16} />
+                    {/* REPORT SEARCH WITH DROPDOWN */}
+                    <div className="report-search-dropdown-wrapper">
+                      <form
+                        className="report-dashboard-search"
+                        onSubmit={handleReportSearchSubmit}
+                      >
+                        <Search size={16} />
 
-      <input
-        type="text"
-        value={reportSearchText}
-        onFocus={() => {
-          if (reportSearchText.trim() !== "") {
-            setShowReportSearchDropdown(true);
-          }
-        }}
-        onChange={(event) => {
-          const value = event.target.value;
+                        <input
+                          type="text"
+                          value={reportSearchText}
+                          onFocus={() => {
+                            if (reportSearchText.trim() !== "") {
+                              setShowReportSearchDropdown(true);
+                            }
+                          }}
+                          onChange={(event) => {
+                            const value = event.target.value;
 
-          setReportSearchText(value);
+                            setReportSearchText(value);
 
-          setShowReportSearchDropdown(
-            value.trim() !== ""
-          );
+                            setShowReportSearchDropdown(
+                              value.trim() !== ""
+                            );
 
-          setReportSearchActiveIndex(-1);
-        }}
-        onKeyDown={(event) => {
-          if (!showReportSearchDropdown) {
-            return;
-          }
+                            setReportSearchActiveIndex(-1);
+                          }}
+                          onKeyDown={(event) => {
+                            if (!showReportSearchDropdown) {
+                              return;
+                            }
 
-          if (event.key === "ArrowDown") {
-            event.preventDefault();
+                            if (event.key === "ArrowDown") {
+                              event.preventDefault();
 
-            setReportSearchActiveIndex(
-              (previousIndex) =>
-                Math.min(
-                  previousIndex + 1,
-                  reportSearchResults.length - 1
-                )
-            );
-          }
+                              setReportSearchActiveIndex(
+                                (previousIndex) =>
+                                  Math.min(
+                                    previousIndex + 1,
+                                    reportSearchResults.length - 1
+                                  )
+                              );
+                            }
 
-          if (event.key === "ArrowUp") {
-            event.preventDefault();
+                            if (event.key === "ArrowUp") {
+                              event.preventDefault();
 
-            setReportSearchActiveIndex(
-              (previousIndex) =>
-                Math.max(
-                  previousIndex - 1,
-                  0
-                )
-            );
-          }
+                              setReportSearchActiveIndex(
+                                (previousIndex) =>
+                                  Math.max(
+                                    previousIndex - 1,
+                                    0
+                                  )
+                              );
+                            }
 
-          if (event.key === "Escape") {
-            setShowReportSearchDropdown(false);
-            setReportSearchActiveIndex(-1);
-          }
-        }}
-        placeholder="Search report name..."
-        autoComplete="off"
-      />
+                            if (event.key === "Escape") {
+                              setShowReportSearchDropdown(false);
+                              setReportSearchActiveIndex(-1);
+                            }
+                          }}
+                          placeholder="Search report name..."
+                          autoComplete="off"
+                        />
 
-      {reportSearchText.trim() !== "" && (
-        <button
-          type="button"
-          className="report-search-clear-button"
-          onClick={() => {
-            setReportSearchText("");
-            setShowReportSearchDropdown(false);
-            setReportSearchActiveIndex(-1);
-          }}
-          title="Clear search"
-          aria-label="Clear search"
-        >
-          <X size={14} />
-        </button>
-      )}
-    </form>
+                        {reportSearchText.trim() !== "" && (
+                          <button
+                            type="button"
+                            className="report-search-clear-button"
+                            onClick={() => {
+                              setReportSearchText("");
+                              setShowReportSearchDropdown(false);
+                              setReportSearchActiveIndex(-1);
+                            }}
+                            title="Clear search"
+                            aria-label="Clear search"
+                          >
+                            <X size={14} />
+                          </button>
+                        )}
+                      </form>
 
-    {showReportSearchDropdown && (
-      <div className="report-search-results-dropdown">
-        {reportSearchResults.length === 0 ? (
-          <div className="report-search-no-result">
-            No matching report found
-          </div>
-        ) : (
-          reportSearchResults.map(
-            (report, index) => {
-              const ReportIcon =
-                report.icon || FileBarChart;
+                      {showReportSearchDropdown && (
+                        <div className="report-search-results-dropdown">
+                          {reportSearchResults.length === 0 ? (
+                            <div className="report-search-no-result">
+                              No matching report found
+                            </div>
+                          ) : (
+                            reportSearchResults.map(
+                              (report, index) => {
+                                const ReportIcon =
+                                  report.icon || FileBarChart;
 
-              return (
-                <button
-                  key={report.name}
-                  type="button"
-                  className={`report-search-result-item ${
-                    reportSearchActiveIndex === index
-                      ? "active"
-                      : ""
-                  }`}
-                  onMouseEnter={() => {
-                    setReportSearchActiveIndex(index);
-                  }}
-                  onMouseDown={(event) => {
-                    event.preventDefault();
-                  }}
-                  onClick={() => {
-                    setReportSearchText(report.name);
-                    setShowReportSearchDropdown(false);
-                    setReportSearchActiveIndex(-1);
+                                return (
+                                  <button
+                                    key={report.name}
+                                    type="button"
+                                    className={`report-search-result-item ${reportSearchActiveIndex === index
+                                        ? "active"
+                                        : ""
+                                      }`}
+                                    onMouseEnter={() => {
+                                      setReportSearchActiveIndex(index);
+                                    }}
+                                    onMouseDown={(event) => {
+                                      event.preventDefault();
+                                    }}
+                                    onClick={() => {
+                                      setReportSearchText(report.name);
+                                      setShowReportSearchDropdown(false);
+                                      setReportSearchActiveIndex(-1);
 
-                    handleReportClick(report.name);
-                  }}
-                >
-                 <div className="report-search-result-item-content">
-  <div className="report-search-result-icon">
-    <ReportIcon size={15} />
-  </div>
+                                      handleReportClick(report.name);
+                                    }}
+                                  >
+                                    <div className="report-search-result-item-content">
+                                      <div className="report-search-result-icon">
+                                        <ReportIcon size={15} />
+                                      </div>
 
-  <div className="report-search-result-text">
-    <div className="report-search-result-name">
-      {report.name}
-    </div>
+                                      <div className="report-search-result-text">
+                                        <div className="report-search-result-name">
+                                          {report.name}
+                                        </div>
 
-    <div className="report-search-result-category">
-      {report.category}
-    </div>
-  </div>
-</div>
-                </button>
-              );
-            }
-          )
-        )}
-      </div>
-    )}
-  </div>
+                                        <div className="report-search-result-category">
+                                          {report.category}
+                                        </div>
+                                      </div>
+                                    </div>
+                                  </button>
+                                );
+                              }
+                            )
+                          )}
+                        </div>
+                      )}
+                    </div>
 
-  {/* CATEGORY FILTER */}
-  <label>
-    <span></span>
+                    {/* CATEGORY FILTER */}
+                    <label>
+                      <span></span>
 
-    <select
-      value={reportCategoryFilter}
-      onChange={(event) => {
-        setReportCategoryFilter(
-          event.target.value
-        );
+                      <select
+                        value={reportCategoryFilter}
+                        onChange={(event) => {
+                          setReportCategoryFilter(
+                            event.target.value
+                          );
 
-        setReportCurrentPage(1);
-      }}
-    >
-      <option value="All">All</option>
-      <option value="Sales">Sales</option>
-      <option value="Purchase">Purchase</option>
-      <option value="Stock">Stock</option>
-      <option value="GST Report">
-        GST Report
-      </option>
-    </select>
-  </label>
+                          setReportCurrentPage(1);
+                        }}
+                      >
+                        <option value="All">All</option>
+                        <option value="Sales">Sales</option>
+                        <option value="Purchase">Purchase</option>
+                        <option value="Stock">Stock</option>
+                        <option value="GST Report">
+                          GST Report
+                        </option>
+                      </select>
+                    </label>
 
-  {/* TYPE FILTER */}
-  <label>
-    <span></span>
+                    {/* TYPE FILTER */}
+                    <label>
+                      <span></span>
 
-    <select defaultValue="All">
-      <option value="All">All</option>
-      <option value="Summary">
-        Summary
-      </option>
-      <option value="Detailed">
-        Detailed
-      </option>
-    </select>
-  </label>
+                      <select defaultValue="All">
+                        <option value="All">All</option>
+                        <option value="Summary">
+                          Summary
+                        </option>
+                        <option value="Detailed">
+                          Detailed
+                        </option>
+                      </select>
+                    </label>
 
-  {/* CREATED BY FILTER */}
-  <label>
-    <span></span>
+                    {/* CREATED BY FILTER */}
+                    <label>
+                      <span></span>
 
-    <select defaultValue="All">
-      <option value="All">All</option>
-      <option value="Administrator">
-        Administrator
-      </option>
-      <option value="User">
-        User
-      </option>
-    </select>
-  </label>
+                      <select defaultValue="All">
+                        <option value="All">All</option>
+                        <option value="Administrator">
+                          Administrator
+                        </option>
+                        <option value="User">
+                          User
+                        </option>
+                      </select>
+                    </label>
 
-  {/* RESET BUTTON */}
-  <button
-    type="button"
-    className="report-filter-reset"
-    onClick={() => {
-      setReportSearchText("");
-      setShowReportSearchDropdown(false);
-      setReportSearchActiveIndex(-1);
-      setReportCategoryFilter("All");
-      setReportCurrentPage(1);
-    }}
-  >
-    <RotateCcw size={14} />
-    Reset
-  </button>
-</div>
-      {/* =====================================================
-          MAIN CONTENT GRID
-      ===================================================== */}
-      <div className="report-dashboard-main-grid">
-        <div className="report-dashboard-left">
-          {/* SALES TREND AND CATEGORIES */}
-          <div className="report-analysis-grid">
-            <article className="report-dashboard-panel">
-              <div className="report-panel-heading">
-                <h3>
-                  Sales Trend
-                  <span>Last 6 Months</span>
-                </h3>
-              </div>
-
-              <div className="report-trend-chart">
-                <ResponsiveContainer
-                  width="100%"
-                  height="100%"
-                >
-                  <LineChart
-                    data={[
-                      { month: "Jan", sales: 20000 },
-                      { month: "Feb", sales: 27000 },
-                      { month: "Mar", sales: 25000 },
-                      { month: "Apr", sales: 33000 },
-                      { month: "May", sales: 22000 },
-                      { month: "Jun", sales: 41000 },
-                    ]}
-                    margin={{
-                      top: 15,
-                      right: 18,
-                      left: -14,
-                      bottom: 0,
-                    }}
-                  >
-                    <CartesianGrid
-                      strokeDasharray="0"
-                      vertical={false}
-                      stroke="#e8edf6"
-                    />
-
-                    <XAxis
-                      dataKey="month"
-                      tick={{
-                        fontSize: 10,
-                        fill: "#76839b",
-                      }}
-                      axisLine={false}
-                      tickLine={false}
-                    />
-
-                    <YAxis
-                      tick={{
-                        fontSize: 9,
-                        fill: "#76839b",
-                      }}
-                      axisLine={false}
-                      tickLine={false}
-                    />
-
-                    <Tooltip />
-
-                    <Line
-                      type="monotone"
-                      dataKey="sales"
-                      stroke="#1559f5"
-                      strokeWidth={2.2}
-                      dot={{
-                        r: 2.5,
-                        fill: "#1559f5",
-                      }}
-                      activeDot={{ r: 4 }}
-                    />
-                  </LineChart>
-                </ResponsiveContainer>
-              </div>
-            </article>
-
-            <article className="report-dashboard-panel">
-              <div className="report-panel-heading report-category-heading">
-                <h3>Report Categories</h3>
-
-                <button type="button">
-                  View all
-                </button>
-              </div>
-
-              <div className="report-category-list">
-                {[
-                  {
-                    name: "Sales Reports",
-                    count: 18,
-                    icon: FileBarChart,
-                  },
-                  {
-                    name: "Purchase Reports",
-                    count: 12,
-                    icon: ShoppingCart,
-                  },
-                  {
-                    name: "Stock Reports",
-                    count: 16,
-                    icon: Package,
-                  },
-                  {
-                    name: "Customer Reports",
-                    count: 14,
-                    icon: Users,
-                  },
-                  {
-                    name: "Financial Reports",
-                    count: 10,
-                    icon: IndianRupee,
-                  },
-                  {
-                    name: "GST Reports",
-                    count: 8,
-                    icon: FileText,
-                  },
-                ].map((category) => {
-                  const CategoryIcon = category.icon;
-
-                  return (
+                    {/* RESET BUTTON */}
                     <button
                       type="button"
-                      key={category.name}
-                      className="report-category-item"
+                      className="report-filter-reset"
+                      onClick={() => {
+                        setReportSearchText("");
+                        setShowReportSearchDropdown(false);
+                        setReportSearchActiveIndex(-1);
+                        setReportCategoryFilter("All");
+                        setReportCurrentPage(1);
+                      }}
                     >
+                      <RotateCcw size={14} />
+                      Reset
+                    </button>
+                  </div>
+                  {/* =====================================================
+            MAIN CONTENT GRID
+        ===================================================== */}
+                  <div className="report-dashboard-main-grid">
+                    <div className="report-dashboard-left">
+                      {/* SALES TREND AND CATEGORIES */}
+                      <div className="report-analysis-grid">
+                        <article className="report-dashboard-panel">
+                          <div className="report-panel-heading">
+                            <h3>
+                              Sales Trend
+                              <span>Last 6 Months</span>
+                            </h3>
+                          </div>
+
+                          <div className="report-trend-chart">
+                            <ResponsiveContainer
+                              width="100%"
+                              height="100%"
+                            >
+                              <LineChart
+                                data={[
+                                  { month: "Jan", sales: 20000 },
+                                  { month: "Feb", sales: 27000 },
+                                  { month: "Mar", sales: 25000 },
+                                  { month: "Apr", sales: 33000 },
+                                  { month: "May", sales: 22000 },
+                                  { month: "Jun", sales: 41000 },
+                                ]}
+                                margin={{
+                                  top: 15,
+                                  right: 18,
+                                  left: -14,
+                                  bottom: 0,
+                                }}
+                              >
+                                <CartesianGrid
+                                  strokeDasharray="0"
+                                  vertical={false}
+                                  stroke="#e8edf6"
+                                />
+
+                                <XAxis
+                                  dataKey="month"
+                                  tick={{
+                                    fontSize: 10,
+                                    fill: "#76839b",
+                                  }}
+                                  axisLine={false}
+                                  tickLine={false}
+                                />
+
+                                <YAxis
+                                  tick={{
+                                    fontSize: 9,
+                                    fill: "#76839b",
+                                  }}
+                                  axisLine={false}
+                                  tickLine={false}
+                                />
+
+                                <Tooltip />
+
+                                <Line
+                                  type="monotone"
+                                  dataKey="sales"
+                                  stroke="#1559f5"
+                                  strokeWidth={2.2}
+                                  dot={{
+                                    r: 2.5,
+                                    fill: "#1559f5",
+                                  }}
+                                  activeDot={{ r: 4 }}
+                                />
+                              </LineChart>
+                            </ResponsiveContainer>
+                          </div>
+                        </article>
+
+                        <article className="report-dashboard-panel">
+                          <div className="report-panel-heading report-category-heading">
+                            <h3>Report Categories</h3>
+
+                            <button type="button">
+                              View all
+                            </button>
+                          </div>
+
+                          <div className="report-category-list">
+                            {[
+                              {
+                                name: "Sales Reports",
+                                count: 18,
+                                icon: FileBarChart,
+                              },
+                              {
+                                name: "Purchase Reports",
+                                count: 12,
+                                icon: ShoppingCart,
+                              },
+                              {
+                                name: "Stock Reports",
+                                count: 16,
+                                icon: Package,
+                              },
+                              {
+                                name: "Customer Reports",
+                                count: 14,
+                                icon: Users,
+                              },
+                              {
+                                name: "Financial Reports",
+                                count: 10,
+                                icon: IndianRupee,
+                              },
+                              {
+                                name: "GST Reports",
+                                count: 8,
+                                icon: FileText,
+                              },
+                            ].map((category) => {
+                              const CategoryIcon = category.icon;
+
+                              return (
+                                <button
+                                  type="button"
+                                  key={category.name}
+                                  className="report-category-item"
+                                >
+                                  <span>
+                                    <CategoryIcon size={13} />
+                                    {category.name}
+                                  </span>
+
+                                  <em>{category.count}</em>
+                                </button>
+                              );
+                            })}
+                          </div>
+                        </article>
+                      </div>
+
+                      {/* =================================================
+                MY REPORTS TABLE
+            ================================================= */}
+                      <article className="report-list-panel">
+                        <div className="report-list-tabs">
+                          <button
+                            type="button"
+                            className="active"
+                          >
+                            My Reports
+                          </button>
+
+                          <button type="button">
+                            Favorites
+                          </button>
+
+                          <button type="button">
+                            Shared With Me
+                          </button>
+                        </div>
+
+                        <div className="report-list-table">
+                          <div className="report-list-header">
+                            <span>Report Name</span>
+                            <span>Category</span>
+                            <span>Type</span>
+                            <span>Created On</span>
+                            <span>Actions</span>
+                          </div>
+
+                          {paginatedMyReports.length === 0 ? (
+                            <div className="report-list-empty">
+                              <FileBarChart size={32} />
+                              <strong>No reports found</strong>
+                              <span>
+                                Try another report name or
+                                category.
+                              </span>
+                            </div>
+                          ) : (
+                            paginatedMyReports.map(
+                              (report, index) => {
+                                const isFavorite =
+                                  favoriteReports.includes(
+                                    report.name
+                                  );
+
+                                return (
+                                  <div
+                                    key={report.name}
+                                    className="report-list-row"
+                                    onClick={() =>
+                                      handleReportClick(
+                                        report.name
+                                      )
+                                    }
+                                  >
+                                    <div className="report-list-name">
+                                      <button
+                                        type="button"
+                                        className={`report-table-favorite ${isFavorite
+                                            ? "selected"
+                                            : ""
+                                          }`}
+                                        onClick={(event) => {
+                                          event.stopPropagation();
+
+                                          toggleFavoriteReport(
+                                            report.name
+                                          );
+                                        }}
+                                      >
+                                        ★
+                                      </button>
+
+                                      <span>
+                                        <strong>
+                                          {report.name}
+                                        </strong>
+
+                                        <small>
+                                          {report.description}
+                                        </small>
+                                      </span>
+                                    </div>
+
+                                    <div>
+                                      <span
+                                        className={`report-table-category category-${report.category.toLowerCase()}`}
+                                      >
+                                        {report.category}
+                                      </span>
+                                    </div>
+
+                                    <span>
+                                      {index % 2 === 0
+                                        ? "Summary"
+                                        : "Detailed"}
+                                    </span>
+
+                                    <span>
+                                      {25 - index} Jun 2025
+                                    </span>
+
+                                    <div className="report-table-actions">
+                                      <button
+                                        type="button"
+                                        onClick={(event) => {
+                                          event.stopPropagation();
+
+                                          handleReportClick(
+                                            report.name
+                                          );
+                                        }}
+                                        title="View report"
+                                      >
+                                        <Eye size={13} />
+                                      </button>
+
+                                      <button
+                                        type="button"
+                                        onClick={(event) =>
+                                          event.stopPropagation()
+                                        }
+                                        title="Export report"
+                                      >
+                                        <Download size={13} />
+                                      </button>
+
+                                      <button
+                                        type="button"
+                                        onClick={(event) =>
+                                          event.stopPropagation()
+                                        }
+                                        title="More options"
+                                      >
+                                        <MoreVertical size={14} />
+                                      </button>
+                                    </div>
+                                  </div>
+                                );
+                              }
+                            )
+                          )}
+                        </div>
+
+                        {filteredMyReports.length > 0 && (
+                          <div className="report-list-footer">
+                            <span>
+                              Showing {reportStartRecord} to{" "}
+                              {reportEndRecord} of{" "}
+                              {filteredMyReports.length} reports
+                            </span>
+
+                            <div className="report-table-pagination">
+                              <button
+                                type="button"
+                                disabled={
+                                  reportSafeCurrentPage === 1
+                                }
+                                onClick={() =>
+                                  setReportCurrentPage(
+                                    (previousPage) =>
+                                      Math.max(
+                                        1,
+                                        previousPage - 1
+                                      )
+                                  )
+                                }
+                              >
+                                <ChevronLeft size={13} />
+                              </button>
+
+                              {Array.from(
+                                { length: reportTotalPages },
+                                (_, index) => index + 1
+                              ).map((pageNumber) => (
+                                <button
+                                  type="button"
+                                  key={pageNumber}
+                                  className={
+                                    reportSafeCurrentPage ===
+                                      pageNumber
+                                      ? "active"
+                                      : ""
+                                  }
+                                  onClick={() =>
+                                    setReportCurrentPage(
+                                      pageNumber
+                                    )
+                                  }
+                                >
+                                  {pageNumber}
+                                </button>
+                              ))}
+
+                              <button
+                                type="button"
+                                disabled={
+                                  reportSafeCurrentPage ===
+                                  reportTotalPages
+                                }
+                                onClick={() =>
+                                  setReportCurrentPage(
+                                    (previousPage) =>
+                                      Math.min(
+                                        reportTotalPages,
+                                        previousPage + 1
+                                      )
+                                  )
+                                }
+                              >
+                                <ChevronRight size={13} />
+                              </button>
+                            </div>
+                          </div>
+                        )}
+                      </article>
+                    </div>
+
+                    {/* =====================================================
+              RIGHT SIDEBAR
+          ===================================================== */}
+                    <aside className="report-dashboard-right">
+                      <article className="report-right-panel report-filter-panel">
+                        <h3>Filters</h3>
+
+                        <label>
+                          <span>Date Range</span>
+
+                          <div className="report-date-control">
+                            <CalendarDays size={14} />
+                            <input
+                              type="text"
+                              defaultValue="01/06/2025 - 30/06/2025"
+                            />
+                            <ChevronDown size={13} />
+                          </div>
+                        </label>
+
+                        <label>
+                          <span>Compare With</span>
+
+                          <select defaultValue="Previous Month">
+                            <option>Previous Month</option>
+                            <option>Previous Quarter</option>
+                            <option>Previous Year</option>
+                          </select>
+                        </label>
+
+                        <div className="report-view-mode">
+                          <span>View</span>
+
+                          <div>
+                            <button
+                              type="button"
+                              className="active"
+                            >
+                              Summary
+                            </button>
+
+                            <button type="button">
+                              Detailed
+                            </button>
+                          </div>
+                        </div>
+
+                        <button
+                          type="button"
+                          className="report-apply-filter-button"
+                        >
+                          Apply Filters
+                        </button>
+                      </article>
+
+                      <article className="report-right-panel report-recent-panel">
+                        <div className="report-recent-heading">
+                          <h3>Recent Reports</h3>
+                          <ChevronUp size={14} />
+                        </div>
+
+                        <div className="report-recent-list">
+                          {[
+                            {
+                              name: "Sales Summary Report",
+                              time: "2 hours ago",
+                              icon: TrendingUp,
+                              className: "green",
+                            },
+                            {
+                              name: "Party Outstanding Report",
+                              time: "5 hours ago",
+                              icon: Package,
+                              className: "orange",
+                            },
+                            {
+                              name: "Stock Movement Report",
+                              time: "1 day ago",
+                              icon: Users,
+                              className: "blue",
+                            },
+                            {
+                              name: "GST Return Summary",
+                              time: "2 days ago",
+                              icon: FileText,
+                              className: "pink",
+                            },
+                            {
+                              name: "Top 10 Products Report",
+                              time: "3 days ago",
+                              icon: Crown,
+                              className: "green",
+                            },
+                          ].map((recentReport) => {
+                            const RecentIcon =
+                              recentReport.icon;
+
+                            return (
+                              <button
+                                type="button"
+                                key={recentReport.name}
+                                className="report-recent-item"
+                              >
+                                <span
+                                  className={`report-recent-icon ${recentReport.className}`}
+                                >
+                                  <RecentIcon size={15} />
+                                </span>
+
+                                <span>
+                                  <strong>
+                                    {recentReport.name}
+                                  </strong>
+
+                                  <small>
+                                    {recentReport.time}
+                                  </small>
+                                </span>
+                              </button>
+                            );
+                          })}
+                        </div>
+
+                        <button
+                          type="button"
+                          className="report-view-all-button"
+                        >
+                          View All
+                        </button>
+                      </article>
+                    </aside>
+                  </div>
+
+                  {/* =====================================================
+            BOTTOM FEATURE BAR
+        ===================================================== */}
+                  <div className="report-bottom-feature-bar">
+                    <div>
                       <span>
-                        <CategoryIcon size={13} />
-                        {category.name}
+                        <TrendingUp size={21} />
                       </span>
 
-                      <em>{category.count}</em>
-                    </button>
-                  );
-                })}
-              </div>
-            </article>
-          </div>
+                      <p>
+                        <strong>Smart Insights</strong>
+                        <small>
+                          AI-powered business insights and
+                          recommendations
+                        </small>
+                      </p>
+                    </div>
 
-          {/* =================================================
-              MY REPORTS TABLE
-          ================================================= */}
-          <article className="report-list-panel">
-            <div className="report-list-tabs">
-              <button
-                type="button"
-                className="active"
-              >
-                My Reports
-              </button>
+                    <div>
+                      <span>
+                        <Clock3 size={21} />
+                      </span>
 
-              <button type="button">
-                Favorites
-              </button>
+                      <p>
+                        <strong>Scheduled Reports</strong>
+                        <small>
+                          Automate report delivery via email
+                        </small>
+                      </p>
+                    </div>
 
-              <button type="button">
-                Shared With Me
-              </button>
-            </div>
+                    <div>
+                      <span>
+                        <Download size={21} />
+                      </span>
 
-            <div className="report-list-table">
-              <div className="report-list-header">
-                <span>Report Name</span>
-                <span>Category</span>
-                <span>Type</span>
-                <span>Created On</span>
-                <span>Actions</span>
-              </div>
+                      <p>
+                        <strong>Export Options</strong>
+                        <small>
+                          Export to Excel, PDF, CSV and more
+                        </small>
+                      </p>
+                    </div>
 
-              {paginatedMyReports.length === 0 ? (
-                <div className="report-list-empty">
-                  <FileBarChart size={32} />
-                  <strong>No reports found</strong>
-                  <span>
-                    Try another report name or
-                    category.
-                  </span>
+                    <div>
+                      <span>
+                        <SlidersHorizontal size={21} />
+                      </span>
+
+                      <p>
+                        <strong>Report Builder</strong>
+                        <small>
+                          Create custom reports with drag and
+                          drop
+                        </small>
+                      </p>
+                    </div>
+
+                    <div className="report-bottom-help">
+                      <p>
+                        <strong>Need help?</strong>
+                        <small>
+                          View guide or contact support
+                        </small>
+                      </p>
+
+                      <button type="button">
+                        Help Center
+                      </button>
+                    </div>
+                  </div>
                 </div>
-              ) : (
-                paginatedMyReports.map(
-                  (report, index) => {
-                    const isFavorite =
-                      favoriteReports.includes(
-                        report.name
-                      );
-
-                    return (
-                      <div
-                        key={report.name}
-                        className="report-list-row"
-                        onClick={() =>
-                          handleReportClick(
-                            report.name
-                          )
-                        }
-                      >
-                        <div className="report-list-name">
-                          <button
-                            type="button"
-                            className={`report-table-favorite ${
-                              isFavorite
-                                ? "selected"
-                                : ""
-                            }`}
-                            onClick={(event) => {
-                              event.stopPropagation();
-
-                              toggleFavoriteReport(
-                                report.name
-                              );
-                            }}
-                          >
-                            ★
-                          </button>
-
-                          <span>
-                            <strong>
-                              {report.name}
-                            </strong>
-
-                            <small>
-                              {report.description}
-                            </small>
-                          </span>
-                        </div>
-
-                        <div>
-                          <span
-                            className={`report-table-category category-${report.category.toLowerCase()}`}
-                          >
-                            {report.category}
-                          </span>
-                        </div>
-
-                        <span>
-                          {index % 2 === 0
-                            ? "Summary"
-                            : "Detailed"}
-                        </span>
-
-                        <span>
-                          {25 - index} Jun 2025
-                        </span>
-
-                        <div className="report-table-actions">
-                          <button
-                            type="button"
-                            onClick={(event) => {
-                              event.stopPropagation();
-
-                              handleReportClick(
-                                report.name
-                              );
-                            }}
-                            title="View report"
-                          >
-                            <Eye size={13} />
-                          </button>
-
-                          <button
-                            type="button"
-                            onClick={(event) =>
-                              event.stopPropagation()
-                            }
-                            title="Export report"
-                          >
-                            <Download size={13} />
-                          </button>
-
-                          <button
-                            type="button"
-                            onClick={(event) =>
-                              event.stopPropagation()
-                            }
-                            title="More options"
-                          >
-                            <MoreVertical size={14} />
-                          </button>
-                        </div>
-                      </div>
-                    );
-                  }
-                )
               )}
-            </div>
-
-            {filteredMyReports.length > 0 && (
-              <div className="report-list-footer">
-                <span>
-                  Showing {reportStartRecord} to{" "}
-                  {reportEndRecord} of{" "}
-                  {filteredMyReports.length} reports
-                </span>
-
-                <div className="report-table-pagination">
-                  <button
-                    type="button"
-                    disabled={
-                      reportSafeCurrentPage === 1
-                    }
-                    onClick={() =>
-                      setReportCurrentPage(
-                        (previousPage) =>
-                          Math.max(
-                            1,
-                            previousPage - 1
-                          )
-                      )
-                    }
-                  >
-                    <ChevronLeft size={13} />
-                  </button>
-
-                  {Array.from(
-                    { length: reportTotalPages },
-                    (_, index) => index + 1
-                  ).map((pageNumber) => (
-                    <button
-                      type="button"
-                      key={pageNumber}
-                      className={
-                        reportSafeCurrentPage ===
-                        pageNumber
-                          ? "active"
-                          : ""
-                      }
-                      onClick={() =>
-                        setReportCurrentPage(
-                          pageNumber
-                        )
-                      }
-                    >
-                      {pageNumber}
-                    </button>
-                  ))}
-
-                  <button
-                    type="button"
-                    disabled={
-                      reportSafeCurrentPage ===
-                      reportTotalPages
-                    }
-                    onClick={() =>
-                      setReportCurrentPage(
-                        (previousPage) =>
-                          Math.min(
-                            reportTotalPages,
-                            previousPage + 1
-                          )
-                      )
-                    }
-                  >
-                    <ChevronRight size={13} />
-                  </button>
-                </div>
-              </div>
-            )}
-          </article>
-        </div>
-
-        {/* =====================================================
-            RIGHT SIDEBAR
-        ===================================================== */}
-        <aside className="report-dashboard-right">
-          <article className="report-right-panel report-filter-panel">
-            <h3>Filters</h3>
-
-            <label>
-              <span>Date Range</span>
-
-              <div className="report-date-control">
-                <CalendarDays size={14} />
-                <input
-                  type="text"
-                  defaultValue="01/06/2025 - 30/06/2025"
-                />
-                <ChevronDown size={13} />
-              </div>
-            </label>
-
-            <label>
-              <span>Compare With</span>
-
-              <select defaultValue="Previous Month">
-                <option>Previous Month</option>
-                <option>Previous Quarter</option>
-                <option>Previous Year</option>
-              </select>
-            </label>
-
-            <div className="report-view-mode">
-              <span>View</span>
-
-              <div>
-                <button
-                  type="button"
-                  className="active"
-                >
-                  Summary
-                </button>
-
-                <button type="button">
-                  Detailed
-                </button>
-              </div>
-            </div>
-
-            <button
-              type="button"
-              className="report-apply-filter-button"
-            >
-              Apply Filters
-            </button>
-          </article>
-
-          <article className="report-right-panel report-recent-panel">
-            <div className="report-recent-heading">
-              <h3>Recent Reports</h3>
-              <ChevronUp size={14} />
-            </div>
-
-            <div className="report-recent-list">
-              {[
-                {
-                  name: "Sales Summary Report",
-                  time: "2 hours ago",
-                  icon: TrendingUp,
-                  className: "green",
-                },
-                {
-                  name: "Party Outstanding Report",
-                  time: "5 hours ago",
-                  icon: Package,
-                  className: "orange",
-                },
-                {
-                  name: "Stock Movement Report",
-                  time: "1 day ago",
-                  icon: Users,
-                  className: "blue",
-                },
-                {
-                  name: "GST Return Summary",
-                  time: "2 days ago",
-                  icon: FileText,
-                  className: "pink",
-                },
-                {
-                  name: "Top 10 Products Report",
-                  time: "3 days ago",
-                  icon: Crown,
-                  className: "green",
-                },
-              ].map((recentReport) => {
-                const RecentIcon =
-                  recentReport.icon;
-
-                return (
-                  <button
-                    type="button"
-                    key={recentReport.name}
-                    className="report-recent-item"
-                  >
-                    <span
-                      className={`report-recent-icon ${recentReport.className}`}
-                    >
-                      <RecentIcon size={15} />
-                    </span>
-
-                    <span>
-                      <strong>
-                        {recentReport.name}
-                      </strong>
-
-                      <small>
-                        {recentReport.time}
-                      </small>
-                    </span>
-                  </button>
-                );
-              })}
-            </div>
-
-            <button
-              type="button"
-              className="report-view-all-button"
-            >
-              View All
-            </button>
-          </article>
-        </aside>
-      </div>
-
-      {/* =====================================================
-          BOTTOM FEATURE BAR
-      ===================================================== */}
-      <div className="report-bottom-feature-bar">
-        <div>
-          <span>
-            <TrendingUp size={21} />
-          </span>
-
-          <p>
-            <strong>Smart Insights</strong>
-            <small>
-              AI-powered business insights and
-              recommendations
-            </small>
-          </p>
-        </div>
-
-        <div>
-          <span>
-            <Clock3 size={21} />
-          </span>
-
-          <p>
-            <strong>Scheduled Reports</strong>
-            <small>
-              Automate report delivery via email
-            </small>
-          </p>
-        </div>
-
-        <div>
-          <span>
-            <Download size={21} />
-          </span>
-
-          <p>
-            <strong>Export Options</strong>
-            <small>
-              Export to Excel, PDF, CSV and more
-            </small>
-          </p>
-        </div>
-
-        <div>
-          <span>
-            <SlidersHorizontal size={21} />
-          </span>
-
-          <p>
-            <strong>Report Builder</strong>
-            <small>
-              Create custom reports with drag and
-              drop
-            </small>
-          </p>
-        </div>
-
-        <div className="report-bottom-help">
-          <p>
-            <strong>Need help?</strong>
-            <small>
-              View guide or contact support
-            </small>
-          </p>
-
-          <button type="button">
-            Help Center
-          </button>
-        </div>
-      </div>
-    </div>
-  )}
 
             {activeSubMenu === 'GoDown Master' && openFormFor === 'GoDown Master' && (
               <div className="compact-master-page">
@@ -59978,18 +60297,25 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                       Export PDF
                     </button>
 
-                    <button
-                      type="button"
-                      className="firm-ui-btn firm-ui-btn-primary"
-                      onClick={() => {
-                        setEditGodownId(null);
-                        setGodownForm({ code: '', name: '', address: '', location: '' });
-                        setOpenFormFor('GoDown Master');
-                      }}
-                    >
-                      <Plus size={17} />
-                      Add New Godown
-                    </button>
+                    {godownPermission.add && (
+                      <button
+                        type="button"
+                        className="firm-ui-btn firm-ui-btn-primary"
+                        onClick={() => {
+                          setEditGodownId(null);
+                          setGodownForm({
+                            code: "",
+                            name: "",
+                            address: "",
+                            location: "",
+                          });
+                          setOpenFormFor("GoDown Master");
+                        }}
+                      >
+                        <Plus size={17} />
+                        Add New Godown
+                      </button>
+                    )}
                   </div>
                 </div>
 
@@ -60094,36 +60420,32 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                                       type="button"
                                       className="firm-ui-action-btn view"
                                       title="View godown"
-                                      onClick={() =>
-                                        viewGodown(godown)
-                                      }
+                                      onClick={() => viewGodown(godown)}
                                     >
                                       <Eye size={15} />
                                     </button>
 
-                                    <button
-                                      type="button"
-                                      className="firm-ui-action-btn edit"
-                                      title="Edit godown"
-                                      onClick={() =>
-                                        editGodown(godown)
-                                      }
-                                    >
-                                      <Pencil size={15} />
-                                    </button>
+                                    {godownPermission.edit && (
+                                      <button
+                                        type="button"
+                                        className="firm-ui-action-btn edit"
+                                        title="Edit godown"
+                                        onClick={() => editGodown(godown)}
+                                      >
+                                        <Pencil size={15} />
+                                      </button>
+                                    )}
 
-                                    <button
-                                      type="button"
-                                      className="firm-ui-action-btn delete"
-                                      title="Delete godown"
-                                      onClick={() =>
-                                        deleteGodown(
-                                          godown
-                                        )
-                                      }
-                                    >
-                                      <Trash2 size={15} />
-                                    </button>
+                                    {godownPermission.delete && (
+                                      <button
+                                        type="button"
+                                        className="firm-ui-action-btn delete"
+                                        title="Delete godown"
+                                        onClick={() => deleteGodown(godown)}
+                                      >
+                                        <Trash2 size={15} />
+                                      </button>
+                                    )}
                                   </div>
                                 </td>
                               </tr>
@@ -60147,7 +60469,7 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                                     : "Add your first godown to start managing."}
                                 </p>
 
-                                {!godownBackendSearch && (
+                                {!godownBackendSearch && godownPermission.add && (
                                   <button
                                     type="button"
                                     className="firm-ui-btn firm-ui-btn-primary"
@@ -60560,6 +60882,7 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                       </div>
 
                       <div className="premium-list-heading-actions">
+                        {settleLoadPermission.add && (
                         <button
                           type="button"
                           className="premium-list-primary-button"
@@ -60570,7 +60893,7 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                           <Plus size={15} />
                           New Settle Load
                         </button>
-
+                        )}
                         <button
                           type="button"
                           className="premium-list-export-button excel"
@@ -60844,6 +61167,7 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                                         >
                                           <Eye size={14} />
                                         </button>
+{settleLoadPermission.edit && (
 
                                         <button
                                           type="button"
@@ -60857,7 +61181,8 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                                         >
                                           <Pencil size={14} />
                                         </button>
-
+)}
+{settleLoadPermission.delete && (
                                         <button
                                           type="button"
                                           className="premium-list-icon-button delete"
@@ -60870,6 +61195,7 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                                         >
                                           <Trash2 size={14} />
                                         </button>
+)}
                                       </div>
                                     </td>
                                   </tr>
@@ -61073,8 +61399,8 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
             {showSettleLoad && activeSubMenu === "Settle Load" && (
               <div className="settle-premium-page">
                 {/* =====================================================
-          PAGE TITLE AND ACTION BUTTONS
-          ===================================================== */}
+            PAGE TITLE AND ACTION BUTTONS
+            ===================================================== */}
                 <div className="settle-premium-topbar">
                   <div>
                     <h2 className="settle-premium-title">Settle Load</h2>
@@ -61128,8 +61454,8 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
 
                 <div className="settle-premium-card">
                   {/* =====================================================
-            LOAD INFORMATION — SINGLE ROW
-            ===================================================== */}
+              LOAD INFORMATION — SINGLE ROW
+              ===================================================== */}
                   <div className="settle-premium-header-fields">
                     <div className="settle-premium-field settle-field-series">
                       <label>Load Series</label>
@@ -61197,8 +61523,8 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                   </div>
 
                   {/* =====================================================
-            LOAD BILLS TOOLBAR
-            ===================================================== */}
+              LOAD BILLS TOOLBAR
+              ===================================================== */}
                   <div className="settle-premium-table-toolbar">
                     <div className="settle-premium-table-heading">
                       <h3>Load Bills</h3>
@@ -61233,11 +61559,11 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                   </div>
 
                   {/* =====================================================
-            BILLS TABLE
-            ===================================================== */}
+              BILLS TABLE
+              ===================================================== */}
                   {/* =====================================================
-      BILLS TABLE — EXACT COLUMNS AS DESIGN
-      ===================================================== */}
+        BILLS TABLE — EXACT COLUMNS AS DESIGN
+        ===================================================== */}
                   <div className="settle-premium-grid-shell">
                     <table className="settle-premium-table">
                       <thead>
@@ -61640,8 +61966,8 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                   </div>
 
                   {/* =====================================================
-            SETTLEMENT SUMMARY
-            ===================================================== */}
+              SETTLEMENT SUMMARY
+              ===================================================== */}
                   <div className="settle-premium-summary">
                     <div className="settle-summary-heading">
                       <h3>Settlement Summary</h3>
@@ -62019,20 +62345,20 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
             {/* Bill Print Form */}
 
             {/* =========================================================
-      PREMIUM BILL PRINT
-    ========================================================= */}
+        PREMIUM BILL PRINT
+      ========================================================= */}
 
             {/* =========================================================
-      BILL PRINT FORM
-    ========================================================= */}
+        BILL PRINT FORM
+      ========================================================= */}
 
             {activeSubMenu === "Bill Print" &&
               openFormFor === "Bill Print" &&
               !showBillPrintPreview && (
                 <div className="bill-print-page">
                   {/* =====================================================
-            PAGE TITLE
-          ===================================================== */}
+              PAGE TITLE
+            ===================================================== */}
 
                   <section className="bill-print-page-heading">
                     <div className="bill-print-heading-left">
@@ -62065,8 +62391,8 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                   </section>
 
                   {/* =====================================================
-            BILL PRINT FORM
-          ===================================================== */}
+              BILL PRINT FORM
+            ===================================================== */}
 
                   <form
                     className="bill-print-content"
@@ -62276,8 +62602,8 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                       </div>
 
                       {/* =================================================
-                LOADING MESSAGE
-              ================================================= */}
+                  LOADING MESSAGE
+                ================================================= */}
 
                       {billPrintLoading && (
                         <div className="bill-print-status loading">
@@ -62291,8 +62617,8 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                       )}
 
                       {/* =================================================
-                ERROR MESSAGE
-              ================================================= */}
+                  ERROR MESSAGE
+                ================================================= */}
 
                       {billPrintError && (
                         <div className="bill-print-status error">
@@ -62303,8 +62629,8 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                     </section>
 
                     {/* =====================================================
-              ACTION FOOTER
-            ===================================================== */}
+                ACTION FOOTER
+              ===================================================== */}
 
                     <footer className="bill-print-action-footer">
                       <button
@@ -62381,17 +62707,17 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
               )}
 
             {/* =========================================================
-      BILL PRINT PREVIEW PAGE
-      Appears only after clicking Preview
-    ========================================================= */}
+        BILL PRINT PREVIEW PAGE
+        Appears only after clicking Preview
+      ========================================================= */}
 
             {activeSubMenu === "Bill Print" &&
               openFormFor === "Bill Print" &&
               showBillPrintPreview && (
                 <div className="bill-print-preview-page">
                   {/* =====================================================
-            PREVIEW TOOLBAR
-          ===================================================== */}
+              PREVIEW TOOLBAR
+            ===================================================== */}
 
                   <div className="bill-print-preview-toolbar">
                     <div className="bill-print-preview-toolbar-title">
@@ -62462,8 +62788,8 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                   </div>
 
                   {/* =====================================================
-            PREVIEW CONTENT
-          ===================================================== */}
+              PREVIEW CONTENT
+            ===================================================== */}
 
                   <div className="bill-print-preview-scroll">
                     {billPrintLoading ? (
@@ -62501,17 +62827,17 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                 </div>
               )}
             {/* =========================================================
-      QUOTATION FORM
-      SAME DESIGN AND WORKING STRUCTURE AS SALES BILLING
-    ========================================================= */}
+        QUOTATION FORM
+        SAME DESIGN AND WORKING STRUCTURE AS SALES BILLING
+      ========================================================= */}
 
             {activeSubMenu === "Quotation" &&
               openFormFor === "Quotation" && (
                 <div className="sales-billing-page">
                   <div className="sales-billing-card">
                     {/* =====================================================
-              PAGE HEADER
-            ===================================================== */}
+                PAGE HEADER
+              ===================================================== */}
 
                     <div className="sales-billing-page-header">
                       <div className="sales-billing-title-wrapper">
@@ -62590,8 +62916,8 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                     </div>
 
                     {/* =====================================================
-              1. QUOTATION HEADER
-            ===================================================== */}
+                1. QUOTATION HEADER
+              ===================================================== */}
 
                     <section className="billing-form-section billing-header-section">
                       <div className="billing-section-heading">
@@ -63053,9 +63379,9 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                     </section>
 
                     {/* =====================================================
-              2. PRODUCT ENTRY
-              EXACT SALES BILLING GRID CLASSES
-            ===================================================== */}
+                2. PRODUCT ENTRY
+                EXACT SALES BILLING GRID CLASSES
+              ===================================================== */}
 
                     <section className="billing-form-section billing-product-section">
                       <div className="billing-product-heading">
@@ -63156,8 +63482,8 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                                 }
 
                                 /*
-                                 * Ignore the Delete button.
-                                 */
+                                * Ignore the Delete button.
+                                */
                                 if (
                                   clickedElement.closest(
                                     ".billing-delete-button, [data-row-delete='true']"
@@ -63167,9 +63493,9 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                                 }
 
                                 /*
-                                 * Find the Sales Billing row that contains
-                                 * whichever input, cell or blank area was clicked.
-                                 */
+                                * Find the Sales Billing row that contains
+                                * whichever input, cell or blank area was clicked.
+                                */
                                 const clickedRow = clickedElement.closest(
                                   "tr[data-sales-row-index]"
                                 );
@@ -64289,9 +64615,9 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                     </section>
 
                     {/* =====================================================
-              PRODUCT SEARCH DROPDOWN
-              SAME DESIGN AS SALES BILLING
-            ===================================================== */}
+                PRODUCT SEARCH DROPDOWN
+                SAME DESIGN AS SALES BILLING
+              ===================================================== */}
 
                     {showProductList &&
                       String(
@@ -64372,11 +64698,7 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                                 productDropdownIndex ===
                                 rowIndex;
 
-                              const alreadySelected =
-                                Boolean(
-                                  isAlreadySelected ||
-                                  isDuplicate
-                                );
+                              const alreadySelected = Boolean(isAlreadySelected);
 
                               return (
                                 <div
@@ -64435,9 +64757,9 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                       )}
 
                     {/* =====================================================
-              3. QUOTATION SUMMARY
-              SAME DESIGN AS INVOICE SUMMARY
-            ===================================================== */}
+                3. QUOTATION SUMMARY
+                SAME DESIGN AS INVOICE SUMMARY
+              ===================================================== */}
 
                     <section className="billing-compact-summary">
                       <div className="billing-compact-summary-header">
@@ -64697,8 +65019,8 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                     }}
                   >
                     {/* ===================================================
-              PAGE HEADER
-            =================================================== */}
+                PAGE HEADER
+              =================================================== */}
                     <div className="premium-load-page-header">
                       <div className="premium-load-title-wrap">
                         <div className="premium-load-title-icon">
@@ -64763,8 +65085,8 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
 
                     <div className="premium-load-layout">
                       {/* =================================================
-                MAIN COLUMN
-              ================================================= */}
+                  MAIN COLUMN
+                ================================================= */}
                       <main className="premium-load-main">
                         {/* LOAD INFORMATION */}
                         <section className="premium-load-card premium-load-info-card">
@@ -65325,8 +65647,8 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                         </section>
 
                         {/* =================================================
-                  BILLS LIST
-                ================================================= */}
+                    BILLS LIST
+                  ================================================= */}
                         <section className="premium-load-card premium-load-bills-card">
                           <div className="premium-load-bills-heading">
                             <div>
@@ -65558,8 +65880,8 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                       </main>
 
                       {/* =================================================
-                RIGHT SIDEBAR
-              ================================================= */}
+                  RIGHT SIDEBAR
+                ================================================= */}
                       <aside className="premium-load-sidebar">
                         <section className="premium-load-side-card premium-load-summary-side-card">
                           <h3>Load Summary</h3>
@@ -65664,8 +65986,8 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                     </div>
 
                     {/* =================================================
-              BOTTOM ACTIONS
-            ================================================= */}
+                BOTTOM ACTIONS
+              ================================================= */}
                     <div className="premium-load-bottom-actions">
                       <button
                         type="button"
@@ -65694,14 +66016,14 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                 </div>
               )}
             {/* =========================================================
-      ADVANCED PRINT LOAD FORM
-    ========================================================= */}
+        ADVANCED PRINT LOAD FORM
+      ========================================================= */}
             {activeSubMenu === "Print Load" &&
               openFormFor === "Print Load" && (
                 <div className="print-load-page">
                   {/* =====================================================
-            PAGE HEADER
-            ===================================================== */}
+              PAGE HEADER
+              ===================================================== */}
                   <div className="print-load-page-header">
                     <div>
                       <h2>Print Load</h2>
@@ -65738,16 +66060,16 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                   </div>
 
                   {/* =====================================================
-            PRINT LOAD FORM
-            ===================================================== */}
+              PRINT LOAD FORM
+              ===================================================== */}
                   <form
                     className="print-load-form"
                     onSubmit={handlePrintLoadSubmit}
                   >
                     <section className="print-load-settings-card">
                       {/* =================================================
-                LOAD SELECTION
-                ================================================= */}
+                  LOAD SELECTION
+                  ================================================= */}
                       <div className="print-load-section">
                         <h3>Load Selection</h3>
 
@@ -65863,8 +66185,8 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                       </div>
 
                       {/* =================================================
-                DISPLAY AND ORDER OPTIONS
-                ================================================= */}
+                  DISPLAY AND ORDER OPTIONS
+                  ================================================= */}
                       <div className="print-load-section">
                         <h3>Display &amp; Order Options</h3>
 
@@ -65979,8 +66301,8 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                     </section>
 
                     {/* =====================================================
-              ONLY ONE COLUMN SELECTION BUTTON
-              ===================================================== */}
+                ONLY ONE COLUMN SELECTION BUTTON
+                ===================================================== */}
                     <section className="print-load-current-layout-card">
                       <div className="print-load-current-layout-icon">
                         {printLoadFormData.reportLevel ===
@@ -66021,8 +66343,8 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                     </section>
 
                     {/* =====================================================
-              LOADING AND ERROR
-              ===================================================== */}
+                LOADING AND ERROR
+                ===================================================== */}
                     {printLoadLoading && (
                       <div className="print-load-message loading">
                         <RefreshCw
@@ -66042,8 +66364,8 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                     )}
 
                     {/* =====================================================
-              BOTTOM BUTTONS
-              ===================================================== */}
+                BOTTOM BUTTONS
+                ===================================================== */}
                     <div className="print-load-bottom-bar">
                       <button
                         type="button"
@@ -66085,8 +66407,8 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                   </form>
 
                   {/* =====================================================
-            COLUMN SELECTION MODAL
-            ===================================================== */}
+              COLUMN SELECTION MODAL
+              ===================================================== */}
                   {showPrintLoadColumnModal &&
                     createPortal(
                       <div
@@ -66233,8 +66555,8 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                     )}
 
                   {/* =====================================================
-            PRINT PREVIEW MODAL
-            ===================================================== */}
+              PRINT PREVIEW MODAL
+              ===================================================== */}
                   {showPrintPreview &&
                     createPortal(
                       <div className="print-load-preview-modal-overlay">
@@ -66244,8 +66566,8 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                           aria-modal="true"
                         >
                           {/* ===============================================
-                    MODAL ACTION BAR
-                    =============================================== */}
+                      MODAL ACTION BAR
+                      =============================================== */}
                           <div className="print-load-preview-modal-header no-print">
                             <div>
                               <h3>Print Load Preview</h3>
@@ -66299,8 +66621,8 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                           </div>
 
                           {/* ===============================================
-                    PRINT DOCUMENT
-                    =============================================== */}
+                      PRINT DOCUMENT
+                      =============================================== */}
                           <div className="print-load-preview-modal-body">
                             <div
                               id="print-load-content"
@@ -66318,8 +66640,8 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                                       key={`print-load-page-${pageIndex}`}
                                     >
                                       {/* =====================================
-                                SIMPLE DOCUMENT HEADER
-                                ===================================== */}
+                                  SIMPLE DOCUMENT HEADER
+                                  ===================================== */}
                                       <header className="print-load-document-header">
                                         <h1>
                                           {printLoadFirmName ||
@@ -66404,8 +66726,8 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                                       </header>
 
                                       {/* =====================================
-                                COMPACT TABLE
-                                ===================================== */}
+                                  COMPACT TABLE
+                                  ===================================== */}
                                       <div className="print-load-document-table-wrap">
                                         <table className="print-load-document-table">
                                           <thead>
@@ -66531,8 +66853,8 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                 renderDashboard()
               )}
             {/* =========================================================
-      FIRM MASTER - COMPACT FORM VIEW
-  ========================================================= */}
+        FIRM MASTER - COMPACT FORM VIEW
+    ========================================================= */}
             {activeSubMenu === "Firm Master" &&
               openFormFor === "Firm Master" && (
                 <div className="compact-master-page">
@@ -66797,8 +67119,8 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                 </div>
               )}
             {/* =========================================================
-      FIRM MASTER - LIST VIEW
-  ========================================================= */}
+        FIRM MASTER - LIST VIEW
+    ========================================================= */}
             {activeSubMenu === "Firm Master" && openFormFor !== "Firm Master" && (
               <div className="firm-ui-page firm-ui-list-page">
                 <div className="firm-ui-page-heading firm-ui-list-heading">
@@ -66827,8 +67149,8 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                           }));
 
                           /*
-                           * Search results always begin on page 1.
-                           */
+                          * Search results always begin on page 1.
+                          */
                           setFirmCurrentPage(1);
                         }}
                       />
@@ -67089,9 +67411,9 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                       )
                         .filter((pageNumber) => {
                           /*
-                           * Display the first page, last page,
-                           * current page and two nearby pages.
-                           */
+                          * Display the first page, last page,
+                          * current page and two nearby pages.
+                          */
                           return (
                             pageNumber === 1 ||
                             pageNumber === firmTotalPages ||
@@ -67165,8 +67487,8 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
             )}
 
             {/* =========================================================
-      USER MASTER - COMPACT FORM VIEW
-  ========================================================= */}
+        USER MASTER - COMPACT FORM VIEW
+    ========================================================= */}
             {activeSubMenu === "User Master" &&
               openFormFor === "User Master" && (
                 <div className="compact-master-page compact-user-page">
@@ -67308,8 +67630,8 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                 </div>
               )}
             {/* =========================================================
-      USER MASTER - LIST VIEW
-  ========================================================= */}
+        USER MASTER - LIST VIEW
+    ========================================================= */}
 
             {activeSubMenu === "User Master" &&
               openFormFor !== "User Master" && (
@@ -67740,104 +68062,104 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                   </div>
                 </div>
               )}
-          {activeSubMenu === "General Setup" &&
-  openFormFor === "General Setup" && (
-    <GeneralSetup1
-      isAdmin={isAdminUser}
-      onSettingsSaved={(savedSetup) => {
-        setRuntimeGeneralSetup((previous) => ({
-          ...previous,
+            {activeSubMenu === "General Setup" &&
+              openFormFor === "General Setup" && (
+                <GeneralSetup1
+                  isAdmin={isAdminUser}
+                  onSettingsSaved={(savedSetup) => {
+                    setRuntimeGeneralSetup((previous) => ({
+                      ...previous,
 
-          billAllowBlacklistParty:
-            savedSetup?.billAllowBlacklistParty === true,
+                      billAllowBlacklistParty:
+                        savedSetup?.billAllowBlacklistParty === true,
 
-          allowChangeBillType:
-            savedSetup?.allowChangeBillType === true,
+                      allowChangeBillType:
+                        savedSetup?.allowChangeBillType === true,
 
-          defaultSalesman:
-            savedSetup?.defaultSalesman === true,
+                      defaultSalesman:
+                        savedSetup?.defaultSalesman === true,
 
-          allowChangeSaleRate:
-            savedSetup?.allowChangeSaleRate === true,
+                      allowChangeSaleRate:
+                        savedSetup?.allowChangeSaleRate === true,
 
-          allowMixBilling:
-            savedSetup?.allowMixBilling === true,
+                      allowMixBilling:
+                        savedSetup?.allowMixBilling === true,
 
-          allowEditBillAfterLoad:
-            savedSetup?.allowEditBillAfterLoad === true,
+                      allowEditBillAfterLoad:
+                        savedSetup?.allowEditBillAfterLoad === true,
 
-          editProductAfterLoad:
-            savedSetup?.editProductAfterLoad === true,
+                      editProductAfterLoad:
+                        savedSetup?.editProductAfterLoad === true,
 
-          saveAndPrint:
-            savedSetup?.saveAndPrint === true,
+                      saveAndPrint:
+                        savedSetup?.saveAndPrint === true,
 
-          allowSRateLessThanPRate:
-            savedSetup?.allowSRateLessThanPRate === true,
+                      allowSRateLessThanPRate:
+                        savedSetup?.allowSRateLessThanPRate === true,
 
-          updateLoadQtyAfterBillEdit:
-            savedSetup?.updateLoadQtyAfterBillEdit === true,
+                      updateLoadQtyAfterBillEdit:
+                        savedSetup?.updateLoadQtyAfterBillEdit === true,
 
-          allowNegativeStock:
-            savedSetup?.allowNegativeStock === true,
+                      allowNegativeStock:
+                        savedSetup?.allowNegativeStock === true,
 
-          goodsReturn:
-            savedSetup?.goodsReturn === true,
+                      goodsReturn:
+                        savedSetup?.goodsReturn === true,
 
-          damageReturn:
-            savedSetup?.damageReturn === true,
+                      damageReturn:
+                        savedSetup?.damageReturn === true,
 
-          schemeSummary:
-            savedSetup?.schemeSummary === true,
+                      schemeSummary:
+                        savedSetup?.schemeSummary === true,
 
-          vatSummary:
-            savedSetup?.vatSummary === true,
-            
+                      vatSummary:
+                        savedSetup?.vatSummary === true,
 
-          serialNo:
-            savedSetup?.serialNo === true,
 
-          autoVoucherNo:
-            savedSetup?.autoVoucherNo === true,
-            billingWithoutHsnCode:
-  savedSetup?.billingWithoutHsnCode === true,
-          editGrossPurchase:
-  savedSetup?.editGrossPurchase === true, 
-  allowChangeStarAmount:
-  savedSetup?.allowChangeStarAmount === true,
+                      serialNo:
+                        savedSetup?.serialNo === true,
 
-          vatOn:
-            savedSetup?.vatOn ||
-            DEFAULT_VAT_ON,
+                      autoVoucherNo:
+                        savedSetup?.autoVoucherNo === true,
+                      billingWithoutHsnCode:
+                        savedSetup?.billingWithoutHsnCode === true,
+                      editGrossPurchase:
+                        savedSetup?.editGrossPurchase === true,
+                      allowChangeStarAmount:
+                        savedSetup?.allowChangeStarAmount === true,
 
-          cashDiscountOn:
-            savedSetup?.cashDiscountOn ||
-            DEFAULT_CASH_DISCOUNT_ON,
+                      vatOn:
+                        savedSetup?.vatOn ||
+                        DEFAULT_VAT_ON,
 
-          productSelectionOn:
-            normalizeProductSelectionMode(
-              savedSetup?.productSelectionOn ||
-              DEFAULT_PRODUCT_SELECTION_ON
-            ),
+                      cashDiscountOn:
+                        savedSetup?.cashDiscountOn ||
+                        DEFAULT_CASH_DISCOUNT_ON,
 
-          defaultCompany:
-            String(
-              savedSetup?.defaultCompany || ""
-            ).trim(),
+                      productSelectionOn:
+                        normalizeProductSelectionMode(
+                          savedSetup?.productSelectionOn ||
+                          DEFAULT_PRODUCT_SELECTION_ON
+                        ),
 
-          defaultGodown:
-            String(
-              savedSetup?.defaultGodown || ""
-            ).trim(),
+                      defaultCompany:
+                        String(
+                          savedSetup?.defaultCompany || ""
+                        ).trim(),
 
-          defaultSelection:
-            normalizeDefaultSelection(
-              savedSetup?.defaultSelection
-            ),
-        }));
-      }}
-    />
-  )}
+                      defaultGodown:
+                        String(
+                          savedSetup?.defaultGodown || ""
+                        ).trim(),
+
+                      defaultSelection:
+                        normalizeDefaultSelection(
+                          savedSetup?.defaultSelection
+                        ),
+                    }));
+                  }}
+                />
+              )}
             {activeSubMenu === "General Setup 2" &&
               openFormFor === "General Setup 2" && (
                 <div
@@ -68436,19 +68758,20 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                       <FileText size={16} />
                       Export PDF
                     </button>
-
-                    <button
-                      type="button"
-                      className="firm-ui-btn firm-ui-btn-primary"
-                      onClick={() => {
-                        setEditCompanyId(null);
-                        setCompanyForm({ code: '', name: '', address: '', branchAddress: '' });
-                        setOpenFormFor('Company Master');
-                      }}
-                    >
-                      <Plus size={17} />
-                      Add New Company
-                    </button>
+                    {companyPermission.add && (
+                      <button
+                        type="button"
+                        className="firm-ui-btn firm-ui-btn-primary"
+                        onClick={() => {
+                          setEditCompanyId(null);
+                          setCompanyForm({ code: '', name: '', address: '', branchAddress: '' });
+                          setOpenFormFor('Company Master');
+                        }}
+                      >
+                        <Plus size={17} />
+                        Add New Company
+                      </button>
+                    )}
                   </div>
                 </div>
 
@@ -68537,22 +68860,26 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                                       >
                                         <Eye size={16} />
                                       </button>
-                                      <button
-                                        type="button"
-                                        className="firm-ui-action-btn edit"
-                                        title="Edit company"
-                                        onClick={() => editCompany(company)}
-                                      >
-                                        <Pencil size={16} />
-                                      </button>
-                                      <button
-                                        type="button"
-                                        className="firm-ui-action-btn delete"
-                                        title="Delete company"
-                                        onClick={() => deleteCompany(company)}
-                                      >
-                                        <Trash2 size={16} />
-                                      </button>
+                                      {companyPermission.edit && (
+                                        <button
+                                          type="button"
+                                          className="firm-ui-action-btn edit"
+                                          title="Edit company"
+                                          onClick={() => editCompany(company)}
+                                        >
+                                          <Pencil size={16} />
+                                        </button>
+                                      )}
+                                      {companyPermission.delete && (
+                                        <button
+                                          type="button"
+                                          className="firm-ui-action-btn delete"
+                                          title="Delete company"
+                                          onClick={() => deleteCompany(company)}
+                                        >
+                                          <Trash2 size={16} />
+                                        </button>
+                                      )}
                                     </div>
                                   </td>
                                 </tr>
@@ -68572,7 +68899,9 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                                     ? 'No company matches the entered search.'
                                     : 'Add your first company to start managing.'}
                                 </p>
+
                                 {!filters.company && (
+
                                   <button
                                     type="button"
                                     className="firm-ui-btn firm-ui-btn-primary"
@@ -68856,18 +69185,20 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                       Export PDF
                     </button>
 
-                    <button
-                      type="button"
-                      className="firm-ui-btn firm-ui-btn-primary"
-                      onClick={() => {
-                        setEditGroupId(null);
-                        setGroupForm({ code: '', name: '' });
-                        setOpenFormFor('Group Master');
-                      }}
-                    >
-                      <Plus size={17} />
-                      Add New Group
-                    </button>
+                    {groupPermission.add && (
+                      <button
+                        type="button"
+                        className="firm-ui-btn firm-ui-btn-primary"
+                        onClick={() => {
+                          setEditGroupId(null);
+                          setGroupForm({ code: "", name: "" });
+                          setOpenFormFor("Group Master");
+                        }}
+                      >
+                        <Plus size={17} />
+                        Add New Group
+                      </button>
+                    )}
                   </div>
                 </div>
 
@@ -68905,7 +69236,7 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                           </tr>
                         ) : getFilteredGroups().length > 0 ? (
                           getFilteredGroups().map(
-                            (group, index) => {
+                            (group, index) => (
                               <tr key={group._id || group.id || index}>
                                 <td className="firm-ui-sno-column">{(groupCurrentPage - 1) *
                                   groupRowsPerPage +
@@ -68928,26 +69259,32 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                                     >
                                       <Eye size={15} />
                                     </button>
-                                    <button
-                                      type="button"
-                                      className="firm-ui-action-btn edit"
-                                      title="Edit group"
-                                      onClick={() => editGroup(group)}
-                                    >
-                                      <Pencil size={15} />
-                                    </button>
-                                    <button
-                                      type="button"
-                                      className="firm-ui-action-btn delete"
-                                      title="Delete group"
-                                      onClick={() => deleteGroup(group._id || group.id)}
-                                    >
-                                      <Trash2 size={15} />
-                                    </button>
+
+                                    {groupPermission.edit && (
+                                      <button
+                                        type="button"
+                                        className="firm-ui-action-btn edit"
+                                        title="Edit group"
+                                        onClick={() => editGroup(group)}
+                                      >
+                                        <Pencil size={15} />
+                                      </button>
+                                    )}
+
+                                    {groupPermission.delete && (
+                                      <button
+                                        type="button"
+                                        className="firm-ui-action-btn delete"
+                                        title="Delete group"
+                                        onClick={() => deleteGroup(group._id || group.id)}
+                                      >
+                                        <Trash2 size={15} />
+                                      </button>
+                                    )}
                                   </div>
                                 </td>
                               </tr>
-                            })
+                            ))
                         ) : (
                           <tr>
                             <td colSpan={5}>
@@ -68961,7 +69298,7 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                                     ? 'No group matches the entered search.'
                                     : 'Add your first group to start managing product groups.'}
                                 </p>
-                                {!filters.group && (
+                                {!filters.group && groupPermission.add && (
                                   <button
                                     type="button"
                                     className="firm-ui-btn firm-ui-btn-primary"
@@ -69244,18 +69581,20 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                       Export PDF
                     </button>
 
-                    <button
-                      type="button"
-                      className="firm-ui-btn firm-ui-btn-primary"
-                      onClick={() => {
-                        setEditCategoryId(null);
-                        setCategoryForm({ code: '', name: '' });
-                        setOpenFormFor('Category Master');
-                      }}
-                    >
-                      <Plus size={17} />
-                      Add New Category
-                    </button>
+                    {categoryPermission.add && (
+                      <button
+                        type="button"
+                        className="firm-ui-btn firm-ui-btn-primary"
+                        onClick={() => {
+                          setEditCategoryId(null);
+                          setCategoryForm({ code: "", name: "" });
+                          setOpenFormFor("Category Master");
+                        }}
+                      >
+                        <Plus size={17} />
+                        Add New Category
+                      </button>
+                    )}
                   </div>
                 </div>
 
@@ -69320,22 +69659,30 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                                     >
                                       <Eye size={15} />
                                     </button>
-                                    <button
-                                      type="button"
-                                      className="firm-ui-action-btn edit"
-                                      title="Edit category"
-                                      onClick={() => editCategory(category)}
-                                    >
-                                      <Pencil size={15} />
-                                    </button>
-                                    <button
-                                      type="button"
-                                      className="firm-ui-action-btn delete"
-                                      title="Delete category"
-                                      onClick={() => deleteCategory(category._id || category.id)}
-                                    >
-                                      <Trash2 size={15} />
-                                    </button>
+
+                                    {categoryPermission.edit && (
+                                      <button
+                                        type="button"
+                                        className="firm-ui-action-btn edit"
+                                        title="Edit category"
+                                        onClick={() => editCategory(category)}
+                                      >
+                                        <Pencil size={15} />
+                                      </button>
+                                    )}
+
+                                    {categoryPermission.delete && (
+                                      <button
+                                        type="button"
+                                        className="firm-ui-action-btn delete"
+                                        title="Delete category"
+                                        onClick={() =>
+                                          deleteCategory(category._id || category.id)
+                                        }
+                                      >
+                                        <Trash2 size={15} />
+                                      </button>
+                                    )}
                                   </div>
                                 </td>
                               </tr>
@@ -69353,7 +69700,7 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                                     ? 'No category matches the entered search.'
                                     : 'Add your first category to start managing product categories.'}
                                 </p>
-                                {!filters.category && (
+                                {!filters.category && categoryPermission.add && (
                                   <button
                                     type="button"
                                     className="firm-ui-btn firm-ui-btn-primary"
@@ -69518,8 +69865,8 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                 transactionFormMode={transactionFormMode}
                 setTransactionFormMode={setTransactionFormMode}
                 autoVoucherNo={
-  runtimeGeneralSetup.autoVoucherNo === true
-}
+                  runtimeGeneralSetup.autoVoucherNo === true
+                }
               />
             )}
 
@@ -69973,6 +70320,7 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
 
                     <button
                       type="button"
+                      disabled={!productPermission.add}
                       className="firm-ui-btn firm-ui-btn-primary"
                       onClick={() => {
                         setEditProductId(null);
@@ -70054,6 +70402,7 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                               </td>
                               <td className="firm-ui-action-column">
                                 <div className="firm-ui-row-actions">
+                                  {/* View */}
                                   <button
                                     type="button"
                                     className="firm-ui-action-btn view"
@@ -70062,14 +70411,20 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                                   >
                                     <Eye size={15} />
                                   </button>
-                                  <button
-                                    type="button"
-                                    className="firm-ui-action-btn edit"
-                                    title="Edit product"
-                                    onClick={() => editProduct(product)}
-                                  >
-                                    <Pencil size={15} />
-                                  </button>
+
+                                  {/* Edit */}
+                                  {productPermission.edit && (
+                                    <button
+                                      type="button"
+                                      className="firm-ui-action-btn edit"
+                                      title="Edit product"
+                                      onClick={() => editProduct(product)}
+                                    >
+                                      <Pencil size={15} />
+                                    </button>
+                                  )}
+
+                                  {/* Product Mapping */}
                                   <button
                                     type="button"
                                     className="firm-ui-action-btn map"
@@ -70079,21 +70434,35 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                                       e.stopPropagation();
                                       openProductMappingModal(product);
                                     }}
-                                    style={{ color: '#8b5cf6', borderColor: '#e9d5ff', background: '#faf5ff' }}
+                                    style={{
+                                      color: "#8b5cf6",
+                                      borderColor: "#e9d5ff",
+                                      background: "#faf5ff",
+                                    }}
                                   >
-                                    <svg size={14} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{ width: '14px', height: '14px' }}>
+                                    <svg
+                                      viewBox="0 0 24 24"
+                                      fill="none"
+                                      stroke="currentColor"
+                                      strokeWidth="2"
+                                      style={{ width: "14px", height: "14px" }}
+                                    >
                                       <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71" />
                                       <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71" />
                                     </svg>
                                   </button>
-                                  <button
-                                    type="button"
-                                    className="firm-ui-action-btn delete"
-                                    title="Delete product"
-                                    onClick={() => deleteProduct(product._id || product.id)}
-                                  >
-                                    <Trash2 size={15} />
-                                  </button>
+
+                                  {/* Delete */}
+                                  {productPermission.delete && (
+                                    <button
+                                      type="button"
+                                      className="firm-ui-action-btn delete"
+                                      title="Delete product"
+                                      onClick={() => deleteProduct(product._id || product.id)}
+                                    >
+                                      <Trash2 size={15} />
+                                    </button>
+                                  )}
                                 </div>
                               </td>
                             </tr>
@@ -70114,6 +70483,7 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                                 {!filters.product && (
                                   <button
                                     type="button"
+                                    disabled={!productPermission.add}
                                     className="firm-ui-btn firm-ui-btn-primary"
                                     onClick={() => {
                                       setEditProductId(null);
@@ -70801,31 +71171,32 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                       <FileText size={16} />
                       Export PDF
                     </button>
-
-                    <button
-                      type="button"
-                      className="firm-ui-btn firm-ui-btn-primary"
-                      onClick={() => {
-                        setEditAccountId(null);
-                        setAccountForm({
-                          accountCode: '', accountName: '', address: '', town: 'Pune',
-                          state: 'MAHARASHTRA', pinCode: '', phoneNo: '', mobileNo: '',
-                          emailId: '', tinNo: '', openingBal: '0.00', openingBalType: 'Dr',
-                          dlNo1: '', dlExp1: '', dlNo2: '', dlExp2: '', birthDate: '',
-                          contactPerson: '', commonCode: '', commonName: '', billType: 'CREDIT',
-                          invType: 'TAXABLE', taxOn: 'SRATE', tradeDisc: 'YES', tradePercent: '0.00',
-                          creditDays: '0', creditBills: '0', lockDays: '0', creditAmt: '0.00',
-                          blackListed: 'NO', weeklyOff: 'NONE', distKm: '0.00', closeTime: '',
-                          seqNo: '0', panNo: '', foodLicense: '', gstNo: '', billToAdd1: '',
-                          tcsPercent: '0.0000', tanNo: '', gstType: 'Unregistered', gstDate: '',
-                          add2: '', gstClsDate: '', allowInPurchase: 'N', drugLicNo: '', drugExpDate: ''
-                        });
-                        setOpenFormFor('Account');
-                      }}
-                    >
-                      <Plus size={17} />
-                      Add New Account
-                    </button>
+                    {accountPermission.add && (
+                      <button
+                        type="button"
+                        className="firm-ui-btn firm-ui-btn-primary"
+                        onClick={() => {
+                          setEditAccountId(null);
+                          setAccountForm({
+                            accountCode: '', accountName: '', address: '', town: 'Pune',
+                            state: 'MAHARASHTRA', pinCode: '', phoneNo: '', mobileNo: '',
+                            emailId: '', tinNo: '', openingBal: '0.00', openingBalType: 'Dr',
+                            dlNo1: '', dlExp1: '', dlNo2: '', dlExp2: '', birthDate: '',
+                            contactPerson: '', commonCode: '', commonName: '', billType: 'CREDIT',
+                            invType: 'TAXABLE', taxOn: 'SRATE', tradeDisc: 'YES', tradePercent: '0.00',
+                            creditDays: '0', creditBills: '0', lockDays: '0', creditAmt: '0.00',
+                            blackListed: 'NO', weeklyOff: 'NONE', distKm: '0.00', closeTime: '',
+                            seqNo: '0', panNo: '', foodLicense: '', gstNo: '', billToAdd1: '',
+                            tcsPercent: '0.0000', tanNo: '', gstType: 'Unregistered', gstDate: '',
+                            add2: '', gstClsDate: '', allowInPurchase: 'N', drugLicNo: '', drugExpDate: ''
+                          });
+                          setOpenFormFor('Account');
+                        }}
+                      >
+                        <Plus size={17} />
+                        Add New Account
+                      </button>
+                    )}
                   </div>
                 </div>
 
@@ -70907,24 +71278,28 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                                       >
                                         <Eye size={15} />
                                       </button>
-                                      <button
-                                        type="button"
-                                        className="firm-ui-action-btn edit"
-                                        title="Edit account"
-                                        onClick={() => editAccount(account)}
-                                      >
-                                        <Pencil size={15} />
-                                      </button>
-                                      <button
-                                        type="button"
-                                        className="firm-ui-action-btn delete"
-                                        title="Delete account"
-                                        onClick={() =>
-                                          deleteAccount(account)
-                                        }
-                                      >
-                                        <Trash2 size={15} />
-                                      </button>
+                                      {accountPermission.edit && (
+                                        <button
+                                          type="button"
+                                          className="firm-ui-action-btn edit"
+                                          title="Edit account"
+                                          onClick={() => editAccount(account)}
+                                        >
+                                          <Pencil size={15} />
+                                        </button>
+                                      )}
+                                      {accountPermission.delete && (
+                                        <button
+                                          type="button"
+                                          className="firm-ui-action-btn delete"
+                                          title="Delete account"
+                                          onClick={() =>
+                                            deleteAccount(account)
+                                          }
+                                        >
+                                          <Trash2 size={15} />
+                                        </button>
+                                      )}
                                     </div>
                                   </td>
                                 </tr>
@@ -70944,30 +71319,34 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                                     : 'Add your first account to start managing customers.'}
                                 </p>
                                 {!filters.account && (
-                                  <button
-                                    type="button"
-                                    className="firm-ui-btn firm-ui-btn-primary"
-                                    onClick={() => {
-                                      setEditAccountId(null);
-                                      setAccountForm({
-                                        accountCode: '', accountName: '', address: '', town: 'Pune',
-                                        state: 'MAHARASHTRA', pinCode: '', phoneNo: '', mobileNo: '',
-                                        emailId: '', tinNo: '', openingBal: '0.00', openingBalType: 'Dr',
-                                        dlNo1: '', dlExp1: '', dlNo2: '', dlExp2: '', birthDate: '',
-                                        contactPerson: '', commonCode: '', commonName: '', billType: 'CREDIT',
-                                        invType: 'TAXABLE', taxOn: 'SRATE', tradeDisc: 'YES', tradePercent: '0.00',
-                                        creditDays: '0', creditBills: '0', lockDays: '0', creditAmt: '0.00',
-                                        blackListed: 'NO', weeklyOff: 'NONE', distKm: '0.00', closeTime: '',
-                                        seqNo: '0', panNo: '', foodLicense: '', gstNo: '', billToAdd1: '',
-                                        tcsPercent: '0.0000', tanNo: '', gstType: 'Unregistered', gstDate: '',
-                                        add2: '', gstClsDate: '', allowInPurchase: 'N', drugLicNo: '', drugExpDate: ''
-                                      });
-                                      setOpenFormFor('Account');
-                                    }}
-                                  >
-                                    <Plus size={16} />
-                                    Add New Account
-                                  </button>
+                                  <div>
+                                    {accountPermission.add && (
+                                      <button
+                                        type="button"
+                                        className="firm-ui-btn firm-ui-btn-primary"
+                                        onClick={() => {
+                                          setEditAccountId(null);
+                                          setAccountForm({
+                                            accountCode: '', accountName: '', address: '', town: 'Pune',
+                                            state: 'MAHARASHTRA', pinCode: '', phoneNo: '', mobileNo: '',
+                                            emailId: '', tinNo: '', openingBal: '0.00', openingBalType: 'Dr',
+                                            dlNo1: '', dlExp1: '', dlNo2: '', dlExp2: '', birthDate: '',
+                                            contactPerson: '', commonCode: '', commonName: '', billType: 'CREDIT',
+                                            invType: 'TAXABLE', taxOn: 'SRATE', tradeDisc: 'YES', tradePercent: '0.00',
+                                            creditDays: '0', creditBills: '0', lockDays: '0', creditAmt: '0.00',
+                                            blackListed: 'NO', weeklyOff: 'NONE', distKm: '0.00', closeTime: '',
+                                            seqNo: '0', panNo: '', foodLicense: '', gstNo: '', billToAdd1: '',
+                                            tcsPercent: '0.0000', tanNo: '', gstType: 'Unregistered', gstDate: '',
+                                            add2: '', gstClsDate: '', allowInPurchase: 'N', drugLicNo: '', drugExpDate: ''
+                                          });
+                                          setOpenFormFor('Account');
+                                        }}
+                                      >
+                                        <Plus size={16} />
+                                        Add New Account
+                                      </button>
+                                    )}
+                                  </div>
                                 )}
                               </div>
                             </td>
@@ -71486,8 +71865,8 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
               </div>
             )}
             {/* =========================================================
-      OTHER ACCOUNT - LIST VIEW (MISSING - ADD THIS)
-  ========================================================= */}
+        OTHER ACCOUNT - LIST VIEW (MISSING - ADD THIS)
+    ========================================================= */}
             {activeSubMenu === 'Other Account' && openFormFor !== 'Other Account' && (
               <div className="firm-ui-page firm-ui-list-page">
                 <div className="firm-ui-page-heading firm-ui-list-heading">
@@ -71554,30 +71933,31 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                       <FileText size={16} />
                       Export PDF
                     </button>
-
-                    <button
-                      type="button"
-                      className="firm-ui-btn firm-ui-btn-primary"
-                      onClick={() => {
-                        setEditOtherAccountId(null);
-                        setOtherAccountForm({
-                          accountCode: '', accountName: '', accountGroup: 'INCOMES DIRECT',
-                          bankAccountNo: '', ifscCode: '', branchName: '',
-                          address: '', town: '', state: '', country: 'India', pinCode: '',
-                          phoneNo: '', mobileNo: '', emailId: '', tinNo: '',
-                          openingBal: '0.00', openingBalType: 'Dr',
-                          invType: 'TAXABLE', taxOn: 'SRATE',
-                          panNo: '', foodLicense: '', gstNo: '',
-                          billToAdd1: '', remark: '', tcsPercent: '0',
-                          tanNo: '', gstType: 'Unregistered', gstDate: '',
-                          add2: '', gstClsDate: ''
-                        });
-                        setOpenFormFor('Other Account');
-                      }}
-                    >
-                      <Plus size={17} />
-                      Add New Account
-                    </button>
+                    {otherAccountPermission.add && (
+                      <button
+                        type="button"
+                        className="firm-ui-btn firm-ui-btn-primary"
+                        onClick={() => {
+                          setEditOtherAccountId(null);
+                          setOtherAccountForm({
+                            accountCode: '', accountName: '', accountGroup: 'INCOMES DIRECT',
+                            bankAccountNo: '', ifscCode: '', branchName: '',
+                            address: '', town: '', state: '', country: 'India', pinCode: '',
+                            phoneNo: '', mobileNo: '', emailId: '', tinNo: '',
+                            openingBal: '0.00', openingBalType: 'Dr',
+                            invType: 'TAXABLE', taxOn: 'SRATE',
+                            panNo: '', foodLicense: '', gstNo: '',
+                            billToAdd1: '', remark: '', tcsPercent: '0',
+                            tanNo: '', gstType: 'Unregistered', gstDate: '',
+                            add2: '', gstClsDate: ''
+                          });
+                          setOpenFormFor('Other Account');
+                        }}
+                      >
+                        <Plus size={17} />
+                        Add New Account
+                      </button>
+                    )}
                   </div>
                 </div>
 
@@ -71703,32 +72083,34 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                                       >
                                         <Eye size={15} />
                                       </button>
-
-                                      <button
-                                        type="button"
-                                        className="firm-ui-action-btn edit"
-                                        title="Edit account"
-                                        onClick={() =>
-                                          editOtherAccount(
-                                            account
-                                          )
-                                        }
-                                      >
-                                        <Pencil size={15} />
-                                      </button>
-
-                                      <button
-                                        type="button"
-                                        className="firm-ui-action-btn delete"
-                                        title="Delete account"
-                                        onClick={() =>
-                                          deleteOtherAccount(
-                                            account
-                                          )
-                                        }
-                                      >
-                                        <Trash2 size={15} />
-                                      </button>
+                                      {otherAccountPermission.edit && (
+                                        <button
+                                          type="button"
+                                          className="firm-ui-action-btn edit"
+                                          title="Edit account"
+                                          onClick={() =>
+                                            editOtherAccount(
+                                              account
+                                            )
+                                          }
+                                        >
+                                          <Pencil size={15} />
+                                        </button>
+                                      )}
+                                      {otherAccountPermission.delete && (
+                                        <button
+                                          type="button"
+                                          className="firm-ui-action-btn delete"
+                                          title="Delete account"
+                                          onClick={() =>
+                                            deleteOtherAccount(
+                                              account
+                                            )
+                                          }
+                                        >
+                                          <Trash2 size={15} />
+                                        </button>
+                                      )}
                                     </div>
                                   </td>
                                 </tr>
@@ -72083,18 +72465,25 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                       Export PDF
                     </button>
 
-                    <button
-                      type="button"
-                      className="firm-ui-btn firm-ui-btn-primary"
-                      onClick={() => {
-                        setEditGstId(null);
-                        setGstForm({ code: '', vat: '', purchaseType: 'GST ON PURCHASE PRICE', salesType: 'GST ON SALES PRICE' });
-                        setOpenFormFor('GST Master');
-                      }}
-                    >
-                      <Plus size={17} />
-                      Add New GST
-                    </button>
+                    {gstPermission.add && (
+                      <button
+                        type="button"
+                        className="firm-ui-btn firm-ui-btn-primary"
+                        onClick={() => {
+                          setEditGstId(null);
+                          setGstForm({
+                            code: "",
+                            vat: "",
+                            purchaseType: "GST ON PURCHASE PRICE",
+                            salesType: "GST ON SALES PRICE",
+                          });
+                          setOpenFormFor("GST Master");
+                        }}
+                      >
+                        <Plus size={17} />
+                        Add New GST
+                      </button>
+                    )}
                   </div>
                 </div>
 
@@ -72189,34 +72578,32 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                                         type="button"
                                         className="firm-ui-action-btn view"
                                         title="View GST"
-                                        onClick={() =>
-                                          viewGst(gst)
-                                        }
+                                        onClick={() => viewGst(gst)}
                                       >
                                         <Eye size={15} />
                                       </button>
 
-                                      <button
-                                        type="button"
-                                        className="firm-ui-action-btn edit"
-                                        title="Edit GST"
-                                        onClick={() =>
-                                          editGst(gst)
-                                        }
-                                      >
-                                        <Pencil size={15} />
-                                      </button>
+                                      {gstPermission.edit && (
+                                        <button
+                                          type="button"
+                                          className="firm-ui-action-btn edit"
+                                          title="Edit GST"
+                                          onClick={() => editGst(gst)}
+                                        >
+                                          <Pencil size={15} />
+                                        </button>
+                                      )}
 
-                                      <button
-                                        type="button"
-                                        className="firm-ui-action-btn delete"
-                                        title="Delete GST"
-                                        onClick={() =>
-                                          deleteGst(gst)
-                                        }
-                                      >
-                                        <Trash2 size={15} />
-                                      </button>
+                                      {gstPermission.delete && (
+                                        <button
+                                          type="button"
+                                          className="firm-ui-action-btn delete"
+                                          title="Delete GST"
+                                          onClick={() => deleteGst(gst)}
+                                        >
+                                          <Trash2 size={15} />
+                                        </button>
+                                      )}
                                     </div>
                                   </td>
                                 </tr>
@@ -72241,7 +72628,7 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                                     : "Add your first GST rate to start managing."}
                                 </p>
 
-                                {!gstBackendSearch && (
+                                {!gstBackendSearch && gstPermission.add && (
                                   <button
                                     type="button"
                                     className="firm-ui-btn firm-ui-btn-primary"
@@ -72575,18 +72962,23 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                       Export PDF
                     </button>
 
-                    <button
-                      type="button"
-                      className="firm-ui-btn firm-ui-btn-primary"
-                      onClick={() => {
-                        setEditAreaId(null);
-                        setAreaForm({ code: '', name: '' });
-                        setOpenFormFor('Area');
-                      }}
-                    >
-                      <Plus size={17} />
-                      Add New Area
-                    </button>
+                    {areaPermission.add && (
+                      <button
+                        type="button"
+                        className="firm-ui-btn firm-ui-btn-primary"
+                        onClick={() => {
+                          setEditAreaId(null);
+                          setAreaForm({
+                            code: "",
+                            name: "",
+                          });
+                          setOpenFormFor("Area");
+                        }}
+                      >
+                        <Plus size={17} />
+                        Add New Area
+                      </button>
+                    )}
                   </div>
                 </div>
 
@@ -72676,34 +73068,32 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                                       type="button"
                                       className="firm-ui-action-btn view"
                                       title="View area"
-                                      onClick={() =>
-                                        viewArea(area)
-                                      }
+                                      onClick={() => viewArea(area)}
                                     >
                                       <Eye size={15} />
                                     </button>
 
-                                    <button
-                                      type="button"
-                                      className="firm-ui-action-btn edit"
-                                      title="Edit area"
-                                      onClick={() =>
-                                        editArea(area)
-                                      }
-                                    >
-                                      <Pencil size={15} />
-                                    </button>
+                                    {areaPermission.edit && (
+                                      <button
+                                        type="button"
+                                        className="firm-ui-action-btn edit"
+                                        title="Edit area"
+                                        onClick={() => editArea(area)}
+                                      >
+                                        <Pencil size={15} />
+                                      </button>
+                                    )}
 
-                                    <button
-                                      type="button"
-                                      className="firm-ui-action-btn delete"
-                                      title="Delete area"
-                                      onClick={() =>
-                                        deleteArea(area)
-                                      }
-                                    >
-                                      <Trash2 size={15} />
-                                    </button>
+                                    {areaPermission.delete && (
+                                      <button
+                                        type="button"
+                                        className="firm-ui-action-btn delete"
+                                        title="Delete area"
+                                        onClick={() => deleteArea(area)}
+                                      >
+                                        <Trash2 size={15} />
+                                      </button>
+                                    )}
                                   </div>
                                 </td>
                               </tr>
@@ -72727,7 +73117,7 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                                     : "Add your first area to start managing."}
                                 </p>
 
-                                {!areaBackendSearch && (
+                                {!areaBackendSearch && areaPermission.add && (
                                   <button
                                     type="button"
                                     className="firm-ui-btn firm-ui-btn-primary"
@@ -73248,22 +73638,36 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                       Export PDF
                     </button>
 
-                    <button
-                      type="button"
-                      className="firm-ui-btn firm-ui-btn-primary"
-                      onClick={() => {
-                        setEditSalesmanId(null);
-                        setSalesmanForm({
-                          code: '', name: '', type: 'SALESMAN', address: '', town: '',
-                          pinCode: '', state: '', country: 'India', phoneNo: '', mobileNo: '',
-                          emailId: '', dateOfBirth: '', qualification: '', reference: '', imeiNo: ''
-                        });
-                        setOpenFormFor('Salesman');
-                      }}
-                    >
-                      <Plus size={17} />
-                      Add New Salesman
-                    </button>
+                    {salesmanPermission.add && (
+                      <button
+                        type="button"
+                        className="firm-ui-btn firm-ui-btn-primary"
+                        onClick={() => {
+                          setEditSalesmanId(null);
+                          setSalesmanForm({
+                            code: "",
+                            name: "",
+                            type: "SALESMAN",
+                            address: "",
+                            town: "",
+                            pinCode: "",
+                            state: "",
+                            country: "India",
+                            phoneNo: "",
+                            mobileNo: "",
+                            emailId: "",
+                            dateOfBirth: "",
+                            qualification: "",
+                            reference: "",
+                            imeiNo: "",
+                          });
+                          setOpenFormFor("Salesman");
+                        }}
+                      >
+                        <Plus size={17} />
+                        Add New Salesman
+                      </button>
+                    )}
                   </div>
                 </div>
 
@@ -73379,45 +73783,38 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                                         : "Inactive"}
                                     </span>
                                   </td>
-
                                   <td className="firm-ui-action-column">
                                     <div className="firm-ui-row-actions">
                                       <button
                                         type="button"
                                         className="firm-ui-action-btn view"
                                         title="View salesman"
-                                        onClick={() =>
-                                          viewSalesman(
-                                            salesman
-                                          )
-                                        }
+                                        onClick={() => viewSalesman(salesman)}
                                       >
                                         <Eye size={15} />
                                       </button>
 
-                                      <button
-                                        type="button"
-                                        className="firm-ui-action-btn edit"
-                                        title="Edit salesman"
-                                        onClick={() =>
-                                          editSalesman(
-                                            salesman
-                                          )
-                                        }
-                                      >
-                                        <Pencil size={15} />
-                                      </button>
+                                      {salesmanPermission.edit && (
+                                        <button
+                                          type="button"
+                                          className="firm-ui-action-btn edit"
+                                          title="Edit salesman"
+                                          onClick={() => editSalesman(salesman)}
+                                        >
+                                          <Pencil size={15} />
+                                        </button>
+                                      )}
 
-                                      <button
-                                        type="button"
-                                        className="firm-ui-action-btn delete"
-                                        title="Delete salesman"
-                                        onClick={() =>
-                                          deleteSalesman(salesman)
-                                        }
-                                      >
-                                        <Trash2 size={15} />
-                                      </button>
+                                      {salesmanPermission.delete && (
+                                        <button
+                                          type="button"
+                                          className="firm-ui-action-btn delete"
+                                          title="Delete salesman"
+                                          onClick={() => deleteSalesman(salesman)}
+                                        >
+                                          <Trash2 size={15} />
+                                        </button>
+                                      )}
                                     </div>
                                   </td>
                                 </tr>
@@ -73442,7 +73839,7 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                                     : "Add your first salesman to start managing."}
                                 </p>
 
-                                {!salesmanBackendSearch && (
+                                {!salesmanBackendSearch && salesmanPermission.add && (
                                   <button
                                     type="button"
                                     className="firm-ui-btn firm-ui-btn-primary"
@@ -73661,9 +74058,9 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
             )}
 
             {/* =========================================================
-      SALES INVOICE (BILLING)
-      COMPLETE MODIFIED JSX BLOCK
-    ========================================================= */}
+        SALES INVOICE (BILLING)
+        COMPLETE MODIFIED JSX BLOCK
+      ========================================================= */}
 
             {openFormFor === "Billing" &&
               (activeSubMenu === "Billing" || isSettleAdjustMode) && (
@@ -73671,8 +74068,8 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                   <div className="sales-billing-card">
 
                     {/* =====================================================
-              PAGE HEADER
-            ===================================================== */}
+                PAGE HEADER
+              ===================================================== */}
 
                     <div className="sales-billing-page-header">
                       <div className="sales-billing-title-wrapper">
@@ -73748,8 +74145,8 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                     </div>
 
                     {/* =====================================================
-              1. INVOICE HEADER
-            ===================================================== */}
+                1. INVOICE HEADER
+              ===================================================== */}
 
                     <section className="billing-form-section billing-header-section">
                       <div className="billing-section-heading">
@@ -74265,8 +74662,8 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                     </section>
 
                     {/* =====================================================
-              2. PRODUCT ENTRY
-            ===================================================== */}
+                2. PRODUCT ENTRY
+              ===================================================== */}
 
                     <section className="billing-form-section billing-product-section">
                       {loadedBillProductReadOnly && (
@@ -74417,9 +74814,9 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                                     }
                                     onMouseDown={(event) => {
                                       /*
-                                       * Do not select the row when the Delete button
-                                       * itself is being pressed.
-                                       */
+                                      * Do not select the row when the Delete button
+                                      * itself is being pressed.
+                                      */
                                       if (
                                         event.target.closest(
                                           ".billing-delete-button, [data-row-delete='true']"
@@ -74429,9 +74826,9 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                                       }
 
                                       /*
-                                       * Empty rows should not clear or change
-                                       * the currently displayed product details.
-                                       */
+                                      * Empty rows should not clear or change
+                                      * the currently displayed product details.
+                                      */
                                       if (!rowHasProduct) {
                                         return;
                                       }
@@ -74810,7 +75207,7 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                                     <td>
                                       <select
                                         className="billing-table-control"
-                                        
+
                                         data-field="units"
                                         data-index={index}
                                         value={item.units}
@@ -75096,55 +75493,55 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
 
                                     {/* Star Amount */}
                                     <td>
-                                     <input
-  className="erp-input numeric"
-  type="number"
-  min="0"
-  step="0.01"
-  value={item.starAmt ?? ""}
-  readOnly={
-    runtimeGeneralSetup
-      .allowChangeStarAmount !== true ||
-    loadedBillProductReadOnly
-  }
-  onChange={(event) =>
-    updateInvoiceItem(
-      index,
-      "starAmt",
-      event.target.value
-    )
-  }
-  title={
-    runtimeGeneralSetup
-      .allowChangeStarAmount === true
-      ? "Star Amount can be edited manually."
-      : "Enable Allow Change Star Amount in General Setup."
-  }
-  style={{
-    backgroundColor:
-      runtimeGeneralSetup
-        .allowChangeStarAmount === true &&
-      !loadedBillProductReadOnly
-        ? "#ffffff"
-        : "#eef2f7",
+                                      <input
+                                        className="erp-input numeric"
+                                        type="number"
+                                        min="0"
+                                        step="0.01"
+                                        value={item.starAmt ?? ""}
+                                        readOnly={
+                                          runtimeGeneralSetup
+                                            .allowChangeStarAmount !== true ||
+                                          loadedBillProductReadOnly
+                                        }
+                                        onChange={(event) =>
+                                          updateInvoiceItem(
+                                            index,
+                                            "starAmt",
+                                            event.target.value
+                                          )
+                                        }
+                                        title={
+                                          runtimeGeneralSetup
+                                            .allowChangeStarAmount === true
+                                            ? "Star Amount can be edited manually."
+                                            : "Enable Allow Change Star Amount in General Setup."
+                                        }
+                                        style={{
+                                          backgroundColor:
+                                            runtimeGeneralSetup
+                                              .allowChangeStarAmount === true &&
+                                              !loadedBillProductReadOnly
+                                              ? "#ffffff"
+                                              : "#eef2f7",
 
-    color:
-      runtimeGeneralSetup
-        .allowChangeStarAmount === true &&
-      !loadedBillProductReadOnly
-        ? "#166534"
-        : "#64748b",
+                                          color:
+                                            runtimeGeneralSetup
+                                              .allowChangeStarAmount === true &&
+                                              !loadedBillProductReadOnly
+                                              ? "#166534"
+                                              : "#64748b",
 
-    cursor:
-      runtimeGeneralSetup
-        .allowChangeStarAmount === true &&
-      !loadedBillProductReadOnly
-        ? "text"
-        : "not-allowed",
+                                          cursor:
+                                            runtimeGeneralSetup
+                                              .allowChangeStarAmount === true &&
+                                              !loadedBillProductReadOnly
+                                              ? "text"
+                                              : "not-allowed",
 
-    fontWeight: 700,
-  }}
-/>
+                                          fontWeight: 700,
+                                        }}
+                                      />
                                     </td>
 
                                     {/* Taxable */}
@@ -75494,11 +75891,11 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                     </section>
 
                     {/* =====================================================
-      COMPACT INVOICE SUMMARY
-      ===================================================== */}
+        COMPACT INVOICE SUMMARY
+        ===================================================== */}
                     {/* =====================================================
-      COMPACT INVOICE SUMMARY
-      ===================================================== */}
+        COMPACT INVOICE SUMMARY
+        ===================================================== */}
                     <section className="billing-compact-summary">
                       <div className="billing-compact-summary-header">
                         <div className="billing-section-title">
@@ -75958,19 +76355,19 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                               <th style={{ minWidth: '100px' }}>QUANTITY</th>
                               <th style={{ minWidth: '80px' }}>FREE</th>
                               <th style={{ minWidth: '100px' }}>MRP</th>
-                           
+
                               <th style={{ minWidth: "100px" }}>
-  PUR RATE
-</th>
+                                PUR RATE
+                              </th>
 
-<th style={{ minWidth: "110px" }}>
-  GROSS AMT
-</th>
+                              <th style={{ minWidth: "110px" }}>
+                                GROSS AMT
+                              </th>
 
-<th style={{ minWidth: "100px" }}>
-  DISC 1
-</th>
-                             
+                              <th style={{ minWidth: "100px" }}>
+                                DISC 1
+                              </th>
+
                               <th style={{ minWidth: '100px' }}>DISC 2</th>
                               <th style={{ minWidth: '100px' }}>DISC 3</th>
                               <th style={{ minWidth: '100px' }}>TAXABLE</th>
@@ -76019,6 +76416,8 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                                       setPurchaseActiveRow(index);
                                       setPurchaseProductDropdownIndex(0);
 
+                                      purchaseProductAnchorRef.current =
+                                        event.currentTarget;
                                       const inputRect =
                                         event.currentTarget.getBoundingClientRect();
 
@@ -76036,6 +76435,8 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                                       setPurchaseActiveRow(index);
                                       setCurrentPurchaseProductIndex(index);
 
+                                      purchaseProductAnchorRef.current =
+                                        event.currentTarget;
                                       const inputRect =
                                         event.currentTarget.getBoundingClientRect();
 
@@ -76150,9 +76551,9 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                                   />
                                 </td>
                                 {/* =====================================================
-      PURCHASE PRODUCT SEARCH DROPDOWN
-      EXACT SALES BILLING DESIGN
-    ===================================================== */}
+        PURCHASE PRODUCT SEARCH DROPDOWN
+        EXACT SALES BILLING DESIGN
+      ===================================================== */}
 
                                 {showPurchaseProductList &&
                                   String(
@@ -76376,56 +76777,56 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                                   />
                                 </td>
                                 {/* Gross Amount */}
-<td>
-  <input
-    className="erp-input numeric"
-    type="number"
-    min="0"
-    step="0.01"
-    data-purchase-field="grossAmount"
-    data-purchase-index={index}
-    placeholder="Gross Amount"
-    value={item.grossAmount || "0.00"}
-    readOnly={
-      runtimeGeneralSetup
-        .editGrossPurchase !== true
-    }
-    onChange={(event) =>
-      updatePurchaseItem(
-        index,
-        "grossAmount",
-        event.target.value
-      )
-    }
-    onKeyDown={(event) =>
-      handlePurchaseKeyDown(
-        event,
-        index,
-        "grossAmount"
-      )
-    }
-    title={
-      runtimeGeneralSetup
-        .editGrossPurchase === true
-        ? "Gross Amount can be edited."
-        : "Enable Edit Gross (Purchase) in General Setup."
-    }
-    style={{
-      width: "100%",
-      backgroundColor:
-        runtimeGeneralSetup
-          .editGrossPurchase === true
-          ? "#ffffff"
-          : "#f3f4f6",
-      cursor:
-        runtimeGeneralSetup
-          .editGrossPurchase === true
-          ? "text"
-          : "not-allowed",
-      fontWeight: 700,
-    }}
-  />
-</td>
+                                <td>
+                                  <input
+                                    className="erp-input numeric"
+                                    type="number"
+                                    min="0"
+                                    step="0.01"
+                                    data-purchase-field="grossAmount"
+                                    data-purchase-index={index}
+                                    placeholder="Gross Amount"
+                                    value={item.grossAmount || "0.00"}
+                                    readOnly={
+                                      runtimeGeneralSetup
+                                        .editGrossPurchase !== true
+                                    }
+                                    onChange={(event) =>
+                                      updatePurchaseItem(
+                                        index,
+                                        "grossAmount",
+                                        event.target.value
+                                      )
+                                    }
+                                    onKeyDown={(event) =>
+                                      handlePurchaseKeyDown(
+                                        event,
+                                        index,
+                                        "grossAmount"
+                                      )
+                                    }
+                                    title={
+                                      runtimeGeneralSetup
+                                        .editGrossPurchase === true
+                                        ? "Gross Amount can be edited."
+                                        : "Enable Edit Gross (Purchase) in General Setup."
+                                    }
+                                    style={{
+                                      width: "100%",
+                                      backgroundColor:
+                                        runtimeGeneralSetup
+                                          .editGrossPurchase === true
+                                          ? "#ffffff"
+                                          : "#f3f4f6",
+                                      cursor:
+                                        runtimeGeneralSetup
+                                          .editGrossPurchase === true
+                                          ? "text"
+                                          : "not-allowed",
+                                      fontWeight: 700,
+                                    }}
+                                  />
+                                </td>
 
                                 {/* Disc 1 */}
                                 <td>
@@ -76649,10 +77050,10 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
 
 
             {/* =========================================================
-    CREDIT NOTE FORM
-    EXACT PURCHASE FORM LAYOUT
-    Credit Note fields and functions remain unchanged
-========================================================= */}
+      CREDIT NOTE FORM
+      EXACT PURCHASE FORM LAYOUT
+      Credit Note fields and functions remain unchanged
+  ========================================================= */}
             {activeSubMenu === "Credit Note" &&
               openFormFor === "Credit Note" && (
                 <div className="purchase-billing-page credit-note-purchase-layout">
@@ -77020,9 +77421,9 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                     </section>
 
                     {/* =========================================================
-    CREDIT NOTE PRODUCT ENTRY
-    Uses only Credit Note states and handlers
-========================================================= */}
+      CREDIT NOTE PRODUCT ENTRY
+      Uses only Credit Note states and handlers
+  ========================================================= */}
                     <section className="credit-product-section">
                       <div className="billing-product-heading">
                         <div className="billing-product-heading-left">
@@ -77232,9 +77633,9 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                                         autoComplete="off"
 
                                         /*
-                                         * Do not open the list just by clicking or focusing.
-                                         * The list will open only after the user types something.
-                                         */
+                                        * Do not open the list just by clicking or focusing.
+                                        * The list will open only after the user types something.
+                                        */
                                         onFocus={() => {
                                           if (!String(item.itemCode || "").trim()) {
                                             setShowCreditProductList(false);
@@ -77255,9 +77656,9 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                                           const typedValue = event.target.value;
 
                                           /*
-                                           * When the input becomes empty, close the dropdown
-                                           * immediately and clear its results.
-                                           */
+                                          * When the input becomes empty, close the dropdown
+                                          * immediately and clear its results.
+                                          */
                                           if (!String(typedValue).trim()) {
                                             setCreditNoteItems((previousItems) =>
                                               previousItems.map((row, rowIndex) =>
@@ -77306,8 +77707,8 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                                             creditFilteredProductList;
 
                                           /*
-                                           * Do nothing when the field is empty.
-                                           */
+                                          * Do nothing when the field is empty.
+                                          */
                                           if (!typedValue) {
                                             if (
                                               event.key === "ArrowDown" ||
@@ -77820,9 +78221,9 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                                             setShowDashboard(false);
 
                                             /*
-                                             * The complete database record is already
-                                             * present in source from loadCreditNotes().
-                                             */
+                                            * The complete database record is already
+                                            * present in source from loadCreditNotes().
+                                            */
                                             loadCreditNoteForEdit(source);
 
                                             return;
@@ -77907,8 +78308,8 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                       </div>
                     </section>
                     {/* =====================================================
-                      CREDIT NOTE SUMMARY
-                  ===================================================== */}
+                        CREDIT NOTE SUMMARY
+                    ===================================================== */}
                     <section className="purchase-summary-section credit-note-summary-section">
                       <div className="purchase-summary-title">
                         Summary
@@ -78132,8 +78533,8 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                             <div className="credit-batch-modal-body">
                               {creditBatchView === "new" ? (
                                 /*
-                                 * NEW BATCH ENTRY FORM
-                                 */
+                                * NEW BATCH ENTRY FORM
+                                */
                                 <div className="credit-new-batch-grid">
                                   {/* Batch Number */}
                                   <div className="labeled-input">
@@ -78428,22 +78829,22 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                                 </div>
                               ) : creditBatchLoading ? (
                                 /*
-                                 * LOADING STATE
-                                 */
+                                * LOADING STATE
+                                */
                                 <div className="credit-batch-message">
                                   Loading batches...
                                 </div>
                               ) : creditBatchRows.length === 0 ? (
                                 /*
-                                 * NO EXISTING BATCH
-                                 */
+                                * NO EXISTING BATCH
+                                */
                                 <div className="credit-batch-message">
                                   No existing batch found.
                                 </div>
                               ) : (
                                 /*
-                                 * EXISTING BATCH TABLE
-                                 */
+                                * EXISTING BATCH TABLE
+                                */
                                 <div className="credit-batch-table-wrapper">
                                   <table className="credit-batch-table">
                                     <thead>
@@ -78947,33 +79348,48 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                             Select Supplier
                           </option>
 
-                          {otherAccounts.map((account) => {
-                            const supplierValue =
-                              account.accountCode ||
-                              account.partyCode ||
-                              account.code ||
-                              account.accountName ||
-                              "";
+                          {otherAccounts
+                            .filter((account) => {
+                              const group = String(
+                                account.accountGroup ||
+                                account.groupName ||
+                                account.group ||
+                                account.AccGroup ||
+                                account.GroupName ||
+                                ""
+                              )
+                                .trim()
+                                .toUpperCase();
 
-                            const supplierLabel =
-                              account.accountName ||
-                              account.partyName ||
-                              account.name ||
-                              supplierValue;
+                              return group === "SUNDRY CREDITORS";
+                            })
+                            .map((account) => {
+                              const supplierValue =
+                                account.accountCode ||
+                                account.partyCode ||
+                                account.code ||
+                                account.accountName ||
+                                "";
 
-                            return (
-                              <option
-                                key={
-                                  account._id ||
-                                  account.id ||
-                                  supplierValue
-                                }
-                                value={supplierValue}
-                              >
-                                {supplierLabel}
-                              </option>
-                            );
-                          })}
+                              const supplierLabel =
+                                account.accountName ||
+                                account.partyName ||
+                                account.name ||
+                                supplierValue;
+
+                              return (
+                                <option
+                                  key={
+                                    account._id ||
+                                    account.id ||
+                                    supplierValue
+                                  }
+                                  value={supplierValue}
+                                >
+                                  {supplierLabel}
+                                </option>
+                              );
+                            })}
                         </select>
                       </div>
 
@@ -79720,8 +80136,8 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                       </div>
                     </div>
                     {/* =========================================================
-    DEBIT NOTE PRODUCT SEARCH DROPDOWN
-    ========================================================= */}
+      DEBIT NOTE PRODUCT SEARCH DROPDOWN
+      ========================================================= */}
 
                     {showDebitProductList &&
                       String(debitProductListFilter || "").trim() !== "" &&
@@ -81185,9 +81601,9 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
             </div>
           </div>
         )}{/* =========================================================
-    CREDIT NOTE PRODUCT SEARCH DROPDOWN
-    Keep this immediately before the final Dashboard </div>
-   ========================================================= */}
+      CREDIT NOTE PRODUCT SEARCH DROPDOWN
+      Keep this immediately before the final Dashboard </div>
+    ========================================================= */}
         {showCreditProductList &&
           currentCreditProductIndex >= 0 &&
           createPortal(
@@ -81222,9 +81638,9 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                   creditFilteredProductList.map(
                     (selectedEntry, productIndex) => {
                       /*
-                       * buildFilteredCreditProductList returns:
-                       * { product, batch, isAlreadySelected }
-                       */
+                      * buildFilteredCreditProductList returns:
+                      * { product, batch, isAlreadySelected }
+                      */
                       const product =
                         selectedEntry?.product ||
                         selectedEntry ||
@@ -81312,9 +81728,9 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                           }}
                           onMouseDown={(event) => {
                             /*
-                             * Prevent the input from losing focus
-                             * before the product gets selected.
-                             */
+                            * Prevent the input from losing focus
+                            * before the product gets selected.
+                            */
                             event.preventDefault();
                             event.stopPropagation();
                           }}
@@ -81352,8 +81768,8 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
             </div>,
             document.body
           )}{/* =========================================================
-    DEBIT NOTE BATCH / MRP MODAL
-    ========================================================= */}
+      DEBIT NOTE BATCH / MRP MODAL
+      ========================================================= */}
 
         {showDebitBatchModal &&
           createPortal(
