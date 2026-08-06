@@ -29249,6 +29249,590 @@ app.get(
     }
   }
 );
+/* =========================================================
+  ALL PARTY WISE SALES REPORT - NEW API
+  ========================================================= */
+
+app.get(
+  "/api/reports/all-party-sales",
+  ensureConnection,
+  async (req, res) => {
+    try {
+      const distributorId = String(
+        req.query.distributorId || ""
+      ).trim();
+
+      const firmId = String(
+        req.query.firmId || ""
+      ).trim();
+
+      const companyCode = String(
+        req.query.companyCode || ""
+      ).trim();
+
+      const reportLevel = String(
+        req.query.reportLevel ||
+        "salesSummary"
+      ).trim();
+
+      const productWise =
+        String(
+          req.query.productWise ||
+          "no"
+        ).toLowerCase() === "yes";
+
+      const withCreditNote =
+        String(
+          req.query.withCreditNote ||
+          "no"
+        ).toLowerCase() === "yes";
+
+      const fromDate = String(
+        req.query.fromDate || ""
+      ).trim();
+
+      const toDate = String(
+        req.query.toDate || ""
+      ).trim();
+
+      const orderBy = String(
+        req.query.orderBy ||
+        "partyName"
+      ).trim();
+
+      const billWiseSalesman =
+        String(
+          req.query.billWiseSalesman ||
+          "no"
+        ).toLowerCase() === "yes";
+
+      const freeValueOn = String(
+        req.query.freeValueOn ||
+        "PRate"
+      ).trim();
+
+      /*
+      * Convert comma-separated query parameters
+      * into cleaned arrays.
+      */
+      const parseCsv = (value) =>
+        String(value || "")
+          .split(",")
+          .map((item) =>
+            item.trim()
+          )
+          .filter(Boolean);
+
+      const selectedAreaCodes =
+        parseCsv(
+          req.query.selectedAreaCodes
+        );
+
+      const selectedSalesmanCodes =
+        parseCsv(
+          req.query
+            .selectedSalesmanCodes
+        );
+
+      /*
+      * Basic validation.
+      */
+      if (
+        !distributorId ||
+        !firmId
+      ) {
+        return res
+          .status(400)
+          .json({
+            success: false,
+            message:
+              "distributorId and firmId are required.",
+          });
+      }
+
+      if (
+        !fromDate ||
+        !toDate
+      ) {
+        return res
+          .status(400)
+          .json({
+            success: false,
+            message:
+              "From Date and To Date are required.",
+          });
+      }
+
+      if (fromDate > toDate) {
+        return res
+          .status(400)
+          .json({
+            success: false,
+            message:
+              "From Date cannot be greater than To Date.",
+          });
+      }
+
+      /*
+      * Prepare sales bill filter.
+      */
+      const match = {
+        distributorId,
+        firmId,
+        isActive: true,
+
+        IsBillCancelled: {
+          $ne: true,
+        },
+
+        BillStatus: {
+          $ne: "CANCELLED",
+        },
+
+        BillDate: {
+          $gte: fromDate,
+          $lte: toDate,
+        },
+      };
+
+      // Company filter - can be empty for "All Companies"
+      if (companyCode) {
+        match.CompanyCode = companyCode;
+      }
+
+      // Area filter
+      if (selectedAreaCodes.length > 0) {
+        match.AreaCode = {
+          $in: selectedAreaCodes,
+        };
+      }
+
+      // Salesman filter
+      if (selectedSalesmanCodes.length > 0) {
+        match.SalesmanCode = {
+          $in: selectedSalesmanCodes,
+        };
+      }
+
+      /*
+      * Load all matching sales bills.
+      */
+      const bills = await SalesHeader.find(match)
+        .sort({
+          BillDate: 1,
+          BillSeries: 1,
+          BillNo: 1,
+        })
+        .lean();
+
+      /*
+      * Return empty report cleanly.
+      */
+      if (bills.length === 0) {
+        return res.json({
+          success: true,
+          count: 0,
+          reportLevel,
+          productWise,
+          rows: [],
+          columns: getAllPartyColumns(productWise, reportLevel),
+        });
+      }
+
+      /*
+      * Safely convert to number.
+      */
+      const toNumber = (...values) => {
+        for (const value of values) {
+          if (value !== undefined && value !== null && value !== "") {
+            const number = Number(value);
+            if (!Number.isNaN(number)) {
+              return number;
+            }
+          }
+        }
+        return 0;
+      };
+
+      /*
+      * Read the first available property from an invoice item.
+      */
+      const getItemValue = (item, ...keys) => {
+        for (const key of keys) {
+          if (item?.[key] !== undefined && item?.[key] !== null) {
+            return item[key];
+          }
+        }
+        return "";
+      };
+
+      /*
+      * Get product details from item.
+      */
+      const getProductCode = (item) => {
+        return String(
+          getItemValue(
+            item,
+            "productCode",
+            "ProductCode",
+            "prodCode",
+            "ProdCode",
+            "productId",
+            "ProductId",
+            "code"
+          ) || ""
+        ).trim();
+      };
+
+      const getProductName = (item) => {
+        return String(
+          getItemValue(
+            item,
+            "productName",
+            "ProductName",
+            "prodName",
+            "ProdName",
+            "name"
+          ) || ""
+        ).trim();
+      };
+
+      const getBatch = (item) => {
+        return String(
+          getItemValue(
+            item,
+            "batchNo",
+            "BatchNo",
+            "batch",
+            "Batch"
+          ) || ""
+        ).trim();
+      };
+
+      /*
+      * Build report rows.
+      */
+      const detailRows = [];
+
+      bills.forEach((bill) => {
+        const items = Array.isArray(bill.items) ? bill.items : [];
+        const reportItems = items.length > 0 ? items : [{}];
+
+        reportItems.forEach((item, itemIndex) => {
+          const productCode = getProductCode(item);
+          const productName = getProductName(item);
+          const batch = getBatch(item);
+
+          const qty = toNumber(
+            getItemValue(item, "qty", "Qty", "quantity", "Quantity", "saleQty", "SaleQty")
+          );
+
+          const freeQty = toNumber(
+            getItemValue(item, "freeQty", "FreeQty", "freeQuantity")
+          );
+
+          const salesRate = toNumber(
+            getItemValue(item, "salesRate", "SalesRate", "saleRate", "SaleRate", "sRate", "SRate", "rate", "Rate")
+          );
+
+          const grossAmount = toNumber(
+            getItemValue(item, "grossAmount", "GrossAmount", "grossAmt", "GrossAmt"),
+            qty * salesRate
+          );
+
+          const discountAmount = toNumber(
+            getItemValue(item, "discount", "Discount", "discountAmount", "DiscountAmount")
+          );
+
+          const cashDiscountAmount = toNumber(
+            getItemValue(item, "cashDiscountAmount", "CashDiscountAmount", "cashDiscountAmt", "cdAmount", "cdAmt", "CDAmount")
+          );
+
+          const vatAmount = toNumber(
+            getItemValue(item, "vatAmount", "VatAmount", "gstAmount", "GSTAmount", "gst")
+          );
+
+          const lessOther = toNumber(
+            getItemValue(item, "lessOther", "LessOther", "otherDiscount", "OtherDiscount")
+          );
+
+          const addOther = toNumber(
+            getItemValue(item, "addOther", "AddOther", "otherAdd", "OtherAdd")
+          );
+
+          const btmAmount = toNumber(
+            getItemValue(item, "btmAmount", "BtmAmount", "billingAmount", "BillingAmount")
+          );
+
+          const weight = toNumber(
+            getItemValue(item, "weight", "Weight")
+          );
+
+          const couponAmount = toNumber(
+            getItemValue(item, "couponAmount", "CouponAmount")
+          );
+
+          const displayAmount = toNumber(
+            getItemValue(item, "displayAmount", "DisplayAmount")
+          );
+
+          const starAmount = toNumber(
+            getItemValue(item, "starAmount", "StarAmount", "starAmt")
+          );
+
+          const surChargeAmount = toNumber(
+            getItemValue(item, "surChargeAmount", "SurChargeAmount", "surcharge")
+          );
+
+          const retAmount = toNumber(
+            getItemValue(item, "retAmount", "RetAmount", "retailAmount")
+          );
+
+          const retVatAmount = toNumber(
+            getItemValue(item, "retVatAmount", "RetVatAmount")
+          );
+
+          const addLessAmount = toNumber(
+            getItemValue(item, "addLessAmount", "AddLessAmount", "addLess")
+          );
+
+          const netAmount = toNumber(
+            getItemValue(item, "netAmount", "NetAmount", "netAmt", "amount", "Amount")
+          );
+
+          // Get Salesman details
+          const billSalesmanName = String(
+            bill.SalesmanName || bill.salesmanName || ""
+          ).trim();
+
+          const masterSalesmanName = String(
+            bill.MasterSalesmanName || bill.masterSalesmanName || bill.SalesmanName || bill.salesmanName || ""
+          ).trim();
+
+          detailRows.push({
+            rowId: `${String(bill._id)}-${itemIndex}`,
+            srNo: detailRows.length + 1,
+            trn: "SALES",
+            partyCode: bill.PartyCode || "",
+            partyName: bill.PartyName || "",
+            grossAmount,
+            discountAmount,
+            cashDiscountAmount,
+            vatAmount,
+            lessOther,
+            addOther,
+            btmAmount,
+            weight,
+            couponAmount,
+            displayAmount,
+            starAmount,
+            surChargeAmount,
+            retAmount,
+            retVatAmount,
+            addLessAmount,
+            netAmount,
+            totalLines: 1,
+            areaName: bill.AreaName || "",
+            masterSalesmanName,
+            billSalesmanName,
+            // Additional fields for product-wise
+            productCode,
+            productName,
+            batch,
+            qty,
+            freeQty,
+            salesRate,
+          });
+        });
+      });
+
+      let rows = detailRows;
+
+      /*
+      * Sales Summary is grouped by party.
+      */
+      if (reportLevel === "salesSummary") {
+        const groupedRows = new Map();
+
+        detailRows.forEach((row) => {
+          const groupKey = productWise
+            ? `${row.partyCode}__${row.productCode}`
+            : row.partyCode || row.partyName;
+
+          if (!groupedRows.has(groupKey)) {
+            groupedRows.set(groupKey, {
+              rowId: groupKey,
+              srNo: 0,
+              trn: "SALES",
+              partyCode: row.partyCode,
+              partyName: row.partyName,
+              grossAmount: 0,
+              discountAmount: 0,
+              cashDiscountAmount: 0,
+              vatAmount: 0,
+              lessOther: 0,
+              addOther: 0,
+              btmAmount: 0,
+              weight: 0,
+              couponAmount: 0,
+              displayAmount: 0,
+              starAmount: 0,
+              surChargeAmount: 0,
+              retAmount: 0,
+              retVatAmount: 0,
+              addLessAmount: 0,
+              netAmount: 0,
+              totalLines: 0,
+              areaName: row.areaName,
+              masterSalesmanName: row.masterSalesmanName,
+              billSalesmanName: row.billSalesmanName,
+              ...(productWise ? {
+                productCode: row.productCode,
+                productName: row.productName,
+                qty: 0,
+                freeQty: 0,
+                salesRate: 0,
+                batch: "",
+              } : {}),
+            });
+          }
+
+          const group = groupedRows.get(groupKey);
+
+          group.grossAmount += toNumber(row.grossAmount);
+          group.discountAmount += toNumber(row.discountAmount);
+          group.cashDiscountAmount += toNumber(row.cashDiscountAmount);
+          group.vatAmount += toNumber(row.vatAmount);
+          group.lessOther += toNumber(row.lessOther);
+          group.addOther += toNumber(row.addOther);
+          group.btmAmount += toNumber(row.btmAmount);
+          group.weight += toNumber(row.weight);
+          group.couponAmount += toNumber(row.couponAmount);
+          group.displayAmount += toNumber(row.displayAmount);
+          group.starAmount += toNumber(row.starAmount);
+          group.surChargeAmount += toNumber(row.surChargeAmount);
+          group.retAmount += toNumber(row.retAmount);
+          group.retVatAmount += toNumber(row.retVatAmount);
+          group.addLessAmount += toNumber(row.addLessAmount);
+          group.netAmount += toNumber(row.netAmount);
+          group.totalLines += toNumber(row.totalLines || 0);
+
+          if (productWise) {
+            group.qty += toNumber(row.qty);
+            group.freeQty += toNumber(row.freeQty);
+            group.salesRate = toNumber(row.salesRate);
+          }
+        });
+
+        rows = Array.from(groupedRows.values());
+      }
+
+      /*
+      * Sort final report rows.
+      */
+      const sortText = (value) =>
+        String(value || "").trim().toLowerCase();
+
+      rows.sort((first, second) => {
+        if (orderBy === "partyCode") {
+          return sortText(first.partyCode).localeCompare(sortText(second.partyCode));
+        }
+        if (orderBy === "trn") {
+          return sortText(first.trn).localeCompare(sortText(second.trn));
+        }
+        if (orderBy === "areaName") {
+          return sortText(first.areaName).localeCompare(sortText(second.areaName));
+        }
+        if (orderBy === "salesmanName") {
+          return sortText(first.masterSalesmanName || first.billSalesmanName)
+            .localeCompare(sortText(second.masterSalesmanName || second.billSalesmanName));
+        }
+        if (orderBy === "netAmountDesc") {
+          return (Number(second.netAmount || 0) - Number(first.netAmount || 0));
+        }
+        if (orderBy === "productName") {
+          return sortText(first.productName).localeCompare(sortText(second.productName));
+        }
+        if (orderBy === "billDate") {
+          return sortText(first.billDate).localeCompare(sortText(second.billDate));
+        }
+
+        const partyResult = sortText(first.partyName).localeCompare(sortText(second.partyName));
+        if (partyResult !== 0) {
+          return partyResult;
+        }
+        return 0;
+      });
+
+      rows = rows.map((row, index) => ({
+        ...row,
+        srNo: index + 1,
+      }));
+
+      function getAllPartyColumns(showProductWise, reportLevelValue) {
+        const columns = [
+          { key: "srNo", label: "SrNo", type: "number" },
+          { key: "trn", label: "Trn", type: "text" },
+          { key: "partyCode", label: "Party Code", type: "text" },
+          { key: "partyName", label: "Party Name", type: "text" },
+        ];
+
+        // Insert product columns if product wise or sales details
+        if (showProductWise || reportLevelValue === "salesDetails") {
+          columns.push({ key: "productCode", label: "Product Code", type: "text" });
+          columns.push({ key: "productName", label: "Product Name", type: "text" });
+          columns.push({ key: "qty", label: "Qty", type: "number" });
+          columns.push({ key: "freeQty", label: "FreeQty", type: "number" });
+          columns.push({ key: "salesRate", label: "Rate", type: "number" });
+          columns.push({ key: "batch", label: "Batch", type: "text" });
+        }
+
+        // Financial columns
+        columns.push(
+          { key: "grossAmount", label: "GrossAmt", type: "number" },
+          { key: "discountAmount", label: "Discount", type: "number" },
+          { key: "cashDiscountAmount", label: "CDAmt", type: "number" },
+          { key: "vatAmount", label: "VatAmt", type: "number" },
+          { key: "lessOther", label: "LessOther", type: "number" },
+          { key: "addOther", label: "AddOther", type: "number" },
+          { key: "btmAmount", label: "BtmAmt", type: "number" },
+          { key: "weight", label: "Weight", type: "number" },
+          { key: "couponAmount", label: "CouponAmt", type: "number" },
+          { key: "displayAmount", label: "DisplayAmt", type: "number" },
+          { key: "starAmount", label: "StarAmt", type: "number" },
+          { key: "surChargeAmount", label: "SurChargeAmt", type: "number" },
+          { key: "retAmount", label: "RetAmt", type: "number" },
+          { key: "retVatAmount", label: "RetVatAmt", type: "number" },
+          { key: "addLessAmount", label: "AddLessAmt", type: "number" },
+          { key: "netAmount", label: "NetAmt", type: "number" },
+          { key: "totalLines", label: "TotalLines", type: "number" },
+          { key: "areaName", label: "AreaName", type: "text" },
+          { key: "masterSalesmanName", label: "Master Salesman Name", type: "text" },
+          { key: "billSalesmanName", label: "Bill Salesman Name", type: "text" }
+        );
+
+        return columns;
+      }
+
+      return res.json({
+        success: true,
+        count: rows.length,
+        reportLevel,
+        productWise,
+        rows,
+        columns: getAllPartyColumns(productWise, reportLevel),
+      });
+    } catch (error) {
+      console.error("All party sales report error:", error);
+
+      return res.status(500).json({
+        success: false,
+        message: "Failed to generate all party sales report.",
+        error: error.message,
+      });
+    }
+  }
+);
 app.get("/api/connection-status", (req, res) => {
   const states = {
     0: "disconnected",
