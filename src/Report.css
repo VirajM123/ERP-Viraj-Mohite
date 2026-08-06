@@ -997,14 +997,9 @@
     display: grid;
     min-height: 0;
     flex: 1;
-
-    /* Maximum available width for the report result grid */
     grid-template-columns: minmax(0, 1fr) 145px;
-
     gap: 8px;
-
     padding: 0 10px 12px;
-
     overflow: hidden;
 }
 .party-report-main-column {
@@ -1091,6 +1086,351 @@
 .party-multi-select-trigger { display: flex; align-items: center; justify-content: space-between; gap: 8px; cursor: pointer; text-align: left; }
 .party-multi-select-trigger > span:first-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
+/* =========================================================
+   ULTRA COMPACT PARTY SELECTOR MODAL - SINGLE ROW
+   ========================================================= */
+
+/* Dropdown container - ultra compact */
+.party-checkbox-dropdown-large {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  z-index: 100;
+  width: 100%;
+  max-width: 400px;
+  min-width: 280px;
+  overflow: hidden;
+  border: 1px solid #dce3ef;
+  border-radius: 8px;
+  background: #ffffff;
+  box-shadow: 0 8px 30px rgba(0, 0, 0, 0.1);
+}
+
+/* Header - ultra compact */
+.party-selector-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 6px 10px 6px 12px;
+  border-bottom: 1px solid #e5e7eb;
+}
+
+.party-selector-header strong {
+  font-size: 12px;
+  font-weight: 700;
+  color: #1e293b;
+}
+
+.party-selector-header small {
+  display: inline;
+  color: #64748b;
+  font-size: 10px;
+  font-weight: 400;
+  margin-left: 4px;
+}
+
+/* Close button - ultra compact */
+.party-close-btn {
+  display: inline-flex;
+  width: 22px;
+  height: 22px;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  border-radius: 4px;
+  background: #f1f5f9;
+  color: #64748b;
+  cursor: pointer;
+  transition: background 0.2s;
+  flex-shrink: 0;
+}
+
+.party-close-btn:hover {
+  background: #e2e8f0;
+}
+
+.party-close-btn svg {
+  width: 14px;
+  height: 14px;
+}
+
+/* Search - ultra compact */
+.party-selector-search {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 4px 8px 3px 8px;
+  padding: 0 8px;
+  height: 26px;
+  border: 1px solid #e2e8f0;
+  border-radius: 4px;
+  background: #f8fafc;
+  transition: border-color 0.2s;
+}
+
+.party-selector-search:focus-within {
+  border-color: #2563eb;
+  background: #ffffff;
+}
+
+.party-selector-search input {
+  width: 100%;
+  min-width: 0;
+  border: none !important;
+  outline: none !important;
+  box-shadow: none !important;
+  background: transparent;
+  font-size: 11px;
+  color: #1e293b;
+  padding: 2px 0;
+}
+
+.party-selector-search input::placeholder {
+  color: #94a3b8;
+  font-size: 10px;
+}
+
+.party-selector-search svg {
+  width: 12px;
+  height: 12px;
+  color: #94a3b8;
+}
+
+/* Sort label - ultra compact */
+.party-selector-sort-label {
+  padding: 2px 10px 2px 10px;
+  font-size: 9px;
+  color: #94a3b8;
+  font-weight: 500;
+  border-bottom: 1px solid #f1f5f9;
+}
+
+/* Party list - ultra compact with single row items */
+.modern-party-list {
+  max-height: 200px;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding: 3px 6px 4px 6px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.modern-party-list::-webkit-scrollbar {
+  width: 3px;
+}
+
+.modern-party-list::-webkit-scrollbar-track {
+  background: #f1f5f9;
+  border-radius: 4px;
+}
+
+.modern-party-list::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border-radius: 4px;
+}
+
+/* Party card - ultra compact single row */
+.party-card {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 8px;
+  border: 1px solid #e5e7eb;
+  border-radius: 5px;
+  background: #ffffff;
+  cursor: pointer;
+  transition: all 0.12s ease;
+  min-height: 28px;
+}
+
+.party-card:hover {
+  border-color: #2563eb;
+  background: #f8fbff;
+}
+
+.party-card.selected {
+  border-color: #2563eb;
+  background: #eef5ff;
+}
+
+.party-card input[type="checkbox"] {
+  width: 13px;
+  height: 13px;
+  margin: 0;
+  flex-shrink: 0;
+  accent-color: #2563eb;
+  cursor: pointer;
+}
+
+.party-card-details {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.party-card-header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex: 1;
+  min-width: 0;
+}
+
+.party-name {
+  font-size: 11px;
+  font-weight: 600;
+  color: #1e293b;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.party-code {
+  font-size: 9px;
+  color: #64748b;
+  background: #f1f5f9;
+  padding: 0 6px;
+  border-radius: 10px;
+  flex-shrink: 0;
+  font-weight: 500;
+  line-height: 16px;
+}
+
+.party-card-footer {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 9px;
+  color: #94a3b8;
+  flex-shrink: 0;
+}
+
+.party-location {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.party-location::before {
+  content: "📍";
+  font-size: 9px;
+}
+
+.party-phone {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.party-phone::before {
+  content: "📞";
+  font-size: 9px;
+}
+
+/* Empty state - ultra compact */
+.party-empty {
+  padding: 16px 10px;
+  text-align: center;
+  color: #94a3b8;
+  font-size: 11px;
+}
+
+/* Footer - ultra compact */
+.party-selector-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 6px;
+  padding: 6px 10px 8px 10px;
+  border-top: 1px solid #e5e7eb;
+  background: #fafbfc;
+  border-radius: 0 0 8px 8px;
+}
+
+.party-cancel-btn {
+  height: 26px;
+  padding: 0 14px;
+  border: 1px solid #d1d5db;
+  background: #ffffff;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 11px;
+  font-weight: 500;
+  color: #475569;
+  transition: all 0.2s;
+}
+
+.party-cancel-btn:hover {
+  background: #f1f5f9;
+  border-color: #94a3b8;
+}
+
+.party-apply-btn {
+  height: 26px;
+  padding: 0 16px;
+  border: none;
+  background: #2563eb;
+  color: #ffffff;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 11px;
+  font-weight: 600;
+  transition: all 0.2s;
+}
+
+.party-apply-btn:hover {
+  background: #1d4ed8;
+}
+
+/* Update the multi-select trigger to match other inputs - compact */
+.party-multi-select-trigger {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  width: 100%;
+  height: 34px !important;
+  min-height: 34px !important;
+  padding: 0 10px !important;
+  border: 1px solid #d8dfeb;
+  border-radius: 6px !important;
+  outline: 0;
+  background: #fff;
+  color: #35415c;
+  font-size: 11px !important;
+  cursor: pointer;
+  transition: border-color 0.15s, box-shadow 0.15s;
+  text-align: left;
+  line-height: 32px !important;
+}
+
+.party-multi-select-trigger:hover {
+  border-color: #aab8d5;
+}
+
+.party-multi-select-trigger:focus {
+  border-color: #4164ec;
+  box-shadow: 0 0 0 3px rgba(65, 100, 236, 0.1);
+}
+
+.party-multi-select-trigger > span:first-child {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.party-multi-select-trigger > span:last-child {
+  font-size: 10px;
+  color: #94a3b8;
+  flex-shrink: 0;
+}
+
+/* =========================================================
+   OTHER PARTY SELECTOR STYLES
+   ========================================================= */
+
 .party-checkbox-dropdown {
   position: absolute;
   top: calc(100% + 7px);
@@ -1104,7 +1444,7 @@
   background: #fff;
   box-shadow: 0 18px 45px rgba(25, 40, 75, .18);
 }
-.party-selector-header,
+
 .party-selection-modal-header,
 .party-selection-modal-footer {
   display: flex;
@@ -1114,14 +1454,13 @@
   padding: 13px 15px;
   border-bottom: 1px solid #e8ecf3;
 }
-.party-selector-header strong,
+
 .party-selection-modal-header strong { color: #16264c; font-size: 13px; }
-.party-selector-header button,
 .party-selection-modal-header button {
   display: inline-flex; width: 28px; height: 28px; align-items: center; justify-content: center;
   border: 0; border-radius: 7px; background: #f2f5fa; color: #5b6780; cursor: pointer;
 }
-.party-selector-search,
+
 .party-report-search {
   display: flex;
   align-items: center;
@@ -1130,9 +1469,9 @@
   background: #fff;
   color: #7d8aa2;
 }
-.party-selector-search { height: 38px; margin: 12px 14px 8px; padding: 0 11px; border-radius: 8px; }
-.party-selector-search input,
+
 .party-report-search input { width: 100%; min-width: 0; border: 0 !important; outline: 0 !important; box-shadow: none !important; background: transparent; }
+
 .party-check-row { display: flex; min-height: 38px; align-items: center; gap: 10px; padding: 7px 14px; color: #35415b; font-size: 11px; cursor: pointer; }
 .party-check-row:hover { background: #f5f8ff; }
 .party-check-row input { width: 15px; height: 15px; accent-color: #3158ef; }
@@ -1231,25 +1570,8 @@
 .party-spinning-icon { animation: party-spin .8s linear infinite; }
 @keyframes party-spin { to { transform: rotate(360deg); } }
 
-@media (max-width: 1350px) {
-  .party-report-content-layout {
-    grid-template-columns: minmax(0, 1fr) 145px;
-    gap: 8px;
-    padding-inline: 10px;
-  }
-  .party-classic-titlebar { padding-inline: 16px; }
-  .party-report-form-grid { gap: 13px 14px; }
-  .party-toolbar-export button { width: 36px; padding: 0; font-size: 0; }
-}
-
-@media (max-width: 1120px) {
-  .party-classic-report-page { overflow: auto; }
-  .party-classic-report-window { width: 1080px; }
-}
 /* =========================================================
    PARTY WISE SALES REPORT — COMPACT ERP CRITERIA OVERRIDE
-   Keeps all report logic/layout intact while matching the
-   compact control sizing used by Sales Invoice forms.
    ========================================================= */
 
 .party-classic-report-page .party-filter-group {
@@ -1414,8 +1736,6 @@
 
 /* =========================================================
    PARTY WISE SALES REPORT — COMPACT QUICK SUMMARY
-   Reduces sidebar summary height and keeps maximum space
-   available for the report result grid.
    ========================================================= */
 
 .party-classic-report-page .party-report-content-layout {
@@ -1436,20 +1756,17 @@
   min-height: 0 !important;
   flex: 1 1 auto !important;
 }
+
 .party-report-sidebar {
-    display: flex;
-    width: 145px;
-    min-width: 145px;
-    max-width: 145px;
-
-    min-height: 0;
-
-    flex-direction: column;
-
-    gap: 8px;
-
-    overflow-y: auto;
-    overflow-x: hidden;
+  display: flex;
+  width: 145px;
+  min-width: 145px;
+  max-width: 145px;
+  min-height: 0;
+  flex-direction: column;
+  gap: 8px;
+  overflow-y: auto;
+  overflow-x: hidden;
 }
 
 /* Compact Quick Summary card only */
@@ -1560,8 +1877,6 @@
 
 /* =========================================================
    PARTY WISE SALES REPORT — EXPANDED RESULT GRID OVERRIDE
-   Gives maximum horizontal space to the report table while
-   preserving the existing filters, toolbar and sidebar logic.
    ========================================================= */
 
 .party-classic-report-page .party-report-content-layout {
@@ -1589,6 +1904,10 @@
   padding-right: 10px !important;
 }
 
+/* =========================================================
+   RESPONSIVE - PARTY REPORT
+   ========================================================= */
+
 @media (max-width: 1350px) {
   .party-classic-report-page .party-report-content-layout {
     grid-template-columns: minmax(0, 1fr) 140px !important;
@@ -1602,4 +1921,1651 @@
     min-width: 140px !important;
     max-width: 140px !important;
   }
+}
+
+@media (max-width: 640px) {
+  .party-checkbox-dropdown-large {
+    max-width: 100%;
+    min-width: 260px;
+    left: 0;
+    right: 0;
+    border-radius: 6px;
+  }
+
+  .party-selector-header {
+    padding: 5px 8px 5px 10px;
+  }
+
+  .party-selector-header strong {
+    font-size: 11px;
+  }
+
+  .party-selector-search {
+    margin: 4px 6px 3px 6px;
+    height: 24px;
+  }
+
+  .modern-party-list {
+    max-height: 160px;
+    padding: 2px 4px 3px 4px;
+  }
+
+  .party-card {
+    padding: 3px 6px;
+    min-height: 24px;
+  }
+
+  .party-name {
+    font-size: 10px;
+  }
+
+  .party-card-footer {
+    font-size: 8px;
+    gap: 6px;
+  }
+
+  .party-selector-footer {
+    padding: 5px 8px 6px 8px;
+  }
+
+  .party-cancel-btn,
+  .party-apply-btn {
+    flex: 1;
+    min-width: 50px;
+    height: 24px;
+    font-size: 10px;
+    padding: 0 10px;
+  }
+}
+/* =========================================================
+   FORCE CSS - CHECKBOX STYLING FOR PARTY SELECTOR
+   ========================================================= */
+
+/* Force override for all checkboxes in party selector */
+.party-card input[type="checkbox"],
+.party-check-row input[type="checkbox"],
+.party-check-all input[type="checkbox"] {
+  -webkit-appearance: none !important;
+  -moz-appearance: none !important;
+  appearance: none !important;
+  width: 16px !important;
+  height: 16px !important;
+  min-width: 16px !important;
+  min-height: 16px !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  border: 2px solid #cbd5e1 !important;
+  border-radius: 4px !important;
+  background: #ffffff !important;
+  cursor: pointer !important;
+  position: relative !important;
+  flex-shrink: 0 !important;
+  transition: all 0.15s ease !important;
+  outline: none !important;
+  box-shadow: none !important;
+}
+
+/* Hover state */
+.party-card input[type="checkbox"]:hover,
+.party-check-row input[type="checkbox"]:hover {
+  border-color: #2563eb !important;
+  background: #f0f7ff !important;
+}
+
+/* Checked state */
+.party-card input[type="checkbox"]:checked,
+.party-check-row input[type="checkbox"]:checked,
+.party-check-all input[type="checkbox"]:checked {
+  border-color: #2563eb !important;
+  background: #2563eb !important;
+}
+
+/* Checkmark - using pseudo element */
+.party-card input[type="checkbox"]:checked::after,
+.party-check-row input[type="checkbox"]:checked::after,
+.party-check-all input[type="checkbox"]:checked::after {
+  content: "✓" !important;
+  position: absolute !important;
+  top: 50% !important;
+  left: 50% !important;
+  transform: translate(-50%, -50%) !important;
+  color: #ffffff !important;
+  font-size: 11px !important;
+  font-weight: 700 !important;
+  line-height: 1 !important;
+}
+
+/* Focus state */
+.party-card input[type="checkbox"]:focus,
+.party-check-row input[type="checkbox"]:focus {
+  border-color: #2563eb !important;
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.15) !important;
+}
+
+/* Disabled state */
+.party-card input[type="checkbox"]:disabled,
+.party-check-row input[type="checkbox"]:disabled {
+  opacity: 0.5 !important;
+  cursor: not-allowed !important;
+}
+
+/* Select All checkbox - slightly different styling */
+.party-check-all input[type="checkbox"] {
+  border-color: #2563eb !important;
+}
+
+.party-check-all input[type="checkbox"]:checked {
+  background: #2563eb !important;
+  border-color: #2563eb !important;
+}
+
+/* Force alignment in party card */
+.party-card {
+  display: flex !important;
+  align-items: center !important;
+  gap: 10px !important;
+  padding: 6px 10px !important;
+  min-height: 32px !important;
+}
+
+.party-card input[type="checkbox"] {
+  margin-top: 0 !important;
+  align-self: center !important;
+}
+
+/* For the "Select All" row */
+.party-check-row.party-check-all {
+  display: flex !important;
+  align-items: center !important;
+  gap: 10px !important;
+  padding: 4px 12px !important;
+  min-height: 30px !important;
+}
+
+.party-check-row.party-check-all input[type="checkbox"] {
+  margin: 0 !important;
+}
+
+/* Remove any default checkbox styling from browsers */
+.party-card input[type="checkbox"]::-ms-check,
+.party-check-row input[type="checkbox"]::-ms-check {
+  display: none !important;
+}
+
+/* For Webkit browsers - remove default styling */
+.party-card input[type="checkbox"]::-webkit-checkbox,
+.party-check-row input[type="checkbox"]::-webkit-checkbox {
+  display: none !important;
+}
+
+/* For Firefox */
+.party-card input[type="checkbox"]::-moz-checkbox,
+.party-check-row input[type="checkbox"]::-moz-checkbox {
+  display: none !important;
+}
+
+/* Ensure the checkbox label click works properly */
+.party-card {
+  cursor: pointer !important;
+}
+
+.party-card input[type="checkbox"] {
+  pointer-events: auto !important;
+  cursor: pointer !important;
+}
+
+/* For the main checkbox in selector header if any */
+.party-selector-header input[type="checkbox"] {
+  -webkit-appearance: none !important;
+  -moz-appearance: none !important;
+  appearance: none !important;
+  width: 16px !important;
+  height: 16px !important;
+  border: 2px solid #cbd5e1 !important;
+  border-radius: 4px !important;
+  background: #ffffff !important;
+  cursor: pointer !important;
+  position: relative !important;
+  transition: all 0.15s ease !important;
+}
+
+.party-selector-header input[type="checkbox"]:checked {
+  border-color: #2563eb !important;
+  background: #2563eb !important;
+}
+
+.party-selector-header input[type="checkbox"]:checked::after {
+  content: "✓" !important;
+  position: absolute !important;
+  top: 50% !important;
+  left: 50% !important;
+  transform: translate(-50%, -50%) !important;
+  color: #ffffff !important;
+  font-size: 11px !important;
+  font-weight: 700 !important;
+}
+
+/* Force all checkboxes in the dropdown to be consistent */
+.party-checkbox-dropdown-large input[type="checkbox"],
+.party-checkbox-dropdown input[type="checkbox"] {
+  -webkit-appearance: none !important;
+  -moz-appearance: none !important;
+  appearance: none !important;
+}
+
+/* Ensure proper spacing in the party card details */
+.party-card-details {
+  display: flex !important;
+  flex: 1 !important;
+  align-items: center !important;
+  gap: 8px !important;
+  min-width: 0 !important;
+}
+
+.party-card-header {
+  display: flex !important;
+  align-items: center !important;
+  gap: 6px !important;
+  flex: 1 !important;
+  min-width: 0 !important;
+  margin-bottom: 0 !important;
+}
+
+.party-card-footer {
+  display: flex !important;
+  align-items: center !important;
+  gap: 10px !important;
+  flex-shrink: 0 !important;
+  margin-top: 0 !important;
+}
+
+/* Make the entire card row clickable but keep checkbox clickable */
+.party-card * {
+  pointer-events: none !important;
+}
+
+.party-card input[type="checkbox"] {
+  pointer-events: auto !important;
+}
+
+/* Fix for any inherited styles that might affect checkboxes */
+.party-classic-report-page input[type="checkbox"] {
+  -webkit-appearance: none !important;
+  -moz-appearance: none !important;
+  appearance: none !important;
+}
+
+/* Ensure checkboxes in the main party list are properly sized */
+.modern-party-list .party-card input[type="checkbox"] {
+  width: 16px !important;
+  height: 16px !important;
+  min-width: 16px !important;
+  min-height: 16px !important;
+}
+
+/* Checkbox animation on hover */
+.party-card:hover input[type="checkbox"]:not(:checked) {
+  border-color: #2563eb !important;
+  background: #f0f7ff !important;
+}
+
+/* Selected card checkbox stays visible */
+.party-card.selected input[type="checkbox"] {
+  border-color: #2563eb !important;
+}
+
+/* Force the checkmark to be visible on checked state */
+.party-card input[type="checkbox"]:checked,
+.party-check-row input[type="checkbox"]:checked {
+  background: #2563eb !important;
+  border-color: #2563eb !important;
+}
+
+.party-card input[type="checkbox"]:checked::after,
+.party-check-row input[type="checkbox"]:checked::after {
+  content: "✓" !important;
+  display: block !important;
+  position: absolute !important;
+  top: 50% !important;
+  left: 50% !important;
+  transform: translate(-50%, -50%) !important;
+  color: #ffffff !important;
+  font-size: 11px !important;
+  font-weight: 700 !important;
+  line-height: 1 !important;
+}
+
+/* Fix for the select all checkbox */
+.party-check-all input[type="checkbox"]:checked::after {
+  content: "✓" !important;
+  display: block !important;
+  position: absolute !important;
+  top: 50% !important;
+  left: 50% !important;
+  transform: translate(-50%, -50%) !important;
+  color: #ffffff !important;
+  font-size: 11px !important;
+  font-weight: 700 !important;
+  line-height: 1 !important;
+}
+/* =========================================================
+   FORCE FIX - SEARCH BAR OVERLAPPING ISSUE
+   ========================================================= */
+
+/* Fix for the search bar - ensure it stays on top and visible */
+.party-selector-search {
+  position: relative !important;
+  z-index: 101 !important;
+  background: #f8fafc !important;
+  border: 1px solid #e2e8f0 !important;
+}
+
+.party-selector-search input {
+  position: relative !important;
+  z-index: 102 !important;
+  background: transparent !important;
+  pointer-events: auto !important;
+  opacity: 1 !important;
+  visibility: visible !important;
+}
+
+/* Force the dropdown container to have proper z-index and overflow */
+.party-checkbox-dropdown-large {
+  z-index: 9999 !important;
+  overflow: visible !important;
+  position: absolute !important;
+  background: #ffffff !important;
+}
+
+/* Ensure the search wrapper is above any overlays */
+.party-selector-search,
+.party-selector-search * {
+  pointer-events: auto !important;
+  opacity: 1 !important;
+  visibility: visible !important;
+}
+
+/* Prevent any white overlay from covering the search */
+.party-checkbox-dropdown-large::before,
+.party-checkbox-dropdown-large::after {
+  display: none !important;
+}
+
+/* Fix for any modal/backdrop that might be interfering */
+.party-selection-backdrop {
+  z-index: 9998 !important;
+  pointer-events: none !important;
+}
+
+.party-selection-backdrop .party-selection-modal {
+  pointer-events: auto !important;
+}
+
+/* Ensure the search input is clickable and visible */
+.party-selector-search input:focus {
+  border: none !important;
+  outline: none !important;
+  box-shadow: none !important;
+  background: transparent !important;
+  z-index: 103 !important;
+  position: relative !important;
+}
+
+/* Force the search container to maintain its background */
+.party-selector-search:focus-within {
+  background: #ffffff !important;
+  border-color: #2563eb !important;
+  z-index: 104 !important;
+}
+
+/* Remove any potential overlay that might be covering the search */
+.party-selector-search ~ * {
+  pointer-events: auto !important;
+}
+
+/* Fix for the dropdown positioning */
+.party-multi-select {
+  position: relative !important;
+  z-index: 100 !important;
+}
+
+/* Ensure the search bar in the modal version also works */
+.party-selection-modal .party-report-search {
+  position: relative !important;
+  z-index: 101 !important;
+  background: #ffffff !important;
+}
+
+.party-selection-modal .party-report-search input {
+  position: relative !important;
+  z-index: 102 !important;
+  background: transparent !important;
+  pointer-events: auto !important;
+}
+
+/* Fix for any white screen that might appear */
+.party-checkbox-dropdown-large {
+  background: #ffffff !important;
+  box-shadow: 0 8px 30px rgba(0, 0, 0, 0.15) !important;
+}
+
+/* Ensure the search input is not hidden by any parent overflow */
+.party-selector-search {
+  overflow: visible !important;
+}
+
+.party-selector-search input {
+  width: 100% !important;
+  min-width: 0 !important;
+}
+
+/* Fix for the close button not interfering */
+.party-close-btn {
+  z-index: 105 !important;
+  position: relative !important;
+}
+
+/* Additional fix for any white overlay from the dropdown itself */
+.party-checkbox-dropdown-large > * {
+  position: relative !important;
+  z-index: 1 !important;
+}
+
+.party-checkbox-dropdown-large > .party-selector-search {
+  z-index: 2 !important;
+}
+
+/* Force the search bar to be on top of everything inside the dropdown */
+.party-selector-search {
+  position: relative !important;
+  z-index: 9999 !important;
+}
+
+.party-selector-search input {
+  position: relative !important;
+  z-index: 9999 !important;
+}
+
+/* Fix for the dropdown when it's opened inside a modal */
+.party-selection-modal .party-checkbox-dropdown-large {
+  z-index: 9999 !important;
+}
+
+/* Ensure the search input receives focus properly */
+.party-selector-search input:focus {
+  background: transparent !important;
+  border: none !important;
+  outline: none !important;
+  box-shadow: none !important;
+}
+
+/* Prevent any white overlay from covering the search area */
+.party-selector-search::before,
+.party-selector-search::after {
+  display: none !important;
+}
+
+/* Fix for any parent container that might be causing the issue */
+.party-multi-select {
+  overflow: visible !important;
+}
+
+.party-report-field {
+  overflow: visible !important;
+}
+
+/* Force the dropdown to be above everything */
+.party-checkbox-dropdown-large {
+  position: absolute !important;
+  top: calc(100% + 2px) !important;
+  left: 0 !important;
+  z-index: 99999 !important;
+  display: block !important;
+}
+/* =========================================================
+   PARTY SELECTOR MODAL - PURE LINE ALIGNMENT
+   ========================================================= */
+
+/* Dropdown container - clean, minimal */
+.party-checkbox-dropdown-large {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  z-index: 99999;
+  width: 100%;
+  min-width: 320px;
+  max-width: 420px;
+  overflow: hidden;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  background: #ffffff;
+  box-shadow: 0 8px 30px rgba(0, 0, 0, 0.12);
+}
+
+/* Header - clean and minimal */
+.party-selector-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 8px 12px 6px 12px;
+  border-bottom: 1px solid #f1f5f9;
+  background: #fafbfc;
+}
+
+.party-selector-header strong {
+  font-size: 12px;
+  font-weight: 700;
+  color: #1e293b;
+}
+
+.party-selector-header small {
+  display: inline;
+  color: #94a3b8;
+  font-size: 10px;
+  font-weight: 400;
+  margin-left: 6px;
+}
+
+.party-close-btn {
+  display: inline-flex;
+  width: 22px;
+  height: 22px;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  border-radius: 4px;
+  background: transparent;
+  color: #94a3b8;
+  cursor: pointer;
+  transition: background 0.2s, color 0.2s;
+  flex-shrink: 0;
+}
+
+.party-close-btn:hover {
+  background: #f1f5f9;
+  color: #475569;
+}
+
+.party-close-btn svg {
+  width: 14px;
+  height: 14px;
+}
+
+/* Search bar - clean line */
+.party-selector-search {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 6px 10px 4px 10px;
+  padding: 0 10px;
+  height: 28px;
+  border: 1px solid #e2e8f0;
+  border-radius: 6px;
+  background: #ffffff;
+  transition: border-color 0.2s, box-shadow 0.2s;
+}
+
+.party-selector-search:focus-within {
+  border-color: #2563eb;
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.08);
+}
+
+.party-selector-search svg {
+  width: 13px;
+  height: 13px;
+  color: #94a3b8;
+  flex-shrink: 0;
+}
+
+.party-selector-search input {
+  width: 100%;
+  min-width: 0;
+  border: none !important;
+  outline: none !important;
+  box-shadow: none !important;
+  background: transparent;
+  font-size: 11px;
+  color: #1e293b;
+  padding: 4px 0;
+}
+
+.party-selector-search input::placeholder {
+  color: #a0aec0;
+  font-size: 10px;
+}
+
+/* Sort label - subtle line */
+.party-selector-sort-label {
+  padding: 4px 12px 3px 12px;
+  font-size: 9px;
+  color: #94a3b8;
+  font-weight: 500;
+  border-bottom: 1px solid #f1f5f9;
+  letter-spacing: 0.3px;
+  text-transform: uppercase;
+}
+
+/* Party list - clean spacing */
+.modern-party-list {
+  max-height: 220px;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding: 4px 6px 6px 6px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.modern-party-list::-webkit-scrollbar {
+  width: 4px;
+}
+
+.modern-party-list::-webkit-scrollbar-track {
+  background: #f8fafc;
+  border-radius: 4px;
+}
+
+.modern-party-list::-webkit-scrollbar-thumb {
+  background: #d1d5db;
+  border-radius: 4px;
+}
+
+.modern-party-list::-webkit-scrollbar-thumb:hover {
+  background: #a0aec0;
+}
+
+/* Party card - pure line alignment with proper checkbox */
+.party-card {
+  display: flex !important;
+  align-items: center !important;
+  gap: 10px !important;
+  padding: 5px 10px !important;
+  border: 1px solid #edf2f7 !important;
+  border-radius: 6px !important;
+  background: #ffffff !important;
+  cursor: pointer !important;
+  transition: all 0.15s ease !important;
+  min-height: 32px !important;
+}
+
+.party-card:hover {
+  border-color: #2563eb !important;
+  background: #f8faff !important;
+}
+
+.party-card.selected {
+  border-color: #2563eb !important;
+  background: #eff6ff !important;
+}
+
+/* Checkbox - pure line aligned */
+.party-card input[type="checkbox"],
+.party-check-row input[type="checkbox"],
+.party-check-all input[type="checkbox"] {
+  -webkit-appearance: none !important;
+  -moz-appearance: none !important;
+  appearance: none !important;
+  width: 16px !important;
+  height: 16px !important;
+  min-width: 16px !important;
+  min-height: 16px !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  border: 2px solid #cbd5e1 !important;
+  border-radius: 4px !important;
+  background: #ffffff !important;
+  cursor: pointer !important;
+  position: relative !important;
+  flex-shrink: 0 !important;
+  transition: all 0.15s ease !important;
+  outline: none !important;
+  box-shadow: none !important;
+  align-self: center !important;
+}
+
+/* Checkbox hover state */
+.party-card input[type="checkbox"]:hover,
+.party-check-row input[type="checkbox"]:hover {
+  border-color: #2563eb !important;
+  background: #f0f7ff !important;
+}
+
+/* Checkbox checked state */
+.party-card input[type="checkbox"]:checked,
+.party-check-row input[type="checkbox"]:checked,
+.party-check-all input[type="checkbox"]:checked {
+  border-color: #2563eb !important;
+  background: #2563eb !important;
+}
+
+/* Checkmark */
+.party-card input[type="checkbox"]:checked::after,
+.party-check-row input[type="checkbox"]:checked::after,
+.party-check-all input[type="checkbox"]:checked::after {
+  content: "✓" !important;
+  position: absolute !important;
+  top: 50% !important;
+  left: 50% !important;
+  transform: translate(-50%, -50%) !important;
+  color: #ffffff !important;
+  font-size: 11px !important;
+  font-weight: 700 !important;
+  line-height: 1 !important;
+}
+
+/* Checkbox focus state */
+.party-card input[type="checkbox"]:focus,
+.party-check-row input[type="checkbox"]:focus {
+  border-color: #2563eb !important;
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.12) !important;
+}
+
+/* Party card details - proper alignment */
+.party-card-details {
+  display: flex !important;
+  flex: 1 !important;
+  align-items: center !important;
+  gap: 10px !important;
+  min-width: 0 !important;
+}
+
+.party-card-header {
+  display: flex !important;
+  align-items: center !important;
+  gap: 6px !important;
+  flex: 1 !important;
+  min-width: 0 !important;
+}
+
+.party-name {
+  font-size: 11px !important;
+  font-weight: 600 !important;
+  color: #1e293b !important;
+  overflow: hidden !important;
+  text-overflow: ellipsis !important;
+  white-space: nowrap !important;
+}
+
+.party-code {
+  font-size: 9px !important;
+  color: #64748b !important;
+  background: #f1f5f9 !important;
+  padding: 0 6px !important;
+  border-radius: 10px !important;
+  flex-shrink: 0 !important;
+  font-weight: 500 !important;
+  line-height: 16px !important;
+}
+
+.party-card-footer {
+  display: flex !important;
+  align-items: center !important;
+  gap: 8px !important;
+  flex-shrink: 0 !important;
+  margin-top: 0 !important;
+}
+
+.party-location {
+  display: flex !important;
+  align-items: center !important;
+  gap: 2px !important;
+  font-size: 9px !important;
+  color: #94a3b8 !important;
+}
+
+.party-location::before {
+  content: "📍" !important;
+  font-size: 9px !important;
+}
+
+.party-phone {
+  display: flex !important;
+  align-items: center !important;
+  gap: 2px !important;
+  font-size: 9px !important;
+  color: #94a3b8 !important;
+}
+
+.party-phone::before {
+  content: "📞" !important;
+  font-size: 9px !important;
+}
+
+/* Make entire card clickable but keep checkbox functional */
+.party-card * {
+  pointer-events: none !important;
+}
+
+.party-card input[type="checkbox"] {
+  pointer-events: auto !important;
+}
+
+/* Empty state */
+.party-empty {
+  padding: 20px 10px !important;
+  text-align: center !important;
+  color: #94a3b8 !important;
+  font-size: 11px !important;
+}
+
+/* Select All row - clean line alignment */
+.party-check-row.party-check-all {
+  display: flex !important;
+  align-items: center !important;
+  gap: 10px !important;
+  padding: 4px 12px !important;
+  min-height: 28px !important;
+  border-bottom: 1px solid #f1f5f9 !important;
+  background: #fafbfc !important;
+  margin: 0 6px 2px 6px !important;
+  border-radius: 4px !important;
+}
+
+.party-check-row.party-check-all input[type="checkbox"] {
+  margin: 0 !important;
+}
+
+.party-check-row.party-check-all span {
+  font-size: 11px !important;
+  font-weight: 600 !important;
+  color: #1e293b !important;
+}
+
+/* Regular party check row */
+.party-check-row {
+  display: flex !important;
+  align-items: center !important;
+  gap: 10px !important;
+  padding: 4px 12px !important;
+  min-height: 28px !important;
+  border-radius: 4px !important;
+  cursor: pointer !important;
+  transition: background 0.15s ease !important;
+}
+
+.party-check-row:hover {
+  background: #f8faff !important;
+}
+
+.party-check-row input[type="checkbox"] {
+  margin: 0 !important;
+}
+
+.party-check-name {
+  font-size: 11px !important;
+  color: #1e293b !important;
+}
+
+/* Footer - clean line */
+.party-selector-footer {
+  display: flex !important;
+  justify-content: flex-end !important;
+  gap: 6px !important;
+  padding: 8px 12px 10px 12px !important;
+  border-top: 1px solid #f1f5f9 !important;
+  background: #fafbfc !important;
+  border-radius: 0 0 8px 8px !important;
+}
+
+.party-cancel-btn {
+  height: 28px !important;
+  padding: 0 14px !important;
+  border: 1px solid #e2e8f0 !important;
+  background: #ffffff !important;
+  border-radius: 6px !important;
+  cursor: pointer !important;
+  font-size: 11px !important;
+  font-weight: 500 !important;
+  color: #475569 !important;
+  transition: all 0.2s ease !important;
+}
+
+.party-cancel-btn:hover {
+  background: #f1f5f9 !important;
+  border-color: #cbd5e1 !important;
+}
+
+.party-apply-btn {
+  height: 28px !important;
+  padding: 0 16px !important;
+  border: none !important;
+  background: #2563eb !important;
+  color: #ffffff !important;
+  border-radius: 6px !important;
+  cursor: pointer !important;
+  font-size: 11px !important;
+  font-weight: 600 !important;
+  transition: all 0.2s ease !important;
+}
+
+.party-apply-btn:hover {
+  background: #1d4ed8 !important;
+}
+
+/* Multi-select trigger - clean */
+.party-multi-select-trigger {
+  display: flex !important;
+  align-items: center !important;
+  justify-content: space-between !important;
+  gap: 6px !important;
+  width: 100% !important;
+  height: 34px !important;
+  min-height: 34px !important;
+  padding: 0 10px !important;
+  border: 1px solid #d8dfeb !important;
+  border-radius: 6px !important;
+  outline: 0 !important;
+  background: #fff !important;
+  color: #35415c !important;
+  font-size: 11px !important;
+  cursor: pointer !important;
+  transition: border-color 0.15s, box-shadow 0.15s !important;
+  text-align: left !important;
+  line-height: 32px !important;
+}
+
+.party-multi-select-trigger:hover {
+  border-color: #aab8d5 !important;
+}
+
+.party-multi-select-trigger:focus {
+  border-color: #4164ec !important;
+  box-shadow: 0 0 0 3px rgba(65, 100, 236, 0.1) !important;
+}
+
+.party-multi-select-trigger > span:first-child {
+  overflow: hidden !important;
+  text-overflow: ellipsis !important;
+  white-space: nowrap !important;
+}
+
+.party-multi-select-trigger > span:last-child {
+  font-size: 10px !important;
+  color: #94a3b8 !important;
+  flex-shrink: 0 !important;
+}
+
+/* =========================================================
+   BACKDROP MODAL FOR AREA/SALESMAN SELECTION
+   ========================================================= */
+
+.party-selection-backdrop {
+  position: fixed !important;
+  inset: 0 !important;
+  z-index: 9998 !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  padding: 20px !important;
+  background: rgba(12, 22, 45, 0.35) !important;
+  backdrop-filter: blur(2px) !important;
+}
+
+.party-selection-modal {
+  width: min(480px, 96vw) !important;
+  overflow: hidden !important;
+  border: 1px solid #e2e8f0 !important;
+  border-radius: 12px !important;
+  background: #ffffff !important;
+  box-shadow: 0 20px 60px rgba(12, 24, 52, 0.2) !important;
+}
+
+.party-selection-modal-header {
+  display: flex !important;
+  align-items: center !important;
+  justify-content: space-between !important;
+  gap: 12px !important;
+  padding: 12px 16px !important;
+  border-bottom: 1px solid #f1f5f9 !important;
+  background: #fafbfc !important;
+}
+
+.party-selection-modal-header strong {
+  font-size: 13px !important;
+  color: #1e293b !important;
+}
+
+.party-selection-modal-header span {
+  display: block !important;
+  margin-top: 2px !important;
+  color: #94a3b8 !important;
+  font-size: 10px !important;
+}
+
+.party-selection-modal-header button {
+  display: inline-flex !important;
+  width: 28px !important;
+  height: 28px !important;
+  align-items: center !important;
+  justify-content: center !important;
+  border: 0 !important;
+  border-radius: 6px !important;
+  background: transparent !important;
+  color: #94a3b8 !important;
+  cursor: pointer !important;
+  transition: background 0.2s !important;
+}
+
+.party-selection-modal-header button:hover {
+  background: #f1f5f9 !important;
+  color: #475569 !important;
+}
+
+.party-checkbox-list {
+  max-height: 220px !important;
+  overflow-y: auto !important;
+  padding: 4px 6px !important;
+}
+
+.party-checkbox-list::-webkit-scrollbar {
+  width: 4px !important;
+}
+
+.party-checkbox-list::-webkit-scrollbar-track {
+  background: #f8fafc !important;
+  border-radius: 4px !important;
+}
+
+.party-checkbox-list::-webkit-scrollbar-thumb {
+  background: #d1d5db !important;
+  border-radius: 4px !important;
+}
+
+.party-selector-empty {
+  padding: 24px !important;
+  text-align: center !important;
+  color: #94a3b8 !important;
+  font-size: 11px !important;
+}
+
+.party-selection-modal-footer {
+  display: flex !important;
+  align-items: center !important;
+  justify-content: space-between !important;
+  padding: 10px 16px !important;
+  border-top: 1px solid #f1f5f9 !important;
+  background: #fafbfc !important;
+  border-radius: 0 0 12px 12px !important;
+}
+
+.party-selection-modal-footer span {
+  color: #64748b !important;
+  font-size: 11px !important;
+}
+
+.party-selection-modal-footer button {
+  display: inline-flex !important;
+  height: 32px !important;
+  align-items: center !important;
+  gap: 6px !important;
+  padding: 0 16px !important;
+  border: none !important;
+  border-radius: 6px !important;
+  background: #2563eb !important;
+  color: #ffffff !important;
+  font-size: 11px !important;
+  font-weight: 600 !important;
+  cursor: pointer !important;
+  transition: background 0.2s !important;
+}
+
+.party-selection-modal-footer button:hover {
+  background: #1d4ed8 !important;
+}
+
+/* =========================================================
+   RESPONSIVE
+   ========================================================= */
+
+@media (max-width: 640px) {
+  .party-checkbox-dropdown-large {
+    max-width: 100% !important;
+    min-width: 260px !important;
+    left: 0 !important;
+    right: 0 !important;
+    border-radius: 6px !important;
+  }
+
+  .party-selector-header {
+    padding: 6px 10px 5px 10px !important;
+  }
+
+  .party-selector-header strong {
+    font-size: 11px !important;
+  }
+
+  .party-selector-search {
+    margin: 4px 8px 3px 8px !important;
+    height: 26px !important;
+  }
+
+  .modern-party-list {
+    max-height: 160px !important;
+    padding: 3px 4px 4px 4px !important;
+  }
+
+  .party-card {
+    padding: 4px 8px !important;
+    min-height: 28px !important;
+    gap: 8px !important;
+  }
+
+  .party-name {
+    font-size: 10px !important;
+  }
+
+  .party-card-footer {
+    font-size: 8px !important;
+    gap: 4px !important;
+  }
+
+  .party-selector-footer {
+    padding: 6px 10px 8px 10px !important;
+  }
+
+  .party-cancel-btn,
+  .party-apply-btn {
+    flex: 1 !important;
+    min-width: 50px !important;
+    height: 26px !important;
+    font-size: 10px !important;
+    padding: 0 10px !important;
+  }
+
+  .party-selection-modal {
+    width: 96vw !important;
+  }
+}
+/* =========================================================
+   FORCE CSS - EXPAND REPORT TABLE WIDTH
+   ========================================================= */
+
+/* Force the grid container to allow full width */
+.party-report-grid-container {
+  width: 100% !important;
+  overflow-x: auto !important;
+  overflow-y: auto !important;
+}
+
+/* Remove table-layout:fixed to let columns expand naturally */
+.party-report-table {
+  width: 100% !important;
+  min-width: 100% !important;
+  table-layout: auto !important;
+  border-collapse: collapse !important;
+}
+
+/* Allow cells to expand and use available space */
+.party-report-table th,
+.party-report-table td {
+  min-width: 0 !important;
+  width: auto !important;
+  padding: 7px 12px !important;
+  white-space: nowrap !important;
+  max-width: none !important;
+}
+
+/* Specific column width overrides - give more space to important columns */
+.party-report-table .party-report-number {
+  min-width: 90px !important;
+  text-align: right !important;
+}
+
+/* Allow text columns to take more space */
+.party-report-table td:not(.party-report-number),
+.party-report-table th:not(.party-report-number) {
+  min-width: 100px !important;
+}
+
+/* Party name column gets extra space */
+.party-report-table td:nth-child(5),
+.party-report-table th:nth-child(5) {
+  min-width: 180px !important;
+  max-width: 300px !important;
+}
+
+/* Product name column gets extra space when visible */
+.party-report-table td:nth-child(10),
+.party-report-table th:nth-child(10) {
+  min-width: 180px !important;
+  max-width: 300px !important;
+}
+
+/* Zoom container - remove transform restrictions */
+.party-report-zoom {
+  transform-origin: top left !important;
+  width: 100% !important;
+  min-width: 100% !important;
+}
+
+/* Ensure the table scrolls horizontally if needed */
+.party-report-grid-container::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+.party-report-grid-container::-webkit-scrollbar-track {
+  background: #f1f5f9;
+  border-radius: 4px;
+}
+
+.party-report-grid-container::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border-radius: 4px;
+}
+
+.party-report-grid-container::-webkit-scrollbar-thumb:hover {
+  background: #94a3b8;
+}
+
+/* Responsive - allow table to be wider on larger screens */
+@media (min-width: 1400px) {
+  .party-report-table {
+    font-size: 10px !important;
+  }
+  
+  .party-report-table th,
+  .party-report-table td {
+    padding: 8px 16px !important;
+  }
+  
+  .party-report-table td:nth-child(5),
+  .party-report-table th:nth-child(5) {
+    min-width: 220px !important;
+  }
+}
+
+/* When zoomed, ensure content stays visible */
+.party-report-zoom[style*="zoom"] {
+  transform: none !important;
+}
+/* =========================================================
+   FORCE CSS - EXPAND REPORT TABLE WIDTH
+   ========================================================= */
+
+/* Force the grid container to allow full width */
+.party-report-grid-container {
+  width: 100% !important;
+  overflow-x: auto !important;
+  overflow-y: auto !important;
+}
+
+/* Remove table-layout:fixed to let columns expand naturally */
+.party-report-table {
+  width: 100% !important;
+  min-width: 100% !important;
+  table-layout: auto !important;
+  border-collapse: collapse !important;
+}
+
+/* Allow cells to expand and use available space */
+.party-report-table th,
+.party-report-table td {
+  min-width: 0 !important;
+  width: auto !important;
+  padding: 7px 12px !important;
+  white-space: nowrap !important;
+  max-width: none !important;
+}
+
+/* Specific column width overrides - give more space to important columns */
+.party-report-table .party-report-number {
+  min-width: 90px !important;
+  text-align: right !important;
+}
+
+/* Allow text columns to take more space */
+.party-report-table td:not(.party-report-number),
+.party-report-table th:not(.party-report-number) {
+  min-width: 100px !important;
+}
+
+/* Party name column gets extra space */
+.party-report-table td:nth-child(5),
+.party-report-table th:nth-child(5) {
+  min-width: 180px !important;
+  max-width: 300px !important;
+}
+
+/* Product name column gets extra space when visible */
+.party-report-table td:nth-child(10),
+.party-report-table th:nth-child(10) {
+  min-width: 180px !important;
+  max-width: 300px !important;
+}
+
+/* Zoom container - remove transform restrictions */
+.party-report-zoom {
+  transform-origin: top left !important;
+  width: 100% !important;
+  min-width: 100% !important;
+}
+
+/* Ensure the table scrolls horizontally if needed */
+.party-report-grid-container::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+.party-report-grid-container::-webkit-scrollbar-track {
+  background: #f1f5f9;
+  border-radius: 4px;
+}
+
+.party-report-grid-container::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border-radius: 4px;
+}
+
+.party-report-grid-container::-webkit-scrollbar-thumb:hover {
+  background: #94a3b8;
+}
+
+/* Responsive - allow table to be wider on larger screens */
+@media (min-width: 1400px) {
+  .party-report-table {
+    font-size: 10px !important;
+  }
+  
+  .party-report-table th,
+  .party-report-table td {
+    padding: 8px 16px !important;
+  }
+  
+  .party-report-table td:nth-child(5),
+  .party-report-table th:nth-child(5) {
+    min-width: 220px !important;
+  }
+}
+
+/* When zoomed, ensure content stays visible */
+.party-report-zoom[style*="zoom"] {
+  transform: none !important;
+}
+/* =========================================================
+   ADDITIONAL STYLES FOR ALL PARTY WISE SALES REPORT
+   ========================================================= */
+
+/* Ensure the filter group legend icon matches the report type */
+.party-classic-report-page .party-filter-legend-icon {
+  display: inline-flex;
+  width: 30px;
+  height: 30px;
+  align-items: center;
+  justify-content: center;
+  border-radius: 9px;
+  background: #eef3ff;
+  color: #3157e8;
+}
+
+/* Make sure the generate button icon matches the report */
+.party-title-generate-button svg {
+  flex-shrink: 0;
+}
+
+/* Ensure the sidebar quick summary shows correct icons */
+.party-summary-item .party-summary-icon {
+  display: inline-flex;
+  width: 37px;
+  height: 37px;
+  flex: 0 0 37px;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  background: #eef3ff;
+  color: #3157e8;
+}
+
+/* Fix for the all party report status bar */
+.party-report-statusbar {
+  display: flex;
+  min-height: 28px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  padding: 0 12px;
+  border-top: 1px solid #e7ebf2;
+  background: #fbfcfe;
+  color: #758198;
+  font-size: 9px;
+}
+
+/* Ensure the dropdown selectors work properly for all party report */
+.party-report-field select,
+.party-report-field input {
+  width: 100%;
+  height: 40px;
+  min-width: 0;
+  padding: 0 12px;
+  border: 1px solid #d8dfeb;
+  border-radius: 7px;
+  outline: 0;
+  background: #fff;
+  color: #35415c;
+  font-size: 12px;
+  transition: border-color .15s, box-shadow .15s;
+}
+
+.party-report-field select:focus,
+.party-report-field input:focus {
+  border-color: #4164ec;
+  box-shadow: 0 0 0 3px rgba(65,100,236,.1);
+}
+
+.party-report-field select:disabled,
+.party-report-field input:disabled {
+  background: #f5f7fb;
+  color: #9aa5b9;
+  cursor: not-allowed;
+}
+
+/* Style for the field help text */
+.party-field-help {
+  margin-top: -3px;
+  color: #71809d;
+  font-size: 9px;
+}
+
+/* Ensure proper spacing in the filter grid for all party report */
+.party-report-form-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(145px, 1fr));
+  gap: 16px 20px;
+  align-items: end;
+}
+
+.party-field-wide {
+  grid-column: span 2;
+}
+
+/* Responsive adjustments for all party report */
+@media (max-width: 1350px) {
+  .party-report-form-grid {
+    grid-template-columns: repeat(4, minmax(120px, 1fr)) !important;
+    column-gap: 10px !important;
+  }
+}
+
+@media (max-width: 1180px) {
+  .party-report-form-grid {
+    grid-template-columns: repeat(3, minmax(150px, 1fr)) !important;
+  }
+  .party-field-wide {
+    grid-column: span 2 !important;
+  }
+}
+
+@media (max-width: 900px) {
+  .party-report-form-grid {
+    grid-template-columns: repeat(2, minmax(150px, 1fr)) !important;
+  }
+}
+
+/* Ensure the dropdown selectors for area/salesman work properly */
+.party-selection-backdrop {
+  position: fixed !important;
+  inset: 0 !important;
+  z-index: 9998 !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  padding: 20px !important;
+  background: rgba(12, 22, 45, 0.35) !important;
+  backdrop-filter: blur(2px) !important;
+}
+
+.party-selection-modal {
+  width: min(480px, 96vw) !important;
+  overflow: hidden !important;
+  border: 1px solid #e2e8f0 !important;
+  border-radius: 12px !important;
+  background: #ffffff !important;
+  box-shadow: 0 20px 60px rgba(12, 24, 52, 0.2) !important;
+}
+
+/* Checkbox styling for all selectors */
+.party-check-row input[type="checkbox"],
+.party-check-all input[type="checkbox"] {
+  -webkit-appearance: none !important;
+  -moz-appearance: none !important;
+  appearance: none !important;
+  width: 16px !important;
+  height: 16px !important;
+  min-width: 16px !important;
+  min-height: 16px !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  border: 2px solid #cbd5e1 !important;
+  border-radius: 4px !important;
+  background: #ffffff !important;
+  cursor: pointer !important;
+  position: relative !important;
+  flex-shrink: 0 !important;
+  transition: all 0.15s ease !important;
+  outline: none !important;
+  box-shadow: none !important;
+}
+
+.party-check-row input[type="checkbox"]:checked,
+.party-check-all input[type="checkbox"]:checked {
+  border-color: #2563eb !important;
+  background: #2563eb !important;
+}
+
+.party-check-row input[type="checkbox"]:checked::after,
+.party-check-all input[type="checkbox"]:checked::after {
+  content: "✓" !important;
+  position: absolute !important;
+  top: 50% !important;
+  left: 50% !important;
+  transform: translate(-50%, -50%) !important;
+  color: #ffffff !important;
+  font-size: 11px !important;
+  font-weight: 700 !important;
+  line-height: 1 !important;
+}
+
+.party-check-row input[type="checkbox"]:hover {
+  border-color: #2563eb !important;
+  background: #f0f7ff !important;
+}
+
+.party-check-row {
+  display: flex !important;
+  align-items: center !important;
+  gap: 10px !important;
+  padding: 4px 12px !important;
+  min-height: 28px !important;
+  border-radius: 4px !important;
+  cursor: pointer !important;
+  transition: background 0.15s ease !important;
+}
+
+.party-check-row:hover {
+  background: #f8faff !important;
+}
+
+.party-check-name {
+  font-size: 11px !important;
+  color: #1e293b !important;
+}
+
+.party-check-all {
+  display: flex !important;
+  align-items: center !important;
+  gap: 10px !important;
+  padding: 4px 12px !important;
+  min-height: 28px !important;
+  border-bottom: 1px solid #f1f5f9 !important;
+  background: #fafbfc !important;
+  margin: 0 6px 2px 6px !important;
+  border-radius: 4px !important;
+}
+
+.party-check-all span {
+  font-size: 11px !important;
+  font-weight: 600 !important;
+  color: #1e293b !important;
+}
+
+.party-checkbox-list {
+  max-height: 220px !important;
+  overflow-y: auto !important;
+  padding: 4px 6px !important;
+}
+
+.party-checkbox-list::-webkit-scrollbar {
+  width: 4px !important;
+}
+
+.party-checkbox-list::-webkit-scrollbar-track {
+  background: #f8fafc !important;
+  border-radius: 4px !important;
+}
+
+.party-checkbox-list::-webkit-scrollbar-thumb {
+  background: #d1d5db !important;
+  border-radius: 4px !important;
+}
+
+.party-selector-empty {
+  padding: 24px !important;
+  text-align: center !important;
+  color: #94a3b8 !important;
+  font-size: 11px !important;
+}
+
+.party-selection-modal-footer {
+  display: flex !important;
+  align-items: center !important;
+  justify-content: space-between !important;
+  padding: 10px 16px !important;
+  border-top: 1px solid #f1f5f9 !important;
+  background: #fafbfc !important;
+  border-radius: 0 0 12px 12px !important;
+}
+
+.party-selection-modal-footer span {
+  color: #64748b !important;
+  font-size: 11px !important;
+}
+
+.party-selection-modal-footer button {
+  display: inline-flex !important;
+  height: 32px !important;
+  align-items: center !important;
+  gap: 6px !important;
+  padding: 0 16px !important;
+  border: none !important;
+  border-radius: 6px !important;
+  background: #2563eb !important;
+  color: #ffffff !important;
+  font-size: 11px !important;
+  font-weight: 600 !important;
+  cursor: pointer !important;
+  transition: background 0.2s !important;
+}
+
+.party-selection-modal-footer button:hover {
+  background: #1d4ed8 !important;
 }
