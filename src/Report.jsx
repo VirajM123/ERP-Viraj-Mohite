@@ -6,6 +6,7 @@ import React, {
 import {
   ArrowLeft,
   BarChart3,
+  BookOpen,
   Building2,
   CalendarDays,
   Check,
@@ -30,6 +31,8 @@ import * as XLSX from "xlsx-js-style";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 import "./Report.css";
+import { API_ROOT } from "./api/config";
+import { secureFetch } from "./SecuritySetup";
 
 const REPORT_INFORMATION = {
   "Party Wise Sales Report": {
@@ -44,6 +47,13 @@ const REPORT_INFORMATION = {
     category: "Sales Report",
     description: "View consolidated sales information for all parties.",
     icon: BarChart3,
+  },
+
+  "Find Cheque Details": {
+    title: "Find Cheque Details",
+    category: "Financial Report",
+    description: "Trace a cheque through receipts, adjusted bills, bounce entries and PDC dockets.",
+    icon: Search,
   },
 
   "Product Wise Sales Report": {
@@ -63,8 +73,7 @@ const REPORT_INFORMATION = {
   "Company Wise Purchase Report": {
     title: "Company Wise Purchase Report",
     category: "Purchase Report",
-    description:
-      "View company-wise purchase details with supplier and product-wise options.",
+    description: "View company-wise purchase details with supplier and product-wise options.",
     icon: Building2,
   },
 
@@ -95,6 +104,35 @@ const REPORT_INFORMATION = {
     description: "View complete inward and outward movement of a product.",
     icon: ShoppingCart,
   },
+  "General Ledger": { title: "General Ledger", category: "Financial Report", description: "Posted journal entries by account.", icon: BookOpen },
+  "Party Ledger": { title: "Party Ledger", category: "Financial Report", description: "Customer or supplier account ledger.", icon: Users },
+  "Trial Balance": { title: "Trial Balance", category: "Financial Report", description: "Debit, credit and closing balance by account.", icon: BarChart3 },
+  "Cash Book": { title: "Cash Book", category: "Financial Report", description: "Posted cash account movements.", icon: FileText },
+  "Bank Book": { title: "Bank Book", category: "Financial Report", description: "Posted bank account movements.", icon: Building2 },
+  "Day Book": { title: "Day Book", category: "Financial Report", description: "Chronological journal activity.", icon: CalendarDays },
+  "Profit & Loss": { title: "Profit & Loss", category: "Financial Report", description: "Income and expense balances.", icon: BarChart3 },
+  "Balance Sheet": { title: "Balance Sheet", category: "Financial Report", description: "Balance sheet account positions.", icon: FileBarChart },
+  "Stock Movement Ledger": { title: "Stock Movement Ledger", category: "Stock Report", description: "Immutable stock inward and outward entries.", icon: Warehouse },
+  "Credit Control Report": { title: "Credit Control Report", category: "Control Report", description: "Customer credit exposure, limits and overdue status.", icon: Users },
+  "Permission Audit Report": { title: "Permission Audit Report", category: "Control Report", description: "Effective user permissions by module and operation.", icon: Check },
+  "Audit Trail Report": { title: "Audit Trail Report", category: "Control Report", description: "Create, edit, cancel, reverse and administrative audit events.", icon: FileText },
+  "Dashboard Reconciliation": { title: "Dashboard Reconciliation", category: "Control Report", description: "Live source totals used by the dashboard.", icon: BarChart3 },
+};
+
+const P0_REPORT_ENDPOINTS = {
+  "General Ledger": "/p0/reports/financial/general-ledger",
+  "Party Ledger": "/p0/reports/financial/party-ledger",
+  "Trial Balance": "/p0/reports/financial/trial-balance",
+  "Cash Book": "/p0/reports/financial/cash-book",
+  "Bank Book": "/p0/reports/financial/bank-book",
+  "Day Book": "/p0/reports/financial/day-book",
+  "Profit & Loss": "/p0/reports/financial/profit-loss",
+  "Balance Sheet": "/p0/reports/financial/balance-sheet",
+  "Stock Movement Ledger": "/p0/reports/stock-movement",
+  "Credit Control Report": "/p0/reports/credit-control",
+  "Permission Audit Report": "/p0/reports/permission-audit",
+  "Audit Trail Report": "/p0/reports/audit-trail",
+  "Dashboard Reconciliation": "/p0/dashboard/summary",
 };
 
 const getTodayDate = () => {
@@ -123,15 +161,200 @@ const Report = ({
   salesmen = [],
   onBack,
 }) => {
-  const API_BASE_URL =
-    import.meta.env.VITE_API_URL ||
-    "http://localhost:5000";
+  const API_BASE_URL = API_ROOT;
+  const [p0Filters, setP0Filters] = useState({ fromDate: getFinancialYearStart(), toDate: getTodayDate(), account: "", product: "" });
+  const [p0Rows, setP0Rows] = useState([]);
+  const [p0Summary, setP0Summary] = useState(null);
+  const [p0Loading, setP0Loading] = useState(false);
+  const [p0Error, setP0Error] = useState("");
+  const isP0Report = Boolean(P0_REPORT_ENDPOINTS[selectedReport]);
+  const [chequeSearch, setChequeSearch] = useState("");
+  const [chequeResult, setChequeResult] = useState(null);
+  const [chequeLoading, setChequeLoading] = useState(false);
+  const [chequeError, setChequeError] = useState("");
+
+  const formatChequeDate = (value) => {
+    if (!value) return "-";
+    const parsed = new Date(value);
+    if (Number.isNaN(parsed.getTime())) return String(value);
+    return parsed.toLocaleDateString("en-IN");
+  };
+
+  const formatChequeAmount = (value) =>
+    Number(value || 0).toLocaleString("en-IN", {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    });
+
+  const findChequeDetails = async () => {
+    const chequeNo = chequeSearch.trim();
+    if (!chequeNo) {
+      setChequeResult(null);
+      setChequeError("Enter a cheque number.");
+      return;
+    }
+
+    setChequeLoading(true);
+    setChequeError("");
+    try {
+      const query = new URLSearchParams({ chequeNo });
+      const response = await secureFetch(
+        `${API_BASE_URL}/api/transaction/find-cheque-details?${query.toString()}`
+      );
+      const result = await response.json();
+      if (!response.ok || !result.success) {
+        throw new Error(result.message || "Cheque details could not be loaded.");
+      }
+      const data = result.data || {};
+      const hasDetails = (data.summaries?.length || 0) +
+        (data.unmatchedBounces?.length || 0) +
+        (data.unmatchedDockets?.length || 0) > 0;
+      setChequeResult(data);
+      if (!hasDetails) setChequeError(`No information was found for cheque ${chequeNo}.`);
+    } catch (error) {
+      setChequeResult(null);
+      setChequeError(error.message || "Cheque details could not be loaded.");
+    } finally {
+      setChequeLoading(false);
+    }
+  };
+
+  const chequeExportRows = () => {
+    const rows = [];
+    (chequeResult?.summaries || []).forEach((summary) => {
+      const base = {
+        ChequeNo: chequeResult.chequeNo,
+        Bank: summary.bankName,
+        DrawerBank: summary.drawerBankName,
+        Party: summary.partyName,
+        ReceiptNo: summary.receiptNo,
+        ReceiptDate: summary.receiptDate,
+        ChequeDate: summary.chequeDate,
+        ChequeAmount: summary.amount,
+      };
+      (summary.bills || []).forEach((bill) => rows.push({
+        ...base,
+        DetailType: "Adjusted Bill",
+        Reference: `${bill.trnSeries || ""}-${bill.trnNo || ""}`,
+        DetailDate: bill.trnDate || "",
+        Amount: Number(bill.nowAdjust || 0),
+        Remarks: bill.remark || "",
+      }));
+      (summary.bounces || []).forEach((bounce) => rows.push({
+        ...base,
+        DetailType: "Cheque Bounce",
+        Reference: `${bounce.trnSeries || ""}-${bounce.trnNo || bounce.chqBounceNo || ""}`,
+        DetailDate: bounce.chqBounceDate || "",
+        Amount: Number(bounce.totalAmt || bounce.chequeAmt || 0),
+        Remarks: bounce.narration || "",
+      }));
+      (summary.dockets || []).forEach((docket) => rows.push({
+        ...base,
+        DetailType: "PDC Docket",
+        Reference: docket.docketNo,
+        DetailDate: docket.depositDate || docket.addedAt || "",
+        Amount: Number(docket.amount || 0),
+        Remarks: docket.bankName || "",
+      }));
+      if (!(summary.bills?.length || summary.bounces?.length || summary.dockets?.length)) {
+        rows.push({ ...base, DetailType: "Receipt", Reference: summary.receiptNo, Amount: summary.amount });
+      }
+    });
+    (chequeResult?.unmatchedBounces || []).forEach((bounce) => rows.push({
+      ChequeNo: chequeResult.chequeNo,
+      Bank: bounce.bankName || "",
+      Party: bounce.partyName || "",
+      DetailType: "Cheque Bounce",
+      Reference: `${bounce.trnSeries || ""}-${bounce.trnNo || bounce.chqBounceNo || ""}`,
+      DetailDate: bounce.chqBounceDate || "",
+      Amount: Number(bounce.totalAmt || bounce.chequeAmt || 0),
+      Remarks: bounce.narration || "",
+    }));
+    (chequeResult?.unmatchedDockets || []).forEach((docket) => rows.push({
+      ChequeNo: chequeResult.chequeNo,
+      Bank: docket.bankName || "",
+      Party: docket.partyName || "",
+      DetailType: "PDC Docket",
+      Reference: docket.docketNo,
+      DetailDate: docket.depositDate || docket.addedAt || "",
+      Amount: Number(docket.amount || 0),
+      Remarks: docket.clearingType || "",
+    }));
+    return rows;
+  };
+
+  const exportChequeExcel = () => {
+    const rows = chequeExportRows();
+    const sheet = XLSX.utils.json_to_sheet(rows);
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, sheet, "Cheque Details");
+    XLSX.writeFile(workbook, `Cheque_${chequeResult.chequeNo}_Details.xlsx`);
+  };
+
+  const exportChequePdf = () => {
+    const rows = chequeExportRows();
+    const pdf = new jsPDF({ orientation: "landscape" });
+    pdf.setFontSize(15);
+    pdf.text(`Cheque Details - ${chequeResult.chequeNo}`, 14, 14);
+    autoTable(pdf, {
+      startY: 20,
+      head: [["Bank", "Party", "Receipt", "Receipt Date", "Type", "Reference", "Date", "Amount", "Remarks"]],
+      body: rows.map((row) => [
+        row.Bank || "-", row.Party || "-", row.ReceiptNo || "-",
+        formatChequeDate(row.ReceiptDate), row.DetailType || "-", row.Reference || "-",
+        formatChequeDate(row.DetailDate), formatChequeAmount(row.Amount), row.Remarks || "-",
+      ]),
+      styles: { fontSize: 7 },
+    });
+    pdf.save(`Cheque_${chequeResult.chequeNo}_Details.pdf`);
+  };
+
+  const generateP0Report = async () => {
+    if (!isP0Report) return;
+    setP0Loading(true); setP0Error("");
+    try {
+      const query = new URLSearchParams();
+      Object.entries(p0Filters).forEach(([key, value]) => { if (String(value || "").trim()) query.set(key, value); });
+      const response = await secureFetch(`${API_BASE_URL}${P0_REPORT_ENDPOINTS[selectedReport]}?${query}`);
+      const result = await response.json();
+      if (!response.ok || result.success === false) throw new Error(result.message || "Report could not be generated.");
+      const rows = Array.isArray(result.rows)
+        ? result.rows
+        : Object.entries(result.data || {}).flatMap(([key, value]) => Array.isArray(value)
+          ? value.map((item) => ({ metric: key, ...(typeof item === "object" ? item : { value: item }) }))
+          : [{ metric: key, value: typeof value === "object" ? JSON.stringify(value) : value }]);
+      setP0Rows(rows); setP0Summary(result.summary || null);
+    } catch (error) { setP0Rows([]); setP0Summary(null); setP0Error(error.message || "Report could not be generated."); }
+    finally { setP0Loading(false); }
+  };
+
+  const p0Columns = useMemo(() => {
+    const keys = [];
+    p0Rows.forEach((row) => Object.keys(row || {}).forEach((key) => {
+      if (!keys.includes(key) && !["_id", "__v", "before", "after", "editHistory"].includes(key)) keys.push(key);
+    }));
+    return keys;
+  }, [p0Rows]);
+
+  const exportP0Excel = () => {
+    const sheet = XLSX.utils.json_to_sheet(p0Rows);
+    const workbook = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(workbook, sheet, "Report");
+    XLSX.writeFile(workbook, `${selectedReport.replace(/[^a-z0-9]+/gi, "_")}.xlsx`);
+  };
+
+  const exportP0Pdf = () => {
+    const pdf = new jsPDF({ orientation: p0Columns.length > 7 ? "landscape" : "portrait" });
+    pdf.text(selectedReport, 14, 14);
+    autoTable(pdf, { head: [p0Columns], body: p0Rows.map((row) => p0Columns.map((key) => String(row[key] ?? ""))), startY: 20, styles: { fontSize: 7 } });
+    pdf.save(`${selectedReport.replace(/[^a-z0-9]+/gi, "_")}.pdf`);
+  };
   const [reportCompanies, setReportCompanies] = useState([]);
   const [mappedParties, setMappedParties] = useState([]);
   const [mappedAreas, setMappedAreas] = useState([]);
   const [mappedSalesmen, setMappedSalesmen] = useState([]);
   const [isCriteriaLoading, setIsCriteriaLoading] = useState(false);
   const [criteriaLoadError, setCriteriaLoadError] = useState("");
+  
 
   // =========================================================
   // PARTY WISE SALES REPORT STATE
@@ -150,6 +373,1100 @@ const Report = ({
     withCreditNote: "no",
     orderBy: "partyName",
   }));
+
+  // =========================================================
+  // COMPANY WISE PURCHASE REPORT STATE - MODERNIZED
+  // =========================================================
+  const [companyPurchaseFilters, setCompanyPurchaseFilters] = useState(() => ({
+    company: "",
+    fromDate: getFinancialYearStart(),
+    toDate: getTodayDate(),
+    supplier: "",
+    selectedSupplierCodes: [],
+    productWise: "no",
+    godown: "all",
+    selectedGodownCodes: [],
+    withCreditNote: "no",
+    orderBy: "companyName",
+    reportLevel: "summary",
+    includeTax: "yes",
+    includeDiscount: "yes",
+    actualInvoice: "no",
+    discountDetails: "no",
+  }));
+
+  const [companyPurchaseRows, setCompanyPurchaseRows] = useState([]);
+  const [companyPurchaseColumns, setCompanyPurchaseColumns] = useState([]);
+  const [isCompanyPurchaseGenerated, setIsCompanyPurchaseGenerated] = useState(false);
+  const [isCompanyPurchaseLoading, setIsCompanyPurchaseLoading] = useState(false);
+  const [companyPurchaseError, setCompanyPurchaseError] = useState("");
+  const [companyPurchaseSearch, setCompanyPurchaseSearch] = useState("");
+  const [companyPurchaseZoom, setCompanyPurchaseZoom] = useState("100");
+  const [companyPurchaseCurrentPage, setCompanyPurchaseCurrentPage] = useState(1);
+  const [companyPurchaseRowsPerPage, setCompanyPurchaseRowsPerPage] = useState(10);
+  const [showSupplierSelector, setShowSupplierSelector] = useState(false);
+  const [showGodownSelector, setShowGodownSelector] = useState(false);
+  const [supplierSelectorSearch, setSupplierSelectorSearch] = useState("");
+  const [godownSelectorSearch, setGodownSelectorSearch] = useState("");
+  const [purchaseProductList, setPurchaseProductList] = useState([]);
+  const [isPurchaseCriteriaLoading, setIsPurchaseCriteriaLoading] = useState(false);
+  const [purchaseCriteriaError, setPurchaseCriteriaError] = useState("");
+
+  // =========================================================
+  // HELPER FUNCTIONS FOR COMPANY PURCHASE REPORT
+  // =========================================================
+  const getSupplierCode = (supplier, index = "") =>
+    String(
+      supplier?.accountCode ||
+        supplier?.AccountCode ||
+        supplier?.code ||
+        supplier?._id ||
+        supplier?.id ||
+        index
+    );
+
+  const getSupplierName = (supplier) =>
+    String(
+      supplier?.accountName ||
+        supplier?.AccountName ||
+        supplier?.name ||
+        supplier?.partyName ||
+        ""
+    );
+
+  const getGodownCode = (godown, index = "") =>
+    String(
+      godown?.godownCode ||
+        godown?.GodownCode ||
+        godown?.code ||
+        godown?._id ||
+        godown?.id ||
+        index
+    );
+
+  const getGodownName = (godown) =>
+    String(
+      godown?.godownName ||
+        godown?.GodownName ||
+        godown?.name ||
+        ""
+    );
+
+  // =========================================================
+  // LOAD COMPANY PURCHASE CRITERIA
+  // =========================================================
+  const loadCompanyPurchaseCriteria = async (companyCode = "") => {
+    try {
+      setIsPurchaseCriteriaLoading(true);
+      setPurchaseCriteriaError("");
+
+      const { distributorId, firmId } = getLoggedInContext();
+
+      if (!distributorId || !firmId) {
+        throw new Error("Distributor or firm information is missing. Please login again.");
+      }
+
+      const query = new URLSearchParams({
+        distributorId,
+        firmId,
+      });
+
+      if (companyCode) {
+        query.set("companyCode", companyCode);
+      }
+
+      const response = await fetch(
+        `${API_BASE_URL}/api/reports/company-purchase/criteria?${query.toString()}`
+      );
+
+      const contentType = response.headers.get("content-type") || "";
+      const result = contentType.includes("application/json")
+        ? await response.json()
+        : {
+            success: false,
+            message: await response.text(),
+          };
+
+      if (!response.ok || !result.success) {
+        throw new Error(result.message || "Failed to load company purchase criteria.");
+      }
+
+      setReportCompanies(Array.isArray(result.companies) ? result.companies : []);
+      setMappedParties(Array.isArray(result.suppliers) ? result.suppliers : []);
+      setPurchaseProductList(Array.isArray(result.products) ? result.products : []);
+      if (Array.isArray(result.godowns)) {
+        setGodowns(result.godowns);
+      }
+
+      return result;
+    } catch (error) {
+      console.error("Company purchase criteria error:", error);
+      setMappedParties([]);
+      setPurchaseProductList([]);
+      setPurchaseCriteriaError(error.message || "Failed to load company purchase criteria.");
+      return null;
+    } finally {
+      setIsPurchaseCriteriaLoading(false);
+    }
+  };
+
+  // =========================================================
+  // LOAD COMPANY PURCHASE CRITERIA ON MOUNT
+  // =========================================================
+  useEffect(() => {
+    if (selectedReport !== "Company Wise Purchase Report") {
+      return;
+    }
+    loadCompanyPurchaseCriteria(companyPurchaseFilters.company);
+  }, [selectedReport, companyPurchaseFilters.company]);
+
+  // =========================================================
+  // UPDATE FILTERS
+  // =========================================================
+  const updateCompanyPurchaseFilter = (field, value) => {
+    setCompanyPurchaseFilters((previous) => ({
+      ...previous,
+      [field]: value,
+    }));
+    setIsCompanyPurchaseGenerated(false);
+    setCompanyPurchaseRows([]);
+    setCompanyPurchaseError("");
+    setCompanyPurchaseCurrentPage(1);
+  };
+
+  // =========================================================
+  // TOGGLE HELPERS
+  // =========================================================
+  const toggleSupplierSelection = (supplierCode, checked) => {
+    setCompanyPurchaseFilters((prev) => {
+      const currentValues = prev.selectedSupplierCodes || [];
+      const nextValues = checked
+        ? [...new Set([...currentValues, supplierCode])]
+        : currentValues.filter((code) => code !== supplierCode);
+      return { ...prev, selectedSupplierCodes: nextValues };
+    });
+    setIsCompanyPurchaseGenerated(false);
+    setCompanyPurchaseRows([]);
+  };
+
+  const toggleAllSuppliers = (checked) => {
+    setCompanyPurchaseFilters((prev) => ({
+      ...prev,
+      selectedSupplierCodes: checked
+        ? mappedParties.map((supplier, index) => getSupplierCode(supplier, index))
+        : [],
+    }));
+    setIsCompanyPurchaseGenerated(false);
+    setCompanyPurchaseRows([]);
+  };
+
+  const toggleGodownSelection = (godownCode, checked) => {
+    setCompanyPurchaseFilters((prev) => {
+      const currentValues = prev.selectedGodownCodes || [];
+      const nextValues = checked
+        ? [...new Set([...currentValues, godownCode])]
+        : currentValues.filter((code) => code !== godownCode);
+      return { ...prev, selectedGodownCodes: nextValues };
+    });
+    setIsCompanyPurchaseGenerated(false);
+    setCompanyPurchaseRows([]);
+  };
+
+  const toggleAllGodowns = (checked) => {
+    setCompanyPurchaseFilters((prev) => ({
+      ...prev,
+      selectedGodownCodes: checked
+        ? godowns.map((godown, index) => getGodownCode(godown, index))
+        : [],
+    }));
+    setIsCompanyPurchaseGenerated(false);
+    setCompanyPurchaseRows([]);
+  };
+
+  // =========================================================
+  // ✅ MOVED normalizeText HERE - before any useMemo hooks
+  // =========================================================
+  const normalizeText = (value) =>
+    String(value ?? "")
+      .trim()
+      .toLowerCase();
+  // =========================================================
+  // VISIBLE OPTIONS FOR SELECTORS
+  // =========================================================
+  const visibleSupplierOptions = useMemo(() => {
+    const search = normalizeText(supplierSelectorSearch);
+    return mappedParties.filter((supplier, index) => {
+      if (!search) return true;
+      const code = getSupplierCode(supplier, index);
+      const name = getSupplierName(supplier);
+      return [code, name].some((value) =>
+        normalizeText(value).includes(search)
+      );
+    });
+  }, [mappedParties, supplierSelectorSearch]);
+
+  const visibleGodownOptions = useMemo(() => {
+    const search = normalizeText(godownSelectorSearch);
+    return godowns.filter((godown, index) => {
+      if (!search) return true;
+      const code = getGodownCode(godown, index);
+      const name = getGodownName(godown);
+      return [code, name].some((value) =>
+        normalizeText(value).includes(search)
+      );
+    });
+  }, [godowns, godownSelectorSearch]);
+
+  // =========================================================
+  // SELECTED SUPPLIER NAMES
+  // =========================================================
+  const selectedSupplierNames = useMemo(() => {
+    return (companyPurchaseFilters.selectedSupplierCodes || [])
+      .map((selectedCode) => {
+        const supplier = mappedParties.find(
+          (s, index) => getSupplierCode(s, index) === selectedCode
+        );
+        return supplier ? getSupplierName(supplier) : "";
+      })
+      .filter(Boolean);
+  }, [companyPurchaseFilters.selectedSupplierCodes, mappedParties]);
+
+  // =========================================================
+  // CLEAR FILTERS
+  // =========================================================
+  const clearCompanyPurchaseFilters = () => {
+    setCompanyPurchaseFilters({
+      company: "",
+      fromDate: getFinancialYearStart(),
+      toDate: getTodayDate(),
+      supplier: "",
+      selectedSupplierCodes: [],
+      productWise: "no",
+      godown: "all",
+      selectedGodownCodes: [],
+      withCreditNote: "no",
+      orderBy: "companyName",
+      reportLevel: "summary",
+      includeTax: "yes",
+      includeDiscount: "yes",
+      actualInvoice: "no",
+      discountDetails: "no",
+    });
+    setCompanyPurchaseRows([]);
+    setCompanyPurchaseColumns([]);
+    setCompanyPurchaseSearch("");
+    setSupplierSelectorSearch("");
+    setGodownSelectorSearch("");
+    setShowSupplierSelector(false);
+    setShowGodownSelector(false);
+    setCompanyPurchaseCurrentPage(1);
+    setCompanyPurchaseError("");
+    setIsCompanyPurchaseGenerated(false);
+  };
+
+  // =========================================================
+  // GENERATE COMPANY WISE PURCHASE REPORT
+  // =========================================================
+  const generateCompanyPurchaseReport = async () => {
+    try {
+      setCompanyPurchaseError("");
+      setCompanyPurchaseRows([]);
+      setCompanyPurchaseColumns([]);
+
+      const { distributorId, firmId } = getLoggedInContext();
+
+      if (!distributorId || !firmId) {
+        throw new Error("Distributor or firm information is missing. Please login again.");
+      }
+
+      if (!companyPurchaseFilters.fromDate || !companyPurchaseFilters.toDate) {
+        throw new Error("From Date and To Date are required.");
+      }
+
+      if (companyPurchaseFilters.fromDate > companyPurchaseFilters.toDate) {
+        throw new Error("From Date cannot be greater than To Date.");
+      }
+
+      setIsCompanyPurchaseLoading(true);
+
+      const query = new URLSearchParams({
+        distributorId,
+        firmId,
+        companyCode: companyPurchaseFilters.company || "",
+        fromDate: companyPurchaseFilters.fromDate,
+        toDate: companyPurchaseFilters.toDate,
+        productWise: companyPurchaseFilters.productWise,
+        withCreditNote: companyPurchaseFilters.withCreditNote,
+        orderBy: companyPurchaseFilters.orderBy,
+        reportLevel: companyPurchaseFilters.reportLevel,
+        includeTax: companyPurchaseFilters.includeTax,
+        includeDiscount: companyPurchaseFilters.includeDiscount,
+        actualInvoice: companyPurchaseFilters.actualInvoice,
+        discountDetails: companyPurchaseFilters.discountDetails,
+      });
+
+      if (companyPurchaseFilters.selectedSupplierCodes.length > 0) {
+        query.set("selectedSupplierCodes", companyPurchaseFilters.selectedSupplierCodes.join(","));
+      }
+
+      if (companyPurchaseFilters.godown === "yes" && companyPurchaseFilters.selectedGodownCodes.length > 0) {
+        query.set("selectedGodownCodes", companyPurchaseFilters.selectedGodownCodes.join(","));
+      }
+
+      const response = await fetch(
+        `${API_BASE_URL}/api/reports/company-wise-purchase?${query.toString()}`
+      );
+
+      const contentType = response.headers.get("content-type") || "";
+      const result = contentType.includes("application/json")
+        ? await response.json()
+        : {
+            success: false,
+            message: await response.text(),
+          };
+
+      if (!response.ok || !result.success) {
+        throw new Error(result.message || "Failed to generate company wise purchase report.");
+      }
+
+      const data = Array.isArray(result.data) ? result.data : [];
+
+      const rows = data.map((row, index) => ({
+        rowId: row._id || `row-${index}`,
+        SrNo: row.SrNo || index + 1,
+        BillDate: row.BillDate || "",
+        BillSeries: row.BillSeries || "",
+        BillNo: row.BillNo ?? "",
+        SupplierCode: row.SupplierCode || "",
+        SupplierName: row.SupplierName || "",
+        ProductCode: row.ProductCode || "",
+        ProductName: row.ProductName || "",
+        Batch: row.Batch || "",
+        MRP: Number(row.MRP || 0),
+        PurchaseRate: Number(row.PurchaseRate || 0),
+        Qty: Number(row.Qty || 0),
+        FreeQty: Number(row.FreeQty || 0),
+        GrossAmount: Number(row.GrossAmount || 0),
+        Discount: Number(row.Discount || 0),
+        DiscountPercent: Number(row.DiscountPercent || 0),
+        TaxableAmount: Number(row.TaxableAmount || 0),
+        TaxAmount: Number(row.TaxAmount || 0),
+        TaxPercent: Number(row.TaxPercent || 0),
+        NetAmount: Number(row.NetAmount || 0),
+        GodownName: row.GodownName || "",
+        PurchaseOrderNo: row.PurchaseOrderNo || "",
+        ChallanNo: row.ChallanNo || "",
+        EwayBillNo: row.EwayBillNo || "",
+        TransportMode: row.TransportMode || "",
+        Remarks: row.Remarks || "",
+      }));
+
+      const columns = [
+        { key: "SrNo", label: "Sr No.", type: "number" },
+        { key: "BillDate", label: "Bill Date", type: "string" },
+        { key: "BillSeries", label: "Series", type: "string" },
+        { key: "BillNo", label: "Bill No", type: "string" },
+        { key: "SupplierCode", label: "Supplier Code", type: "string" },
+        { key: "SupplierName", label: "Supplier Name", type: "string" },
+        { key: "ProductCode", label: "Product Code", type: "string" },
+        { key: "ProductName", label: "Product Name", type: "string" },
+        { key: "Batch", label: "Batch", type: "string" },
+        { key: "MRP", label: "MRP", type: "number" },
+        { key: "PurchaseRate", label: "Purchase Rate", type: "number" },
+        { key: "Qty", label: "Qty", type: "number" },
+        { key: "FreeQty", label: "Free Qty", type: "number" },
+        { key: "GrossAmount", label: "Gross Amount", type: "number" },
+        { key: "Discount", label: "Discount", type: "number" },
+        { key: "DiscountPercent", label: "Disc %", type: "number" },
+        { key: "TaxableAmount", label: "Taxable Amount", type: "number" },
+        { key: "TaxAmount", label: "Tax Amount", type: "number" },
+        { key: "TaxPercent", label: "Tax %", type: "number" },
+        { key: "NetAmount", label: "Net Amount", type: "number" },
+        { key: "GodownName", label: "Godown", type: "string" },
+        { key: "PurchaseOrderNo", label: "PO No", type: "string" },
+        { key: "ChallanNo", label: "Challan No", type: "string" },
+        { key: "EwayBillNo", label: "E-Way Bill", type: "string" },
+        { key: "TransportMode", label: "Transport", type: "string" },
+        { key: "Remarks", label: "Remarks", type: "string" },
+      ];
+
+      setCompanyPurchaseRows(rows);
+      setCompanyPurchaseColumns(columns);
+      setCompanyPurchaseCurrentPage(1);
+      setIsCompanyPurchaseGenerated(true);
+
+      if (rows.length === 0) {
+        setCompanyPurchaseError("No purchase records were found for the selected criteria.");
+      }
+    } catch (error) {
+      console.error("Company purchase report generation error:", error);
+      setCompanyPurchaseRows([]);
+      setCompanyPurchaseColumns([]);
+      setIsCompanyPurchaseGenerated(false);
+      setCompanyPurchaseError(error.message || "Failed to generate company wise purchase report.");
+    } finally {
+      setIsCompanyPurchaseLoading(false);
+    }
+  };
+
+  // =========================================================
+  // COMPANY PURCHASE REPORT - FILTERED ROWS & TOTALS
+  // =========================================================
+  const filteredCompanyPurchaseRows = useMemo(() => {
+    const search = normalizeText(companyPurchaseSearch);
+    if (!search) return companyPurchaseRows;
+    return companyPurchaseRows.filter((row) =>
+      Object.values(row).some((value) =>
+        normalizeText(value).includes(search)
+      )
+    );
+  }, [companyPurchaseRows, companyPurchaseSearch]);
+
+  const companyPurchaseTotals = useMemo(() => {
+    return filteredCompanyPurchaseRows.reduce(
+      (total, row) => ({
+        Qty: total.Qty + Number(row.Qty || 0),
+        FreeQty: total.FreeQty + Number(row.FreeQty || 0),
+        GrossAmount: total.GrossAmount + Number(row.GrossAmount || 0),
+        Discount: total.Discount + Number(row.Discount || 0),
+        TaxableAmount: total.TaxableAmount + Number(row.TaxableAmount || 0),
+        TaxAmount: total.TaxAmount + Number(row.TaxAmount || 0),
+        NetAmount: total.NetAmount + Number(row.NetAmount || 0),
+      }),
+      {
+        Qty: 0,
+        FreeQty: 0,
+        GrossAmount: 0,
+        Discount: 0,
+        TaxableAmount: 0,
+        TaxAmount: 0,
+        NetAmount: 0,
+      }
+    );
+  }, [filteredCompanyPurchaseRows]);
+
+  // =========================================================
+  // COMPANY PURCHASE REPORT - PAGINATION
+  // =========================================================
+  const companyPurchaseTotalPages = Math.max(
+    1,
+    Math.ceil(filteredCompanyPurchaseRows.length / companyPurchaseRowsPerPage)
+  );
+  const companyPurchaseSafeCurrentPage = Math.min(companyPurchaseCurrentPage, companyPurchaseTotalPages);
+  const companyPurchasePageStart = (companyPurchaseSafeCurrentPage - 1) * companyPurchaseRowsPerPage;
+  const companyPurchasePageRows = filteredCompanyPurchaseRows.slice(
+    companyPurchasePageStart,
+    companyPurchasePageStart + companyPurchaseRowsPerPage
+  );
+
+  // =========================================================
+  // COMPANY PURCHASE REPORT - EXPORT FUNCTIONS
+  // =========================================================
+  const formatCompanyPurchaseValue = (column, value) => {
+    if (value === undefined || value === null || value === "") return "";
+    if (column.type === "number") return formatReportNumber(value);
+    if (column.key === "BillDate") {
+      const rawDate = String(value).trim();
+      if (!rawDate) return "";
+      const dateOnly = rawDate.includes("T") ? rawDate.split("T")[0] : rawDate;
+      const parts = dateOnly.split("-");
+      if (parts.length === 3) return `${parts[2]}-${parts[1]}-${parts[0]}`;
+      return rawDate;
+    }
+    return String(value);
+  };
+
+  const getCompanyPurchaseTotalValue = (column, columnIndex, totals) => {
+    if (columnIndex === 0) return "TOTAL";
+    const totalFieldMap = {
+      Qty: "Qty",
+      FreeQty: "FreeQty",
+      GrossAmount: "GrossAmount",
+      Discount: "Discount",
+      TaxableAmount: "TaxableAmount",
+      TaxAmount: "TaxAmount",
+      NetAmount: "NetAmount",
+    };
+    const totalField = totalFieldMap[column.key];
+    if (!totalField) return "";
+    return Number(totals[totalField] || 0);
+  };
+
+  const validateCompanyPurchaseExport = () => {
+    if (!isCompanyPurchaseGenerated) {
+      setCompanyPurchaseError("Please generate the report before exporting.");
+      return false;
+    }
+    if (companyPurchaseColumns.length === 0) {
+      setCompanyPurchaseError("Report columns are not available.");
+      return false;
+    }
+    if (filteredCompanyPurchaseRows.length === 0) {
+      setCompanyPurchaseError("No report records are available to export.");
+      return false;
+    }
+    setCompanyPurchaseError("");
+    return true;
+  };
+
+  const getCompanyPurchaseExportValue = (column, value) => {
+    if (value === undefined || value === null) return "";
+    if (column.type === "number") {
+      const numberValue = Number(value);
+      return Number.isFinite(numberValue) ? numberValue : 0;
+    }
+    return String(value);
+  };
+
+  const exportCompanyPurchaseToExcel = () => {
+    try {
+      if (!validateCompanyPurchaseExport()) return;
+
+      const companyName = getSelectedCompanyName();
+      const firmDetails = getLoggedInFirmDetails();
+      const workbook = XLSX.utils.book_new();
+      const columnCount = Math.max(companyPurchaseColumns.length, 1);
+      const worksheetData = [];
+
+      worksheetData.push([firmDetails.firmName || "Firm Name"]);
+      worksheetData.push(["Company Wise Purchase Report"]);
+      worksheetData.push([
+        "Company",
+        companyName,
+        "Report Level",
+        companyPurchaseFilters.reportLevel === "details" ? "Details" : "Summary"
+      ]);
+      worksheetData.push([
+        "Period",
+        `${companyPurchaseFilters.fromDate} to ${companyPurchaseFilters.toDate}`,
+        "Records",
+        filteredCompanyPurchaseRows.length,
+      ]);
+      worksheetData.push([]);
+
+      const tableHeaderRowIndex = worksheetData.length;
+      worksheetData.push(companyPurchaseColumns.map((column) => column.label || column.key));
+
+      filteredCompanyPurchaseRows.forEach((row) => {
+        worksheetData.push(
+          companyPurchaseColumns.map((column) =>
+            getCompanyPurchaseExportValue(column, row[column.key])
+          )
+        );
+      });
+
+      const totalRowIndex = worksheetData.length;
+      worksheetData.push(
+        companyPurchaseColumns.map((column, columnIndex) =>
+          getCompanyPurchaseTotalValue(column, columnIndex, companyPurchaseTotals)
+        )
+      );
+
+      const worksheet = XLSX.utils.aoa_to_sheet(worksheetData);
+
+      const thinBorder = {
+        top: { style: "thin", color: { rgb: "9FB9C8" } },
+        bottom: { style: "thin", color: { rgb: "9FB9C8" } },
+        left: { style: "thin", color: { rgb: "9FB9C8" } },
+        right: { style: "thin", color: { rgb: "9FB9C8" } },
+      };
+
+      const firmNameStyle = {
+        font: { bold: true, sz: 16, color: { rgb: "FFFFFF" } },
+        fill: { patternType: "solid", fgColor: { rgb: "124F78" } },
+        alignment: { horizontal: "center", vertical: "center" },
+      };
+
+      const reportTitleStyle = {
+        font: { bold: true, sz: 14, color: { rgb: "FFFFFF" } },
+        fill: { patternType: "solid", fgColor: { rgb: "F79646" } },
+        alignment: { horizontal: "center", vertical: "center" },
+      };
+
+      const informationLabelStyle = {
+        font: { bold: true, color: { rgb: "163D5C" } },
+        fill: { patternType: "solid", fgColor: { rgb: "D7EAF5" } },
+        alignment: { vertical: "center" },
+        border: thinBorder,
+      };
+
+      const informationValueStyle = {
+        font: { color: { rgb: "263E50" } },
+        fill: { patternType: "solid", fgColor: { rgb: "F7FBFD" } },
+        alignment: { vertical: "center", wrapText: true },
+        border: thinBorder,
+      };
+
+      const headerStyle = {
+        font: { bold: true, color: { rgb: "FFFFFF" } },
+        fill: { patternType: "solid", fgColor: { rgb: "267BB3" } },
+        alignment: { horizontal: "center", vertical: "center", wrapText: true },
+        border: thinBorder,
+      };
+
+      const oddRowStyle = {
+        fill: { patternType: "solid", fgColor: { rgb: "FFFFFF" } },
+        alignment: { vertical: "center" },
+        border: thinBorder,
+      };
+
+      const evenRowStyle = {
+        fill: { patternType: "solid", fgColor: { rgb: "EAF5FB" } },
+        alignment: { vertical: "center" },
+        border: thinBorder,
+      };
+
+      const totalStyle = {
+        font: { bold: true, color: { rgb: "163D5C" } },
+        fill: { patternType: "solid", fgColor: { rgb: "B7D6EA" } },
+        alignment: { vertical: "center" },
+        border: thinBorder,
+      };
+
+      const firmNameCell = worksheet["A1"];
+      if (firmNameCell) firmNameCell.s = firmNameStyle;
+
+      const reportTitleCell = worksheet["A2"];
+      if (reportTitleCell) reportTitleCell.s = reportTitleStyle;
+
+      [2, 3].forEach((rowIndex) => {
+        [0, 2].forEach((labelColumnIndex) => {
+          const labelCellAddress = XLSX.utils.encode_cell({ r: rowIndex, c: labelColumnIndex });
+          if (worksheet[labelCellAddress]) {
+            worksheet[labelCellAddress].s = informationLabelStyle;
+          }
+        });
+        [1, 3].forEach((valueColumnIndex) => {
+          const valueCellAddress = XLSX.utils.encode_cell({ r: rowIndex, c: valueColumnIndex });
+          if (worksheet[valueCellAddress]) {
+            worksheet[valueCellAddress].s = informationValueStyle;
+          }
+        });
+      });
+
+      companyPurchaseColumns.forEach((_, columnIndex) => {
+        const cellAddress = XLSX.utils.encode_cell({ r: tableHeaderRowIndex, c: columnIndex });
+        if (worksheet[cellAddress]) {
+          worksheet[cellAddress].s = headerStyle;
+        }
+      });
+
+      const dataStartRowIndex = tableHeaderRowIndex + 1;
+      const dataEndRowIndex = totalRowIndex - 1;
+
+      for (let rowIndex = dataStartRowIndex; rowIndex <= dataEndRowIndex; rowIndex += 1) {
+        const isEvenRow = (rowIndex - dataStartRowIndex) % 2 === 1;
+        companyPurchaseColumns.forEach((column, columnIndex) => {
+          const cellAddress = XLSX.utils.encode_cell({ r: rowIndex, c: columnIndex });
+          if (!worksheet[cellAddress]) {
+            worksheet[cellAddress] = { t: "s", v: "" };
+          }
+          worksheet[cellAddress].s = {
+            ...(isEvenRow ? evenRowStyle : oddRowStyle),
+            alignment: {
+              horizontal: column.type === "number" ? "right" : "left",
+              vertical: "center",
+            },
+            numFmt: column.type === "number" ? "#,##0.00" : "General",
+          };
+        });
+      }
+
+      companyPurchaseColumns.forEach((column, columnIndex) => {
+        const cellAddress = XLSX.utils.encode_cell({ r: totalRowIndex, c: columnIndex });
+        if (!worksheet[cellAddress]) {
+          worksheet[cellAddress] = { t: "s", v: "" };
+        }
+        worksheet[cellAddress].s = {
+          ...totalStyle,
+          alignment: {
+            horizontal: column.type === "number" ? "right" : "left",
+            vertical: "center",
+          },
+          numFmt: column.type === "number" ? "#,##0.00" : "General",
+        };
+      });
+
+      worksheet["!merges"] = [
+        { s: { r: 0, c: 0 }, e: { r: 0, c: columnCount - 1 } },
+        { s: { r: 1, c: 0 }, e: { r: 1, c: columnCount - 1 } },
+      ];
+
+      worksheet["!cols"] = companyPurchaseColumns.map((column) => {
+        const labelLength = String(column.label || "").length;
+        let width = column.type === "number" ? 14 : Math.max(12, Math.min(35, labelLength + 5));
+        if (column.key === "SupplierName" || column.key === "ProductName") width = 28;
+        if (column.key === "BillDate" || column.key === "Batch") width = 14;
+        return { wch: width };
+      });
+
+      worksheet["!freeze"] = {
+        xSplit: 0,
+        ySplit: tableHeaderRowIndex + 1,
+        topLeftCell: `A${tableHeaderRowIndex + 2}`,
+        activePane: "bottomLeft",
+        state: "frozen",
+      };
+
+      worksheet["!autofilter"] = {
+        ref: XLSX.utils.encode_range({
+          s: { r: tableHeaderRowIndex, c: 0 },
+          e: { r: dataEndRowIndex, c: columnCount - 1 },
+        }),
+      };
+
+      XLSX.utils.book_append_sheet(workbook, worksheet, "Company Purchase");
+
+      const fileName = sanitizeExportFileName(
+        `Company_Wise_Purchase_${companyName}_${companyPurchaseFilters.fromDate}_${companyPurchaseFilters.toDate}`
+      );
+
+      XLSX.writeFile(workbook, `${fileName}.xlsx`, { cellStyles: true });
+    } catch (error) {
+      console.error("Excel export error:", error);
+      setCompanyPurchaseError(error.message || "Failed to export Excel report.");
+    }
+  };
+
+  const exportCompanyPurchaseToCsv = () => {
+    try {
+      if (!validateCompanyPurchaseExport()) return;
+
+      const companyName = getSelectedCompanyName();
+      const firmDetails = getLoggedInFirmDetails();
+      const csvRows = [];
+
+      csvRows.push([firmDetails.firmName || "Firm Name"]);
+      csvRows.push(["Company Wise Purchase Report"]);
+      csvRows.push(["Company", companyName, "Report Level", companyPurchaseFilters.reportLevel === "details" ? "Details" : "Summary"]);
+      csvRows.push([
+        "Period",
+        `${companyPurchaseFilters.fromDate} to ${companyPurchaseFilters.toDate}`,
+        "Records",
+        filteredCompanyPurchaseRows.length,
+      ]);
+      csvRows.push([]);
+      csvRows.push(companyPurchaseColumns.map((column) => column.label || column.key));
+
+      filteredCompanyPurchaseRows.forEach((row) => {
+        csvRows.push(
+          companyPurchaseColumns.map((column) =>
+            getCompanyPurchaseExportValue(column, row[column.key])
+          )
+        );
+      });
+
+      csvRows.push(
+        companyPurchaseColumns.map((column, columnIndex) =>
+          getCompanyPurchaseTotalValue(column, columnIndex, companyPurchaseTotals)
+        )
+      );
+
+      const escapeCsvValue = (value) => {
+        const text = String(value ?? "");
+        return `"${text.replace(/"/g, '""')}"`;
+      };
+
+      const csvContent =
+        "\uFEFF" +
+        csvRows.map((row) => row.map(escapeCsvValue).join(",")).join("\r\n");
+
+      const csvBlob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+      const csvUrl = URL.createObjectURL(csvBlob);
+      const downloadLink = document.createElement("a");
+      const fileName = sanitizeExportFileName(
+        `Company_Wise_Purchase_${companyName}_${companyPurchaseFilters.fromDate}_${companyPurchaseFilters.toDate}`
+      );
+
+      downloadLink.href = csvUrl;
+      downloadLink.download = `${fileName}.csv`;
+      document.body.appendChild(downloadLink);
+      downloadLink.click();
+      downloadLink.remove();
+      URL.revokeObjectURL(csvUrl);
+    } catch (error) {
+      console.error("CSV export error:", error);
+      setCompanyPurchaseError(error.message || "Failed to export CSV report.");
+    }
+  };
+
+  const exportCompanyPurchaseToPdf = () => {
+    try {
+      if (!validateCompanyPurchaseExport()) return;
+
+      const companyName = getSelectedCompanyName();
+
+      const pdf = new jsPDF({
+        orientation: "landscape",
+        unit: "mm",
+        format: companyPurchaseColumns.length > 12 ? "a3" : "a4",
+      });
+
+      const pageWidth = pdf.internal.pageSize.getWidth();
+
+      pdf.setFontSize(15);
+      pdf.text("Company Wise Purchase Report", pageWidth / 2, 12, { align: "center" });
+      pdf.setFontSize(8.5);
+      pdf.text(`Company: ${companyName}`, 10, 19);
+      pdf.text(`Report Level: ${companyPurchaseFilters.reportLevel === "details" ? "Details" : "Summary"}`, 10, 24);
+      pdf.text(
+        `Period: ${companyPurchaseFilters.fromDate} to ${companyPurchaseFilters.toDate}`,
+        10,
+        29
+      );
+      pdf.text(`Records: ${filteredCompanyPurchaseRows.length}`, pageWidth - 10, 19, {
+        align: "right",
+      });
+
+      const tableHead = [companyPurchaseColumns.map((column) => column.label)];
+      const tableBody = filteredCompanyPurchaseRows.map((row) =>
+        companyPurchaseColumns.map((column) =>
+          formatCompanyPurchaseValue(column, row[column.key])
+        )
+      );
+
+      const totalsRow = companyPurchaseColumns.map((column, columnIndex) => {
+        const value = getCompanyPurchaseTotalValue(column, columnIndex, companyPurchaseTotals);
+        if (column.type === "number" && value !== "") return formatReportNumber(value);
+        return value;
+      });
+      tableBody.push(totalsRow);
+
+      const columnStyles = {};
+      companyPurchaseColumns.forEach((column, index) => {
+        columnStyles[index] = {
+          halign: column.type === "number" ? "right" : "left",
+          cellWidth: "auto",
+        };
+      });
+
+      autoTable(pdf, {
+        startY: 34,
+        head: tableHead,
+        body: tableBody,
+        theme: "grid",
+        styles: {
+          fontSize: companyPurchaseColumns.length > 15 ? 5 : 6.5,
+          cellPadding: 1.2,
+          overflow: "linebreak",
+          valign: "middle",
+        },
+        headStyles: { fontStyle: "bold", halign: "center" },
+        columnStyles,
+        didParseCell: (data) => {
+          const isTotalRow =
+            data.section === "body" && data.row.index === tableBody.length - 1;
+          if (isTotalRow) {
+            data.cell.styles.fontStyle = "bold";
+          }
+        },
+        didDrawPage: () => {
+          const pageNumber = pdf.internal.getNumberOfPages();
+          const pageHeight = pdf.internal.pageSize.getHeight();
+          pdf.setFontSize(7);
+          pdf.text(`Page ${pageNumber}`, pageWidth - 10, pageHeight - 5, {
+            align: "right",
+          });
+        },
+      });
+
+      const fileName = sanitizeExportFileName(
+        `Company_Wise_Purchase_${companyName}_${companyPurchaseFilters.fromDate}_${companyPurchaseFilters.toDate}`
+      );
+      pdf.save(`${fileName}.pdf`);
+    } catch (error) {
+      console.error("PDF export error:", error);
+      setCompanyPurchaseError(error.message || "Failed to export PDF report.");
+    }
+  };
+
+  const printCompanyPurchaseReport = () => {
+    try {
+      if (!validateCompanyPurchaseExport()) return;
+
+      const companyName = getSelectedCompanyName();
+
+      const tableHeaders = companyPurchaseColumns
+        .map(
+          (column) => `
+            <th class="${column.type === "number" ? "number-cell" : ""}">
+              ${escapePrintHtml(column.label)}
+            </th>
+          `
+        )
+        .join("");
+
+      const tableRows = filteredCompanyPurchaseRows
+        .map(
+          (row) => `
+            <tr>
+              ${companyPurchaseColumns
+                .map(
+                  (column) => `
+                    <td class="${column.type === "number" ? "number-cell" : ""}">
+                      ${escapePrintHtml(formatCompanyPurchaseValue(column, row[column.key]))}
+                    </td>
+                  `
+                )
+                .join("")}
+            </tr>
+          `
+        )
+        .join("");
+
+      const totalsCells = companyPurchaseColumns
+        .map((column, columnIndex) => {
+          const value = getCompanyPurchaseTotalValue(column, columnIndex, companyPurchaseTotals);
+          const displayValue =
+            column.type === "number" && value !== "" ? formatReportNumber(value) : value;
+          return `
+            <td class="${column.type === "number" ? "number-cell" : ""}">
+              ${escapePrintHtml(displayValue)}
+            </td>
+          `;
+        })
+        .join("");
+
+      const printWindow = window.open("", "_blank", "width=1400,height=900");
+      if (!printWindow) {
+        throw new Error("Print window was blocked. Please allow pop-ups for this website.");
+      }
+
+      printWindow.document.open();
+      printWindow.document.write(`
+        <!DOCTYPE html>
+        <html>
+          <head>
+            <meta charset="UTF-8" />
+            <title>Company Wise Purchase Report</title>
+            <style>
+              @page { size: landscape; margin: 8mm; }
+              * { box-sizing: border-box; }
+              body {
+                margin: 0;
+                color: #111827;
+                font-family: Arial, Helvetica, sans-serif;
+                font-size: 10px;
+              }
+              .report-header { margin-bottom: 10px; text-align: center; }
+              .report-header h1 { margin: 0 0 6px; font-size: 18px; }
+              .report-information {
+                display: flex;
+                flex-wrap: wrap;
+                justify-content: space-between;
+                gap: 5px 18px;
+                border: 1px solid #9ca3af;
+                padding: 6px 8px;
+                text-align: left;
+              }
+              .report-information span { white-space: nowrap; }
+              table {
+                width: 100%;
+                border-collapse: collapse;
+                table-layout: auto;
+              }
+              thead { display: table-header-group; }
+              tfoot { display: table-footer-group; }
+              tr { break-inside: avoid; page-break-inside: avoid; }
+              th, td {
+                border: 1px solid #6b7280;
+                padding: 3px 4px;
+                vertical-align: middle;
+                overflow-wrap: anywhere;
+              }
+              th {
+                background: #e5e7eb;
+                font-weight: 700;
+                text-align: center;
+                white-space: nowrap;
+              }
+              tbody tr:nth-child(even) { background: #f9fafb; }
+              tfoot td { background: #e5e7eb; font-weight: 700; }
+              .number-cell { text-align: right; white-space: nowrap; }
+              .print-footer { margin-top: 7px; text-align: right; font-size: 9px; }
+              @media print {
+                body { print-color-adjust: exact; -webkit-print-color-adjust: exact; }
+              }
+            </style>
+          </head>
+          <body>
+            <div class="report-header">
+              <h1>Company Wise Purchase Report</h1>
+              <div class="report-information">
+                <span><strong>Company:</strong> ${escapePrintHtml(companyName)}</span>
+                <span><strong>Level:</strong> ${escapePrintHtml(companyPurchaseFilters.reportLevel === "details" ? "Details" : "Summary")}</span>
+                <span><strong>Period:</strong> ${escapePrintHtml(companyPurchaseFilters.fromDate)} to ${escapePrintHtml(companyPurchaseFilters.toDate)}</span>
+                <span><strong>Records:</strong> ${filteredCompanyPurchaseRows.length}</span>
+              </div>
+            </div>
+            <table>
+              <thead><tr>${tableHeaders}</tr></thead>
+              <tbody>${tableRows}</tbody>
+              <tfoot><tr>${totalsCells}</tr></tfoot>
+            </table>
+            <div class="print-footer">
+              Printed on: ${escapePrintHtml(new Date().toLocaleString("en-IN"))}
+            </div>
+            <script>
+              window.addEventListener("load", function () {
+                window.focus();
+                setTimeout(function () { window.print(); }, 300);
+              });
+              window.addEventListener("afterprint", function () { window.close(); });
+            </script>
+          </body>
+        </html>
+      `);
+      printWindow.document.close();
+    } catch (error) {
+      console.error("Print report error:", error);
+      setCompanyPurchaseError(error.message || "Failed to print report.");
+    }
+  };
+
+  // =========================================================
+  // PRODUCT SELECTOR COMPONENT
+  // =========================================================
+  const getProductOptionCode = (product, index = "") =>
+    String(
+      product?.productCode ||
+        product?.ProductCode ||
+        product?.code ||
+        product?._id ||
+        product?.id ||
+        index
+    );
+
+  const getProductOptionName = (product) =>
+    String(
+      product?.productName ||
+        product?.ProductName ||
+        product?.name ||
+        ""
+    );
+
+  // =========================================================
+  // PRODUCT WISE SALES REPORT STATE - SIMPLIFIED
+  // =========================================================
+  const [productReportFilters, setProductReportFilters] = useState(() => ({
+    company: "",
+    selectedProductCodes: [],
+    fromDate: getFinancialYearStart(),
+    toDate: getTodayDate(),
+    selectedArea: "no",
+    selectedAreaCodes: [],
+    selectedSalesman: "no",
+    selectedSalesmanCodes: [],
+    withCreditNote: "no",
+    orderBy: "productName",
+    showZeroSales: "no",
+  }));
+
+  const [showProductSelector, setShowProductSelector] = useState(false);
+  const [productSelectorSearch, setProductSelectorSearch] = useState("");
+  const [reportProductList, setReportProductList] = useState([]);
+  const [isProductCriteriaLoading, setIsProductCriteriaLoading] = useState(false);
+  const [productCriteriaError, setProductCriteriaError] = useState("");
 
   const [partyReportRows, setPartyReportRows] = useState([]);
   const [partyReportColumns, setPartyReportColumns] = useState([]);
@@ -172,7 +1489,7 @@ const Report = ({
   // ALL PARTY WISE SALES REPORT STATE
   // =========================================================
   const [allPartySalesFilters, setAllPartySalesFilters] = useState(() => ({
-    company: "", // Can be empty string for "All Companies"
+    company: "",
     reportLevel: "salesSummary",
     selectedArea: "no",
     selectedAreaCodes: [],
@@ -201,61 +1518,33 @@ const Report = ({
   const [allAreaSelectorSearch, setAllAreaSelectorSearch] = useState("");
   const [allSalesmanSelectorSearch, setAllSalesmanSelectorSearch] = useState("");
 
-  // =========================================================
-  // PRODUCT WISE SALES REPORT STATE
-  // =========================================================
-  const [productReportFilters, setProductReportFilters] = useState(() => ({
-    company: "",
-    productCode: "",
-    productGroup: "",
-    category: "",
-    subCategory: "",
-    brand: "",
-    fromDate: getFinancialYearStart(),
-    toDate: getTodayDate(),
-    salesman: "",
-    area: "",
-    party: "",
-    billType: "",
-    reportLevel: "summary",
-    scope: "all",
-    crnStatus: "all",
-    orderBy: "productName",
-    showZeroSales: "no",
-  }));
-
-const [productReportRows, setProductReportRows] = useState([]);
+  const [productReportRows, setProductReportRows] = useState([]);
   const [productReportColumns, setProductReportColumns] = useState([]);
   const [isProductReportGenerated, setIsProductReportGenerated] = useState(false);
   const [isProductReportLoading, setIsProductReportLoading] = useState(false);
   const [productReportError, setProductReportError] = useState("");
   const [productReportSearch, setProductReportSearch] = useState("");
   const [productReportZoom, setProductReportZoom] = useState("100");
-  const [reportProductList, setReportProductList] = useState([]);
-  const [isProductCriteriaLoading, setIsProductCriteriaLoading] = useState(false);
-  const [productCriteriaError, setProductCriteriaError] = useState("");
 
-  // =========================================================
-  // ALL PRODUCT WISE SALES REPORT STATE
-  // =========================================================
   const [allProductReportFilters, setAllProductReportFilters] = useState(() => ({
     company: "",
-    productCode: "",
     productGroup: "",
     category: "",
-    subCategory: "",
     brand: "",
     fromDate: getFinancialYearStart(),
     toDate: getTodayDate(),
-    salesman: "",
-    area: "",
-    party: "",
-    billType: "",
-    reportLevel: "summary",
-    scope: "all",
-    crnStatus: "all",
+    selectedArea: "no",
+    selectedAreaCodes: [],
+    selectedSalesman: "no",
+    selectedSalesmanCodes: [],
+    billWiseSalesman: "no",
+    withCreditNote: "no",
     orderBy: "productName",
     showZeroSales: "no",
+    reportLevel: "units",
+    valuationBy: "basicRate",
+    salesType: "onlySales",
+    reportOn: "productName",
   }));
 
   const [allProductReportRows, setAllProductReportRows] = useState([]);
@@ -266,11 +1555,52 @@ const [productReportRows, setProductReportRows] = useState([]);
   const [allProductReportSearch, setAllProductReportSearch] = useState("");
   const [allProductReportZoom, setAllProductReportZoom] = useState("100");
 
-  const normalizeText = (value) =>
-    String(value ?? "")
-      .trim()
-      .toLowerCase();
 
+  // =========================================================
+  // useMemo hooks that use normalizeText
+  // =========================================================
+  const filteredAllProductReportRows = useMemo(() => {
+    const search = normalizeText(allProductReportSearch);
+    if (!search) return allProductReportRows;
+    return allProductReportRows.filter((row) =>
+      Object.values(row).some((value) =>
+        normalizeText(value).includes(search)
+      )
+    );
+  }, [allProductReportRows, allProductReportSearch]);
+
+  const allProductReportTotals = useMemo(() => {
+    return filteredAllProductReportRows.reduce(
+      (total, row) => ({
+        openingStock: total.openingStock + Number(row.openingStock || 0),
+        totalQty: total.totalQty + Number(row.totalQty || 0),
+        freeQty: total.freeQty + Number(row.freeQty || 0),
+        grossAmount: total.grossAmount + Number(row.grossAmount || 0),
+        discount: total.discount + Number(row.discount || 0),
+        netAmount: total.netAmount + Number(row.netAmount || 0),
+        totalTax: total.totalTax + Number(row.totalTax || 0),
+        netSales: total.netSales + Number(row.netSales || 0),
+        crnAmount: total.crnAmount + Number(row.crnAmount || 0),
+        balanceAmount: total.balanceAmount + Number(row.balanceAmount || 0),
+      }),
+      {
+        openingStock: 0,
+        totalQty: 0,
+        freeQty: 0,
+        grossAmount: 0,
+        discount: 0,
+        netAmount: 0,
+        totalTax: 0,
+        netSales: 0,
+        crnAmount: 0,
+        balanceAmount: 0,
+      }
+    );
+  }, [filteredAllProductReportRows]);
+
+  // =========================================================
+  // Helper functions
+  // =========================================================
   const getCompanyCode = (company, index = "") =>
     String(
       company?.companyCode ||
@@ -420,7 +1750,7 @@ const [productReportRows, setProductReportRows] = useState([]);
     }
   };
 
-const loadProductReportCriteria = async (companyCode = "") => {
+  const loadProductReportCriteria = async (companyCode = "") => {
     try {
       setIsProductCriteriaLoading(true);
       setProductCriteriaError("");
@@ -459,6 +1789,23 @@ const loadProductReportCriteria = async (companyCode = "") => {
       setReportCompanies(Array.isArray(result.companies) ? result.companies : []);
       setReportProductList(Array.isArray(result.products) ? result.products : []);
 
+      const areaResponse = await fetch(
+        `${API_BASE_URL}/api/reports/party-sales/criteria?${query.toString()}`
+      );
+
+      const areaContentType = areaResponse.headers.get("content-type") || "";
+      const areaResult = areaContentType.includes("application/json")
+        ? await areaResponse.json()
+        : {
+            success: false,
+            message: await areaResponse.text(),
+          };
+
+      if (areaResponse.ok && areaResult.success) {
+        setMappedAreas(Array.isArray(areaResult.areas) ? areaResult.areas : []);
+        setMappedSalesmen(Array.isArray(areaResult.salesmen) ? areaResult.salesmen : []);
+      }
+
       return result;
     } catch (error) {
       console.error("Product report criteria error:", error);
@@ -470,19 +1817,28 @@ const loadProductReportCriteria = async (companyCode = "") => {
     }
   };
 
-  /*
-   * Load company/product list when Product reports open.
-   */
   useEffect(() => {
     if (selectedReport !== "Product Wise Sales Report" && selectedReport !== "All Product Wise Sales Report") {
       return;
     }
-    loadProductReportCriteria("");
-  }, [selectedReport]);
 
-  /*
-   * Reload products whenever the Product Wise company changes.
-   */
+    const companyCode = selectedReport === "Product Wise Sales Report"
+      ? productReportFilters.company
+      : allProductReportFilters.company;
+
+    if (selectedReport === "Product Wise Sales Report") {
+      setProductReportFilters((prev) => ({
+        ...prev,
+        selectedAreaCodes: [],
+        selectedSalesmanCodes: [],
+        selectedArea: "no",
+        selectedSalesman: "no",
+      }));
+    }
+
+    loadProductReportCriteria(companyCode);
+  }, [selectedReport, productReportFilters.company, allProductReportFilters.company]);
+
   useEffect(() => {
     if (selectedReport !== "Product Wise Sales Report" && selectedReport !== "All Product Wise Sales Report") {
       return;
@@ -495,9 +1851,6 @@ const loadProductReportCriteria = async (companyCode = "") => {
     loadProductReportCriteria(companyCode);
   }, [selectedReport, productReportFilters.company, allProductReportFilters.company]);
 
-  /*
-   * Load company list when Party Wise Sales Report opens.
-   */
   useEffect(() => {
     if (selectedReport !== "Party Wise Sales Report" && selectedReport !== "All Party Wise Sales Report") {
       return;
@@ -505,10 +1858,6 @@ const loadProductReportCriteria = async (companyCode = "") => {
     loadPartyReportCriteria("");
   }, [selectedReport]);
 
-  /*
-   * Load only mapped parties, areas and salesmen whenever
-   * company selection changes.
-   */
   useEffect(() => {
     if (selectedReport !== "Party Wise Sales Report" && selectedReport !== "All Party Wise Sales Report") {
       return;
@@ -518,7 +1867,6 @@ const loadProductReportCriteria = async (companyCode = "") => {
       ? partySalesFilters.company
       : allPartySalesFilters.company;
 
-    // Reset selections for party report
     if (selectedReport === "Party Wise Sales Report") {
       setPartySalesFilters((previous) => ({
         ...previous,
@@ -537,7 +1885,6 @@ const loadProductReportCriteria = async (companyCode = "") => {
       setIsPartyReportGenerated(false);
       setPartyReportError("");
     } else {
-      // Reset for all party report
       setAllPartySalesFilters((previous) => ({
         ...previous,
         selectedAreaCodes: [],
@@ -553,12 +1900,7 @@ const loadProductReportCriteria = async (companyCode = "") => {
       setAllPartyReportError("");
     }
 
-    // Load criteria based on company selection
-    // For "All Companies" (empty string), load all data
     loadPartyReportCriteria(companyCode);
-    
-    // For All Party Report, if company is empty, we want to load all parties/areas/salesmen
-    // The API should handle empty companyCode as "All Companies"
   }, [selectedReport, partySalesFilters.company, allPartySalesFilters.company]);
 
   const updatePartySalesFilter = (field, value) => {
@@ -880,139 +2222,137 @@ const loadProductReportCriteria = async (companyCode = "") => {
       setIsPartyReportLoading(false);
     }
   };
-// =========================================================
-// GENERATE ALL PARTY WISE SALES REPORT
-// =========================================================
-const generateAllPartySalesReport = async () => {
-  try {
-    setAllPartyReportError("");
-    setAllPartyReportRows([]);
-    setAllPartyReportColumns([]);
 
-    const { distributorId, firmId } = getLoggedInContext();
+  // =========================================================
+  // GENERATE ALL PARTY WISE SALES REPORT
+  // =========================================================
+  const generateAllPartySalesReport = async () => {
+    try {
+      setAllPartyReportError("");
+      setAllPartyReportRows([]);
+      setAllPartyReportColumns([]);
 
-    if (!distributorId || !firmId) {
-      throw new Error("Distributor or firm information is missing. Please login again.");
+      const { distributorId, firmId } = getLoggedInContext();
+
+      if (!distributorId || !firmId) {
+        throw new Error("Distributor or firm information is missing. Please login again.");
+      }
+
+      if (allPartySalesFilters.selectedArea === "yes" &&
+        allPartySalesFilters.selectedAreaCodes.length === 0) {
+        throw new Error("Please select at least one area.");
+      }
+
+      if (allPartySalesFilters.selectedSalesman === "yes" &&
+        allPartySalesFilters.selectedSalesmanCodes.length === 0) {
+        throw new Error("Please select at least one salesman.");
+      }
+
+      if (!allPartySalesFilters.fromDate || !allPartySalesFilters.toDate) {
+        throw new Error("From Date and To Date are required.");
+      }
+
+      if (allPartySalesFilters.fromDate > allPartySalesFilters.toDate) {
+        throw new Error("From Date cannot be greater than To Date.");
+      }
+
+      setIsAllPartyReportLoading(true);
+
+      const query = new URLSearchParams({
+        distributorId,
+        firmId,
+        companyCode: allPartySalesFilters.company || "",
+        reportLevel: allPartySalesFilters.reportLevel,
+        selectedAreaCodes:
+          allPartySalesFilters.selectedArea === "yes"
+            ? allPartySalesFilters.selectedAreaCodes.join(",")
+            : "",
+        selectedSalesmanCodes:
+          allPartySalesFilters.selectedSalesman === "yes"
+            ? allPartySalesFilters.selectedSalesmanCodes.join(",")
+            : "",
+        productWise: allPartySalesFilters.productWise,
+        fromDate: allPartySalesFilters.fromDate,
+        toDate: allPartySalesFilters.toDate,
+        withCreditNote: allPartySalesFilters.withCreditNote,
+        orderBy: allPartySalesFilters.orderBy,
+        billWiseSalesman: allPartySalesFilters.billWiseSalesman,
+        freeValueOn: allPartySalesFilters.freeValueOn,
+      });
+
+      const response = await fetch(
+        `${API_BASE_URL}/api/reports/all-party-sales?${query.toString()}`
+      );
+
+      const contentType = response.headers.get("content-type") || "";
+      const result = contentType.includes("application/json")
+        ? await response.json()
+        : {
+            success: false,
+            message: await response.text(),
+          };
+
+      if (!response.ok || !result.success) {
+        throw new Error(result.message || "Failed to generate all party sales report.");
+      }
+
+      const rows = Array.isArray(result.rows)
+        ? result.rows.map((row, index) => ({
+            ...row,
+            rowId: row.rowId || index,
+            srNo: index + 1,
+            trn: row.trn || "SALES",
+            partyCode: row.partyCode || "",
+            partyName: row.partyName || "",
+            grossAmount: Number(row.grossAmount || 0),
+            discountAmount: Number(row.discountAmount || 0),
+            cashDiscountAmount: Number(row.cashDiscountAmount || 0),
+            vatAmount: Number(row.vatAmount || 0),
+            lessOther: Number(row.lessOther || 0),
+            addOther: Number(row.addOther || 0),
+            btmAmount: Number(row.btmAmount || 0),
+            weight: Number(row.weight || 0),
+            couponAmount: Number(row.couponAmount || 0),
+            displayAmount: Number(row.displayAmount || 0),
+            starAmount: Number(row.starAmount || 0),
+            surChargeAmount: Number(row.surChargeAmount || 0),
+            retAmount: Number(row.retAmount || 0),
+            retVatAmount: Number(row.retVatAmount || 0),
+            addLessAmount: Number(row.addLessAmount || 0),
+            netAmount: Number(row.netAmount || 0),
+            totalLines: Number(row.totalLines || 1),
+            areaName: row.areaName || "",
+            masterSalesmanName: row.masterSalesmanName || "",
+            billSalesmanName: row.billSalesmanName || "",
+            productCode: row.productCode || "",
+            productName: row.productName || "",
+            qty: Number(row.qty || 0),
+            freeQty: Number(row.freeQty || 0),
+            salesRate: Number(row.salesRate || 0),
+            batch: row.batch || "",
+          }))
+        : [];
+
+      const columns = Array.isArray(result.columns) ? result.columns : [];
+
+      setAllPartyReportRows(rows);
+      setAllPartyReportColumns(columns);
+      setAllPartyCurrentPage(1);
+      setIsAllPartyReportGenerated(true);
+
+      if (rows.length === 0) {
+        setAllPartyReportError("No sales records were found for the selected criteria.");
+      }
+    } catch (error) {
+      console.error("All party sales report generation error:", error);
+      setAllPartyReportRows([]);
+      setAllPartyReportColumns([]);
+      setIsAllPartyReportGenerated(false);
+      setAllPartyReportError(error.message || "Failed to generate all party sales report.");
+    } finally {
+      setIsAllPartyReportLoading(false);
     }
-
-    // For All Party Report, company can be empty (All Companies)
-    if (allPartySalesFilters.selectedArea === "yes" &&
-      allPartySalesFilters.selectedAreaCodes.length === 0) {
-      throw new Error("Please select at least one area.");
-    }
-
-    if (allPartySalesFilters.selectedSalesman === "yes" &&
-      allPartySalesFilters.selectedSalesmanCodes.length === 0) {
-      throw new Error("Please select at least one salesman.");
-    }
-
-    if (!allPartySalesFilters.fromDate || !allPartySalesFilters.toDate) {
-      throw new Error("From Date and To Date are required.");
-    }
-
-    if (allPartySalesFilters.fromDate > allPartySalesFilters.toDate) {
-      throw new Error("From Date cannot be greater than To Date.");
-    }
-
-    setIsAllPartyReportLoading(true);
-
-    const query = new URLSearchParams({
-      distributorId,
-      firmId,
-      companyCode: allPartySalesFilters.company || "",
-      reportLevel: allPartySalesFilters.reportLevel,
-      selectedAreaCodes:
-        allPartySalesFilters.selectedArea === "yes"
-          ? allPartySalesFilters.selectedAreaCodes.join(",")
-          : "",
-      selectedSalesmanCodes:
-        allPartySalesFilters.selectedSalesman === "yes"
-          ? allPartySalesFilters.selectedSalesmanCodes.join(",")
-          : "",
-      productWise: allPartySalesFilters.productWise,
-      fromDate: allPartySalesFilters.fromDate,
-      toDate: allPartySalesFilters.toDate,
-      withCreditNote: allPartySalesFilters.withCreditNote,
-      orderBy: allPartySalesFilters.orderBy,
-      billWiseSalesman: allPartySalesFilters.billWiseSalesman,
-      freeValueOn: allPartySalesFilters.freeValueOn,
-    });
-
-
-    const response = await fetch(
-      `${API_BASE_URL}/api/reports/all-party-sales?${query.toString()}`
-    );
-
-    const contentType = response.headers.get("content-type") || "";
-    const result = contentType.includes("application/json")
-      ? await response.json()
-      : {
-          success: false,
-          message: await response.text(),
-        };
-
-    if (!response.ok || !result.success) {
-      throw new Error(result.message || "Failed to generate all party sales report.");
-    }
-
-    const rows = Array.isArray(result.rows)
-      ? result.rows.map((row, index) => ({
-          ...row,
-          rowId: row.rowId || index,
-          srNo: index + 1,
-          trn: row.trn || "SALES",
-          partyCode: row.partyCode || "",
-          partyName: row.partyName || "",
-          grossAmount: Number(row.grossAmount || 0),
-          discountAmount: Number(row.discountAmount || 0),
-          cashDiscountAmount: Number(row.cashDiscountAmount || 0),
-          vatAmount: Number(row.vatAmount || 0),
-          lessOther: Number(row.lessOther || 0),
-          addOther: Number(row.addOther || 0),
-          btmAmount: Number(row.btmAmount || 0),
-          weight: Number(row.weight || 0),
-          couponAmount: Number(row.couponAmount || 0),
-          displayAmount: Number(row.displayAmount || 0),
-          starAmount: Number(row.starAmount || 0),
-          surChargeAmount: Number(row.surChargeAmount || 0),
-          retAmount: Number(row.retAmount || 0),
-          retVatAmount: Number(row.retVatAmount || 0),
-          addLessAmount: Number(row.addLessAmount || 0),
-          netAmount: Number(row.netAmount || 0),
-          totalLines: Number(row.totalLines || 1),
-          areaName: row.areaName || "",
-          masterSalesmanName: row.masterSalesmanName || "",
-          billSalesmanName: row.billSalesmanName || "",
-          // Product-wise fields
-          productCode: row.productCode || "",
-          productName: row.productName || "",
-          qty: Number(row.qty || 0),
-          freeQty: Number(row.freeQty || 0),
-          salesRate: Number(row.salesRate || 0),
-          batch: row.batch || "",
-        }))
-      : [];
-
-    const columns = Array.isArray(result.columns) ? result.columns : [];
-
-    setAllPartyReportRows(rows);
-    setAllPartyReportColumns(columns);
-    setAllPartyCurrentPage(1);
-    setIsAllPartyReportGenerated(true);
-
-    if (rows.length === 0) {
-      setAllPartyReportError("No sales records were found for the selected criteria.");
-    }
-  } catch (error) {
-    console.error("All party sales report generation error:", error);
-    setAllPartyReportRows([]);
-    setAllPartyReportColumns([]);
-    setIsAllPartyReportGenerated(false);
-    setAllPartyReportError(error.message || "Failed to generate all party sales report.");
-  } finally {
-    setIsAllPartyReportLoading(false);
-  }
-};
+  };
 
   // =========================================================
   // PARTY REPORT - FILTERED ROWS & TOTALS
@@ -1069,52 +2409,52 @@ const generateAllPartySalesReport = async () => {
     );
   }, [allPartyReportRows, allPartyReportSearch]);
 
-const allPartySalesTotals = useMemo(() => {
-  return filteredAllPartySalesRows.reduce(
-    (total, row) => ({
-      grossAmount: total.grossAmount + Number(row.grossAmount || 0),
-      discountAmount: total.discountAmount + Number(row.discountAmount || 0),
-      cashDiscountAmount: total.cashDiscountAmount + Number(row.cashDiscountAmount || 0),
-      vatAmount: total.vatAmount + Number(row.vatAmount || 0),
-      lessOther: total.lessOther + Number(row.lessOther || 0),
-      addOther: total.addOther + Number(row.addOther || 0),
-      btmAmount: total.btmAmount + Number(row.btmAmount || 0),
-      weight: total.weight + Number(row.weight || 0),
-      couponAmount: total.couponAmount + Number(row.couponAmount || 0),
-      displayAmount: total.displayAmount + Number(row.displayAmount || 0),
-      starAmount: total.starAmount + Number(row.starAmount || 0),
-      surChargeAmount: total.surChargeAmount + Number(row.surChargeAmount || 0),
-      retAmount: total.retAmount + Number(row.retAmount || 0),
-      retVatAmount: total.retVatAmount + Number(row.retVatAmount || 0),
-      addLessAmount: total.addLessAmount + Number(row.addLessAmount || 0),
-      netAmount: total.netAmount + Number(row.netAmount || 0),
-      totalLines: total.totalLines + Number(row.totalLines || 0),
-      qty: total.qty + Number(row.qty || 0),
-      freeQty: total.freeQty + Number(row.freeQty || 0),
-    }),
-    {
-      grossAmount: 0,
-      discountAmount: 0,
-      cashDiscountAmount: 0,
-      vatAmount: 0,
-      lessOther: 0,
-      addOther: 0,
-      btmAmount: 0,
-      weight: 0,
-      couponAmount: 0,
-      displayAmount: 0,
-      starAmount: 0,
-      surChargeAmount: 0,
-      retAmount: 0,
-      retVatAmount: 0,
-      addLessAmount: 0,
-      netAmount: 0,
-      totalLines: 0,
-      qty: 0,
-      freeQty: 0,
-    }
-  );
-}, [filteredAllPartySalesRows]);
+  const allPartySalesTotals = useMemo(() => {
+    return filteredAllPartySalesRows.reduce(
+      (total, row) => ({
+        grossAmount: total.grossAmount + Number(row.grossAmount || 0),
+        discountAmount: total.discountAmount + Number(row.discountAmount || 0),
+        cashDiscountAmount: total.cashDiscountAmount + Number(row.cashDiscountAmount || 0),
+        vatAmount: total.vatAmount + Number(row.vatAmount || 0),
+        lessOther: total.lessOther + Number(row.lessOther || 0),
+        addOther: total.addOther + Number(row.addOther || 0),
+        btmAmount: total.btmAmount + Number(row.btmAmount || 0),
+        weight: total.weight + Number(row.weight || 0),
+        couponAmount: total.couponAmount + Number(row.couponAmount || 0),
+        displayAmount: total.displayAmount + Number(row.displayAmount || 0),
+        starAmount: total.starAmount + Number(row.starAmount || 0),
+        surChargeAmount: total.surChargeAmount + Number(row.surChargeAmount || 0),
+        retAmount: total.retAmount + Number(row.retAmount || 0),
+        retVatAmount: total.retVatAmount + Number(row.retVatAmount || 0),
+        addLessAmount: total.addLessAmount + Number(row.addLessAmount || 0),
+        netAmount: total.netAmount + Number(row.netAmount || 0),
+        totalLines: total.totalLines + Number(row.totalLines || 0),
+        qty: total.qty + Number(row.qty || 0),
+        freeQty: total.freeQty + Number(row.freeQty || 0),
+      }),
+      {
+        grossAmount: 0,
+        discountAmount: 0,
+        cashDiscountAmount: 0,
+        vatAmount: 0,
+        lessOther: 0,
+        addOther: 0,
+        btmAmount: 0,
+        weight: 0,
+        couponAmount: 0,
+        displayAmount: 0,
+        starAmount: 0,
+        surChargeAmount: 0,
+        retAmount: 0,
+        retVatAmount: 0,
+        addLessAmount: 0,
+        netAmount: 0,
+        totalLines: 0,
+        qty: 0,
+        freeQty: 0,
+      }
+    );
+  }, [filteredAllPartySalesRows]);
 
   // =========================================================
   // PARTY REPORT - UTILITY FUNCTIONS
@@ -1146,12 +2486,17 @@ const allPartySalesTotals = useMemo(() => {
       .replace(/\s+/g, "_");
 
   const getSelectedCompanyName = () => {
+    if (selectedReport === "Company Wise Purchase Report") {
+      const selectedCompany = reportCompanies.find(
+        (company, index) => getCompanyCode(company, index) === companyPurchaseFilters.company
+      );
+      return selectedCompany ? getCompanyName(selectedCompany) : "All Companies";
+    }
     const selectedCompany = reportCompanies.find(
       (company, index) => getCompanyCode(company, index) === (selectedReport === "Party Wise Sales Report"
         ? partySalesFilters.company
         : allPartySalesFilters.company)
     );
-    // Return "All Companies" if no company is selected (empty string)
     if (selectedReport === "All Party Wise Sales Report" && !allPartySalesFilters.company) {
       return "All Companies";
     }
@@ -1341,13 +2686,9 @@ const allPartySalesTotals = useMemo(() => {
       const columnCount = Math.max(partyReportColumns.length, 1);
       const worksheetData = [];
 
-      // Row 1: Firm name
       worksheetData.push([firmDetails.firmName || "Firm Name"]);
-      // Row 2: Report title
       worksheetData.push(["Party Wise Sales Report"]);
-      // Row 3: Company and report level
       worksheetData.push(["Company", companyName, "Report Level", reportLevel]);
-      // Row 4: Period and record count
       worksheetData.push([
         "Period",
         `${partySalesFilters.fromDate} to ${partySalesFilters.toDate}`,
@@ -1356,18 +2697,15 @@ const allPartySalesTotals = useMemo(() => {
       ]);
       worksheetData.push([]);
 
-      // Column headings
       const tableHeaderRowIndex = worksheetData.length;
       worksheetData.push(partyReportColumns.map((column) => column.label || column.key));
 
-      // Report data
       filteredPartySalesRows.forEach((row) => {
         worksheetData.push(
           partyReportColumns.map((column) => getExportValue(column, row[column.key]))
         );
       });
 
-      // Total row
       const totalRowIndex = worksheetData.length;
       worksheetData.push(
         partyReportColumns.map((column, columnIndex) =>
@@ -1377,7 +2715,6 @@ const allPartySalesTotals = useMemo(() => {
 
       const worksheet = XLSX.utils.aoa_to_sheet(worksheetData);
 
-      // Apply styles
       const thinBorder = {
         top: { style: "thin", color: { rgb: "9FB9C8" } },
         bottom: { style: "thin", color: { rgb: "9FB9C8" } },
@@ -1437,15 +2774,12 @@ const allPartySalesTotals = useMemo(() => {
         border: thinBorder,
       };
 
-      // Apply firm name style
       const firmNameCell = worksheet["A1"];
       if (firmNameCell) firmNameCell.s = firmNameStyle;
 
-      // Apply report title style
       const reportTitleCell = worksheet["A2"];
       if (reportTitleCell) reportTitleCell.s = reportTitleStyle;
 
-      // Style info rows
       [2, 3].forEach((rowIndex) => {
         [0, 2].forEach((labelColumnIndex) => {
           const labelCellAddress = XLSX.utils.encode_cell({ r: rowIndex, c: labelColumnIndex });
@@ -1461,7 +2795,6 @@ const allPartySalesTotals = useMemo(() => {
         });
       });
 
-      // Style table header
       partyReportColumns.forEach((_, columnIndex) => {
         const cellAddress = XLSX.utils.encode_cell({ r: tableHeaderRowIndex, c: columnIndex });
         if (worksheet[cellAddress]) {
@@ -1469,7 +2802,6 @@ const allPartySalesTotals = useMemo(() => {
         }
       });
 
-      // Style table data with alternating colors
       const dataStartRowIndex = tableHeaderRowIndex + 1;
       const dataEndRowIndex = totalRowIndex - 1;
 
@@ -1491,7 +2823,6 @@ const allPartySalesTotals = useMemo(() => {
         });
       }
 
-      // Style total row
       partyReportColumns.forEach((column, columnIndex) => {
         const cellAddress = XLSX.utils.encode_cell({ r: totalRowIndex, c: columnIndex });
         if (!worksheet[cellAddress]) {
@@ -1507,13 +2838,11 @@ const allPartySalesTotals = useMemo(() => {
         };
       });
 
-      // Merge cells
       worksheet["!merges"] = [
         { s: { r: 0, c: 0 }, e: { r: 0, c: columnCount - 1 } },
         { s: { r: 1, c: 0 }, e: { r: 1, c: columnCount - 1 } },
       ];
 
-      // Column widths
       worksheet["!cols"] = partyReportColumns.map((column) => {
         const labelLength = String(column.label || "").length;
         let width = column.type === "number" ? 14 : Math.max(12, Math.min(35, labelLength + 5));
@@ -1522,14 +2851,12 @@ const allPartySalesTotals = useMemo(() => {
         return { wch: width };
       });
 
-      // Row heights
       worksheet["!rows"] = [];
       worksheet["!rows"][0] = { hpt: 24 };
       worksheet["!rows"][1] = { hpt: 22 };
       worksheet["!rows"][2] = { hpt: 20 };
       worksheet["!rows"][3] = { hpt: 20 };
 
-      // Freeze report headings
       worksheet["!freeze"] = {
         xSplit: 0,
         ySplit: tableHeaderRowIndex + 1,
@@ -1538,7 +2865,6 @@ const allPartySalesTotals = useMemo(() => {
         state: "frozen",
       };
 
-      // Filter dropdowns
       worksheet["!autofilter"] = {
         ref: XLSX.utils.encode_range({
           s: { r: tableHeaderRowIndex, c: 0 },
@@ -1546,7 +2872,6 @@ const allPartySalesTotals = useMemo(() => {
         }),
       };
 
-      // Page layout
       worksheet["!pageSetup"] = {
         orientation: "landscape",
         fitToWidth: 1,
@@ -1890,13 +3215,9 @@ const allPartySalesTotals = useMemo(() => {
       const columnCount = Math.max(allPartyReportColumns.length, 1);
       const worksheetData = [];
 
-      // Row 1: Firm name
       worksheetData.push([firmDetails.firmName || "Firm Name"]);
-      // Row 2: Report title
       worksheetData.push(["All Party Wise Sales Report"]);
-      // Row 3: Company and report level
       worksheetData.push(["Company", companyName, "Report Level", reportLevel]);
-      // Row 4: Period and record count
       worksheetData.push([
         "Period",
         `${allPartySalesFilters.fromDate} to ${allPartySalesFilters.toDate}`,
@@ -1904,7 +3225,6 @@ const allPartySalesTotals = useMemo(() => {
         filteredAllPartySalesRows.length,
       ]);
 
-      // Add additional filter info
       if (allPartySalesFilters.billWiseSalesman === "yes") {
         worksheetData.push(["Bill Wise Salesman", "Yes"]);
       }
@@ -1912,18 +3232,15 @@ const allPartySalesTotals = useMemo(() => {
 
       worksheetData.push([]);
 
-      // Column headings
       const tableHeaderRowIndex = worksheetData.length;
       worksheetData.push(allPartyReportColumns.map((column) => column.label || column.key));
 
-      // Report data
       filteredAllPartySalesRows.forEach((row) => {
         worksheetData.push(
           allPartyReportColumns.map((column) => getExportValue(column, row[column.key]))
         );
       });
 
-      // Total row
       const totalRowIndex = worksheetData.length;
       worksheetData.push(
         allPartyReportColumns.map((column, columnIndex) =>
@@ -1933,7 +3250,6 @@ const allPartySalesTotals = useMemo(() => {
 
       const worksheet = XLSX.utils.aoa_to_sheet(worksheetData);
 
-      // Apply styles (same as party report)
       const thinBorder = {
         top: { style: "thin", color: { rgb: "9FB9C8" } },
         bottom: { style: "thin", color: { rgb: "9FB9C8" } },
@@ -1993,18 +3309,14 @@ const allPartySalesTotals = useMemo(() => {
         border: thinBorder,
       };
 
-      // Apply firm name style
       const firmNameCell = worksheet["A1"];
       if (firmNameCell) firmNameCell.s = firmNameStyle;
 
-      // Apply report title style
       const reportTitleCell = worksheet["A2"];
       if (reportTitleCell) reportTitleCell.s = reportTitleStyle;
 
-      // Style info rows
       [2, 3, 4, 5].forEach((rowIndex) => {
         if (rowIndex === 4) {
-          // Bill Wise Salesman row
           const labelCellAddress = XLSX.utils.encode_cell({ r: rowIndex, c: 0 });
           if (worksheet[labelCellAddress]) {
             worksheet[labelCellAddress].s = informationLabelStyle;
@@ -2016,7 +3328,6 @@ const allPartySalesTotals = useMemo(() => {
           return;
         }
         if (rowIndex === 5) {
-          // Free Value On row
           const labelCellAddress = XLSX.utils.encode_cell({ r: rowIndex, c: 0 });
           if (worksheet[labelCellAddress]) {
             worksheet[labelCellAddress].s = informationLabelStyle;
@@ -2041,7 +3352,6 @@ const allPartySalesTotals = useMemo(() => {
         });
       });
 
-      // Style table header
       allPartyReportColumns.forEach((_, columnIndex) => {
         const cellAddress = XLSX.utils.encode_cell({ r: tableHeaderRowIndex, c: columnIndex });
         if (worksheet[cellAddress]) {
@@ -2049,7 +3359,6 @@ const allPartySalesTotals = useMemo(() => {
         }
       });
 
-      // Style table data with alternating colors
       const dataStartRowIndex = tableHeaderRowIndex + 1;
       const dataEndRowIndex = totalRowIndex - 1;
 
@@ -2071,7 +3380,6 @@ const allPartySalesTotals = useMemo(() => {
         });
       }
 
-      // Style total row
       allPartyReportColumns.forEach((column, columnIndex) => {
         const cellAddress = XLSX.utils.encode_cell({ r: totalRowIndex, c: columnIndex });
         if (!worksheet[cellAddress]) {
@@ -2087,13 +3395,11 @@ const allPartySalesTotals = useMemo(() => {
         };
       });
 
-      // Merge cells
       worksheet["!merges"] = [
         { s: { r: 0, c: 0 }, e: { r: 0, c: columnCount - 1 } },
         { s: { r: 1, c: 0 }, e: { r: 1, c: columnCount - 1 } },
       ];
 
-      // Column widths
       worksheet["!cols"] = allPartyReportColumns.map((column) => {
         const labelLength = String(column.label || "").length;
         let width = column.type === "number" ? 14 : Math.max(12, Math.min(35, labelLength + 5));
@@ -2102,14 +3408,12 @@ const allPartySalesTotals = useMemo(() => {
         return { wch: width };
       });
 
-      // Row heights
       worksheet["!rows"] = [];
       worksheet["!rows"][0] = { hpt: 24 };
       worksheet["!rows"][1] = { hpt: 22 };
       worksheet["!rows"][2] = { hpt: 20 };
       worksheet["!rows"][3] = { hpt: 20 };
 
-      // Freeze report headings
       worksheet["!freeze"] = {
         xSplit: 0,
         ySplit: tableHeaderRowIndex + 1,
@@ -2118,7 +3422,6 @@ const allPartySalesTotals = useMemo(() => {
         state: "frozen",
       };
 
-      // Filter dropdowns
       worksheet["!autofilter"] = {
         ref: XLSX.utils.encode_range({
           s: { r: tableHeaderRowIndex, c: 0 },
@@ -2126,7 +3429,6 @@ const allPartySalesTotals = useMemo(() => {
         }),
       };
 
-      // Page layout
       worksheet["!pageSetup"] = {
         orientation: "landscape",
         fitToWidth: 1,
@@ -2645,7 +3947,7 @@ const allPartySalesTotals = useMemo(() => {
 
   const clearAllPartySalesFilters = () => {
     setAllPartySalesFilters({
-      company: "", // Empty for "All Companies"
+      company: "",
       reportLevel: "salesSummary",
       selectedArea: "no",
       selectedAreaCodes: [],
@@ -2692,12 +3994,11 @@ const allPartySalesTotals = useMemo(() => {
     crnStatus: "all",
     orderBy: "productName",
     showZeroSales: "no",
-}));
+  }));
 
   const [reportSearch, setReportSearch] = useState("");
   const [reportZoom, setReportZoom] = useState("100");
   const [currentPage, setCurrentPage] = useState(1);
-
 
   const reportInformation =
     REPORT_INFORMATION[selectedReport] || {
@@ -2800,7 +4101,7 @@ const allPartySalesTotals = useMemo(() => {
     );
   }, [filteredProductSalesRows]);
 
-// =========================================================
+  // =========================================================
   // PRODUCT SALES REPORT - MOCK DATASET
   // =========================================================
   const productSalesMockData = useMemo(
@@ -2819,24 +4120,6 @@ const allPartySalesTotals = useMemo(() => {
     []
   );
 
-  const getProductOptionCode = (product, index = "") =>
-    String(
-      product?.productCode ||
-        product?.ProductCode ||
-        product?.code ||
-        product?._id ||
-        product?.id ||
-        index
-    );
-
-  const getProductOptionName = (product) =>
-    String(
-      product?.productName ||
-        product?.ProductName ||
-        product?.name ||
-        ""
-    );
-
   const productOptionList = useMemo(() => {
     if (Array.isArray(products) && products.length > 0) {
       return products;
@@ -2852,6 +4135,7 @@ const allPartySalesTotals = useMemo(() => {
     setIsProductReportGenerated(false);
     setProductReportRows([]);
     setProductReportError("");
+    setCurrentPage(1);
   };
 
   const updateAllProductReportFilter = (field, value) => {
@@ -2867,28 +4151,25 @@ const allPartySalesTotals = useMemo(() => {
   const clearProductSalesFilters = () => {
     setProductReportFilters({
       company: "",
-      productCode: "",
-      productGroup: "",
-      category: "",
-      subCategory: "",
-      brand: "",
+      selectedProductCodes: [],
       fromDate: getFinancialYearStart(),
       toDate: getTodayDate(),
-      salesman: "",
-      area: "",
-      party: "",
-      billType: "",
-      reportLevel: "summary",
-      scope: "all",
-      crnStatus: "all",
+      selectedArea: "no",
+      selectedAreaCodes: [],
+      selectedSalesman: "no",
+      selectedSalesmanCodes: [],
+      withCreditNote: "no",
       orderBy: "productName",
       showZeroSales: "no",
     });
     setProductReportRows([]);
     setProductReportColumns([]);
     setProductReportSearch("");
+    setProductSelectorSearch("");
+    setShowProductSelector(false);
     setIsProductReportGenerated(false);
     setProductReportError("");
+    setCurrentPage(1);
   };
 
   const clearAllProductSalesFilters = () => {
@@ -2992,7 +4273,7 @@ const allPartySalesTotals = useMemo(() => {
     return rows;
   };
 
-  const generateProductSalesReport = () => {
+  const generateProductSalesReport = async () => {
     try {
       setProductReportError("");
       setProductReportRows([]);
@@ -3007,15 +4288,111 @@ const allPartySalesTotals = useMemo(() => {
 
       setIsProductReportLoading(true);
 
-      const rows = applyProductReportFilters(
-        productSalesMockData,
-        productReportFilters,
-        false
+      const { distributorId, firmId } = getLoggedInContext();
+
+      if (!distributorId || !firmId) {
+        throw new Error("Distributor or firm information is missing. Please login again.");
+      }
+
+      const query = new URLSearchParams({
+        distributorId,
+        firmId,
+        companyCode: productReportFilters.company || "",
+        fromDate: productReportFilters.fromDate,
+        toDate: productReportFilters.toDate,
+        orderBy: productReportFilters.orderBy,
+        showZeroSales: productReportFilters.showZeroSales,
+        withCreditNote: productReportFilters.withCreditNote,
+      });
+
+      if (productReportFilters.selectedProductCodes?.length > 0) {
+        query.set("productCodes", productReportFilters.selectedProductCodes.join(","));
+      }
+
+      if (productReportFilters.selectedArea === "yes" && productReportFilters.selectedAreaCodes.length > 0) {
+        query.set("selectedAreaCodes", productReportFilters.selectedAreaCodes.join(","));
+      }
+
+      if (productReportFilters.selectedSalesman === "yes" && productReportFilters.selectedSalesmanCodes.length > 0) {
+        query.set("selectedSalesmanCodes", productReportFilters.selectedSalesmanCodes.join(","));
+      }
+
+      const response = await fetch(
+        `${API_BASE_URL}/api/reports/product-wise-sales?${query.toString()}`
       );
 
-      const columns = buildProductReportColumns();
+      const contentType = response.headers.get("content-type") || "";
+      const result = contentType.includes("application/json")
+        ? await response.json()
+        : {
+            success: false,
+            message: await response.text(),
+          };
+
+      if (!response.ok || !result.success) {
+        throw new Error(result.message || "Failed to generate product sales report.");
+      }
+
+      const data = Array.isArray(result.data) ? result.data : [];
+
+      const rows = data.map((row, index) => ({
+        rowId: row._id || `row-${index}`,
+        SrNo: row.SrNo || index + 1,
+        BillDate: row.BillDate || "",
+        BillSeries: row.BillSeries || "",
+        BillNo: row.BillNo ?? "",
+        PartyCode: row.PartyCode || "",
+        PartyName: row.PartyName || "",
+        Rate: Number(row.Rate || 0),
+        MRP: Number(row.MRP || 0),
+        Qty: Number(row.Qty || 0),
+        FreeQty: Number(row.FreeQty || 0),
+        AMT: Number(row.AMT || 0),
+        Weight: Number(row.Weight || 0),
+        TPRAMT: Number(row.TPRAMT || 0),
+        Disc: Number(row.Disc || 0),
+        CDAMT: Number(row.CDAMT || 0),
+        CDPercent: Number(row.CDPercent || 0),
+        BranchName: row.BranchName || "",
+        Address: row.Address || "",
+        productCode: row.productCode || "",
+        productName: row.productName || "",
+        salesRate: row.Rate || 0,
+        mrp: row.MRP || 0,
+        qty: row.Qty || 0,
+        freeQty: row.FreeQty || 0,
+        grossAmount: row.AMT || 0,
+        weight: row.Weight || 0,
+        tprAmount: row.TPRAMT || 0,
+        discount: row.Disc || 0,
+        cashDiscountAmount: row.CDAMT || 0,
+        cdPercent: row.CDPercent || 0,
+        companyName: row.BranchName || "",
+        address: row.Address || "",
+      }));
 
       setProductReportRows(rows);
+
+      const columns = [
+        { key: "SrNo", label: "SrNo.", type: "number" },
+        { key: "BillDate", label: "Bill Date", type: "string" },
+        { key: "BillSeries", label: "Bill Series", type: "string" },
+        { key: "BillNo", label: "Bill No", type: "string" },
+        { key: "PartyCode", label: "Party Code", type: "string" },
+        { key: "PartyName", label: "Party Name", type: "string" },
+        { key: "Rate", label: "Rate", type: "number" },
+        { key: "MRP", label: "MRP", type: "number" },
+        { key: "Qty", label: "Qty", type: "number" },
+        { key: "FreeQty", label: "Free Qty", type: "number" },
+        { key: "AMT", label: "AMT", type: "number" },
+        { key: "Weight", label: "Weight", type: "number" },
+        { key: "TPRAMT", label: "TPR AMT", type: "number" },
+        { key: "Disc", label: "Disc", type: "number" },
+        { key: "CDAMT", label: "CD AMT", type: "number" },
+        { key: "CDPercent", label: "CD %", type: "number" },
+        { key: "BranchName", label: "Branch Name", type: "string" },
+        { key: "Address", label: "Address", type: "string" },
+      ];
       setProductReportColumns(columns);
       setIsProductReportGenerated(true);
 
@@ -3075,7 +4452,7 @@ const allPartySalesTotals = useMemo(() => {
   };
 
   // =========================================================
-  // PRODUCT REPORT - FILTERED ROWS & TOTALS
+  // PRODUCT REPORT - FILTERED ROWS & TOTALS (UPDATED)
   // =========================================================
   const filteredProductReportRows = useMemo(() => {
     const search = normalizeText(productReportSearch);
@@ -3090,70 +4467,31 @@ const allPartySalesTotals = useMemo(() => {
   const productReportTotals = useMemo(() => {
     return filteredProductReportRows.reduce(
       (total, row) => ({
-        openingStock: total.openingStock + Number(row.openingStock || 0),
-        totalQty: total.totalQty + Number(row.totalQty || 0),
-        freeQty: total.freeQty + Number(row.freeQty || 0),
-        grossAmount: total.grossAmount + Number(row.grossAmount || 0),
-        discount: total.discount + Number(row.discount || 0),
-        netAmount: total.netAmount + Number(row.netAmount || 0),
-        totalTax: total.totalTax + Number(row.totalTax || 0),
-        netSales: total.netSales + Number(row.netSales || 0),
-        crnAmount: total.crnAmount + Number(row.crnAmount || 0),
-        balanceAmount: total.balanceAmount + Number(row.balanceAmount || 0),
+        Rate: total.Rate + Number(row.Rate || 0),
+        MRP: total.MRP + Number(row.MRP || 0),
+        Qty: total.Qty + Number(row.Qty || 0),
+        FreeQty: total.FreeQty + Number(row.FreeQty || 0),
+        AMT: total.AMT + Number(row.AMT || 0),
+        Weight: total.Weight + Number(row.Weight || 0),
+        TPRAMT: total.TPRAMT + Number(row.TPRAMT || 0),
+        Disc: total.Disc + Number(row.Disc || 0),
+        CDAMT: total.CDAMT + Number(row.CDAMT || 0),
+        CDPercent: total.CDPercent + Number(row.CDPercent || 0),
       }),
       {
-        openingStock: 0,
-        totalQty: 0,
-        freeQty: 0,
-        grossAmount: 0,
-        discount: 0,
-        netAmount: 0,
-        totalTax: 0,
-        netSales: 0,
-        crnAmount: 0,
-        balanceAmount: 0,
+        Rate: 0,
+        MRP: 0,
+        Qty: 0,
+        FreeQty: 0,
+        AMT: 0,
+        Weight: 0,
+        TPRAMT: 0,
+        Disc: 0,
+        CDAMT: 0,
+        CDPercent: 0,
       }
     );
   }, [filteredProductReportRows]);
-
-  const filteredAllProductReportRows = useMemo(() => {
-    const search = normalizeText(allProductReportSearch);
-    if (!search) return allProductReportRows;
-    return allProductReportRows.filter((row) =>
-      Object.values(row).some((value) =>
-        normalizeText(value).includes(search)
-      )
-    );
-  }, [allProductReportRows, allProductReportSearch]);
-
-  const allProductReportTotals = useMemo(() => {
-    return filteredAllProductReportRows.reduce(
-      (total, row) => ({
-        openingStock: total.openingStock + Number(row.openingStock || 0),
-        totalQty: total.totalQty + Number(row.totalQty || 0),
-        freeQty: total.freeQty + Number(row.freeQty || 0),
-        grossAmount: total.grossAmount + Number(row.grossAmount || 0),
-        discount: total.discount + Number(row.discount || 0),
-        netAmount: total.netAmount + Number(row.netAmount || 0),
-        totalTax: total.totalTax + Number(row.totalTax || 0),
-        netSales: total.netSales + Number(row.netSales || 0),
-        crnAmount: total.crnAmount + Number(row.crnAmount || 0),
-        balanceAmount: total.balanceAmount + Number(row.balanceAmount || 0),
-      }),
-      {
-        openingStock: 0,
-        totalQty: 0,
-        freeQty: 0,
-        grossAmount: 0,
-        discount: 0,
-        netAmount: 0,
-        totalTax: 0,
-        netSales: 0,
-        crnAmount: 0,
-        balanceAmount: 0,
-      }
-    );
-  }, [filteredAllProductReportRows]);
 
   // =========================================================
   // PRODUCT REPORT - EXPORT / PRINT HELPERS
@@ -3909,6 +5247,233 @@ const allPartySalesTotals = useMemo(() => {
   // =========================================================
   // ALL PARTY REPORT - RENDER COMPONENT
   // =========================================================
+  if (selectedReport === "Find Cheque Details") {
+    const summaries = chequeResult?.summaries || [];
+    const unmatchedBounces = chequeResult?.unmatchedBounces || [];
+    const unmatchedDockets = chequeResult?.unmatchedDockets || [];
+    const hasResult = summaries.length + unmatchedBounces.length + unmatchedDockets.length > 0;
+
+    return (
+      <div className="party-classic-report-page cheque-details-report-page">
+        <div className="party-classic-report-window">
+          <div className="party-classic-titlebar">
+            <div className="party-report-title-left">
+              <button type="button" className="party-title-back" onClick={onBack} title="Back to reports" aria-label="Back to reports">
+                <ArrowLeft size={18} />
+              </button>
+              <div className="party-title-icon"><Search size={21} /></div>
+              <div className="party-title-content">
+                <span>Financial Report</span>
+                <h1>Find Cheque Details</h1>
+                <p>Trace receipts, adjusted bills, bounce entries and PDC docket activity.</p>
+              </div>
+            </div>
+            <div className="party-title-actions">
+              <button type="button" className="party-title-secondary-button" disabled={!hasResult} onClick={exportChequeExcel}>
+                <FileSpreadsheet size={15} /> Excel
+              </button>
+              <button type="button" className="party-title-secondary-button" disabled={!hasResult} onClick={exportChequePdf}>
+                <FileText size={15} /> PDF
+              </button>
+              <button type="button" className="party-title-secondary-button" disabled={!hasResult} onClick={() => window.print()}>
+                <Printer size={15} /> Print
+              </button>
+            </div>
+          </div>
+
+          <div className="party-report-content-layout cheque-report-layout">
+            <main className="party-report-main-column">
+              <form className="party-report-filter-panel cheque-search-panel" onSubmit={(event) => { event.preventDefault(); findChequeDetails(); }}>
+                <fieldset className="party-filter-group">
+                  <legend><span className="party-filter-legend-icon"><Search size={15} /></span>Cheque Search</legend>
+                  <div className="cheque-search-row">
+                    <div className="party-report-field">
+                      <label htmlFor="find-cheque-number">Cheque No.</label>
+                      <input
+                        id="find-cheque-number"
+                        autoFocus
+                        value={chequeSearch}
+                        onChange={(event) => setChequeSearch(event.target.value)}
+                        placeholder="Enter exact cheque number"
+                        autoComplete="off"
+                      />
+                    </div>
+                    <button type="submit" className="party-title-generate-button" disabled={chequeLoading}>
+                      {chequeLoading ? <RefreshCw size={16} className="party-spinning-icon" /> : <Search size={16} />}
+                      {chequeLoading ? "Finding..." : "Find Cheque"}
+                    </button>
+                  </div>
+                </fieldset>
+              </form>
+
+              {chequeError && <div className="party-report-error" role="alert">{chequeError}</div>}
+
+              {!hasResult && !chequeError && (
+                <div className="party-empty-report cheque-empty-report">
+                  <Search size={38} />
+                  <h3>Enter a cheque number</h3>
+                  <p>Press Enter or click Find Cheque to load its complete transaction trail.</p>
+                </div>
+              )}
+
+              {hasResult && (
+                <div className="cheque-summary-grid">
+                  {summaries.map((summary, summaryIndex) => (
+                    <article className="cheque-summary-card" key={summary.receiptId || summaryIndex}>
+                      <header className="cheque-summary-header">
+                        <div>
+                          <span>Receiving Bank</span>
+                          <h2>{summary.bankName || "Bank not recorded"}</h2>
+                        </div>
+                        <div className="cheque-summary-date">
+                          <span>Receipt Date</span>
+                          <strong>{formatChequeDate(summary.receiptDate)}</strong>
+                        </div>
+                      </header>
+
+                      <div className="cheque-key-details">
+                        <div><span>Cheque No.</span><strong>{chequeResult.chequeNo}</strong></div>
+                        <div><span>Party</span><strong>{summary.partyName || "-"}</strong></div>
+                        <div><span>Receipt No.</span><strong>{summary.receiptNo || "-"}</strong></div>
+                        <div><span>Cheque Date</span><strong>{formatChequeDate(summary.chequeDate)}</strong></div>
+                        <div><span>Drawer Bank</span><strong>{summary.drawerBankName || "-"}</strong></div>
+                        <div><span>Receipt Amount</span><strong>₹{formatChequeAmount(summary.amount)}</strong></div>
+                      </div>
+
+                      <section className="cheque-detail-section">
+                        <h3>Bills Adjusted Against This Cheque</h3>
+                        <div className="cheque-table-scroll">
+                          <table className="party-report-table cheque-detail-table">
+                            <thead><tr><th>Bill</th><th>Date</th><th>Bill Amt.</th><th>Adjusted</th><th>Discount</th><th>Balance</th></tr></thead>
+                            <tbody>
+                              {(summary.bills || []).length ? summary.bills.map((bill, index) => (
+                                <tr key={`${bill.trnSeries}-${bill.trnNo}-${index}`}>
+                                  <td>{bill.trnSeries || ""}-{bill.trnNo || ""}</td>
+                                  <td>{formatChequeDate(bill.trnDate)}</td>
+                                  <td className="party-report-number">₹{formatChequeAmount(bill.amount)}</td>
+                                  <td className="party-report-number">₹{formatChequeAmount(bill.nowAdjust)}</td>
+                                  <td className="party-report-number">₹{formatChequeAmount(bill.discAmt)}</td>
+                                  <td className="party-report-number">₹{formatChequeAmount(bill.balanceAmt)}</td>
+                                </tr>
+                              )) : <tr><td colSpan="6" className="cheque-none-cell">No adjusted bills recorded.</td></tr>}
+                            </tbody>
+                          </table>
+                        </div>
+                      </section>
+
+                      <section className="cheque-detail-section">
+                        <h3>Cheque Bounce Details</h3>
+                        {(summary.bounces || []).length ? summary.bounces.map((bounce, index) => (
+                          <div className="cheque-event-row bounce" key={bounce._id || index}>
+                            <strong>{bounce.trnSeries || "CB"}-{bounce.trnNo || bounce.chqBounceNo || ""}</strong>
+                            <span>Bounced: {formatChequeDate(bounce.chqBounceDate)}</span>
+                            <span>Clearing: {formatChequeDate(bounce.clearingDate)}</span>
+                            <span>Charges: ₹{formatChequeAmount(bounce.chqBounceCharges)}</span>
+                            <span>Total: ₹{formatChequeAmount(bounce.totalAmt || bounce.chequeAmt)}</span>
+                            {bounce.narration && <small>{bounce.narration}</small>}
+                          </div>
+                        )) : <p className="cheque-no-event">No bounce entry found.</p>}
+                      </section>
+
+                      <section className="cheque-detail-section">
+                        <h3>PDC Docket Details</h3>
+                        {(summary.dockets || []).length ? summary.dockets.map((docket, index) => (
+                          <div className="cheque-event-row docket" key={`${docket.docketId}-${index}`}>
+                            <strong>{docket.docketNo}</strong>
+                            <span>Bank: {docket.bankName || "-"}</span>
+                            <span>Deposit Date: {formatChequeDate(docket.depositDate)}</span>
+                            <span>Added On: {formatChequeDate(docket.addedAt)}</span>
+                            <span>Clearing Date: {formatChequeDate(docket.clearingDate)}</span>
+                          </div>
+                        )) : <p className="cheque-no-event">Not added to a PDC docket.</p>}
+                      </section>
+                    </article>
+                  ))}
+
+                  {(unmatchedBounces.length > 0 || unmatchedDockets.length > 0) && (
+                    <article className="cheque-summary-card cheque-unmatched-card">
+                      <header className="cheque-summary-header"><div><span>Additional Matches</span><h2>Unlinked cheque activity</h2></div></header>
+                      {unmatchedBounces.map((bounce, index) => (
+                        <section className="cheque-detail-section" key={bounce._id || `bounce-${index}`}>
+                          <h3>Cheque Bounce</h3>
+                          <div className="cheque-event-row bounce"><strong>{bounce.bankName || "Bank not recorded"}</strong><span>{bounce.partyName || "-"}</span><span>Bounced: {formatChequeDate(bounce.chqBounceDate)}</span><span>Total: ₹{formatChequeAmount(bounce.totalAmt || bounce.chequeAmt)}</span></div>
+                        </section>
+                      ))}
+                      {unmatchedDockets.map((docket, index) => (
+                        <section className="cheque-detail-section" key={`${docket.docketId}-${index}`}>
+                          <h3>PDC Docket</h3>
+                          <div className="cheque-event-row docket"><strong>{docket.docketNo}</strong><span>Bank: {docket.bankName || "-"}</span><span>Deposit Date: {formatChequeDate(docket.depositDate)}</span><span>Added On: {formatChequeDate(docket.addedAt)}</span></div>
+                        </section>
+                      ))}
+                    </article>
+                  )}
+                </div>
+              )}
+            </main>
+
+            <aside className="party-report-sidebar cheque-report-sidebar">
+              <div className="party-sidebar-card">
+                <h3>Cheque Summary</h3>
+                <div className="party-sidebar-stat"><span>Cheque No.</span><strong>{chequeResult?.chequeNo || "-"}</strong></div>
+                <div className="party-sidebar-stat"><span>Receipt / Bank Matches</span><strong>{summaries.length}</strong></div>
+                <div className="party-sidebar-stat"><span>Adjusted Bills</span><strong>{summaries.reduce((total, item) => total + (item.bills?.length || 0), 0)}</strong></div>
+                <div className="party-sidebar-stat"><span>Bounce Entries</span><strong>{summaries.reduce((total, item) => total + (item.bounces?.length || 0), unmatchedBounces.length)}</strong></div>
+                <div className="party-sidebar-stat"><span>PDC Dockets</span><strong>{summaries.reduce((total, item) => total + (item.dockets?.length || 0), unmatchedDockets.length)}</strong></div>
+              </div>
+            </aside>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (isP0Report) {
+    const showAccount = ["General Ledger", "Party Ledger"].includes(selectedReport);
+    const showProduct = selectedReport === "Stock Movement Ledger";
+    return (
+      <div className="report-page">
+        <div className="report-page-header">
+          <div className="report-title-section">
+            <button type="button" className="report-back-button" onClick={onBack}><ArrowLeft size={18} /></button>
+            <div className="report-title-icon"><ReportIcon size={22} /></div>
+            <div><span className="report-category">{reportInformation.category}</span><h1>{reportInformation.title}</h1><p>{reportInformation.description}</p></div>
+          </div>
+          <div className="report-toolbar-actions">
+            <button type="button" onClick={exportP0Excel} disabled={!p0Rows.length}><FileSpreadsheet size={16} /> Excel</button>
+            <button type="button" onClick={exportP0Pdf} disabled={!p0Rows.length}><FileText size={16} /> PDF</button>
+            <button type="button" onClick={() => window.print()} disabled={!p0Rows.length}><Printer size={16} /> Print</button>
+          </div>
+        </div>
+
+        <div className="report-filter-card">
+          <div className="report-filter-heading"><div><h2>Report Filters</h2><p>Figures are loaded from the current firm's persistent transactions.</p></div></div>
+          <div className="report-filter-grid">
+            <div className="report-field"><label>From Date</label><input type="date" value={p0Filters.fromDate} onChange={(e) => setP0Filters((old) => ({ ...old, fromDate: e.target.value }))} /></div>
+            <div className="report-field"><label>To Date</label><input type="date" value={p0Filters.toDate} onChange={(e) => setP0Filters((old) => ({ ...old, toDate: e.target.value }))} /></div>
+            {showAccount && <div className="report-field report-field-wide"><label>Account / Party</label><input value={p0Filters.account} placeholder="Account code or name" onChange={(e) => setP0Filters((old) => ({ ...old, account: e.target.value }))} /></div>}
+            {showProduct && <div className="report-field report-field-wide"><label>Product</label><input value={p0Filters.product} placeholder="Product code or name" onChange={(e) => setP0Filters((old) => ({ ...old, product: e.target.value }))} /></div>}
+          </div>
+          <div className="report-filter-actions">
+            <button type="button" className="report-clear-button" onClick={() => { setP0Filters({ fromDate: getFinancialYearStart(), toDate: getTodayDate(), account: "", product: "" }); setP0Rows([]); setP0Error(""); }}>Clear</button>
+            <button type="button" className="report-generate-button" onClick={generateP0Report} disabled={p0Loading}>{p0Loading ? "Generating..." : "Generate Report"}</button>
+          </div>
+        </div>
+
+        {p0Error && <div className="report-result-card"><X size={34} /><h3>Report could not be generated</h3><p>{p0Error}</p></div>}
+        {!p0Error && p0Rows.length === 0 && <div className="report-result-card"><FileBarChart size={38} /><h3>No report generated</h3><p>Select filters and click Generate Report.</p></div>}
+        {p0Rows.length > 0 && (
+          <div className="report-result-card" style={{ alignItems: "stretch", overflow: "auto" }}>
+            {p0Summary && <div style={{ display: "flex", gap: 24, padding: "10px 4px" }}><strong>Total Debit: ₹{Number(p0Summary.debit || 0).toLocaleString("en-IN")}</strong><strong>Total Credit: ₹{Number(p0Summary.credit || 0).toLocaleString("en-IN")}</strong></div>}
+            <table className="party-report-table" style={{ width: "100%", minWidth: Math.max(900, p0Columns.length * 130) }}>
+              <thead><tr>{p0Columns.map((column) => <th key={column}>{column.replace(/([A-Z])/g, " $1").replace(/^./, (c) => c.toUpperCase())}</th>)}</tr></thead>
+              <tbody>{p0Rows.map((row, index) => <tr key={row._id || index}>{p0Columns.map((column) => <td key={column}>{typeof row[column] === "object" ? JSON.stringify(row[column]) : String(row[column] ?? "")}</td>)}</tr>)}</tbody>
+            </table>
+          </div>
+        )}
+      </div>
+    );
+  }
+
   if (selectedReport === "All Party Wise Sales Report") {
     return (
       <div className="party-classic-report-page">
@@ -3977,7 +5542,6 @@ const allPartySalesTotals = useMemo(() => {
                   </legend>
 
                   <div className="party-report-form-grid">
-                    {/* 1. COMPANY - WITH "All Companies" Option */}
                     <div className="party-report-field">
                       <label>Company</label>
                       <select
@@ -3989,7 +5553,6 @@ const allPartySalesTotals = useMemo(() => {
                           setShowAllSalesmanSelector(false);
                         }}
                       >
-                        {/* "All Companies" option - empty string value */}
                         <option value="">
                           {isCriteriaLoading ? "Loading..." : "All Companies"}
                         </option>
@@ -4008,7 +5571,6 @@ const allPartySalesTotals = useMemo(() => {
                       </small>
                     </div>
 
-                    {/* 2. REPORT LEVEL */}
                     <div className="party-report-field">
                       <label>Report Level</label>
                       <select
@@ -4033,7 +5595,6 @@ const allPartySalesTotals = useMemo(() => {
                       </select>
                     </div>
 
-                    {/* 3. AREA */}
                     <div className="party-report-field">
                       <label>Selected Area</label>
                       <select
@@ -4060,7 +5621,6 @@ const allPartySalesTotals = useMemo(() => {
                       </select>
                     </div>
 
-                    {/* 4. SALESMAN */}
                     <div className="party-report-field">
                       <label>Select Salesman</label>
                       <select
@@ -4087,7 +5647,6 @@ const allPartySalesTotals = useMemo(() => {
                       </select>
                     </div>
 
-                    {/* 5. PRODUCT WISE */}
                     <div className="party-report-field">
                       <label>Product Wise</label>
                       <select
@@ -4126,7 +5685,6 @@ const allPartySalesTotals = useMemo(() => {
                       )}
                     </div>
 
-                    {/* 6. BILL WISE SALESMAN */}
                     <div className="party-report-field">
                       <label>Bill Wise Salesman</label>
                       <select
@@ -4140,7 +5698,6 @@ const allPartySalesTotals = useMemo(() => {
                       </select>
                     </div>
 
-                    {/* 7. FREE VALUE ON */}
                     <div className="party-report-field">
                       <label>Free Value On</label>
                       <select
@@ -4155,7 +5712,6 @@ const allPartySalesTotals = useMemo(() => {
                       </select>
                     </div>
 
-                    {/* 8. FROM DATE */}
                     <div className="party-report-field">
                       <label>From Date</label>
                       <input
@@ -4167,7 +5723,6 @@ const allPartySalesTotals = useMemo(() => {
                       />
                     </div>
 
-                    {/* 9. TO DATE */}
                     <div className="party-report-field">
                       <label>To Date</label>
                       <input
@@ -4179,7 +5734,6 @@ const allPartySalesTotals = useMemo(() => {
                       />
                     </div>
 
-                    {/* 10. CREDIT NOTE */}
                     <div className="party-report-field">
                       <label>With Credit Note</label>
                       <select
@@ -4193,7 +5747,6 @@ const allPartySalesTotals = useMemo(() => {
                       </select>
                     </div>
 
-                    {/* 11. ORDER BY */}
                     <div className="party-report-field">
                       <label>Order By</label>
                       <select
@@ -4215,7 +5768,6 @@ const allPartySalesTotals = useMemo(() => {
                   </div>
                 </fieldset>
 
-                {/* AREA SELECTOR MODAL */}
                 {showAllAreaSelector && (
                   <div
                     className="party-selection-backdrop"
@@ -4302,7 +5854,6 @@ const allPartySalesTotals = useMemo(() => {
                   </div>
                 )}
 
-                {/* SALESMAN SELECTOR MODAL */}
                 {showAllSalesmanSelector && (
                   <div
                     className="party-selection-backdrop"
@@ -4562,48 +6113,48 @@ const allPartySalesTotals = useMemo(() => {
                         </tbody>
 
                         {filteredAllPartySalesRows.length > 0 && (
-  <tfoot>
-    <tr>
-      {allPartyReportColumns.map((column, index) => {
-        let value = "";
-        if (index === 0) value = "TOTAL";
-        if (column.key === "grossAmount") value = formatReportNumber(allPartySalesTotals.grossAmount);
-        if (column.key === "discountAmount") value = formatReportNumber(allPartySalesTotals.discountAmount);
-        if (column.key === "cashDiscountAmount") value = formatReportNumber(allPartySalesTotals.cashDiscountAmount);
-        if (column.key === "vatAmount") value = formatReportNumber(allPartySalesTotals.vatAmount);
-        if (column.key === "lessOther") value = formatReportNumber(allPartySalesTotals.lessOther);
-        if (column.key === "addOther") value = formatReportNumber(allPartySalesTotals.addOther);
-        if (column.key === "btmAmount") value = formatReportNumber(allPartySalesTotals.btmAmount);
-        if (column.key === "weight") value = formatReportNumber(allPartySalesTotals.weight);
-        if (column.key === "couponAmount") value = formatReportNumber(allPartySalesTotals.couponAmount);
-        if (column.key === "displayAmount") value = formatReportNumber(allPartySalesTotals.displayAmount);
-        if (column.key === "starAmount") value = formatReportNumber(allPartySalesTotals.starAmount);
-        if (column.key === "surChargeAmount") value = formatReportNumber(allPartySalesTotals.surChargeAmount);
-        if (column.key === "retAmount") value = formatReportNumber(allPartySalesTotals.retAmount);
-        if (column.key === "retVatAmount") value = formatReportNumber(allPartySalesTotals.retVatAmount);
-        if (column.key === "addLessAmount") value = formatReportNumber(allPartySalesTotals.addLessAmount);
-        if (column.key === "netAmount") value = formatReportNumber(allPartySalesTotals.netAmount);
-        if (column.key === "totalLines") value = formatReportNumber(allPartySalesTotals.totalLines);
-        if (column.key === "qty") value = formatReportNumber(allPartySalesTotals.qty);
-        if (column.key === "freeQty") value = formatReportNumber(allPartySalesTotals.freeQty);
+                          <tfoot>
+                            <tr>
+                              {allPartyReportColumns.map((column, index) => {
+                                let value = "";
+                                if (index === 0) value = "TOTAL";
+                                if (column.key === "grossAmount") value = formatReportNumber(allPartySalesTotals.grossAmount);
+                                if (column.key === "discountAmount") value = formatReportNumber(allPartySalesTotals.discountAmount);
+                                if (column.key === "cashDiscountAmount") value = formatReportNumber(allPartySalesTotals.cashDiscountAmount);
+                                if (column.key === "vatAmount") value = formatReportNumber(allPartySalesTotals.vatAmount);
+                                if (column.key === "lessOther") value = formatReportNumber(allPartySalesTotals.lessOther);
+                                if (column.key === "addOther") value = formatReportNumber(allPartySalesTotals.addOther);
+                                if (column.key === "btmAmount") value = formatReportNumber(allPartySalesTotals.btmAmount);
+                                if (column.key === "weight") value = formatReportNumber(allPartySalesTotals.weight);
+                                if (column.key === "couponAmount") value = formatReportNumber(allPartySalesTotals.couponAmount);
+                                if (column.key === "displayAmount") value = formatReportNumber(allPartySalesTotals.displayAmount);
+                                if (column.key === "starAmount") value = formatReportNumber(allPartySalesTotals.starAmount);
+                                if (column.key === "surChargeAmount") value = formatReportNumber(allPartySalesTotals.surChargeAmount);
+                                if (column.key === "retAmount") value = formatReportNumber(allPartySalesTotals.retAmount);
+                                if (column.key === "retVatAmount") value = formatReportNumber(allPartySalesTotals.retVatAmount);
+                                if (column.key === "addLessAmount") value = formatReportNumber(allPartySalesTotals.addLessAmount);
+                                if (column.key === "netAmount") value = formatReportNumber(allPartySalesTotals.netAmount);
+                                if (column.key === "totalLines") value = formatReportNumber(allPartySalesTotals.totalLines);
+                                if (column.key === "qty") value = formatReportNumber(allPartySalesTotals.qty);
+                                if (column.key === "freeQty") value = formatReportNumber(allPartySalesTotals.freeQty);
 
-        return (
-          <td
-            key={column.key}
-            className={column.type === "number" ? "party-report-number" : ""}
-            style={{
-              fontWeight: 'bold',
-              minWidth: column.key === 'partyName' || column.key === 'productName' ? '180px' :
-                column.type === 'number' ? '90px' : '100px'
-            }}
-          >
-            {value}
-          </td>
-        );
-      })}
-    </tr>
-  </tfoot>
-)}
+                                return (
+                                  <td
+                                    key={column.key}
+                                    className={column.type === "number" ? "party-report-number" : ""}
+                                    style={{
+                                      fontWeight: 'bold',
+                                      minWidth: column.key === 'partyName' || column.key === 'productName' ? '180px' :
+                                        column.type === 'number' ? '90px' : '100px'
+                                    }}
+                                  >
+                                    {value}
+                                  </td>
+                                );
+                              })}
+                            </tr>
+                          </tfoot>
+                        )}
                       </table>
                     </div>
                   )}
@@ -4738,7 +6289,6 @@ const allPartySalesTotals = useMemo(() => {
                   </legend>
 
                   <div className="party-report-form-grid">
-                    {/* 1. COMPANY */}
                     <div className="party-report-field">
                       <label>Company</label>
                       <select
@@ -4759,8 +6309,8 @@ const allPartySalesTotals = useMemo(() => {
                         }}
                       >
                         <option value="ALL">
-  All Companies
-</option>
+                          All Companies
+                        </option>
                         {reportCompanies.map((company, index) => {
                           const companyCode = getCompanyCode(company, index);
                           const companyName = getCompanyName(company) || companyCode;
@@ -4773,7 +6323,6 @@ const allPartySalesTotals = useMemo(() => {
                       </select>
                     </div>
 
-                    {/* 2. REPORT LEVEL */}
                     <div className="party-report-field">
                       <label>Report Level</label>
                       <select
@@ -4801,7 +6350,6 @@ const allPartySalesTotals = useMemo(() => {
                       </select>
                     </div>
 
-                    {/* 3. PARTY SELECTION */}
                     {partySalesFilters.reportLevel === "selectedParty" && (
                       <div className="party-report-field party-field-wide">
                         <label>Selected Parties</label>
@@ -4920,7 +6468,6 @@ const allPartySalesTotals = useMemo(() => {
                       </div>
                     )}
 
-                    {/* 4. AREA */}
                     <div className="party-report-field">
                       <label>Selected Area</label>
                       <select
@@ -4947,7 +6494,6 @@ const allPartySalesTotals = useMemo(() => {
                       </select>
                     </div>
 
-                    {/* 5. SALESMAN */}
                     <div className="party-report-field">
                       <label>Select Salesman</label>
                       <select
@@ -4974,7 +6520,6 @@ const allPartySalesTotals = useMemo(() => {
                       </select>
                     </div>
 
-                    {/* 6. PRODUCT WISE */}
                     <div className="party-report-field">
                       <label>Product Wise</label>
                       <select
@@ -5013,7 +6558,6 @@ const allPartySalesTotals = useMemo(() => {
                       )}
                     </div>
 
-                    {/* 7. FROM DATE */}
                     <div className="party-report-field">
                       <label>From Date</label>
                       <input
@@ -5025,7 +6569,6 @@ const allPartySalesTotals = useMemo(() => {
                       />
                     </div>
 
-                    {/* 8. TO DATE */}
                     <div className="party-report-field">
                       <label>To Date</label>
                       <input
@@ -5037,7 +6580,6 @@ const allPartySalesTotals = useMemo(() => {
                       />
                     </div>
 
-                    {/* 9. CREDIT NOTE */}
                     <div className="party-report-field">
                       <label>With Credit Note</label>
                       <select
@@ -5051,7 +6593,6 @@ const allPartySalesTotals = useMemo(() => {
                       </select>
                     </div>
 
-                    {/* 10. ORDER BY */}
                     <div className="party-report-field">
                       <label>Order By</label>
                       <select
@@ -5073,7 +6614,6 @@ const allPartySalesTotals = useMemo(() => {
                   </div>
                 </fieldset>
 
-                {/* AREA SELECTOR MODAL */}
                 {showAreaSelector && (
                   <div
                     className="party-selection-backdrop"
@@ -5160,7 +6700,6 @@ const allPartySalesTotals = useMemo(() => {
                   </div>
                 )}
 
-                {/* SALESMAN SELECTOR MODAL */}
                 {showSalesmanSelector && (
                   <div
                     className="party-selection-backdrop"
@@ -5518,33 +7057,23 @@ const allPartySalesTotals = useMemo(() => {
     );
   }
 
-// =========================================================
-  // PRODUCT WISE SALES REPORT - RENDER
+  // =========================================================
+  // PRODUCT WISE SALES REPORT - RENDER (SIMPLIFIED)
   // =========================================================
   if (selectedReport === "Product Wise Sales Report") {
     const productOptionSource =
       reportProductList.length > 0 ? reportProductList : productOptionList;
-    const productGroupOptions = [
-      ...new Set(
-        (productOptionSource || [])
-          .map((item) => item?.group || "")
-          .filter(Boolean)
-      ),
-    ];
-    const productCategoryOptions = [
-      ...new Set(
-        (productOptionSource || [])
-          .map((item) => item?.category || "")
-          .filter(Boolean)
-      ),
-    ];
-    const productBrandOptions = [
-      ...new Set(
-        (productOptionSource || [])
-          .map((item) => item?.brand || "")
-          .filter(Boolean)
-      ),
-    ];
+
+    const selectedProductNames = useMemo(() => {
+      return (productReportFilters.selectedProductCodes || [])
+        .map((selectedCode) => {
+          const product = productOptionSource.find(
+            (p, index) => getProductOptionCode(p, index) === selectedCode
+          );
+          return product ? getProductOptionName(product) : "";
+        })
+        .filter(Boolean);
+    }, [productReportFilters.selectedProductCodes, productOptionSource]);
 
     return (
       <div className="party-classic-report-page">
@@ -5610,175 +7139,507 @@ const allPartySalesTotals = useMemo(() => {
                     Report Filters
                   </legend>
 
-                  <div className="party-report-form-grid">
-                    {/* 1. COMPANY */}
-                    <div className="party-report-field">
-                      <label>Company</label>
-<select
-                        value={productReportFilters.company}
-                        onChange={(event) =>
-                          updateProductReportFilter("company", event.target.value)
-                        }
-                      >
-                        <option value="">All Companies</option>
-                        {reportCompanies.map((company, index) => {
-                          const companyCode = getCompanyCode(company, index);
-                          const companyName = getCompanyName(company) || companyCode;
-                          return (
-                            <option key={company._id || companyCode} value={companyCode}>
-                              {companyName}
-                            </option>
-                          );
-                        })}
-                      </select>
+                  <div className="party-report-form-grid-two-rows">
+                    <div className="party-report-form-row">
+                      <div className="party-report-field">
+                        <label>Company</label>
+                        <select
+                          value={productReportFilters.company}
+                          onChange={(event) => {
+                            updateProductReportFilter("company", event.target.value);
+                            setProductReportFilters((prev) => ({
+                              ...prev,
+                              selectedProductCodes: [],
+                            }));
+                            setProductSelectorSearch("");
+                            setShowProductSelector(false);
+                          }}
+                        >
+                          <option value="">All Companies</option>
+                          {reportCompanies.map((company, index) => {
+                            const companyCode = getCompanyCode(company, index);
+                            const companyName = getCompanyName(company) || companyCode;
+                            return (
+                              <option key={company._id || companyCode} value={companyCode}>
+                                {companyName}
+                              </option>
+                            );
+                          })}
+                        </select>
+                      </div>
+
+                      <div className="party-report-field party-field-wide">
+                        <label>Product</label>
+                        <div className="party-multi-select">
+                          <button
+                            type="button"
+                            className="party-multi-select-trigger"
+                            onClick={() => {
+                              setShowProductSelector((prev) => !prev);
+                              setProductReportError("");
+                            }}
+                          >
+                            <span>
+                              {selectedProductNames.length > 0
+                                ? selectedProductNames.join(", ")
+                                : "Select products..."}
+                            </span>
+                            <span>▼</span>
+                          </button>
+                        </div>
+                      </div>
+
+                      <div className="party-report-field">
+                        <label>Selected Area</label>
+                        <select
+                          value={productReportFilters.selectedArea}
+                          onChange={(event) => {
+                            const value = event.target.value;
+                            setProductReportFilters((prev) => ({
+                              ...prev,
+                              selectedArea: value,
+                              selectedAreaCodes: value === "yes" ? prev.selectedAreaCodes : [],
+                            }));
+                            setIsProductReportGenerated(false);
+                            setProductReportRows([]);
+                          }}
+                        >
+                          <option value="no">No</option>
+                          <option value="yes">Yes</option>
+                        </select>
+                      </div>
+
+                      <div className="party-report-field">
+                        <label>Salesman</label>
+                        <select
+                          value={productReportFilters.selectedSalesman}
+                          onChange={(event) => {
+                            const value = event.target.value;
+                            setProductReportFilters((prev) => ({
+                              ...prev,
+                              selectedSalesman: value,
+                              selectedSalesmanCodes: value === "yes" ? prev.selectedSalesmanCodes : [],
+                            }));
+                            setIsProductReportGenerated(false);
+                            setProductReportRows([]);
+                          }}
+                        >
+                          <option value="no">No</option>
+                          <option value="yes">Yes</option>
+                        </select>
+                      </div>
                     </div>
 
-                    {/* 2. PRODUCT */}
-                    <div className="party-report-field">
-                      <label>Product</label>
-                      <select
-                        value={productReportFilters.productCode}
-                        onChange={(event) =>
-                          updateProductReportFilter("productCode", event.target.value)
-                        }
-                      >
-                        <option value="">
-                          {isProductCriteriaLoading ? "Loading products..." : "All Products"}
-                        </option>
-                        {productOptionSource.map((product, index) => {
-                          const value = getProductOptionCode(product, index);
-                          const label = getProductOptionName(product) || value;
-                          return (
-                            <option key={value} value={value}>
-                              {label}
-                            </option>
-                          );
-                        })}
-                      </select>
-                    </div>
+                    <div className="party-report-form-row">
+                      <div className="party-report-field">
+                        <label>From Date</label>
+                        <input
+                          type="date"
+                          value={productReportFilters.fromDate}
+                          onChange={(event) =>
+                            updateProductReportFilter("fromDate", event.target.value)
+                          }
+                        />
+                      </div>
 
-                    {/* 3. PRODUCT GROUP */}
-                    <div className="party-report-field">
-                      <label>Product Group</label>
-                      <select
-                        value={productReportFilters.productGroup}
-                        onChange={(event) =>
-                          updateProductReportFilter("productGroup", event.target.value)
-                        }
-                      >
-                        <option value="">All Groups</option>
-                        {productGroupOptions.map((group) => (
-                          <option key={group} value={group}>
-                            {group}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
+                      <div className="party-report-field">
+                        <label>To Date</label>
+                        <input
+                          type="date"
+                          value={productReportFilters.toDate}
+                          onChange={(event) =>
+                            updateProductReportFilter("toDate", event.target.value)
+                          }
+                        />
+                      </div>
 
-                    {/* 4. CATEGORY */}
-                    <div className="party-report-field">
-                      <label>Category</label>
-                      <select
-                        value={productReportFilters.category}
-                        onChange={(event) =>
-                          updateProductReportFilter("category", event.target.value)
-                        }
-                      >
-                        <option value="">All Categories</option>
-                        {productCategoryOptions.map((category) => (
-                          <option key={category} value={category}>
-                            {category}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
+                      <div className="party-report-field">
+                        <label>With CRN Status</label>
+                        <select
+                          value={productReportFilters.withCreditNote}
+                          onChange={(event) =>
+                            updateProductReportFilter("withCreditNote", event.target.value)
+                          }
+                        >
+                          <option value="no">No</option>
+                          <option value="yes">Yes</option>
+                        </select>
+                      </div>
 
-                    {/* 5. BRAND */}
-                    <div className="party-report-field">
-                      <label>Brand</label>
-                      <select
-                        value={productReportFilters.brand}
-                        onChange={(event) =>
-                          updateProductReportFilter("brand", event.target.value)
-                        }
-                      >
-                        <option value="">All Brands</option>
-                        {productBrandOptions.map((brand) => (
-                          <option key={brand} value={brand}>
-                            {brand}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
+                      <div className="party-report-field">
+                        <label>Order By</label>
+                        <select
+                          value={productReportFilters.orderBy}
+                          onChange={(event) =>
+                            updateProductReportFilter("orderBy", event.target.value)
+                          }
+                        >
+                          <option value="productName">Product Name</option>
+                          <option value="productCode">Product Code</option>
+                          <option value="grossAmount">Gross Amount</option>
+                          <option value="netAmount">Net Amount</option>
+                        </select>
+                      </div>
 
-                    {/* 6. REPORT LEVEL */}
-                    <div className="party-report-field">
-                      <label>Report Level</label>
-                      <select
-                        value={productReportFilters.reportLevel}
-                        onChange={(event) =>
-                          updateProductReportFilter("reportLevel", event.target.value)
-                        }
-                      >
-                        <option value="summary">Summary</option>
-                        <option value="details">Details</option>
-                      </select>
-                    </div>
-
-                    {/* 7. FROM DATE */}
-                    <div className="party-report-field">
-                      <label>From Date</label>
-                      <input
-                        type="date"
-                        value={productReportFilters.fromDate}
-                        onChange={(event) =>
-                          updateProductReportFilter("fromDate", event.target.value)
-                        }
-                      />
-                    </div>
-
-                    {/* 8. TO DATE */}
-                    <div className="party-report-field">
-                      <label>To Date</label>
-                      <input
-                        type="date"
-                        value={productReportFilters.toDate}
-                        onChange={(event) =>
-                          updateProductReportFilter("toDate", event.target.value)
-                        }
-                      />
-                    </div>
-
-                    {/* 9. SHOW ZERO SALES */}
-                    <div className="party-report-field">
-                      <label>Show Zero Sales</label>
-                      <select
-                        value={productReportFilters.showZeroSales}
-                        onChange={(event) =>
-                          updateProductReportFilter("showZeroSales", event.target.value)
-                        }
-                      >
-                        <option value="no">No</option>
-                        <option value="yes">Yes</option>
-                      </select>
-                    </div>
-
-                    {/* 10. ORDER BY */}
-                    <div className="party-report-field">
-                      <label>Order By</label>
-                      <select
-                        value={productReportFilters.orderBy}
-                        onChange={(event) =>
-                          updateProductReportFilter("orderBy", event.target.value)
-                        }
-                      >
-                        <option value="productName">Product Name</option>
-                        <option value="productCode">Product Code</option>
-                        <option value="grossAmount">Gross Amount</option>
-                        <option value="netAmount">Net Amount</option>
-                      </select>
+                      <div className="party-report-field">
+                        <label>Show Zero Sales</label>
+                        <select
+                          value={productReportFilters.showZeroSales}
+                          onChange={(event) =>
+                            updateProductReportFilter("showZeroSales", event.target.value)
+                          }
+                        >
+                          <option value="no">No</option>
+                          <option value="yes">Yes</option>
+                        </select>
+                      </div>
                     </div>
                   </div>
+
+                  {productReportFilters.selectedArea === "yes" && (
+                    <div
+                      className="party-selection-backdrop"
+                      onMouseDown={(event) => {
+                        if (event.target === event.currentTarget) {
+                          setProductReportFilters((prev) => ({
+                            ...prev,
+                            selectedArea: "no",
+                            selectedAreaCodes: [],
+                          }));
+                        }
+                      }}
+                    >
+                      <div className="party-selection-modal">
+                        <div className="party-selection-modal-header">
+                          <div>
+                            <strong>Select Area</strong>
+                            <span>Select areas to filter</span>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setProductReportFilters((prev) => ({
+                                ...prev,
+                                selectedArea: "no",
+                                selectedAreaCodes: [],
+                              }));
+                            }}
+                          >
+                            <X size={15} />
+                          </button>
+                        </div>
+
+                        <div className="party-selector-search">
+                          <Search size={13} />
+                          <input
+                            type="text"
+                            value={areaSelectorSearch}
+                            placeholder="Search area..."
+                            onChange={(event) => setAreaSelectorSearch(event.target.value)}
+                          />
+                        </div>
+
+                        <label className="party-check-row party-check-all">
+                          <input
+                            type="checkbox"
+                            checked={
+                              mappedAreas.length > 0 &&
+                              productReportFilters.selectedAreaCodes.length === mappedAreas.length
+                            }
+                            onChange={(event) => {
+                              const checked = event.target.checked;
+                              setProductReportFilters((prev) => ({
+                                ...prev,
+                                selectedAreaCodes: checked
+                                  ? mappedAreas.map((area, index) => getAreaCode(area, index))
+                                  : [],
+                              }));
+                              setIsProductReportGenerated(false);
+                              setProductReportRows([]);
+                            }}
+                          />
+                          <span>Select All Areas</span>
+                        </label>
+
+                        <div className="party-checkbox-list">
+                          {mappedAreas.length > 0 ? (
+                            mappedAreas.map((area, index) => {
+                              const areaCode = getAreaCode(area, index);
+                              const isChecked = productReportFilters.selectedAreaCodes.includes(areaCode);
+                              const areaName = getAreaName(area) || areaCode;
+
+                              return (
+                                <label key={area._id || areaCode} className="party-check-row">
+                                  <input
+                                    type="checkbox"
+                                    checked={isChecked}
+                                    onChange={(event) => {
+                                      setProductReportFilters((prev) => {
+                                        const currentValues = prev.selectedAreaCodes || [];
+                                        const nextValues = event.target.checked
+                                          ? [...new Set([...currentValues, areaCode])]
+                                          : currentValues.filter((code) => code !== areaCode);
+                                        return { ...prev, selectedAreaCodes: nextValues };
+                                      });
+                                      setIsProductReportGenerated(false);
+                                      setProductReportRows([]);
+                                    }}
+                                  />
+                                  <span className="party-check-name">{areaName}</span>
+                                </label>
+                              );
+                            })
+                          ) : (
+                            <div className="party-selector-empty">No areas found</div>
+                          )}
+                        </div>
+
+                        <div className="party-selection-modal-footer">
+                          <span>{productReportFilters.selectedAreaCodes.length} area(s) selected</span>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setProductReportFilters((prev) => ({
+                                ...prev,
+                                selectedArea: "no",
+                                selectedAreaCodes: [],
+                              }));
+                            }}
+                          >
+                            <Check size={13} /> Done
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {productReportFilters.selectedSalesman === "yes" && (
+                    <div
+                      className="party-selection-backdrop"
+                      onMouseDown={(event) => {
+                        if (event.target === event.currentTarget) {
+                          setProductReportFilters((prev) => ({
+                            ...prev,
+                            selectedSalesman: "no",
+                            selectedSalesmanCodes: [],
+                          }));
+                        }
+                      }}
+                    >
+                      <div className="party-selection-modal">
+                        <div className="party-selection-modal-header">
+                          <div>
+                            <strong>Select Salesman</strong>
+                            <span>Select salesmen to filter</span>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setProductReportFilters((prev) => ({
+                                ...prev,
+                                selectedSalesman: "no",
+                                selectedSalesmanCodes: [],
+                              }));
+                            }}
+                          >
+                            <X size={15} />
+                          </button>
+                        </div>
+
+                        <div className="party-selector-search">
+                          <Search size={13} />
+                          <input
+                            type="text"
+                            value={salesmanSelectorSearch}
+                            placeholder="Search salesman..."
+                            onChange={(event) => setSalesmanSelectorSearch(event.target.value)}
+                          />
+                        </div>
+
+                        <label className="party-check-row party-check-all">
+                          <input
+                            type="checkbox"
+                            checked={
+                              mappedSalesmen.length > 0 &&
+                              productReportFilters.selectedSalesmanCodes.length === mappedSalesmen.length
+                            }
+                            onChange={(event) => {
+                              const checked = event.target.checked;
+                              setProductReportFilters((prev) => ({
+                                ...prev,
+                                selectedSalesmanCodes: checked
+                                  ? mappedSalesmen.map((salesman, index) => getSalesmanCode(salesman, index))
+                                  : [],
+                              }));
+                              setIsProductReportGenerated(false);
+                              setProductReportRows([]);
+                            }}
+                          />
+                          <span>Select All Salesmen</span>
+                        </label>
+
+                        <div className="party-checkbox-list">
+                          {mappedSalesmen.length > 0 ? (
+                            mappedSalesmen.map((salesman, index) => {
+                              const salesmanCode = getSalesmanCode(salesman, index);
+                              const isChecked = productReportFilters.selectedSalesmanCodes.includes(salesmanCode);
+                              const salesmanName = getSalesmanName(salesman) || salesmanCode;
+
+                              return (
+                                <label key={salesman._id || salesmanCode} className="party-check-row">
+                                  <input
+                                    type="checkbox"
+                                    checked={isChecked}
+                                    onChange={(event) => {
+                                      setProductReportFilters((prev) => {
+                                        const currentValues = prev.selectedSalesmanCodes || [];
+                                        const nextValues = event.target.checked
+                                          ? [...new Set([...currentValues, salesmanCode])]
+                                          : currentValues.filter((code) => code !== salesmanCode);
+                                        return { ...prev, selectedSalesmanCodes: nextValues };
+                                      });
+                                      setIsProductReportGenerated(false);
+                                      setProductReportRows([]);
+                                    }}
+                                  />
+                                  <span className="party-check-name">{salesmanName}</span>
+                                </label>
+                              );
+                            })
+                          ) : (
+                            <div className="party-selector-empty">No salesmen found</div>
+                          )}
+                        </div>
+
+                        <div className="party-selection-modal-footer">
+                          <span>{productReportFilters.selectedSalesmanCodes.length} salesman(s) selected</span>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setProductReportFilters((prev) => ({
+                                ...prev,
+                                selectedSalesman: "no",
+                                selectedSalesmanCodes: [],
+                              }));
+                            }}
+                          >
+                            <Check size={13} /> Done
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {showProductSelector && (
+                    <div
+                      className="party-selection-backdrop"
+                      onMouseDown={(event) => {
+                        if (event.target === event.currentTarget) {
+                          setShowProductSelector(false);
+                        }
+                      }}
+                    >
+                      <div className="party-selection-modal party-selection-modal-large">
+                        <div className="party-selection-modal-header">
+                          <div>
+                            <strong>Select Products</strong>
+                            <span>
+                              {productReportFilters.selectedProductCodes?.length || 0} Selected
+                            </span>
+                          </div>
+                          <button type="button" onClick={() => setShowProductSelector(false)}>
+                            <X size={15} />
+                          </button>
+                        </div>
+
+                        <div className="party-selector-search">
+                          <Search size={13} />
+                          <input
+                            type="text"
+                            value={productSelectorSearch}
+                            placeholder="Search products by code or name..."
+                            onChange={(event) => setProductSelectorSearch(event.target.value)}
+                            autoFocus
+                          />
+                        </div>
+
+                        <div className="party-selector-sort-label">
+                          <span>Sort by Name (A-Z)</span>
+                        </div>
+
+                        <label className="party-check-row party-check-all">
+                          <input
+                            type="checkbox"
+                            checked={
+                              productOptionSource.length > 0 &&
+                              productReportFilters.selectedProductCodes?.length === productOptionSource.length
+                            }
+                            onChange={(event) => {
+                              const checked = event.target.checked;
+                              setProductReportFilters((prev) => ({
+                                ...prev,
+                                selectedProductCodes: checked
+                                  ? productOptionSource.map((p, index) => getProductOptionCode(p, index))
+                                  : [],
+                              }));
+                              setIsProductReportGenerated(false);
+                              setProductReportRows([]);
+                            }}
+                          />
+                          <span>Select All Products</span>
+                        </label>
+
+                        <div className="party-checkbox-list modern-product-list">
+                          {productOptionSource.length > 0 ? (
+                            productOptionSource.map((product, index) => {
+                              const productCode = getProductOptionCode(product, index);
+                              const isChecked = productReportFilters.selectedProductCodes?.includes(productCode) || false;
+                              const productName = getProductOptionName(product) || productCode;
+
+                              return (
+                                <label key={product._id || productCode} className={`party-card ${isChecked ? "selected" : ""}`}>
+                                  <input
+                                    type="checkbox"
+                                    checked={isChecked}
+                                    onChange={(event) => {
+                                      setProductReportFilters((prev) => {
+                                        const currentValues = prev.selectedProductCodes || [];
+                                        const nextValues = event.target.checked
+                                          ? [...new Set([...currentValues, productCode])]
+                                          : currentValues.filter((code) => code !== productCode);
+                                        return { ...prev, selectedProductCodes: nextValues };
+                                      });
+                                      setIsProductReportGenerated(false);
+                                      setProductReportRows([]);
+                                    }}
+                                  />
+                                  <div className="party-card-details">
+                                    <div className="party-card-header">
+                                      <span className="party-name">{productName}</span>
+                                      <span className="party-code">{productCode}</span>
+                                    </div>
+                                  </div>
+                                </label>
+                              );
+                            })
+                          ) : (
+                            <div className="party-selector-empty">
+                              {isProductCriteriaLoading ? "Loading products..." : "No products found"}
+                            </div>
+                          )}
+                        </div>
+
+                        <div className="party-selection-modal-footer">
+                          <span>
+                            {productReportFilters.selectedProductCodes?.length || 0} product(s) selected
+                          </span>
+                          <button type="button" onClick={() => setShowProductSelector(false)}>
+                            <Check size={13} /> Done
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  )}
                 </fieldset>
               </div>
 
@@ -5812,14 +7673,20 @@ const allPartySalesTotals = useMemo(() => {
                       <input
                         type="text"
                         value={productReportSearch}
-                        onChange={(event) => setProductReportSearch(event.target.value)}
+                        onChange={(event) => {
+                          setProductReportSearch(event.target.value);
+                          setCurrentPage(1);
+                        }}
                         placeholder="Search in results..."
                       />
                       {productReportSearch.trim() !== "" && (
                         <button
                           type="button"
                           className="party-grid-search-clear"
-                          onClick={() => setProductReportSearch("")}
+                          onClick={() => {
+                            setProductReportSearch("");
+                            setCurrentPage(1);
+                          }}
                           title="Clear search"
                           aria-label="Clear search"
                         >
@@ -5906,47 +7773,48 @@ const allPartySalesTotals = useMemo(() => {
                       <table className="party-report-table" style={{ width: '100%', minWidth: '1200px' }}>
                         <thead>
                           <tr>
-                            {productReportColumns.map((column) => (
-                              <th
-                                key={column.key}
-                                className={column.type === "number" ? "party-report-number" : ""}
-                                style={{
-                                  minWidth: column.key === 'productName' ? '180px' :
-                                    column.type === 'number' ? '90px' : '100px',
-                                  whiteSpace: 'nowrap'
-                                }}
-                              >
-                                {column.label}
-                              </th>
-                            ))}
+                            <th style={{ minWidth: '50px' }}>SrNo.</th>
+                            <th style={{ minWidth: '100px' }}>Bill Date</th>
+                            <th style={{ minWidth: '80px' }}>Bill Series</th>
+                            <th style={{ minWidth: '70px' }}>Bill No</th>
+                            <th style={{ minWidth: '100px' }}>Party Code</th>
+                            <th style={{ minWidth: '180px' }}>Party Name</th>
+                            <th style={{ minWidth: '80px' }} className="party-report-number">Rate</th>
+                            <th style={{ minWidth: '80px' }} className="party-report-number">MRP</th>
+                            <th style={{ minWidth: '70px' }} className="party-report-number">Qty</th>
+                            <th style={{ minWidth: '70px' }} className="party-report-number">Free Qty</th>
+                            <th style={{ minWidth: '90px' }} className="party-report-number">AMT</th>
+                            <th style={{ minWidth: '70px' }} className="party-report-number">Weight</th>
+                            <th style={{ minWidth: '80px' }} className="party-report-number">TPR AMT</th>
+                            <th style={{ minWidth: '70px' }} className="party-report-number">Disc</th>
+                            <th style={{ minWidth: '80px' }} className="party-report-number">CD AMT</th>
+                            <th style={{ minWidth: '70px' }} className="party-report-number">CD %</th>
+                            <th style={{ minWidth: '130px' }}>Branch Name</th>
+                            <th style={{ minWidth: '200px' }}>Address</th>
                           </tr>
                         </thead>
 
                         <tbody>
                           {filteredProductReportRows.map((row, rowIndex) => (
                             <tr key={row.rowId || rowIndex}>
-                              {productReportColumns.map((column) => (
-                                <td
-                                  key={`${rowIndex}-${column.key}`}
-                                  className={column.type === "number" ? "party-report-number" : ""}
-                                  style={{
-                                    minWidth: column.key === 'productName' ? '180px' :
-                                      column.type === 'number' ? '90px' : '100px',
-                                    whiteSpace: 'nowrap',
-                                    overflow: 'hidden',
-                                    textOverflow: 'ellipsis'
-                                  }}
-                                  title={String(
-                                    column.type === "number"
-                                      ? formatReportNumber(row[column.key])
-                                      : row[column.key] ?? ""
-                                  )}
-                                >
-                                  {column.type === "number"
-                                    ? formatReportNumber(row[column.key])
-                                    : String(row[column.key] ?? "")}
-                                </td>
-                              ))}
+                              <td style={{ textAlign: 'center' }}>{row.SrNo || rowIndex + 1}</td>
+                              <td>{formatPartyReportValue({ key: 'BillDate' }, row.BillDate || row.billDate)}</td>
+                              <td>{row.BillSeries || row.billSeries || ''}</td>
+                              <td style={{ textAlign: 'center' }}>{row.BillNo ?? row.billNo ?? ''}</td>
+                              <td>{row.PartyCode || row.partyCode || ''}</td>
+                              <td>{row.PartyName || row.partyName || ''}</td>
+                              <td className="party-report-number">{formatReportNumber(row.Rate || row.salesRate || 0)}</td>
+                              <td className="party-report-number">{formatReportNumber(row.MRP || row.mrp || 0)}</td>
+                              <td className="party-report-number">{formatReportNumber(row.Qty || row.qty || 0)}</td>
+                              <td className="party-report-number">{formatReportNumber(row.FreeQty || row.freeQty || 0)}</td>
+                              <td className="party-report-number">{formatReportNumber(row.AMT || row.amount || row.grossAmount || 0)}</td>
+                              <td className="party-report-number">{formatReportNumber(row.Weight || row.weight || 0)}</td>
+                              <td className="party-report-number">{formatReportNumber(row.TPRAMT || row.tprAmount || 0)}</td>
+                              <td className="party-report-number">{formatReportNumber(row.Disc || row.discount || 0)}</td>
+                              <td className="party-report-number">{formatReportNumber(row.CDAMT || row.cashDiscountAmount || 0)}</td>
+                              <td className="party-report-number">{formatReportNumber(row.CDPercent || row.cdPercent || 0)}</td>
+                              <td>{row.BranchName || row.companyName || ''}</td>
+                              <td>{row.Address || ''}</td>
                             </tr>
                           ))}
                         </tbody>
@@ -5954,34 +7822,38 @@ const allPartySalesTotals = useMemo(() => {
                         {filteredProductReportRows.length > 0 && (
                           <tfoot>
                             <tr>
-                              {productReportColumns.map((column, index) => {
-                                let value = "";
-                                if (index === 0) value = "TOTAL";
-                                if (column.key === "openingStock") value = formatReportNumber(productReportTotals.openingStock);
-                                if (column.key === "totalQty") value = formatReportNumber(productReportTotals.totalQty);
-                                if (column.key === "freeQty") value = formatReportNumber(productReportTotals.freeQty);
-                                if (column.key === "grossAmount") value = formatReportNumber(productReportTotals.grossAmount);
-                                if (column.key === "discount") value = formatReportNumber(productReportTotals.discount);
-                                if (column.key === "netAmount") value = formatReportNumber(productReportTotals.netAmount);
-                                if (column.key === "totalTax") value = formatReportNumber(productReportTotals.totalTax);
-                                if (column.key === "netSales") value = formatReportNumber(productReportTotals.netSales);
-                                if (column.key === "crnAmount") value = formatReportNumber(productReportTotals.crnAmount);
-                                if (column.key === "balanceAmount") value = formatReportNumber(productReportTotals.balanceAmount);
-
-                                return (
-                                  <td
-                                    key={column.key}
-                                    className={column.type === "number" ? "party-report-number" : ""}
-                                    style={{
-                                      fontWeight: 'bold',
-                                      minWidth: column.key === 'productName' ? '180px' :
-                                        column.type === 'number' ? '90px' : '100px'
-                                    }}
-                                  >
-                                    {value}
-                                  </td>
-                                );
-                              })}
+                              <td colSpan="6" style={{ fontWeight: 'bold', textAlign: 'right' }}>TOTAL</td>
+                              <td className="party-report-number" style={{ fontWeight: 'bold' }}>
+                                {formatReportNumber(productReportTotals.Rate || 0)}
+                              </td>
+                              <td className="party-report-number" style={{ fontWeight: 'bold' }}>
+                                {formatReportNumber(productReportTotals.MRP || 0)}
+                              </td>
+                              <td className="party-report-number" style={{ fontWeight: 'bold' }}>
+                                {formatReportNumber(productReportTotals.Qty || 0)}
+                              </td>
+                              <td className="party-report-number" style={{ fontWeight: 'bold' }}>
+                                {formatReportNumber(productReportTotals.FreeQty || 0)}
+                              </td>
+                              <td className="party-report-number" style={{ fontWeight: 'bold' }}>
+                                {formatReportNumber(productReportTotals.AMT || 0)}
+                              </td>
+                              <td className="party-report-number" style={{ fontWeight: 'bold' }}>
+                                {formatReportNumber(productReportTotals.Weight || 0)}
+                              </td>
+                              <td className="party-report-number" style={{ fontWeight: 'bold' }}>
+                                {formatReportNumber(productReportTotals.TPRAMT || 0)}
+                              </td>
+                              <td className="party-report-number" style={{ fontWeight: 'bold' }}>
+                                {formatReportNumber(productReportTotals.Disc || 0)}
+                              </td>
+                              <td className="party-report-number" style={{ fontWeight: 'bold' }}>
+                                {formatReportNumber(productReportTotals.CDAMT || 0)}
+                              </td>
+                              <td className="party-report-number" style={{ fontWeight: 'bold' }}>
+                                {formatReportNumber(productReportTotals.CDPercent || 0)}
+                              </td>
+                              <td colSpan="2"></td>
                             </tr>
                           </tfoot>
                         )}
@@ -5993,9 +7865,6 @@ const allPartySalesTotals = useMemo(() => {
                 <div className="party-report-statusbar">
                   <span>
                     Records: {isProductReportGenerated ? filteredProductReportRows.length : 0}
-                  </span>
-                  <span>
-                    Level: {productReportFilters.reportLevel === "details" ? "Details" : "Summary"}
                   </span>
                   <span>
                     Period: {productReportFilters.fromDate || "--"} to {productReportFilters.toDate || "--"}
@@ -6023,23 +7892,29 @@ const allPartySalesTotals = useMemo(() => {
                   <span className="party-summary-icon"><ShoppingCart size={17} /></span>
                   <div>
                     <small>Total Quantity</small>
-                    <strong>{formatReportNumber(productReportTotals.totalQty || 0)}</strong>
+                    <strong>{formatReportNumber(productReportTotals.Qty || 0)}</strong>
                   </div>
                 </div>
 
                 <div className="party-summary-item">
                   <span className="party-summary-icon"><BarChart3 size={17} /></span>
                   <div>
-                    <small>Gross Amount</small>
-                    <strong>₹ {formatReportNumber(productReportTotals.grossAmount || 0)}</strong>
+                    <small>Total Amount</small>
+                    <strong>₹ {formatReportNumber(productReportTotals.AMT || 0)}</strong>
                   </div>
                 </div>
 
                 <div className="party-summary-item">
                   <span className="party-summary-icon"><FileText size={17} /></span>
                   <div>
-                    <small>Net Amount</small>
-                    <strong>₹ {formatReportNumber(productReportTotals.netAmount || 0)}</strong>
+                    <small>Total Products</small>
+                    <strong>
+                      {new Set(
+                        filteredProductReportRows
+                          .map((row) => row.productCode || row.ProductCode)
+                          .filter(Boolean)
+                      ).size}
+                    </strong>
                   </div>
                 </div>
               </section>
@@ -6050,33 +7925,169 @@ const allPartySalesTotals = useMemo(() => {
     );
   }
 
-// =========================================================
-  // ALL PRODUCT WISE SALES REPORT - RENDER
+  // =========================================================
+  // ALL PRODUCT WISE SALES REPORT - RENDER (SIMPLIFIED)
   // =========================================================
   if (selectedReport === "All Product Wise Sales Report") {
     const productOptionSource =
       reportProductList.length > 0 ? reportProductList : productOptionList;
-    const productGroupOptions = [
-      ...new Set(
-        (productOptionSource || [])
-          .map((item) => item?.group || "")
-          .filter(Boolean)
-      ),
-    ];
-    const productCategoryOptions = [
-      ...new Set(
-        (productOptionSource || [])
-          .map((item) => item?.category || "")
-          .filter(Boolean)
-      ),
-    ];
-    const productBrandOptions = [
-      ...new Set(
-        (productOptionSource || [])
-          .map((item) => item?.brand || "")
-          .filter(Boolean)
-      ),
-    ];
+
+    const generateAllProductWiseSalesReport = async () => {
+      try {
+        setAllProductReportError("");
+        setAllProductReportRows([]);
+        setAllProductReportColumns([]);
+
+        const { distributorId, firmId } = getLoggedInContext();
+
+        if (!distributorId || !firmId) {
+          throw new Error("Distributor or firm information is missing. Please login again.");
+        }
+
+        if (!allProductReportFilters.fromDate || !allProductReportFilters.toDate) {
+          throw new Error("From Date and To Date are required.");
+        }
+
+        if (allProductReportFilters.fromDate > allProductReportFilters.toDate) {
+          throw new Error("From Date cannot be greater than To Date.");
+        }
+
+        setIsAllProductReportLoading(true);
+
+        const query = new URLSearchParams({
+          distributorId,
+          firmId,
+          companyCode: allProductReportFilters.company || "",
+          fromDate: allProductReportFilters.fromDate,
+          toDate: allProductReportFilters.toDate,
+          orderBy: allProductReportFilters.orderBy || "productName",
+          showZeroSales: allProductReportFilters.showZeroSales || "no",
+          reportLevel: allProductReportFilters.reportLevel || "units",
+          valuationBy: allProductReportFilters.valuationBy || "basicRate",
+          salesType: allProductReportFilters.salesType || "onlySales",
+          billWiseSalesman: allProductReportFilters.billWiseSalesman || "no",
+          withCreditNote: allProductReportFilters.withCreditNote || "no",
+        });
+
+        if (allProductReportFilters.selectedArea === "yes" && allProductReportFilters.selectedAreaCodes.length > 0) {
+          query.set("selectedAreaCodes", allProductReportFilters.selectedAreaCodes.join(","));
+        }
+
+        if (allProductReportFilters.selectedSalesman === "yes" && allProductReportFilters.selectedSalesmanCodes.length > 0) {
+          query.set("selectedSalesmanCodes", allProductReportFilters.selectedSalesmanCodes.join(","));
+        }
+
+        const response = await fetch(
+          `${API_BASE_URL}/api/reports/all-product-wise-sales?${query.toString()}`
+        );
+
+        const contentType = response.headers.get("content-type") || "";
+        const result = contentType.includes("application/json")
+          ? await response.json()
+          : {
+              success: false,
+              message: await response.text(),
+            };
+
+        if (!response.ok || !result.success) {
+          throw new Error(result.message || "Failed to generate all product wise sales report.");
+        }
+
+        const data = Array.isArray(result.data) ? result.data : [];
+
+        const rows = data.map((row, index) => ({
+          rowId: row._id || `row-${index}`,
+          SrNo: row.SrNo || index + 1,
+          ProductName: row.ProductName || "",
+          ProductCode: row.ProductCode || "",
+          LocalProduct: row.LocalProduct || "",
+          Batch: row.Batch || "",
+          MRP: Number(row.MRP || 0),
+          Rate: Number(row.Rate || 0),
+          Qty: Number(row.Qty || 0),
+          FreeQty: Number(row.FreeQty || 0),
+          Amount: Number(row.Amount || 0),
+          Disc: Number(row.Disc || 0),
+          OtherDisc: Number(row.OtherDisc || 0),
+          Valuation: Number(row.Valuation || 0),
+          Weight: Number(row.Weight || 0),
+          BillCuts: Number(row.BillCuts || 0),
+          Outlets: Number(row.Outlets || 0),
+          VatAmt: Number(row.VatAmt || 0),
+          Cess1: Number(row.Cess1 || 0),
+          Cess2: Number(row.Cess2 || 0),
+          BasicRate: Number(row.BasicRate || 0),
+          Difference: Number(row.Difference || 0),
+          BillDate: row.BillDate || "",
+          BillSeries: row.BillSeries || "",
+          BillNo: row.BillNo ?? "",
+          PartyCode: row.PartyCode || "",
+          PartyName: row.PartyName || "",
+          CompanyName: row.CompanyName || "",
+          SalesmanName: row.SalesmanName || "",
+          AreaName: row.AreaName || "",
+          Godown: row.Godown || "",
+        }));
+
+        const columns = [
+          { key: "SrNo", label: "SRNo", type: "number" },
+          { key: "ProductName", label: "Product Name", type: "string" },
+          { key: "LocalProduct", label: "Local Product", type: "string" },
+          { key: "Batch", label: "Batch", type: "string" },
+          { key: "MRP", label: "MRP", type: "number" },
+          { key: "Rate", label: "Rate", type: "number" },
+          { key: "Qty", label: "Qty", type: "number" },
+          { key: "FreeQty", label: "Free Qty", type: "number" },
+          { key: "Amount", label: "Amount", type: "number" },
+          { key: "Disc", label: "Disc", type: "number" },
+          { key: "OtherDisc", label: "OtherDisc", type: "number" },
+          { key: "Valuation", label: "Valuation", type: "number" },
+          { key: "Weight", label: "Kg", type: "number" },
+          { key: "BillCuts", label: "BillCuts", type: "number" },
+          { key: "Outlets", label: "Outlets", type: "number" },
+          { key: "VatAmt", label: "VatAmt", type: "number" },
+          { key: "Cess1", label: "Cess1", type: "number" },
+          { key: "Cess2", label: "Cess2", type: "number" },
+          { key: "BasicRate", label: "Basic Rate", type: "number" },
+          { key: "Difference", label: "Difference", type: "number" },
+        ];
+
+        setAllProductReportRows(rows);
+        setAllProductReportColumns(columns);
+        setIsAllProductReportGenerated(true);
+
+        if (rows.length === 0) {
+          setAllProductReportError("No product sales records were found for the selected criteria.");
+        }
+      } catch (error) {
+        console.error("All product wise sales report generation error:", error);
+        setAllProductReportRows([]);
+        setAllProductReportColumns([]);
+        setIsAllProductReportGenerated(false);
+        setAllProductReportError(error.message || "Failed to generate all product wise sales report.");
+      } finally {
+        setIsAllProductReportLoading(false);
+      }
+    };
+
+    const formatAllProductReportValue = (column, value) => {
+      if (value === undefined || value === null || value === "") return "";
+      if (column.type === "number") {
+        return formatReportNumber(value);
+      }
+      return String(value);
+    };
+
+    const allProductTotalPages = Math.max(
+      1,
+      Math.ceil(filteredAllProductReportRows.length / allPartyRowsPerPage)
+    );
+    const allProductSafeCurrentPage = Math.min(allPartyCurrentPage, allProductTotalPages);
+    const allProductPageStart = (allProductSafeCurrentPage - 1) * allPartyRowsPerPage;
+    const allProductPageRows = filteredAllProductReportRows.slice(
+      allProductPageStart,
+      allProductPageStart + allPartyRowsPerPage
+    );
 
     return (
       <div className="party-classic-report-page">
@@ -6118,7 +8129,7 @@ const allPartySalesTotals = useMemo(() => {
               <button
                 type="button"
                 className="party-title-generate-button"
-                onClick={generateAllProductSalesReport}
+                onClick={generateAllProductWiseSalesReport}
                 disabled={isAllProductReportLoading}
               >
                 {isAllProductReportLoading ? (
@@ -6142,152 +8153,355 @@ const allPartySalesTotals = useMemo(() => {
                     Report Filters
                   </legend>
 
-                  <div className="party-report-form-grid">
-                    {/* 1. COMPANY */}
-                    <div className="party-report-field">
-                      <label>Company</label>
-                      <select
-                        value={allProductReportFilters.company}
-                        onChange={(event) =>
-                          updateAllProductReportFilter("company", event.target.value)
-                        }
-                      >
-                        <option value="">All Companies</option>
-                        {reportCompanies.map((company, index) => {
-                          const companyCode = getCompanyCode(company, index);
-                          const companyName = getCompanyName(company) || companyCode;
-                          return (
-                            <option key={company._id || companyCode} value={companyCode}>
-                              {companyName}
-                            </option>
-                          );
-                        })}
-                      </select>
+                  <div className="party-report-form-grid-two-rows">
+                    <div className="party-report-form-row">
+                      <div className="party-report-field">
+                        <label>Company</label>
+                        <select
+                          value={allProductReportFilters.company}
+                          onChange={(event) =>
+                            updateAllProductReportFilter("company", event.target.value)
+                          }
+                        >
+                          <option value="">All Companies</option>
+                          {reportCompanies.map((company, index) => {
+                            const companyCode = getCompanyCode(company, index);
+                            const companyName = getCompanyName(company) || companyCode;
+                            return (
+                              <option key={company._id || companyCode} value={companyCode}>
+                                {companyName}
+                              </option>
+                            );
+                          })}
+                        </select>
+                      </div>
+
+                      <div className="party-report-field">
+                        <label>Selected Area</label>
+                        <select
+                          value={allProductReportFilters.selectedArea}
+                          onChange={(event) => {
+                            const value = event.target.value;
+                            setAllProductReportFilters((prev) => ({
+                              ...prev,
+                              selectedArea: value,
+                              selectedAreaCodes: value === "yes" ? prev.selectedAreaCodes : [],
+                            }));
+                            if (value === "yes") {
+                              setShowAllAreaSelector(true);
+                            } else {
+                              setShowAllAreaSelector(false);
+                            }
+                            setAllProductReportRows([]);
+                            setIsAllProductReportGenerated(false);
+                          }}
+                        >
+                          <option value="no">No</option>
+                          <option value="yes">Yes</option>
+                        </select>
+                      </div>
+
+                      <div className="party-report-field">
+                        <label>Selected Salesman</label>
+                        <select
+                          value={allProductReportFilters.selectedSalesman}
+                          onChange={(event) => {
+                            const value = event.target.value;
+                            setAllProductReportFilters((prev) => ({
+                              ...prev,
+                              selectedSalesman: value,
+                              selectedSalesmanCodes: value === "yes" ? prev.selectedSalesmanCodes : [],
+                            }));
+                            if (value === "yes") {
+                              setShowAllSalesmanSelector(true);
+                            } else {
+                              setShowAllSalesmanSelector(false);
+                            }
+                            setAllProductReportRows([]);
+                            setIsAllProductReportGenerated(false);
+                          }}
+                        >
+                          <option value="no">No</option>
+                          <option value="yes">Yes</option>
+                        </select>
+                      </div>
+
+                      <div className="party-report-field">
+                        <label>Bill Wise Salesman</label>
+                        <select
+                          value={allProductReportFilters.billWiseSalesman}
+                          onChange={(event) =>
+                            updateAllProductReportFilter("billWiseSalesman", event.target.value)
+                          }
+                        >
+                          <option value="no">No</option>
+                          <option value="yes">Yes</option>
+                        </select>
+                      </div>
                     </div>
 
-                    {/* 2. PRODUCT GROUP */}
-                    <div className="party-report-field">
-                      <label>Product Group</label>
-                      <select
-                        value={allProductReportFilters.productGroup}
-                        onChange={(event) =>
-                          updateAllProductReportFilter("productGroup", event.target.value)
-                        }
-                      >
-                        <option value="">All Groups</option>
-                        {productGroupOptions.map((group) => (
-                          <option key={group} value={group}>
-                            {group}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
+                    <div className="party-report-form-row">
+                      <div className="party-report-field">
+                        <label>From Date</label>
+                        <input
+                          type="date"
+                          value={allProductReportFilters.fromDate}
+                          onChange={(event) =>
+                            updateAllProductReportFilter("fromDate", event.target.value)
+                          }
+                        />
+                      </div>
 
-                    {/* 3. CATEGORY */}
-                    <div className="party-report-field">
-                      <label>Category</label>
-                      <select
-                        value={allProductReportFilters.category}
-                        onChange={(event) =>
-                          updateAllProductReportFilter("category", event.target.value)
-                        }
-                      >
-                        <option value="">All Categories</option>
-                        {productCategoryOptions.map((category) => (
-                          <option key={category} value={category}>
-                            {category}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
+                      <div className="party-report-field">
+                        <label>To Date</label>
+                        <input
+                          type="date"
+                          value={allProductReportFilters.toDate}
+                          onChange={(event) =>
+                            updateAllProductReportFilter("toDate", event.target.value)
+                          }
+                        />
+                      </div>
 
-                    {/* 4. BRAND */}
-                    <div className="party-report-field">
-                      <label>Brand</label>
-                      <select
-                        value={allProductReportFilters.brand}
-                        onChange={(event) =>
-                          updateAllProductReportFilter("brand", event.target.value)
-                        }
-                      >
-                        <option value="">All Brands</option>
-                        {productBrandOptions.map((brand) => (
-                          <option key={brand} value={brand}>
-                            {brand}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
+                      <div className="party-report-field">
+                        <label>Report Level</label>
+                        <select
+                          value={allProductReportFilters.reportLevel}
+                          onChange={(event) =>
+                            updateAllProductReportFilter("reportLevel", event.target.value)
+                          }
+                        >
+                          <option value="units">Units</option>
+                          <option value="amount">Amount</option>
+                          <option value="details">Details</option>
+                        </select>
+                      </div>
 
-                    {/* 5. REPORT LEVEL */}
-                    <div className="party-report-field">
-                      <label>Report Level</label>
-                      <select
-                        value={allProductReportFilters.reportLevel}
-                        onChange={(event) =>
-                          updateAllProductReportFilter("reportLevel", event.target.value)
-                        }
-                      >
-                        <option value="summary">Summary</option>
-                        <option value="details">Details</option>
-                      </select>
-                    </div>
+                      <div className="party-report-field">
+                        <label>Order By</label>
+                        <select
+                          value={allProductReportFilters.orderBy}
+                          onChange={(event) =>
+                            updateAllProductReportFilter("orderBy", event.target.value)
+                          }
+                        >
+                          <option value="productName">Name Wise</option>
+                          <option value="productCode">Code Wise</option>
+                          <option value="amount">Amount Wise</option>
+                          <option value="qty">Qty Wise</option>
+                          <option value="rate">Rate Wise</option>
+                        </select>
+                      </div>
 
-                    {/* 6. FROM DATE */}
-                    <div className="party-report-field">
-                      <label>From Date</label>
-                      <input
-                        type="date"
-                        value={allProductReportFilters.fromDate}
-                        onChange={(event) =>
-                          updateAllProductReportFilter("fromDate", event.target.value)
-                        }
-                      />
-                    </div>
-
-                    {/* 7. TO DATE */}
-                    <div className="party-report-field">
-                      <label>To Date</label>
-                      <input
-                        type="date"
-                        value={allProductReportFilters.toDate}
-                        onChange={(event) =>
-                          updateAllProductReportFilter("toDate", event.target.value)
-                        }
-                      />
-                    </div>
-
-                    {/* 8. SHOW ZERO SALES */}
-                    <div className="party-report-field">
-                      <label>Show Zero Sales</label>
-                      <select
-                        value={allProductReportFilters.showZeroSales}
-                        onChange={(event) =>
-                          updateAllProductReportFilter("showZeroSales", event.target.value)
-                        }
-                      >
-                        <option value="no">No</option>
-                        <option value="yes">Yes</option>
-                      </select>
-                    </div>
-
-                    {/* 9. ORDER BY */}
-                    <div className="party-report-field">
-                      <label>Order By</label>
-                      <select
-                        value={allProductReportFilters.orderBy}
-                        onChange={(event) =>
-                          updateAllProductReportFilter("orderBy", event.target.value)
-                        }
-                      >
-                        <option value="productName">Product Name</option>
-                        <option value="productCode">Product Code</option>
-                        <option value="grossAmount">Gross Amount</option>
-                        <option value="netAmount">Net Amount</option>
-                      </select>
+                      <div className="party-report-field">
+                        <label>Show Zero Sales</label>
+                        <select
+                          value={allProductReportFilters.showZeroSales}
+                          onChange={(event) =>
+                            updateAllProductReportFilter("showZeroSales", event.target.value)
+                          }
+                        >
+                          <option value="no">No</option>
+                          <option value="yes">Yes</option>
+                        </select>
+                      </div>
                     </div>
                   </div>
                 </fieldset>
+
+                {showAllAreaSelector && (
+                  <div
+                    className="party-selection-backdrop"
+                    onMouseDown={(event) => {
+                      if (event.target === event.currentTarget) {
+                        setShowAllAreaSelector(false);
+                      }
+                    }}
+                  >
+                    <div className="party-selection-modal">
+                      <div className="party-selection-modal-header">
+                        <div>
+                          <strong>Select Area</strong>
+                          <span>Only company-mapped areas</span>
+                        </div>
+                        <button type="button" onClick={() => setShowAllAreaSelector(false)}>
+                          <X size={15} />
+                        </button>
+                      </div>
+
+                      <div className="party-selector-search">
+                        <Search size={13} />
+                        <input
+                          type="text"
+                          value={allAreaSelectorSearch}
+                          placeholder="Search area name..."
+                          onChange={(event) => setAllAreaSelectorSearch(event.target.value)}
+                        />
+                      </div>
+
+                      <label className="party-check-row party-check-all">
+                        <input
+                          type="checkbox"
+                          checked={
+                            mappedAreas.length > 0 &&
+                            allProductReportFilters.selectedAreaCodes.length === mappedAreas.length
+                          }
+                          onChange={(event) => {
+                            const checked = event.target.checked;
+                            setAllProductReportFilters((prev) => ({
+                              ...prev,
+                              selectedAreaCodes: checked
+                                ? mappedAreas.map((area, index) => getAreaCode(area, index))
+                                : [],
+                            }));
+                            setAllProductReportRows([]);
+                            setIsAllProductReportGenerated(false);
+                          }}
+                        />
+                        <span>Select All Areas</span>
+                      </label>
+
+                      <div className="party-checkbox-list">
+                        {mappedAreas.length > 0 ? (
+                          mappedAreas.map((area, index) => {
+                            const areaCode = getAreaCode(area, index);
+                            const isChecked = allProductReportFilters.selectedAreaCodes.includes(areaCode);
+
+                            return (
+                              <label key={area._id || areaCode} className="party-check-row">
+                                <input
+                                  type="checkbox"
+                                  checked={isChecked}
+                                  onChange={(event) => {
+                                    setAllProductReportFilters((prev) => {
+                                      const currentValues = prev.selectedAreaCodes || [];
+                                      const nextValues = event.target.checked
+                                        ? [...new Set([...currentValues, areaCode])]
+                                        : currentValues.filter((code) => code !== areaCode);
+                                      return { ...prev, selectedAreaCodes: nextValues };
+                                    });
+                                    setAllProductReportRows([]);
+                                    setIsAllProductReportGenerated(false);
+                                  }}
+                                />
+                                <span className="party-check-name">
+                                  {getAreaName(area) || "Unnamed Area"}
+                                </span>
+                              </label>
+                            );
+                          })
+                        ) : (
+                          <div className="party-selector-empty">No mapped area found.</div>
+                        )}
+                      </div>
+
+                      <div className="party-selection-modal-footer">
+                        <span>{allProductReportFilters.selectedAreaCodes.length} area(s) selected</span>
+                        <button type="button" onClick={() => setShowAllAreaSelector(false)}>
+                          <Check size={13} /> Done
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {showAllSalesmanSelector && (
+                  <div
+                    className="party-selection-backdrop"
+                    onMouseDown={(event) => {
+                      if (event.target === event.currentTarget) {
+                        setShowAllSalesmanSelector(false);
+                      }
+                    }}
+                  >
+                    <div className="party-selection-modal">
+                      <div className="party-selection-modal-header">
+                        <div>
+                          <strong>Select Salesman</strong>
+                          <span>Only company-mapped salesmen</span>
+                        </div>
+                        <button type="button" onClick={() => setShowAllSalesmanSelector(false)}>
+                          <X size={15} />
+                        </button>
+                      </div>
+
+                      <div className="party-selector-search">
+                        <Search size={13} />
+                        <input
+                          type="text"
+                          value={allSalesmanSelectorSearch}
+                          placeholder="Search salesman name..."
+                          onChange={(event) => setAllSalesmanSelectorSearch(event.target.value)}
+                        />
+                      </div>
+
+                      <label className="party-check-row party-check-all">
+                        <input
+                          type="checkbox"
+                          checked={
+                            mappedSalesmen.length > 0 &&
+                            allProductReportFilters.selectedSalesmanCodes.length === mappedSalesmen.length
+                          }
+                          onChange={(event) => {
+                            const checked = event.target.checked;
+                            setAllProductReportFilters((prev) => ({
+                              ...prev,
+                              selectedSalesmanCodes: checked
+                                ? mappedSalesmen.map((salesman, index) => getSalesmanCode(salesman, index))
+                                : [],
+                            }));
+                            setAllProductReportRows([]);
+                            setIsAllProductReportGenerated(false);
+                          }}
+                        />
+                        <span>Select All Salesmen</span>
+                      </label>
+
+                      <div className="party-checkbox-list">
+                        {mappedSalesmen.length > 0 ? (
+                          mappedSalesmen.map((salesman, index) => {
+                            const salesmanCode = getSalesmanCode(salesman, index);
+                            const isChecked = allProductReportFilters.selectedSalesmanCodes.includes(salesmanCode);
+
+                            return (
+                              <label key={salesman._id || salesmanCode} className="party-check-row">
+                                <input
+                                  type="checkbox"
+                                  checked={isChecked}
+                                  onChange={(event) => {
+                                    setAllProductReportFilters((prev) => {
+                                      const currentValues = prev.selectedSalesmanCodes || [];
+                                      const nextValues = event.target.checked
+                                        ? [...new Set([...currentValues, salesmanCode])]
+                                        : currentValues.filter((code) => code !== salesmanCode);
+                                      return { ...prev, selectedSalesmanCodes: nextValues };
+                                    });
+                                    setAllProductReportRows([]);
+                                    setIsAllProductReportGenerated(false);
+                                  }}
+                                />
+                                <span className="party-check-name">
+                                  {getSalesmanName(salesman) || "Unnamed Salesman"}
+                                </span>
+                              </label>
+                            );
+                          })
+                        ) : (
+                          <div className="party-selector-empty">No mapped salesman found.</div>
+                        )}
+                      </div>
+
+                      <div className="party-selection-modal-footer">
+                        <span>
+                          {allProductReportFilters.selectedSalesmanCodes.length} salesman(s) selected
+                        </span>
+                        <button type="button" onClick={() => setShowAllSalesmanSelector(false)}>
+                          <Check size={13} /> Done
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                )}
               </div>
 
               {allProductReportError && (
@@ -6352,7 +8566,7 @@ const allPartySalesTotals = useMemo(() => {
                     <button
                       type="button"
                       className="party-grid-refresh-button"
-                      onClick={generateAllProductSalesReport}
+                      onClick={generateAllProductWiseSalesReport}
                       disabled={isAllProductReportLoading}
                       title="Refresh report"
                     >
@@ -6411,50 +8625,55 @@ const allPartySalesTotals = useMemo(() => {
                       className="party-report-zoom"
                       style={{ zoom: Number(allProductReportZoom) / 100 }}
                     >
-                      <table className="party-report-table" style={{ width: '100%', minWidth: '1200px' }}>
+                      <table className="party-report-table" style={{ width: '100%', minWidth: '1800px' }}>
                         <thead>
                           <tr>
-                            {allProductReportColumns.map((column) => (
-                              <th
-                                key={column.key}
-                                className={column.type === "number" ? "party-report-number" : ""}
-                                style={{
-                                  minWidth: column.key === 'productName' ? '180px' :
-                                    column.type === 'number' ? '90px' : '100px',
-                                  whiteSpace: 'nowrap'
-                                }}
-                              >
-                                {column.label}
-                              </th>
-                            ))}
+                            <th style={{ minWidth: '50px' }}>SRNo</th>
+                            <th style={{ minWidth: '180px' }}>Product Name</th>
+                            <th style={{ minWidth: '120px' }}>Local Product</th>
+                            <th style={{ minWidth: '80px' }}>Batch</th>
+                            <th style={{ minWidth: '80px' }} className="party-report-number">MRP</th>
+                            <th style={{ minWidth: '80px' }} className="party-report-number">Rate</th>
+                            <th style={{ minWidth: '70px' }} className="party-report-number">Qty</th>
+                            <th style={{ minWidth: '70px' }} className="party-report-number">Free Qty</th>
+                            <th style={{ minWidth: '90px' }} className="party-report-number">Amount</th>
+                            <th style={{ minWidth: '70px' }} className="party-report-number">Disc</th>
+                            <th style={{ minWidth: '80px' }} className="party-report-number">OtherDisc</th>
+                            <th style={{ minWidth: '90px' }} className="party-report-number">Valuation</th>
+                            <th style={{ minWidth: '70px' }} className="party-report-number">Kg</th>
+                            <th style={{ minWidth: '70px' }} className="party-report-number">BillCuts</th>
+                            <th style={{ minWidth: '70px' }} className="party-report-number">Outlets</th>
+                            <th style={{ minWidth: '80px' }} className="party-report-number">VatAmt</th>
+                            <th style={{ minWidth: '70px' }} className="party-report-number">Cess1</th>
+                            <th style={{ minWidth: '70px' }} className="party-report-number">Cess2</th>
+                            <th style={{ minWidth: '80px' }} className="party-report-number">Basic Rate</th>
+                            <th style={{ minWidth: '80px' }} className="party-report-number">Difference</th>
                           </tr>
                         </thead>
 
                         <tbody>
-                          {filteredAllProductReportRows.map((row, rowIndex) => (
+                          {allProductPageRows.map((row, rowIndex) => (
                             <tr key={row.rowId || rowIndex}>
-                              {allProductReportColumns.map((column) => (
-                                <td
-                                  key={`${rowIndex}-${column.key}`}
-                                  className={column.type === "number" ? "party-report-number" : ""}
-                                  style={{
-                                    minWidth: column.key === 'productName' ? '180px' :
-                                      column.type === 'number' ? '90px' : '100px',
-                                    whiteSpace: 'nowrap',
-                                    overflow: 'hidden',
-                                    textOverflow: 'ellipsis'
-                                  }}
-                                  title={String(
-                                    column.type === "number"
-                                      ? formatReportNumber(row[column.key])
-                                      : row[column.key] ?? ""
-                                  )}
-                                >
-                                  {column.type === "number"
-                                    ? formatReportNumber(row[column.key])
-                                    : String(row[column.key] ?? "")}
-                                </td>
-                              ))}
+                              <td style={{ textAlign: 'center' }}>{row.SrNo || rowIndex + 1}</td>
+                              <td>{row.ProductName || ''}</td>
+                              <td>{row.LocalProduct || ''}</td>
+                              <td>{row.Batch || ''}</td>
+                              <td className="party-report-number">{formatReportNumber(row.MRP || 0)}</td>
+                              <td className="party-report-number">{formatReportNumber(row.Rate || 0)}</td>
+                              <td className="party-report-number">{formatReportNumber(row.Qty || 0)}</td>
+                              <td className="party-report-number">{formatReportNumber(row.FreeQty || 0)}</td>
+                              <td className="party-report-number">{formatReportNumber(row.Amount || 0)}</td>
+                              <td className="party-report-number">{formatReportNumber(row.Disc || 0)}</td>
+                              <td className="party-report-number">{formatReportNumber(row.OtherDisc || 0)}</td>
+                              <td className="party-report-number">{formatReportNumber(row.Valuation || 0)}</td>
+                              <td className="party-report-number">{formatReportNumber(row.Weight || 0)}</td>
+                              <td className="party-report-number">{formatReportNumber(row.BillCuts || 0)}</td>
+                              <td className="party-report-number">{formatReportNumber(row.Outlets || 0)}</td>
+                              <td className="party-report-number">{formatReportNumber(row.VatAmt || 0)}</td>
+                              <td className="party-report-number">{formatReportNumber(row.Cess1 || 0)}</td>
+                              <td className="party-report-number">{formatReportNumber(row.Cess2 || 0)}</td>
+                              <td className="party-report-number">{formatReportNumber(row.BasicRate || 0)}</td>
+                              <td className="party-report-number">{formatReportNumber(row.Difference || 0)}</td>
                             </tr>
                           ))}
                         </tbody>
@@ -6462,34 +8681,58 @@ const allPartySalesTotals = useMemo(() => {
                         {filteredAllProductReportRows.length > 0 && (
                           <tfoot>
                             <tr>
-                              {allProductReportColumns.map((column, index) => {
-                                let value = "";
-                                if (index === 0) value = "TOTAL";
-                                if (column.key === "openingStock") value = formatReportNumber(allProductReportTotals.openingStock);
-                                if (column.key === "totalQty") value = formatReportNumber(allProductReportTotals.totalQty);
-                                if (column.key === "freeQty") value = formatReportNumber(allProductReportTotals.freeQty);
-                                if (column.key === "grossAmount") value = formatReportNumber(allProductReportTotals.grossAmount);
-                                if (column.key === "discount") value = formatReportNumber(allProductReportTotals.discount);
-                                if (column.key === "netAmount") value = formatReportNumber(allProductReportTotals.netAmount);
-                                if (column.key === "totalTax") value = formatReportNumber(allProductReportTotals.totalTax);
-                                if (column.key === "netSales") value = formatReportNumber(allProductReportTotals.netSales);
-                                if (column.key === "crnAmount") value = formatReportNumber(allProductReportTotals.crnAmount);
-                                if (column.key === "balanceAmount") value = formatReportNumber(allProductReportTotals.balanceAmount);
-
-                                return (
-                                  <td
-                                    key={column.key}
-                                    className={column.type === "number" ? "party-report-number" : ""}
-                                    style={{
-                                      fontWeight: 'bold',
-                                      minWidth: column.key === 'productName' ? '180px' :
-                                        column.type === 'number' ? '90px' : '100px'
-                                    }}
-                                  >
-                                    {value}
-                                  </td>
-                                );
-                              })}
+                              <td style={{ fontWeight: 'bold', textAlign: 'center' }}>TOTAL</td>
+                              <td></td>
+                              <td></td>
+                              <td></td>
+                              <td className="party-report-number" style={{ fontWeight: 'bold' }}>
+                                {formatReportNumber(allProductReportTotals.MRP || 0)}
+                              </td>
+                              <td className="party-report-number" style={{ fontWeight: 'bold' }}>
+                                {formatReportNumber(allProductReportTotals.Rate || 0)}
+                              </td>
+                              <td className="party-report-number" style={{ fontWeight: 'bold' }}>
+                                {formatReportNumber(allProductReportTotals.Qty || 0)}
+                              </td>
+                              <td className="party-report-number" style={{ fontWeight: 'bold' }}>
+                                {formatReportNumber(allProductReportTotals.FreeQty || 0)}
+                              </td>
+                              <td className="party-report-number" style={{ fontWeight: 'bold' }}>
+                                {formatReportNumber(allProductReportTotals.Amount || 0)}
+                              </td>
+                              <td className="party-report-number" style={{ fontWeight: 'bold' }}>
+                                {formatReportNumber(allProductReportTotals.Disc || 0)}
+                              </td>
+                              <td className="party-report-number" style={{ fontWeight: 'bold' }}>
+                                {formatReportNumber(allProductReportTotals.OtherDisc || 0)}
+                              </td>
+                              <td className="party-report-number" style={{ fontWeight: 'bold' }}>
+                                {formatReportNumber(allProductReportTotals.Valuation || 0)}
+                              </td>
+                              <td className="party-report-number" style={{ fontWeight: 'bold' }}>
+                                {formatReportNumber(allProductReportTotals.Weight || 0)}
+                              </td>
+                              <td className="party-report-number" style={{ fontWeight: 'bold' }}>
+                                {formatReportNumber(allProductReportTotals.BillCuts || 0)}
+                              </td>
+                              <td className="party-report-number" style={{ fontWeight: 'bold' }}>
+                                {formatReportNumber(allProductReportTotals.Outlets || 0)}
+                              </td>
+                              <td className="party-report-number" style={{ fontWeight: 'bold' }}>
+                                {formatReportNumber(allProductReportTotals.VatAmt || 0)}
+                              </td>
+                              <td className="party-report-number" style={{ fontWeight: 'bold' }}>
+                                {formatReportNumber(allProductReportTotals.Cess1 || 0)}
+                              </td>
+                              <td className="party-report-number" style={{ fontWeight: 'bold' }}>
+                                {formatReportNumber(allProductReportTotals.Cess2 || 0)}
+                              </td>
+                              <td className="party-report-number" style={{ fontWeight: 'bold' }}>
+                                {formatReportNumber(allProductReportTotals.BasicRate || 0)}
+                              </td>
+                              <td className="party-report-number" style={{ fontWeight: 'bold' }}>
+                                {formatReportNumber(allProductReportTotals.Difference || 0)}
+                              </td>
                             </tr>
                           </tfoot>
                         )}
@@ -6503,7 +8746,8 @@ const allPartySalesTotals = useMemo(() => {
                     Records: {isAllProductReportGenerated ? filteredAllProductReportRows.length : 0}
                   </span>
                   <span>
-                    Level: {allProductReportFilters.reportLevel === "details" ? "Details" : "Summary"}
+                    Level: {allProductReportFilters.reportLevel === "details" ? "Details" : 
+                      allProductReportFilters.reportLevel === "amount" ? "Amount" : "Units"}
                   </span>
                   <span>
                     Period: {allProductReportFilters.fromDate || "--"} to {allProductReportFilters.toDate || "--"}
@@ -6531,7 +8775,7 @@ const allPartySalesTotals = useMemo(() => {
                   <span className="party-summary-icon"><ShoppingCart size={17} /></span>
                   <div>
                     <small>Total Quantity</small>
-                    <strong>{formatReportNumber(allProductReportTotals.totalQty || 0)}</strong>
+                    <strong>{formatReportNumber(allProductReportTotals.Qty || 0)}</strong>
                   </div>
                 </div>
 
@@ -6539,7 +8783,7 @@ const allPartySalesTotals = useMemo(() => {
                   <span className="party-summary-icon"><BarChart3 size={17} /></span>
                   <div>
                     <small>Gross Amount</small>
-                    <strong>₹ {formatReportNumber(allProductReportTotals.grossAmount || 0)}</strong>
+                    <strong>₹ {formatReportNumber(allProductReportTotals.Amount || 0)}</strong>
                   </div>
                 </div>
 
@@ -6547,7 +8791,723 @@ const allPartySalesTotals = useMemo(() => {
                   <span className="party-summary-icon"><FileText size={17} /></span>
                   <div>
                     <small>Net Amount</small>
-                    <strong>₹ {formatReportNumber(allProductReportTotals.netAmount || 0)}</strong>
+                    <strong>₹ {formatReportNumber(allProductReportTotals.Valuation || 0)}</strong>
+                  </div>
+                </div>
+              </section>
+            </aside>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // =========================================================
+  // COMPANY WISE PURCHASE REPORT - MODERN RENDER
+  // =========================================================
+  if (selectedReport === "Company Wise Purchase Report") {
+    return (
+      <div className="party-classic-report-page">
+        <div className="party-classic-report-window">
+          <div className="party-classic-titlebar">
+            <div className="party-report-title-left">
+              <button
+                type="button"
+                className="party-title-back"
+                onClick={onBack}
+                title="Back to reports"
+                aria-label="Back to reports"
+              >
+                <ArrowLeft size={18} />
+              </button>
+
+              <div className="party-title-icon">
+                <Building2 size={21} />
+              </div>
+
+              <div className="party-title-content">
+                <span>Purchase Report</span>
+                <h1>Company Wise Purchase Report</h1>
+                <p>Detailed company-wise purchase analysis with supplier and product-wise options</p>
+              </div>
+            </div>
+
+            <div className="party-title-actions">
+              <button
+                type="button"
+                className="party-title-secondary-button"
+                title="Clear current filters"
+                onClick={clearCompanyPurchaseFilters}
+              >
+                <RefreshCw size={15} />
+                Reset Filter
+              </button>
+
+              <button
+                type="button"
+                className="party-title-generate-button"
+                onClick={generateCompanyPurchaseReport}
+                disabled={isCompanyPurchaseLoading || isPurchaseCriteriaLoading}
+              >
+                {isCompanyPurchaseLoading ? (
+                  <RefreshCw size={16} className="party-spinning-icon" />
+                ) : (
+                  <Building2 size={16} />
+                )}
+                {isCompanyPurchaseLoading ? "Generating..." : "Generate Report"}
+              </button>
+            </div>
+          </div>
+
+          <div className="party-report-content-layout">
+            <main className="party-report-main-column">
+              <div className="party-report-filter-panel">
+                <fieldset className="party-filter-group">
+                  <legend>
+                    <span className="party-filter-legend-icon">
+                      <Building2 size={15} />
+                    </span>
+                    Report Filters
+                  </legend>
+
+                  <div className="party-report-form-grid-two-rows">
+                    <div className="party-report-form-row">
+                      <div className="party-report-field">
+                        <label>Company</label>
+                        <select
+                          value={companyPurchaseFilters.company}
+                          disabled={isPurchaseCriteriaLoading}
+                          onChange={(event) => {
+                            const value = event.target.value;
+                            setCompanyPurchaseFilters((prev) => ({
+                              ...prev,
+                              company: value,
+                              selectedSupplierCodes: [],
+                              selectedGodownCodes: [],
+                            }));
+                            setSupplierSelectorSearch("");
+                            setGodownSelectorSearch("");
+                            setShowSupplierSelector(false);
+                            setShowGodownSelector(false);
+                            setCompanyPurchaseRows([]);
+                            setIsCompanyPurchaseGenerated(false);
+                            loadCompanyPurchaseCriteria(value);
+                          }}
+                        >
+                          <option value="">All Companies</option>
+                          {reportCompanies.map((company, index) => {
+                            const companyCode = getCompanyCode(company, index);
+                            const companyName = getCompanyName(company) || companyCode;
+                            return (
+                              <option key={company._id || companyCode} value={companyCode}>
+                                {companyName}
+                              </option>
+                            );
+                          })}
+                        </select>
+                      </div>
+
+                      <div className="party-report-field party-field-wide">
+                        <label>Supplier</label>
+                        <div className="party-multi-select">
+                          <button
+                            type="button"
+                            className="party-multi-select-trigger"
+                            disabled={!companyPurchaseFilters.company && reportCompanies.length === 0}
+                            onClick={() => {
+                              if (!companyPurchaseFilters.company) {
+                                setCompanyPurchaseError("Please select company first.");
+                                return;
+                              }
+                              setShowSupplierSelector((prev) => !prev);
+                              setCompanyPurchaseError("");
+                            }}
+                          >
+                            <span>
+                              {selectedSupplierNames.length > 0
+                                ? selectedSupplierNames.join(", ")
+                                : "Select suppliers..."}
+                            </span>
+                            <span>▼</span>
+                          </button>
+                        </div>
+                      </div>
+
+                      <div className="party-report-field">
+                        <label>Godown</label>
+                        <select
+                          value={companyPurchaseFilters.godown}
+                          onChange={(event) => {
+                            const value = event.target.value;
+                            setCompanyPurchaseFilters((prev) => ({
+                              ...prev,
+                              godown: value,
+                              selectedGodownCodes: value === "yes" ? prev.selectedGodownCodes : [],
+                            }));
+                            if (value === "yes") {
+                              setShowGodownSelector(true);
+                            } else {
+                              setShowGodownSelector(false);
+                            }
+                            setCompanyPurchaseRows([]);
+                            setIsCompanyPurchaseGenerated(false);
+                          }}
+                        >
+                          <option value="all">All Godowns</option>
+                          <option value="yes">Select Godowns</option>
+                        </select>
+                      </div>
+
+                      <div className="party-report-field">
+                        <label>Report Level</label>
+                        <select
+                          value={companyPurchaseFilters.reportLevel}
+                          onChange={(event) => {
+                            const value = event.target.value;
+                            setCompanyPurchaseFilters((prev) => ({
+                              ...prev,
+                              reportLevel: value,
+                            }));
+                            setCompanyPurchaseRows([]);
+                            setIsCompanyPurchaseGenerated(false);
+                          }}
+                        >
+                          <option value="summary">Summary</option>
+                          <option value="details">Details</option>
+                        </select>
+                      </div>
+                    </div>
+
+                    <div className="party-report-form-row">
+                      <div className="party-report-field">
+                        <label>From Date</label>
+                        <input
+                          type="date"
+                          value={companyPurchaseFilters.fromDate}
+                          onChange={(event) =>
+                            updateCompanyPurchaseFilter("fromDate", event.target.value)
+                          }
+                        />
+                      </div>
+
+                      <div className="party-report-field">
+                        <label>To Date</label>
+                        <input
+                          type="date"
+                          value={companyPurchaseFilters.toDate}
+                          onChange={(event) =>
+                            updateCompanyPurchaseFilter("toDate", event.target.value)
+                          }
+                        />
+                      </div>
+
+                      <div className="party-report-field">
+                        <label>Product Wise</label>
+                        <select
+                          value={companyPurchaseFilters.productWise}
+                          onChange={(event) =>
+                            updateCompanyPurchaseFilter("productWise", event.target.value)
+                          }
+                        >
+                          <option value="no">No</option>
+                          <option value="yes">Yes</option>
+                        </select>
+                      </div>
+
+                      <div className="party-report-field">
+                        <label>Order By</label>
+                        <select
+                          value={companyPurchaseFilters.orderBy}
+                          onChange={(event) =>
+                            updateCompanyPurchaseFilter("orderBy", event.target.value)
+                          }
+                        >
+                          <option value="companyName">Company Name</option>
+                          <option value="supplierName">Supplier Name</option>
+                          <option value="billDate">Bill Date</option>
+                          <option value="productName">Product Name</option>
+                          <option value="netAmount">Net Amount</option>
+                        </select>
+                      </div>
+
+                      <div className="party-report-field">
+                        <label>With Credit Note</label>
+                        <select
+                          value={companyPurchaseFilters.withCreditNote}
+                          onChange={(event) =>
+                            updateCompanyPurchaseFilter("withCreditNote", event.target.value)
+                          }
+                        >
+                          <option value="no">No</option>
+                          <option value="yes">Yes</option>
+                        </select>
+                      </div>
+                    </div>
+                  </div>
+
+                  {showSupplierSelector && (
+                    <div
+                      className="party-selection-backdrop"
+                      onMouseDown={(event) => {
+                        if (event.target === event.currentTarget) {
+                          setShowSupplierSelector(false);
+                        }
+                      }}
+                    >
+                      <div className="party-selection-modal party-selection-modal-large">
+                        <div className="party-selection-modal-header">
+                          <div>
+                            <strong>Select Suppliers</strong>
+                            <span>
+                              {companyPurchaseFilters.selectedSupplierCodes?.length || 0} Selected
+                            </span>
+                          </div>
+                          <button type="button" onClick={() => setShowSupplierSelector(false)}>
+                            <X size={15} />
+                          </button>
+                        </div>
+
+                        <div className="party-selector-search">
+                          <Search size={13} />
+                          <input
+                            type="text"
+                            value={supplierSelectorSearch}
+                            placeholder="Search suppliers by code or name..."
+                            onChange={(event) => setSupplierSelectorSearch(event.target.value)}
+                            autoFocus
+                          />
+                        </div>
+
+                        <div className="party-selector-sort-label">
+                          <span>Sort by Name (A-Z)</span>
+                        </div>
+
+                        <label className="party-check-row party-check-all">
+                          <input
+                            type="checkbox"
+                            checked={
+                              mappedParties.length > 0 &&
+                              companyPurchaseFilters.selectedSupplierCodes?.length === mappedParties.length
+                            }
+                            onChange={(event) => toggleAllSuppliers(event.target.checked)}
+                          />
+                          <span>Select All Suppliers</span>
+                        </label>
+
+                        <div className="party-checkbox-list modern-product-list">
+                          {visibleSupplierOptions.length > 0 ? (
+                            visibleSupplierOptions.map((supplier, index) => {
+                              const supplierCode = getSupplierCode(supplier, index);
+                              const isChecked = companyPurchaseFilters.selectedSupplierCodes?.includes(supplierCode) || false;
+                              const supplierName = getSupplierName(supplier) || supplierCode;
+
+                              return (
+                                <label key={supplier._id || supplierCode} className={`party-card ${isChecked ? "selected" : ""}`}>
+                                  <input
+                                    type="checkbox"
+                                    checked={isChecked}
+                                    onChange={(event) =>
+                                      toggleSupplierSelection(supplierCode, event.target.checked)
+                                    }
+                                  />
+                                  <div className="party-card-details">
+                                    <div className="party-card-header">
+                                      <span className="party-name">{supplierName}</span>
+                                      <span className="party-code">{supplierCode}</span>
+                                    </div>
+                                    <div className="party-card-footer">
+                                      <span className="party-location">
+                                        {supplier?.town || supplier?.city || ""}
+                                      </span>
+                                      <span className="party-phone">
+                                        {supplier?.mobileNo || supplier?.phone || ""}
+                                      </span>
+                                    </div>
+                                  </div>
+                                </label>
+                              );
+                            })
+                          ) : (
+                            <div className="party-selector-empty">
+                              {isPurchaseCriteriaLoading ? "Loading suppliers..." : "No suppliers found"}
+                            </div>
+                          )}
+                        </div>
+
+                        <div className="party-selection-modal-footer">
+                          <span>
+                            {companyPurchaseFilters.selectedSupplierCodes?.length || 0} supplier(s) selected
+                          </span>
+                          <button type="button" onClick={() => setShowSupplierSelector(false)}>
+                            <Check size={13} /> Done
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {showGodownSelector && (
+                    <div
+                      className="party-selection-backdrop"
+                      onMouseDown={(event) => {
+                        if (event.target === event.currentTarget) {
+                          setShowGodownSelector(false);
+                        }
+                      }}
+                    >
+                      <div className="party-selection-modal">
+                        <div className="party-selection-modal-header">
+                          <div>
+                            <strong>Select Godowns</strong>
+                            <span>
+                              {companyPurchaseFilters.selectedGodownCodes?.length || 0} Selected
+                            </span>
+                          </div>
+                          <button type="button" onClick={() => setShowGodownSelector(false)}>
+                            <X size={15} />
+                          </button>
+                        </div>
+
+                        <div className="party-selector-search">
+                          <Search size={13} />
+                          <input
+                            type="text"
+                            value={godownSelectorSearch}
+                            placeholder="Search godowns..."
+                            onChange={(event) => setGodownSelectorSearch(event.target.value)}
+                            autoFocus
+                          />
+                        </div>
+
+                        <label className="party-check-row party-check-all">
+                          <input
+                            type="checkbox"
+                            checked={
+                              godowns.length > 0 &&
+                              companyPurchaseFilters.selectedGodownCodes?.length === godowns.length
+                            }
+                            onChange={(event) => toggleAllGodowns(event.target.checked)}
+                          />
+                          <span>Select All Godowns</span>
+                        </label>
+
+                        <div className="party-checkbox-list">
+                          {visibleGodownOptions.length > 0 ? (
+                            visibleGodownOptions.map((godown, index) => {
+                              const godownCode = getGodownCode(godown, index);
+                              const isChecked = companyPurchaseFilters.selectedGodownCodes?.includes(godownCode) || false;
+                              const godownName = getGodownName(godown) || godownCode;
+
+                              return (
+                                <label key={godown._id || godownCode} className="party-check-row">
+                                  <input
+                                    type="checkbox"
+                                    checked={isChecked}
+                                    onChange={(event) =>
+                                      toggleGodownSelection(godownCode, event.target.checked)
+                                    }
+                                  />
+                                  <span className="party-check-name">{godownName}</span>
+                                </label>
+                              );
+                            })
+                          ) : (
+                            <div className="party-selector-empty">
+                              {isPurchaseCriteriaLoading ? "Loading godowns..." : "No godowns found"}
+                            </div>
+                          )}
+                        </div>
+
+                        <div className="party-selection-modal-footer">
+                          <span>
+                            {companyPurchaseFilters.selectedGodownCodes?.length || 0} godown(s) selected
+                          </span>
+                          <button type="button" onClick={() => setShowGodownSelector(false)}>
+                            <Check size={13} /> Done
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                </fieldset>
+              </div>
+
+              {companyPurchaseError && (
+                <div className="party-report-error" role="alert">
+                  {companyPurchaseError}
+                </div>
+              )}
+
+              <div className="party-report-results">
+                <div className="party-result-caption">Report Results</div>
+
+                <div className="party-report-toolbar">
+                  <div className="party-grid-heading">
+                    <div className="party-grid-heading-icon">
+                      <Building2 size={17} />
+                    </div>
+                    <div>
+                      <strong>Report Results</strong>
+                      <span>
+                        {isCompanyPurchaseGenerated
+                          ? `${filteredCompanyPurchaseRows.length} records found`
+                          : "Generate the report to view results"}
+                      </span>
+                    </div>
+                  </div>
+
+                  <div className="party-grid-toolbar-actions">
+                    <div className="party-report-search">
+                      <Search size={15} />
+                      <input
+                        type="text"
+                        value={companyPurchaseSearch}
+                        onChange={(event) => {
+                          setCompanyPurchaseSearch(event.target.value);
+                          setCompanyPurchaseCurrentPage(1);
+                        }}
+                        placeholder="Search in results..."
+                      />
+                      {companyPurchaseSearch.trim() !== "" && (
+                        <button
+                          type="button"
+                          className="party-grid-search-clear"
+                          onClick={() => {
+                            setCompanyPurchaseSearch("");
+                            setCompanyPurchaseCurrentPage(1);
+                          }}
+                          title="Clear search"
+                          aria-label="Clear search"
+                        >
+                          <X size={14} />
+                        </button>
+                      )}
+                    </div>
+
+                    <select
+                      className="party-grid-zoom-select"
+                      value={companyPurchaseZoom}
+                      onChange={(event) => setCompanyPurchaseZoom(event.target.value)}
+                      title="Grid zoom"
+                    >
+                      <option value="75">75%</option>
+                      <option value="90">90%</option>
+                      <option value="100">100%</option>
+                      <option value="125">125%</option>
+                      <option value="150">150%</option>
+                    </select>
+
+                    <button
+                      type="button"
+                      className="party-grid-refresh-button"
+                      onClick={generateCompanyPurchaseReport}
+                      disabled={isCompanyPurchaseLoading || isPurchaseCriteriaLoading}
+                      title="Refresh report"
+                    >
+                      <RefreshCw size={15} />
+                    </button>
+
+                    <div className="party-toolbar-export">
+                      <button
+                        type="button"
+                        className="party-export-excel"
+                        onClick={exportCompanyPurchaseToExcel}
+                        disabled={!isCompanyPurchaseGenerated || filteredCompanyPurchaseRows.length === 0}
+                      >
+                        <FileSpreadsheet size={15} /> Excel
+                      </button>
+
+                      <button
+                        type="button"
+                        className="party-export-csv"
+                        onClick={exportCompanyPurchaseToCsv}
+                        disabled={!isCompanyPurchaseGenerated || filteredCompanyPurchaseRows.length === 0}
+                      >
+                        <Download size={15} /> CSV
+                      </button>
+
+                      <button
+                        type="button"
+                        className="party-export-pdf"
+                        onClick={exportCompanyPurchaseToPdf}
+                        disabled={!isCompanyPurchaseGenerated || filteredCompanyPurchaseRows.length === 0}
+                      >
+                        <FileText size={15} /> PDF
+                      </button>
+
+                      <button
+                        type="button"
+                        className="party-export-print"
+                        onClick={printCompanyPurchaseReport}
+                        disabled={!isCompanyPurchaseGenerated || filteredCompanyPurchaseRows.length === 0}
+                      >
+                        <Printer size={15} /> Print
+                      </button>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="party-report-grid-container">
+                  {!isCompanyPurchaseGenerated ? (
+                    <div className="party-empty-report">
+                      <Building2 size={40} />
+                      <strong>No report generated</strong>
+                      <span>Select the required report filters and click Generate.</span>
+                    </div>
+                  ) : (
+                    <div
+                      className="party-report-zoom"
+                      style={{ zoom: Number(companyPurchaseZoom) / 100 }}
+                    >
+                      <table className="party-report-table" style={{ width: '100%', minWidth: '1200px' }}>
+                        <thead>
+                          <tr>
+                            <th style={{ minWidth: '50px' }}>Sr No.</th>
+                            <th style={{ minWidth: '100px' }}>Bill Date</th>
+                            <th style={{ minWidth: '80px' }}>Series</th>
+                            <th style={{ minWidth: '70px' }}>Bill No</th>
+                            <th style={{ minWidth: '100px' }}>Supplier Code</th>
+                            <th style={{ minWidth: '180px' }}>Supplier Name</th>
+                            <th style={{ minWidth: '100px' }}>Product Code</th>
+                            <th style={{ minWidth: '180px' }}>Product Name</th>
+                            <th style={{ minWidth: '80px' }}>Batch</th>
+                            <th style={{ minWidth: '80px' }} className="party-report-number">MRP</th>
+                            <th style={{ minWidth: '90px' }} className="party-report-number">Purchase Rate</th>
+                            <th style={{ minWidth: '70px' }} className="party-report-number">Qty</th>
+                            <th style={{ minWidth: '70px' }} className="party-report-number">Free Qty</th>
+                            <th style={{ minWidth: '90px' }} className="party-report-number">Gross Amount</th>
+                            <th style={{ minWidth: '80px' }} className="party-report-number">Discount</th>
+                            <th style={{ minWidth: '70px' }} className="party-report-number">Disc %</th>
+                            <th style={{ minWidth: '90px' }} className="party-report-number">Taxable Amount</th>
+                            <th style={{ minWidth: '80px' }} className="party-report-number">Tax Amount</th>
+                            <th style={{ minWidth: '70px' }} className="party-report-number">Tax %</th>
+                            <th style={{ minWidth: '90px' }} className="party-report-number">Net Amount</th>
+                            <th style={{ minWidth: '120px' }}>Godown</th>
+                          </tr>
+                        </thead>
+
+                        <tbody>
+                          {companyPurchasePageRows.map((row, rowIndex) => (
+                            <tr key={row.rowId || rowIndex}>
+                              <td style={{ textAlign: 'center' }}>{row.SrNo || rowIndex + 1}</td>
+                              <td>{formatCompanyPurchaseValue({ key: 'BillDate' }, row.BillDate)}</td>
+                              <td>{row.BillSeries || ''}</td>
+                              <td style={{ textAlign: 'center' }}>{row.BillNo ?? ''}</td>
+                              <td>{row.SupplierCode || ''}</td>
+                              <td>{row.SupplierName || ''}</td>
+                              <td>{row.ProductCode || ''}</td>
+                              <td>{row.ProductName || ''}</td>
+                              <td>{row.Batch || ''}</td>
+                              <td className="party-report-number">{formatReportNumber(row.MRP || 0)}</td>
+                              <td className="party-report-number">{formatReportNumber(row.PurchaseRate || 0)}</td>
+                              <td className="party-report-number">{formatReportNumber(row.Qty || 0)}</td>
+                              <td className="party-report-number">{formatReportNumber(row.FreeQty || 0)}</td>
+                              <td className="party-report-number">{formatReportNumber(row.GrossAmount || 0)}</td>
+                              <td className="party-report-number">{formatReportNumber(row.Discount || 0)}</td>
+                              <td className="party-report-number">{formatReportNumber(row.DiscountPercent || 0)}</td>
+                              <td className="party-report-number">{formatReportNumber(row.TaxableAmount || 0)}</td>
+                              <td className="party-report-number">{formatReportNumber(row.TaxAmount || 0)}</td>
+                              <td className="party-report-number">{formatReportNumber(row.TaxPercent || 0)}</td>
+                              <td className="party-report-number">{formatReportNumber(row.NetAmount || 0)}</td>
+                              <td>{row.GodownName || ''}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+
+                        {filteredCompanyPurchaseRows.length > 0 && (
+                          <tfoot>
+                            <tr>
+                              <td colSpan="11" style={{ fontWeight: 'bold', textAlign: 'right' }}>TOTAL</td>
+                              <td className="party-report-number" style={{ fontWeight: 'bold' }}>
+                                {formatReportNumber(companyPurchaseTotals.Qty || 0)}
+                              </td>
+                              <td className="party-report-number" style={{ fontWeight: 'bold' }}>
+                                {formatReportNumber(companyPurchaseTotals.FreeQty || 0)}
+                              </td>
+                              <td className="party-report-number" style={{ fontWeight: 'bold' }}>
+                                {formatReportNumber(companyPurchaseTotals.GrossAmount || 0)}
+                              </td>
+                              <td className="party-report-number" style={{ fontWeight: 'bold' }}>
+                                {formatReportNumber(companyPurchaseTotals.Discount || 0)}
+                              </td>
+                              <td colSpan="2"></td>
+                              <td className="party-report-number" style={{ fontWeight: 'bold' }}>
+                                {formatReportNumber(companyPurchaseTotals.TaxableAmount || 0)}
+                              </td>
+                              <td className="party-report-number" style={{ fontWeight: 'bold' }}>
+                                {formatReportNumber(companyPurchaseTotals.TaxAmount || 0)}
+                              </td>
+                              <td colSpan="2"></td>
+                              <td className="party-report-number" style={{ fontWeight: 'bold' }}>
+                                {formatReportNumber(companyPurchaseTotals.NetAmount || 0)}
+                              </td>
+                              <td colSpan="1"></td>
+                            </tr>
+                          </tfoot>
+                        )}
+                      </table>
+                    </div>
+                  )}
+                </div>
+
+                <div className="party-report-statusbar">
+                  <span>
+                    Records: {isCompanyPurchaseGenerated ? filteredCompanyPurchaseRows.length : 0}
+                  </span>
+                  <span>
+                    Level: {companyPurchaseFilters.reportLevel === "details" ? "Details" : "Summary"}
+                  </span>
+                  <span>
+                    Period: {companyPurchaseFilters.fromDate || "--"} to {companyPurchaseFilters.toDate || "--"}
+                  </span>
+                </div>
+              </div>
+            </main>
+
+            <aside className="party-report-sidebar">
+              <section className="party-sidebar-card">
+                <div className="party-sidebar-card-title">
+                  <Building2 size={18} />
+                  <strong>Quick Summary</strong>
+                </div>
+
+                <div className="party-summary-item">
+                  <span className="party-summary-icon"><Building2 size={17} /></span>
+                  <div>
+                    <small>Total Records</small>
+                    <strong>{filteredCompanyPurchaseRows.length.toLocaleString("en-IN")}</strong>
+                  </div>
+                </div>
+
+                <div className="party-summary-item">
+                  <span className="party-summary-icon"><ShoppingCart size={17} /></span>
+                  <div>
+                    <small>Total Quantity</small>
+                    <strong>{formatReportNumber(companyPurchaseTotals.Qty || 0)}</strong>
+                  </div>
+                </div>
+
+                <div className="party-summary-item">
+                  <span className="party-summary-icon"><BarChart3 size={17} /></span>
+                  <div>
+                    <small>Gross Amount</small>
+                    <strong>₹ {formatReportNumber(companyPurchaseTotals.GrossAmount || 0)}</strong>
+                  </div>
+                </div>
+
+                <div className="party-summary-item">
+                  <span className="party-summary-icon"><FileText size={17} /></span>
+                  <div>
+                    <small>Net Amount</small>
+                    <strong>₹ {formatReportNumber(companyPurchaseTotals.NetAmount || 0)}</strong>
+                  </div>
+                </div>
+
+                <div className="party-summary-item">
+                  <span className="party-summary-icon"><FileText size={17} /></span>
+                  <div>
+                    <small>Tax Amount</small>
+                    <strong>₹ {formatReportNumber(companyPurchaseTotals.TaxAmount || 0)}</strong>
                   </div>
                 </div>
               </section>

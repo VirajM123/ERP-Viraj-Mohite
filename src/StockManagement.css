@@ -1,0 +1,375 @@
+/* Stock adjustment uses the Sales Billing design system from Dashboard.css. */
+.stock-adjustment-page {
+  min-height: 100%;
+}
+
+.stock-adjustment-page .sales-billing-card {
+  min-height: 100%;
+}
+
+.stock-header-fields {
+  grid-template-columns: repeat(6, minmax(130px, 1fr)) !important;
+  gap: 10px 12px !important;
+}
+
+.stock-narration-field {
+  grid-column: span 2;
+}
+
+.stock-entry-scroll {
+  min-height: 285px;
+  max-height: 285px;
+}
+
+.billing-product-table.stock-entry-table {
+  width: 100% !important;
+  min-width: 1040px !important;
+  table-layout: fixed;
+}
+
+.billing-product-table.stock-entry-table th:nth-child(1),
+.billing-product-table.stock-entry-table td:nth-child(1) { width: 54px; min-width: 54px; text-align: center; }
+.billing-product-table.stock-entry-table th:nth-child(2),
+.billing-product-table.stock-entry-table td:nth-child(2) { width: 155px; min-width: 155px; }
+.billing-product-table.stock-entry-table th:nth-child(3),
+.billing-product-table.stock-entry-table td:nth-child(3) { width: 250px; min-width: 250px; }
+.billing-product-table.stock-entry-table th:nth-child(4),
+.billing-product-table.stock-entry-table td:nth-child(4) { width: 80px; min-width: 80px; }
+.billing-product-table.stock-entry-table th:nth-child(5),
+.billing-product-table.stock-entry-table td:nth-child(5),
+.billing-product-table.stock-entry-table th:nth-child(6),
+.billing-product-table.stock-entry-table td:nth-child(6) { width: 85px; min-width: 85px; }
+.billing-product-table.stock-entry-table th:nth-child(7),
+.billing-product-table.stock-entry-table td:nth-child(7),
+.billing-product-table.stock-entry-table th:nth-child(8),
+.billing-product-table.stock-entry-table td:nth-child(8) { width: 110px; min-width: 110px; }
+
+.stock-selected-batch {
+  display: flex;
+  align-items: center;
+  gap: 24px;
+  padding: 0 14px;
+  color: #64748b;
+  font-size: 10px;
+  font-weight: 650;
+}
+
+.stock-selected-batch strong {
+  margin-left: 4px;
+  color: #172554;
+}
+
+.stock-new-batch-panel {
+  margin-top: 14px;
+  padding: 15px;
+  border: 1px solid #dce5f2;
+  border-radius: 9px;
+  background: #f8fafc;
+}
+
+.stock-new-batch-panel > .billing-section-title {
+  margin-bottom: 12px;
+}
+
+.stock-batch-fields {
+  display: grid;
+  grid-template-columns: repeat(6, minmax(115px, 1fr));
+  gap: 12px;
+}
+
+.stock-value-footer {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 1px;
+  padding: 18px 26px 22px;
+  background: #f4f7fb;
+}
+
+.stock-value-footer > div {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  min-height: 42px;
+  padding: 0 14px;
+  border: 1px solid #dce5f0;
+  background: #fff;
+  color: #64748b;
+  font-size: 11px;
+  font-weight: 650;
+}
+
+.stock-value-footer strong {
+  color: #172554;
+  font-size: 13px;
+}
+
+.stock-product-dropdown {
+  width: min(720px, calc(100vw - 40px));
+}
+
+.stock-batch-modal-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 1000000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  background: rgba(15, 23, 42, 0.46);
+}
+
+.stock-batch-modal {
+  width: min(860px, calc(100vw - 40px));
+  max-height: calc(100vh - 60px);
+  overflow: hidden;
+  border: 1px solid #cdd8e8;
+  border-radius: 10px;
+  background: #fff;
+  box-shadow: 0 24px 65px rgba(15, 23, 42, 0.24);
+}
+
+.stock-batch-modal-header {
+  display: flex;
+  min-height: 64px;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 18px;
+  border-bottom: 1px solid #dce5f2;
+}
+
+.stock-batch-modal-header h2 {
+  margin: 0;
+  color: #172554;
+  font-size: 16px;
+}
+
+.stock-batch-modal-header p {
+  margin: 3px 0 0;
+  color: #64748b;
+  font-size: 11px;
+}
+
+.stock-batch-modal-header button {
+  width: 34px;
+  height: 34px;
+  display: grid;
+  place-items: center;
+  border: 0;
+  border-radius: 7px;
+  background: #f1f5f9;
+  color: #475569;
+  cursor: pointer;
+}
+
+.stock-batch-tabs {
+  display: flex;
+  gap: 7px;
+  padding: 12px 16px;
+  border-bottom: 1px solid #e5ebf4;
+  background: #f8fafc;
+}
+
+.stock-batch-tabs button {
+  height: 32px;
+  padding: 0 14px;
+  border: 1px solid #d5e0ef;
+  border-radius: 6px;
+  background: #fff;
+  color: #475569;
+  font-size: 11px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.stock-batch-tabs button.active {
+  border-color: #2563eb;
+  background: #2563eb;
+  color: #fff;
+}
+
+.stock-batch-table-wrap {
+  max-height: 330px;
+  overflow: auto;
+  margin: 16px;
+  border: 1px solid #dce5f2;
+  border-radius: 8px;
+}
+
+.stock-batch-table {
+  width: 100%;
+  border-collapse: collapse;
+  color: #334155;
+  font-size: 11px;
+}
+
+.stock-batch-table th,
+.stock-batch-table td {
+  height: 38px;
+  padding: 7px 10px;
+  border-right: 1px solid #e8edf4;
+  border-bottom: 1px solid #e8edf4;
+  text-align: left;
+}
+
+.stock-batch-table th {
+  position: sticky;
+  top: 0;
+  background: #f3f7fc;
+  color: #334155;
+  font-size: 10px;
+}
+
+.stock-batch-table tbody tr:hover td {
+  background: #eff6ff;
+}
+
+.stock-batch-select {
+  border: 0;
+  background: transparent;
+  color: #2563eb;
+  font: inherit;
+  font-weight: 750;
+  cursor: pointer;
+}
+
+.stock-batch-empty {
+  height: 90px !important;
+  color: #64748b;
+  text-align: center !important;
+}
+
+.stock-modal-new-batch {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(150px, 1fr));
+  gap: 14px;
+  padding: 20px;
+}
+
+.stock-batch-modal-footer {
+  display: flex;
+  min-height: 60px;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 9px;
+  padding: 10px 16px;
+  border-top: 1px solid #dce5f2;
+  background: #f8fafc;
+}
+
+.stock-batch-modal-footer > span {
+  margin-right: auto;
+  color: #64748b;
+  font-size: 11px;
+}
+
+.stock-dropdown-empty {
+  min-height: 55px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #64748b;
+  font-size: 11px;
+}
+
+.stock-list-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 12px;
+  color: #64748b;
+  font-size: 11px;
+  font-weight: 650;
+}
+
+.stock-list-search {
+  width: min(380px, 100%);
+  height: 36px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 11px;
+  border: 1px solid #d7e0ed;
+  border-radius: 7px;
+  background: #fff;
+  color: #64748b;
+}
+
+.stock-list-search input {
+  width: 100%;
+  border: 0;
+  outline: 0;
+  color: #172554;
+  font: inherit;
+  font-size: 12px;
+}
+
+.stock-adjustment-list-page {
+  width: 100%;
+  min-height: 100%;
+}
+
+.stock-adjustment-list-page .stock-list-toolbar {
+  justify-content: space-between !important;
+}
+
+.stock-adjustment-list-page .stock-list-search {
+  margin: 0;
+}
+
+.stock-list-count {
+  color: #68758a;
+  font-size: 11px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.stock-adjustment-list-page .stock-list-table {
+  width: 100%;
+  min-width: 1180px;
+  table-layout: auto;
+}
+
+.stock-adjustment-list-page .stock-list-table th,
+.stock-adjustment-list-page .stock-list-table td {
+  min-width: 76px;
+  white-space: nowrap;
+}
+
+.stock-adjustment-list-page .stock-list-table .ts-sr-column {
+  width: 54px;
+  min-width: 54px;
+  text-align: center;
+}
+
+.stock-adjustment-list-page .stock-item-name-column,
+.stock-adjustment-list-page .stock-narration-column {
+  min-width: 180px !important;
+}
+
+.stock-number {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.stock-list-empty {
+  height: 120px !important;
+  color: #64748b;
+  text-align: center !important;
+}
+
+.stock-management-submenu .nav-subitem {
+  min-height: 34px;
+}
+
+@media (max-width: 1050px) {
+  .stock-header-fields { grid-template-columns: repeat(3, minmax(125px, 1fr)) !important; }
+  .stock-narration-field { grid-column: span 2; }
+  .stock-batch-fields { grid-template-columns: repeat(3, minmax(120px, 1fr)); }
+}
+
+@media (max-width: 760px) {
+  .stock-header-fields, .stock-batch-fields, .stock-modal-new-batch, .stock-value-footer { grid-template-columns: 1fr !important; }
+  .stock-narration-field { grid-column: span 1; }
+  .stock-selected-batch { gap: 10px; flex-wrap: wrap; }
+}

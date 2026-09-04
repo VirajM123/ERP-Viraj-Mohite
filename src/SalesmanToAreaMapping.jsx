@@ -1,7 +1,5 @@
 import React, { useMemo, useState } from "react";
-
-const API_URL = "https://total-solution-backend.onrender.com/api";
-  // const API_URL = "http://localhost:5000/api";
+import { API_URL } from "./api/config";
 
 const SalesmanToAreaMapping = ({ companies = [], areas = [], salesmen = [] }) => {
   const [selectedCompanyCode, setSelectedCompanyCode] = useState("");

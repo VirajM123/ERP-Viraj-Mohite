@@ -1,13 +1,10 @@
 import React from "react";
 import "./SecuritySetup.css";
+import { API_URL } from "./api/config";
 
 /* =========================================================
    API CONFIGURATION
 ========================================================= */
-
-// const API_URL = "http://localhost:5000/api";
-const API_URL = "https://total-solution-backend.onrender.com/api";
-
 
 /* =========================================================
    PERMISSION COLUMNS
@@ -111,6 +108,12 @@ const DEFAULT_OPERATION_GROUPS = [
                 module: "MASTER",
                 operation: "GODOWN",
             },
+            {
+                id: "master-service",
+                name: "Service",
+                module: "MASTER",
+                operation: "SERVICE",
+            },
         ],
     },
 {
@@ -154,6 +157,12 @@ const DEFAULT_OPERATION_GROUPS = [
                 name: "Quotation",
                 module: "SALES",
                 operation: "QUOTATION",
+            },
+            {
+                id: "sales-service",
+                name: "Sales Service",
+                module: "SALES",
+                operation: "SALES_SERVICE",
             },
             {
                 id: "sales-order",
@@ -223,6 +232,7 @@ const DEFAULT_OPERATION_GROUPS = [
         name: "Transactions",
         icon: "📁",
         operations: [
+            { id: "transactions-payment", name: "Payment", module: "TRANSACTIONS", operation: "PAYMENT" },
             {
                 id: "transaction-journal",
                 name: "Journal Voucher",
@@ -290,6 +300,10 @@ const DEFAULT_OPERATION_GROUPS = [
                 module: "REPORTS",
                 operation: "GST_REPORTS",
             },
+            { id: "report-financial", name: "Financial Reports", module: "REPORTS", operation: "FINANCIAL_REPORT" },
+            { id: "report-credit-control", name: "Credit Control", module: "REPORTS", operation: "CREDIT_CONTROL" },
+            { id: "report-audit-trail", name: "Audit Trail", module: "REPORTS", operation: "AUDIT_TRAIL" },
+            { id: "report-permission-audit", name: "Permission Audit", module: "REPORTS", operation: "PERMISSION_AUDIT" },
         ],
     },
     {
@@ -2609,18 +2623,7 @@ export const secureFetch = async (
 ) => {
   const headers = {
     ...(options.headers || {}),
-
-    "x-distributor-id":
-      localStorage.getItem("distributorId") || "",
-
-    "x-firm-id":
-      localStorage.getItem("firmId") || "",
-
-    "x-user-id":
-      localStorage.getItem("userId") || "",
-
-    "x-user-role":
-      localStorage.getItem("role") || "",
+    Authorization: `Bearer ${localStorage.getItem("token") || ""}`,
   };
 
   const response = await fetch(url, {

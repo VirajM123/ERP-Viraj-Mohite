@@ -3569,3 +3569,426 @@
 .party-selection-modal-footer button:hover {
   background: #1d4ed8 !important;
 }
+/* Product Selector Modal - Large */
+.party-selection-modal-large {
+  max-width: 900px;
+  width: 95%;
+  max-height: 85vh;
+}
+
+/* Modern Product List */
+.modern-product-list .party-card {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 10px 14px;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  margin-bottom: 6px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  background: #fff;
+}
+
+.modern-product-list .party-card:hover {
+  border-color: #3b82f6;
+  background: #f0f7ff;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+}
+
+.modern-product-list .party-card.selected {
+  border-color: #3b82f6;
+  background: #eff6ff;
+  box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.2);
+}
+
+.modern-product-list .party-card input[type="checkbox"] {
+  margin-top: 2px;
+  width: 16px;
+  height: 16px;
+  flex-shrink: 0;
+  cursor: pointer;
+  accent-color: #3b82f6;
+}
+
+.modern-product-list .party-card-details {
+  flex: 1;
+  min-width: 0;
+}
+
+.modern-product-list .party-card-header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+  margin-bottom: 4px;
+}
+
+.modern-product-list .party-name {
+  font-weight: 600;
+  font-size: 14px;
+  color: #1f2937;
+  flex: 1;
+}
+
+.modern-product-list .party-code {
+  font-size: 12px;
+  color: #6b7280;
+  background: #f3f4f6;
+  padding: 1px 8px;
+  border-radius: 12px;
+  font-family: monospace;
+}
+
+.modern-product-list .party-card-footer {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 14px;
+  font-size: 12px;
+  color: #6b7280;
+}
+
+.modern-product-list .party-card-footer .party-location,
+.modern-product-list .party-card-footer .party-phone {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+/* Product selection trigger */
+.party-multi-select-trigger {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  width: 100%;
+  padding: 8px 12px;
+  min-height: 38px;
+  background: #fff;
+  border: 1px solid #d1d5db;
+  border-radius: 6px;
+  font-size: 14px;
+  color: #1f2937;
+  cursor: pointer;
+  transition: border-color 0.2s;
+}
+
+.party-multi-select-trigger:hover {
+  border-color: #9ca3af;
+}
+
+.party-multi-select-trigger:disabled {
+  background: #f3f4f6;
+  cursor: not-allowed;
+  opacity: 0.7;
+}
+
+.party-multi-select-trigger span:first-child {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  flex: 1;
+}
+
+.party-multi-select-trigger span:last-child {
+  color: #6b7280;
+  margin-left: 8px;
+}
+
+/* Field wide for product selection */
+.party-field-wide {
+  grid-column: 1 / -1;
+}
+
+@media (max-width: 768px) {
+  .party-field-wide {
+    grid-column: 1 / -1;
+  }
+  
+  .party-selection-modal-large {
+    max-width: 98%;
+    width: 98%;
+  }
+  
+  .modern-product-list .party-card {
+    flex-wrap: wrap;
+  }
+  
+  .modern-product-list .party-card-header {
+    flex-wrap: wrap;
+  }
+}
+/* Two Row Grid Layout for Product Report */
+.party-report-form-grid-two-rows {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  width: 100%;
+}
+
+.party-report-form-row {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 12px 16px;
+  width: 100%;
+}
+
+.party-report-form-row .party-report-field {
+  min-width: 0;
+}
+
+.party-report-form-row .party-field-wide {
+  grid-column: span 1;
+}
+
+/* Responsive: Stack on smaller screens */
+@media (max-width: 1200px) {
+  .party-report-form-row {
+    grid-template-columns: repeat(3, 1fr);
+  }
+}
+
+@media (max-width: 768px) {
+  .party-report-form-row {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+
+@media (max-width: 480px) {
+  .party-report-form-row {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* Find Cheque Details keeps the All Party report shell and adds compact trace cards. */
+.cheque-report-layout {
+  align-items: start;
+}
+
+.cheque-search-panel {
+  margin-bottom: 14px;
+}
+
+.cheque-search-row {
+  display: grid;
+  grid-template-columns: minmax(240px, 520px) auto;
+  align-items: end;
+  gap: 12px;
+}
+
+.cheque-search-row .party-title-generate-button {
+  min-height: 38px;
+  margin-bottom: 1px;
+}
+
+.cheque-empty-report {
+  min-height: 320px;
+  border: 1px dashed #cbd5e1;
+  border-radius: 12px;
+  background: #fff;
+}
+
+.cheque-empty-report h3,
+.cheque-empty-report p {
+  margin: 0;
+}
+
+.cheque-empty-report h3 {
+  color: #17264a;
+  font-size: 15px;
+}
+
+.cheque-summary-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+  align-items: start;
+}
+
+.cheque-summary-card {
+  min-width: 0;
+  overflow: hidden;
+  border: 1px solid #dbe4f0;
+  border-radius: 13px;
+  background: #fff;
+  box-shadow: 0 5px 18px rgba(28, 48, 83, 0.07);
+}
+
+.cheque-summary-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 16px;
+  padding: 14px 16px;
+  color: #fff;
+  background: linear-gradient(135deg, #173e77, #2866ad);
+}
+
+.cheque-summary-header span,
+.cheque-key-details span {
+  display: block;
+  margin-bottom: 3px;
+  color: inherit;
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  opacity: 0.8;
+}
+
+.cheque-summary-header h2 {
+  margin: 0;
+  font-size: 16px;
+}
+
+.cheque-summary-date {
+  flex: 0 0 auto;
+  text-align: right;
+}
+
+.cheque-key-details {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px 14px;
+  padding: 14px 16px;
+  border-bottom: 1px solid #e8edf4;
+  background: #f8fbff;
+}
+
+.cheque-key-details span {
+  color: #65758b;
+}
+
+.cheque-key-details strong {
+  display: block;
+  overflow-wrap: anywhere;
+  color: #142541;
+  font-size: 12px;
+}
+
+.cheque-detail-section {
+  padding: 13px 16px;
+  border-bottom: 1px solid #edf1f6;
+}
+
+.cheque-detail-section:last-child {
+  border-bottom: 0;
+}
+
+.cheque-detail-section h3,
+.cheque-report-sidebar h3 {
+  margin: 0 0 9px;
+  color: #1c3155;
+  font-size: 12px;
+}
+
+.cheque-table-scroll {
+  overflow-x: auto;
+}
+
+.cheque-detail-table {
+  min-width: 610px;
+  font-size: 10px;
+}
+
+.cheque-none-cell,
+.cheque-no-event {
+  color: #7b8798;
+  text-align: center;
+}
+
+.cheque-no-event {
+  margin: 5px 0;
+  font-size: 11px;
+}
+
+.cheque-event-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 12px;
+  padding: 9px 10px;
+  border-left: 3px solid #3b82f6;
+  border-radius: 7px;
+  background: #f4f8ff;
+  color: #43526a;
+  font-size: 10px;
+}
+
+.cheque-event-row + .cheque-event-row {
+  margin-top: 7px;
+}
+
+.cheque-event-row.bounce {
+  border-left-color: #dc2626;
+  background: #fff5f5;
+}
+
+.cheque-event-row.docket {
+  border-left-color: #059669;
+  background: #f0fdf7;
+}
+
+.cheque-event-row strong {
+  color: #182844;
+}
+
+.cheque-event-row small {
+  flex-basis: 100%;
+}
+
+.cheque-report-sidebar .party-sidebar-card > h3 {
+  padding-bottom: 10px;
+  border-bottom: 1px solid #e5eaf1;
+}
+
+.party-sidebar-stat {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 9px 0;
+  border-bottom: 1px solid #eef1f5;
+  color: #617086;
+  font-size: 11px;
+}
+
+.party-sidebar-stat:last-child {
+  border-bottom: 0;
+}
+
+.party-sidebar-stat strong {
+  color: #172b4d;
+  text-align: right;
+}
+
+@media (max-width: 1200px) {
+  .cheque-summary-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 700px) {
+  .cheque-search-row,
+  .cheque-key-details {
+    grid-template-columns: 1fr;
+  }
+
+  .cheque-summary-header {
+    align-items: flex-start;
+  }
+}
+
+@media print {
+  .cheque-details-report-page .party-classic-titlebar,
+  .cheque-details-report-page .cheque-search-panel,
+  .cheque-details-report-page .cheque-report-sidebar {
+    display: none !important;
+  }
+
+  .cheque-details-report-page .party-report-content-layout {
+    display: block;
+  }
+
+  .cheque-summary-card {
+    break-inside: avoid;
+    box-shadow: none;
+  }
+}

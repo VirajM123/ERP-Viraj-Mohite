@@ -1810,7 +1810,7 @@
   .collection-receipt-grid-6 {
     grid-template-columns: repeat(3, 1fr);
   }
-};
+}
 .party-search-box {
   position: relative !important;
   overflow: visible !important;

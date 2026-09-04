@@ -1,4 +1,5 @@
 import React from "react";
+import { API_URL } from "./api/config";
 import "./GeneralSetup1.css";
 
 /* =========================================================
@@ -111,7 +112,6 @@ export const createDefaultGeneralSetup = () => ({
     autoVoucherNo: true,
     dateLocking: "",
     showEntryDays: "10",
-    billingWithoutHsnCode: false,
     /* General Setup 2 */
 allowCessInPurchase: true,
 allowCessInSale: false,
@@ -270,8 +270,6 @@ const GeneralSetup1 = ({
     onSettingsSaved,
     isAdmin = false,
 }) => {
-    // const API_URL = "http://localhost:5000/api";
-    const API_URL = "https://total-solution-backend.onrender.com/api";
     const [generalSetup, setGeneralSetup] =
         React.useState(() =>
             createDefaultGeneralSetup()
@@ -593,18 +591,7 @@ const fetchWithTimeout = async (
 
         const headers = {
             ...(options.headers || {}),
-
-            "x-distributor-id":
-                localStorage.getItem("distributorId") || "",
-
-            "x-firm-id":
-                localStorage.getItem("firmId") || "",
-
-            "x-user-id":
-                localStorage.getItem("userId") || "",
-
-            "x-user-role":
-                localStorage.getItem("role") || "",
+            Authorization: `Bearer ${localStorage.getItem("token") || ""}`,
         };
 
         return await fetch(url, {

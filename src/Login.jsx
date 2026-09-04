@@ -1,13 +1,12 @@
 import React, { useEffect, useRef, useState } from "react";
 import "./Login.css";
-
-const API_URL = "https://total-solution-backend.onrender.com/api";
-// const API_URL = "http://localhost:5000/api";
+import { API_URL } from "./api/config";
+import { businessDateIST } from "./utils/businessDate";
+import { startSession } from "./utils/session";
 
 
 const getTodayDate = () => {
-  const today = new Date();
-  return today.toISOString().split("T")[0];
+  return businessDateIST();
 };
 
 const indianStates = [
@@ -406,7 +405,8 @@ console.log(
         return;
       }
 
-      localStorage.setItem("token", "login-success");
+      localStorage.setItem("token", result.token);
+      startSession();
       localStorage.setItem("distributorId", result.user.distributorId);
       localStorage.setItem("firmId", result.user.firmId);
       localStorage.setItem("firmCode", result.user.firmCode);

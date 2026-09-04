@@ -114,6 +114,12 @@ export default function createSecuritySetupRouter(User) {
           module: "MASTER",
           operation: "GODOWN",
         },
+        {
+          id: "master-customer-bank",
+          name: "Customer Bank",
+          module: "MASTER",
+          operation: "CUSTOMER_BANK",
+        },
       ],
     },
     {
@@ -280,6 +286,16 @@ export default function createSecuritySetupRouter(User) {
           module: "REPORTS",
           operation: "GST_REPORTS",
         },
+        {
+          id: "report-purchase",
+          name: "Purchase Reports",
+          module: "REPORTS",
+          operation: "PURCHASE_REPORT",
+        },
+        { id: "report-financial", name: "Financial Reports", module: "REPORTS", operation: "FINANCIAL_REPORT" },
+        { id: "report-credit-control", name: "Credit Control", module: "REPORTS", operation: "CREDIT_CONTROL" },
+        { id: "report-audit-trail", name: "Audit Trail", module: "REPORTS", operation: "AUDIT_TRAIL" },
+        { id: "report-permission-audit", name: "Permission Audit", module: "REPORTS", operation: "PERMISSION_AUDIT" },
       ],
     },
     {
@@ -549,18 +565,7 @@ export default function createSecuritySetupRouter(User) {
       return false;
     }
 
-    /*
-     * View is always allowed.
-     */
-    if (
-      String(action).toLowerCase() === "view"
-    ) {
-      return true;
-    }
-
-    return Boolean(
-      operationPermissions[action]
-    );
+    return Boolean(operationPermissions[String(action).toLowerCase()]);
   };
 
   const authorize = async (
@@ -614,21 +619,10 @@ export default function createSecuritySetupRouter(User) {
       async (req, res, next) => {
         try {
 
-          const distributorId = readString(
-            req.headers["x-distributor-id"]
-          );
-
-          const firmId = readString(
-            req.headers["x-firm-id"]
-          );
-
-          const userId = readString(
-            req.headers["x-user-id"]
-          );
-
-          const role = normalizeRole(
-            req.headers["x-user-role"]
-          );
+          const distributorId = readString(req.auth?.distributorId);
+          const firmId = readString(req.auth?.firmId);
+          const userId = readString(req.auth?.userId);
+          const role = normalizeRole(req.auth?.role);
 
           req.security = {
             distributorId,
@@ -679,10 +673,17 @@ export default function createSecuritySetupRouter(User) {
      LOAD SECURITY SETUP
   ========================================================= */
 
-  router.get("/", async (req, res) => {
+  const requireDistributorAdmin = (req, res, next) => {
+    if (normalizeRole(req.auth?.role) !== "DISTRIBUTOR_ADMIN") {
+      return res.status(403).json({ success: false, message: "Distributor administrator permission is required." });
+    }
+    next();
+  };
+
+  router.get("/", requireDistributorAdmin, async (req, res) => {
     try {
-      const distributorId = readString(req.query.distributorId);
-      const firmId = readString(req.query.firmId);
+      const distributorId = readString(req.auth?.distributorId);
+      const firmId = readString(req.auth?.firmId);
 
       if (!distributorId || !firmId) {
         return res.status(400).json({
@@ -751,10 +752,10 @@ export default function createSecuritySetupRouter(User) {
 
   router.get("/my-permissions", async (req, res) => {
     try {
-      const distributorId = readString(req.query.distributorId);
-      const firmId = readString(req.query.firmId);
-      const userId = readString(req.query.userId);
-      const role = normalizeRole(req.query.role);
+      const distributorId = readString(req.auth?.distributorId);
+      const firmId = readString(req.auth?.firmId);
+      const userId = readString(req.auth?.userId);
+      const role = normalizeRole(req.auth?.role);
 
       if (!distributorId || !firmId || !userId) {
         return res.status(400).json({
@@ -818,11 +819,11 @@ export default function createSecuritySetupRouter(User) {
      SAVE SECURITY SETUP
   ========================================================= */
 
-  router.put("/", async (req, res) => {
+  router.put("/", requireDistributorAdmin, async (req, res) => {
     try {
-      const distributorId = readString(req.body.distributorId);
-      const firmId = readString(req.body.firmId);
-      const updatedBy = readString(req.body.updatedBy);
+      const distributorId = readString(req.auth?.distributorId);
+      const firmId = readString(req.auth?.firmId);
+      const updatedBy = readString(req.auth?.userId);
 
       const users = Array.isArray(req.body.users)
         ? req.body.users

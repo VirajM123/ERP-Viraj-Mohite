@@ -1,7 +1,9 @@
-import React, { useState, useCallback, useEffect } from "react";
+import React, { useState, useCallback, useEffect, useRef } from "react";
 import { secureFetch, usePermission } from "./SecuritySetup";
 import "./Transaction.css";
 import { useERP } from "./context/ERPContext";
+import { API_URL } from "./api/config";
+import { businessDateIST } from "./utils/businessDate";
 import {
   Plus,
   FileSpreadsheet,
@@ -27,8 +29,6 @@ import {
   ChevronDown,
 } from "lucide-react";
 
-const API_URL = "https://total-solution-backend.onrender.com/api";
-// const API_URL = "http://localhost:5000/api";
 const Transaction = ({
   salesInvoices = [],
   salesmen = [],
@@ -46,6 +46,8 @@ const Transaction = ({
   autoVoucherNo = true,
 }) => {
   const receiptPermission = usePermission("TRANSACTIONS", "RECEIPT");
+  const paymentPermission = usePermission("TRANSACTIONS", "PAYMENT");
+  const journalPermission = usePermission("TRANSACTIONS", "JOURNAL_VOUCHER");
   const chequeBouncePermission = usePermission("TRANSACTIONS", "CHEQUE_BOUNCE");
   const pdcDocketPermission = usePermission("TRANSACTIONS", "PDC_DOCKET");           // NEW
 const contraPermission = usePermission("TRANSACTIONS", "CONTRA");                 // NEW
@@ -57,6 +59,41 @@ const collectionVoucherPermission = usePermission("TRANSACTIONS", "COLLECTION_VO
 
 
   const { state, dispatch } = useERP();
+  const [isFormReadOnly, setIsFormReadOnly] = useState(false);
+
+  useEffect(() => {
+    if (!isFormReadOnly) return undefined;
+    const formRoot = document.querySelector(".transaction-page.is-form-read-only");
+    if (!formRoot) return undefined;
+
+    const lockControls = () => {
+      formRoot
+        .querySelectorAll("input, select, textarea, [contenteditable='true']")
+        .forEach((control) => {
+          if (!control.hasAttribute("data-project-view-lock")) {
+            control.setAttribute("data-project-view-was-disabled", control.disabled ? "true" : "false");
+            control.setAttribute("data-project-view-lock", "true");
+          }
+          if ("disabled" in control) control.disabled = true;
+          control.setAttribute("contenteditable", "false");
+        });
+    };
+
+    lockControls();
+    const observer = new MutationObserver(lockControls);
+    observer.observe(formRoot, { childList: true, subtree: true });
+
+    return () => {
+      observer.disconnect();
+      formRoot.querySelectorAll("[data-project-view-lock]").forEach((control) => {
+        if ("disabled" in control && control.getAttribute("data-project-view-was-disabled") !== "true") {
+          control.disabled = false;
+        }
+        control.removeAttribute("data-project-view-lock");
+        control.removeAttribute("data-project-view-was-disabled");
+      });
+    };
+  }, [isFormReadOnly, activeTransaction, transactionFormMode]);
   /* =========================================================
    AUTO VOUCHER NUMBER COMMON HELPERS
 ========================================================= */
@@ -88,6 +125,7 @@ const collectionVoucherPermission = usePermission("TRANSACTIONS", "COLLECTION_VO
   };
 
   const openTransactionList = (menu) => {
+    setIsFormReadOnly(false);
     setActiveTransaction(menu);
     setTransactionFormMode((prev) => ({
       ...(prev || {}),
@@ -99,14 +137,14 @@ const collectionVoucherPermission = usePermission("TRANSACTIONS", "COLLECTION_VO
   // const [salesmanBills, setSalesmanBills] = useState([]);
   //  const [areaBills, setAreaBills] = useState([]);
   const openTransactionEntry = (menu) => {
+    setIsFormReadOnly(false);
     setActiveTransaction(menu);
 
     if (menu === "Contra") {
       setEditContraId(null);
 
       setContraFormData({
-        transactionDate:
-          new Date().toISOString().split("T")[0],
+        transactionDate: businessDateIST(),
 
         tranVNo: "",
 
@@ -121,8 +159,7 @@ const collectionVoucherPermission = usePermission("TRANSACTIONS", "COLLECTION_VO
       setEditCollectionVoucherId(null);
 
       setCollectionVoucherFormData({
-        collectionDate:
-          new Date().toISOString().split("T")[0],
+        collectionDate: businessDateIST(),
 
         colVNo: "",
 
@@ -161,6 +198,9 @@ const collectionVoucherPermission = usePermission("TRANSACTIONS", "COLLECTION_VO
 }
 
 if (menu === "Payment") {
+  setEditPaymentId(null);
+  paymentIdempotencyKey.current =
+    globalThis.crypto?.randomUUID?.() || `payment-${Date.now()}-${Math.random().toString(36).slice(2)}`;
   setPaymentFormData(
     (previous) => ({
       ...previous,
@@ -185,6 +225,8 @@ if (
   menu === "Journal Voucher" ||
   menu === "Journal"
 ) {
+  setEditJournalId(null);
+  journalIdempotencyKey.current = globalThis.crypto?.randomUUID?.() || `journal-${Date.now()}-${Math.random().toString(36).slice(2)}`;
   setJournalFormData(
     (previous) => ({
       ...previous,
@@ -241,31 +283,52 @@ if (menu === "PDC Docket") {
   const [billItems, setBillItems] = useState([]);
 
   useEffect(() => {
+    const distributorId = localStorage.getItem("distributorId");
+    const firmId = localStorage.getItem("firmId");
+
+    if (!distributorId || !firmId) {
+      return;
+    }
 
     loadCollectionVouchers();
-
   }, []);
 
 
   useEffect(() => {
+    const distributorId = localStorage.getItem("distributorId");
+    const firmId = localStorage.getItem("firmId");
+
+    if (!distributorId || !firmId) {
+      return;
+    }
 
     loadPDCDockets();
     loadContra();
-
   }, []);
 
   useEffect(() => {
-    console.log("LOAD RECEIPTS CALLED");
+    const distributorId = localStorage.getItem("distributorId");
+    const firmId = localStorage.getItem("firmId");
+
+    if (!distributorId || !firmId) {
+      return;
+    }
 
     loadReceipts();
-
-  }, [dispatch]);
+  }, []);
 
 
 
 
 
   useEffect(() => {
+    const distributorId = localStorage.getItem("distributorId");
+    const firmId = localStorage.getItem("firmId");
+
+    if (!distributorId || !firmId) {
+      return;
+    }
+
     loadChequeBounces();
   }, []);
   // =========================
@@ -392,6 +455,9 @@ if (menu === "PDC Docket") {
     setReceiptListCurrentPage(1);
   };
   const [editReceiptId, setEditReceiptId] = useState(null);
+  const receiptIdempotencyKey = useRef(
+    globalThis.crypto?.randomUUID?.() || `receipt-${Date.now()}-${Math.random().toString(36).slice(2)}`
+  );
   const [partySuggestions, setPartySuggestions] = useState([]);
   const [partySearchActive, setPartySearchActive] = useState(false);
   const [partyNotFound, setPartyNotFound] = useState(false);
@@ -565,8 +631,12 @@ if (menu === "PDC Docket") {
     setPaymentListCurrentPage(1);
   };
   const [paymentPartySuggestions, setPaymentPartySuggestions] = useState([]);
+  const [editPaymentId, setEditPaymentId] = useState(null);
+  const paymentIdempotencyKey = useRef(
+    globalThis.crypto?.randomUUID?.() || `payment-${Date.now()}-${Math.random().toString(36).slice(2)}`
+  );
   const [paymentFormData, setPaymentFormData] = useState({
-    vDate: new Date().toISOString().split("T")[0],
+    vDate: businessDateIST(),
     vNo:
       autoVoucherNo === true
         ? (state.payments?.length || 0) + 1
@@ -595,25 +665,39 @@ if (menu === "PDC Docket") {
       return;
     }
 
-    setPaymentFormData(
-      (previous) => ({
-        ...previous,
-
-        vNo:
-          autoVoucherNo === true
-            ? String(
-              (state.payments?.length || 0) +
-              1
-            )
-            : "",
+    if (editPaymentId || autoVoucherNo !== true) return;
+    let cancelled = false;
+    secureFetch(`${API_URL}/transaction/payment/next-no`)
+      .then(async (response) => {
+        const result = await response.json();
+        if (!response.ok || result.success === false) throw new Error(result.message || "Unable to generate payment number.");
+        if (!cancelled) setPaymentFormData((previous) => ({ ...previous, vNo: String(result.nextNo || "") }));
       })
-    );
+      .catch((error) => console.error("Payment next-number error:", error));
+    return () => { cancelled = true; };
   }, [
     activeTransaction,
     transactionFormMode?.["Payment"],
     autoVoucherNo,
     state.payments?.length,
+    editPaymentId,
   ]);
+
+  useEffect(() => {
+    if (activeTransaction !== "Payment") return;
+    let cancelled = false;
+    secureFetch(`${API_URL}/transaction/payment`)
+      .then(async (response) => {
+        const result = await response.json();
+        if (!response.ok || result.success === false) throw new Error(result.message || "Unable to load payments.");
+        if (!cancelled) {
+          const legacyLocalPayments = (state.payments || []).filter((payment) => !payment?._id && !payment?.header?._id);
+          dispatch({ type: "SET_PAYMENTS", payload: [...legacyLocalPayments, ...(result.data || [])] });
+        }
+      })
+      .catch((error) => console.error("Payment list load error:", error));
+    return () => { cancelled = true; };
+  }, [activeTransaction]);
   const [paymentItems, setPaymentItems] = useState([{
     id: Date.now(),
     srNo: 1,
@@ -710,9 +794,11 @@ if (menu === "PDC Docket") {
     setJournalListCurrentPage(1);
   };
   const [accountSuggestions, setAccountSuggestions] = useState([]);
+  const [editJournalId, setEditJournalId] = useState(null);
+  const journalIdempotencyKey = useRef(globalThis.crypto?.randomUUID?.() || `journal-${Date.now()}-${Math.random().toString(36).slice(2)}`);
   const [activeAccountRow, setActiveAccountRow] = useState(null);
   const [journalFormData, setJournalFormData] = useState({
-    vDate: new Date().toISOString().split("T")[0],
+    vDate: businessDateIST(),
     vNo:
       autoVoucherNo === true
         ? (state.journals?.length || 0) + 1
@@ -732,19 +818,14 @@ if (menu === "PDC Docket") {
       return;
     }
 
-    setJournalFormData(
-      (previous) => ({
-        ...previous,
-
-        vNo:
-          autoVoucherNo === true
-            ? String(
-              (state.journals?.length || 0) +
-              1
-            )
-            : "",
-      })
-    );
+    if (editJournalId || autoVoucherNo !== true) return;
+    let cancelled = false;
+    secureFetch(`${API_URL}/p0/journal-voucher/next-no`).then(async (response) => {
+      const result = await response.json();
+      if (!response.ok || result.success === false) throw new Error(result.message || "Unable to generate Journal Voucher number.");
+      if (!cancelled) setJournalFormData((previous) => ({ ...previous, vNo: String(result.nextNo || "") }));
+    }).catch((error) => console.error("Journal next-number error:", error));
+    return () => { cancelled = true; };
   }, [
     activeTransaction,
     transactionFormMode?.[
@@ -752,7 +833,18 @@ if (menu === "PDC Docket") {
     ],
     autoVoucherNo,
     state.journals?.length,
+    editJournalId,
   ]);
+  useEffect(() => {
+    if (activeTransaction !== "Journal Voucher") return;
+    let cancelled = false;
+    secureFetch(`${API_URL}/p0/journal-voucher`).then(async (response) => {
+      const result = await response.json();
+      if (!response.ok || result.success === false) throw new Error(result.message || "Unable to load Journal Vouchers.");
+      if (!cancelled) dispatch({ type: "SET_JOURNALS", payload: result.data || [] });
+    }).catch((error) => console.error("Journal list load error:", error));
+    return () => { cancelled = true; };
+  }, [activeTransaction]);
   const [journalItems, setJournalItems] = useState([{
     id: Date.now(),
     seqNo: 1,
@@ -947,7 +1039,7 @@ if (menu === "PDC Docket") {
 
 
   const [chequeBounceFormData, setChequeBounceFormData] = useState({
-    chqBounceDate: new Date().toISOString().split("T")[0],
+    chqBounceDate: businessDateIST(),
 
     trnSeries: "",
     trnNo: "",
@@ -1287,7 +1379,7 @@ if (menu === "PDC Docket") {
   };
   const [editContraId, setEditContraId] = useState(null);
   const [contraFormData, setContraFormData] = useState({
-    transactionDate: new Date().toISOString().split("T")[0],
+    transactionDate: businessDateIST(),
     tranVNo: "",
     transactionType: "CASH DEPOSIT",
     amount: "",
@@ -1462,7 +1554,7 @@ if (menu === "PDC Docket") {
   // const [showCollectionVoucherForm, setShowCollectionVoucherForm] = useState(false);
   const [editCollectionVoucherId, setEditCollectionVoucherId] = useState(null);
   const [collectionVoucherFormData, setCollectionVoucherFormData] = useState({
-    collectionDate: new Date().toISOString().split("T")[0],
+    collectionDate: businessDateIST(),
     colVNo: "",
     narration: "",
     collectionType: "Bill wise"
@@ -3500,7 +3592,8 @@ const selectParty = (
 
           headers: {
             "Content-Type":
-              "application/json"
+              "application/json",
+            "Idempotency-Key": receiptIdempotencyKey.current,
           },
 
           body:
@@ -3573,6 +3666,7 @@ const selectParty = (
     }
   };
   const resetReceiptForm = () => {
+  receiptIdempotencyKey.current = globalThis.crypto?.randomUUID?.() || `receipt-${Date.now()}-${Math.random().toString(36).slice(2)}`;
   setEditReceiptId(null);
 
   setReceiptFormData({
@@ -3672,9 +3766,7 @@ const selectParty = (
     setReceiptFormData({
       receiptDate:
         header.receiptDate ||
-        new Date()
-          .toISOString()
-          .split("T")[0],
+        businessDateIST(),
 
       rno:
         header.rno || "",
@@ -3741,19 +3833,6 @@ const selectParty = (
 
       rloadNo:
         header.rloadNo || "",
-
-      drawerBankId:
-        header.drawerBankId || "",
-
-      drawerBank:
-        header.drawerBankName ||
-        header.drawerBank ||
-        "",
-
-      drawerBankName:
-        header.drawerBankName ||
-        header.drawerBank ||
-        "",
 
       micr:
         header.micr || "",
@@ -4183,7 +4262,7 @@ const selectParty = (
     setAccountSuggestions([]);
     setActiveAccountRow(null);
   };
-  const saveJournalVoucher = () => {
+  const saveJournalVoucher = async () => {
   const journalNumber =
     requireVoucherNumber(
       journalFormData.vNo,
@@ -4286,25 +4365,44 @@ const selectParty = (
     affectsOutstanding: true,
   };
 
-  console.log(
-    "JOURNAL PAYLOAD =",
-    payload
-  );
+  try {
+    const response = await secureFetch(`${API_URL}/p0/journal-voucher${editJournalId ? `/${editJournalId}` : ""}`, {
+      method: editJournalId ? "PUT" : "POST",
+      headers: { "Content-Type": "application/json", ...(!editJournalId ? { "Idempotency-Key": journalIdempotencyKey.current } : {}) },
+      body: JSON.stringify({ ...payload.header, lines: payload.items, summary: payload.summary }),
+    });
+    const result = await response.json();
+    if (!response.ok || result.success === false) throw new Error(result.message || "Journal Voucher save failed.");
+    dispatch({ type: editJournalId ? "UPDATE_JOURNAL" : "ADD_JOURNAL", payload: result.data });
+    alert(editJournalId ? "Journal Voucher corrected and reposted successfully." : "Journal Voucher Saved Successfully");
+    setEditJournalId(null);
+    journalIdempotencyKey.current = globalThis.crypto?.randomUUID?.() || `journal-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+    resetJournalForm();
+    openTransactionList("Journal Voucher");
+  } catch (error) { alert(error.message || "Journal Voucher save failed."); }
+};
 
-  dispatch({
-    type: "ADD_JOURNAL",
-    payload,
-  });
+const editJournal = (journal) => {
+  const header = journal.header || journal || {};
+  setEditJournalId(journal._id || header._id || null);
+  setJournalFormData({ vDate: header.vDate || businessDateIST(), vNo: header.vNo || "", narr: header.narr || header.narration || "", isGst: header.isGst || "N" });
+  const lines = journal.lines || journal.items || [];
+  const items = lines.map((line, index) => ({ id: `${journal._id || "journal"}-${index}`, seqNo: index + 1, accountCode: line.accountCode || "", accountName: line.accountName || line.accountCode || "", drAmount: Number(line.debit ?? line.drAmount ?? 0), crAmount: Number(line.credit ?? line.crAmount ?? 0) }));
+  setJournalItems(items.length ? items : [{ id: Date.now(), seqNo: 1, accountCode: "", accountName: "", drAmount: 0, crAmount: 0 }]);
+  calculateJournalSummary(items);
+};
 
-  alert(
-    "Journal Voucher Saved Successfully"
-  );
-
-  resetJournalForm();
-
-  openTransactionList(
-    "Journal Voucher"
-  );
+const deleteJournal = async (id) => {
+  if (!id) return alert("This legacy local Journal Voucher cannot be cancelled on the server.");
+  const reason = window.prompt("Enter Journal Voucher cancellation reason:");
+  if (reason === null) return;
+  if (!reason.trim()) return alert("Cancellation reason is required.");
+  try {
+    const response = await secureFetch(`${API_URL}/p0/journal-voucher/${id}`, { method: "DELETE", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ reason }) });
+    const result = await response.json();
+    if (!response.ok || result.success === false) throw new Error(result.message || "Journal cancellation failed.");
+    dispatch({ type: "DELETE_JOURNAL", payload: id }); alert(result.message);
+  } catch (error) { alert(error.message || "Journal cancellation failed."); }
 };
 
 const resetJournalForm = () => {
@@ -4396,7 +4494,7 @@ const resetJournalForm = () => {
       setTimeout(() => calculatePaymentSummary(billRows), 0);
     };
 
-    const savePayment = () => {
+    const savePayment = async () => {
       const paymentNumber =
         requireVoucherNumber(
           paymentFormData.vNo,
@@ -4407,25 +4505,92 @@ const resetJournalForm = () => {
         return;
       }
 
+      const amount = Number(paymentFormData.drAmt || paymentSummary.totalDrAmt || 0);
+      if (!paymentFormData.partyName.trim() || !paymentFormData.bankCash || amount <= 0) {
+        alert("Party Name, Bank/Cash and a positive payment amount are required.");
+        return;
+      }
       const payload = {
-        id: Date.now(),
-
-        header: {
-          ...paymentFormData,
-          vNo: Number(paymentNumber),
-        },
-
+        ...paymentFormData,
+        amount,
         items: paymentItems,
         summary: paymentSummary,
       };
-      dispatch({ type: "ADD_PAYMENT", payload });
-      alert("Payment Saved Successfully");
-      resetPaymentForm();
-      openTransactionList("Payment");
+      try {
+        const response = await secureFetch(
+          `${API_URL}/transaction/payment${editPaymentId ? `/${editPaymentId}` : ""}`,
+          {
+            method: editPaymentId ? "PUT" : "POST",
+            headers: {
+              "Content-Type": "application/json",
+              ...(!editPaymentId ? { "Idempotency-Key": paymentIdempotencyKey.current } : {}),
+            },
+            body: JSON.stringify(payload),
+          }
+        );
+        const result = await response.json();
+        if (!response.ok || result.success === false) throw new Error(result.message || "Payment save failed.");
+        const savedPayment = result.data;
+        if (editPaymentId) dispatch({ type: "UPDATE_PAYMENT", payload: savedPayment });
+        else dispatch({ type: "ADD_PAYMENT", payload: savedPayment });
+        alert(editPaymentId ? "Payment corrected and reposted successfully." : "Payment Saved Successfully");
+        setEditPaymentId(null);
+        paymentIdempotencyKey.current = globalThis.crypto?.randomUUID?.() || `payment-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+        resetPaymentForm();
+        openTransactionList("Payment");
+      } catch (error) {
+        alert(error.message || "Payment save failed.");
+      }
     };
+
+  const editPayment = (payment) => {
+    const header = payment.header || payment || {};
+    setEditPaymentId(payment._id || header._id || null);
+    setPaymentFormData({
+      vDate: header.vDate || businessDateIST(), vNo: header.vNo || "", narr: header.narr || header.narration || "",
+      partyName: header.partyName || "", drAmt: header.drAmt ?? header.amount ?? "", chqNo: header.chqNo || header.chequeNo || "",
+      bankCash: header.bankCash || "", crAmt: header.crAmt ?? header.amount ?? "", chqDate: header.chqDate || header.chequeDate || "",
+      adjustedAc1: header.adjustedAc1 || "", drCr1: header.drCr1 || "Dr", clearingDate: header.clearingDate || "",
+      adjustedAc2: header.adjustedAc2 || "", drCr2: header.drCr2 || "Cr", partyBankName: header.partyBankName || "",
+      bankAccountNo: header.bankAccountNo || "",
+    });
+    const allocations = payment.allocations || payment.items || [];
+    setPaymentItems(allocations.length ? allocations.map((item, index) => ({
+      id: item.purchaseId || `${Date.now()}-${index}`, srNo: index + 1, trn: item.trn || "PUR",
+      trnSeries: item.trnSeries || "", voucherNo: item.voucherNo || "", amount: item.amount || "",
+      adjustedAmt: item.previouslyAdjusted ?? item.adjustedAmt ?? "", balanceAmt: Math.max(0, Number(item.amount || 0) - Number(item.previouslyAdjusted || 0) - Number(item.allocatedAmount || item.newAdjusted || 0)).toFixed(2),
+      newAdjusted: item.allocatedAmount ?? item.newAdjusted ?? "",
+    })) : [{ id: Date.now(), srNo: 1, trn: "", trnSeries: "", voucherNo: "", amount: "", adjustedAmt: "", balanceAmt: "", newAdjusted: "" }]);
+    setPaymentSummary({ adjustedAmt: Number(header.amount || header.drAmt || 0).toFixed(2), balanceAmt: "0.00", totalDrAmt: Number(header.amount || header.drAmt || 0).toFixed(2), totalCrAmt: Number(header.amount || header.crAmt || 0).toFixed(2) });
+  };
+
+  const deletePayment = async (payment) => {
+    const id = typeof payment === "string" ? payment : payment?._id || payment?.header?._id;
+    if (!id) {
+      alert("This legacy local payment cannot be cancelled on the server.");
+      return;
+    }
+    const reason = window.prompt("Enter payment cancellation reason:");
+    if (reason === null) return;
+    if (!reason.trim()) {
+      alert("Cancellation reason is required.");
+      return;
+    }
+    try {
+      const response = await secureFetch(`${API_URL}/transaction/payment/${id}`, {
+        method: "DELETE", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ reason }),
+      });
+      const result = await response.json();
+      if (!response.ok || result.success === false) throw new Error(result.message || "Payment cancellation failed.");
+      dispatch({ type: "DELETE_PAYMENT", payload: id });
+      alert(result.message || "Payment cancelled successfully.");
+    } catch (error) {
+      alert(error.message || "Payment cancellation failed.");
+    }
+  };
   const resetPaymentForm = () => {
     setPaymentFormData({
-      vDate: new Date().toISOString().split("T")[0], vNo: state.payments.length + 2, narr: "", partyName: "",
+      vDate: businessDateIST(), vNo: state.payments.length + 2, narr: "", partyName: "",
       drAmt: "", chqNo: "", bankCash: "", crAmt: "", chqDate: "", adjustedAc1: "", drCr1: "Dr",
       clearingDate: "", adjustedAc2: "", drCr2: "Cr", partyBankName: "", bankAccountNo: ""
     });
@@ -4950,7 +5115,7 @@ const saveChequeBounce =
       chqBounceDate:
         chequeBounce.chqBounceDate ||
         chequeBounce.trndate ||
-        new Date().toISOString().split("T")[0],
+        businessDateIST(),
 
       trnSeries: series,
       trnNo: numberOnly,
@@ -6699,7 +6864,7 @@ const response = await secureFetch(url, {
 
   const resetContraForm = () => {
     setContraFormData({
-      transactionDate: new Date().toISOString().split("T")[0], tranVNo: "",
+      transactionDate: businessDateIST(), tranVNo: "",
       transactionType: "CASH DEPOSIT", amount: "", narration: ""
     });
     setEditContraId(null);
@@ -6927,7 +7092,7 @@ const editContra = (contra) => {
 
     const nextReceiptData = {
       ...receiptFormData,
-      receiptDate: collectionVoucherFormData.collectionDate || new Date().toISOString().split("T")[0],
+      receiptDate: collectionVoucherFormData.collectionDate || businessDateIST(),
       rno: (state.receipts?.length || 0) + 1,
       billSeries: bill.billSeries || "",
       billNo: bill.billNo || "",
@@ -8933,7 +9098,7 @@ setTransactionFormMode((prev) => ({
     loadChequeBounceList,
   ]);
   const renderReceiptList = () => (
-    <div className="receipt-premium-list-page">
+    <div className="erp-transaction-list-page receipt-premium-list-page">
       {/* =====================================================
           PAGE HEADER
           ===================================================== */}
@@ -9205,10 +9370,13 @@ setTransactionFormMode((prev) => ({
 
         <button
           type="button"
-          className={`receipt-premium-filter-button ${receiptActiveFilterCount > 0
-            ? "has-active-filters"
-            : ""
+          className={`receipt-premium-filter-button ${receiptFiltersVisible
+            ? "active"
+            : receiptActiveFilterCount > 0
+              ? "has-active-filters"
+              : ""
             }`}
+          aria-expanded={receiptFiltersVisible}
           onClick={() =>
             setReceiptFiltersVisible(
               (previous) => !previous
@@ -9535,9 +9703,10 @@ setTransactionFormMode((prev) => ({
                             type="button"
                             className="receipt-premium-action-button view"
                             title="View Receipt"
-                            onClick={() =>
-                              editReceipt(receipt)
-                            }
+                            onClick={() => {
+                              setIsFormReadOnly(true);
+                              editReceipt(receipt);
+                            }}
                           >
                             <Eye size={14} />
                           </button>
@@ -11119,6 +11288,14 @@ setTransactionFormMode((prev) => ({
   )
     ? state.journals
     : [];
+  const getJournalTotals = (journal) => {
+    const summary = journal.summary || {};
+    const lines = journal.lines || journal.items || [];
+    return {
+      totalDr: Number(summary.totalDr ?? journal.totalDr ?? lines.reduce((sum, line) => sum + Number(line.debit ?? line.drAmount ?? 0), 0)) || 0,
+      totalCr: Number(summary.totalCr ?? journal.totalCr ?? lines.reduce((sum, line) => sum + Number(line.credit ?? line.crAmount ?? 0), 0)) || 0,
+    };
+  };
 
   const normalizedJournalSearch = String(
     journalListSearch || ""
@@ -11130,9 +11307,6 @@ setTransactionFormMode((prev) => ({
     journalListRows.filter((journal) => {
       const header =
         journal.header || journal || {};
-
-      const summary =
-        journal.summary || {};
 
       const voucherNo = String(
         header.vNo ||
@@ -11159,19 +11333,7 @@ setTransactionFormMode((prev) => ({
         .trim()
         .toLowerCase();
 
-      const totalDr =
-        Number(
-          summary.totalDr ??
-          header.totalDr ??
-          0
-        ) || 0;
-
-      const totalCr =
-        Number(
-          summary.totalCr ??
-          header.totalCr ??
-          0
-        ) || 0;
+      const { totalDr, totalCr } = getJournalTotals(journal);
 
       const difference = Math.abs(
         totalDr - totalCr
@@ -11375,12 +11537,9 @@ setTransactionFormMode((prev) => ({
     const totalDebitAmount =
       filteredJournalList.reduce(
         (total, journal) => {
-          const summary =
-            journal.summary || {};
-
           return (
             total +
-            (Number(summary.totalDr) || 0)
+            getJournalTotals(journal).totalDr
           );
         },
         0
@@ -11389,12 +11548,9 @@ setTransactionFormMode((prev) => ({
     const totalCreditAmount =
       filteredJournalList.reduce(
         (total, journal) => {
-          const summary =
-            journal.summary || {};
-
           return (
             total +
-            (Number(summary.totalCr) || 0)
+            getJournalTotals(journal).totalCr
           );
         },
         0
@@ -11403,14 +11559,7 @@ setTransactionFormMode((prev) => ({
     const balancedJournalCount =
       filteredJournalList.filter(
         (journal) => {
-          const summary =
-            journal.summary || {};
-
-          const totalDr =
-            Number(summary.totalDr) || 0;
-
-          const totalCr =
-            Number(summary.totalCr) || 0;
+          const { totalDr, totalCr } = getJournalTotals(journal);
 
           return (
             Math.abs(totalDr - totalCr) <
@@ -11434,7 +11583,7 @@ setTransactionFormMode((prev) => ({
     };
 
     return (
-      <div className="journal-premium-list-page">
+      <div className="erp-transaction-list-page journal-premium-list-page">
         <div className="journal-premium-heading">
           <div className="journal-premium-title">
             <h2>Journal Voucher List</h2>
@@ -11446,14 +11595,14 @@ setTransactionFormMode((prev) => ({
           </div>
 
           <div className="journal-heading-actions">
-            <button
+            {journalPermission.add && <button
               type="button"
               className="journal-main-button journal-add-button"
               onClick={openNewJournalVoucher}
             >
               <Plus size={16} />
               New Journal Voucher
-            </button>
+            </button>}
 
             <button
               type="button"
@@ -11631,10 +11780,13 @@ setTransactionFormMode((prev) => ({
 
           <button
             type="button"
-            className={`journal-filter-toggle ${journalActiveFilterCount > 0
-              ? "has-active-filters"
-              : ""
+            className={`journal-filter-toggle ${journalFiltersVisible
+              ? "active"
+              : journalActiveFilterCount > 0
+                ? "has-active-filters"
+                : ""
               }`}
+            aria-expanded={journalFiltersVisible}
             onClick={() =>
               setJournalFiltersVisible(
                 (previous) => !previous
@@ -11848,22 +12000,7 @@ setTransactionFormMode((prev) => ({
                         journal ||
                         {};
 
-                      const summary =
-                        journal.summary || {};
-
-                      const totalDr =
-                        Number(
-                          summary.totalDr ??
-                          header.totalDr ??
-                          0
-                        ) || 0;
-
-                      const totalCr =
-                        Number(
-                          summary.totalCr ??
-                          header.totalCr ??
-                          0
-                        ) || 0;
+                      const { totalDr, totalCr } = getJournalTotals(journal);
 
                       const difference =
                         Math.abs(
@@ -11954,6 +12091,7 @@ setTransactionFormMode((prev) => ({
                                 className="journal-action-button view"
                                 title="View Journal Voucher"
                                 onClick={() => {
+                                  setIsFormReadOnly(true);
                                   setTransactionFormMode(
                                     (previous) => ({
                                       ...previous,
@@ -11968,7 +12106,7 @@ setTransactionFormMode((prev) => ({
                                 <Eye size={16} />
                               </button>
 
-                              <button
+                              {journalPermission.edit && <button
                                 type="button"
                                 className="journal-action-button edit"
                                 title="Edit Journal Voucher"
@@ -11985,9 +12123,9 @@ setTransactionFormMode((prev) => ({
                                 }}
                               >
                                 <Pencil size={16} />
-                              </button>
+                              </button>}
 
-                              <button
+                              {journalPermission.delete && <button
                                 type="button"
                                 className="journal-action-button delete"
                                 title="Delete Journal Voucher"
@@ -11999,7 +12137,7 @@ setTransactionFormMode((prev) => ({
                                 }
                               >
                                 <Trash2 size={16} />
-                              </button>
+                              </button>}
                             </div>
                           </td>
                         </tr>
@@ -12764,7 +12902,7 @@ setTransactionFormMode((prev) => ({
 
           return (
             total +
-            (Number(header.drAmt) || 0)
+            (Number(header.drAmt ?? header.amount) || 0)
           );
         },
         0
@@ -12778,7 +12916,7 @@ setTransactionFormMode((prev) => ({
 
           return (
             total +
-            (Number(header.crAmt) || 0)
+            (Number(header.crAmt ?? header.amount) || 0)
           );
         },
         0
@@ -12799,7 +12937,7 @@ setTransactionFormMode((prev) => ({
       ).length;
 
     return (
-      <div className="payment-premium-list-page">
+      <div className="erp-transaction-list-page payment-premium-list-page">
         <div className="payment-premium-heading">
           <div className="payment-premium-title">
             <h2>Payment List</h2>
@@ -12809,7 +12947,7 @@ setTransactionFormMode((prev) => ({
           </div>
 
           <div className="payment-heading-actions">
-            <button
+            {paymentPermission.add && <button
               type="button"
               className="payment-main-button payment-add-button"
               onClick={() =>
@@ -12818,7 +12956,7 @@ setTransactionFormMode((prev) => ({
             >
               <Plus size={16} />
               New Payment
-            </button>
+            </button>}
 
             <button
               type="button"
@@ -12963,10 +13101,13 @@ setTransactionFormMode((prev) => ({
 
           <button
             type="button"
-            className={`payment-filter-toggle ${paymentActiveFilterCount > 0
-              ? "has-active-filters"
-              : ""
+            className={`payment-filter-toggle ${paymentFiltersVisible
+              ? "active"
+              : paymentActiveFilterCount > 0
+                ? "has-active-filters"
+                : ""
               }`}
+            aria-expanded={paymentFiltersVisible}
             onClick={() =>
               setPaymentFiltersVisible(
                 (previous) => !previous
@@ -13195,7 +13336,7 @@ setTransactionFormMode((prev) => ({
                           <td className="payment-amount-column">
                             ₹
                             {Number(
-                              header.drAmt || 0
+                              header.drAmt ?? header.amount ?? 0
                             ).toLocaleString(
                               "en-IN",
                               {
@@ -13208,7 +13349,7 @@ setTransactionFormMode((prev) => ({
                           <td className="payment-amount-column">
                             ₹
                             {Number(
-                              header.crAmt || 0
+                              header.crAmt ?? header.amount ?? 0
                             ).toLocaleString(
                               "en-IN",
                               {
@@ -13226,11 +13367,12 @@ setTransactionFormMode((prev) => ({
 
                           <td className="payment-actions-column">
                             <div className="payment-row-actions">
-                              <button
+                              {paymentPermission.view && <button
                                 type="button"
                                 className="payment-action-button view"
                                 title="View Payment"
                                 onClick={() => {
+                                  setIsFormReadOnly(true);
                                   setTransactionFormMode(
                                     (previous) => ({
                                       ...previous,
@@ -13242,9 +13384,9 @@ setTransactionFormMode((prev) => ({
                                 }}
                               >
                                 <Eye size={16} />
-                              </button>
+                              </button>}
 
-                              <button
+                              {paymentPermission.edit && <button
                                 type="button"
                                 className="payment-action-button edit"
                                 title="Edit Payment"
@@ -13260,20 +13402,20 @@ setTransactionFormMode((prev) => ({
                                 }}
                               >
                                 <Pencil size={16} />
-                              </button>
+                              </button>}
 
-                              <button
+                              {paymentPermission.delete && <button
                                 type="button"
                                 className="payment-action-button delete"
                                 title="Delete Payment"
                                 onClick={() =>
                                   deletePayment(
-                                    payment.id
+                                    payment
                                   )
                                 }
                               >
                                 <Trash2 size={16} />
-                              </button>
+                              </button>}
                             </div>
                           </td>
                         </tr>
@@ -13493,7 +13635,7 @@ setTransactionFormMode((prev) => ({
       );
 
     return (
-      <div className="cheque-bounce-premium-list-page">
+      <div className="erp-transaction-list-page cheque-bounce-premium-list-page">
         {/* PAGE HEADER */}
 
         <div className="cheque-bounce-premium-heading">
@@ -13693,10 +13835,13 @@ setTransactionFormMode((prev) => ({
 
           <button
             type="button"
-            className={`cheque-bounce-filter-button ${chequeBounceActiveFilterCount > 0
-              ? "has-active-filters"
-              : ""
+            className={`cheque-bounce-filter-button ${chequeBounceFiltersVisible
+              ? "active"
+              : chequeBounceActiveFilterCount > 0
+                ? "has-active-filters"
+                : ""
               }`}
+            aria-expanded={chequeBounceFiltersVisible}
             onClick={() =>
               setChequeBounceFiltersVisible(
                 (previous) => !previous
@@ -14034,11 +14179,12 @@ setTransactionFormMode((prev) => ({
                                 type="button"
                                 className="cheque-bounce-action-button view"
                                 title="View Cheque Bounce"
-                                onClick={() =>
+                                onClick={() => {
+                                  setIsFormReadOnly(true);
                                   editChequeBounce(
                                     chequeBounce
-                                  )
-                                }
+                                  );
+                                }}
                               >
                                 <Eye size={16} />
                               </button>
@@ -14990,7 +15136,7 @@ setTransactionFormMode((prev) => ({
       ).length;
 
     return (
-      <div className="pdc-docket-premium-list-page">
+      <div className="erp-transaction-list-page pdc-docket-premium-list-page">
         <div className="pdc-docket-premium-heading">
           <div className="pdc-docket-premium-title">
             <h2>PDC Docket List</h2>
@@ -15155,10 +15301,13 @@ setTransactionFormMode((prev) => ({
 
           <button
             type="button"
-            className={`pdc-docket-filter-toggle ${pdcDocketActiveFilterCount > 0
-              ? "has-active-filters"
-              : ""
+            className={`pdc-docket-filter-toggle ${pdcDocketFiltersVisible
+              ? "active"
+              : pdcDocketActiveFilterCount > 0
+                ? "has-active-filters"
+                : ""
               }`}
+            aria-expanded={pdcDocketFiltersVisible}
             onClick={() =>
               setPDCDocketFiltersVisible(
                 (previous) => !previous
@@ -15472,6 +15621,7 @@ setTransactionFormMode((prev) => ({
                                 className="pdc-docket-action-button view"
                                 title="View PDC Docket"
                                 onClick={() => {
+                                  setIsFormReadOnly(true);
                                   setTransactionFormMode(
                                     (previous) => ({
                                       ...previous,
@@ -16315,7 +16465,7 @@ setTransactionFormMode((prev) => ({
       );
 
     return (
-      <div className="contra-premium-list-page">
+      <div className="erp-transaction-list-page contra-premium-list-page">
         <div className="contra-premium-heading">
           <div className="contra-premium-title">
             <h2>Bank Deposit / Withdrawal</h2>
@@ -16511,10 +16661,13 @@ setTransactionFormMode((prev) => ({
 
           <button
             type="button"
-            className={`contra-filter-toggle ${contraActiveFilterCount > 0
-              ? "has-active-filters"
-              : ""
+            className={`contra-filter-toggle ${contraFiltersVisible
+              ? "active"
+              : contraActiveFilterCount > 0
+                ? "has-active-filters"
+                : ""
               }`}
+            aria-expanded={contraFiltersVisible}
             onClick={() =>
               setContraFiltersVisible(
                 (previous) => !previous
@@ -16840,6 +16993,7 @@ setTransactionFormMode((prev) => ({
                                 className="contra-action-button view"
                                 title="View Transaction"
                                 onClick={() => {
+                                  setIsFormReadOnly(true);
                                   setTransactionFormMode(
                                     (previous) => ({
                                       ...previous,
@@ -17444,7 +17598,7 @@ setTransactionFormMode((prev) => ({
         : 0;
 
     return (
-      <div className="collection-voucher-premium-list-page">
+      <div className="erp-transaction-list-page collection-voucher-premium-list-page">
         <div className="collection-voucher-premium-heading">
           <div className="collection-voucher-premium-title">
             <h2>Collection Voucher List</h2>
@@ -17632,7 +17786,13 @@ setTransactionFormMode((prev) => ({
 
           <button
             type="button"
-            className="collection-voucher-filter-toggle"
+            className={`collection-voucher-filter-toggle ${collectionVoucherFiltersVisible
+              ? "active"
+              : collectionVoucherActiveFilterCount > 0
+                ? "has-active-filters"
+                : ""
+              }`}
+            aria-expanded={collectionVoucherFiltersVisible}
             onClick={() =>
               setCollectionVoucherFiltersVisible(
                 (previous) => !previous
@@ -17955,6 +18115,7 @@ setTransactionFormMode((prev) => ({
                                   className="collection-voucher-action-button view"
                                   title="View Collection Voucher"
                                   onClick={() => {
+                                    setIsFormReadOnly(true);
                                     setTransactionFormMode(
                                       (previous) => ({
                                         ...previous,
@@ -18703,7 +18864,40 @@ setTransactionFormMode((prev) => ({
   console.log("State Receipts =", state.receipts);
   console.log("Length =", state.receipts?.length);
   return (
-    <div className="transaction-page">
+    <div
+      className={`transaction-page ${isFormReadOnly ? "is-form-read-only" : ""}`}
+      onClickCapture={(event) => {
+        if (event.target.closest("button.edit, [class*='action-button'][class*='edit']")) {
+          setIsFormReadOnly(false);
+          return;
+        }
+        if (isFormReadOnly) {
+          const button = event.target.closest("button");
+          if (!button) return;
+          const descriptor = `${button.className || ""} ${button.title || ""} ${button.getAttribute("aria-label") || ""} ${button.textContent || ""}`;
+          if (/(close|cancel|back)/i.test(descriptor)) {
+            setIsFormReadOnly(false);
+            return;
+          }
+          if (!/(close|cancel|back|tab|preview|print)/i.test(descriptor)) {
+            event.preventDefault();
+            event.stopPropagation();
+          }
+        }
+      }}
+      onSubmitCapture={(event) => {
+        if (isFormReadOnly) {
+          event.preventDefault();
+          event.stopPropagation();
+        }
+      }}
+    >
+      {isFormReadOnly && (
+        <div className="project-read-only-banner" role="status">
+          <Eye size={15} />
+          View only — this entry cannot be edited
+        </div>
+      )}
       {activeTransaction === "Receipt" &&
         (transactionFormMode?.["Receipt"] ? renderReceiptForm() : renderReceiptList())}
 

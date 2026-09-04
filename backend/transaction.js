@@ -1,8 +1,42 @@
 import express from "express";
 import mongoose from "mongoose";
+import { nextDocumentNumber } from "./counters.js";
+import { postBalancedJournal, reverseSourceJournal } from "./accounting.js";
+import { writeAuditEvent } from "./audit.js";
+
+export const paymentAmountFromBody = (body) => {
+  const amount = Number(body.amount ?? body.drAmt ?? body.crAmt ?? body.summary?.totalDrAmt ?? 0);
+  if (!Number.isFinite(amount) || amount <= 0) {
+    throw Object.assign(new Error("Payment amount must be greater than zero."), { statusCode: 400 });
+  }
+  const credit = Number(body.crAmt ?? amount);
+  const debit = Number(body.drAmt ?? amount);
+  if (!Number.isFinite(credit) || !Number.isFinite(debit) || Math.abs(credit - debit) > 0.01 || Math.abs(amount - debit) > 0.01) {
+    throw Object.assign(new Error("Payment debit and credit amounts must be equal."), { statusCode: 400 });
+  }
+  return amount;
+};
+
+export const normalizePaymentAllocations = (body) => (Array.isArray(body.allocations) ? body.allocations : body.items || [])
+  .map((item) => ({
+    trn: String(item.trn || "PUR"),
+    trnSeries: String(item.trnSeries || item.vouSer || "").trim(),
+    voucherNo: String(item.voucherNo ?? item.vouNo ?? "").trim(),
+    amount: Number(item.amount || 0),
+    previouslyAdjusted: Number(item.previouslyAdjusted ?? item.adjustedAmt ?? 0),
+    allocatedAmount: Number(item.allocatedAmount ?? item.newAdjusted ?? 0),
+  }))
+  .filter((item) => item.allocatedAmount > 0);
+
 export default function createTransactionRouter(securityRouter) {
 
 const router = express.Router();
+
+const tenantFilter = (req, extra = {}) => ({
+  ...extra,
+  distributorId: req.auth.distributorId,
+  firmId: req.auth.firmId,
+});
 
 
 /* ==========================
@@ -117,12 +151,22 @@ receiptBills: [
         companyId: String,
         firmId: String,
         distributorId: String,
+        idempotencyKey: { type: String, default: "" },
+        status: { type: String, enum: ["POSTED", "REVERSED"], default: "POSTED" },
+        reversedAt: { type: Date, default: null },
+        reversedBy: { type: String, default: "" },
+        reversalReason: { type: String, default: "" },
     },
     {
         timestamps: true,
         collection: "T_Receipt",
     }
 );
+receiptSchema.index({ distributorId: 1, firmId: 1, idempotencyKey: 1 }, {
+  unique: true,
+  partialFilterExpression: { idempotencyKey: { $type: "string", $gt: "" } },
+});
+receiptSchema.index({ distributorId: 1, firmId: 1, billSeries: 1, rno: 1 }, { unique: true });
 
 /* ==========================
    CHEQUE BOUNCE SCHEMA
@@ -262,6 +306,9 @@ const PDCDocket =
         pdcDocketSchema
     );
 
+chequeBounceSchema.index({ distributorId: 1, firmId: 1, trnSeries: 1, trnNo: 1 }, { unique: true });
+pdcDocketSchema.index({ distributorId: 1, firmId: 1, docSeries: 1, docVNo: 1 }, { unique: true });
+
 const ChequeBounce =
     mongoose.models.T_ChequeBounce ||
     mongoose.model(
@@ -272,6 +319,237 @@ const ChequeBounce =
 const Receipt =
     mongoose.models.T_Receipt ||
     mongoose.model("T_Receipt", receiptSchema);
+
+/* ==========================
+   FIND CHEQUE DETAILS REPORT
+========================== */
+
+router.get(
+  "/find-cheque-details",
+  securityRouter.authorizeRequest("REPORTS", "PARTY_WISE_SALES", "view"),
+  async (req, res) => {
+    try {
+      const chequeNo = String(req.query.chequeNo || "").trim();
+      if (!chequeNo) {
+        return res.status(400).json({ success: false, message: "Cheque number is required." });
+      }
+
+      const escapedChequeNo = chequeNo.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+      const exactCheque = new RegExp(`^${escapedChequeNo}$`, "i");
+      const tenant = tenantFilter(req);
+
+      const [receipts, bounces, dockets] = await Promise.all([
+        Receipt.find({ ...tenant, chequeNo: exactCheque, status: { $ne: "REVERSED" } })
+          .sort({ receiptDate: 1, createdAt: 1 })
+          .lean(),
+        ChequeBounce.find({ ...tenant, chequeNo: exactCheque, status: { $ne: "REVERSED" } })
+          .sort({ chqBounceDate: 1, createdAt: 1 })
+          .lean(),
+        PDCDocket.find({ ...tenant, cheques: { $elemMatch: { chequeNo: exactCheque } }, status: { $ne: "REVERSED" } })
+          .sort({ depositDate: 1, createdAt: 1 })
+          .lean(),
+      ]);
+
+      const docketEntries = dockets.flatMap((docket) =>
+        (Array.isArray(docket.cheques) ? docket.cheques : [])
+          .filter((entry) => exactCheque.test(String(entry.chequeNo || "").trim()))
+          .map((entry) => ({
+            docketId: docket._id,
+            docketNo: `${docket.docSeries || "PDC"}-${docket.docVNo || ""}`,
+            depositDate: docket.depositDate || "",
+            addedAt: docket.createdAt || null,
+            bankName: docket.houseBankName || docket.bankName || docket.houseBank || "",
+            clearingType: docket.clearingType || "",
+            clearingDate: entry.clearingDate || docket.clearingDate || "",
+            amount: Number(entry.amount || 0),
+            receiptSeries: entry.receiptSeries || "",
+            receiptNo: entry.receiptNo || "",
+            partyCode: entry.partyCode || "",
+            partyName: entry.partyName || "",
+          }))
+      );
+
+      const receiptSummaries = receipts.map((receipt) => {
+        const receiptNo = String(receipt.rno || "");
+        const partyName = String(receipt.partyName || "").trim().toLowerCase();
+        const receivingBank = String(receipt.bankCash || "").trim().toLowerCase();
+        const samePartyReceipts = receipts.filter((item) =>
+          String(item.partyName || "").trim().toLowerCase() === partyName
+        );
+        const relatedBounces = bounces.filter((bounce) => {
+          const bounceReceiptNo = String(bounce.receiptNo || "").replace(/\D/g, "");
+          const bounceBank = String(bounce.bankName || "").trim().toLowerCase();
+          const sameParty = String(bounce.partyName || "").trim().toLowerCase() === partyName;
+          return (bounceReceiptNo && bounceReceiptNo === receiptNo.replace(/\D/g, "")) ||
+            (!bounceReceiptNo && sameParty && (
+              (bounceBank && bounceBank === receivingBank) ||
+              (!bounceBank && samePartyReceipts.length === 1)
+            ));
+        });
+        const relatedDockets = docketEntries.filter((docket) => {
+          const docketReceiptNo = String(docket.receiptNo || "").replace(/\D/g, "");
+          const docketBank = String(docket.bankName || "").trim().toLowerCase();
+          const sameParty = String(docket.partyName || "").trim().toLowerCase() === partyName;
+          return (docketReceiptNo && docketReceiptNo === receiptNo.replace(/\D/g, "")) ||
+            (!docketReceiptNo && sameParty && (
+              (docketBank && docketBank === receivingBank) ||
+              (!docketBank && samePartyReceipts.length === 1)
+            ));
+        });
+
+        return {
+          receiptId: receipt._id,
+          receiptNo: receipt.rno || "",
+          receiptDate: receipt.receiptDate || "",
+          chequeDate: receipt.chequeDate || "",
+          amount: Number(receipt.receiptAmount || 0),
+          partyId: receipt.partyId || "",
+          partyName: receipt.partyName || "",
+          bankName: receipt.bankCash || "",
+          drawerBankName: receipt.drawerBankName || "",
+          micr: receipt.micr || "",
+          narration: receipt.narration || "",
+          bills: Array.isArray(receipt.receiptBills) ? receipt.receiptBills : [],
+          bounces: relatedBounces,
+          dockets: relatedDockets,
+        };
+      });
+
+      res.json({
+        success: true,
+        data: {
+          chequeNo,
+          summaries: receiptSummaries,
+          unmatchedBounces: bounces.filter((bounce) => !receiptSummaries.some((summary) => summary.bounces.some((item) => String(item._id) === String(bounce._id)))),
+          unmatchedDockets: docketEntries.filter((docket) => !receiptSummaries.some((summary) => summary.dockets.some((item) => String(item.docketId) === String(docket.docketId) && String(item.receiptNo) === String(docket.receiptNo)))),
+        },
+      });
+    } catch (error) {
+      console.error("Find cheque details report error:", error);
+      res.status(500).json({ success: false, message: "Unable to find cheque details." });
+    }
+  }
+);
+
+/* ==========================
+   PAYMENT VOUCHER SCHEMA
+   Additive model: the existing Receipt/PDC/Contra collections are untouched.
+========================== */
+const paymentAllocationSchema = new mongoose.Schema({
+  trn: { type: String, default: "PUR" },
+  trnSeries: { type: String, default: "" },
+  voucherNo: { type: String, default: "" },
+  purchaseId: { type: mongoose.Schema.Types.ObjectId, default: null },
+  amount: { type: Number, default: 0 },
+  previouslyAdjusted: { type: Number, default: 0 },
+  allocatedAmount: { type: Number, default: 0 },
+}, { _id: false });
+
+const paymentSchema = new mongoose.Schema({
+  distributorId: { type: String, required: true, trim: true },
+  firmId: { type: String, required: true, trim: true },
+  vDate: { type: String, required: true },
+  vNo: { type: Number, required: true },
+  partyCode: { type: String, default: "" },
+  partyName: { type: String, required: true },
+  bankCash: { type: String, required: true },
+  amount: { type: Number, required: true, min: 0.01 },
+  narration: { type: String, default: "" },
+  reference: { type: String, default: "" },
+  chequeNo: { type: String, default: "" },
+  chequeDate: { type: String, default: "" },
+  clearingDate: { type: String, default: "" },
+  partyBankName: { type: String, default: "" },
+  bankAccountNo: { type: String, default: "" },
+  allocations: { type: [paymentAllocationSchema], default: [] },
+  idempotencyKey: { type: String, default: "" },
+  status: { type: String, enum: ["POSTED", "REVERSED"], default: "POSTED" },
+  reversedAt: { type: Date, default: null },
+  reversedBy: { type: String, default: "" },
+  reversalReason: { type: String, default: "" },
+  editHistory: { type: [mongoose.Schema.Types.Mixed], default: [] },
+}, { timestamps: true, collection: "T_Payment" });
+
+paymentSchema.index({ distributorId: 1, firmId: 1, vNo: 1 }, { unique: true });
+paymentSchema.index({ distributorId: 1, firmId: 1, idempotencyKey: 1 }, {
+  unique: true,
+  partialFilterExpression: { idempotencyKey: { $type: "string", $gt: "" } },
+});
+
+const Payment = mongoose.models.T_Payment || mongoose.model("T_Payment", paymentSchema);
+
+const getPurchaseModel = () => mongoose.models.T_Pur_Header;
+
+const findPurchaseForAllocation = async (req, allocation, session) => {
+  const Purchase = getPurchaseModel();
+  if (!Purchase) throw new Error("Purchase model is unavailable.");
+  const numericVoucher = Number(String(allocation.voucherNo).match(/(\d+)$/)?.[1] || allocation.voucherNo);
+  if (!Number.isFinite(numericVoucher) || numericVoucher <= 0) {
+    throw Object.assign(new Error(`Invalid purchase voucher ${allocation.voucherNo}.`), { statusCode: 400 });
+  }
+  const series = String(allocation.trnSeries || "").trim();
+  const purchase = await Purchase.findOne(tenantFilter(req, {
+    vouNo: numericVoucher,
+    isActive: { $ne: false },
+    ...(series ? { vouSer: series } : {}),
+  })).session(session);
+  if (!purchase) {
+    throw Object.assign(new Error(`Purchase ${series}-${numericVoucher} was not found.`), { statusCode: 404 });
+  }
+  return purchase;
+};
+
+const reservePaymentAllocations = async (req, allocations, partyName, session) => {
+  const reserved = [];
+  for (const allocation of allocations) {
+    const purchase = await findPurchaseForAllocation(req, allocation, session);
+    if (partyName && String(purchase.supplierName || "").trim().toLowerCase() !== partyName.trim().toLowerCase()) {
+      throw Object.assign(new Error("Every allocated purchase must belong to the selected supplier."), { statusCode: 400 });
+    }
+    const billAmount = Number(purchase.netAmt || 0);
+    const alreadyAllocated = Number(purchase.paymentAllocated || 0);
+    if (allocation.allocatedAmount > billAmount - alreadyAllocated + 0.01) {
+      throw Object.assign(new Error(`Payment exceeds the pending amount for purchase ${purchase.vouSer}-${purchase.vouNo}.`), { statusCode: 409 });
+    }
+    const result = await purchase.constructor.updateOne(
+      { _id: purchase._id, $expr: { $eq: [{ $ifNull: ["$paymentAllocated", 0] }, alreadyAllocated] } },
+      { $inc: { paymentAllocated: allocation.allocatedAmount } },
+      { session }
+    );
+    if (result.modifiedCount !== 1) {
+      throw Object.assign(new Error("Purchase outstanding changed during payment. Please reload and retry."), { statusCode: 409 });
+    }
+    reserved.push({ ...allocation, purchaseId: purchase._id, amount: billAmount, previouslyAdjusted: alreadyAllocated });
+  }
+  return reserved;
+};
+
+const releasePaymentAllocations = async (allocations, session) => {
+  const Purchase = getPurchaseModel();
+  if (!Purchase) return;
+  for (const allocation of allocations || []) {
+    if (!allocation.purchaseId || Number(allocation.allocatedAmount || 0) <= 0) continue;
+
+    const purchase = await Purchase.findOne(
+      { _id: allocation.purchaseId },
+      { paymentAllocated: 1 }
+    ).session(session);
+
+    if (!purchase) continue;
+
+    const nextPaymentAllocated = Math.max(
+      0,
+      Number(purchase.paymentAllocated || 0) -
+        Number(allocation.allocatedAmount || 0)
+    );
+
+    await Purchase.updateOne(
+      { _id: allocation.purchaseId },
+      { $set: { paymentAllocated: nextPaymentAllocated } },
+      { session }
+    );
+  }
+};
 
 
 /* ==========================
@@ -351,6 +629,7 @@ const Contra =
     "T_Contra",
     contraSchema
   );
+contraSchema.index({ distributorId: 1, firmId: 1, tranVNo: 1 }, { unique: true });
 
     /* ==========================
    COLLECTION VOUCHER SCHEMA
@@ -508,6 +787,7 @@ const CollectionVoucher =
     "T_CollectionVoucher",
     collectionVoucherSchema
   );
+collectionVoucherSchema.index({ distributorId: 1, firmId: 1, colVNo: 1 }, { unique: true });
 
 
 
@@ -524,8 +804,313 @@ const CollectionVoucher =
 //   );
 
 /* ==========================
+   PAYMENT VOUCHER API
+========================== */
+router.get(
+  "/payment/next-no",
+  securityRouter.authorizeRequest("TRANSACTIONS", "PAYMENT", "view"),
+  async (req, res) => {
+    const last = await Payment.findOne(tenantFilter(req)).sort({ vNo: -1 }).select({ vNo: 1 }).lean();
+    return res.json({ success: true, nextNo: Number(last?.vNo || 0) + 1 });
+  }
+);
+
+router.get(
+  "/payment",
+  securityRouter.authorizeRequest("TRANSACTIONS", "PAYMENT", "view"),
+  async (req, res) => {
+    const payments = await Payment.find(tenantFilter(req, { status: { $ne: "REVERSED" } })).sort({ vDate: -1, vNo: -1 }).lean();
+    return res.json({ success: true, data: payments });
+  }
+);
+
+router.post(
+  "/payment",
+  securityRouter.authorizeRequest("TRANSACTIONS", "PAYMENT", "add"),
+  async (req, res) => {
+    const session = await mongoose.startSession();
+    const idempotencyKey = String(req.get("Idempotency-Key") || req.body.idempotencyKey || "").trim();
+    try {
+      const duplicate = idempotencyKey ? await Payment.findOne(tenantFilter(req, { idempotencyKey })).lean() : null;
+      if (duplicate) return res.status(200).json({ success: true, data: duplicate, duplicate: true });
+      let saved;
+      await session.withTransaction(async () => {
+        const amount = paymentAmountFromBody(req.body);
+        const partyName = String(req.body.partyName || "").trim();
+        const bankCash = String(req.body.bankCash || "").trim();
+        if (!partyName || !bankCash || !String(req.body.vDate || "").trim()) {
+          throw Object.assign(new Error("Voucher date, supplier/account and bank/cash account are required."), { statusCode: 400 });
+        }
+        const incomingAllocations = normalizePaymentAllocations(req.body);
+        const allocationTotal = incomingAllocations.reduce((sum, item) => sum + item.allocatedAmount, 0);
+        if (allocationTotal > amount + 0.01) {
+          throw Object.assign(new Error("Bill allocations cannot exceed the payment amount."), { statusCode: 400 });
+        }
+        const allocations = await reservePaymentAllocations(req, incomingAllocations, partyName, session);
+        const last = await Payment.findOne(tenantFilter(req)).sort({ vNo: -1 }).session(session).lean();
+        const vNo = await nextDocumentNumber({
+          distributorId: req.auth.distributorId, firmId: req.auth.firmId,
+          documentType: "PAYMENT", documentDate: req.body.vDate,
+          session, minimumValue: Number(last?.vNo || 0),
+        });
+        [saved] = await Payment.create([{
+          distributorId: req.auth.distributorId, firmId: req.auth.firmId,
+          vDate: String(req.body.vDate), vNo,
+          partyCode: String(req.body.partyCode || req.body.partyId || ""), partyName,
+          bankCash, amount, narration: String(req.body.narration || req.body.narr || ""),
+          reference: String(req.body.reference || req.body.chqNo || ""),
+          chequeNo: String(req.body.chequeNo || req.body.chqNo || ""), chequeDate: String(req.body.chequeDate || req.body.chqDate || ""),
+          clearingDate: String(req.body.clearingDate || ""), partyBankName: String(req.body.partyBankName || ""),
+          bankAccountNo: String(req.body.bankAccountNo || ""), allocations, idempotencyKey,
+        }], { session });
+        await postBalancedJournal({
+          distributorId: req.auth.distributorId, firmId: req.auth.firmId,
+          sourceType: "PAYMENT", sourceId: String(saved._id), documentNo: String(vNo),
+          documentDate: String(req.body.vDate), createdBy: req.auth.userId,
+          lines: [
+            { accountCode: String(req.body.partyCode || req.body.partyId || partyName), debit: amount, credit: 0, narration: saved.narration || "Payment" },
+            { accountCode: bankCash, debit: 0, credit: amount, narration: saved.narration || "Payment" },
+          ],
+        }, session);
+        await writeAuditEvent(req, { entityType: "PAYMENT", entityId: String(saved._id), action: "CREATE", after: saved.toObject() }, session);
+      });
+      return res.status(201).json({ success: true, data: saved });
+    } catch (error) {
+      if (error?.code === 11000 && idempotencyKey) {
+        const duplicate = await Payment.findOne(tenantFilter(req, { idempotencyKey })).lean();
+        if (duplicate) return res.status(200).json({ success: true, data: duplicate, duplicate: true });
+      }
+      return res.status(error.statusCode || (error?.code === 11000 ? 409 : 500)).json({ success: false, message: error.statusCode || error?.code === 11000 ? error.message : "Payment could not be posted." });
+    } finally {
+      await session.endSession();
+    }
+  }
+);
+
+router.put(
+  "/payment/:id",
+  securityRouter.authorizeRequest("TRANSACTIONS", "PAYMENT", "edit"),
+  async (req, res) => {
+    const session = await mongoose.startSession();
+    try {
+      let updated;
+      await session.withTransaction(async () => {
+        const payment = await Payment.findOne(tenantFilter(req, { _id: req.params.id, status: "POSTED" })).session(session);
+        if (!payment) throw Object.assign(new Error("Payment not found or already reversed."), { statusCode: 404 });
+        const before = payment.toObject();
+        await releasePaymentAllocations(payment.allocations, session);
+        await reverseSourceJournal({
+          distributorId: req.auth.distributorId, firmId: req.auth.firmId, sourceType: "PAYMENT", sourceId: String(payment._id),
+          createdBy: req.auth.userId, documentDate: req.body.vDate || payment.vDate, reason: req.body.reason || "Payment edit reversal",
+        }, session);
+        const amount = paymentAmountFromBody(req.body);
+        const partyName = String(req.body.partyName || "").trim();
+        const bankCash = String(req.body.bankCash || "").trim();
+        if (!partyName || !bankCash) throw Object.assign(new Error("Supplier/account and bank/cash account are required."), { statusCode: 400 });
+        const allocations = await reservePaymentAllocations(req, normalizePaymentAllocations(req.body), partyName, session);
+        Object.assign(payment, {
+          vDate: String(req.body.vDate || payment.vDate), partyCode: String(req.body.partyCode || req.body.partyId || ""),
+          partyName, bankCash, amount, narration: String(req.body.narration || req.body.narr || ""),
+          reference: String(req.body.reference || req.body.chqNo || ""), chequeNo: String(req.body.chequeNo || req.body.chqNo || ""),
+          chequeDate: String(req.body.chequeDate || req.body.chqDate || ""), clearingDate: String(req.body.clearingDate || ""),
+          partyBankName: String(req.body.partyBankName || ""), bankAccountNo: String(req.body.bankAccountNo || ""), allocations,
+        });
+        payment.editHistory.push({ changedAt: new Date(), changedBy: req.auth.userId, reason: String(req.body.reason || "Payment corrected"), snapshot: before });
+        updated = await payment.save({ session });
+        await postBalancedJournal({
+          distributorId: req.auth.distributorId, firmId: req.auth.firmId, sourceType: "PAYMENT", sourceId: String(payment._id),
+          documentNo: String(payment.vNo), documentDate: payment.vDate, createdBy: req.auth.userId,
+          lines: [
+            { accountCode: String(payment.partyCode || payment.partyName), debit: amount, credit: 0, narration: payment.narration || "Payment repost" },
+            { accountCode: bankCash, debit: 0, credit: amount, narration: payment.narration || "Payment repost" },
+          ],
+        }, session);
+        await writeAuditEvent(req, { entityType: "PAYMENT", entityId: String(payment._id), action: "EDIT_REPOST", reason: req.body.reason || "Payment corrected", before, after: updated.toObject() }, session);
+      });
+      return res.json({ success: true, data: updated });
+    } catch (error) {
+      return res.status(error.statusCode || 500).json({ success: false, message: error.statusCode ? error.message : "Payment edit/repost failed." });
+    } finally {
+      await session.endSession();
+    }
+  }
+);
+
+router.delete(
+  "/payment/:id",
+  securityRouter.authorizeRequest("TRANSACTIONS", "PAYMENT", "delete"),
+  async (req, res) => {
+    const session = await mongoose.startSession();
+    try {
+      let payment;
+      await session.withTransaction(async () => {
+        payment = await Payment.findOne(tenantFilter(req, { _id: req.params.id, status: "POSTED" })).session(session);
+        if (!payment) throw Object.assign(new Error("Payment not found or already reversed."), { statusCode: 404 });
+        const before = payment.toObject();
+        await releasePaymentAllocations(payment.allocations, session);
+        await reverseSourceJournal({
+          distributorId: req.auth.distributorId, firmId: req.auth.firmId, sourceType: "PAYMENT", sourceId: String(payment._id),
+          createdBy: req.auth.userId, documentDate: payment.vDate, reason: req.body?.reason || "Payment cancellation",
+        }, session);
+        payment.status = "REVERSED"; payment.reversedAt = new Date(); payment.reversedBy = req.auth.userId;
+        payment.reversalReason = String(req.body?.reason || "Payment cancelled by user");
+        await payment.save({ session });
+        await writeAuditEvent(req, { entityType: "PAYMENT", entityId: String(payment._id), action: "REVERSE", reason: payment.reversalReason, before, after: payment.toObject() }, session);
+      });
+      return res.json({ success: true, message: "Payment cancelled and reversed successfully." });
+    } catch (error) {
+      return res.status(error.statusCode || 500).json({ success: false, message: error.statusCode ? error.message : "Payment cancellation failed." });
+    } finally {
+      await session.endSession();
+    }
+  }
+);
+
+/* ==========================
    SAVE RECEIPT
 ========================== */
+
+router.post(
+  "/receipt",
+  securityRouter.authorizeRequest("TRANSACTIONS", "RECEIPT", "add"),
+  async (req, res) => {
+    const session = await mongoose.startSession();
+    try {
+      const body = req.body || {};
+      const idempotencyKey = String(req.headers["idempotency-key"] || body.idempotencyKey || "").trim();
+      if (idempotencyKey.length < 16 || idempotencyKey.length > 200) {
+        return res.status(400).json({ success: false, message: "A stable Idempotency-Key is required." });
+      }
+
+      const existing = await Receipt.findOne(tenantFilter(req, { idempotencyKey })).lean();
+      if (existing) return res.status(200).json({ success: true, idempotent: true, data: existing });
+
+      const incoming = Array.isArray(body.receiptBills) ? body.receiptBills : Array.isArray(body.items) ? body.items : [];
+      const bills = incoming.map((item) => ({
+        trnSeries: String(item.trnSeries ?? item.billSeries ?? item.BillSeries ?? "").trim(),
+        trnNo: String(item.trnNo ?? item.billNo ?? item.BillNo ?? "").trim(),
+        trnDate: String(item.trnDate ?? item.billDate ?? ""),
+        nowAdjust: Number(item.nowAdjust || 0),
+        discAmt: Number(item.discAmt ?? item.discAmount ?? 0),
+        remark: String(item.remark || "").trim(),
+      })).filter((item) => item.nowAdjust > 0 || item.discAmt > 0);
+
+      if (!bills.length || bills.some((item) => !item.trnNo || item.nowAdjust < 0 || item.discAmt < 0)) {
+        return res.status(400).json({ success: false, message: "Valid positive bill allocations are required." });
+      }
+      const receiptAmount = Number(body.receiptAmount || 0);
+      const cashAllocated = bills.reduce((sum, item) => sum + item.nowAdjust, 0);
+      const discountTotal = bills.reduce((sum, item) => sum + item.discAmt, 0);
+      if (!Number.isFinite(receiptAmount) || receiptAmount <= 0 || Math.abs(receiptAmount - cashAllocated) > 0.01) {
+        return res.status(400).json({ success: false, message: "Receipt amount must equal the current cash allocations." });
+      }
+
+      let savedReceipt;
+      await session.withTransaction(async () => {
+        const sales = mongoose.connection.collection("T_Sal_Header");
+        for (const bill of bills) {
+          const billFilter = tenantFilter(req, { BillNo: Number.isFinite(Number(bill.trnNo)) ? Number(bill.trnNo) : bill.trnNo });
+          if (bill.trnSeries) billFilter.BillSeries = bill.trnSeries;
+          const invoice = await sales.findOne(billFilter, { session, projection: { NetAmount: 1, BillAmount: 1, partyCode: 1, AccountCode: 1, receiptAllocated: 1 } });
+          if (!invoice) throw Object.assign(new Error(`Sales bill ${bill.trnSeries}-${bill.trnNo} was not found in this firm.`), { statusCode: 404 });
+
+          const previousReceipts = await Receipt.aggregate([
+            { $match: tenantFilter(req, { status: { $ne: "REVERSED" }, receiptBills: { $elemMatch: { trnSeries: bill.trnSeries, trnNo: bill.trnNo } } }) },
+            { $unwind: "$receiptBills" },
+            { $match: { "receiptBills.trnSeries": bill.trnSeries, "receiptBills.trnNo": bill.trnNo } },
+            { $group: { _id: null, total: { $sum: { $add: ["$receiptBills.nowAdjust", "$receiptBills.discAmt"] } } } },
+          ]).session(session);
+          const legacyAllocated = Number(previousReceipts[0]?.total || 0);
+          const allocation = bill.nowAdjust + bill.discAmt;
+          const amountField = Number(invoice.NetAmount ?? invoice.BillAmount ?? 0);
+          const currentAllocated = Math.max(Number(invoice.receiptAllocated || 0), legacyAllocated);
+
+          await sales.updateOne(
+            { _id: invoice._id },
+            { $max: { receiptAllocated: currentAllocated } },
+            { session }
+          );
+
+          const reserved = await sales.updateOne(
+  {
+    _id: invoice._id,
+
+    $expr: {
+      $gte: [
+        {
+          $subtract: [
+            amountField,
+            {
+              $ifNull: [
+                "$receiptAllocated",
+                currentAllocated
+              ]
+            }
+          ]
+        },
+        allocation
+      ]
+    }
+  },
+
+  {
+    $inc: {
+      receiptAllocated: allocation
+    }
+  },
+
+  {
+    session
+  }
+);
+          if (reserved.modifiedCount !== 1) throw Object.assign(new Error(`Receipt exceeds the pending amount for bill ${bill.trnSeries}-${bill.trnNo}.`), { statusCode: 409 });
+        }
+
+        const rno = await nextDocumentNumber({
+          distributorId: req.auth.distributorId,
+          firmId: req.auth.firmId,
+          documentType: "RECEIPT",
+          series: String(body.billSeries || bills[0].trnSeries || ""),
+          documentDate: body.receiptDate,
+          session,
+        });
+        const receiptData = {
+          ...body,
+          distributorId: req.auth.distributorId,
+          firmId: req.auth.firmId,
+          rno,
+          receiptAmount,
+          receiptBills: bills,
+          idempotencyKey,
+          status: "POSTED",
+          addUser: req.auth.userId,
+        };
+        [savedReceipt] = await Receipt.create([receiptData], { session });
+
+        const lines = [
+          { accountCode: String(body.bankCash || "CASH"), debit: receiptAmount, credit: 0, narration: body.narration || "Receipt" },
+          ...(discountTotal > 0 ? [{ accountCode: "DISCOUNT_ALLOWED", debit: discountTotal, credit: 0, narration: "Receipt discount" }] : []),
+          { accountCode: String(body.partyId || body.partyName || "SUNDRY_DEBTORS"), debit: 0, credit: receiptAmount + discountTotal, narration: body.narration || "Receipt" },
+        ];
+        await postBalancedJournal({
+          distributorId: req.auth.distributorId, firmId: req.auth.firmId,
+          sourceType: "RECEIPT", sourceId: String(savedReceipt._id), documentNo: String(rno),
+          documentDate: String(body.receiptDate || ""), createdBy: req.auth.userId, lines,
+        }, session);
+        await writeAuditEvent(req, { entityType: "RECEIPT", entityId: String(savedReceipt._id), action: "CREATE", after: savedReceipt.toObject() }, session);
+      });
+      return res.status(201).json({ success: true, data: savedReceipt });
+    } catch (error) {
+      if (error?.code === 11000) {
+        const existing = await Receipt.findOne(tenantFilter(req, { idempotencyKey })).lean();
+        if (existing) return res.status(200).json({ success: true, idempotent: true, data: existing });
+      }
+      return res.status(error.statusCode || 500).json({ success: false, message: error.statusCode ? error.message : "Receipt could not be posted." });
+    } finally {
+      await session.endSession();
+    }
+  }
+);
 
 router.post(
   "/receipt",
@@ -737,7 +1322,7 @@ router.get(
   securityRouter.authorizeRequest("TRANSACTIONS", "RECEIPT", "view"),
   async (req, res) => {
     try {
-        const receipts = await Receipt.find()
+        const receipts = await Receipt.find(tenantFilter(req, { status: { $ne: "REVERSED" } }))
             .sort({ createdAt: -1 });
 
         res.json({
@@ -1258,10 +1843,7 @@ router.put(
         });
       }
 
-      const existingReceipt =
-        await Receipt.findById(
-          receiptId
-        );
+      const existingReceipt = await Receipt.findOne(tenantFilter(req, { _id: receiptId }));
 
       if (!existingReceipt) {
         return res.status(404).json({
@@ -1269,6 +1851,9 @@ router.put(
           message:
             "Receipt not found."
         });
+      }
+      if (existingReceipt.status === "POSTED") {
+        return res.status(409).json({ success: false, message: "Posted receipts are immutable. Reverse this receipt and create a corrected receipt." });
       }
 
       const body =
@@ -1384,19 +1969,8 @@ router.put(
         });
       }
 
-      const distributorId =
-        String(
-          body.distributorId ||
-          existingReceipt.distributorId ||
-          ""
-        ).trim();
-
-      const firmId =
-        String(
-          body.firmId ||
-          existingReceipt.firmId ||
-          ""
-        ).trim();
+      const distributorId = req.auth.distributorId;
+      const firmId = req.auth.firmId;
 
       if (
         !distributorId ||
@@ -1555,8 +2129,8 @@ drawerBankName:
       };
 
       const updatedReceipt =
-        await Receipt.findByIdAndUpdate(
-          receiptId,
+        await Receipt.findOneAndUpdate(
+          tenantFilter(req, { _id: receiptId }),
 
           {
             $set:
@@ -1600,9 +2174,7 @@ router.get(
   securityRouter.authorizeRequest("TRANSACTIONS", "RECEIPT", "view"),
   async (req, res) => {
     try {
-        const receipt = await Receipt.findById(
-            req.params.id
-        );
+        const receipt = await Receipt.findOne(tenantFilter(req, { _id: req.params.id }));
 
         res.json({
             success: true,
@@ -1624,20 +2196,59 @@ router.delete(
   "/receipt/:id",
   securityRouter.authorizeRequest("TRANSACTIONS", "RECEIPT", "delete"),
   async (req, res) => {
+    const session = await mongoose.startSession();
     try {
-        await Receipt.findByIdAndDelete(
-            req.params.id
-        );
+        await session.withTransaction(async () => {
+          const receipt = await Receipt.findOne(tenantFilter(req, { _id: req.params.id, status: { $ne: "REVERSED" } })).session(session);
+          if (!receipt) throw Object.assign(new Error("Receipt not found or already reversed."), { statusCode: 404 });
+          const sales = mongoose.connection.collection("T_Sal_Header");
+          for (const bill of receipt.receiptBills || []) {
+            const allocation = Number(bill.nowAdjust || 0) + Number(bill.discAmt || 0);
+            const billNo = Number.isFinite(Number(bill.trnNo)) ? Number(bill.trnNo) : bill.trnNo;
+            const billFilter = tenantFilter(req, {
+              BillSeries: String(bill.trnSeries || ""),
+              BillNo: billNo,
+            });
+            const salesBill = await sales.findOne(
+              billFilter,
+              {
+                session,
+                projection: { receiptAllocated: 1 },
+              }
+            );
+
+            if (salesBill) {
+              await sales.updateOne(
+                { _id: salesBill._id },
+                {
+                  $set: {
+                    receiptAllocated: Math.max(
+                      0,
+                      Number(salesBill.receiptAllocated || 0) - allocation
+                    ),
+                  },
+                },
+                { session }
+              );
+            }
+          }
+          await reverseSourceJournal({ distributorId: req.auth.distributorId, firmId: req.auth.firmId, sourceType: "RECEIPT", sourceId: String(receipt._id), createdBy: req.auth.userId, documentDate: receipt.receiptDate, reason: req.body?.reason || "Receipt reversal" }, session);
+          receipt.status = "REVERSED"; receipt.reversedAt = new Date(); receipt.reversedBy = req.auth.userId; receipt.reversalReason = String(req.body?.reason || "User requested reversal");
+          await receipt.save({ session });
+          await writeAuditEvent(req, { entityType: "RECEIPT", entityId: String(receipt._id), action: "REVERSE", reason: receipt.reversalReason, before: receipt.toObject() }, session);
+        });
 
         res.json({
             success: true,
-            message: "Deleted Successfully",
+            message: "Receipt reversed successfully",
         });
     } catch (error) {
-        res.status(500).json({
+        res.status(error.statusCode || 500).json({
             success: false,
-            message: error.message,
+            message: error.statusCode ? error.message : "Receipt reversal failed.",
         });
+    } finally {
+        await session.endSession();
     }
 });
 
@@ -1732,7 +2343,7 @@ router.post(
         .toUpperCase()
         .trim();
 
-      const trnNo =
+      let trnNo =
         Number(req.body.trnNo) || 0;
 
       if (!trnSeries) {
@@ -1758,6 +2369,8 @@ router.post(
       const firmId = String(
         req.body.firmId || ""
       ).trim();
+      const lastChequeBounce = await ChequeBounce.findOne({ distributorId, firmId, trnSeries }).sort({ trnNo: -1 }).lean();
+      trnNo = await nextDocumentNumber({ distributorId, firmId, documentType: "CHEQUE_BOUNCE", series: trnSeries, documentDate: req.body.chqBounceDate, minimumValue: Number(lastChequeBounce?.trnNo || 0) });
 
       const exists =
         await ChequeBounce.findOne({
@@ -1828,7 +2441,7 @@ router.put(
         });
       }
 
-      const existingChequeBounce = await ChequeBounce.findById(chequeBounceId);
+      const existingChequeBounce = await ChequeBounce.findOne(tenantFilter(req, { _id: chequeBounceId }));
 
       if (!existingChequeBounce) {
         return res.status(404).json({
@@ -1893,8 +2506,8 @@ router.put(
       delete updatePayload._id;
       delete updatePayload.id;
 
-      const updated = await ChequeBounce.findByIdAndUpdate(
-        chequeBounceId,
+      const updated = await ChequeBounce.findOneAndUpdate(
+        tenantFilter(req, { _id: chequeBounceId }),
         updatePayload,
         { new: true }
       );
@@ -1911,7 +2524,7 @@ router.get(
   securityRouter.authorizeRequest("TRANSACTIONS", "CHEQUE_BOUNCE", "view"),
   async (req, res) => {
     try {
-        const records = await ChequeBounce.find()
+        const records = await ChequeBounce.find(tenantFilter(req, { status: { $ne: "REVERSED" } }))
             .sort({ createdAt: -1 });
 
         res.json({
@@ -2396,10 +3009,7 @@ router.get(
   securityRouter.authorizeRequest("TRANSACTIONS", "CHEQUE_BOUNCE", "view"),
   async (req, res) => {
     try {
-        const record =
-            await ChequeBounce.findById(
-                req.params.id
-            );
+        const record = await ChequeBounce.findOne(tenantFilter(req, { _id: req.params.id }));
 
         res.json({
             success: true,
@@ -2420,9 +3030,7 @@ router.delete(
   securityRouter.authorizeRequest("TRANSACTIONS", "CHEQUE_BOUNCE", "delete"),
   async (req, res) => {
     try {
-        await ChequeBounce.findByIdAndDelete(
-            req.params.id
-        );
+        await ChequeBounce.findOneAndUpdate(tenantFilter(req, { _id: req.params.id }), { $set: { status: "REVERSED" } });
 
         res.json({
             success: true,
@@ -2441,8 +3049,10 @@ router.post(
   securityRouter.authorizeRequest("TRANSACTIONS", "PDC_DOCKET", "add"),
   async (req, res) => {
     try {
-
-        const data = await PDCDocket.create(req.body);
+        const distributorId = req.auth.distributorId, firmId = req.auth.firmId, docSeries = String(req.body.docSeries || "PDC").trim();
+        const last = await PDCDocket.findOne({ distributorId, firmId, docSeries }).sort({ docVNo: -1 }).lean();
+        const docVNo = await nextDocumentNumber({ distributorId, firmId, documentType: "PDC_DOCKET", series: docSeries, documentDate: req.body.pdcDate || req.body.docDate, minimumValue: Number(last?.docVNo || 0) });
+        const data = await PDCDocket.create({ ...req.body, distributorId, firmId, docSeries, docVNo });
 
         res.status(201).json({
             success: true,
@@ -2480,7 +3090,7 @@ router.put(
         });
       }
 
-      const existing = await PDCDocket.findById(pdcId);
+      const existing = await PDCDocket.findOne(tenantFilter(req, { _id: pdcId }));
 
       if (!existing) {
         return res.status(404).json({
@@ -2550,8 +3160,8 @@ router.put(
       delete updateData.id;
 
       const updated =
-        await PDCDocket.findByIdAndUpdate(
-          pdcId,
+        await PDCDocket.findOneAndUpdate(
+          tenantFilter(req, { _id: pdcId }),
           updateData,
           {
             new: true,
@@ -2585,7 +3195,7 @@ router.get(
     try {
 
         const records = await PDCDocket
-            .find()
+            .find(tenantFilter(req, { status: { $ne: "REVERSED" } }))
             .sort({ createdAt: -1 });
 
         res.json({
@@ -3140,9 +3750,7 @@ router.delete(
   async (req, res) => {
     try {
 
-        await PDCDocket.findByIdAndDelete(
-            req.params.id
-        );
+        await PDCDocket.findOneAndUpdate(tenantFilter(req, { _id: req.params.id }), { $set: { status: "REVERSED" } });
 
         res.json({
             success: true
@@ -3163,8 +3771,10 @@ router.post(
   securityRouter.authorizeRequest("TRANSACTIONS", "CONTRA", "add"),
   async (req, res) => {
   try {
-
-    const data = await Contra.create(req.body);
+    const distributorId = req.auth.distributorId, firmId = req.auth.firmId;
+    const last = await Contra.findOne({ distributorId, firmId }).sort({ tranVNo: -1 }).lean();
+    const tranVNo = await nextDocumentNumber({ distributorId, firmId, documentType: "CONTRA", documentDate: req.body.transactionDate, minimumValue: Number(last?.tranVNo || 0) });
+    const data = await Contra.create({ ...req.body, distributorId, firmId, tranVNo });
 
     res.status(201).json({
       success: true,
@@ -3199,7 +3809,7 @@ router.put(
         });
       }
 
-      const existing = await Contra.findById(contraId);
+      const existing = await Contra.findOne(tenantFilter(req, { _id: contraId }));
 
       if (!existing) {
         return res.status(404).json({
@@ -3245,8 +3855,8 @@ router.put(
       delete updateData.id;
 
       const updated =
-        await Contra.findByIdAndUpdate(
-          contraId,
+        await Contra.findOneAndUpdate(
+          tenantFilter(req, { _id: contraId }),
           updateData,
           {
             new: true,
@@ -3280,7 +3890,7 @@ router.get(
   try {
 
     const records = await Contra
-      .find()
+      .find(tenantFilter(req, { status: { $ne: "REVERSED" } }))
       .sort({ createdAt: -1 });
 
     res.json({
@@ -3749,9 +4359,7 @@ router.delete(
   async (req, res) => {
   try {
 
-    await Contra.findByIdAndDelete(
-      req.params.id
-    );
+    await Contra.findOneAndUpdate(tenantFilter(req, { _id: req.params.id }), { $set: { status: "REVERSED" } });
 
     res.json({
       success: true
@@ -3836,8 +4444,10 @@ router.post(
   securityRouter.authorizeRequest("TRANSACTIONS", "COLLECTION_VOUCHER", "add"),
   async (req, res) => {
     try {
-
-        const data = await CollectionVoucher.create(req.body);
+        const distributorId = req.auth.distributorId, firmId = req.auth.firmId;
+        const last = await CollectionVoucher.findOne({ distributorId, firmId }).sort({ colVNo: -1 }).lean();
+        const colVNo = await nextDocumentNumber({ distributorId, firmId, documentType: "COLLECTION_VOUCHER", documentDate: req.body.collectionDate, minimumValue: Number(last?.colVNo || 0) });
+        const data = await CollectionVoucher.create({ ...req.body, distributorId, firmId, colVNo });
 
         res.status(201).json({
             success: true,
@@ -3872,7 +4482,7 @@ router.put(
       }
 
       const existing =
-        await CollectionVoucher.findById(voucherId);
+        await CollectionVoucher.findOne(tenantFilter(req, { _id: voucherId }));
 
       if (!existing) {
         return res.status(404).json({
@@ -3930,8 +4540,8 @@ router.put(
       delete updateData.id;
 
       const updated =
-        await CollectionVoucher.findByIdAndUpdate(
-          voucherId,
+        await CollectionVoucher.findOneAndUpdate(
+          tenantFilter(req, { _id: voucherId }),
           updateData,
           {
             new: true,
@@ -3967,7 +4577,7 @@ router.get(
     try {
 
         const records = await CollectionVoucher
-            .find()
+            .find(tenantFilter(req, { status: { $ne: "REVERSED" } }))
             .sort({ createdAt: -1 });
 
         res.json({
@@ -4470,9 +5080,7 @@ router.delete(
 
     try {
 
-        await CollectionVoucher.findByIdAndDelete(
-            req.params.id
-        );
+        await CollectionVoucher.findOneAndUpdate(tenantFilter(req, { _id: req.params.id }), { $set: { status: "REVERSED" } });
 
         res.json({
             success: true

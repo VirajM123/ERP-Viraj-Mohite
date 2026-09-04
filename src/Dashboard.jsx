@@ -5,7 +5,12 @@ import * as XLSX from "xlsx-js-style";
 import jsPDF from 'jspdf';
 import 'jspdf-autotable';
 import './Dashboard.css';
-import totalSolutionLogo from "./assets/images/Totalsolution.png";
+import totalSolutionLogo from "./assets/images/Totalsolution-sidebar-dark.png";
+import { businessDateIST } from "./utils/businessDate";
+import {
+  getSessionExpiresAt,
+  startSession,
+} from "./utils/session";
 import {
   loadPermissions,
   hasPermission,
@@ -14,6 +19,8 @@ import {
   refreshPermissions,
 } from "./SecuritySetup";
 import Report from "./Report";
+import ImportData from "./ImportData";
+import { API_URL } from "./api/config";
 
 
 // Change this at the top of Dashboard.jsx:
@@ -23,10 +30,8 @@ import SalesmanToAreaMapping from './SalesmanToAreaMapping';
 import Transaction from "./Transaction";
 import GeneralSetup1 from "./GeneralSetup1";
 import SecuritySetup from "./SecuritySetup";
-const API_URL = "https://total-solution-backend.onrender.com/api";
-// const API_URL = "http://localhost:5000/api";
-
-
+import StockManagement from "./StockManagement";
+import { SalesService, ServiceMaster } from "./ServiceManagement";
 import {
   LineChart,
   Line,
@@ -47,6 +52,7 @@ import {
 import {
   Search,
   Plus,
+   Upload,
   Download,
   HelpCircle,
   Bell,
@@ -101,6 +107,10 @@ import {
   ChevronRight,
   LockKeyhole,
   ShieldCheck,
+  ShieldAlert,
+  Scale,
+  ArrowLeftRight,
+  History,
   UserCog,
   FolderOpen,
   Printer,
@@ -110,7 +120,8 @@ import {
   Zap,
   Maximize2,
   SlidersHorizontal,
-  PlusCircle
+  PlusCircle,
+  BookOpen
 } from "lucide-react";
 
 
@@ -153,6 +164,13 @@ const allReportItems = [
     description:
       "Consolidated sales report covering all parties.",
     icon: FileBarChart,
+  },
+  {
+    name: "Find Cheque Details",
+    category: "Financial",
+    description:
+      "Find a cheque's receipts, adjusted bills, bounce history and PDC docket details.",
+    icon: Search,
   },
   {
     name: "Product Wise Sales Report",
@@ -203,7 +221,48 @@ const allReportItems = [
       "Complete inward and outward product movement ledger.",
     icon: ClipboardList,
   },
+  { name: "General Ledger", category: "Financial", description: "Account-wise journal transactions with debit, credit and closing balance.", icon: BookOpen },
+  { name: "Party Ledger", category: "Financial", description: "Customer or supplier ledger for the selected period.", icon: Users },
+  { name: "Trial Balance", category: "Financial", description: "Account debit, credit and closing trial balance.", icon: Scale },
+  { name: "Cash Book", category: "Financial", description: "Cash account transactions from posted journals.", icon: Wallet },
+  { name: "Bank Book", category: "Financial", description: "Bank account transactions from posted journals.", icon: Landmark },
+  { name: "Day Book", category: "Financial", description: "Chronological daily accounting entries.", icon: CalendarDays },
+  { name: "Profit & Loss", category: "Financial", description: "Income and expense summary from posted journals.", icon: TrendingUp },
+  { name: "Balance Sheet", category: "Financial", description: "Account balances for assets and liabilities.", icon: Scale },
+  { name: "Stock Movement Ledger", category: "Stock", description: "Immutable inward and outward movement history.", icon: ArrowLeftRight },
+  { name: "Credit Control Report", category: "Control", description: "Credit limits, blacklisting, overdue and outstanding exposure.", icon: ShieldAlert },
+  { name: "Permission Audit Report", category: "Control", description: "Review effective user permissions.", icon: ShieldCheck },
+  { name: "Audit Trail Report", category: "Control", description: "Search transaction and administrative audit events.", icon: History },
+  { name: "Dashboard Reconciliation", category: "Control", description: "Compare dashboard totals with live transaction data.", icon: LayoutDashboard },
 ];
+
+const reportCatalogCategories = [
+  { id: "sales", name: "Sales Reports", description: "Order, Billing, Return & Analysis", icon: FileBarChart },
+  { id: "purchase", name: "Purchase Reports", description: "Purchase, GRN & Analysis", icon: ShoppingCart },
+  { id: "price", name: "Price & Discount", description: "Price, Discount & Rate", icon: BadgeIndianRupee },
+  { id: "scheme", name: "Scheme & Claims", description: "Schemes, Offers & Claims", icon: ClipboardList },
+  { id: "stock", name: "Stock Reports", description: "Stock, Movement & Valuation", icon: Box },
+  { id: "customer", name: "Customer Reports", description: "Customer, Outstanding & Ageing", icon: UserRound },
+  { id: "salesman", name: "Salesman Reports", description: "Salesman, Target & Performance", icon: Users },
+  { id: "gst", name: "GST Reports", description: "GST, E-Invoice & E-Way Bill", icon: FileText },
+  { id: "print", name: "Print / Documents", description: "Bill Print, Labels & Documents", icon: Printer },
+  { id: "other", name: "Other Reports", description: "Financial, Control, MIS & More", icon: MoreVertical },
+];
+
+const getReportCatalogCategory = (report) => {
+  if (report.category === "Sales") return "sales";
+  if (report.category === "Purchase") return "purchase";
+  if (report.category === "Stock") return "stock";
+
+  if (
+    report.name === "Party Ledger" ||
+    report.name === "Credit Control Report"
+  ) {
+    return "customer";
+  }
+
+  return "other";
+};
 
 const Dashboard = ({ onLogout }) => {
   const loggedInRole = String(
@@ -218,12 +277,56 @@ const Dashboard = ({ onLogout }) => {
   ].includes(loggedInRole);
   const [activeMenu, setActiveMenu] = useState(null);
   const [activeSubMenu, setActiveSubMenu] = useState(null);
+  const [stockManagementExpanded, setStockManagementExpanded] = useState(false);
   const [openFormFor, setOpenFormFor] = useState(null);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [sessionSecondsRemaining, setSessionSecondsRemaining] = useState(() => {
+    const expiresAt = getSessionExpiresAt();
+    return Math.max(0, Math.ceil((expiresAt - Date.now()) / 1000));
+  });
   const [showReceiptForm, setShowReceiptForm] = useState(false);
   const [accountActiveTab, setAccountActiveTab] = useState('basic');
   const [otherAccountActiveTab, setOtherAccountActiveTab] = useState('basic');
   const [transactionFormMode, setTransactionFormMode] = useState({});
   const [masterReturnContext, setMasterReturnContext] = useState(null);
+  const [showImportData, setShowImportData] = useState(false); // <-- ADD THIS HERE
+
+  useEffect(() => {
+    // Give already-authenticated legacy sessions one complete window. New logins
+    // always receive their timestamp in Login.jsx before Dashboard is mounted.
+    let expiresAt = getSessionExpiresAt();
+    if (!expiresAt && localStorage.getItem("token")) {
+      expiresAt = startSession();
+    }
+
+    const updateCountdown = () => {
+      if (!localStorage.getItem("token")) {
+        onLogout();
+        return;
+      }
+
+      const millisecondsRemaining = expiresAt - Date.now();
+      const secondsRemaining = Math.max(
+        0,
+        Math.ceil(millisecondsRemaining / 1000)
+      );
+
+      setSessionSecondsRemaining(secondsRemaining);
+
+      if (millisecondsRemaining <= 0) {
+        onLogout();
+      }
+    };
+
+    updateCountdown();
+    const countdownTimer = window.setInterval(updateCountdown, 1000);
+
+    return () => window.clearInterval(countdownTimer);
+  }, [onLogout]);
+
+  const sessionCountdownText = `${String(
+    Math.floor(sessionSecondsRemaining / 60)
+  ).padStart(2, "0")}:${String(sessionSecondsRemaining % 60).padStart(2, "0")}`;
 
   const [runtimeGeneralSetup, setRuntimeGeneralSetup] =
     useState({
@@ -745,7 +848,7 @@ const debitNotePermission = usePermission("VOUCHERS", "DEBIT_NOTE");
     useState(-1);
 
   const [reportCategoryFilter, setReportCategoryFilter] =
-    useState("All");
+    useState("sales");
 
   const REPORT_RESULTS_PER_PAGE = 5;
 
@@ -1039,7 +1142,7 @@ const debitNotePermission = usePermission("VOUCHERS", "DEBIT_NOTE");
     setShowDashboard(false);
 
     setReportSearchText("");
-    setReportCategoryFilter("All");
+    setReportCategoryFilter("sales");
 
     setShowSalesList(false);
     setShowPurchaseList(false);
@@ -1166,6 +1269,36 @@ const debitNotePermission = usePermission("VOUCHERS", "DEBIT_NOTE");
   const quickAccessReports = allReportItems.filter((report) =>
     favoriteReports.includes(report.name)
   );
+
+  const activeReportCatalogCategory =
+    reportCatalogCategories.find(
+      (category) => category.id === reportCategoryFilter
+    ) || reportCatalogCategories[0];
+
+  const ActiveReportCatalogIcon =
+    activeReportCatalogCategory.icon;
+
+  const reportCatalogSearch =
+    normalizeReportText(reportSearchText);
+
+  const visibleReportCatalogItems =
+    allReportItems.filter((report) => {
+      const belongsToSelectedCategory =
+        getReportCatalogCategory(report) ===
+        activeReportCatalogCategory.id;
+
+      if (!belongsToSelectedCategory) {
+        return false;
+      }
+
+      if (!reportCatalogSearch) {
+        return true;
+      }
+
+      return normalizeReportText(
+        `${report.name} ${report.description}`
+      ).includes(reportCatalogSearch);
+    });
 
   /* =========================================================
   LOAD TRANSFER STATES
@@ -1956,7 +2089,10 @@ const debitNotePermission = usePermission("VOUCHERS", "DEBIT_NOTE");
       const response = await fetch(
         `${API_URL}/sales/${encodeURIComponent(
           salesId
-        )}/print-details?${query.toString()}`
+        )}/print-details?${query.toString()}`,
+        {
+          cache: "no-store",
+        }
       );
 
       const result = await response.json();
@@ -3099,6 +3235,23 @@ const debitNotePermission = usePermission("VOUCHERS", "DEBIT_NOTE");
           "PCS"
         ),
 
+        pack: getInvoiceValue(
+          item,
+          [
+            "pack",
+            "Pack",
+            "packing",
+            "Packing",
+            "packSize",
+            "PackSize",
+            "boxPack",
+            "BoxPack",
+            "unitQty",
+            "UnitQty",
+          ],
+          "-"
+        ),
+
         qty,
 
         free: Number(
@@ -3312,6 +3465,13 @@ const debitNotePermission = usePermission("VOUCHERS", "DEBIT_NOTE");
       return number > 0 ? money(number) : "-";
     };
 
+    const packLabel = (value, unit) => {
+      const rawValue = String(value ?? "").trim();
+      if (!rawValue || rawValue === "-") return "-";
+      if (/[a-z]/i.test(rawValue)) return text(rawValue);
+      return text(`${rawValue} ${String(unit || "").trim()}`.trim());
+    };
+
     const joinAddress = (lines) =>
       lines
         .map((line) => String(line || "").trim())
@@ -3346,6 +3506,8 @@ const debitNotePermission = usePermission("VOUCHERS", "DEBIT_NOTE");
       "PoNumber",
       "poNo",
       "PONo",
+      "Narration",
+      "narration",
     ]);
 
     const invoiceType = readBillValue(
@@ -3549,6 +3711,12 @@ const debitNotePermission = usePermission("VOUCHERS", "DEBIT_NOTE");
       ""
     );
 
+    const firmPanNo = getInvoiceValue(
+      firm,
+      ["panNo", "PANNo", "pan", "PAN"],
+      readBillValue(["FirmPANNo", "firmPanNo"])
+    );
+
     const partyName = getInvoiceValue(
       party,
       ["partyName", "accountName", "PartyName", "AccountName"],
@@ -3584,6 +3752,12 @@ const debitNotePermission = usePermission("VOUCHERS", "DEBIT_NOTE");
       ""
     );
 
+    const partyMobile = getInvoiceValue(
+      party,
+      ["mobileNo", "MobileNo", "mobile", "Mobile"],
+      readBillValue(["CustMobileNo", "custMobileNo"])
+    );
+
     const partyGstNo = getInvoiceValue(
       party,
       ["gstNo", "GSTNo", "gstin", "GSTIN"],
@@ -3603,10 +3777,28 @@ const debitNotePermission = usePermission("VOUCHERS", "DEBIT_NOTE");
       ""
     );
 
+    const partyDlNo1 = getInvoiceValue(
+      party,
+      ["dlNo1", "DLNo1", "drugLicenceNo1", "DrugLicenceNo1"],
+      readBillValue(["CustDLNo1", "custDLNo1", "DLNo1", "dlNo1"])
+    );
+
+    const partyDlNo2 = getInvoiceValue(
+      party,
+      ["dlNo2", "DLNo2", "drugLicenceNo2", "DrugLicenceNo2"],
+      readBillValue(["CustDLNo2", "custDLNo2", "DLNo2", "dlNo2"])
+    );
+
     const salesmanName = getInvoiceValue(
       salesman,
       ["salesmanName", "SalesmanName", "name"],
       readBillValue(["SalesmanName", "salesmanName"])
+    );
+
+    const salesmanMobile = getInvoiceValue(
+      salesman,
+      ["mobileNo", "MobileNo", "mobile", "Mobile", "phoneNo", "PhoneNo"],
+      readBillValue(["SSMMobileNo", "ssmMobileNo", "SalesmanMobileNo"])
     );
 
     const areaName = getInvoiceValue(
@@ -3646,48 +3838,88 @@ const debitNotePermission = usePermission("VOUCHERS", "DEBIT_NOTE");
     );
 
     const visibleItems = items || [];
-    const minimumRows = isA5 ? 6 : 10;
-    const emptyRowCount = Math.max(0, minimumRows - visibleItems.length);
+    const totalItemQuantity = visibleItems.reduce(
+      (sum, item) => sum + safeNumber(item.qty),
+      0
+    );
+    const emptyRowCount = 0;
+
+    const taxSummary = Array.from(
+      visibleItems.reduce((summaryMap, item) => {
+        const gstPercent =
+          safeNumber(item.igstPercent) > 0
+            ? safeNumber(item.igstPercent)
+            : safeNumber(item.cgstPercent) + safeNumber(item.sgstPercent);
+        const key = gstPercent.toFixed(2);
+        const current = summaryMap.get(key) || {
+          gstPercent,
+          taxableValue: 0,
+          cgstAmount: 0,
+          sgstAmount: 0,
+          igstAmount: 0,
+          totalTax: 0,
+        };
+
+        current.taxableValue += safeNumber(item.taxableAmount);
+        current.cgstAmount += safeNumber(item.cgstAmount);
+        current.sgstAmount += safeNumber(item.sgstAmount);
+        current.igstAmount += safeNumber(item.igstAmount);
+        current.totalTax +=
+          safeNumber(item.cgstAmount) +
+          safeNumber(item.sgstAmount) +
+          safeNumber(item.igstAmount);
+        summaryMap.set(key, current);
+        return summaryMap;
+      }, new Map()).values()
+    ).sort((left, right) => left.gstPercent - right.gstPercent);
+
+    const taxSummaryRows = taxSummary
+      .map(
+        (row) => `
+          <tr>
+            <td class="center">${qty(row.gstPercent)}%</td>
+            <td class="number">${money(row.taxableValue)}</td>
+            <td class="number">${money(row.cgstAmount)}</td>
+            <td class="number">${money(row.sgstAmount)}</td>
+            <td class="number">${money(row.igstAmount)}</td>
+            <td class="number">${money(row.totalTax)}</td>
+          </tr>
+        `
+      )
+      .join("");
 
     const itemRows = visibleItems
       .map(
         (item, index) => `
           <tr class="item-row">
-          ${showSerialNo
+            ${showSerialNo
             ? `<td class="center">${index + 1}</td>`
             : ""
           }
-            <td class="product-name">${text(item.productName)}</td>
             ${showHsn ? `<td class="center">${text(item.hsn)}</td>` : ""}
-            <td class="number">${money(item.mrp)}</td>
-            <td class="center">${text(item.unit)}</td>
+            <td class="product-name">${text(item.productName)}</td>
+            <td class="center">${packLabel(item.pack, item.unit)}</td>
             <td class="number">${qty(item.qty)}</td>
-            <td class="number">${safeNumber(item.free) > 0 ? qty(item.free) : "-"
-          }</td>
+            <td class="center">${text(item.unit)}</td>
             <td class="number">${money(item.rate)}</td>
-            <td class="number">
-              ${showScheme
-            ? money(
-              safeNumber(item.schemeAmount) +
-              safeNumber(item.cashDiscountAmount)
+            <td class="number">${showScheme
+            ? percent(
+              safeNumber(item.schemePercent) +
+              safeNumber(item.cashDiscountPercent)
             )
-            : money(0)
-          }
-            </td>
+            : "-"
+          }</td>
+            <td class="number">${percent(
+            safeNumber(item.igstPercent) > 0
+              ? safeNumber(item.igstPercent)
+              : safeNumber(item.cgstPercent) + safeNumber(item.sgstPercent)
+          )}</td>
             <td class="number">${money(item.taxableAmount)}</td>
-            <td class="tax-cell">
-              <div class="tax-cell-inner">
-                <span class="tax-percent">${percent(item.cgstPercent)}</span>
-                <span class="tax-amount">${money(item.cgstAmount)}</span>
-              </div>
-            </td>
-
-            <td class="tax-cell">
-              <div class="tax-cell-inner">
-                <span class="tax-percent">${percent(item.sgstPercent)}</span>
-                <span class="tax-amount">${money(item.sgstAmount)}</span>
-              </div>
-            </td>
+            <td class="number">${money(
+            safeNumber(item.cgstAmount) +
+            safeNumber(item.sgstAmount) +
+            safeNumber(item.igstAmount)
+          )}</td>
             <td class="number strong">${money(item.netAmount)}</td>
           </tr>
         `
@@ -3733,18 +3965,17 @@ const debitNotePermission = usePermission("VOUCHERS", "DEBIT_NOTE");
               ${joinAddress(firmAddressLines)}
             </div>
 
-            <div class="info-line">
-              <span>State</span><b>:</b>
-              <span>${text(firmState)}</span>
-              <span class="push-label">State Code</span><b>:</b>
-              <span>${text(firmStateCode)}</span>
+            <div class="header-inline-details">
+              <span><b>State:</b> ${text(firmState)}</span>
+              <span><b>State Code:</b> ${text(firmStateCode)}</span>
+              <span><b>Ph:</b> ${text(firmPhone)}</span>
+              <span><b>Mobile:</b> ${text(firmMobile)}</span>
             </div>
 
-            <div class="info-line">
-              <span>Ph</span><b>:</b>
-              <span>${text(firmPhone || firmMobile)}</span>
-              <span class="push-label">FIRM GSTIN</span><b>:</b>
-              <strong>${text(firmGstNo)}</strong>
+            <div class="header-inline-details firm-tax-details">
+              <span><b>GSTIN:</b> ${text(firmGstNo)}</span>
+              <span><b>PAN:</b> ${text(firmPanNo)}</span>
+              <span><b>Food Lic. No:</b> ${text(firmFoodLicence)}</span>
             </div>
           </div>
 
@@ -3781,25 +4012,14 @@ const debitNotePermission = usePermission("VOUCHERS", "DEBIT_NOTE");
             <div class="party-name">${text(partyName)}</div>
             <div class="compact-lines">${joinAddress(partyAddressLines)}</div>
 
-            <div class="info-line">
-              <span>STATE</span><b>:</b>
-              <span>${text(partyState)}</span>
-              <span class="push-label">STATE CODE</span><b>:</b>
-              <span>${text(partyStateCode)}</span>
-            </div>
-
-            <div class="info-line">
-              <strong>GSTIN/UNIQUE ID</strong><b>:</b>
-              <strong>${text(partyGstNo)}</strong>
-            </div>
-
-            <div class="info-line">
-              <span>Phone</span><b>:</b>
-              <span>${text(partyPhone)}</span>
-            </div>
+            <div class="info-line"><span>State / Code</span><b>:</b><span>${text(partyState)} / ${text(partyStateCode)}</span></div>
+            <div class="info-line"><strong>GSTIN/UNIQUE ID</strong><b>:</b><strong>${text(partyGstNo)}</strong></div>
+            <div class="info-line"><span>Phone / Mobile</span><b>:</b><span>${text(partyPhone)} / ${text(partyMobile)}</span></div>
+            <div class="info-line"><span>DL No.</span><b>:</b><span>${text(partyDlNo1)}</span></div>
           </div>
 
           <div class="middle-party-details">
+            <div class="party-heading">Other Details</div>
             <div class="info-line">
               <span>BEAT</span><b>:</b>
               <span>${text(areaName)}</span>
@@ -3809,6 +4029,11 @@ const debitNotePermission = usePermission("VOUCHERS", "DEBIT_NOTE");
               <span>PC NAME</span><b>:</b>
               <span>${text(salesmanName)}</span>
             </div>
+
+            <div class="info-line">
+              <span>SSM Mobile</span><b>:</b>
+              <span>${text(salesmanMobile)}</span>
+            </div>
           </div>
 
           <div class="party-block">
@@ -3816,61 +4041,44 @@ const debitNotePermission = usePermission("VOUCHERS", "DEBIT_NOTE");
             <div class="party-name">${text(partyName)}</div>
             <div class="compact-lines">${joinAddress(partyAddressLines)}</div>
 
-            <div class="info-line">
-              <span>STATE</span><b>:</b>
-              <span>${text(partyState)}</span>
-              <span class="push-label">STATE CODE</span><b>:</b>
-              <span>${text(partyStateCode)}</span>
-            </div>
-
-            <div class="info-line">
-              <strong>GSTIN/UNIQUE ID</strong><b>:</b>
-              <strong>${text(partyGstNo)}</strong>
-            </div>
-
-            <div class="info-line">
-              <span>Food Lic No</span><b>:</b>
-              <span>${text(partyFoodLicence)}</span>
-            </div>
+            <div class="info-line"><span>State / Code</span><b>:</b><span>${text(partyState)} / ${text(partyStateCode)}</span></div>
+            <div class="info-line"><strong>GSTIN/UNIQUE ID</strong><b>:</b><strong>${text(partyGstNo)}</strong></div>
+            <div class="info-line"><span>Food Lic No</span><b>:</b><span>${text(partyFoodLicence)}</span></div>
+            <div class="info-line"><span>DL No.</span><b>:</b><span>${text(partyDlNo2)}</span></div>
           </div>
         </section>
 
         <section class="items-wrap">
           <table class="crystal-table">
             <colgroup>
-              <col style="width:3.2%">
-              <col style="width:${showHsn ? "18.4%" : "24.4%"}">
-              ${showHsn ? '<col style="width:7.4%">' : ""}
-              <col style="width:6.2%">
-              <col style="width:5.4%">
-              <col style="width:4.2%">
-              <col style="width:4.2%">
-              <col style="width:7.0%">
-              <col style="width:7.0%">
-              <col style="width:8.3%">
-              <col style="width:9.0%">
-              <col style="width:9.0%">
-              <col style="width:10.7%">
+              ${showSerialNo ? '<col style="width:4%">' : ""}
+              ${showHsn ? '<col style="width:8%">' : ""}
+              <col style="width:${24 + (showSerialNo ? 0 : 4) + (showHsn ? 0 : 8)}%">
+              <col style="width:8%">
+              <col style="width:5%">
+              <col style="width:6%">
+              <col style="width:7%">
+              <col style="width:6%">
+              <col style="width:5%">
+              <col style="width:10%">
+              <col style="width:8%">
+              <col style="width:9%">
             </colgroup>
 
             <thead>
               <tr>
-              ${showSerialNo
-        ? `<th>SR NO</th>`
-        : ""
-      }
-                <th class="left">Product Name</th>
-                ${showHsn ? "<th>HSN</th>" : ""}
-                <th>MRP</th>
-                <th>Unit</th>
+                ${showSerialNo ? `<th>Sr.</th>` : ""}
+                ${showHsn ? "<th>HSN / SAC</th>" : ""}
+                <th class="left">Item Name</th>
+                <th>Pack</th>
                 <th>Qty</th>
-                <th>Fr.</th>
+                <th>Unit</th>
                 <th>Rate</th>
-                <th>Disc</th>
-                <th>Taxable</th>
-                <th>CGST<br><small>% &nbsp;&nbsp; Amt</small></th>
-                <th>SGST<br><small>% &nbsp;&nbsp; Amt</small></th>
-                <th>Net Amt</th>
+                <th>Disc. %</th>
+                <th>GST %</th>
+                <th>Taxable Value</th>
+                <th>GST Amt.</th>
+                <th>Amount</th>
               </tr>
             </thead>
 
@@ -3881,113 +4089,31 @@ const debitNotePermission = usePermission("VOUCHERS", "DEBIT_NOTE");
           </table>
         </section>
 
+        <div class="invoice-quick-totals">
+          <span>Total Items: <strong>${visibleItems.length}</strong></span>
+          <span>Total Qty: <strong>${qty(totalItemQuantity)}</strong></span>
+          <span>Sub Total: <strong>${money(netAmount)}</strong></span>
+        </div>
+
         <section class="invoice-bottom">
-          <div class="total-words-row">
-            <strong>Tot Value (Words)</strong>
-            <span>RS. ${text(amountInWords, "Zero Only")}</span>
-          </div>
-
-          <div class="bottom-middle-grid">
-            <div class="bottom-notes">
-              ${showDeclaration
-        ? `
-                    <div class="declaration-text">
-                      <strong>Declaration:</strong>
-                      Certified that the particulars given above are true and
-                      correct and the amount indicated.
-                    </div>
-                  `
-        : ""
-      }
-
-              <div class="receiver-label">
-                <strong>Receivers Stamp &amp; Sign.</strong>
+          <div class="invoice-footer-summary-grid">
+            <div class="footer-left-column">
+              <div class="footer-section">
+                <div class="footer-section-heading">Amount in Words</div>
+                <strong>${text(amountInWords, "Zero Only")}</strong>
               </div>
-            </div>
-  <div class="amount-summary">
-            ${showTaxSummary
-        ? `
-                  
-                    <div class="amount-summary-row">
-                      <span>TAXABLE AMT</span><b>:</b><strong>${money(taxableValue)}</strong>
-                    </div>
-                    <div class="amount-summary-row">
-                      <span>SCHE/CASH</span><b>:</b><strong>${money(totalSchemeCash)}</strong>
-                    </div>
-                    <div class="amount-summary-row">
-                      <span>CGST AMT</span><b>:</b><strong>${money(cgstAmount)}</strong>
-                    </div>
-                    <div class="amount-summary-row">
-                      <span>SGST AMT</span><b>:</b><strong>${money(sgstAmount)}</strong>
-                    </div>
-                    ${igstAmount !== 0
-          ? `
-                          <div class="amount-summary-row">
-                            <span>IGST AMT</span><b>:</b><strong>${money(igstAmount)}</strong>
-                          </div>
-                        `
-          : ""
-        }
-                    <div class="amount-summary-row">
-                      <span>CN/STAR/DIS</span><b>:</b><strong>${money(totalCnStarDis)}</strong>
-                    </div>
-                <div class="amount-summary-row">
-    <span>TCS AMT</span>
-    <b>:</b>
-    <strong>${money(tcsAmount)}</strong>
-  </div>
 
-  ${goodsReturn
-          ? `
-        <div class="amount-summary-row">
-          <span>GOODS RETURN</span>
-          <b>:</b>
-          <strong>${money(goodsReturnAmount)}</strong>
-        </div>
-      `
-          : ""
-        }
-
-  ${damageReturn
-          ? `
-        <div class="amount-summary-row">
-          <span>DAMAGE RETURN</span>
-          <b>:</b>
-          <strong>${money(damageReturnAmount)}</strong>
-        </div>
-      `
-          : ""
-        }
-
-  <div class="amount-summary-row">
-    <span>ROUNDING</span>
-    <b>:</b>
-    <strong>${money(roundingAmount)}</strong>
-  </div>
-                    <div class="amount-summary-row net-amount-row">
-                      <span>NET AMOUNT</span><b>:</b><strong>${money(netAmount)}</strong>
-                    </div>
-                  </div>
-                `
-        : ""
-      }
-          </div>
-
-          <div class="invoice-footer-grid">
-            <div class="receiver-section">
-              <strong>Receivers Stamp &amp; Sign.</strong>
-            </div>
-
-            <div class="footer-detail-section">
               ${showBankDetails
         ? `
-                    <div class="footer-bank-row">
-                      <span><strong>BANK NAME:</strong> ${text(bankName)}</span>
-                      <span><strong>A/C NO:</strong> ${text(bankAccountNo)}</span>
-                      <span><strong>IFSC CODE:</strong> ${text(bankIfsc)}</span>
-                      <span><strong>BRANCH:</strong> ${text(bankBranch)}</span>
+                    <div class="footer-section bank-details">
+                      <div class="footer-section-heading">Bank Details</div>
+                      <div class="footer-detail-row"><span>Bank Name</span><b>:</b><span>${text(bankName)}</span></div>
+                      <div class="footer-detail-row"><span>A/C Name</span><b>:</b><span>${text(firmName)}</span></div>
+                      <div class="footer-detail-row"><span>A/C No.</span><b>:</b><span>${text(bankAccountNo)}</span></div>
+                      <div class="footer-detail-row"><span>IFSC Code</span><b>:</b><span>${text(bankIfsc)}</span></div>
+                      <div class="footer-detail-row"><span>Branch</span><b>:</b><span>${text(bankBranch)}</span></div>
                       ${bankAccountType
-          ? `<span><strong>A/C TYPE:</strong> ${text(bankAccountType)}</span>`
+          ? `<div class="footer-detail-row"><span>A/C Type</span><b>:</b><span>${text(bankAccountType)}</span></div>`
           : ""
         }
                     </div>
@@ -3995,25 +4121,90 @@ const debitNotePermission = usePermission("VOUCHERS", "DEBIT_NOTE");
         : ""
       }
 
-              <div class="footer-declaration-row">
-                <div class="footer-declaration">
-                  ${showDeclaration
+              ${showDeclaration
         ? `
-                        <strong>Declaration:</strong>
-                        Certified that the particulars given above are true and
-                        correct and the amount indicated.
-                      `
+                    <div class="footer-section terms-section">
+                      <div class="footer-section-heading">Terms &amp; Conditions</div>
+                      <div>1. Goods once sold will not be taken back or exchanged.</div>
+                      <div>2. Interest will be charged on overdue payments.</div>
+                      <div>3. Subject to ${text(firmState || "local")} jurisdiction only.</div>
+                    </div>
+                  `
         : ""
       }
-                </div>
+            </div>
 
-                <div class="footer-signature">
-                  <strong>FOR ${text(firmName)}</strong>
-                  <div class="authorised-line"></div>
-                  <span>Authorised Signatory</span>
-                </div>
+            <div class="footer-tax-column">
+              ${showTaxSummary
+        ? `
+                    <div class="footer-section-heading center">Tax Summary</div>
+                    <table class="tax-summary-table">
+                      <thead>
+                        <tr>
+                          <th>GST%</th>
+                          <th>Taxable Value</th>
+                          <th>CGST</th>
+                          <th>SGST</th>
+                          <th>IGST</th>
+                          <th>Total Tax</th>
+                        </tr>
+                      </thead>
+                      <tbody>${taxSummaryRows}</tbody>
+                      <tfoot>
+                        <tr>
+                          <th>Total</th>
+                          <th class="number">${money(taxableValue)}</th>
+                          <th class="number">${money(cgstAmount)}</th>
+                          <th class="number">${money(sgstAmount)}</th>
+                          <th class="number">${money(igstAmount)}</th>
+                          <th class="number">${money(cgstAmount + sgstAmount + igstAmount)}</th>
+                        </tr>
+                      </tfoot>
+                    </table>
+                  `
+        : ""
+      }
+
+              <div class="receiver-signature">
+                <span>Receiver's Signature</span>
               </div>
             </div>
+
+            <div class="footer-total-column">
+              <div class="footer-total-row"><span>Total Taxable Value</span><b>:</b><strong>&#8377; ${money(taxableValue)}</strong></div>
+              <div class="footer-total-row"><span>Total CGST</span><b>:</b><strong>&#8377; ${money(cgstAmount)}</strong></div>
+              <div class="footer-total-row"><span>Total SGST</span><b>:</b><strong>&#8377; ${money(sgstAmount)}</strong></div>
+              <div class="footer-total-row"><span>Total IGST</span><b>:</b><strong>&#8377; ${money(igstAmount)}</strong></div>
+              ${tcsAmount !== 0
+        ? `<div class="footer-total-row"><span>Total TCS</span><b>:</b><strong>&#8377; ${money(tcsAmount)}</strong></div>`
+        : ""
+      }
+              ${totalSchemeCash !== 0
+        ? `<div class="footer-total-row"><span>Scheme / Cash</span><b>:</b><strong>- &#8377; ${money(totalSchemeCash)}</strong></div>`
+        : ""
+      }
+              ${totalCnStarDis !== 0
+        ? `<div class="footer-total-row"><span>CN / Star / Display</span><b>:</b><strong>- &#8377; ${money(totalCnStarDis)}</strong></div>`
+        : ""
+      }
+              ${goodsReturn
+        ? `<div class="footer-total-row"><span>Goods Return</span><b>:</b><strong>&#8377; ${money(goodsReturnAmount)}</strong></div>`
+        : ""
+      }
+              ${damageReturn
+        ? `<div class="footer-total-row"><span>Damage Return</span><b>:</b><strong>&#8377; ${money(damageReturnAmount)}</strong></div>`
+        : ""
+      }
+              <div class="footer-total-row"><span>Round Off</span><b>:</b><strong>&#8377; ${money(roundingAmount)}</strong></div>
+              <div class="grand-total-row"><span>Grand Total</span><b>:</b><strong>&#8377; ${money(netAmount)}</strong></div>
+              <div class="rounded-off-label">(Rounded Off)</div>
+            </div>
+          </div>
+
+          <div class="invoice-footer-closing">
+            <span></span>
+            <strong>Thank You! &nbsp; Visit Again !!!</strong>
+            <span></span>
           </div>
         </section>
       </main>
@@ -4203,7 +4394,7 @@ const debitNotePermission = usePermission("VOUCHERS", "DEBIT_NOTE");
   }
 
   .invoice-a5 .middle-party-details {
-    padding-top: 8mm;
+    padding-top: 0;
   }
 
   .invoice-a5 .party-heading,
@@ -4235,6 +4426,12 @@ const debitNotePermission = usePermission("VOUCHERS", "DEBIT_NOTE");
     padding: 1mm 2mm;
   }
 
+  .invoice-a5 .invoice-quick-totals {
+    min-height: 4.5mm;
+    padding: 0.5mm 1mm;
+    font-size: 6.8px;
+  }
+
   .invoice-a5 .bottom-middle-grid {
     min-height: 26mm;
   }
@@ -4259,19 +4456,31 @@ const debitNotePermission = usePermission("VOUCHERS", "DEBIT_NOTE");
 
             .copy-label { position: absolute; right: 4mm; top: 1.5mm; font-size: 7px; }
 
-            .report-top {
+             .report-top {
               display: grid;
               grid-template-columns: minmax(0, 58%) minmax(0, 42%);
               width: 100%;
-              min-height: 30mm;
+              min-height: 28mm;
+              padding-bottom: 1.5mm;
+              border-bottom: 1px solid #000;
             }
 
-            .firm-block, .invoice-block { min-width: 0; padding: 1mm 2mm; }
-            .firm-block { padding-left: 4mm; }
-            .invoice-block { padding-left: 7mm; }
-            .firm-name { margin: 0 0 1mm; font-size: 12px; line-height: 1.2; font-weight: 700; }
-            .tax-heading { margin: 0 0 2mm; font-size: 14px; line-height: 1.2; font-weight: 700; }
-            .compact-lines { min-height: 9mm; line-height: 1.35; }
+            .firm-block, .invoice-block { min-width: 0; padding: 0.8mm 2mm; }
+            .firm-block { padding-left: 1mm; }
+            .invoice-block { padding-left: 8mm; }
+            .firm-name { margin: 0 0 1mm; font-size: 15px; line-height: 1.15; font-weight: 800; letter-spacing: 0.15px; }
+            .tax-heading { margin: 0 0 1.5mm; font-size: 13px; line-height: 1.2; font-weight: 800; letter-spacing: 0.7px; }
+            .compact-lines { min-height: 7mm; line-height: 1.35; }
+
+            .header-inline-details {
+              display: flex;
+              flex-wrap: wrap;
+              gap: 0.8mm 5mm;
+              margin-top: 0.8mm;
+              line-height: 1.35;
+            }
+
+            .firm-tax-details { padding-top: 0.7mm; border-top: 1px dotted #666; }
 
             .label-value {
               display: grid;
@@ -4295,29 +4504,26 @@ const debitNotePermission = usePermission("VOUCHERS", "DEBIT_NOTE");
             .push-label { margin-left: 7mm; }
 
             .long-dash {
-              width: 100%;
-              height: 1px;
-              margin: 0;
-              background: repeating-linear-gradient(to right, #000 0, #000 7mm, transparent 7mm, transparent 10mm);
+              display: none;
             }
 
             .party-grid {
               display: grid;
               grid-template-columns: minmax(0, 39%) minmax(0, 22%) minmax(0, 39%);
               width: 100%;
-              min-height: 34mm;
-              padding: 2mm 4mm 1.5mm;
-              column-gap: 3mm;
+              min-height: 30mm;
+              padding: 2mm 1mm 1.5mm;
+              column-gap: 6mm;
+              border-bottom: 1px solid #000;
             }
 
             .party-block, .middle-party-details { min-width: 0; }
-            .middle-party-details { padding: 12mm 1mm 0; }
-            .party-heading { margin: 0 0 1.4mm; font-size: 10px; line-height: 1.2; }
+            .middle-party-details { padding: 0; }
+            .party-heading { margin: 0 0 1.4mm; padding-bottom: 0.7mm; border-bottom: 1px solid #000; font-size: 9px; line-height: 1.2; font-weight: 800; text-transform: uppercase; }
             .party-name { margin: 0 0 1mm; font-size: 10px; line-height: 1.2; font-weight: 700; }
 
             .items-wrap {
               width: 100%;
-              border-top: 1px dotted #000;
               border-bottom: 1px solid #000;
             }
 
@@ -4333,23 +4539,24 @@ const debitNotePermission = usePermission("VOUCHERS", "DEBIT_NOTE");
             .crystal-table th:last-child, .crystal-table td:last-child { border-right: 0; }
 
             .crystal-table th {
-              height: 9mm;
-              padding: 0.8mm 0.5mm;
-              border-bottom: 1px dotted #000;
+              height: 6.5mm;
+              padding: 0.7mm 0.45mm;
+              border-top: 1px solid #000;
+              border-bottom: 1px solid #000;
               overflow: hidden;
               text-align: center;
               vertical-align: middle;
               font-size: 8px;
               line-height: 1.15;
-              font-weight: 400;
+              font-weight: 700;
               white-space: normal;
             }
 
             .crystal-table th small { display: block; margin-top: 0.4mm; font-size: 6.5px; line-height: 1; }
 
             .crystal-table td {
-              height: 5.6mm;
-              padding: 0.5mm 0.6mm;
+              height: 4.5mm;
+              padding: 0.35mm 0.55mm;
               overflow: hidden;
               text-overflow: ellipsis;
               vertical-align: middle;
@@ -4358,81 +4565,143 @@ const debitNotePermission = usePermission("VOUCHERS", "DEBIT_NOTE");
               white-space: nowrap;
             }
 
-            .crystal-table .product-name { text-align: left; font-weight: 700; }
+            .crystal-table .product-name { text-align: left; font-weight: 400; }
             .left { text-align: left !important; }
             .center { text-align: center !important; }
             .number { text-align: right !important; font-variant-numeric: tabular-nums; }
             .strong { font-weight: 700; }
             .empty-row td { color: transparent; }
 
+            .invoice-quick-totals {
+              display: grid;
+              grid-template-columns: minmax(0, 1fr) auto auto;
+              gap: 10mm;
+              align-items: center;
+              min-height: 6mm;
+              padding: 0.8mm 1mm;
+              border-bottom: 1px solid #000;
+              font-size: 8px;
+            }
+
+            .invoice-quick-totals span:first-child { justify-self: start; }
+            .invoice-quick-totals span:nth-child(2),
+            .invoice-quick-totals span:nth-child(3) { justify-self: end; }
+
             .tax-cell { padding: 0 !important; }
             .tax-cell-inner { display: grid; grid-template-columns: 36% 64%; width: 100%; height: 100%; align-items: stretch; }
             .tax-percent { display: flex; align-items: center; justify-content: center; padding: 0.4mm; border-right: 1px dotted #777; }
             .tax-amount { display: flex; align-items: center; justify-content: flex-end; padding: 0.4mm 0.7mm; font-variant-numeric: tabular-nums; }
 
-            .invoice-bottom { width: 100%; font-size: 8px; }
-
-            .total-words-row {
-              display: grid;
-              grid-template-columns: 34mm minmax(0, 1fr);
-              align-items: center;
-              min-height: 7mm;
-              padding: 0 1.5mm;
-              border-bottom: 1px solid #000;
-            }
-
-            .bottom-middle-grid {
-              display: grid;
-              grid-template-columns: minmax(0, 1fr) 57mm;
-              min-height: 33mm;
-              border-bottom: 1px solid #000;
-            }
-
-            .bottom-notes { position: relative; min-width: 0; padding: 1.5mm 2mm; }
-            .declaration-text { max-width: 150mm; line-height: 1.4; }
-            .receiver-label { position: absolute; left: 2mm; bottom: 2mm; }
-            .amount-summary { padding: 1.2mm 1.8mm; border-left: 1px solid #000; }
-
-            .amount-summary-row {
-              display: grid;
-              grid-template-columns: minmax(0, 1fr) 3mm 24mm;
-              align-items: baseline;
-              min-height: 3.4mm;
-            }
-
-            .amount-summary-row span { white-space: nowrap; }
-            .amount-summary-row strong { text-align: right; font-variant-numeric: tabular-nums; }
-            .net-amount-row { margin-top: 0.7mm; padding-top: 0.8mm; border-top: 1px solid #000; font-weight: 700; }
-
-            .invoice-footer-grid { display: grid; grid-template-columns: 29% 71%; min-height: 31mm; }
-            .receiver-section { padding: 3mm 2mm; }
-            .footer-detail-section { border-left: 1px solid #000; }
-
-            .footer-bank-row {
-              display: flex;
-              flex-wrap: wrap;
-              align-items: center;
-              min-height: 8mm;
-              padding: 1.5mm 2mm;
-              gap: 1mm 4mm;
-              border-bottom: 1px solid #000;
+            .invoice-bottom {
+              width: 100%;
+              padding-top: 1.5mm;
               font-size: 7.5px;
             }
 
-            .footer-declaration-row { display: grid; grid-template-columns: minmax(0, 1fr) 44mm; min-height: 22mm; }
-            .footer-declaration { padding: 2.5mm 2mm; line-height: 1.4; }
+            .invoice-footer-summary-grid {
+              display: grid;
+              grid-template-columns: 31% 43% 26%;
+              align-items: stretch;
+              width: 100%;
+              min-height: 44mm;
+            }
 
-            .footer-signature {
+            .footer-left-column,
+            .footer-tax-column,
+            .footer-total-column {
+              min-width: 0;
+              padding: 0 1.5mm;
+            }
+
+            .footer-section { margin-bottom: 2mm; }
+            .footer-section-heading {
+              margin-bottom: 1mm;
+              font-weight: 800;
+              text-transform: uppercase;
+            }
+
+            .footer-detail-row,
+            .footer-total-row {
+              display: grid;
+              grid-template-columns: 22mm 2mm minmax(0, 1fr);
+              align-items: baseline;
+              min-height: 3.4mm;
+              column-gap: 0.6mm;
+            }
+
+            .footer-total-row {
+              grid-template-columns: minmax(0, 1fr) 2mm 24mm;
+            }
+
+            .footer-total-row strong {
+              text-align: right;
+              font-variant-numeric: tabular-nums;
+              white-space: nowrap;
+            }
+
+            .terms-section { line-height: 1.55; }
+
+            .tax-summary-table {
+              width: 100%;
+              border-collapse: collapse;
+              table-layout: fixed;
+              font-size: 6.7px;
+            }
+
+            .tax-summary-table th,
+            .tax-summary-table td {
+              height: 5mm;
+              padding: 0.5mm 0.4mm;
+              border: 1px solid #777;
+              font-weight: 400;
+              white-space: nowrap;
+            }
+
+            .tax-summary-table thead th,
+            .tax-summary-table tfoot th { font-weight: 700; text-align: center; }
+            .tax-summary-table tfoot th.number { text-align: right; }
+
+            .receiver-signature {
               display: flex;
-              flex-direction: column;
-              align-items: center;
-              justify-content: space-between;
-              padding: 2mm;
+              justify-content: flex-end;
+              align-items: flex-end;
+              min-height: 14mm;
+              padding-top: 4mm;
+            }
+
+            .receiver-signature span {
+              min-width: 34mm;
+              padding-top: 1mm;
+              border-top: 1px solid #000;
               text-align: center;
             }
 
-            .footer-signature > strong { align-self: stretch; text-align: right; }
-            .authorised-line { width: 34mm; margin-top: auto; margin-bottom: 1.3mm; border-top: 1px solid #000; }
+            .grand-total-row {
+              display: grid;
+              grid-template-columns: minmax(0, 1fr) 2mm 27mm;
+              align-items: baseline;
+              margin-top: 1mm;
+              padding-top: 1.4mm;
+              border-top: 1px solid #000;
+              font-size: 11px;
+              font-weight: 800;
+              text-transform: uppercase;
+            }
+
+            .grand-total-row strong { text-align: right; white-space: nowrap; }
+            .rounded-off-label { margin-top: 0.8mm; font-size: 6.5px; }
+
+            .invoice-footer-closing {
+              display: grid;
+              grid-template-columns: 1fr auto 1fr;
+              align-items: center;
+              gap: 2mm;
+              margin-top: 1mm;
+              font-size: 10px;
+              font-style: italic;
+            }
+
+            .invoice-footer-closing span { border-top: 1px solid #000; }
 
             .invoice-a5 .report-top, .invoice-half .report-top { min-height: 22mm; }
             .invoice-a5 .party-grid, .invoice-half .party-grid { min-height: 25mm; padding-top: 1mm; }
@@ -4442,6 +4711,20 @@ const debitNotePermission = usePermission("VOUCHERS", "DEBIT_NOTE");
             .invoice-a5 .tax-heading, .invoice-half .tax-heading { font-size: 12px; }
             .invoice-a5 .bottom-middle-grid, .invoice-half .bottom-middle-grid { min-height: 25mm; grid-template-columns: minmax(0, 1fr) 45mm; }
             .invoice-a5 .invoice-footer-grid, .invoice-half .invoice-footer-grid { min-height: 24mm; }
+            .invoice-a5 .invoice-bottom { padding-top: 1mm; font-size: 6px; }
+            .invoice-a5 .invoice-footer-summary-grid { min-height: 32mm; }
+            .invoice-a5 .footer-left-column,
+            .invoice-a5 .footer-tax-column,
+            .invoice-a5 .footer-total-column { padding: 0 1mm; }
+            .invoice-a5 .footer-section { margin-bottom: 1mm; }
+            .invoice-a5 .footer-detail-row,
+            .invoice-a5 .footer-total-row { min-height: 2.5mm; font-size: 5.8px; }
+            .invoice-a5 .tax-summary-table { font-size: 5.2px; }
+            .invoice-a5 .tax-summary-table th,
+            .invoice-a5 .tax-summary-table td { height: 3.4mm; padding: 0.25mm; }
+            .invoice-a5 .receiver-signature { min-height: 8mm; padding-top: 2mm; }
+            .invoice-a5 .grand-total-row { font-size: 8px; }
+            .invoice-a5 .invoice-footer-closing { font-size: 7px; }
 
             @media print {
               html, body { width: 100%; margin: 0 !important; padding: 0 !important; background: #fff !important; }
@@ -4449,7 +4732,7 @@ const debitNotePermission = usePermission("VOUCHERS", "DEBIT_NOTE");
               .invoice-preview-toolbar { display: none !important; }
               .preview-shell { width: 100%; margin: 0 !important; padding: 0 !important; background: #fff !important; }
               .invoice-page { margin: 0 auto !important; box-shadow: none !important; }
-              .report-top, .party-grid, .items-wrap, .invoice-bottom, .invoice-footer-grid, .item-row {
+              .report-top, .party-grid, .items-wrap, .invoice-bottom, .invoice-footer-summary-grid, .item-row {
                 break-inside: avoid;
                 page-break-inside: avoid;
               }
@@ -4721,7 +5004,7 @@ const debitNotePermission = usePermission("VOUCHERS", "DEBIT_NOTE");
     setCreditNoteFormData((previous) => ({
       ...previous,
 
-      vDate: new Date().toISOString().split("T")[0],
+      vDate: businessDateIST(),
 
       creditNoteSeries:
         previous.creditNoteSeries || "CN",
@@ -4784,7 +5067,7 @@ const debitNotePermission = usePermission("VOUCHERS", "DEBIT_NOTE");
 
       refDate:
         invoiceFormData.billDate ||
-        new Date().toISOString().split("T")[0],
+        businessDateIST(),
     }));
 
     /*
@@ -6457,6 +6740,49 @@ const debitNotePermission = usePermission("VOUCHERS", "DEBIT_NOTE");
   const [showViewModal, setShowViewModal] = useState(false);
   const [viewData, setViewData] = useState(null);
   const [viewType, setViewType] = useState('');
+  const [isFormReadOnly, setIsFormReadOnly] = useState(false);
+
+  const openReadOnlyForm = (openForm) => {
+    setIsFormReadOnly(true);
+    setShowViewModal(false);
+    openForm?.();
+  };
+
+  useEffect(() => {
+    if (!isFormReadOnly) return undefined;
+    const formRoot = document.querySelector(
+      ".dashboard-container.is-form-read-only .content-body"
+    );
+    if (!formRoot) return undefined;
+
+    const lockControls = () => {
+      formRoot
+        .querySelectorAll("input, select, textarea, [contenteditable='true']")
+        .forEach((control) => {
+          if (!control.hasAttribute("data-project-view-lock")) {
+            control.setAttribute("data-project-view-was-disabled", control.disabled ? "true" : "false");
+            control.setAttribute("data-project-view-lock", "true");
+          }
+          if ("disabled" in control) control.disabled = true;
+          control.setAttribute("contenteditable", "false");
+        });
+    };
+
+    lockControls();
+    const observer = new MutationObserver(lockControls);
+    observer.observe(formRoot, { childList: true, subtree: true });
+
+    return () => {
+      observer.disconnect();
+      formRoot.querySelectorAll("[data-project-view-lock]").forEach((control) => {
+        if ("disabled" in control && control.getAttribute("data-project-view-was-disabled") !== "true") {
+          control.disabled = false;
+        }
+        control.removeAttribute("data-project-view-lock");
+        control.removeAttribute("data-project-view-was-disabled");
+      });
+    };
+  }, [isFormReadOnly, openFormFor]);
 
   const [invoiceAreaPartyMappings, setInvoiceAreaPartyMappings] = useState([]);
   const [invoiceSalesmanAreaMappings, setInvoiceSalesmanAreaMappings] = useState([]);
@@ -6628,7 +6954,7 @@ const debitNotePermission = usePermission("VOUCHERS", "DEBIT_NOTE");
   const [currentReceiptItem, setCurrentReceiptItem] = useState(null);
   const [receiptFormData, setReceiptFormData] = useState({
     // Receipt Header
-    receiptDate: new Date().toISOString().split("T")[0],
+    receiptDate: businessDateIST(),
 
     // Receipt Number
     receiptSeries: "",
@@ -6702,7 +7028,7 @@ const debitNotePermission = usePermission("VOUCHERS", "DEBIT_NOTE");
   const createDefaultPrintLoadForm = () => ({
     loadSeries: "",
     loadNo: "",
-    loadDate: new Date().toISOString().split("T")[0],
+    loadDate: businessDateIST(),
 
     reportLevel: "product_wise",
     printOn: "mrp",
@@ -6761,7 +7087,7 @@ const debitNotePermission = usePermission("VOUCHERS", "DEBIT_NOTE");
 
         loadDate:
           parsedValue.loadDate ||
-          new Date().toISOString().split("T")[0],
+          businessDateIST(),
 
         reportLevel:
           parsedValue.reportLevel ||
@@ -6985,7 +7311,7 @@ const debitNotePermission = usePermission("VOUCHERS", "DEBIT_NOTE");
 
   // Sales Invoice State
   const [invoiceFormData, setInvoiceFormData] = useState({
-    billDate: new Date().toISOString().split('T')[0],
+    billDate: businessDateIST(),
     godown: 'G1',
     company: "",
     companyCode: "",
@@ -7086,6 +7412,18 @@ const debitNotePermission = usePermission("VOUCHERS", "DEBIT_NOTE");
       ? numericValue
       : 0;
   };
+
+  function invoiceRound(value) {
+    const number = Number(value || 0);
+
+    if (!Number.isFinite(number)) {
+      return 0;
+    }
+
+    return Math.round(
+      (number + Number.EPSILON) * 100
+    ) / 100;
+  }
 
   /* =========================================================
     FINAL INVOICE TOTALS
@@ -7362,14 +7700,54 @@ const debitNotePermission = usePermission("VOUCHERS", "DEBIT_NOTE");
       0
     );
 
+  /*
+   * Older sales rows can contain an empty purchaseRate field while the
+   * actual value is stored in PRate/purRate. A nullish-coalescing chain
+   * stops at that empty string and incorrectly turns it into zero, which
+   * blocks an otherwise valid invoice update. Read the first usable rate
+   * instead, without weakening the purchase-rate validation rule.
+   */
+  const getSalesItemPurchaseRate = (item) => {
+    const candidates = [
+      item?.purchaseRate,
+      item?.PurchaseRate,
+      item?.purRate,
+      item?.PurRate,
+      item?.pRate,
+      item?.PRate,
+      item?.prate,
+      item?.Rate_Per_Unit,
+      item?.selectedBatch?.purchaseRate,
+      item?.selectedBatch?.PurchaseRate,
+      item?.selectedBatch?.purRate,
+      item?.selectedBatch?.PurRate,
+      item?.selectedBatch?.pRate,
+      item?.selectedBatch?.PRate,
+      item?.selectedBatch?.prate,
+      item?.selectedBatch?.Rate_Per_Unit,
+    ];
+
+    for (const candidate of candidates) {
+      if (
+        candidate === "" ||
+        candidate === null ||
+        candidate === undefined
+      ) {
+        continue;
+      }
+
+      const rate = Number(candidate);
+
+      if (Number.isFinite(rate) && rate > 0) {
+        return rate;
+      }
+    }
+
+    return 0;
+  };
+
   const getSalesDetailPurchaseRate = (item) =>
-    Number(
-      item?.purchaseRate ??
-      item?.selectedBatch?.purchaseRate ??
-      item?.selectedBatch?.pRate ??
-      item?.selectedBatch?.PRate ??
-      0
-    );
+    getSalesItemPurchaseRate(item);
 
   const getSalesDetailNetAmount = (item) => {
     if (!item) {
@@ -7730,7 +8108,7 @@ const debitNotePermission = usePermission("VOUCHERS", "DEBIT_NOTE");
     supplier: '',
     company: '',
     storageLocation: '',
-    invoiceDate: new Date().toISOString().split('T')[0],
+    invoiceDate: businessDateIST(),
 
     vouSer: '',
     vouNo: '',
@@ -7788,7 +8166,6 @@ const debitNotePermission = usePermission("VOUCHERS", "DEBIT_NOTE");
       }, 100);
     });
   };
-
   const handleAddPurchaseProduct = (event) => {
     if (event) {
       event.preventDefault();
@@ -12152,6 +12529,9 @@ const debitNotePermission = usePermission("VOUCHERS", "DEBIT_NOTE");
       icon: "📊",
       items: [
         "Billing",
+        "Counter Sales",
+        "Sales Service",
+        "Stock Management",
         "Quotation",
         "Create Load",
         "Print Load",
@@ -18697,7 +19077,7 @@ const debitNotePermission = usePermission("VOUCHERS", "DEBIT_NOTE");
       if (!distributorId || !firmId) return;
 
       const res = await fetch(
-        `${API_URL}/sales/next-bill-no?distributorId=${distributorId}&firmId=${firmId}&BillSeries=${encodeURIComponent(series || "")}`
+        `${API_URL}/sales/next-bill-no?distributorId=${distributorId}&firmId=${firmId}&BillSeries=${encodeURIComponent(series || "")}&salesEntryType=${activeSubMenu === "Counter Sales" ? "COUNTER_SALES" : "BILLING"}`
       );
 
       const result = await res.json();
@@ -22931,41 +23311,11 @@ const debitNotePermission = usePermission("VOUCHERS", "DEBIT_NOTE");
               0
             ),
 
-            purchaseRate: Number(
-              item.purchaseRate ??
-              item.PurchaseRate ??
-              item.purRate ??
-              item.PurRate ??
-              item.pRate ??
-              item.PRate ??
-              item.prate ??
-              item.Rate_Per_Unit ??
-              item.selectedBatch?.purchaseRate ??
-              item.selectedBatch?.PurchaseRate ??
-              item.selectedBatch?.purRate ??
-              item.selectedBatch?.pRate ??
-              item.selectedBatch?.PRate ??
-              item.selectedBatch?.Rate_Per_Unit ??
-              0
-            ),
+            purchaseRate:
+              getSalesItemPurchaseRate(item),
 
-            PRate: Number(
-              item.purchaseRate ??
-              item.PurchaseRate ??
-              item.purRate ??
-              item.PurRate ??
-              item.pRate ??
-              item.PRate ??
-              item.prate ??
-              item.Rate_Per_Unit ??
-              item.selectedBatch?.purchaseRate ??
-              item.selectedBatch?.PurchaseRate ??
-              item.selectedBatch?.purRate ??
-              item.selectedBatch?.pRate ??
-              item.selectedBatch?.PRate ??
-              item.selectedBatch?.Rate_Per_Unit ??
-              0
-            ),
+            PRate:
+              getSalesItemPurchaseRate(item),
 
             taxable: Number(item.taxable || 0),
             gst: Number(item.gst || item.gstPercent || 0),
@@ -23157,23 +23507,7 @@ ALLOW CHANGE STAR AMOUNT — FINAL SAVE PROTECTION
           .allowSRateLessThanPRate !== true
       ) {
         const readSalesPurchaseRate = (item) =>
-          Number(
-            item.purchaseRate ??
-            item.PurchaseRate ??
-            item.purRate ??
-            item.PurRate ??
-            item.pRate ??
-            item.PRate ??
-            item.prate ??
-            item.selectedBatch?.purchaseRate ??
-            item.selectedBatch?.PurchaseRate ??
-            item.selectedBatch?.purRate ??
-            item.selectedBatch?.PurRate ??
-            item.selectedBatch?.pRate ??
-            item.selectedBatch?.PRate ??
-            item.selectedBatch?.prate ??
-            0
-          );
+          getSalesItemPurchaseRate(item);
 
         const readSalesRate = (item) =>
           Number(
@@ -23377,6 +23711,10 @@ ALLOW CHANGE STAR AMOUNT — FINAL SAVE PROTECTION
         BillSeries: invoiceFormData.BillSeries || "",
         BillNo: Number(invoiceFormData.billNo || 0),
         BillType: invoiceFormData.billType || "Credit",
+        SalesEntryType:
+          activeSubMenu === "Counter Sales"
+            ? "COUNTER_SALES"
+            : "BILLING",
         DueDate: invoiceFormData.dueDate,
 
         SalesmanCode: selectedSalesman?.code || selectedSalesman?.salesmanCode || "",
@@ -23527,6 +23865,10 @@ ALLOW CHANGE STAR AMOUNT — FINAL SAVE PROTECTION
 
         search:
           salesSearchDebounced,
+
+        counterSalesOnly:
+          activeSubMenu ===
+          "Counter Sales",
       });
 
       if (isSettleAdjustMode) {
@@ -24020,6 +24362,7 @@ ALLOW CHANGE STAR AMOUNT — FINAL SAVE PROTECTION
         limit,
         filters,
         search,
+        counterSalesOnly = false,
       } = {}) => {
         try {
           const {
@@ -24099,6 +24442,13 @@ ALLOW CHANGE STAR AMOUNT — FINAL SAVE PROTECTION
           appendFilter(
             "search",
             searchText
+          );
+
+          appendFilter(
+            "salesEntryType",
+            counterSalesOnly
+              ? "COUNTER_SALES"
+              : "BILLING"
           );
 
           appendFilter(
@@ -24223,6 +24573,19 @@ ALLOW CHANGE STAR AMOUNT — FINAL SAVE PROTECTION
                 const originalItem =
                   sale || {};
 
+                const normalizedSalesEntryType =
+                  String(
+                    sale.SalesEntryType ??
+                    sale.salesEntryType ??
+                    ""
+                  )
+                    .trim()
+                    .toUpperCase()
+                    .replace(/[\s-]+/g, "_") ===
+                    "COUNTER_SALES"
+                    ? "COUNTER_SALES"
+                    : "BILLING";
+
                 const netAmount =
                   Number(
                     sale.NetAmount ??
@@ -24271,6 +24634,12 @@ ALLOW CHANGE STAR AMOUNT — FINAL SAVE PROTECTION
 
                 return {
                   ...sale,
+
+                  SalesEntryType:
+                    normalizedSalesEntryType,
+
+                  salesEntryType:
+                    normalizedSalesEntryType,
 
                   id:
                     sale._id ||
@@ -24540,8 +24909,8 @@ ALLOW CHANGE STAR AMOUNT — FINAL SAVE PROTECTION
   ]);
   useEffect(() => {
     const billingListIsVisible =
-      activeSubMenu ===
-      "Billing" &&
+      (activeSubMenu === "Billing" ||
+        activeSubMenu === "Counter Sales") &&
       showSalesList &&
       openFormFor !==
       "Billing";
@@ -24562,6 +24931,8 @@ ALLOW CHANGE STAR AMOUNT — FINAL SAVE PROTECTION
 
       search:
         salesSearchDebounced,
+      counterSalesOnly:
+        activeSubMenu === "Counter Sales",
     });
   }, [
     activeSubMenu,
@@ -39396,14 +39767,8 @@ ALLOW CHANGE STAR AMOUNT — FINAL SAVE PROTECTION
     };
   }, [showProductList, currentProductIndex]);
 
-  const getFilteredServices = () => {
-    return services.filter(service =>
-      service.code?.toLowerCase().includes(filters.service.toLowerCase()) ||
-      service.name?.toLowerCase().includes(filters.service.toLowerCase())
-    );
-  };
-
   const handleMenuClick = (menuKey) => {
+    setIsFormReadOnly(false);
     setActiveMenu(activeMenu === menuKey ? null : menuKey);
 
     if (menuKey === "transactions") {
@@ -41026,6 +41391,7 @@ ALLOW CHANGE STAR AMOUNT — FINAL SAVE PROTECTION
   };
 
   const handleSubMenuClick = async (item) => {
+    setIsFormReadOnly(false);
     await refreshPermissions();
     /*
     * Save the current entry before changing modules.
@@ -41051,6 +41417,7 @@ ALLOW CHANGE STAR AMOUNT — FINAL SAVE PROTECTION
     */
     if (
       item !== "Billing" &&
+      item !== "Counter Sales" &&
       item !== "Quotation"
     ) {
       setOpenFormFor(null);
@@ -41108,7 +41475,24 @@ ALLOW CHANGE STAR AMOUNT — FINAL SAVE PROTECTION
 
       return;
     }
+if (item === "Import Data") {
+  setActiveMenu("tools");
+  setActiveSubMenu("Import Data");
+  setOpenFormFor(null);
+  setShowDashboard(false);
+  setShowImportData(true);
 
+  setShowSalesList(false);
+  setShowPurchaseList(false);
+  setShowCreditNoteList(false);
+  setShowDebitNoteList(false);
+  setShowCreateLoadList(false);
+  setShowSettleLoadList(false);
+  setShowSettleLoad(false);
+  setShowPrintPreview(false);
+
+  return;
+}
     if (item === "Load Transfer") {
       setActiveMenu("sales");
       setActiveSubMenu("Load Transfer");
@@ -41167,6 +41551,35 @@ ALLOW CHANGE STAR AMOUNT — FINAL SAVE PROTECTION
         limit: salesRowsPerPage,
         filters: salesAppliedFilters,
         search: salesSearchDebounced,
+      });
+
+      return;
+    }
+
+    if (item === "Counter Sales") {
+      if (openFormFor === "Quotation") {
+        saveInvoiceDraft("Quotation");
+      }
+
+      setEditingInvoiceId(null);
+      setOriginalEditingPartyCode("");
+      setEditingLoadedSalesBill(false);
+      setOriginalLoadedInvoiceItems([]);
+
+      setOpenFormFor(null);
+      setShowDashboard(false);
+      setShowSalesList(true);
+      setActiveMenu("sales");
+      setActiveSubMenu("Counter Sales");
+      activeInvoiceDraftFormRef.current = null;
+      setSalesCurrentPage(1);
+
+      await loadSalesBills({
+        page: 1,
+        limit: salesRowsPerPage,
+        filters: salesAppliedFilters,
+        search: salesSearchDebounced,
+        counterSalesOnly: true,
       });
 
       return;
@@ -41456,6 +41869,7 @@ ALLOW CHANGE STAR AMOUNT — FINAL SAVE PROTECTION
   const handlePlusClick = (item, e) => {
     e?.preventDefault();
     e?.stopPropagation();
+    setIsFormReadOnly(false);
 
     /*
     * Billing and Quotation must use their own
@@ -41466,6 +41880,11 @@ ALLOW CHANGE STAR AMOUNT — FINAL SAVE PROTECTION
     */
     if (item === "Billing") {
       openNewSalesInvoice(e);
+      return;
+    }
+
+    if (item === "Counter Sales") {
+      openNewCounterSales(e);
       return;
     }
 
@@ -41725,7 +42144,9 @@ ALLOW CHANGE STAR AMOUNT — FINAL SAVE PROTECTION
         reEnterPassword: ''
       });
     }
-
+else if (item === 'Import Data') {
+  setShowImportData(true);
+}
 
     else if (item === 'Purchase') {
       setPurchaseItems([]);
@@ -41733,7 +42154,7 @@ ALLOW CHANGE STAR AMOUNT — FINAL SAVE PROTECTION
         supplier: '',
         company: '',
         storageLocation: '',
-        invoiceDate: new Date().toISOString().split('T')[0],
+        invoiceDate: businessDateIST(),
         vouSer: '',
         vouNo: '',
         vno: '',
@@ -41802,7 +42223,7 @@ ALLOW CHANGE STAR AMOUNT — FINAL SAVE PROTECTION
     else if (item === 'Credit Note') {
       setCreditNoteItems([]);
       setCreditNoteFormData({
-        vDate: new Date().toISOString().split('T')[0],
+        vDate: businessDateIST(),
         creditNoteSeries: '',
         creditNoteNo: '',
         billSeries: '',
@@ -41819,7 +42240,7 @@ ALLOW CHANGE STAR AMOUNT — FINAL SAVE PROTECTION
         narr: '',
         full: '',
         refBy: '',
-        refDate: new Date().toISOString().split('T')[0]
+        refDate: businessDateIST()
       });
       setCreditNoteSummary({
         grossAmt: 0, schemeAmt: 0, tprAmt: 0, cashDisc: 0, gstAmt: 0, starAmt: 0, starPercent: 0,
@@ -41830,7 +42251,7 @@ ALLOW CHANGE STAR AMOUNT — FINAL SAVE PROTECTION
     else if (item === 'Debit Note') {
       setDebitNoteItems([]);
       setDebitNoteFormData({
-        vDate: new Date().toISOString().split('T')[0],
+        vDate: businessDateIST(),
         vNo: '',
         godown: 'G1',
         company: '',
@@ -41849,12 +42270,12 @@ ALLOW CHANGE STAR AMOUNT — FINAL SAVE PROTECTION
       setCreateLoadFormData({
         loadSeries: '',
         loadNo: '',
-        loadDate: new Date().toISOString().split('T')[0],
+        loadDate: businessDateIST(),
         company: '',
         deliverBoy: '',
         selectedSalesman: [],
         billFromDate: getCurrentYearAprilFirst(),
-        billToDate: new Date().toISOString().split('T')[0],
+        billToDate: businessDateIST(),
         narration: '',
         deliveryBy: ''
       });
@@ -41876,8 +42297,8 @@ ALLOW CHANGE STAR AMOUNT — FINAL SAVE PROTECTION
       setSettleLoadFormData({
         loadSeries: '',
         loadNo: '',
-        loadDate: new Date().toISOString().split('T')[0],
-        settleLoadDate: new Date().toISOString().split('T')[0],
+        loadDate: businessDateIST(),
+        settleLoadDate: businessDateIST(),
         narration: ''
       });
 
@@ -42141,7 +42562,7 @@ ALLOW CHANGE STAR AMOUNT — FINAL SAVE PROTECTION
 
         BillDate:
           invoiceFormData.billDate ||
-          new Date().toISOString().split("T")[0],
+          businessDateIST(),
 
         Godown:
           selectedGodown?.name ||
@@ -42372,7 +42793,7 @@ ALLOW CHANGE STAR AMOUNT — FINAL SAVE PROTECTION
 
     setInvoiceFormData({
       billDate:
-        new Date().toISOString().split("T")[0],
+        businessDateIST(),
 
       godown: godown || "G1",
       company: company || "",
@@ -42548,6 +42969,11 @@ ALLOW CHANGE STAR AMOUNT — FINAL SAVE PROTECTION
     return name.trim().length >= 2;
   };
   const closeForm = async () => {
+    setIsFormReadOnly(false);
+    const closingCounterSales =
+      openFormFor === "Billing" &&
+      activeSubMenu === "Counter Sales";
+
     const returnContext =
       masterReturnContextRef.current ||
       masterReturnContext;
@@ -42582,6 +43008,10 @@ ALLOW CHANGE STAR AMOUNT — FINAL SAVE PROTECTION
 
     setOpenFormFor(null);
 
+    if (closingCounterSales) {
+      setShowSalesList(true);
+    }
+
     setEditGstId(null);
     setEditSalesmanId(null);
     setEditGodownId(null);
@@ -42601,7 +43031,11 @@ ALLOW CHANGE STAR AMOUNT — FINAL SAVE PROTECTION
     setMasterReturnContext(null);
   };
   useEffect(() => {
-    if (activeSubMenu === 'Billing' && invoiceItems.length === 0) {
+    if (
+      (activeSubMenu === 'Billing' ||
+        activeSubMenu === 'Counter Sales') &&
+      invoiceItems.length === 0
+    ) {
       addInvoiceItem();
     }
     if (activeSubMenu === 'Purchase' && purchaseItems.length === 0) {
@@ -43722,50 +44156,6 @@ ALLOW CHANGE STAR AMOUNT — FINAL SAVE PROTECTION
     setOpenFormFor("Area");
   };
 
-
-  // Service Handlers
-  const handleServiceInput = (e) => {
-    setServiceForm({ ...serviceForm, [e.target.name]: e.target.value });
-  };
-
-  const saveService = (e) => {
-    e.preventDefault();
-    if (!serviceForm.code || !serviceForm.name || !serviceForm.vat) return alert('Code, Name and GST % required');
-
-    if (editServiceId) {
-      setServices(services.map(service =>
-        service.id === editServiceId
-          ? { ...service, ...serviceForm }
-          : service
-      ));
-      setEditServiceId(null);
-    } else {
-      const newId = Math.max(...services.map(s => s.id), 0) + 1;
-      const newSrNo = services.length + 1;
-      setServices([...services, { id: newId, srNo: newSrNo, ...serviceForm }]);
-    }
-    resetServiceForm();
-    closeForm();
-  };
-
-  const editService = (service) => {
-    setEditServiceId(service.id);
-    setServiceForm({
-      code: service.code,
-      name: service.name,
-      vat: service.vat,
-      purchaseType: service.purchaseType,
-      salesType: service.salesType
-    });
-    setOpenFormFor('Service');
-  };
-
-  const deleteService = (id) => {
-    if (window.confirm('Are you sure you want to delete this service?')) {
-      setServices(services.filter(s => s.id !== id));
-    }
-  };
-
   const handleCompanyInput = (e) => {
     const { name, value } = e.target;
     setCompanyForm({ ...companyForm, [name]: regexInputValue(name, value) });
@@ -43861,15 +44251,7 @@ ALLOW CHANGE STAR AMOUNT — FINAL SAVE PROTECTION
   };
   // Add this function with your other view functions (around line 1000-1100)
   const viewCompany = (company) => {
-    setViewData({
-      companyCode: company.code || company.companyCode || "-",
-      companyName: company.name || company.companyName || "-",
-      companyAddress: company.address || company.companyAddress || "-",
-      branchAddress: company.branchAddress || company.branchOfficeAddress || "-",
-    });
-
-    setViewType("Company");
-    setShowViewModal(true);
+    openReadOnlyForm(() => editCompany(company));
   };
 
   const editCompany = (company) => {
@@ -43937,57 +44319,21 @@ ALLOW CHANGE STAR AMOUNT — FINAL SAVE PROTECTION
 
   // ---------- VIEW FUNCTIONS ----------
   const viewGroup = (group) => {
-    setViewData({
-      groupCode: group.code || group.groupCode || "-",
-      groupName: group.name || group.groupName || "-",
-      status: group.isActive !== false ? "Active" : "Inactive",
-      createdAt: group.createdAt ? new Date(group.createdAt).toLocaleDateString() : "-",
-      ...group
-    });
-    setViewType("Group");
-    setShowViewModal(true);
+    openReadOnlyForm(() => editGroup(group));
   };
 
   const viewCategory = (category) => {
-    setViewData({
-      categoryCode: category.code || category.categoryCode || "-",
-      categoryName: category.name || category.categoryName || "-",
-      status: category.isActive !== false ? "Active" : "Inactive",
-      createdAt: category.createdAt
-        ? new Date(category.createdAt).toLocaleDateString()
-        : "-",
-      ...category,
-    });
-
-    setViewType("Category");
-    setShowViewModal(true);
+    openReadOnlyForm(() => editCategory(category));
   };
   const viewProduct = (product) => {
-    setViewData({
-      productCode: product.productCode || product.code || "-",
-      productName: product.productName || product.name || "-",
-      companyName: product.companyName || "-",
-      group: product.group || "-",
-      category: product.category || "-",
-      gst: product.gst || "-",
-      hsn: product.hsn || "-",
-      eanCode: product.eanCode || "-",
-      basicUnit: product.basicUnit || "-",
-      Rate_Per_Unit: product.Rate_Per_Unit || "-",
-      Min_Stock_Holding: product.Min_Stock_Holding || "-",
-      weight: product.weight || "-",
-      boxPack: product.boxPack || "-",
-      inboxPack: product.inboxPack || "-",
-      description: product.description || "-",
-      status: product.isActive !== false ? "Active" : "Inactive",
-      ...product,
-    });
-
-    setViewType("Product");
-    setShowViewModal(true);
+    openReadOnlyForm(() => editProduct(product));
   };
 
   const viewAccount = (account) => {
+    if (openReadOnlyForm) {
+      openReadOnlyForm(() => editAccount(account));
+      return;
+    }
     // 🔥 FIX: Properly normalize blackListed for display
     const blackListedDisplay = String(account.blackListed || "NO").trim().toUpperCase() === "YES" ? "YES" : "NO";
 
@@ -44013,6 +44359,10 @@ ALLOW CHANGE STAR AMOUNT — FINAL SAVE PROTECTION
   };
 
   const viewOtherAccount = (account) => {
+    if (openReadOnlyForm) {
+      openReadOnlyForm(() => editOtherAccount(account));
+      return;
+    }
     setViewData({
       accountCode: account.accountCode || "-",
       accountName: account.accountName || "-",
@@ -44052,12 +44402,14 @@ ALLOW CHANGE STAR AMOUNT — FINAL SAVE PROTECTION
   };
 
   const viewGst = (gst) => {
-    setViewType("GST");
-    setViewData(gst);
-    setShowViewModal(true);
+    openReadOnlyForm(() => editGst(gst));
   };
 
   const viewSalesman = (salesman) => {
+    if (openReadOnlyForm) {
+      openReadOnlyForm(() => editSalesman(salesman));
+      return;
+    }
     setViewData({
       salesmanCode: salesman.code || salesman.salesmanCode || "-",
       salesmanName: salesman.name || salesman.salesmanName || "-",
@@ -44072,21 +44424,15 @@ ALLOW CHANGE STAR AMOUNT — FINAL SAVE PROTECTION
   };
 
   const viewArea = (area) => {
-    setViewType("Area");
-    setViewData(area);
-    setShowViewModal(true);
+    openReadOnlyForm(() => editArea(area));
   };
 
   const viewGodown = (godown) => {
-    setViewType("Godown");
-    setViewData(godown);
-    setShowViewModal(true);
+    openReadOnlyForm(() => editGodown(godown));
   };
 
   const viewCustomerBank = (bank) => {
-    setViewData(bank);
-    setViewType("CustomerBank");
-    setShowViewModal(true);
+    openReadOnlyForm(() => editCustomerBank(bank));
   };
 
   // ---------- EDIT FUNCTIONS ----------
@@ -44248,6 +44594,7 @@ ALLOW CHANGE STAR AMOUNT — FINAL SAVE PROTECTION
     });
 
     setAccountActiveTab("gst");
+    setOpenFormFor("Account");
 
 
     setTimeout(() => {
@@ -46833,21 +47180,7 @@ ALLOW CHANGE STAR AMOUNT — FINAL SAVE PROTECTION
       alert("Record ID not found.");
       return;
     }
-
-    // Find the record from the current list data
-    const record = settleLoadListData.find(
-      (item) => String(item._id || item.id) === String(recordId)
-    );
-
-    if (!record) {
-      alert("Settle Load record not found in the current list.");
-      return;
-    }
-
-    // Reuse the existing view modal logic
-    setViewData(record);
-    setViewType("Settle Load");
-    setShowViewModal(true);
+    openReadOnlyForm(() => editSettleLoadRecord(recordId));
   };
 
   /* =========================================================
@@ -48339,6 +48672,52 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
     setOpenFormFor("Billing");
   };
 
+  const openNewCounterSales = (event) => {
+    event?.preventDefault();
+    event?.stopPropagation();
+
+    if (openFormFor === "Quotation") {
+      saveInvoiceDraft("Quotation");
+    }
+
+    const freshDraft = createInvoiceEntryDraft();
+    freshDraft.formData.BillSeries = "CS";
+    freshDraft.formData.billSeries = "CS";
+    freshDraft.formData.billType = "Cash";
+
+    billingEntryDraftRef.current =
+      cloneInvoiceDraftValue(freshDraft);
+    activeInvoiceDraftFormRef.current = "Billing";
+
+    setEditingInvoiceId(null);
+    setInvoiceFormData(
+      cloneInvoiceDraftValue(freshDraft.formData)
+    );
+    setInvoiceItems(
+      cloneInvoiceDraftValue(freshDraft.items)
+    );
+    setInvoiceSummary(
+      cloneInvoiceDraftValue(freshDraft.summary)
+    );
+    setInvoiceManualAdjustments(
+      cloneInvoiceDraftValue(freshDraft.manualAdjustments)
+    );
+
+    setSelectedSalesDetailRow(-1);
+    setActiveRow(0);
+    setShowProductList(false);
+    setCurrentProductIndex(-1);
+    setProductDropdownIndex(-1);
+    setFilteredProductList([]);
+    setProductListFilter("");
+
+    setShowSalesList(false);
+    setShowDashboard(false);
+    setActiveMenu("sales");
+    setActiveSubMenu("Counter Sales");
+    setOpenFormFor("Billing");
+  };
+
   const openNewQuotation = (
     event
   ) => {
@@ -48507,6 +48886,10 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
     };
 
   const renderVoucherList = (title, data, columns) => {
+    const isCounterSalesList =
+      String(title || "").trim().toLowerCase() ===
+      "counter sales";
+
     // Calculate maximum content width for each column dynamically
     const calculateColumnWidths = (items) => {
       const widths = {
@@ -48850,7 +49233,7 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
         return String(value).slice(0, 10);
       }
 
-      return date.toISOString().split("T")[0];
+      return businessDateIST(date);
     };
 
     const formatSalesListDate = (value) => {
@@ -49025,7 +49408,9 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
       setActiveSubMenu(
         keepQuotationVisible
           ? "Quotation"
-          : "Billing"
+          : isCounterSalesList
+            ? "Counter Sales"
+            : "Billing"
       );
     };
     const updateActiveAdvancedFilter = (
@@ -50848,7 +51233,9 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
               ? "Purchase Invoice List"
               : isQuotationList
                 ? "Quotation List"
-                : "Sales Invoice List";
+                : isCounterSalesList
+                  ? "Counter Sales List"
+                  : "Sales Invoice List";
       const pageSubtitle =
         isDebitNoteList
           ? "Manage supplier debit notes, purchase returns and stock adjustments"
@@ -50858,7 +51245,9 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
               ? "Manage all supplier purchase invoices"
               : isQuotationList
                 ? "Manage all customer quotations"
-                : "Manage all customer sales invoices";
+                : isCounterSalesList
+                  ? "Manage counter sales invoices"
+                  : "Manage all customer sales invoices";
 
       const createButtonText =
         isDebitNoteList
@@ -50869,7 +51258,9 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
               ? "New Purchase Invoice"
               : isQuotationList
                 ? "New Quotation"
-                : "New Sales Invoice";
+                : isCounterSalesList
+                  ? "New Counter Sale"
+                  : "New Sales Invoice";
 
       const createHandler =
         isDebitNoteList
@@ -51028,7 +51419,9 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
               }
               : isQuotationList
                 ? openNewQuotation
-                : openNewSalesInvoice;
+                : isCounterSalesList
+                  ? openNewCounterSales
+                  : openNewSalesInvoice;
 
       const getSourceValue = (
         item,
@@ -51359,7 +51752,7 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
         )
       );
 
-      const todayISO = new Date().toISOString().slice(0, 10);
+      const todayISO = businessDateIST();
       const todaysRows = premiumSalesFilteredData.filter(
         (item) => normalizeSalesDate(item.date) === todayISO
       );
@@ -51997,7 +52390,7 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
 
       return (
         <div
-          className={`ts-sales-list-page ${isCreditNoteList
+          className={`erp-transaction-list-page ts-sales-list-page ${isCreditNoteList
             ? "is-credit-note"
             : isPurchaseList
               ? "is-purchase"
@@ -52065,11 +52458,34 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
         FILTER OPEN BUTTON
         Filters remain hidden until this is clicked.
     ================================================ */}
-          {!activeFiltersVisible && (
-            <div className="ts-filter-launch-row">
+          <div className="ts-filter-launch-row ts-reference-list-toolbar">
+              <div className="ts-reference-list-search">
+                <Search size={15} />
+                <input
+                  type="text"
+                  placeholder="Search records..."
+                  value={
+                    isDebitNoteList || isCreditNoteList || isPurchaseList
+                      ? activeAdvancedFilters.search || ""
+                      : activeAdvancedFilters.invoiceSearch || ""
+                  }
+                  onChange={(event) => {
+                    const nextValue = event.target.value;
+
+                    if (isDebitNoteList || isCreditNoteList) {
+                      updateActiveAdvancedFilter("search", nextValue);
+                      return;
+                    }
+
+                    handlePremiumSalesSearch(nextValue);
+                  }}
+                />
+              </div>
+
               <button
                 type="button"
-                className="ts-open-filter-button"
+                className={`ts-open-filter-button ${activeFiltersVisible ? "active" : ""}`}
+                aria-expanded={activeFiltersVisible}
                 onClick={openSalesFilterPanel}
               >
                 <SlidersHorizontal size={16} />
@@ -52088,7 +52504,6 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                   </span>
                 )}
             </div>
-          )}
 
           {/* ================================================
         FILTER FIELDS
@@ -54159,7 +54574,10 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
 
                                       await handleEditVoucher(
                                         type,
-                                        source
+                                        source,
+                                        isCounterSalesList
+                                          ? "Counter Sales"
+                                          : "Billing"
                                       );
                                     }}
                                   >
@@ -54837,9 +55255,7 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
       ========================================================= */
 
     const handleViewLoad = (item) => {
-      setViewData(item);
-      setViewType("Create Load");
-      setShowViewModal(true);
+      openReadOnlyForm(() => handleEditLoad(item));
     };
 
     const handleEditLoad = async (item) => {
@@ -54996,7 +55412,7 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
             original.loadDate ||
             item.loadDate ||
             item.date ||
-            new Date().toISOString().split("T")[0],
+            businessDateIST(),
 
           company:
             original.CompanyName ||
@@ -55047,7 +55463,7 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
             original.BillToDate ||
             original.billToDate ||
             item.billToDate ||
-            new Date().toISOString().split("T")[0],
+            businessDateIST(),
 
           narration:
             original.Narration ||
@@ -55565,7 +55981,7 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
     ];
 
     return (
-      <div className="ts-load-list-page">
+      <div className="erp-transaction-list-page ts-load-list-page">
         {/* =====================================================
               PAGE HEADER
               ===================================================== */}
@@ -56320,9 +56736,33 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
   // ========== VIEW, EDIT, DELETE HANDLERS FOR ALL VOUCHERS ==========
 
   const handleViewVoucher = (type, item) => {
-    setViewData(item);
-    setViewType(type);
-    setShowViewModal(true);
+    const salesMenu =
+      activeSubMenu === "Counter Sales"
+        ? "Counter Sales"
+        : "Billing";
+
+    const actualItem =
+      item?.databaseDebitNote ||
+      item?.databaseCreditNote ||
+      item?.originalItem?.originalItem ||
+      item?.originalItem ||
+      item;
+
+    openReadOnlyForm(async () => {
+      if (type === "Debit Note") {
+        await loadDebitNoteForEdit(actualItem);
+        return;
+      }
+      if (type === "Credit Note") {
+        await loadCreditNoteForEdit(actualItem);
+        return;
+      }
+      await handleEditVoucher(
+        type,
+        actualItem,
+        salesMenu
+      );
+    });
   };
 
   const isSalesBillAssignedToLoad = (item) => {
@@ -56361,7 +56801,11 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
       Boolean(loadSeries && loadNo > 0)
     );
   };
-  const handleEditVoucher = async (type, item) => {
+  const handleEditVoucher = async (
+    type,
+    item,
+    salesMenu = "Billing"
+  ) => {
 
     console.log(
       "Editing voucher:",
@@ -57062,14 +57506,26 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
           item.billNumber ||
           "";
 
+        const billId =
+          actualItem._id ||
+          actualItem.id ||
+          item._id ||
+          item.id ||
+          "";
+
         const params = new URLSearchParams({
           distributorId,
           firmId,
           billSeries,
           billNo: String(billNo),
+          billId: String(billId),
+          salesEntryType:
+            salesMenu === "Counter Sales"
+              ? "COUNTER_SALES"
+              : "BILLING",
         });
 
-        const res = await fetch(`${API_URL}/sales/bill?${params.toString()}`);
+        const res = await secureFetch(`${API_URL}/sales/bill?${params.toString()}`);
         const result = await res.json();
 
         if (!res.ok || !result.success) {
@@ -57153,7 +57609,7 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
           "";
 
         setInvoiceFormData({
-          billDate: bill.BillDate || bill.billDate || new Date().toISOString().split("T")[0],
+          billDate: bill.BillDate || bill.billDate || businessDateIST(),
           godown: bill.GDCode || bill.Godown || bill.godown || "G1",
           company: companyCode,
           area: areaCode,
@@ -57167,7 +57623,11 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
         });
 
         const loadedSalesItems =
-          (bill.items || []).map((x, i) => ({
+          (bill.items || []).map((x, i) => {
+            const purchaseRate =
+              getSalesItemPurchaseRate(x);
+
+            return {
             ...x,
 
             id:
@@ -57240,6 +57700,9 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
               x.salesRate ??
               "",
 
+            purchaseRate,
+            PRate: purchaseRate,
+
             rateGst:
               x.rateGst ??
               "",
@@ -57308,7 +57771,8 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
               x.amount ??
               x.netAmount ??
               "",
-          }));
+          };
+          });
         const recalculatedLoadedSalesItems =
           recalculateInvoiceCashDiscount(
             loadedSalesItems
@@ -57606,7 +58070,11 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
           setActiveSubMenu("Quotation");
         } else {
           setOpenFormFor("Billing");
-          setActiveSubMenu("Billing");
+          setActiveSubMenu(
+            salesMenu === "Counter Sales"
+              ? "Counter Sales"
+              : "Billing"
+          );
         }
 
         return;
@@ -57621,7 +58089,7 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
         supplier: item.supplierName || item.partyName || item.supplier || '',
         company: item.company || item.companyName || '',
         storageLocation: item.godownName || item.storageLocation || item.branchName || '',
-        invoiceDate: item.invoiceDate || item.billDate || new Date().toISOString().split('T')[0],
+        invoiceDate: item.invoiceDate || item.billDate || businessDateIST(),
 
         vouSer: item.vouSer || item.billSeries || '',
         vouNo: item.vouNo ?? item.billNo ?? '',
@@ -57693,6 +58161,11 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
 
   const handleDeleteVoucher = async (type, id) => {
     if (!window.confirm(`Are you sure you want to permanently delete this ${type}?\n\nThis action cannot be undone!`)) return;
+
+    const salesMenuAfterDelete =
+      activeSubMenu === "Counter Sales"
+        ? "Counter Sales"
+        : "Billing";
 
     try {
       const { distributorId, firmId } = getFirmSession();
@@ -57924,12 +58397,16 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
 
           search:
             salesSearchDebounced,
+
+          counterSalesOnly:
+            salesMenuAfterDelete ===
+            "Counter Sales",
         });
 
         setShowSalesList(true);
         setShowDashboard(false);
         setActiveMenu("sales");
-        setActiveSubMenu("Billing");
+        setActiveSubMenu(salesMenuAfterDelete);
         setShowSettleLoad(false);
         setShowSettleLoadList(false);
 
@@ -58125,6 +58602,54 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
 
     }
   };
+  const renderStockManagementMenu = () => {
+    const stockPageOpen = ["Stock In", "Stock Out"].includes(activeSubMenu);
+
+    return (
+      <div className="nav-subitem-wrapper report-menu-group">
+        <div
+          className={"nav-subitem report-category-row " + (stockManagementExpanded || stockPageOpen ? "active" : "")}
+          onClick={() => setStockManagementExpanded((previous) => !previous)}
+        >
+          <span className="submenu-text">Stock Management</span>
+          <span className={"report-menu-arrow " + (stockManagementExpanded ? "open" : "")}>
+            <ChevronRight size={16} />
+          </span>
+        </div>
+
+        {stockManagementExpanded && (
+          <div className="report-subreport-list stock-management-submenu">
+            {["Stock In", "Stock Out"].map((stockItem) => (
+              <button
+                key={stockItem}
+                type="button"
+                className={"report-subreport-item " + (activeSubMenu === stockItem ? "active" : "")}
+                onClick={(event) => {
+                  event.stopPropagation();
+                  handleSubMenuClick(stockItem);
+                }}
+              >
+                <span className="report-subreport-dot" />
+                <span className="stock-management-label">{stockItem}</span>
+                <span
+                  className="plus-icon"
+                  title={`Add ${stockItem}`}
+                  aria-label={`Add ${stockItem}`}
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    handlePlusClick(stockItem, event);
+                  }}
+                >
+                  +
+                </span>
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
+    );
+  };
+
   const renderSalesPrintFormatModal = () => {
     if (!showSalesPrintFormatModal) {
       return null;
@@ -58203,14 +58728,20 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
               id="sales-print-modal-title"
               className="sales-print-classic-title"
             >
-              <Printer size={16} />
+              <span className="sales-print-title-icon">
+                <Printer size={19} />
+              </span>
 
-              <span>Sales Billing</span>
+              <span className="sales-print-title-copy">
+                <strong>Print Sales Invoice</strong>
+                <small>Configure invoice output and print settings</small>
+              </span>
             </div>
 
             <button
               type="button"
               className="sales-print-classic-close"
+              aria-label="Close print settings"
               disabled={salesPrintPreparing}
               onClick={
                 closeSalesPrintFormatSelection
@@ -58221,6 +58752,20 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
           </div>
 
           <div className="sales-print-classic-body">
+            <section className="sales-print-section">
+              <div className="sales-print-section-heading">
+                <div>
+                  <FileText size={17} />
+                  <span>Invoice Range</span>
+                </div>
+
+                <small>
+                  <span aria-hidden="true">*</span>
+                  Required fields
+                </small>
+              </div>
+
+              <div className="sales-print-invoice-grid">
             <div className="sales-print-classic-form-row">
               <label>Firm Code :</label>
 
@@ -58443,6 +58988,17 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
               <span />
             </div>
 
+              </div>
+            </section>
+
+            <section className="sales-print-section">
+              <div className="sales-print-section-heading">
+                <div>
+                  <ClipboardList size={17} />
+                  <span>Print Content</span>
+                </div>
+              </div>
+
             <div className="sales-print-classic-options-grid">
               <div className="sales-print-classic-option">
                 <label>Goods Return :</label>
@@ -58464,8 +59020,8 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                     );
                   }}
                 >
-                  <option value="Y">Y</option>
-                  <option value="N">N</option>
+                  <option value="Y">Yes</option>
+                  <option value="N">No</option>
                 </select>
               </div>
 
@@ -58489,8 +59045,8 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                     );
                   }}
                 >
-                  <option value="Y">Y</option>
-                  <option value="N">N</option>
+                  <option value="Y">Yes</option>
+                  <option value="N">No</option>
                 </select>
               </div>
 
@@ -58514,8 +59070,8 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                     );
                   }}
                 >
-                  <option value="Y">Y</option>
-                  <option value="N">N</option>
+                  <option value="Y">Yes</option>
+                  <option value="N">No</option>
                 </select>
               </div>
 
@@ -58539,11 +59095,20 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                     );
                   }}
                 >
-                  <option value="Y">Y</option>
-                  <option value="N">N</option>
+                  <option value="Y">Yes</option>
+                  <option value="N">No</option>
                 </select>
               </div>
             </div>
+            </section>
+
+            <section className="sales-print-section sales-print-output-section">
+              <div className="sales-print-section-heading">
+                <div>
+                  <Settings size={17} />
+                  <span>Output Settings</span>
+                </div>
+              </div>
 
             <div className="sales-print-layout-fields">
               {/* REPORT NUMBER */}
@@ -58614,6 +59179,7 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                 </select>
               </div>
             </div>
+            </section>
 
             <div className="sales-print-classic-actions">
               <button
@@ -58683,7 +59249,34 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
     <>
       {renderSalesPrintFormatModal()}
 
-      <div className="dashboard-container">
+      <div
+        className={`dashboard-container ${sidebarCollapsed ? "sidebar-collapsed" : ""} ${isFormReadOnly ? "is-form-read-only" : ""}`}
+        onClickCapture={(event) => {
+          if (event.target.closest("button.edit, .firm-ui-action-btn.edit, .user-ui-action-btn.edit")) {
+            setIsFormReadOnly(false);
+            return;
+          }
+          if (isFormReadOnly) {
+            const button = event.target.closest(".content-body button");
+            if (!button) return;
+            const descriptor = `${button.className || ""} ${button.title || ""} ${button.getAttribute("aria-label") || ""} ${button.textContent || ""}`;
+            if (/(close|cancel|back)/i.test(descriptor)) {
+              setIsFormReadOnly(false);
+              return;
+            }
+            if (!/(tab|preview|print)/i.test(descriptor)) {
+              event.preventDefault();
+              event.stopPropagation();
+            }
+          }
+        }}
+        onSubmitCapture={(event) => {
+          if (isFormReadOnly) {
+            event.preventDefault();
+            event.stopPropagation();
+          }
+        }}
+      >
         <aside className="sidebar">
           {/* ==================== SIDEBAR BRAND ==================== */}
           <div
@@ -58703,14 +59296,6 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                 className="lovable-brand-logo"
               />
             </div>
-
-            <div className="lovable-brand-details">
-              <strong>Total Solution</strong>
-
-              <span className="lovable-current-firm">
-                {loggedFirmName || "Enterprise ERP"}
-              </span>
-            </div>
           </div>
 
           {/* ==================== SIDEBAR MENU ==================== */}
@@ -58720,7 +59305,13 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                 <div
                   className={`nav-header ${activeMenu === key ? "active" : ""
                     }`}
+                  title={sidebarCollapsed ? menu.title : undefined}
                   onClick={() => {
+                    if (key === "logout") {
+                      handleLogout();
+                      return;
+                    }
+
                     handleMenuClick(key);
 
                     if (key !== "reports") {
@@ -58737,13 +59328,16 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                     className={`nav-arrow ${activeMenu === key ? "open" : ""
                       }`}
                   >
-                    ⌄
+                    <ChevronDown size={13} />
                   </span>
                 </div>
 
                 {activeMenu === key && (
                   <div className="nav-submenu">
                     {menu.items.map((item, idx) => {
+                      if (key === "sales" && item === "Stock Management") {
+                        return <React.Fragment key={item}>{renderStockManagementMenu()}</React.Fragment>;
+                      }
                       /*
                       * Special nested layout only for Reports.
                       */
@@ -58927,20 +59521,14 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
             </div>
 
             <div className="lovable-sidebar-firm-card">
-              <div className="lovable-sidebar-firm-icon">
-                <Building2 size={17} />
-              </div>
-
               <div className="lovable-sidebar-firm-content">
-                <span>Logged in firm</span>
-
                 <strong title={loggedFirmName}>
                   {loggedFirmName || "Firm not selected"}
                 </strong>
 
                 {loggedUserName && (
                   <small title={loggedUserName}>
-                    User: {loggedUserName}
+                    {loggedUserName}
                   </small>
                 )}
               </div>
@@ -58955,6 +59543,9 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                 type="button"
                 className="lovable-sidebar-toggle"
                 aria-label="Toggle sidebar"
+                aria-expanded={!sidebarCollapsed}
+                title={sidebarCollapsed ? "Expand sidebar" : "Collapse sidebar"}
+                onClick={() => setSidebarCollapsed((previous) => !previous)}
               >
                 <Menu size={18} />
               </button>
@@ -58967,139 +59558,22 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
               </strong>
             </div>
 
-            <div className="lovable-header-search">
-              <Search size={18} />
-
-              <input
-                type="text"
-                placeholder={
-                  activeSubMenu === "Purchase"
-                    ? "Search bill, supplier, company..."
-                    : activeSubMenu === "Quotation"
-                      ? "Search quotations..."
-                      : "Search invoices, customers, products..."
-                }
-                value={
-                  activeSubMenu === "Purchase"
-                    ? purchaseAdvancedFilters.search || ""
-                    : activeSubMenu === "Quotation"
-                      ? quotationAdvancedFilters
-                        .invoiceSearch || ""
-                      : activeSubMenu === "Billing"
-                        ? salesAdvancedFilters
-                          .invoiceSearch || ""
-                        : ""
-                }
-                onChange={(event) => {
-                  const value =
-                    event.target.value;
-
-                  /* PURCHASE SEARCH */
-                  if (
-                    activeSubMenu === "Purchase"
-                  ) {
-                    setPurchaseAdvancedFilters(
-                      (previous) => ({
-                        ...previous,
-                        search: value,
-                      })
-                    );
-
-                    setPurchaseAppliedFilters(
-                      (previous) => ({
-                        ...previous,
-                        search: value,
-                      })
-                    );
-
-                    setPurchaseSearchDebounced(
-                      value.trim()
-                    );
-
-                    setPurchaseCurrentPage(1);
-
-                    setListPage(
-                      (previous) => ({
-                        ...previous,
-                        Purchase: 1,
-                      })
-                    );
-
-                    return;
-                  }
-
-                  /* QUOTATION SEARCH */
-                  if (
-                    activeSubMenu === "Quotation"
-                  ) {
-                    setQuotationAdvancedFilters(
-                      (previous) => ({
-                        ...previous,
-                        invoiceSearch: value,
-                      })
-                    );
-
-                    setQuotationAppliedFilters(
-                      (previous) => ({
-                        ...previous,
-                        invoiceSearch: value,
-                      })
-                    );
-
-                    setQuotationSearchDebounced(
-                      value.trim()
-                    );
-
-                    setQuotationCurrentPage(1);
-
-                    setListPage(
-                      (previous) => ({
-                        ...previous,
-                        quotation: 1,
-                      })
-                    );
-
-                    return;
-                  }
-
-                  /* SALES SEARCH */
-                  if (
-                    activeSubMenu === "Billing"
-                  ) {
-                    setSalesAdvancedFilters(
-                      (previous) => ({
-                        ...previous,
-                        invoiceSearch: value,
-                      })
-                    );
-
-                    setSalesAppliedFilters(
-                      (previous) => ({
-                        ...previous,
-                        invoiceSearch: value,
-                      })
-                    );
-
-                    setSalesSearchDebounced(
-                      value.trim()
-                    );
-
-                    setSalesCurrentPage(1);
-
-                    setListPage(
-                      (previous) => ({
-                        ...previous,
-                        Billing: 1,
-                      })
-                    );
-                  }
-                }}
-              />
-
-              <kbd>⌘K</kbd>
-            </div>
-
             <div className="lovable-header-right">
+              <div
+                className={`lovable-session-countdown ${
+                  sessionSecondsRemaining <= 300 ? "ending-soon" : ""
+                }`}
+                title={`The system will automatically log out after ${sessionCountdownText}`}
+                role="timer"
+                aria-live="off"
+              >
+                <Clock3 size={16} />
+                <span className="lovable-session-countdown-copy">
+                  <small></small>
+                  <strong>{sessionCountdownText}</strong>
+                </span>
+              </div>
+
               <div
                 className="lovable-create-dropdown"
                 onMouseLeave={() => setShowCreateDropdown(false)}
@@ -59204,23 +59678,20 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
               </button>
 
               <div className="lovable-user-profile">
-                <div className="lovable-user-avatar">
-                  {loggedUserName
-                    ? loggedUserName.substring(0, 2).toUpperCase()
-                    : "AD"}
-                </div>
-
                 <div className="lovable-user-information">
                   <strong>{loggedUserName || "Administrator"}</strong>
-                  <span>Administrator</span>
                 </div>
-
-                <ChevronDown size={16} />
               </div>
             </div>
           </header>
 
           <div className="content-body">
+            {isFormReadOnly && (
+              <div className="project-read-only-banner" role="status">
+                <Eye size={15} />
+                View only — this entry cannot be edited
+              </div>
+            )}
             {activeMenu === "reports" &&
               selectedReport &&
               openFormFor === "Report" && (
@@ -59233,12 +59704,124 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                   onBack={() => {
                     setSelectedReport(null);
                     setOpenFormFor(null);
-                    setActiveSubMenu(expandedReportCategory);
+                    setActiveSubMenu("My Reports");
+                    setShowMyReports(true);
                   }}
                 />
               )}
 
             {activeMenu === "reports" &&
+              showMyReports &&
+              !selectedReport &&
+              openFormFor !== "Report" && (
+                <main className="report-catalog-page">
+                  <header className="report-catalog-header">
+                    <span className="report-catalog-header-icon">
+                      <FileBarChart size={25} />
+                    </span>
+
+                    <div>
+                      <h1>Reports</h1>
+                      <p>
+                        View, analyze and generate all business reports from one place.
+                      </p>
+                    </div>
+                  </header>
+
+                  <section
+                    className="report-catalog-categories"
+                    aria-label="Report categories"
+                  >
+                    {reportCatalogCategories.map((category) => {
+                      const isActive =
+                        category.id === activeReportCatalogCategory.id;
+
+                      return (
+                        <button
+                          type="button"
+                          key={category.id}
+                          className={`report-catalog-category ${isActive ? "active" : ""}`}
+                          onClick={() => {
+                            setReportCategoryFilter(category.id);
+                            setReportSearchText("");
+                            setShowReportSearchDropdown(false);
+                          }}
+                        >
+                          <strong>{category.name}</strong>
+                        </button>
+                      );
+                    })}
+                  </section>
+
+                  <section className="report-catalog-list-card">
+                    <div className="report-catalog-list-header">
+                      <div className="report-catalog-list-title">
+                        <span className="report-catalog-list-icon">
+                          <ActiveReportCatalogIcon size={21} />
+                        </span>
+
+                        <div>
+                          <h2>{activeReportCatalogCategory.name}</h2>
+                          <p>Select a report below to generate or view it.</p>
+                        </div>
+                      </div>
+
+                      <label className="report-catalog-search">
+                        <Search size={15} />
+                        <input
+                          type="text"
+                          value={reportSearchText}
+                          onChange={(event) =>
+                            setReportSearchText(event.target.value)
+                          }
+                          placeholder={`Search in ${activeReportCatalogCategory.name}...`}
+                        />
+                      </label>
+                    </div>
+
+                    {visibleReportCatalogItems.length > 0 ? (
+                      <div className="report-catalog-links">
+                        {visibleReportCatalogItems.map((report) => {
+                          const ReportIcon = report.icon || FileText;
+
+                          return (
+                            <button
+                              type="button"
+                              key={report.name}
+                              className="report-catalog-link"
+                              onClick={() => handleReportClick(report.name)}
+                              title={report.description}
+                            >
+                              <ReportIcon size={14} />
+                              <span>{report.name}</span>
+                            </button>
+                          );
+                        })}
+                      </div>
+                    ) : (
+                      <div className="report-catalog-empty">
+                        <FileText size={25} />
+                        <strong>
+                          {reportCatalogSearch
+                            ? "No matching reports found"
+                            : "No reports are currently available in this category"}
+                        </strong>
+                        <span>Choose another category or clear the search.</span>
+                      </div>
+                    )}
+
+                    <footer className="report-catalog-footer">
+                      <HelpCircle size={17} />
+                      <span>
+                        Select a category above and click the required report to generate or view.
+                      </span>
+                    </footer>
+                  </section>
+                </main>
+              )}
+
+            {activeMenu === "reports" &&
+              false &&
               showMyReports &&
               !selectedReport &&
               openFormFor !== "Report" && (
@@ -59518,6 +60101,8 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                         <option value="Sales">Sales</option>
                         <option value="Purchase">Purchase</option>
                         <option value="Stock">Stock</option>
+                        <option value="Financial">Financial</option>
+                        <option value="Control">Control</option>
                         <option value="GST Report">
                           GST Report
                         </option>
@@ -60234,20 +60819,15 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
             )}
 
             {activeSubMenu === 'GoDown Master' && openFormFor !== 'GoDown Master' && (
-              <div className="firm-ui-page firm-ui-list-page">
-                <div className="firm-ui-page-heading firm-ui-list-heading">
+              <div className="firm-ui-page firm-ui-list-page erp-master-list-page">
+                <div className="firm-ui-page-heading firm-ui-list-heading erp-list-page-header">
                   <div>
-                    <div className="firm-ui-breadcrumb">
-                      <span></span>
-                      <span></span>
-                      <strong></strong>
-                    </div>
-                    <h1></h1>
-                    <p></p>
+                    <h1>Godown Master</h1>
+                    <p>Manage warehouse and inventory storage locations.</p>
                   </div>
 
-                  <div className="firm-ui-list-toolbar">
-                    <div className="firm-ui-search-box">
+                  <div className="firm-ui-list-toolbar erp-list-toolbar">
+                    <div className="firm-ui-search-box erp-list-search">
                       <Search size={17} />
                       <input
                         type="text"
@@ -60319,9 +60899,9 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                   </div>
                 </div>
 
-                <div className="firm-ui-table-card">
-                  <div className="firm-ui-table-scroll">
-                    <table className="firm-ui-table firm-ui-table-compact">
+                <div className="firm-ui-table-card erp-list-card">
+                  <div className="firm-ui-table-scroll erp-list-table-scroll">
+                    <table className="firm-ui-table firm-ui-table-compact erp-list-table">
                       <thead>
                         <tr>
                           <th className="firm-ui-sno-column" style={{ width: '50px' }}>S.No</th>
@@ -60501,7 +61081,7 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                       </tbody>
                     </table>
                   </div>
-                  <div className="firm-ui-table-footer">
+                  <div className="firm-ui-table-footer erp-list-footer">
                     <div className="firm-ui-footer-info">
                       <span>
                         Showing{" "}
@@ -60871,7 +61451,7 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                 };
 
                 return (
-                  <div className="premium-list-page settle-list-page">
+                  <div className="erp-transaction-list-page premium-list-page settle-list-page">
                     <div className="premium-list-heading-row">
                       <div>
                         <h2>Settle Load List</h2>
@@ -62176,7 +62756,7 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                       <input
                         className="erp-input"
                         type="date"
-                        value={receiptFormData.receiptDate || new Date().toISOString().split("T")[0]}
+                        value={receiptFormData.receiptDate || businessDateIST()}
                         onChange={(e) =>
                           setReceiptFormData({ ...receiptFormData, receiptDate: e.target.value })
                         }
@@ -63413,7 +63993,7 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                             type="button"
                             className="billing-toolbar-button"
                           >
-                            <span>ϟ</span>
+                            <span>ÏŸ</span>
                             Fast Add
                           </button>
 
@@ -66846,6 +67426,18 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                     )}
                 </div>
               )}
+            {(activeSubMenu === "Stock In" || activeSubMenu === "Stock Out") && (
+              <StockManagement
+                mode={activeSubMenu === "Stock In" ? "IN" : "OUT"}
+                view={openFormFor === activeSubMenu ? "form" : "list"}
+                products={products}
+                godowns={godowns}
+                companies={companies}
+                onOpenForm={() => setOpenFormFor(activeSubMenu)}
+                onCloseForm={() => setOpenFormFor(null)}
+              />
+            )}
+
             {/* Dashboard Performance View - Show when no other menu is active or when explicitly set */}
             {((!activeSubMenu && showDashboard) || (activeSubMenu === 'Dashboard')) &&
               openFormFor !== 'Firm Master' &&
@@ -67122,18 +67714,15 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
         FIRM MASTER - LIST VIEW
     ========================================================= */}
             {activeSubMenu === "Firm Master" && openFormFor !== "Firm Master" && (
-              <div className="firm-ui-page firm-ui-list-page">
-                <div className="firm-ui-page-heading firm-ui-list-heading">
+              <div className="firm-ui-page firm-ui-list-page erp-master-list-page">
+                <div className="firm-ui-page-heading firm-ui-list-heading erp-list-page-header">
                   <div>
-                    <div className="firm-ui-breadcrumb">
-                      <span></span>
-                      <span></span>
-                      <strong> </strong>
-                    </div>
+                    <h1>Firm Master</h1>
+                    <p>Manage firm profiles and business registration details.</p>
                   </div>
 
-                  <div className="firm-ui-list-toolbar">
-                    <div className="firm-ui-search-box">
+                  <div className="firm-ui-list-toolbar erp-list-toolbar">
+                    <div className="firm-ui-search-box erp-list-search">
                       <Search size={17} />
 
                       <input
@@ -67211,9 +67800,9 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                   </div>
                 </div>
 
-                <div className="firm-ui-table-card">
-                  <div className="firm-ui-table-scroll">
-                    <table className="firm-ui-table">
+                <div className="firm-ui-table-card erp-list-card">
+                  <div className="firm-ui-table-scroll erp-list-table-scroll">
+                    <table className="firm-ui-table erp-list-table">
                       <thead>
                         <tr>
                           <th className="firm-ui-sno-column">S.No</th>
@@ -67374,7 +67963,7 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                     </table>
                   </div>
 
-                  <div className="firm-ui-table-footer">
+                  <div className="firm-ui-table-footer erp-list-footer">
                     <span>
                       Showing{" "}
                       <strong>{firmStartRecord}</strong>
@@ -67635,18 +68224,15 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
 
             {activeSubMenu === "User Master" &&
               openFormFor !== "User Master" && (
-                <div className="user-ui-page user-ui-list-page">
-                  <div className="user-ui-page-heading user-ui-list-heading">
+                <div className="user-ui-page user-ui-list-page erp-master-list-page">
+                  <div className="user-ui-page-heading user-ui-list-heading erp-list-page-header">
                     <div>
-                      <div className="user-ui-breadcrumb">
-                        <span></span>
-                        <span></span>
-                        <strong></strong>
-                      </div>
+                      <h1>User Master</h1>
+                      <p>Manage application users, roles and access status.</p>
                     </div>
 
-                    <div className="user-ui-list-toolbar">
-                      <div className="user-ui-search-box">
+                    <div className="user-ui-list-toolbar erp-list-toolbar">
+                      <div className="user-ui-search-box erp-list-search">
                         <Search size={17} />
 
                         <input
@@ -67745,9 +68331,9 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                     </div>
                   </div>
 
-                  <div className="user-ui-table-card">
-                    <div className="user-ui-table-scroll">
-                      <table className="user-ui-table">
+                  <div className="user-ui-table-card erp-list-card">
+                    <div className="user-ui-table-scroll erp-list-table-scroll">
+                      <table className="user-ui-table erp-list-table">
                         <thead>
                           <tr>
                             <th className="user-ui-sno-column">S.No</th>
@@ -67951,7 +68537,7 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                       </table>
                     </div>
 
-                    <div className="user-ui-table-footer">
+                    <div className="user-ui-table-footer erp-list-footer">
                       <span>
                         Showing{" "}
                         <strong>{userStartRecord}</strong>
@@ -68184,6 +68770,13 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                   }}
                 />
               )}
+  {activeSubMenu === "Import Data" && showImportData && (
+  <ImportData onClose={() => {
+    setShowImportData(false);
+    setActiveSubMenu(null);
+    setShowDashboard(true);
+  }} />
+)}
             {activeSubMenu === 'Customer Bank Master' && openFormFor === 'Customer Bank Master' && (
               <div className="compact-master-page">
                 <div className="compact-master-heading">
@@ -68402,20 +68995,15 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
             )}
 
             {activeSubMenu === 'Customer Bank Master' && openFormFor !== 'Customer Bank Master' && (
-              <div className="firm-ui-page firm-ui-list-page">
-                <div className="firm-ui-page-heading firm-ui-list-heading">
+              <div className="firm-ui-page firm-ui-list-page erp-master-list-page">
+                <div className="firm-ui-page-heading firm-ui-list-heading erp-list-page-header">
                   <div>
-                    <div className="firm-ui-breadcrumb">
-                      <span></span>
-                      <span></span>
-                      <strong></strong>
-                    </div>
-                    <h1></h1>
-                    <p></p>
+                    <h1>Customer Bank Master</h1>
+                    <p>Manage customer banking and payment account details.</p>
                   </div>
 
-                  <div className="firm-ui-list-toolbar">
-                    <div className="firm-ui-search-box">
+                  <div className="firm-ui-list-toolbar erp-list-toolbar">
+                    <div className="firm-ui-search-box erp-list-search">
                       <Search size={17} />
                       <input
                         type="text"
@@ -68475,9 +69063,9 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                   </div>
                 </div>
 
-                <div className="firm-ui-table-card">
-                  <div className="firm-ui-table-scroll">
-                    <table className="firm-ui-table firm-ui-table-compact">
+                <div className="firm-ui-table-card erp-list-card">
+                  <div className="firm-ui-table-scroll erp-list-table-scroll">
+                    <table className="firm-ui-table firm-ui-table-compact erp-list-table">
                       <thead>
                         <tr>
                           <th className="firm-ui-sno-column" style={{ width: '50px' }}>S.No</th>
@@ -68580,7 +69168,7 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                     </table>
                   </div>
 
-                  <div className="firm-ui-table-footer">
+                  <div className="firm-ui-table-footer erp-list-footer">
                     <span>
                       Showing <strong>{getFilteredCustomerBanks().length ? 1 : 0}</strong> to{' '}
                       <strong>{getFilteredCustomerBanks().length}</strong> of{' '}
@@ -68701,20 +69289,20 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
               </div>
             )}
             {activeSubMenu === 'Company Master' && openFormFor !== 'Company Master' && (
-              <div className="firm-ui-page firm-ui-list-page">
-                <div className="firm-ui-page-heading firm-ui-list-heading">
+              <div className="firm-ui-page firm-ui-list-page erp-master-list-page company-master-list-page">
+                <div className="firm-ui-page-heading firm-ui-list-heading erp-list-page-header">
                   <div>
                     <div className="firm-ui-breadcrumb">
                       <span></span>
                       <span></span>
                       <strong></strong>
                     </div>
-                    <h1></h1>
-                    <p></p>
+                    <h1>Company Master</h1>
+                    <p>Manage company master records and business information.</p>
                   </div>
 
-                  <div className="firm-ui-list-toolbar">
-                    <div className="firm-ui-search-box">
+                  <div className="firm-ui-list-toolbar erp-list-toolbar">
+                    <div className="firm-ui-search-box erp-list-search">
                       <Search size={17} />
                       <input
                         type="text"
@@ -68775,9 +69363,9 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                   </div>
                 </div>
 
-                <div className="firm-ui-table-card">
-                  <div className="firm-ui-table-scroll">
-                    <table className="firm-ui-table">
+                <div className="firm-ui-table-card erp-list-card">
+                  <div className="firm-ui-table-scroll erp-list-table-scroll">
+                    <table className="firm-ui-table erp-list-table">
                       <thead>
                         <tr>
                           <th className="firm-ui-sno-column">S.No</th>
@@ -68923,7 +69511,7 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                     </table>
                   </div>
 
-                  <div className="firm-ui-table-footer">
+                  <div className="firm-ui-table-footer erp-list-footer">
                     <span>
                       Showing{" "}
                       <strong>{companyStartRecord}</strong>
@@ -69129,20 +69717,15 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
               </div>
             )}
             {activeSubMenu === 'Group Master' && openFormFor !== 'Group Master' && (
-              <div className="firm-ui-page firm-ui-list-page">
-                <div className="firm-ui-page-heading firm-ui-list-heading">
+              <div className="firm-ui-page firm-ui-list-page erp-master-list-page">
+                <div className="firm-ui-page-heading firm-ui-list-heading erp-list-page-header">
                   <div>
-                    <div className="firm-ui-breadcrumb">
-                      <span></span>
-                      <span></span>
-                      <strong></strong>
-                    </div>
-                    <h1></h1>
-                    <p></p>
+                    <h1>Group Master</h1>
+                    <p>Manage product and account classification groups.</p>
                   </div>
 
-                  <div className="firm-ui-list-toolbar">
-                    <div className="firm-ui-search-box">
+                  <div className="firm-ui-list-toolbar erp-list-toolbar">
+                    <div className="firm-ui-search-box erp-list-search">
                       <Search size={17} />
                       <input
                         type="text"
@@ -69202,9 +69785,9 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                   </div>
                 </div>
 
-                <div className="firm-ui-table-card">
-                  <div className="firm-ui-table-scroll">
-                    <table className="firm-ui-table firm-ui-table-compact">
+                <div className="firm-ui-table-card erp-list-card">
+                  <div className="firm-ui-table-scroll erp-list-table-scroll">
+                    <table className="firm-ui-table firm-ui-table-compact erp-list-table">
                       <thead>
                         <tr>
                           <th className="firm-ui-sno-column" style={{ width: '70px' }}>S.No</th>
@@ -69320,7 +69903,7 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                     </table>
                   </div>
 
-                  <div className="firm-ui-table-footer">
+                  <div className="firm-ui-table-footer erp-list-footer">
                     <span>
                       Showing{" "}
                       <strong>{groupStartRecord}</strong>
@@ -69524,20 +70107,15 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
               </div>
             )}
             {activeSubMenu === 'Category Master' && openFormFor !== 'Category Master' && (
-              <div className="firm-ui-page firm-ui-list-page">
-                <div className="firm-ui-page-heading firm-ui-list-heading">
+              <div className="firm-ui-page firm-ui-list-page erp-master-list-page">
+                <div className="firm-ui-page-heading firm-ui-list-heading erp-list-page-header">
                   <div>
-                    <div className="firm-ui-breadcrumb">
-                      <span></span>
-                      <span></span>
-                      <strong></strong>
-                    </div>
-                    <h1></h1>
-                    <p></p>
+                    <h1>Category Master</h1>
+                    <p>Manage product categories and their classification.</p>
                   </div>
 
-                  <div className="firm-ui-list-toolbar">
-                    <div className="firm-ui-search-box">
+                  <div className="firm-ui-list-toolbar erp-list-toolbar">
+                    <div className="firm-ui-search-box erp-list-search">
                       <Search size={17} />
                       <input
                         type="text"
@@ -69598,9 +70176,9 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                   </div>
                 </div>
 
-                <div className="firm-ui-table-card">
-                  <div className="firm-ui-table-scroll">
-                    <table className="firm-ui-table firm-ui-table-compact">
+                <div className="firm-ui-table-card erp-list-card">
+                  <div className="firm-ui-table-scroll erp-list-table-scroll">
+                    <table className="firm-ui-table firm-ui-table-compact erp-list-table">
                       <thead>
                         <tr>
                           <th className="firm-ui-sno-column" style={{ width: '70px' }}>S.No</th>
@@ -69722,7 +70300,7 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                     </table>
                   </div>
 
-                  <div className="firm-ui-table-footer">
+                  <div className="firm-ui-table-footer erp-list-footer">
                     <span>
                       Showing{" "}
                       <strong>
@@ -70252,20 +70830,20 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
               </div>
             )}
             {activeSubMenu === 'Product' && openFormFor !== 'Product' && (
-              <div className="firm-ui-page firm-ui-list-page">
-                <div className="firm-ui-page-heading firm-ui-list-heading">
+              <div className="firm-ui-page firm-ui-list-page erp-master-list-page product-master-list-page">
+                <div className="firm-ui-page-heading firm-ui-list-heading erp-list-page-header">
                   <div>
                     <div className="firm-ui-breadcrumb">
                       <span></span>
                       <span></span>
                       <strong></strong>
                     </div>
-                    <h1></h1>
-                    <p></p>
+                    <h1>Product Master</h1>
+                    <p>Manage product, pricing, tax and inventory information.</p>
                   </div>
 
-                  <div className="firm-ui-list-toolbar">
-                    <div className="firm-ui-search-box">
+                  <div className="firm-ui-list-toolbar erp-list-toolbar">
+                    <div className="firm-ui-search-box erp-list-search">
                       <Search size={17} />
                       <input
                         type="text"
@@ -70342,9 +70920,9 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                   </div>
                 </div>
 
-                <div className="firm-ui-table-card">
-                  <div className="firm-ui-table-scroll">
-                    <table className="firm-ui-table firm-ui-table-compact">
+                <div className="firm-ui-table-card erp-list-card">
+                  <div className="firm-ui-table-scroll erp-list-table-scroll">
+                    <table className="firm-ui-table firm-ui-table-compact erp-list-table">
                       <thead>
                         <tr>
                           <th className="firm-ui-sno-column" style={{ width: '50px' }}>S.No</th>
@@ -70511,7 +71089,7 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                     </table>
                   </div>
 
-                  <div className="firm-ui-table-footer">
+                  <div className="firm-ui-table-footer erp-list-footer">
                     <div>
                       <span>
                         Showing{" "}
@@ -71111,20 +71689,15 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
             )}
 
             {activeSubMenu === 'Account' && openFormFor !== 'Account' && (
-              <div className="firm-ui-page firm-ui-list-page">
-                <div className="firm-ui-page-heading firm-ui-list-heading">
+              <div className="firm-ui-page firm-ui-list-page erp-master-list-page account-master-list-page">
+                <div className="firm-ui-page-heading firm-ui-list-heading erp-list-page-header">
                   <div>
-                    <div className="firm-ui-breadcrumb">
-                      <span></span>
-                      <span></span>
-                      <strong></strong>
-                    </div>
-                    <h1></h1>
-                    <p></p>
+                    <h1>Account Master</h1>
+                    <p>Manage customer accounts, tax details and credit information.</p>
                   </div>
 
-                  <div className="firm-ui-list-toolbar">
-                    <div className="firm-ui-search-box">
+                  <div className="firm-ui-list-toolbar erp-list-toolbar">
+                    <div className="firm-ui-search-box erp-list-search">
                       <Search size={17} />
                       <input
                         type="text"
@@ -71200,9 +71773,9 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                   </div>
                 </div>
 
-                <div className="firm-ui-table-card">
-                  <div className="firm-ui-table-scroll">
-                    <table className="firm-ui-table firm-ui-table-compact">
+                <div className="firm-ui-table-card erp-list-card">
+                  <div className="firm-ui-table-scroll erp-list-table-scroll">
+                    <table className="firm-ui-table firm-ui-table-compact erp-list-table">
                       <thead>
                         <tr>
                           <th className="firm-ui-sno-column" style={{ width: '50px' }}>S.No</th>
@@ -71356,7 +71929,7 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                     </table>
                   </div>
 
-                  <div className="firm-ui-table-footer">
+                  <div className="firm-ui-table-footer erp-list-footer">
                     <div className="firm-ui-footer-info">
                       <span>
                         Showing{" "}
@@ -71868,20 +72441,15 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
         OTHER ACCOUNT - LIST VIEW (MISSING - ADD THIS)
     ========================================================= */}
             {activeSubMenu === 'Other Account' && openFormFor !== 'Other Account' && (
-              <div className="firm-ui-page firm-ui-list-page">
-                <div className="firm-ui-page-heading firm-ui-list-heading">
+              <div className="firm-ui-page firm-ui-list-page erp-master-list-page other-account-master-list-page">
+                <div className="firm-ui-page-heading firm-ui-list-heading erp-list-page-header">
                   <div>
-                    <div className="firm-ui-breadcrumb">
-                      <span></span>
-                      <span></span>
-                      <strong></strong>
-                    </div>
-                    <h1></h1>
-                    <p></p>
+                    <h1>Other Account Master</h1>
+                    <p>Manage ledger accounts, banking and tax information.</p>
                   </div>
 
-                  <div className="firm-ui-list-toolbar">
-                    <div className="firm-ui-search-box">
+                  <div className="firm-ui-list-toolbar erp-list-toolbar">
+                    <div className="firm-ui-search-box erp-list-search">
                       <Search size={17} />
                       <input
                         type="text"
@@ -71961,9 +72529,9 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                   </div>
                 </div>
 
-                <div className="firm-ui-table-card">
-                  <div className="firm-ui-table-scroll">
-                    <table className="firm-ui-table firm-ui-table-compact">
+                <div className="firm-ui-table-card erp-list-card">
+                  <div className="firm-ui-table-scroll erp-list-table-scroll">
+                    <table className="firm-ui-table firm-ui-table-compact erp-list-table">
                       <thead>
                         <tr>
                           <th className="firm-ui-sno-column" style={{ width: '50px' }}>S.No</th>
@@ -72076,7 +72644,7 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                                         className="firm-ui-action-btn view"
                                         title="View account"
                                         onClick={() =>
-                                          editOtherAccount(
+                                          viewOtherAccount(
                                             account
                                           )
                                         }
@@ -72142,7 +72710,7 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                     </table>
                   </div>
 
-                  <div className="firm-ui-table-footer">
+                  <div className="firm-ui-table-footer erp-list-footer">
                     <div className="firm-ui-footer-info">
                       <span>
                         Showing{" "}
@@ -72405,20 +72973,15 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
             )}
 
             {activeSubMenu === 'GST Master' && openFormFor !== 'GST Master' && (
-              <div className="firm-ui-page firm-ui-list-page">
-                <div className="firm-ui-page-heading firm-ui-list-heading">
+              <div className="firm-ui-page firm-ui-list-page erp-master-list-page">
+                <div className="firm-ui-page-heading firm-ui-list-heading erp-list-page-header">
                   <div>
-                    <div className="firm-ui-breadcrumb">
-                      <span></span>
-                      <span></span>
-                      <strong></strong>
-                    </div>
-                    <h1></h1>
-                    <p></p>
+                    <h1>GST Master</h1>
+                    <p>Manage GST rates and tax configuration records.</p>
                   </div>
 
-                  <div className="firm-ui-list-toolbar">
-                    <div className="firm-ui-search-box">
+                  <div className="firm-ui-list-toolbar erp-list-toolbar">
+                    <div className="firm-ui-search-box erp-list-search">
                       <Search size={17} />
                       <input
                         type="text"
@@ -72487,9 +73050,9 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                   </div>
                 </div>
 
-                <div className="firm-ui-table-card">
-                  <div className="firm-ui-table-scroll">
-                    <table className="firm-ui-table firm-ui-table-compact">
+                <div className="firm-ui-table-card erp-list-card">
+                  <div className="firm-ui-table-scroll erp-list-table-scroll">
+                    <table className="firm-ui-table firm-ui-table-compact erp-list-table">
                       <thead>
                         <tr>
                           <th className="firm-ui-sno-column" style={{ width: '50px' }}>S.No</th>
@@ -72661,7 +73224,7 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                     </table>
                   </div>
 
-                  <div className="firm-ui-table-footer">
+                  <div className="firm-ui-table-footer erp-list-footer">
                     <div className="firm-ui-footer-info">
                       <span>
                         Showing{" "}
@@ -72909,20 +73472,15 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
             )}
 
             {activeSubMenu === 'Area' && openFormFor !== 'Area' && (
-              <div className="firm-ui-page firm-ui-list-page">
-                <div className="firm-ui-page-heading firm-ui-list-heading">
+              <div className="firm-ui-page firm-ui-list-page erp-master-list-page">
+                <div className="firm-ui-page-heading firm-ui-list-heading erp-list-page-header">
                   <div>
-                    <div className="firm-ui-breadcrumb">
-                      <span></span>
-                      <span></span>
-                      <strong></strong>
-                    </div>
-                    <h1></h1>
-                    <p></p>
+                    <h1>Area Master</h1>
+                    <p>Manage sales territories, routes and service areas.</p>
                   </div>
 
-                  <div className="firm-ui-list-toolbar">
-                    <div className="firm-ui-search-box">
+                  <div className="firm-ui-list-toolbar erp-list-toolbar">
+                    <div className="firm-ui-search-box erp-list-search">
                       <Search size={17} />
                       <input
                         type="text"
@@ -72982,9 +73540,9 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                   </div>
                 </div>
 
-                <div className="firm-ui-table-card">
-                  <div className="firm-ui-table-scroll">
-                    <table className="firm-ui-table firm-ui-table-compact">
+                <div className="firm-ui-table-card erp-list-card">
+                  <div className="firm-ui-table-scroll erp-list-table-scroll">
+                    <table className="firm-ui-table firm-ui-table-compact erp-list-table">
                       <thead>
                         <tr>
                           <th className="firm-ui-sno-column" style={{ width: '50px' }}>S.No</th>
@@ -73146,7 +73704,7 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                     </table>
                   </div>
 
-                  <div className="firm-ui-table-footer">
+                  <div className="firm-ui-table-footer erp-list-footer">
                     <div className="firm-ui-footer-info">
                       <span>
                         Showing{" "}
@@ -73312,70 +73870,12 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
               </div>
             )}
 
-            {/* Service Master - Form View */}
-            {activeSubMenu === 'Service' && openFormFor === 'Service' && (
-              <div className="master-section erp-master-form">
-                <div className="form-header">
-                  <div className="page-title-large">{editServiceId ? 'Edit Service Information' : 'Add Service Information'}</div>
-                  <button className="close-form-btn" onClick={closeForm}>✕</button>
-                </div>
-                <form className="master-form" onSubmit={saveService}>
-                  <div className="form-section">
-                    <h4 className="section-header">Service Details</h4>
-                    <div className="form-grid-2">
-                      <div className="labeled-input">
-                        <label>Code *</label>
-                        <input name="code" placeholder="Code" value={serviceForm.code} onChange={handleServiceInput} required />
-                      </div>
-                      <div className="labeled-input">
-                        <label>Name *</label>
-                        <input name="name" placeholder="Service Name" value={serviceForm.name} onChange={handleServiceInput} required />
-                      </div>
-                    </div>
-                    <div className="form-grid-2">
-                      <div className="labeled-input">
-                        <label>GST % *</label>
-                        <input name="vat" type="number" step="0.01" placeholder="GST %" value={serviceForm.vat} onChange={handleServiceInput} required />
-                      </div>
-                      <div className="labeled-input">
-                        <label>Purchase Type</label>
-                        <select name="purchaseType" value={serviceForm.purchaseType} onChange={handleServiceInput}>
-                          <option value="VAT ON PURCHASE PRICE">VAT ON PURCHASE PRICE</option>
-                          <option value="VAT ON MRP">VAT ON MRP</option>
-                          <option value="OTHER STATE">OTHER STATE</option>
-                          <option value="EXPT PURCHASE">EXPT PURCHASE</option>
-                          <option value="VAT ON MARGIN">VAT ON MARGIN</option>
-                        </select>
-                      </div>
-                    </div>
-                    <div className="form-grid-2">
-                      <div className="labeled-input">
-                        <label>Sales Type</label>
-                        <select name="salesType" value={serviceForm.salesType} onChange={handleServiceInput}>
-                          <option value="VAT ON SALES PRICE">VAT ON SALES PRICE</option>
-                          <option value="VAT ON MRP">VAT ON MRP</option>
-                          <option value="OTHER STATE">OTHER STATE</option>
-                        </select>
-                      </div>
-                    </div>
-                  </div>
-                  <div className="form-actions">
-                    <button type="submit" className="btn-primary">{editServiceId ? 'Update' : 'Save'}</button>
-                    <button type="button" className="btn-secondary" onClick={closeForm}>Cancel</button>
-                  </div>
-                </form>
-              </div>
-            )}
-            {/* Service Master - Grid View */}
-            {activeSubMenu === 'Service' && openFormFor !== 'Service' && (
-              renderDataTable('Services List', getFilteredServices(), [
-                { key: 'srNo', label: 'Sr. No' },
-                { key: 'code', label: 'Code' },
-                { key: 'name', label: 'Name' },
-                { key: 'vat', label: 'GST %' },
-                { key: 'purchaseType', label: 'Purchase Type' },
-                { key: 'salesType', label: 'Sales Type' }
-              ], 'service', deleteService)
+            {activeSubMenu === 'Service' && (
+              <ServiceMaster
+                isFormOpen={openFormFor === 'Service'}
+                onOpenForm={() => setOpenFormFor('Service')}
+                onCloseForm={() => setOpenFormFor(null)}
+              />
             )}
 
             {activeSubMenu === 'Salesman' && openFormFor === 'Salesman' && (
@@ -73578,20 +74078,15 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
             )}
 
             {activeSubMenu === 'Salesman' && openFormFor !== 'Salesman' && (
-              <div className="firm-ui-page firm-ui-list-page">
-                <div className="firm-ui-page-heading firm-ui-list-heading">
+              <div className="firm-ui-page firm-ui-list-page erp-master-list-page">
+                <div className="firm-ui-page-heading firm-ui-list-heading erp-list-page-header">
                   <div>
-                    <div className="firm-ui-breadcrumb">
-                      <span></span>
-                      <span></span>
-                      <strong></strong>
-                    </div>
-                    <h1></h1>
-                    <p></p>
+                    <h1>Salesman Master</h1>
+                    <p>Manage sales representatives and contact information.</p>
                   </div>
 
-                  <div className="firm-ui-list-toolbar">
-                    <div className="firm-ui-search-box">
+                  <div className="firm-ui-list-toolbar erp-list-toolbar">
+                    <div className="firm-ui-search-box erp-list-search">
                       <Search size={17} />
                       <input
                         type="text"
@@ -73671,9 +74166,9 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                   </div>
                 </div>
 
-                <div className="firm-ui-table-card">
-                  <div className="firm-ui-table-scroll">
-                    <table className="firm-ui-table firm-ui-table-compact">
+                <div className="firm-ui-table-card erp-list-card">
+                  <div className="firm-ui-table-scroll erp-list-table-scroll">
+                    <table className="firm-ui-table firm-ui-table-compact erp-list-table">
                       <thead>
                         <tr>
                           <th className="firm-ui-sno-column" style={{ width: '50px' }}>S.No</th>
@@ -73881,7 +74376,7 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                     </table>
                   </div>
 
-                  <div className="firm-ui-table-footer">
+                  <div className="firm-ui-table-footer erp-list-footer">
                     <div className="firm-ui-footer-info">
                       <span>
                         Showing{" "}
@@ -74063,7 +74558,9 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
       ========================================================= */}
 
             {openFormFor === "Billing" &&
-              (activeSubMenu === "Billing" || isSettleAdjustMode) && (
+              (activeSubMenu === "Billing" ||
+                activeSubMenu === "Counter Sales" ||
+                isSettleAdjustMode) && (
                 <div className="sales-billing-page">
                   <div className="sales-billing-card">
 
@@ -74075,7 +74572,9 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                       <div className="sales-billing-title-wrapper">
                         <div>
                           <h2 className="sales-billing-title">
-                            Sales Invoice (Billing)
+                            {activeSubMenu === "Counter Sales"
+                              ? "Counter Sales Invoice"
+                              : "Sales Invoice (Billing)"}
                           </h2>
 
                           <p className="sales-billing-subtitle">
@@ -74721,7 +75220,7 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                                 : "Fast Add"
                             }
                           >
-                            <span>ϟ</span>
+                            <span>ÏŸ</span>
                             Fast Add
                           </button>
 
@@ -75035,6 +75534,23 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                                             }
                                           } else if (
                                             event.key ===
+                                            "Tab" &&
+                                            !event.shiftKey &&
+                                            String(
+                                              item.productCode ||
+                                              item.productId ||
+                                              ""
+                                            ).trim()
+                                          ) {
+                                            setShowProductList(false);
+                                            setProductDropdownIndex(-1);
+                                            handleInvoiceKeyDown(
+                                              event,
+                                              index,
+                                              "product"
+                                            );
+                                          } else if (
+                                            event.key ===
                                             "Escape"
                                           ) {
                                             event.preventDefault();
@@ -75342,6 +75858,8 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                                     <td>
                                       <input
                                         className="billing-table-control billing-numeric-control"
+                                        type="text"
+                                        inputMode="decimal"
                                         data-field="rateGst"
                                         data-index={index}
                                         disabled={loadedBillProductReadOnly}
@@ -75353,6 +75871,23 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                                             event.target.value
                                           )
                                         }
+                                        onBlur={(event) => {
+                                          const value =
+                                            event.target.value.trim();
+
+                                          if (
+                                            value !== "" &&
+                                            Number.isFinite(Number(value))
+                                          ) {
+                                            updateInvoiceItem(
+                                              index,
+                                              "rateGst",
+                                              invoiceRound(
+                                                Number(value)
+                                              ).toFixed(2)
+                                            );
+                                          }
+                                        }}
                                         onKeyDown={(event) =>
                                           handleInvoiceKeyDown(
                                             event,
@@ -75392,12 +75927,21 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                                       <input
                                         type="text"
                                         inputMode="decimal"
+                                        data-field="schemePct"
+                                        data-index={index}
                                         value={item.schemePct || ""}
                                         onChange={(event) =>
                                           updateInvoiceItem(
                                             index,
                                             "schemePct",
                                             event.target.value
+                                          )
+                                        }
+                                        onKeyDown={(event) =>
+                                          handleInvoiceKeyDown(
+                                            event,
+                                            index,
+                                            "schemePct"
                                           )
                                         }
                                       />
@@ -75620,6 +76164,13 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                                         data-index={index}
                                         value={item.amount}
                                         readOnly
+                                        onKeyDown={(event) =>
+                                          handleInvoiceKeyDown(
+                                            event,
+                                            index,
+                                            "amount"
+                                          )
+                                        }
                                       />
                                     </td>
 
@@ -80276,6 +80827,14 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
 
 
             {/* Sales Invoice List */}
+            {activeSubMenu === "Sales Service" && (
+              <SalesService
+                isFormOpen={openFormFor === "Sales Service"}
+                onOpenForm={() => setOpenFormFor("Sales Service")}
+                onCloseForm={() => setOpenFormFor(null)}
+              />
+            )}
+
             {activeSubMenu === "Billing" &&
               showSalesList &&
               !openFormFor &&
@@ -80285,6 +80844,25 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                   (item) =>
                     String(item.type || "").toLowerCase() !==
                     "quotation"
+                ),
+                []
+              )}
+
+            {activeSubMenu === "Counter Sales" &&
+              showSalesList &&
+              !openFormFor &&
+              renderVoucherList(
+                "Counter Sales",
+                salesListData.filter(
+                  (item) =>
+                    String(
+                      item.SalesEntryType ||
+                      item.salesEntryType ||
+                      ""
+                    )
+                      .trim()
+                      .toLowerCase() ===
+                    "counter_sales"
                 ),
                 []
               )}

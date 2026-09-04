@@ -138,14 +138,14 @@ function erpReducer(state, action) {
 
     case "UPDATE_PAYMENT": {
       const updatedPayments = state.payments.map((p) =>
-        p.id === action.payload.id ? action.payload : p
+        String(p._id || p.id) === String(action.payload._id || action.payload.id) ? action.payload : p
       );
       saveToLocalStorage('erp_payments', updatedPayments);
       return { ...state, payments: updatedPayments };
     }
 
     case "DELETE_PAYMENT": {
-      const filtered = state.payments.filter((p) => p.id !== action.payload);
+      const filtered = state.payments.filter((p) => String(p._id || p.id) !== String(action.payload));
       saveToLocalStorage('erp_payments', filtered);
       return { ...state, payments: filtered };
     }
@@ -166,14 +166,14 @@ function erpReducer(state, action) {
 
     case "UPDATE_JOURNAL": {
       const updatedJournals = state.journals.map((j) =>
-        j.id === action.payload.id ? action.payload : j
+        String(j._id || j.id) === String(action.payload._id || action.payload.id) ? action.payload : j
       );
       saveToLocalStorage('erp_journals', updatedJournals);
       return { ...state, journals: updatedJournals };
     }
 
     case "DELETE_JOURNAL": {
-      const filtered = state.journals.filter((j) => j.id !== action.payload);
+      const filtered = state.journals.filter((j) => String(j._id || j.id) !== String(action.payload));
       saveToLocalStorage('erp_journals', filtered);
       return { ...state, journals: filtered };
     }
