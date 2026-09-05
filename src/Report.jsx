@@ -28,6 +28,7 @@ import {
   X,
 } from "lucide-react";
 import * as XLSX from "xlsx-js-style";
+import { strToU8, zipSync } from "fflate";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 import "./Report.css";
@@ -70,11 +71,32 @@ const REPORT_INFORMATION = {
     icon: FileBarChart,
   },
 
+  "Stock And Sales Report": {
+    title: "Stock And Sales Report",
+    category: "Sales Report",
+    description: "Compare current stock with sales for a selected date range.",
+    icon: Warehouse,
+  },
+
   "Company Wise Purchase Report": {
     title: "Company Wise Purchase Report",
     category: "Purchase Report",
     description: "View company-wise purchase details with supplier and product-wise options.",
     icon: Building2,
+  },
+
+  "Company/Bill Wise Purchase Report": {
+    title: "Company/Bill Wise Purchase Report",
+    category: "Purchase Report",
+    description: "View voucher and bill-wise purchase line details.",
+    icon: Building2,
+  },
+
+  "Product Wise Purchase Report": {
+    title: "Product Wise Purchase Report",
+    category: "Purchase Report",
+    description: "View product-wise purchase, discount and tax details.",
+    icon: PackageSearch,
   },
 
   "Current Stock Report": {
@@ -104,6 +126,11 @@ const REPORT_INFORMATION = {
     description: "View complete inward and outward movement of a product.",
     icon: ShoppingCart,
   },
+  "Sales GST Register": { title: "Sales GST Register", category: "GST Report", description: "Invoice-wise outward supplies with GST rate bifurcation.", icon: FileSpreadsheet },
+  "Purchase GST Register": { title: "Purchase GST Register", category: "GST Report", description: "Supplier invoice-wise inward supplies with GST rate bifurcation.", icon: FileSpreadsheet },
+  "CRN GST Register": { title: "CRN GST Register", category: "GST Report", description: "Credit-note returns with party and rate-wise GST values.", icon: FileText },
+  "GST Summary": { title: "GST Summary", category: "GST Report", description: "Rate-wise sales, purchase and return tax summary.", icon: BarChart3 },
+  "GSTR1 Report": { title: "GSTR1 Report", category: "GST Report", description: "Outward supply data ready for Excel, JSON and CSV export.", icon: FileBarChart },
   "General Ledger": { title: "General Ledger", category: "Financial Report", description: "Posted journal entries by account.", icon: BookOpen },
   "Party Ledger": { title: "Party Ledger", category: "Financial Report", description: "Customer or supplier account ledger.", icon: Users },
   "Trial Balance": { title: "Trial Balance", category: "Financial Report", description: "Debit, credit and closing balance by account.", icon: BarChart3 },
@@ -120,6 +147,10 @@ const REPORT_INFORMATION = {
 };
 
 const P0_REPORT_ENDPOINTS = {
+  "Current Stock Report": "/api/reports/current-stock",
+  "As On Date Stock Report": "/api/reports/as-on-date-stock",
+  "Damage Stock Report": "/api/reports/damage-stock",
+  "Product Ledger": "/api/reports/product-ledger",
   "General Ledger": "/p0/reports/financial/general-ledger",
   "Party Ledger": "/p0/reports/financial/party-ledger",
   "Trial Balance": "/p0/reports/financial/trial-balance",
@@ -128,12 +159,78 @@ const P0_REPORT_ENDPOINTS = {
   "Day Book": "/p0/reports/financial/day-book",
   "Profit & Loss": "/p0/reports/financial/profit-loss",
   "Balance Sheet": "/p0/reports/financial/balance-sheet",
-  "Stock Movement Ledger": "/p0/reports/stock-movement",
+  "Stock Movement Ledger": "/api/p0/reports/stock-movement",
   "Credit Control Report": "/p0/reports/credit-control",
   "Permission Audit Report": "/p0/reports/permission-audit",
   "Audit Trail Report": "/p0/reports/audit-trail",
   "Dashboard Reconciliation": "/p0/dashboard/summary",
 };
+
+const GST_REPORT_ENDPOINTS = {
+  "Sales GST Register": "sales-register",
+  "Purchase GST Register": "purchase-register",
+  "CRN GST Register": "crn-register",
+  "GST Summary": "summary",
+  "GSTR1 Report": "gstr1",
+};
+
+const FIXED_REPORT_COLUMNS = {
+  "Current Stock Report": [
+    ["SrNo", "SrNo"], ["SysProdCode", "SysProdCode"], ["HSNCode", "HSNCode"], ["ProdCode", "ProdCode"],
+    ["ProdName", "ProdName"], ["LocalProduct", "Local Product"], ["ShortCode", "ShortCode"], ["Batch", "Batch"],
+    ["MfgDate", "MFG. Date"], ["ExpDate", "EXP. Date"], ["BatchLock", "Batch Lock"], ["MRP", "MRP"],
+    ["BoxQty", "BoxQty"], ["InBox", "InBox"], ["UnitQty", "UnitQty"], ["TotalQty", "Total Qty"],
+    ["ValueRs", "Value [Rs.]"], ["ValueKg", "Value [Kg]"], ["CatName", "CatName"], ["CompName", "CompName"],
+    ["VatPer", "VatPer"], ["Weight", "Weight"], ["BoxPack", "BoxPack"], ["InBoxPack", "InBoxPack"],
+    ["LastPurchaseDate", "Last Purchase Date"], ["LastPurchase", "Last Purchase"], ["LastQty", "LastQty"],
+  ],
+  "As On Date Stock Report": [],
+  "Damage Stock Report": [
+    ["SrNo", "SrNo."], ["TrnDate", "TrnDate"], ["TrnSeries", "TrnSeries"], ["TrnNo", "TrnNo"],
+    ["SysProdCode", "SysProdCode"], ["ProductCode", "Product Code"], ["ProductName", "Product Name"],
+    ["LocalProduct", "Local Product"], ["MRP", "MRP"], ["BoxQty", "BoxQty"], ["InBoxQty", "InBoxQty"],
+    ["UnitQty", "UnitQty"], ["Qty", "Qty"], ["FreeQty", "Free Qty"], ["Amount", "Amount"],
+    ["Weight", "Weight"], ["VatPer", "VatPer"], ["Value", "Value"],
+  ],
+  "Product Ledger": [
+    ["SrNo", "Sr No."], ["Date", "Date"], ["TrnSeries", "TrnSeries"], ["TrnNo", "Trn No"],
+    ["InvDate", "InvDate"], ["InvNo", "InvNo"], ["Trn", "Trn"], ["PartyCode", "Party Code"],
+    ["PartyName", "Party Name"], ["AddQty", "Add Qty"], ["LessQty", "Less Qty"], ["BalanceQty", "Balance Qty"],
+    ["Mrp", "Mrp"], ["Batch", "Batch"], ["SRate", "SRate"], ["PRate", "PRate"], ["Qty", "Qty"],
+    ["FreeQty", "Free Qty"], ["BoxPack", "BoxPack"], ["InBoxPack", "InBoxPack"], ["BoxQty", "BoxQty"],
+    ["InBoxQty", "InBoxQty"], ["UnitQty", "UnitQty"],
+  ],
+  "Stock Movement Ledger": [
+    ["SrNo", "Sr No."], ["Date", "Date"], ["TrnSeries", "Trn Series"], ["TrnNo", "Trn No"],
+    ["Movement", "Movement"], ["Godown", "Godown"], ["ProductCode", "Product Code"], ["ProductName", "Product Name"],
+    ["Batch", "Batch"], ["MRP", "MRP"], ["StockIn", "Stock In"], ["StockOut", "Stock Out"],
+    ["BalanceQty", "Balance Qty"], ["Qty", "Qty"], ["FreeQty", "Free Qty"], ["Narration", "Narration"],
+  ],
+};
+FIXED_REPORT_COLUMNS["As On Date Stock Report"] = FIXED_REPORT_COLUMNS["Current Stock Report"];
+
+const COMPANY_BILL_PURCHASE_COLUMNS = [
+  ["VouDate", "Vou Date"], ["VouSeries", "Vou Series"], ["VouNo", "Vou No."],
+  ["ProductCode", "Product Code"], ["ProductName", "Product Name"], ["MRP", "MRP"],
+  ["Batch", "Batch"], ["Unit", "Unit"], ["Qty", "Qty"], ["FreeQty", "FreeQty"],
+  ["Rate", "Purchase Rate"], ["SalesRate", "Sales Rate"], ["Amount", "Amount"], ["BVDiscAmt", "BVDiscAmt"],
+  ["BVAddAmt", "BVAddAmt"], ["AVDiscAmt", "AVDiscAmt"], ["AVAddAmt", "AVAddAmt"],
+  ["VatPer", "VatPer"], ["VatAmt", "VatAmt"], ["CGST", "CGST"], ["SGST", "SGST"],
+  ["IGST", "IGST"], ["Cess1", "Cess1"], ["Cess2", "Cess2"],
+  ["BoxPack", "Boxpack"], ["INBoxPack", "INBoxpack"],
+].map(([key, label]) => ({ key, label }));
+
+const PRODUCT_PURCHASE_COLUMNS = [
+  ["SrNo", "SrNo."], ["VouDate", "Vou.Date"], ["VouSeries", "Series"], ["VouNo", "Vou.No"],
+  ["InvDate", "InvDate"], ["InvNo", "InvNo"], ["Company", "Company"],
+  ["ProductCode", "ProdCode"], ["ProductName", "ProdName"], ["HSNCode", "HSNCode"],
+  ["MRP", "MRP"], ["Qty", "Qty"], ["FreeQty", "Free Qty"], ["BoxQty", "BoxQty"],
+  ["Rate", "Purchase Rate"], ["SalesRate", "Sales Rate"], ["Gross", "Gross"], ["Weight", "Weight"], ["Taxable", "Taxable"],
+  ["GSTPercent", "GST%"], ["GSTAmt", "GST Amt"], ["CGST", "CGST"], ["SGST", "SGST"],
+  ["IGST", "IGST"], ["Cess1", "Cess1"], ["Cess2", "Cess2"],
+  ["BVDiscAmt", "BVDiscAmt"], ["BVAddAmt", "BVAddAmt"], ["AVDiscAmt", "AVDiscAmt"],
+  ["AVAddAmt", "AVAddAmt"], ["NetAmt", "NetAmt"], ["BoxPack", "BoxPack"],
+].map(([key, label]) => ({ key, label }));
 
 const getTodayDate = () => {
   const today = new Date();
@@ -162,16 +259,126 @@ const Report = ({
   onBack,
 }) => {
   const API_BASE_URL = API_ROOT;
-  const [p0Filters, setP0Filters] = useState({ fromDate: getFinancialYearStart(), toDate: getTodayDate(), account: "", product: "" });
+  const defaultP0Filters = () => ({
+    companyCode: "",
+    fromDate: getFinancialYearStart(),
+    toDate: getTodayDate(),
+    asOnDate: getTodayDate(),
+    account: "",
+    product: "",
+    batch: "",
+    godownCode: "",
+    entryType: "",
+    reportType: "details",
+    reportLevel: "productBatch",
+    reportFilter: "all",
+    nearExpiry: "N",
+    expiryDays: "",
+    currentStock: "Y",
+    includeNegative: "N",
+    includeZero: "N",
+    orderBy: "productName",
+  });
+  const [p0Filters, setP0Filters] = useState(defaultP0Filters);
   const [p0Rows, setP0Rows] = useState([]);
   const [p0Summary, setP0Summary] = useState(null);
   const [p0Loading, setP0Loading] = useState(false);
   const [p0Error, setP0Error] = useState("");
+  const [p0Generated, setP0Generated] = useState(false);
   const isP0Report = Boolean(P0_REPORT_ENDPOINTS[selectedReport]);
+  const isGstReport = Boolean(GST_REPORT_ENDPOINTS[selectedReport]);
+  const defaultGstFilters = () => ({
+    fromDate: getFinancialYearStart(), toDate: getTodayDate(), billType: "all", invoiceType: "all",
+    taxOnType: "all", specificSeries: "N", series: "", outputFormat: "party", gstNo: "all",
+    cessSeparate: "N", gstBifurcation: "N", companyWise: "N", withDetails: "N",
+    discountBifurcation: "N", reportWith: "gst", withDamage: "Y",
+  });
+  const [gstFilters, setGstFilters] = useState(defaultGstFilters);
+  const [gstRows, setGstRows] = useState([]);
+  const [gstColumns, setGstColumns] = useState([]);
+  const [gstSections, setGstSections] = useState([]);
+  const [activeGstrSheet, setActiveGstrSheet] = useState("B2B");
+  const [gstTotals, setGstTotals] = useState({});
+  const [gstSummary, setGstSummary] = useState(null);
+  const [gstLoading, setGstLoading] = useState(false);
+  const [gstGenerated, setGstGenerated] = useState(false);
+  const [gstError, setGstError] = useState("");
+  const [gstSearch, setGstSearch] = useState("");
+  const [gstZoom, setGstZoom] = useState("100");
+  const activeGstrSection = useMemo(() => (
+    selectedReport === "GSTR1 Report"
+      ? gstSections.find((section) => section.name === activeGstrSheet) || gstSections[0] || null
+      : null
+  ), [selectedReport, gstSections, activeGstrSheet]);
+  const visibleGstRows = activeGstrSection?.rows || gstRows;
+  const visibleGstColumns = activeGstrSection?.columns || gstColumns;
+  const filteredGstRows = useMemo(() => {
+    const query = gstSearch.trim().toLowerCase();
+    if (!query) return visibleGstRows;
+    return visibleGstRows.filter((row) => Object.values(row || {}).some((value) =>
+      String(value ?? "").toLowerCase().includes(query)
+    ));
+  }, [visibleGstRows, gstSearch]);
   const [chequeSearch, setChequeSearch] = useState("");
   const [chequeResult, setChequeResult] = useState(null);
   const [chequeLoading, setChequeLoading] = useState(false);
   const [chequeError, setChequeError] = useState("");
+  const [stockSalesFilters, setStockSalesFilters] = useState({
+    companyCode: "",
+    reportLevel: "unit",
+    godownCode: "",
+    fromDate: getFinancialYearStart(),
+    toDate: getTodayDate(),
+    reportWith: "summary",
+    filter: "all",
+    orderBy: "productName",
+    stockWithFreeQty: false,
+  });
+  const [stockSalesCriteria, setStockSalesCriteria] = useState({
+    companies: [],
+    godowns: [],
+  });
+  const [stockSalesRows, setStockSalesRows] = useState([]);
+  const [stockSalesSummary, setStockSalesSummary] = useState(null);
+  const [stockSalesLoading, setStockSalesLoading] = useState(false);
+  const [stockSalesError, setStockSalesError] = useState("");
+  const [stockSalesGenerated, setStockSalesGenerated] = useState(false);
+  const [stockSalesSearch, setStockSalesSearch] = useState("");
+  const [stockSalesZoom, setStockSalesZoom] = useState("100");
+  const filteredStockSalesRows = useMemo(() => {
+    const searchValue = stockSalesSearch.trim().toLowerCase();
+    if (!searchValue) return stockSalesRows;
+    return stockSalesRows.filter((row) =>
+      Object.values(row || {}).some((value) =>
+        String(value ?? "").toLowerCase().includes(searchValue)
+      )
+    );
+  }, [stockSalesRows, stockSalesSearch]);
+  const [purchaseAnalysisFilters, setPurchaseAnalysisFilters] = useState({
+    companyCode: "",
+    godownCode: "",
+    fromDate: getFinancialYearStart(),
+    toDate: getTodayDate(),
+    actualInvoice: "no",
+    discountDetails: "no",
+    reportLevel: "all",
+    reportWith: "category",
+    orderBy: "productName",
+  });
+  const [purchaseAnalysisCriteria, setPurchaseAnalysisCriteria] = useState({ companies: [], godowns: [] });
+  const [purchaseAnalysisRows, setPurchaseAnalysisRows] = useState([]);
+  const [purchaseAnalysisLoading, setPurchaseAnalysisLoading] = useState(false);
+  const [purchaseAnalysisGenerated, setPurchaseAnalysisGenerated] = useState(false);
+  const [purchaseAnalysisError, setPurchaseAnalysisError] = useState("");
+  const [purchaseAnalysisSearch, setPurchaseAnalysisSearch] = useState("");
+  const [purchaseAnalysisZoom, setPurchaseAnalysisZoom] = useState("100");
+  const filteredPurchaseAnalysisRows = useMemo(() => {
+    const query = purchaseAnalysisSearch.trim().toLowerCase();
+    if (!query) return purchaseAnalysisRows;
+    return purchaseAnalysisRows.filter((row) => Object.values(row || {}).some((value) =>
+      String(value ?? "").toLowerCase().includes(query)
+    ));
+  }, [purchaseAnalysisRows, purchaseAnalysisSearch]);
 
   const formatChequeDate = (value) => {
     if (!value) return "-";
@@ -285,10 +492,14 @@ const Report = ({
 
   const exportChequeExcel = () => {
     const rows = chequeExportRows();
-    const sheet = XLSX.utils.json_to_sheet(rows);
+    const columns = Object.keys(rows[0] || {}).map((key) => ({ key, label: key }));
+    const totalRow = { DetailType: "TOTAL", Amount: rows.reduce((total, row) => total + Number(row.Amount || 0), 0), RowType: "total" };
+    const exportRows = rows.length ? [...rows, totalRow] : rows;
+    const sheet = XLSX.utils.json_to_sheet(exportRows.map(({ RowType, ...row }) => row));
+    applyMildTableStyle(sheet, columns, exportRows);
     const workbook = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(workbook, sheet, "Cheque Details");
-    XLSX.writeFile(workbook, `Cheque_${chequeResult.chequeNo}_Details.xlsx`);
+    XLSX.writeFile(workbook, `Cheque_${chequeResult.chequeNo}_Details.xlsx`, { cellStyles: true });
   };
 
   const exportChequePdf = () => {
@@ -313,7 +524,10 @@ const Report = ({
     if (!isP0Report) return;
     setP0Loading(true); setP0Error("");
     try {
+      const { distributorId, firmId } = getLoggedInContext();
       const query = new URLSearchParams();
+      if (distributorId) query.set("distributorId", distributorId);
+      if (firmId) query.set("firmId", firmId);
       Object.entries(p0Filters).forEach(([key, value]) => { if (String(value || "").trim()) query.set(key, value); });
       const response = await secureFetch(`${API_BASE_URL}${P0_REPORT_ENDPOINTS[selectedReport]}?${query}`);
       const result = await response.json();
@@ -324,28 +538,61 @@ const Report = ({
           ? value.map((item) => ({ metric: key, ...(typeof item === "object" ? item : { value: item }) }))
           : [{ metric: key, value: typeof value === "object" ? JSON.stringify(value) : value }]);
       setP0Rows(rows); setP0Summary(result.summary || null);
-    } catch (error) { setP0Rows([]); setP0Summary(null); setP0Error(error.message || "Report could not be generated."); }
+      setP0Generated(true);
+    } catch (error) { setP0Rows([]); setP0Summary(null); setP0Generated(false); setP0Error(error.message || "Report could not be generated."); }
     finally { setP0Loading(false); }
   };
 
-  const p0Columns = useMemo(() => {
+  const p0ColumnDefinitions = useMemo(() => {
+    const configured = FIXED_REPORT_COLUMNS[selectedReport];
+    if (configured?.length) return configured.map(([key, label]) => ({ key, label }));
     const keys = [];
     p0Rows.forEach((row) => Object.keys(row || {}).forEach((key) => {
       if (!keys.includes(key) && !["_id", "__v", "before", "after", "editHistory"].includes(key)) keys.push(key);
     }));
-    return keys;
-  }, [p0Rows]);
+    return keys.map((key) => ({ key, label: key.replace(/([A-Z])/g, " $1").replace(/^./, (c) => c.toUpperCase()) }));
+  }, [p0Rows, selectedReport]);
+  const p0Columns = p0ColumnDefinitions.map((column) => column.key);
 
   const exportP0Excel = () => {
-    const sheet = XLSX.utils.json_to_sheet(p0Rows);
+    const numericKeys = p0ColumnDefinitions.filter((column) => (
+      /(?:debit|credit|amount|balance|opening|closing|stockin|stockout|qty|value)/i.test(column.key)
+      && p0Rows.some((row) => typeof row[column.key] === "number")
+    )).map((column) => column.key);
+    const totalRow = p0Rows.length ? Object.fromEntries(p0ColumnDefinitions.map((column, index) => [
+      column.key,
+      index === 0 ? "TOTAL" : numericKeys.includes(column.key) ? p0Rows.reduce((total, row) => total + Number(row[column.key] || 0), 0) : "",
+    ])) : null;
+    if (totalRow) totalRow.RowType = "total";
+    const exportRows = totalRow ? [...p0Rows, totalRow] : p0Rows;
+    const sheet = XLSX.utils.aoa_to_sheet([
+      p0ColumnDefinitions.map((column) => column.label),
+      ...exportRows.map((row) => p0ColumnDefinitions.map((column) => row[column.key] ?? "")),
+    ]);
+    applyMildTableStyle(sheet, p0ColumnDefinitions, exportRows);
     const workbook = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(workbook, sheet, "Report");
-    XLSX.writeFile(workbook, `${selectedReport.replace(/[^a-z0-9]+/gi, "_")}.xlsx`);
+    XLSX.writeFile(workbook, `${selectedReport.replace(/[^a-z0-9]+/gi, "_")}.xlsx`, { cellStyles: true });
+  };
+
+  const exportP0Csv = () => {
+    const escapeCsv = (value) => `"${String(value ?? "").replace(/"/g, '""')}"`;
+    const csv = [
+      p0ColumnDefinitions.map((column) => escapeCsv(column.label)).join(","),
+      ...p0Rows.map((row) => p0Columns.map((key) => escapeCsv(row[key])).join(",")),
+    ].join("\r\n");
+    const blob = new Blob([`\uFEFF${csv}`], { type: "text/csv;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `${selectedReport.replace(/[^a-z0-9]+/gi, "_")}.csv`;
+    link.click();
+    URL.revokeObjectURL(url);
   };
 
   const exportP0Pdf = () => {
     const pdf = new jsPDF({ orientation: p0Columns.length > 7 ? "landscape" : "portrait" });
     pdf.text(selectedReport, 14, 14);
-    autoTable(pdf, { head: [p0Columns], body: p0Rows.map((row) => p0Columns.map((key) => String(row[key] ?? ""))), startY: 20, styles: { fontSize: 7 } });
+    autoTable(pdf, { head: [p0ColumnDefinitions.map((column) => column.label)], body: p0Rows.map((row) => p0Columns.map((key) => String(row[key] ?? ""))), startY: 20, styles: { fontSize: 7 } });
     pdf.save(`${selectedReport.replace(/[^a-z0-9]+/gi, "_")}.pdf`);
   };
   const [reportCompanies, setReportCompanies] = useState([]);
@@ -1694,6 +1941,517 @@ const Report = ({
           ""
       ).trim(),
     };
+  };
+
+  const updateGstFilter = (key, value) => {
+    setGstFilters((current) => ({ ...current, [key]: value }));
+    setGstGenerated(false);
+  };
+
+  const generateGstReport = async () => {
+    const { distributorId, firmId } = getLoggedInContext();
+    if (!distributorId || !firmId) {
+      setGstError("Distributor or firm information is missing. Please login again.");
+      return;
+    }
+    if (!gstFilters.fromDate || !gstFilters.toDate || gstFilters.fromDate > gstFilters.toDate) {
+      setGstError("Enter a valid From Date and To Date range.");
+      return;
+    }
+    setGstLoading(true); setGstError("");
+    try {
+      const query = new URLSearchParams({ distributorId, firmId });
+      Object.entries(gstFilters).forEach(([key, value]) => query.set(key, String(value ?? "")));
+      const response = await secureFetch(`${API_BASE_URL}/api/reports/gst/${GST_REPORT_ENDPOINTS[selectedReport]}?${query}`);
+      const result = await response.json();
+      if (!response.ok || result.success === false) throw new Error(result.message || "GST report could not be generated.");
+      setGstRows(Array.isArray(result.rows) ? result.rows : []);
+      setGstColumns(Array.isArray(result.columns) ? result.columns : []);
+      const sections = Array.isArray(result.sections) ? result.sections : [];
+      setGstSections(sections);
+      setActiveGstrSheet(sections[0]?.name || "B2B");
+      setGstTotals(result.totals || {}); setGstSummary(result.summary || null); setGstGenerated(true);
+    } catch (error) {
+      setGstRows([]); setGstColumns([]); setGstSections([]); setGstTotals({}); setGstSummary(null); setGstGenerated(false);
+      setGstError(error.message || "GST report could not be generated.");
+    } finally { setGstLoading(false); }
+  };
+
+  const gstExportMatrix = (columns = visibleGstColumns, rows = filteredGstRows, includeFooter = true) => {
+    const matrix = [
+      columns.map((column) => column.label),
+      ...rows.map((row) => columns.map((column) => row[column.key] ?? "")),
+    ];
+    if (includeFooter && selectedReport !== "GST Summary" && selectedReport !== "GSTR1 Report" && rows.length) {
+      matrix.push(columns.map((column, index) => (
+        index === 0 ? "TOTAL" : Object.prototype.hasOwnProperty.call(gstTotals, column.key) ? gstTotals[column.key] : ""
+      )));
+    }
+    return matrix;
+  };
+
+  const gstFileName = () => `${selectedReport.replace(/[^a-z0-9]+/gi, "_")}_${gstFilters.fromDate}_${gstFilters.toDate}`;
+
+  const applyMildTableStyle = (sheet, columns, rows, options = {}) => {
+    const border = {
+      top: { style: "thin", color: { rgb: "C7D4DF" } },
+      bottom: { style: "thin", color: { rgb: "C7D4DF" } },
+      left: { style: "thin", color: { rgb: "C7D4DF" } },
+      right: { style: "thin", color: { rgb: "C7D4DF" } },
+    };
+    const headerStyle = {
+      font: { bold: true, color: { rgb: "27445D" } },
+      fill: { patternType: "solid", fgColor: { rgb: "DCEBF5" } },
+      alignment: { horizontal: "center", vertical: "center", wrapText: true },
+      border,
+    };
+    const totalStyle = {
+      font: { bold: true, color: { rgb: "31543A" } },
+      fill: { patternType: "solid", fgColor: { rgb: "E4F0E6" } },
+      alignment: { vertical: "center" },
+      border,
+    };
+    columns.forEach((_, index) => {
+      const cell = sheet[XLSX.utils.encode_cell({ r: 0, c: index })];
+      if (cell) cell.s = headerStyle;
+    });
+    const totalRows = options.totalRows || rows.reduce((indexes, row, index) => {
+      if (["total", "final", "summary"].includes(String(row?.RowType || "").toLowerCase())) indexes.push(index + 1);
+      return indexes;
+    }, []);
+    totalRows.forEach((rowIndex) => columns.forEach((column, columnIndex) => {
+      const address = XLSX.utils.encode_cell({ r: rowIndex, c: columnIndex });
+      if (!sheet[address]) sheet[address] = { t: "s", v: "" };
+      sheet[address].s = {
+        ...totalStyle,
+        alignment: { horizontal: typeof rows[rowIndex - 1]?.[column.key] === "number" ? "right" : "left", vertical: "center" },
+        numFmt: typeof rows[rowIndex - 1]?.[column.key] === "number" ? "#,##0.00" : "General",
+      };
+    }));
+    sheet["!cols"] = columns.map((column) => ({ wch: Math.min(32, Math.max(11, String(column.label || column.key).length + 2)) }));
+    sheet["!autofilter"] = { ref: sheet["!ref"] || "A1:A1" };
+  };
+
+  const downloadReportBlob = (blob, fileName) => {
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = fileName;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    window.setTimeout(() => URL.revokeObjectURL(url), 0);
+  };
+
+  const exportGstExcel = () => {
+    const workbook = XLSX.utils.book_new();
+    if (selectedReport === "GSTR1 Report" && gstSections.length) {
+      gstSections.forEach((section) => {
+        const sheet = XLSX.utils.aoa_to_sheet(gstExportMatrix(section.columns, section.rows, false));
+        applyMildTableStyle(sheet, section.columns, section.rows);
+        XLSX.utils.book_append_sheet(workbook, sheet, section.name.slice(0, 31));
+      });
+    } else {
+      const matrix = gstExportMatrix();
+      const sheet = XLSX.utils.aoa_to_sheet(matrix);
+      const footerRows = selectedReport !== "GST Summary" && filteredGstRows.length ? [matrix.length - 1] : undefined;
+      applyMildTableStyle(sheet, visibleGstColumns, filteredGstRows, { totalRows: footerRows });
+      XLSX.utils.book_append_sheet(workbook, sheet, "GST Report");
+    }
+    XLSX.writeFile(workbook, `${gstFileName()}.xlsx`, { cellStyles: true });
+  };
+
+  const exportGstCsv = () => {
+    if (selectedReport === "GSTR1 Report" && gstSections.length) {
+      const files = Object.fromEntries(gstSections.map((section) => {
+        const sheet = XLSX.utils.aoa_to_sheet(gstExportMatrix(section.columns, section.rows, false));
+        const csv = XLSX.utils.sheet_to_csv(sheet);
+        return [`${section.name.toLowerCase()}.csv`, strToU8(`\uFEFF${csv}`)];
+      }));
+      const archive = zipSync(files, { level: 6 });
+      downloadReportBlob(new Blob([archive], { type: "application/zip" }), `${gstFileName()}.zip`);
+      return;
+    }
+    const sheet = XLSX.utils.aoa_to_sheet(gstExportMatrix());
+    const csv = XLSX.utils.sheet_to_csv(sheet);
+    downloadReportBlob(new Blob([`\uFEFF${csv}`], { type: "text/csv;charset=utf-8" }), `${gstFileName()}.csv`);
+  };
+
+  const exportGstJson = () => {
+    const payload = selectedReport === "GSTR1 Report" && gstSections.length
+      ? Object.fromEntries(gstSections.map((section) => [section.name, section.rows]))
+      : filteredGstRows;
+    downloadReportBlob(new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" }), `${gstFileName()}.json`);
+  };
+
+  const exportGstPdf = () => {
+    const pdf = new jsPDF({ orientation: "landscape", unit: "pt", format: "a3" });
+    pdf.setFontSize(15); pdf.text(selectedReport, 28, 28);
+    pdf.setFontSize(9); pdf.text(`${gstFilters.fromDate} to ${gstFilters.toDate}`, 28, 43);
+    autoTable(pdf, { startY: 52, head: [visibleGstColumns.map((column) => column.label)], body: filteredGstRows.map((row) => visibleGstColumns.map((column) => row[column.key] ?? "")), styles: { fontSize: 4.5, cellPadding: 2 }, headStyles: { fillColor: [91, 132, 158] }, horizontalPageBreak: true, horizontalPageBreakRepeat: 0 });
+    pdf.save(`${gstFileName()}.pdf`);
+  };
+
+  const loadStockSalesCriteria = async () => {
+    setStockSalesError("");
+    try {
+      const { distributorId, firmId } = getLoggedInContext();
+      if (!distributorId || !firmId) {
+        throw new Error("Distributor or firm information is missing. Please login again.");
+      }
+
+      const query = new URLSearchParams({ distributorId, firmId });
+      const response = await secureFetch(
+        `${API_BASE_URL}/api/reports/stock-and-sales/criteria?${query.toString()}`
+      );
+      const result = await response.json();
+      if (!response.ok || !result.success) {
+        throw new Error(result.message || "Failed to load report criteria.");
+      }
+
+      setStockSalesCriteria({
+        companies: Array.isArray(result.companies) ? result.companies : [],
+        godowns: Array.isArray(result.godowns) ? result.godowns : [],
+      });
+    } catch (error) {
+      setStockSalesCriteria({ companies: [], godowns: [] });
+      setStockSalesError(error.message || "Failed to load report criteria.");
+    }
+  };
+
+  useEffect(() => {
+    if (selectedReport !== "Stock And Sales Report") return;
+    loadStockSalesCriteria();
+  }, [selectedReport]);
+
+  const generateStockSalesReport = async () => {
+    if (stockSalesFilters.fromDate > stockSalesFilters.toDate) {
+      setStockSalesError("From Date cannot be greater than To Date.");
+      return;
+    }
+
+    setStockSalesLoading(true);
+    setStockSalesError("");
+    try {
+      const { distributorId, firmId } = getLoggedInContext();
+      if (!distributorId || !firmId) {
+        throw new Error("Distributor or firm information is missing. Please login again.");
+      }
+
+      const query = new URLSearchParams({
+        distributorId,
+        firmId,
+        ...stockSalesFilters,
+        stockWithFreeQty: stockSalesFilters.stockWithFreeQty ? "yes" : "no",
+      });
+      const response = await secureFetch(
+        `${API_BASE_URL}/api/reports/stock-and-sales?${query.toString()}`
+      );
+      const result = await response.json();
+      if (!response.ok || !result.success) {
+        throw new Error(result.message || "Failed to generate Stock And Sales Report.");
+      }
+
+      setStockSalesRows(Array.isArray(result.data) ? result.data : []);
+      setStockSalesSummary(result.summary || null);
+      setStockSalesGenerated(true);
+    } catch (error) {
+      setStockSalesRows([]);
+      setStockSalesSummary(null);
+      setStockSalesGenerated(false);
+      setStockSalesError(error.message || "Failed to generate Stock And Sales Report.");
+    } finally {
+      setStockSalesLoading(false);
+    }
+  };
+
+  const clearStockSalesReport = () => {
+    setStockSalesFilters({
+      companyCode: "",
+      reportLevel: "unit",
+      godownCode: "",
+      fromDate: getFinancialYearStart(),
+      toDate: getTodayDate(),
+      reportWith: "summary",
+      filter: "all",
+      orderBy: "productName",
+      stockWithFreeQty: false,
+    });
+    setStockSalesRows([]);
+    setStockSalesSummary(null);
+    setStockSalesGenerated(false);
+    setStockSalesError("");
+    setStockSalesSearch("");
+    setStockSalesZoom("100");
+  };
+
+  const getStockSalesExportColumns = () => [
+    { key: "SrNo", label: "SrNo." },
+    ...(!stockSalesFilters.companyCode ? [{ key: "CompanyName", label: "Company" }] : []),
+    { key: "ShortCode", label: "ShortCode" },
+    { key: "ProductCode", label: "Product Code" },
+    { key: "ProductName", label: "Product Name" },
+    { key: "LocalProduct", label: "Local Product" },
+    { key: "SysProdCode", label: "SysProdCode" },
+    { key: "MRP", label: "MRP" },
+    { key: "Opening", label: "Opening" },
+    { key: "Purchase", label: "Purchase" },
+    { key: "CreditNote", label: "Credit Note" },
+    { key: "Increase", label: "Increase" },
+    { key: "MFI", label: "MFI" },
+    { key: "ToGDTransfer", label: "To GDTransfer" },
+    { key: "Sales", label: "Sales" },
+    { key: "DebitNote", label: "Debit Note" },
+    { key: "Decrease", label: "Decrease" },
+    { key: "Damage", label: "Damage" },
+    { key: "MFO", label: "MFO" },
+    { key: "FromGDTransfer", label: "From GDTransfer" },
+    { key: "Closing", label: "Closing" },
+    { key: "BoxPack", label: "BoxPack" },
+    { key: "LastPurchaseDate", label: "Last Purchase Date" },
+    { key: "LastPurchase", label: "Last Purchase" },
+    { key: "LastQty", label: "Last Qty" },
+    { key: "Category", label: "Category" },
+    { key: "SubCategory", label: "SubCategory" },
+    { key: "Group", label: "Group" },
+    { key: "SubGroup", label: "SubGroup" },
+    { key: "Brand", label: "Brand" },
+    { key: "SubBrand", label: "SubBrand" },
+    ...(stockSalesFilters.reportWith === "details" ? [{ key: "GodownName", label: "Godown" }] : []),
+  ];
+
+  const getStockSalesFileName = () =>
+    `Stock_And_Sales_${stockSalesFilters.fromDate}_${stockSalesFilters.toDate}`;
+
+  const exportStockSalesExcel = () => {
+    const columns = getStockSalesExportColumns();
+    const numericKeys = [
+      "Opening", "Purchase", "CreditNote", "Increase", "MFI", "ToGDTransfer",
+      "Sales", "DebitNote", "Decrease", "Damage", "MFO", "FromGDTransfer", "Closing", "LastQty",
+    ];
+    const totalRow = Object.fromEntries(columns.map((column, index) => [
+      column.key,
+      index === 0 ? "TOTAL" : numericKeys.includes(column.key) ? filteredStockSalesRows.reduce((total, row) => total + Number(row[column.key] || 0), 0) : "",
+    ]));
+    totalRow.RowType = "total";
+    const exportRows = filteredStockSalesRows.length ? [...filteredStockSalesRows, totalRow] : filteredStockSalesRows;
+    const worksheet = XLSX.utils.aoa_to_sheet([
+      columns.map((column) => column.label),
+      ...exportRows.map((row) => columns.map((column) => row[column.key] ?? "")),
+    ]);
+    applyMildTableStyle(worksheet, columns, exportRows);
+    worksheet["!freeze"] = { xSplit: 0, ySplit: 1 };
+    worksheet["!cols"] = columns.map((column) => ({
+      wch: Math.max(11, Math.min(28, column.label.length + 4)),
+    }));
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, worksheet, "Stock And Sales");
+    XLSX.writeFile(workbook, `${getStockSalesFileName()}.xlsx`, { cellStyles: true });
+  };
+
+  const exportStockSalesCsv = () => {
+    const columns = getStockSalesExportColumns();
+    const escapeCsv = (value) => `"${String(value ?? "").replace(/"/g, '""')}"`;
+    const csv = [
+      columns.map((column) => escapeCsv(column.label)).join(","),
+      ...filteredStockSalesRows.map((row) => columns.map((column) => escapeCsv(row[column.key])).join(",")),
+    ].join("\r\n");
+    const url = URL.createObjectURL(new Blob(["\uFEFF", csv], { type: "text/csv;charset=utf-8" }));
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `${getStockSalesFileName()}.csv`;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    URL.revokeObjectURL(url);
+  };
+
+  const exportStockSalesPdf = () => {
+    const columns = getStockSalesExportColumns();
+    const pdf = new jsPDF({ orientation: "landscape", unit: "mm", format: "a3" });
+    pdf.setFontSize(13);
+    pdf.text("Stock And Sales Report", 10, 10);
+    pdf.setFontSize(8);
+    pdf.text(`Period: ${stockSalesFilters.fromDate} to ${stockSalesFilters.toDate}`, 10, 16);
+    autoTable(pdf, {
+      head: [columns.map((column) => column.label)],
+      body: filteredStockSalesRows.map((row) => columns.map((column) => String(row[column.key] ?? ""))),
+      startY: 20,
+      theme: "grid",
+      styles: { fontSize: 5.5, cellPadding: 1.1, overflow: "linebreak" },
+      headStyles: { fillColor: [21, 89, 214], textColor: 255 },
+      horizontalPageBreak: true,
+      horizontalPageBreakRepeat: [0, 1, 2, 3],
+      margin: { left: 7, right: 7 },
+    });
+    pdf.save(`${getStockSalesFileName()}.pdf`);
+  };
+
+  const printStockSalesReport = () => {
+    const columns = getStockSalesExportColumns();
+    const escapeHtml = (value) => String(value ?? "")
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;");
+    const printWindow = window.open("", "_blank", "width=1400,height=900");
+    if (!printWindow) {
+      setStockSalesError("Print window was blocked. Please allow pop-ups and try again.");
+      return;
+    }
+    const headerCells = columns.map((column) => `<th>${escapeHtml(column.label)}</th>`).join("");
+    const bodyRows = filteredStockSalesRows.map((row) =>
+      `<tr>${columns.map((column) => `<td>${escapeHtml(row[column.key])}</td>`).join("")}</tr>`
+    ).join("");
+    printWindow.document.write(`<!doctype html><html><head><title>Stock And Sales Report</title><style>
+      @page { size: A3 landscape; margin: 8mm; }
+      body { font-family: Arial, sans-serif; color: #17233d; }
+      h1 { margin: 0 0 4px; font-size: 18px; }
+      p { margin: 0 0 12px; font-size: 10px; }
+      table { width: 100%; border-collapse: collapse; font-size: 7px; }
+      th, td { padding: 4px; border: 1px solid #cbd5e1; white-space: nowrap; text-align: left; }
+      th { background: #0f4da8; color: white; }
+    </style></head><body><h1>Stock And Sales Report</h1>
+      <p>Period: ${escapeHtml(stockSalesFilters.fromDate)} to ${escapeHtml(stockSalesFilters.toDate)}</p>
+      <table><thead><tr>${headerCells}</tr></thead><tbody>${bodyRows}</tbody></table>
+    </body></html>`);
+    printWindow.document.close();
+    printWindow.focus();
+    window.setTimeout(() => printWindow.print(), 250);
+  };
+
+  const isPurchaseAnalysisReport = [
+    "Company/Bill Wise Purchase Report",
+    "Product Wise Purchase Report",
+  ].includes(selectedReport);
+  const purchaseAnalysisColumns = selectedReport === "Company/Bill Wise Purchase Report"
+    ? COMPANY_BILL_PURCHASE_COLUMNS
+    : PRODUCT_PURCHASE_COLUMNS;
+  const purchaseNumericKeys = new Set([
+    "VouNo", "MRP", "Qty", "FreeQty", "BoxQty", "Rate", "SalesRate", "Gross", "Amount", "Weight",
+    "Taxable", "GSTPercent", "GSTAmt", "VatPer", "VatAmt", "CGST", "SGST", "IGST",
+    "Cess1", "Cess2", "BVDiscAmt", "BVAddAmt", "AVDiscAmt", "AVAddAmt", "NetAmt",
+    "BoxPack", "INBoxPack",
+  ]);
+
+  const loadPurchaseAnalysisCriteria = async () => {
+    setPurchaseAnalysisError("");
+    try {
+      const { distributorId, firmId } = getLoggedInContext();
+      const query = new URLSearchParams({ distributorId, firmId });
+      const response = await secureFetch(`${API_BASE_URL}/api/reports/purchase-analysis/criteria?${query}`);
+      const result = await response.json();
+      if (!response.ok || !result.success) throw new Error(result.message || "Failed to load purchase report criteria.");
+      setPurchaseAnalysisCriteria({
+        companies: Array.isArray(result.companies) ? result.companies : [],
+        godowns: Array.isArray(result.godowns) ? result.godowns : [],
+      });
+    } catch (error) {
+      setPurchaseAnalysisCriteria({ companies: [], godowns: [] });
+      setPurchaseAnalysisError(error.message || "Failed to load purchase report criteria.");
+    }
+  };
+
+  useEffect(() => {
+    if (!isPurchaseAnalysisReport) return;
+    loadPurchaseAnalysisCriteria();
+  }, [selectedReport]);
+
+  const generatePurchaseAnalysisReport = async () => {
+    if (purchaseAnalysisFilters.fromDate > purchaseAnalysisFilters.toDate) {
+      setPurchaseAnalysisError("From Date cannot be greater than To Date.");
+      return;
+    }
+    setPurchaseAnalysisLoading(true);
+    setPurchaseAnalysisError("");
+    try {
+      const { distributorId, firmId } = getLoggedInContext();
+      const query = new URLSearchParams({ distributorId, firmId, ...purchaseAnalysisFilters });
+      if (selectedReport === "Company/Bill Wise Purchase Report") query.set("orderBy", "voucher");
+      const response = await secureFetch(`${API_BASE_URL}/api/reports/purchase-analysis?${query}`);
+      const result = await response.json();
+      if (!response.ok || !result.success) throw new Error(result.message || "Failed to generate purchase report.");
+      setPurchaseAnalysisRows(Array.isArray(result.data) ? result.data : []);
+      setPurchaseAnalysisGenerated(true);
+      setPurchaseAnalysisSearch("");
+    } catch (error) {
+      setPurchaseAnalysisRows([]);
+      setPurchaseAnalysisGenerated(false);
+      setPurchaseAnalysisError(error.message || "Failed to generate purchase report.");
+    } finally {
+      setPurchaseAnalysisLoading(false);
+    }
+  };
+
+  const clearPurchaseAnalysisReport = () => {
+    setPurchaseAnalysisFilters({
+      companyCode: "", godownCode: "", fromDate: getFinancialYearStart(), toDate: getTodayDate(),
+      actualInvoice: "no", discountDetails: "no", reportLevel: "all", reportWith: "category", orderBy: "productName",
+    });
+    setPurchaseAnalysisRows([]);
+    setPurchaseAnalysisGenerated(false);
+    setPurchaseAnalysisError("");
+    setPurchaseAnalysisSearch("");
+    setPurchaseAnalysisZoom("100");
+  };
+
+  const purchaseAnalysisFileName = () =>
+    `${selectedReport.replace(/[^a-z0-9]+/gi, "_")}_${purchaseAnalysisFilters.fromDate}_${purchaseAnalysisFilters.toDate}`;
+
+  const exportPurchaseAnalysisExcel = () => {
+    const totalKeys = new Set([
+      "Qty", "FreeQty", "BoxQty", "Gross", "Amount", "Weight", "Taxable", "GSTAmt", "VatAmt",
+      "CGST", "SGST", "IGST", "Cess1", "Cess2", "BVDiscAmt", "BVAddAmt", "AVDiscAmt", "AVAddAmt", "NetAmt",
+    ]);
+    const totalRow = Object.fromEntries(purchaseAnalysisColumns.map((column, index) => [
+      column.key,
+      index === 0 ? "TOTAL" : totalKeys.has(column.key) ? filteredPurchaseAnalysisRows.reduce((total, row) => total + Number(row[column.key] || 0), 0) : "",
+    ]));
+    totalRow.RowType = "total";
+    const exportRows = filteredPurchaseAnalysisRows.length ? [...filteredPurchaseAnalysisRows, totalRow] : filteredPurchaseAnalysisRows;
+    const sheet = XLSX.utils.aoa_to_sheet([
+      purchaseAnalysisColumns.map((column) => column.label),
+      ...exportRows.map((row) => purchaseAnalysisColumns.map((column) => row[column.key] ?? "")),
+    ]);
+    applyMildTableStyle(sheet, purchaseAnalysisColumns, exportRows);
+    sheet["!cols"] = purchaseAnalysisColumns.map((column) => ({ wch: Math.max(11, Math.min(28, column.label.length + 4)) }));
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, sheet, "Purchase Report");
+    XLSX.writeFile(workbook, `${purchaseAnalysisFileName()}.xlsx`, { cellStyles: true });
+  };
+
+  const exportPurchaseAnalysisCsv = () => {
+    const escapeCsv = (value) => `"${String(value ?? "").replace(/"/g, '""')}"`;
+    const content = [
+      purchaseAnalysisColumns.map((column) => escapeCsv(column.label)).join(","),
+      ...filteredPurchaseAnalysisRows.map((row) => purchaseAnalysisColumns.map((column) => escapeCsv(row[column.key])).join(",")),
+    ].join("\r\n");
+    const url = URL.createObjectURL(new Blob(["\uFEFF", content], { type: "text/csv;charset=utf-8" }));
+    const link = document.createElement("a");
+    link.href = url; link.download = `${purchaseAnalysisFileName()}.csv`;
+    document.body.appendChild(link); link.click(); link.remove(); URL.revokeObjectURL(url);
+  };
+
+  const exportPurchaseAnalysisPdf = () => {
+    const pdf = new jsPDF({ orientation: "landscape", unit: "mm", format: "a3" });
+    pdf.setFontSize(13); pdf.text(selectedReport, 8, 10);
+    pdf.setFontSize(8); pdf.text(`Period: ${purchaseAnalysisFilters.fromDate} to ${purchaseAnalysisFilters.toDate}`, 8, 16);
+    autoTable(pdf, {
+      head: [purchaseAnalysisColumns.map((column) => column.label)],
+      body: filteredPurchaseAnalysisRows.map((row) => purchaseAnalysisColumns.map((column) => String(row[column.key] ?? ""))),
+      startY: 20, theme: "grid", styles: { fontSize: 5.5, cellPadding: 1.1 },
+      headStyles: { fillColor: [15, 77, 168], textColor: 255 }, horizontalPageBreak: true,
+      horizontalPageBreakRepeat: [0, 1, 2], margin: { left: 6, right: 6 },
+    });
+    pdf.save(`${purchaseAnalysisFileName()}.pdf`);
+  };
+
+  const printPurchaseAnalysisReport = () => {
+    const popup = window.open("", "_blank", "width=1400,height=900");
+    if (!popup) return setPurchaseAnalysisError("Print window was blocked. Please allow pop-ups and try again.");
+    const safe = (value) => String(value ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+    popup.document.write(`<!doctype html><html><head><title>${safe(selectedReport)}</title><style>@page{size:A3 landscape;margin:8mm}body{font-family:Arial}table{width:100%;border-collapse:collapse;font-size:7px}th,td{border:1px solid #bbb;padding:4px;white-space:nowrap}th{background:#0f4da8;color:#fff}</style></head><body><h2>${safe(selectedReport)}</h2><p>${safe(purchaseAnalysisFilters.fromDate)} to ${safe(purchaseAnalysisFilters.toDate)}</p><table><thead><tr>${purchaseAnalysisColumns.map((column) => `<th>${safe(column.label)}</th>`).join("")}</tr></thead><tbody>${filteredPurchaseAnalysisRows.map((row) => `<tr>${purchaseAnalysisColumns.map((column) => `<td>${safe(row[column.key])}</td>`).join("")}</tr>`).join("")}</tbody></table></body></html>`);
+    popup.document.close(); popup.focus(); window.setTimeout(() => popup.print(), 250);
   };
 
   const loadPartyReportCriteria = async (companyCode = "") => {
@@ -5244,6 +6002,107 @@ const Report = ({
     }
   };
 
+  if (isGstReport) {
+    const isSales = selectedReport === "Sales GST Register";
+    const isPurchase = selectedReport === "Purchase GST Register";
+    const isCrn = selectedReport === "CRN GST Register";
+    const isSummary = selectedReport === "GST Summary";
+    const isGstr1 = selectedReport === "GSTR1 Report";
+    const numericKeys = new Set(visibleGstColumns.filter((column) => filteredGstRows.some((row) => typeof row[column.key] === "number")).map((column) => column.key));
+    const formatCell = (column, value) => {
+      if (isSummary && (value === undefined || value === null || value === "")) return "";
+      return numericKeys.has(column.key)
+        ? Number(value || 0).toLocaleString("en-IN", { minimumFractionDigits: column.key === "SrNo" || column.key === "TrnNo" ? 0 : 2, maximumFractionDigits: 2 })
+        : String(value ?? "") || "-";
+    };
+    const resetGstReport = () => {
+      setGstFilters(defaultGstFilters()); setGstRows([]); setGstColumns([]); setGstSections([]); setActiveGstrSheet("B2B"); setGstTotals({}); setGstSummary(null);
+      setGstSearch(""); setGstZoom("100"); setGstError(""); setGstGenerated(false);
+    };
+
+    return (
+      <div className="report-page gst-report-page">
+        <div className="report-page-header gst-report-header">
+          <div className="report-title-section">
+            <button type="button" className="report-back-button" onClick={onBack} title="Back to reports"><ArrowLeft size={18} /></button>
+            <div className="report-title-icon"><ReportIcon size={22} /></div>
+            <div><span className="report-category">GST Report</span><h1>{selectedReport}</h1><p>{reportInformation.description}</p></div>
+          </div>
+        </div>
+
+        <div className={`report-filter-card gst-filter-card ${isGstr1 ? "gstr1-criteria-card" : ""}`}>
+          {isGstr1 && <div className="gstr1-criteria-heading"><strong>GSTR1 Report Criteria</strong><span>Select the return period and whether damage transactions should be included.</span></div>}
+          <div className="gst-filter-grid">
+            {isSales && <>
+              <div className="report-field"><label>Bill Type</label><select value={gstFilters.billType} onChange={(event) => updateGstFilter("billType", event.target.value)}><option value="all">All</option><option value="Cash">Cash</option><option value="Credit">Credit</option></select></div>
+              <div className="report-field"><label>Invoice Type</label><select value={gstFilters.invoiceType} onChange={(event) => updateGstFilter("invoiceType", event.target.value)}><option value="all">All</option><option value="Registered">Registered</option><option value="Unregistered">Unregistered</option></select></div>
+              <div className="report-field"><label>Tax On Type</label><select value={gstFilters.taxOnType} onChange={(event) => updateGstFilter("taxOnType", event.target.value)}><option value="all">All</option><option value="GST ON SALES PRICE">GST on Sales Price</option><option value="GST IN MRP">GST in MRP</option></select></div>
+              <div className="report-field"><label>Output Format</label><select value={gstFilters.outputFormat} onChange={(event) => updateGstFilter("outputFormat", event.target.value)}><option value="party">With Party Detail</option><option value="summary">Summary</option></select></div>
+            </>}
+
+            {(isSales || isCrn) && <>
+              <div className="report-field"><label>Specific Series</label><select value={gstFilters.specificSeries} onChange={(event) => updateGstFilter("specificSeries", event.target.value)}><option value="N">No</option><option value="Y">Yes</option></select></div>
+              {gstFilters.specificSeries === "Y" && <div className="report-field"><label>Series</label><input value={gstFilters.series} onChange={(event) => updateGstFilter("series", event.target.value)} placeholder="Enter series" /></div>}
+              <div className="report-field"><label>GST No.</label><select value={gstFilters.gstNo} onChange={(event) => updateGstFilter("gstNo", event.target.value)}><option value="all">All</option><option value="registered">Registered</option><option value="unregistered">Unregistered</option></select></div>
+            </>}
+
+            <div className="report-field"><label>From Date</label><input type="date" value={gstFilters.fromDate} onChange={(event) => updateGstFilter("fromDate", event.target.value)} /></div>
+            <div className="report-field"><label>To Date</label><input type="date" value={gstFilters.toDate} onChange={(event) => updateGstFilter("toDate", event.target.value)} /></div>
+
+            {(isSales || isPurchase) && <div className="report-field"><label>Cess Separate</label><select value={gstFilters.cessSeparate} onChange={(event) => updateGstFilter("cessSeparate", event.target.value)}><option value="N">No</option><option value="Y">Yes</option></select></div>}
+            {isPurchase && <div className="report-field"><label>Report With</label><select value={gstFilters.reportWith} onChange={(event) => updateGstFilter("reportWith", event.target.value)}><option value="gst">With GST</option><option value="all">All Purchases</option></select></div>}
+            {(isSales || isPurchase || isCrn) && <div className="report-field"><label>GST Bifurcation</label><select value={gstFilters.gstBifurcation} onChange={(event) => updateGstFilter("gstBifurcation", event.target.value)}><option value="N">No</option><option value="Y">Yes</option></select></div>}
+            {isSummary && <>
+              <div className="report-field"><label>Company Wise</label><select value={gstFilters.companyWise} onChange={(event) => updateGstFilter("companyWise", event.target.value)}><option value="N">No</option><option value="Y">Yes</option></select></div>
+              <div className="report-field"><label>With Details</label><select value={gstFilters.withDetails} onChange={(event) => updateGstFilter("withDetails", event.target.value)}><option value="N">No</option><option value="Y">Yes</option></select></div>
+              <div className="report-field"><label>Discount Bifurcation</label><select value={gstFilters.discountBifurcation} onChange={(event) => updateGstFilter("discountBifurcation", event.target.value)}><option value="N">No</option><option value="Y">Yes</option></select></div>
+            </>}
+            {isGstr1 && <div className="report-field"><label>With Damage</label><select value={gstFilters.withDamage} onChange={(event) => updateGstFilter("withDamage", event.target.value)}><option value="Y">Yes</option><option value="N">No</option></select></div>}
+          </div>
+          <div className="report-filter-actions gst-filter-actions">
+            <button type="button" className="report-clear-button" onClick={resetGstReport}>Clear</button>
+            <button type="button" className="report-generate-button" onClick={generateGstReport} disabled={gstLoading}>{gstLoading ? <RefreshCw size={14} className="party-spinning-icon" /> : <FileBarChart size={14} />}{gstLoading ? "Generating..." : "Generate Report"}</button>
+          </div>
+        </div>
+
+        {gstError && <div className="party-report-error" role="alert">{gstError}</div>}
+
+        {gstGenerated && <div className="party-report-results gst-report-results">
+          <div className="party-report-toolbar">
+            <div className="party-grid-heading"><div className="party-grid-heading-icon"><FileBarChart size={17} /></div><div><strong>Report Results</strong><span>{filteredGstRows.length} records found</span></div></div>
+            <div className="party-grid-toolbar-actions">
+              <label className="party-report-search"><Search size={14} /><input value={gstSearch} onChange={(event) => setGstSearch(event.target.value)} placeholder="Search in results..." /></label>
+              <select className="party-grid-zoom-select" value={gstZoom} onChange={(event) => setGstZoom(event.target.value)} aria-label="Grid zoom"><option value="75">75%</option><option value="100">100%</option><option value="125">125%</option></select>
+              <button type="button" className="party-grid-refresh-button" onClick={generateGstReport} disabled={gstLoading} title="Refresh report"><RefreshCw size={15} /></button>
+              <div className="party-toolbar-export">
+                <button type="button" className="party-export-excel" disabled={!gstRows.length} onClick={exportGstExcel}><FileSpreadsheet size={15} /> Excel</button>
+                <button type="button" className="party-export-csv" disabled={!gstRows.length} onClick={exportGstCsv}><Download size={15} /> {isGstr1 ? "CSV ZIP" : "CSV"}</button>
+                {isGstr1 && <button type="button" className="party-export-json" disabled={!gstRows.length} onClick={exportGstJson}><FileText size={15} /> JSON</button>}
+                <button type="button" className="party-export-pdf" disabled={!gstRows.length} onClick={exportGstPdf}><FileText size={15} /> PDF</button>
+                <button type="button" className="party-export-print" disabled={!gstRows.length} onClick={() => window.print()}><Printer size={15} /> Print</button>
+              </div>
+            </div>
+          </div>
+          {isGstr1 && <div className="gstr1-sheet-tabs" role="tablist" aria-label="GSTR1 sheets">
+            {gstSections.map((section) => <button type="button" role="tab" aria-selected={activeGstrSheet === section.name} className={activeGstrSheet === section.name ? "active" : ""} key={section.name} onClick={() => { setActiveGstrSheet(section.name); setGstSearch(""); }}>{section.name}<span>{section.rows.filter((row) => row.RowType !== "total").length}</span></button>)}
+          </div>}
+          <div className="gst-result-table-wrap party-report-grid-container"><div className="party-report-zoom" style={{ zoom: Number(gstZoom) / 100 }}>
+            <table className="party-report-table gst-result-table">
+              <thead><tr>{visibleGstColumns.map((column) => <th key={column.key}>{column.label}</th>)}</tr></thead>
+              <tbody>
+                {filteredGstRows.length ? filteredGstRows.map((row, rowIndex) => <tr className={(isSummary || isGstr1) && row.RowType ? `gst-summary-${row.RowType}` : ""} key={`${row.TrnSeries || row.Section || row.AccountName || activeGstrSheet || "gst"}-${row.TrnNo || row.SrNo || rowIndex}-${rowIndex}`}>{visibleGstColumns.map((column) => <td key={column.key} className={numericKeys.has(column.key) ? "party-report-number" : ""}>{formatCell(column, row[column.key])}</td>)}</tr>) : <tr><td colSpan={Math.max(visibleGstColumns.length, 1)} className="gst-empty-cell">No GST records match the selected criteria.</td></tr>}
+              </tbody>
+              {!isSummary && !isGstr1 && !!filteredGstRows.length && <tfoot><tr>{visibleGstColumns.map((column, index) => <td key={column.key} className={numericKeys.has(column.key) ? "party-report-number" : ""}>{index === 0 ? "TOTAL" : Object.prototype.hasOwnProperty.call(gstTotals, column.key) ? formatCell(column, gstTotals[column.key]) : ""}</td>)}</tr></tfoot>}
+            </table>
+          </div></div>
+          <div className="party-report-statusbar"><span>Records: {gstSummary?.records || 0}</span><span>Taxable: ₹ {formatReportNumber(gstSummary?.taxable || 0)} · GST: ₹ {formatReportNumber(gstSummary?.gst || 0)} · Bill Value: ₹ {formatReportNumber(gstSummary?.billValue || 0)}</span><span>Period: {gstFilters.fromDate} to {gstFilters.toDate}</span></div>
+        </div>}
+
+        {!gstGenerated && !gstError && <div className="report-result-card"><FileBarChart size={38} /><h3>No report generated</h3><p>Select the criteria from the supplied GST report design and click Generate Report.</p></div>}
+      </div>
+    );
+  }
+
   // =========================================================
   // ALL PARTY REPORT - RENDER COMPONENT
   // =========================================================
@@ -5429,45 +6288,392 @@ const Report = ({
 
   if (isP0Report) {
     const showAccount = ["General Ledger", "Party Ledger"].includes(selectedReport);
-    const showProduct = selectedReport === "Stock Movement Ledger";
+    const showProduct = ["Product Ledger", "Stock Movement Ledger"].includes(selectedReport);
+    const isStockDataReport = ["Current Stock Report", "As On Date Stock Report", "Damage Stock Report", "Product Ledger", "Stock Movement Ledger"].includes(selectedReport);
+    const showDateRange = !["Current Stock Report", "As On Date Stock Report"].includes(selectedReport);
+    const isCurrentStock = selectedReport === "Current Stock Report";
+    const isAsOnDateStock = selectedReport === "As On Date Stock Report";
+    const isDamageStock = selectedReport === "Damage Stock Report";
+    const isProductLedger = selectedReport === "Product Ledger";
+    const isStockMovement = selectedReport === "Stock Movement Ledger";
+    const updateP0Filter = (field, value) => setP0Filters((old) => ({ ...old, [field]: value }));
     return (
-      <div className="report-page">
+      <div className="report-page p0-stock-report-page">
         <div className="report-page-header">
           <div className="report-title-section">
             <button type="button" className="report-back-button" onClick={onBack}><ArrowLeft size={18} /></button>
             <div className="report-title-icon"><ReportIcon size={22} /></div>
             <div><span className="report-category">{reportInformation.category}</span><h1>{reportInformation.title}</h1><p>{reportInformation.description}</p></div>
           </div>
-          <div className="report-toolbar-actions">
-            <button type="button" onClick={exportP0Excel} disabled={!p0Rows.length}><FileSpreadsheet size={16} /> Excel</button>
-            <button type="button" onClick={exportP0Pdf} disabled={!p0Rows.length}><FileText size={16} /> PDF</button>
-            <button type="button" onClick={() => window.print()} disabled={!p0Rows.length}><Printer size={16} /> Print</button>
-          </div>
         </div>
 
-        <div className="report-filter-card">
+          <div className="report-filter-card">
           <div className="report-filter-heading"><div><h2>Report Filters</h2><p>Figures are loaded from the current firm's persistent transactions.</p></div></div>
           <div className="report-filter-grid">
-            <div className="report-field"><label>From Date</label><input type="date" value={p0Filters.fromDate} onChange={(e) => setP0Filters((old) => ({ ...old, fromDate: e.target.value }))} /></div>
-            <div className="report-field"><label>To Date</label><input type="date" value={p0Filters.toDate} onChange={(e) => setP0Filters((old) => ({ ...old, toDate: e.target.value }))} /></div>
-            {showAccount && <div className="report-field report-field-wide"><label>Account / Party</label><input value={p0Filters.account} placeholder="Account code or name" onChange={(e) => setP0Filters((old) => ({ ...old, account: e.target.value }))} /></div>}
-            {showProduct && <div className="report-field report-field-wide"><label>Product</label><input value={p0Filters.product} placeholder="Product code or name" onChange={(e) => setP0Filters((old) => ({ ...old, product: e.target.value }))} /></div>}
+            {isStockDataReport && <div className="report-field"><label>Company</label><select value={p0Filters.companyCode} onChange={(e) => updateP0Filter("companyCode", e.target.value)}><option value="">All Companies</option>{companies.map((company, index) => { const value = getCompanyCode(company, index); return <option key={company._id || value} value={value}>{getCompanyName(company) || value}</option>; })}</select></div>}
+            {isCurrentStock && <div className="report-field"><label>Report Type</label><select value={p0Filters.reportType} onChange={(e) => updateP0Filter("reportType", e.target.value)}><option value="details">Details</option><option value="summary">Summary</option></select></div>}
+            {(isCurrentStock || isAsOnDateStock || isDamageStock) && <div className="report-field"><label>Report Level</label><select value={p0Filters.reportLevel} onChange={(e) => updateP0Filter("reportLevel", e.target.value)}><option value="productBatch">Product / Batch</option><option value="product">Product</option><option value="company">Company</option></select></div>}
+            {showDateRange && <div className="report-field"><label>From Date</label><input type="date" value={p0Filters.fromDate} onChange={(e) => updateP0Filter("fromDate", e.target.value)} /></div>}
+            {showDateRange && <div className="report-field"><label>To Date</label><input type="date" value={p0Filters.toDate} onChange={(e) => updateP0Filter("toDate", e.target.value)} /></div>}
+            {isAsOnDateStock && <div className="report-field"><label>As On Date</label><input type="date" value={p0Filters.asOnDate} onChange={(e) => updateP0Filter("asOnDate", e.target.value)} /></div>}
+            {showAccount && <div className="report-field report-field-wide"><label>Account / Party</label><input value={p0Filters.account} placeholder="Account code or name" onChange={(e) => updateP0Filter("account", e.target.value)} /></div>}
+            {showProduct && <div className="report-field report-field-wide"><label>Product</label><select value={p0Filters.product} onChange={(e) => updateP0Filter("product", e.target.value)}><option value="">All Products</option>{products.map((product, index) => { const code = product.productCode || product.code || product._id || index; const name = product.productName || product.name || code; return <option key={product._id || code} value={code}>{name}</option>; })}</select></div>}
+            {isProductLedger && <div className="report-field"><label>Batch</label><input value={p0Filters.batch} placeholder="All batches" onChange={(e) => updateP0Filter("batch", e.target.value)} /></div>}
+            {isStockDataReport && <div className="report-field"><label>Godown</label><select value={p0Filters.godownCode} onChange={(e) => updateP0Filter("godownCode", e.target.value)}><option value="">All Godowns</option>{godowns.map((godown, index) => { const value = godown.godownCode || godown.code || godown._id || index; return <option key={value} value={value}>{godown.godownName || godown.name || value}</option>; })}</select></div>}
+            {isStockMovement && <div className="report-field"><label>Entry Type</label><select value={p0Filters.entryType} onChange={(e) => updateP0Filter("entryType", e.target.value)}><option value="">Stock In &amp; Out</option><option value="IN">Stock In</option><option value="OUT">Stock Out</option></select></div>}
+            {isCurrentStock && <div className="report-field"><label>Report Filter</label><select value={p0Filters.reportFilter} onChange={(e) => updateP0Filter("reportFilter", e.target.value)}><option value="all">All Stock</option><option value="positive">Positive Stock</option><option value="negative">Negative Stock</option><option value="zero">Zero Stock</option></select></div>}
+            {isCurrentStock && <div className="report-field"><label>Near Expiry</label><select value={p0Filters.nearExpiry} onChange={(e) => updateP0Filter("nearExpiry", e.target.value)}><option value="N">No</option><option value="Y">Yes</option></select></div>}
+            {isCurrentStock && <div className="report-field"><label>Days</label><input type="number" min="1" disabled={p0Filters.nearExpiry !== "Y"} value={p0Filters.expiryDays} onChange={(e) => updateP0Filter("expiryDays", e.target.value)} placeholder="Expiry days" /></div>}
+            {isCurrentStock && <div className="report-field"><label>Current Stock</label><select value={p0Filters.currentStock} onChange={(e) => updateP0Filter("currentStock", e.target.value)}><option value="Y">Yes</option><option value="N">No</option></select></div>}
+            {isCurrentStock && <div className="report-field"><label>Negative</label><select value={p0Filters.includeNegative} onChange={(e) => updateP0Filter("includeNegative", e.target.value)}><option value="N">No</option><option value="Y">Yes</option></select></div>}
+            {isCurrentStock && <div className="report-field"><label>With Zero</label><select value={p0Filters.includeZero} onChange={(e) => updateP0Filter("includeZero", e.target.value)}><option value="N">No</option><option value="Y">Yes</option></select></div>}
+            {(isAsOnDateStock || isDamageStock) && <div className="report-field"><label>Order By</label><select value={p0Filters.orderBy} onChange={(e) => updateP0Filter("orderBy", e.target.value)}><option value="productName">Product Name</option><option value="productCode">Product Code</option><option value="date">Date</option></select></div>}
           </div>
           <div className="report-filter-actions">
-            <button type="button" className="report-clear-button" onClick={() => { setP0Filters({ fromDate: getFinancialYearStart(), toDate: getTodayDate(), account: "", product: "" }); setP0Rows([]); setP0Error(""); }}>Clear</button>
+            <button type="button" className="report-clear-button" onClick={() => { setP0Filters(defaultP0Filters()); setP0Rows([]); setP0Summary(null); setP0Generated(false); setP0Error(""); }}>Clear</button>
             <button type="button" className="report-generate-button" onClick={generateP0Report} disabled={p0Loading}>{p0Loading ? "Generating..." : "Generate Report"}</button>
           </div>
         </div>
 
         {p0Error && <div className="report-result-card"><X size={34} /><h3>Report could not be generated</h3><p>{p0Error}</p></div>}
-        {!p0Error && p0Rows.length === 0 && <div className="report-result-card"><FileBarChart size={38} /><h3>No report generated</h3><p>Select filters and click Generate Report.</p></div>}
+        {!p0Error && p0Rows.length === 0 && <div className="report-result-card"><FileBarChart size={38} /><h3>{p0Generated ? "No records found" : "No report generated"}</h3><p>{p0Generated ? "No data matches the selected report filters." : "Select filters and click Generate Report."}</p></div>}
         {p0Rows.length > 0 && (
-          <div className="report-result-card" style={{ alignItems: "stretch", overflow: "auto" }}>
+          <div className="party-report-results p0-report-results">
+            <div className="p0-result-toolbar">
+              <div className="party-grid-heading"><div className="party-grid-heading-icon"><FileBarChart size={17} /></div><div><strong>Report Results</strong><span>{p0Rows.length.toLocaleString("en-IN")} record{p0Rows.length === 1 ? "" : "s"} found</span></div></div>
+              <div className="party-toolbar-export">
+                <button type="button" className="party-export-excel" onClick={exportP0Excel}><FileSpreadsheet size={15} /> Excel</button>
+                <button type="button" className="party-export-csv" onClick={exportP0Csv}><Download size={15} /> CSV</button>
+                <button type="button" className="party-export-pdf" onClick={exportP0Pdf}><FileText size={15} /> PDF</button>
+                <button type="button" className="party-export-print" onClick={() => window.print()}><Printer size={15} /> Print</button>
+              </div>
+            </div>
             {p0Summary && <div style={{ display: "flex", gap: 24, padding: "10px 4px" }}><strong>Total Debit: ₹{Number(p0Summary.debit || 0).toLocaleString("en-IN")}</strong><strong>Total Credit: ₹{Number(p0Summary.credit || 0).toLocaleString("en-IN")}</strong></div>}
-            <table className="party-report-table" style={{ width: "100%", minWidth: Math.max(900, p0Columns.length * 130) }}>
-              <thead><tr>{p0Columns.map((column) => <th key={column}>{column.replace(/([A-Z])/g, " $1").replace(/^./, (c) => c.toUpperCase())}</th>)}</tr></thead>
+            <div className="party-report-grid-container p0-report-table-wrap"><table className="party-report-table" style={{ width: "100%", minWidth: Math.max(900, p0Columns.length * 130) }}>
+              <thead><tr>{p0ColumnDefinitions.map((column) => <th key={column.key}>{column.label}</th>)}</tr></thead>
               <tbody>{p0Rows.map((row, index) => <tr key={row._id || index}>{p0Columns.map((column) => <td key={column}>{typeof row[column] === "object" ? JSON.stringify(row[column]) : String(row[column] ?? "")}</td>)}</tr>)}</tbody>
-            </table>
+            </table></div>
+            <div className="party-report-statusbar"><span>Records: {p0Rows.length}</span><span>{selectedReport}</span><span>{showDateRange ? `Period: ${p0Filters.fromDate} to ${p0Filters.toDate}` : isAsOnDateStock ? `As on: ${p0Filters.asOnDate}` : "Current data"}</span></div>
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  if (isPurchaseAnalysisReport) {
+    const isBillWise = selectedReport === "Company/Bill Wise Purchase Report";
+    const totalKeys = new Set([
+      "Qty", "FreeQty", "BoxQty", "Gross", "Amount", "Weight", "Taxable", "GSTAmt", "VatAmt",
+      "CGST", "SGST", "IGST", "Cess1", "Cess2", "BVDiscAmt", "BVAddAmt", "AVDiscAmt", "AVAddAmt", "NetAmt",
+    ]);
+    const totals = filteredPurchaseAnalysisRows.reduce((result, row) => {
+      totalKeys.forEach((key) => { result[key] = (result[key] || 0) + Number(row[key] || 0); });
+      return result;
+    }, {});
+    const formatValue = (column, value) => purchaseNumericKeys.has(column.key)
+      ? Number(value || 0).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 3 })
+      : String(value ?? "") || "-";
+
+    return (
+      <div className="report-page purchase-analysis-report-page">
+        <div className="report-page-header">
+          <div className="report-title-section">
+            <button type="button" className="report-back-button" onClick={onBack} title="Back to reports"><ArrowLeft size={18} /></button>
+            <div className="report-title-icon">{isBillWise ? <Building2 size={22} /> : <PackageSearch size={22} />}</div>
+            <div><span className="report-category">Purchase Report</span><h1>{selectedReport}</h1><p>{isBillWise ? "Voucher and bill-wise purchase line details." : "Product-wise purchase, tax and discount analysis."}</p></div>
+          </div>
+        </div>
+
+        <div className="report-filter-card">
+          <div className="report-filter-grid">
+            {!isBillWise && <div className="report-field"><label>Report Type</label><select value="details" disabled><option value="details">Details</option></select></div>}
+            <div className="report-field"><label>Company</label><select value={purchaseAnalysisFilters.companyCode} onChange={(event) => setPurchaseAnalysisFilters((old) => ({ ...old, companyCode: event.target.value }))}>
+              <option value="">All Companies</option>{purchaseAnalysisCriteria.companies.map((company, index) => { const code = getCompanyCode(company, index); return <option key={company._id || code} value={code}>{getCompanyName(company) || code}</option>; })}
+            </select></div>
+            {!isBillWise && <div className="report-field"><label>Report Level</label><select value={purchaseAnalysisFilters.reportLevel} onChange={(event) => setPurchaseAnalysisFilters((old) => ({ ...old, reportLevel: event.target.value }))}><option value="all">All</option><option value="company">Company Wise</option><option value="godown">Godown Wise</option></select></div>}
+            <div className="report-field"><label>Godown</label><select value={purchaseAnalysisFilters.godownCode} onChange={(event) => setPurchaseAnalysisFilters((old) => ({ ...old, godownCode: event.target.value }))}>
+              <option value="">All Godowns</option>{purchaseAnalysisCriteria.godowns.map((godown, index) => { const code = String(godown.godownCode || godown.code || godown._id || index); return <option key={godown._id || code} value={code}>{godown.godownName || godown.name || code}</option>; })}
+            </select></div>
+            <div className="report-field"><label>From Date</label><input type="date" value={purchaseAnalysisFilters.fromDate} onChange={(event) => setPurchaseAnalysisFilters((old) => ({ ...old, fromDate: event.target.value }))} /></div>
+            <div className="report-field"><label>To Date</label><input type="date" value={purchaseAnalysisFilters.toDate} onChange={(event) => setPurchaseAnalysisFilters((old) => ({ ...old, toDate: event.target.value }))} /></div>
+            {isBillWise && <div className="report-field"><label>Actual Invoice</label><select value={purchaseAnalysisFilters.actualInvoice} onChange={(event) => setPurchaseAnalysisFilters((old) => ({ ...old, actualInvoice: event.target.value }))}><option value="no">No</option><option value="yes">Yes</option></select></div>}
+            <div className="report-field"><label>Discount Details</label><select value={purchaseAnalysisFilters.discountDetails} onChange={(event) => setPurchaseAnalysisFilters((old) => ({ ...old, discountDetails: event.target.value }))}><option value="no">No</option><option value="yes">Yes</option></select></div>
+            {!isBillWise && <><div className="report-field"><label>Report With</label><select value={purchaseAnalysisFilters.reportWith} onChange={(event) => setPurchaseAnalysisFilters((old) => ({ ...old, reportWith: event.target.value }))}><option value="category">Category</option><option value="company">Company</option><option value="godown">Godown</option></select></div><div className="report-field"><label>Order By</label><select value={purchaseAnalysisFilters.orderBy} onChange={(event) => setPurchaseAnalysisFilters((old) => ({ ...old, orderBy: event.target.value }))}><option value="productName">Product Name</option><option value="productCode">Product Code</option><option value="company">Company</option><option value="voucher">Voucher</option><option value="amount">Net Amount</option></select></div></>}
+          </div>
+          <div className="report-filter-actions"><button type="button" className="report-generate-button" onClick={generatePurchaseAnalysisReport} disabled={purchaseAnalysisLoading}>{purchaseAnalysisLoading ? "Generating..." : "Generate Report"}</button><button type="button" className="report-clear-button" onClick={clearPurchaseAnalysisReport}><RefreshCw size={14} /> Reset Filter</button></div>
+        </div>
+
+        {purchaseAnalysisError && <div className="party-report-error" role="alert">{purchaseAnalysisError}</div>}
+        <div className="party-report-results purchase-analysis-results">
+          <div className="party-report-toolbar">
+            <div className="party-grid-heading"><div className="party-grid-heading-icon"><ShoppingCart size={17} /></div><div><strong>Report Results</strong><span>{purchaseAnalysisGenerated ? `${filteredPurchaseAnalysisRows.length} records found` : "Generate the report to view results"}</span></div></div>
+            <div className="party-grid-toolbar-actions">
+              <div className="party-report-search"><Search size={15} /><input value={purchaseAnalysisSearch} onChange={(event) => setPurchaseAnalysisSearch(event.target.value)} placeholder="Search in results..." disabled={!purchaseAnalysisGenerated} />{purchaseAnalysisSearch && <button type="button" className="party-grid-search-clear" onClick={() => setPurchaseAnalysisSearch("")}><X size={14} /></button>}</div>
+              <select className="party-grid-zoom-select" value={purchaseAnalysisZoom} onChange={(event) => setPurchaseAnalysisZoom(event.target.value)}><option value="75">75%</option><option value="90">90%</option><option value="100">100%</option><option value="125">125%</option><option value="150">150%</option></select>
+              <button type="button" className="party-grid-refresh-button" onClick={generatePurchaseAnalysisReport} disabled={purchaseAnalysisLoading}><RefreshCw size={15} /></button>
+              <div className="party-toolbar-export"><button className="party-export-excel" onClick={exportPurchaseAnalysisExcel} disabled={!filteredPurchaseAnalysisRows.length}><FileSpreadsheet size={15} /> Excel</button><button className="party-export-csv" onClick={exportPurchaseAnalysisCsv} disabled={!filteredPurchaseAnalysisRows.length}><Download size={15} /> CSV</button><button className="party-export-pdf" onClick={exportPurchaseAnalysisPdf} disabled={!filteredPurchaseAnalysisRows.length}><FileText size={15} /> PDF</button><button className="party-export-print" onClick={printPurchaseAnalysisReport} disabled={!filteredPurchaseAnalysisRows.length}><Printer size={15} /> Print</button></div>
+            </div>
+          </div>
+          <div className="party-report-grid-container purchase-analysis-table-wrap">
+            {!purchaseAnalysisGenerated ? <div className="party-empty-report"><ShoppingCart size={40} /><strong>No report generated</strong><span>Select filters and click Generate Report.</span></div> : filteredPurchaseAnalysisRows.length === 0 ? <div className="party-empty-report"><PackageSearch size={38} /><strong>No matching purchases</strong><span>Change the search or report filters.</span></div> : <div className="party-report-zoom" style={{ zoom: Number(purchaseAnalysisZoom) / 100 }}><table className="party-report-table purchase-analysis-table"><thead><tr>{purchaseAnalysisColumns.map((column) => <th key={column.key} className={purchaseNumericKeys.has(column.key) ? "party-report-number" : ""}>{column.label}</th>)}</tr></thead><tbody>{filteredPurchaseAnalysisRows.map((row) => <tr key={`${row.VouSeries}-${row.VouNo}-${row.SrNo}`}>{purchaseAnalysisColumns.map((column) => <td key={column.key} className={purchaseNumericKeys.has(column.key) ? "party-report-number" : ""} title={String(row[column.key] ?? "")}>{formatValue(column, row[column.key])}</td>)}</tr>)}</tbody><tfoot><tr>{purchaseAnalysisColumns.map((column, index) => <td key={column.key} className={totalKeys.has(column.key) ? "party-report-number" : ""}>{index === 0 ? "TOTAL" : totalKeys.has(column.key) ? Number(totals[column.key] || 0).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : ""}</td>)}</tr></tfoot></table></div>}
+          </div>
+          <div className="party-report-statusbar"><span>Records: {purchaseAnalysisGenerated ? filteredPurchaseAnalysisRows.length : 0}</span><span>{isBillWise ? "Level: Company / Bill Wise" : "Level: Product Wise"}</span><span>Period: {purchaseAnalysisFilters.fromDate} to {purchaseAnalysisFilters.toDate}</span></div>
+        </div>
+      </div>
+    );
+  }
+
+  if (selectedReport === "Stock And Sales Report") {
+    const numberText = (value, decimals = 2) =>
+      Number(value || 0).toLocaleString("en-IN", {
+        minimumFractionDigits: decimals,
+        maximumFractionDigits: decimals,
+      });
+    const stockSalesColumns = getStockSalesExportColumns();
+    const stockSalesQuantityKeys = new Set([
+      "Opening", "Purchase", "CreditNote", "Increase", "MFI", "ToGDTransfer",
+      "Sales", "DebitNote", "Decrease", "Damage", "MFO", "FromGDTransfer",
+      "Closing", "BoxPack", "LastQty",
+    ]);
+    const stockSalesMoneyKeys = new Set(["MRP", "LastPurchase"]);
+    const stockSalesTotalKeys = new Set([
+      "Opening", "Purchase", "CreditNote", "Increase", "MFI", "ToGDTransfer",
+      "Sales", "DebitNote", "Decrease", "Damage", "MFO", "FromGDTransfer",
+      "Closing", "LastQty",
+    ]);
+    const visibleStockSalesTotals = filteredStockSalesRows.reduce((totals, row) => {
+      stockSalesTotalKeys.forEach((key) => {
+        totals[key] = (totals[key] || 0) + Number(row[key] || 0);
+      });
+      return totals;
+    }, {});
+    const formatStockSalesCell = (column, value) => {
+      if (stockSalesMoneyKeys.has(column.key)) return numberText(value);
+      if (stockSalesQuantityKeys.has(column.key)) return numberText(value, 3);
+      return String(value ?? "") || "-";
+    };
+
+    return (
+      <div className="report-page stock-sales-report-page">
+        <div className="report-page-header">
+          <div className="report-title-section">
+            <button type="button" className="report-back-button" onClick={onBack} title="Back to reports">
+              <ArrowLeft size={18} />
+            </button>
+            <div className="report-title-icon"><Warehouse size={22} /></div>
+            <div>
+              <span className="report-category">Sales Report</span>
+              <h1>Stock And Sales Report</h1>
+              <p>Compare live stock with sales posted during the selected period.</p>
+            </div>
+          </div>
+        </div>
+
+        <div className="report-filter-card">
+          <div className="report-filter-heading">
+            <div><h2>Report Filters</h2><p>Choose one company or All Companies to load actual database records.</p></div>
+          </div>
+
+          <div className="report-filter-grid">
+            <div className="report-field">
+              <label>Company</label>
+              <select
+                value={stockSalesFilters.companyCode}
+                onChange={(event) => setStockSalesFilters((old) => ({ ...old, companyCode: event.target.value }))}
+              >
+                <option value="">All Companies</option>
+                {stockSalesCriteria.companies.map((company, index) => {
+                  const value = getCompanyCode(company, index);
+                  return <option key={company._id || value} value={value}>{getCompanyName(company) || value}</option>;
+                })}
+              </select>
+            </div>
+
+            <div className="report-field">
+              <label>Report Level</label>
+              <select value={stockSalesFilters.reportLevel} onChange={(event) => setStockSalesFilters((old) => ({ ...old, reportLevel: event.target.value }))}>
+                <option value="unit">Unit Wise</option>
+                <option value="product">Product Wise</option>
+                <option value="company">Company Wise</option>
+              </select>
+            </div>
+
+            <div className="report-field">
+              <label>Godown</label>
+              <select value={stockSalesFilters.godownCode} onChange={(event) => setStockSalesFilters((old) => ({ ...old, godownCode: event.target.value }))}>
+                <option value="">All Godowns</option>
+                {stockSalesCriteria.godowns.map((godown, index) => {
+                  const value = String(godown.godownCode || godown.code || godown._id || index);
+                  const label = godown.godownName || godown.name || value;
+                  return <option key={godown._id || value} value={value}>{label}</option>;
+                })}
+              </select>
+            </div>
+
+            <div className="report-field">
+              <label>From Date</label>
+              <input type="date" value={stockSalesFilters.fromDate} onChange={(event) => setStockSalesFilters((old) => ({ ...old, fromDate: event.target.value }))} />
+            </div>
+
+            <div className="report-field">
+              <label>To Date</label>
+              <input type="date" value={stockSalesFilters.toDate} onChange={(event) => setStockSalesFilters((old) => ({ ...old, toDate: event.target.value }))} />
+            </div>
+
+            <div className="report-field">
+              <label>Report With</label>
+              <select value={stockSalesFilters.reportWith} onChange={(event) => setStockSalesFilters((old) => ({ ...old, reportWith: event.target.value }))}>
+                <option value="summary">Summary</option>
+                <option value="details">Detailed (Godown Wise)</option>
+              </select>
+            </div>
+
+            <div className="report-field">
+              <label>Filter</label>
+              <select value={stockSalesFilters.filter} onChange={(event) => setStockSalesFilters((old) => ({ ...old, filter: event.target.value }))}>
+                <option value="all">All</option>
+                <option value="stock">With Stock</option>
+                <option value="sales">With Sales</option>
+                <option value="zeroStock">Zero Stock</option>
+                <option value="noSales">No Sales</option>
+              </select>
+            </div>
+
+            <div className="report-field">
+              <label>Order By</label>
+              <select value={stockSalesFilters.orderBy} onChange={(event) => setStockSalesFilters((old) => ({ ...old, orderBy: event.target.value }))}>
+                <option value="productName">Product Name</option>
+                <option value="productCode">Product Code</option>
+                <option value="companyName">Company Name</option>
+                <option value="stockQty">Stock Quantity</option>
+                <option value="salesQty">Sales Quantity</option>
+              </select>
+            </div>
+
+            <label className="stock-sales-free-option">
+              <input
+                type="checkbox"
+                checked={stockSalesFilters.stockWithFreeQty}
+                onChange={(event) => setStockSalesFilters((old) => ({ ...old, stockWithFreeQty: event.target.checked }))}
+              />
+              <span>Stock With Free Qty</span>
+            </label>
+          </div>
+
+          <div className="report-filter-actions">
+            <button type="button" className="report-generate-button" onClick={generateStockSalesReport} disabled={stockSalesLoading}>
+              {stockSalesLoading ? "Generating..." : "Generate Report"}
+            </button>
+            <button type="button" className="report-clear-button" onClick={clearStockSalesReport}>
+              <RefreshCw size={14} /> Reset Filter
+            </button>
+          </div>
+        </div>
+
+        {stockSalesError && <div className="report-result-card"><X size={34} /><h3>Report could not be loaded</h3><p>{stockSalesError}</p></div>}
+        {!stockSalesError && !stockSalesGenerated && <div className="report-result-card"><FileBarChart size={38} /><h3>No report generated</h3><p>Select filters and click Generate Report.</p></div>}
+        {!stockSalesError && stockSalesGenerated && stockSalesRows.length === 0 && <div className="report-result-card"><PackageSearch size={38} /><h3>No matching records</h3><p>No stock or sales records match the selected filters.</p></div>}
+
+        {stockSalesRows.length > 0 && (
+          <div className="party-report-results stock-sales-results">
+            <div className="party-report-toolbar">
+              <div className="party-grid-heading">
+                <div className="party-grid-heading-icon"><FileBarChart size={17} /></div>
+                <div>
+                  <strong>Report Results</strong>
+                  <span>{filteredStockSalesRows.length} records found</span>
+                </div>
+              </div>
+
+              <div className="party-grid-toolbar-actions">
+                <div className="party-report-search">
+                  <Search size={15} />
+                  <input type="text" value={stockSalesSearch} onChange={(event) => setStockSalesSearch(event.target.value)} placeholder="Search in results..." />
+                  {stockSalesSearch && <button type="button" className="party-grid-search-clear" onClick={() => setStockSalesSearch("")} title="Clear search" aria-label="Clear search"><X size={14} /></button>}
+                </div>
+                <select className="party-grid-zoom-select" value={stockSalesZoom} onChange={(event) => setStockSalesZoom(event.target.value)} title="Grid zoom">
+                  <option value="75">75%</option><option value="90">90%</option><option value="100">100%</option><option value="125">125%</option><option value="150">150%</option>
+                </select>
+                <button type="button" className="party-grid-refresh-button" onClick={generateStockSalesReport} disabled={stockSalesLoading} title="Refresh report"><RefreshCw size={15} /></button>
+                <div className="party-toolbar-export">
+                  <button type="button" className="party-export-excel" onClick={exportStockSalesExcel} disabled={!filteredStockSalesRows.length}><FileSpreadsheet size={15} /> Excel</button>
+                  <button type="button" className="party-export-csv" onClick={exportStockSalesCsv} disabled={!filteredStockSalesRows.length}><Download size={15} /> CSV</button>
+                  <button type="button" className="party-export-pdf" onClick={exportStockSalesPdf} disabled={!filteredStockSalesRows.length}><FileText size={15} /> PDF</button>
+                  <button type="button" className="party-export-print" onClick={printStockSalesReport} disabled={!filteredStockSalesRows.length}><Printer size={15} /> Print</button>
+                </div>
+              </div>
+            </div>
+            <div className="stock-sales-summary">
+              <span>Records <strong>{stockSalesSummary?.records || 0}</strong></span>
+              <span>Stock Qty <strong>{numberText(stockSalesSummary?.stockQty, 3)}</strong></span>
+              <span>Sales Qty <strong>{numberText(stockSalesSummary?.totalSalesQty, 3)}</strong></span>
+              <span>Free Qty <strong>{numberText(stockSalesSummary?.freeQty, 3)}</strong></span>
+              <span>Sales Amount <strong>₹ {numberText(stockSalesSummary?.salesAmount)}</strong></span>
+            </div>
+            <div className="party-report-grid-container stock-sales-table-wrap">
+              {filteredStockSalesRows.length === 0 ? (
+                <div className="party-empty-report"><PackageSearch size={36} /><strong>No matching records</strong><span>Change the result search or report filters.</span></div>
+              ) : (
+              <div className="party-report-zoom" style={{ zoom: Number(stockSalesZoom) / 100 }}>
+              <table className="party-report-table stock-sales-table">
+                <thead><tr>
+                  <th>Sr.</th>
+                  {!stockSalesFilters.companyCode && <th>Company</th>}
+                  <th>ShortCode</th><th>Product Code</th><th>Product Name</th><th>Local Product</th><th>SysProdCode</th>
+                  <th className="party-report-number">MRP</th><th className="party-report-number">Opening</th>
+                  <th className="party-report-number">Purchase</th><th className="party-report-number">Credit Note</th>
+                  <th className="party-report-number">Increase</th><th className="party-report-number">MFI</th>
+                  <th className="party-report-number">To GDTransfer</th><th className="party-report-number">Sales</th>
+                  <th className="party-report-number">Debit Note</th><th className="party-report-number">Decrease</th>
+                  <th className="party-report-number">Damage</th><th className="party-report-number">MFO</th>
+                  <th className="party-report-number">From GDTransfer</th><th className="party-report-number">Closing</th>
+                  <th className="party-report-number">BoxPack</th><th>Last Purchase Date</th>
+                  <th className="party-report-number">Last Purchase</th><th className="party-report-number">Last Qty</th>
+                  <th>Category</th><th>SubCategory</th><th>Group</th><th>SubGroup</th><th>Brand</th><th>SubBrand</th>
+                  {stockSalesFilters.reportWith === "details" && <th>Godown</th>}
+                </tr></thead>
+                <tbody>{filteredStockSalesRows.map((row) => <tr key={`${row.CompanyCode}-${row.ProductCode}-${row.GodownCode}-${row.SrNo}`}>
+                  <td>{row.SrNo}</td>
+                  {!stockSalesFilters.companyCode && <td>{row.CompanyName}</td>}
+                  <td>{row.ShortCode || "-"}</td><td>{row.ProductCode}</td><td>{row.ProductName}</td>
+                  <td>{row.LocalProduct || "-"}</td><td>{row.SysProdCode || "-"}</td>
+                  <td className="party-report-number">{numberText(row.MRP)}</td>
+                  <td className="party-report-number">{numberText(row.Opening, 3)}</td>
+                  <td className="party-report-number">{numberText(row.Purchase, 3)}</td>
+                  <td className="party-report-number">{numberText(row.CreditNote, 3)}</td>
+                  <td className="party-report-number">{numberText(row.Increase, 3)}</td>
+                  <td className="party-report-number">{numberText(row.MFI, 3)}</td>
+                  <td className="party-report-number">{numberText(row.ToGDTransfer, 3)}</td>
+                  <td className="party-report-number">{numberText(row.Sales, 3)}</td>
+                  <td className="party-report-number">{numberText(row.DebitNote, 3)}</td>
+                  <td className="party-report-number">{numberText(row.Decrease, 3)}</td>
+                  <td className="party-report-number">{numberText(row.Damage, 3)}</td>
+                  <td className="party-report-number">{numberText(row.MFO, 3)}</td>
+                  <td className="party-report-number">{numberText(row.FromGDTransfer, 3)}</td>
+                  <td className="party-report-number">{numberText(row.Closing, 3)}</td>
+                  <td className="party-report-number">{numberText(row.BoxPack, 3)}</td>
+                  <td>{row.LastPurchaseDate || "-"}</td>
+                  <td className="party-report-number">{numberText(row.LastPurchase)}</td>
+                  <td className="party-report-number">{numberText(row.LastQty, 3)}</td>
+                  <td>{row.Category || "-"}</td><td>{row.SubCategory || "-"}</td>
+                  <td>{row.Group || "-"}</td><td>{row.SubGroup || "-"}</td>
+                  <td>{row.Brand || "-"}</td><td>{row.SubBrand || "-"}</td>
+                  {stockSalesFilters.reportWith === "details" && <td>{row.GodownName}</td>}
+                </tr>)}</tbody>
+                <tfoot><tr>{stockSalesColumns.map((column, index) => (
+                  <td key={column.key} className={stockSalesTotalKeys.has(column.key) ? "party-report-number" : ""}>
+                    {index === 0 ? "TOTAL" : stockSalesTotalKeys.has(column.key) ? numberText(visibleStockSalesTotals[column.key], 3) : ""}
+                  </td>
+                ))}</tr></tfoot>
+              </table>
+              </div>
+              )}
+            </div>
+            <div className="party-report-statusbar">
+              <span>Records: {filteredStockSalesRows.length}</span>
+              <span>Level: {stockSalesFilters.reportLevel === "company" ? "Company Wise" : stockSalesFilters.reportLevel === "product" ? "Product Wise" : "Unit Wise"}</span>
+              <span>Period: {stockSalesFilters.fromDate || "--"} to {stockSalesFilters.toDate || "--"}</span>
+            </div>
           </div>
         )}
       </div>
@@ -6225,7 +7431,7 @@ const Report = ({
   // =========================================================
   if (selectedReport === "Party Wise Sales Report") {
     return (
-      <div className="party-classic-report-page">
+      <div className="party-classic-report-page party-wise-sales-report-page">
         <div className="party-classic-report-window">
           <div className="party-classic-titlebar">
             <div className="party-report-title-left">

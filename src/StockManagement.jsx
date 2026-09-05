@@ -27,8 +27,15 @@ const formatDate = (value) => {
 };
 
 export default function StockManagement({ mode, view = "list", products = [], godowns = [], companies = [], onOpenForm, onCloseForm }) {
-  const isStockIn = mode === "IN";
-  const title = isStockIn ? "Stock In" : "Stock Out";
+  const isDamageStock = mode === "DAMAGE_IN" || mode === "DAMAGE_OUT";
+  const isStockIn = mode === "IN" || mode === "DAMAGE_IN";
+  const title = ({
+    IN: "Stock In",
+    OUT: "Stock Out",
+    DAMAGE_IN: "Self Damage (Godown Damage)",
+    DAMAGE_OUT: "Damage Stock Out",
+  })[mode] || "Stock";
+  const stockDescription = isDamageStock ? "damaged stock" : "saleable stock";
   const productInputRef = useRef(null);
   const internalOpenRef = useRef(false);
   const [form, setForm] = useState(createForm);
@@ -68,6 +75,7 @@ export default function StockManagement({ mode, view = "list", products = [], go
   useEffect(() => {
     setForm((previous) => ({ ...createForm(), godownCode: previous.godownCode || text(godowns[0]?.code || godowns[0]?.godownCode) }));
     setSearchText("");
+    setBatchCache({});
     setSelectedBatch(null);
     setNewBatch(false);
     setEntryMode("create");
@@ -139,7 +147,7 @@ export default function StockManagement({ mode, view = "list", products = [], go
       const loaded = await Promise.all(missing.map(async (product) => {
         const code = productCode(product);
         try {
-          const query = new URLSearchParams({ distributorId: localStorage.getItem("distributorId") || "", firmId: localStorage.getItem("firmId") || "", gdCode: form.godownCode, prodCode: code });
+          const query = new URLSearchParams({ distributorId: localStorage.getItem("distributorId") || "", firmId: localStorage.getItem("firmId") || "", gdCode: form.godownCode, prodCode: code, stockType: isDamageStock ? "DAMAGE" : "SALEABLE" });
           const response = await secureFetch(`${API_URL}/stock/batches?${query}`);
           const result = await response.json();
           return [`${form.godownCode}_${code}`, response.ok && Array.isArray(result.batches) ? result.batches : []];
@@ -154,7 +162,7 @@ export default function StockManagement({ mode, view = "list", products = [], go
     };
     load();
     return () => { cancelled = true; };
-  }, [showProducts, form.godownCode, matchedProducts, batchCache]);
+  }, [showProducts, form.godownCode, matchedProducts, batchCache, isDamageStock]);
 
   const dropdownRows = useMemo(() => matchedProducts.flatMap((product) => {
     const batches = batchCache[`${form.godownCode}_${productCode(product)}`] || [];
@@ -300,7 +308,7 @@ export default function StockManagement({ mode, view = "list", products = [], go
   const save = async () => {
     if (!form.godownCode || !form.productCode || totalQuantity <= 0) return alert("Select a godown and product, then enter Qty or Free Qty.");
     if (!isStockIn && !selectedBatch) return alert("Select an existing product batch for Stock Out.");
-    if (!isStockIn && entryMode === "create" && totalQuantity > availableStock) return alert(`Only ${availableStock} saleable units are available in the selected batch.`);
+    if (!isStockIn && entryMode === "create" && totalQuantity > availableStock) return alert(`Only ${availableStock} ${isDamageStock ? "damaged" : "saleable"} units are available in the selected batch.`);
 
     setSaving(true);
     try {
@@ -360,7 +368,7 @@ export default function StockManagement({ mode, view = "list", products = [], go
         <div className="ts-sales-page-header">
           <div>
             <h1>{title} List</h1>
-            <p>Manage all saleable stock {isStockIn ? "inward" : "outward"} entries</p>
+            <p>Manage all {stockDescription} {isStockIn ? "inward" : "outward"} entries</p>
           </div>
 
           <div className="ts-sales-page-actions">

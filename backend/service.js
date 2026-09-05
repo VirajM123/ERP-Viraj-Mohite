@@ -1,6 +1,7 @@
 import express from "express";
 import mongoose from "mongoose";
 import { nextDocumentNumber } from "./counters.js";
+import { assertMasterNotUsed } from "./masterUsageGuard.js";
 
 const Service = mongoose.models.Mas_Service || mongoose.model("Mas_Service", new mongoose.Schema({
   serviceCode: { type: String, required: true, trim: true, uppercase: true },
@@ -176,11 +177,20 @@ export default function createServiceRouter(securityRouter) {
   });
 
   router.delete("/services/:id", master("delete"), async (req, res) => {
-    const scope = requestTenant(req, req.query, res); if (!scope) return;
-    if (!mongoose.isValidObjectId(req.params.id)) return res.status(400).json({ success: false, message: "Invalid Service ID." });
-    const record = await Service.findOneAndUpdate({ _id: req.params.id, ...scope, isActive: { $ne: false } }, { $set: { isActive: false } });
-    if (!record) return res.status(404).json({ success: false, message: "Service not found." });
-    res.json({ success: true, message: "Service deleted successfully." });
+    try {
+      const scope = requestTenant(req, req.query, res); if (!scope) return;
+      if (!mongoose.isValidObjectId(req.params.id)) return res.status(400).json({ success: false, message: "Invalid Service ID." });
+      const filter = { _id: req.params.id, ...scope, isActive: { $ne: false } };
+      const record = await Service.findOne(filter);
+      if (!record) return res.status(404).json({ success: false, message: "Service not found." });
+      await assertMasterNotUsed({ connection: mongoose.connection, scope, type: "service",
+        record: { _id: record._id, code: record.serviceCode, name: record.serviceName } });
+      await Service.findOneAndUpdate(filter, { $set: { isActive: false } });
+      res.json({ success: true, message: "Service deleted successfully." });
+    } catch (error) {
+      res.status(error.statusCode || 500).json({ success: false,
+        message: error.statusCode ? error.message : "Service delete failed." });
+    }
   });
 
   router.get("/sales-services", sales("view"), async (req, res) => {

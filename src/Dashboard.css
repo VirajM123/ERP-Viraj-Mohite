@@ -47995,12 +47995,13 @@ td {
   display: grid;
   grid-template-columns: repeat(6, minmax(0, 1fr));
   gap: 9px;
-  margin-bottom: 12px;
-  padding: 12px;
-  border: 1px solid var(--catalog-border);
-  border-radius: 7px;
-  background: #fff;
-  box-shadow: 0 4px 14px rgba(39, 75, 126, 0.06);
+  margin-bottom: 0;
+  padding: 8px 0 12px;
+  border: 0;
+  border-bottom: 1px solid var(--catalog-border);
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
 }
 
 .report-catalog-category {
@@ -48012,25 +48013,25 @@ td {
   min-height: 38px;
   gap: 0;
   padding: 7px 10px;
-  border: 1px solid #e1e9f4;
-  border-radius: 6px;
-  background: linear-gradient(135deg, #ffffff, #f5f8fc);
-  color: var(--catalog-text);
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  color: #0b4ea2;
   text-align: center;
   cursor: pointer;
-  transition: border-color 0.15s ease, background 0.15s ease, transform 0.15s ease;
+  transition: color 0.15s ease, transform 0.15s ease;
 }
 
 .report-catalog-category:hover {
-  border-color: #b9cff0;
-  background: #f7faff;
+  background: transparent;
+  color: #1767e8;
   transform: translateY(-1px);
 }
 
 .report-catalog-category.active {
-  border-color: #b8d0f5;
-  background: #f4f8ff;
-  box-shadow: inset 0 -3px 0 #1767e8;
+  background: transparent;
+  color: #1767e8;
+  box-shadow: none;
 }
 
 .report-catalog-category strong {
@@ -48049,10 +48050,10 @@ td {
 
 .report-catalog-list-card {
   overflow: hidden;
-  border: 1px solid var(--catalog-border);
-  border-radius: 7px;
-  background: #fff;
-  box-shadow: 0 4px 14px rgba(39, 75, 126, 0.06);
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
 }
 
 .report-catalog-list-header {
@@ -48060,8 +48061,8 @@ td {
   align-items: center;
   justify-content: space-between;
   gap: 18px;
-  padding: 10px 14px;
-  border-bottom: 1px solid #e4ecf7;
+  padding: 26px 14px 12px;
+  border-bottom: 0;
 }
 
 .report-catalog-list-title {
@@ -48072,8 +48073,7 @@ td {
 }
 
 .report-catalog-list-icon {
-  width: 35px;
-  height: 35px;
+  display: none;
 }
 
 .report-catalog-list-title h2 {
@@ -48100,19 +48100,25 @@ td {
 
 .report-catalog-search input {
   width: 100%;
+  height: 100% !important;
   min-width: 0;
-  border: 0;
+  margin: 0 !important;
+  padding: 0 !important;
+  border: 0 !important;
+  border-radius: 0 !important;
   outline: 0;
-  background: transparent;
+  background: transparent !important;
+  box-shadow: none !important;
   color: #17325d;
   font-size: 10px;
+  appearance: none;
 }
 
 .report-catalog-links {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
   align-content: start;
-  min-height: 260px;
+  min-height: 210px;
   padding: 10px 13px 14px;
 }
 
@@ -48124,7 +48130,7 @@ td {
   gap: 9px;
   padding: 0 12px;
   border: 0;
-  border-right: 1px solid #e3ebf5;
+  border-right: 0;
   background: transparent;
   color: #1762c2;
   font-size: 10px;
@@ -48137,9 +48143,10 @@ td {
 }
 
 .report-catalog-link:hover {
-  border-radius: 5px;
-  background: #f1f7ff;
+  border-radius: 0;
+  background: transparent;
   color: #0c4fa8;
+  text-decoration: underline;
 }
 
 .report-catalog-link svg {
@@ -48173,7 +48180,7 @@ td {
 }
 
 .report-catalog-footer {
-  display: flex;
+  display: none;
   align-items: center;
   gap: 9px;
   margin: 0 10px 10px;
@@ -48223,5 +48230,146 @@ td {
 
   .report-catalog-link {
     border-right: 0 !important;
+  }
+}
+
+/* Approved report catalog mockup layout. */
+@media (min-width: 721px) {
+  .report-catalog-page {
+    padding: 32px 34px;
+  }
+
+  .report-catalog-header {
+    margin-bottom: 30px;
+    padding: 0;
+  }
+
+  .report-catalog-categories {
+    row-gap: 18px;
+    padding: 4px 0 28px;
+  }
+
+  .report-catalog-category {
+    min-height: 34px;
+    padding: 4px 8px;
+  }
+
+  .report-catalog-category strong {
+    font-size: 12px;
+  }
+
+  .report-catalog-list-header {
+    padding: 38px 24px 20px;
+  }
+
+  .report-catalog-links {
+    row-gap: 10px;
+    padding: 10px 14px 20px;
+  }
+
+  .report-catalog-link {
+    height: 42px;
+    padding: 0 12px;
+    font-size: 11px;
+  }
+}
+
+/* Report catalog: flat, text-led ERP styling from the approved reference. */
+.report-catalog-header-icon,
+.report-catalog-list-icon {
+  background: #eef4ff;
+  box-shadow: none;
+}
+
+.report-catalog-category.active {
+  color: #0b4db8;
+}
+
+.report-catalog-category.active::after {
+  position: absolute;
+  right: 18%;
+  bottom: 0;
+  left: 18%;
+  height: 2px;
+  border-radius: 2px;
+  background: #0b4db8;
+  content: "";
+}
+
+.report-catalog-category strong {
+  font-size: 13px;
+}
+
+.report-catalog-header p,
+.report-catalog-list-title p,
+.report-catalog-search input,
+.report-catalog-link {
+  font-size: 12px;
+}
+
+/* Keep the selected category heading, search, and report links on one grid. */
+.report-catalog-list-header {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(240px, 300px);
+  align-items: center;
+}
+
+.report-catalog-list-title,
+.report-catalog-list-title > div {
+  min-width: 0;
+}
+
+.report-catalog-search {
+  box-sizing: border-box;
+  width: 100%;
+  overflow: hidden;
+}
+
+.report-catalog-search > svg {
+  width: 16px;
+  height: 16px;
+  flex: 0 0 16px;
+}
+
+.report-catalog-search input {
+  position: static !important;
+  display: block;
+  flex: 1 1 auto;
+  box-sizing: border-box;
+  height: 32px !important;
+  min-height: 0 !important;
+  line-height: 32px !important;
+  vertical-align: middle;
+  transform: none !important;
+}
+
+.report-catalog-search input::placeholder {
+  line-height: normal;
+}
+
+.report-catalog-links {
+  grid-auto-rows: 42px;
+  align-items: start;
+}
+
+.report-catalog-link {
+  display: grid;
+  grid-template-columns: 18px minmax(0, 1fr);
+  align-items: center;
+  column-gap: 8px;
+  box-sizing: border-box;
+  width: 100%;
+  margin: 0;
+}
+
+.report-catalog-link > svg {
+  width: 14px;
+  height: 14px;
+  justify-self: center;
+}
+
+@media (max-width: 720px) {
+  .report-catalog-list-header {
+    grid-template-columns: 1fr;
   }
 }

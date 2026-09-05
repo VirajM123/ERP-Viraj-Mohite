@@ -231,9 +231,69 @@ export default function createP0FeaturesRouter(securityRouter) {
     res.json({ success: true, report, rows, summary: { debit: rows.reduce((s, r) => s + number(r.debit), 0), credit: rows.reduce((s, r) => s + number(r.credit), 0) } });
   });
   router.get("/reports/stock-movement", securityRouter.authorizeRequest("REPORTS", "STOCK_REPORT", "view"), async (req, res) => {
-    const filter = tenant(req, { ...dateMatch(req, "movementDate") });
-    if (req.query.product) filter.$or = [{ productCode: new RegExp(String(req.query.product), "i") }, { productName: new RegExp(String(req.query.product), "i") }];
-    res.json({ success: true, rows: await StockMovement.find(filter).sort({ movementDate: 1, createdAt: 1 }).lean() });
+    const StockAdjustment = mongoose.models.T_Stock_Adjustment;
+    if (!StockAdjustment) return res.json({ success: true, rows: [] });
+    const entryType = String(req.query.entryType || "").trim().toUpperCase();
+    const filter = tenant(req, {
+      Status: "COMPLETED",
+      AdjustmentType: entryType === "IN" || entryType === "OUT" ? entryType : { $in: ["IN", "OUT"] },
+      ...dateMatch(req, "VoucherDate"),
+    });
+    if (req.query.godownCode) filter.GDCode = String(req.query.godownCode);
+    const companyCode = String(req.query.companyCode || "").trim();
+    if (companyCode) {
+      const Company = mongoose.models.Mas_Company;
+      const Product = mongoose.models.Mas_Product;
+      const selectedCompany = Company
+        ? await Company.findOne(tenant(req, { companyCode, isActive: { $ne: false } })).lean()
+        : null;
+      const acceptedCompanyKeys = new Set([
+        companyCode,
+        selectedCompany?._id,
+        selectedCompany?.companyCode,
+        selectedCompany?.companyName,
+      ].filter(Boolean).map((value) => String(value).trim().toLowerCase()));
+      const companyProducts = Product
+        ? await Product.find(tenant(req, { isActive: { $ne: false } })).select("productCode companyId companyName").lean()
+        : [];
+      const productCodes = companyProducts.filter((product) =>
+        [product.companyId, product.companyName]
+          .filter(Boolean)
+          .some((value) => acceptedCompanyKeys.has(String(value).trim().toLowerCase()))
+      ).map((product) => String(product.productCode || "")).filter(Boolean);
+      filter.$and = [{ $or: [{ CompanyCode: companyCode }, { ProdCode: { $in: productCodes } }] }];
+    }
+    if (req.query.product) {
+      const escaped = String(req.query.product).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+      const search = new RegExp(escaped, "i");
+      filter.$or = [{ ProdCode: search }, { ProductName: search }];
+    }
+    const adjustments = await StockAdjustment.find(filter).sort({ VoucherDate: 1, createdAt: 1 }).lean();
+    const rows = adjustments.map((row, index) => {
+      const quantity = number(row.TotalQty || row.Qty);
+      const stockIn = row.AdjustmentType === "IN" ? quantity : 0;
+      const stockOut = row.AdjustmentType === "OUT" ? quantity : 0;
+      const voucherParts = String(row.VoucherNo || "").split("-");
+      return {
+        SrNo: index + 1,
+        Date: row.VoucherDate || "",
+        TrnSeries: voucherParts[0] || "",
+        TrnNo: voucherParts.slice(1).join("-") || row.VoucherNo || "",
+        Movement: row.AdjustmentType === "IN" ? "Stock In" : "Stock Out",
+        Godown: row.GodownName || row.GDCode || "",
+        ProductCode: row.ProdCode || "",
+        ProductName: row.ProductName || "",
+        Batch: row.Batch || ".",
+        MRP: number(row.MRP),
+        StockIn: stockIn,
+        StockOut: stockOut,
+        BalanceQty: number(row.BalanceAfter),
+        Qty: number(row.Qty),
+        FreeQty: number(row.FreeQty),
+        Narration: row.Narration || "",
+      };
+    });
+    res.json({ success: true, rows });
   });
   router.get("/reports/audit-trail", securityRouter.authorizeRequest("REPORTS", "AUDIT_TRAIL", "view"), async (req, res) => {
     const filter = tenant(req); if (req.query.fromDate || req.query.toDate) { filter.createdAt = {}; if (req.query.fromDate) filter.createdAt.$gte = new Date(`${req.query.fromDate}T00:00:00.000Z`); if (req.query.toDate) filter.createdAt.$lte = new Date(`${req.query.toDate}T23:59:59.999Z`); }

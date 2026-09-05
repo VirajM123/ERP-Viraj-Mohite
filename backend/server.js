@@ -7,6 +7,7 @@ import generalSetupRoutes from "./generalSetup.js";
 import createSecuritySetupRouter from "./securitySetup.js";
 import createImportRouter from "./importRoutes.js";
 import createProductSalesReportRouter from "./productSalesReport.js";
+import createGstReportsRouter from "./gstReports.js";
 import {
   authenticateApi,
   assertSecurityConfiguration,
@@ -24,6 +25,7 @@ import { businessDateIST } from "./businessDate.js";
 import { validateFinancialEnvelope } from "./financialValidation.js";
 import createP0FeaturesRouter, { recordStockMovements, validateCustomerCredit } from "./p0Features.js";
 import createServiceRouter from "./service.js";
+import { assertMasterNotUsed } from "./masterUsageGuard.js";
 dotenv.config();
 
 assertSecurityConfiguration();
@@ -1922,7 +1924,7 @@ const stockAdjustmentSchema = new mongoose.Schema(
     RequestId: { type: String, required: true },
     VoucherNo: { type: String, required: true },
     VoucherDate: { type: String, required: true },
-    AdjustmentType: { type: String, enum: ["IN", "OUT"], required: true },
+    AdjustmentType: { type: String, enum: ["IN", "OUT", "DAMAGE_IN", "DAMAGE_OUT"], required: true },
     GDCode: { type: String, required: true },
     GodownName: { type: String, default: "" },
     CompanyCode: { type: String, default: "" },
@@ -4778,18 +4780,20 @@ app.put(
       });
     }
 
+    const updateData = {
+      companyCode: code.trim(),
+      companyName: name.trim(),
+      companyAddress: address || "",
+      branchOfficeAddress: branchAddress || "",
+    };
+    if (Object.hasOwn(req.body, "gstNo")) updateData.gstNo = String(req.body.gstNo || "").trim();
+    if (Object.hasOwn(req.body, "state")) updateData.state = String(req.body.state || "").trim();
+    if (Object.hasOwn(req.body, "pinCode")) updateData.pinCode = String(req.body.pinCode || "").trim();
+
     const company = await Company.findOneAndUpdate(
       { _id: req.params.id, distributorId: req.auth.distributorId, firmId: req.auth.firmId },
-      {
-        companyCode: code.trim(),
-        companyName: name.trim(),
-        companyAddress: address || "",
-        branchOfficeAddress: branchAddress || "",
-        gstNo: String(req.body.gstNo || "").trim(),
-        state: String(req.body.state || "").trim(),
-        pinCode: String(req.body.pinCode || "").trim(),
-      },
-      { new: true }
+      { $set: updateData },
+      { new: true, runValidators: true }
     );
 
     if (!company) {
@@ -4798,6 +4802,7 @@ app.put(
 
     res.json({ success: true, message: "Company updated successfully", data: company });
   } catch (error) {
+    if (error.code === 11000) return res.status(409).json({ success: false, message: "Company code already exists for this firm" });
     res.status(500).json({ success: false, message: "Company update failed", error: error.message });
   }
 });
@@ -4866,6 +4871,13 @@ app.delete(
       });
     }
 
+    await assertMasterNotUsed({
+      connection: mongoose.connection,
+      scope: { distributorId, firmId },
+      type: "company",
+      record: { _id: company._id, code: companyCode, name: companyName },
+    });
+
     await Company.findOneAndUpdate(
       { _id: req.params.id, distributorId: req.auth.distributorId, firmId: req.auth.firmId },
       { $set: { isActive: false } }
@@ -4876,9 +4888,9 @@ app.delete(
       message: "Company deleted successfully",
     });
   } catch (error) {
-    res.status(500).json({
+    res.status(error.statusCode || 500).json({
       success: false,
-      message: "Company delete failed",
+      message: error.statusCode ? error.message : "Company delete failed",
       error: error.message,
     });
   }
@@ -9519,6 +9531,13 @@ app.post("/api/customer-banks", ensureConnection, securityRouter.authorizeReques
       accountType: req.body.accountType || "Savings",
       clearingType: String(req.body.clearingType || "LOCAL").trim(),
 
+      customerName: req.body.customerName || "",
+      customerCode: req.body.customerCode || "",
+      mobileNo: req.body.mobileNo || "",
+      emailId: req.body.emailId || "",
+      upiId: req.body.upiId || "",
+      beneficiaryName: req.body.beneficiaryName || "",
+
       swiftCode: req.body.swiftCode || "",
       micrCode: req.body.micrCode || "",
       panNumber: req.body.panNumber || "",
@@ -13657,7 +13676,7 @@ app.get(
 
 app.get("/api/stock/batches", ensureConnection, async (req, res) => {
   try {
-    const { distributorId, firmId, gdCode, prodCode, includeLocked = "N" } = req.query;
+    const { distributorId, firmId, gdCode, prodCode, includeLocked = "N", stockType = "SALEABLE" } = req.query;
 
     const filter = {
       distributorId: String(distributorId || "").trim(),
@@ -13671,7 +13690,8 @@ app.get("/api/stock/batches", ensureConnection, async (req, res) => {
       filter.IsLocked = { $ne: "Y" };
     }
 
-    const rows = await Stock.find(filter).sort({ ExpDt: 1, Batch: 1 }).lean();
+    const StockModel = String(stockType).trim().toUpperCase() === "DAMAGE" ? DamStock : Stock;
+    const rows = await StockModel.find(filter).sort({ ExpDt: 1, Batch: 1 }).lean();
     console.log(
       "STOCK BATCH FILTER:",
       JSON.stringify(filter, null, 2)
@@ -13755,7 +13775,7 @@ app.get("/api/stock/adjustments", ensureConnection, async (req, res) => {
     }
 
     const filter = { distributorId, firmId, Status: "COMPLETED" };
-    if (["IN", "OUT"].includes(adjustmentType)) filter.AdjustmentType = adjustmentType;
+    if (["IN", "OUT", "DAMAGE_IN", "DAMAGE_OUT"].includes(adjustmentType)) filter.AdjustmentType = adjustmentType;
 
     const adjustments = await StockAdjustment.find(filter)
       .sort({ createdAt: -1 })
@@ -13782,6 +13802,16 @@ const getStockAdjustmentKey = (adjustment) => ({
   MRP: Number(adjustment.MRP || 0),
 });
 
+const isStockInAdjustment = (adjustmentType) => ["IN", "DAMAGE_IN"].includes(String(adjustmentType).toUpperCase());
+const isDamageStockAdjustment = (adjustmentType) => String(adjustmentType).toUpperCase().startsWith("DAMAGE_");
+const getAdjustmentStockModel = (adjustmentType) => isDamageStockAdjustment(adjustmentType) ? DamStock : Stock;
+const getStockAdjustmentLabel = (adjustmentType) => ({
+  IN: "Stock In",
+  OUT: "Stock Out",
+  DAMAGE_IN: "Self Damage (Godown Damage)",
+  DAMAGE_OUT: "Damage Stock Out",
+}[String(adjustmentType).toUpperCase()] || "Stock");
+
 /*
  * Apply (direction = 1) or reverse (direction = -1) one manual stock
  * adjustment. Negative movements are guarded so an edit/delete can never
@@ -13789,19 +13819,20 @@ const getStockAdjustmentKey = (adjustment) => ({
  */
 const moveStockForAdjustment = async (adjustment, direction = 1) => {
   const totalQuantity = Number(adjustment.TotalQty || 0);
-  const typeSign = adjustment.AdjustmentType === "IN" ? 1 : -1;
+  const typeSign = isStockInAdjustment(adjustment.AdjustmentType) ? 1 : -1;
   const quantityDelta = direction * typeSign * totalQuantity;
   const stockKey = getStockAdjustmentKey(adjustment);
+  const StockModel = getAdjustmentStockModel(adjustment.AdjustmentType);
 
   if (quantityDelta < 0) {
-    const stockRow = await Stock.findOneAndUpdate(
+    const stockRow = await StockModel.findOneAndUpdate(
       { ...stockKey, Qty: { $gte: Math.abs(quantityDelta) }, IsLocked: { $ne: "Y" } },
       { $inc: { Qty: quantityDelta } },
       { new: true, runValidators: true }
     ).lean();
 
     if (!stockRow) {
-      const currentRow = await Stock.findOne(stockKey).lean();
+      const currentRow = await StockModel.findOne(stockKey).lean();
       const error = new Error(
         currentRow
           ? `Only ${Number(currentRow.Qty || 0)} saleable units are available in this batch.`
@@ -13820,14 +13851,14 @@ const moveStockForAdjustment = async (adjustment, direction = 1) => {
     firmName: String(adjustment.firmName || "").trim(),
   };
 
-  if (adjustment.AdjustmentType === "IN") {
+  if (isStockInAdjustment(adjustment.AdjustmentType)) {
     setValues.ExpDt = adjustment.ExpiryDate || null;
     setValues.MfgDt = adjustment.MfgDate || null;
     setValues.BoxPack = Number(adjustment.BoxPack || 1);
     setValues.InBoxPack = Number(adjustment.InBoxPack || 1);
   }
 
-  return Stock.findOneAndUpdate(
+  return StockModel.findOneAndUpdate(
     stockKey,
     {
       $inc: { Qty: quantityDelta },
@@ -13857,7 +13888,7 @@ app.put("/api/stock/adjustments/:id", ensureConnection, async (req, res) => {
       return res.status(400).json({ success: false, message: "A valid stock entry and firm are required." });
     }
 
-    if (!["IN", "OUT"].includes(adjustmentType) || totalQuantity <= 0) {
+    if (!["IN", "OUT", "DAMAGE_IN", "DAMAGE_OUT"].includes(adjustmentType) || totalQuantity <= 0) {
       return res.status(400).json({ success: false, message: "Adjustment type and a quantity greater than zero are required." });
     }
 
@@ -13948,7 +13979,7 @@ app.put("/api/stock/adjustments/:id", ensureConnection, async (req, res) => {
 
     return res.json({
       success: true,
-      message: `${adjustmentType === "IN" ? "Stock In" : "Stock Out"} entry updated successfully.`,
+      message: `${getStockAdjustmentLabel(adjustmentType)} entry updated successfully.`,
       stock: { quantity: Number(stockRow.Qty || 0) },
     });
   } catch (error) {
@@ -14070,10 +14101,10 @@ app.post("/api/stock/adjust", ensureConnection, async (req, res) => {
       });
     }
 
-    if (!["IN", "OUT"].includes(adjustmentType)) {
+    if (!["IN", "OUT", "DAMAGE_IN", "DAMAGE_OUT"].includes(adjustmentType)) {
       return res.status(400).json({
         success: false,
-        message: "Adjustment type must be IN or OUT.",
+        message: "Invalid stock adjustment type.",
       });
     }
 
@@ -14118,7 +14149,7 @@ app.post("/api/stock/adjust", ensureConnection, async (req, res) => {
       });
     }
 
-    const voucherPrefix = adjustmentType === "IN" ? "STI" : "STO";
+    const voucherPrefix = ({ IN: "STI", OUT: "STO", DAMAGE_IN: "DMI", DAMAGE_OUT: "DMO" })[adjustmentType];
     const adjustment = await StockAdjustment.create({
       RequestId: requestId,
       VoucherNo: `${voucherPrefix}-${Date.now()}`,
@@ -14149,8 +14180,10 @@ app.post("/api/stock/adjust", ensureConnection, async (req, res) => {
 
     let stockRow;
 
-    if (adjustmentType === "IN") {
-      stockRow = await Stock.findOneAndUpdate(
+    const StockModel = getAdjustmentStockModel(adjustmentType);
+
+    if (isStockInAdjustment(adjustmentType)) {
+      stockRow = await StockModel.findOneAndUpdate(
         stockKey,
         {
           $inc: { Qty: totalQuantity },
@@ -14168,14 +14201,14 @@ app.post("/api/stock/adjust", ensureConnection, async (req, res) => {
         { new: true, upsert: true, runValidators: true }
       ).lean();
     } else {
-      stockRow = await Stock.findOneAndUpdate(
+      stockRow = await StockModel.findOneAndUpdate(
         { ...stockKey, Qty: { $gte: totalQuantity }, IsLocked: { $ne: "Y" } },
         { $inc: { Qty: -totalQuantity } },
         { new: true, runValidators: true }
       ).lean();
 
       if (!stockRow) {
-        const currentRow = await Stock.findOne(stockKey).lean();
+        const currentRow = await StockModel.findOne(stockKey).lean();
         await StockAdjustment.updateOne(
           { _id: adjustment._id },
           { $set: { Status: "FAILED" } }
@@ -14183,7 +14216,7 @@ app.post("/api/stock/adjust", ensureConnection, async (req, res) => {
         return res.status(409).json({
           success: false,
           message: currentRow
-            ? `Only ${Number(currentRow.Qty || 0)} saleable units are available in this batch.`
+            ? `Only ${Number(currentRow.Qty || 0)} ${isDamageStockAdjustment(adjustmentType) ? "damaged" : "saleable"} units are available in this batch.`
             : "The selected stock batch no longer exists.",
         });
       }
@@ -14196,9 +14229,7 @@ app.post("/api/stock/adjust", ensureConnection, async (req, res) => {
 
     return res.json({
       success: true,
-      message: adjustmentType === "IN"
-        ? "Saleable stock added successfully."
-        : "Saleable stock reduced successfully.",
+      message: `${getStockAdjustmentLabel(adjustmentType)} saved successfully.`,
       stock: {
         id: stockRow._id,
         gdCode: stockRow.GDCode,
@@ -14212,7 +14243,7 @@ app.post("/api/stock/adjust", ensureConnection, async (req, res) => {
     console.error("Manual stock adjustment error:", error);
     return res.status(500).json({
       success: false,
-      message: "Failed to update saleable stock.",
+      message: "Failed to update stock.",
       error: error.message,
     });
   }
@@ -22323,6 +22354,20 @@ const DebitNote =
     debitNoteSchema
   );
 
+app.use(
+  "/api/reports",
+  ensureConnection,
+  securityRouter.authorizeRequest("REPORTS", "GST_REPORTS", "view"),
+  createGstReportsRouter({
+    SalesHeader,
+    PurchaseHeader,
+    CreditNote,
+    DebitNote,
+    Account,
+    OtherAccount,
+  })
+);
+
 const debitNumber = (value) => {
   const parsed = Number(value ?? 0);
 
@@ -26586,6 +26631,8 @@ const damStockSchema = new mongoose.Schema(
     PRate: { type: Number, default: 0 },
     SRate: { type: Number, default: 0 },
     Qty: { type: Number, default: 0 },
+    ExpDt: { type: String, default: null },
+    MfgDt: { type: String, default: null },
     BoxPack: { type: Number, default: 1 },
     InBoxPack: { type: Number, default: 1 },
     IsLocked: { type: String, default: "N" },
@@ -26703,7 +26750,7 @@ app.put(
         groupCode: code.trim(),
         groupName: name.trim(),
       },
-      { new: true }
+      { new: true, runValidators: true }
     );
 
     if (!updatedGroup) {
@@ -26716,6 +26763,7 @@ app.put(
       data: updatedGroup
     });
   } catch (error) {
+    if (error.code === 11000) return res.status(409).json({ success: false, message: "Group code already exists for this firm" });
     res.status(500).json({
       success: false,
       message: "Group update failed",
@@ -26735,8 +26783,13 @@ app.delete(
   ),
   async (req, res) => {
   try {
+    const filter = { _id: req.params.id, distributorId: req.auth.distributorId, firmId: req.auth.firmId };
+    const group = await Group.findOne(filter);
+    if (!group) return res.status(404).json({ success: false, message: "Group not found" });
+    await assertMasterNotUsed({ connection: mongoose.connection, scope: req.auth, type: "group",
+      record: { _id: group._id, code: group.groupCode, name: group.groupName } });
     const deletedGroup = await Group.findOneAndUpdate(
-      { _id: req.params.id, distributorId: req.auth.distributorId, firmId: req.auth.firmId },
+      filter,
       { $set: { isActive: false } }, { new: true }
     );
 
@@ -26746,9 +26799,9 @@ app.delete(
 
     res.json({ success: true, message: "Group deleted successfully" });
   } catch (error) {
-    res.status(500).json({
+    res.status(error.statusCode || 500).json({
       success: false,
-      message: "Group delete failed",
+      message: error.statusCode ? error.message : "Group delete failed",
       error: error.message
     });
   }
@@ -26781,7 +26834,7 @@ app.put(
         categoryCode: code.trim(),
         categoryName: name.trim(),
       },
-      { new: true }
+      { new: true, runValidators: true }
     );
 
     if (!updatedCategory) {
@@ -26794,6 +26847,7 @@ app.put(
       data: updatedCategory
     });
   } catch (error) {
+    if (error.code === 11000) return res.status(409).json({ success: false, message: "Category code already exists for this firm" });
     res.status(500).json({
       success: false,
       message: "Category update failed",
@@ -26813,8 +26867,13 @@ app.delete(
   ),
   async (req, res) => {
   try {
+    const filter = { _id: req.params.id, distributorId: req.auth.distributorId, firmId: req.auth.firmId };
+    const category = await Category.findOne(filter);
+    if (!category) return res.status(404).json({ success: false, message: "Category not found" });
+    await assertMasterNotUsed({ connection: mongoose.connection, scope: req.auth, type: "category",
+      record: { _id: category._id, code: category.categoryCode, name: category.categoryName } });
     const deletedCategory = await Category.findOneAndUpdate(
-      { _id: req.params.id, distributorId: req.auth.distributorId, firmId: req.auth.firmId },
+      filter,
       { $set: { isActive: false } }, { new: true }
     );
 
@@ -26824,9 +26883,9 @@ app.delete(
 
     res.json({ success: true, message: "Category deleted successfully" });
   } catch (error) {
-    res.status(500).json({
+    res.status(error.statusCode || 500).json({
       success: false,
-      message: "Category delete failed",
+      message: error.statusCode ? error.message : "Category delete failed",
       error: error.message
     });
   }
@@ -26842,10 +26901,15 @@ app.put(
     "edit"
   ), async (req, res) => {
   try {
+    const productCode = String(req.body.code || req.body.productCode || "").trim();
+    const productName = String(req.body.name || req.body.productName || "").trim();
+    if (!productCode || !productName) {
+      return res.status(400).json({ success: false, message: "Product Code and Name are required" });
+    }
     const updateData = {
       ...req.body,
-      productCode: String(req.body.code || req.body.productCode || "").trim(),
-      productName: String(req.body.name || req.body.productName || "").trim(),
+      productCode,
+      productName,
       hsn: String(req.body.hsn || "").trim(),
     };
 
@@ -26856,7 +26920,7 @@ app.put(
     const updatedProduct = await Product.findOneAndUpdate(
       { _id: req.params.id, distributorId: req.auth.distributorId, firmId: req.auth.firmId },
       updateData,
-      { new: true }
+      { new: true, runValidators: true }
     );
 
     if (!updatedProduct) {
@@ -26869,6 +26933,7 @@ app.put(
       data: updatedProduct,
     });
   } catch (error) {
+    if (error.code === 11000) return res.status(409).json({ success: false, message: "Product code already exists for this firm" });
     res.status(500).json({
       success: false,
       message: "Product update failed",
@@ -26887,8 +26952,13 @@ app.delete(
     "delete"
   ), async (req, res) => {
   try {
+    const filter = { _id: req.params.id, distributorId: req.auth.distributorId, firmId: req.auth.firmId };
+    const product = await Product.findOne(filter);
+    if (!product) return res.status(404).json({ success: false, message: "Product not found" });
+    await assertMasterNotUsed({ connection: mongoose.connection, scope: req.auth, type: "product",
+      record: { _id: product._id, code: product.productCode, name: product.productName } });
     const deletedProduct = await Product.findOneAndUpdate(
-      { _id: req.params.id, distributorId: req.auth.distributorId, firmId: req.auth.firmId },
+      filter,
       { $set: { isActive: false } }, { new: true }
     );
 
@@ -26898,9 +26968,9 @@ app.delete(
 
     res.json({ success: true, message: "Product deleted successfully" });
   } catch (error) {
-    res.status(500).json({
+    res.status(error.statusCode || 500).json({
       success: false,
-      message: "Product delete failed",
+      message: error.statusCode ? error.message : "Product delete failed",
       error: error.message
     });
   }
@@ -26917,8 +26987,12 @@ app.put(
     ), async (req, res) => {
   try {
     const { id } = req.params;
-    const distributorId = String(req.body.distributorId || "").trim();
-    const firmId = String(req.body.firmId || "").trim();
+    const distributorId = String(req.auth.distributorId || "").trim();
+    const firmId = String(req.auth.firmId || "").trim();
+
+    if (!String(req.body.accountCode || "").trim() || !String(req.body.accountName || "").trim()) {
+      return res.status(400).json({ success: false, message: "Account Code and Name are required" });
+    }
 
     let townValue = req.body.town || "Pune";
     const areaCodeValue = req.body.areaCode || "";
@@ -27071,8 +27145,13 @@ app.delete(
         "delete"
     ), async (req, res) => {
   try {
+    const filter = { _id: req.params.id, distributorId: req.auth.distributorId, firmId: req.auth.firmId };
+    const account = await Account.findOne(filter);
+    if (!account) return res.status(404).json({ success: false, message: "Account not found" });
+    await assertMasterNotUsed({ connection: mongoose.connection, scope: req.auth, type: "account",
+      record: { _id: account._id, code: account.accountCode, name: account.accountName } });
     const deletedAccount = await Account.findOneAndUpdate(
-      { _id: req.params.id, distributorId: req.auth.distributorId, firmId: req.auth.firmId },
+      filter,
       { $set: { isActive: false } }, { new: true }
     );
 
@@ -27082,9 +27161,9 @@ app.delete(
 
     res.json({ success: true, message: "Account deleted successfully" });
   } catch (error) {
-    res.status(500).json({
+    res.status(error.statusCode || 500).json({
       success: false,
-      message: "Account delete failed",
+      message: error.statusCode ? error.message : "Account delete failed",
       error: error.message
     });
   }
@@ -27102,7 +27181,20 @@ app.put(
   async (req, res) => {
   try {
     const { id } = req.params;
-    const updateData = { ...req.body };
+    const accountCode = String(req.body.accountCode || "").trim();
+    const accountName = String(req.body.accountName || "").trim();
+    if (!accountCode || !accountName) {
+      return res.status(400).json({ success: false, message: "Account Code and Name are required" });
+    }
+    const updateData = {
+      ...req.body,
+      accountCode,
+      accountName,
+      branch: req.body.branch || req.body.branchName || "",
+      branchName: req.body.branchName || req.body.branch || "",
+      openingBal: Number(req.body.openingBal || 0),
+      tcsPercent: Number(req.body.tcsPercent || 0),
+    };
 
     delete updateData._id;
     delete updateData.distributorId;
@@ -27111,7 +27203,7 @@ app.put(
     const updatedOtherAccount = await OtherAccount.findOneAndUpdate(
       { _id: id, distributorId: req.auth.distributorId, firmId: req.auth.firmId },
       updateData,
-      { new: true }
+      { new: true, runValidators: true }
     );
 
     if (!updatedOtherAccount) {
@@ -27124,6 +27216,7 @@ app.put(
       data: updatedOtherAccount
     });
   } catch (error) {
+    if (error.code === 11000) return res.status(409).json({ success: false, message: "Other account code already exists for this firm" });
     res.status(500).json({
       success: false,
       message: "Other Account update failed",
@@ -27143,8 +27236,13 @@ app.delete(
   ),
   async (req, res) => {
   try {
+    const filter = { _id: req.params.id, distributorId: req.auth.distributorId, firmId: req.auth.firmId };
+    const account = await OtherAccount.findOne(filter);
+    if (!account) return res.status(404).json({ success: false, message: "Other Account not found" });
+    await assertMasterNotUsed({ connection: mongoose.connection, scope: req.auth, type: "otherAccount",
+      record: { _id: account._id, code: account.accountCode, name: account.accountName } });
     const deletedOtherAccount = await OtherAccount.findOneAndUpdate(
-      { _id: req.params.id, distributorId: req.auth.distributorId, firmId: req.auth.firmId },
+      filter,
       { $set: { isActive: false } }, { new: true }
     );
 
@@ -27154,9 +27252,9 @@ app.delete(
 
     res.json({ success: true, message: "Other Account deleted successfully" });
   } catch (error) {
-    res.status(500).json({
+    res.status(error.statusCode || 500).json({
       success: false,
-      message: "Other Account delete failed",
+      message: error.statusCode ? error.message : "Other Account delete failed",
       error: error.message
     });
   }
@@ -27182,6 +27280,9 @@ app.put(
         message: "GST Code and VAT Percent are required"
       });
     }
+    if (!Number.isFinite(Number(vatPercent))) {
+      return res.status(400).json({ success: false, message: "VAT Percent must be a valid number" });
+    }
 
     const updatedGst = await GST.findOneAndUpdate(
       { _id: id, distributorId: req.auth.distributorId, firmId: req.auth.firmId },
@@ -27191,7 +27292,7 @@ app.put(
         purchaseType: purchaseType || "VAT ON PURCHASE PRICE",
         salesType: salesType || "VAT ON SALES PRICE",
       },
-      { new: true }
+      { new: true, runValidators: true }
     );
 
     if (!updatedGst) {
@@ -27229,8 +27330,13 @@ app.delete(
   ),
   async (req, res) => {
   try {
+    const filter = { _id: req.params.id, distributorId: req.auth.distributorId, firmId: req.auth.firmId };
+    const gst = await GST.findOne(filter);
+    if (!gst) return res.status(404).json({ success: false, message: "GST not found" });
+    await assertMasterNotUsed({ connection: mongoose.connection, scope: req.auth, type: "gst",
+      record: { _id: gst._id, code: gst.gstCode, name: gst.gstCode } });
     const deletedGst = await GST.findOneAndUpdate(
-      { _id: req.params.id, distributorId: req.auth.distributorId, firmId: req.auth.firmId },
+      filter,
       { $set: { isActive: false } }, { new: true }
     );
 
@@ -27240,9 +27346,9 @@ app.delete(
 
     res.json({ success: true, message: "GST deleted successfully" });
   } catch (error) {
-    res.status(500).json({
+    res.status(error.statusCode || 500).json({
       success: false,
-      message: "GST delete failed",
+      message: error.statusCode ? error.message : "GST delete failed",
       error: error.message
     });
   }
@@ -27260,7 +27366,17 @@ app.put(
   async (req, res) => {
   try {
     const { id } = req.params;
-    const updateData = { ...req.body };
+    const salesmanCode = String(req.body.salesmanCode || req.body.code || "").trim();
+    const salesmanName = String(req.body.salesmanName || req.body.name || "").trim();
+    if (!salesmanCode || !salesmanName) {
+      return res.status(400).json({ success: false, message: "Salesman Code and Name are required" });
+    }
+    const updateData = {
+      ...req.body,
+      salesmanCode,
+      salesmanName,
+      salesmanType: req.body.salesmanType || req.body.type || "SALESMAN",
+    };
 
     delete updateData._id;
     delete updateData.distributorId;
@@ -27269,7 +27385,7 @@ app.put(
     const updatedSalesman = await Salesman.findOneAndUpdate(
       { _id: id, distributorId: req.auth.distributorId, firmId: req.auth.firmId },
       updateData,
-      { new: true }
+      { new: true, runValidators: true }
     );
 
     if (!updatedSalesman) {
@@ -27307,8 +27423,13 @@ app.delete(
   ),
   async (req, res) => {
   try {
+    const filter = { _id: req.params.id, distributorId: req.auth.distributorId, firmId: req.auth.firmId };
+    const salesman = await Salesman.findOne(filter);
+    if (!salesman) return res.status(404).json({ success: false, message: "Salesman not found" });
+    await assertMasterNotUsed({ connection: mongoose.connection, scope: req.auth, type: "salesman",
+      record: { _id: salesman._id, code: salesman.salesmanCode, name: salesman.salesmanName } });
     const deletedSalesman = await Salesman.findOneAndUpdate(
-      { _id: req.params.id, distributorId: req.auth.distributorId, firmId: req.auth.firmId },
+      filter,
       { $set: { isActive: false } }, { new: true }
     );
 
@@ -27318,9 +27439,9 @@ app.delete(
 
     res.json({ success: true, message: "Salesman deleted successfully" });
   } catch (error) {
-    res.status(500).json({
+    res.status(error.statusCode || 500).json({
       success: false,
-      message: "Salesman delete failed",
+      message: error.statusCode ? error.message : "Salesman delete failed",
       error: error.message
     });
   }
@@ -27353,7 +27474,7 @@ app.put(
         areaCode: areaCode.trim(),
         areaName: areaName.trim(),
       },
-      { new: true }
+      { new: true, runValidators: true }
     );
 
     if (!updatedArea) {
@@ -27391,8 +27512,13 @@ app.delete(
   ),
   async (req, res) => {
   try {
+    const filter = { _id: req.params.id, distributorId: req.auth.distributorId, firmId: req.auth.firmId };
+    const area = await Area.findOne(filter);
+    if (!area) return res.status(404).json({ success: false, message: "Area not found" });
+    await assertMasterNotUsed({ connection: mongoose.connection, scope: req.auth, type: "area",
+      record: { _id: area._id, code: area.areaCode, name: area.areaName } });
     const deletedArea = await Area.findOneAndUpdate(
-      { _id: req.params.id, distributorId: req.auth.distributorId, firmId: req.auth.firmId },
+      filter,
       { $set: { isActive: false } }, { new: true }
     );
 
@@ -27402,9 +27528,9 @@ app.delete(
 
     res.json({ success: true, message: "Area deleted successfully" });
   } catch (error) {
-    res.status(500).json({
+    res.status(error.statusCode || 500).json({
       success: false,
-      message: "Area delete failed",
+      message: error.statusCode ? error.message : "Area delete failed",
       error: error.message
     });
   }
@@ -27439,7 +27565,7 @@ app.put(
         address: address || "",
         location: location || "",
       },
-      { new: true }
+      { new: true, runValidators: true }
     );
 
     if (!updatedGodown) {
@@ -27476,8 +27602,13 @@ app.delete(
   ),
   async (req, res) => {
   try {
+    const filter = { _id: req.params.id, distributorId: req.auth.distributorId, firmId: req.auth.firmId };
+    const godown = await Godown.findOne(filter);
+    if (!godown) return res.status(404).json({ success: false, message: "Godown not found" });
+    await assertMasterNotUsed({ connection: mongoose.connection, scope: req.auth, type: "godown",
+      record: { _id: godown._id, code: godown.godownCode, name: godown.godownName } });
     const deletedGodown = await Godown.findOneAndUpdate(
-      { _id: req.params.id, distributorId: req.auth.distributorId, firmId: req.auth.firmId },
+      filter,
       { $set: { isActive: false } }, { new: true }
     );
 
@@ -27487,9 +27618,9 @@ app.delete(
 
     res.json({ success: true, message: "Godown deleted successfully" });
   } catch (error) {
-    res.status(500).json({
+    res.status(error.statusCode || 500).json({
       success: false,
-      message: "Godown delete failed",
+      message: error.statusCode ? error.message : "Godown delete failed",
       error: error.message
     });
   }
@@ -27498,6 +27629,10 @@ app.delete(
 app.put("/api/customer-banks/:id", ensureConnection, securityRouter.authorizeRequest("MASTER", "CUSTOMER_BANK", "edit"), async (req, res) => {
   try {
     const { id } = req.params;
+
+    if (!String(req.body.bankCode || "").trim() || !String(req.body.bankName || "").trim()) {
+      return res.status(400).json({ success: false, message: "Bank Code and Bank Name are required" });
+    }
 
     const updateData = {
       bankCode: String(req.body.bankCode || "").trim(),
@@ -27539,6 +27674,7 @@ app.put("/api/customer-banks/:id", ensureConnection, securityRouter.authorizeReq
       data: updatedBank,
     });
   } catch (error) {
+    if (error.code === 11000) return res.status(409).json({ success: false, message: "This Bank Code already exists for this firm" });
     res.status(500).json({
       success: false,
       message: "Customer Bank update failed",
@@ -27550,8 +27686,13 @@ app.put("/api/customer-banks/:id", ensureConnection, securityRouter.authorizeReq
 // ---------- CUSTOMER BANK MASTER ----------
 app.delete("/api/customer-banks/:id", ensureConnection, securityRouter.authorizeRequest("MASTER", "CUSTOMER_BANK", "delete"), async (req, res) => {
   try {
+    const filter = { _id: req.params.id, distributorId: req.auth.distributorId, firmId: req.auth.firmId };
+    const bank = await CustomerBank.findOne(filter);
+    if (!bank) return res.status(404).json({ success: false, message: "Customer Bank not found" });
+    await assertMasterNotUsed({ connection: mongoose.connection, scope: req.auth, type: "customerBank",
+      record: { _id: bank._id, code: bank.bankCode, name: bank.bankName } });
     const deletedBank = await CustomerBank.findOneAndUpdate(
-      { _id: req.params.id, distributorId: req.auth.distributorId, firmId: req.auth.firmId },
+      filter,
       { $set: { isActive: false } }, { new: true }
     );
 
@@ -27561,9 +27702,9 @@ app.delete("/api/customer-banks/:id", ensureConnection, securityRouter.authorize
 
     res.json({ success: true, message: "Customer Bank deleted successfully" });
   } catch (error) {
-    res.status(500).json({
+    res.status(error.statusCode || 500).json({
       success: false,
-      message: "Customer Bank delete failed",
+      message: error.statusCode ? error.message : "Customer Bank delete failed",
       error: error.message
     });
   }
@@ -32025,6 +32166,368 @@ app.get(
 // COMPANY WISE PURCHASE REPORT API
 // =========================================================
 
+// =========================================================
+// STOCK REPORT APIS
+// These reports intentionally read the stock/transaction collections directly.
+// The field aliases keep older imported documents usable without changing the
+// schemas or any stock posting logic.
+// =========================================================
+const stockReportNumber = (...values) => {
+  for (const value of values) {
+    if (value !== undefined && value !== null && value !== "") {
+      const parsed = Number(value);
+      if (Number.isFinite(parsed)) return parsed;
+    }
+  }
+  return 0;
+};
+
+const stockReportPick = (source, ...keys) => {
+  for (const key of keys) {
+    if (source?.[key] !== undefined && source?.[key] !== null) return source[key];
+  }
+  return "";
+};
+
+const stockReportItemCode = (item) => String(stockReportPick(
+  item, "productCode", "ProductCode", "ProdCode", "prodCode", "code", "productId"
+) || String(item?.product || "").split(" - ")[0] || "").trim();
+
+const stockReportItemQty = (item) => stockReportNumber(
+  stockReportPick(item, "quantity", "qty", "Qty", "totalQty", "TotalQty")
+);
+
+const stockReportTenant = (req) => {
+  const distributorId = String(req.query.distributorId || req.auth?.distributorId || "").trim();
+  const firmId = String(req.query.firmId || req.auth?.firmId || "").trim();
+  return distributorId && firmId ? { distributorId, firmId } : null;
+};
+
+const loadStockReportMasters = async (tenantFilter) => {
+  const [productRows, companyRows] = await Promise.all([
+    Product.find({ ...tenantFilter, isActive: { $ne: false } }).lean(),
+    Company.find({ ...tenantFilter, isActive: { $ne: false } }).lean(),
+  ]);
+  const productsByCode = new Map(productRows.map((row) => [String(row.productCode || "").trim(), row]));
+  const companiesByKey = new Map();
+  companyRows.forEach((row) => {
+    [row._id, row.companyCode, row.companyName].filter(Boolean).forEach((key) => companiesByKey.set(String(key), row));
+  });
+  return { productsByCode, companiesByKey };
+};
+
+const stockReportMatchesCompany = (product, companyCode, masters) => {
+  const requested = String(companyCode || "").trim();
+  if (!requested) return true;
+  const selectedCompany = masters.companiesByKey.get(requested);
+  const accepted = new Set([
+    requested,
+    selectedCompany?._id,
+    selectedCompany?.companyCode,
+    selectedCompany?.companyName,
+  ].filter(Boolean).map((value) => String(value).trim().toLowerCase()));
+  return [product?.companyId, product?.companyCode, product?.companyName]
+    .filter(Boolean)
+    .some((value) => accepted.has(String(value).trim().toLowerCase()));
+};
+
+const sortStockReportRows = (rows, orderBy = "productName") => {
+  const keys = orderBy === "productCode"
+    ? ["ProdCode", "ProductCode"]
+    : orderBy === "date"
+      ? ["TrnDate", "Date"]
+      : ["ProdName", "ProductName", "CompName"];
+  return rows.sort((left, right) => {
+    const leftValue = keys.map((key) => left[key]).find((value) => value !== undefined) || "";
+    const rightValue = keys.map((key) => right[key]).find((value) => value !== undefined) || "";
+    return String(leftValue).localeCompare(String(rightValue), undefined, { numeric: true });
+  });
+};
+
+const lastPurchaseByProduct = async (tenantFilter) => {
+  const purchases = await PurchaseHeader.find({ ...tenantFilter, isActive: { $ne: false } })
+    .select("invoiceDate items")
+    .sort({ invoiceDate: -1, createdAt: -1 })
+    .lean();
+  const result = new Map();
+  purchases.forEach((purchase) => {
+    (Array.isArray(purchase.items) ? purchase.items : []).forEach((item) => {
+      const code = stockReportItemCode(item);
+      if (!code || result.has(code)) return;
+      result.set(code, {
+        date: purchase.invoiceDate || "",
+        rate: stockReportNumber(stockReportPick(item, "purRate", "purchaseRate", "PRate", "pRate", "rate", "Rate")),
+        qty: stockReportItemQty(item),
+      });
+    });
+  });
+  return result;
+};
+
+const stockStatusRows = async (tenantFilter, { godownCode = "", asOnDate = "", companyCode = "" } = {}) => {
+  const filter = { ...tenantFilter };
+  if (godownCode) filter.GDCode = godownCode;
+  const [stocks, masters, lastPurchases] = await Promise.all([
+    Stock.find(filter).sort({ ProdCode: 1, Batch: 1 }).lean(),
+    loadStockReportMasters(tenantFilter),
+    lastPurchaseByProduct(tenantFilter),
+  ]);
+
+  let quantities = new Map(stocks.map((stock) => [String(stock._id), stockReportNumber(stock.Qty)]));
+  if (asOnDate) {
+    const Movement = mongoose.models.Inv_StockMovement;
+    const [laterMovements, laterAdjustments] = await Promise.all([
+      Movement ? Movement.find({ ...tenantFilter, movementDate: { $gt: asOnDate } }).lean() : [],
+      StockAdjustment.find({ ...tenantFilter, Status: "COMPLETED", VoucherDate: { $gt: asOnDate } }).lean(),
+    ]);
+    const movementDelta = new Map();
+    laterMovements.forEach((row) => {
+      const key = [row.godown, row.productCode, row.batch || ".", stockReportNumber(row.mrp)].join("\u0000");
+      movementDelta.set(key, (movementDelta.get(key) || 0) + stockReportNumber(row.quantityIn) - stockReportNumber(row.quantityOut));
+    });
+    laterAdjustments.filter((row) => ["IN", "OUT"].includes(String(row.AdjustmentType))).forEach((row) => {
+      const key = [row.GDCode, row.ProdCode, row.Batch || ".", stockReportNumber(row.MRP)].join("\u0000");
+      const sign = row.AdjustmentType === "IN" ? 1 : -1;
+      movementDelta.set(key, (movementDelta.get(key) || 0) + sign * stockReportNumber(row.TotalQty, row.Qty));
+    });
+    quantities = new Map(stocks.map((stock) => {
+      const key = [stock.GDCode, stock.ProdCode, stock.Batch || ".", stockReportNumber(stock.MRP)].join("\u0000");
+      return [String(stock._id), stockReportNumber(stock.Qty) - (movementDelta.get(key) || 0)];
+    }));
+  }
+
+  return stocks.map((stock) => {
+    const product = masters.productsByCode.get(String(stock.ProdCode || "").trim()) || {};
+    if (!stockReportMatchesCompany(product, companyCode, masters)) return null;
+    const company = masters.companiesByKey.get(String(product.companyId || product.companyCode || product.companyName || "")) || {};
+    const qty = quantities.get(String(stock._id)) || 0;
+    const boxPack = stockReportNumber(stock.BoxPack, product.boxPack, 1) || 1;
+    const inBoxPack = stockReportNumber(stock.InBoxPack, product.inboxPack, 1) || 1;
+    const boxQty = Math.trunc(qty / boxPack);
+    const afterBoxes = qty - boxQty * boxPack;
+    const inBox = Math.trunc(afterBoxes / inBoxPack);
+    const unitQty = afterBoxes - inBox * inBoxPack;
+    const weight = stockReportNumber(product.weight);
+    const lastPurchase = lastPurchases.get(String(stock.ProdCode || "")) || {};
+    return {
+      SysProdCode: String(stockReportPick(product, "sysProdCode", "SysProdCode", "systemProductCode") || product._id || ""),
+      HSNCode: String(stockReportPick(product, "hsn", "HSNCode", "hsnCode") || ""),
+      ProdCode: stock.ProdCode || "",
+      ProdName: product.productName || "",
+      LocalProduct: String(stockReportPick(product, "localProduct", "LocalProduct", "description") || ""),
+      ShortCode: String(stockReportPick(product, "shortCode", "ShortCode", "eanCode") || ""),
+      Batch: stock.Batch || ".",
+      MfgDate: stock.MfgDt || "",
+      ExpDate: stock.ExpDt || "",
+      BatchLock: stock.IsLocked || "N",
+      MRP: stockReportNumber(stock.MRP),
+      BoxQty: boxQty,
+      InBox: inBox,
+      UnitQty: Number(unitQty.toFixed(3)),
+      TotalQty: Number(qty.toFixed(3)),
+      ValueRs: Number((qty * stockReportNumber(stock.PRate)).toFixed(2)),
+      ValueKg: Number((qty * weight).toFixed(3)),
+      CatName: String(stockReportPick(product, "categoryName", "category", "Category") || ""),
+      CompName: company.companyName || product.companyName || "",
+      VatPer: stockReportNumber(product.gst, product.VatPer),
+      Weight: weight,
+      BoxPack: boxPack,
+      InBoxPack: inBoxPack,
+      LastPurchaseDate: lastPurchase.date || "",
+      LastPurchase: stockReportNumber(lastPurchase.rate),
+      LastQty: stockReportNumber(lastPurchase.qty),
+    };
+  }).filter(Boolean);
+};
+
+app.get("/api/reports/current-stock", ensureConnection, securityRouter.authorizeRequest("REPORTS", "STOCK_REPORT", "view"), async (req, res) => {
+  try {
+    const tenantFilter = stockReportTenant(req);
+    if (!tenantFilter) return res.status(400).json({ success: false, message: "Distributor and firm are required." });
+    let rows = await stockStatusRows(tenantFilter, {
+      godownCode: String(req.query.godownCode || "").trim(),
+      companyCode: String(req.query.companyCode || "").trim(),
+    });
+    const reportFilter = String(req.query.reportFilter || "all").toLowerCase();
+    if (reportFilter === "positive") rows = rows.filter((row) => row.TotalQty > 0);
+    else if (reportFilter === "negative") rows = rows.filter((row) => row.TotalQty < 0);
+    else if (reportFilter === "zero") rows = rows.filter((row) => row.TotalQty === 0);
+    else {
+      if (String(req.query.includeNegative || "N").toUpperCase() !== "Y") rows = rows.filter((row) => row.TotalQty >= 0);
+      if (String(req.query.includeZero || "N").toUpperCase() !== "Y") rows = rows.filter((row) => row.TotalQty !== 0);
+    }
+    if (String(req.query.nearExpiry || "N").toUpperCase() === "Y") {
+      const days = Math.max(1, stockReportNumber(req.query.expiryDays, 30));
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      const limit = new Date(today);
+      limit.setDate(limit.getDate() + days);
+      rows = rows.filter((row) => {
+        const expiry = new Date(row.ExpDate);
+        return !Number.isNaN(expiry.getTime()) && expiry >= today && expiry <= limit;
+      });
+    }
+    rows = sortStockReportRows(rows, req.query.orderBy).map((row, index) => ({ SrNo: index + 1, ...row }));
+    return res.json({ success: true, rows });
+  } catch (error) {
+    console.error("Current stock report error:", error);
+    return res.status(500).json({ success: false, message: error.message || "Failed to load current stock report." });
+  }
+});
+
+app.get("/api/reports/as-on-date-stock", ensureConnection, securityRouter.authorizeRequest("REPORTS", "STOCK_REPORT", "view"), async (req, res) => {
+  try {
+    const tenantFilter = stockReportTenant(req);
+    const asOnDate = String(req.query.asOnDate || req.query.toDate || "").trim();
+    if (!tenantFilter || !asOnDate) return res.status(400).json({ success: false, message: "Distributor, firm and As On Date are required." });
+    const rows = sortStockReportRows((await stockStatusRows(tenantFilter, {
+      godownCode: String(req.query.godownCode || "").trim(),
+      asOnDate,
+      companyCode: String(req.query.companyCode || "").trim(),
+    })).filter((row) => row.TotalQty !== 0), req.query.orderBy).map((row, index) => ({ SrNo: index + 1, ...row }));
+    return res.json({ success: true, rows });
+  } catch (error) {
+    console.error("As-on-date stock report error:", error);
+    return res.status(500).json({ success: false, message: error.message || "Failed to load as-on-date stock report." });
+  }
+});
+
+app.get("/api/reports/damage-stock", ensureConnection, securityRouter.authorizeRequest("REPORTS", "STOCK_REPORT", "view"), async (req, res) => {
+  try {
+    const tenantFilter = stockReportTenant(req);
+    if (!tenantFilter) return res.status(400).json({ success: false, message: "Distributor and firm are required." });
+    const filter = { ...tenantFilter, isActive: { $ne: false } };
+    if (req.query.godownCode) filter.GDCode = String(req.query.godownCode);
+    const fromDate = String(req.query.fromDate || "").trim();
+    const toDate = String(req.query.toDate || "").trim();
+    const [stocks, masters, adjustments] = await Promise.all([
+      DamStock.find(filter).sort({ ProdCode: 1, Batch: 1 }).lean(),
+      loadStockReportMasters(tenantFilter),
+      StockAdjustment.find({ ...tenantFilter, Status: "COMPLETED", AdjustmentType: { $in: ["DAMAGE_IN", "DAMAGE_OUT"] }, ...(fromDate || toDate ? { VoucherDate: { ...(fromDate ? { $gte: fromDate } : {}), ...(toDate ? { $lte: toDate } : {}) } } : {}) }).sort({ VoucherDate: -1, createdAt: -1 }).lean(),
+    ]);
+    const latestAdjustment = new Map();
+    adjustments.forEach((row) => {
+      const key = [row.GDCode, row.ProdCode, row.Batch || ".", stockReportNumber(row.MRP)].join("\u0000");
+      if (!latestAdjustment.has(key)) latestAdjustment.set(key, row);
+    });
+    let rows = stocks.filter((stock) => stockReportNumber(stock.Qty) !== 0).map((stock) => {
+      const product = masters.productsByCode.get(String(stock.ProdCode || "")) || {};
+      if (!stockReportMatchesCompany(product, req.query.companyCode, masters)) return null;
+      const qty = stockReportNumber(stock.Qty);
+      const boxPack = stockReportNumber(stock.BoxPack, product.boxPack, 1) || 1;
+      const inBoxPack = stockReportNumber(stock.InBoxPack, product.inboxPack, 1) || 1;
+      const boxQty = Math.trunc(qty / boxPack);
+      const remainder = qty - boxQty * boxPack;
+      const inBoxQty = Math.trunc(remainder / inBoxPack);
+      const unitQty = remainder - inBoxQty * inBoxPack;
+      const adjustment = latestAdjustment.get([stock.GDCode, stock.ProdCode, stock.Batch || ".", stockReportNumber(stock.MRP)].join("\u0000")) || {};
+      const trnParts = String(adjustment.VoucherNo || "").split("-");
+      const rate = stockReportNumber(stock.PRate);
+      return {
+        TrnDate: adjustment.VoucherDate || "", TrnSeries: trnParts.length > 1 ? trnParts[0] : "",
+        TrnNo: trnParts.length > 1 ? trnParts.slice(1).join("-") : adjustment.VoucherNo || "",
+        SysProdCode: String(stockReportPick(product, "sysProdCode", "SysProdCode", "systemProductCode") || product._id || ""),
+        ProductCode: stock.ProdCode || "", ProductName: product.productName || adjustment.ProductName || "",
+        LocalProduct: String(stockReportPick(product, "localProduct", "LocalProduct", "description") || ""), MRP: stockReportNumber(stock.MRP),
+        BoxQty: boxQty, InBoxQty: inBoxQty, UnitQty: Number(unitQty.toFixed(3)), Qty: qty,
+        FreeQty: stockReportNumber(adjustment.FreeQty), Amount: Number((qty * rate).toFixed(2)),
+        Weight: Number((qty * stockReportNumber(product.weight)).toFixed(3)), VatPer: stockReportNumber(product.gst, product.VatPer),
+        Value: Number((qty * rate).toFixed(2)),
+      };
+    }).filter(Boolean);
+    if (fromDate || toDate) rows = rows.filter((row) => row.TrnDate);
+    rows = sortStockReportRows(rows, req.query.orderBy).map((row, index) => ({ SrNo: index + 1, ...row }));
+    return res.json({ success: true, rows });
+  } catch (error) {
+    console.error("Damage stock report error:", error);
+    return res.status(500).json({ success: false, message: error.message || "Failed to load damage stock report." });
+  }
+});
+
+app.get("/api/reports/product-ledger", ensureConnection, securityRouter.authorizeRequest("REPORTS", "STOCK_REPORT", "view"), async (req, res) => {
+  try {
+    const tenantFilter = stockReportTenant(req);
+    if (!tenantFilter) return res.status(400).json({ success: false, message: "Distributor and firm are required." });
+    const fromDate = String(req.query.fromDate || "").trim();
+    const toDate = String(req.query.toDate || "").trim();
+    const productSearch = String(req.query.product || "").trim().toLowerCase();
+    const batchSearch = String(req.query.batch || "").trim().toLowerCase();
+    const companyCode = String(req.query.companyCode || "").trim();
+    const godownCode = String(req.query.godownCode || "").trim();
+    const dateAllowed = (value) => (!fromDate || String(value) >= fromDate) && (!toDate || String(value) <= toDate);
+    const [purchases, sales, adjustments, currentStocks, masters] = await Promise.all([
+      PurchaseHeader.find({ ...tenantFilter, isActive: { $ne: false }, ...(godownCode ? { gdCode: godownCode } : {}) }).lean(),
+      SalesHeader.find({ ...tenantFilter, isActive: { $ne: false }, IsBillCancelled: { $ne: true }, ...(godownCode ? { GDCode: godownCode } : {}) }).lean(),
+      StockAdjustment.find({ ...tenantFilter, Status: "COMPLETED", AdjustmentType: { $in: ["IN", "OUT"] }, ...(godownCode ? { GDCode: godownCode } : {}) }).lean(),
+      Stock.find({ ...tenantFilter, ...(godownCode ? { GDCode: godownCode } : {}), ...(batchSearch ? { Batch: new RegExp(`^${batchSearch.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}$`, "i") } : {}) }).select("ProdCode Qty").lean(),
+      loadStockReportMasters(tenantFilter),
+    ]);
+    const entries = [];
+    const pushEntry = ({ date, series, no, invDate = "", invNo = "", trn, partyCode = "", partyName = "", item, addQty = 0, lessQty = 0, mrp = 0, batch = ".", sRate = 0, pRate = 0, qty = 0, freeQty = 0, boxPack = 1, inBoxPack = 1 }) => {
+      const code = stockReportItemCode(item) || String(item?.ProdCode || "");
+      const product = masters.productsByCode.get(code) || {};
+      if (productSearch && !`${code} ${product.productName || stockReportPick(item, "productName", "ProductName")}`.toLowerCase().includes(productSearch)) return;
+      if (batchSearch && String(batch || ".").trim().toLowerCase() !== batchSearch) return;
+      if (!stockReportMatchesCompany(product, companyCode, masters)) return;
+      const total = stockReportNumber(qty) + stockReportNumber(freeQty);
+      const boxes = Math.trunc(total / (boxPack || 1));
+      const remainder = total - boxes * (boxPack || 1);
+      const inBoxes = Math.trunc(remainder / (inBoxPack || 1));
+      entries.push({ Visible: dateAllowed(date), Date: date || "", TrnSeries: series || "", TrnNo: no ?? "", InvDate: invDate || "", InvNo: invNo || "", Trn: trn,
+        PartyCode: partyCode, PartyName: partyName, ProductCode: code, ProductName: product.productName || stockReportPick(item, "productName", "ProductName") || "",
+        AddQty: addQty, LessQty: lessQty, Mrp: mrp, Batch: batch || ".", SRate: sRate, PRate: pRate, Qty: qty, FreeQty: freeQty,
+        BoxPack: boxPack || 1, InBoxPack: inBoxPack || 1, BoxQty: boxes, InBoxQty: inBoxes, UnitQty: Number((remainder - inBoxes * (inBoxPack || 1)).toFixed(3)) });
+    };
+    purchases.forEach((bill) => (bill.items || []).forEach((item) => {
+      const qty = stockReportItemQty(item), free = stockReportNumber(stockReportPick(item, "free", "Free", "freeQty", "FreeQty"));
+      pushEntry({ date: bill.invoiceDate, series: bill.vouSer, no: bill.vouNo, invDate: bill.actualInvoiceDate || bill.invDate || bill.invoiceDate, invNo: bill.invoiceNumber, trn: "PURCHASE", partyCode: bill.supplierCode, partyName: bill.supplierName, item,
+        addQty: qty + free, mrp: stockReportNumber(stockReportPick(item, "mrp", "MRP"), item.selectedBatch?.MRP), batch: stockReportPick(item, "batchNo", "batch", "Batch") || item.selectedBatch?.Batch,
+        sRate: stockReportNumber(stockReportPick(item, "salesRate", "SRate", "rate")), pRate: stockReportNumber(stockReportPick(item, "purRate", "purchaseRate", "PRate", "rate", "Rate")), qty, freeQty: free,
+        boxPack: stockReportNumber(stockReportPick(item, "boxPack", "BoxPack"), item.selectedBatch?.BoxPack, 1), inBoxPack: stockReportNumber(stockReportPick(item, "inBoxPack", "InBoxPack"), item.selectedBatch?.InBoxPack, 1) });
+    }));
+    sales.forEach((bill) => (bill.items || []).forEach((item) => {
+      const qty = stockReportItemQty(item), free = stockReportNumber(stockReportPick(item, "free", "Free", "freeQty", "FreeQty"));
+      pushEntry({ date: bill.BillDate, series: bill.BillSeries, no: bill.BillNo, invDate: bill.BillDate, invNo: `${bill.BillSeries || ""}${bill.BillNo || ""}`, trn: "SALE", partyCode: bill.PartyCode, partyName: bill.PartyName, item,
+        lessQty: qty + free, mrp: stockReportNumber(stockReportPick(item, "mrp", "MRP"), item.selectedBatch?.MRP), batch: stockReportPick(item, "batchNo", "batch", "Batch") || item.selectedBatch?.Batch,
+        sRate: stockReportNumber(stockReportPick(item, "rate", "Rate", "salesRate", "SRate")), pRate: stockReportNumber(stockReportPick(item, "purchaseRate", "PRate")), qty, freeQty: free,
+        boxPack: stockReportNumber(stockReportPick(item, "boxPack", "BoxPack"), item.selectedBatch?.BoxPack, 1), inBoxPack: stockReportNumber(stockReportPick(item, "inBoxPack", "InBoxPack"), item.selectedBatch?.InBoxPack, 1) });
+    }));
+    adjustments.forEach((row) => {
+      const isIn = row.AdjustmentType === "IN";
+      const total = stockReportNumber(row.TotalQty, row.Qty);
+      const parts = String(row.VoucherNo || "").split("-");
+      pushEntry({ date: row.VoucherDate, series: parts[0] || row.AdjustmentType, no: parts.slice(1).join("-") || row.VoucherNo, trn: row.AdjustmentType, item: row,
+        addQty: isIn ? total : 0, lessQty: isIn ? 0 : total, mrp: row.MRP, batch: row.Batch, sRate: row.SRate, pRate: row.PRate,
+        qty: row.Qty, freeQty: row.FreeQty, boxPack: row.BoxPack, inBoxPack: row.InBoxPack });
+    });
+    entries.sort((a, b) => String(a.Date).localeCompare(String(b.Date)) || String(a.TrnSeries).localeCompare(String(b.TrnSeries)) || String(a.TrnNo).localeCompare(String(b.TrnNo)));
+    const currentByProduct = new Map();
+    currentStocks.forEach((row) => currentByProduct.set(row.ProdCode, (currentByProduct.get(row.ProdCode) || 0) + stockReportNumber(row.Qty)));
+    const netByProduct = new Map();
+    entries.forEach((row) => netByProduct.set(row.ProductCode, (netByProduct.get(row.ProductCode) || 0) + stockReportNumber(row.AddQty) - stockReportNumber(row.LessQty)));
+    const balances = new Map([...netByProduct.keys()].map((code) => [code, (currentByProduct.get(code) || 0) - (netByProduct.get(code) || 0)]));
+    const rows = entries.map((row) => {
+      const key = row.ProductCode;
+      const balance = (balances.get(key) || 0) + stockReportNumber(row.AddQty) - stockReportNumber(row.LessQty);
+      balances.set(key, balance);
+      return { ...row, Date: row.Date, TrnSeries: row.TrnSeries, TrnNo: row.TrnNo, InvDate: row.InvDate, InvNo: row.InvNo, Trn: row.Trn,
+        PartyCode: row.PartyCode, PartyName: row.PartyName, AddQty: row.AddQty, LessQty: row.LessQty, BalanceQty: Number(balance.toFixed(3)), Mrp: row.Mrp, Batch: row.Batch,
+        SRate: row.SRate, PRate: row.PRate, Qty: row.Qty, FreeQty: row.FreeQty, BoxPack: row.BoxPack, InBoxPack: row.InBoxPack, BoxQty: row.BoxQty, InBoxQty: row.InBoxQty, UnitQty: row.UnitQty };
+    }).filter((row) => row.Visible).map((row, index) => {
+      const output = { ...row };
+      delete output.Visible;
+      delete output.ProductCode;
+      delete output.ProductName;
+      return { SrNo: index + 1, ...output };
+    });
+    return res.json({ success: true, rows });
+  } catch (error) {
+    console.error("Product ledger report error:", error);
+    return res.status(500).json({ success: false, message: error.message || "Failed to load product ledger." });
+  }
+});
+
+
 // GET /api/reports/company-wise-purchase
 // Query Parameters:
 //   - distributorId: string (required)
@@ -32328,6 +32831,594 @@ suppliers = suppliers.map((supplier) => ({
     });
   }
 });
+// Stock And Sales Report criteria. Values come directly from the current firm's masters.
+app.get(
+  "/api/reports/stock-and-sales/criteria",
+  ensureConnection,
+  securityRouter.authorizeRequest("REPORTS", "PRODUCT_WISE_SALES", "view"),
+  async (req, res) => {
+    try {
+      const distributorId = String(req.query.distributorId || "").trim();
+      const firmId = String(req.query.firmId || "").trim();
+      if (!distributorId || !firmId) {
+        return res.status(400).json({ success: false, message: "distributorId and firmId are required." });
+      }
+
+      const masterFilter = { distributorId, firmId, isActive: true };
+      const [companies, godowns] = await Promise.all([
+        Company.find(masterFilter)
+          .select("companyCode companyName")
+          .sort({ companyName: 1, companyCode: 1 })
+          .lean(),
+        Godown.find(masterFilter)
+          .select("godownCode godownName")
+          .sort({ godownName: 1, godownCode: 1 })
+          .lean(),
+      ]);
+
+      return res.json({ success: true, companies, godowns });
+    } catch (error) {
+      console.error("Stock and sales criteria error:", error);
+      return res.status(500).json({ success: false, message: "Failed to load Stock And Sales criteria." });
+    }
+  }
+);
+
+// Compares the live stock balance with sales posted during the requested period.
+app.get(
+  "/api/reports/stock-and-sales",
+  ensureConnection,
+  securityRouter.authorizeRequest("REPORTS", "PRODUCT_WISE_SALES", "view"),
+  async (req, res) => {
+    try {
+      const distributorId = String(req.query.distributorId || "").trim();
+      const firmId = String(req.query.firmId || "").trim();
+      const companyCode = String(req.query.companyCode || "").trim();
+      const godownCode = String(req.query.godownCode || "").trim();
+      const fromDate = String(req.query.fromDate || "").trim();
+      const toDate = String(req.query.toDate || "").trim();
+      const reportLevel = String(req.query.reportLevel || "unit").trim();
+      const reportWith = String(req.query.reportWith || "summary").trim();
+      const rowFilter = String(req.query.filter || "all").trim();
+      const orderBy = String(req.query.orderBy || "productName").trim();
+      const includeFreeQty = String(req.query.stockWithFreeQty || "no").toLowerCase() === "yes";
+
+      if (!distributorId || !firmId || !fromDate || !toDate) {
+        return res.status(400).json({
+          success: false,
+          message: "distributorId, firmId, From Date and To Date are required.",
+        });
+      }
+      if (fromDate > toDate) {
+        return res.status(400).json({ success: false, message: "From Date cannot be greater than To Date." });
+      }
+
+      const baseFilter = { distributorId, firmId };
+      const [companies, godowns, products] = await Promise.all([
+        Company.find({ ...baseFilter, isActive: true }).select("companyCode companyName").lean(),
+        Godown.find({ ...baseFilter, isActive: true }).select("godownCode godownName").lean(),
+        Product.find({ ...baseFilter, isActive: true }).lean(),
+      ]);
+
+      const companyNames = new Map(companies.map((row) => [String(row.companyCode || ""), String(row.companyName || row.companyCode || "")]));
+      const companyCodesById = new Map(companies.map((row) => [String(row._id || ""), String(row.companyCode || "")]));
+      const godownNames = new Map(godowns.map((row) => [String(row.godownCode || ""), String(row.godownName || row.godownCode || "")]));
+      const productByCode = new Map(products.map((row) => [String(row.productCode || ""), row]));
+      const resolveProductCompanyCode = (product = {}) => {
+        const storedValue = String(product.companyCode || product.CompanyCode || product.companyId || "").trim();
+        return companyCodesById.get(storedValue) || storedValue;
+      };
+
+      const stockFilter = { ...baseFilter };
+      if (godownCode) stockFilter.GDCode = godownCode;
+
+      const salesFilter = {
+        ...baseFilter,
+        isActive: true,
+        IsBillCancelled: { $ne: true },
+        BillStatus: { $ne: "CANCELLED" },
+        BillDate: { $gte: fromDate, $lte: toDate },
+      };
+      if (companyCode) salesFilter.CompanyCode = companyCode;
+      if (godownCode) salesFilter.$or = [{ GDCode: godownCode }, { Godown: godownCode }];
+
+      const [stockRows, salesBills, purchaseBills, stockAdjustments, creditNotes, debitNotes] = await Promise.all([
+        Stock.find(stockFilter).lean(),
+        SalesHeader.find(salesFilter).select("CompanyCode CompanyName GDCode Godown items").lean(),
+        PurchaseHeader.find({
+          ...baseFilter,
+          isActive: { $ne: false },
+          invoiceDate: { $lte: toDate },
+        }).select("invoiceDate company companyCode companyName gdCode items").sort({ invoiceDate: -1, createdAt: -1 }).lean(),
+        StockAdjustment.find({
+          ...baseFilter,
+          Status: "COMPLETED",
+          VoucherDate: { $gte: fromDate, $lte: toDate },
+        }).lean(),
+        CreditNote.find({
+          ...baseFilter,
+          isActive: { $ne: false },
+          Status: { $ne: "CANCELLED" },
+          VDate: { $gte: fromDate, $lte: toDate },
+          ...(companyCode ? { CompanyCode: companyCode } : {}),
+          ...(godownCode ? { GDCode: godownCode } : {}),
+        }).select("CompanyCode CompanyName GDCode Godown items").lean(),
+        DebitNote.find({
+          ...baseFilter,
+          isActive: { $ne: false },
+          Status: { $ne: "CANCELLED" },
+          VDate: { $gte: fromDate, $lte: toDate },
+          ...(companyCode ? { CompanyCode: companyCode } : {}),
+          ...(godownCode ? { GDCode: godownCode } : {}),
+        }).select("CompanyCode CompanyName GDCode Godown items").lean(),
+      ]);
+
+      const numberFrom = (...values) => {
+        for (const value of values) {
+          if (value !== undefined && value !== null && value !== "") {
+            const parsed = Number(value);
+            if (Number.isFinite(parsed)) return parsed;
+          }
+        }
+        return 0;
+      };
+      const itemValue = (item, ...keys) => {
+        for (const key of keys) {
+          if (item?.[key] !== undefined && item?.[key] !== null) return item[key];
+        }
+        return "";
+      };
+      const movementQty = (item = {}) => {
+        const explicitTotal = itemValue(item, "totalQty", "TotalQty");
+        if (explicitTotal !== "") return numberFrom(explicitTotal);
+        return numberFrom(itemValue(item, "qty", "Qty", "quantity", "Quantity")) +
+          numberFrom(itemValue(item, "free", "Free", "freeQty", "FreeQty"));
+      };
+      const lastPurchaseByProduct = new Map();
+      for (const purchase of purchaseBills) {
+        for (const item of Array.isArray(purchase.items) ? purchase.items : []) {
+          const code = String(itemValue(item, "productCode", "ProductCode", "ProdCode", "prodCode", "code") || "").trim();
+          if (!code || lastPurchaseByProduct.has(code)) continue;
+          lastPurchaseByProduct.set(code, {
+            date: String(purchase.invoiceDate || ""),
+            rate: numberFrom(itemValue(item, "purRate", "purchaseRate", "PRate", "rate", "Rate")),
+            qty: numberFrom(itemValue(item, "qty", "Qty", "quantity", "Quantity", "totalQty", "TotalQty")),
+            mrp: numberFrom(itemValue(item, "mrp", "MRP"), item.selectedBatch?.mrp, item.selectedBatch?.MRP),
+            boxPack: numberFrom(itemValue(item, "boxPack", "BoxPack"), item.selectedBatch?.boxPack, item.selectedBatch?.BoxPack),
+          });
+        }
+      }
+      const aggregates = new Map();
+      const rowKey = ({ rowCompanyCode, productCode, unit, rowGodownCode }) => {
+        const levelKey = reportLevel === "company"
+          ? rowCompanyCode
+          : reportLevel === "product"
+            ? `${rowCompanyCode}|${productCode}`
+            : `${rowCompanyCode}|${productCode}|${unit}`;
+        return reportWith === "details" ? `${levelKey}|${rowGodownCode}` : levelKey;
+      };
+      const ensureRow = ({ rowCompanyCode, rowCompanyName, productCode, productName, unit, rowGodownCode, product = {} }) => {
+        const key = rowKey({ rowCompanyCode, productCode, unit, rowGodownCode });
+        if (!aggregates.has(key)) {
+          const lastPurchase = lastPurchaseByProduct.get(productCode) || {};
+          const isCompanyLevel = reportLevel === "company";
+          aggregates.set(key, {
+            CompanyCode: rowCompanyCode,
+            CompanyName: rowCompanyName || companyNames.get(rowCompanyCode) || rowCompanyCode || "Unassigned",
+            ProductCode: isCompanyLevel ? "" : productCode,
+            ProductName: isCompanyLevel ? "All Products" : productName || productCode,
+            ShortCode: isCompanyLevel ? "" : String(product.shortCode || product.ShortCode || product.productShortCode || product.ProductShortCode || ""),
+            LocalProduct: isCompanyLevel ? "" : String(product.localProduct || product.LocalProduct || product.localProductName || product.LocalProductName || ""),
+            SysProdCode: isCompanyLevel ? "" : String(product.sysProdCode || product.SysProdCode || product.systemProductCode || product.companyProductCode || product.CompanyProductCode || ""),
+            Unit: isCompanyLevel ? "" : unit || "PCS",
+            MRP: isCompanyLevel ? 0 : numberFrom(product.MRP, product.mrp, lastPurchase.mrp),
+            BoxPack: isCompanyLevel ? 0 : numberFrom(product.boxPack, product.BoxPack, lastPurchase.boxPack, 1),
+            LastPurchaseDate: isCompanyLevel ? "" : String(lastPurchase.date || ""),
+            LastPurchase: isCompanyLevel ? 0 : numberFrom(lastPurchase.rate),
+            LastQty: isCompanyLevel ? 0 : numberFrom(lastPurchase.qty),
+            Category: isCompanyLevel ? "" : String(product.category || product.Category || product.categoryName || ""),
+            SubCategory: isCompanyLevel ? "" : String(product.subCategory || product.SubCategory || product.subCategoryName || ""),
+            Group: isCompanyLevel ? "" : String(product.group || product.Group || product.productGroup || ""),
+            SubGroup: isCompanyLevel ? "" : String(product.subGroup || product.SubGroup || product.productSubGroup || ""),
+            Brand: isCompanyLevel ? "" : String(product.brand || product.Brand || ""),
+            SubBrand: isCompanyLevel ? "" : String(product.subBrand || product.SubBrand || ""),
+            GodownCode: reportWith === "details" ? rowGodownCode : "",
+            GodownName: reportWith === "details" ? (godownNames.get(rowGodownCode) || rowGodownCode || "Unassigned") : "All Godowns",
+            StockQty: 0,
+            Purchase: 0,
+            CreditNote: 0,
+            Increase: 0,
+            MFI: 0,
+            ToGDTransfer: 0,
+            SalesQty: 0,
+            DebitNote: 0,
+            Decrease: 0,
+            Damage: 0,
+            MFO: 0,
+            FreeQty: 0,
+            SalesAmount: 0,
+            FromGDTransfer: 0,
+          });
+        }
+        return aggregates.get(key);
+      };
+
+      for (const stock of stockRows) {
+        const productCode = String(stock.ProdCode || stock.productCode || "").trim();
+        const product = productByCode.get(productCode) || {};
+        const rowCompanyCode = resolveProductCompanyCode(product);
+        if (companyCode && rowCompanyCode !== companyCode) continue;
+        const row = ensureRow({
+          rowCompanyCode,
+          rowCompanyName: product.companyName,
+          productCode,
+          productName: product.productName,
+          unit: product.basicUnit,
+          rowGodownCode: String(stock.GDCode || "").trim(),
+          product,
+        });
+        row.StockQty += numberFrom(stock.Qty, stock.quantity);
+        row.MRP = Math.max(row.MRP, numberFrom(stock.MRP));
+        row.BoxPack = Math.max(row.BoxPack, numberFrom(stock.BoxPack, 1));
+      }
+
+      for (const bill of salesBills) {
+        for (const item of Array.isArray(bill.items) ? bill.items : []) {
+          const productCode = String(itemValue(item, "productCode", "ProductCode", "ProdCode", "prodCode", "code") || "").trim();
+          const product = productByCode.get(productCode) || {};
+          const rowCompanyCode = String(bill.CompanyCode || resolveProductCompanyCode(product)).trim();
+          if (companyCode && rowCompanyCode !== companyCode) continue;
+          const qty = numberFrom(itemValue(item, "qty", "Qty", "quantity", "Quantity"));
+          const freeQty = numberFrom(itemValue(item, "free", "Free", "freeQty", "FreeQty"));
+          const rate = numberFrom(itemValue(item, "rate", "Rate", "salesRate", "SalesRate", "sRate", "SRate"));
+          const amount = numberFrom(
+            itemValue(item, "netAmount", "NetAmount", "amount", "Amount", "AMT", "grossAmount", "GrossAmount"),
+            qty * rate
+          );
+          const row = ensureRow({
+            rowCompanyCode,
+            rowCompanyName: bill.CompanyName || product.companyName,
+            productCode,
+            productName: itemValue(item, "productName", "ProductName", "ProdName", "name") || product.productName,
+            unit: itemValue(item, "unit", "Unit", "basicUnit") || product.basicUnit,
+            rowGodownCode: String(bill.GDCode || bill.Godown || "").trim(),
+            product,
+          });
+          row.SalesQty += qty;
+          row.FreeQty += freeQty;
+          row.SalesAmount += amount;
+        }
+      }
+
+      for (const purchase of purchaseBills) {
+        if (String(purchase.invoiceDate || "") < fromDate) continue;
+        for (const item of Array.isArray(purchase.items) ? purchase.items : []) {
+          const productCode = String(itemValue(item, "productCode", "ProductCode", "ProdCode", "prodCode", "code") || "").trim();
+          const product = productByCode.get(productCode) || {};
+          const rowCompanyCode = resolveProductCompanyCode(product);
+          if (companyCode && rowCompanyCode !== companyCode) continue;
+          const rowGodownCode = String(purchase.gdCode || item.GDCode || "").trim();
+          if (godownCode && rowGodownCode !== godownCode) continue;
+          const row = ensureRow({
+            rowCompanyCode,
+            rowCompanyName: purchase.companyName || product.companyName,
+            productCode,
+            productName: itemValue(item, "productName", "ProductName", "ProdName", "name") || product.productName,
+            unit: itemValue(item, "unit", "Unit", "basicUnit") || product.basicUnit,
+            rowGodownCode,
+            product,
+          });
+          row.Purchase += movementQty(item);
+        }
+      }
+
+      const addNoteMovements = (notes, fieldName) => {
+        for (const note of notes) {
+          for (const item of Array.isArray(note.items) ? note.items : []) {
+            if (String(item.TRN || item.trn || "GDR").toUpperCase() !== "GDR") continue;
+            const productCode = String(itemValue(item, "ProductCode", "productCode", "ProdCode", "code") || "").trim();
+            const product = productByCode.get(productCode) || {};
+            const rowCompanyCode = String(note.CompanyCode || resolveProductCompanyCode(product)).trim();
+            if (companyCode && rowCompanyCode !== companyCode) continue;
+            const rowGodownCode = String(note.GDCode || note.Godown || "").trim();
+            if (godownCode && rowGodownCode !== godownCode) continue;
+            const row = ensureRow({
+              rowCompanyCode,
+              rowCompanyName: note.CompanyName || product.companyName,
+              productCode,
+              productName: itemValue(item, "ProductName", "productName", "ProdName", "name") || product.productName,
+              unit: itemValue(item, "Unit", "unit", "basicUnit") || product.basicUnit,
+              rowGodownCode,
+              product,
+            });
+            row[fieldName] += movementQty(item);
+          }
+        }
+      };
+      addNoteMovements(creditNotes, "CreditNote");
+      addNoteMovements(debitNotes, "DebitNote");
+
+      for (const adjustment of stockAdjustments) {
+        const transferMarker = String(
+          adjustment.TransferType || adjustment.transferType || adjustment.FromGDCode || adjustment.fromGDCode || adjustment.Narration || ""
+        );
+        const productCode = String(adjustment.ProdCode || adjustment.productCode || "").trim();
+        const product = productByCode.get(productCode) || {};
+        const rowCompanyCode = String(adjustment.CompanyCode || resolveProductCompanyCode(product)).trim();
+        if (companyCode && rowCompanyCode !== companyCode) continue;
+        const targetGodown = String(adjustment.GDCode || adjustment.ToGDCode || adjustment.toGDCode || "").trim();
+        if (godownCode && targetGodown !== godownCode) continue;
+        const row = ensureRow({
+          rowCompanyCode,
+          rowCompanyName: product.companyName,
+          productCode,
+          productName: adjustment.ProductName || product.productName,
+          unit: adjustment.Unit || product.basicUnit,
+          rowGodownCode: targetGodown,
+          product,
+        });
+        const quantity = numberFrom(adjustment.TotalQty, adjustment.Qty);
+        const adjustmentType = String(adjustment.AdjustmentType || "").toUpperCase();
+        const isTransfer = /transfer/i.test(transferMarker) || Boolean(adjustment.FromGDCode || adjustment.fromGDCode || adjustment.ToGDCode || adjustment.toGDCode);
+        const isMfi = /\bMFI\b|manufactur.*in/i.test(transferMarker);
+        const isMfo = /\bMFO\b|manufactur.*out/i.test(transferMarker);
+        if (adjustmentType === "DAMAGE_IN") row.Damage += quantity;
+        else if (adjustmentType === "IN" && isTransfer) row.FromGDTransfer += quantity;
+        else if (adjustmentType === "OUT" && isTransfer) row.ToGDTransfer += quantity;
+        else if (adjustmentType === "IN" && isMfi) row.MFI += quantity;
+        else if (adjustmentType === "OUT" && isMfo) row.MFO += quantity;
+        else if (adjustmentType === "IN") row.Increase += quantity;
+        else if (adjustmentType === "OUT") row.Decrease += quantity;
+      }
+
+      let rows = Array.from(aggregates.values()).map((row) => ({
+        ...row,
+        StockQty: Number(row.StockQty.toFixed(3)),
+        SalesQty: Number(row.SalesQty.toFixed(3)),
+        FreeQty: Number(row.FreeQty.toFixed(3)),
+        TotalSalesQty: Number((row.SalesQty + (includeFreeQty ? row.FreeQty : 0)).toFixed(3)),
+        SalesAmount: Number(row.SalesAmount.toFixed(2)),
+        Sales: Number((row.SalesQty + (includeFreeQty ? row.FreeQty : 0)).toFixed(3)),
+        Purchase: Number(row.Purchase.toFixed(3)),
+        CreditNote: Number(row.CreditNote.toFixed(3)),
+        Increase: Number(row.Increase.toFixed(3)),
+        MFI: Number(row.MFI.toFixed(3)),
+        ToGDTransfer: Number(row.ToGDTransfer.toFixed(3)),
+        DebitNote: Number(row.DebitNote.toFixed(3)),
+        Decrease: Number(row.Decrease.toFixed(3)),
+        Damage: Number(row.Damage.toFixed(3)),
+        MFO: Number(row.MFO.toFixed(3)),
+        FromGDTransfer: Number(row.FromGDTransfer.toFixed(3)),
+        Closing: Number(row.StockQty.toFixed(3)),
+        Opening: Number((
+          row.StockQty - row.Purchase - row.CreditNote - row.Increase - row.MFI - row.FromGDTransfer +
+          row.SalesQty + row.FreeQty + row.DebitNote + row.Decrease + row.Damage + row.MFO + row.ToGDTransfer
+        ).toFixed(3)),
+      }));
+
+      if (rowFilter === "stock") rows = rows.filter((row) => row.StockQty !== 0);
+      if (rowFilter === "sales") rows = rows.filter((row) => row.TotalSalesQty !== 0);
+      if (rowFilter === "zeroStock") rows = rows.filter((row) => row.StockQty === 0);
+      if (rowFilter === "noSales") rows = rows.filter((row) => row.TotalSalesQty === 0);
+
+      const comparators = {
+        productCode: (a, b) => a.ProductCode.localeCompare(b.ProductCode),
+        companyName: (a, b) => a.CompanyName.localeCompare(b.CompanyName),
+        stockQty: (a, b) => b.StockQty - a.StockQty,
+        salesQty: (a, b) => b.TotalSalesQty - a.TotalSalesQty,
+        productName: (a, b) => a.ProductName.localeCompare(b.ProductName),
+      };
+      rows.sort(comparators[orderBy] || comparators.productName);
+      rows = rows.map((row, index) => ({ SrNo: index + 1, ...row }));
+
+      const summary = rows.reduce(
+        (total, row) => ({
+          records: total.records + 1,
+          stockQty: total.stockQty + row.StockQty,
+          salesQty: total.salesQty + row.SalesQty,
+          freeQty: total.freeQty + row.FreeQty,
+          totalSalesQty: total.totalSalesQty + row.TotalSalesQty,
+          salesAmount: total.salesAmount + row.SalesAmount,
+        }),
+        { records: 0, stockQty: 0, salesQty: 0, freeQty: 0, totalSalesQty: 0, salesAmount: 0 }
+      );
+
+      return res.json({ success: true, data: rows, summary });
+    } catch (error) {
+      console.error("Stock and sales report error:", error);
+      return res.status(500).json({
+        success: false,
+        message: error.message || "Failed to generate Stock And Sales Report.",
+      });
+    }
+  }
+);
+
+app.get(
+  "/api/reports/purchase-analysis/criteria",
+  ensureConnection,
+  securityRouter.authorizeRequest("REPORTS", "PURCHASE_REPORT", "view"),
+  async (req, res) => {
+    try {
+      const distributorId = String(req.query.distributorId || "").trim();
+      const firmId = String(req.query.firmId || "").trim();
+      if (!distributorId || !firmId) {
+        return res.status(400).json({ success: false, message: "distributorId and firmId are required." });
+      }
+      const filter = { distributorId, firmId, isActive: true };
+      const [companies, godowns] = await Promise.all([
+        Company.find(filter).select("companyCode companyName").sort({ companyName: 1 }).lean(),
+        Godown.find(filter).select("godownCode godownName").sort({ godownName: 1 }).lean(),
+      ]);
+      return res.json({ success: true, companies, godowns });
+    } catch (error) {
+      console.error("Purchase analysis criteria error:", error);
+      return res.status(500).json({ success: false, message: "Failed to load purchase report criteria." });
+    }
+  }
+);
+
+app.get(
+  "/api/reports/purchase-analysis",
+  ensureConnection,
+  securityRouter.authorizeRequest("REPORTS", "PURCHASE_REPORT", "view"),
+  async (req, res) => {
+    try {
+      const distributorId = String(req.query.distributorId || "").trim();
+      const firmId = String(req.query.firmId || "").trim();
+      const companyCode = String(req.query.companyCode || "").trim();
+      const godownCode = String(req.query.godownCode || "").trim();
+      const fromDate = String(req.query.fromDate || "").trim();
+      const toDate = String(req.query.toDate || "").trim();
+      const actualInvoice = String(req.query.actualInvoice || "no").toLowerCase();
+      const orderBy = String(req.query.orderBy || "productName").trim();
+
+      if (!distributorId || !firmId || !fromDate || !toDate) {
+        return res.status(400).json({ success: false, message: "Distributor, firm and date range are required." });
+      }
+      if (fromDate > toDate) {
+        return res.status(400).json({ success: false, message: "From Date cannot be greater than To Date." });
+      }
+
+      const baseFilter = { distributorId, firmId };
+      const selectedCompany = companyCode
+        ? await Company.findOne({ ...baseFilter, companyCode }).select("companyCode companyName").lean()
+        : null;
+      const billFilter = {
+        ...baseFilter,
+        isActive: { $ne: false },
+        invoiceDate: { $gte: fromDate, $lte: toDate },
+      };
+      if (companyCode) {
+        billFilter.$or = [
+          { company: companyCode },
+          { company: selectedCompany?.companyName || companyCode },
+          { companyCode },
+        ];
+      }
+      if (godownCode) billFilter.gdCode = godownCode;
+      if (actualInvoice === "yes") {
+        billFilter.invoiceNumber = { $exists: true, $nin: ["", null] };
+      }
+
+      const bills = await PurchaseHeader.find(billFilter)
+        .sort({ invoiceDate: 1, vouSer: 1, vouNo: 1 })
+        .lean();
+      const productCodes = [...new Set(bills.flatMap((bill) =>
+        (Array.isArray(bill.items) ? bill.items : []).map((item) => String(
+          item.productCode || item.ProductCode || item.ProdCode || item.code || ""
+        ).trim()).filter(Boolean)
+      ))];
+      const productMasters = productCodes.length
+        ? await Product.find({ ...baseFilter, productCode: { $in: productCodes } }).lean()
+        : [];
+      const productByCode = new Map(productMasters.map((product) => [String(product.productCode || ""), product]));
+
+      const num = (...values) => {
+        for (const value of values) {
+          if (value !== undefined && value !== null && value !== "") {
+            const parsed = Number(value);
+            if (Number.isFinite(parsed)) return parsed;
+          }
+        }
+        return 0;
+      };
+      const pick = (source, ...keys) => {
+        for (const key of keys) {
+          if (source?.[key] !== undefined && source?.[key] !== null) return source[key];
+        }
+        return "";
+      };
+
+      const rows = [];
+      for (const bill of bills) {
+        for (const item of Array.isArray(bill.items) ? bill.items : []) {
+          const productCode = String(pick(item, "productCode", "ProductCode", "ProdCode", "code") || "").trim();
+          const product = productByCode.get(productCode) || {};
+          const qty = num(pick(item, "quantity", "qty", "Qty"));
+          const freeQty = num(pick(item, "free", "Free", "freeQty", "FreeQty"));
+          const rate = num(pick(item, "purRate", "purchaseRate", "PRate", "pRate", "rate", "Rate"));
+          const salesRate = num(
+            pick(item, "salesRate", "SalesRate", "sRate", "SRate"),
+            pick(item.selectedBatch, "salesRate", "SalesRate", "sRate", "SRate", "rate", "Rate"),
+            pick(item, "rate", "Rate"),
+            pick(product, "salesRate", "SalesRate", "sRate", "SRate", "Rate_Per_Unit")
+          );
+          const gross = num(pick(item, "grossAmount", "GrossAmount", "grossAmt"), qty * rate);
+          const taxable = num(pick(item, "taxable", "Taxable", "taxableValue", "TaxableValue"), gross);
+          const vatPer = num(pick(item, "gst", "tax", "gstPercent", "GSTPercent", "VatPer"));
+          const cgst = num(pick(item, "cgst", "CGST"));
+          const sgst = num(pick(item, "sgst", "SGST"));
+          const igst = num(pick(item, "igst", "IGST"));
+          const vatAmt = num(pick(item, "gstAmount", "GSTAmount", "vatAmt", "VatAmt"), cgst + sgst + igst);
+          const boxPack = num(pick(item, "boxPack", "BoxPack"), item.selectedBatch?.boxPack, item.selectedBatch?.BoxPack, 1) || 1;
+          const inBoxPack = num(pick(item, "inBoxPack", "inboxPack", "InBoxPack"), item.selectedBatch?.inBoxPack, item.selectedBatch?.InBoxPack, 1) || 1;
+          const bvDiscAmt = num(pick(item, "bvDiscAmt", "BVDiscAmt", "beforeVatDiscountAmount"), pick(item, "BVDisc1", "bvDisc1")) + num(pick(item, "BVDisc2", "bvDisc2"));
+          const bvAddAmt = num(pick(item, "bvAddAmt", "BVAddAmt", "beforeVatAddAmount"), pick(item, "BVAdd1", "bvAdd1")) + num(pick(item, "BVAdd2", "bvAdd2"));
+          const avDiscAmt = num(pick(item, "avDiscAmt", "AVDiscAmt", "afterVatDiscountAmount"), pick(item, "AVDisc1", "avDisc1")) + num(pick(item, "AVDisc2", "avDisc2"));
+          const avAddAmt = num(pick(item, "avAddAmt", "AVAddAmt", "afterVatAddAmount"), pick(item, "AVAdd1", "avAdd1")) + num(pick(item, "AVAdd2", "avAdd2"));
+          const amount = num(pick(item, "amount", "Amount", "netAmount", "NetAmount"), taxable + vatAmt - avDiscAmt + avAddAmt);
+
+          rows.push({
+            SrNo: rows.length + 1,
+            VouDate: bill.invoiceDate || "",
+            VouSeries: bill.vouSer || "",
+            VouNo: bill.vouNo ?? "",
+            InvDate: bill.actualInvoiceDate || bill.invDate || bill.invoiceDate || "",
+            InvNo: bill.invoiceNumber || "",
+            Company: bill.company || selectedCompany?.companyName || "",
+            ProductCode: productCode,
+            ProductName: String(pick(item, "productName", "ProductName", "ProdName", "name") || product.productName || ""),
+            HSNCode: String(pick(item, "hsn", "hsnCode", "HSNCode") || product.hsn || ""),
+            MRP: num(pick(item, "mrp", "MRP"), item.selectedBatch?.mrp, item.selectedBatch?.MRP),
+            Batch: String(pick(item, "batchNo", "batch", "Batch") || item.selectedBatch?.Batch || "."),
+            Unit: String(pick(item, "unit", "Unit", "basicUnit") || product.basicUnit || "PCS"),
+            Qty: qty,
+            FreeQty: freeQty,
+            BoxQty: num(pick(item, "boxQty", "BoxQty", "cases", "Cases"), boxPack > 0 ? qty / boxPack : 0),
+            Rate: rate,
+            SalesRate: salesRate,
+            Gross: gross,
+            Amount: amount,
+            Weight: num(pick(item, "weight", "Weight"), product.weight) * qty,
+            Taxable: taxable,
+            BVDiscAmt: bvDiscAmt,
+            BVAddAmt: bvAddAmt,
+            AVDiscAmt: avDiscAmt,
+            AVAddAmt: avAddAmt,
+            VatPer: vatPer,
+            VatAmt: vatAmt,
+            GSTPercent: vatPer,
+            GSTAmt: vatAmt,
+            CGST: cgst,
+            SGST: sgst,
+            IGST: igst,
+            Cess1: num(pick(item, "cess1", "Cess1", "cess")),
+            Cess2: num(pick(item, "cess2", "Cess2", "cessAmount", "CessAmount")),
+            NetAmt: amount,
+            BoxPack: boxPack,
+            INBoxPack: inBoxPack,
+          });
+        }
+      }
+
+      const sorters = {
+        productName: (a, b) => a.ProductName.localeCompare(b.ProductName),
+        productCode: (a, b) => a.ProductCode.localeCompare(b.ProductCode),
+        company: (a, b) => a.Company.localeCompare(b.Company),
+        voucher: (a, b) => a.VouDate.localeCompare(b.VouDate) || String(a.VouSeries).localeCompare(String(b.VouSeries)) || Number(a.VouNo) - Number(b.VouNo),
+        amount: (a, b) => b.NetAmt - a.NetAmt,
+      };
+      rows.sort(sorters[orderBy] || sorters.productName);
+      rows.forEach((row, index) => { row.SrNo = index + 1; });
+      return res.json({ success: true, data: rows, count: rows.length });
+    } catch (error) {
+      console.error("Purchase analysis report error:", error);
+      return res.status(500).json({ success: false, message: error.message || "Failed to generate purchase report." });
+    }
+  }
+);
+
 app.use("/api/p0", ensureConnection, createP0FeaturesRouter(securityRouter));
 
 app.use((req, res) => {

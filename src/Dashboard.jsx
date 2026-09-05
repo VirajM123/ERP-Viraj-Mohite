@@ -121,7 +121,8 @@ import {
   Maximize2,
   SlidersHorizontal,
   PlusCircle,
-  BookOpen
+  BookOpen,
+  PackageSearch
 } from "lucide-react";
 
 
@@ -184,14 +185,26 @@ const allReportItems = [
     category: "Sales",
     description:
       "Consolidated sales report covering all products.",
-    icon: BarChart,
+    icon: FileBarChart,
   },
   {
-    name: "Company Wise Purchase Report",
-    category: "Purchase",
+    name: "Stock And Sales Report",
+    category: "Sales",
     description:
-      "Company-wise purchase details and supplier analysis.",
+      "Compare current stock with actual sales for one company or all companies.",
+    icon: Warehouse,
+  },
+  {
+    name: "Company/Bill Wise Purchase Report",
+    category: "Purchase",
+    description: "Voucher and bill-wise purchase product details.",
     icon: ShoppingCart,
+  },
+  {
+    name: "Product Wise Purchase Report",
+    category: "Purchase",
+    description: "Product-wise purchase quantity, tax and discount analysis.",
+    icon: PackageSearch,
   },
   {
     name: "Current Stock Report",
@@ -221,6 +234,11 @@ const allReportItems = [
       "Complete inward and outward product movement ledger.",
     icon: ClipboardList,
   },
+  { name: "Sales GST Register", category: "GST", description: "Invoice-wise outward GST register with rate bifurcation.", icon: FileSpreadsheet },
+  { name: "Purchase GST Register", category: "GST", description: "Supplier invoice-wise inward GST register with rate bifurcation.", icon: FileSpreadsheet },
+  { name: "CRN GST Register", category: "GST", description: "Credit note GST register with party and tax-rate details.", icon: FileText },
+  { name: "GST Summary", category: "GST", description: "Rate-wise GST summary for sales, purchases and returns.", icon: FileBarChart },
+  { name: "GSTR1 Report", category: "GST", description: "GSTR-1 outward supply data for Excel, JSON and CSV export.", icon: FileText },
   { name: "General Ledger", category: "Financial", description: "Account-wise journal transactions with debit, credit and closing balance.", icon: BookOpen },
   { name: "Party Ledger", category: "Financial", description: "Customer or supplier ledger for the selected period.", icon: Users },
   { name: "Trial Balance", category: "Financial", description: "Account debit, credit and closing trial balance.", icon: Scale },
@@ -253,6 +271,7 @@ const getReportCatalogCategory = (report) => {
   if (report.category === "Sales") return "sales";
   if (report.category === "Purchase") return "purchase";
   if (report.category === "Stock") return "stock";
+  if (report.category === "GST") return "gst";
 
   if (
     report.name === "Party Ledger" ||
@@ -277,7 +296,6 @@ const Dashboard = ({ onLogout }) => {
   ].includes(loggedInRole);
   const [activeMenu, setActiveMenu] = useState(null);
   const [activeSubMenu, setActiveSubMenu] = useState(null);
-  const [stockManagementExpanded, setStockManagementExpanded] = useState(false);
   const [openFormFor, setOpenFormFor] = useState(null);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [sessionSecondsRemaining, setSessionSecondsRemaining] = useState(() => {
@@ -859,7 +877,7 @@ const debitNotePermission = usePermission("VOUCHERS", "DEBIT_NOTE");
     useState([
       "Party Wise Sales Report",
       "Product Wise Sales Report",
-      "Company Wise Purchase Report",
+      "Company/Bill Wise Purchase Report",
       "Current Stock Report",
       "As On Date Stock Report",
     ]);
@@ -6413,7 +6431,7 @@ const debitNotePermission = usePermission("VOUCHERS", "DEBIT_NOTE");
       const url = `${API_URL}/areas-for-account?distributorId=${encodeURIComponent(distributorId)}&firmId=${encodeURIComponent(firmId)}`;
       console.log("📡 Fetching areas from:", url);
 
-      const res = await fetch(url);
+      const res = await secureFetch(url);
       const result = await res.json();
 
       console.log("📥 Areas API response:", result);
@@ -12479,7 +12497,8 @@ const debitNotePermission = usePermission("VOUCHERS", "DEBIT_NOTE");
     ],
 
     Purchase: [
-      "Company Wise Purchase Report",
+      "Company/Bill Wise Purchase Report",
+      "Product Wise Purchase Report",
     ],
 
     Stock: [
@@ -12489,7 +12508,13 @@ const debitNotePermission = usePermission("VOUCHERS", "DEBIT_NOTE");
       "Product Ledger",
     ],
 
-    "GST Report": [],
+    "GST Report": [
+      "Sales GST Register",
+      "Purchase GST Register",
+      "CRN GST Register",
+      "GST Summary",
+      "GSTR1 Report",
+    ],
   };
   const menuItems = {
     dashboard: {
@@ -12531,13 +12556,23 @@ const debitNotePermission = usePermission("VOUCHERS", "DEBIT_NOTE");
         "Billing",
         "Counter Sales",
         "Sales Service",
-        "Stock Management",
         "Quotation",
         "Create Load",
         "Print Load",
         "Settle Load",
         "Bill Print",
         "Load Transfer"
+      ]
+    },
+
+    stockManagement: {
+      title: "Stock Management",
+      icon: "📦",
+      items: [
+        "Stock In",
+        "Stock Out",
+        "Self Damage (Godown Damage)",
+        "Damage Stock Out"
       ]
     },
 
@@ -17580,7 +17615,7 @@ const debitNotePermission = usePermission("VOUCHERS", "DEBIT_NOTE");
         return;
       }
 
-      const res = await fetch(
+      const res = await secureFetch(
         `${API_URL}/customer-banks?distributorId=${distributorId}&firmId=${firmId}`
       );
 
@@ -17653,7 +17688,7 @@ const debitNotePermission = usePermission("VOUCHERS", "DEBIT_NOTE");
 
       const method = editCustomerBankId ? "PUT" : "POST";
 
-      const res = await fetch(url, {
+      const res = await secureFetch(url, {
         method,
         headers: {
           "Content-Type": "application/json",
@@ -17688,6 +17723,7 @@ const debitNotePermission = usePermission("VOUCHERS", "DEBIT_NOTE");
         ifscCode: "",
         branchName: "",
         accountType: "Savings",
+        clearingType: "LOCAL",
         customerName: "",
         customerCode: "",
         mobileNo: "",
@@ -17725,6 +17761,7 @@ const debitNotePermission = usePermission("VOUCHERS", "DEBIT_NOTE");
       ifscCode: bank.ifscCode || "",
       branchName: bank.branchName || "",
       accountType: bank.accountType || "Savings",
+      clearingType: bank.clearingType || "LOCAL",
       customerName: bank.customerName || "",
       customerCode: bank.customerCode || "",
       mobileNo: bank.mobileNo || "",
@@ -17759,7 +17796,7 @@ const debitNotePermission = usePermission("VOUCHERS", "DEBIT_NOTE");
     if (!window.confirm(`Delete customer bank "${bankName}"?`)) return;
 
     try {
-      const res = await fetch(`${API_URL}/customer-banks/${id}`, {
+      const res = await secureFetch(`${API_URL}/customer-banks/${id}`, {
         method: "DELETE",
       });
 
@@ -39637,9 +39674,27 @@ ALLOW CHANGE STAR AMOUNT — FINAL SAVE PROTECTION
   // Export to Excel
   const exportToExcel = (data, filename, columns) => {
     const worksheet = XLSX.utils.json_to_sheet(data);
+    const range = worksheet["!ref"] ? XLSX.utils.decode_range(worksheet["!ref"]) : null;
+    if (range) {
+      const headerStyle = {
+        font: { bold: true, color: { rgb: "27445D" } },
+        fill: { patternType: "solid", fgColor: { rgb: "DCEBF5" } },
+        alignment: { horizontal: "center", vertical: "center", wrapText: true },
+        border: {
+          top: { style: "thin", color: { rgb: "C7D4DF" } },
+          bottom: { style: "thin", color: { rgb: "C7D4DF" } },
+          left: { style: "thin", color: { rgb: "C7D4DF" } },
+          right: { style: "thin", color: { rgb: "C7D4DF" } },
+        },
+      };
+      for (let columnIndex = range.s.c; columnIndex <= range.e.c; columnIndex += 1) {
+        const cell = worksheet[XLSX.utils.encode_cell({ r: range.s.r, c: columnIndex })];
+        if (cell) cell.s = headerStyle;
+      }
+    }
     const workbook = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(workbook, worksheet, filename);
-    XLSX.writeFile(workbook, `${filename}.xlsx`);
+    XLSX.writeFile(workbook, `${filename}.xlsx`, { cellStyles: true });
   };
 
   // Export to PDF
@@ -44555,6 +44610,7 @@ else if (item === 'Import Data') {
       openingDate: account.openingDate || "",
       address: account.address || "",
       town: account.town || "Pune",
+      areaCode: account.areaCode || "",
       state: account.state || "MAHARASHTRA",
       pinCode: account.pinCode || "",
       phoneNo: account.phoneNo || "",
@@ -45565,8 +45621,8 @@ else if (item === 'Import Data') {
 
       setAccountForm(prev => ({
         ...prev,
-        town: value,
-        areaCode: selectedArea?.value || value
+        town: selectedArea?.label || value,
+        areaCode: selectedArea?.value || ""
       }));
       return;
     }
@@ -45924,6 +45980,7 @@ else if (item === 'Import Data') {
 
     const wasEditing =
       Boolean(editAccountId);
+    let accountSaveCompleted = false;
 
     try {
       const url = editAccountId
@@ -45968,6 +46025,7 @@ else if (item === 'Import Data') {
       if (!res.ok || !result.success) {
         return alert(result.message || "Account save failed");
       }
+      accountSaveCompleted = true;
 
       const savedAccountCode =
         result.account?.accountCode ||
@@ -46235,6 +46293,9 @@ else if (item === 'Import Data') {
       setOpenFormFor(null);
     } catch (error) {
       console.error(error);
+      if (accountSaveCompleted) {
+        return;
+      }
       alert("Server not connected. Account save failed.");
     }
   };
@@ -58602,54 +58663,6 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
 
     }
   };
-  const renderStockManagementMenu = () => {
-    const stockPageOpen = ["Stock In", "Stock Out"].includes(activeSubMenu);
-
-    return (
-      <div className="nav-subitem-wrapper report-menu-group">
-        <div
-          className={"nav-subitem report-category-row " + (stockManagementExpanded || stockPageOpen ? "active" : "")}
-          onClick={() => setStockManagementExpanded((previous) => !previous)}
-        >
-          <span className="submenu-text">Stock Management</span>
-          <span className={"report-menu-arrow " + (stockManagementExpanded ? "open" : "")}>
-            <ChevronRight size={16} />
-          </span>
-        </div>
-
-        {stockManagementExpanded && (
-          <div className="report-subreport-list stock-management-submenu">
-            {["Stock In", "Stock Out"].map((stockItem) => (
-              <button
-                key={stockItem}
-                type="button"
-                className={"report-subreport-item " + (activeSubMenu === stockItem ? "active" : "")}
-                onClick={(event) => {
-                  event.stopPropagation();
-                  handleSubMenuClick(stockItem);
-                }}
-              >
-                <span className="report-subreport-dot" />
-                <span className="stock-management-label">{stockItem}</span>
-                <span
-                  className="plus-icon"
-                  title={`Add ${stockItem}`}
-                  aria-label={`Add ${stockItem}`}
-                  onClick={(event) => {
-                    event.stopPropagation();
-                    handlePlusClick(stockItem, event);
-                  }}
-                >
-                  +
-                </span>
-              </button>
-            ))}
-          </div>
-        )}
-      </div>
-    );
-  };
-
   const renderSalesPrintFormatModal = () => {
     if (!showSalesPrintFormatModal) {
       return null;
@@ -59335,9 +59348,6 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                 {activeMenu === key && (
                   <div className="nav-submenu">
                     {menu.items.map((item, idx) => {
-                      if (key === "sales" && item === "Stock Management") {
-                        return <React.Fragment key={item}>{renderStockManagementMenu()}</React.Fragment>;
-                      }
                       /*
                       * Special nested layout only for Reports.
                       */
@@ -59774,7 +59784,8 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                           onChange={(event) =>
                             setReportSearchText(event.target.value)
                           }
-                          placeholder={`Search in ${activeReportCatalogCategory.name}...`}
+                          placeholder={`Search ${activeReportCatalogCategory.name.toLowerCase()}...`}
+                          aria-label={`Search in ${activeReportCatalogCategory.name}`}
                         />
                       </label>
                     </div>
@@ -67426,9 +67437,19 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                     )}
                 </div>
               )}
-            {(activeSubMenu === "Stock In" || activeSubMenu === "Stock Out") && (
+            {[
+              "Stock In",
+              "Stock Out",
+              "Self Damage (Godown Damage)",
+              "Damage Stock Out"
+            ].includes(activeSubMenu) && (
               <StockManagement
-                mode={activeSubMenu === "Stock In" ? "IN" : "OUT"}
+                mode={({
+                  "Stock In": "IN",
+                  "Stock Out": "OUT",
+                  "Self Damage (Godown Damage)": "DAMAGE_IN",
+                  "Damage Stock Out": "DAMAGE_OUT",
+                })[activeSubMenu]}
                 view={openFormFor === activeSubMenu ? "form" : "list"}
                 products={products}
                 godowns={godowns}
@@ -71350,7 +71371,11 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                       <label>Town</label>
                       <select
                         name="town"
-                        value={accountForm.town}
+                        value={
+                          accountForm.areaCode ||
+                          areaOptions.find((area) => area.label === accountForm.town)?.value ||
+                          ""
+                        }
                         onChange={handleAccountInput}
                       >
                         <option value="">Select Area</option>
