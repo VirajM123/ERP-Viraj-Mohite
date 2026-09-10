@@ -7,6 +7,7 @@ import 'jspdf-autotable';
 import './Dashboard.css';
 import totalSolutionLogo from "./assets/images/Totalsolution-sidebar-dark.png";
 import { businessDateIST } from "./utils/businessDate";
+import { resolveInvoiceItemHsn } from "./utils/invoiceHsn";
 import {
   getSessionExpiresAt,
   startSession,
@@ -23075,6 +23076,13 @@ const debitNotePermission = usePermission("VOUCHERS", "DEBIT_NOTE");
       productId: itemCode,
       productCode: itemCode,
       productName: itemName,
+      hsn: String(
+        product.hsn ??
+        product.HSN ??
+        product.hsnCode ??
+        product.HSNCode ??
+        ""
+      ).trim(),
 
       /*
       * Required for mixed-company invoices.
@@ -23422,16 +23430,7 @@ const debitNotePermission = usePermission("VOUCHERS", "DEBIT_NOTE");
 ========================================================= */
 
   const getInvoiceItemHsnCode = (item) => {
-    return String(
-      item?.hsn ??
-      item?.HSN ??
-      item?.hsnCode ??
-      item?.HSNCode ??
-      item?.HsnCode ??
-      item?.productHsn ??
-      item?.ProductHSN ??
-      ""
-    ).trim();
+    return resolveInvoiceItemHsn(item, products);
   };
 
   const getInvoiceItemProductName = (
@@ -23738,6 +23737,7 @@ const debitNotePermission = usePermission("VOUCHERS", "DEBIT_NOTE");
         .map((item) => {
           const finalQty = Number(item.qty ?? item.quantity ?? item.Qty ?? 0);
           const finalFree = Number(item.free ?? item.Free ?? 0);
+          const finalHsn = getInvoiceItemHsnCode(item);
 
           return {
             ...item,
@@ -23751,6 +23751,8 @@ const debitNotePermission = usePermission("VOUCHERS", "DEBIT_NOTE");
               item.productId ||
               String(item.product || "").split(" - ")[0] ||
               "",
+            hsn: finalHsn,
+            HSN: finalHsn,
             batchNo: item.batchNo || item.selectedBatch?.batchNo || ".",
 
             qty: finalQty,
@@ -23928,14 +23930,7 @@ ALLOW CHANGE STAR AMOUNT — FINAL SAVE PROTECTION
       ) {
         const missingHsnItem =
           validItems.find((item) => {
-            const hsnCode = String(
-              item.hsn ??
-              item.HSN ??
-              item.hsnCode ??
-              item.HSNCode ??
-              item.HsnCode ??
-              ""
-            ).trim();
+            const hsnCode = getInvoiceItemHsnCode(item);
 
             return !hsnCode;
           });

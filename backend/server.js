@@ -2079,10 +2079,8 @@ const enforceTrustedSalesRates = async ({ req, items, distributorId, firmId, gdC
   const normalize = (value) => String(value ?? "").trim();
   const itemKey = (productCode, batch, mrp) => [normalize(productCode).toUpperCase(), normalize(batch || ".").toUpperCase(), Number(mrp || 0)].join("\u0000");
   const productCodes = [...new Set(items.map((item) => normalize(item.productCode || item.productId || item.code || String(item.product || "").split(" - ")[0])).filter(Boolean))];
-  const [stockRows, products] = await Promise.all([
-    Stock.find({ distributorId, firmId, GDCode: normalize(gdCode), ProdCode: { $in: productCodes } }).session(session).lean(),
-    Product.find({ distributorId, firmId, productCode: { $in: productCodes }, isActive: true }).session(session).lean(),
-  ]);
+  const stockRows = await Stock.find({ distributorId, firmId, GDCode: normalize(gdCode), ProdCode: { $in: productCodes } }).session(session).lean();
+  const products = await Product.find({ distributorId, firmId, productCode: { $in: productCodes }, isActive: true }).session(session).lean();
   const stockByKey = new Map(stockRows.map((row) => [itemKey(row.ProdCode, row.Batch, row.MRP), row]));
   const productByCode = new Map(products.map((row) => [normalize(row.productCode).toUpperCase(), row]));
   const overrideRequested = items.some((item) => {
@@ -2326,11 +2324,9 @@ const buildSalesEntryTypeFilter = (value) => {
 
 const buildSalesHistoricalSnapshot = async ({ distributorId, firmId, companyCode, partyCode, items, session }) => {
   const productCodes = [...new Set(items.map((item) => String(item.productCode || item.productId || item.code || "").trim()).filter(Boolean))];
-  const [company, party, products] = await Promise.all([
-    Company.findOne({ distributorId, firmId, companyCode }).session(session).lean(),
-    Account.findOne({ distributorId, firmId, accountCode: partyCode }).session(session).lean(),
-    Product.find({ distributorId, firmId, productCode: { $in: productCodes } }).session(session).lean(),
-  ]);
+  const company = await Company.findOne({ distributorId, firmId, companyCode }).session(session).lean();
+  const party = await Account.findOne({ distributorId, firmId, accountCode: partyCode }).session(session).lean();
+  const products = await Product.find({ distributorId, firmId, productCode: { $in: productCodes } }).session(session).lean();
   const productMap = new Map(products.map((product) => [String(product.productCode), product]));
   return {
     capturedAt: new Date(),
@@ -14154,11 +14150,11 @@ const getStockAdjustmentLabel = (adjustmentType) => ({
 }[String(adjustmentType).toUpperCase()] || "Stock");
 
 const validateStockAdjustmentReferences = async ({ distributorId, firmId, gdCode, prodCode, companyCode, session }) => {
-  const [godown, product, company] = await Promise.all([
-    GodownModel.findOne({ distributorId, firmId, godownCode: gdCode, isActive: { $ne: false } }).session(session).lean(),
-    Product.findOne({ distributorId, firmId, productCode: prodCode, isActive: { $ne: false } }).session(session).lean(),
-    companyCode ? Company.findOne({ distributorId, firmId, companyCode, isActive: { $ne: false } }).session(session).lean() : Promise.resolve(null),
-  ]);
+  const godown = await GodownModel.findOne({ distributorId, firmId, godownCode: gdCode, isActive: { $ne: false } }).session(session).lean();
+  const product = await Product.findOne({ distributorId, firmId, productCode: prodCode, isActive: { $ne: false } }).session(session).lean();
+  const company = companyCode
+    ? await Company.findOne({ distributorId, firmId, companyCode, isActive: { $ne: false } }).session(session).lean()
+    : null;
   if (!godown) throw Object.assign(new Error("Invalid or inactive godown."), { statusCode: 400 });
   if (!product) throw Object.assign(new Error("Invalid or inactive product."), { statusCode: 400 });
   if (companyCode && !company) throw Object.assign(new Error("Invalid or inactive company."), { statusCode: 400 });
@@ -22166,18 +22162,22 @@ const cancelSalesBill = async ({ req, session, bill, reason }) => {
   if (bill.IsLoaded || bill.LoadNo) {
     throw Object.assign(new Error("Loaded bill must be removed from load before cancellation"), { statusCode: 409 });
   }
-  const [linkedReceipt, linkedSettlement, linkedCollection, linkedPdc] = await Promise.all([
-    Receipt.findOne({ distributorId, firmId, status: { $ne: "REVERSED" }, $or: [
+  const linkedReceipt = await Receipt.findOne({ distributorId, firmId, status: { $ne: "REVERSED" }, $or: [
       { billSeries: bill.BillSeries, billNo: String(bill.BillNo) },
       { receiptBills: { $elemMatch: { trnSeries: bill.BillSeries, trnNo: String(bill.BillNo) } } },
-    ] }).session(session),
-    SettleLoad.findOne({ distributorId, firmId, $or: [
+    ] }).session(session);
+  const linkedSettlement = await SettleLoad.findOne({ distributorId, firmId, $or: [
       { "bills.billSeries": bill.BillSeries, "bills.billNo": String(bill.BillNo) },
       { "bills.BillSeries": bill.BillSeries, "bills.BillNo": bill.BillNo },
-    ] }).session(session),
-    mongoose.connection.collection("T_CollectionVoucher").findOne({ distributorId, firmId, status: { $ne: "REVERSED" }, bills: { $elemMatch: { billSeries: bill.BillSeries, billNo: String(bill.BillNo) } } }, { session }),
-    mongoose.connection.collection("T_PDCDocket").findOne({ distributorId, firmId, status: { $ne: "REVERSED" }, $or: [{ billSeries: bill.BillSeries, billNo: String(bill.BillNo) }, { bills: { $elemMatch: { billSeries: bill.BillSeries, billNo: String(bill.BillNo) } } }] }, { session }),
-  ]);
+    ] }).session(session);
+  const linkedCollection = await mongoose.connection.collection("T_CollectionVoucher").findOne(
+    { distributorId, firmId, status: { $ne: "REVERSED" }, bills: { $elemMatch: { billSeries: bill.BillSeries, billNo: String(bill.BillNo) } } },
+    { session }
+  );
+  const linkedPdc = await mongoose.connection.collection("T_PDCDocket").findOne(
+    { distributorId, firmId, status: { $ne: "REVERSED" }, $or: [{ billSeries: bill.BillSeries, billNo: String(bill.BillNo) }, { bills: { $elemMatch: { billSeries: bill.BillSeries, billNo: String(bill.BillNo) } } }] },
+    { session }
+  );
   if (linkedReceipt) throw Object.assign(new Error("Receipt exists for this bill; reverse the receipt first"), { statusCode: 409 });
   if (linkedSettlement) throw Object.assign(new Error("Settled bill cannot be cancelled directly"), { statusCode: 409 });
   if (linkedCollection || linkedPdc) throw Object.assign(new Error("Collection/PDC exists for this bill; reverse it before cancellation"), { statusCode: 409 });
@@ -24006,11 +24006,11 @@ app.post(
       }
       const supplierCode = String(req.body.SupplierCode || req.body.supplierCode || "").trim();
       const companyCode = String(req.body.CompanyCode || req.body.companyCode || "").trim();
-      const [noteSupplier, noteGodown, noteCompany] = await Promise.all([
-        OtherAccount.findOne({ distributorId, firmId, accountCode: supplierCode, isActive: { $ne: false } }).session(session).lean(),
-        GodownModel.findOne({ distributorId, firmId, godownCode: gdCode, isActive: { $ne: false } }).session(session).lean(),
-        companyCode ? Company.findOne({ distributorId, firmId, companyCode, isActive: { $ne: false } }).session(session).lean() : Promise.resolve(null),
-      ]);
+      const noteSupplier = await OtherAccount.findOne({ distributorId, firmId, accountCode: supplierCode, isActive: { $ne: false } }).session(session).lean();
+      const noteGodown = await GodownModel.findOne({ distributorId, firmId, godownCode: gdCode, isActive: { $ne: false } }).session(session).lean();
+      const noteCompany = companyCode
+        ? await Company.findOne({ distributorId, firmId, companyCode, isActive: { $ne: false } }).session(session).lean()
+        : null;
       if (!noteSupplier) throw Object.assign(new Error("Invalid or inactive supplier account."), { statusCode: 400 });
       if (!noteGodown) throw Object.assign(new Error("Invalid or inactive godown."), { statusCode: 400 });
       if (companyCode && !noteCompany) throw Object.assign(new Error("Invalid or inactive company."), { statusCode: 400 });
@@ -24327,11 +24327,11 @@ app.put(
 
       const supplierCode = String(req.body.SupplierCode || req.body.supplierCode || oldDebitNote.SupplierCode || "").trim();
       const companyCode = String(req.body.CompanyCode || req.body.companyCode || oldDebitNote.CompanyCode || "").trim();
-      const [noteSupplier, noteGodown, noteCompany] = await Promise.all([
-        OtherAccount.findOne({ distributorId, firmId, accountCode: supplierCode, isActive: { $ne: false } }).session(session).lean(),
-        GodownModel.findOne({ distributorId, firmId, godownCode: newGdCode, isActive: { $ne: false } }).session(session).lean(),
-        companyCode ? Company.findOne({ distributorId, firmId, companyCode, isActive: { $ne: false } }).session(session).lean() : Promise.resolve(null),
-      ]);
+      const noteSupplier = await OtherAccount.findOne({ distributorId, firmId, accountCode: supplierCode, isActive: { $ne: false } }).session(session).lean();
+      const noteGodown = await GodownModel.findOne({ distributorId, firmId, godownCode: newGdCode, isActive: { $ne: false } }).session(session).lean();
+      const noteCompany = companyCode
+        ? await Company.findOne({ distributorId, firmId, companyCode, isActive: { $ne: false } }).session(session).lean()
+        : null;
       if (!noteSupplier) throw Object.assign(new Error("Invalid or inactive supplier account."), { statusCode: 400 });
       if (!noteGodown) throw Object.assign(new Error("Invalid or inactive godown."), { statusCode: 400 });
       if (companyCode && !noteCompany) throw Object.assign(new Error("Invalid or inactive company."), { statusCode: 400 });
@@ -25544,11 +25544,11 @@ app.post(
 
       const partyCode = String(req.body.PartyCode || req.body.partyCode || "").trim();
       const companyCode = String(req.body.CompanyCode || req.body.companyCode || "").trim();
-      const [noteParty, noteGodown, noteCompany] = await Promise.all([
-        Account.findOne({ distributorId, firmId, accountCode: partyCode, isActive: { $ne: false } }).session(session).lean(),
-        GodownModel.findOne({ distributorId, firmId, godownCode: gdCode, isActive: { $ne: false } }).session(session).lean(),
-        companyCode ? Company.findOne({ distributorId, firmId, companyCode, isActive: { $ne: false } }).session(session).lean() : Promise.resolve(null),
-      ]);
+      const noteParty = await Account.findOne({ distributorId, firmId, accountCode: partyCode, isActive: { $ne: false } }).session(session).lean();
+      const noteGodown = await GodownModel.findOne({ distributorId, firmId, godownCode: gdCode, isActive: { $ne: false } }).session(session).lean();
+      const noteCompany = companyCode
+        ? await Company.findOne({ distributorId, firmId, companyCode, isActive: { $ne: false } }).session(session).lean()
+        : null;
       if (!noteParty) throw Object.assign(new Error("Invalid or inactive customer account."), { statusCode: 400 });
       if (!noteGodown) throw Object.assign(new Error("Invalid or inactive godown."), { statusCode: 400 });
       if (companyCode && !noteCompany) throw Object.assign(new Error("Invalid or inactive company."), { statusCode: 400 });
@@ -26239,11 +26239,11 @@ app.put(
       }
       const partyCode = String(req.body.PartyCode || req.body.partyCode || oldCreditNote.PartyCode || "").trim();
       const companyCode = String(req.body.CompanyCode || req.body.companyCode || oldCreditNote.CompanyCode || "").trim();
-      const [noteParty, noteGodown, noteCompany] = await Promise.all([
-        Account.findOne({ distributorId, firmId, accountCode: partyCode, isActive: { $ne: false } }).session(session).lean(),
-        GodownModel.findOne({ distributorId, firmId, godownCode: newGdCode, isActive: { $ne: false } }).session(session).lean(),
-        companyCode ? Company.findOne({ distributorId, firmId, companyCode, isActive: { $ne: false } }).session(session).lean() : Promise.resolve(null),
-      ]);
+      const noteParty = await Account.findOne({ distributorId, firmId, accountCode: partyCode, isActive: { $ne: false } }).session(session).lean();
+      const noteGodown = await GodownModel.findOne({ distributorId, firmId, godownCode: newGdCode, isActive: { $ne: false } }).session(session).lean();
+      const noteCompany = companyCode
+        ? await Company.findOne({ distributorId, firmId, companyCode, isActive: { $ne: false } }).session(session).lean()
+        : null;
       if (!noteParty) throw Object.assign(new Error("Invalid or inactive customer account."), { statusCode: 400 });
       if (!noteGodown) throw Object.assign(new Error("Invalid or inactive godown."), { statusCode: 400 });
       if (companyCode && !noteCompany) throw Object.assign(new Error("Invalid or inactive company."), { statusCode: 400 });

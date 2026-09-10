@@ -14,6 +14,11 @@ test('sales and purchase master checks run sequentially inside their transaction
   const source = await readFile(new URL('../server.js', import.meta.url), 'utf8');
   assert.doesNotMatch(source, /const \[salesParty, salesCompany, salesGodown, salesPerson\] = await Promise\.all/);
   assert.doesNotMatch(source, /const \[purchaseSupplier, purchaseCompany, purchaseGodown\] = await Promise\.all/);
+  assert.doesNotMatch(source, /const \[noteSupplier, noteGodown, noteCompany\] = await Promise\.all/);
+  assert.doesNotMatch(source, /const \[noteParty, noteGodown, noteCompany\] = await Promise\.all/);
+  assert.doesNotMatch(source, /const \[stockRows, products\] = await Promise\.all/);
+  assert.doesNotMatch(source, /const \[company, party, products\] = await Promise\.all/);
+  assert.doesNotMatch(source, /const \[linkedReceipt, linkedSettlement, linkedCollection, linkedPdc\] = await Promise\.all/);
   assert.match(source, /const salesParty = await Account\.findOne[\s\S]*?const salesCompany = await Company\.findOne[\s\S]*?const salesGodown = await GodownModel\.findOne/);
   assert.match(source, /const purchaseSupplier = await OtherAccount\.findOne[\s\S]*?const purchaseCompany = await Company\.findOne[\s\S]*?const purchaseGodown = await GodownModel\.findOne/);
 });
