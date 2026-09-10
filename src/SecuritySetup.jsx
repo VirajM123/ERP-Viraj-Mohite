@@ -1,6 +1,7 @@
 import React from "react";
 import "./SecuritySetup.css";
 import { API_URL } from "./api/config";
+import { authenticatedFetch, isTrustedApiDestination } from "./api/client";
 
 /* =========================================================
    API CONFIGURATION
@@ -133,6 +134,7 @@ const DEFAULT_OPERATION_GROUPS = [
             module: "MAPPING",
             operation: "AREA_TO_PARTY",
         },
+        { id: "mapping-product", name: "Product Mapping", module: "MAPPING", operation: "PRODUCT_MAPPING" },
     ],
 },
     {
@@ -145,6 +147,12 @@ const DEFAULT_OPERATION_GROUPS = [
                 name: "Sales Billing",
                 module: "SALES",
                 operation: "SALES_BILLING",
+            },
+            {
+                id: "sales-rate-override",
+                name: "Sales Rate Override",
+                module: "SALES",
+                operation: "SALES_RATE_OVERRIDE",
             },
             {
                 id: "sales-list",
@@ -212,6 +220,12 @@ const DEFAULT_OPERATION_GROUPS = [
                 name: "Debit Note",
                 module: "VOUCHERS",
                 operation: "DEBIT_NOTE",
+            },
+            {
+                id: "voucher-stock-adjustment",
+                name: "Stock Adjustment",
+                module: "VOUCHERS",
+                operation: "STOCK_ADJUSTMENT",
             },
             {
                 id: "voucher-receipt",
@@ -335,6 +349,11 @@ const DEFAULT_OPERATION_GROUPS = [
                 module: "TOOLS",
                 operation: "DATA_EXPORT",
             },
+            { id: "tools-company-series", name: "Company Wise Series", module: "TOOLS", operation: "COMPANY_WISE_SERIES" },
+            { id: "tools-batch-lock", name: "Batch Lock / Unlock", module: "TOOLS", operation: "BATCH_LOCK" },
+            { id: "tools-batch-rate-override", name: "Batch Sales Rate Override", module: "TOOLS", operation: "BATCH_RATE_OVERRIDE" },
+            { id: "tools-print-settings", name: "Print Settings", module: "TOOLS", operation: "PRINT_SETTINGS" },
+            { id: "tools-desktop-import", name: "Desktop Backup Import", module: "TOOLS", operation: "DESKTOP_IMPORT" },
         ],
     },
     {
@@ -413,7 +432,7 @@ const DEFAULT_USERS = [
 ========================================================= */
 
 const createBlankPermission = () => ({
-    view: true,
+    view: false,
     add: false,
     edit: false,
     delete: false,
@@ -551,7 +570,7 @@ const normalizePermission = (permission) => ({
         permission?.view ??
         permission?.canView ??
         permission?.View ??
-        true
+        false
     ),
 
     add: parseBoolean(
@@ -1545,7 +1564,7 @@ const SecuritySetup = ({
                           user.isAdministrator
     ? createFullPermission()
     : {
-          view: true,
+          view: false,
           add: false,
           edit: false,
           delete: false,
@@ -2294,16 +2313,13 @@ const SecuritySetup = ({
                                                                 >
                                                                     <PermissionCheckbox
                                                                         checked={
-                                                                            column.key === "view"
+                                                                            user.isAdministrator
                                                                                 ? true
-                                                                                : user.isAdministrator
-                                                                                    ? true
-                                                                                    : currentPermission[column.key]
+                                                                                : currentPermission[column.key]
                                                                         }
                                                                         disabled={
                                                                             user.isAdministrator ||
-                                                                            saving ||
-                                                                            column.key === "view"
+                                                                            saving
                                                                         }
                                                                         title={`${column.label} permission for ${user.userName}`}
                                                                         onChange={(
@@ -2621,15 +2637,8 @@ export const secureFetch = async (
   url,
   options = {}
 ) => {
-  const headers = {
-    ...(options.headers || {}),
-    Authorization: `Bearer ${localStorage.getItem("token") || ""}`,
-  };
-
-  const response = await fetch(url, {
-    ...options,
-    headers,
-  });
+  if (!isTrustedApiDestination(url)) throw new Error("Authenticated requests are restricted to the configured API origin.");
+  const response = await authenticatedFetch(url, options);
 
   // Authentication expired
   if (response.status === 401) {
@@ -2679,7 +2688,7 @@ export const usePermission = (
 
     return (
         permissions?.[moduleKey]?.[operation] || {
-            view: true,
+            view: false,
             add: false,
             edit: false,
             delete: false,

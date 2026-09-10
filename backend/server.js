@@ -4,8 +4,12 @@ import cors from "cors";
 import dotenv from "dotenv";
 import createTransactionRouter from "./transaction.js"; 
 import generalSetupRoutes from "./generalSetup.js";
+import companyWiseSeriesRoutes from "./companyWiseSeries.js";
+import createBatchLockRouter from "./batchLock.js";
+import printAccountDetailsRoutes from "./printAccountDetails.js";
 import createSecuritySetupRouter from "./securitySetup.js";
 import createImportRouter from "./importRoutes.js";
+import createDesktopImportRouter from "./desktopImportRoutes.js";
 import createProductSalesReportRouter from "./productSalesReport.js";
 import createGstReportsRouter from "./gstReports.js";
 import {
@@ -16,6 +20,7 @@ import {
   issueAccessToken,
   migrateLegacyPassword,
   requireRoles,
+  validatePasswordStrength,
   verifyPassword,
 } from "./auth.js";
 import { writeAuditEvent } from "./audit.js";
@@ -25,7 +30,9 @@ import { businessDateIST } from "./businessDate.js";
 import { validateFinancialEnvelope } from "./financialValidation.js";
 import createP0FeaturesRouter, { recordStockMovements, validateCustomerCredit } from "./p0Features.js";
 import createServiceRouter from "./service.js";
+import createProductMappingRouter from "./productMapping.js";
 import { assertMasterNotUsed } from "./masterUsageGuard.js";
+import { apiErrorHandler } from "./apiError.js";
 dotenv.config();
 
 assertSecurityConfiguration();
@@ -73,8 +80,8 @@ app.use("/api", createRateLimiter({
   paths: new Set(["/login", "/login/firms", "/register"]),
 }));
 app.use("/api", authenticateApi);
-//app.use("/api/transaction", transactionRoutes);
-app.use("/api/general-setup", generalSetupRoutes);
+// Feature routers that require operation-level authorization are mounted after
+// the security policy router is created below.
 
 
 const PORT = process.env.PORT || 5000;
@@ -87,11 +94,6 @@ if (!MONGODB_URI) {
 }
 
 console.log("✅ ENV loaded");
-console.log("PORT =", PORT);
-
-const maskedUri = MONGODB_URI.replace(/\/\/([^:]+):([^@]+)@/, "//$1:****@");
-console.log("MONGODB_URI =", maskedUri);
-
 mongoose.set("strictQuery", false);
 
 const connectDB = async () => {
@@ -138,6 +140,7 @@ const userSchema = new mongoose.Schema(
     oldPassword: { type: String, default: "" },
     password: { type: String, required: true },
     role: { type: String, default: "USER" },
+    salesmanCode: { type: String, default: "", trim: true },
     isActive: { type: Boolean, default: true },
     sessionVersion: { type: Number, default: 0 },
   },
@@ -168,12 +171,36 @@ const Company = mongoose.model("Mas_Company", companySchema);
 const securityRouter =
     createSecuritySetupRouter(User);
 
+const authorizeFeatureMethods = (moduleCode, operationCode, actions) => (req, res, next) => {
+  const action = actions[req.method];
+  if (!action) return res.status(405).json({ success: false, message: "Method not allowed." });
+  return securityRouter.authorizeRequest(moduleCode, operationCode, action)(req, res, next);
+};
+
 app.use(
     "/api/security-setup",
     ensureConnection,
     securityRouter
 );
 const transactionRoutes = createTransactionRouter(securityRouter);   // NEW — after securityRouter exists
+app.use(
+  "/api/general-setup",
+  ensureConnection,
+  authorizeFeatureMethods("TOOLS", "GENERAL_SETUP_1", { GET: "view", PUT: "edit" }),
+  generalSetupRoutes
+);
+app.use(
+  "/api/company-wise-series",
+  ensureConnection,
+  authorizeFeatureMethods("TOOLS", "COMPANY_WISE_SERIES", { GET: "view", PUT: "edit", DELETE: "delete" }),
+  companyWiseSeriesRoutes
+);
+app.use(
+  "/api/print-account-details",
+  ensureConnection,
+  authorizeFeatureMethods("TOOLS", "PRINT_SETTINGS", { GET: "view", PUT: "edit" }),
+  printAccountDetailsRoutes
+);
 app.use("/api/transaction", transactionRoutes);         
 app.use("/api", ensureConnection, createServiceRouter(securityRouter));
 const registerSchema = new mongoose.Schema(
@@ -264,7 +291,7 @@ const generateFirmId = async () => {
   return `FIRM-${maxNo + 1}`;
 };
 
-app.post("/api/register", ensureConnection, async (req, res) => {
+app.post("/api/register", ensureConnection, requireRoles("DISTRIBUTOR_ADMIN"), async (req, res) => {
   try {
     const {
       firmCode,
@@ -295,7 +322,24 @@ app.post("/api/register", ensureConnection, async (req, res) => {
       });
     }
 
+    if (String(userName).trim() !== String(req.auth.userName).trim()) {
+      return res.status(403).json({
+        success: false,
+        message: "A distributor administrator may only add a firm to their own account.",
+      });
+    }
+
+    if (!validatePasswordStrength(password)) {
+      return res.status(400).json({
+        success: false,
+        message: "Password must be 12-128 characters and include uppercase, lowercase, number, and symbol characters.",
+      });
+    }
+
+    const distributorId = String(req.auth.distributorId);
+
     const existingFirm = await Register.findOne({
+      distributorId,
       firmCode: firmCode.trim(),
       firmName: firmName.trim(),
     });
@@ -308,11 +352,10 @@ app.post("/api/register", ensureConnection, async (req, res) => {
     }
 
     const existingUser = await Register.findOne({
+      distributorId,
       userName: userName.trim(),
       isActive: true,
     });
-
-    let distributorId;
 
     if (existingUser) {
       if (!(await verifyPassword(password, existingUser.password))) {
@@ -322,10 +365,6 @@ app.post("/api/register", ensureConnection, async (req, res) => {
             "This username already exists. Enter correct old password to add another firm.",
         });
       }
-
-      distributorId = existingUser.distributorId;
-    } else {
-      distributorId = await generateDistributorId();
     }
 
     const firmId = await generateFirmId();
@@ -667,6 +706,7 @@ app.post(
             normalUser.userName,
 
           role,
+          salesmanCode: normalUser.salesmanCode || "",
 
           userSource: "USER",
         },
@@ -855,6 +895,9 @@ app.post("/api/users", ensureConnection, requireRoles("DISTRIBUTOR_ADMIN"), asyn
         message: "User Name and Password are required",
       });
     }
+    if (!validatePasswordStrength(password)) {
+      return res.status(400).json({ success: false, message: "Password must be 12-128 characters and include uppercase, lowercase, number, and symbol characters." });
+    }
 
     const existingUser = await User.findOne({
       distributorId,
@@ -890,6 +933,15 @@ app.post("/api/users", ensureConnection, requireRoles("DISTRIBUTOR_ADMIN"), asyn
         ? requestedRole
         : "USER";
 
+    const assignedSalesmanCode = safeRole === "SALESMAN" ? String(req.body.salesmanCode || "").trim() : "";
+    if (safeRole === "SALESMAN") {
+      if (!assignedSalesmanCode) return res.status(400).json({ success: false, message: "A salesman master must be assigned to a SALESMAN user." });
+      const assignedSalesman = await mongoose.connection.collection("Mas_Salesman").findOne({
+        distributorId, firmId, salesmanCode: assignedSalesmanCode, isActive: { $ne: false },
+      });
+      if (!assignedSalesman) return res.status(400).json({ success: false, message: "The assigned salesman is invalid or inactive." });
+    }
+
     const newUser = await User.create({
       userId: "USR" + Date.now(),
       distributorId,
@@ -899,6 +951,7 @@ app.post("/api/users", ensureConnection, requireRoles("DISTRIBUTOR_ADMIN"), asyn
       oldPassword: "",
       password: await hashPassword(password),
       role: safeRole,
+      salesmanCode: assignedSalesmanCode,
       isActive: true,
     });
 
@@ -927,18 +980,29 @@ app.put("/api/users/:id", ensureConnection, requireRoles("DISTRIBUTOR_ADMIN"), a
         role: ["ADMIN", "MANAGER", "ACCOUNTANT", "SALESMAN", "GODOWN", "USER"].includes(
           String(req.body.role || "USER").trim().toUpperCase()
         ) ? String(req.body.role || "USER").trim().toUpperCase() : "USER",
+        salesmanCode: String(req.body.role || "").trim().toUpperCase() === "SALESMAN" ? String(req.body.salesmanCode || "").trim() : "",
         isActive: req.body.isActive ?? true,
         oldPassword: "",
       };
+    if (update.role === "SALESMAN") {
+      if (!update.salesmanCode) return res.status(400).json({ success: false, message: "A salesman master must be assigned to a SALESMAN user." });
+      const assignedSalesman = await mongoose.connection.collection("Mas_Salesman").findOne({
+        distributorId: req.auth.distributorId, firmId: req.auth.firmId,
+        salesmanCode: update.salesmanCode, isActive: { $ne: false },
+      });
+      if (!assignedSalesman) return res.status(400).json({ success: false, message: "The assigned salesman is invalid or inactive." });
+    }
     if (req.body.password) {
+      if (!validatePasswordStrength(req.body.password)) {
+        return res.status(400).json({ success: false, message: "Password must be 12-128 characters and include uppercase, lowercase, number, and symbol characters." });
+      }
       update.password = await hashPassword(req.body.password);
-      update.sessionVersion = Number(req.auth?.id === req.params.id ? 1 : 0) + Number(req.body.sessionVersion || 0);
     }
     const updatedUser = await User.findOneAndUpdate(
       { _id: req.params.id, distributorId: req.auth.distributorId, firmId: req.auth.firmId },
-      update,
+      { $set: update, $inc: { sessionVersion: 1 } },
       { new: true }
-    ).select("-password");
+    ).select("-password -oldPassword");
 
     if (!updatedUser) {
       return res.status(404).json({ success: false, message: "User not found" });
@@ -1050,7 +1114,7 @@ const Category = mongoose.model("Mas_Category", categorySchema);
 const Product = mongoose.model("Mas_Product", productSchema);
 
 const applyProductMasterTaxRates = async ({ items, distributorId, firmId, session }) => {
-  const codes = items.map((item) => String(item.productCode || item.productId || item.code || String(item.product || "").split(" - ")[0] || "").trim());
+  const codes = items.map((item) => String(item.productCode || item.ProductCode || item.productId || item.code || String(item.product || "").split(" - ")[0] || "").trim());
   if (codes.some((code) => !code)) throw new Error("Every invoice item must contain a product code.");
   const products = await Product.find({ distributorId, firmId, productCode: { $in: [...new Set(codes)] }, isActive: true }).session(session).lean();
   const productMap = new Map(products.map((product) => [String(product.productCode), product]));
@@ -1061,7 +1125,9 @@ const applyProductMasterTaxRates = async ({ items, distributorId, firmId, sessio
     items[index].gstPercent = Number(product.gst || 0);
     items[index].GSTPercent = Number(product.gst || 0);
     items[index].hsn = String(product.hsn || "");
+    items[index].HSN = String(product.hsn || "");
     items[index].productName = String(product.productName || items[index].productName || "");
+    items[index].ProductName = String(product.productName || items[index].ProductName || "");
   }
 };
 
@@ -1821,6 +1887,9 @@ const AreaToPartyMapping = mongoose.model(
 const importRouter = createImportRouter({
   authorizeRequest: securityRouter.authorizeRequest,
   models: {
+    Company,
+    Category,
+    Group,
     Account,
     Product,
     CustomerBank,
@@ -1831,6 +1900,13 @@ const importRouter = createImportRouter({
   },
 });
 app.use("/api", ensureConnection, importRouter);
+app.use("/api", ensureConnection, createDesktopImportRouter({
+  authorizeRequest: securityRouter.authorizeRequest,
+}));
+app.use("/api/product-mappings", ensureConnection, createProductMappingRouter({
+  authorizeRequest: securityRouter.authorizeRequest,
+  Product,
+}));
 
 const productSalesReportRouter = createProductSalesReportRouter(securityRouter);
 app.use("/api/reports", ensureConnection, productSalesReportRouter);
@@ -1905,6 +1981,8 @@ const purchaseHeaderSchema = new mongoose.Schema(
     netAmt: Number,
 
     items: Array,
+    desktopImportReconciledAt: Date,
+    desktopImportStockKeys: { type: [String], default: undefined },
     historicalSnapshot: { type: mongoose.Schema.Types.Mixed, default: null },
     paymentAllocated: { type: Number, default: 0 },
     isActive: { type: Boolean, default: true },
@@ -1918,6 +1996,17 @@ purchaseHeaderSchema.index(
 );
 
 const Stock = mongoose.model("Mas_Stock", stockSchema);
+app.use(
+  "/api/batch-lock",
+  ensureConnection,
+  createBatchLockRouter({
+    Stock,
+    Product,
+    Company,
+    authorizeRequest: securityRouter.authorizeRequest,
+    authorize: securityRouter.authorize,
+  })
+);
 
 const stockAdjustmentSchema = new mongoose.Schema(
   {
@@ -1944,7 +2033,11 @@ const stockAdjustmentSchema = new mongoose.Schema(
     TotalQty: { type: Number, default: 0 },
     BalanceAfter: { type: Number, default: 0 },
     Narration: { type: String, default: "" },
-    Status: { type: String, enum: ["PENDING", "COMPLETED", "FAILED"], default: "PENDING" },
+    Status: { type: String, enum: ["PENDING", "COMPLETED", "FAILED", "CANCELLED"], default: "PENDING" },
+    CancelledAt: Date,
+    CancelledBy: { type: String, default: "" },
+    CancellationReason: { type: String, default: "" },
+    EditHistory: { type: [mongoose.Schema.Types.Mixed], default: [] },
     distributorId: { type: String, required: true },
     firmId: { type: String, required: true },
     firmName: { type: String, default: "" },
@@ -1959,6 +2052,62 @@ stockAdjustmentSchema.index(
 
 const StockAdjustment = mongoose.model("T_Stock_Adjustment", stockAdjustmentSchema);
 const PurchaseHeader = mongoose.model("T_Pur_Header", purchaseHeaderSchema);
+
+const enforceTrustedSalesRates = async ({ req, items, distributorId, firmId, gdCode, generalSetup, session }) => {
+  const normalize = (value) => String(value ?? "").trim();
+  const itemKey = (productCode, batch, mrp) => [normalize(productCode).toUpperCase(), normalize(batch || ".").toUpperCase(), Number(mrp || 0)].join("\u0000");
+  const productCodes = [...new Set(items.map((item) => normalize(item.productCode || item.productId || item.code || String(item.product || "").split(" - ")[0])).filter(Boolean))];
+  const [stockRows, products] = await Promise.all([
+    Stock.find({ distributorId, firmId, GDCode: normalize(gdCode), ProdCode: { $in: productCodes } }).session(session).lean(),
+    Product.find({ distributorId, firmId, productCode: { $in: productCodes }, isActive: true }).session(session).lean(),
+  ]);
+  const stockByKey = new Map(stockRows.map((row) => [itemKey(row.ProdCode, row.Batch, row.MRP), row]));
+  const productByCode = new Map(products.map((row) => [normalize(row.productCode).toUpperCase(), row]));
+  const overrideRequested = items.some((item) => {
+    const code = normalize(item.productCode || item.productId || item.code || String(item.product || "").split(" - ")[0]);
+    const stock = stockByKey.get(itemKey(code, item.batchNo || item.Batch || item.selectedBatch?.Batch, item.mrp ?? item.MRP ?? item.selectedBatch?.MRP));
+    const product = productByCode.get(code.toUpperCase());
+    const trusted = Number(stock?.SRate || product?.Rate_Per_Unit || 0);
+    const submitted = Number(item.rate ?? item.salesRate ?? item.SRate ?? 0);
+    return trusted <= 0 || Math.abs(submitted - trusted) > 0.001;
+  });
+  let overrideAllowed = false;
+  if (overrideRequested && generalSetup?.allowChangeSaleRate === true) {
+    overrideAllowed = await securityRouter.authorize(
+      distributorId, firmId, req.auth.userId, req.auth.role,
+      "SALES", "SALES_RATE_OVERRIDE", "edit"
+    );
+  }
+  const overrideReason = normalize(req.body.rateOverrideReason || req.body.overrideReason);
+
+  for (let index = 0; index < items.length; index += 1) {
+    const item = items[index];
+    const code = normalize(item.productCode || item.productId || item.code || String(item.product || "").split(" - ")[0]);
+    const stock = stockByKey.get(itemKey(code, item.batchNo || item.Batch || item.selectedBatch?.Batch, item.mrp ?? item.MRP ?? item.selectedBatch?.MRP));
+    const product = productByCode.get(code.toUpperCase());
+    const trustedRate = Number(stock?.SRate || product?.Rate_Per_Unit || 0);
+    const submittedRate = Number(item.rate ?? item.salesRate ?? item.SRate ?? 0);
+    const changed = trustedRate <= 0 || Math.abs(submittedRate - trustedRate) > 0.001;
+    if (changed && (!overrideAllowed || !overrideReason)) {
+      const error = new Error(trustedRate > 0
+        ? `Sales rate for product ${code} must be ${trustedRate.toFixed(2)}. A permitted override with a reason is required.`
+        : `A trusted sales rate is unavailable for product ${code}. A permitted override with a reason is required.`);
+      error.statusCode = 403;
+      throw error;
+    }
+    const appliedRate = changed ? submittedRate : trustedRate;
+    Object.assign(item, {
+      rate: appliedRate,
+      salesRate: appliedRate,
+      SRate: appliedRate,
+      originalRate: trustedRate,
+      appliedRate,
+      rateOverrideReason: changed ? overrideReason : "",
+      rateOverrideBy: changed ? req.auth.userId : "",
+      rateOverrideAt: changed ? new Date() : null,
+    });
+  }
+};
 
 const salesHeaderSchema = new mongoose.Schema(
   {
@@ -7801,8 +7950,6 @@ app.post(
 });
 app.put("/api/sales/change-bill-type-f4", ensureConnection, async (req, res) => {
   try {
-    console.log("CHANGE BILL TYPE BODY:", JSON.stringify(req.body, null, 2));
-
     const distributorId = String(req.body.distributorId || "").trim();
     const firmId = String(req.body.firmId || "").trim();
     const bills = Array.isArray(req.body.bills) ? req.body.bills : [];
@@ -7941,6 +8088,21 @@ app.put(
     if (!PartyName) throw new Error("Party is required");
     if (!GDCode) throw new Error("Godown code is required");
     if (!items.length) throw new Error("At least one product is required");
+    if (req.auth.role === "SALESMAN") {
+      if (!req.auth.salesmanCode) throw Object.assign(new Error("This user is not assigned to a salesman master."), { statusCode: 403 });
+      if (String(SalesmanCode || "").trim() !== req.auth.salesmanCode) throw Object.assign(new Error("Salesmen may only post bills assigned to themselves."), { statusCode: 403 });
+    }
+
+    const [salesParty, salesCompany, salesGodown, salesPerson] = await Promise.all([
+      Account.findOne({ distributorId, firmId, accountCode: PartyCode, isActive: { $ne: false } }).session(session).lean(),
+      Company.findOne({ distributorId, firmId, companyCode: CompanyCode, isActive: { $ne: false } }).session(session).lean(),
+      Godown.findOne({ distributorId, firmId, godownCode: GDCode, isActive: { $ne: false } }).session(session).lean(),
+      SalesmanCode ? Salesman.findOne({ distributorId, firmId, salesmanCode: SalesmanCode, isActive: { $ne: false } }).session(session).lean() : Promise.resolve(null),
+    ]);
+    if (!salesParty) throw Object.assign(new Error("Invalid or inactive customer account."), { statusCode: 400 });
+    if (!salesCompany) throw Object.assign(new Error("Invalid or inactive company."), { statusCode: 400 });
+    if (!salesGodown) throw Object.assign(new Error("Invalid or inactive godown."), { statusCode: 400 });
+    if (SalesmanCode && !salesPerson) throw Object.assign(new Error("Invalid or inactive salesman."), { statusCode: 400 });
 
     const oldBill = await SalesHeader.findOne({
       _id: id,
@@ -7959,6 +8121,7 @@ app.put(
       session,
     });
     await applyProductMasterTaxRates({ items, distributorId, firmId, session });
+    await enforceTrustedSalesRates({ req, items, distributorId, firmId, gdCode: GDCode, generalSetup, session });
     const canonicalSales = validateFinancialEnvelope(req.body, items, { vatMode: generalSetup?.vatOn });
     items.splice(0, items.length, ...canonicalSales.items);
     Object.assign(req.body, canonicalSales);
@@ -8573,7 +8736,7 @@ loadQuantityUpdated:
 
     console.error("Sales update error:", error);
 
-    res.status(error.code === 11000 ? 409 : 500).json({
+    res.status(error.statusCode || (error.code === 11000 ? 409 : 500)).json({
       success: false,
       message:
         error.code === 11000
@@ -8594,7 +8757,8 @@ app.get(
   ),
   async (req, res) => {
   try {
-    const { distributorId, firmId } = req.query;
+    const distributorId = req.auth.distributorId;
+    const firmId = req.auth.firmId;
 
     if (!distributorId || !firmId) {
       return res.status(400).json({
@@ -10005,11 +10169,17 @@ app.post(
     items.splice(0, items.length, ...canonicalPurchase.items);
     Object.assign(req.body, canonicalPurchase);
     const lastPurchaseForCounter = await PurchaseHeader.findOne({ distributorId, firmId, vouSer: String(vouSer || "").trim() }).sort({ vouNo: -1 }).session(session).lean();
-    const assignedVouNo = await nextDocumentNumber({ distributorId, firmId, documentType: "PURCHASE", series: String(vouSer || "").trim(), documentDate: invoiceDate, session, minimumValue: Number(lastPurchaseForCounter?.vouNo || 0) });
-    const [purchaseSupplier, purchaseCompany] = await Promise.all([
-      OtherAccount.findOne({ distributorId, firmId, accountCode: supplierCode }).session(session).lean(),
-      Company.findOne({ distributorId, firmId, $or: [{ companyCode: company }, { companyName: company }] }).session(session).lean(),
+    const assignedVouNo = req.body._desktopImport === true && Number(vouNo) > 0
+      ? Number(vouNo)
+      : await nextDocumentNumber({ distributorId, firmId, documentType: "PURCHASE", series: String(vouSer || "").trim(), documentDate: invoiceDate, session, minimumValue: Number(lastPurchaseForCounter?.vouNo || 0) });
+    const [purchaseSupplier, purchaseCompany, purchaseGodown] = await Promise.all([
+      OtherAccount.findOne({ distributorId, firmId, accountCode: supplierCode, isActive: { $ne: false } }).session(session).lean(),
+      Company.findOne({ distributorId, firmId, isActive: { $ne: false }, $or: [{ companyCode: company }, { companyName: company }] }).session(session).lean(),
+      Godown.findOne({ distributorId, firmId, godownCode: gdCode, isActive: { $ne: false } }).session(session).lean(),
     ]);
+    if (!purchaseSupplier) throw Object.assign(new Error("Invalid or inactive supplier account."), { statusCode: 400 });
+    if (!purchaseCompany) throw Object.assign(new Error("Invalid or inactive company."), { statusCode: 400 });
+    if (!purchaseGodown) throw Object.assign(new Error("Invalid or inactive godown."), { statusCode: 400 });
     const purchaseSnapshot = { capturedAt: new Date(), supplier: purchaseSupplier ? { code: purchaseSupplier.accountCode, name: purchaseSupplier.accountName, address: purchaseSupplier.address || "", gstin: purchaseSupplier.gstNo || "", state: purchaseSupplier.state || "", pinCode: purchaseSupplier.pinCode || "" } : { code: supplierCode || "", name: supplierName || "" }, company: purchaseCompany ? { code: purchaseCompany.companyCode, name: purchaseCompany.companyName, address: purchaseCompany.companyAddress || "", gstin: purchaseCompany.gstNo || "", state: purchaseCompany.state || "" } : null, products: items.map((item) => ({ code: item.productCode || item.code || "", name: item.productName || "", hsn: item.hsn || "", gstRate: Number(item.gst || 0), mrp: Number(item.mrp || 0), rate: Number(item.purRate ?? item.purchaseRate ?? 0) })) };
 
     const header = await PurchaseHeader.create(
@@ -10018,7 +10188,7 @@ app.post(
         firmId,
         firmName,
         invoiceDate,
-        vouSer: String(vouSer).trim(),
+        vouSer: String(vouSer || "").trim(),
         vouNo: assignedVouNo,
         vno: vno || "",
         supplierCode: supplierCode || "",
@@ -10475,6 +10645,111 @@ const applyPurchaseStockMovement = async ({
   }
 };
 
+/*
+ * A desktop import may encounter a purchase header created by an older import
+ * run which did not create its stock rows. This endpoint is intentionally
+ * conservative: it repairs only an identical voucher, and adds quantity only
+ * when the exact godown/product/batch/MRP stock row does not exist at all.
+ * Re-running it is therefore idempotent and cannot add the purchase twice.
+ */
+app.post(
+  "/api/purchase/reconcile-desktop-import",
+  ensureConnection,
+  securityRouter.authorizeRequest("VOUCHERS", "PURCHASE", "add"),
+  async (req, res) => {
+    const session = await mongoose.startSession();
+    try {
+      session.startTransaction();
+      const distributorId = String(req.body.distributorId || "").trim();
+      const firmId = String(req.body.firmId || "").trim();
+      const vouSer = String(req.body.vouSer || "").trim();
+      const vouNo = Number(req.body.vouNo);
+      const gdCode = String(req.body.gdCode || "").trim();
+      const incomingItems = Array.isArray(req.body.items) ? req.body.items.map((item) => ({ ...item })) : [];
+
+      if (req.body._desktopImport !== true) throw new Error("This repair is available only to the desktop import workflow.");
+      if (!distributorId || !firmId || !vouNo || !gdCode || !incomingItems.length) throw new Error("Desktop purchase repair data is incomplete.");
+
+      const purchase = await PurchaseHeader.findOne({ distributorId, firmId, vouSer, vouNo, isActive: true }).session(session);
+      if (!purchase) throw new Error(`Existing purchase ${vouSer}-${vouNo} was not found.`);
+      if (String(purchase.gdCode || "").trim() !== gdCode) {
+        const error = new Error(`Purchase ${vouSer}-${vouNo} exists in a different godown; automatic repair was not applied.`);
+        error.statusCode = 409;
+        throw error;
+      }
+
+      await applyProductMasterTaxRates({ items: incomingItems, distributorId, firmId, session });
+      const itemCode = (item) => String(item.productCode || item.code || item.productId || String(item.product || "").split(" - ")[0] || "").trim();
+      const itemBatch = (item) => String(item.batchNo || item.batch || item.selectedBatch?.batchNo || item.selectedBatch?.Batch || ".").trim() || ".";
+      const itemMrp = (item) => Number(item.mrp ?? item.MRP ?? item.selectedBatch?.mrp ?? item.selectedBatch?.MRP ?? 0);
+      const itemQty = (item) => Number(item.quantity ?? item.qty ?? item.Qty ?? 0) + Number(item.free ?? item.Free ?? 0);
+      const itemRate = (item) => Number(item.purRate ?? item.purchaseRate ?? item.PRate ?? item.pRate ?? 0);
+      const signature = (item) => [itemCode(item), itemBatch(item), itemMrp(item), itemQty(item), itemRate(item)].map(String).join("|");
+      const existingSignatures = (purchase.items || []).map(signature).sort();
+      const incomingSignatures = incomingItems.map(signature).sort();
+      if (JSON.stringify(existingSignatures) !== JSON.stringify(incomingSignatures)) {
+        const error = new Error(`Purchase ${vouSer}-${vouNo} exists but its items were changed; automatic repair was not applied.`);
+        error.statusCode = 409;
+        throw error;
+      }
+
+      const incomingBySignature = new Map();
+      for (const item of incomingItems) {
+        const values = incomingBySignature.get(signature(item)) || [];
+        values.push(item);
+        incomingBySignature.set(signature(item), values);
+      }
+      const repairedItems = (purchase.items || []).map((storedItem) => {
+        const source = incomingBySignature.get(signature(storedItem))?.shift();
+        if (!source) return storedItem;
+        const productCode = itemCode(source);
+        const productName = String(source.productName || storedItem.productName || "").trim();
+        return {
+          ...(typeof storedItem.toObject === "function" ? storedItem.toObject() : storedItem),
+          productCode,
+          productName,
+          product: [productCode, productName].filter(Boolean).join(" - "),
+        };
+      });
+
+      const groupedItems = new Map();
+      for (const item of incomingItems) {
+        const stockKey = `${itemCode(item)}|${itemBatch(item)}|${itemMrp(item)}`;
+        const group = groupedItems.get(stockKey) || [];
+        group.push(item);
+        groupedItems.set(stockKey, group);
+      }
+      const repairedStockKeys = [];
+      for (const [stockKey, group] of groupedItems) {
+        const first = group[0];
+        const filter = { distributorId, firmId, GDCode: gdCode, ProdCode: itemCode(first), Batch: itemBatch(first), MRP: itemMrp(first) };
+        const stock = await Stock.findOne(filter).session(session).lean();
+        if (!stock) {
+          await applyPurchaseStockMovement({ items: group, distributorId, firmId, firmName: req.body.firmName || purchase.firmName || "", gdCode, direction: 1, session });
+        } else {
+          const purchaseRate = itemRate(first);
+          const salesRate = Number(first.salesRate ?? first.SRate ?? first.rate ?? 0);
+          await Stock.updateOne(filter, { $set: { isActive: true, ...(purchaseRate > 0 ? { PRate: purchaseRate } : {}), ...(salesRate > 0 ? { SRate: salesRate } : {}) } }, { session });
+        }
+        repairedStockKeys.push(stockKey);
+      }
+
+      purchase.items = repairedItems;
+      purchase.desktopImportReconciledAt = new Date();
+      purchase.desktopImportStockKeys = repairedStockKeys;
+      await purchase.save({ session });
+      await writeAuditEvent(req, { entityType: "PURCHASE", entityId: String(purchase._id), action: "DESKTOP_IMPORT_RECONCILE", after: purchase.toObject() }, session);
+      await session.commitTransaction();
+      res.json({ success: true, message: `Purchase ${vouSer}-${vouNo} checked and repaired without duplicating it.`, data: { header: purchase } });
+    } catch (error) {
+      await session.abortTransaction();
+      res.status(error.statusCode || 500).json({ success: false, message: error.message || "Desktop purchase repair failed" });
+    } finally {
+      session.endSession();
+    }
+  }
+);
+
 app.put(
   "/api/purchase/:id",
   ensureConnection,
@@ -10514,6 +10789,14 @@ app.put(
       const canonicalPurchase = validateFinancialEnvelope(req.body, items, { type: "purchase" });
       items.splice(0, items.length, ...canonicalPurchase.items);
       Object.assign(req.body, canonicalPurchase);
+      const [purchaseSupplier, purchaseCompany, purchaseGodown] = await Promise.all([
+        OtherAccount.findOne({ distributorId, firmId, accountCode: supplierCode, isActive: { $ne: false } }).session(session).lean(),
+        Company.findOne({ distributorId, firmId, isActive: { $ne: false }, $or: [{ companyCode: company }, { companyName: company }] }).session(session).lean(),
+        Godown.findOne({ distributorId, firmId, godownCode: gdCode, isActive: { $ne: false } }).session(session).lean(),
+      ]);
+      if (!purchaseSupplier) throw Object.assign(new Error("Invalid or inactive supplier account."), { statusCode: 400 });
+      if (!purchaseCompany) throw Object.assign(new Error("Invalid or inactive company."), { statusCode: 400 });
+      if (!purchaseGodown) throw Object.assign(new Error("Invalid or inactive godown."), { statusCode: 400 });
       const purchaseSnapshot = { capturedAt: new Date(), supplier: { code: supplierCode || "", name: supplierName || "" }, company: { name: company || "" }, products: items.map((item) => ({ code: item.productCode || item.code || "", name: item.productName || "", hsn: item.hsn || "", gstRate: Number(item.gst || 0), mrp: Number(item.mrp || 0), rate: Number(item.purRate ?? item.purchaseRate ?? 0) })) };
 
       const oldPurchase = await PurchaseHeader.findOne({
@@ -10553,7 +10836,7 @@ app.put(
           $set: {
             firmName,
             invoiceDate,
-            vouSer: String(vouSer).trim(),
+            vouSer: String(vouSer || "").trim(),
             vouNo: Number(vouNo),
             vno: vno || "",
             supplierCode: supplierCode || "",
@@ -11882,6 +12165,20 @@ app.post(
           "At least one product is required"
         );
       }
+      if (req.auth.role === "SALESMAN") {
+        if (!req.auth.salesmanCode) throw Object.assign(new Error("This user is not assigned to a salesman master."), { statusCode: 403 });
+        if (String(SalesmanCode || "").trim() !== req.auth.salesmanCode) throw Object.assign(new Error("Salesmen may only post bills assigned to themselves."), { statusCode: 403 });
+      }
+      const [salesParty, salesCompany, salesGodown, salesPerson] = await Promise.all([
+        Account.findOne({ distributorId, firmId, accountCode: PartyCode, isActive: { $ne: false } }).session(session).lean(),
+        Company.findOne({ distributorId, firmId, companyCode: CompanyCode, isActive: { $ne: false } }).session(session).lean(),
+        Godown.findOne({ distributorId, firmId, godownCode: GDCode, isActive: { $ne: false } }).session(session).lean(),
+        SalesmanCode ? Salesman.findOne({ distributorId, firmId, salesmanCode: SalesmanCode, isActive: { $ne: false } }).session(session).lean() : Promise.resolve(null),
+      ]);
+      if (!salesParty) throw Object.assign(new Error("Invalid or inactive customer account."), { statusCode: 400 });
+      if (!salesCompany) throw Object.assign(new Error("Invalid or inactive company."), { statusCode: 400 });
+      if (!salesGodown) throw Object.assign(new Error("Invalid or inactive godown."), { statusCode: 400 });
+      if (SalesmanCode && !salesPerson) throw Object.assign(new Error("Invalid or inactive salesman."), { statusCode: 400 });
       let historicalSnapshot;
 
       /* =====================================================
@@ -11900,8 +12197,9 @@ app.post(
           distributorId,
           firmId,
           session,
-        });
+      });
       await applyProductMasterTaxRates({ items, distributorId, firmId, session });
+      await enforceTrustedSalesRates({ req, items, distributorId, firmId, gdCode: GDCode, generalSetup, session });
       const canonicalSales = validateFinancialEnvelope(req.body, items, { vatMode: generalSetup?.vatOn });
       items.splice(0, items.length, ...canonicalSales.items);
       Object.assign(req.body, canonicalSales);
@@ -11919,7 +12217,7 @@ app.post(
         BillSeries: normalizedBillSeries,
         ...entryTypeFilter,
       }).sort({ BillNo: -1 }).session(session).lean();
-      const assignedBillNo = await nextDocumentNumber({
+      const assignedBillNo = req.body._desktopImport === true && Number(BillNo) > 0 ? Number(BillNo) : await nextDocumentNumber({
         distributorId,
         firmId,
         documentType: normalizedEntryType === "COUNTER_SALES"
@@ -11927,7 +12225,8 @@ app.post(
           : "SALES",
         series: normalizedBillSeries,
         documentDate: BillDate,
-        session,
+        // Reserve the number independently so concurrent bill transactions
+        // cannot contend on the shared counter and fail with a duplicate.
         minimumValue: Number(lastSalesForCounter?.BillNo || 0),
       });
       historicalSnapshot = await buildSalesHistoricalSnapshot({
@@ -12328,6 +12627,7 @@ app.get(
       distributorId,
       firmId,
       isActive: true,
+      ...(req.auth.role === "SALESMAN" ? { SalesmanCode: req.auth.salesmanCode || "__UNASSIGNED__" } : {}),
     })
       .sort({ BillDate: -1, BillNo: -1 })
       .lean();
@@ -12421,9 +12721,9 @@ app.get(
         ""
       ).trim();
 
-      const salesmanCode = String(
-        req.query.salesmanCode || ""
-      ).trim();
+      const salesmanCode = req.auth.role === "SALESMAN"
+        ? (req.auth.salesmanCode || "__UNASSIGNED__")
+        : String(req.query.salesmanCode || "").trim();
 
       const salesmanName = String(
         req.query.salesmanName ||
@@ -13686,12 +13986,17 @@ app.get("/api/stock/batches", ensureConnection, async (req, res) => {
       $or: [{ isActive: true }, { isActive: { $exists: false } }],
     };
 
+    const allRowsFilter = { ...filter };
+
     if (includeLocked !== "Y") {
       filter.IsLocked = { $ne: "Y" };
     }
 
     const StockModel = String(stockType).trim().toUpperCase() === "DAMAGE" ? DamStock : Stock;
-    const rows = await StockModel.find(filter).sort({ ExpDt: 1, Batch: 1 }).lean();
+    const [rows, totalBatchCount] = await Promise.all([
+      StockModel.find(filter).sort({ ExpDt: 1, Batch: 1 }).lean(),
+      includeLocked !== "Y" ? StockModel.countDocuments(allRowsFilter) : Promise.resolve(0),
+    ]);
     console.log(
       "STOCK BATCH FILTER:",
       JSON.stringify(filter, null, 2)
@@ -13747,6 +14052,10 @@ app.get("/api/stock/batches", ensureConnection, async (req, res) => {
       success: true,
       count: batches.length,
       batches,
+      allBatchesLocked:
+        includeLocked !== "Y" &&
+        totalBatchCount > 0 &&
+        batches.length === 0,
     });
   } catch (error) {
     console.error("❌ Stock batch load error:", error.message);
@@ -13764,10 +14073,14 @@ app.get("/api/stock/batches", ensureConnection, async (req, res) => {
 // The conditional Stock Out update prevents concurrent requests from
 // taking a batch below zero.
 // ============================================================
-app.get("/api/stock/adjustments", ensureConnection, async (req, res) => {
+app.get(
+  "/api/stock/adjustments",
+  ensureConnection,
+  securityRouter.authorizeRequest("VOUCHERS", "STOCK_ADJUSTMENT", "view"),
+  async (req, res) => {
   try {
-    const distributorId = String(req.query.distributorId || "").trim();
-    const firmId = String(req.query.firmId || "").trim();
+    const distributorId = String(req.auth.distributorId || "").trim();
+    const firmId = String(req.auth.firmId || "").trim();
     const adjustmentType = String(req.query.adjustmentType || "").trim().toUpperCase();
 
     if (!distributorId || !firmId) {
@@ -13788,10 +14101,10 @@ app.get("/api/stock/adjustments", ensureConnection, async (req, res) => {
     return res.status(500).json({
       success: false,
       message: "Failed to load stock adjustments.",
-      error: error.message,
     });
   }
-});
+  }
+);
 
 const getStockAdjustmentKey = (adjustment) => ({
   distributorId: String(adjustment.distributorId || "").trim(),
@@ -13812,12 +14125,24 @@ const getStockAdjustmentLabel = (adjustmentType) => ({
   DAMAGE_OUT: "Damage Stock Out",
 }[String(adjustmentType).toUpperCase()] || "Stock");
 
+const validateStockAdjustmentReferences = async ({ distributorId, firmId, gdCode, prodCode, companyCode, session }) => {
+  const [godown, product, company] = await Promise.all([
+    Godown.findOne({ distributorId, firmId, godownCode: gdCode, isActive: { $ne: false } }).session(session).lean(),
+    Product.findOne({ distributorId, firmId, productCode: prodCode, isActive: { $ne: false } }).session(session).lean(),
+    companyCode ? Company.findOne({ distributorId, firmId, companyCode, isActive: { $ne: false } }).session(session).lean() : Promise.resolve(null),
+  ]);
+  if (!godown) throw Object.assign(new Error("Invalid or inactive godown."), { statusCode: 400 });
+  if (!product) throw Object.assign(new Error("Invalid or inactive product."), { statusCode: 400 });
+  if (companyCode && !company) throw Object.assign(new Error("Invalid or inactive company."), { statusCode: 400 });
+  return { godown, product, company };
+};
+
 /*
  * Apply (direction = 1) or reverse (direction = -1) one manual stock
  * adjustment. Negative movements are guarded so an edit/delete can never
  * take the current batch below zero.
  */
-const moveStockForAdjustment = async (adjustment, direction = 1) => {
+const moveStockForAdjustment = async (adjustment, direction = 1, session = null) => {
   const totalQuantity = Number(adjustment.TotalQty || 0);
   const typeSign = isStockInAdjustment(adjustment.AdjustmentType) ? 1 : -1;
   const quantityDelta = direction * typeSign * totalQuantity;
@@ -13828,11 +14153,11 @@ const moveStockForAdjustment = async (adjustment, direction = 1) => {
     const stockRow = await StockModel.findOneAndUpdate(
       { ...stockKey, Qty: { $gte: Math.abs(quantityDelta) }, IsLocked: { $ne: "Y" } },
       { $inc: { Qty: quantityDelta } },
-      { new: true, runValidators: true }
+      { new: true, runValidators: true, session }
     ).lean();
 
     if (!stockRow) {
-      const currentRow = await StockModel.findOne(stockKey).lean();
+      const currentRow = await StockModel.findOne(stockKey).session(session).lean();
       const error = new Error(
         currentRow
           ? `Only ${Number(currentRow.Qty || 0)} saleable units are available in this batch.`
@@ -13865,20 +14190,22 @@ const moveStockForAdjustment = async (adjustment, direction = 1) => {
       $set: setValues,
       $setOnInsert: { ...stockKey, IsLocked: "N" },
     },
-    { new: true, upsert: true, runValidators: true }
+    { new: true, upsert: true, runValidators: true, session }
   ).lean();
 };
 
-app.put("/api/stock/adjustments/:id", ensureConnection, async (req, res) => {
+app.put(
+  "/api/stock/adjustments/:id",
+  ensureConnection,
+  securityRouter.authorizeRequest("VOUCHERS", "STOCK_ADJUSTMENT", "edit"),
+  async (req, res) => {
+  const session = await mongoose.startSession();
   let originalAdjustment = null;
   let replacementAdjustment = null;
-  let originalReversed = false;
-  let replacementApplied = false;
-  let recordLocked = false;
 
   try {
-    const distributorId = String(req.body?.distributorId || "").trim();
-    const firmId = String(req.body?.firmId || "").trim();
+    const distributorId = String(req.auth.distributorId || "").trim();
+    const firmId = String(req.auth.firmId || "").trim();
     const adjustmentType = String(req.body?.adjustmentType || "").trim().toUpperCase();
     const quantity = Number(req.body?.quantity || 0);
     const freeQuantity = Number(req.body?.freeQuantity || 0);
@@ -13892,14 +14219,16 @@ app.put("/api/stock/adjustments/:id", ensureConnection, async (req, res) => {
       return res.status(400).json({ success: false, message: "Adjustment type and a quantity greater than zero are required." });
     }
 
+    session.startTransaction();
     originalAdjustment = await StockAdjustment.findOne({
       _id: req.params.id,
       distributorId,
       firmId,
       Status: "COMPLETED",
-    }).lean();
+    }).session(session).lean();
 
     if (!originalAdjustment) {
+      await session.abortTransaction();
       return res.status(404).json({ success: false, message: "Stock adjustment was not found." });
     }
 
@@ -13928,22 +14257,26 @@ app.put("/api/stock/adjustments/:id", ensureConnection, async (req, res) => {
     };
 
     if (!replacementAdjustment.GDCode || !replacementAdjustment.ProdCode) {
+      await session.abortTransaction();
       return res.status(400).json({ success: false, message: "Godown and product are required." });
     }
+    await validateStockAdjustmentReferences({
+      distributorId, firmId, gdCode: replacementAdjustment.GDCode,
+      prodCode: replacementAdjustment.ProdCode, companyCode: replacementAdjustment.CompanyCode, session,
+    });
 
     const lockResult = await StockAdjustment.updateOne(
       { _id: originalAdjustment._id, distributorId, firmId, Status: "COMPLETED" },
-      { $set: { Status: "PENDING" } }
+      { $set: { Status: "PENDING" } },
+      { session }
     );
     if (lockResult.modifiedCount !== 1) {
+      await session.abortTransaction();
       return res.status(409).json({ success: false, message: "This stock adjustment is already being changed. Refresh and try again." });
     }
-    recordLocked = true;
 
-    await moveStockForAdjustment(originalAdjustment, -1);
-    originalReversed = true;
-    const stockRow = await moveStockForAdjustment(replacementAdjustment, 1);
-    replacementApplied = true;
+    await moveStockForAdjustment(originalAdjustment, -1, session);
+    const stockRow = await moveStockForAdjustment(replacementAdjustment, 1, session);
 
     const updateResult = await StockAdjustment.updateOne(
       { _id: originalAdjustment._id, distributorId, firmId, Status: "PENDING" },
@@ -13972,10 +14305,39 @@ app.put("/api/stock/adjustments/:id", ensureConnection, async (req, res) => {
           Narration: replacementAdjustment.Narration,
           Status: "COMPLETED",
         },
-      }
+      },
+      { session }
     );
     if (updateResult.modifiedCount !== 1) throw new Error("The stock adjustment changed while it was being updated.");
-    recordLocked = false;
+    const movementId = new mongoose.Types.ObjectId().toString();
+    const movementItem = (entry) => ({
+      productCode: entry.ProdCode,
+      productName: entry.ProductName,
+      batch: entry.Batch,
+      mrp: entry.MRP,
+      quantity: entry.Qty,
+      free: entry.FreeQty,
+    });
+    await recordStockMovements({
+      distributorId, firmId, godown: originalAdjustment.GDCode,
+      items: [movementItem(originalAdjustment)], movementDate: businessDateIST(),
+      sourceType: "STOCK_ADJUSTMENT_EDIT_REVERSE", sourceId: movementId,
+      documentNo: originalAdjustment.VoucherNo, direction: isStockInAdjustment(originalAdjustment.AdjustmentType) ? -1 : 1,
+      userId: req.auth.userId, session,
+    });
+    await recordStockMovements({
+      distributorId, firmId, godown: replacementAdjustment.GDCode,
+      items: [movementItem(replacementAdjustment)], movementDate: businessDateIST(),
+      sourceType: "STOCK_ADJUSTMENT_EDIT_APPLY", sourceId: movementId,
+      documentNo: replacementAdjustment.VoucherNo, direction: isStockInAdjustment(replacementAdjustment.AdjustmentType) ? 1 : -1,
+      userId: req.auth.userId, session,
+    });
+    await writeAuditEvent(req, {
+      entityType: "STOCK_ADJUSTMENT", entityId: String(originalAdjustment._id), action: "EDIT",
+      reason: replacementAdjustment.Narration || "Stock adjustment corrected",
+      before: originalAdjustment, after: replacementAdjustment,
+    }, session);
+    await session.commitTransaction();
 
     return res.json({
       success: true,
@@ -13983,102 +14345,101 @@ app.put("/api/stock/adjustments/:id", ensureConnection, async (req, res) => {
       stock: { quantity: Number(stockRow.Qty || 0) },
     });
   } catch (error) {
-    try {
-      if (replacementApplied && replacementAdjustment) await moveStockForAdjustment(replacementAdjustment, -1);
-      if (originalReversed && originalAdjustment) await moveStockForAdjustment(originalAdjustment, 1);
-    } catch (rollbackError) {
-      console.error("Stock adjustment update rollback error:", rollbackError);
-    }
-    if (recordLocked && originalAdjustment) {
-      try {
-        await StockAdjustment.updateOne(
-          { _id: originalAdjustment._id, Status: "PENDING" },
-          { $set: { Status: "COMPLETED" } }
-        );
-      } catch (unlockError) {
-        console.error("Stock adjustment update unlock error:", unlockError);
-      }
-    }
+    if (session.inTransaction()) await session.abortTransaction();
 
     console.error("Stock adjustment update error:", error);
     return res.status(error.statusCode || 500).json({
       success: false,
       message: error.message || "Failed to update stock adjustment.",
     });
+  } finally {
+    await session.endSession();
   }
 });
 
-app.delete("/api/stock/adjustments/:id", ensureConnection, async (req, res) => {
+app.delete(
+  "/api/stock/adjustments/:id",
+  ensureConnection,
+  securityRouter.authorizeRequest("VOUCHERS", "STOCK_ADJUSTMENT", "delete"),
+  async (req, res) => {
+  const session = await mongoose.startSession();
   let adjustment = null;
-  let stockReversed = false;
-  let recordLocked = false;
 
   try {
-    const distributorId = String(req.body?.distributorId || "").trim();
-    const firmId = String(req.body?.firmId || "").trim();
+    const distributorId = String(req.auth.distributorId || "").trim();
+    const firmId = String(req.auth.firmId || "").trim();
+    const cancellationReason = String(req.body?.reason || "Cancelled by user").trim();
 
     if (!mongoose.Types.ObjectId.isValid(req.params.id) || !distributorId || !firmId) {
       return res.status(400).json({ success: false, message: "A valid stock entry and firm are required." });
     }
 
+    session.startTransaction();
     adjustment = await StockAdjustment.findOne({
       _id: req.params.id,
       distributorId,
       firmId,
       Status: "COMPLETED",
-    }).lean();
+    }).session(session).lean();
 
     if (!adjustment) {
+      await session.abortTransaction();
       return res.status(404).json({ success: false, message: "Stock adjustment was not found." });
     }
 
     const lockResult = await StockAdjustment.updateOne(
       { _id: adjustment._id, distributorId, firmId, Status: "COMPLETED" },
-      { $set: { Status: "PENDING" } }
+      { $set: { Status: "PENDING" } },
+      { session }
     );
     if (lockResult.modifiedCount !== 1) {
+      await session.abortTransaction();
       return res.status(409).json({ success: false, message: "This stock adjustment is already being changed. Refresh and try again." });
     }
-    recordLocked = true;
 
-    await moveStockForAdjustment(adjustment, -1);
-    stockReversed = true;
-    const deleteResult = await StockAdjustment.deleteOne({ _id: adjustment._id, distributorId, firmId, Status: "PENDING" });
-    if (deleteResult.deletedCount !== 1) throw new Error("The stock adjustment changed while it was being deleted.");
-    recordLocked = false;
+    await moveStockForAdjustment(adjustment, -1, session);
+    const cancelled = await StockAdjustment.findOneAndUpdate(
+      { _id: adjustment._id, distributorId, firmId, Status: "PENDING" },
+      { $set: { Status: "CANCELLED", CancelledAt: new Date(), CancelledBy: req.auth.userId, CancellationReason: cancellationReason } },
+      { new: true, session }
+    );
+    if (!cancelled) throw new Error("The stock adjustment changed while it was being cancelled.");
+    await recordStockMovements({
+      distributorId, firmId, godown: adjustment.GDCode,
+      items: [{ productCode: adjustment.ProdCode, productName: adjustment.ProductName, batch: adjustment.Batch, mrp: adjustment.MRP, quantity: adjustment.Qty, free: adjustment.FreeQty }],
+      movementDate: businessDateIST(), sourceType: "STOCK_ADJUSTMENT_CANCEL", sourceId: String(adjustment._id),
+      documentNo: adjustment.VoucherNo, direction: isStockInAdjustment(adjustment.AdjustmentType) ? -1 : 1,
+      userId: req.auth.userId, session,
+    });
+    await writeAuditEvent(req, {
+      entityType: "STOCK_ADJUSTMENT", entityId: String(adjustment._id), action: "CANCEL",
+      reason: cancellationReason, before: adjustment, after: cancelled.toObject(),
+    }, session);
+    await session.commitTransaction();
 
-    return res.json({ success: true, message: "Stock adjustment deleted and stock balance restored." });
+    return res.json({ success: true, message: "Stock adjustment cancelled and stock balance restored." });
   } catch (error) {
-    if (stockReversed && adjustment) {
-      try {
-        await moveStockForAdjustment(adjustment, 1);
-      } catch (rollbackError) {
-        console.error("Stock adjustment delete rollback error:", rollbackError);
-      }
-    }
-    if (recordLocked && adjustment) {
-      try {
-          await StockAdjustment.updateOne(
-            { _id: adjustment._id, Status: "PENDING" },
-            { $set: { Status: "COMPLETED" } }
-          );
-      } catch (unlockError) {
-        console.error("Stock adjustment delete unlock error:", unlockError);
-      }
-    }
+    if (session.inTransaction()) await session.abortTransaction();
 
     console.error("Stock adjustment delete error:", error);
     return res.status(error.statusCode || 500).json({
       success: false,
-      message: error.message || "Failed to delete stock adjustment.",
+      message: error.message || "Failed to cancel stock adjustment.",
     });
+  } finally {
+    await session.endSession();
   }
 });
 
-app.post("/api/stock/adjust", ensureConnection, async (req, res) => {
+app.post(
+  "/api/stock/adjust",
+  ensureConnection,
+  securityRouter.authorizeRequest("VOUCHERS", "STOCK_ADJUSTMENT", "add"),
+  async (req, res) => {
+  const session = await mongoose.startSession();
   try {
-    const distributorId = String(req.body?.distributorId || "").trim();
-    const firmId = String(req.body?.firmId || "").trim();
+    const distributorId = String(req.auth.distributorId || "").trim();
+    const firmId = String(req.auth.firmId || "").trim();
     const firmName = String(req.body?.firmName || "").trim();
     const adjustmentType = String(req.body?.adjustmentType || "")
       .trim()
@@ -14128,13 +14489,19 @@ app.post("/api/stock/adjust", ensureConnection, async (req, res) => {
       MRP,
     };
 
+    session.startTransaction();
+    await validateStockAdjustmentReferences({
+      distributorId, firmId, gdCode: GDCode, prodCode: ProdCode,
+      companyCode: String(req.body?.companyCode || "").trim(), session,
+    });
     const priorRequest = await StockAdjustment.findOne({
       distributorId,
       firmId,
       RequestId: requestId,
-    }).lean();
+    }).session(session).lean();
 
     if (priorRequest?.Status === "COMPLETED") {
+      await session.abortTransaction();
       return res.json({
         success: true,
         message: "This stock adjustment was already saved.",
@@ -14143,6 +14510,7 @@ app.post("/api/stock/adjust", ensureConnection, async (req, res) => {
     }
 
     if (priorRequest) {
+      await session.abortTransaction();
       return res.status(409).json({
         success: false,
         message: "This stock adjustment is already being processed. Refresh the list before retrying.",
@@ -14150,7 +14518,7 @@ app.post("/api/stock/adjust", ensureConnection, async (req, res) => {
     }
 
     const voucherPrefix = ({ IN: "STI", OUT: "STO", DAMAGE_IN: "DMI", DAMAGE_OUT: "DMO" })[adjustmentType];
-    const adjustment = await StockAdjustment.create({
+    const [adjustment] = await StockAdjustment.create([{
       RequestId: requestId,
       VoucherNo: `${voucherPrefix}-${Date.now()}`,
       VoucherDate: String(req.body?.voucherDate || "").trim() || new Date().toISOString().slice(0, 10),
@@ -14176,7 +14544,7 @@ app.post("/api/stock/adjust", ensureConnection, async (req, res) => {
       distributorId,
       firmId,
       firmName,
-    });
+    }], { session });
 
     let stockRow;
 
@@ -14198,34 +14566,42 @@ app.post("/api/stock/adjust", ensureConnection, async (req, res) => {
           },
           $setOnInsert: { ...stockKey, IsLocked: "N" },
         },
-        { new: true, upsert: true, runValidators: true }
+        { new: true, upsert: true, runValidators: true, session }
       ).lean();
     } else {
       stockRow = await StockModel.findOneAndUpdate(
         { ...stockKey, Qty: { $gte: totalQuantity }, IsLocked: { $ne: "Y" } },
         { $inc: { Qty: -totalQuantity } },
-        { new: true, runValidators: true }
+        { new: true, runValidators: true, session }
       ).lean();
 
       if (!stockRow) {
-        const currentRow = await StockModel.findOne(stockKey).lean();
-        await StockAdjustment.updateOne(
-          { _id: adjustment._id },
-          { $set: { Status: "FAILED" } }
-        );
-        return res.status(409).json({
-          success: false,
-          message: currentRow
-            ? `Only ${Number(currentRow.Qty || 0)} ${isDamageStockAdjustment(adjustmentType) ? "damaged" : "saleable"} units are available in this batch.`
-            : "The selected stock batch no longer exists.",
-        });
+        const currentRow = await StockModel.findOne(stockKey).session(session).lean();
+        const insufficient = new Error(currentRow
+          ? `Only ${Number(currentRow.Qty || 0)} ${isDamageStockAdjustment(adjustmentType) ? "damaged" : "saleable"} units are available in this batch.`
+          : "The selected stock batch no longer exists.");
+        insufficient.statusCode = 409;
+        throw insufficient;
       }
     }
 
     await StockAdjustment.updateOne(
       { _id: adjustment._id },
-      { $set: { Status: "COMPLETED", BalanceAfter: Number(stockRow.Qty || 0) } }
+      { $set: { Status: "COMPLETED", BalanceAfter: Number(stockRow.Qty || 0) } },
+      { session }
     );
+    await recordStockMovements({
+      distributorId, firmId, godown: GDCode,
+      items: [{ productCode: ProdCode, productName: adjustment.ProductName, batch: Batch, mrp: MRP, quantity, free: freeQuantity }],
+      movementDate: adjustment.VoucherDate, sourceType: "STOCK_ADJUSTMENT", sourceId: String(adjustment._id),
+      documentNo: adjustment.VoucherNo, direction: isStockInAdjustment(adjustmentType) ? 1 : -1,
+      userId: req.auth.userId, session,
+    });
+    await writeAuditEvent(req, {
+      entityType: "STOCK_ADJUSTMENT", entityId: String(adjustment._id), action: "CREATE",
+      reason: adjustment.Narration || getStockAdjustmentLabel(adjustmentType), after: adjustment.toObject(),
+    }, session);
+    await session.commitTransaction();
 
     return res.json({
       success: true,
@@ -14240,12 +14616,14 @@ app.post("/api/stock/adjust", ensureConnection, async (req, res) => {
       },
     });
   } catch (error) {
+    if (session.inTransaction()) await session.abortTransaction();
     console.error("Manual stock adjustment error:", error);
-    return res.status(500).json({
+    return res.status(error.statusCode || (error?.code === 11000 ? 409 : 500)).json({
       success: false,
-      message: "Failed to update stock.",
-      error: error.message,
+      message: error.statusCode || error?.code === 11000 ? error.message : "Failed to update stock.",
     });
+  } finally {
+    await session.endSession();
   }
 });
 // ============================================================
@@ -17605,7 +17983,9 @@ app.post(
         );
       }
       const lastLoadForCounter = await LoadHeader.findOne({ DistributorId, FirmId, LoadSeries: cleanLoadSeries }).sort({ LoadNo: -1 }).session(session).lean();
-      cleanLoadNo = await nextDocumentNumber({ distributorId: DistributorId, firmId: FirmId, documentType: "LOAD", series: cleanLoadSeries, documentDate: LoadDate, session, minimumValue: Number(lastLoadForCounter?.LoadNo || 0) });
+      if (req.body._desktopImport !== true) {
+        cleanLoadNo = await nextDocumentNumber({ distributorId: DistributorId, firmId: FirmId, documentType: "LOAD", series: cleanLoadSeries, documentDate: LoadDate, session, minimumValue: Number(lastLoadForCounter?.LoadNo || 0) });
+      }
 
       if (!Array.isArray(Bills) || Bills.length === 0) {
         throw new Error(
@@ -18780,13 +19160,9 @@ app.post(
     try {
       session.startTransaction();
 
-      const distributorId = String(
-        req.body.distributorId || ""
-      ).trim();
+      const distributorId = String(req.auth.distributorId || "").trim();
 
-      const firmId = String(
-        req.body.firmId || ""
-      ).trim();
+      const firmId = String(req.auth.firmId || "").trim();
 
       const transferMode = String(
         req.body.transferMode ||
@@ -21752,6 +22128,51 @@ app.get("/api/create-load/next-no", ensureConnection, async (req, res) => {
     });
   }
 });
+const cancelSalesBill = async ({ req, session, bill, reason }) => {
+  const distributorId = req.auth.distributorId;
+  const firmId = req.auth.firmId;
+  const cancelReason = String(reason || "Cancelled by user").trim();
+  if (bill.IsBillCancelled || bill.BillStatus === "CANCELLED" || bill.isActive === false) {
+    throw Object.assign(new Error("Bill is already cancelled"), { statusCode: 409 });
+  }
+  if (bill.IsLoaded || bill.LoadNo) {
+    throw Object.assign(new Error("Loaded bill must be removed from load before cancellation"), { statusCode: 409 });
+  }
+  const [linkedReceipt, linkedSettlement, linkedCollection, linkedPdc] = await Promise.all([
+    Receipt.findOne({ distributorId, firmId, status: { $ne: "REVERSED" }, $or: [
+      { billSeries: bill.BillSeries, billNo: String(bill.BillNo) },
+      { receiptBills: { $elemMatch: { trnSeries: bill.BillSeries, trnNo: String(bill.BillNo) } } },
+    ] }).session(session),
+    SettleLoad.findOne({ distributorId, firmId, $or: [
+      { "bills.billSeries": bill.BillSeries, "bills.billNo": String(bill.BillNo) },
+      { "bills.BillSeries": bill.BillSeries, "bills.BillNo": bill.BillNo },
+    ] }).session(session),
+    mongoose.connection.collection("T_CollectionVoucher").findOne({ distributorId, firmId, status: { $ne: "REVERSED" }, bills: { $elemMatch: { billSeries: bill.BillSeries, billNo: String(bill.BillNo) } } }, { session }),
+    mongoose.connection.collection("T_PDCDocket").findOne({ distributorId, firmId, status: { $ne: "REVERSED" }, $or: [{ billSeries: bill.BillSeries, billNo: String(bill.BillNo) }, { bills: { $elemMatch: { billSeries: bill.BillSeries, billNo: String(bill.BillNo) } } }] }, { session }),
+  ]);
+  if (linkedReceipt) throw Object.assign(new Error("Receipt exists for this bill; reverse the receipt first"), { statusCode: 409 });
+  if (linkedSettlement) throw Object.assign(new Error("Settled bill cannot be cancelled directly"), { statusCode: 409 });
+  if (linkedCollection || linkedPdc) throw Object.assign(new Error("Collection/PDC exists for this bill; reverse it before cancellation"), { statusCode: 409 });
+
+  const before = bill.toObject();
+  await applySalesStockMovement({ items: bill.items, distributorId, firmId, firmName: bill.firmName, gdCode: bill.GDCode, direction: 1, session });
+  bill.BillStatus = "CANCELLED";
+  bill.IsBillCancelled = true;
+  bill.isActive = false;
+  bill.CancelledAt = new Date();
+  bill.CancelledBy = req.auth.userId;
+  bill.CancelReason = cancelReason;
+  await bill.save({ session });
+  await reverseSourceJournal({ distributorId, firmId, sourceType: "SALES", sourceId: String(bill._id), createdBy: req.auth.userId, documentDate: businessDateIST(), reason: cancelReason }, session);
+  await recordStockMovements({
+    distributorId, firmId, godown: bill.GDCode, items: bill.items,
+    movementDate: businessDateIST(), sourceType: "SALES_CANCEL", sourceId: bill._id,
+    documentNo: `${bill.BillSeries || ""}${bill.BillNo}`, direction: 1, userId: req.auth.userId, session,
+  });
+  await writeAuditEvent(req, { entityType: "SALES_BILL", entityId: String(bill._id), action: "CANCEL", reason: cancelReason, before, after: bill.toObject() }, session);
+  return bill;
+};
+
 app.put(
   "/api/sales/cancel-bill",
   ensureConnection,
@@ -21794,79 +22215,7 @@ app.put(
         message: "Sales bill not found",
       });
     }
-    if (bill.IsBillCancelled || bill.BillStatus === "CANCELLED") {
-      await session.abortTransaction();
-      return res.status(409).json({ success: false, message: "Bill is already cancelled" });
-    }
-    if (bill.IsLoaded || bill.LoadNo) {
-      await session.abortTransaction();
-      return res.status(409).json({ success: false, message: "Loaded bill must be removed from load before cancellation" });
-    }
-    const linkedReceipt = await Receipt.findOne({
-      distributorId, firmId,
-      status: { $ne: "REVERSED" },
-      $or: [
-        { billSeries: bill.BillSeries, billNo: String(bill.BillNo) },
-        { receiptBills: { $elemMatch: { trnSeries: bill.BillSeries, trnNo: String(bill.BillNo) } } },
-      ],
-    }).session(session);
-    if (linkedReceipt) {
-      await session.abortTransaction();
-      return res.status(409).json({ success: false, message: "Receipt exists for this bill; reverse the receipt first" });
-    }
-    const linkedSettlement = await SettleLoad.findOne({
-      distributorId, firmId,
-      $or: [
-        { "bills.billSeries": bill.BillSeries, "bills.billNo": String(bill.BillNo) },
-        { "bills.BillSeries": bill.BillSeries, "bills.BillNo": bill.BillNo },
-      ],
-    }).session(session);
-    if (linkedSettlement) {
-      await session.abortTransaction();
-      return res.status(409).json({ success: false, message: "Settled bill cannot be cancelled directly" });
-    }
-    const linkedCollection = await mongoose.connection.collection("T_CollectionVoucher").findOne({
-      distributorId, firmId, status: { $ne: "REVERSED" },
-      bills: { $elemMatch: { billSeries: bill.BillSeries, billNo: String(bill.BillNo) } },
-    }, { session });
-    const linkedPdc = await mongoose.connection.collection("T_PDCDocket").findOne({
-      distributorId, firmId, status: { $ne: "REVERSED" },
-      $or: [{ billSeries: bill.BillSeries, billNo: String(bill.BillNo) }, { bills: { $elemMatch: { billSeries: bill.BillSeries, billNo: String(bill.BillNo) } } }],
-    }, { session });
-    if (linkedCollection || linkedPdc) {
-      await session.abortTransaction();
-      return res.status(409).json({ success: false, message: "Collection/PDC exists for this bill; reverse it before cancellation" });
-    }
-    await applySalesStockMovement({
-      items: bill.items,
-      distributorId,
-      firmId,
-      firmName: bill.firmName,
-      gdCode: bill.GDCode,
-      direction: 1,
-      session,
-    });
-    bill.BillStatus = "CANCELLED";
-    bill.IsBillCancelled = true;
-    bill.CancelledAt = new Date();
-    bill.CancelledBy = req.auth.userId;
-    bill.CancelReason = cancelReason;
-    await bill.save({ session });
-    await reverseSourceJournal({ distributorId, firmId, sourceType: "SALES", sourceId: String(bill._id), createdBy: req.auth.userId, documentDate: businessDateIST(), reason: cancelReason }, session);
-    await recordStockMovements({
-      distributorId, firmId, godown: bill.GDCode, items: bill.items,
-      movementDate: businessDateIST(), sourceType: "SALES_CANCEL", sourceId: bill._id,
-      documentNo: `${bill.BillSeries || ""}${bill.BillNo}`,
-      direction: 1, userId: req.auth.userId, session,
-    });
-    await writeAuditEvent(req, {
-      entityType: "SALES_BILL",
-      entityId: String(bill._id),
-      action: "CANCEL",
-      reason: cancelReason,
-      before: { BillStatus: "ACTIVE", IsBillCancelled: false },
-      after: { BillStatus: "CANCELLED", IsBillCancelled: true },
-    }, session);
+    await cancelSalesBill({ req, session, bill, reason: cancelReason });
     await session.commitTransaction();
 
     res.json({
@@ -21876,10 +22225,9 @@ app.put(
     });
   } catch (error) {
     if (session.inTransaction()) await session.abortTransaction();
-    res.status(500).json({
+    res.status(error.statusCode || 500).json({
       success: false,
-      message: "Bill cancel failed",
-      error: error.message,
+      message: error.statusCode ? error.message : "Bill cancel failed",
     });
   } finally {
     await session.endSession();
@@ -23569,13 +23917,9 @@ app.post(
     try {
       session.startTransaction();
 
-      const distributorId = String(
-        req.body.distributorId || ""
-      ).trim();
+      const distributorId = String(req.auth.distributorId || "").trim();
 
-      const firmId = String(
-        req.body.firmId || ""
-      ).trim();
+      const firmId = String(req.auth.firmId || "").trim();
 
       const firmName = String(
         req.body.firmName || ""
@@ -23632,8 +23976,66 @@ app.post(
           "At least one product is required."
         );
       }
+      const supplierCode = String(req.body.SupplierCode || req.body.supplierCode || "").trim();
+      const companyCode = String(req.body.CompanyCode || req.body.companyCode || "").trim();
+      const [noteSupplier, noteGodown, noteCompany] = await Promise.all([
+        OtherAccount.findOne({ distributorId, firmId, accountCode: supplierCode, isActive: { $ne: false } }).session(session).lean(),
+        Godown.findOne({ distributorId, firmId, godownCode: gdCode, isActive: { $ne: false } }).session(session).lean(),
+        companyCode ? Company.findOne({ distributorId, firmId, companyCode, isActive: { $ne: false } }).session(session).lean() : Promise.resolve(null),
+      ]);
+      if (!noteSupplier) throw Object.assign(new Error("Invalid or inactive supplier account."), { statusCode: 400 });
+      if (!noteGodown) throw Object.assign(new Error("Invalid or inactive godown."), { statusCode: 400 });
+      if (companyCode && !noteCompany) throw Object.assign(new Error("Invalid or inactive company."), { statusCode: 400 });
+      await applyProductMasterTaxRates({ items, distributorId, firmId, session });
+      const calculatedDebit = validateFinancialEnvelope(req.body, items, { type: "purchase" });
+      items.splice(0, items.length, ...calculatedDebit.items.map((item) => ({
+        ...item,
+        GrossAmount: item.grossAmount,
+        TaxableValue: item.taxable,
+        CGST: item.cgst,
+        SGST: item.sgst,
+        IGST: item.igst,
+        GSTAmount: Number(item.cgst || 0) + Number(item.sgst || 0) + Number(item.igst || 0),
+      })));
+      const referenceBillSeries = String(req.body.BillSeries || req.body.billSeries || "").trim();
+      const referenceBillNo = Number(req.body.BillNo || req.body.billNo || 0);
+      if (referenceBillNo > 0) {
+        const originalPurchase = await PurchaseHeader.findOne({
+          distributorId, firmId, vouSer: referenceBillSeries, vouNo: referenceBillNo, isActive: true,
+        }).session(session).lean();
+        if (!originalPurchase) throw Object.assign(new Error("Original purchase bill was not found in this firm."), { statusCode: 404 });
+        if (supplierCode && String(originalPurchase.supplierCode || "") !== supplierCode) {
+          throw Object.assign(new Error("Debit-note supplier does not match the original purchase bill."), { statusCode: 400 });
+        }
+        const keyFor = (item) => [
+          String(item.productCode || item.ProductCode || item.productId || "").trim().toUpperCase(),
+          String(item.batchNo || item.Batch || item.selectedBatch?.Batch || ".").trim().toUpperCase(),
+        ].join("\u0000");
+        const originalQty = new Map();
+        for (const item of originalPurchase.items || []) {
+          const key = keyFor(item);
+          originalQty.set(key, Number(originalQty.get(key) || 0) + Number(item.qty ?? item.quantity ?? item.Qty ?? 0) + Number(item.free ?? item.Free ?? 0));
+        }
+        const priorNotes = await DebitNote.find({
+          distributorId, firmId, BillSeries: referenceBillSeries, BillNo: referenceBillNo, isActive: true,
+        }).session(session).lean();
+        const returnedQty = new Map();
+        for (const note of priorNotes) for (const item of note.items || []) {
+          const key = keyFor(item);
+          returnedQty.set(key, Number(returnedQty.get(key) || 0) + Number(item.Qty ?? item.qty ?? 0) + Number(item.Free ?? item.free ?? 0));
+        }
+        for (const item of items) {
+          const key = keyFor(item);
+          const requested = Number(item.Qty ?? item.qty ?? 0) + Number(item.Free ?? item.free ?? 0);
+          if (requested + Number(returnedQty.get(key) || 0) > Number(originalQty.get(key) || 0) + 0.0001) {
+            throw Object.assign(new Error(`Return quantity exceeds the remaining quantity on the original purchase bill for product ${item.ProductCode || item.productCode}.`), { statusCode: 409 });
+          }
+        }
+      }
       const lastDebitNote = await DebitNote.findOne({ distributorId, firmId, DebitNoteSeries: debitNoteSeries }).sort({ DebitNoteNo: -1 }).session(session).lean();
-      debitNoteNo = await nextDocumentNumber({ distributorId, firmId, documentType: "DEBIT_NOTE", series: debitNoteSeries, documentDate: req.body.VDate, session, minimumValue: Number(lastDebitNote?.DebitNoteNo || 0) });
+      debitNoteNo = req.body._desktopImport === true && debitNoteNo > 0
+        ? debitNoteNo
+        : await nextDocumentNumber({ distributorId, firmId, documentType: "DEBIT_NOTE", series: debitNoteSeries, documentDate: req.body.VDate, session, minimumValue: Number(lastDebitNote?.DebitNoteNo || 0) });
 
       const duplicate =
         await DebitNote.findOne({
@@ -23700,26 +24102,16 @@ app.post(
                 gdCode,
 
               GrossAmount:
-                debitNumber(
-                  req.body.GrossAmount
-                ),
+                calculatedDebit.grossAmount,
 
               GSTAmount:
-                debitNumber(
-                  req.body.GSTAmount
-                ),
+                calculatedDebit.cgstAmt + calculatedDebit.sgstAmt + calculatedDebit.igstAmt,
 
               NetAmount:
-                debitNumber(
-                  req.body.NetAmount ??
-                  req.body.amount
-                ),
+                calculatedDebit.netAmt,
 
               amount:
-                debitNumber(
-                  req.body.NetAmount ??
-                  req.body.amount
-                ),
+                calculatedDebit.netAmt,
 
               TotalQty:
                 items.reduce(
@@ -23821,13 +24213,9 @@ app.put(
           req.params.id || ""
         ).trim();
 
-      const distributorId = String(
-        req.body.distributorId || ""
-      ).trim();
+      const distributorId = String(req.auth.distributorId || "").trim();
 
-      const firmId = String(
-        req.body.firmId || ""
-      ).trim();
+      const firmId = String(req.auth.firmId || "").trim();
 
       const firmName = String(
         req.body.firmName || ""
@@ -23908,6 +24296,24 @@ app.put(
           "Godown code is required."
         );
       }
+
+      const supplierCode = String(req.body.SupplierCode || req.body.supplierCode || oldDebitNote.SupplierCode || "").trim();
+      const companyCode = String(req.body.CompanyCode || req.body.companyCode || oldDebitNote.CompanyCode || "").trim();
+      const [noteSupplier, noteGodown, noteCompany] = await Promise.all([
+        OtherAccount.findOne({ distributorId, firmId, accountCode: supplierCode, isActive: { $ne: false } }).session(session).lean(),
+        Godown.findOne({ distributorId, firmId, godownCode: newGdCode, isActive: { $ne: false } }).session(session).lean(),
+        companyCode ? Company.findOne({ distributorId, firmId, companyCode, isActive: { $ne: false } }).session(session).lean() : Promise.resolve(null),
+      ]);
+      if (!noteSupplier) throw Object.assign(new Error("Invalid or inactive supplier account."), { statusCode: 400 });
+      if (!noteGodown) throw Object.assign(new Error("Invalid or inactive godown."), { statusCode: 400 });
+      if (companyCode && !noteCompany) throw Object.assign(new Error("Invalid or inactive company."), { statusCode: 400 });
+      await applyProductMasterTaxRates({ items: newItems, distributorId, firmId, session });
+      const calculatedDebit = validateFinancialEnvelope(req.body, newItems, { type: "purchase" });
+      newItems.splice(0, newItems.length, ...calculatedDebit.items.map((item) => ({
+        ...item, GrossAmount: item.grossAmount, TaxableValue: item.taxable,
+        CGST: item.cgst, SGST: item.sgst, IGST: item.igst,
+        GSTAmount: Number(item.cgst || 0) + Number(item.sgst || 0) + Number(item.igst || 0),
+      })));
 
       /*
       * Deduct new edited quantities.
@@ -24000,26 +24406,16 @@ app.put(
                 newGdCode,
 
               GrossAmount:
-                debitNumber(
-                  req.body.GrossAmount
-                ),
+                calculatedDebit.grossAmount,
 
               GSTAmount:
-                debitNumber(
-                  req.body.GSTAmount
-                ),
+                calculatedDebit.cgstAmt + calculatedDebit.sgstAmt + calculatedDebit.igstAmt,
 
               NetAmount:
-                debitNumber(
-                  req.body.NetAmount ??
-                  req.body.amount
-                ),
+                calculatedDebit.netAmt,
 
               amount:
-                debitNumber(
-                  req.body.NetAmount ??
-                  req.body.amount
-                ),
+                calculatedDebit.netAmt,
 
               TotalQty:
                 newItems.reduce(
@@ -24065,6 +24461,15 @@ app.put(
               true,
           }
         );
+
+      await reverseSourceJournal({ distributorId, firmId, sourceType: "DEBIT_NOTE", sourceId: String(id), createdBy: req.auth.userId, documentDate: String(updated.VDate || ""), reason: "Debit note edited" }, session);
+      const updatedTax = Number(updated.GSTAmount || 0);
+      await postBalancedJournal({ distributorId, firmId, sourceType: "DEBIT_NOTE", sourceId: String(id), documentNo: `${debitNoteSeries}${debitNoteNo}`, documentDate: String(updated.VDate || ""), createdBy: req.auth.userId, lines: [
+        { accountCode: String(updated.SupplierCode || updated.SupplierName || "SUNDRY_CREDITORS"), debit: Number(updated.NetAmount || 0), credit: 0, narration: "Debit note edit" },
+        { accountCode: "PURCHASE_RETURN", debit: 0, credit: Number(updated.NetAmount || 0) - updatedTax, narration: "Purchase return" },
+        ...(updatedTax > 0 ? [{ accountCode: "INPUT_GST_REVERSAL", debit: 0, credit: updatedTax, narration: "GST reversal" }] : []),
+      ] }, session);
+      await writeAuditEvent(req, { entityType: "DEBIT_NOTE", entityId: String(id), action: "EDIT", before: oldDebitNote.toObject(), after: updated.toObject() }, session);
 
       await session.commitTransaction();
 
@@ -24855,13 +25260,9 @@ app.post(
     try {
       session.startTransaction();
 
-      const distributorId = String(
-        req.body.distributorId || ""
-      ).trim();
+      const distributorId = String(req.auth.distributorId || "").trim();
 
-      const firmId = String(
-        req.body.firmId || ""
-      ).trim();
+      const firmId = String(req.auth.firmId || "").trim();
 
       const firmName = String(
         req.body.firmName || ""
@@ -24940,7 +25341,9 @@ app.post(
         });
       }
       const lastCreditNote = await CreditNote.findOne({ distributorId, firmId, CreditNoteSeries: creditNoteSeries }).sort({ CreditNoteNo: -1 }).session(session).lean();
-      creditNoteNo = await nextDocumentNumber({ distributorId, firmId, documentType: "CREDIT_NOTE", series: creditNoteSeries, documentDate: req.body.VDate, session, minimumValue: Number(lastCreditNote?.CreditNoteNo || 0) });
+      creditNoteNo = req.body._desktopImport === true && creditNoteNo > 0
+        ? creditNoteNo
+        : await nextDocumentNumber({ distributorId, firmId, documentType: "CREDIT_NOTE", series: creditNoteSeries, documentDate: req.body.VDate, session, minimumValue: Number(lastCreditNote?.CreditNoteNo || 0) });
 
       /*
       * Normalize and validate every item.
@@ -25111,6 +25514,29 @@ app.post(
         });
       }
 
+      const partyCode = String(req.body.PartyCode || req.body.partyCode || "").trim();
+      const companyCode = String(req.body.CompanyCode || req.body.companyCode || "").trim();
+      const [noteParty, noteGodown, noteCompany] = await Promise.all([
+        Account.findOne({ distributorId, firmId, accountCode: partyCode, isActive: { $ne: false } }).session(session).lean(),
+        Godown.findOne({ distributorId, firmId, godownCode: gdCode, isActive: { $ne: false } }).session(session).lean(),
+        companyCode ? Company.findOne({ distributorId, firmId, companyCode, isActive: { $ne: false } }).session(session).lean() : Promise.resolve(null),
+      ]);
+      if (!noteParty) throw Object.assign(new Error("Invalid or inactive customer account."), { statusCode: 400 });
+      if (!noteGodown) throw Object.assign(new Error("Invalid or inactive godown."), { statusCode: 400 });
+      if (companyCode && !noteCompany) throw Object.assign(new Error("Invalid or inactive company."), { statusCode: 400 });
+      await applyProductMasterTaxRates({ items: normalizedItems, distributorId, firmId, session });
+      const noteSetup = await loadFirmGeneralSetup({ distributorId, firmId, session });
+      const calculatedCredit = validateFinancialEnvelope(req.body, normalizedItems, { vatMode: noteSetup?.vatOn });
+      normalizedItems.splice(0, normalizedItems.length, ...calculatedCredit.items.map((item) => ({
+        ...item,
+        GrossAmount: item.grossAmt,
+        TaxableValue: item.taxable,
+        CGST: item.cgst,
+        SGST: item.sgst,
+        IGST: item.igst,
+        GSTAmount: Number(item.cgst || 0) + Number(item.sgst || 0) + Number(item.igst || 0),
+      })));
+
       const existingCreditNote =
         await CreditNote.findOne({
           distributorId,
@@ -25158,41 +25584,44 @@ app.post(
           await SalesHeader.findOne(
             salesBillFilter
           ).session(session);
+
+        if (!salesBill) throw Object.assign(new Error("Original sales bill was not found in this firm."), { statusCode: 404 });
+        if (partyCode && String(salesBill.PartyCode || "") !== partyCode) {
+          throw Object.assign(new Error("Credit-note customer does not match the original sales bill."), { statusCode: 400 });
+        }
+
+        const keyFor = (item) => [
+          String(item.productCode || item.ProductCode || item.productId || "").trim().toUpperCase(),
+          String(item.batchNo || item.Batch || item.selectedBatch?.Batch || ".").trim().toUpperCase(),
+        ].join("\u0000");
+        const originalQty = new Map();
+        for (const item of salesBill.items || []) {
+          const key = keyFor(item);
+          originalQty.set(key, Number(originalQty.get(key) || 0) + Number(item.qty ?? item.quantity ?? item.Qty ?? 0) + Number(item.free ?? item.Free ?? 0));
+        }
+        const priorNotes = await CreditNote.find({
+          distributorId, firmId, BillSeries: salesBill.BillSeries, BillNo: salesBill.BillNo, isActive: true,
+        }).session(session).lean();
+        const returnedQty = new Map();
+        for (const note of priorNotes) for (const item of note.items || []) {
+          const key = keyFor(item);
+          returnedQty.set(key, Number(returnedQty.get(key) || 0) + Number(item.qty ?? item.quantity ?? item.Qty ?? 0) + Number(item.free ?? item.Free ?? 0));
+        }
+        for (const item of normalizedItems) {
+          const key = keyFor(item);
+          const requested = Number(item.Qty ?? item.qty ?? 0) + Number(item.Free ?? item.free ?? 0);
+          if (requested + Number(returnedQty.get(key) || 0) > Number(originalQty.get(key) || 0) + 0.0001) {
+            throw Object.assign(new Error(`Return quantity exceeds the remaining quantity on the original sales bill for product ${item.ProductCode || item.productCode}.`), { statusCode: 409 });
+          }
+        }
       }
 
-      const creditAmount = Number(
-        req.body.NetAmount ??
-        req.body.amount ??
-        0
-      );
-
-      const grossAmount = Number(
-        req.body.GrossAmount || 0
-      );
-
-      const taxableValue = Number(
-        req.body.TaxableValue ??
-        req.body.taxableValue ??
-        0
-      );
-
-      const cgstAmount = Number(
-        req.body.CGSTAmount ??
-        req.body.cgstAmount ??
-        0
-      );
-
-      const sgstAmount = Number(
-        req.body.SGSTAmount ??
-        req.body.sgstAmount ??
-        0
-      );
-
-      const igstAmount = Number(
-        req.body.IGSTAmount ??
-        req.body.igstAmount ??
-        0
-      );
+      const creditAmount = calculatedCredit.NetAmount;
+      const grossAmount = calculatedCredit.GrossAmount;
+      const taxableValue = calculatedCredit.TaxableValue;
+      const cgstAmount = calculatedCredit.CGSTAmount;
+      const sgstAmount = calculatedCredit.SGSTAmount;
+      const igstAmount = calculatedCredit.IGSTAmount;
 
       if (
         !Number.isFinite(
@@ -25543,13 +25972,9 @@ app.put(
         req.params.id || ""
       ).trim();
 
-      const distributorId = String(
-        req.body.distributorId || ""
-      ).trim();
+      const distributorId = String(req.auth.distributorId || "").trim();
 
-      const firmId = String(
-        req.body.firmId || ""
-      ).trim();
+      const firmId = String(req.auth.firmId || "").trim();
 
       const firmName = String(
         req.body.firmName || ""
@@ -25784,11 +26209,32 @@ app.put(
           "At least one product is required."
         );
       }
-
-      const newAmounts =
-        getCreditNoteAmounts(
-          req.body
-        );
+      const partyCode = String(req.body.PartyCode || req.body.partyCode || oldCreditNote.PartyCode || "").trim();
+      const companyCode = String(req.body.CompanyCode || req.body.companyCode || oldCreditNote.CompanyCode || "").trim();
+      const [noteParty, noteGodown, noteCompany] = await Promise.all([
+        Account.findOne({ distributorId, firmId, accountCode: partyCode, isActive: { $ne: false } }).session(session).lean(),
+        Godown.findOne({ distributorId, firmId, godownCode: newGdCode, isActive: { $ne: false } }).session(session).lean(),
+        companyCode ? Company.findOne({ distributorId, firmId, companyCode, isActive: { $ne: false } }).session(session).lean() : Promise.resolve(null),
+      ]);
+      if (!noteParty) throw Object.assign(new Error("Invalid or inactive customer account."), { statusCode: 400 });
+      if (!noteGodown) throw Object.assign(new Error("Invalid or inactive godown."), { statusCode: 400 });
+      if (companyCode && !noteCompany) throw Object.assign(new Error("Invalid or inactive company."), { statusCode: 400 });
+      await applyProductMasterTaxRates({ items: newItems, distributorId, firmId, session });
+      const noteSetup = await loadFirmGeneralSetup({ distributorId, firmId, session });
+      const calculatedCredit = validateFinancialEnvelope(req.body, newItems, { vatMode: noteSetup?.vatOn });
+      newItems.splice(0, newItems.length, ...calculatedCredit.items.map((item) => ({
+        ...item, GrossAmount: item.grossAmt, TaxableValue: item.taxable,
+        CGST: item.cgst, SGST: item.sgst, IGST: item.igst,
+        GSTAmount: Number(item.cgst || 0) + Number(item.sgst || 0) + Number(item.igst || 0),
+      })));
+      const newAmounts = {
+        creditAmount: calculatedCredit.NetAmount,
+        grossAmount: calculatedCredit.GrossAmount,
+        taxableValue: calculatedCredit.TaxableValue,
+        cgstAmount: calculatedCredit.CGSTAmount,
+        sgstAmount: calculatedCredit.SGSTAmount,
+        igstAmount: calculatedCredit.IGSTAmount,
+      };
 
       const newSalesBill =
         await findReferencedSalesBill({
@@ -25803,6 +26249,38 @@ app.put(
 
           session,
         });
+
+      if (newBillNo > 0 && !newSalesBill) throw Object.assign(new Error("Original sales bill was not found in this firm."), { statusCode: 404 });
+      if (newSalesBill && partyCode && String(newSalesBill.PartyCode || "") !== partyCode) {
+        throw Object.assign(new Error("Credit-note customer does not match the original sales bill."), { statusCode: 400 });
+      }
+      if (newSalesBill) {
+        const keyFor = (item) => [
+          String(item.productCode || item.ProductCode || item.productId || "").trim().toUpperCase(),
+          String(item.batchNo || item.Batch || item.selectedBatch?.Batch || ".").trim().toUpperCase(),
+        ].join("\u0000");
+        const originalQty = new Map();
+        for (const item of newSalesBill.items || []) {
+          const key = keyFor(item);
+          originalQty.set(key, Number(originalQty.get(key) || 0) + Number(item.qty ?? item.quantity ?? item.Qty ?? 0) + Number(item.free ?? item.Free ?? 0));
+        }
+        const priorNotes = await CreditNote.find({
+          _id: { $ne: oldCreditNote._id }, distributorId, firmId,
+          BillSeries: newSalesBill.BillSeries, BillNo: newSalesBill.BillNo, isActive: true,
+        }).session(session).lean();
+        const returnedQty = new Map();
+        for (const note of priorNotes) for (const item of note.items || []) {
+          const key = keyFor(item);
+          returnedQty.set(key, Number(returnedQty.get(key) || 0) + Number(item.Qty ?? item.qty ?? 0) + Number(item.Free ?? item.free ?? 0));
+        }
+        for (const item of newItems) {
+          const key = keyFor(item);
+          const requested = Number(item.Qty ?? item.qty ?? 0) + Number(item.Free ?? item.free ?? 0);
+          if (requested + Number(returnedQty.get(key) || 0) > Number(originalQty.get(key) || 0) + 0.0001) {
+            throw Object.assign(new Error(`Return quantity exceeds the remaining quantity on the original sales bill for product ${item.ProductCode || item.productCode}.`), { statusCode: 409 });
+          }
+        }
+      }
 
       /*
       * The old adjustment has already been reversed.
@@ -25986,6 +26464,15 @@ app.put(
             session,
           }
         );
+
+      await reverseSourceJournal({ distributorId, firmId, sourceType: "CREDIT_NOTE", sourceId: String(id), createdBy: req.auth.userId, documentDate: String(updatedCreditNote.VDate || ""), reason: "Credit note edited" }, session);
+      const updatedCreditTax = newAmounts.cgstAmount + newAmounts.sgstAmount + newAmounts.igstAmount;
+      await postBalancedJournal({ distributorId, firmId, sourceType: "CREDIT_NOTE", sourceId: String(id), documentNo: `${creditNoteSeries}${creditNoteNo}`, documentDate: String(updatedCreditNote.VDate || ""), createdBy: req.auth.userId, lines: [
+        { accountCode: "SALES_RETURN", debit: newAmounts.creditAmount - updatedCreditTax, credit: 0, narration: "Credit note edit" },
+        ...(updatedCreditTax > 0 ? [{ accountCode: "OUTPUT_GST_REVERSAL", debit: updatedCreditTax, credit: 0, narration: "GST reversal" }] : []),
+        { accountCode: String(updatedCreditNote.PartyCode || updatedCreditNote.PartyName || "SUNDRY_DEBTORS"), debit: 0, credit: newAmounts.creditAmount, narration: "Credit note edit" },
+      ] }, session);
+      await writeAuditEvent(req, { entityType: "CREDIT_NOTE", entityId: String(id), action: "EDIT", before: oldCreditNote.toObject(), after: updatedCreditNote.toObject() }, session);
 
       await session.commitTransaction();
 
@@ -27709,354 +28196,8 @@ app.delete("/api/customer-banks/:id", ensureConnection, securityRouter.authorize
     });
   }
 });
-// ==================== PRODUCT MAPPING API ENDPOINTS (FULLY FIXED) ====================
-const productMappingSchema = new mongoose.Schema({
-
-  distributorId: String,
-  firmId: String,
-  firmName: String,
-
-  sourceProductCode: String,
-  sourceProductName: String,
-
-  mappings: [
-    {
-      companyProdCode: String,
-      companyProdName: String,
-      seqNo: Number
-    }
-  ],
-
-  isActive: {
-    type: Boolean,
-    default: true
-  }
-
-}, {
-  timestamps: true,
-  collection: "Mas_ProductMapping"
-});
-
-// ---------- POST/Create Product Mapping ----------
-app.post('/api/product-mappings', ensureConnection, async (req, res) => {
-  try {
-    const { sourceProductId, sourceProductCode, mappedProductIds, distributorId, firmId } = req.body;
-
-    console.log('POST /api/product-mappings - body:', { sourceProductId, sourceProductCode, mappedProductIds, distributorId, firmId });
-
-    // FIXED: Proper validation
-    if (!distributorId || !firmId) {
-      return res.status(400).json({
-        success: false,
-        message: 'distributorId and firmId are required'
-      });
-    }
-
-    if (!sourceProductId || !mappedProductIds || !mappedProductIds.length) {
-      return res.status(400).json({
-        success: false,
-        message: 'Source product and at least one mapped product are required'
-      });
-    }
-
-    // Check if mapping already exists
-    let existingMapping = await ProductMapping.findOne({
-      sourceProductId,
-      distributorId,
-      firmId,
-      isActive: true
-    });
-
-    if (existingMapping) {
-      // Update existing mapping
-      existingMapping.mappedProductIds = mappedProductIds;
-      existingMapping.sourceProductCode = sourceProductCode || existingMapping.sourceProductCode;
-      await existingMapping.save();
-
-      res.json({
-        success: true,
-        message: 'Product mapping updated successfully'
-      });
-    } else {
-      // Create new mapping
-      await ProductMapping.create({
-        sourceProductId,
-        sourceProductCode,
-        mappedProductIds,
-        distributorId,
-        firmId
-      });
-
-      res.json({
-        success: true,
-        message: 'Product mapping saved successfully'
-      });
-    }
-  } catch (error) {
-    console.error('Product mapping save error:', error);
-
-    if (error.code === 11000) {
-      return res.status(409).json({
-        success: false,
-        message: 'A mapping already exists for this product'
-      });
-    }
-
-    res.status(500).json({
-      success: false,
-      message: 'Product mapping save failed',
-      error: error.message
-    });
-  }
-});
-
-// ---------- GET Product Mappings (LIST) ----------
-app.get('/api/product-mappings', ensureConnection, async (req, res) => {
-  try {
-    const distributorId = String(req.query.distributorId || '').trim();
-    const firmId = String(req.query.firmId || '').trim();
-
-    console.log('GET /api/product-mappings - distributorId:', distributorId, 'firmId:', firmId);
-
-    // FIXED: Proper validation for distributorId and firmId
-    if (!distributorId || !firmId) {
-      return res.status(400).json({
-        success: false,
-        message: 'distributorId and firmId are required'
-      });
-    }
-
-    const filter = {
-      distributorId,
-      firmId,
-      isActive: true
-    };
-
-    // Optional productId filter
-    const productId = req.query.productId;
-    if (productId) {
-      filter.$or = [
-        { sourceProductId: productId },
-        { mappedProductIds: productId }
-      ];
-    }
-
-    const mappings = await ProductMapping.find(filter)
-      .populate('sourceProductId', 'productCode productName')
-      .populate('mappedProductIds', 'productCode productName')
-      .lean();
-
-    console.log('Found mappings:', mappings.length);
-
-    res.json({
-      success: true,
-      mappings
-    });
-  } catch (error) {
-    console.error('Product mappings fetch error:', error);
-    res.status(500).json({
-      success: false,
-      message: 'Failed to load product mappings',
-      error: error.message
-    });
-  }
-});
-// ---------- GET Single Product Mapping by ID ----------
-app.get('/api/product-mappings/:productId', ensureConnection, async (req, res) => {
-  try {
-    const { productId } = req.params;
-    const distributorId = String(req.query.distributorId || '').trim();
-    const firmId = String(req.query.firmId || '').trim();
-
-    console.log('GET /api/product-mappings/:productId - productId:', productId, 'distributorId:', distributorId, 'firmId:', firmId);
-
-    // FIXED: Proper validation for distributorId and firmId
-    if (!distributorId || !firmId) {
-      return res.status(400).json({
-        success: false,
-        message: 'distributorId and firmId are required'
-      });
-    }
-
-    const mapping = await ProductMapping.findOne({
-      sourceProductId: productId,
-      distributorId,
-      firmId,
-      isActive: true
-    })
-      .populate('sourceProductId', 'productCode productName')
-      .populate('mappedProductIds', 'productCode productName')
-      .lean();
-
-    res.json({
-      success: true,
-      mapping: mapping || null
-    });
-  } catch (error) {
-    console.error('Product mapping fetch error:', error);
-    res.status(500).json({
-      success: false,
-      message: 'Failed to load product mapping',
-      error: error.message
-    });
-  }
-});
-
-// ---------- DELETE Product Mapping ----------
-app.delete('/api/product-mappings/:id', ensureConnection, async (req, res) => {
-  try {
-    const distributorId = String(req.body.distributorId || req.query.distributorId || '').trim();
-    const firmId = String(req.body.firmId || req.query.firmId || '').trim();
-
-    console.log('DELETE /api/product-mappings/:id - id:', req.params.id, 'distributorId:', distributorId, 'firmId:', firmId);
-
-    // FIXED: Proper validation
-    if (!distributorId || !firmId) {
-      return res.status(400).json({
-        success: false,
-        message: 'distributorId and firmId are required'
-      });
-    }
-
-    const mapping = await ProductMapping.findOneAndUpdate(
-      {
-        _id: req.params.id,
-        distributorId,
-        firmId,
-        isActive: true
-      },
-      { isActive: false },
-      { new: true }
-    );
-
-    if (!mapping) {
-      return res.status(404).json({
-        success: false,
-        message: 'Product mapping not found'
-      });
-    }
-
-    res.json({
-      success: true,
-      message: 'Product mapping deleted successfully'
-    });
-  } catch (error) {
-    console.error('Product mapping delete error:', error);
-    res.status(500).json({
-      success: false,
-      message: 'Product mapping delete failed',
-      error: error.message
-    });
-  }
-});
-app.post("/api/product-mappings", ensureConnection, async (req, res) => {
-  try {
-
-    const {
-      distributorId,
-      firmId,
-      firmName,
-      sourceProductCode,
-      sourceProductName,
-      mappings
-    } = req.body;
-
-    if (!distributorId || !firmId) {
-      return res.status(400).json({
-        success: false,
-        message: "Distributor/Firm missing."
-      });
-    }
-
-    if (!sourceProductCode) {
-      return res.status(400).json({
-        success: false,
-        message: "Source Product is required."
-      });
-    }
-
-    const validMappings = (mappings || []).filter(x =>
-      String(x.companyProdCode || "").trim() ||
-      String(x.companyProdName || "").trim()
-    );
-
-    if (!validMappings.length) {
-      return res.status(400).json({
-        success: false,
-        message: "Please enter at least one mapped product."
-      });
-    }
-
-    let existing = await ProductMapping.findOne({
-      distributorId,
-      firmId,
-      sourceProductCode,
-      isActive: true
-    });
-
-    if (existing) {
-
-      existing.sourceProductName = sourceProductName;
-      existing.mappings = validMappings;
-      existing.firmName = firmName;
-
-      await existing.save();
-
-      return res.json({
-        success: true,
-        message: "Product Mapping Updated"
-      });
-    }
-
-    await ProductMapping.create({
-
-      distributorId,
-      firmId,
-      firmName,
-
-      sourceProductCode,
-      sourceProductName,
-
-      mappings: validMappings,
-
-      isActive: true
-    });
-
-    res.json({
-      success: true,
-      message: "Product Mapping Saved"
-    });
-
-  } catch (err) {
-
-    console.error(err);
-
-    res.status(500).json({
-      success: false,
-      message: err.message
-    });
-
-  }
-});
-
-app.get("/api/product-mappings/:productCode", async (req, res) => {
-  try {
-    const { productCode } = req.params;
-    const { distributorId, firmId } = req.query;
-
-    const mapping = await db.collection("Mas_ProductMapping").findOne({
-      distributorId,
-      firmId,
-      sourceProductCode: productCode,
-    });
-
-    res.json({ success: true, mapping });
-  } catch (err) {
-    console.error("Product mapping load error:", err);
-    res.status(500).json({ success: false, message: "Server error" });
-  }
-});
-// ---------- PERMANENT DELETE SALES BILL ----------
+// Product mapping routes are provided by createProductMappingRouter above.
+// Compatibility endpoint: posted sales are cancelled through the canonical reversal service.
 app.delete(
   "/api/sales/:id",
   ensureConnection,
@@ -28072,14 +28213,8 @@ app.delete(
     session.startTransaction();
 
     const { id } = req.params;
-    const { distributorId, firmId } = req.body;
-
-    if (!distributorId || !firmId) {
-      return res.status(400).json({
-        success: false,
-        message: "distributorId and firmId are required"
-      });
-    }
+    const distributorId = req.auth.distributorId;
+    const firmId = req.auth.firmId;
 
     // Find the sales bill first
     const salesBill = await SalesHeader.findOne({
@@ -28089,77 +28224,20 @@ app.delete(
       isActive: true
     }).session(session);
 
-    if (!salesBill) {
-      return res.status(404).json({
-        success: false,
-        message: "Sales bill not found"
-      });
-    }
-
-    // Check if bill is already loaded
-    if (salesBill.IsLoaded === true) {
-      return res.status(400).json({
-        success: false,
-        message: "Cannot delete bill that is already loaded. Please remove from load first."
-      });
-    }
-
-    // Check if bill has receipts
-    const hasReceipts = await Receipt.findOne({
-      distributorId,
-      firmId,
-      billSeries: salesBill.BillSeries,
-      billNo: salesBill.BillNo
-    }).session(session);
-
-    if (hasReceipts) {
-      return res.status(400).json({
-        success: false,
-        message: `Cannot delete bill ${salesBill.BillSeries}-${salesBill.BillNo}. Receipt(s) exist for this bill. Please delete receipts first.`
-      });
-    }
-
-    // Restore stock for each item
-    for (const item of salesBill.items || []) {
-      const prodCode = String(item.productCode || item.productId || "").trim();
-      const batchNo = String(item.batchNo || item.selectedBatch?.batchNo || ".").trim() || ".";
-      const mrp = Number(item.mrp || 0);
-      const qty = Number(item.qty || item.quantity || 0) + Number(item.free || 0);
-
-      if (prodCode && qty > 0) {
-        await Stock.updateOne(
-          {
-            distributorId,
-            firmId,
-            GDCode: salesBill.GDCode,
-            ProdCode: prodCode,
-            Batch: batchNo,
-            MRP: mrp,
-          },
-          { $inc: { Qty: qty } }
-        ).session(session);
-      }
-    }
-
-    const deleted = await SalesHeader.findOneAndUpdate(
-      { _id: id, distributorId, firmId },
-      { $set: { isActive: false, status: "CANCELLED", cancelledAt: new Date(), cancelledBy: req.auth.userId, cancellationReason: String(req.body.reason || "Deleted by user") } },
-      { new: true, session }
-    );
-    await reverseSourceJournal({ distributorId, firmId, sourceType: "SALES", sourceId: String(id), createdBy: req.auth.userId, documentDate: businessDateIST(), reason: req.body.reason || "Sales cancellation" }, session);
-    await writeAuditEvent(req, { entityType: "SALES", entityId: String(id), action: "CANCEL", reason: req.body.reason || "Deleted by user", before: salesBill.toObject(), after: deleted.toObject() }, session);
+    if (!salesBill) throw Object.assign(new Error("Sales bill not found"), { statusCode: 404 });
+    const cancelled = await cancelSalesBill({ req, session, bill: salesBill, reason: req.body.reason || "Cancelled from sales list" });
 
     await session.commitTransaction();
 
     res.json({
       success: true,
       message: `Sales bill ${salesBill.BillSeries}-${salesBill.BillNo} cancelled and reversed`,
-      data: deleted
+      data: cancelled
     });
   } catch (error) {
-    await session.abortTransaction();
+    if (session.inTransaction()) await session.abortTransaction();
     console.error("Delete sales bill error:", error);
-    res.status(500).json({
+    res.status(error.statusCode || 500).json({
       success: false,
       message: error.message || "Sales bill delete failed"
     });
@@ -31237,21 +31315,8 @@ app.get(
   }
 );
 app.get("/api/connection-status", (req, res) => {
-  const states = {
-    0: "disconnected",
-    1: "connected",
-    2: "connecting",
-    3: "disconnecting",
-  };
-
-  res.json({
-    success: true,
-    readyState: mongoose.connection.readyState,
-    status: states[mongoose.connection.readyState],
-    databaseName: mongoose.connection.name || null,
-    expectedDatabase: "Total_Solution",
-    isCorrectDatabase: mongoose.connection.name === "Total_Solution",
-  });
+  const ready = mongoose.connection.readyState === 1;
+  res.status(ready ? 200 : 503).json({ success: ready, status: ready ? "ok" : "unavailable" });
 });
 
 // =========================================================
@@ -33427,3 +33492,4 @@ app.use((req, res) => {
     message: `Route not found: ${req.method} ${req.originalUrl}`,
   });
 });
+app.use(apiErrorHandler);

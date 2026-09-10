@@ -10,3 +10,4 @@ vite.config.js.bak
 backend/.env
 backend/.env.*
 !backend/.env.example
+.desktop-import-analysis/

@@ -6,10 +6,22 @@ const BCRYPT_ROUNDS = 12;
 const PUBLIC_API_PATHS = new Set([
   "/login",
   "/login/firms",
-  "/register",
   "/connection-status",
   "/bill-print/health",
 ]);
+
+const TENANT_KEYS = new Map([
+  ["firmid", "firmId"],
+  ["distributorid", "distributorId"],
+  ["x-firm-id", "firmId"],
+  ["x-distributor-id", "distributorId"],
+]);
+
+export const validatePasswordStrength = (value) => {
+  const password = String(value || "");
+  if (password.length < 12 || password.length > 128) return false;
+  return /[a-z]/.test(password) && /[A-Z]/.test(password) && /\d/.test(password) && /[^A-Za-z0-9]/.test(password);
+};
 
 export const isPasswordHash = (value = "") => /^\$2[aby]\$\d{2}\$/.test(String(value));
 
@@ -98,22 +110,27 @@ const resolvePrincipal = async (payload) => {
     firmId: String(record.firmId || ""),
     firmName: String(record.firmName || ""),
     role: String(record.role || "USER").trim().toUpperCase(),
+    salesmanCode: String(record.salesmanCode || "").trim(),
     source: payload.src,
   };
 };
 
-const rejectTenantMismatch = (req, principal) => {
-  const candidates = [req.body, req.query, req.params];
-  for (const source of candidates) {
-    if (!source) continue;
-    for (const [key, value] of Object.entries(source)) {
-      const normalized = key.toLowerCase();
-      if (normalized === "firmid" && value && String(value) !== principal.firmId) return true;
-      if (normalized === "distributorid" && value && String(value) !== principal.distributorId) return true;
+export const hasTenantMismatch = (value, principal, seen = new WeakSet()) => {
+  if (!value || typeof value !== "object") return false;
+  if (seen.has(value)) return false;
+  seen.add(value);
+  for (const [key, child] of Object.entries(value)) {
+    const principalKey = TENANT_KEYS.get(String(key).toLowerCase());
+    if (principalKey && child != null && String(child).trim() && String(child) !== String(principal[principalKey] || "")) {
+      return true;
     }
+    if (child && typeof child === "object" && hasTenantMismatch(child, principal, seen)) return true;
   }
   return false;
 };
+
+const rejectTenantMismatch = (req, principal) =>
+  [req.body, req.query, req.params, req.headers].some((source) => hasTenantMismatch(source, principal));
 
 export const authenticateApi = async (req, res, next) => {
   if (req.method === "OPTIONS" || PUBLIC_API_PATHS.has(req.path)) return next();

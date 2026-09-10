@@ -1,5 +1,6 @@
 import express from "express";
 import mongoose from "mongoose";
+import { writeAuditEvent } from "./audit.js";
 
 const router = express.Router();
 
@@ -779,13 +780,9 @@ allowGstRate:
 
 router.get("/", async (req, res) => {
   try {
-    const distributorId = readString(
-      req.query.distributorId
-    );
+    const distributorId = readString(req.auth?.distributorId);
 
-    const firmId = readString(
-      req.query.firmId
-    );
+    const firmId = readString(req.auth?.firmId);
 
     const firmName = readString(
       req.query.firmName
@@ -846,14 +843,11 @@ router.get("/", async (req, res) => {
    ========================================================= */
 
 router.put("/", async (req, res) => {
+  const session = await mongoose.startSession();
   try {
-    const distributorId = readString(
-      req.body.distributorId
-    );
+    const distributorId = readString(req.auth?.distributorId);
 
-    const firmId = readString(
-      req.body.firmId
-    );
+    const firmId = readString(req.auth?.firmId);
 
     if (!distributorId || !firmId) {
       return res.status(400).json({
@@ -863,38 +857,39 @@ router.put("/", async (req, res) => {
       });
     }
 
-    const existingSetup =
-      await GeneralSetup.findOne({
+    let setup;
+    await session.withTransaction(async () => {
+      const existingSetup = await GeneralSetup.findOne({
         distributorId,
         firmId,
-      }).lean();
+      }).session(session).lean();
 
-    const updateData =
-      buildSetupUpdate(
-        req.body,
-        existingSetup
-      );
+      const updateData = buildSetupUpdate(req.body, existingSetup);
 
-    const setup =
-      await GeneralSetup.findOneAndUpdate(
-        {
-          distributorId,
-          firmId,
-        },
+      setup = await GeneralSetup.findOneAndUpdate(
+        { distributorId, firmId },
         {
           $set: updateData,
-          $setOnInsert: {
-            distributorId,
-            firmId,
-          },
+          $setOnInsert: { distributorId, firmId },
         },
         {
           new: true,
           upsert: true,
           runValidators: true,
           setDefaultsOnInsert: true,
+          session,
         }
       ).lean();
+
+      await writeAuditEvent(req, {
+        entityType: "GENERAL_SETUP",
+        entityId: String(setup._id),
+        action: existingSetup ? "UPDATE" : "CREATE",
+        reason: String(req.body.reason || "General Setup changed").trim(),
+        before: existingSetup,
+        after: setup,
+      }, session);
+    });
 
     return res.json({
       success: true,
@@ -922,6 +917,8 @@ router.put("/", async (req, res) => {
         "Failed to save General Setup.",
       error: error.message,
     });
+  } finally {
+    await session.endSession();
   }
 });
 

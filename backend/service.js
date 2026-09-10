@@ -222,8 +222,11 @@ export default function createServiceRouter(securityRouter) {
       const payload = await voucherPayload(req.body, scope);
       if (!payload.voucherDate) return res.status(400).json({ success: false, message: "Voucher Date is required." });
       const latest = await SalesService.findOne({ ...scope, voucherSeries: payload.voucherSeries }).sort({ voucherNo: -1 }).lean();
-      const voucherNo = await nextDocumentNumber({ ...scope, documentType: "SALES_SERVICE", series: payload.voucherSeries,
-        documentDate: payload.voucherDate, minimumValue: latest?.voucherNo || 0 });
+      const requestedDesktopNo = Number(req.body.voucherNo || 0);
+      const voucherNo = req.body._desktopImport === true && requestedDesktopNo > 0
+        ? requestedDesktopNo
+        : await nextDocumentNumber({ ...scope, documentType: "SALES_SERVICE", series: payload.voucherSeries,
+          documentDate: payload.voucherDate, minimumValue: latest?.voucherNo || 0 });
       const voucher = await SalesService.create({ ...payload, voucherNo, ...scope, firmName: clean(req.body.firmName) });
       res.status(201).json({ success: true, message: "Sales Service saved successfully.", voucher });
     } catch (error) { res.status(error.status || 500).json({ success: false, message: error.message || "Sales Service save failed." }); }

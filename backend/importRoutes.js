@@ -29,7 +29,7 @@ const duplicateKey = (config, doc) => {
 export default function createImportRouter({ authorizeRequest, models }) {
   const router = express.Router();
   const companyViewPermission = authorizeRequest("MASTER", "COMPANY", "view");
-  const entryOperations = { Account: "ACCOUNT", Product: "PRODUCT", Bank: "BANK", Salesman: "SALESMAN", Area: "AREA", AreaToPartyMapping: "AREA_TO_PARTY", SalesmanToAreaMapping: "SALESMAN_TO_AREA" };
+  const entryOperations = { Company: "COMPANY", Category: "CATEGORY", Group: "GROUP", Account: "ACCOUNT", Product: "PRODUCT", Bank: "BANK", Salesman: "SALESMAN", Area: "AREA", AreaToPartyMapping: "AREA_TO_PARTY", SalesmanToAreaMapping: "SALESMAN_TO_AREA" };
   const importPermission = (req, res, next) => {
     const operation = entryOperations[req.body?.entryType];
     if (!operation) return res.status(400).json({ success: false, message: "Unsupported import entry type." });
@@ -41,6 +41,7 @@ export default function createImportRouter({ authorizeRequest, models }) {
   const validate = async (req, res, next) => {
     try {
       const { entryType, data, company } = req.body || {};
+      const desktopBatch = req.body?.desktopBatch === true;
       const config = getImportConfig(entryType);
       const Model = models[entryType];
       const { distributorId, firmId, firmName } = req.security;
@@ -60,6 +61,20 @@ export default function createImportRouter({ authorizeRequest, models }) {
       const collection = mongoose.connection.collection(config.collection);
       const existing = await collection.find({ distributorId, firmId }).toArray();
       const keys = new Set(existing.map((doc) => duplicateKey(config, doc).toLowerCase()).filter(Boolean));
+      let areaToPartyReferences = null;
+      if (entryType === "AreaToPartyMapping") {
+        const distinctValues = (column) => [...new Set(data.map((row) => clean(row[column])).filter(Boolean))];
+        const [companies, accounts, areas] = await Promise.all([
+          mongoose.connection.collection("Mas_Company").find({ distributorId, firmId, companyCode: { $in: distinctValues("Company Code") }, isActive: true }).toArray(),
+          mongoose.connection.collection("Mas_Account").find({ distributorId, firmId, accountCode: { $in: distinctValues("Account Code") }, isActive: true }).toArray(),
+          mongoose.connection.collection("Mas_Area").find({ distributorId, firmId, areaCode: { $in: distinctValues("Area Code") }, isActive: true }).toArray(),
+        ]);
+        areaToPartyReferences = {
+          companies: new Map(companies.map((item) => [clean(item.companyCode), item])),
+          accounts: new Map(accounts.map((item) => [clean(item.accountCode), item])),
+          areas: new Map(areas.map((item) => [clean(item.areaCode), item])),
+        };
+      }
       const seen = new Set(); const rows = []; const documents = [];
       for (let index = 0; index < data.length; index += 1) {
         const source = data[index]; const errors = []; const doc = { distributorId, firmId, firmName, isActive: true };
@@ -87,24 +102,30 @@ export default function createImportRouter({ authorizeRequest, models }) {
         const schemaError = new Model(doc).validateSync();
         if (schemaError) errors.push(...Object.values(schemaError.errors).map((item) => item.message));
         if (entryType === "AreaToPartyMapping") {
-          if (doc.companyCode !== req.selectedCompany.companyCode) errors.push("Company Code must match the selected Company");
-          const [account, area] = await Promise.all([
-            mongoose.connection.collection("Mas_Account").findOne({ distributorId, firmId, accountCode: doc.accountCode, isActive: true }),
-            mongoose.connection.collection("Mas_Area").findOne({ distributorId, firmId, areaCode: doc.areaCode, isActive: true }),
-          ]);
+          const rowCompany = desktopBatch
+            ? areaToPartyReferences.companies.get(clean(doc.companyCode))
+            : req.selectedCompany;
+          if (!rowCompany) errors.push(`Company Code "${doc.companyCode || ""}" does not exist`);
+          else if (!desktopBatch && doc.companyCode !== rowCompany.companyCode) errors.push("Company Code must match the selected Company");
+          const account = areaToPartyReferences.accounts.get(clean(doc.accountCode));
+          const area = areaToPartyReferences.areas.get(clean(doc.areaCode));
           if (!account) errors.push(`Account Code "${doc.accountCode || ""}" does not exist`); else doc.accountName = account.accountName;
           if (!area) errors.push(`Area Code "${doc.areaCode || ""}" does not exist`); else doc.areaName = area.areaName;
-          doc.companyName = req.selectedCompany.companyName;
+          if (rowCompany) doc.companyName = rowCompany.companyName;
         }
         if (entryType === "SalesmanToAreaMapping") {
-          if (doc.companyCode !== req.selectedCompany.companyCode) errors.push("Company Code must match the selected Company");
+          const rowCompany = desktopBatch
+            ? await mongoose.connection.collection("Mas_Company").findOne({ distributorId, firmId, companyCode: doc.companyCode, isActive: true })
+            : req.selectedCompany;
+          if (!rowCompany) errors.push(`Company Code "${doc.companyCode || ""}" does not exist`);
+          else if (!desktopBatch && doc.companyCode !== rowCompany.companyCode) errors.push("Company Code must match the selected Company");
           const [area, salesman] = await Promise.all([
             mongoose.connection.collection("Mas_Area").findOne({ distributorId, firmId, areaCode: doc.areaCode, isActive: true }),
             mongoose.connection.collection("Mas_Salesman").findOne({ distributorId, firmId, salesmanCode: doc.salesmanCode, isActive: true }),
           ]);
           if (!area) errors.push(`Area Code "${doc.areaCode || ""}" does not exist`); else doc.areaName = area.areaName;
           if (!salesman) errors.push(`Salesman Code "${doc.salesmanCode || ""}" does not exist`); else doc.salesmanName = salesman.salesmanName;
-          doc.companyName = req.selectedCompany.companyName;
+          if (rowCompany) doc.companyName = rowCompany.companyName;
         }
         const key = duplicateKey(config, doc).toLowerCase();
         if (key && (keys.has(key) || seen.has(key))) errors.push(`${config.label} with ${config.duplicateField} "${doc[config.duplicateField]}" already exists`);

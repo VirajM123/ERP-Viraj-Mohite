@@ -15,14 +15,28 @@ export const nextDocumentNumber = async ({ distributorId, firmId, documentType, 
 
   // Keep an existing counter at least level with the latest saved document.
   // This is a normal update document (not an aggregation update pipeline).
-  await DocumentCounter.updateOne(
-    counterFilter,
-    {
-      $max: { value: Number(minimumValue || 0) },
-      $setOnInsert: counterFilter,
-    },
-    { upsert: true, session }
-  );
+  try {
+    await DocumentCounter.updateOne(
+      counterFilter,
+      {
+        $max: { value: Number(minimumValue || 0) },
+        $setOnInsert: counterFilter,
+      },
+      { upsert: true, session }
+    );
+  } catch (error) {
+    /*
+     * Two first requests for the same counter can both observe that it is
+     * missing. The unique index lets only one create it; the other request
+     * continues against the row that has just been created.
+     */
+    if (error?.code !== 11000 || session) throw error;
+
+    await DocumentCounter.updateOne(
+      counterFilter,
+      { $max: { value: Number(minimumValue || 0) } }
+    );
+  }
 
   const counter = await DocumentCounter.findOneAndUpdate(
     counterFilter,

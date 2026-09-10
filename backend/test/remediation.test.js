@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import jwt from "jsonwebtoken";
-import { authenticateApi, hashPassword, isPasswordHash, requireRoles, verifyPassword } from "../auth.js";
+import { authenticateApi, hashPassword, hasTenantMismatch, isPasswordHash, requireRoles, validatePasswordStrength, verifyPassword } from "../auth.js";
 import { businessDateIST, financialYearFor, istBusinessDateRange } from "../businessDate.js";
 import { validateFinancialEnvelope } from "../financialValidation.js";
 import { redactAuditValue } from "../audit.js";
@@ -11,6 +11,19 @@ test("passwords are bcrypt hashed and verified", async () => {
   assert.equal(isPasswordHash(hash), true);
   assert.equal(await verifyPassword("correct horse battery staple", hash), true);
   assert.equal(await verifyPassword("wrong", hash), false);
+});
+
+test("new passwords must meet the strong-password policy", () => {
+  assert.equal(validatePasswordStrength("short"), false);
+  assert.equal(validatePasswordStrength("alllowercase123!"), false);
+  assert.equal(validatePasswordStrength("Correct-Horse-42!"), true);
+});
+
+test("nested and top-level client tenant conflicts are rejected", () => {
+  const principal = { distributorId: "DIST-1", firmId: "FIRM-1" };
+  assert.equal(hasTenantMismatch({ firmId: "FIRM-1", rows: [{ distributorId: "DIST-1" }] }, principal), false);
+  assert.equal(hasTenantMismatch({ rows: [{ metadata: { FirmId: "FIRM-2" } }] }, principal), true);
+  assert.equal(hasTenantMismatch({ distributorID: "DIST-2" }, principal), true);
 });
 
 test("legacy plaintext verification remains migration-compatible", async () => {
@@ -76,6 +89,14 @@ test("protected API rejects missing token even with fake admin headers", async (
   const req = { method: "GET", path: "/users", headers: { "x-user-role": "DISTRIBUTOR_ADMIN" } };
   const res = authResponse();
   await authenticateApi(req, res, () => assert.fail("request must not proceed"));
+  assert.equal(res.statusCode, 401);
+});
+
+test("firm registration is not a public API", async () => {
+  process.env.JWT_SECRET = "test-only-secret-that-is-longer-than-32-characters";
+  const req = { method: "POST", path: "/register", headers: {}, body: {} };
+  const res = authResponse();
+  await authenticateApi(req, res, () => assert.fail("public registration must not proceed"));
   assert.equal(res.statusCode, 401);
 });
 

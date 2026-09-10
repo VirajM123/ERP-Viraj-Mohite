@@ -97,11 +97,11 @@ export const validateCustomerCredit = async ({ req, session }) => {
   if (String(body.BillType || "").toLowerCase().includes("cash")) return null;
   const Account = mongoose.models.Mas_Account;
   const Sales = mongoose.models.T_Sal_Header;
-  if (!Account || !Sales) return null;
+  if (!Account || !Sales) throw new Error("Customer credit validation is unavailable.");
   const partyCode = String(body.PartyCode || "").trim();
   const partyName = String(body.PartyName || "").trim();
-  const account = await Account.findOne(tenant(req, partyCode ? { accountCode: partyCode } : { accountName: partyName })).session(session).lean();
-  if (!account) return null;
+  const account = await Account.findOne(tenant(req, partyCode ? { accountCode: partyCode, isActive: { $ne: false } } : { accountName: partyName, isActive: { $ne: false } })).session(session).lean();
+  if (!account) throw Object.assign(new Error("Invalid or inactive customer account."), { statusCode: 400 });
   const bills = await Sales.find(tenant(req, { PartyCode: account.accountCode, isActive: { $ne: false }, IsBillCancelled: { $ne: true } }))
     .select({ NetAmount: 1, receiptAllocated: 1, DueDate: 1, BillDate: 1 }).session(session).lean();
   const outstanding = bills.reduce((sum, bill) => sum + Math.max(0, number(bill.NetAmount) - number(bill.receiptAllocated)), 0);
@@ -171,7 +171,10 @@ export default function createP0FeaturesRouter(securityRouter) {
           if (existing) { saved = existing; return; }
         }
         const last = await JournalVoucher.findOne(tenant(req)).sort({ vNo: -1 }).session(session).lean();
-        const vNo = await nextDocumentNumber({ distributorId: req.auth.distributorId, firmId: req.auth.firmId, documentType: "JOURNAL_VOUCHER", documentDate: req.body.vDate, session, minimumValue: number(last?.vNo) });
+        const importedVNo = number(req.body.vNo);
+        const vNo = req.body._desktopImport === true && importedVNo > 0
+          ? importedVNo
+          : await nextDocumentNumber({ distributorId: req.auth.distributorId, firmId: req.auth.firmId, documentType: "JOURNAL_VOUCHER", documentDate: req.body.vDate, session, minimumValue: number(last?.vNo) });
         [saved] = await JournalVoucher.create([{ distributorId: req.auth.distributorId, firmId: req.auth.firmId, vDate: String(req.body.vDate), vNo, narration: String(req.body.narration || req.body.narr || ""), reference: String(req.body.reference || ""), lines, idempotencyKey }], { session });
         await postBalancedJournal({ distributorId: req.auth.distributorId, firmId: req.auth.firmId, sourceType: "JOURNAL_VOUCHER", sourceId: String(saved._id), documentNo: String(vNo), documentDate: saved.vDate, createdBy: req.auth.userId, lines }, session);
         await writeAuditEvent(req, { entityType: "JOURNAL_VOUCHER", entityId: String(saved._id), action: "CREATE", after: saved.toObject() }, session);

@@ -848,7 +848,10 @@ router.post(
         }
         const allocations = await reservePaymentAllocations(req, incomingAllocations, partyName, session);
         const last = await Payment.findOne(tenantFilter(req)).sort({ vNo: -1 }).session(session).lean();
-        const vNo = await nextDocumentNumber({
+        const requestedDesktopNo = Number(req.body.vNo || 0);
+        const vNo = req.body._desktopImport === true && requestedDesktopNo > 0
+          ? requestedDesktopNo
+          : await nextDocumentNumber({
           distributorId: req.auth.distributorId, firmId: req.auth.firmId,
           documentType: "PAYMENT", documentDate: req.body.vDate,
           session, minimumValue: Number(last?.vNo || 0),
@@ -1066,14 +1069,17 @@ router.post(
           if (reserved.modifiedCount !== 1) throw Object.assign(new Error(`Receipt exceeds the pending amount for bill ${bill.trnSeries}-${bill.trnNo}.`), { statusCode: 409 });
         }
 
-        const rno = await nextDocumentNumber({
-          distributorId: req.auth.distributorId,
-          firmId: req.auth.firmId,
-          documentType: "RECEIPT",
-          series: String(body.billSeries || bills[0].trnSeries || ""),
-          documentDate: body.receiptDate,
-          session,
-        });
+        const importedRno = Number(body.rno || 0);
+        const rno = body._desktopImport === true && importedRno > 0
+          ? importedRno
+          : await nextDocumentNumber({
+            distributorId: req.auth.distributorId,
+            firmId: req.auth.firmId,
+            documentType: "RECEIPT",
+            series: String(body.billSeries || bills[0].trnSeries || ""),
+            documentDate: body.receiptDate,
+            session,
+          });
         const receiptData = {
           ...body,
           distributorId: req.auth.distributorId,
@@ -2346,7 +2352,7 @@ router.post(
       let trnNo =
         Number(req.body.trnNo) || 0;
 
-      if (!trnSeries) {
+      if (!trnSeries && req.body._desktopImport !== true) {
         return res.status(400).json({
           success: false,
           message:
@@ -2370,7 +2376,9 @@ router.post(
         req.body.firmId || ""
       ).trim();
       const lastChequeBounce = await ChequeBounce.findOne({ distributorId, firmId, trnSeries }).sort({ trnNo: -1 }).lean();
-      trnNo = await nextDocumentNumber({ distributorId, firmId, documentType: "CHEQUE_BOUNCE", series: trnSeries, documentDate: req.body.chqBounceDate, minimumValue: Number(lastChequeBounce?.trnNo || 0) });
+      if (req.body._desktopImport !== true) {
+        trnNo = await nextDocumentNumber({ distributorId, firmId, documentType: "CHEQUE_BOUNCE", series: trnSeries, documentDate: req.body.chqBounceDate, minimumValue: Number(lastChequeBounce?.trnNo || 0) });
+      }
 
       const exists =
         await ChequeBounce.findOne({
@@ -3051,7 +3059,10 @@ router.post(
     try {
         const distributorId = req.auth.distributorId, firmId = req.auth.firmId, docSeries = String(req.body.docSeries || "PDC").trim();
         const last = await PDCDocket.findOne({ distributorId, firmId, docSeries }).sort({ docVNo: -1 }).lean();
-        const docVNo = await nextDocumentNumber({ distributorId, firmId, documentType: "PDC_DOCKET", series: docSeries, documentDate: req.body.pdcDate || req.body.docDate, minimumValue: Number(last?.docVNo || 0) });
+        const importedDocVNo = Number(req.body.docVNo || 0);
+        const docVNo = req.body._desktopImport === true && importedDocVNo > 0
+          ? importedDocVNo
+          : await nextDocumentNumber({ distributorId, firmId, documentType: "PDC_DOCKET", series: docSeries, documentDate: req.body.pdcDate || req.body.docDate, minimumValue: Number(last?.docVNo || 0) });
         const data = await PDCDocket.create({ ...req.body, distributorId, firmId, docSeries, docVNo });
 
         res.status(201).json({
@@ -3773,7 +3784,10 @@ router.post(
   try {
     const distributorId = req.auth.distributorId, firmId = req.auth.firmId;
     const last = await Contra.findOne({ distributorId, firmId }).sort({ tranVNo: -1 }).lean();
-    const tranVNo = await nextDocumentNumber({ distributorId, firmId, documentType: "CONTRA", documentDate: req.body.transactionDate, minimumValue: Number(last?.tranVNo || 0) });
+    const importedTranVNo = Number(req.body.tranVNo || 0);
+    const tranVNo = req.body._desktopImport === true && importedTranVNo > 0
+      ? importedTranVNo
+      : await nextDocumentNumber({ distributorId, firmId, documentType: "CONTRA", documentDate: req.body.transactionDate, minimumValue: Number(last?.tranVNo || 0) });
     const data = await Contra.create({ ...req.body, distributorId, firmId, tranVNo });
 
     res.status(201).json({
@@ -4446,7 +4460,10 @@ router.post(
     try {
         const distributorId = req.auth.distributorId, firmId = req.auth.firmId;
         const last = await CollectionVoucher.findOne({ distributorId, firmId }).sort({ colVNo: -1 }).lean();
-        const colVNo = await nextDocumentNumber({ distributorId, firmId, documentType: "COLLECTION_VOUCHER", documentDate: req.body.collectionDate, minimumValue: Number(last?.colVNo || 0) });
+        const importedColVNo = Number(req.body.colVNo || 0);
+        const colVNo = req.body._desktopImport === true && importedColVNo > 0
+          ? importedColVNo
+          : await nextDocumentNumber({ distributorId, firmId, documentType: "COLLECTION_VOUCHER", documentDate: req.body.collectionDate, minimumValue: Number(last?.colVNo || 0) });
         const data = await CollectionVoucher.create({ ...req.body, distributorId, firmId, colVNo });
 
         res.status(201).json({

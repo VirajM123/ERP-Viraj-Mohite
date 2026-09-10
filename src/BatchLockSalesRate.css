@@ -1,0 +1,71 @@
+.batch-rate-list-page, .batch-rate-entry-page { padding: 14px 18px 18px; }
+.batch-rate-history-table { min-width: 1500px; }
+.batch-rate-history-table th { height: 36px; }
+.batch-rate-history-table td { height: 39px; }
+.batch-rate-history-table td small { display: block; color: #64748b; }
+.batch-product-link { border: 0; padding: 0; background: transparent; color: #0369a1; font: inherit; font-weight: 700; cursor: pointer; text-align: left; }
+.batch-product-link:hover { text-decoration: underline; }
+
+.batch-rate-entry-page { min-height: 100%; background: #f5f8fd; color: #102348; }
+.batch-rate-entry-page .compact-master-heading { margin-bottom: 14px; padding: 4px 4px 0; }
+.batch-rate-entry-page .compact-master-title-icon { width: 42px; height: 42px; flex-basis: 42px; border-radius: 10px; color: #245cd7; background: #eaf1ff; }
+.batch-rate-entry-page .compact-master-title h1 { color: #102348; font-size: 18px; }
+.batch-rate-entry-page .compact-master-title p { color: #5f7194; font-size: 11px; }
+.batch-rate-entry-page .compact-btn { min-height: 40px; padding: 0 18px; border-radius: 7px; font-size: 11px; }
+.batch-rate-entry-page .compact-btn-primary { border-color: #1f59bd; background: linear-gradient(135deg, #2870d7, #1d57b9); box-shadow: 0 5px 12px rgba(36, 101, 199, .22); }
+.batch-rate-entry-page .compact-master-form { padding: 16px; border-color: #d9e4f2; border-radius: 11px; box-shadow: 0 5px 18px rgba(35, 78, 134, .05); }
+.batch-rate-form { display: block; }
+
+.batch-rate-filters { display: grid; grid-template-columns: minmax(220px, 1fr) 200px minmax(340px, 1.35fr); gap: 18px; align-items: end; margin-bottom: 16px; }
+.batch-rate-entry-page .compact-field { gap: 7px; }
+.batch-rate-entry-page .compact-field label { color: #14284c; font-size: 11px; }
+.batch-rate-entry-page .compact-field input, .batch-rate-entry-page .compact-field select { height: 40px; border-color: #cbd8e8; border-radius: 7px; color: #243858; font-size: 12px; }
+.batch-rate-search > div { display: flex; gap: 9px; }
+.batch-rate-search input { flex: 1; }
+.batch-rate-search button { min-width: 64px; border: 1px solid #0862b6; border-radius: 7px; padding: 0 18px; color: #fff; background: linear-gradient(135deg, #0875ca, #0759aa); font-size: 11px; font-weight: 750; cursor: pointer; }
+
+.batch-rate-grid-card { overflow: hidden; border: 1px solid #cedced; border-radius: 8px; background: #fff; }
+.batch-rate-grid-scroll { max-height: calc(100vh - 300px); min-height: 360px; overflow: auto; scrollbar-color: #98a9bc #eef2f7; scrollbar-width: thin; }
+.batch-rate-grid-scroll::-webkit-scrollbar { width: 11px; height: 11px; }
+.batch-rate-grid-scroll::-webkit-scrollbar-track { background: #eef2f7; }
+.batch-rate-grid-scroll::-webkit-scrollbar-thumb { border: 2px solid #eef2f7; border-radius: 10px; background: #98a9bc; }
+.batch-rate-grid-table { width: 100%; min-width: 1640px; border-collapse: separate; border-spacing: 0; table-layout: fixed; color: #17335e; font-size: 11px; }
+.batch-rate-grid-table th { position: sticky; z-index: 2; top: 0; height: 45px; padding: 0 12px; border-right: 1px solid #cfdaea; border-bottom: 1px solid #c5d4e8; color: #17325d; background: linear-gradient(180deg, #edf3fd, #e4edf9); font-weight: 750; text-align: center; white-space: nowrap; }
+.batch-rate-grid-table th:nth-child(1) { width: 125px; }
+.batch-rate-grid-table th:nth-child(2) { width: 180px; }
+.batch-rate-grid-table th:nth-child(3) { width: 90px; }
+.batch-rate-grid-table th:nth-child(4) { width: 100px; }
+.batch-rate-grid-table th:nth-child(5) { width: 110px; }
+.batch-rate-grid-table th:nth-child(6) { width: 95px; }
+.batch-rate-grid-table th:nth-child(7) { width: 120px; }
+.batch-rate-grid-table th:nth-child(8), .batch-rate-grid-table th:nth-child(9), .batch-rate-grid-table th:nth-child(10), .batch-rate-grid-table th:nth-child(11) { width: 125px; }
+.batch-rate-grid-table th:nth-child(12) { width: 130px; }
+.batch-rate-grid-table th:nth-child(13) { width: 160px; }
+.batch-rate-grid-table td { height: 47px; padding: 5px 12px; overflow: hidden; border-right: 1px solid #dce5f0; border-bottom: 1px solid #dce5f0; color: #1c3a66; background: #fff; text-align: center; text-overflow: ellipsis; white-space: nowrap; }
+.batch-rate-grid-table tbody tr:nth-child(even) td { background: #f8fafd; }
+.batch-rate-grid-table tbody tr:hover td { background: #f1f6fd; }
+.batch-rate-grid-table th:last-child, .batch-rate-grid-table td:last-child { border-right: 0; }
+.batch-rate-grid-table tbody tr:last-child td { border-bottom: 0; }
+.batch-rate-grid-table td:first-child, .batch-rate-grid-table td:nth-child(2) { text-align: left; }
+.batch-rate-product-name { font-weight: 600; }
+.batch-rate-grid-input { width: 100%; height: 36px; box-sizing: border-box; border: 1px solid #c6d3e3; border-radius: 7px; outline: none; padding: 0 11px; color: #18345e; background: #fff; font: inherit; font-size: 12px; font-weight: 650; }
+.batch-rate-grid-input:focus { border-color: #4d7fd0; box-shadow: 0 0 0 3px rgba(47, 105, 198, .11); }
+.batch-rate-lock { min-width: 57px; height: 30px; border: 0; border-radius: 7px; font-size: 11px; font-weight: 750; cursor: pointer; }
+.batch-rate-lock.unlocked { color: #50617b; background: linear-gradient(180deg, #edf1f6, #e3e9f0); }
+.batch-rate-lock.locked { color: #bd1111; background: linear-gradient(180deg, #ffe2e2, #ffcaca); }
+.batch-rate-edit-date { color: #536984 !important; }
+.batch-rate-empty { height: 220px !important; color: #718096 !important; text-align: center !important; }
+
+.batch-rate-grid-footer { display: flex; min-height: 62px; align-items: center; justify-content: space-between; gap: 16px; padding: 10px 14px; border-top: 1px solid #d9e3ef; color: #18345e; background: #fff; font-size: 11px; }
+.batch-rate-pagination { display: flex; align-items: center; gap: 5px; }
+.batch-rate-pagination button { display: inline-flex; width: 34px; height: 34px; align-items: center; justify-content: center; border: 1px solid transparent; border-radius: 7px; color: #233a5d; background: #fff; font: inherit; font-weight: 650; cursor: pointer; }
+.batch-rate-pagination button:first-child, .batch-rate-pagination button:last-child { border-color: #d2deed; color: #4e6d9f; }
+.batch-rate-pagination button.active { color: #fff; background: linear-gradient(180deg, #337bdc, #1e61c4); box-shadow: 0 3px 8px rgba(34, 102, 197, .25); }
+.batch-rate-pagination button:disabled { opacity: .45; cursor: not-allowed; }
+.batch-rate-pagination span { padding: 0 2px; color: #718096; }
+
+@media (max-width: 900px) {
+  .batch-rate-filters { grid-template-columns: 1fr; }
+  .batch-rate-grid-scroll { max-height: none; }
+  .batch-rate-grid-footer { align-items: flex-start; flex-direction: column; }
+}

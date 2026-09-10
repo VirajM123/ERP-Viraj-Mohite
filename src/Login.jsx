@@ -1,5 +1,24 @@
 import React, { useEffect, useRef, useState } from "react";
+import {
+  ArrowRight,
+  Building2,
+  CalendarDays,
+  Cloud,
+  Eye,
+  EyeOff,
+  Globe2,
+  LockKeyhole,
+  Mail,
+  Monitor,
+  Phone,
+  Rocket,
+  Settings,
+  Smartphone,
+  UserRound,
+} from "lucide-react";
 import "./Login.css";
+import loginLogo from "../assets/img/Login.ico";
+import loginOfficeHero from "./assets/images/login-office-hero.png";
 import { API_URL } from "./api/config";
 import { businessDateIST } from "./utils/businessDate";
 import { startSession } from "./utils/session";
@@ -99,6 +118,7 @@ const Login = ({ onLoginSuccess }) => {
   const [registeredFirms, setRegisteredFirms] = useState([]);
   const [firmsLoaded, setFirmsLoaded] = useState(false);
   const [loadingFirms, setLoadingFirms] = useState(false);
+  const [isLoggingIn, setIsLoggingIn] = useState(false);
 
   const loadRequestId = useRef(0);
 
@@ -287,6 +307,8 @@ const Login = ({ onLoginSuccess }) => {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    if (isLoggingIn) return;
+    if (mode === "login") setIsLoggingIn(true);
 
     try {
       if (mode === "register") {
@@ -412,6 +434,7 @@ console.log(
       localStorage.setItem("firmCode", result.user.firmCode);
       localStorage.setItem("firmName", result.user.firmName);
       localStorage.setItem("userName", result.user.userName);
+      localStorage.setItem("salesmanCode", result.user.salesmanCode || "");
       localStorage.setItem(
         "workingDate",
         formData.workingDate || getTodayDate()
@@ -491,6 +514,8 @@ await loadMyPermissions(
     } catch (error) {
       alert("Server not connected. Please check backend is running.");
       console.error(error);
+    } finally {
+      setIsLoggingIn(false);
     }
   };
 
@@ -507,22 +532,14 @@ await loadMyPermissions(
   };
 
   return (
-    <div className="auth-page">
-      <div className="auth-card">
+    <div className={`auth-page ${mode === "register" ? "register-page" : ""}`}>
+      <div className={`auth-card ${mode === "register" ? "register-card" : ""}`}>
         <div className="auth-left">
-          <div className="circle-bg"></div>
-          <div className="dot-bg"></div>
-
-          <div className="auth-form-box">
-            <div className="auth-mark">
-              <span></span>
-              <span></span>
-            </div>
-
+          <div className={`auth-form-box ${mode === "register" ? "register-form" : ""}`}>
             <h2>
               {mode === "login" ? (
                 <>
-                  Welcome <span>Back!</span>
+                  Welcome Back!
                 </>
               ) : (
                 <>
@@ -533,7 +550,7 @@ await loadMyPermissions(
 
             <p className="auth-subtitle">
               {mode === "login"
-                ? "Sign in to access your ERP dashboard"
+                ? "Sign in to your ERP account"
                 : "Create your distributor ERP account"}
             </p>
 
@@ -806,7 +823,9 @@ await loadMyPermissions(
               <div className="form-group">
                 <label>User Name</label>
                 <div className="input-box">
-                  <span className="input-icon">👤</span>
+                  <span className="input-icon" aria-hidden="true">
+                    <UserRound />
+                  </span>
                   <input
                     type="text"
                     name="userName"
@@ -821,7 +840,9 @@ await loadMyPermissions(
               <div className="form-group">
                 <label>Password</label>
                 <div className="input-box">
-                  <span className="input-icon">🔒</span>
+                  <span className="input-icon" aria-hidden="true">
+                    <LockKeyhole />
+                  </span>
                   <input
                     type={showPassword ? "text" : "password"}
                     name="password"
@@ -835,8 +856,9 @@ await loadMyPermissions(
                     type="button"
                     className="eye-btn"
                     onClick={() => setShowPassword(!showPassword)}
+                    aria-label={showPassword ? "Hide password" : "Show password"}
                   >
-                    {showPassword ? "🙈" : "👁"}
+                    {showPassword ? <EyeOff /> : <Eye />}
                   </button>
                 </div>
               </div>
@@ -846,7 +868,9 @@ await loadMyPermissions(
                   <div className="form-group">
                     <label>Firm Name</label>
                     <div className="input-box select-box">
-                      <span className="input-icon">🏬</span>
+                      <span className="input-icon" aria-hidden="true">
+                        <Building2 />
+                      </span>
                       <select
                         name="firmId"
                         value={formData.firmId}
@@ -881,7 +905,9 @@ await loadMyPermissions(
                   <div className="form-group">
                     <label>Working Date</label>
                     <div className="input-box">
-                      <span className="input-icon">📅</span>
+                      <span className="input-icon" aria-hidden="true">
+                        <CalendarDays />
+                      </span>
                       <input
                         type="date"
                         name="workingDate"
@@ -906,17 +932,25 @@ await loadMyPermissions(
 
               <button
                 type="submit"
-                className="auth-btn"
-                disabled={mode === "login" && loadingFirms}
+                className={`auth-btn ${isLoggingIn ? "is-launching" : ""}`}
+                aria-busy={isLoggingIn}
+                disabled={mode === "login" && (loadingFirms || isLoggingIn)}
               >
                 <span>
                   {mode === "login"
-                    ? loadingFirms
+                    ? isLoggingIn
+                      ? <><Rocket className="login-rocket" aria-hidden="true" /> Signing in...</>
+                      : loadingFirms
                       ? "Loading Firms..."
-                      : "🔒 Login"
+                      : (
+                        <>
+                          <LockKeyhole className="button-lock" />
+                          Login
+                        </>
+                      )
                     : "Register Distributor"}
                 </span>
-                <b>→</b>
+                <ArrowRight aria-hidden="true" />
               </button>
             </form>
 
@@ -930,13 +964,47 @@ await loadMyPermissions(
               {mode === "login"
                 ? "Don’t have a distributor account?"
                 : "Already have an account?"}{" "}
-              <button type="button" onClick={switchMode}>
-                {mode === "login" ? "Register Distributor" : "Login"}
+              <button type="button" onClick={switchMode} disabled={isLoggingIn}>
+                {mode === "login" ? "Register Now" : "Login"}
               </button>
             </p>
           </div>
         </div>
+
+        {mode === "login" && (
+          <div className="auth-right">
+            <img className="office-scene" src={loginOfficeHero} alt="" />
+            <div className="showcase-content">
+              <img className="login-logo" src={loginLogo} alt="Total Solution" />
+              <p className="managed-by">Developed and Managed by Total Solution</p>
+              <div className="showcase-rule" />
+              <div className="solution-list" aria-label="Total Solution services">
+                <div><Monitor /><span>Desktop<br />ERP</span></div>
+                <div><Cloud /><span>Cloud<br />Access</span></div>
+                <div><Smartphone /><span>Mobile<br />Solutions</span></div>
+                <div><Settings /><span>Business<br />Utilities</span></div>
+              </div>
+              <p className="showcase-tagline">One solution for a smarter business</p>
+            </div>
+          </div>
+        )}
       </div>
+
+      {mode === "login" && (
+        <footer className="auth-footer">
+          <div className="footer-contact">
+            <span><Phone /> 98509 06140</span>
+            <i />
+            <span>9657084117</span>
+            <span><Mail /> totalsolution2023@gmail.com</span>
+            <span><Globe2 /> https://www.totalsolutionerp.com/</span>
+          </div>
+          <div className="footer-copyright">
+            <i />
+            <span>© 2026 Total Solution. All rights reserved.</span>
+          </div>
+        </footer>
+      )}
     </div>
   );
 };

@@ -20,7 +20,10 @@ import {
 } from "./SecuritySetup";
 import Report from "./Report";
 import ImportData from "./ImportData";
+import ImportDataFromDesktop from "./ImportDataFromDesktop";
 import { API_URL } from "./api/config";
+
+const DEFAULT_INVOICE_TERMS = "1. Goods once sold will not be taken back or exchanged.\n2. Interest will be charged on overdue payments.\n3. Subject to local jurisdiction only.";
 
 
 // Change this at the top of Dashboard.jsx:
@@ -29,6 +32,8 @@ import { API_URL } from "./api/config";
 import SalesmanToAreaMapping from './SalesmanToAreaMapping';
 import Transaction from "./Transaction";
 import GeneralSetup1 from "./GeneralSetup1";
+import CompanyWiseSeriesSetup from "./CompanyWiseSeriesSetup";
+import BatchLockSalesRate from "./BatchLockSalesRate";
 import SecuritySetup from "./SecuritySetup";
 import StockManagement from "./StockManagement";
 import { SalesService, ServiceMaster } from "./ServiceManagement";
@@ -308,6 +313,58 @@ const Dashboard = ({ onLogout }) => {
   const [transactionFormMode, setTransactionFormMode] = useState({});
   const [masterReturnContext, setMasterReturnContext] = useState(null);
   const [showImportData, setShowImportData] = useState(false); // <-- ADD THIS HERE
+  const [showDesktopImport, setShowDesktopImport] = useState(false);
+  const [companyWiseSeriesRows, setCompanyWiseSeriesRows] = useState([]);
+  const [toolNavigationRequest, setToolNavigationRequest] = useState({
+    target: "",
+    mode: "list",
+    id: 0,
+  });
+
+  const loadCompanyWiseSeries = useCallback(async () => {
+    const distributorId = localStorage.getItem("distributorId") || "";
+    const firmId = localStorage.getItem("firmId") || "";
+    if (!distributorId || !firmId) return [];
+
+    try {
+      const query = new URLSearchParams({ distributorId, firmId });
+      const response = await secureFetch(`${API_URL}/company-wise-series?${query}`);
+      const result = await response.json();
+      if (!response.ok || !result.success) return [];
+      const rows = Array.isArray(result.rows) ? result.rows : [];
+      setCompanyWiseSeriesRows(rows);
+      return rows;
+    } catch (error) {
+      console.error("Company-wise series load error:", error);
+      return [];
+    }
+  }, []);
+
+  const getConfiguredCompanySeries = (companyValue, voucherType) => {
+    const normalizedCompany = String(companyValue || "").trim().toUpperCase();
+    const companyRow = companyWiseSeriesRows.find(
+      (row) => String(row.companyCode || "").trim().toUpperCase() === normalizedCompany
+    );
+    const fallbackRow = companyWiseSeriesRows.find(
+      (row) => String(row.companyCode || "").trim().toUpperCase() === "ALL"
+    );
+    const specificSeriesValue = String(companyRow?.[voucherType] || "")
+      .trim()
+      .toUpperCase();
+    const fallbackValue = String(fallbackRow?.[voucherType] || "")
+      .trim()
+      .toUpperCase();
+
+    if (specificSeriesValue) {
+      return { configured: true, value: specificSeriesValue };
+    }
+    if (fallbackRow) {
+      return { configured: true, value: fallbackValue };
+    }
+    return companyRow
+      ? { configured: true, value: "" }
+      : { configured: false, value: "" };
+  };
 
   useEffect(() => {
     // Give already-authenticated legacy sessions one complete window. New logins
@@ -455,6 +512,16 @@ const Dashboard = ({ onLogout }) => {
   ] = useState(() =>
     createDefaultSalesPrintOptions()
   );
+  const [printAccountDetails, setPrintAccountDetails] = useState({
+    bankName: "",
+    accountName: "",
+    accountNumber: "",
+    ifscCode: "",
+    termsAndConditions: DEFAULT_INVOICE_TERMS,
+    qrCode: { fileName: "", mimeType: "", dataUrl: "" },
+  });
+  const [showPrintAccountDetailsModal, setShowPrintAccountDetailsModal] = useState(false);
+  const [printAccountDetailsSaving, setPrintAccountDetailsSaving] = useState(false);
   useEffect(() => {
     if (showSalesPrintFormatModal) {
       return;
@@ -709,6 +776,207 @@ const debitNotePermission = usePermission("VOUCHERS", "DEBIT_NOTE");
         };
       }
     };
+
+  const loadPrintAccountDetails = async () => {
+    try {
+      const response = await secureFetch(`${API_URL}/print-account-details`, {
+        cache: "no-store",
+        headers: { Accept: "application/json" },
+      });
+      const result = await response.json();
+      if (!response.ok || result?.success === false) {
+        throw new Error(result?.message || "Unable to load saved print details.");
+      }
+
+      const details = result?.details || null;
+      const savedQrCode = details?.qrCode || { fileName: "", mimeType: "", dataUrl: "" };
+      let printableQrCode = savedQrCode;
+      if (savedQrCode.dataUrl) {
+        try {
+          printableQrCode = {
+            ...savedQrCode,
+            mimeType: "image/png",
+            dataUrl: await cropPaymentQrCode(savedQrCode.dataUrl),
+          };
+        } catch (error) {
+          console.error("Saved QR image crop error:", error);
+        }
+      }
+      setPrintAccountDetails({
+        bankName: details?.bankName || "",
+        accountName: details?.accountName || "",
+        accountNumber: details?.accountNumber || "",
+        ifscCode: details?.ifscCode || "",
+        termsAndConditions: details?.termsAndConditions || DEFAULT_INVOICE_TERMS,
+        qrCode: printableQrCode,
+      });
+      return details ? { ...details, qrCode: printableQrCode } : details;
+    } catch (error) {
+      console.error("Print account details load error:", error);
+      return null;
+    }
+  };
+
+  const savePrintAccountDetails = async ({ requireBankDetails = false } = {}) => {
+    const bankName = String(printAccountDetails.bankName || "").trim();
+    const accountName = String(printAccountDetails.accountName || "").trim();
+    const accountNumber = String(printAccountDetails.accountNumber || "").trim();
+    const ifscCode = String(printAccountDetails.ifscCode || "").trim().toUpperCase();
+    const termsAndConditions = String(printAccountDetails.termsAndConditions || "").trim();
+
+    if (requireBankDetails && (!bankName || !accountName || !accountNumber || !ifscCode)) {
+      alert("Please enter Bank Name, Account Name, Account Number and IFSC Code.");
+      return null;
+    }
+
+    setPrintAccountDetailsSaving(true);
+    try {
+      const response = await secureFetch(`${API_URL}/print-account-details`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json", Accept: "application/json" },
+        body: JSON.stringify({
+          bankName,
+          accountName,
+          accountNumber,
+          ifscCode,
+          termsAndConditions,
+          qrCode: printAccountDetails.qrCode,
+          printContent: {
+            goodsReturn: salesPrintOptions.goodsReturn,
+            damageReturn: salesPrintOptions.damageReturn,
+            showScheme: salesPrintOptions.showScheme,
+            showTaxSummary: salesPrintOptions.showTaxSummary,
+          },
+          outputSettings: {
+            reportNumber: salesPrintOptions.reportNumber,
+            paperSize: salesPrintOptions.paperSize,
+            orientation: salesPrintOptions.orientation,
+          },
+        }),
+      });
+      const result = await response.json();
+      if (!response.ok || result?.success === false) {
+        throw new Error(result?.message || "Unable to save print details.");
+      }
+      setPrintAccountDetails({
+        bankName: result.details?.bankName || "",
+        accountName: result.details?.accountName || "",
+        accountNumber: result.details?.accountNumber || "",
+        ifscCode: result.details?.ifscCode || "",
+        termsAndConditions: result.details?.termsAndConditions || DEFAULT_INVOICE_TERMS,
+        qrCode: result.details?.qrCode || { fileName: "", mimeType: "", dataUrl: "" },
+      });
+      return result.details;
+    } catch (error) {
+      console.error("Print account details save error:", error);
+      alert(error.message || "Unable to save print details.");
+      return null;
+    } finally {
+      setPrintAccountDetailsSaving(false);
+    }
+  };
+
+  const cropPaymentQrCode = async (dataUrl) => {
+    const image = await new Promise((resolve, reject) => {
+      const sourceImage = new Image();
+      sourceImage.onload = () => resolve(sourceImage);
+      sourceImage.onerror = reject;
+      sourceImage.src = dataUrl;
+    });
+
+    const imageWidth = image.naturalWidth || image.width;
+    const imageHeight = image.naturalHeight || image.height;
+    let cropX = 0;
+    let cropY = 0;
+    let cropSize = Math.min(imageWidth, imageHeight);
+    let qrWasDetected = false;
+
+    // Chromium can identify the exact QR bounds. Keep a white quiet zone around
+    // the code so payment apps can still scan the smaller printed version.
+    if ("BarcodeDetector" in window) {
+      try {
+        const detector = new window.BarcodeDetector({ formats: ["qr_code"] });
+        const detectedCodes = await detector.detect(image);
+        const bounds = detectedCodes[0]?.boundingBox;
+        if (bounds?.width && bounds?.height) {
+          const qrSize = Math.max(bounds.width, bounds.height);
+          const quietZone = qrSize * 0.1;
+          cropSize = Math.min(
+            Math.max(qrSize + quietZone * 2, 1),
+            imageWidth,
+            imageHeight
+          );
+          cropX = bounds.x + bounds.width / 2 - cropSize / 2;
+          cropY = bounds.y + bounds.height / 2 - cropSize / 2;
+          qrWasDetected = true;
+        }
+      } catch (error) {
+        console.debug("Automatic QR detection unavailable; using centered crop.", error);
+      }
+    }
+
+    // Payment QR screenshots are normally portrait images with the QR centered.
+    // A square image is already a cropped QR and must be left intact.
+    const aspectRatio = imageWidth / imageHeight;
+    if (!qrWasDetected && (aspectRatio < 0.9 || aspectRatio > 1.1)) {
+      cropSize = Math.min(imageWidth, imageHeight) * 0.76;
+      cropX = (imageWidth - cropSize) / 2;
+      cropY = (imageHeight - cropSize) / 2;
+    }
+
+    cropX = Math.max(0, Math.min(cropX, imageWidth - cropSize));
+    cropY = Math.max(0, Math.min(cropY, imageHeight - cropSize));
+
+    const outputSize = Math.min(640, Math.max(256, Math.round(cropSize)));
+    const canvas = document.createElement("canvas");
+    canvas.width = outputSize;
+    canvas.height = outputSize;
+    const context = canvas.getContext("2d");
+    if (!context) return dataUrl;
+
+    context.fillStyle = "#fff";
+    context.fillRect(0, 0, outputSize, outputSize);
+    context.imageSmoothingEnabled = false;
+    context.drawImage(
+      image,
+      cropX,
+      cropY,
+      cropSize,
+      cropSize,
+      0,
+      0,
+      outputSize,
+      outputSize
+    );
+    return canvas.toDataURL("image/png");
+  };
+
+  const handlePrintQrCodeFile = (file) => {
+    if (!file) return;
+    if (!["image/png", "image/jpeg"].includes(file.type)) {
+      alert("Please select a PNG, JPG or JPEG image.");
+      return;
+    }
+    if (file.size > 1_000_000) {
+      alert("QR code image must be smaller than 1 MB.");
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = async () => {
+      const originalDataUrl = String(reader.result || "");
+      let croppedDataUrl = originalDataUrl;
+      try {
+        croppedDataUrl = await cropPaymentQrCode(originalDataUrl);
+      } catch (error) {
+        console.error("QR image crop error:", error);
+      }
+      setPrintAccountDetails((previous) => ({
+        ...previous,
+        qrCode: { fileName: file.name, mimeType: "image/png", dataUrl: croppedDataUrl },
+      }));
+    };
+    reader.readAsDataURL(file);
+  };
   const openSalesPrintFormatSelection =
     async (
       salesRow,
@@ -758,8 +1026,10 @@ const debitNotePermission = usePermission("VOUCHERS", "DEBIT_NOTE");
       * Always load the latest saved General Setup
       * before opening the print modal.
       */
-      const latestSetup =
-        await loadLatestSalesPrintSetup();
+      const [latestSetup, savedPrintDetails] = await Promise.all([
+        loadLatestSalesPrintSetup(),
+        loadPrintAccountDetails(),
+      ]);
 
       setSelectedSalesPrintRow(
         actualSalesRow
@@ -769,6 +1039,8 @@ const debitNotePermission = usePermission("VOUCHERS", "DEBIT_NOTE");
         ...createDefaultSalesPrintOptions(
           latestSetup
         ),
+        ...(savedPrintDetails?.printContent || {}),
+        ...(savedPrintDetails?.outputSettings || {}),
 
         defaultAction,
 
@@ -809,8 +1081,10 @@ const debitNotePermission = usePermission("VOUCHERS", "DEBIT_NOTE");
     async (
       defaultAction = "print"
     ) => {
-      const latestSetup =
-        await loadLatestSalesPrintSetup();
+      const [latestSetup, savedPrintDetails] = await Promise.all([
+        loadLatestSalesPrintSetup(),
+        loadPrintAccountDetails(),
+      ]);
 
       setSelectedSalesPrintRow(null);
 
@@ -818,6 +1092,8 @@ const debitNotePermission = usePermission("VOUCHERS", "DEBIT_NOTE");
         ...createDefaultSalesPrintOptions(
           latestSetup
         ),
+        ...(savedPrintDetails?.printContent || {}),
+        ...(savedPrintDetails?.outputSettings || {}),
 
         defaultAction,
 
@@ -2809,6 +3085,11 @@ const debitNotePermission = usePermission("VOUCHERS", "DEBIT_NOTE");
     try {
       setSalesPrintPreparing(true);
 
+      const savedPrintDetails = await savePrintAccountDetails();
+      if (!savedPrintDetails) {
+        throw new Error("Print settings could not be saved.");
+      }
+
       const commonPrintOptions = {
         reportNumber:
           selectedReportNumber,
@@ -2854,6 +3135,9 @@ const debitNotePermission = usePermission("VOUCHERS", "DEBIT_NOTE");
 
         showDeclaration:
           salesPrintOptions.showDeclaration,
+
+        printAccountDetails:
+          savedPrintDetails,
       };
 
       let invoiceHtml = "";
@@ -3412,6 +3696,7 @@ const debitNotePermission = usePermission("VOUCHERS", "DEBIT_NOTE");
       showTaxSummary = true,
       showBankDetails = true,
       showDeclaration = true,
+      printAccountDetails = null,
 
       goodsReturn = true,
       damageReturn = true,
@@ -3825,31 +4110,52 @@ const debitNotePermission = usePermission("VOUCHERS", "DEBIT_NOTE");
       readBillValue(["AreaName", "areaName"])
     );
 
-    const bankName = getInvoiceValue(
-      bank,
-      ["bankName", "BankName", "name"],
-      getInvoiceValue(firm, ["bankName", "BankName"], "")
-    );
+    const hasSavedPrintAccount = Boolean(printAccountDetails);
 
-    const bankAccountNo = getInvoiceValue(
-      bank,
-      ["accountNo", "AccountNo", "bankAccountNo"],
-      getInvoiceValue(firm, ["bankAccountNo", "accountNo"], "")
-    );
+    const bankName = hasSavedPrintAccount
+      ? String(printAccountDetails.bankName || "").trim()
+      : getInvoiceValue(
+        bank,
+        ["bankName", "BankName", "name"],
+        getInvoiceValue(firm, ["bankName", "BankName"], "")
+      );
 
-    const bankIfsc = getInvoiceValue(
-      bank,
-      ["ifscCode", "IFSCCode", "ifsc", "IFSC"],
-      getInvoiceValue(firm, ["ifscCode", "IFSCCode"], "")
-    );
+    const bankAccountNo = hasSavedPrintAccount
+      ? String(printAccountDetails.accountNumber || "").trim()
+      : getInvoiceValue(
+        bank,
+        ["accountNo", "AccountNo", "bankAccountNo"],
+        getInvoiceValue(firm, ["bankAccountNo", "accountNo"], "")
+      );
 
-    const bankBranch = getInvoiceValue(
+    const bankAccountName = hasSavedPrintAccount
+      ? String(printAccountDetails.accountName || "").trim()
+      : firmName;
+
+    const bankIfsc = hasSavedPrintAccount
+      ? String(printAccountDetails.ifscCode || "").trim()
+      : getInvoiceValue(
+        bank,
+        ["ifscCode", "IFSCCode", "ifsc", "IFSC"],
+        getInvoiceValue(firm, ["ifscCode", "IFSCCode"], "")
+      );
+
+    const bankQrCode = String(printAccountDetails?.qrCode?.dataUrl || "");
+    const defaultTermsAndConditions = `1. Goods once sold will not be taken back or exchanged.
+2. Interest will be charged on overdue payments.
+3. Subject to ${firmState || "local"} jurisdiction only.`;
+    const termsAndConditions = String(
+      printAccountDetails?.termsAndConditions || defaultTermsAndConditions
+    ).trim();
+    const termsAndConditionsHtml = text(termsAndConditions).replace(/\r?\n/g, "<br>");
+
+    const bankBranch = hasSavedPrintAccount ? "" : getInvoiceValue(
       bank,
       ["branch", "branchName", "Branch", "BranchName"],
       getInvoiceValue(firm, ["branch", "branchName"], "")
     );
 
-    const bankAccountType = getInvoiceValue(
+    const bankAccountType = hasSavedPrintAccount ? "" : getInvoiceValue(
       bank,
       ["accountType", "AccountType", "acType"],
       ""
@@ -3920,13 +4226,10 @@ const debitNotePermission = usePermission("VOUCHERS", "DEBIT_NOTE");
             <td class="number">${qty(item.qty)}</td>
             <td class="center">${text(item.unit)}</td>
             <td class="number">${money(item.rate)}</td>
-            <td class="number">${showScheme
-            ? percent(
-              safeNumber(item.schemePercent) +
-              safeNumber(item.cashDiscountPercent)
-            )
-            : "-"
-          }</td>
+            <td class="number">${showScheme ? percent(item.schemePercent) : "-"}</td>
+            <td class="number">${showScheme ? money(item.schemeAmount) : "-"}</td>
+            <td class="number">${showScheme ? percent(item.cashDiscountPercent) : "-"}</td>
+            <td class="number">${showScheme ? money(item.cashDiscountAmount) : "-"}</td>
             <td class="number">${percent(
             safeNumber(item.igstPercent) > 0
               ? safeNumber(item.igstPercent)
@@ -3948,22 +4251,9 @@ const debitNotePermission = usePermission("VOUCHERS", "DEBIT_NOTE");
       .map(
         () => `
           <tr class="item-row empty-row">
-          ${showSerialNo
-            ? `<td>&nbsp;</td>`
-            : ""
-          }
-            <td></td>
-            ${showHsn ? "<td></td>" : ""}
-            <td></td>
-            <td></td>
-            <td></td>
-            <td></td>
-            <td></td>
-            <td></td>
-            <td></td>
-            <td></td>
-            <td></td>
-            <td></td>
+            ${Array.from({ length: 13 + (showSerialNo ? 1 : 0) + (showHsn ? 1 : 0) })
+              .map(() => "<td>&nbsp;</td>")
+              .join("")}
           </tr>
         `
       )
@@ -4071,16 +4361,19 @@ const debitNotePermission = usePermission("VOUCHERS", "DEBIT_NOTE");
             <colgroup>
               ${showSerialNo ? '<col style="width:4%">' : ""}
               ${showHsn ? '<col style="width:8%">' : ""}
-              <col style="width:${24 + (showSerialNo ? 0 : 4) + (showHsn ? 0 : 8)}%">
-              <col style="width:8%">
+              <col style="width:${18 + (showSerialNo ? 0 : 4) + (showHsn ? 0 : 7)}%">
+              <col style="width:6%">
+              <col style="width:4%">
               <col style="width:5%">
               <col style="width:6%">
+              <col style="width:4.5%">
+              <col style="width:6%">
+              <col style="width:4.5%">
+              <col style="width:6%">
+              <col style="width:4.5%">
+              <col style="width:8%">
               <col style="width:7%">
-              <col style="width:6%">
-              <col style="width:5%">
-              <col style="width:10%">
-              <col style="width:8%">
-              <col style="width:9%">
+              <col style="width:8.5%">
             </colgroup>
 
             <thead>
@@ -4092,7 +4385,10 @@ const debitNotePermission = usePermission("VOUCHERS", "DEBIT_NOTE");
                 <th>Qty</th>
                 <th>Unit</th>
                 <th>Rate</th>
-                <th>Disc. %</th>
+                <th>Sch. %</th>
+                <th>Sch. Amt.</th>
+                <th>CD %</th>
+                <th>CD Amt.</th>
                 <th>GST %</th>
                 <th>Taxable Value</th>
                 <th>GST Amt.</th>
@@ -4121,31 +4417,39 @@ const debitNotePermission = usePermission("VOUCHERS", "DEBIT_NOTE");
                 <strong>${text(amountInWords, "Zero Only")}</strong>
               </div>
 
-              ${showBankDetails
+              ${showBankDetails && (bankName || bankAccountName || bankAccountNo || bankIfsc || bankQrCode)
         ? `
                     <div class="footer-section bank-details">
+                      <div class="bank-details-content">
                       <div class="footer-section-heading">Bank Details</div>
                       <div class="footer-detail-row"><span>Bank Name</span><b>:</b><span>${text(bankName)}</span></div>
-                      <div class="footer-detail-row"><span>A/C Name</span><b>:</b><span>${text(firmName)}</span></div>
+                      <div class="footer-detail-row"><span>A/C Name</span><b>:</b><span>${text(bankAccountName)}</span></div>
                       <div class="footer-detail-row"><span>A/C No.</span><b>:</b><span>${text(bankAccountNo)}</span></div>
                       <div class="footer-detail-row"><span>IFSC Code</span><b>:</b><span>${text(bankIfsc)}</span></div>
-                      <div class="footer-detail-row"><span>Branch</span><b>:</b><span>${text(bankBranch)}</span></div>
+                      ${bankBranch
+          ? `<div class="footer-detail-row"><span>Branch</span><b>:</b><span>${text(bankBranch)}</span></div>`
+          : ""
+        }
                       ${bankAccountType
           ? `<div class="footer-detail-row"><span>A/C Type</span><b>:</b><span>${text(bankAccountType)}</span></div>`
           : ""
         }
+                      ${showDeclaration && termsAndConditions
+          ? `<div class="terms-section"><div class="footer-section-heading">Terms &amp; Conditions</div><div>${termsAndConditionsHtml}</div></div>`
+          : ""
+        }
+                      </div>
+                      ${bankQrCode ? `<img class="bank-qr-code" src="${bankQrCode}" alt="Payment QR code" />` : ""}
                     </div>
                   `
         : ""
       }
 
-              ${showDeclaration
+              ${showDeclaration && termsAndConditions && !(showBankDetails && (bankName || bankAccountName || bankAccountNo || bankIfsc || bankQrCode))
         ? `
                     <div class="footer-section terms-section">
                       <div class="footer-section-heading">Terms &amp; Conditions</div>
-                      <div>1. Goods once sold will not be taken back or exchanged.</div>
-                      <div>2. Interest will be charged on overdue payments.</div>
-                      <div>3. Subject to ${text(firmState || "local")} jurisdiction only.</div>
+                      <div>${termsAndConditionsHtml}</div>
                     </div>
                   `
         : ""
@@ -4618,7 +4922,7 @@ const debitNotePermission = usePermission("VOUCHERS", "DEBIT_NOTE");
 
             .invoice-footer-summary-grid {
               display: grid;
-              grid-template-columns: 31% 43% 26%;
+              grid-template-columns: 42% 35% 23%;
               align-items: stretch;
               width: 100%;
               min-height: 44mm;
@@ -4632,6 +4936,42 @@ const debitNotePermission = usePermission("VOUCHERS", "DEBIT_NOTE");
             }
 
             .footer-section { margin-bottom: 2mm; }
+            .bank-details {
+              display: grid;
+              grid-template-columns: minmax(0, 1fr) 26mm;
+              column-gap: 2mm;
+              padding-right: 0;
+            }
+            .bank-details-content { min-width: 0; }
+            .bank-details .footer-detail-row {
+              grid-template-columns: 14mm 2mm minmax(0, 1fr);
+              padding-right: 1mm;
+              font-weight: 700;
+            }
+            .bank-details .footer-detail-row span:last-child {
+              overflow-wrap: anywhere;
+              word-break: break-word;
+              font-weight: 700;
+            }
+            .bank-qr-code {
+              position: static;
+              grid-column: 2;
+              grid-row: 1;
+              align-self: start;
+              justify-self: end;
+              width: 26mm;
+              height: 26mm;
+              object-fit: contain;
+              transform: translateY(-2mm);
+              border: 0;
+              background: #fff;
+              print-color-adjust: exact;
+              -webkit-print-color-adjust: exact;
+            }
+            .invoice-a5 .bank-details {
+              grid-template-columns: minmax(0, 1fr) 24mm;
+            }
+            .invoice-a5 .bank-qr-code { width: 24mm; height: 24mm; }
             .footer-section-heading {
               margin-bottom: 1mm;
               font-weight: 800;
@@ -4657,7 +4997,7 @@ const debitNotePermission = usePermission("VOUCHERS", "DEBIT_NOTE");
               white-space: nowrap;
             }
 
-            .terms-section { line-height: 1.55; }
+            .terms-section { margin-top: 1.5mm; line-height: 1.55; }
 
             .tax-summary-table {
               width: 100%;
@@ -6076,6 +6416,7 @@ const debitNotePermission = usePermission("VOUCHERS", "DEBIT_NOTE");
   const [editCompanyId, setEditCompanyId] = useState(null);
   // Add this with other state declarations
   const [salesStockBatches, setSalesStockBatches] = useState({});
+  const [salesAllBatchesLocked, setSalesAllBatchesLocked] = useState({});
   const [editGroupId, setEditGroupId] = useState(null);
   const [editCategoryId, setEditCategoryId] = useState(null);
   const [editProductId, setEditProductId] = useState(null);
@@ -6214,7 +6555,7 @@ const debitNotePermission = usePermission("VOUCHERS", "DEBIT_NOTE");
     setShowProductMappingModal(true);
 
     try {
-      const res = await fetch(
+      const res = await secureFetch(
         `${API_URL}/product-mappings/${encodeURIComponent(sourceProductCode)}?distributorId=${distributorId}&firmId=${firmId}`
       );
       const result = await res.json();
@@ -6708,7 +7049,7 @@ const debitNotePermission = usePermission("VOUCHERS", "DEBIT_NOTE");
     }
 
     try {
-      const res = await fetch(`${API_URL}/product-mappings`, {
+      const res = await secureFetch(`${API_URL}/product-mappings`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -12133,6 +12474,7 @@ const debitNotePermission = usePermission("VOUCHERS", "DEBIT_NOTE");
   useEffect(() => {
 
     loadCompanies();
+    loadCompanyWiseSeries();
     loadGroups();
     loadCategories();
     loadProducts();
@@ -12610,7 +12952,10 @@ const debitNotePermission = usePermission("VOUCHERS", "DEBIT_NOTE");
       icon: "⚙️",
       items: [
         "General Setup",
-        "Security Setup"
+        "Company Wise Series Setup",
+        "Batch Lock and Change Sales Rate",
+        "Security Setup",
+        "Import Data From Desktop"
       ]
     },
 
@@ -19162,6 +19507,40 @@ const debitNotePermission = usePermission("VOUCHERS", "DEBIT_NOTE");
     }
   }, [invoiceFormData.BillSeries, openFormFor, editingInvoiceId]);
 
+  useEffect(() => {
+    if (
+      editingInvoiceId ||
+      openFormFor !== "Billing" ||
+      !["Billing", "Counter Sales"].includes(activeSubMenu) ||
+      !invoiceFormData.company
+    ) {
+      return;
+    }
+
+    const configuredSeries = getConfiguredCompanySeries(
+      invoiceFormData.company,
+      "sales"
+    );
+    if (!configuredSeries.configured) return;
+
+    setInvoiceFormData((previous) =>
+      previous.BillSeries === configuredSeries.value
+        ? previous
+        : {
+            ...previous,
+            BillSeries: configuredSeries.value,
+            billSeries: configuredSeries.value,
+            billNo: "",
+          }
+    );
+  }, [
+    activeSubMenu,
+    openFormFor,
+    editingInvoiceId,
+    invoiceFormData.company,
+    companyWiseSeriesRows,
+  ]);
+
 
   const recalcAllInvoiceItems = (
     partyCode = invoiceFormData.party
@@ -19346,10 +19725,22 @@ const debitNotePermission = usePermission("VOUCHERS", "DEBIT_NOTE");
         return;
       }
 
+      const salesSeries = getConfiguredCompanySeries(
+        selectedCompanyCode,
+        "sales"
+      );
+
       setInvoiceFormData((previous) => ({
         ...previous,
 
         company: selectedCompanyCode,
+        ...(salesSeries.configured
+          ? {
+              BillSeries: salesSeries.value,
+              billSeries: salesSeries.value,
+              billNo: "",
+            }
+          : {}),
 
         area: "",
 
@@ -21503,6 +21894,11 @@ const debitNotePermission = usePermission("VOUCHERS", "DEBIT_NOTE");
         [cacheKey]: loadedBatches,
         [prodCode]: loadedBatches,
       }));
+      setSalesAllBatchesLocked((previous) => ({
+        ...previous,
+        [cacheKey]: result.allBatchesLocked === true,
+        [prodCode]: result.allBatchesLocked === true,
+      }));
 
       return loadedBatches;
     } catch (error) {
@@ -21620,11 +22016,20 @@ const debitNotePermission = usePermission("VOUCHERS", "DEBIT_NOTE");
     const search = norm(productListFilter);
 
     return products.filter(p => {
+      const productCode = getProductCode(p);
+      const godownCode = getSalesGodownCode();
+      const fullyLocked =
+        salesAllBatchesLocked[`${godownCode}_${productCode}`] === true ||
+        salesAllBatchesLocked[productCode] === true;
       const productMatched =
         norm(getProductCode(p)).includes(search) ||
         norm(getProductName(p)).includes(search);
 
-      return productMatched && productBelongsToSelectedSalesCompany(p);
+      return (
+        !fullyLocked &&
+        productMatched &&
+        productBelongsToSelectedSalesCompany(p)
+      );
     });
   };
   const getSelectedVoucherCompany = (companyValue) => {
@@ -22539,6 +22944,27 @@ const debitNotePermission = usePermission("VOUCHERS", "DEBIT_NOTE");
     invoiceFormData.company,
     companies,
   ]);
+
+  /*
+   * Product rows are built immediately while the matching Mas_Stock batches
+   * are still loading. Rebuild only the open Sales dropdown when that cache
+   * changes so newly loaded Batch/MRP/Rate/Qty values replace the temporary
+   * zero-value product-master row.
+   */
+  useEffect(() => {
+    if (
+      !showProductList ||
+      !String(productListFilter || "").trim() ||
+      currentProductIndex < 0
+    ) {
+      return;
+    }
+
+    buildFilteredProductList(
+      productListFilter,
+      currentProductIndex
+    );
+  }, [salesStockBatches, salesAllBatchesLocked]);
 
   const focusSalesQty = (index) => {
     setTimeout(() => {
@@ -26720,6 +27146,29 @@ ALLOW CHANGE STAR AMOUNT — FINAL SAVE PROTECTION
       return;
     }
 
+    if (name === "company") {
+      const purchaseSeries = getConfiguredCompanySeries(
+        cleanValue,
+        "purchase"
+      );
+
+      setPurchaseFormData((previous) => ({
+        ...previous,
+        company: cleanValue,
+        ...(purchaseSeries.configured
+          ? { vouSer: purchaseSeries.value, vouNo: "" }
+          : {}),
+      }));
+
+      if (purchaseSeries.configured) {
+        setTimeout(
+          () => loadNextPurchaseVouNo(purchaseSeries.value),
+          0
+        );
+      }
+      return;
+    }
+
     if (name === "isIgst") {
       const isIgstPurchase = cleanValue === "Y" || cleanValue === "Yes";
 
@@ -27533,11 +27982,6 @@ ALLOW CHANGE STAR AMOUNT — FINAL SAVE PROTECTION
 
       if (!purchaseFormData.storageLocation) {
         alert("Please select godown");
-        return;
-      }
-
-      if (!purchaseFormData.vouSer) {
-        alert("Please enter Vou Ser");
         return;
       }
 
@@ -31992,12 +32436,25 @@ ALLOW CHANGE STAR AMOUNT — FINAL SAVE PROTECTION
         const companyName =
           getCreditCompanyName(cleanValue);
 
+        const configuredSeries =
+          getConfiguredCompanySeries(
+            companyCode,
+            "creditNote"
+          );
+
         updatedForm = {
           ...updatedForm,
 
           company: companyCode,
           companyCode,
           companyName,
+          ...(configuredSeries.configured
+            ? {
+                creditNoteSeries:
+                  configuredSeries.value,
+                creditNoteNo: "",
+              }
+            : {}),
 
           /*
           * Clear old party because it may belong
@@ -35903,7 +36360,29 @@ ALLOW CHANGE STAR AMOUNT — FINAL SAVE PROTECTION
   };
   const handleDebitNoteInputChange = (e) => {
     const { name, value } = e.target;
-    setDebitNoteFormData({ ...debitNoteFormData, [name]: regexInputValue(name, value) });
+    const cleanValue = regexInputValue(name, value);
+
+    if (name === "company") {
+      const configuredSeries = getConfiguredCompanySeries(
+        cleanValue,
+        "debitNote"
+      );
+
+      setDebitNoteFormData((previous) => ({
+        ...previous,
+        company: cleanValue,
+        ...(configuredSeries.configured
+          ? {
+              debitNoteSeries: configuredSeries.value,
+              debitNoteNo: "",
+              vNo: "",
+            }
+          : {}),
+      }));
+      return;
+    }
+
+    setDebitNoteFormData({ ...debitNoteFormData, [name]: cleanValue });
   };
 
   const addDebitNoteItem = useCallback(() => {
@@ -41513,6 +41992,48 @@ ALLOW CHANGE STAR AMOUNT — FINAL SAVE PROTECTION
       return;
     }
 
+    if (item === "Company Wise Series Setup") {
+      setToolNavigationRequest((current) => ({
+        target: item,
+        mode: "list",
+        id: current.id + 1,
+      }));
+      setActiveMenu("tools");
+      setActiveSubMenu("Company Wise Series Setup");
+      setOpenFormFor("Company Wise Series Setup");
+      setShowDashboard(false);
+      setShowSalesList(false);
+      setShowPurchaseList(false);
+      setShowCreditNoteList(false);
+      setShowDebitNoteList(false);
+      setShowCreateLoadList(false);
+      setShowSettleLoadList(false);
+      setShowSettleLoad(false);
+      setShowPrintPreview(false);
+      return;
+    }
+
+    if (item === "Batch Lock and Change Sales Rate") {
+      setToolNavigationRequest((current) => ({
+        target: item,
+        mode: "list",
+        id: current.id + 1,
+      }));
+      setActiveMenu("tools");
+      setActiveSubMenu("Batch Lock and Change Sales Rate");
+      setOpenFormFor("Batch Lock and Change Sales Rate");
+      setShowDashboard(false);
+      setShowSalesList(false);
+      setShowPurchaseList(false);
+      setShowCreditNoteList(false);
+      setShowDebitNoteList(false);
+      setShowCreateLoadList(false);
+      setShowSettleLoadList(false);
+      setShowSettleLoad(false);
+      setShowPrintPreview(false);
+      return;
+    }
+
     if (item === "Security Setup") {
       setActiveMenu("tools");
       setActiveSubMenu("Security Setup");
@@ -41548,6 +42069,15 @@ if (item === "Import Data") {
 
   return;
 }
+    if (item === "Import Data From Desktop") {
+      setActiveMenu("tools");
+      setActiveSubMenu("Import Data From Desktop");
+      setOpenFormFor(null);
+      setShowDashboard(false);
+      setShowDesktopImport(true);
+      setShowImportData(false);
+      return;
+    }
     if (item === "Load Transfer") {
       setActiveMenu("sales");
       setActiveSubMenu("Load Transfer");
@@ -41948,6 +42478,17 @@ if (item === "Import Data") {
       return;
     }
 
+    if (
+      item === "Company Wise Series Setup" ||
+      item === "Batch Lock and Change Sales Rate"
+    ) {
+      setToolNavigationRequest((current) => ({
+        target: item,
+        mode: "entry",
+        id: current.id + 1,
+      }));
+    }
+
     // Reset ALL list views FIRST
 
     // Reset ALL list views FIRST
@@ -42201,6 +42742,10 @@ if (item === "Import Data") {
     }
 else if (item === 'Import Data') {
   setShowImportData(true);
+}
+else if (item === 'Import Data From Desktop') {
+  setShowDesktopImport(true);
+  setShowImportData(false);
 }
 
     else if (item === 'Purchase') {
@@ -58180,7 +58725,17 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
         igstAmt: item.igstAmt || 0,
         netAmt: item.netAmt || item.amount || 0
       });
-      setPurchaseItems(item.items || []);
+      setPurchaseItems((item.items || []).map((purchaseItem, index) => {
+        const productCode = String(
+          purchaseItem.productCode || purchaseItem.code || purchaseItem.productId || ""
+        ).trim();
+        const productName = String(purchaseItem.productName || "").trim();
+        return {
+          ...purchaseItem,
+          id: purchaseItem.id || purchaseItem._id || `purchase-edit-${index}`,
+          product: purchaseItem.product || [productCode, productName].filter(Boolean).join(" - "),
+        };
+      }));
         setEditingPurchaseId(item._id || item.id || null);
       setOpenFormFor('Purchase');
       setActiveSubMenu('Purchase');
@@ -58663,6 +59218,155 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
 
     }
   };
+  const renderPrintAccountDetailsModal = () => {
+    if (!showPrintAccountDetailsModal) return null;
+
+    return createPortal(
+      <div className="print-account-details-overlay" onMouseDown={(event) => {
+        if (event.target === event.currentTarget && !printAccountDetailsSaving) {
+          setShowPrintAccountDetailsModal(false);
+        }
+      }}>
+        <div className="print-account-details-modal" role="dialog" aria-modal="true" aria-labelledby="print-account-details-title">
+          <div className="print-account-details-header">
+            <div>
+              <strong id="print-account-details-title">Bank, QR &amp; Print Settings</strong>
+              <small>Update all invoice print details in one place</small>
+            </div>
+            <button type="button" aria-label="Close bank details" disabled={printAccountDetailsSaving} onClick={() => setShowPrintAccountDetailsModal(false)}>
+              <X size={16} />
+            </button>
+          </div>
+
+          <div className="print-account-details-body">
+            <div className="print-account-section-title">Bank Account Details</div>
+            <label>
+              <span>Bank Name <b>*</b></span>
+              <input type="text" maxLength="120" value={printAccountDetails.bankName} disabled={printAccountDetailsSaving}
+                onChange={(event) => setPrintAccountDetails((previous) => ({ ...previous, bankName: event.target.value }))} />
+            </label>
+            <label>
+              <span>Account Name <b>*</b></span>
+              <input type="text" maxLength="120" value={printAccountDetails.accountName} disabled={printAccountDetailsSaving}
+                onChange={(event) => setPrintAccountDetails((previous) => ({ ...previous, accountName: event.target.value }))} />
+            </label>
+            <label>
+              <span>Account Number <b>*</b></span>
+              <input type="text" maxLength="50" value={printAccountDetails.accountNumber} disabled={printAccountDetailsSaving}
+                onChange={(event) => setPrintAccountDetails((previous) => ({ ...previous, accountNumber: event.target.value.replace(/[^a-z0-9-]/gi, "") }))} />
+            </label>
+            <label>
+              <span>IFSC Code <b>*</b></span>
+              <input type="text" maxLength="20" value={printAccountDetails.ifscCode} disabled={printAccountDetailsSaving}
+                onChange={(event) => setPrintAccountDetails((previous) => ({ ...previous, ifscCode: event.target.value.toUpperCase().replace(/[^A-Z0-9]/g, "") }))} />
+            </label>
+            <label className="print-account-qr-field">
+              <span>QR Code (PNG/JPG)</span>
+              <input type="file" accept="image/png,image/jpeg,.png,.jpg,.jpeg" disabled={printAccountDetailsSaving}
+                onChange={(event) => handlePrintQrCodeFile(event.target.files?.[0])} />
+            </label>
+
+            {printAccountDetails.qrCode?.dataUrl && (
+              <div className="print-account-qr-preview">
+                <img src={printAccountDetails.qrCode.dataUrl} alt="Selected payment QR code" />
+                <div>
+                  <span>{printAccountDetails.qrCode.fileName || "QR code image"}</span>
+                  <button type="button" disabled={printAccountDetailsSaving} onClick={() => setPrintAccountDetails((previous) => ({
+                    ...previous,
+                    qrCode: { fileName: "", mimeType: "", dataUrl: "" },
+                  }))}>Remove</button>
+                </div>
+              </div>
+            )}
+
+            <div className="print-account-section-title">Terms &amp; Conditions</div>
+            <label className="print-account-terms-field">
+              <span>Invoice Terms (one condition per line)</span>
+              <textarea
+                maxLength="2000"
+                rows="5"
+                value={printAccountDetails.termsAndConditions}
+                disabled={printAccountDetailsSaving}
+                placeholder="Enter the terms and conditions shown below bank details"
+                onChange={(event) => setPrintAccountDetails((previous) => ({
+                  ...previous,
+                  termsAndConditions: event.target.value,
+                }))}
+              />
+            </label>
+
+            <div className="print-account-section-title">Print Content</div>
+            <label>
+              <span>Goods Return</span>
+              <select value={salesPrintOptions.goodsReturn ? "Y" : "N"} disabled={printAccountDetailsSaving}
+                onChange={(event) => setSalesPrintOptions((previous) => ({ ...previous, goodsReturn: event.target.value === "Y" }))}>
+                <option value="Y">Yes</option><option value="N">No</option>
+              </select>
+            </label>
+            <label>
+              <span>Damage Return</span>
+              <select value={salesPrintOptions.damageReturn ? "Y" : "N"} disabled={printAccountDetailsSaving}
+                onChange={(event) => setSalesPrintOptions((previous) => ({ ...previous, damageReturn: event.target.value === "Y" }))}>
+                <option value="Y">Yes</option><option value="N">No</option>
+              </select>
+            </label>
+            <label>
+              <span>Scheme Summary</span>
+              <select value={salesPrintOptions.showScheme ? "Y" : "N"} disabled={printAccountDetailsSaving}
+                onChange={(event) => setSalesPrintOptions((previous) => ({ ...previous, showScheme: event.target.value === "Y" }))}>
+                <option value="Y">Yes</option><option value="N">No</option>
+              </select>
+            </label>
+            <label>
+              <span>VAT Summary</span>
+              <select value={salesPrintOptions.showTaxSummary ? "Y" : "N"} disabled={printAccountDetailsSaving}
+                onChange={(event) => setSalesPrintOptions((previous) => ({ ...previous, showTaxSummary: event.target.value === "Y" }))}>
+                <option value="Y">Yes</option><option value="N">No</option>
+              </select>
+            </label>
+
+            <div className="print-account-section-title">Output Settings</div>
+            <label>
+              <span>Report Number</span>
+              <select value={salesPrintOptions.reportNumber || "1"} disabled={printAccountDetailsSaving}
+                onChange={(event) => setSalesPrintOptions((previous) => ({ ...previous, reportNumber: event.target.value }))}>
+                {SALES_BILL_REPORT_NUMBERS.map((report) => <option key={report.value} value={report.value}>{report.label}</option>)}
+              </select>
+            </label>
+            <label>
+              <span>Paper Size</span>
+              <select value={salesPrintOptions.paperSize || "A4"} disabled={printAccountDetailsSaving} onChange={(event) => {
+                const selectedPaper = SALES_BILL_PAPER_SIZES.find((paper) => paper.value === event.target.value) || SALES_BILL_PAPER_SIZES[0];
+                setSalesPrintOptions((previous) => ({
+                  ...previous,
+                  paperSize: selectedPaper.value,
+                  orientation: selectedPaper.orientation,
+                }));
+              }}>
+                {SALES_BILL_PAPER_SIZES.map((paper) => <option key={paper.value} value={paper.value}>{paper.label}</option>)}
+              </select>
+            </label>
+          </div>
+
+          <div className="print-account-details-actions">
+            <button type="button" className="secondary" disabled={printAccountDetailsSaving} onClick={() => setShowPrintAccountDetailsModal(false)}>Cancel</button>
+            <button type="button" className="primary" disabled={printAccountDetailsSaving} onClick={async () => {
+              const saved = await savePrintAccountDetails({ requireBankDetails: true });
+              if (saved) {
+                setShowPrintAccountDetailsModal(false);
+                alert("Bank account and print settings saved successfully.");
+              }
+            }}>
+              {printAccountDetailsSaving ? <RefreshCw size={15} className="sales-print-format-spin" /> : <CreditCard size={15} />}
+              Save Details
+            </button>
+          </div>
+        </div>
+      </div>,
+      document.body
+    );
+  };
+
   const renderSalesPrintFormatModal = () => {
     if (!showSalesPrintFormatModal) {
       return null;
@@ -59197,6 +59901,15 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
             <div className="sales-print-classic-actions">
               <button
                 type="button"
+                className="sales-print-classic-button account-details"
+                disabled={salesPrintPreparing}
+                onClick={() => setShowPrintAccountDetailsModal(true)}
+              >
+                <CreditCard size={16} />
+                Account / Print Settings
+              </button>
+              <button
+                type="button"
                 className="sales-print-classic-button print"
                 disabled={salesPrintPreparing}
                 onClick={() => {
@@ -59261,6 +59974,7 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
   return (
     <>
       {renderSalesPrintFormatModal()}
+      {renderPrintAccountDetailsModal()}
 
       <div
         className={`dashboard-container ${sidebarCollapsed ? "sidebar-collapsed" : ""} ${isFormReadOnly ? "is-form-read-only" : ""}`}
@@ -59488,9 +60202,15 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                               {item}
                             </span>
 
-                            {activeMenu !== "tools" && (
+                            {(activeMenu !== "tools" ||
+                              item === "Company Wise Series Setup" ||
+                              item === "Batch Lock and Change Sales Rate") && (
                               <span
-                                className="plus-icon"
+                                className={`plus-icon ${activeMenu === "tools" ? "tools-plus-icon" : ""}`}
+                                role="button"
+                                tabIndex={0}
+                                aria-label={`Add ${item}`}
+                                title={`Add ${item}`}
                                 onClick={(event) => {
                                   event.stopPropagation();
 
@@ -59509,6 +60229,11 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                                   }
 
                                   handlePlusClick(item, event);
+                                }}
+                                onKeyDown={(event) => {
+                                  if (event.key === "Enter" || event.key === " ") {
+                                    handlePlusClick(item, event);
+                                  }
                                 }}
                               >
                                 +
@@ -68767,6 +69492,33 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                   }}
                 />
               )}
+            {activeSubMenu === "Company Wise Series Setup" &&
+              openFormFor === "Company Wise Series Setup" && (
+                <CompanyWiseSeriesSetup
+                  companies={companies}
+                  onSaved={setCompanyWiseSeriesRows}
+                  navigationRequest={
+                    toolNavigationRequest.target === "Company Wise Series Setup"
+                      ? toolNavigationRequest
+                      : null
+                  }
+                />
+              )}
+            {activeSubMenu === "Batch Lock and Change Sales Rate" &&
+              openFormFor === "Batch Lock and Change Sales Rate" && (
+                <BatchLockSalesRate
+                  companies={companies}
+                  navigationRequest={
+                    toolNavigationRequest.target === "Batch Lock and Change Sales Rate"
+                      ? toolNavigationRequest
+                      : null
+                  }
+                  onStockChanged={() => {
+                    setSalesStockBatches({});
+                    setSalesAllBatchesLocked({});
+                  }}
+                />
+              )}
             {activeSubMenu === "General Setup 2" &&
               openFormFor === "General Setup 2" && (
                 <div
@@ -68798,6 +69550,13 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
     setShowDashboard(true);
   }} />
 )}
+            {activeSubMenu === "Import Data From Desktop" && showDesktopImport && (
+              <ImportDataFromDesktop onClose={() => {
+                setShowDesktopImport(false);
+                setActiveSubMenu(null);
+                setShowDashboard(true);
+              }} />
+            )}
             {activeSubMenu === 'Customer Bank Master' && openFormFor === 'Customer Bank Master' && (
               <div className="compact-master-page">
                 <div className="compact-master-heading">

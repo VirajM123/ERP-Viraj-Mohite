@@ -1,5 +1,6 @@
 import express from "express";
 import mongoose from "mongoose";
+import { writeAuditEvent } from "./audit.js";
 
 export default function createSecuritySetupRouter(User) {
 
@@ -71,6 +72,7 @@ export default function createSecuritySetupRouter(User) {
           module: "MASTER",
           operation: "PRODUCT",
         },
+        { id: "master-service", name: "Service", module: "MASTER", operation: "SERVICE" },
 
         {
           id: "master-other-account",
@@ -139,6 +141,12 @@ export default function createSecuritySetupRouter(User) {
           module: "MAPPING",
           operation: "AREA_TO_PARTY",
         },
+        {
+          id: "mapping-product",
+          name: "Product Mapping",
+          module: "MAPPING",
+          operation: "PRODUCT_MAPPING",
+        },
       ],
     },
     {
@@ -151,6 +159,13 @@ export default function createSecuritySetupRouter(User) {
           name: "Sales Billing",
           module: "SALES",
           operation: "SALES_BILLING",
+        },
+        { id: "sales-service", name: "Sales Service", module: "SALES", operation: "SALES_SERVICE" },
+        {
+          id: "sales-rate-override",
+          name: "Sales Rate Override",
+          module: "SALES",
+          operation: "SALES_RATE_OVERRIDE",
         },
         {
           id: "sales-quotation",
@@ -194,6 +209,12 @@ export default function createSecuritySetupRouter(User) {
           name: "Debit Note",
           module: "VOUCHERS",
           operation: "DEBIT_NOTE",
+        },
+        {
+          id: "voucher-stock-adjustment",
+          name: "Stock Adjustment",
+          module: "VOUCHERS",
+          operation: "STOCK_ADJUSTMENT",
         },
 
       ],
@@ -327,6 +348,11 @@ export default function createSecuritySetupRouter(User) {
           module: "TOOLS",
           operation: "DATA_EXPORT",
         },
+        { id: "tools-company-series", name: "Company Wise Series", module: "TOOLS", operation: "COMPANY_WISE_SERIES" },
+        { id: "tools-batch-lock", name: "Batch Lock / Unlock", module: "TOOLS", operation: "BATCH_LOCK" },
+        { id: "tools-batch-rate-override", name: "Batch Sales Rate Override", module: "TOOLS", operation: "BATCH_RATE_OVERRIDE" },
+        { id: "tools-print-settings", name: "Print Settings", module: "TOOLS", operation: "PRINT_SETTINGS" },
+        { id: "tools-desktop-import", name: "Desktop Backup Import", module: "TOOLS", operation: "DESKTOP_IMPORT" },
       ],
     },
     {
@@ -413,7 +439,7 @@ export default function createSecuritySetupRouter(User) {
             permissions[group.id][
               operation.operation
             ] = {
-              view: true,
+              view: isAdmin,
               add: isAdmin,
               edit: isAdmin,
               delete: isAdmin,
@@ -525,12 +551,19 @@ export default function createSecuritySetupRouter(User) {
   ========================================================= */
 
 
+  const knownPermission = (moduleCode, operationCode, action) =>
+    PERMISSION_COLUMNS.some((column) => column.key === String(action).toLowerCase()) &&
+    DEFAULT_OPERATION_GROUPS.some((group) => group.operations.some((operation) =>
+      operation.module === String(moduleCode).toUpperCase() &&
+      operation.operation === String(operationCode).toUpperCase()));
+
   const checkPermission = (
     permissions,
     moduleCode,
     operationCode,
     action
   ) => {
+    if (!knownPermission(moduleCode, operationCode, action)) return false;
 
     const role = normalizeRole(
       permissions?.role
@@ -565,7 +598,8 @@ export default function createSecuritySetupRouter(User) {
       return false;
     }
 
-    return Boolean(operationPermissions[String(action).toLowerCase()]);
+    return Object.hasOwn(operationPermissions, String(action).toLowerCase()) &&
+      operationPermissions[String(action).toLowerCase()] === true;
   };
 
   const authorize = async (
@@ -577,6 +611,7 @@ export default function createSecuritySetupRouter(User) {
     operationCode,
     action
   ) => {
+    if (!distributorId || !firmId || !userId || !knownPermission(moduleCode, operationCode, action)) return false;
 
     /*
      * Distributor Admin
@@ -697,6 +732,7 @@ export default function createSecuritySetupRouter(User) {
         firmId,
         isActive: true,
       })
+        .select("-password -oldPassword")
         .sort({ userName: 1 })
         .lean();
 
@@ -710,7 +746,6 @@ export default function createSecuritySetupRouter(User) {
         });
 
         if (!security) {
-          console.log("USER FROM DB =>", user);
           security = await SecuritySetup.create({
             distributorId,
             firmId,
@@ -744,7 +779,7 @@ export default function createSecuritySetupRouter(User) {
 
       return res.status(500).json({
         success: false,
-        message: error.message,
+        message: "Unable to load security setup.",
       });
 
     }
@@ -811,7 +846,6 @@ export default function createSecuritySetupRouter(User) {
         success: false,
         message:
           "Unable to load user permissions.",
-        error: error.message,
       });
     }
   });
@@ -820,14 +854,16 @@ export default function createSecuritySetupRouter(User) {
   ========================================================= */
 
   router.put("/", requireDistributorAdmin, async (req, res) => {
+    let session;
     try {
       const distributorId = readString(req.auth?.distributorId);
       const firmId = readString(req.auth?.firmId);
       const updatedBy = readString(req.auth?.userId);
 
-      const users = Array.isArray(req.body.users)
-        ? req.body.users
-        : [];
+      if (!Array.isArray(req.body.users)) {
+        return res.status(400).json({ success: false, message: "Users must be an array." });
+      }
+      const users = req.body.users;
 
       if (!distributorId || !firmId) {
         return res.status(400).json({
@@ -837,6 +873,36 @@ export default function createSecuritySetupRouter(User) {
       }
 
       for (const user of users) {
+        if (!user || typeof user.userId !== "string" || !user.userId.trim() ||
+            !user.permissions || typeof user.permissions !== "object" || Array.isArray(user.permissions)) {
+          return res.status(400).json({ success: false, message: "Invalid user permissions." });
+        }
+        for (const [moduleCode, operations] of Object.entries(user.permissions)) {
+          if (!DEFAULT_OPERATION_GROUPS.some((group) => group.id === moduleCode) ||
+              !operations || typeof operations !== "object" || Array.isArray(operations)) {
+            return res.status(400).json({ success: false, message: "Invalid permission module." });
+          }
+          for (const [operationCode, actions] of Object.entries(operations)) {
+            if (!knownPermission(moduleCode, operationCode, "view") ||
+                !actions || typeof actions !== "object" || Array.isArray(actions) ||
+                Object.entries(actions).some(([action, value]) =>
+                  !knownPermission(moduleCode, operationCode, action) || typeof value !== "boolean")) {
+              return res.status(400).json({ success: false, message: "Invalid permission operation or action." });
+            }
+          }
+        }
+      }
+
+      session = await mongoose.startSession();
+      await session.withTransaction(async () => {
+      for (const user of users) {
+        const target = await User.findOne({ distributorId, firmId, userId: user.userId, isActive: true }).session(session).lean();
+        if (!target) {
+          const error = new Error("User does not belong to this firm or is inactive.");
+          error.status = 400;
+          throw error;
+        }
+        const before = await SecuritySetup.findOne({ distributorId, firmId, userId: user.userId }).session(session).lean();
         await SecuritySetup.findOneAndUpdate(
           {
             distributorId,
@@ -848,14 +914,24 @@ export default function createSecuritySetupRouter(User) {
               permissions: user.permissions,
               updatedBy,
               isActive: true,
+              userName: target.userName,
+              role: normalizeRole(target.role),
+              firmName: target.firmName,
             },
           },
           {
             new: true,
             upsert: true,
+            session,
+            runValidators: true,
           }
         );
+        await writeAuditEvent(req, {
+          entityType: "SECURITY_SETUP", entityId: user.userId, action: "UPDATE",
+          before: before?.permissions, after: user.permissions,
+        }, session);
       }
+      });
 
       return res.json({
         success: true,
@@ -866,11 +942,13 @@ export default function createSecuritySetupRouter(User) {
 
       console.error(error);
 
-      return res.status(500).json({
+      return res.status(error.status === 400 ? 400 : 500).json({
         success: false,
-        message: error.message,
+        message: error.status === 400 ? error.message : "Unable to save security permissions.",
       });
 
+    } finally {
+      if (session) await session.endSession();
     }
   });
   router.authorizeRequest =

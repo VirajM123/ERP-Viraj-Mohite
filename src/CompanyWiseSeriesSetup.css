@@ -1,0 +1,19 @@
+.company-series-list-page { padding: 14px 18px 18px; }
+.tool-page-title { display: flex; align-items: center; gap: 10px; min-width: 0; }
+.tool-page-title > span { width: 34px; height: 34px; flex: 0 0 34px; display: grid; place-items: center; border: 1px solid #d8e4fb; border-radius: 8px; color: #245be6; background: #eef4ff; }
+.company-series-list-table { min-width: 1500px; }
+.company-series-list-table th, .company-series-list-table td { white-space: nowrap; }
+.company-series-list-table th { height: 36px; }
+.company-series-list-table td { height: 39px; }
+.company-series-list-table td small { display: block; margin-top: 2px; color: #64748b; }
+.company-series-name-link { border: 0; padding: 0; background: transparent; color: #0369a1; font: inherit; font-weight: 700; cursor: pointer; text-align: left; }
+.company-series-name-link:hover { text-decoration: underline; }
+.company-series-entry { padding: 14px 18px 18px; }
+.company-series-form { display: block; }
+.company-series-company-field { max-width: 380px; margin-bottom: 14px; }
+.company-series-field-grid { display: grid; grid-template-columns: repeat(4, minmax(150px, 1fr)); gap: 12px 14px; padding-top: 14px; border-top: 1px solid #edf1f7; }
+.company-series-entry .compact-master-form { padding: 16px 18px 18px; }
+.company-series-entry .compact-field input,
+.company-series-entry .compact-field select { height: 34px; }
+@media (max-width: 1000px) { .company-series-field-grid { grid-template-columns: repeat(2, minmax(150px, 1fr)); } }
+@media (max-width: 600px) { .company-series-field-grid { grid-template-columns: 1fr; } }
