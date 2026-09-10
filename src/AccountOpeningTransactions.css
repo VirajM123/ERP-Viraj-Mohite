@@ -1,0 +1,29 @@
+.compact-master-actions.account-master-actions { flex-wrap: wrap; }
+.account-opening-trigger { background: #eef2ff; color: #3348c9; border: 1px solid #aebaf4; white-space: normal; }
+.account-opening-dialog { width: min(1060px, calc(100vw - 32px)); max-width: none; max-height: min(620px, calc(100dvh - 32px)); padding: 0; border: 1px solid #dce3ed; border-radius: 12px; color: #24334b; background: #fff; box-shadow: 0 20px 70px #12234440; }
+.account-opening-dialog::backdrop { background: #13213c70; }
+.account-opening-dialog form { display: flex; flex-direction: column; max-height: inherit; }
+.account-opening-dialog header, .account-opening-dialog footer { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 16px 20px; flex-shrink: 0; }
+.account-opening-dialog header { border-bottom: 1px solid #e2e8f0; }
+.account-opening-dialog h2 { margin: 0; font-size: 18px; }
+.account-opening-dialog p { font-size: 12px; margin: 6px 0; }
+.account-opening-content { padding: 12px 20px; overflow: auto; }
+.account-opening-hint { color: #64748b; }
+.account-opening-table-scroll { max-height: 260px; overflow: auto; margin: 14px 0; border: 1px solid #dce3ed; border-radius: 6px; }
+.account-opening-dialog table { width: 100%; min-width: 1330px; border-collapse: collapse; font-size: 12px; }
+.account-opening-dialog th { text-align: left; background: #eef2ff; padding: 9px 6px; position: sticky; top: 0; }
+.account-opening-dialog td { padding: 5px; border-top: 1px solid #e2e8f0; }
+.account-opening-dialog input, .account-opening-dialog select { box-sizing: border-box; width: 100%; min-width: 65px; height: 32px; border: 1px solid #cbd5e1; border-radius: 4px; padding: 4px 6px; font: inherit; color: #24334b; background: white; }
+.account-opening-dialog input[type=date] { min-width: 130px; }
+.account-opening-dialog input[type=number] { min-width: 110px; }
+.account-opening-icon { display: inline-flex; padding: 6px; border: 0; border-radius: 4px; background: transparent; color: #64748b; cursor: pointer; }
+.account-opening-icon:hover { background: #eef2ff; color: #3348c9; }
+.account-opening-dialog .account-opening-empty { padding: 22px; }
+.account-opening-totals { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; margin-top: 18px; font-size: 12px; }
+.account-opening-totals strong { display: block; margin-top: 5px; font-size: 14px; }
+.account-opening-dialog footer { justify-content: flex-end; border-top: 1px solid #e2e8f0; }
+.account-opening-error { color: #b91c1c; }
+.account-opening-fields { padding: 0; margin: 0; border: 0; min-width: 0; }
+.account-opening-lookup { min-width: 190px; }
+.account-opening-lookup small { display: block; margin-top: 5px; }
+@media (max-width: 600px) { .account-opening-totals { grid-template-columns: repeat(2, minmax(0, 1fr)); } }

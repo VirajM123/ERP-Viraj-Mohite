@@ -1,8 +1,9 @@
 import express from "express";
 import mongoose from "mongoose";
 import { nextDocumentNumber } from "./counters.js";
-import { postBalancedJournal, reverseSourceJournal } from "./accounting.js";
+import { postBalancedJournal } from "./accounting.js";
 import { writeAuditEvent } from "./audit.js";
+import { openingOutstanding, openingBillRows, allocateOpening, releaseOpening, reverseOpeningAwareJournal } from './openingBalances.js';
 
 export const paymentAmountFromBody = (body) => {
   const amount = Number(body.amount ?? body.drAmt ?? body.crAmt ?? body.summary?.totalDrAmt ?? 0);
@@ -19,6 +20,7 @@ export const paymentAmountFromBody = (body) => {
 
 export const normalizePaymentAllocations = (body) => (Array.isArray(body.allocations) ? body.allocations : body.items || [])
   .map((item) => ({
+    ...(item.openingTransactionId ? { openingTransactionId: String(item.openingTransactionId) } : {}),
     trn: String(item.trn || "PUR"),
     trnSeries: String(item.trnSeries || item.vouSer || "").trim(),
     voucherNo: String(item.voucherNo ?? item.vouNo ?? "").trim(),
@@ -31,6 +33,13 @@ export const normalizePaymentAllocations = (body) => (Array.isArray(body.allocat
 export default function createTransactionRouter(securityRouter) {
 
 const router = express.Router();
+
+router.get('/receipt/opening-bills', securityRouter.authorizeRequest('TRANSACTIONS', 'RECEIPT', 'view'), async (req, res) => {
+  res.json({ success: true, data: openingBillRows(await openingOutstanding(req, 'Dr')) });
+});
+router.get('/payment/opening-bills', securityRouter.authorizeRequest('TRANSACTIONS', 'PAYMENT', 'view'), async (req, res) => {
+  res.json({ success: true, data: openingBillRows(await openingOutstanding(req, 'Cr')) });
+});
 
 const tenantFilter = (req, extra = {}) => ({
   ...extra,
@@ -97,6 +106,7 @@ editUser: {
 
 receiptBills: [
   {
+    openingTransactionId: { type: String, default: '' },
     trnSeries: {
       type: String,
       default: ""
@@ -436,6 +446,7 @@ router.get(
    Additive model: the existing Receipt/PDC/Contra collections are untouched.
 ========================== */
 const paymentAllocationSchema = new mongoose.Schema({
+  openingTransactionId: { type: String, default: '' },
   trn: { type: String, default: "PUR" },
   trnSeries: { type: String, default: "" },
   voucherNo: { type: String, default: "" },
@@ -502,6 +513,12 @@ const findPurchaseForAllocation = async (req, allocation, session) => {
 const reservePaymentAllocations = async (req, allocations, partyName, session) => {
   const reserved = [];
   for (const allocation of allocations) {
+    if (allocation.openingTransactionId) {
+      const opening = await allocateOpening(req, allocation.openingTransactionId, allocation.allocatedAmount, 'Cr', req.body.partyCode || partyName, session, req.body.vDate);
+      req.body.partyCode = opening.accountCode;
+      reserved.push({ ...allocation, amount: opening.balanceAmount, previouslyAdjusted: opening.allocatedAmount });
+      continue;
+    }
     const purchase = await findPurchaseForAllocation(req, allocation, session);
     if (partyName && String(purchase.supplierName || "").trim().toLowerCase() !== partyName.trim().toLowerCase()) {
       throw Object.assign(new Error("Every allocated purchase must belong to the selected supplier."), { statusCode: 400 });
@@ -528,6 +545,10 @@ const releasePaymentAllocations = async (allocations, session) => {
   const Purchase = getPurchaseModel();
   if (!Purchase) return;
   for (const allocation of allocations || []) {
+    if (allocation.openingTransactionId) {
+      await releaseOpening(allocation.openingTransactionId, allocation.allocatedAmount, session);
+      continue;
+    }
     if (!allocation.purchaseId || Number(allocation.allocatedAmount || 0) <= 0) continue;
 
     const purchase = await Purchase.findOne(
@@ -902,10 +923,10 @@ router.put(
         if (!payment) throw Object.assign(new Error("Payment not found or already reversed."), { statusCode: 404 });
         const before = payment.toObject();
         await releasePaymentAllocations(payment.allocations, session);
-        await reverseSourceJournal({
+        await reverseOpeningAwareJournal({
           distributorId: req.auth.distributorId, firmId: req.auth.firmId, sourceType: "PAYMENT", sourceId: String(payment._id),
           createdBy: req.auth.userId, documentDate: req.body.vDate || payment.vDate, reason: req.body.reason || "Payment edit reversal",
-        }, session);
+        }, payment.allocations, session);
         const amount = paymentAmountFromBody(req.body);
         const partyName = String(req.body.partyName || "").trim();
         const bankCash = String(req.body.bankCash || "").trim();
@@ -951,10 +972,10 @@ router.delete(
         if (!payment) throw Object.assign(new Error("Payment not found or already reversed."), { statusCode: 404 });
         const before = payment.toObject();
         await releasePaymentAllocations(payment.allocations, session);
-        await reverseSourceJournal({
+        await reverseOpeningAwareJournal({
           distributorId: req.auth.distributorId, firmId: req.auth.firmId, sourceType: "PAYMENT", sourceId: String(payment._id),
           createdBy: req.auth.userId, documentDate: payment.vDate, reason: req.body?.reason || "Payment cancellation",
-        }, session);
+        }, payment.allocations, session);
         payment.status = "REVERSED"; payment.reversedAt = new Date(); payment.reversedBy = req.auth.userId;
         payment.reversalReason = String(req.body?.reason || "Payment cancelled by user");
         await payment.save({ session });
@@ -990,6 +1011,7 @@ router.post(
 
       const incoming = Array.isArray(body.receiptBills) ? body.receiptBills : Array.isArray(body.items) ? body.items : [];
       const bills = incoming.map((item) => ({
+        ...(item.openingTransactionId ? { openingTransactionId: String(item.openingTransactionId) } : {}),
         trnSeries: String(item.trnSeries ?? item.billSeries ?? item.BillSeries ?? "").trim(),
         trnNo: String(item.trnNo ?? item.billNo ?? item.BillNo ?? "").trim(),
         trnDate: String(item.trnDate ?? item.billDate ?? ""),
@@ -1012,6 +1034,14 @@ router.post(
       await session.withTransaction(async () => {
         const sales = mongoose.connection.collection("T_Sal_Header");
         for (const bill of bills) {
+          if (bill.openingTransactionId) {
+            const opening = await allocateOpening(req, bill.openingTransactionId, bill.nowAdjust + bill.discAmt, 'Dr', body.partyId || body.partyName, session, body.receiptDate);
+            body.partyId = opening.accountCode;
+            bill.trnSeries = opening.transactionSeries;
+            bill.trnNo = opening.transactionNo;
+            bill.trnDate = opening.date;
+            continue;
+          }
           const billFilter = tenantFilter(req, { BillNo: Number.isFinite(Number(bill.trnNo)) ? Number(bill.trnNo) : bill.trnNo });
           if (bill.trnSeries) billFilter.BillSeries = bill.trnSeries;
           const invoice = await sales.findOne(billFilter, { session, projection: { NetAmount: 1, BillAmount: 1, partyCode: 1, AccountCode: 1, receiptAllocated: 1 } });
@@ -1020,7 +1050,7 @@ router.post(
           const previousReceipts = await Receipt.aggregate([
             { $match: tenantFilter(req, { status: { $ne: "REVERSED" }, receiptBills: { $elemMatch: { trnSeries: bill.trnSeries, trnNo: bill.trnNo } } }) },
             { $unwind: "$receiptBills" },
-            { $match: { "receiptBills.trnSeries": bill.trnSeries, "receiptBills.trnNo": bill.trnNo } },
+            { $match: { "receiptBills.trnSeries": bill.trnSeries, "receiptBills.trnNo": bill.trnNo, "receiptBills.openingTransactionId": { $in: [null, ''] } } },
             { $group: { _id: null, total: { $sum: { $add: ["$receiptBills.nowAdjust", "$receiptBills.discAmt"] } } } },
           ]).session(session);
           const legacyAllocated = Number(previousReceipts[0]?.total || 0);
@@ -2210,6 +2240,10 @@ router.delete(
           const sales = mongoose.connection.collection("T_Sal_Header");
           for (const bill of receipt.receiptBills || []) {
             const allocation = Number(bill.nowAdjust || 0) + Number(bill.discAmt || 0);
+            if (bill.openingTransactionId) {
+              await releaseOpening(bill.openingTransactionId, allocation, session);
+              continue;
+            }
             const billNo = Number.isFinite(Number(bill.trnNo)) ? Number(bill.trnNo) : bill.trnNo;
             const billFilter = tenantFilter(req, {
               BillSeries: String(bill.trnSeries || ""),
@@ -2238,7 +2272,7 @@ router.delete(
               );
             }
           }
-          await reverseSourceJournal({ distributorId: req.auth.distributorId, firmId: req.auth.firmId, sourceType: "RECEIPT", sourceId: String(receipt._id), createdBy: req.auth.userId, documentDate: receipt.receiptDate, reason: req.body?.reason || "Receipt reversal" }, session);
+          await reverseOpeningAwareJournal({ distributorId: req.auth.distributorId, firmId: req.auth.firmId, sourceType: "RECEIPT", sourceId: String(receipt._id), createdBy: req.auth.userId, documentDate: receipt.receiptDate, reason: req.body?.reason || "Receipt reversal" }, receipt.receiptBills, session);
           receipt.status = "REVERSED"; receipt.reversedAt = new Date(); receipt.reversedBy = req.auth.userId; receipt.reversalReason = String(req.body?.reason || "User requested reversal");
           await receipt.save({ session });
           await writeAuditEvent(req, { entityType: "RECEIPT", entityId: String(receipt._id), action: "REVERSE", reason: receipt.reversalReason, before: receipt.toObject() }, session);

@@ -19,6 +19,8 @@ import {
   refreshPermissions,
 } from "./SecuritySetup";
 import Report from "./Report";
+import AccountOpeningTransactions from "./AccountOpeningTransactions";
+import { ACCOUNT_STATES } from "./data/accountStates";
 import ImportData from "./ImportData";
 import ImportDataFromDesktop from "./ImportDataFromDesktop";
 import { API_URL } from "./api/config";
@@ -254,6 +256,7 @@ const allReportItems = [
   { name: "Balance Sheet", category: "Financial", description: "Account balances for assets and liabilities.", icon: Scale },
   { name: "Stock Movement Ledger", category: "Stock", description: "Immutable inward and outward movement history.", icon: ArrowLeftRight },
   { name: "Credit Control Report", category: "Control", description: "Credit limits, blacklisting, overdue and outstanding exposure.", icon: ShieldAlert },
+  { name: "Party Outstanding Report", category: "Customer", description: "Current invoice and opening balances after receipts and payments.", icon: UserRound },
   { name: "Permission Audit Report", category: "Control", description: "Review effective user permissions.", icon: ShieldCheck },
   { name: "Audit Trail Report", category: "Control", description: "Search transaction and administrative audit events.", icon: History },
   { name: "Dashboard Reconciliation", category: "Control", description: "Compare dashboard totals with live transaction data.", icon: LayoutDashboard },
@@ -277,6 +280,7 @@ const getReportCatalogCategory = (report) => {
   if (report.category === "Purchase") return "purchase";
   if (report.category === "Stock") return "stock";
   if (report.category === "GST") return "gst";
+  if (report.category === "Customer") return "customer";
 
   if (
     report.name === "Party Ledger" ||
@@ -45187,6 +45191,7 @@ else if (item === 'Import Data From Desktop') {
       creditAmt: account.creditAmt !== undefined && account.creditAmt !== null ? String(account.creditAmt) : "0.00",
       // 🔥 CRITICAL FIX: Set blackListed to the normalized value
       blackListed: normalizedBlackListed,
+      openingTransactions: account.openingTransactions || [],
     });
 
     console.log("📥 EDIT ACCOUNT - Form state after set:", {
@@ -72047,7 +72052,7 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                       <p>{editAccountId ? 'Edit account details' : ''}</p>
                     </div>
                   </div>
-                  <div className="compact-master-actions">
+                  <div className="compact-master-actions account-master-actions">
                     <button
                       type="button"
                       className="compact-btn compact-btn-cancel"
@@ -72056,6 +72061,15 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                       <X size={15} />
                       Cancel
                     </button>
+                    <AccountOpeningTransactions
+                      key={editAccountId || "new-account"}
+                      account={accountForm}
+                      accountId={editAccountId}
+                      onApply={(openingTransactions, totals) => setAccountForm(previous => ({
+                        ...previous, openingTransactions,
+                        ...(totals ? { openingBal: Math.abs(totals.net).toFixed(2), openingBalType: totals.net < 0 ? 'Cr' : 'Dr' } : {}),
+                      }))}
+                    />
                     <button
                       type="submit"
                       form="compact-account-master-form"
@@ -72121,7 +72135,7 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                       <input
                         name="openingDate"
                         type="date"
-                        value={accountForm.openingDate || '2026-04-21'}
+                        value={accountForm.openingDate || ''}
                         onChange={handleAccountInput}
                       />
                     </div>
@@ -72152,12 +72166,18 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
 
                     <div className="compact-field">
                       <label>State</label>
-                      <input
+                      <select
                         name="state"
+                        aria-label="State"
                         value={accountForm.state}
                         onChange={handleAccountInput}
-                        placeholder="State"
-                      />
+                      >
+                        <option value="">Select State</option>
+                        {accountForm.state && !ACCOUNT_STATES.includes(accountForm.state) && (
+                          <option value={accountForm.state}>{accountForm.state}</option>
+                        )}
+                        {ACCOUNT_STATES.map(state => <option key={state} value={state}>{state}</option>)}
+                      </select>
                     </div>
 
                     <div className="compact-field">

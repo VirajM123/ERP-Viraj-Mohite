@@ -1,4 +1,6 @@
 import express from "express";
+import { validateOpeningTransactions } from "../shared/openingTransactions.js";
+import createOpeningBalancesRouter, { saveAccountWithOpenings } from "./openingBalances.js";
 import mongoose from "mongoose";
 import cors from "cors";
 import dotenv from "dotenv";
@@ -1131,6 +1133,22 @@ const applyProductMasterTaxRates = async ({ items, distributorId, firmId, sessio
   }
 };
 
+const openingTransactionSchema = new mongoose.Schema({
+  transactionType: { type: String, enum: ['SAL', 'PUR', 'CRN', 'DRN', 'REC', 'PAY', 'JOU', 'OPB'], required: true },
+  transactionSeries: { type: String, default: '' },
+  transactionNo: { type: String, required: true },
+  date: { type: String, required: true },
+  originalAmount: { type: Number, required: true, min: 0 },
+  balanceAmount: { type: Number, required: true, min: 0 },
+  balanceType: { type: String, enum: ['Dr', 'Cr'], required: true },
+  company: { type: String, default: '' },
+  salesman: { type: String, default: '' },
+  areaName: { type: String, default: '' },
+  adjusted: { type: String, enum: ['Y', 'N'], default: 'N' },
+  appeared: { type: String, default: 'M' },
+  mode: String, sourceType: String, sourceId: String,
+}, { _id: false });
+
 const accountSchema = new mongoose.Schema(
   {
     accountCode: { type: String, required: true, trim: true },
@@ -1150,6 +1168,7 @@ const accountSchema = new mongoose.Schema(
     tinNo: { type: String, default: "" },
     openingBal: { type: Number, default: 0 },
     openingBalType: { type: String, default: "Dr" },
+    openingTransactions: { type: [openingTransactionSchema], default: undefined },
 
     contactPerson: { type: String, default: "" },
     invType: { type: String, default: "TAXABLE" },
@@ -1367,7 +1386,10 @@ godownSchema.index(
   { unique: true }
 );
 
-const Godown = mongoose.model("Mas_Godown", godownSchema);
+// Keep the model name distinct from the `Godown` description field used by
+// sales, quotation and purchase request payloads. Route-level destructuring of
+// that field must never shadow the database model.
+const GodownModel = mongoose.models.Mas_Godown || mongoose.model("Mas_Godown", godownSchema);
 // ============================================================
 // PURCHASE BILL MODEL
 // Fix: ReferenceError: PurchaseBill is not defined
@@ -5963,7 +5985,7 @@ app.get(
       firmId,
       isActive: true,
     })
-      .select('accountCode accountName openingDate address town state pinCode phoneNo mobileNo emailId tinNo openingBal openingBalType contactPerson invType taxOn panNo foodLicense gstNo billToAdd1 tanNo gstType gstDate gstClsDate add2 tcsPercent allowInPurchase drugLicNo drugExpDate creditDays creditBills lockDays creditAmt blackListed lastBillDate lastInvoiceDate areaCode distributorId firmId firmName isActive createdAt updatedAt')
+      .select('accountCode accountName openingDate address town state pinCode phoneNo mobileNo emailId tinNo openingBal openingBalType openingTransactions contactPerson invType taxOn panNo foodLicense gstNo billToAdd1 tanNo gstType gstDate gstClsDate add2 tcsPercent allowInPurchase drugLicNo drugExpDate creditDays creditBills lockDays creditAmt blackListed lastBillDate lastInvoiceDate areaCode distributorId firmId firmName isActive createdAt updatedAt')
       .sort({ createdAt: -1 });
 
     // Get all areas for this firm to populate town dropdown
@@ -6196,6 +6218,7 @@ app.get(
               "tinNo",
               "openingBal",
               "openingBalType",
+              "openingTransactions",
               "contactPerson",
               "invType",
               "taxOn",
@@ -6328,7 +6351,14 @@ app.post(
       }
     }
 
-    const account = await Account.create({
+    if (req.body.openingTransactions !== undefined) {
+      const message = validateOpeningTransactions(req.body.openingTransactions);
+      if (message) return res.status(400).json({ success: false, message });
+    }
+
+    const account = await saveAccountWithOpenings(req, async session => {
+      const [created] = await Account.create([{
+      ...(req.body.openingTransactions !== undefined ? { openingTransactions: req.body.openingTransactions } : {}),
       accountCode,
       accountName,
 
@@ -6378,6 +6408,8 @@ app.post(
       firmId,
       firmName,
       isActive: true,
+    }], { session });
+      return created;
     });
 
     res.status(201).json({
@@ -6392,9 +6424,9 @@ app.post(
         message: "Account code already exists for this firm",
       });
     }
-    res.status(500).json({
+    res.status(error.statusCode || 500).json({
       success: false,
-      message: "Account creation failed",
+      message: error.statusCode ? error.message : "Account creation failed",
       error: error.message,
     });
   }
@@ -8093,12 +8125,12 @@ app.put(
       if (String(SalesmanCode || "").trim() !== req.auth.salesmanCode) throw Object.assign(new Error("Salesmen may only post bills assigned to themselves."), { statusCode: 403 });
     }
 
-    const [salesParty, salesCompany, salesGodown, salesPerson] = await Promise.all([
-      Account.findOne({ distributorId, firmId, accountCode: PartyCode, isActive: { $ne: false } }).session(session).lean(),
-      Company.findOne({ distributorId, firmId, companyCode: CompanyCode, isActive: { $ne: false } }).session(session).lean(),
-      Godown.findOne({ distributorId, firmId, godownCode: GDCode, isActive: { $ne: false } }).session(session).lean(),
-      SalesmanCode ? Salesman.findOne({ distributorId, firmId, salesmanCode: SalesmanCode, isActive: { $ne: false } }).session(session).lean() : Promise.resolve(null),
-    ]);
+    const salesParty = await Account.findOne({ distributorId, firmId, accountCode: PartyCode, isActive: { $ne: false } }).session(session).lean();
+    const salesCompany = await Company.findOne({ distributorId, firmId, companyCode: CompanyCode, isActive: { $ne: false } }).session(session).lean();
+    const salesGodown = await GodownModel.findOne({ distributorId, firmId, godownCode: GDCode, isActive: { $ne: false } }).session(session).lean();
+    const salesPerson = SalesmanCode
+      ? await Salesman.findOne({ distributorId, firmId, salesmanCode: SalesmanCode, isActive: { $ne: false } }).session(session).lean()
+      : null;
     if (!salesParty) throw Object.assign(new Error("Invalid or inactive customer account."), { statusCode: 400 });
     if (!salesCompany) throw Object.assign(new Error("Invalid or inactive company."), { statusCode: 400 });
     if (!salesGodown) throw Object.assign(new Error("Invalid or inactive godown."), { statusCode: 400 });
@@ -9086,7 +9118,7 @@ app.get(
       });
     }
 
-    const godowns = await Godown.find({
+    const godowns = await GodownModel.find({
       distributorId,
       firmId,
       isActive: true,
@@ -9224,7 +9256,7 @@ app.get(
       }
 
       const totalRecords =
-        await Godown.countDocuments(
+        await GodownModel.countDocuments(
           filter
         );
 
@@ -9249,7 +9281,7 @@ app.get(
         limit;
 
       const godowns =
-        await Godown.find(filter)
+        await GodownModel.find(filter)
           .sort({
             godownName: 1,
             godownCode: 1,
@@ -9348,7 +9380,7 @@ app.post(
       });
     }
 
-    const godown = await Godown.create({
+    const godown = await GodownModel.create({
       godownCode,
       godownName,
 
@@ -10172,11 +10204,9 @@ app.post(
     const assignedVouNo = req.body._desktopImport === true && Number(vouNo) > 0
       ? Number(vouNo)
       : await nextDocumentNumber({ distributorId, firmId, documentType: "PURCHASE", series: String(vouSer || "").trim(), documentDate: invoiceDate, session, minimumValue: Number(lastPurchaseForCounter?.vouNo || 0) });
-    const [purchaseSupplier, purchaseCompany, purchaseGodown] = await Promise.all([
-      OtherAccount.findOne({ distributorId, firmId, accountCode: supplierCode, isActive: { $ne: false } }).session(session).lean(),
-      Company.findOne({ distributorId, firmId, isActive: { $ne: false }, $or: [{ companyCode: company }, { companyName: company }] }).session(session).lean(),
-      Godown.findOne({ distributorId, firmId, godownCode: gdCode, isActive: { $ne: false } }).session(session).lean(),
-    ]);
+    const purchaseSupplier = await OtherAccount.findOne({ distributorId, firmId, accountCode: supplierCode, isActive: { $ne: false } }).session(session).lean();
+    const purchaseCompany = await Company.findOne({ distributorId, firmId, isActive: { $ne: false }, $or: [{ companyCode: company }, { companyName: company }] }).session(session).lean();
+    const purchaseGodown = await GodownModel.findOne({ distributorId, firmId, godownCode: gdCode, isActive: { $ne: false } }).session(session).lean();
     if (!purchaseSupplier) throw Object.assign(new Error("Invalid or inactive supplier account."), { statusCode: 400 });
     if (!purchaseCompany) throw Object.assign(new Error("Invalid or inactive company."), { statusCode: 400 });
     if (!purchaseGodown) throw Object.assign(new Error("Invalid or inactive godown."), { statusCode: 400 });
@@ -10789,11 +10819,9 @@ app.put(
       const canonicalPurchase = validateFinancialEnvelope(req.body, items, { type: "purchase" });
       items.splice(0, items.length, ...canonicalPurchase.items);
       Object.assign(req.body, canonicalPurchase);
-      const [purchaseSupplier, purchaseCompany, purchaseGodown] = await Promise.all([
-        OtherAccount.findOne({ distributorId, firmId, accountCode: supplierCode, isActive: { $ne: false } }).session(session).lean(),
-        Company.findOne({ distributorId, firmId, isActive: { $ne: false }, $or: [{ companyCode: company }, { companyName: company }] }).session(session).lean(),
-        Godown.findOne({ distributorId, firmId, godownCode: gdCode, isActive: { $ne: false } }).session(session).lean(),
-      ]);
+      const purchaseSupplier = await OtherAccount.findOne({ distributorId, firmId, accountCode: supplierCode, isActive: { $ne: false } }).session(session).lean();
+      const purchaseCompany = await Company.findOne({ distributorId, firmId, isActive: { $ne: false }, $or: [{ companyCode: company }, { companyName: company }] }).session(session).lean();
+      const purchaseGodown = await GodownModel.findOne({ distributorId, firmId, godownCode: gdCode, isActive: { $ne: false } }).session(session).lean();
       if (!purchaseSupplier) throw Object.assign(new Error("Invalid or inactive supplier account."), { statusCode: 400 });
       if (!purchaseCompany) throw Object.assign(new Error("Invalid or inactive company."), { statusCode: 400 });
       if (!purchaseGodown) throw Object.assign(new Error("Invalid or inactive godown."), { statusCode: 400 });
@@ -12169,12 +12197,12 @@ app.post(
         if (!req.auth.salesmanCode) throw Object.assign(new Error("This user is not assigned to a salesman master."), { statusCode: 403 });
         if (String(SalesmanCode || "").trim() !== req.auth.salesmanCode) throw Object.assign(new Error("Salesmen may only post bills assigned to themselves."), { statusCode: 403 });
       }
-      const [salesParty, salesCompany, salesGodown, salesPerson] = await Promise.all([
-        Account.findOne({ distributorId, firmId, accountCode: PartyCode, isActive: { $ne: false } }).session(session).lean(),
-        Company.findOne({ distributorId, firmId, companyCode: CompanyCode, isActive: { $ne: false } }).session(session).lean(),
-        Godown.findOne({ distributorId, firmId, godownCode: GDCode, isActive: { $ne: false } }).session(session).lean(),
-        SalesmanCode ? Salesman.findOne({ distributorId, firmId, salesmanCode: SalesmanCode, isActive: { $ne: false } }).session(session).lean() : Promise.resolve(null),
-      ]);
+      const salesParty = await Account.findOne({ distributorId, firmId, accountCode: PartyCode, isActive: { $ne: false } }).session(session).lean();
+      const salesCompany = await Company.findOne({ distributorId, firmId, companyCode: CompanyCode, isActive: { $ne: false } }).session(session).lean();
+      const salesGodown = await GodownModel.findOne({ distributorId, firmId, godownCode: GDCode, isActive: { $ne: false } }).session(session).lean();
+      const salesPerson = SalesmanCode
+        ? await Salesman.findOne({ distributorId, firmId, salesmanCode: SalesmanCode, isActive: { $ne: false } }).session(session).lean()
+        : null;
       if (!salesParty) throw Object.assign(new Error("Invalid or inactive customer account."), { statusCode: 400 });
       if (!salesCompany) throw Object.assign(new Error("Invalid or inactive company."), { statusCode: 400 });
       if (!salesGodown) throw Object.assign(new Error("Invalid or inactive godown."), { statusCode: 400 });
@@ -14127,7 +14155,7 @@ const getStockAdjustmentLabel = (adjustmentType) => ({
 
 const validateStockAdjustmentReferences = async ({ distributorId, firmId, gdCode, prodCode, companyCode, session }) => {
   const [godown, product, company] = await Promise.all([
-    Godown.findOne({ distributorId, firmId, godownCode: gdCode, isActive: { $ne: false } }).session(session).lean(),
+    GodownModel.findOne({ distributorId, firmId, godownCode: gdCode, isActive: { $ne: false } }).session(session).lean(),
     Product.findOne({ distributorId, firmId, productCode: prodCode, isActive: { $ne: false } }).session(session).lean(),
     companyCode ? Company.findOne({ distributorId, firmId, companyCode, isActive: { $ne: false } }).session(session).lean() : Promise.resolve(null),
   ]);
@@ -23980,7 +24008,7 @@ app.post(
       const companyCode = String(req.body.CompanyCode || req.body.companyCode || "").trim();
       const [noteSupplier, noteGodown, noteCompany] = await Promise.all([
         OtherAccount.findOne({ distributorId, firmId, accountCode: supplierCode, isActive: { $ne: false } }).session(session).lean(),
-        Godown.findOne({ distributorId, firmId, godownCode: gdCode, isActive: { $ne: false } }).session(session).lean(),
+        GodownModel.findOne({ distributorId, firmId, godownCode: gdCode, isActive: { $ne: false } }).session(session).lean(),
         companyCode ? Company.findOne({ distributorId, firmId, companyCode, isActive: { $ne: false } }).session(session).lean() : Promise.resolve(null),
       ]);
       if (!noteSupplier) throw Object.assign(new Error("Invalid or inactive supplier account."), { statusCode: 400 });
@@ -24301,7 +24329,7 @@ app.put(
       const companyCode = String(req.body.CompanyCode || req.body.companyCode || oldDebitNote.CompanyCode || "").trim();
       const [noteSupplier, noteGodown, noteCompany] = await Promise.all([
         OtherAccount.findOne({ distributorId, firmId, accountCode: supplierCode, isActive: { $ne: false } }).session(session).lean(),
-        Godown.findOne({ distributorId, firmId, godownCode: newGdCode, isActive: { $ne: false } }).session(session).lean(),
+        GodownModel.findOne({ distributorId, firmId, godownCode: newGdCode, isActive: { $ne: false } }).session(session).lean(),
         companyCode ? Company.findOne({ distributorId, firmId, companyCode, isActive: { $ne: false } }).session(session).lean() : Promise.resolve(null),
       ]);
       if (!noteSupplier) throw Object.assign(new Error("Invalid or inactive supplier account."), { statusCode: 400 });
@@ -25518,7 +25546,7 @@ app.post(
       const companyCode = String(req.body.CompanyCode || req.body.companyCode || "").trim();
       const [noteParty, noteGodown, noteCompany] = await Promise.all([
         Account.findOne({ distributorId, firmId, accountCode: partyCode, isActive: { $ne: false } }).session(session).lean(),
-        Godown.findOne({ distributorId, firmId, godownCode: gdCode, isActive: { $ne: false } }).session(session).lean(),
+        GodownModel.findOne({ distributorId, firmId, godownCode: gdCode, isActive: { $ne: false } }).session(session).lean(),
         companyCode ? Company.findOne({ distributorId, firmId, companyCode, isActive: { $ne: false } }).session(session).lean() : Promise.resolve(null),
       ]);
       if (!noteParty) throw Object.assign(new Error("Invalid or inactive customer account."), { statusCode: 400 });
@@ -26213,7 +26241,7 @@ app.put(
       const companyCode = String(req.body.CompanyCode || req.body.companyCode || oldCreditNote.CompanyCode || "").trim();
       const [noteParty, noteGodown, noteCompany] = await Promise.all([
         Account.findOne({ distributorId, firmId, accountCode: partyCode, isActive: { $ne: false } }).session(session).lean(),
-        Godown.findOne({ distributorId, firmId, godownCode: newGdCode, isActive: { $ne: false } }).session(session).lean(),
+        GodownModel.findOne({ distributorId, firmId, godownCode: newGdCode, isActive: { $ne: false } }).session(session).lean(),
         companyCode ? Company.findOne({ distributorId, firmId, companyCode, isActive: { $ne: false } }).session(session).lean() : Promise.resolve(null),
       ]);
       if (!noteParty) throw Object.assign(new Error("Invalid or inactive customer account."), { statusCode: 400 });
@@ -27503,7 +27531,13 @@ app.put(
 
     console.log("📝 Updating account with blackListed:", normalizedBlackListed);
 
+    if (req.body.openingTransactions !== undefined) {
+      const message = validateOpeningTransactions(req.body.openingTransactions);
+      if (message) return res.status(400).json({ success: false, message });
+    }
+
     const updateData = {
+      ...(req.body.openingTransactions !== undefined ? { openingTransactions: req.body.openingTransactions } : {}),
       accountCode: String(req.body.accountCode || "").trim(),
       accountName: String(req.body.accountName || "").trim(),
       openingDate: req.body.openingDate || "",
@@ -27550,11 +27584,11 @@ app.put(
       creditAmt: updateData.creditAmt
     });
 
-    const updatedAccount = await Account.findOneAndUpdate(
+    const updatedAccount = await saveAccountWithOpenings(req, session => Account.findOneAndUpdate(
       { _id: id, distributorId: req.auth.distributorId, firmId: req.auth.firmId },
       updateData,
-      { new: true, runValidators: true }
-    );
+      { new: true, runValidators: true, session }
+    ));
 
     if (!updatedAccount) {
       return res.status(404).json({
@@ -27575,9 +27609,9 @@ app.put(
         message: "Account code already exists for this firm"
       });
     }
-    res.status(500).json({
+    res.status(error.statusCode || 500).json({
       success: false,
-      message: "Account update failed",
+      message: error.statusCode ? error.message : "Account update failed",
       error: error.message
     });
   }
@@ -28044,7 +28078,7 @@ app.put(
       });
     }
 
-    const updatedGodown = await Godown.findOneAndUpdate(
+    const updatedGodown = await GodownModel.findOneAndUpdate(
       { _id: id, distributorId: req.auth.distributorId, firmId: req.auth.firmId },
       {
         godownCode: godownCode.trim(),
@@ -28090,11 +28124,11 @@ app.delete(
   async (req, res) => {
   try {
     const filter = { _id: req.params.id, distributorId: req.auth.distributorId, firmId: req.auth.firmId };
-    const godown = await Godown.findOne(filter);
+    const godown = await GodownModel.findOne(filter);
     if (!godown) return res.status(404).json({ success: false, message: "Godown not found" });
     await assertMasterNotUsed({ connection: mongoose.connection, scope: req.auth, type: "godown",
       record: { _id: godown._id, code: godown.godownCode, name: godown.godownName } });
-    const deletedGodown = await Godown.findOneAndUpdate(
+    const deletedGodown = await GodownModel.findOneAndUpdate(
       filter,
       { $set: { isActive: false } }, { new: true }
     );
@@ -32873,7 +32907,7 @@ suppliers = suppliers.map((supplier) => ({
       .sort('productName');
 
     // Fetch godowns
-    const godowns = await Godown.find({
+    const godowns = await GodownModel.find({
       distributorId,
       firmId,
       ...(companyCode && companyCode !== '' ? { companyCode } : {})
@@ -32915,7 +32949,7 @@ app.get(
           .select("companyCode companyName")
           .sort({ companyName: 1, companyCode: 1 })
           .lean(),
-        Godown.find(masterFilter)
+        GodownModel.find(masterFilter)
           .select("godownCode godownName")
           .sort({ godownName: 1, godownCode: 1 })
           .lean(),
@@ -32961,7 +32995,7 @@ app.get(
       const baseFilter = { distributorId, firmId };
       const [companies, godowns, products] = await Promise.all([
         Company.find({ ...baseFilter, isActive: true }).select("companyCode companyName").lean(),
-        Godown.find({ ...baseFilter, isActive: true }).select("godownCode godownName").lean(),
+        GodownModel.find({ ...baseFilter, isActive: true }).select("godownCode godownName").lean(),
         Product.find({ ...baseFilter, isActive: true }).lean(),
       ]);
 
@@ -33313,7 +33347,7 @@ app.get(
       const filter = { distributorId, firmId, isActive: true };
       const [companies, godowns] = await Promise.all([
         Company.find(filter).select("companyCode companyName").sort({ companyName: 1 }).lean(),
-        Godown.find(filter).select("godownCode godownName").sort({ godownName: 1 }).lean(),
+        GodownModel.find(filter).select("godownCode godownName").sort({ godownName: 1 }).lean(),
       ]);
       return res.json({ success: true, companies, godowns });
     } catch (error) {
@@ -33484,6 +33518,7 @@ app.get(
   }
 );
 
+app.use("/api/opening-transactions", ensureConnection, createOpeningBalancesRouter(securityRouter));
 app.use("/api/p0", ensureConnection, createP0FeaturesRouter(securityRouter));
 
 app.use((req, res) => {

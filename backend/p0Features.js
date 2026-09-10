@@ -3,6 +3,7 @@ import mongoose from "mongoose";
 import { Journal, postBalancedJournal, reverseSourceJournal } from "./accounting.js";
 import { AuditEvent, writeAuditEvent } from "./audit.js";
 import { nextDocumentNumber } from "./counters.js";
+import { openingOutstanding } from './openingBalances.js';
 
 const stockMovementSchema = new mongoose.Schema({
   distributorId: { type: String, required: true }, firmId: { type: String, required: true },
@@ -104,6 +105,8 @@ export const validateCustomerCredit = async ({ req, session }) => {
   if (!account) throw Object.assign(new Error("Invalid or inactive customer account."), { statusCode: 400 });
   const bills = await Sales.find(tenant(req, { PartyCode: account.accountCode, isActive: { $ne: false }, IsBillCancelled: { $ne: true } }))
     .select({ NetAmount: 1, receiptAllocated: 1, DueDate: 1, BillDate: 1 }).session(session).lean();
+  const openings = await openingOutstanding(req, 'Dr', session);
+  bills.push(...openings.filter(row => row.accountCode === account.accountCode).map(row => ({ NetAmount: row.balanceAmount, receiptAllocated: row.allocatedAmount, BillDate: row.date, DueDate: row.postingDate })));
   const outstanding = bills.reduce((sum, bill) => sum + Math.max(0, number(bill.NetAmount) - number(bill.receiptAllocated)), 0);
   const exposure = outstanding + number(body.NetAmount);
   const today = new Date().toISOString().slice(0, 10);
@@ -151,6 +154,23 @@ const financialRows = async (req) => {
 
 export default function createP0FeaturesRouter(securityRouter) {
   const router = express.Router();
+
+  router.get('/reports/party-outstanding', securityRouter.authorizeRequest('REPORTS', 'OUTSTANDING_REPORT', 'view'), async (req, res) => {
+    const [sales, purchases, openings] = await Promise.all([
+      mongoose.models.T_Sal_Header.find(tenant(req, { isActive: { $ne: false }, IsBillCancelled: { $ne: true } })).lean(),
+      mongoose.models.T_Pur_Header.find(tenant(req, { isActive: { $ne: false } })).lean(),
+      openingOutstanding(req),
+    ]);
+    let rows = [
+      ...sales.map(row => ({ accountCode: row.PartyCode, accountName: row.PartyName, source: 'Sales', type: 'SAL', series: row.BillSeries, number: row.BillNo, date: row.BillDate, originalAmount: number(row.NetAmount), broughtForward: '', allocated: number(row.receiptAllocated), debit: Math.max(0, number(row.NetAmount) - number(row.receiptAllocated)), credit: 0 })),
+      ...purchases.map(row => ({ accountCode: row.supplierCode, accountName: row.supplierName, source: 'Purchase', type: 'PUR', series: row.vouSer, number: row.vouNo, date: row.invoiceDate, originalAmount: number(row.netAmt), broughtForward: '', allocated: number(row.paymentAllocated), debit: 0, credit: Math.max(0, number(row.netAmt) - number(row.paymentAllocated)) })),
+      ...openings.map(row => ({ accountCode: row.accountCode, accountName: row.accountName, source: 'Opening', type: row.transactionType, series: row.transactionSeries, number: row.transactionNo, date: row.date, originalAmount: row.originalAmount, broughtForward: row.balanceAmount, allocated: row.allocatedAmount, debit: row.balanceType === 'Dr' ? row.balanceAmount - row.allocatedAmount : 0, credit: row.balanceType === 'Cr' ? row.balanceAmount - row.allocatedAmount : 0 })),
+    ].filter(row => row.debit > 0 || row.credit > 0);
+    const account = String(req.query.account || '').trim().toLowerCase();
+    if (account) rows = rows.filter(row => `${row.accountCode} ${row.accountName}`.toLowerCase().includes(account));
+    rows.sort((a, b) => String(a.accountName).localeCompare(String(b.accountName)) || String(a.date).localeCompare(String(b.date)));
+    res.json({ success: true, rows, summary: { debit: rows.reduce((sum, row) => sum + row.debit, 0), credit: rows.reduce((sum, row) => sum + row.credit, 0) } });
+  });
 
   router.get("/journal-voucher/next-no", securityRouter.authorizeRequest("TRANSACTIONS", "JOURNAL_VOUCHER", "view"), async (req, res) => {
     const last = await JournalVoucher.findOne(tenant(req)).sort({ vNo: -1 }).lean();
@@ -312,6 +332,8 @@ export default function createP0FeaturesRouter(securityRouter) {
     const Account = mongoose.models.Mas_Account, Sales = mongoose.models.T_Sal_Header;
     const accounts = Account ? await Account.find(tenant(req, { isActive: { $ne: false } })).lean() : [];
     const sales = Sales ? await Sales.find(tenant(req, { isActive: { $ne: false }, IsBillCancelled: { $ne: true } })).select({ PartyCode: 1, NetAmount: 1, receiptAllocated: 1, DueDate: 1 }).lean() : [];
+    const openingBills = await openingOutstanding(req, 'Dr');
+    sales.push(...openingBills.map(row => ({ PartyCode: row.accountCode, NetAmount: row.balanceAmount, receiptAllocated: row.allocatedAmount, DueDate: row.postingDate })));
     const today = new Date().toISOString().slice(0, 10);
     const rows = accounts.map((account) => { const bills = sales.filter((bill) => bill.PartyCode === account.accountCode); const outstanding = bills.reduce((sum, bill) => sum + Math.max(0, number(bill.NetAmount) - number(bill.receiptAllocated)), 0); return { accountCode: account.accountCode, accountName: account.accountName, blackListed: account.blackListed, creditLimit: number(account.creditAmt), creditDays: number(account.creditDays), maximumBills: number(account.creditBills), pendingBills: bills.filter((bill) => number(bill.NetAmount) - number(bill.receiptAllocated) > 0).length, outstanding, overdue: bills.some((bill) => number(bill.NetAmount) - number(bill.receiptAllocated) > 0 && String(bill.DueDate || "") < today) ? "YES" : "NO" }; });
     res.json({ success: true, rows });
@@ -325,8 +347,9 @@ export default function createP0FeaturesRouter(securityRouter) {
       Stock ? Stock.find(tenant(req)).lean() : [],
     ]);
     const totalSales = sales.reduce((s, row) => s + number(row.NetAmount), 0), totalPurchase = purchases.reduce((s, row) => s + number(row.netAmt), 0), collection = receipts.reduce((s, row) => s + number(row.receiptAmount), 0);
-    const outstanding = sales.reduce((s, row) => s + Math.max(0, number(row.NetAmount) - number(row.receiptAllocated)), 0), today = new Date().toISOString().slice(0, 10);
-    const overdue = sales.filter((row) => String(row.DueDate || "") < today).reduce((s, row) => s + Math.max(0, number(row.NetAmount) - number(row.receiptAllocated)), 0);
+    const openingBills = await openingOutstanding(req, 'Dr');
+    const outstanding = sales.reduce((s, row) => s + Math.max(0, number(row.NetAmount) - number(row.receiptAllocated)), 0) + openingBills.reduce((sum, row) => sum + row.balanceAmount - row.allocatedAmount, 0), today = new Date().toISOString().slice(0, 10);
+    const overdue = sales.filter((row) => String(row.DueDate || "") < today).reduce((s, row) => s + Math.max(0, number(row.NetAmount) - number(row.receiptAllocated)), 0) + openingBills.filter(row => row.postingDate < today).reduce((sum, row) => sum + row.balanceAmount - row.allocatedAmount, 0);
     const stockValue = stock.reduce((s, row) => s + number(row.Qty) * number(row.PRate), 0), lowStock = stock.filter((row) => number(row.Qty) > 0 && number(row.Qty) <= 10).length;
     const topProducts = Object.values(sales.flatMap((row) => row.items || []).reduce((map, item) => { const key = itemCode(item) || itemName(item) || "Unknown"; map[key] ||= { code: key, name: itemName(item) || key, quantity: 0, amount: 0 }; map[key].quantity += itemQty(item); map[key].amount += number(item.netAmount ?? item.NetAmount ?? item.amount ?? item.grossAmount); return map; }, {})).sort((a, b) => b.amount - a.amount).slice(0, 5);
     const salesTrend = Object.values(sales.reduce((map, row) => { const key = String(row.BillDate || "No date"); map[key] ||= { label: key, sales: 0, collections: 0 }; map[key].sales += number(row.NetAmount); return map; }, {})).sort((a, b) => a.label.localeCompare(b.label)).slice(-30);

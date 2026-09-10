@@ -133,6 +133,7 @@ const REPORT_INFORMATION = {
   "GSTR1 Report": { title: "GSTR1 Report", category: "GST Report", description: "Outward supply data ready for Excel, JSON and CSV export.", icon: FileBarChart },
   "General Ledger": { title: "General Ledger", category: "Financial Report", description: "Posted journal entries by account.", icon: BookOpen },
   "Party Ledger": { title: "Party Ledger", category: "Financial Report", description: "Customer or supplier account ledger.", icon: Users },
+  "Party Outstanding Report": { title: "Party Outstanding Report", category: "Customer Report", description: "Current unpaid invoices and brought-forward balances, after receipts and payments.", icon: Users },
   "Trial Balance": { title: "Trial Balance", category: "Financial Report", description: "Debit, credit and closing balance by account.", icon: BarChart3 },
   "Cash Book": { title: "Cash Book", category: "Financial Report", description: "Posted cash account movements.", icon: FileText },
   "Bank Book": { title: "Bank Book", category: "Financial Report", description: "Posted bank account movements.", icon: Building2 },
@@ -153,6 +154,7 @@ const P0_REPORT_ENDPOINTS = {
   "Product Ledger": "/api/reports/product-ledger",
   "General Ledger": "/p0/reports/financial/general-ledger",
   "Party Ledger": "/p0/reports/financial/party-ledger",
+  "Party Outstanding Report": "/p0/reports/party-outstanding",
   "Trial Balance": "/p0/reports/financial/trial-balance",
   "Cash Book": "/p0/reports/financial/cash-book",
   "Bank Book": "/p0/reports/financial/bank-book",
@@ -6287,10 +6289,10 @@ const Report = ({
   }
 
   if (isP0Report) {
-    const showAccount = ["General Ledger", "Party Ledger"].includes(selectedReport);
+    const showAccount = ["General Ledger", "Party Ledger", "Party Outstanding Report"].includes(selectedReport);
     const showProduct = ["Product Ledger", "Stock Movement Ledger"].includes(selectedReport);
     const isStockDataReport = ["Current Stock Report", "As On Date Stock Report", "Damage Stock Report", "Product Ledger", "Stock Movement Ledger"].includes(selectedReport);
-    const showDateRange = !["Current Stock Report", "As On Date Stock Report"].includes(selectedReport);
+    const showDateRange = !["Current Stock Report", "As On Date Stock Report", "Party Outstanding Report"].includes(selectedReport);
     const isCurrentStock = selectedReport === "Current Stock Report";
     const isAsOnDateStock = selectedReport === "As On Date Stock Report";
     const isDamageStock = selectedReport === "Damage Stock Report";

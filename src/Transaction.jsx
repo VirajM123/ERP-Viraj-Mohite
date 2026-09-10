@@ -132,6 +132,21 @@ const collectionVoucherPermission = usePermission("TRANSACTIONS", "COLLECTION_VO
       [menu]: false
     }));
   };
+  const [openingReceiptBills, setOpeningReceiptBills] = useState([]);
+  const [openingPaymentBills, setOpeningPaymentBills] = useState([]);
+  const [openingBillsError, setOpeningBillsError] = useState('');
+  const loadOpeningBills = useCallback(async () => {
+    const kind = activeTransaction === 'Receipt' ? 'receipt' : activeTransaction === 'Payment' ? 'payment' : '';
+    if (!kind) return;
+    try {
+      const response = await secureFetch(API_URL + '/transaction/' + kind + '/opening-bills');
+      const result = await response.json();
+      if (!response.ok || !result.success) throw new Error(result.message || 'Opening balances could not be loaded.');
+      (kind === 'receipt' ? setOpeningReceiptBills : setOpeningPaymentBills)(result.data || []);
+      setOpeningBillsError('');
+    } catch (error) { setOpeningBillsError(error.message); }
+  }, [activeTransaction]);
+  useEffect(() => { loadOpeningBills(); }, [loadOpeningBills, transactionFormMode]);
   const [pendingBillsApi, setPendingBillsApi] =
     useState([]);
   // const [salesmanBills, setSalesmanBills] = useState([]);
@@ -2392,6 +2407,7 @@ if (menu === "PDC Docket") {
       const receiptItems = receipt.receiptBills || receipt.items || [];
 
       const matchedItems = receiptItems.filter(i =>
+        !i.openingTransactionId &&
         clean(i.trnSeries) === clean(billSeries) &&
         clean(i.trnNo) === clean(billNo)
       );
@@ -2407,7 +2423,7 @@ if (menu === "PDC Docket") {
   };
   console.log("salesInvoices =", salesInvoices);
 
-  const pendingBills = (salesInvoices || [])
+  const regularPendingBills = (salesInvoices || [])
     .map((invoice, index) => {
       const header = invoice.header || {};
       const summary = invoice.summary || {};
@@ -2540,7 +2556,10 @@ if (menu === "PDC Docket") {
     })
     .filter((bill) => bill.billNo && bill.balance > 0);
 
+  const pendingBills = [...regularPendingBills, ...openingReceiptBills];
+
   const pendingPurchaseBills = [
+    ...openingPaymentBills,
     { party: "SURYAJUG CO OP BANK", billSeries: "PUR", billNo: "PUR-001", amount: 50000, adjusted: 0, balance: 50000 },
     { party: "SURYAJUG CO OP BANK", billSeries: "PUR", billNo: "PUR-002", amount: 25000, adjusted: 5000, balance: 20000 },
     { party: "ABC INDUSTRIES", billSeries: "PUR", billNo: "PUR-003", amount: 15000, adjusted: 0, balance: 15000 }
@@ -2782,6 +2801,7 @@ if (menu === "PDC Docket") {
         id: Date.now() + index,
         srNo: index + 1,
         trnSeries: bill.billSeries,
+        openingTransactionId: bill.openingTransactionId,
         trnNo: bill.billNo,
         trnDate: bill.trnDate,
         amount: bill.amount,
@@ -3280,6 +3300,7 @@ const selectParty = (
           srNo:
             index + 1,
 
+          openingTransactionId: bill.openingTransactionId,
           trnSeries:
             bill.billSeries ||
             "",
@@ -3398,6 +3419,7 @@ const selectParty = (
           })
           .map((item) => {
             return {
+              openingTransactionId: item.openingTransactionId,
               trnSeries:
                 String(
                   item.trnSeries ||
@@ -3634,6 +3656,7 @@ const selectParty = (
       resetReceiptForm();
 
       await loadReceipts();
+      await loadOpeningBills();
 
       setReceiptListCurrentPage(1);
 
@@ -4482,7 +4505,8 @@ const resetJournalForm = () => {
       setPaymentPartySuggestions([]);
       const filteredBills = pendingPurchaseBills.filter(bill => String(bill.party).toLowerCase() === String(selectedParty).toLowerCase());
       const billRows = filteredBills.map((bill, index) => ({
-        id: Date.now() + index, srNo: index + 1, trn: "PUR", trnSeries: bill.billSeries,
+        id: Date.now() + index, srNo: index + 1, trn: bill.transactionType || "PUR", trnSeries: bill.billSeries,
+        openingTransactionId: bill.openingTransactionId,
         voucherNo: bill.billNo, amount: bill.amount, adjustedAmt: bill.adjusted || 0,
         balanceAmt: bill.balance, newAdjusted: bill.balance
       }));
@@ -4536,6 +4560,7 @@ const resetJournalForm = () => {
         alert(editPaymentId ? "Payment corrected and reposted successfully." : "Payment Saved Successfully");
         setEditPaymentId(null);
         paymentIdempotencyKey.current = globalThis.crypto?.randomUUID?.() || `payment-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+        await loadOpeningBills();
         resetPaymentForm();
         openTransactionList("Payment");
       } catch (error) {
@@ -4556,6 +4581,7 @@ const resetJournalForm = () => {
     });
     const allocations = payment.allocations || payment.items || [];
     setPaymentItems(allocations.length ? allocations.map((item, index) => ({
+      openingTransactionId: item.openingTransactionId,
       id: item.purchaseId || `${Date.now()}-${index}`, srNo: index + 1, trn: item.trn || "PUR",
       trnSeries: item.trnSeries || "", voucherNo: item.voucherNo || "", amount: item.amount || "",
       adjustedAmt: item.previouslyAdjusted ?? item.adjustedAmt ?? "", balanceAmt: Math.max(0, Number(item.amount || 0) - Number(item.previouslyAdjusted || 0) - Number(item.allocatedAmount || item.newAdjusted || 0)).toFixed(2),
@@ -4583,6 +4609,7 @@ const resetJournalForm = () => {
       const result = await response.json();
       if (!response.ok || result.success === false) throw new Error(result.message || "Payment cancellation failed.");
       dispatch({ type: "DELETE_PAYMENT", payload: id });
+      await loadOpeningBills();
       alert(result.message || "Payment cancelled successfully.");
     } catch (error) {
       alert(error.message || "Payment cancellation failed.");
@@ -18892,6 +18919,7 @@ setTransactionFormMode((prev) => ({
         }
       }}
     >
+      {openingBillsError && ['Receipt', 'Payment'].includes(activeTransaction) && <div role="alert" style={{ color: '#b91c1c', padding: 12 }}>{openingBillsError} <button type="button" onClick={loadOpeningBills}>Retry loading opening balances</button></div>}
       {isFormReadOnly && (
         <div className="project-read-only-banner" role="status">
           <Eye size={15} />
