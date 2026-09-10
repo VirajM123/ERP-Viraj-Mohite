@@ -10479,7 +10479,7 @@ app.post(
       });
     }
 
-    res.status(500).json({
+    res.status(error.statusCode === 400 ? 400 : 500).json({
       success: false,
       message: error.message || "Purchase save failed",
     });
@@ -10925,7 +10925,7 @@ app.put(
         });
       }
 
-      res.status(500).json({
+      res.status(error.statusCode === 400 ? 400 : 500).json({
         success: false,
         message: error.message || "Purchase update failed",
       });
