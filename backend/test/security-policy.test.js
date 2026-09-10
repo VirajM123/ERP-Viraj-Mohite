@@ -111,6 +111,7 @@ test("uncaught API errors and malformed JSON have safe responses", () => {
     [new Error("database path and secret details"), 500],
     [{ type: "entity.parse.failed", body: "secret request body" }, 400],
     [{ type: "entity.too.large" }, 413],
+    [{ code: "CORS_ORIGIN_DENIED" }, 403],
     [{ code: 11000, keyValue: { password: "secret" } }, 409],
   ]) {
     const res = response();

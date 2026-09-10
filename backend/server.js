@@ -35,6 +35,8 @@ import createServiceRouter from "./service.js";
 import createProductMappingRouter from "./productMapping.js";
 import { assertMasterNotUsed } from "./masterUsageGuard.js";
 import { apiErrorHandler } from "./apiError.js";
+import { buildAllowedOrigins, corsOriginAllowed } from "./corsOrigins.js";
+import { commitTransactionReliably } from "./transactionCommit.js";
 dotenv.config();
 
 assertSecurityConfiguration();
@@ -42,13 +44,16 @@ assertSecurityConfiguration();
 const app = express();
 if (process.env.TRUST_PROXY) app.set("trust proxy", process.env.TRUST_PROXY === "true" ? 1 : process.env.TRUST_PROXY);
 
-const allowedOrigins = String(process.env.CORS_ORIGINS || "http://localhost:5173")
-  .split(",").map((value) => value.trim()).filter(Boolean);
+const allowedOrigins = buildAllowedOrigins(
+  process.env.CORS_ORIGINS || "http://localhost:5173"
+);
 app.disable("x-powered-by");
 app.use(cors({
   origin(origin, callback) {
-    if (!origin || allowedOrigins.includes(origin)) return callback(null, true);
-    return callback(new Error("Origin is not allowed by CORS policy."));
+    if (corsOriginAllowed(origin, allowedOrigins)) return callback(null, true);
+    const error = new Error("Origin is not allowed by CORS policy.");
+    error.code = "CORS_ORIGIN_DENIED";
+    return callback(error);
   },
   credentials: false,
 }));
@@ -8702,7 +8707,7 @@ synchronizedBill.Items =
       replaceExisting: true,
     });
 
-    await session.commitTransaction();
+    await commitTransactionReliably(session);
 
     const savedUpdatedBill =
       updatedBill?.toObject
@@ -8745,7 +8750,7 @@ loadQuantityUpdated:
         ),
     });
   } catch (error) {
-    await session.abortTransaction();
+    if (session.inTransaction()) await session.abortTransaction();
 
     const duplicateKeyText = `${JSON.stringify(
       error.keyPattern || {}
@@ -10450,7 +10455,7 @@ app.post(
      
     }
 
-    await session.commitTransaction();
+    await commitTransactionReliably(session);
 
     const nextVouNo = assignedVouNo + 1;
 
@@ -10463,7 +10468,9 @@ app.post(
       nextVouNo,
     });
   } catch (error) {
-    await session.abortTransaction();
+    if (session.inTransaction()) await session.abortTransaction();
+
+    console.error("Purchase save error:", error);
 
     if (error.code === 11000) {
       return res.status(409).json({
@@ -10765,10 +10772,12 @@ app.post(
       purchase.desktopImportStockKeys = repairedStockKeys;
       await purchase.save({ session });
       await writeAuditEvent(req, { entityType: "PURCHASE", entityId: String(purchase._id), action: "DESKTOP_IMPORT_RECONCILE", after: purchase.toObject() }, session);
-      await session.commitTransaction();
+      await commitTransactionReliably(session);
       res.json({ success: true, message: `Purchase ${vouSer}-${vouNo} checked and repaired without duplicating it.`, data: { header: purchase } });
     } catch (error) {
-      await session.abortTransaction();
+      if (session.inTransaction()) await session.abortTransaction();
+
+      console.error("Desktop purchase reconciliation error:", error);
       res.status(error.statusCode || 500).json({ success: false, message: error.message || "Desktop purchase repair failed" });
     } finally {
       session.endSession();
@@ -10897,7 +10906,7 @@ app.put(
         { accountCode: String(supplierCode || supplierName), debit: 0, credit: Number(req.body.netAmt || 0), narration: narration || "Purchase edit" },
       ] }, session);
       await writeAuditEvent(req, { entityType: "PURCHASE", entityId: String(id), action: "UPDATE", before: oldPurchase.toObject(), after: updatedPurchase.toObject() }, session);
-      await session.commitTransaction();
+      await commitTransactionReliably(session);
 
       res.json({
         success: true,
@@ -10905,7 +10914,9 @@ app.put(
         data: { header: updatedPurchase },
       });
     } catch (error) {
-      await session.abortTransaction();
+      if (session.inTransaction()) await session.abortTransaction();
+
+      console.error("Purchase update error:", error);
 
       if (error.code === 11000) {
         return res.status(409).json({
@@ -12517,8 +12528,7 @@ app.post(
          2. Sales Bill creation
       ===================================================== */
 
-      await session
-        .commitTransaction();
+      await commitTransactionReliably(session);
 
       const savedBill =
         header[0]?.toObject
@@ -14361,7 +14371,7 @@ app.put(
       reason: replacementAdjustment.Narration || "Stock adjustment corrected",
       before: originalAdjustment, after: replacementAdjustment,
     }, session);
-    await session.commitTransaction();
+    await commitTransactionReliably(session);
 
     return res.json({
       success: true,
@@ -14439,7 +14449,7 @@ app.delete(
       entityType: "STOCK_ADJUSTMENT", entityId: String(adjustment._id), action: "CANCEL",
       reason: cancellationReason, before: adjustment, after: cancelled.toObject(),
     }, session);
-    await session.commitTransaction();
+    await commitTransactionReliably(session);
 
     return res.json({ success: true, message: "Stock adjustment cancelled and stock balance restored." });
   } catch (error) {
@@ -14625,7 +14635,7 @@ app.post(
       entityType: "STOCK_ADJUSTMENT", entityId: String(adjustment._id), action: "CREATE",
       reason: adjustment.Narration || getStockAdjustmentLabel(adjustmentType), after: adjustment.toObject(),
     }, session);
-    await session.commitTransaction();
+    await commitTransactionReliably(session);
 
     return res.json({
       success: true,
@@ -16959,7 +16969,7 @@ app.put(
         }
       );
 
-      await session.commitTransaction();
+      await commitTransactionReliably(session);
 
       res.json({
         success: true,
@@ -18380,7 +18390,7 @@ app.post(
         }
       );
 
-      await session.commitTransaction();
+      await commitTransactionReliably(session);
 
       res.status(201).json({
         success: true,
@@ -19772,7 +19782,7 @@ app.post(
         }
       );
 
-      await session.commitTransaction();
+      await commitTransactionReliably(session);
 
       return res.json({
         success: true,
@@ -20838,7 +20848,7 @@ app.post(
         session,
       });
 
-      await session.commitTransaction();
+      await commitTransactionReliably(session);
 
       return res.json({
         success: true,
@@ -22035,7 +22045,7 @@ app.post("/api/receipt", ensureConnection, securityRouter.authorizeRequest("TRAN
       receiptBills: [{ trnSeries: billSeries, trnNo: billNo, trnDate: salesBill.BillDate || "", amount: receiptAmount, adjustAmt: 0, balanceAmt: Number(salesBill.NetAmount || 0) - receiptAmount, nowAdjust: receiptAmount, remark: req.body.narration || "" }],
     }], { session });
     await writeAuditEvent(req, { entityType: "RECEIPT", entityId: String(receipt._id), action: "CREATE", after: { billSeries, billNo, receiptSeries, rno, receiptAmount } }, session);
-    await session.commitTransaction();
+    await commitTransactionReliably(session);
     res.status(201).json({ success: true, message: "Receipt saved successfully", receipt });
   } catch (error) {
     if (session.inTransaction()) await session.abortTransaction();
@@ -22244,7 +22254,7 @@ app.put(
       });
     }
     await cancelSalesBill({ req, session, bill, reason: cancelReason });
-    await session.commitTransaction();
+    await commitTransactionReliably(session);
 
     res.json({
       success: true,
@@ -24187,7 +24197,7 @@ app.post(
       ] }, session);
       await writeAuditEvent(req, { entityType: "DEBIT_NOTE", entityId: String(created[0]._id), action: "CREATE", after: created[0].toObject() }, session);
 
-      await session.commitTransaction();
+      await commitTransactionReliably(session);
 
       return res.status(201).json({
         success:
@@ -24499,7 +24509,7 @@ app.put(
       ] }, session);
       await writeAuditEvent(req, { entityType: "DEBIT_NOTE", entityId: String(id), action: "EDIT", before: oldDebitNote.toObject(), after: updated.toObject() }, session);
 
-      await session.commitTransaction();
+      await commitTransactionReliably(session);
 
       return res.json({
         success:
@@ -24611,7 +24621,7 @@ app.delete(
       await reverseSourceJournal({ distributorId, firmId, sourceType: "DEBIT_NOTE", sourceId: id, createdBy: req.auth.userId, documentDate: businessDateIST(), reason: "Debit note cancellation" }, session);
       await writeAuditEvent(req, { entityType: "DEBIT_NOTE", entityId: id, action: "CANCEL", before: debitNote.toObject() }, session);
 
-      await session.commitTransaction();
+      await commitTransactionReliably(session);
 
       return res.json({
         success:
@@ -25933,7 +25943,7 @@ app.post(
       ] }, session);
       await writeAuditEvent(req, { entityType: "CREDIT_NOTE", entityId: String(createdCreditNotes[0]._id), action: "CREATE", after: createdCreditNotes[0].toObject() }, session);
 
-      await session.commitTransaction();
+      await commitTransactionReliably(session);
 
       return res.status(201).json({
         success: true,
@@ -26502,7 +26512,7 @@ app.put(
       ] }, session);
       await writeAuditEvent(req, { entityType: "CREDIT_NOTE", entityId: String(id), action: "EDIT", before: oldCreditNote.toObject(), after: updatedCreditNote.toObject() }, session);
 
-      await session.commitTransaction();
+      await commitTransactionReliably(session);
 
       return res.json({
         success:
@@ -28261,7 +28271,7 @@ app.delete(
     if (!salesBill) throw Object.assign(new Error("Sales bill not found"), { statusCode: 404 });
     const cancelled = await cancelSalesBill({ req, session, bill: salesBill, reason: req.body.reason || "Cancelled from sales list" });
 
-    await session.commitTransaction();
+    await commitTransactionReliably(session);
 
     res.json({
       success: true,
@@ -29060,7 +29070,7 @@ app.delete(
     });
     await writeAuditEvent(req, { entityType: "PURCHASE", entityId: String(id), action: "CANCEL", reason: req.body.reason || "Deleted by user", before: purchase.toObject(), after: cancelledPurchase.toObject() }, session);
 
-    await session.commitTransaction();
+    await commitTransactionReliably(session);
 
     res.json({
       success: true,
@@ -29306,7 +29316,7 @@ app.delete(
         );
       }
 
-      await session.commitTransaction();
+      await commitTransactionReliably(session);
 
       return res.json({
         success:
@@ -29429,7 +29439,7 @@ app.delete(
     await LoadHeader.findOneAndUpdate({ _id: id, DistributorId: distributorId, FirmId: firmId }, { $set: { IsCancelled: true, CancelledAt: new Date(), CancelledBy: req.auth.userId } }, { session });
     await writeAuditEvent(req, { entityType: "LOAD", entityId: String(id), action: "CANCEL", before: load.toObject() }, session);
 
-    await session.commitTransaction();
+    await commitTransactionReliably(session);
 
     res.json({
       success: true,
