@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import vm from "node:vm";
 import { validateFinancialEnvelope } from "../financialValidation.js";
+import { purchaseSupplierFilter } from "../purchaseSupplier.js";
 
 const source = (await readFile(new URL("../server.js", import.meta.url), "utf8")).replace(/\r\n/g, "\n");
 
@@ -23,7 +24,7 @@ async function rejectedPurchase(method, missingMaster, databaseFailure = false) 
     process: { env: { NODE_ENV: "production" } },
     mongoose: { startSession: async () => session },
     ensureConnection() {}, securityRouter: { authorizeRequest() {} },
-    applyProductMasterTaxRates: async () => {}, validateFinancialEnvelope,
+    applyProductMasterTaxRates: async () => {}, validateFinancialEnvelope, purchaseSupplierFilter,
     PurchaseHeader: { findOne: () => query(null) }, nextDocumentNumber: async () => 1,
     OtherAccount: master("supplier"), Company: master("company"), GodownModel: master("godown"),
     console: { error() {} },

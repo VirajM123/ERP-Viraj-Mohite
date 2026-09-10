@@ -8,6 +8,7 @@ import './Dashboard.css';
 import totalSolutionLogo from "./assets/images/Totalsolution-sidebar-dark.png";
 import { businessDateIST } from "./utils/businessDate";
 import { resolveInvoiceItemHsn } from "./utils/invoiceHsn";
+import { findPurchaseSupplier, purchaseSupplierValue } from "./utils/purchaseSupplier";
 import {
   getSessionExpiresAt,
   startSession,
@@ -26587,11 +26588,7 @@ ALLOW CHANGE STAR AMOUNT — FINAL SAVE PROTECTION
         .grossAmountManuallyEdited = false;
     }
 
-    const supplierAccount = otherAccounts.find(
-      (acc) =>
-        acc.accountName === purchaseFormData.supplier ||
-        acc.accountCode === purchaseFormData.supplier
-    );
+    const supplierAccount = findPurchaseSupplier(otherAccounts, purchaseFormData.supplier);
 
     const invType = (supplierAccount?.invType || 'TAXABLE').toUpperCase();
     const taxOn = (supplierAccount?.taxOn || 'SRATE').toUpperCase();
@@ -26737,14 +26734,7 @@ ALLOW CHANGE STAR AMOUNT — FINAL SAVE PROTECTION
       let totalIgst = 0;
       let totalAmount = 0;
 
-      const supplierAccount =
-        otherAccounts.find(
-          (account) =>
-            account.accountName ===
-            purchaseFormData.supplier ||
-            account.accountCode ===
-            purchaseFormData.supplier
-        );
+      const supplierAccount = findPurchaseSupplier(otherAccounts, purchaseFormData.supplier);
 
       const invType = String(
         supplierAccount?.invType || "TAXABLE"
@@ -28048,11 +28038,11 @@ ALLOW CHANGE STAR AMOUNT — FINAL SAVE PROTECTION
         return;
       }
 
-      const selectedSupplier = otherAccounts.find(
-        (acc) =>
-          acc.accountName === purchaseFormData.supplier ||
-          acc.accountCode === purchaseFormData.supplier
-      );
+      const selectedSupplier = findPurchaseSupplier(otherAccounts, purchaseFormData.supplier);
+      if (!selectedSupplier || !String(selectedSupplier.accountCode ?? "").trim()) {
+        alert("Please select a supplier with a valid account code from Other Account Master.");
+        return;
+      }
 
       const selectedGodown = godowns.find(
         (g) =>
@@ -28080,8 +28070,9 @@ ALLOW CHANGE STAR AMOUNT — FINAL SAVE PROTECTION
           ? "MIX"
           : selectedCompany?._id || selectedCompany?.id || "",
 
-        supplierCode: selectedSupplier?.accountCode || "",
-        supplierName: purchaseFormData.supplier,
+        supplierId: selectedSupplier._id || selectedSupplier.id || undefined,
+        supplierCode: selectedSupplier.accountCode,
+        supplierName: selectedSupplier.accountName,
 
         gdCode: selectedGodown?.code || selectedGodown?.godownCode || purchaseFormData.storageLocation,
         godownName: selectedGodown?.name || selectedGodown?.godownName || purchaseFormData.storageLocation,
@@ -58692,7 +58683,7 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
     }
     else if (type === 'Purchase') {
      setPurchaseFormData({
-        supplier: item.supplierName || item.partyName || item.supplier || '',
+        supplier: item.supplierCode || item.supplierName || item.partyName || item.supplier || '',
         company: item.company || item.companyName || '',
         storageLocation: item.godownName || item.storageLocation || item.branchName || '',
         invoiceDate: item.invoiceDate || item.billDate || businessDateIST(),
@@ -77623,11 +77614,11 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                       {/* 6. Supplier */}
                       <div className="labeled-input">
                         <label>Supplier *</label>
-                        <select name="supplier" className="erp-select" value={purchaseFormData.supplier} onChange={handlePurchaseInputChange} required>
+                        <select name="supplier" className="erp-select" value={purchaseSupplierValue(findPurchaseSupplier(otherAccounts, purchaseFormData.supplier))} onChange={handlePurchaseInputChange} required>
                           <option value="">Select Supplier</option>
                           {otherAccounts
-                            .filter(acc => acc.accountGroup === 'SUNDRY CREDITORS')
-                            .map(acc => <option key={acc.id || acc._id} value={acc.accountName}>{acc.accountName}</option>)}
+                            .filter(acc => acc.accountGroup === 'SUNDRY CREDITORS' && acc.isActive !== false)
+                            .map(acc => <option key={acc.id || acc._id} value={purchaseSupplierValue(acc)}>{acc.accountName}</option>)}
                         </select>
                       </div>
 

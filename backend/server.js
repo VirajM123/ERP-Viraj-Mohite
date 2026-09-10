@@ -37,6 +37,7 @@ import { assertMasterNotUsed } from "./masterUsageGuard.js";
 import { apiErrorHandler } from "./apiError.js";
 import { buildAllowedOrigins, corsOriginAllowed } from "./corsOrigins.js";
 import { commitTransactionReliably } from "./transactionCommit.js";
+import { purchaseSupplierFilter } from "./purchaseSupplier.js";
 dotenv.config();
 
 assertSecurityConfiguration();
@@ -10159,7 +10160,7 @@ app.post(
   try {
     session.startTransaction();
 
-    const {
+    let {
       distributorId,
       firmId,
       firmName,
@@ -10205,12 +10206,17 @@ app.post(
     const assignedVouNo = req.body._desktopImport === true && Number(vouNo) > 0
       ? Number(vouNo)
       : await nextDocumentNumber({ distributorId, firmId, documentType: "PURCHASE", series: String(vouSer || "").trim(), documentDate: invoiceDate, session, minimumValue: Number(lastPurchaseForCounter?.vouNo || 0) });
-    const purchaseSupplier = await OtherAccount.findOne({ distributorId, firmId, accountCode: supplierCode, isActive: { $ne: false } }).session(session).lean();
+    const purchaseSupplier = await OtherAccount.findOne(purchaseSupplierFilter(req.body)).session(session).lean();
     const purchaseCompany = await Company.findOne({ distributorId, firmId, isActive: { $ne: false }, $or: [{ companyCode: company }, { companyName: company }] }).session(session).lean();
     const purchaseGodown = await GodownModel.findOne({ distributorId, firmId, godownCode: gdCode, isActive: { $ne: false } }).session(session).lean();
     if (!purchaseSupplier) throw Object.assign(new Error("Invalid or inactive supplier account."), { statusCode: 400 });
     if (!purchaseCompany) throw Object.assign(new Error("Invalid or inactive company."), { statusCode: 400 });
     if (!purchaseGodown) throw Object.assign(new Error("Invalid or inactive godown."), { statusCode: 400 });
+    if (req.body.supplierId) {
+      supplierCode = purchaseSupplier.accountCode;
+      supplierName = purchaseSupplier.accountName;
+      if (!String(supplierCode ?? "").trim()) throw Object.assign(new Error("The selected supplier has no account code. Please update Other Account Master."), { statusCode: 400 });
+    }
     const purchaseSnapshot = { capturedAt: new Date(), supplier: purchaseSupplier ? { code: purchaseSupplier.accountCode, name: purchaseSupplier.accountName, address: purchaseSupplier.address || "", gstin: purchaseSupplier.gstNo || "", state: purchaseSupplier.state || "", pinCode: purchaseSupplier.pinCode || "" } : { code: supplierCode || "", name: supplierName || "" }, company: purchaseCompany ? { code: purchaseCompany.companyCode, name: purchaseCompany.companyName, address: purchaseCompany.companyAddress || "", gstin: purchaseCompany.gstNo || "", state: purchaseCompany.state || "" } : null, products: items.map((item) => ({ code: item.productCode || item.code || "", name: item.productName || "", hsn: item.hsn || "", gstRate: Number(item.gst || 0), mrp: Number(item.mrp || 0), rate: Number(item.purRate ?? item.purchaseRate ?? 0) })) };
 
     const header = await PurchaseHeader.create(
@@ -10796,7 +10802,7 @@ app.put(
       session.startTransaction();
 
       const { id } = req.params;
-      const {
+      let {
         distributorId,
         firmId,
         firmName,
@@ -10824,12 +10830,17 @@ app.put(
       const canonicalPurchase = validateFinancialEnvelope(req.body, items, { type: "purchase" });
       items.splice(0, items.length, ...canonicalPurchase.items);
       Object.assign(req.body, canonicalPurchase);
-      const purchaseSupplier = await OtherAccount.findOne({ distributorId, firmId, accountCode: supplierCode, isActive: { $ne: false } }).session(session).lean();
+      const purchaseSupplier = await OtherAccount.findOne(purchaseSupplierFilter(req.body)).session(session).lean();
       const purchaseCompany = await Company.findOne({ distributorId, firmId, isActive: { $ne: false }, $or: [{ companyCode: company }, { companyName: company }] }).session(session).lean();
       const purchaseGodown = await GodownModel.findOne({ distributorId, firmId, godownCode: gdCode, isActive: { $ne: false } }).session(session).lean();
       if (!purchaseSupplier) throw Object.assign(new Error("Invalid or inactive supplier account."), { statusCode: 400 });
       if (!purchaseCompany) throw Object.assign(new Error("Invalid or inactive company."), { statusCode: 400 });
       if (!purchaseGodown) throw Object.assign(new Error("Invalid or inactive godown."), { statusCode: 400 });
+      if (req.body.supplierId) {
+        supplierCode = purchaseSupplier.accountCode;
+        supplierName = purchaseSupplier.accountName;
+        if (!String(supplierCode ?? "").trim()) throw Object.assign(new Error("The selected supplier has no account code. Please update Other Account Master."), { statusCode: 400 });
+      }
       const purchaseSnapshot = { capturedAt: new Date(), supplier: { code: supplierCode || "", name: supplierName || "" }, company: { name: company || "" }, products: items.map((item) => ({ code: item.productCode || item.code || "", name: item.productName || "", hsn: item.hsn || "", gstRate: Number(item.gst || 0), mrp: Number(item.mrp || 0), rate: Number(item.purRate ?? item.purchaseRate ?? 0) })) };
 
       const oldPurchase = await PurchaseHeader.findOne({
