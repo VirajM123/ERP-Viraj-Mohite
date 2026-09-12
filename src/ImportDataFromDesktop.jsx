@@ -23,6 +23,8 @@ const estimateRemainingSeconds = (processed, total, startedAt, now) => {
 export default function ImportDataFromDesktop({ onClose }) {
   const [backups, setBackups] = useState([]);
   const [excelFiles, setExcelFiles] = useState([]);
+  const [exportDistributorId, setExportDistributorId] = useState(() => localStorage.getItem("distributorId") || "");
+  const [exportFirmId, setExportFirmId] = useState(() => localStorage.getItem("firmId") || "");
   const [job, setJob] = useState(null);
   const [progress, setProgress] = useState(0);
   const [stage, setStage] = useState("Select a desktop SQL Server backup to begin");
@@ -82,8 +84,11 @@ export default function ImportDataFromDesktop({ onClose }) {
 
   const generate = () => {
     if (!backups.length || processing) return;
+    if (!exportDistributorId.trim() || !exportFirmId.trim()) return setError("Enter the Distributor ID and Firm ID to write into the Excel files.");
     setError(""); setProgress(1); setStage("Uploading desktop backup"); setSelected(new Set());
     const form = new FormData(); backups.forEach((backup) => form.append("backup", backup));
+    form.append("exportDistributorId", exportDistributorId.trim());
+    form.append("exportFirmId", exportFirmId.trim());
     const request = new XMLHttpRequest();
     request.open("POST", `${API_URL}/desktop-import/generate`);
     request.setRequestHeader("Authorization", authHeaders().Authorization);
@@ -224,6 +229,10 @@ export default function ImportDataFromDesktop({ onClose }) {
 
     <section className="desktop-import-card desktop-import-upload-card">
       <label>Desktop database backup <b>*</b></label>
+      <div className="desktop-import-tenant-fields">
+        <label><span>Distributor ID to write in Excel <b>*</b></span><input value={exportDistributorId} onChange={(event) => setExportDistributorId(event.target.value)} disabled={processing} placeholder="Enter Distributor ID"/></label>
+        <label><span>Firm ID to write in Excel <b>*</b></span><input value={exportFirmId} onChange={(event) => setExportFirmId(event.target.value)} disabled={processing} placeholder="Enter Firm ID"/></label>
+      </div>
       <div className="desktop-import-file-row">
         <input ref={inputRef} type="file" accept=".bak" multiple hidden onChange={(event) => chooseBackups(event.target.files)}/>
         <button type="button" className="desktop-import-browse" disabled={processing} onClick={() => inputRef.current?.click()}><Upload size={14}/>Browse</button>

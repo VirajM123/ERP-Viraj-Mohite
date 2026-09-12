@@ -439,7 +439,7 @@ export const generateDesktopImportFiles = async (job, backupFiles) => {
       const table = tableIndex.get(tableName.toLowerCase());
       updateJob(job, 52 + Math.round((index / available.length) * 38), `Converting ${importConfig[entryType].label}`);
       let sourceRows = await readRows(database, `SELECT * FROM ${quoteSqlName(table.schema)}.${quoteSqlName(table.name)}`, sqlServer);
-      const mapped = mapDesktopRows({ entryType, rows: sourceRows, distributorId: job.distributorId, firmId: job.firmId, references });
+      const mapped = mapDesktopRows({ entryType, rows: sourceRows, distributorId: job.exportDistributorId || job.distributorId, firmId: job.exportFirmId || job.firmId, references });
       if (mapped.length) generated.push(createWorkbook(job, entryType, mapped));
     }
     for (let index = 0; index < transactionDefinitions.length; index += 1) {
@@ -458,7 +458,8 @@ export const generateDesktopImportFiles = async (job, backupFiles) => {
         if (rows.length) sheets.push({ sheet: source.sheet, rows });
       }
       if (sheets.length) {
-        const dataRows = buildDesktopTransactionRows({ job, definition, sheets, references });
+        const exportJob = { ...job, distributorId: job.exportDistributorId || job.distributorId, firmId: job.exportFirmId || job.firmId };
+        const dataRows = buildDesktopTransactionRows({ job: exportJob, definition, sheets, references });
         if (dataRows.length) generated.push(createSourceWorkbook(job, definition, sheets, dataRows));
       }
     }
@@ -536,8 +537,14 @@ export default function createDesktopImportRouter({ authorizeRequest }) {
       fs.rmSync(req.desktopImportDirectory, { recursive: true, force: true });
       return res.status(415).json({ success: false, message: "Every upload must be a native SQL Server backup file." });
     }
+    const exportDistributorId = String(req.body?.exportDistributorId || req.security.distributorId).trim();
+    const exportFirmId = String(req.body?.exportFirmId || req.security.firmId).trim();
+    if (!exportDistributorId || !exportFirmId || exportDistributorId.length > 100 || exportFirmId.length > 100) {
+      fs.rmSync(req.desktopImportDirectory, { recursive: true, force: true });
+      return res.status(400).json({ success: false, message: "Enter valid Distributor ID and Firm ID values for the generated Excel files." });
+    }
     const id = crypto.randomUUID();
-    const job = { id, status: "processing", progress: 12, stage: "Backup uploaded", directory: req.desktopImportDirectory, distributorId: req.security.distributorId, firmId: req.security.firmId, firmName: req.security.firmName || "", files: [], createdAt: new Date().toISOString() };
+    const job = { id, status: "processing", progress: 12, stage: "Backup uploaded", directory: req.desktopImportDirectory, distributorId: req.security.distributorId, firmId: req.security.firmId, exportDistributorId, exportFirmId, firmName: req.security.firmName || "", files: [], createdAt: new Date().toISOString() };
     jobs.set(id, job);
     generateDesktopImportFiles(job, req.files.map((file) => file.path));
     return res.status(202).json({ success: true, jobId: id });
