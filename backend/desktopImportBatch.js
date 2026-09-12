@@ -159,6 +159,15 @@ export const preflightDesktopImport = async ({ job, fileIds, companyCode }) => {
       const rowErrors = []; const rowWarnings = [];
       if (master) {
         const config = importConfig[file.entryType];
+        if (file.entryType === "Account") {
+          const openingBalance = Number(record.payload["Opening Balance"] || 0);
+          if (Number.isFinite(openingBalance)) {
+            record.payload["Opening Balance"] = Math.abs(openingBalance);
+            if (!String(record.payload["Opening Balance Type"] || "").trim()) {
+              record.payload["Opening Balance Type"] = openingBalance < 0 ? "Cr" : "Dr";
+            }
+          }
+        }
         if (file.entryType === "Account" && record.payload.GSTIN && !validGstin.test(String(record.payload.GSTIN).trim().toUpperCase())) {
           rowWarnings.push(`Invalid legacy GSTIN ${record.payload.GSTIN} was omitted`);
           record.payload.GSTIN = "";
@@ -247,6 +256,23 @@ const captureMasterIds = async (file, records, tenant) => {
   return docs.filter((doc) => keys.has(composite(doc, definition.dbKey))).map((doc) => String(doc._id));
 };
 
+const ensureDesktopPurchaseSuppliers = async ({ records, tenant, firmName }) => {
+  const suppliers = new Map(records.map((record) => [normalize(record.payload.supplierCode), {
+    accountCode: String(record.payload.supplierCode || "").trim(),
+    accountName: String(record.payload.supplierName || "").trim(),
+  }]).filter(([key, supplier]) => key && supplier.accountName));
+  if (!suppliers.size) return [];
+  const collection = mongoose.connection.collection("Mas_OtherAccount");
+  const existing = await collection.find({ ...tenant, accountCode: { $in: [...suppliers.values()].map((item) => item.accountCode) }, isActive: { $ne: false } }, { projection: { accountCode: 1 } }).toArray();
+  existing.forEach((item) => suppliers.delete(normalize(item.accountCode)));
+  if (!suppliers.size) return [];
+  const result = await collection.insertMany([...suppliers.values()].map((supplier) => ({
+    ...supplier, ...tenant, firmName: firmName || "", accountGroup: "SUNDRY CREDITORS", isActive: true,
+    createdAt: new Date(), updatedAt: new Date(),
+  })), { ordered: true });
+  return Object.values(result.insertedIds || {}).map((id) => String(id));
+};
+
 export const runDesktopImport = async ({ job, plan, state, companyCode, authorization, baseUrl, retryOnly = false }) => {
   const tenant = { distributorId: job.distributorId, firmId: job.firmId };
   state.status = "running"; state.startedAt ||= new Date().toISOString(); state.updatedAt = new Date().toISOString();
@@ -280,6 +306,8 @@ export const runDesktopImport = async ({ job, plan, state, companyCode, authoriz
       } else {
         const definition = transactionDefinitions[file.entryType];
         if (file.entryType === "DesktopPurchase") {
+          const supplierIds = await ensureDesktopPurchaseSuppliers({ records: candidates, tenant, firmName: job.firmName });
+          if (supplierIds.length) state.rollback.push({ kind: "master", collection: "Mas_OtherAccount", ids: supplierIds, fileId: file.id });
           const godowns = new Map(candidates.map((record) => [normalize(record.payload.gdCode), {
             godownCode: String(record.payload.gdCode || "").trim(), godownName: String(record.payload.godownName || "").trim(),
           }]).filter(([key, value]) => key && value.godownName));
@@ -313,9 +341,10 @@ export const runDesktopImport = async ({ job, plan, state, companyCode, authoriz
           }
           fileState.processed += 1; state.processed += 1; fileState.updatedAt = new Date().toISOString(); state.updatedAt = fileState.updatedAt;
         };
-        for (let offset = 0; offset < candidates.length; offset += DESKTOP_TRANSACTION_CONCURRENCY) {
+        const concurrency = file.entryType === "DesktopPurchase" ? 1 : DESKTOP_TRANSACTION_CONCURRENCY;
+        for (let offset = 0; offset < candidates.length; offset += concurrency) {
           await waitWhilePaused(state);
-          await Promise.all(candidates.slice(offset, offset + DESKTOP_TRANSACTION_CONCURRENCY).map(importRecord));
+          await Promise.all(candidates.slice(offset, offset + concurrency).map(importRecord));
         }
       }
       fileState.status = fileState.failed ? "completed_with_errors" : "completed"; fileState.finishedAt = new Date().toISOString(); fileState.updatedAt = fileState.finishedAt;

@@ -35,6 +35,9 @@ export default function createImportRouter({ authorizeRequest, models }) {
   const companyViewPermission = authorizeRequest("MASTER", "COMPANY", "view");
   const entryOperations = { Company: "COMPANY", Category: "CATEGORY", Group: "GROUP", Account: "ACCOUNT", Product: "PRODUCT", Bank: "CUSTOMER_BANK", Salesman: "SALESMAN", Area: "AREA", AreaToPartyMapping: "AREA_TO_PARTY", SalesmanToAreaMapping: "SALESMAN_TO_AREA" };
   const importPermission = (req, res, next) => {
+    if (req.body?.desktopBatch === true) {
+      return authorizeRequest("TOOLS", "DESKTOP_IMPORT", "add")(req, res, next);
+    }
     const operation = entryOperations[req.body?.entryType];
     if (!operation) return res.status(400).json({ success: false, message: "Unsupported import entry type." });
     return authorizeRequest("MASTER", operation, "add")(req, res, next);
