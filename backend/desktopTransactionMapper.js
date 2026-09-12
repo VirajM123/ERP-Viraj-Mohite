@@ -153,7 +153,7 @@ const noteRows = (job, definition, headerRows, detailRows, references, credit) =
     const numberField = credit ? "CreditNoteNo" : "DebitNoteNo";
     const payload = {
       distributorId: job.distributorId, firmId: job.firmId, VDate: date(header.TrnDate), VNo: number(header.TrnNo),
-      [seriesField]: text(header.TrnSeries), [numberField]: number(header.TrnNo), BillSeries: text(header.BillSeries), BillNo: number(header.BillNo),
+      [seriesField]: text(header.TrnSeries) || (credit ? "CN" : "DN"), [numberField]: number(header.TrnNo), BillSeries: text(header.BillSeries), BillNo: number(header.BillNo),
       ...(credit ? { PartyCode: account.code, PartyName: text(header.PName) || account.name } : { SupplierCode: account.code, SupplierName: account.name }),
       GDCode: text(header.GDCode), Godown: text(godown.GDName), CompanyCode: company.code, CompanyName: company.name,
       Narration: text(header.Narr), GrossAmount: number(header.Amt), NetAmount: number(header.NetAmt), Rounding: number(header.RndAmt),

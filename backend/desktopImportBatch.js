@@ -98,6 +98,12 @@ export const readDesktopWorkbook = (filePath, entryType) => {
         .map((item) => Object.fromEntries(Object.entries(item).filter(([name]) => !transaction.identity.includes(name)).map(([name, value]) => [name, jsonCell(value)])));
       }
     }
+    // Older generated Credit Note workbooks can contain a blank desktop
+    // transaction series. The API stores those notes under its canonical CN
+    // default, so normalize them before duplicate preflight and submission.
+    if (entryType === "DesktopCreditNote" && !String(payload.CreditNoteSeries || "").trim()) {
+      payload.CreditNoteSeries = "CN";
+    }
     return { row: index + 2, source: row, payload };
   });
 };

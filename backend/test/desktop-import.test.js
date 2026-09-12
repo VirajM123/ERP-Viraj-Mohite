@@ -105,6 +105,24 @@ test("desktop purchase rows retain the visible product label and stock fields", 
   assert.equal(payload.items[0].purchaseRate, 80);
 });
 
+test("desktop credit notes use the API canonical series when the legacy series is blank", () => {
+  const references = {
+    products: new Map([["10", { ProdCode: "P10", ProdName: "Product 10" }]]),
+    accounts: new Map([["20", { AcCode: "A20", AcName: "Customer 20" }]]),
+    companies: new Map([["30", { CompCode: "C30", CompName: "Company 30" }]]),
+    salesmen: new Map(), areas: new Map(), godowns: new Map([["g1", { GDName: "Main" }]]),
+  };
+  const [row] = buildDesktopTransactionRows({
+    job: { distributorId: "D", firmId: "F" }, definition: { entryType: "DesktopCreditNote", label: "Credit Note" }, references,
+    sheets: [
+      { sheet: "Header", rows: [{ TrnSeries: "", TrnNo: 1, TrnDate: "2026-01-02", SysAcCode: 20, SysCompCode: 30, GDCode: "G1" }] },
+      { sheet: "Details", rows: [{ TrnSeries: "", TrnNo: 1, SysProdCode: 10, Batch: "B1", MRP: 120, Qty: 1, Rate: 100 }] },
+    ],
+  });
+  const payload = JSON.parse(row["ERP Payload JSON"]);
+  assert.equal(payload.CreditNoteSeries, "CN");
+});
+
 test("desktop purchase BV discounts remain amounts and do not become invalid percentages", () => {
   const references = {
     products: new Map([["10", { ProdCode: "P10", ProdName: "Product 10" }]]),
@@ -171,6 +189,25 @@ test("transaction workbook contains ERP document and item sheets without desktop
     const [hydrated] = readDesktopWorkbook(file.filePath, "DesktopSales");
     assert.equal(hydrated.payload.PartyCode, "1518"); assert.equal(hydrated.payload.items[0].productCode, "K042");
   } finally { fs.rmSync(directory, { recursive: true, force: true }); }
+});
+
+test("previously generated credit-note workbooks normalize a blank series before retry", () => {
+  const directory = fs.mkdtempSync(path.join(os.tmpdir(), "erp-credit-note-test-"));
+  try {
+    const filePath = path.join(directory, "credit-note.xlsx");
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, XLSX.utils.json_to_sheet([{ distributorId: "D", firmId: "F", CreditNoteSeries: "", CreditNoteNo: 1, PartyCode: "A20" }]), "Data");
+    XLSX.utils.book_append_sheet(workbook, XLSX.utils.json_to_sheet([{ CreditNoteSeries: "", CreditNoteNo: 1, ProductCode: "P10", Qty: 1 }]), "items");
+    XLSX.writeFile(workbook, filePath);
+    const [record] = readDesktopWorkbook(filePath, "DesktopCreditNote");
+    assert.equal(record.payload.CreditNoteSeries, "CN");
+    assert.equal(record.payload.items.length, 1);
+  } finally { fs.rmSync(directory, { recursive: true, force: true }); }
+});
+
+test("historical desktop credit notes do not reapply live sales-bill validation", () => {
+  const server = fs.readFileSync(new URL("../server.js", import.meta.url), "utf8");
+  assert.match(server, /if \(billNo > 0 && req\.body\._desktopImport !== true\)/);
 });
 
 test("desktop batch order imports stock sources before sales and receipts", () => {

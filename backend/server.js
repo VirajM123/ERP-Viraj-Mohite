@@ -25785,7 +25785,13 @@ app.post(
       */
       let salesBill = null;
 
-      if (billNo > 0) {
+      /*
+      * Historical desktop Credit Notes have already been applied to their
+      * source Sales Bills. Preserve the reference during migration, but do
+      * not revalidate or apply it a second time in the destination ERP.
+      * Normal Credit Note entry keeps the existing validation unchanged.
+      */
+      if (billNo > 0 && req.body._desktopImport !== true) {
         const salesBillFilter = {
           distributorId,
           firmId,
