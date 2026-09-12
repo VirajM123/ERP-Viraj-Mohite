@@ -22,6 +22,7 @@ const estimateRemainingSeconds = (processed, total, startedAt, now) => {
 
 export default function ImportDataFromDesktop({ onClose }) {
   const [backups, setBackups] = useState([]);
+  const [excelFiles, setExcelFiles] = useState([]);
   const [job, setJob] = useState(null);
   const [progress, setProgress] = useState(0);
   const [stage, setStage] = useState("Select a desktop SQL Server backup to begin");
@@ -32,6 +33,7 @@ export default function ImportDataFromDesktop({ onClose }) {
   const [actionBusy, setActionBusy] = useState("");
   const [clockNow, setClockNow] = useState(Date.now());
   const inputRef = useRef(null);
+  const excelInputRef = useRef(null);
   const pollRef = useRef(null);
   const processing = job?.status === "processing";
   const batchActive = ["queued", "running", "paused", "rolling_back"].includes(job?.import?.status);
@@ -102,11 +104,40 @@ export default function ImportDataFromDesktop({ onClose }) {
     request.send(form);
   };
 
+  const uploadExcels = () => {
+    if (!excelFiles.length || processing || actionBusy) return;
+    setActionBusy("excel-upload"); setError(""); setProgress(1); setStage("Uploading ERP Excel files"); setSelected(new Set());
+    const form = new FormData(); excelFiles.forEach((file) => form.append("excel", file));
+    const request = new XMLHttpRequest();
+    request.open("POST", `${API_URL}/desktop-import/upload-excel`);
+    request.setRequestHeader("Authorization", authHeaders().Authorization);
+    request.upload.onprogress = (event) => {
+      if (event.lengthComputable) setProgress(Math.max(1, Math.round((event.loaded / event.total) * 100)));
+    };
+    request.onerror = () => { setError("Excel upload failed. Please check the backend connection."); setProgress(0); setActionBusy(""); };
+    request.onload = () => {
+      let result = {};
+      try { result = JSON.parse(request.responseText || "{}"); } catch { result = {}; }
+      setActionBusy("");
+      if (request.status < 200 || request.status >= 300) { setError(result.message || "Excel upload failed."); setProgress(0); return; }
+      setJob(result.job); setProgress(100); setStage(result.job.stage || "Excel files are ready to import");
+      setSelected(new Set((result.job.files || []).map((file) => file.id)));
+    };
+    request.send(form);
+  };
+
   const chooseBackups = (files) => {
     const selectedFiles = Array.from(files || []);
     window.clearTimeout(pollRef.current);
-    setBackups(selectedFiles); setJob(null); setSelected(new Set()); setError(""); setProgress(0);
+    setBackups(selectedFiles); setExcelFiles([]); setJob(null); setSelected(new Set()); setError(""); setProgress(0);
     setStage(selectedFiles.length ? "Ready to generate ERP Excel files" : "Select a desktop SQL Server backup to begin");
+  };
+
+  const chooseExcels = (files) => {
+    const selectedFiles = Array.from(files || []);
+    window.clearTimeout(pollRef.current);
+    setExcelFiles(selectedFiles); setBackups([]); setJob(null); setSelected(new Set()); setError(""); setProgress(0);
+    setStage(selectedFiles.length ? "Ready to upload and import ERP Excel files" : "Select Excel files exported from the local machine");
   };
 
   const toggleFile = (id) => { setJob((current) => current ? ({ ...current, preflight: null }) : current); setSelected((current) => {
@@ -202,6 +233,17 @@ export default function ImportDataFromDesktop({ onClose }) {
       </div>
     </section>
 
+    <section className="desktop-import-card desktop-import-upload-card">
+      <label>Or import generated Excel files on this server <b>*</b></label>
+      <div className="desktop-import-file-row">
+        <input ref={excelInputRef} type="file" accept=".xlsx,.xls" multiple hidden onChange={(event) => chooseExcels(event.target.files)}/>
+        <button type="button" className="desktop-import-browse" disabled={processing || !!actionBusy} onClick={() => excelInputRef.current?.click()}><Upload size={14}/>Select Excels</button>
+        <div className="desktop-import-file-name"><strong>{excelFiles.length ? `${excelFiles.length} Excel file${excelFiles.length === 1 ? "" : "s"} selected` : "No Excel files selected"}</strong><small>{excelFiles.length ? `${(excelFiles.reduce((total, file) => total + file.size, 0) / 1024 / 1024).toFixed(1)} MB total` : "Select multiple .xlsx files downloaded after local backup extraction"}</small></div>
+        {!!excelFiles.length && !actionBusy && <button type="button" className="desktop-import-remove" onClick={() => { chooseExcels([]); if (excelInputRef.current) excelInputRef.current.value = ""; }}><X size={14}/>Clear</button>}
+        <button type="button" className="desktop-import-generate" disabled={!excelFiles.length || processing || !!actionBusy} onClick={uploadExcels}>{actionBusy === "excel-upload" ? <><LoaderCircle className="desktop-import-spin" size={15}/>Uploading...</> : <><FileSpreadsheet size={15}/>Upload for Import</>}</button>
+      </div>
+    </section>
+
     {(progress > 0 || processing) && <section className="desktop-import-card desktop-import-progress-card">
       <div className="desktop-import-progress-copy"><span>{stage}</span><strong>{Math.round(progress)}%</strong></div>
       <div className="desktop-import-progress-track" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow={progress}><span style={{ width: `${Math.max(0, Math.min(100, progress))}%` }}/></div>
@@ -210,7 +252,7 @@ export default function ImportDataFromDesktop({ onClose }) {
     {error && <div className="desktop-import-error"><X size={15}/><span>{error}</span></div>}
 
     {job?.status === "completed" && <section className="desktop-import-card desktop-import-results">
-      <div className="desktop-import-results-head"><div><h2><CheckCircle2 size={17}/>Generated Excel Files</h2><p>The Data sheet uses ERP fields for import. Transaction files also retain the original desktop header/detail sheets for verification.</p></div><button type="button" onClick={downloadSelected} disabled={!selected.size}><Download size={14}/>Download Selected ({selected.size})</button></div>
+      <div className="desktop-import-results-head"><div><h2><CheckCircle2 size={17}/>{job.source === "excel" ? "Uploaded Excel Files" : "Generated Excel Files"}</h2><p>The Data sheet uses ERP fields for import. Transaction files also retain the original desktop header/detail sheets for verification.</p></div><button type="button" onClick={downloadSelected} disabled={!selected.size}><Download size={14}/>Download Selected ({selected.size})</button></div>
       <div className="desktop-import-file-list">
         {job.files.map((file) => <label key={file.id} className={selected.has(file.id) ? "selected" : ""}>
           <input type="checkbox" checked={selected.has(file.id)} onChange={() => toggleFile(file.id)}/>
@@ -255,6 +297,6 @@ export default function ImportDataFromDesktop({ onClose }) {
       {!!job.preflight?.report?.length && <div className="desktop-import-report-preview"><h3><AlertTriangle size={14}/>Preflight findings</h3>{job.preflight.report.slice(0, 8).map((item, index) => <p key={`${item.file}-${item.row}-${index}`}><b>{item.entryType} row {item.row}:</b> {item.message}</p>)}</div>}
     </section>}
 
-    {!job && !error && <div className="desktop-import-empty"><DatabaseBackup size={40}/><h3>No backup processed</h3><p>Choose a .bak file and click Generate Excel.</p></div>}
+    {!job && !error && <div className="desktop-import-empty"><DatabaseBackup size={40}/><h3>No backup or Excel files processed</h3><p>Generate Excel from a local backup, or upload previously generated Excel files.</p></div>}
   </div>;
 }

@@ -16,6 +16,8 @@ const execFileAsync = promisify(execFile);
 const MAX_BACKUP_BYTES = Math.min(512 * 1024 * 1024, Math.max(1, Number(process.env.DESKTOP_IMPORT_MAX_BYTES || 256 * 1024 * 1024)));
 const MAX_BACKUP_FILES = Math.min(4, Math.max(1, Number(process.env.DESKTOP_IMPORT_MAX_FILES || 2)));
 const MAX_BACKUP_TOTAL_BYTES = Math.min(1024 * 1024 * 1024, Math.max(MAX_BACKUP_BYTES, Number(process.env.DESKTOP_IMPORT_MAX_TOTAL_BYTES || 512 * 1024 * 1024)));
+const MAX_EXCEL_BYTES = Math.min(64 * 1024 * 1024, Math.max(1, Number(process.env.DESKTOP_IMPORT_EXCEL_MAX_BYTES || 32 * 1024 * 1024)));
+const MAX_EXCEL_FILES = Math.min(50, Math.max(1, Number(process.env.DESKTOP_IMPORT_EXCEL_MAX_FILES || 30)));
 const JOB_TTL_MS = Number(process.env.DESKTOP_IMPORT_JOB_TTL_MS || 24 * 60 * 60 * 1000);
 const SQL_TIMEOUT_MS = Math.min(60 * 60 * 1000, Math.max(60_000, Number(process.env.DESKTOP_IMPORT_SQL_TIMEOUT_MS || 30 * 60 * 1000)));
 const jobs = new Map();
@@ -135,6 +137,23 @@ const transactionDefinitions = [
   { entryType: "DesktopPayment", label: "Payment", tables: [{ sheet: "Header", names: ["T_Pay_Header"] }, { sheet: "Details", names: ["T_Pay_Details", "T_PAY_ADJUST"] }] },
   { entryType: "DesktopCollectionVoucher", label: "Collection Voucher", tables: [{ sheet: "Header", names: ["T_Col_Header", "T_CollectionVoucher"] }, { sheet: "Details", names: ["T_Col_Details", "T_CollectionVoucher_Details"] }] },
 ];
+
+const normalizedFileStem = (value) => String(value || "")
+  .replace(/\.(xlsx|xls)$/i, "")
+  .replace(/_From_Desktop(?:_[0-9a-f-]+)?$/i, "")
+  .replace(/[^a-z0-9]/gi, "")
+  .toLowerCase();
+
+const excelTypeNames = new Map(DESKTOP_IMPORT_ORDER.flatMap((entryType) => {
+  const shortName = entryType.replace(/^Desktop/, "");
+  return [[normalizedFileStem(entryType), entryType], [normalizedFileStem(shortName), entryType]];
+}));
+
+export const desktopExcelEntryType = (fileName) => excelTypeNames.get(normalizedFileStem(fileName)) || "";
+
+const desktopExcelLabel = (entryType) => importConfig[entryType]?.label
+  || transactionDefinitions.find((definition) => definition.entryType === entryType)?.label
+  || entryType.replace(/^Desktop/, "");
 
 const cleanCell = (value) => sanitizeSpreadsheetCell(value ?? "");
 
@@ -476,13 +495,25 @@ export default function createDesktopImportRouter({ authorizeRequest }) {
     limits: { fileSize: MAX_BACKUP_BYTES, files: MAX_BACKUP_FILES },
     fileFilter(req, file, callback) { callback(null, path.extname(file.originalname).toLowerCase() === ".bak"); },
   });
+  const excelUpload = multer({
+    storage: multer.diskStorage({
+      destination(req, file, callback) { callback(null, req.desktopImportDirectory); },
+      filename(req, file, callback) { callback(null, `${crypto.randomUUID()}.xlsx`); },
+    }),
+    limits: { fileSize: MAX_EXCEL_BYTES, files: MAX_EXCEL_FILES },
+    fileFilter(req, file, callback) { callback(null, [".xlsx", ".xls"].includes(path.extname(file.originalname).toLowerCase())); },
+  });
 
-  router.post("/desktop-import/generate", canImportDesktop, (req, res, next) => {
+  const rejectActiveJob = (req, res, next) => {
     const activeForTenant = [...jobs.values()].some((job) =>
       job.distributorId === req.security.distributorId && job.firmId === req.security.firmId &&
       ["processing", "running", "paused", "rolling_back"].includes(job.status === "completed" ? job.import?.status : job.status)
     );
     if (activeForTenant) return res.status(429).json({ success: false, message: "A desktop import job is already active for this firm." });
+    next();
+  };
+
+  router.post("/desktop-import/generate", canImportDesktop, rejectActiveJob, (req, res, next) => {
     req.setTimeout(SQL_TIMEOUT_MS + 60_000);
     req.desktopImportDirectory = fs.mkdtempSync(path.join(os.tmpdir(), "erp-desktop-import-"));
     next();
@@ -512,10 +543,47 @@ export default function createDesktopImportRouter({ authorizeRequest }) {
     return res.status(202).json({ success: true, jobId: id });
   });
 
+  router.post("/desktop-import/upload-excel", canImportDesktop, rejectActiveJob, (req, res, next) => {
+    req.desktopImportDirectory = fs.mkdtempSync(path.join(os.tmpdir(), "erp-desktop-excel-"));
+    next();
+  }, excelUpload.array("excel", MAX_EXCEL_FILES), (req, res) => {
+    if (!req.files?.length) {
+      fs.rmSync(req.desktopImportDirectory, { recursive: true, force: true });
+      return res.status(400).json({ success: false, message: "Please select one or more ERP Excel files." });
+    }
+    try {
+      const seenTypes = new Set();
+      const importedFiles = req.files.map((file) => {
+        const entryType = desktopExcelEntryType(file.originalname);
+        if (!entryType) throw Object.assign(new Error(`${file.originalname} is not a recognized ERP desktop export file.`), { status: 415 });
+        if (seenTypes.has(entryType)) throw Object.assign(new Error(`Select only one ${desktopExcelLabel(entryType)} file.`), { status: 400 });
+        seenTypes.add(entryType);
+        const workbook = XLSX.read(fs.readFileSync(file.path), { type: "buffer", bookSheets: false });
+        if (!workbook.SheetNames.length) throw Object.assign(new Error(`${file.originalname} does not contain a worksheet.`), { status: 415 });
+        const firstSheet = workbook.Sheets[workbook.SheetNames[0]];
+        const rows = XLSX.utils.sheet_to_json(firstSheet, { defval: "" }).length;
+        if (!rows) throw Object.assign(new Error(`${file.originalname} does not contain importable rows.`), { status: 422 });
+        return { id: crypto.randomUUID(), entryType, label: desktopExcelLabel(entryType), fileName: file.originalname, rows, importable: true, filePath: file.path };
+      }).sort((left, right) => DESKTOP_IMPORT_ORDER.indexOf(left.entryType) - DESKTOP_IMPORT_ORDER.indexOf(right.entryType));
+      const id = crypto.randomUUID();
+      const job = {
+        id, status: "completed", progress: 100, stage: `${importedFiles.length} Excel file(s) are ready to import`, source: "excel",
+        directory: req.desktopImportDirectory, distributorId: req.security.distributorId, firmId: req.security.firmId,
+        firmName: req.security.firmName || "", files: importedFiles.map(({ filePath, ...file }) => file),
+        filePaths: new Map(importedFiles.map((file) => [file.id, file.filePath])), createdAt: new Date().toISOString(),
+      };
+      jobs.set(id, job);
+      return res.status(201).json({ success: true, job: { id: job.id, status: job.status, progress: job.progress, stage: job.stage, source: job.source, files: job.files } });
+    } catch (error) {
+      fs.rmSync(req.desktopImportDirectory, { recursive: true, force: true });
+      return res.status(error.status || 415).json({ success: false, message: error.message || "The selected Excel files could not be read." });
+    }
+  });
+
   router.get("/desktop-import/jobs/:jobId", canImportDesktop, (req, res) => {
     const job = ownedJob(req);
     if (!job) return res.status(404).json({ success: false, message: "Conversion job was not found or has expired." });
-    return res.json({ success: true, job: { id: job.id, status: job.status, progress: job.progress, stage: job.stage, error: job.error, files: job.files, preflight: job.preflight, import: publicImportState(job.import) } });
+    return res.json({ success: true, job: { id: job.id, status: job.status, progress: job.progress, stage: job.stage, source: job.source, error: job.error, files: job.files, preflight: job.preflight, import: publicImportState(job.import) } });
   });
 
   router.get("/desktop-import/jobs/:jobId/files/:fileId", canImportDesktop, (req, res) => {
@@ -605,7 +673,7 @@ export default function createDesktopImportRouter({ authorizeRequest }) {
 
   router.use((error, req, res, next) => {
     if (req.desktopImportDirectory) fs.rm(req.desktopImportDirectory, { recursive: true, force: true }, () => {});
-    if (error instanceof multer.MulterError && error.code === "LIMIT_FILE_SIZE") return res.status(413).json({ success: false, message: `Backup file is larger than the ${Math.round(MAX_BACKUP_BYTES / 1024 / 1024)} MB limit.` });
+    if (error instanceof multer.MulterError && error.code === "LIMIT_FILE_SIZE") return res.status(413).json({ success: false, message: req.path.includes("upload-excel") ? `Excel file is larger than the ${Math.round(MAX_EXCEL_BYTES / 1024 / 1024)} MB limit.` : `Backup file is larger than the ${Math.round(MAX_BACKUP_BYTES / 1024 / 1024)} MB limit.` });
     return res.status(500).json({ success: false, message: error.message || "Desktop backup upload failed." });
   });
   return router;
