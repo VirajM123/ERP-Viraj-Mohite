@@ -6,7 +6,7 @@ import { importConfig } from "./importConfig.js";
 const DESKTOP_TRANSACTION_CONCURRENCY = Math.max(1, Math.min(32, Number.parseInt(process.env.DESKTOP_IMPORT_TRANSACTION_CONCURRENCY || "16", 10) || 16));
 const DESKTOP_TRANSACTION_BATCH_SIZE = Math.max(25, Math.min(500, Number.parseInt(process.env.DESKTOP_IMPORT_TRANSACTION_BATCH_SIZE || "100", 10) || 100));
 
-export const desktopTransactionConcurrency = (entryType) => ["DesktopPurchase", "DesktopSales", "DesktopCounterSales"].includes(entryType)
+export const desktopTransactionConcurrency = (entryType) => entryType === "DesktopPurchase"
   ? 1
   : DESKTOP_TRANSACTION_CONCURRENCY;
 
@@ -246,8 +246,31 @@ export const preflightDesktopImport = async ({ job, fileIds, companyCode }) => {
 const apiRequest = async ({ baseUrl, authorization, endpoint, method = "POST", body, idempotencyKey }) => {
   const response = await fetch(`${baseUrl}${endpoint}`, { method, headers: { Authorization: authorization, "Content-Type": "application/json", ...(idempotencyKey ? { "Idempotency-Key": idempotencyKey } : {}) }, body: body === undefined ? undefined : JSON.stringify(body) });
   const result = await response.json().catch(() => ({}));
-  if (!response.ok) throw new Error(result.message || result.error || `${method} ${endpoint} failed (${response.status})`);
+  if (!response.ok) {
+    const error = new Error(result.message || result.error || `${method} ${endpoint} failed (${response.status})`);
+    error.status = response.status;
+    error.code = result.code;
+    throw error;
+  }
   return result;
+};
+
+const wait = (milliseconds) => new Promise((resolve) => setTimeout(resolve, milliseconds));
+const isRetryableDesktopTransactionError = (error) => error?.status >= 500
+  || [112, 244, 251].includes(Number(error?.code));
+
+export const requestDesktopTransaction = async (options, { attempts = 5 } = {}) => {
+  let lastError;
+  for (let attempt = 1; attempt <= attempts; attempt += 1) {
+    try {
+      return await apiRequest(options);
+    } catch (error) {
+      lastError = error;
+      if (attempt >= attempts || !isRetryableDesktopTransactionError(error)) throw error;
+      await wait(Math.min(1600, 100 * (2 ** (attempt - 1))));
+    }
+  }
+  throw lastError;
 };
 
 const responseId = (result) => String(result.savedBillId || result.data?._id || result.data?.header?._id || result.purchase?._id || result.creditNote?._id || result.debitNote?._id || result.voucher?._id || result.load?._id || result.saved?._id || "");
@@ -344,7 +367,10 @@ export const runDesktopImport = async ({ job, plan, state, companyCode, authoriz
             const endpoint = record.status === "repair" && file.entryType === "DesktopPurchase"
               ? "/purchase/reconcile-desktop-import"
               : definition.endpoint;
-            const result = await apiRequest({ baseUrl, authorization, endpoint, body: payload, idempotencyKey: `desktop-${job.id}-${file.entryType}-${record.row}` });
+            const request = { baseUrl, authorization, endpoint, body: payload, idempotencyKey: `desktop-${job.id}-${file.entryType}-${record.row}` };
+            const result = ["DesktopSales", "DesktopCounterSales"].includes(file.entryType)
+              ? await requestDesktopTransaction(request)
+              : await apiRequest(request);
             let id = responseId(result);
             if (!id && definition.collection === "T_Stock_Adjustment") id = String((await mongoose.connection.collection(definition.collection).findOne({ ...tenant, RequestId: payload.requestId }, { projection: { _id: 1 } }))?._id || "");
             // A reconciliation updates a purchase that existed before this job;
@@ -357,9 +383,8 @@ export const runDesktopImport = async ({ job, plan, state, companyCode, authoriz
           }
           fileState.processed += 1; state.processed += 1; fileState.updatedAt = new Date().toISOString(); state.updatedAt = fileState.updatedAt;
         };
-        // Sales bills commonly touch the same stock batches. Running those
-        // MongoDB transactions concurrently causes write conflicts and masks
-        // the real result as a generic production 500 response.
+        // Sales use bounded parallelism for throughput; transient stock write
+        // conflicts are retried by requestDesktopTransaction above.
         const concurrency = desktopTransactionConcurrency(file.entryType);
         for (let batchOffset = 0; batchOffset < candidates.length; batchOffset += DESKTOP_TRANSACTION_BATCH_SIZE) {
           const batch = candidates.slice(batchOffset, batchOffset + DESKTOP_TRANSACTION_BATCH_SIZE);

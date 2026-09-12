@@ -4,7 +4,6 @@ import Dashboard from "./Dashboard";
 import { useSortableListTables } from "./hooks/useSortableListTables";
 import {
   getSessionExpiresAt,
-  hasActiveSession,
   startSession,
 } from "./utils/session";
 
@@ -15,15 +14,10 @@ function App() {
     if (localStorage.getItem("token") && !getSessionExpiresAt()) {
       startSession();
     }
-
-    const isActive = hasActiveSession();
-
-    if (!isActive && localStorage.getItem("token")) {
-      localStorage.clear();
-      sessionStorage.clear();
-    }
-
-    return isActive;
+    // Keep the current workspace visible after expiry. The API still rejects
+    // an expired token, but unsaved screen state is no longer destroyed by an
+    // automatic logout.
+    return Boolean(localStorage.getItem("token"));
   });
 
   const handleLoginSuccess = () => {

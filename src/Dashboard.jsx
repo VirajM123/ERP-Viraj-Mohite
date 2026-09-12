@@ -314,6 +314,7 @@ const Dashboard = ({ onLogout }) => {
     const expiresAt = getSessionExpiresAt();
     return Math.max(0, Math.ceil((expiresAt - Date.now()) / 1000));
   });
+  const sessionExpiryNoticeShownRef = useRef(false);
   const [showReceiptForm, setShowReceiptForm] = useState(false);
   const [accountActiveTab, setAccountActiveTab] = useState('basic');
   const [otherAccountActiveTab, setOtherAccountActiveTab] = useState('basic');
@@ -396,7 +397,10 @@ const Dashboard = ({ onLogout }) => {
       setSessionSecondsRemaining(secondsRemaining);
 
       if (millisecondsRemaining <= 0) {
-        onLogout();
+        if (!sessionExpiryNoticeShownRef.current) {
+          sessionExpiryNoticeShownRef.current = true;
+          window.alert("Your session has expired. Your current screen and unsaved data will remain open. Please log in again before performing another server action.");
+        }
       }
     };
 

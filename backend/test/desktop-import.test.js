@@ -185,10 +185,10 @@ test("desktop batch order imports stock sources before sales and receipts", () =
   assert.ok(DESKTOP_IMPORT_ORDER.indexOf("DesktopReceipt") < DESKTOP_IMPORT_ORDER.indexOf("DesktopCHB"));
 });
 
-test("desktop stock-mutating document imports are serialized", () => {
+test("desktop purchases remain serialized while sales use bounded parallelism", () => {
   assert.equal(desktopTransactionConcurrency("DesktopPurchase"), 1);
-  assert.equal(desktopTransactionConcurrency("DesktopSales"), 1);
-  assert.equal(desktopTransactionConcurrency("DesktopCounterSales"), 1);
+  assert.ok(desktopTransactionConcurrency("DesktopSales") > 1);
+  assert.ok(desktopTransactionConcurrency("DesktopCounterSales") > 1);
   assert.ok(desktopTransactionConcurrency("DesktopReceipt") >= 1);
 });
 
