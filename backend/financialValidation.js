@@ -69,8 +69,28 @@ export const calculatePurchaseFinancials = (body, rows) => {
     if (qty + free <= 0) throw new Error(`Item ${index + 1} quantity must be positive`);
     const mrp = number(row.mrp ?? row.MRP, `Item ${index + 1} MRP`), rate = number(row.purRate ?? row.purchaseRate ?? row.PRate ?? row.pRate, `Item ${index + 1} Purchase Rate`);
     if (rate <= 0) throw new Error(`Item ${index + 1} Purchase Rate must be greater than zero`);
-    const gross = roundMoney(qty * rate); let taxable = gross;
-    for (const key of ["disc1", "disc2", "disc3"]) taxable = roundMoney(taxable - taxable * percent(row[key] || 0, `${key} percent`) / 100);
+    const desktopImport = body._desktopImport === true;
+    const submittedDesktopGross = desktopImport
+      ? number(row.grossAmount ?? row.GrossAmount ?? 0, `Item ${index + 1} gross amount`)
+      : 0;
+    const desktopQuantity = desktopImport && String(row.unit ?? row.Unit ?? "").trim().toLowerCase() === "box"
+      ? qty * (number(row.boxPack ?? row.BoxPack ?? 1, `Item ${index + 1} box pack`) || 1)
+      : qty;
+    const gross = submittedDesktopGross > 0 ? roundMoney(submittedDesktopGross) : roundMoney(desktopQuantity * rate);
+    let taxable = gross;
+    for (const key of ["disc1", "disc2", "disc3"]) {
+      // Older generated desktop workbooks stored the BV discount amount in
+      // `disc1`/`disc2`/`disc3`. Accept that shape so users can retry the same
+      // file; newly generated files use the explicit *Amount fields instead.
+      const amountValue = row[`${key}Amount`] ?? (desktopImport ? row[key] : undefined);
+      if (desktopImport && amountValue !== undefined && amountValue !== null && amountValue !== "") {
+        const discountAmount = roundMoney(number(amountValue, `${key} amount`));
+        if (discountAmount > taxable) throw new Error(`${key} amount cannot exceed taxable amount`);
+        taxable = roundMoney(taxable - discountAmount);
+      } else {
+        taxable = roundMoney(taxable - taxable * percent(row[key] || 0, `${key} percent`) / 100);
+      }
+    }
     const gst = roundMoney(taxable * percent(row.tax ?? row.gst ?? row.gstPercent ?? 0, `Item ${index + 1} GST`) / 100);
     const cgst = igstMode ? 0 : roundMoney(gst / 2), sgst = igstMode ? 0 : roundMoney(gst - cgst), igst = igstMode ? gst : 0, amount = roundMoney(taxable + gst);
     totals.mrp = roundMoney(totals.mrp + (qty + free) * mrp); totals.gross = roundMoney(totals.gross + gross); totals.taxable = roundMoney(totals.taxable + taxable); totals.cgst = roundMoney(totals.cgst + cgst); totals.sgst = roundMoney(totals.sgst + sgst); totals.igst = roundMoney(totals.igst + igst); totals.amount = roundMoney(totals.amount + amount);

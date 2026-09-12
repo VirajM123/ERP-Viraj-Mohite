@@ -129,7 +129,12 @@ const purchaseRows = (job, definition, headerRows, detailRows, references) => {
           // canonical code/name fields as well because stock posting uses them.
           product: [item.productCode, item.productName].filter(Boolean).join(" - "),
           purchaseRate: number(row.PRate || row.Rate),
-          disc1: number(row.BVDisc1), disc2: number(row.BVDisc2), disc3: number(row.BVDisc3), tax: number(row.VATPer),
+          // Desktop BVDisc fields contain currency amounts, not percentages.
+          // Keep them separate so normal ERP percentage discounts retain their
+          // existing meaning and historical desktop invoices validate correctly.
+          grossAmount: number(row.GrossAmount || row.Amt),
+          disc1Amount: number(row.BVDisc1), disc2Amount: number(row.BVDisc2), disc3Amount: number(row.BVDisc3),
+          disc1: 0, disc2: 0, disc3: 0, tax: number(row.VATPer),
         };
       }),
     };

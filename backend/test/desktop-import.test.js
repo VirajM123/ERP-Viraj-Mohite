@@ -7,6 +7,7 @@ import * as XLSX from "xlsx";
 import { createSourceWorkbook, localSqlServiceAccount, mapDesktopRows, parseInstalledSqlInstances, parseSqlXmlRows } from "../desktopImportRoutes.js";
 import { buildDesktopTransactionRows } from "../desktopTransactionMapper.js";
 import { DESKTOP_IMPORT_ORDER, readDesktopWorkbook } from "../desktopImportBatch.js";
+import { calculatePurchaseFinancials } from "../financialValidation.js";
 
 test("desktop account rows map to the existing ERP Excel structure", () => {
   const [row] = mapDesktopRows({
@@ -102,6 +103,37 @@ test("desktop purchase rows retain the visible product label and stock fields", 
   assert.equal(payload.items[0].productName, "Product 10");
   assert.equal(payload.items[0].batchNo, "B1");
   assert.equal(payload.items[0].purchaseRate, 80);
+});
+
+test("desktop purchase BV discounts remain amounts and do not become invalid percentages", () => {
+  const references = {
+    products: new Map([["10", { ProdCode: "P10", ProdName: "Product 10" }]]),
+    accounts: new Map([["20", { AcCode: "A20", AcName: "Supplier 20" }]]),
+    companies: new Map([["30", { CompCode: "C30", CompName: "Company 30" }]]),
+    salesmen: new Map(), areas: new Map(), godowns: new Map([["g1", { GDName: "Main" }]]),
+  };
+  const [row] = buildDesktopTransactionRows({
+    job: { distributorId: "D", firmId: "F" }, definition: { entryType: "DesktopPurchase", label: "Purchase" }, references,
+    sheets: [
+      { sheet: "Header", rows: [{ TrnSeries: "P", TrnNo: 1, TrnDate: "2026-01-02", SysAcCode: 20, SysCompCode: 30, GDCode: "G1" }] },
+      { sheet: "Details", rows: [{ TrnSeries: "P", TrnNo: 1, SysProdCode: 10, Batch: "B1", MRP: 120, Qty: 60, PRate: 55.996, GrossAmount: 3359.76, BVDisc1: 209.99, VATPer: 5 }] },
+    ],
+  });
+  const payload = JSON.parse(row["ERP Payload JSON"]);
+  assert.equal(payload.items[0].disc1, 0);
+  assert.equal(payload.items[0].disc1Amount, 209.99);
+  const result = calculatePurchaseFinancials(payload, payload.items);
+  assert.equal(result.items[0].grossAmount, 3359.76);
+  assert.equal(result.items[0].taxable, 3149.77);
+});
+
+test("previously generated desktop purchase files can retry BV amount discounts", () => {
+  const result = calculatePurchaseFinancials({ _desktopImport: true }, [{
+    quantity: 2, unit: "BOX", boxPack: 30, purRate: 80.16666,
+    mrp: 100, disc1: 745.56, disc2: 0, disc3: 0, tax: 5,
+  }]);
+  assert.equal(result.items[0].grossAmount, 4810);
+  assert.equal(result.items[0].taxable, 4064.44);
 });
 
 test("desktop internal keys become ERP product, account and company codes", () => {
