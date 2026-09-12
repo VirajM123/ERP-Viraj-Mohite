@@ -10817,8 +10817,13 @@ app.post(
       if (req.body._desktopImport !== true) throw new Error("This repair is available only to the desktop import workflow.");
       if (!distributorId || !firmId || !vouNo || !gdCode || !incomingItems.length) throw new Error("Desktop purchase repair data is incomplete.");
 
-      const purchase = await PurchaseHeader.findOne({ distributorId, firmId, vouSer, vouNo, isActive: true }).session(session);
+      // The voucher number index also covers cancelled purchases.  Those rows
+      // cannot be inserted again, so the desktop importer must reactivate the
+      // identical cancelled voucher instead of treating it as a missing active
+      // purchase (or attempting a duplicate insert).
+      const purchase = await PurchaseHeader.findOne({ distributorId, firmId, vouSer, vouNo }).session(session);
       if (!purchase) throw new Error(`Existing purchase ${vouSer}-${vouNo} was not found.`);
+      const reactivatePurchase = purchase.isActive === false;
       if (String(purchase.gdCode || "").trim() !== gdCode) {
         const error = new Error(`Purchase ${vouSer}-${vouNo} exists in a different godown; automatic repair was not applied.`);
         error.statusCode = 409;
@@ -10871,7 +10876,11 @@ app.post(
         const first = group[0];
         const filter = { distributorId, firmId, GDCode: gdCode, ProdCode: itemCode(first), Batch: itemBatch(first), MRP: itemMrp(first) };
         const stock = await Stock.findOne(filter).session(session).lean();
-        if (!stock) {
+        // Cancellation reverses the original stock quantity but intentionally
+        // leaves the stock row in place. Reactivation must therefore add the
+        // quantity even when that row still exists. Active-purchase repair keeps
+        // its prior idempotent, missing-row-only behaviour.
+        if (reactivatePurchase || !stock) {
           await applyPurchaseStockMovement({ items: group, distributorId, firmId, firmName: req.body.firmName || purchase.firmName || "", gdCode, direction: 1, session });
         } else {
           const purchaseRate = itemRate(first);
@@ -10882,12 +10891,46 @@ app.post(
       }
 
       purchase.items = repairedItems;
+      if (reactivatePurchase) {
+        purchase.isActive = true;
+
+        const purchaseTax = Number(purchase.cgstAmt || 0) + Number(purchase.sgstAmt || 0) + Number(purchase.igstAmt || 0);
+        await postBalancedJournal({
+          distributorId,
+          firmId,
+          sourceType: "PURCHASE",
+          sourceId: String(purchase._id),
+          documentNo: `${vouSer}${vouNo}`,
+          documentDate: String(purchase.invoiceDate || req.body.invoiceDate || ""),
+          createdBy: req.auth.userId,
+          lines: [
+            { accountCode: "PURCHASE", debit: Number(purchase.netAmt || 0) - purchaseTax, credit: 0, narration: purchase.narration || "Purchase" },
+            ...(purchaseTax > 0 ? [{ accountCode: "INPUT_GST", debit: purchaseTax, credit: 0, narration: "Input GST" }] : []),
+            { accountCode: String(purchase.supplierCode || purchase.supplierName), debit: 0, credit: Number(purchase.netAmt || 0), narration: purchase.narration || "Purchase" },
+          ],
+        }, session);
+        await recordStockMovements({
+          distributorId,
+          firmId,
+          godown: gdCode,
+          items: incomingItems,
+          movementDate: String(purchase.invoiceDate || req.body.invoiceDate || ""),
+          sourceType: "PURCHASE_REACTIVATE",
+          sourceId: purchase._id,
+          documentNo: `${vouSer}${vouNo}`,
+          direction: 1,
+          userId: req.auth.userId,
+          session,
+        });
+      }
       purchase.desktopImportReconciledAt = new Date();
       purchase.desktopImportStockKeys = repairedStockKeys;
       await purchase.save({ session });
-      await writeAuditEvent(req, { entityType: "PURCHASE", entityId: String(purchase._id), action: "DESKTOP_IMPORT_RECONCILE", after: purchase.toObject() }, session);
+      await writeAuditEvent(req, { entityType: "PURCHASE", entityId: String(purchase._id), action: reactivatePurchase ? "DESKTOP_IMPORT_REACTIVATE" : "DESKTOP_IMPORT_RECONCILE", after: purchase.toObject() }, session);
       await commitTransactionReliably(session);
-      res.json({ success: true, message: `Purchase ${vouSer}-${vouNo} checked and repaired without duplicating it.`, data: { header: purchase } });
+      res.json({ success: true, message: reactivatePurchase
+        ? `Purchase ${vouSer}-${vouNo} was reactivated and its stock was restored.`
+        : `Purchase ${vouSer}-${vouNo} checked and repaired without duplicating it.`, data: { header: purchase } });
     } catch (error) {
       if (session.inTransaction()) await session.abortTransaction();
 
