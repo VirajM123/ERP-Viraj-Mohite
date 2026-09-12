@@ -1992,7 +1992,7 @@ const importRouter = createImportRouter({
     Group,
     Account,
     Product,
-    CustomerBank,
+    Bank: CustomerBank,
     Salesman,
     Area,
     AreaToPartyMapping,

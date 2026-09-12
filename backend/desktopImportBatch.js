@@ -51,6 +51,7 @@ const masterDefinitions = {
 };
 
 const normalize = (value) => String(value ?? "").trim().toLowerCase();
+const validGstin = /^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z][0-9A-Z]Z[0-9A-Z]$/;
 const composite = (row, fields) => fields.map((field) => normalize(row?.[field])).join("|");
 const jsonCell = (value) => {
   if (typeof value !== "string" || !/^[{[]/.test(value.trim())) return value;
@@ -158,6 +159,10 @@ export const preflightDesktopImport = async ({ job, fileIds, companyCode }) => {
       const rowErrors = []; const rowWarnings = [];
       if (master) {
         const config = importConfig[file.entryType];
+        if (file.entryType === "Account" && record.payload.GSTIN && !validGstin.test(String(record.payload.GSTIN).trim().toUpperCase())) {
+          rowWarnings.push(`Invalid legacy GSTIN ${record.payload.GSTIN} was omitted`);
+          record.payload.GSTIN = "";
+        }
         for (const column of config.columns.filter((column) => column.required)) if (!String(record.payload[column.excel] ?? "").trim()) rowErrors.push(`${column.excel} is required`);
         if (file.entryType === "Product" && record.payload.Company && !known.companies.has(normalize(record.payload.Company))) rowErrors.push(`company ${record.payload.Company} does not exist`);
         if (file.entryType === "AreaToPartyMapping") {
@@ -181,7 +186,12 @@ export const preflightDesktopImport = async ({ job, fileIds, companyCode }) => {
         const payloadKeys = transaction.payloadDuplicate || transaction.duplicate;
         record.key = composite(record.payload, payloadKeys);
         const refs = transactionReferences(record.payload, transaction);
-        for (const [kind, values] of Object.entries(refs)) for (const value of values) if (!known[kind].has(normalize(value))) rowErrors.push(`${kind.slice(0, -1)} ${value} does not exist`);
+        for (const [kind, values] of Object.entries(refs)) for (const value of values) if (!known[kind].has(normalize(value))) {
+          const canCreatePurchaseGodown = file.entryType === "DesktopPurchase" && kind === "godowns"
+            && normalize(value) === normalize(record.payload.gdCode) && String(record.payload.godownName || "").trim();
+          if (canCreatePurchaseGodown) rowWarnings.push(`Godown ${value} will be created from the purchase file`);
+          else rowErrors.push(`${kind.slice(0, -1)} ${value} does not exist`);
+        }
         if (["DesktopSales", "DesktopStockOut"].includes(file.entryType)) for (const product of refs.products) {
           const stockKey = `${normalize(record.payload.GDCode || record.payload.gdCode)}|${normalize(product)}`;
           if (!known.stocks.has(stockKey)) rowWarnings.push(`No current or selected opening/incoming stock was found for product ${product}; existing stock rules will recheck it`);
@@ -269,6 +279,18 @@ export const runDesktopImport = async ({ job, plan, state, companyCode, authoriz
         }
       } else {
         const definition = transactionDefinitions[file.entryType];
+        if (file.entryType === "DesktopPurchase") {
+          const godowns = new Map(candidates.map((record) => [normalize(record.payload.gdCode), {
+            godownCode: String(record.payload.gdCode || "").trim(), godownName: String(record.payload.godownName || "").trim(),
+          }]).filter(([key, value]) => key && value.godownName));
+          for (const godown of godowns.values()) {
+            const existingGodown = await mongoose.connection.collection("Mas_Godown").findOne({ ...tenant, godownCode: godown.godownCode, isActive: { $ne: false } }, { projection: { _id: 1 } });
+            if (existingGodown) continue;
+            const result = await apiRequest({ baseUrl, authorization, endpoint: "/godowns", body: { ...godown, ...tenant, firmName: job.firmName || "" }, idempotencyKey: `desktop-${job.id}-godown-${normalize(godown.godownCode)}` });
+            const id = responseId(result);
+            if (id) state.rollback.push({ kind: "master", collection: "Mas_Godown", ids: [id], fileId: file.id });
+          }
+        }
         const importRecord = async (record) => {
           await waitWhilePaused(state);
           let payload = { ...record.payload, distributorId: job.distributorId, firmId: job.firmId, firmName: job.firmName || "", _desktopImport: true };
