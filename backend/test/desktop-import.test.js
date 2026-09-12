@@ -6,7 +6,7 @@ import test from "node:test";
 import * as XLSX from "xlsx";
 import { createSourceWorkbook, localSqlServiceAccount, mapDesktopRows, parseInstalledSqlInstances, parseSqlXmlRows } from "../desktopImportRoutes.js";
 import { buildDesktopTransactionRows } from "../desktopTransactionMapper.js";
-import { DESKTOP_IMPORT_ORDER, readDesktopWorkbook } from "../desktopImportBatch.js";
+import { DESKTOP_IMPORT_ORDER, desktopTransactionConcurrency, readDesktopWorkbook } from "../desktopImportBatch.js";
 import { calculatePurchaseFinancials } from "../financialValidation.js";
 
 test("desktop account rows map to the existing ERP Excel structure", () => {
@@ -183,6 +183,13 @@ test("desktop batch order imports stock sources before sales and receipts", () =
   assert.ok(DESKTOP_IMPORT_ORDER.indexOf("AreaToPartyMapping") < DESKTOP_IMPORT_ORDER.indexOf("DesktopSales"));
   assert.ok(DESKTOP_IMPORT_ORDER.indexOf("DesktopSales") < DESKTOP_IMPORT_ORDER.indexOf("DesktopReceipt"));
   assert.ok(DESKTOP_IMPORT_ORDER.indexOf("DesktopReceipt") < DESKTOP_IMPORT_ORDER.indexOf("DesktopCHB"));
+});
+
+test("desktop stock-mutating document imports are serialized", () => {
+  assert.equal(desktopTransactionConcurrency("DesktopPurchase"), 1);
+  assert.equal(desktopTransactionConcurrency("DesktopSales"), 1);
+  assert.equal(desktopTransactionConcurrency("DesktopCounterSales"), 1);
+  assert.ok(desktopTransactionConcurrency("DesktopReceipt") >= 1);
 });
 
 test("desktop receipt rows map the party, bank and bill allocations for outstanding updates", () => {

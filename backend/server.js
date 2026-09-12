@@ -12396,11 +12396,20 @@ app.post(
           session,
       });
       await applyProductMasterTaxRates({ items, distributorId, firmId, session });
-      await enforceTrustedSalesRates({ req, items, distributorId, firmId, gdCode: GDCode, generalSetup, session });
+      // Historical desktop invoices must retain the rate at which they were
+      // originally posted. Current-rate overrides apply only to new billing.
+      if (req.body._desktopImport !== true) {
+        await enforceTrustedSalesRates({ req, items, distributorId, firmId, gdCode: GDCode, generalSetup, session });
+      }
       const canonicalSales = validateFinancialEnvelope(req.body, items, { vatMode: generalSetup?.vatOn });
       items.splice(0, items.length, ...canonicalSales.items);
       Object.assign(req.body, canonicalSales);
-      const creditControl = await validateCustomerCredit({ req, session });
+      // Credit controls govern new orders. Applying them while reconstructing
+      // historical invoices makes earlier bills block later bills in the same
+      // migration and prevents the outstanding ledger from being restored.
+      const creditControl = req.body._desktopImport === true
+        ? null
+        : await validateCustomerCredit({ req, session });
       const normalizedEntryType = normalizeSalesEntryType(SalesEntryType);
       const normalizedBillSeries = String(
         BillSeries ||
@@ -12430,8 +12439,12 @@ app.post(
         distributorId, firmId, companyCode: CompanyCode, partyCode: PartyCode, items, session,
       });
 
-      const allowNegativeStock =
-        readSetupBoolean(
+      // A historical migration reconstructs documents in their original
+      // order and must not be blocked by today's stock balance. This exception
+      // is restricted to the desktop-import marker; normal sales continue to
+      // follow the firm's negative-stock setting.
+      const allowNegativeStock = req.body._desktopImport === true
+        || readSetupBoolean(
           generalSetup
             ?.allowNegativeStock,
           false
@@ -12661,16 +12674,21 @@ app.post(
       const savedHeader = header[0];
       const outputTax = Number(req.body.CGSTAmount || 0) + Number(req.body.SGSTAmount || 0) + Number(req.body.IGSTAmount || 0);
       const creditNote = Number(req.body.CreditNoteAmount || 0);
-      await postBalancedJournal({
-        distributorId, firmId, sourceType: "SALES", sourceId: String(savedHeader._id),
-        documentNo: `${normalizedBillSeries}${assignedBillNo}`, documentDate: String(BillDate || ""), createdBy: req.auth.userId,
-        lines: [
-          { accountCode: String(PartyCode || PartyName), debit: Number(req.body.NetAmount || 0), credit: 0, narration: Narration || "Sales" },
-          ...(creditNote > 0 ? [{ accountCode: "CREDIT_NOTE_ALLOWED", debit: creditNote, credit: 0, narration: "Credit note" }] : []),
-          { accountCode: "SALES", debit: 0, credit: Number(req.body.OriginalNetAmount || 0) - outputTax, narration: Narration || "Sales" },
-          ...(outputTax > 0 ? [{ accountCode: "OUTPUT_GST", debit: 0, credit: outputTax, narration: "Output GST" }] : []),
-        ],
-      }, session);
+      const isZeroValueDesktopSale = req.body._desktopImport === true
+        && Math.abs(Number(req.body.NetAmount || 0)) <= 0.01
+        && Math.abs(Number(req.body.OriginalNetAmount || 0)) <= 0.01;
+      if (!isZeroValueDesktopSale) {
+        await postBalancedJournal({
+          distributorId, firmId, sourceType: "SALES", sourceId: String(savedHeader._id),
+          documentNo: `${normalizedBillSeries}${assignedBillNo}`, documentDate: String(BillDate || ""), createdBy: req.auth.userId,
+          lines: [
+            { accountCode: String(PartyCode || PartyName), debit: Number(req.body.NetAmount || 0), credit: 0, narration: Narration || "Sales" },
+            ...(creditNote > 0 ? [{ accountCode: "CREDIT_NOTE_ALLOWED", debit: creditNote, credit: 0, narration: "Credit note" }] : []),
+            { accountCode: "SALES", debit: 0, credit: Number(req.body.OriginalNetAmount || 0) - outputTax, narration: Narration || "Sales" },
+            ...(outputTax > 0 ? [{ accountCode: "OUTPUT_GST", debit: 0, credit: outputTax, narration: "Output GST" }] : []),
+          ],
+        }, session);
+      }
       await writeAuditEvent(req, { entityType: "SALES", entityId: String(savedHeader._id), action: "CREATE", after: savedHeader.toObject() }, session);
       if (creditControl?.overridden) {
         await writeAuditEvent(req, { entityType: "CREDIT_OVERRIDE", entityId: String(savedHeader._id), action: "APPROVE", reason: creditControl.reason, after: creditControl }, session);

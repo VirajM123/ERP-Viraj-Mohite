@@ -6,6 +6,10 @@ import { importConfig } from "./importConfig.js";
 const DESKTOP_TRANSACTION_CONCURRENCY = Math.max(1, Math.min(32, Number.parseInt(process.env.DESKTOP_IMPORT_TRANSACTION_CONCURRENCY || "16", 10) || 16));
 const DESKTOP_TRANSACTION_BATCH_SIZE = Math.max(25, Math.min(500, Number.parseInt(process.env.DESKTOP_IMPORT_TRANSACTION_BATCH_SIZE || "100", 10) || 100));
 
+export const desktopTransactionConcurrency = (entryType) => ["DesktopPurchase", "DesktopSales", "DesktopCounterSales"].includes(entryType)
+  ? 1
+  : DESKTOP_TRANSACTION_CONCURRENCY;
+
 export const DESKTOP_IMPORT_ORDER = [
   "Company", "Category", "Group", "Product", "Account", "Bank", "Area", "Salesman",
   "AreaToPartyMapping", "SalesmanToAreaMapping", "DesktopOpeningStock", "DesktopPurchase",
@@ -353,7 +357,10 @@ export const runDesktopImport = async ({ job, plan, state, companyCode, authoriz
           }
           fileState.processed += 1; state.processed += 1; fileState.updatedAt = new Date().toISOString(); state.updatedAt = fileState.updatedAt;
         };
-        const concurrency = file.entryType === "DesktopPurchase" ? 1 : DESKTOP_TRANSACTION_CONCURRENCY;
+        // Sales bills commonly touch the same stock batches. Running those
+        // MongoDB transactions concurrently causes write conflicts and masks
+        // the real result as a generic production 500 response.
+        const concurrency = desktopTransactionConcurrency(file.entryType);
         for (let batchOffset = 0; batchOffset < candidates.length; batchOffset += DESKTOP_TRANSACTION_BATCH_SIZE) {
           const batch = candidates.slice(batchOffset, batchOffset + DESKTOP_TRANSACTION_BATCH_SIZE);
           for (let offset = 0; offset < batch.length; offset += concurrency) {
