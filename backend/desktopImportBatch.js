@@ -41,7 +41,7 @@ const masterDefinitions = {
   Company: { collection: "Mas_Company", excelKey: ["Company Code"], dbKey: ["companyCode"] },
   Category: { collection: "Mas_Category", excelKey: ["Category Code"], dbKey: ["categoryCode"] },
   Group: { collection: "Mas_Group", excelKey: ["Group Code"], dbKey: ["groupCode"] },
-  Account: { collection: "Mas_Account", excelKey: ["Account Code"], dbKey: ["accountCode"] },
+  Account: { collection: "Mas_Account", excelKey: ["Account Code", "Account Name"], dbKey: ["accountCode", "accountName"] },
   Product: { collection: "Mas_Product", excelKey: ["Product Code"], dbKey: ["productCode"] },
   Bank: { collection: "Mas_CustomerBank", excelKey: ["Bank Code"], dbKey: ["bankCode"] },
   Salesman: { collection: "Mas_Salesman", excelKey: ["Salesman Code"], dbKey: ["salesmanCode"] },

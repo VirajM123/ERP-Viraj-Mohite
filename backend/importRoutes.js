@@ -25,11 +25,15 @@ const duplicateKey = (config, doc) => {
   }
   return clean(doc[config.duplicateField]);
 };
+const importDuplicateKey = (config, doc, entryType, desktopBatch) =>
+  desktopBatch && entryType === "Account"
+    ? [doc.accountCode, doc.accountName].map(clean).join("|")
+    : duplicateKey(config, doc);
 
 export default function createImportRouter({ authorizeRequest, models }) {
   const router = express.Router();
   const companyViewPermission = authorizeRequest("MASTER", "COMPANY", "view");
-  const entryOperations = { Company: "COMPANY", Category: "CATEGORY", Group: "GROUP", Account: "ACCOUNT", Product: "PRODUCT", Bank: "BANK", Salesman: "SALESMAN", Area: "AREA", AreaToPartyMapping: "AREA_TO_PARTY", SalesmanToAreaMapping: "SALESMAN_TO_AREA" };
+  const entryOperations = { Company: "COMPANY", Category: "CATEGORY", Group: "GROUP", Account: "ACCOUNT", Product: "PRODUCT", Bank: "CUSTOMER_BANK", Salesman: "SALESMAN", Area: "AREA", AreaToPartyMapping: "AREA_TO_PARTY", SalesmanToAreaMapping: "SALESMAN_TO_AREA" };
   const importPermission = (req, res, next) => {
     const operation = entryOperations[req.body?.entryType];
     if (!operation) return res.status(400).json({ success: false, message: "Unsupported import entry type." });
@@ -60,7 +64,7 @@ export default function createImportRouter({ authorizeRequest, models }) {
       if (missingColumns.length) return res.status(422).json({ success: false, message: `Missing required column(s): ${missingColumns.join(", ")}`, missingColumns });
       const collection = mongoose.connection.collection(config.collection);
       const existing = await collection.find({ distributorId, firmId }).toArray();
-      const keys = new Set(existing.map((doc) => duplicateKey(config, doc).toLowerCase()).filter(Boolean));
+      const keys = new Set(existing.map((doc) => importDuplicateKey(config, doc, entryType, desktopBatch).toLowerCase()).filter(Boolean));
       let areaToPartyReferences = null;
       if (entryType === "AreaToPartyMapping") {
         const distinctValues = (column) => [...new Set(data.map((row) => clean(row[column])).filter(Boolean))];
@@ -127,7 +131,7 @@ export default function createImportRouter({ authorizeRequest, models }) {
           if (!salesman) errors.push(`Salesman Code "${doc.salesmanCode || ""}" does not exist`); else doc.salesmanName = salesman.salesmanName;
           if (rowCompany) doc.companyName = rowCompany.companyName;
         }
-        const key = duplicateKey(config, doc).toLowerCase();
+        const key = importDuplicateKey(config, doc, entryType, desktopBatch).toLowerCase();
         if (key && (keys.has(key) || seen.has(key))) errors.push(`${config.label} with ${config.duplicateField} "${doc[config.duplicateField]}" already exists`);
         if (key) seen.add(key);
         rows.push({ row: index + 2, status: errors.length ? "Error" : "Valid", message: errors.join("; ") });
