@@ -37,6 +37,7 @@ export default function ImportDataFromDesktop({ onClose }) {
   const inputRef = useRef(null);
   const excelInputRef = useRef(null);
   const pollRef = useRef(null);
+  const pollFailuresRef = useRef(0);
   const processing = job?.status === "processing";
   const batchActive = ["queued", "running", "paused", "rolling_back"].includes(job?.import?.status);
 
@@ -60,6 +61,7 @@ export default function ImportDataFromDesktop({ onClose }) {
       const response = await fetch(`${API_URL}/desktop-import/jobs/${jobId}`, { headers: authHeaders(), cache: "no-store" });
       const result = await response.json();
       if (!response.ok) throw new Error(result.message || "Unable to read conversion progress.");
+      pollFailuresRef.current = 0;
       setJob(result.job);
       setProgress(result.job.progress || 0);
       setStage(result.job.stage || "Processing backup");
@@ -74,6 +76,11 @@ export default function ImportDataFromDesktop({ onClose }) {
       }
       pollRef.current = window.setTimeout(() => pollJob(jobId), 900);
     } catch (pollError) {
+      pollFailuresRef.current += 1;
+      if (pollFailuresRef.current <= 5) {
+        pollRef.current = window.setTimeout(() => pollJob(jobId), 1500);
+        return;
+      }
       setError(pollError.message);
       setJob((previous) => ({ ...previous, status: "failed" }));
     }
@@ -131,6 +138,7 @@ export default function ImportDataFromDesktop({ onClose }) {
   const chooseBackups = (files) => {
     const selectedFiles = Array.from(files || []);
     window.clearTimeout(pollRef.current);
+    pollFailuresRef.current = 0;
     setBackups(selectedFiles); setExcelFiles([]); setJob(null); setSelected(new Set()); setError(""); setProgress(0);
     setStage(selectedFiles.length ? "Ready to generate ERP Excel files" : "Select a desktop SQL Server backup to begin");
   };
@@ -138,6 +146,7 @@ export default function ImportDataFromDesktop({ onClose }) {
   const chooseExcels = (files) => {
     const selectedFiles = Array.from(files || []);
     window.clearTimeout(pollRef.current);
+    pollFailuresRef.current = 0;
     setExcelFiles(selectedFiles); setBackups([]); setJob(null); setSelected(new Set()); setError(""); setProgress(0);
     setStage(selectedFiles.length ? "Ready to upload and import ERP Excel files" : "Select Excel files exported from the local machine");
   };

@@ -4,6 +4,7 @@ import * as XLSX from "xlsx";
 import { importConfig } from "./importConfig.js";
 
 const DESKTOP_TRANSACTION_CONCURRENCY = Math.max(1, Math.min(32, Number.parseInt(process.env.DESKTOP_IMPORT_TRANSACTION_CONCURRENCY || "16", 10) || 16));
+const DESKTOP_TRANSACTION_BATCH_SIZE = Math.max(25, Math.min(500, Number.parseInt(process.env.DESKTOP_IMPORT_TRANSACTION_BATCH_SIZE || "100", 10) || 100));
 
 export const DESKTOP_IMPORT_ORDER = [
   "Company", "Category", "Group", "Product", "Account", "Bank", "Area", "Salesman",
@@ -73,14 +74,25 @@ export const readDesktopWorkbook = (filePath, entryType) => {
     const nestedName = workbook.SheetNames.find((name) => normalize(name) === normalize(transaction.nested));
     nestedRows = nestedName ? XLSX.utils.sheet_to_json(workbook.Sheets[nestedName], { defval: "" }) : [];
   }
+  const nestedRowsByIdentity = !hasJson && transaction?.nested
+    ? nestedRows.reduce((groups, item) => {
+      const key = transaction.identity.map((field) => String(item[field] ?? "")).join("\u0000");
+      const group = groups.get(key) || [];
+      group.push(item);
+      groups.set(key, group);
+      return groups;
+    }, new Map())
+    : null;
   return rows.map((row, index) => {
     let payload;
     if (hasJson) payload = payloadJson(row);
     else {
       payload = Object.fromEntries(Object.entries(row).map(([name, value]) => [name, jsonCell(value)]));
-      if (transaction.nested) payload[transaction.nested] = nestedRows
-        .filter((item) => transaction.identity.every((field) => String(item[field] ?? "") === String(row[field] ?? "")))
+      if (transaction.nested) {
+        const identityKey = transaction.identity.map((field) => String(row[field] ?? "")).join("\u0000");
+        payload[transaction.nested] = (nestedRowsByIdentity.get(identityKey) || [])
         .map((item) => Object.fromEntries(Object.entries(item).filter(([name]) => !transaction.identity.includes(name)).map(([name, value]) => [name, jsonCell(value)])));
+      }
     }
     return { row: index + 2, source: row, payload };
   });
@@ -342,9 +354,12 @@ export const runDesktopImport = async ({ job, plan, state, companyCode, authoriz
           fileState.processed += 1; state.processed += 1; fileState.updatedAt = new Date().toISOString(); state.updatedAt = fileState.updatedAt;
         };
         const concurrency = file.entryType === "DesktopPurchase" ? 1 : DESKTOP_TRANSACTION_CONCURRENCY;
-        for (let offset = 0; offset < candidates.length; offset += concurrency) {
-          await waitWhilePaused(state);
-          await Promise.all(candidates.slice(offset, offset + concurrency).map(importRecord));
+        for (let batchOffset = 0; batchOffset < candidates.length; batchOffset += DESKTOP_TRANSACTION_BATCH_SIZE) {
+          const batch = candidates.slice(batchOffset, batchOffset + DESKTOP_TRANSACTION_BATCH_SIZE);
+          for (let offset = 0; offset < batch.length; offset += concurrency) {
+            await waitWhilePaused(state);
+            await Promise.all(batch.slice(offset, offset + concurrency).map(importRecord));
+          }
         }
       }
       fileState.status = fileState.failed ? "completed_with_errors" : "completed"; fileState.finishedAt = new Date().toISOString(); fileState.updatedAt = fileState.finishedAt;

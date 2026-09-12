@@ -316,6 +316,13 @@ const ownedJob = (req) => {
   return job && job.distributorId === req.security.distributorId && job.firmId === req.security.firmId ? job : null;
 };
 const internalApiUrl = () => String(process.env.DESKTOP_IMPORT_INTERNAL_API_URL || `http://127.0.0.1:${process.env.PORT || 5000}/api`).replace(/\/$/, "");
+const sameImportSelection = (previous = {}, fileIds = [], companyCode = "") => {
+  const previousIds = [...(previous.fileIds || [])].sort();
+  const requestedIds = [...fileIds].sort();
+  return String(previous.companyCode || "") === String(companyCode || "")
+    && previousIds.length === requestedIds.length
+    && previousIds.every((id, index) => id === requestedIds[index]);
+};
 const summarizePreflight = (plan) => ({
   totals: plan.totals,
   files: plan.files.map(({ records, ...file }) => file),
@@ -617,7 +624,11 @@ export default function createDesktopImportRouter({ authorizeRequest }) {
       if (!job || job.status !== "completed") return res.status(404).json({ success: false, message: "Completed conversion job was not found." });
       const fileIds = Array.isArray(req.body?.fileIds) ? req.body.fileIds : [];
       const companyCode = String(req.body?.companyCode || "").trim();
-      const plan = await preflightDesktopImport({ job, fileIds, companyCode });
+      // Reuse the exact dry-run result when the selection is unchanged. Large
+      // transaction workbooks no longer have to be parsed and queried twice.
+      const plan = job.importPlan && sameImportSelection(job.importOptions, fileIds, companyCode)
+        ? job.importPlan
+        : await preflightDesktopImport({ job, fileIds, companyCode });
       job.importPlan = plan;
       job.importOptions = { fileIds, companyCode };
       job.preflight = summarizePreflight(plan);
@@ -632,7 +643,9 @@ export default function createDesktopImportRouter({ authorizeRequest }) {
       if (["running", "paused", "rolling_back"].includes(job.import?.status)) return res.status(409).json({ success: false, message: "This desktop import job is already active." });
       const fileIds = Array.isArray(req.body?.fileIds) ? req.body.fileIds : [];
       const companyCode = String(req.body?.companyCode || "").trim();
-      const plan = await preflightDesktopImport({ job, fileIds, companyCode });
+      const plan = job.importPlan && sameImportSelection(job.importOptions, fileIds, companyCode)
+        ? job.importPlan
+        : await preflightDesktopImport({ job, fileIds, companyCode });
       job.importPlan = plan; job.importOptions = { fileIds, companyCode }; job.preflight = summarizePreflight(plan);
       if (plan.totals.errors) return res.status(422).json({ success: false, message: "Preflight found errors. Fix them before importing.", preflight: job.preflight });
       const state = {
