@@ -92,12 +92,13 @@ test("protected API rejects missing token even with fake admin headers", async (
   assert.equal(res.statusCode, 401);
 });
 
-test("firm registration is not a public API", async () => {
+test("firm registration is available before login", async () => {
   process.env.JWT_SECRET = "test-only-secret-that-is-longer-than-32-characters";
   const req = { method: "POST", path: "/register", headers: {}, body: {} };
   const res = authResponse();
-  await authenticateApi(req, res, () => assert.fail("public registration must not proceed"));
-  assert.equal(res.statusCode, 401);
+  let proceeded = false;
+  await authenticateApi(req, res, () => { proceeded = true; });
+  assert.equal(proceeded, true);
 });
 
 test("protected API rejects invalid and expired tokens", async () => {

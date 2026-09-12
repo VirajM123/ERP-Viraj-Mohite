@@ -6,6 +6,7 @@ const BCRYPT_ROUNDS = 12;
 const PUBLIC_API_PATHS = new Set([
   "/login",
   "/login/firms",
+  "/register",
   "/connection-status",
   "/bill-print/health",
 ]);

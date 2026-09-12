@@ -154,3 +154,22 @@ test('lookup matches the exact firm, account, series and number and returns unpa
   assert.deepEqual(seen[0].filter.BillNo, { $in: ['12', 12] }); assert.deepEqual(seen[0].filter.PartyCode, { $in: ['A1', accountId] });
   assert.deepEqual(openingTenant(req, { firmId: 'OTHER' }), { distributorId: 'D1', firmId: 'F1' });
 });
+
+
+test('matched prior-year bills save opening references and unpaid amounts without a duplicate journal', async t => {
+  const h = harness(t);
+  const Account = mongoose.models.Mas_Account || mongoose.model('Mas_Account', new mongoose.Schema({}));
+  t.mock.method(Account, 'findOne', () => query({ _id: accountId, accountCode: 'A1' }));
+  t.mock.method(mongoose.connection, 'collection', () => ({
+    find() { return { limit() { return this; }, toArray: async () => [{ _id: 'sale1', BillDate: '2026-03-01', NetAmount: 1000, receiptAllocated: 400 }] }; },
+    aggregate() { return { toArray: async () => [] }; },
+  }));
+  h.data.journals.push({ _id: 'journal1', distributorId: 'D1', firmId: 'F1', sourceType: 'SALES', sourceId: 'sale1', status: 'POSTED', reversalOf: null });
+  const req = request([row({ transactionType: 'SAL', mode: 'EXISTING' })]);
+  await saveAccountWithOpenings(req, h.save);
+  await saveAccountWithOpenings(req, h.save);
+  assert.equal(h.data.rows.length, 1);
+  assert.equal(h.data.rows[0].mode, 'EXISTING');
+  assert.equal(h.data.rows[0].balanceAmount, 600);
+  assert.equal(h.data.journals.length, 1);
+});

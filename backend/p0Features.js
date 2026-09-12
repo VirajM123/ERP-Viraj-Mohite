@@ -144,12 +144,29 @@ const dateMatch = (req, field = "documentDate") => {
   return Object.keys(condition).length ? { [field]: condition } : {};
 };
 
-const financialRows = async (req) => {
-  const journals = await Journal.find(tenant(req, { status: "POSTED", ...dateMatch(req) })).sort({ documentDate: 1, createdAt: 1 }).lean();
-  return journals.flatMap((entry) => entry.lines.map((line) => ({
+export const financialRows = async (req, includeOpening = false) => {
+  // Ledger openings include prior posted activity, including receipts/payments.
+  // OpeningTransaction is a reference/summary, not a second ledger posting.
+  const filter = includeOpening && req.query.fromDate
+    ? (req.query.toDate ? { documentDate: { $lte: String(req.query.toDate) } } : {})
+    : dateMatch(req);
+  const journals = await Journal.find(tenant(req, { status: "POSTED", ...filter })).sort({ documentDate: 1, createdAt: 1 }).lean();
+  const rows = journals.flatMap((entry) => entry.lines.map((line) => ({
     date: entry.documentDate, documentNo: entry.documentNo || "", source: entry.sourceType,
     accountCode: line.accountCode, narration: line.narration || "", debit: number(line.debit), credit: number(line.credit),
   })));
+  if (!includeOpening || !req.query.fromDate) return rows;
+  const fromDate = String(req.query.fromDate), balances = new Map(), movements = [];
+  for (const row of rows) {
+    if (row.date < fromDate || (row.date === fromDate && row.source === 'OPENING_BALANCE')) {
+      balances.set(row.accountCode, (balances.get(row.accountCode) || 0) + Math.round(row.debit * 100) - Math.round(row.credit * 100));
+    } else movements.push(row);
+  }
+  const openings = [...balances].filter(([, cents]) => cents !== 0).map(([accountCode, cents]) => ({
+    date: fromDate, documentNo: "", source: "OPENING_BALANCE", accountCode,
+    narration: "Opening Balance", debit: Math.max(cents, 0) / 100, credit: Math.max(-cents, 0) / 100,
+  }));
+  return [...openings, ...movements];
 };
 
 export default function createP0FeaturesRouter(securityRouter) {
@@ -239,7 +256,8 @@ export default function createP0FeaturesRouter(securityRouter) {
   });
 
   router.get("/reports/financial/:report", securityRouter.authorizeRequest("REPORTS", "FINANCIAL_REPORT", "view"), async (req, res) => {
-    let rows = await financialRows(req); const report = String(req.params.report || "general-ledger");
+    const report = String(req.params.report || "general-ledger");
+    let rows = await financialRows(req, ["general-ledger", "party-ledger"].includes(report));
     const account = String(req.query.account || "").trim().toLowerCase();
     if (account) rows = rows.filter((row) => row.accountCode.toLowerCase().includes(account));
     if (report === "cash-book") rows = rows.filter((row) => /cash/i.test(row.accountCode));

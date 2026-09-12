@@ -1,0 +1,20 @@
+.account-area-trigger { gap: 6px; }
+.account-area-dialog { width: min(1120px, calc(100vw - 32px)); max-height: calc(100vh - 40px); padding: 0; border: 0; border-radius: 12px; color: #1f2937; box-shadow: 0 24px 70px rgba(15, 23, 42, .28); }
+.account-area-dialog::backdrop { background: rgba(30, 41, 59, .55); }
+.account-area-dialog header, .account-area-dialog footer { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 14px 18px; border-bottom: 1px solid #e2e8f0; }
+.account-area-dialog header h2 { margin: 0; font-size: 18px; }
+.account-area-dialog header p { margin: 3px 0 0; color: #64748b; font-size: 12px; }
+.account-area-dialog header > button { border: 0; background: transparent; color: #64748b; cursor: pointer; }
+.account-area-body { padding: 16px 18px; overflow: auto; }
+.account-area-help { margin: 0 0 12px; color: #64748b; font-size: 13px; }
+.account-area-table-wrap { overflow: auto; border: 1px solid #dbe3ef; border-radius: 8px; }
+.account-area-dialog table { width: 100%; min-width: 900px; border-collapse: collapse; }
+.account-area-dialog th { padding: 9px 10px; background: #f1f5f9; color: #334155; text-align: left; font-size: 12px; white-space: nowrap; }
+.account-area-dialog td { padding: 8px 10px; border-top: 1px solid #e2e8f0; }
+.account-area-dialog td:first-child strong, .account-area-dialog td:first-child span { display: block; }
+.account-area-dialog td:first-child span { color: #64748b; font-size: 12px; }
+.account-area-dialog select, .account-area-dialog input { width: 100%; min-height: 34px; box-sizing: border-box; border: 1px solid #cbd5e1; border-radius: 6px; padding: 6px 8px; background: white; }
+.account-area-clear { border: 0; background: transparent; color: #dc2626; cursor: pointer; }
+.account-area-empty { padding: 24px !important; text-align: center; color: #64748b; }
+.account-area-error { margin: 12px 0 0; color: #b91c1c; font-size: 13px; }
+.account-area-dialog footer { justify-content: flex-end; border-top: 1px solid #e2e8f0; border-bottom: 0; }

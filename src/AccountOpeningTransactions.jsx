@@ -101,7 +101,7 @@ export default function AccountOpeningTransactions({ account, accountId, onApply
           <button type="button" className="account-opening-icon" aria-label="Close opening transactions" onClick={() => dialog.current.close()}><X size={18} /></button>
         </header>
         <div className="account-opening-content">
-          <p className="account-opening-hint">Enter Trn, Series and No, then press Tab or Load to fetch an existing document for this account. Existing documents are linked without posting twice. Unmatched references are brought-forward balances posted on the account Opening Date: <strong>{account.openingDate || 'not set'}</strong>.</p>
+          <p className="account-opening-hint">Enter Trn, Series and No, then press Tab or Load to fetch an existing document for this account. Existing bills are saved as opening references without posting twice. Bills before the ledger From Date contribute to its opening balance. Unmatched references are brought-forward balances posted on the account Opening Date: <strong>{account.openingDate || 'not set'}</strong>.</p>
           <p className="account-opening-hint">Apply, then Save / Update Account to post. Opening entries update the ledger and outstanding; they do not create sales, purchase, GST or stock movements.</p>
           {loading && <p role="status">Loading saved opening transactions...</p>}
           <fieldset disabled={loading || loadFailed} className="account-opening-fields">
@@ -127,12 +127,13 @@ export default function AccountOpeningTransactions({ account, accountId, onApply
           <button type="button" className="compact-btn account-opening-trigger" onClick={addRow}><Plus size={15} /> Add Transaction</button>
           </fieldset>
           <div className="account-opening-totals">
-            <div>Opening Balance<strong>{account.openingBal || '0.00'} {account.openingBalType || 'Dr'}</strong></div>
+            <div>Account Opening Balance<strong>{account.openingBal || '0.00'} {account.openingBalType || 'Dr'}</strong></div>
             <div>Total Dr<strong>{totals.debit.toFixed(2)}</strong></div>
             <div>Total Cr<strong>{totals.credit.toFixed(2)}</strong></div>
             <div>Total Dr − Cr<strong>{Math.abs(totals.net).toFixed(2)} {totals.net < 0 ? 'Cr' : 'Dr'}</strong></div>
           </div>
-          <p><strong>Brought-forward balance to post: {Math.abs(openingTotals.net).toFixed(2)} {openingTotals.net < 0 ? 'Cr' : 'Dr'}</strong> (excludes linked documents)</p>
+          <p><strong>Selected unpaid balance: {Math.abs(totals.net).toFixed(2)} {totals.net < 0 ? 'Cr' : 'Dr'}</strong> (includes existing bills; already-posted bills are not posted again)</p>
+          <p><strong>New brought-forward balance to post: {Math.abs(openingTotals.net).toFixed(2)} {openingTotals.net < 0 ? 'Cr' : 'Dr'}</strong> (excludes linked documents)</p>
           {error && <p role="alert" className="account-opening-error">{error}</p>}
         </div>
         <footer><button type="button" className="compact-btn compact-btn-cancel" onClick={() => dialog.current.close()}>Cancel</button>

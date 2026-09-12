@@ -22,6 +22,7 @@ import {
 } from "./SecuritySetup";
 import Report from "./Report";
 import AccountOpeningTransactions from "./AccountOpeningTransactions";
+import AccountCompanyAreaMappings from "./AccountCompanyAreaMappings";
 import { ACCOUNT_STATES } from "./data/accountStates";
 import ImportData from "./ImportData";
 import ImportDataFromDesktop from "./ImportDataFromDesktop";
@@ -9378,6 +9379,9 @@ const debitNotePermission = usePermission("VOUCHERS", "DEBIT_NOTE");
   const [areaToPartyEditingRow, setAreaToPartyEditingRow] = useState(-1);
   const [areaToPartyEditingCell, setAreaToPartyEditingCell] = useState('');
   const [areaToPartyFilter, setAreaToPartyFilter] = useState('');
+  const [areaToPartyListSearch, setAreaToPartyListSearch] = useState('');
+  const [areaToPartyCurrentPage, setAreaToPartyCurrentPage] = useState(1);
+  const [areaToPartySavingCell, setAreaToPartySavingCell] = useState('');
 
   // ==================== SETTLE LOAD STATE VARIABLES ====================
   // Add these with other state declarations
@@ -12541,7 +12545,7 @@ const debitNotePermission = usePermission("VOUCHERS", "DEBIT_NOTE");
   const [customerBankFilter, setCustomerBankFilter] = useState('');
 
   // Form states
-  const [companyForm, setCompanyForm] = useState({ code: '', name: '', address: '', branchAddress: '' });
+  const [companyForm, setCompanyForm] = useState({ code: '', name: '', address: '', branchAddress: '', defaultSupplierId: '' });
 
   const [productForm, setProductForm] = useState({
     code: '',
@@ -16120,6 +16124,7 @@ const debitNotePermission = usePermission("VOUCHERS", "DEBIT_NOTE");
           name: c.companyName,
           address: c.companyAddress,
           branchAddress: c.branchOfficeAddress,
+          defaultSupplierId: c.defaultSupplierId || "",
         }))
       );
     } catch (error) {
@@ -16231,6 +16236,8 @@ const debitNotePermission = usePermission("VOUCHERS", "DEBIT_NOTE");
 
               branchOfficeAddress:
                 company.branchOfficeAddress || "",
+
+              defaultSupplierId: company.defaultSupplierId || "",
 
               isActive:
                 company.isActive !== false,
@@ -17305,9 +17312,7 @@ const debitNotePermission = usePermission("VOUCHERS", "DEBIT_NOTE");
     alert("User deleted successfully!");
   };
   const handleLogout = () => {
-    sessionStorage.clear();
-    localStorage.clear();
-    setIsLoggedIn(false);
+    onLogout();
   };
   const loadGodowns = async () => {
     try {
@@ -27136,6 +27141,8 @@ ALLOW CHANGE STAR AMOUNT — FINAL SAVE PROTECTION
     }
 
     if (name === "company") {
+      const selectedCompany = companies.find(c => String(c.companyCode || c.code || c.id || c._id) === cleanValue);
+      const defaultSupplier = findPurchaseSupplier(otherAccounts, selectedCompany?.defaultSupplierId);
       const purchaseSeries = getConfiguredCompanySeries(
         cleanValue,
         "purchase"
@@ -27144,6 +27151,7 @@ ALLOW CHANGE STAR AMOUNT — FINAL SAVE PROTECTION
       setPurchaseFormData((previous) => ({
         ...previous,
         company: cleanValue,
+        ...(defaultSupplier?.accountGroup === 'SUNDRY CREDITORS' ? { supplier: purchaseSupplierValue(defaultSupplier) } : {}),
         ...(purchaseSeries.configured
           ? { vouSer: purchaseSeries.value, vouNo: "" }
           : {}),
@@ -42513,7 +42521,7 @@ if (item === "Import Data") {
 
     // IMPORTANT: Clear ALL previous form data when clicking +
     if (item === 'Company Master') {
-      setCompanyForm({ code: '', name: '', address: '', branchAddress: '' });
+      setCompanyForm({ code: '', name: '', address: '', branchAddress: '', defaultSupplierId: '' });
     }
     else if (item === 'Group Master') {
       setGroupForm({ code: '', name: '' });
@@ -44824,7 +44832,7 @@ else if (item === 'Import Data From Desktop') {
 
       // ✅ RESET FORM FIELDS
       setEditCompanyId(null);
-      setCompanyForm({ code: "", name: "", address: "", branchAddress: "" });
+      setCompanyForm({ code: "", name: "", address: "", branchAddress: "", defaultSupplierId: "" });
 
       // ✅ CLOSE FORM AND SHOW GRID VIEW
       closeForm();
@@ -44852,6 +44860,7 @@ else if (item === 'Import Data From Desktop') {
       name: company.name || company.companyName || "",
       address: company.address || company.companyAddress || "",
       branchAddress: company.branchAddress || company.branchOfficeAddress || "",
+      defaultSupplierId: company.defaultSupplierId || "",
     });
 
     setOpenFormFor("Company Master");
@@ -46516,6 +46525,8 @@ else if (item === 'Import Data From Desktop') {
 
     const wasEditing =
       Boolean(editAccountId);
+    const returnContext =
+      masterReturnContextRef.current || masterReturnContext;
     let accountSaveCompleted = false;
 
     try {
@@ -47610,6 +47621,38 @@ else if (item === 'Import Data From Desktop') {
     );
   });
 
+  const areaToPartyFilteredRows = areaToPartyData
+    .map((row, originalIndex) => ({ row, originalIndex }))
+    .filter(({ row }) => {
+      const query = areaToPartyListSearch.trim().toLowerCase();
+      return !query || [
+        row.partyCode,
+        row.partyName,
+        row.areaName,
+        row.areaCode,
+        row.closingDate,
+        row.isLock,
+        row.isStar,
+        row.accountCode,
+        row.accountName,
+        row.address1,
+        row.address2,
+        row.town,
+        row.phone,
+        row.mobileNo,
+        row.gstNo,
+        row.creditBill,
+        row.creditDays,
+        row.unrecoChq,
+      ]
+        .some((value) => String(value || '').toLowerCase().includes(query));
+    });
+  const areaToPartyTotalPages = Math.max(1, Math.ceil(areaToPartyFilteredRows.length / 10));
+  const areaToPartyVisibleRows = areaToPartyFilteredRows.slice(
+    (areaToPartyCurrentPage - 1) * 10,
+    areaToPartyCurrentPage * 10
+  );
+
   const getCompanyCode = (company) =>
     company?.companyCode || company?.code || "";
 
@@ -47622,19 +47665,43 @@ else if (item === 'Import Data From Desktop') {
     setAreaToPartyEditingRow(-1);
     setAreaToPartyEditingCell("");
     setShowAreaToPartyDropdown(false);
+    setAreaToPartyListSearch("");
+    setAreaToPartyCurrentPage(1);
 
     if (!company || accounts.length === 0) {
       setAreaToPartyData([]);
       return;
     }
 
-    const baseRows = accounts.map((account, index) => ({
-      id: `atp_${index}_${Date.now()}`,
-      accountCode: account.accountCode || account.code || "",
-      accountName: account.accountName || account.name || "",
-      areaCode: "",
-      areaName: "",
-    }));
+    const baseRows = accounts.map((account, index) => {
+      const masterAreaCode = account.areaCode || account.AreaCode || "";
+      const masterArea = areas.find((area) =>
+        String(area.code || area.areaCode || "") === String(masterAreaCode)
+      );
+
+      return {
+        id: `atp_${index}_${Date.now()}`,
+        accountId: account._id || account.id || "",
+        partyCode: account.partyCode || account.PartyCode || account.accountCode || account.code || "",
+        partyName: account.partyName || account.PartyName || account.accountName || account.name || "",
+        areaCode: masterAreaCode,
+        areaName: account.areaName || account.AreaName || masterArea?.name || masterArea?.areaName || "",
+        closingDate: account.gstClsDate || account.closingDate || account.ClosingDate || "",
+        isLock: normalizeYesNo(account.isLock ?? account.IsLock ?? account.isLocked ?? account.IsLocked ?? "NO"),
+        isStar: normalizeYesNo(account.isStar ?? account.IsStar ?? "NO"),
+        accountCode: account.accountCode || account.AccountCode || account.code || "",
+        accountName: account.accountName || account.AccountName || account.name || "",
+        address1: account.address1 || account.Address1 || account.address || "",
+        address2: account.address2 || account.Address2 || account.add2 || "",
+        town: account.town || account.Town || "",
+        phone: account.phone || account.Phone || account.phoneNo || "",
+        mobileNo: account.mobileNo || account.MobileNo || "",
+        gstNo: account.gstNo || account.GstNo || account.GSTNo || "",
+        creditBill: account.creditBill ?? account.CreditBill ?? account.creditBills ?? "",
+        creditDays: account.creditDays ?? account.CreditDays ?? "",
+        unrecoChq: account.unrecoChq ?? account.UnrecoChq ?? "",
+      };
+    });
 
     try {
       const distributorId = localStorage.getItem("distributorId");
@@ -47714,6 +47781,117 @@ else if (item === 'Import Data From Desktop') {
   const handleAreaToPartyFilterChange = (e) => {
     setAreaToPartyFilter(e.target.value);
   };
+
+  const handleAreaToPartyAccountFieldChange = (rowIndex, field, value) => {
+    setAreaToPartyData((previousRows) =>
+      previousRows.map((row, index) =>
+        index === rowIndex ? { ...row, [field]: value } : row
+      )
+    );
+  };
+
+  const saveAreaToPartyAccountFields = async (rowIndex, updates) => {
+    const row = areaToPartyData[rowIndex];
+    if (!row?.accountId || !updates || !Object.keys(updates).length) return;
+
+    const savingKey = `${row.accountId}_${Object.keys(updates).join("_")}`;
+    setAreaToPartySavingCell(savingKey);
+
+    try {
+      const response = await secureFetch(
+        `${API_URL}/accounts/${encodeURIComponent(row.accountId)}/mapping-details`,
+        {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ updates }),
+        }
+      );
+      const result = await response.json();
+
+      if (!response.ok || !result.success) {
+        throw new Error(result.message || "Account details update failed");
+      }
+
+      const saved = result.data || {};
+      setAccounts((previousAccounts) =>
+        previousAccounts.map((account) =>
+          String(account._id || account.id) === String(row.accountId)
+            ? { ...account, ...saved, id: saved._id || account.id }
+            : account
+        )
+      );
+      setAreaToPartyData((previousRows) =>
+        previousRows.map((currentRow, index) =>
+          index === rowIndex
+            ? {
+              ...currentRow,
+              partyCode: saved.partyCode ?? currentRow.partyCode,
+              partyName: saved.partyName ?? currentRow.partyName,
+              areaCode: saved.areaCode ?? currentRow.areaCode,
+              areaName: saved.areaName ?? currentRow.areaName,
+              closingDate: saved.closingDate ?? currentRow.closingDate,
+              isLock: saved.isLock ?? currentRow.isLock,
+              isStar: saved.isStar ?? currentRow.isStar,
+              accountCode: saved.accountCode ?? currentRow.accountCode,
+              accountName: saved.accountName ?? currentRow.accountName,
+              address1: saved.address ?? currentRow.address1,
+              address2: saved.add2 ?? currentRow.address2,
+              town: saved.town ?? currentRow.town,
+              phone: saved.phoneNo ?? currentRow.phone,
+              mobileNo: saved.mobileNo ?? currentRow.mobileNo,
+              gstNo: saved.gstNo ?? currentRow.gstNo,
+              creditBill: saved.creditBills ?? currentRow.creditBill,
+              creditDays: saved.creditDays ?? currentRow.creditDays,
+              unrecoChq: saved.unrecoChq ?? currentRow.unrecoChq,
+            }
+            : currentRow
+        )
+      );
+    } catch (error) {
+      console.error("Area To Party account update error:", error);
+      alert(error.message || "Account details update failed");
+    } finally {
+      setAreaToPartySavingCell("");
+    }
+  };
+
+  const renderAreaToPartyEditor = (row, rowIndex, field, type = "text") => (
+    <input
+      className="mapping-inline-editor"
+      type={type}
+      min={type === "number" ? "0" : undefined}
+      value={row[field] ?? ""}
+      title={String(row[field] ?? "")}
+      aria-label={field}
+      disabled={areaToPartySavingCell.startsWith(`${row.accountId}_`)}
+      onChange={(event) =>
+        handleAreaToPartyAccountFieldChange(rowIndex, field, event.target.value)
+      }
+      onBlur={(event) =>
+        saveAreaToPartyAccountFields(rowIndex, { [field]: event.target.value })
+      }
+      onKeyDown={(event) => {
+        if (event.key === "Enter") event.currentTarget.blur();
+      }}
+    />
+  );
+
+  const renderAreaToPartyYesNo = (row, rowIndex, field) => (
+    <select
+      className="mapping-inline-editor mapping-inline-select"
+      value={normalizeYesNo(row[field])}
+      aria-label={field}
+      disabled={areaToPartySavingCell.startsWith(`${row.accountId}_`)}
+      onChange={(event) => {
+        const value = event.target.value;
+        handleAreaToPartyAccountFieldChange(rowIndex, field, value);
+        saveAreaToPartyAccountFields(rowIndex, { [field]: value });
+      }}
+    >
+      <option value="YES">YES</option>
+      <option value="NO">NO</option>
+    </select>
+  );
 
   const saveAreaToPartyMapping = async () => {
     if (!areaToPartyCompany) {
@@ -47862,6 +48040,8 @@ else if (item === 'Import Data From Desktop') {
     setAreaToPartyEditingRow(-1);
     setAreaToPartyEditingCell('');
     setShowAreaToPartyDropdown(false);
+    setAreaToPartyListSearch('');
+    setAreaToPartyCurrentPage(1);
   };
   /* =========================================================
   LOAD TRANSFER PAGE
@@ -70037,6 +70217,14 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                       />
                     </div>
                     <div className="compact-field">
+                      <label>Default Supplier</label>
+                      <select name="defaultSupplierId" value={companyForm.defaultSupplierId || ''} onChange={handleCompanyInput}>
+                        <option value="">Select Default Supplier</option>
+                        {otherAccounts.filter(acc => acc.accountGroup === 'SUNDRY CREDITORS' && acc.isActive !== false)
+                          .map(acc => <option key={acc.id || acc._id} value={purchaseSupplierValue(acc)}>{acc.accountName}</option>)}
+                      </select>
+                    </div>
+                    <div className="compact-field">
                       <label>Status</label>
                       <select name="status" value={companyForm.status || 'Active'} onChange={handleCompanyInput}>
                         <option value="Active">Active</option>
@@ -70123,7 +70311,7 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                         className="firm-ui-btn firm-ui-btn-primary"
                         onClick={() => {
                           setEditCompanyId(null);
-                          setCompanyForm({ code: '', name: '', address: '', branchAddress: '' });
+                          setCompanyForm({ code: '', name: '', address: '', branchAddress: '', defaultSupplierId: '' });
                           setOpenFormFor('Company Master');
                         }}
                       >
@@ -70266,7 +70454,7 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                                     className="firm-ui-btn firm-ui-btn-primary"
                                     onClick={() => {
                                       setEditCompanyId(null);
-                                      setCompanyForm({ code: '', name: '', address: '', branchAddress: '' });
+                                      setCompanyForm({ code: '', name: '', address: '', branchAddress: '', defaultSupplierId: '' });
                                       setOpenFormFor('Company Master');
                                     }}
                                   >
@@ -72055,6 +72243,15 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                         ...previous, openingTransactions,
                         ...(totals ? { openingBal: Math.abs(totals.net).toFixed(2), openingBalType: totals.net < 0 ? 'Cr' : 'Dr' } : {}),
                       }))}
+                    />
+                    <AccountCompanyAreaMappings
+                      account={accountForm}
+                      accountId={editAccountId}
+                      companies={companies}
+                      areas={areaOptions}
+                      apiUrl={API_URL}
+                      secureFetch={secureFetch}
+                      onApply={(companyAreaMappings) => setAccountForm(previous => ({ ...previous, companyAreaMappings }))}
                     />
                     <button
                       type="submit"
@@ -81689,94 +81886,121 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
             )}
             {/* Area To Party Mapping UI */}
             {activeSubMenu === 'Area To Party' && (
-              <div className="master-section">
-                <div className="page-title-large">Area to Party Mapping</div>
+              <section className="mapping-page mapping-area-party-page">
+                <div className="mapping-toolbar">
+                  <div className="mapping-page-header">
+                    <div className="mapping-title-block">
+                      <h1>Area to Party Mapping</h1>
+                      <p>Map customer accounts to areas</p>
+                    </div>
 
-                <div className="form-row mb-4">
-                  <label className="form-label">Select Company:</label>
-                  <select className="form-select" value={areaToPartyCompany?.id || ''} onChange={(e) => handleAreaToPartyCompanySelect(companies.find(c => c.id == e.target.value))}>
-                    <option value="">--- Select Company ---</option>
-                    {companies.map(company => (<option key={company.id} value={company.id}>{company.code} - {company.name}</option>))}
-                  </select>
+                    <div className="mapping-header-controls">
+                      <label htmlFor="area-party-company">Company</label>
+                      <div className="mapping-company-actions">
+                        <select
+                          id="area-party-company"
+                          className="mapping-company-select"
+                          value={areaToPartyCompany?.id || ''}
+                          onChange={(e) => handleAreaToPartyCompanySelect(companies.find(c => c.id == e.target.value))}
+                        >
+                          <option value="">Select Company</option>
+                          {companies.map(company => (<option key={company.id} value={company.id}>{company.code} - {company.name}</option>))}
+                        </select>
+                      </div>
+                    </div>
+
+                    <div className="mapping-header-actions">
+                      <button type="button" className="mapping-button mapping-button-primary" onClick={saveAreaToPartyMapping}><Save size={14} />Save Mapping</button>
+                      <button type="button" className="mapping-button mapping-export-button"><FileSpreadsheet size={14} />Export Excel</button>
+                      <button type="button" className="mapping-button mapping-export-button"><FileText size={14} />Export PDF</button>
+                      <button type="button" className="mapping-button mapping-export-button"><Printer size={14} />Print List</button>
+                    </div>
+                  </div>
+
+                  <div className="mapping-search-row">
+                    <label className="mapping-search-box">
+                      <Search size={15} />
+                      <input
+                        type="search"
+                        placeholder="Search party, account, area or contact details..."
+                        value={areaToPartyListSearch}
+                        onChange={(event) => {
+                          setAreaToPartyListSearch(event.target.value);
+                          setAreaToPartyCurrentPage(1);
+                        }}
+                      />
+                    </label>
+                    <button type="button" className="mapping-button mapping-filter-button">
+                      <SlidersHorizontal size={14} />Apply Filter<ChevronDown size={14} />
+                    </button>
+                  </div>
                 </div>
 
                 {areaToPartyCompany && areaToPartyData.length > 0 && (
-                  <>
+                  <div className="mapping-table-card">
                     <div className="grid-header">
                       <h3>Mapping for {areaToPartyCompany.code} - {areaToPartyCompany.name} ({areaToPartyData.length} accounts)</h3>
                       <div className="form-actions"><button className="btn-save" onClick={saveAreaToPartyMapping}>💾 Save Mapping</button><button className="btn-cancel" onClick={resetAreaToPartyMapping}>🔄 Reset</button></div>
                     </div>
-                    <div className="data-table-container">
-                      <table className="data-table">
-                        <thead><tr><th style={{ width: '20%' }}>Account Code</th><th style={{ width: '40%' }}>Account Name</th><th style={{ width: '25%' }}>Area Name</th><th style={{ width: '15%' }}>Status</th></tr></thead>
+                    <div className="mapping-table-wrap">
+                      <table className="mapping-list-table">
+                        <thead>
+                          <tr>
+                            <th>Party Code</th>
+                            <th>Party Name</th>
+                            <th>Area Name</th>
+                            <th>Area Code</th>
+                            <th>Closing Date</th>
+                            <th>IsLock</th>
+                            <th>IsStar</th>
+                            <th>Account Code</th>
+                            <th>Account Name</th>
+                            <th>Address1</th>
+                            <th>Address2</th>
+                            <th>Town</th>
+                            <th>Phone</th>
+                            <th>MobileNo</th>
+                            <th>GstNo</th>
+                            <th>Credit Bill</th>
+                            <th>Credit Days</th>
+                            <th>UnrecoChq</th>
+                          </tr>
+                        </thead>
                         <tbody>
-                          {areaToPartyData.map((row, rowIndex) => (
+                          {areaToPartyVisibleRows.map(({ row, originalIndex }) => (
                             <tr
-                              key={row.id || rowIndex}
+                              key={row.id || originalIndex}
                               className={
-                                areaToPartyEditingRow === rowIndex ? "editing-row" : ""
+                                areaToPartyEditingRow === originalIndex ? "editing-row" : ""
                               }
                             >
-                              {/* Account Code */}
+                              <td data-label="Party Code">{renderAreaToPartyEditor(row, originalIndex, "partyCode")}</td>
+                              <td data-label="Party Name">{renderAreaToPartyEditor(row, originalIndex, "partyName")}</td>
                               <td
-                                data-label="Account Code"
-                                style={{
-                                  width: "15%",
-                                  whiteSpace: "nowrap"
-                                }}
-                              >
-                                {row.accountCode}
-                              </td>
-
-                              {/* Account Name */}
-                              <td
-                                data-label="Account Name"
-                                style={{
-                                  width: "45%",
-                                  whiteSpace: "nowrap",
-                                  overflow: "hidden",
-                                  textOverflow: "ellipsis"
-                                }}
-                              >
-                                {row.accountName}
-                              </td>
-
-                              {/* Area Name */}
-                              <td
-                                data-atp-cell={`areaName_${rowIndex}`}
+                                data-atp-cell={`areaName_${originalIndex}`}
                                 data-label="Area Name"
-                                className={`editable-cell ${areaToPartyEditingCell === `areaName_${rowIndex}`
+                                className={`mapping-area-picker ${areaToPartyEditingCell === `areaName_${originalIndex}`
                                   ? "editing"
                                   : ""
                                   }`}
-                                style={{
-                                  width: "28%",
-                                  position: "relative"
-                                }}
                                 onClick={() =>
-                                  handleAreaToPartyCellClick(rowIndex, "areaName")
+                                  handleAreaToPartyCellClick(originalIndex, "areaName")
                                 }
                                 tabIndex={0}
                                 onKeyDown={(e) =>
-                                  handleAreaToPartyKeyDown(e, rowIndex, "areaName")
+                                  handleAreaToPartyKeyDown(e, originalIndex, "areaName")
                                 }
                               >
                                 {row.areaName ? (
                                   row.areaName
                                 ) : (
-                                  <span
-                                    className="placeholder"
-                                    style={{
-                                      color: "#999",
-                                      fontStyle: "italic"
-                                    }}
-                                  >
+                                  <span className="mapping-placeholder">
                                     Click to select area...
                                   </span>
                                 )}
 
                                 {showAreaToPartyDropdown &&
-                                  areaToPartyEditingRow === rowIndex && (
+                                  areaToPartyEditingRow === originalIndex && (
                                     <div
                                       className="dropdown-overlay"
                                       onClick={(e) => e.stopPropagation()}
@@ -81800,10 +82024,17 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                                               onClick={(e) => {
                                                 e.stopPropagation();
 
+                                                const selectedAreaCode = area.code || area.areaCode || "";
+                                                const selectedAreaName = area.name || area.areaName || "";
+
                                                 handleAreaToPartySelect(
-                                                  rowIndex,
+                                                  originalIndex,
                                                   area
                                                 );
+                                                saveAreaToPartyAccountFields(originalIndex, {
+                                                  areaCode: selectedAreaCode,
+                                                  areaName: selectedAreaName,
+                                                });
 
                                                 // Close popup immediately
                                                 setShowAreaToPartyDropdown(false);
@@ -81827,36 +82058,44 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                                     </div>
                                   )}
                               </td>
-
-                              {/* Status */}
-                              <td
-                                data-label="Status"
-                                style={{
-                                  width: "12%",
-                                  textAlign: "center",
-                                  whiteSpace: "nowrap"
-                                }}
-                              >
-                                <span
-                                  className={`status-badge ${row.areaName ? "complete" : "pending"
-                                    }`}
-                                >
-                                  {row.areaName
-                                    ? "✅ Complete"
-                                    : "⏳ Pending"}
-                                </span>
-                              </td>
+                              <td data-label="Area Code">{renderAreaToPartyEditor(row, originalIndex, "areaCode")}</td>
+                              <td data-label="Closing Date">{renderAreaToPartyEditor(row, originalIndex, "closingDate")}</td>
+                              <td data-label="IsLock">{renderAreaToPartyYesNo(row, originalIndex, "isLock")}</td>
+                              <td data-label="IsStar">{renderAreaToPartyYesNo(row, originalIndex, "isStar")}</td>
+                              <td data-label="Account Code">{renderAreaToPartyEditor(row, originalIndex, "accountCode")}</td>
+                              <td data-label="Account Name">{renderAreaToPartyEditor(row, originalIndex, "accountName")}</td>
+                              <td data-label="Address1">{renderAreaToPartyEditor(row, originalIndex, "address1")}</td>
+                              <td data-label="Address2">{renderAreaToPartyEditor(row, originalIndex, "address2")}</td>
+                              <td data-label="Town">{renderAreaToPartyEditor(row, originalIndex, "town")}</td>
+                              <td data-label="Phone">{renderAreaToPartyEditor(row, originalIndex, "phone")}</td>
+                              <td data-label="MobileNo">{renderAreaToPartyEditor(row, originalIndex, "mobileNo")}</td>
+                              <td data-label="GstNo">{renderAreaToPartyEditor(row, originalIndex, "gstNo")}</td>
+                              <td data-label="Credit Bill">{renderAreaToPartyEditor(row, originalIndex, "creditBill", "number")}</td>
+                              <td data-label="Credit Days">{renderAreaToPartyEditor(row, originalIndex, "creditDays", "number")}</td>
+                              <td data-label="UnrecoChq">{renderAreaToPartyEditor(row, originalIndex, "unrecoChq")}</td>
                             </tr>
                           ))}
                         </tbody>
                       </table>
                     </div>
-                    <div className="mapping-stats mt-4"><div className="stat"><strong>Progress:</strong> <span className="progress-count">{areaToPartyData.filter(row => row.areaName).length}/{areaToPartyData.length} accounts mapped</span></div></div>
-                  </>
+                    <div className="mapping-table-footer">
+                      <span>Showing {(areaToPartyCurrentPage - 1) * 10 + 1} to {Math.min(areaToPartyCurrentPage * 10, areaToPartyFilteredRows.length)} of {areaToPartyFilteredRows.length} entries</span>
+                      <div className="mapping-pagination">
+                        <select aria-label="Rows per page" defaultValue="10"><option>10</option></select>
+                        <button type="button" disabled={areaToPartyCurrentPage === 1} onClick={() => setAreaToPartyCurrentPage((page) => Math.max(1, page - 1))}><ChevronLeft size={15} /></button>
+                        {Array.from({ length: areaToPartyTotalPages }, (_, pageIndex) => pageIndex + 1).slice(0, 5).map((page) => (
+                          <button type="button" key={page} className={areaToPartyCurrentPage === page ? "is-current" : ""} onClick={() => setAreaToPartyCurrentPage(page)}>{page}</button>
+                        ))}
+                        {areaToPartyTotalPages > 6 && <span>...</span>}
+                        {areaToPartyTotalPages > 5 && <button type="button" className={areaToPartyCurrentPage === areaToPartyTotalPages ? "is-current" : ""} onClick={() => setAreaToPartyCurrentPage(areaToPartyTotalPages)}>{areaToPartyTotalPages}</button>}
+                        <button type="button" disabled={areaToPartyCurrentPage === areaToPartyTotalPages} onClick={() => setAreaToPartyCurrentPage((page) => Math.min(areaToPartyTotalPages, page + 1))}><ChevronRight size={15} /></button>
+                      </div>
+                    </div>
+                  </div>
                 )}
-                {!areaToPartyCompany && (<div className="empty-state"><div className="empty-icon">🔗</div><h4>Select a company to start mapping</h4><p>Add companies in Company Master first, then select one above to map areas to parties.</p></div>)}
-                {!accounts.length && areaToPartyCompany && (<div className="empty-state"><div className="empty-icon">👤</div><h4>No Accounts Found</h4><p>Add accounts in Account Master first to enable mapping.</p></div>)}
-              </div>
+                {!areaToPartyCompany && (<div className="mapping-empty-state"><div><h4>Select a company to start mapping</h4><p>Add companies in Company Master first, then select one above to map areas to parties.</p></div></div>)}
+                {!accounts.length && areaToPartyCompany && (<div className="mapping-empty-state"><div><h4>No Accounts Found</h4><p>Add accounts in Account Master first to enable mapping.</p></div></div>)}
+              </section>
             )}
           </div>
         </main>

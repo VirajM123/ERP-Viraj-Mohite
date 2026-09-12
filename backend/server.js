@@ -158,6 +158,7 @@ const userSchema = new mongoose.Schema(
 const companySchema = new mongoose.Schema(
   {
     companyCode: String,
+    defaultSupplierId: { type: String, default: "" },
     companyName: String,
     companyAddress: String,
     branchOfficeAddress: String,
@@ -299,7 +300,7 @@ const generateFirmId = async () => {
   return `FIRM-${maxNo + 1}`;
 };
 
-app.post("/api/register", ensureConnection, requireRoles("DISTRIBUTOR_ADMIN"), async (req, res) => {
+app.post("/api/register", ensureConnection, async (req, res) => {
   try {
     const {
       firmCode,
@@ -330,13 +331,6 @@ app.post("/api/register", ensureConnection, requireRoles("DISTRIBUTOR_ADMIN"), a
       });
     }
 
-    if (String(userName).trim() !== String(req.auth.userName).trim()) {
-      return res.status(403).json({
-        success: false,
-        message: "A distributor administrator may only add a firm to their own account.",
-      });
-    }
-
     if (!validatePasswordStrength(password)) {
       return res.status(400).json({
         success: false,
@@ -344,10 +338,7 @@ app.post("/api/register", ensureConnection, requireRoles("DISTRIBUTOR_ADMIN"), a
       });
     }
 
-    const distributorId = String(req.auth.distributorId);
-
     const existingFirm = await Register.findOne({
-      distributorId,
       firmCode: firmCode.trim(),
       firmName: firmName.trim(),
     });
@@ -360,10 +351,11 @@ app.post("/api/register", ensureConnection, requireRoles("DISTRIBUTOR_ADMIN"), a
     }
 
     const existingUser = await Register.findOne({
-      distributorId,
       userName: userName.trim(),
       isActive: true,
     });
+
+    let distributorId;
 
     if (existingUser) {
       if (!(await verifyPassword(password, existingUser.password))) {
@@ -373,6 +365,10 @@ app.post("/api/register", ensureConnection, requireRoles("DISTRIBUTOR_ADMIN"), a
             "This username already exists. Enter correct old password to add another firm.",
         });
       }
+
+      distributorId = existingUser.distributorId;
+    } else {
+      distributorId = await generateDistributorId();
     }
 
     const firmId = await generateFirmId();
@@ -1159,6 +1155,8 @@ const accountSchema = new mongoose.Schema(
   {
     accountCode: { type: String, required: true, trim: true },
     accountName: { type: String, required: true, trim: true },
+    partyCode: { type: String, default: "" },
+    partyName: { type: String, default: "" },
 
     openingDate: { type: String, default: "" },
 
@@ -1189,6 +1187,7 @@ const accountSchema = new mongoose.Schema(
     gstType: { type: String, default: "Unregistered" },
     gstDate: { type: String, default: "" },
     gstClsDate: { type: String, default: "" },
+    closingDate: { type: String, default: "" },
 
     add2: { type: String, default: "" },
     tcsPercent: { type: Number, default: 0 },
@@ -1211,6 +1210,10 @@ const accountSchema = new mongoose.Schema(
     firmName: { type: String, default: "" },
 
     areaCode: { type: String, default: "" },
+    areaName: { type: String, default: "" },
+    isLock: { type: String, default: "NO" },
+    isStar: { type: String, default: "NO" },
+    unrecoChq: { type: String, default: "" },
 
     isActive: { type: Boolean, default: true },
   },
@@ -1891,6 +1894,11 @@ const areaToPartyMappingSchema = new mongoose.Schema(
     areaCode: String,
     areaName: String,
 
+    // Customer code/name used by this specific company. These can differ
+    // from Account Master and therefore belong on the company mapping.
+    compaccode: { type: String, default: "" },
+    compacname: { type: String, default: "" },
+
     distributorId: { type: String, required: true },
     firmId: { type: String, required: true },
     firmName: { type: String, default: "" },
@@ -1909,6 +1917,70 @@ const AreaToPartyMapping = mongoose.model(
   "Mas_AreaToPartyMapping",
   areaToPartyMappingSchema
 );
+
+const validateAccountCompanyMappings = async (req, accountCode, accountName, session = null) => {
+  if (req.body.companyAreaMappings === undefined) return null;
+  if (!Array.isArray(req.body.companyAreaMappings)) {
+    throw Object.assign(new Error("Company area mappings must be a list."), { statusCode: 400 });
+  }
+
+  const rows = req.body.companyAreaMappings.filter((row) =>
+    row && [row.companyCode, row.areaCode, row.compaccode, row.compacname].some((value) => String(value || "").trim())
+  );
+  const normalized = [];
+  const companyCodes = new Set();
+  for (const row of rows) {
+    const companyCode = String(row.companyCode || "").trim();
+    const areaCode = String(row.areaCode || "").trim();
+    const compaccode = String(row.compaccode || "").trim();
+    const compacname = String(row.compacname || "").trim();
+    if (!companyCode || !areaCode || !compaccode || !compacname) {
+      throw Object.assign(new Error("Company, Area, Company Account Code and Company Account Name are required for every mapped row."), { statusCode: 400 });
+    }
+    if (companyCodes.has(companyCode)) {
+      throw Object.assign(new Error(`Company ${companyCode} is mapped more than once.`), { statusCode: 400 });
+    }
+    companyCodes.add(companyCode);
+    normalized.push({ companyCode, areaCode, compaccode, compacname });
+  }
+
+  const scope = { distributorId: req.auth.distributorId, firmId: req.auth.firmId, isActive: { $ne: false } };
+  const companies = await Company.find({ ...scope, companyCode: { $in: normalized.map((row) => row.companyCode) } })
+    .select("companyCode companyName").session(session).lean();
+  const areas = await Area.find({ ...scope, areaCode: { $in: normalized.map((row) => row.areaCode) } })
+    .select("areaCode areaName").session(session).lean();
+  const companyMap = new Map(companies.map((company) => [String(company.companyCode), company]));
+  const areaMap = new Map(areas.map((area) => [String(area.areaCode), area]));
+  if (companyMap.size !== companyCodes.size || areaMap.size !== new Set(normalized.map((row) => row.areaCode)).size) {
+    throw Object.assign(new Error("Select active companies and areas from this firm."), { statusCode: 400 });
+  }
+
+  return normalized.map((row) => ({
+    ...row,
+    companyName: String(companyMap.get(row.companyCode).companyName || "").trim(),
+    areaName: String(areaMap.get(row.areaCode).areaName || "").trim(),
+    accountCode,
+    accountName,
+    distributorId: req.auth.distributorId,
+    firmId: req.auth.firmId,
+    firmName: String(req.auth.firmName || req.body.firmName || "").trim(),
+    isActive: true,
+  }));
+};
+
+const syncAccountCompanyMappings = async (req, account, rows, session = null) => {
+  if (rows === null) return;
+  const scope = { distributorId: req.auth.distributorId, firmId: req.auth.firmId, accountCode: account.accountCode };
+  await AreaToPartyMapping.updateMany(scope, { $set: { isActive: false } }, { session });
+  if (!rows.length) return;
+  await AreaToPartyMapping.bulkWrite(rows.map((row) => ({
+    updateOne: {
+      filter: { ...scope, companyCode: row.companyCode },
+      update: { $set: { ...row, accountName: account.accountName, isActive: true } },
+      upsert: true,
+    },
+  })), { session });
+};
 
 // Mounted after the actual supported master/mapping models are registered so
 // imported records receive the same defaults and validation as normal saves.
@@ -4914,7 +4986,12 @@ const {
       });
     }
 
+    const defaultSupplierId = String(req.body.defaultSupplierId || "").trim();
+    if (defaultSupplierId && (!mongoose.isValidObjectId(defaultSupplierId) || !await OtherAccount.exists({ _id: defaultSupplierId, distributorId, firmId, accountGroup: "SUNDRY CREDITORS", isActive: { $ne: false } }))) {
+      return res.status(400).json({ success: false, message: "Select an active supplier from this firm." });
+    }
     const company = await Company.create({
+      defaultSupplierId,
       companyCode: code.trim(),
       companyName: name.trim(),
       companyAddress: address || "",
@@ -4959,6 +5036,13 @@ app.put(
       companyAddress: address || "",
       branchOfficeAddress: branchAddress || "",
     };
+    if (Object.hasOwn(req.body, "defaultSupplierId")) {
+      const defaultSupplierId = String(req.body.defaultSupplierId || "").trim();
+      if (defaultSupplierId && (!mongoose.isValidObjectId(defaultSupplierId) || !await OtherAccount.exists({ _id: defaultSupplierId, distributorId: req.auth.distributorId, firmId: req.auth.firmId, accountGroup: "SUNDRY CREDITORS", isActive: { $ne: false } }))) {
+        return res.status(400).json({ success: false, message: "Select an active supplier from this firm." });
+      }
+      updateData.defaultSupplierId = defaultSupplierId;
+    }
     if (Object.hasOwn(req.body, "gstNo")) updateData.gstNo = String(req.body.gstNo || "").trim();
     if (Object.hasOwn(req.body, "state")) updateData.state = String(req.body.state || "").trim();
     if (Object.hasOwn(req.body, "pinCode")) updateData.pinCode = String(req.body.pinCode || "").trim();
@@ -5987,7 +6071,7 @@ app.get(
       firmId,
       isActive: true,
     })
-      .select('accountCode accountName openingDate address town state pinCode phoneNo mobileNo emailId tinNo openingBal openingBalType openingTransactions contactPerson invType taxOn panNo foodLicense gstNo billToAdd1 tanNo gstType gstDate gstClsDate add2 tcsPercent allowInPurchase drugLicNo drugExpDate creditDays creditBills lockDays creditAmt blackListed lastBillDate lastInvoiceDate areaCode distributorId firmId firmName isActive createdAt updatedAt')
+      .select('accountCode accountName partyCode partyName PartyCode PartyName openingDate closingDate ClosingDate address address1 address2 Address1 Address2 add2 town Town state pinCode phone phoneNo Phone mobileNo MobileNo emailId tinNo openingBal openingBalType openingTransactions contactPerson invType taxOn panNo foodLicense gstNo GstNo GSTNo billToAdd1 tanNo gstType gstDate gstClsDate tcsPercent allowInPurchase drugLicNo drugExpDate creditDays CreditDays creditBill CreditBill creditBills unrecoChq UnrecoChq isLock IsLock isLocked IsLocked isStar IsStar lockDays creditAmt blackListed lastBillDate lastInvoiceDate areaCode AreaCode areaName AreaName distributorId firmId firmName isActive createdAt updatedAt')
       .sort({ createdAt: -1 });
 
     // Get all areas for this firm to populate town dropdown
@@ -6358,6 +6442,8 @@ app.post(
       if (message) return res.status(400).json({ success: false, message });
     }
 
+    const companyAreaMappings = await validateAccountCompanyMappings(req, accountCode, accountName);
+
     const account = await saveAccountWithOpenings(req, async session => {
       const [created] = await Account.create([{
       ...(req.body.openingTransactions !== undefined ? { openingTransactions: req.body.openingTransactions } : {}),
@@ -6411,6 +6497,7 @@ app.post(
       firmName,
       isActive: true,
     }], { session });
+      await syncAccountCompanyMappings(req, created, companyAreaMappings, session);
       return created;
     });
 
@@ -10120,6 +10207,27 @@ app.post("/api/area-to-party-mappings", ensureConnection, async (req, res) => {
   }
 });
 
+
+app.get(
+  "/api/account-company-area-mappings",
+  ensureConnection,
+  securityRouter.authorizeRequest("MASTER", "ACCOUNT", "view"),
+  async (req, res) => {
+    try {
+      const accountCode = String(req.query.accountCode || "").trim();
+      if (!accountCode) return res.status(400).json({ success: false, message: "Account code is required." });
+      const mappings = await AreaToPartyMapping.find({
+        distributorId: req.auth.distributorId,
+        firmId: req.auth.firmId,
+        accountCode,
+        isActive: { $ne: false },
+      }).select("companyCode companyName areaCode areaName compaccode compacname").sort({ companyName: 1 }).lean();
+      return res.json({ success: true, mappings });
+    } catch (error) {
+      return res.status(500).json({ success: false, message: "Failed to load account company mappings.", error: error.message });
+    }
+  }
+);
 
 app.get("/api/purchase/next-vou-no", ensureConnection, async (req, res) => {
   try {
@@ -27557,6 +27665,12 @@ app.put(
       if (message) return res.status(400).json({ success: false, message });
     }
 
+    const companyAreaMappings = await validateAccountCompanyMappings(
+      req,
+      String(req.body.accountCode || "").trim(),
+      String(req.body.accountName || "").trim()
+    );
+
     const updateData = {
       ...(req.body.openingTransactions !== undefined ? { openingTransactions: req.body.openingTransactions } : {}),
       accountCode: String(req.body.accountCode || "").trim(),
@@ -27605,11 +27719,15 @@ app.put(
       creditAmt: updateData.creditAmt
     });
 
-    const updatedAccount = await saveAccountWithOpenings(req, session => Account.findOneAndUpdate(
-      { _id: id, distributorId: req.auth.distributorId, firmId: req.auth.firmId },
-      updateData,
-      { new: true, runValidators: true, session }
-    ));
+    const updatedAccount = await saveAccountWithOpenings(req, async session => {
+      const account = await Account.findOneAndUpdate(
+        { _id: id, distributorId: req.auth.distributorId, firmId: req.auth.firmId },
+        updateData,
+        { new: true, runValidators: true, session }
+      );
+      if (account) await syncAccountCompanyMappings(req, account, companyAreaMappings, session);
+      return account;
+    });
 
     if (!updatedAccount) {
       return res.status(404).json({
@@ -27637,6 +27755,115 @@ app.put(
     });
   }
 });
+
+// Inline Account Master updates used only by the Area-to-Party grid.
+// The allow-list prevents this compact editor from changing unrelated fields.
+app.patch(
+  "/api/accounts/:id/mapping-details",
+  ensureConnection,
+  securityRouter.authorizeRequest("MASTER", "ACCOUNT", "edit"),
+  async (req, res) => {
+    try {
+      if (!mongoose.isValidObjectId(req.params.id)) {
+        return res.status(400).json({ success: false, message: "Invalid account id" });
+      }
+
+      const existing = await Account.findOne({
+        _id: req.params.id,
+        distributorId: req.auth.distributorId,
+        firmId: req.auth.firmId,
+        isActive: { $ne: false },
+      });
+
+      if (!existing) {
+        return res.status(404).json({ success: false, message: "Account not found" });
+      }
+
+      const updates = req.body?.updates && typeof req.body.updates === "object"
+        ? req.body.updates
+        : {};
+      const text = (value) => String(value ?? "").trim();
+      const yesNo = (value) => ["YES", "Y", "TRUE", "1"].includes(text(value).toUpperCase()) ? "YES" : "NO";
+      const updateData = {};
+      const assignText = (requestField, accountField = requestField) => {
+        if (Object.hasOwn(updates, requestField)) updateData[accountField] = text(updates[requestField]);
+      };
+
+      assignText("partyCode");
+      assignText("partyName");
+      assignText("areaName");
+      assignText("areaCode");
+      if (Object.hasOwn(updates, "closingDate")) {
+        updateData.closingDate = text(updates.closingDate);
+        updateData.gstClsDate = text(updates.closingDate);
+      }
+      assignText("accountCode");
+      assignText("accountName");
+      assignText("address1", "address");
+      assignText("address2", "add2");
+      assignText("town");
+      assignText("phone", "phoneNo");
+      assignText("mobileNo");
+      assignText("gstNo");
+      assignText("unrecoChq");
+
+      if (Object.hasOwn(updates, "isLock")) updateData.isLock = yesNo(updates.isLock);
+      if (Object.hasOwn(updates, "isStar")) updateData.isStar = yesNo(updates.isStar);
+      if (Object.hasOwn(updates, "creditBill")) updateData.creditBills = Math.max(0, Number(updates.creditBill) || 0);
+      if (Object.hasOwn(updates, "creditDays")) updateData.creditDays = Math.max(0, Number(updates.creditDays) || 0);
+
+      if (Object.hasOwn(updateData, "accountCode") && !updateData.accountCode) {
+        return res.status(400).json({ success: false, message: "Account Code is required" });
+      }
+      if (Object.hasOwn(updateData, "accountName") && !updateData.accountName) {
+        return res.status(400).json({ success: false, message: "Account Name is required" });
+      }
+      if (!Object.keys(updateData).length) {
+        return res.status(400).json({ success: false, message: "No editable account fields were provided" });
+      }
+
+      const previousAccountCode = existing.accountCode;
+      const updatedAccount = await Account.findOneAndUpdate(
+        {
+          _id: existing._id,
+          distributorId: req.auth.distributorId,
+          firmId: req.auth.firmId,
+        },
+        { $set: updateData },
+        { new: true, runValidators: true }
+      );
+
+      const mappingUpdates = {};
+      if (Object.hasOwn(updateData, "accountCode")) mappingUpdates.accountCode = updatedAccount.accountCode;
+      if (Object.hasOwn(updateData, "accountName")) mappingUpdates.accountName = updatedAccount.accountName;
+      if (Object.keys(mappingUpdates).length) {
+        await AreaToPartyMapping.updateMany(
+          {
+            distributorId: req.auth.distributorId,
+            firmId: req.auth.firmId,
+            accountCode: previousAccountCode,
+          },
+          { $set: mappingUpdates }
+        );
+      }
+
+      return res.json({
+        success: true,
+        message: "Account details updated successfully",
+        data: updatedAccount,
+      });
+    } catch (error) {
+      if (error.code === 11000) {
+        return res.status(409).json({ success: false, message: "Account code already exists for this firm" });
+      }
+      return res.status(500).json({
+        success: false,
+        message: "Account details update failed",
+        error: error.message,
+      });
+    }
+  }
+);
 // ==================== GET AREAS FOR DROPDOWN ====================
 app.get("/api/areas-for-account", ensureConnection, async (req, res) => {
   try {
