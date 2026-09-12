@@ -69,6 +69,7 @@ export default function createImportRouter({ authorizeRequest, models }) {
       const existing = await collection.find({ distributorId, firmId }).toArray();
       const keys = new Set(existing.map((doc) => importDuplicateKey(config, doc, entryType, desktopBatch).toLowerCase()).filter(Boolean));
       let areaToPartyReferences = null;
+      let salesmanToAreaReferences = null;
       if (entryType === "AreaToPartyMapping") {
         const distinctValues = (column) => [...new Set(data.map((row) => clean(row[column])).filter(Boolean))];
         const [companies, accounts, areas] = await Promise.all([
@@ -80,6 +81,19 @@ export default function createImportRouter({ authorizeRequest, models }) {
           companies: new Map(companies.map((item) => [clean(item.companyCode), item])),
           accounts: new Map(accounts.map((item) => [clean(item.accountCode), item])),
           areas: new Map(areas.map((item) => [clean(item.areaCode), item])),
+        };
+      }
+      if (entryType === "SalesmanToAreaMapping") {
+        const distinctValues = (column) => [...new Set(data.map((row) => clean(row[column])).filter(Boolean))];
+        const [companies, areas, salesmen] = await Promise.all([
+          mongoose.connection.collection("Mas_Company").find({ distributorId, firmId, companyCode: { $in: distinctValues("Company Code") }, isActive: true }).toArray(),
+          mongoose.connection.collection("Mas_Area").find({ distributorId, firmId, areaCode: { $in: distinctValues("Area Code") }, isActive: true }).toArray(),
+          mongoose.connection.collection("Mas_Salesman").find({ distributorId, firmId, salesmanCode: { $in: distinctValues("Salesman Code") }, isActive: true }).toArray(),
+        ]);
+        salesmanToAreaReferences = {
+          companies: new Map(companies.map((item) => [clean(item.companyCode), item])),
+          areas: new Map(areas.map((item) => [clean(item.areaCode), item])),
+          salesmen: new Map(salesmen.map((item) => [clean(item.salesmanCode), item])),
         };
       }
       const seen = new Set(); const rows = []; const documents = [];
@@ -122,14 +136,12 @@ export default function createImportRouter({ authorizeRequest, models }) {
         }
         if (entryType === "SalesmanToAreaMapping") {
           const rowCompany = desktopBatch
-            ? await mongoose.connection.collection("Mas_Company").findOne({ distributorId, firmId, companyCode: doc.companyCode, isActive: true })
+            ? salesmanToAreaReferences.companies.get(clean(doc.companyCode))
             : req.selectedCompany;
           if (!rowCompany) errors.push(`Company Code "${doc.companyCode || ""}" does not exist`);
           else if (!desktopBatch && doc.companyCode !== rowCompany.companyCode) errors.push("Company Code must match the selected Company");
-          const [area, salesman] = await Promise.all([
-            mongoose.connection.collection("Mas_Area").findOne({ distributorId, firmId, areaCode: doc.areaCode, isActive: true }),
-            mongoose.connection.collection("Mas_Salesman").findOne({ distributorId, firmId, salesmanCode: doc.salesmanCode, isActive: true }),
-          ]);
+          const area = salesmanToAreaReferences.areas.get(clean(doc.areaCode));
+          const salesman = salesmanToAreaReferences.salesmen.get(clean(doc.salesmanCode));
           if (!area) errors.push(`Area Code "${doc.areaCode || ""}" does not exist`); else doc.areaName = area.areaName;
           if (!salesman) errors.push(`Salesman Code "${doc.salesmanCode || ""}" does not exist`); else doc.salesmanName = salesman.salesmanName;
           if (rowCompany) doc.companyName = rowCompany.companyName;
