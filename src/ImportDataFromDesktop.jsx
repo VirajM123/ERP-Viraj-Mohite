@@ -39,9 +39,6 @@ export default function ImportDataFromDesktop({ onClose }) {
   const pollRef = useRef(null);
   const processing = job?.status === "processing";
   const batchActive = ["queued", "running", "paused", "rolling_back"].includes(job?.import?.status);
-  const masterTypes = new Set(["Category", "Group", "Account", "Product", "Bank", "Salesman", "Area", "AreaToPartyMapping", "SalesmanToAreaMapping"]);
-  const importsCompany = job?.files?.some((file) => selected.has(file.id) && file.entryType === "Company");
-  const needsCompany = !importsCompany && job?.files?.some((file) => selected.has(file.id) && masterTypes.has(file.entryType));
 
   useEffect(() => () => window.clearTimeout(pollRef.current), []);
   useEffect(() => {
@@ -179,7 +176,7 @@ export default function ImportDataFromDesktop({ onClose }) {
   };
 
   const runPreflight = async () => {
-    if (!selected.size || (needsCompany && !companyCode)) return setError(!selected.size ? "Select at least one generated file." : "Select the target Company before validation.");
+    if (!selected.size) return setError("Select at least one generated file.");
     setActionBusy("preflight"); setError("");
     try {
       const result = await postAction("/preflight", { fileIds: [...selected], companyCode });
@@ -188,7 +185,7 @@ export default function ImportDataFromDesktop({ onClose }) {
   };
 
   const startImport = async () => {
-    if (!selected.size || (needsCompany && !companyCode)) return setError(!selected.size ? "Select at least one generated file." : "Select the target Company before importing.");
+    if (!selected.size) return setError("Select at least one generated file.");
     setActionBusy("import"); setError("");
     try {
       const result = await postAction("/import", { fileIds: [...selected], companyCode });
@@ -273,7 +270,7 @@ export default function ImportDataFromDesktop({ onClose }) {
 
     {job?.status === "completed" && <section className="desktop-import-card desktop-import-batch-card">
       <div className="desktop-import-batch-head"><div><h2><ShieldCheck size={17}/>Validate & Import in Safe Order</h2><p>Masters → opening stock → purchases/stock-in → sales/stock-out → notes → receipts and vouchers.</p></div>
-        <select value={companyCode} onChange={(event) => { setCompanyCode(event.target.value); setJob((current) => current ? ({ ...current, preflight: null }) : current); }} disabled={batchActive}><option value="">{needsCompany ? "Select target Company *" : "Target Company (optional)"}</option>{companies.map((company) => <option key={company._id || company.companyCode} value={company.companyCode}>{company.companyCode} - {company.companyName}</option>)}</select>
+        <select value={companyCode} onChange={(event) => { setCompanyCode(event.target.value); setJob((current) => current ? ({ ...current, preflight: null }) : current); }} disabled={batchActive}><option value="">All companies (automatic mapping)</option>{companies.map((company) => <option key={company._id || company.companyCode} value={company.companyCode}>{company.companyCode} - {company.companyName}</option>)}</select>
       </div>
       <div className="desktop-import-batch-actions">
         <button type="button" onClick={runPreflight} disabled={batchActive || !!actionBusy || !selected.size}>{actionBusy === "preflight" ? <LoaderCircle className="desktop-import-spin" size={14}/> : <ShieldCheck size={14}/>}Dry-run Preview</button>

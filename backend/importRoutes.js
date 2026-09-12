@@ -48,7 +48,7 @@ export default function createImportRouter({ authorizeRequest, models }) {
       if (!config || !Model) return res.status(400).json({ success: false, message: "Unsupported import entry type." });
       if (!Array.isArray(data) || !data.length) return res.status(400).json({ success: false, message: "No Excel rows were supplied." });
       if (data.length > MAX_IMPORT_ROWS) return res.status(413).json({ success: false, message: `Import is limited to ${MAX_IMPORT_ROWS} rows per request.` });
-      if (entryType !== "Company") {
+      if (entryType !== "Company" && (!desktopBatch || clean(company))) {
         const companyCode = clean(company);
         if (!companyCode) return res.status(400).json({ success: false, message: "Please select a Company before importing." });
         const selectedCompany = await mongoose.connection.collection("Mas_Company").findOne({ distributorId, firmId, companyCode, isActive: true });

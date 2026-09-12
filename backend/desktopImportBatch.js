@@ -159,8 +159,6 @@ export const preflightDesktopImport = async ({ job, fileIds, companyCode }) => {
       if (master) {
         const config = importConfig[file.entryType];
         for (const column of config.columns.filter((column) => column.required)) if (!String(record.payload[column.excel] ?? "").trim()) rowErrors.push(`${column.excel} is required`);
-        const importsCompanies = ordered.some((item) => item.entryType === "Company");
-        if (file.entryType !== "Company" && !companyCode && !importsCompanies) rowErrors.push("Target Company is required");
         if (file.entryType === "Product" && record.payload.Company && !known.companies.has(normalize(record.payload.Company))) rowErrors.push(`company ${record.payload.Company} does not exist`);
         if (file.entryType === "AreaToPartyMapping") {
           if (!known.companies.has(normalize(record.payload["Company Code"]))) rowErrors.push(`company ${record.payload["Company Code"]} does not exist`);
