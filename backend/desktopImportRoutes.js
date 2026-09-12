@@ -20,6 +20,11 @@ const MAX_EXCEL_BYTES = Math.min(64 * 1024 * 1024, Math.max(1, Number(process.en
 const MAX_EXCEL_FILES = Math.min(50, Math.max(1, Number(process.env.DESKTOP_IMPORT_EXCEL_MAX_FILES || 30)));
 const JOB_TTL_MS = Number(process.env.DESKTOP_IMPORT_JOB_TTL_MS || 24 * 60 * 60 * 1000);
 const SQL_TIMEOUT_MS = Math.min(60 * 60 * 1000, Math.max(60_000, Number(process.env.DESKTOP_IMPORT_SQL_TIMEOUT_MS || 30 * 60 * 1000)));
+// Desktop workbook upload/parsing and preflight are intentionally allowed more
+// time than ordinary API calls. The app-wide 30 second response timeout can
+// otherwise close the socket after the browser has finished uploading a large
+// workbook, which fetch reports only as "Failed to fetch".
+const ACTION_TIMEOUT_MS = Math.min(30 * 60 * 1000, Math.max(60_000, Number(process.env.DESKTOP_IMPORT_ACTION_TIMEOUT_MS || 10 * 60 * 1000)));
 const jobs = new Map();
 let detectedSqlServer;
 
@@ -505,6 +510,12 @@ export default function createDesktopImportRouter({ authorizeRequest }) {
     fileFilter(req, file, callback) { callback(null, [".xlsx", ".xls"].includes(path.extname(file.originalname).toLowerCase())); },
   });
 
+  const allowDesktopImportTime = (req, res, next) => {
+    req.setTimeout(ACTION_TIMEOUT_MS);
+    res.setTimeout(ACTION_TIMEOUT_MS);
+    next();
+  };
+
   const rejectActiveJob = (req, res, next) => {
     const activeForTenant = [...jobs.values()].some((job) =>
       job.distributorId === req.security.distributorId && job.firmId === req.security.firmId &&
@@ -514,7 +525,7 @@ export default function createDesktopImportRouter({ authorizeRequest }) {
     next();
   };
 
-  router.post("/desktop-import/generate", canImportDesktop, rejectActiveJob, (req, res, next) => {
+  router.post("/desktop-import/generate", canImportDesktop, rejectActiveJob, allowDesktopImportTime, (req, res, next) => {
     req.setTimeout(SQL_TIMEOUT_MS + 60_000);
     req.desktopImportDirectory = fs.mkdtempSync(path.join(os.tmpdir(), "erp-desktop-import-"));
     next();
@@ -550,7 +561,7 @@ export default function createDesktopImportRouter({ authorizeRequest }) {
     return res.status(202).json({ success: true, jobId: id });
   });
 
-  router.post("/desktop-import/upload-excel", canImportDesktop, rejectActiveJob, (req, res, next) => {
+  router.post("/desktop-import/upload-excel", canImportDesktop, rejectActiveJob, allowDesktopImportTime, (req, res, next) => {
     req.desktopImportDirectory = fs.mkdtempSync(path.join(os.tmpdir(), "erp-desktop-excel-"));
     next();
   }, excelUpload.array("excel", MAX_EXCEL_FILES), (req, res) => {
@@ -600,7 +611,7 @@ export default function createDesktopImportRouter({ authorizeRequest }) {
     return res.download(job.filePaths.get(file.id), file.fileName);
   });
 
-  router.post("/desktop-import/jobs/:jobId/preflight", canImportDesktop, express.json({ limit: "2mb" }), async (req, res, next) => {
+  router.post("/desktop-import/jobs/:jobId/preflight", canImportDesktop, allowDesktopImportTime, express.json({ limit: "2mb" }), async (req, res, next) => {
     try {
       const job = ownedJob(req);
       if (!job || job.status !== "completed") return res.status(404).json({ success: false, message: "Completed conversion job was not found." });
@@ -614,7 +625,7 @@ export default function createDesktopImportRouter({ authorizeRequest }) {
     } catch (error) { next(error); }
   });
 
-  router.post("/desktop-import/jobs/:jobId/import", canImportDesktop, express.json({ limit: "2mb" }), async (req, res, next) => {
+  router.post("/desktop-import/jobs/:jobId/import", canImportDesktop, allowDesktopImportTime, express.json({ limit: "2mb" }), async (req, res, next) => {
     try {
       const job = ownedJob(req);
       if (!job || job.status !== "completed") return res.status(404).json({ success: false, message: "Completed conversion job was not found." });
