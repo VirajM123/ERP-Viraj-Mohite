@@ -285,6 +285,23 @@ export const localSqlServiceAccount = (server) => {
   return `NT SERVICE\\MSSQL$${match[1]}`;
 };
 
+export const desktopConversionErrorMessage = (error, sqlServer = "") => {
+  const detail = String(error?.stderr || error?.message || "Desktop backup conversion failed.").trim();
+  if (detail.includes("media families")) {
+    return "This is one part of a multi-file SQL Server backup. Select every .bak part from the same backup set and generate again.";
+  }
+  if (/Msg 3169|incompatible with this server/i.test(detail)) {
+    return `The uploaded backup is newer than the available restore engine (${sqlServer || "unknown"}). Install/start a SQL Server version at least as new as the backup, or set DESKTOP_IMPORT_SQL_SERVER to that instance. SQL Server backup files cannot be restored by an older engine.`;
+  }
+  if (/No accessible SQL Server instance was found/i.test(detail)) {
+    return "No SQL Server restore engine is available on the backend that received this backup. Run the backend on the Windows machine that has SQL Server, or configure DESKTOP_IMPORT_SQL_SERVER to an accessible compatible instance.";
+  }
+  if (error?.code === "ENOENT" && /sqlcmd/i.test(`${error?.path || ""} ${error?.message || ""}`)) {
+    return "The backend does not have the SQL Server sqlcmd utility required to read .bak files. Install SQL Server command-line tools and configure DESKTOP_IMPORT_SQLCMD, or run this conversion on the Windows SQL Server machine.";
+  }
+  return "Desktop backup conversion failed. Review the server log using the job ID and retry with a verified backup.";
+};
+
 const readJsonQuery = async (database, query, server) => {
   const output = await runSql(`SET NOCOUNT ON; ${query} FOR JSON PATH, INCLUDE_NULL_VALUES;`, database, server);
   const compact = output.replace(/\r?\n/g, "");
@@ -501,12 +518,8 @@ export const generateDesktopImportFiles = async (job, backupFiles) => {
   } catch (error) {
     job.status = "failed";
     const detail = String(error?.stderr || error?.message || "Desktop backup conversion failed.").trim();
-    console.error("Desktop backup conversion failed", { jobId: job.id, code: String(error?.code || "RESTORE_FAILED") });
-    job.error = detail.includes("media families")
-      ? "This is one part of a multi-file SQL Server backup. Select every .bak part from the same backup set and generate again."
-      : /Msg 3169|incompatible with this server/i.test(detail)
-        ? `The uploaded backup is newer than the available restore engine (${job.sqlServer || "unknown"}). Install/start a SQL Server version at least as new as the backup, or set DESKTOP_IMPORT_SQL_SERVER to that instance. SQL Server backup files cannot be restored by an older engine.`
-        : "Desktop backup conversion failed. Review the server log using the job ID and retry with a verified backup.";
+    console.error("Desktop backup conversion failed", { jobId: job.id, code: String(error?.code || "RESTORE_FAILED"), detail });
+    job.error = desktopConversionErrorMessage(error, job.sqlServer);
     updateJob(job, job.progress || 0, "Conversion failed");
   } finally {
     await runSql(`IF DB_ID(${quoteSqlText(database)}) IS NOT NULL BEGIN ALTER DATABASE ${quoteSqlName(database)} SET SINGLE_USER WITH ROLLBACK IMMEDIATE; DROP DATABASE ${quoteSqlName(database)}; END;`, undefined, job.sqlServer).catch(() => {});

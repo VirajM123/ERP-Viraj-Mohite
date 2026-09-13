@@ -4,9 +4,14 @@ import os from "node:os";
 import path from "node:path";
 import test from "node:test";
 import * as XLSX from "xlsx";
-import { createSourceWorkbook, localSqlServiceAccount, mapDesktopRows, parseInstalledSqlInstances, parseSqlXmlRows } from "../desktopImportRoutes.js";
+import { createSourceWorkbook, desktopConversionErrorMessage, localSqlServiceAccount, mapDesktopRows, parseInstalledSqlInstances, parseSqlXmlRows } from "../desktopImportRoutes.js";
 import { buildDesktopTransactionRows } from "../desktopTransactionMapper.js";
 import { DESKTOP_IMPORT_ORDER, desktopTransactionConcurrency, readDesktopWorkbook } from "../desktopImportBatch.js";
+
+test("desktop conversion reports a missing backend SQL Server instead of blaming the backup", () => {
+  assert.match(desktopConversionErrorMessage(new Error("No accessible SQL Server instance was found.")), /No SQL Server restore engine is available/);
+  assert.match(desktopConversionErrorMessage(Object.assign(new Error("spawn sqlcmd ENOENT"), { code: "ENOENT", path: "sqlcmd" })), /sqlcmd utility/);
+});
 import { calculatePurchaseFinancials } from "../financialValidation.js";
 
 test("desktop account rows map to the existing ERP Excel structure", () => {
