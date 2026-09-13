@@ -209,7 +209,8 @@ export const mapDesktopRows = ({ entryType, rows, distributorId, firmId, referen
       output["Salesman Name"] = cleanCell(referenceValue(references.salesmen, salesmanCode, "SSMName") || output["Salesman Name"]);
     }
     return output;
-  });
+  }).filter((output) => entryType !== "AreaToPartyMapping"
+    || (String(output["Area Code"] || "").trim() && String(output["Area Name"] || "").trim()));
 };
 
 const quoteSqlName = (value) => `[${String(value).replaceAll("]", "]]" )}]`;

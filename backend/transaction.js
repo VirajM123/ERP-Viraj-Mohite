@@ -107,6 +107,7 @@ editUser: {
 receiptBills: [
   {
     openingTransactionId: { type: String, default: '' },
+    legacyUnmatched: { type: Boolean, default: false },
     trnSeries: {
       type: String,
       default: ""
@@ -1042,9 +1043,24 @@ router.post(
             bill.trnDate = opening.date;
             continue;
           }
-          const billFilter = tenantFilter(req, { BillNo: Number.isFinite(Number(bill.trnNo)) ? Number(bill.trnNo) : bill.trnNo });
-          if (bill.trnSeries) billFilter.BillSeries = bill.trnSeries;
+          const billFilter = tenantFilter(req, {
+            BillNo: Number.isFinite(Number(bill.trnNo)) ? Number(bill.trnNo) : bill.trnNo,
+            // A blank desktop series is a real legacy series, not a wildcard.
+            // Without this constraint an old allocation can be applied to a
+            // newer invoice that reused the same bill number in another series.
+            ...(body._desktopImport === true ? { BillSeries: bill.trnSeries } : {}),
+          });
+          if (body._desktopImport === true && bill.trnDate) billFilter.BillDate = bill.trnDate;
+          if (body._desktopImport !== true && bill.trnSeries) billFilter.BillSeries = bill.trnSeries;
           const invoice = await sales.findOne(billFilter, { session, projection: { NetAmount: 1, BillAmount: 1, partyCode: 1, AccountCode: 1, receiptAllocated: 1 } });
+          if (!invoice && body._desktopImport === true) {
+            // Desktop exports can contain receipts for bills from an older
+            // period that is outside the selected Sales export. Retain the
+            // allocation for audit/history, but never mutate an unrelated
+            // current-period bill balance.
+            bill.legacyUnmatched = true;
+            continue;
+          }
           if (!invoice) throw Object.assign(new Error(`Sales bill ${bill.trnSeries}-${bill.trnNo} was not found in this firm.`), { statusCode: 404 });
 
           const previousReceipts = await Receipt.aggregate([

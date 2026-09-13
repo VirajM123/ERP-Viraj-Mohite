@@ -42,6 +42,35 @@ test("desktop product and party mappings replace SysCompCode with the ERP compan
   assert.deepEqual({ company: mapping["Company Code"], account: mapping["Account Code"], area: mapping["Area Name"] }, { company: "VICCO", account: "A020", area: "North" });
 });
 
+test("desktop area-to-party conversion omits parties that have no area mapping", () => {
+  const rows = mapDesktopRows({
+    entryType: "AreaToPartyMapping", distributorId: "D", firmId: "F",
+    references: {
+      companies: new Map([["1", { CompCode: "C1", CompName: "Company" }]]),
+      accounts: new Map([["20", { AcCode: "A20", AcName: "Party" }]]),
+      areas: new Map(),
+    },
+    rows: [{ SysCompCode: 1, SysAcCode: 20, AreaCode: "" }],
+  });
+  assert.deepEqual(rows, []);
+});
+
+test("existing area-to-party workbooks ignore rows that have no area mapping", () => {
+  const directory = fs.mkdtempSync(path.join(os.tmpdir(), "erp-area-mapping-test-"));
+  try {
+    const filePath = path.join(directory, "area-mapping.xlsx");
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, XLSX.utils.json_to_sheet([
+      { "Company Code": "C1", "Account Code": "A1", "Area Code": "", "Area Name": "" },
+      { "Company Code": "C1", "Account Code": "A2", "Area Code": "N", "Area Name": "North" },
+    ]), "Data");
+    XLSX.writeFile(workbook, filePath);
+    const records = readDesktopWorkbook(filePath, "AreaToPartyMapping");
+    assert.equal(records.length, 1);
+    assert.equal(records[0].payload["Account Code"], "A2");
+  } finally { fs.rmSync(directory, { recursive: true, force: true }); }
+});
+
 test("desktop conversion reads rows from pre-JSON SQL Server compatibility levels", () => {
   const rows = parseSqlXmlRows(`XML_F52E2B61-18A1-11d1-B105-00805F49916B
 ----------------
@@ -208,6 +237,13 @@ test("previously generated credit-note workbooks normalize a blank series before
 test("historical desktop credit notes do not reapply live sales-bill validation", () => {
   const server = fs.readFileSync(new URL("../server.js", import.meta.url), "utf8");
   assert.match(server, /if \(billNo > 0 && req\.body\._desktopImport !== true\)/);
+});
+
+test("desktop receipts match a blank bill series exactly and retain unmatched legacy allocations", () => {
+  const server = fs.readFileSync(new URL("../transaction.js", import.meta.url), "utf8");
+  assert.match(server, /body\._desktopImport === true \? \{ BillSeries: bill\.trnSeries \} : \{\}/);
+  assert.match(server, /billFilter\.BillDate = bill\.trnDate;/);
+  assert.match(server, /bill\.legacyUnmatched = true;/);
 });
 
 test("desktop batch order imports stock sources before sales and receipts", () => {

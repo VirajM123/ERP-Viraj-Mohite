@@ -71,7 +71,12 @@ export const readDesktopWorkbook = (filePath, entryType) => {
   const firstSheet = workbook.Sheets[workbook.SheetNames[0]];
   const rows = XLSX.utils.sheet_to_json(firstSheet, { defval: "" });
   const transaction = transactionDefinitions[entryType];
-  if (!transaction) return rows.map((row, index) => ({ row: index + 2, source: row, payload: row }));
+  if (!transaction) return rows
+    .map((row, index) => ({ row: index + 2, source: row, payload: row }))
+    // A party without an area is intentionally unmapped in the desktop data;
+    // it is not a malformed Area-to-Party mapping to import.
+    .filter((record) => entryType !== "AreaToPartyMapping"
+      || (String(record.payload["Area Code"] || "").trim() && String(record.payload["Area Name"] || "").trim()));
   const hasJson = Object.keys(rows[0] || {}).some((key) => /^ERP Payload JSON(?: \d+)?$/.test(key));
   let nestedRows = [];
   if (!hasJson && transaction.nested) {
