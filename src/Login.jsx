@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from "react";
+import React, { useRef, useState } from "react";
 import {
   ArrowRight,
   Building2,
@@ -241,33 +241,12 @@ const Login = ({ onLoginSuccess }) => {
     }
   };
 
-  useEffect(() => {
-    if (mode !== "login") return;
-
-    const userName = formData.userName.trim();
-    const password = formData.password;
-
-    setRegisteredFirms([]);
-    setFirmsLoaded(false);
-    setFormData((prev) => ({
-      ...prev,
-      firmName: "",
-      firmId: "",
-      firmCode: "",
-      distributorId: "",
-    }));
-
-    if (!userName || !password) return;
-
-    const timer = setTimeout(() => {
-      loadUserFirms(false);
-    }, 500);
-
-    return () => clearTimeout(timer);
-  }, [mode, formData.userName, formData.password]);
-
   const handleChange = (e) => {
     const { name, value } = e.target;
+
+    if ((name === "userName" || name === "password") && mode === "login") {
+      clearFirmSelection();
+    }
 
     if (name === "firmId" && mode === "login") {
       const selectedFirm = registeredFirms.find(
@@ -848,6 +827,9 @@ await loadMyPermissions(
                     name="password"
                     value={formData.password}
                     onChange={handleChange}
+                    onBlur={() => {
+                      if (mode === "login") loadUserFirms(false);
+                    }}
                     placeholder="Enter password"
                     required
                   />
