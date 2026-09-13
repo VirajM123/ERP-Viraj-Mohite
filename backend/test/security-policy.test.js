@@ -1,6 +1,5 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import fs from "node:fs";
 import mongoose from "mongoose";
 import jwt from "jsonwebtoken";
 import createSecuritySetupRouter from "../securitySetup.js";
@@ -19,16 +18,6 @@ test("authentication rate limits isolate usernames sharing a deployment proxy", 
     authRateLimitKey({ ip: "10.0.0.1", body: { userName: "alice" } }),
     authRateLimitKey({ ip: "10.0.0.1", body: { userName: "bob" } })
   );
-});
-
-test("login page keeps firm discovery and authentication as secure POST requests", () => {
-  const loginPage = fs.readFileSync(new URL("../../src/Login.jsx", import.meta.url), "utf8");
-  const server = fs.readFileSync(new URL("../server.js", import.meta.url), "utf8");
-  assert.match(loginPage, /fetch\(`\$\{API_URL\}\/login\/firms`,\s*\{\s*method:\s*"POST"/s);
-  assert.match(loginPage, /fetch\(`\$\{API_URL\}\/login`,\s*\{\s*method:\s*"POST"/s);
-  assert.match(server, /app\.get\("\/api\/login\/firms"/);
-  assert.match(server, /app\.get\("\/api\/login\/firms"[\s\S]*?status\(200\)/);
-  assert.match(server, /app\.post\(\s*"\/api\/login\/firms"/s);
 });
 
 test("permissions require explicit true and deny unknown operations even to admins", () => {

@@ -426,19 +426,6 @@ app.post("/api/register", ensureConnection, async (req, res) => {
   }
 });
 
-// Browsers, uptime checks, or stale clients can accidentally navigate to this
-// endpoint with GET. Firm discovery must remain POST-only because it verifies a
-// password from the request body; handle GET explicitly instead of leaking it
-// into the generic "Route not found" response.
-app.get("/api/login/firms", (req, res) => {
-  res.set("Allow", "POST");
-  return res.status(200).json({
-    success: true,
-    firms: [],
-    message: "Firm names are loaded after credentials are entered on the login page.",
-  });
-});
-
 app.post(
   "/api/login/firms",
   ensureConnection,
