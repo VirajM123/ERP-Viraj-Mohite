@@ -42,6 +42,27 @@ test("desktop product and party mappings replace SysCompCode with the ERP compan
   assert.deepEqual({ company: mapping["Company Code"], account: mapping["Account Code"], area: mapping["Area Name"] }, { company: "VICCO", account: "A020", area: "North" });
 });
 
+test("desktop party mapping uses an exact account town when its source area is blank", () => {
+  const references = {
+    companies: new Map([["1", { CompCode: "101", CompName: "TOOYUMM" }]]),
+    accounts: new Map([["1319", { AcCode: "1319", AcName: "Outlet", Town: "07-TINGRE NAGAR" }]]),
+    areas: new Map([["07", { AreaCode: "07", AreaName: "07-TINGRE NAGAR" }]]),
+  };
+  const [mapping] = mapDesktopRows({ entryType: "AreaToPartyMapping", distributorId: "D", firmId: "F", references, rows: [{ SysCompCode: 1, SysAcCode: 1319, AreaCode: "" }] });
+  assert.deepEqual({ areaCode: mapping["Area Code"], areaName: mapping["Area Name"] }, { areaCode: "07", areaName: "07-TINGRE NAGAR" });
+});
+
+test("desktop party mapping does not guess an area from an ambiguous account town", () => {
+  const references = {
+    companies: new Map(),
+    accounts: new Map([["1", { AcCode: "1", Town: "Central" }]]),
+    areas: new Map([["a", { AreaName: "Central" }], ["b", { AreaName: "Central" }]]),
+  };
+  const [mapping] = mapDesktopRows({ entryType: "AreaToPartyMapping", distributorId: "D", firmId: "F", references, rows: [{ SysAcCode: 1, AreaCode: "" }] });
+  assert.equal(mapping["Area Code"], "");
+  assert.equal(mapping["Area Name"], "");
+});
+
 test("desktop conversion reads rows from pre-JSON SQL Server compatibility levels", () => {
   const rows = parseSqlXmlRows(`XML_F52E2B61-18A1-11d1-B105-00805F49916B
 ----------------

@@ -192,12 +192,29 @@ export const mapDesktopRows = ({ entryType, rows, distributorId, firmId, referen
     if (entryType === "AreaToPartyMapping") {
       const sysCompany = valueFromAliases(source, ["SysCompCode", "CompCode"]);
       const sysAccount = valueFromAliases(source, ["SysAcCode", "AcCode"]);
-      const areaCode = valueFromAliases(source, ["AreaCode", "RouteCode"]);
+      let areaCode = valueFromAliases(source, ["AreaCode", "RouteCode"]);
+      let fallbackArea = null;
+      if (String(areaCode ?? "").trim() === "") {
+        const account = references.accounts?.get(String(sysAccount ?? "").trim().toLowerCase());
+        const accountTown = String(valueFromAliases(account, ["Town", "City"]) ?? "").trim().toLowerCase();
+        if (accountTown) {
+          const matches = [...new Map(
+            [...(references.areas?.entries() || [])]
+              .filter(([, area]) => String(valueFromAliases(area, ["AreaName", "RouteName", "Name"]) ?? "").trim().toLowerCase() === accountTown)
+              .map(([code, area]) => [String(code), { code, area }])
+          ).values()];
+          if (matches.length === 1) {
+            fallbackArea = matches[0].area;
+            areaCode = matches[0].code;
+          }
+        }
+      }
       output["Company Code"] = cleanCell(referenceValue(references.companies, sysCompany, "CompCode") || output["Company Code"]);
       output["Company Name"] = cleanCell(referenceValue(references.companies, sysCompany, "CompName") || output["Company Name"]);
       output["Account Code"] = cleanCell(referenceValue(references.accounts, sysAccount, "AcCode") || output["Account Code"]);
       output["Account Name"] = cleanCell(referenceValue(references.accounts, sysAccount, "AcName") || output["Account Name"]);
-      output["Area Name"] = cleanCell(referenceValue(references.areas, areaCode, "AreaName") || output["Area Name"]);
+      output["Area Code"] = cleanCell(areaCode || output["Area Code"]);
+      output["Area Name"] = cleanCell(fallbackArea?.AreaName || referenceValue(references.areas, areaCode, "AreaName") || output["Area Name"]);
     }
     if (entryType === "SalesmanToAreaMapping") {
       const sysCompany = valueFromAliases(source, ["SysCompCode", "CompCode"]);

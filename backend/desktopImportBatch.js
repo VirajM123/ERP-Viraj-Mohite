@@ -112,10 +112,10 @@ const loadKnownReferences = async (tenant) => {
   const filter = { ...tenant, isActive: { $ne: false } };
   const [products, accounts, companies, godowns, areas, salesmen, services, stocks] = await Promise.all([
     mongoose.connection.collection("Mas_Product").find(filter, { projection: { productCode: 1 } }).toArray(),
-    mongoose.connection.collection("Mas_Account").find(filter, { projection: { accountCode: 1 } }).toArray(),
+    mongoose.connection.collection("Mas_Account").find(filter, { projection: { accountCode: 1, town: 1 } }).toArray(),
     mongoose.connection.collection("Mas_Company").find(filter, { projection: { companyCode: 1 } }).toArray(),
     mongoose.connection.collection("Mas_Godown").find(filter, { projection: { godownCode: 1 } }).toArray(),
-    mongoose.connection.collection("Mas_Area").find(filter, { projection: { areaCode: 1 } }).toArray(),
+    mongoose.connection.collection("Mas_Area").find(filter, { projection: { areaCode: 1, areaName: 1 } }).toArray(),
     mongoose.connection.collection("Mas_Salesman").find(filter, { projection: { salesmanCode: 1 } }).toArray(),
     mongoose.connection.collection("Mas_Service").find(filter, { projection: { serviceCode: 1 } }).toArray(),
     mongoose.connection.collection("Mas_Stock").find({ ...tenant, Qty: { $gt: 0 }, IsLocked: { $ne: "Y" } }, { projection: { GDCode: 1, ProdCode: 1 } }).toArray(),
@@ -123,9 +123,19 @@ const loadKnownReferences = async (tenant) => {
   return {
     products: new Set(products.map((row) => normalize(row.productCode))),
     accounts: new Set(accounts.map((row) => normalize(row.accountCode))),
+    accountTowns: new Map(accounts.map((row) => [normalize(row.accountCode), normalize(row.town)]).filter(([, town]) => town)),
     companies: new Set(companies.map((row) => normalize(row.companyCode))),
     godowns: new Set(godowns.map((row) => normalize(row.godownCode))),
     areas: new Set(areas.map((row) => normalize(row.areaCode))),
+    areaCodesByName: areas.reduce((map, row) => {
+      const name = normalize(row.areaName);
+      if (!name) return map;
+      const codes = map.get(name) || new Set();
+      codes.add(String(row.areaCode ?? "").trim());
+      map.set(name, codes);
+      return map;
+    }, new Map()),
+    areaNamesByCode: new Map(areas.map((row) => [normalize(row.areaCode), String(row.areaName ?? "").trim()])),
     salesmen: new Set(salesmen.map((row) => normalize(row.salesmanCode))),
     services: new Set(services.map((row) => normalize(row.serviceCode))),
     stocks: new Set(stocks.map((row) => `${normalize(row.GDCode)}|${normalize(row.ProdCode)}`)),
@@ -152,8 +162,21 @@ export const preflightDesktopImport = async ({ job, fileIds, companyCode }) => {
   for (const file of ordered) {
     if (file.entryType === "Company") readDesktopWorkbook(job.filePaths.get(file.id), file.entryType).forEach(({ payload }) => known.companies.add(normalize(payload["Company Code"])));
     if (file.entryType === "Product") readDesktopWorkbook(job.filePaths.get(file.id), file.entryType).forEach(({ payload }) => known.products.add(normalize(payload["Product Code"])));
-    if (file.entryType === "Account") readDesktopWorkbook(job.filePaths.get(file.id), file.entryType).forEach(({ payload }) => known.accounts.add(normalize(payload["Account Code"])));
-    if (file.entryType === "Area") readDesktopWorkbook(job.filePaths.get(file.id), file.entryType).forEach(({ payload }) => known.areas.add(normalize(payload["Area Code"])));
+    if (file.entryType === "Account") readDesktopWorkbook(job.filePaths.get(file.id), file.entryType).forEach(({ payload }) => {
+      known.accounts.add(normalize(payload["Account Code"]));
+      if (normalize(payload.Town)) known.accountTowns.set(normalize(payload["Account Code"]), normalize(payload.Town));
+    });
+    if (file.entryType === "Area") readDesktopWorkbook(job.filePaths.get(file.id), file.entryType).forEach(({ payload }) => {
+      const code = String(payload["Area Code"] ?? "").trim();
+      const name = normalize(payload["Area Name"]);
+      known.areas.add(normalize(code));
+      known.areaNamesByCode.set(normalize(code), String(payload["Area Name"] ?? "").trim());
+      if (name) {
+        const codes = known.areaCodesByName.get(name) || new Set();
+        codes.add(code);
+        known.areaCodesByName.set(name, codes);
+      }
+    });
     if (file.entryType === "Salesman") readDesktopWorkbook(job.filePaths.get(file.id), file.entryType).forEach(({ payload }) => known.salesmen.add(normalize(payload["Salesman Code"])));
     if (["DesktopOpeningStock", "DesktopPurchase", "DesktopStockIn"].includes(file.entryType)) readDesktopWorkbook(job.filePaths.get(file.id), file.entryType).forEach(({ payload }) => {
       const definition = transactionDefinitions[file.entryType];
@@ -179,6 +202,17 @@ export const preflightDesktopImport = async ({ job, fileIds, companyCode }) => {
     let ready = 0; let duplicates = 0; let errors = 0; let warnings = 0;
     for (const record of records) {
       const rowErrors = []; const rowWarnings = [];
+      if (file.entryType === "AreaToPartyMapping" && !normalize(record.payload["Area Code"])) {
+        const town = known.accountTowns.get(normalize(record.payload["Account Code"]));
+        const matchingAreaCodes = town ? [...(known.areaCodesByName.get(town) || [])] : [];
+        if (matchingAreaCodes.length === 1) {
+          record.payload["Area Code"] = matchingAreaCodes[0];
+          record.payload["Area Name"] = record.payload["Area Name"] || known.areaNamesByCode.get(normalize(matchingAreaCodes[0])) || "";
+          rowWarnings.push("Area recovered from the account's exact Town match");
+        }
+      }
+      const isUnmappedAreaToParty = file.entryType === "AreaToPartyMapping"
+        && !normalize(record.payload["Area Code"]);
       if (master) {
         const config = importConfig[file.entryType];
         if (file.entryType === "Account") {
@@ -228,8 +262,17 @@ export const preflightDesktopImport = async ({ job, fileIds, companyCode }) => {
           if (!known.stocks.has(stockKey)) rowWarnings.push(`No current or selected opening/incoming stock was found for product ${product}; existing stock rules will recheck it`);
         }
       }
+      // A desktop party without an area has no mapping to import.  Skip only
+      // that row instead of preventing every valid mapping in the file from
+      // being imported; the Account Master row remains unaffected.
+      if (isUnmappedAreaToParty) {
+        rowErrors.length = 0;
+        rowWarnings.push("No Area Code was supplied; this unmapped party will be skipped");
+      }
       const isExistingDesktopPurchase = file.entryType === "DesktopPurchase" && existing.has(record.key);
-      record.status = rowErrors.length
+      record.status = isUnmappedAreaToParty
+        ? "skipped"
+        : rowErrors.length
         ? "error"
         : isExistingDesktopPurchase
           ? "repair"
