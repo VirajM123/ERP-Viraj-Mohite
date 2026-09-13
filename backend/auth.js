@@ -163,13 +163,19 @@ export const authenticateApi = async (req, res, next) => {
   }
 };
 
-export const createRateLimiter = ({ windowMs, max, paths = null }) => {
+export const authRateLimitKey = (req) => {
+  const userName = String(req.body?.userName || "").trim().toLowerCase();
+  return userName ? `${req.ip}:user:${userName}` : String(req.ip);
+};
+
+export const createRateLimiter = ({ windowMs, max, paths = null, keyGenerator = (req) => String(req.ip) }) => {
   const buckets = new Map();
   let indexReady = false;
   return async (req, res, next) => {
     if (paths && !paths.has(req.path)) return next();
     const now = Date.now();
-    const key = `${req.ip}:${req.path}`;
+    const clientKey = keyGenerator(req);
+    const key = `${clientKey}:${req.path}`;
     if (process.env.NODE_ENV === "production" && mongoose.connection.readyState === 1) {
       try {
         const collection = mongoose.connection.collection("Sys_RateLimit");
@@ -179,7 +185,7 @@ export const createRateLimiter = ({ windowMs, max, paths = null }) => {
         }
         const windowStart = Math.floor(now / windowMs) * windowMs;
         const distributed = await collection.findOneAndUpdate(
-          { _id: `${req.path}:${req.ip}:${windowStart}` },
+          { _id: `${req.path}:${clientKey}:${windowStart}` },
           { $inc: { count: 1 }, $setOnInsert: { expiresAt: new Date(windowStart + windowMs) } },
           { upsert: true, returnDocument: "after" }
         );

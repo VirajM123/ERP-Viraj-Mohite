@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import mongoose from "mongoose";
 import jwt from "jsonwebtoken";
 import createSecuritySetupRouter from "../securitySetup.js";
-import { authenticateApi, hasTenantMismatch } from "../auth.js";
+import { authenticateApi, authRateLimitKey, hasTenantMismatch } from "../auth.js";
 import { financialYearFor, istBusinessDateRange, validateBusinessDate } from "../businessDate.js";
 import { AuditEvent } from "../audit.js";
 import { apiErrorHandler } from "../apiError.js";
@@ -11,6 +11,14 @@ import createProductMappingRouter, { ProductMapping } from "../productMapping.js
 
 const router = createSecuritySetupRouter({});
 const response = () => ({ statusCode: 200, status(code) { this.statusCode = code; return this; }, json(body) { this.body = body; return this; } });
+
+test("authentication rate limits isolate usernames sharing a deployment proxy", () => {
+  assert.equal(authRateLimitKey({ ip: "10.0.0.1", body: { userName: " Alice " } }), "10.0.0.1:user:alice");
+  assert.notEqual(
+    authRateLimitKey({ ip: "10.0.0.1", body: { userName: "alice" } }),
+    authRateLimitKey({ ip: "10.0.0.1", body: { userName: "bob" } })
+  );
+});
 
 test("permissions require explicit true and deny unknown operations even to admins", () => {
   for (const value of [false, "false", "true", 1, {}, undefined]) {

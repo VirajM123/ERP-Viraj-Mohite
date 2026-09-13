@@ -16,6 +16,7 @@ import createProductSalesReportRouter from "./productSalesReport.js";
 import createGstReportsRouter from "./gstReports.js";
 import {
   authenticateApi,
+  authRateLimitKey,
   assertSecurityConfiguration,
   createRateLimiter,
   hashPassword,
@@ -86,6 +87,7 @@ app.use("/api", createRateLimiter({
   windowMs: 15 * 60_000,
   max: Number(process.env.AUTH_RATE_LIMIT || 20),
   paths: new Set(["/login", "/login/firms", "/register"]),
+  keyGenerator: authRateLimitKey,
 }));
 app.use("/api", authenticateApi);
 // Feature routers that require operation-level authorization are mounted after
