@@ -187,16 +187,31 @@ const receiptRows = (job, definition, headerRows, detailRows, references) => {
   return headerRows.map((header) => {
     const party = masterName(references, "accounts", header.SysAcCodeDr, "AcCode", "AcName", true);
     const bank = masterName(references, "accounts", header.SysAcCodeCr, "AcCode", "AcName", true);
+    const salesman = ref(references.salesmen, header.SSMCode ?? header.SysSSMCode ?? header.SalesmanCode);
     const receiptBills = (details.get(key(header)) || []).map((row) => ({
       trnSeries: text(row.AdjTrnSeries), trnNo: text(row.AdjTrnNo), trnDate: date(row.AdjTrnDate),
-      nowAdjust: number(row.NowAdjAmt), discAmt: number(row.DiscAmt), remark: text(row.Remark),
+      amount: number(row.BillAmt ?? row.BillAmount ?? row.TrnAmt ?? row.Amount),
+      adjustAmt: number(row.PrevAdjAmt ?? row.PreviousAdj ?? row.AdjustAmt),
+      balanceAmt: number(row.BalAmt ?? row.BalanceAmt ?? row.BalanceAmount),
+      nowAdjust: number(row.NowAdjAmt),
+      discountPercent: number(row.DiscPer ?? row.DiscountPercent),
+      discAmt: number(row.DiscAmt), remark: text(row.Remark),
     })).filter((row) => row.nowAdjust > 0 || row.discAmt > 0);
     const receiptAmount = receiptBills.reduce((sum, row) => sum + row.nowAdjust, 0);
+    const firstBill = receiptBills[0] || {};
+    const salesmanCode = text(header.SSMCode ?? header.SysSSMCode ?? header.SalesmanCode);
+    const drawerBankName = text(header.CustBank ?? header.CustomerBank ?? header.DrawerBank ?? header.DraweeBank);
     const payload = {
-      receiptDate: date(header.TrnDate), billSeries: text(header.TrnSeries), rno: number(header.TrnNo), partyId: party.code, partyName: party.name,
-      bankCash: bank.code || bank.name || "CASH", receiptAmount, narration: text(header.Narr), chequeNo: text(header.Chqno), chequeDate: date(header.ChqDate), receiptBills,
+      receiptDate: date(header.TrnDate), receiptSeries: text(header.TrnSeries) || "RC", rno: number(header.TrnNo),
+      billSeries: firstBill.trnSeries || "", billNo: firstBill.trnNo || "",
+      partyId: party.code, partyName: party.name,
+      salesmanId: salesmanCode, salesmanName: text(salesman.SSMName || salesman.SalesmanName),
+      bankCash: bank.code || bank.name || "CASH", receiptAmount, narration: text(header.Narr),
+      chequeNo: text(header.Chqno ?? header.ChqNo ?? header.ChequeNo), chequeDate: date(header.ChqDate ?? header.ChequeDate),
+      drawerBankId: text(header.CustBankCode ?? header.CustomerBankCode ?? header.DrawerBankCode),
+      drawerBankName, micr: text(header.MICR ?? header.Micr), receiptBills,
     };
-    return receiptBills.length ? payloadRow(job, definition, payload, { date: payload.receiptDate, series: payload.billSeries, number: payload.rno, party: payload.partyName, amount: receiptAmount }) : null;
+    return receiptBills.length ? payloadRow(job, definition, payload, { date: payload.receiptDate, series: payload.receiptSeries, number: payload.rno, party: payload.partyName, amount: receiptAmount }) : null;
   }).filter(Boolean);
 };
 

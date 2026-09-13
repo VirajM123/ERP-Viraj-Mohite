@@ -251,18 +251,21 @@ test("desktop purchases remain serialized while sales use bounded parallelism", 
 });
 
 test("desktop receipt rows map the party, bank and bill allocations for outstanding updates", () => {
-  const references = { products: new Map(), companies: new Map(), salesmen: new Map(), areas: new Map(), godowns: new Map(), accounts: new Map([
+  const references = { products: new Map(), companies: new Map(), salesmen: new Map([["7", { SSMName: "Representative" }]]), areas: new Map(), godowns: new Map(), accounts: new Map([
     ["20", { AcCode: "PARTY", AcName: "Customer" }], ["30", { AcCode: "BANK", AcName: "Bank" }],
   ]) };
   const [row] = buildDesktopTransactionRows({
     job: { distributorId: "D", firmId: "F" }, definition: { entryType: "DesktopReceipt", label: "Receipt" }, references,
     sheets: [
-      { sheet: "Header", rows: [{ TrnSeries: "R", TrnNo: 2, TrnDate: "2026-01-03", SysAcCodeDr: 20, SysAcCodeCr: 30 }] },
-      { sheet: "Details", rows: [{ TrnSeries: "R", TrnNo: 2, AdjTrnSeries: "S", AdjTrnNo: 1, NowAdjAmt: 75, DiscAmt: 5 }] },
+      { sheet: "Header", rows: [{ TrnSeries: "R", TrnNo: 2, TrnDate: "2026-01-03", SysAcCodeDr: 20, SysAcCodeCr: 30, SSMCode: 7, CustBank: "Customer Bank", MICR: "411002001" }] },
+      { sheet: "Details", rows: [{ TrnSeries: "R", TrnNo: 2, AdjTrnSeries: "S", AdjTrnNo: 1, BillAmt: 100, PrevAdjAmt: 20, BalAmt: 80, NowAdjAmt: 75, DiscAmt: 5 }] },
     ],
   });
   const payload = JSON.parse(row["ERP Payload JSON"]);
   assert.equal(payload._desktopImport, true); assert.equal(payload.rno, 2);
   assert.equal(payload.partyId, "PARTY"); assert.equal(payload.bankCash, "BANK"); assert.equal(payload.receiptAmount, 75);
-  assert.deepEqual(payload.receiptBills[0], { trnSeries: "S", trnNo: "1", trnDate: "", nowAdjust: 75, discAmt: 5, remark: "" });
+  assert.equal(payload.receiptSeries, "R"); assert.equal(payload.billSeries, "S"); assert.equal(payload.billNo, "1");
+  assert.equal(payload.salesmanId, "7"); assert.equal(payload.salesmanName, "Representative");
+  assert.equal(payload.drawerBankName, "Customer Bank"); assert.equal(payload.micr, "411002001");
+  assert.deepEqual(payload.receiptBills[0], { trnSeries: "S", trnNo: "1", trnDate: "", amount: 100, adjustAmt: 20, balanceAmt: 80, nowAdjust: 75, discountPercent: 0, discAmt: 5, remark: "" });
 });

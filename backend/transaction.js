@@ -56,6 +56,7 @@ const tenantFilter = (req, extra = {}) => ({
 const receiptSchema = new mongoose.Schema(
     {
         receiptDate: String,
+        receiptSeries: { type: String, default: "RC" },
         rno: Number,
 
         billSeries: String,
@@ -176,7 +177,7 @@ receiptSchema.index({ distributorId: 1, firmId: 1, idempotencyKey: 1 }, {
   unique: true,
   partialFilterExpression: { idempotencyKey: { $type: "string", $gt: "" } },
 });
-receiptSchema.index({ distributorId: 1, firmId: 1, billSeries: 1, rno: 1 }, { unique: true });
+receiptSchema.index({ distributorId: 1, firmId: 1, receiptSeries: 1, rno: 1 }, { unique: true });
 
 /* ==========================
    CHEQUE BOUNCE SCHEMA
@@ -1015,7 +1016,11 @@ router.post(
         trnSeries: String(item.trnSeries ?? item.billSeries ?? item.BillSeries ?? "").trim(),
         trnNo: String(item.trnNo ?? item.billNo ?? item.BillNo ?? "").trim(),
         trnDate: String(item.trnDate ?? item.billDate ?? ""),
+        amount: Number(item.amount ?? item.billAmount ?? 0),
+        adjustAmt: Number(item.adjustAmt ?? item.previouslyAdjusted ?? 0),
+        balanceAmt: Number(item.balanceAmt ?? item.balanceAmount ?? 0),
         nowAdjust: Number(item.nowAdjust || 0),
+        discountPercent: Number(item.discountPercent ?? item.discount ?? 0),
         discAmt: Number(item.discAmt ?? item.discAmount ?? 0),
         remark: String(item.remark || "").trim(),
       })).filter((item) => item.nowAdjust > 0 || item.discAmt > 0);
@@ -1115,6 +1120,14 @@ router.post(
           distributorId: req.auth.distributorId,
           firmId: req.auth.firmId,
           rno,
+          receiptSeries: String(body.receiptSeries || "RC").trim() || "RC",
+          billSeries: String(body.billSeries || bills[0]?.trnSeries || "").trim(),
+          billNo: String(body.billNo || bills[0]?.trnNo || "").trim(),
+          salesmanId: String(body.salesmanId || "").trim(),
+          salesmanName: String(body.salesmanName || body.salesman || "").trim(),
+          drawerBankId: String(body.drawerBankId || "").trim(),
+          drawerBankName: String(body.drawerBankName || body.drawerBank || "").trim(),
+          micr: String(body.micr || "").trim(),
           receiptAmount,
           receiptBills: bills,
           idempotencyKey,

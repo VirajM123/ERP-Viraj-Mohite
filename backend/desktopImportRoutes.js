@@ -378,7 +378,7 @@ export const createSourceWorkbook = (job, definition, sheets, dataRows) => {
   const identityFields = {
     DesktopSales: ["BillSeries", "BillNo"], DesktopPurchase: ["vouSer", "vouNo"],
     DesktopCreditNote: ["CreditNoteSeries", "CreditNoteNo"], DesktopDebitNote: ["DebitNoteSeries", "DebitNoteNo"],
-    DesktopReceipt: ["billSeries", "rno"], DesktopJournalVoucher: ["vDate", "vNo"],
+    DesktopReceipt: ["receiptSeries", "rno"], DesktopJournalVoucher: ["vDate", "vNo"],
     DesktopCollectionVoucher: ["collectionDate", "colVNo"], DesktopPDC: ["docSeries", "docVNo"],
     DesktopCounterSales: ["BillSeries", "BillNo"], DesktopSalesService: ["voucherSeries", "voucherNo"],
     DesktopLoads: ["LoadSeries", "LoadNo"], DesktopSettleLoad: ["loadSeries", "loadNo"], DesktopPayment: ["vNo"],
