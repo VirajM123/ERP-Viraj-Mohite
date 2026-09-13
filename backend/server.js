@@ -10016,7 +10016,12 @@ app.get(
       };
 
       if (companyCode) {
-        mappingFilter.companyCode = companyCode;
+        // Legacy CSV/Compass imports can store numeric-looking codes as
+        // Mongo numbers.  Normal application saves store them as strings.
+        // Match both forms so imported mappings remain visible in billing.
+        mappingFilter.$expr = {
+          $eq: [{ $toString: "$companyCode" }, companyCode],
+        };
       }
 
       /*
@@ -10049,8 +10054,11 @@ app.get(
             distributorId,
             firmId,
             isActive: true,
-            accountCode: {
-              $in: mappedAccountCodes,
+            $expr: {
+              $in: [
+                { $toString: "$accountCode" },
+                mappedAccountCodes,
+              ],
             },
           })
             .select({
