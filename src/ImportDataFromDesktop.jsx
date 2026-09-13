@@ -3,6 +3,11 @@ import { AlertTriangle, CheckCircle2, DatabaseBackup, Download, FileSpreadsheet,
 import { API_URL } from "./api/config";
 
 const authHeaders = () => ({ Authorization: `Bearer ${localStorage.getItem("token") || ""}` });
+const LOCAL_CONVERTER_URL = String(import.meta.env.VITE_DESKTOP_IMPORT_HELPER_URL || "http://127.0.0.1:5055/api").replace(/\/$/, "");
+const localConverterHeaders = () => ({
+  "X-Desktop-Distributor-Id": localStorage.getItem("distributorId") || "",
+  "X-Desktop-Firm-Id": localStorage.getItem("firmId") || "",
+});
 const formatDuration = (seconds) => {
   if (!Number.isFinite(seconds) || seconds < 0) return "Calculating...";
   const rounded = Math.max(0, Math.round(seconds));
@@ -56,29 +61,29 @@ export default function ImportDataFromDesktop({ onClose }) {
     } catch { /* Preflight will show a clear company error if loading fails. */ }
   })(); }, []);
 
-  const pollJob = async (jobId) => {
+  const pollJob = async (jobId, apiUrl = API_URL, localConversion = false) => {
     try {
-      const response = await fetch(`${API_URL}/desktop-import/jobs/${jobId}`, { headers: authHeaders(), cache: "no-store" });
+      const response = await fetch(`${apiUrl}/desktop-import/jobs/${jobId}`, { headers: localConversion ? localConverterHeaders() : authHeaders(), cache: "no-store" });
       const result = await response.json();
       if (!response.ok) throw new Error(result.message || "Unable to read conversion progress.");
       pollFailuresRef.current = 0;
-      setJob(result.job);
+      setJob({ ...result.job, localConversion, apiUrl });
       setProgress(result.job.progress || 0);
       setStage(result.job.stage || "Processing backup");
       if (result.job.status === "completed") {
         setSelected((current) => current.size ? current : new Set(result.job.files.map((file) => file.id)));
-        if (["queued", "running", "rolling_back"].includes(result.job.import?.status)) pollRef.current = window.setTimeout(() => pollJob(jobId), 700);
+        if (["queued", "running", "rolling_back"].includes(result.job.import?.status)) pollRef.current = window.setTimeout(() => pollJob(jobId, apiUrl, localConversion), 700);
         return;
       }
       if (result.job.status === "failed") {
         setError(result.job.error || "Desktop backup conversion failed.");
         return;
       }
-      pollRef.current = window.setTimeout(() => pollJob(jobId), 900);
+      pollRef.current = window.setTimeout(() => pollJob(jobId, apiUrl, localConversion), 900);
     } catch (pollError) {
       pollFailuresRef.current += 1;
       if (pollFailuresRef.current <= 5) {
-        pollRef.current = window.setTimeout(() => pollJob(jobId), 1500);
+        pollRef.current = window.setTimeout(() => pollJob(jobId, apiUrl, localConversion), 1500);
         return;
       }
       setError(pollError.message);
@@ -94,21 +99,21 @@ export default function ImportDataFromDesktop({ onClose }) {
     form.append("exportDistributorId", exportDistributorId.trim());
     form.append("exportFirmId", exportFirmId.trim());
     const request = new XMLHttpRequest();
-    request.open("POST", `${API_URL}/desktop-import/generate`);
-    request.setRequestHeader("Authorization", authHeaders().Authorization);
+    request.open("POST", `${LOCAL_CONVERTER_URL}/desktop-import/generate`);
+    Object.entries(localConverterHeaders()).forEach(([name, value]) => request.setRequestHeader(name, value));
     request.upload.onprogress = (event) => {
       if (event.lengthComputable) setProgress(Math.max(1, Math.round((event.loaded / event.total) * 12)));
     };
-    request.onerror = () => { setError("Backup upload failed. Please check the backend connection."); setJob({ status: "failed" }); };
+    request.onerror = () => { setError("Local backup converter is not running. Start it on this Windows computer and try again."); setJob({ status: "failed" }); };
     request.onload = () => {
       let result = {};
       try { result = JSON.parse(request.responseText || "{}"); } catch { result = {}; }
       if (request.status < 200 || request.status >= 300) {
         setError(result.message || "Backup upload failed."); setJob({ status: "failed" }); return;
       }
-      setJob({ id: result.jobId, status: "processing", files: [] });
-      setStage("Backup uploaded; reading database");
-      pollJob(result.jobId);
+      setJob({ id: result.jobId, status: "processing", files: [], localConversion: true, apiUrl: LOCAL_CONVERTER_URL });
+      setStage("Backup opened locally; reading database");
+      pollJob(result.jobId, LOCAL_CONVERTER_URL, true);
     };
     request.send(form);
   };
@@ -156,7 +161,8 @@ export default function ImportDataFromDesktop({ onClose }) {
   }); };
 
   const downloadFile = async (file) => {
-    const response = await fetch(`${API_URL}/desktop-import/jobs/${job.id}/files/${file.id}`, { headers: authHeaders() });
+    const apiUrl = job.apiUrl || API_URL;
+    const response = await fetch(`${apiUrl}/desktop-import/jobs/${job.id}/files/${file.id}`, { headers: job.localConversion ? localConverterHeaders() : authHeaders() });
     if (!response.ok) {
       const result = await response.json().catch(() => ({}));
       setError(result.message || `Unable to download ${file.fileName}.`);
@@ -277,7 +283,9 @@ export default function ImportDataFromDesktop({ onClose }) {
       </div>
     </section>}
 
-    {job?.status === "completed" && <section className="desktop-import-card desktop-import-batch-card">
+    {job?.status === "completed" && job.localConversion && <div className="desktop-import-error"><CheckCircle2 size={15}/><span>Conversion stayed on this computer. Download the generated files, then select them under “import generated Excel files” to import through the production server.</span></div>}
+
+    {job?.status === "completed" && !job.localConversion && <section className="desktop-import-card desktop-import-batch-card">
       <div className="desktop-import-batch-head"><div><h2><ShieldCheck size={17}/>Validate & Import in Safe Order</h2><p>Masters → opening stock → purchases/stock-in → sales/stock-out → notes → receipts and vouchers.</p></div>
         <select value={companyCode} onChange={(event) => { setCompanyCode(event.target.value); setJob((current) => current ? ({ ...current, preflight: null }) : current); }} disabled={batchActive}><option value="">All companies (automatic mapping)</option>{companies.map((company) => <option key={company._id || company.companyCode} value={company.companyCode}>{company.companyCode} - {company.companyName}</option>)}</select>
       </div>
