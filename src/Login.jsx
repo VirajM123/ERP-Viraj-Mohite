@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from "react";
+import React, { useRef, useState } from "react";
 import {
   ArrowRight,
   Building2,
@@ -241,31 +241,6 @@ const Login = ({ onLoginSuccess }) => {
     }
   };
 
-  useEffect(() => {
-    if (mode !== "login") return;
-
-    const userName = formData.userName.trim();
-    const password = formData.password;
-
-    setRegisteredFirms([]);
-    setFirmsLoaded(false);
-    setFormData((prev) => ({
-      ...prev,
-      firmName: "",
-      firmId: "",
-      firmCode: "",
-      distributorId: "",
-    }));
-
-    if (!userName || !password) return;
-
-    const timer = setTimeout(() => {
-      loadUserFirms(false);
-    }, 500);
-
-    return () => clearTimeout(timer);
-  }, [mode, formData.userName, formData.password]);
-
   const handleChange = (e) => {
     const { name, value } = e.target;
 
@@ -282,6 +257,21 @@ const Login = ({ onLoginSuccess }) => {
         distributorId: selectedFirm ? selectedFirm.distributorId : "",
       }));
 
+      return;
+    }
+
+    if (mode === "login" && ["userName", "password"].includes(name)) {
+      loadRequestId.current += 1;
+      setRegisteredFirms([]);
+      setFirmsLoaded(false);
+      setFormData((prev) => ({
+        ...prev,
+        [name]: value,
+        firmName: "",
+        firmId: "",
+        firmCode: "",
+        distributorId: "",
+      }));
       return;
     }
 
@@ -848,6 +838,9 @@ await loadMyPermissions(
                     name="password"
                     value={formData.password}
                     onChange={handleChange}
+                    onBlur={(event) => {
+                      if (mode === "login" && event.relatedTarget?.type !== "submit") loadUserFirms(false);
+                    }}
                     placeholder="Enter password"
                     required
                   />
