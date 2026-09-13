@@ -11901,6 +11901,7 @@ const applySalesStockMovement = async ({
   gdCode,
   direction,
   allowNegativeStock = false,
+  initializeMissingStock = false,
   session,
 }) => {
   const safeItems =
@@ -12139,6 +12140,15 @@ const applySalesStockMovement = async ({
      * and the Sales quantity is deducted even when Qty is 0.
      */
     if (allowNegativeStock) {
+      // During a desktop migration, a missing legacy stock row is initialized
+      // with exactly the quantity required by this sale and consumed by the
+      // same atomic operation. Its resulting balance is therefore zero. This
+      // is deliberately limited to missing rows; existing rows retain the
+      // normal negative-stock behaviour.
+      const exactStockExists = initializeMissingStock
+        ? Boolean(await Stock.exists(stockFilter).session(session))
+        : true;
+
       await Stock.findOneAndUpdate(
         stockFilter,
         {
@@ -12197,7 +12207,7 @@ const applySalesStockMovement = async ({
 
           $inc: {
             Qty:
-              -totalQty,
+              exactStockExists ? -totalQty : 0,
           },
         },
         {
@@ -12451,12 +12461,10 @@ app.post(
       // order and must not be blocked by today's stock balance. This exception
       // is restricted to the desktop-import marker; normal sales continue to
       // follow the firm's negative-stock setting.
-      const allowNegativeStock = req.body._desktopImport === true
-        || readSetupBoolean(
-          generalSetup
-            ?.allowNegativeStock,
-          false
-        );
+      const allowNegativeStock = readSetupBoolean(
+        generalSetup?.allowNegativeStock,
+        false
+      );
 
       /* =====================================================
          APPLY SALES STOCK MOVEMENT
@@ -12481,6 +12489,9 @@ app.post(
           -1,
 
         allowNegativeStock,
+
+        initializeMissingStock:
+          req.body._desktopImport === true && allowNegativeStock,
 
         session,
       });

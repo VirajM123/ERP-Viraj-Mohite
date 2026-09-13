@@ -6,7 +6,16 @@ import { importConfig } from "./importConfig.js";
 const DESKTOP_TRANSACTION_CONCURRENCY = Math.max(1, Math.min(32, Number.parseInt(process.env.DESKTOP_IMPORT_TRANSACTION_CONCURRENCY || "16", 10) || 16));
 const DESKTOP_TRANSACTION_BATCH_SIZE = Math.max(25, Math.min(500, Number.parseInt(process.env.DESKTOP_IMPORT_TRANSACTION_BATCH_SIZE || "100", 10) || 100));
 
-export const desktopTransactionConcurrency = (entryType) => entryType === "DesktopPurchase"
+const SERIAL_DESKTOP_TRANSACTION_TYPES = new Set([
+  "DesktopPurchase",
+  "DesktopOpeningStock",
+  "DesktopStockIn",
+  "DesktopStockOut",
+  "DesktopSelfDamage",
+  "DesktopDamageStockOut",
+]);
+
+export const desktopTransactionConcurrency = (entryType) => SERIAL_DESKTOP_TRANSACTION_TYPES.has(entryType)
   ? 1
   : DESKTOP_TRANSACTION_CONCURRENCY;
 

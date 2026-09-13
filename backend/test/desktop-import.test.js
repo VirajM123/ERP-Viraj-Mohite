@@ -260,6 +260,9 @@ test("desktop batch order imports stock sources before sales and receipts", () =
 
 test("desktop purchases remain serialized while sales use bounded parallelism", () => {
   assert.equal(desktopTransactionConcurrency("DesktopPurchase"), 1);
+  assert.equal(desktopTransactionConcurrency("DesktopOpeningStock"), 1);
+  assert.equal(desktopTransactionConcurrency("DesktopStockIn"), 1);
+  assert.equal(desktopTransactionConcurrency("DesktopStockOut"), 1);
   assert.ok(desktopTransactionConcurrency("DesktopSales") > 1);
   assert.ok(desktopTransactionConcurrency("DesktopCounterSales") > 1);
   assert.ok(desktopTransactionConcurrency("DesktopReceipt") >= 1);
