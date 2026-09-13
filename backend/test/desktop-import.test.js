@@ -4,9 +4,9 @@ import os from "node:os";
 import path from "node:path";
 import test from "node:test";
 import * as XLSX from "xlsx";
-import { createSourceWorkbook, localSqlServiceAccount, mapDesktopRows, parseInstalledSqlInstances, parseSqlXmlRows } from "../desktopImportRoutes.js";
+import { canReuseDesktopImportPlan, createSourceWorkbook, localSqlServiceAccount, mapDesktopRows, parseInstalledSqlInstances, parseSqlXmlRows } from "../desktopImportRoutes.js";
 import { buildDesktopTransactionRows } from "../desktopTransactionMapper.js";
-import { DESKTOP_IMPORT_ORDER, desktopTransactionConcurrency, readDesktopWorkbook } from "../desktopImportBatch.js";
+import { DESKTOP_IMPORT_ORDER, desktopCommittedTransactionFilter, desktopTransactionConcurrency, readDesktopWorkbook } from "../desktopImportBatch.js";
 import { calculatePurchaseFinancials } from "../financialValidation.js";
 
 test("desktop account rows map to the existing ERP Excel structure", () => {
@@ -239,6 +239,12 @@ test("historical desktop credit notes do not reapply live sales-bill validation"
   assert.match(server, /if \(billNo > 0 && req\.body\._desktopImport !== true\)/);
 });
 
+test("zero-value historical sales remain editable without creating an invalid journal", () => {
+  const server = fs.readFileSync(new URL("../server.js", import.meta.url), "utf8");
+  assert.match(server, /const isZeroValueSalesEdit =/);
+  assert.match(server, /if \(!isZeroValueSalesEdit\) \{\s*await postBalancedJournal/);
+});
+
 test("desktop receipts match a blank bill series exactly and retain unmatched legacy allocations", () => {
   const server = fs.readFileSync(new URL("../transaction.js", import.meta.url), "utf8");
   assert.match(server, /body\._desktopImport === true \? \{ BillSeries: bill\.trnSeries \} : \{\}/);
@@ -258,14 +264,35 @@ test("desktop batch order imports stock sources before sales and receipts", () =
   assert.ok(DESKTOP_IMPORT_ORDER.indexOf("DesktopReceipt") < DESKTOP_IMPORT_ORDER.indexOf("DesktopCHB"));
 });
 
-test("desktop purchases remain serialized while sales use bounded parallelism", () => {
+test("stock-mutating desktop imports are serialized to avoid write conflicts", () => {
   assert.equal(desktopTransactionConcurrency("DesktopPurchase"), 1);
   assert.equal(desktopTransactionConcurrency("DesktopOpeningStock"), 1);
   assert.equal(desktopTransactionConcurrency("DesktopStockIn"), 1);
   assert.equal(desktopTransactionConcurrency("DesktopStockOut"), 1);
-  assert.ok(desktopTransactionConcurrency("DesktopSales") > 1);
-  assert.ok(desktopTransactionConcurrency("DesktopCounterSales") > 1);
+  assert.equal(desktopTransactionConcurrency("DesktopSales"), 1);
+  assert.equal(desktopTransactionConcurrency("DesktopCounterSales"), 1);
   assert.ok(desktopTransactionConcurrency("DesktopReceipt") >= 1);
+});
+
+test("desktop sales can be reconciled by their stored bill identity after an uncertain response", () => {
+  const tenant = { distributorId: "D1", firmId: "F1" };
+  assert.deepEqual(
+    desktopCommittedTransactionFilter("DesktopSales", { BillSeries: " 26-27/ ", BillNo: "42" }, tenant),
+    { ...tenant, BillSeries: "26-27/", BillNo: 42 },
+  );
+  assert.deepEqual(
+    desktopCommittedTransactionFilter("DesktopCounterSales", { BillSeries: "CS", BillNo: 7 }, tenant),
+    { ...tenant, BillSeries: "CS", BillNo: 7 },
+  );
+  assert.equal(desktopCommittedTransactionFilter("DesktopReceipt", {}, tenant), null);
+});
+
+test("a repeated desktop import refreshes preflight instead of replaying the stale ready rows", () => {
+  const selection = ["sales-file"];
+  const cached = { importPlan: { files: [] }, importOptions: { fileIds: selection, companyCode: "C1" } };
+  assert.equal(canReuseDesktopImportPlan({ ...cached, importState: null }, selection, "C1"), true);
+  assert.equal(canReuseDesktopImportPlan({ ...cached, importState: { status: "completed_with_errors" } }, selection, "C1"), false);
+  assert.equal(canReuseDesktopImportPlan({ ...cached, importState: { status: "completed" } }, selection, "C1"), false);
 });
 
 test("desktop receipt rows map the party, bank and bill allocations for outstanding updates", () => {

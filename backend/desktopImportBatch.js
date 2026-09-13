@@ -10,6 +10,12 @@ const SERIAL_DESKTOP_TRANSACTION_TYPES = new Set([
   "DesktopPurchase",
   "DesktopOpeningStock",
   "DesktopStockIn",
+  // Sales invoices from the same desktop export repeatedly touch the same
+  // stock rows. Running them in parallel causes avoidable MongoDB write
+  // conflicts and can leave a successfully committed invoice reported as a
+  // failed import when only the commit acknowledgement was interrupted.
+  "DesktopSales",
+  "DesktopCounterSales",
   "DesktopStockOut",
   "DesktopSelfDamage",
   "DesktopDamageStockOut",
@@ -295,6 +301,15 @@ export const requestDesktopTransaction = async (options, { attempts = 5 } = {}) 
 
 const responseId = (result) => String(result.savedBillId || result.data?._id || result.data?.header?._id || result.purchase?._id || result.creditNote?._id || result.debitNote?._id || result.voucher?._id || result.load?._id || result.saved?._id || "");
 
+export const desktopCommittedTransactionFilter = (entryType, payload, tenant) => {
+  if (!["DesktopSales", "DesktopCounterSales"].includes(entryType)) return null;
+  return {
+    ...tenant,
+    BillSeries: String(payload.BillSeries || "").trim(),
+    BillNo: Number(payload.BillNo),
+  };
+};
+
 const resolveDesktopTransactionIds = async (entryType, payload, tenant) => {
   if (entryType !== "DesktopSalesService") return payload;
   const party = await mongoose.connection.collection("Mas_Account").findOne({ ...tenant, accountCode: payload.partyCode, isActive: { $ne: false } }, { projection: { _id: 1 } });
@@ -398,8 +413,22 @@ export const runDesktopImport = async ({ job, plan, state, companyCode, authoriz
             if (id && record.status !== "repair") state.rollback.push({ kind: "transaction", endpoint: definition.deleteEndpoint, id, fileId: file.id, entryType: file.entryType });
             fileState.imported += 1; state.imported += 1;
           } catch (error) {
-            state.failures.push({ fileId: file.id, file: file.fileName, entryType: file.entryType, row: record.row, message: error.message });
-            fileState.failed += 1; state.failed += 1;
+            // A transaction commit can succeed even when its acknowledgement
+            // is lost. Reconcile the sales identity before recording a failure
+            // so retrying does not turn a committed bill into a false failure.
+            const committedFilter = desktopCommittedTransactionFilter(file.entryType, payload, tenant);
+            const committed = committedFilter
+              ? await mongoose.connection.collection(definition.collection)
+                .findOne(committedFilter, { projection: { _id: 1 } })
+                .catch(() => null)
+              : null;
+            if (committed?._id) {
+              state.rollback.push({ kind: "transaction", endpoint: definition.deleteEndpoint, id: String(committed._id), fileId: file.id, entryType: file.entryType });
+              fileState.imported += 1; state.imported += 1;
+            } else {
+              state.failures.push({ fileId: file.id, file: file.fileName, entryType: file.entryType, row: record.row, message: error.message });
+              fileState.failed += 1; state.failed += 1;
+            }
           }
           fileState.processed += 1; state.processed += 1; fileState.updatedAt = new Date().toISOString(); state.updatedAt = fileState.updatedAt;
         };

@@ -324,6 +324,11 @@ const sameImportSelection = (previous = {}, fileIds = [], companyCode = "") => {
     && previousIds.length === requestedIds.length
     && previousIds.every((id, index) => id === requestedIds[index]);
 };
+export const canReuseDesktopImportPlan = ({ importPlan, importState, importOptions }, fileIds = [], companyCode = "") => Boolean(
+  importPlan
+  && !importState
+  && sameImportSelection(importOptions, fileIds, companyCode)
+);
 const summarizePreflight = (plan) => ({
   totals: plan.totals,
   files: plan.files.map(({ records, ...file }) => file),
@@ -627,7 +632,7 @@ export default function createDesktopImportRouter({ authorizeRequest }) {
       const companyCode = String(req.body?.companyCode || "").trim();
       // Reuse the exact dry-run result when the selection is unchanged. Large
       // transaction workbooks no longer have to be parsed and queried twice.
-      const plan = job.importPlan && sameImportSelection(job.importOptions, fileIds, companyCode)
+      const plan = canReuseDesktopImportPlan({ importPlan: job.importPlan, importState: job.import, importOptions: job.importOptions }, fileIds, companyCode)
         ? job.importPlan
         : await preflightDesktopImport({ job, fileIds, companyCode });
       job.importPlan = plan;
@@ -644,7 +649,11 @@ export default function createDesktopImportRouter({ authorizeRequest }) {
       if (["running", "paused", "rolling_back"].includes(job.import?.status)) return res.status(409).json({ success: false, message: "This desktop import job is already active." });
       const fileIds = Array.isArray(req.body?.fileIds) ? req.body.fileIds : [];
       const companyCode = String(req.body?.companyCode || "").trim();
-      const plan = job.importPlan && sameImportSelection(job.importOptions, fileIds, companyCode)
+      // Once an import has run, its cached plan is stale: rows committed by
+      // that run are still marked "ready" in memory. Rebuild preflight so a
+      // second Import Selected click queries MongoDB again and processes only
+      // records that are still missing.
+      const plan = canReuseDesktopImportPlan({ importPlan: job.importPlan, importState: job.import, importOptions: job.importOptions }, fileIds, companyCode)
         ? job.importPlan
         : await preflightDesktopImport({ job, fileIds, companyCode });
       job.importPlan = plan; job.importOptions = { fileIds, companyCode }; job.preflight = summarizePreflight(plan);

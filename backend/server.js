@@ -8780,12 +8780,19 @@ synchronizedBill.Items =
     await reverseSourceJournal({ distributorId, firmId, sourceType: "SALES", sourceId: String(id), createdBy: req.auth.userId, documentDate: BillDate, reason: "Sales bill edited" }, session);
     const editedOutputTax = Number(req.body.CGSTAmount || 0) + Number(req.body.SGSTAmount || 0) + Number(req.body.IGSTAmount || 0);
     const editedCreditNote = Number(req.body.CreditNoteAmount || 0);
-    await postBalancedJournal({ distributorId, firmId, sourceType: "SALES", sourceId: String(id), documentNo: `${String(BillSeries || "")}${Number(BillNo)}`, documentDate: String(BillDate || ""), createdBy: req.auth.userId, lines: [
-      { accountCode: String(PartyCode || PartyName), debit: Number(req.body.NetAmount || 0), credit: 0, narration: Narration || "Sales edit" },
-      ...(editedCreditNote > 0 ? [{ accountCode: "CREDIT_NOTE_ALLOWED", debit: editedCreditNote, credit: 0, narration: "Credit note" }] : []),
-      { accountCode: "SALES", debit: 0, credit: Number(req.body.OriginalNetAmount || 0) - editedOutputTax, narration: Narration || "Sales edit" },
-      ...(editedOutputTax > 0 ? [{ accountCode: "OUTPUT_GST", debit: 0, credit: editedOutputTax, narration: "Output GST" }] : []),
-    ] }, session);
+    // Desktop history includes legitimate zero-value bills. Creation already
+    // omits their journal because accounting requires positive totals; editing
+    // the same bill must follow that rule instead of raising a hidden 500.
+    const isZeroValueSalesEdit = Math.abs(Number(req.body.NetAmount || 0)) <= 0.01
+      && Math.abs(Number(req.body.OriginalNetAmount || 0)) <= 0.01;
+    if (!isZeroValueSalesEdit) {
+      await postBalancedJournal({ distributorId, firmId, sourceType: "SALES", sourceId: String(id), documentNo: `${String(BillSeries || "")}${Number(BillNo)}`, documentDate: String(BillDate || ""), createdBy: req.auth.userId, lines: [
+        { accountCode: String(PartyCode || PartyName), debit: Number(req.body.NetAmount || 0), credit: 0, narration: Narration || "Sales edit" },
+        ...(editedCreditNote > 0 ? [{ accountCode: "CREDIT_NOTE_ALLOWED", debit: editedCreditNote, credit: 0, narration: "Credit note" }] : []),
+        { accountCode: "SALES", debit: 0, credit: Number(req.body.OriginalNetAmount || 0) - editedOutputTax, narration: Narration || "Sales edit" },
+        ...(editedOutputTax > 0 ? [{ accountCode: "OUTPUT_GST", debit: 0, credit: editedOutputTax, narration: Narration || "Output GST" }] : []),
+      ] }, session);
+    }
     await writeAuditEvent(req, { entityType: "SALES", entityId: String(id), action: "UPDATE", before: oldBill.toObject(), after: updatedBill.toObject() }, session);
     await recordStockMovements({
       distributorId, firmId, godown: GDCode, items, movementDate: BillDate,
