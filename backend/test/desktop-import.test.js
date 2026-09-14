@@ -323,11 +323,14 @@ test("desktop sales skip stock movement only for zero-quantity historical items"
   assert.match(server, /if \(skipZeroQuantityItems && totalQty === 0\) \{\s*continue;/);
 });
 
-test("desktop receipts match a blank bill series exactly and retain unmatched legacy allocations", () => {
+test("desktop receipts retain unmatched and excessive legacy allocations without overpaying sales bills", () => {
   const server = fs.readFileSync(new URL("../transaction.js", import.meta.url), "utf8");
   assert.match(server, /body\._desktopImport === true \? \{ BillSeries: bill\.trnSeries \} : \{\}/);
   assert.match(server, /billFilter\.BillDate = bill\.trnDate;/);
   assert.match(server, /bill\.legacyUnmatched = true;/);
+  assert.match(server, /bill\.legacyOverAllocation = true;/);
+  assert.match(server, /bill\.appliedAmount = availableAmount;/);
+  assert.match(server, /Math\.min\(amountField, currentAllocated \+ availableAmount\)/);
 });
 
 test("desktop batch order imports stock sources before sales and receipts", () => {

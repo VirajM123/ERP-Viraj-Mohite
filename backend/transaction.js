@@ -155,6 +155,16 @@ receiptBills: [
       default: 0
     },
 
+    appliedAmount: {
+      type: Number,
+      default: 0
+    },
+
+    legacyOverAllocation: {
+      type: Boolean,
+      default: false
+    },
+
     remark: {
       type: String,
       default: ""
@@ -1069,7 +1079,13 @@ router.post(
             { $match: tenantFilter(req, { status: { $ne: "REVERSED" }, receiptBills: { $elemMatch: { trnSeries: bill.trnSeries, trnNo: bill.trnNo } } }) },
             { $unwind: "$receiptBills" },
             { $match: { "receiptBills.trnSeries": bill.trnSeries, "receiptBills.trnNo": bill.trnNo, "receiptBills.openingTransactionId": { $in: [null, ''] } } },
-            { $group: { _id: null, total: { $sum: { $add: ["$receiptBills.nowAdjust", "$receiptBills.discAmt"] } } } },
+            { $group: { _id: null, total: { $sum: {
+              $cond: [
+                { $eq: ["$receiptBills.legacyOverAllocation", true] },
+                { $ifNull: ["$receiptBills.appliedAmount", 0] },
+                { $add: ["$receiptBills.nowAdjust", "$receiptBills.discAmt"] },
+              ],
+            } } } },
           ]).session(session);
           const legacyAllocated = Number(previousReceipts[0]?.total || 0);
           const allocation = bill.nowAdjust + bill.discAmt;
@@ -1089,6 +1105,18 @@ router.post(
               : { $max: { receiptAllocated: currentAllocated } },
             { session }
           );
+
+          const availableAmount = Math.max(0, amountField - currentAllocated);
+          if (body._desktopImport === true && allocation > availableAmount + 0.01) {
+            bill.legacyOverAllocation = true;
+            bill.appliedAmount = availableAmount;
+            await sales.updateOne(
+              { _id: invoice._id },
+              { $set: { receiptAllocated: Math.min(amountField, currentAllocated + availableAmount) } },
+              { session }
+            );
+            continue;
+          }
 
           const reserved = await sales.updateOne(
   {
