@@ -148,12 +148,21 @@ export const readDesktopWorkbookStreaming = async (filePath, entryType) => {
   const nestedGroups = new Map();
   let worksheetIndex = 0;
   const reader = new ExcelJS.stream.xlsx.WorkbookReader(filePath, {
-    sharedStrings: "ignore", hyperlinks: "ignore", styles: "ignore", worksheets: "emit",
+    // Generated workbooks store headers and most text in the shared-string
+    // table. Resolve those values while streaming; otherwise every text cell
+    // becomes { sharedString: n } and the importer cannot recognize columns.
+    sharedStrings: "cache", hyperlinks: "ignore", styles: "ignore", worksheets: "emit",
   });
   for await (const worksheet of reader) {
     worksheetIndex += 1;
     const normalizedSheetName = normalize(worksheet.name);
-    const collectFirst = worksheetIndex === 1;
+    // ExcelJS emits worksheets in ZIP-entry order, which is not guaranteed to
+    // match workbook tab order. Generated files explicitly name the import
+    // sheet "Data", so do not accidentally parse the Instructions sheet when
+    // it happens to be emitted first. Retain first-sheet fallback for legacy
+    // workbooks that do not use the generated format.
+    const collectFirst = normalizedSheetName === "data"
+      || (worksheetIndex === 1 && normalizedSheetName !== "instructions");
     const collectNested = Boolean(transaction?.nested) && normalizedSheetName === normalize(transaction.nested);
     if (!collectFirst && !collectNested) continue;
     let headers = [];
