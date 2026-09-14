@@ -147,7 +147,11 @@ export default function createImportRouter({ authorizeRequest, models }) {
           if (rowCompany) doc.companyName = rowCompany.companyName;
         }
         const key = importDuplicateKey(config, doc, entryType, desktopBatch).toLowerCase();
-        if (key && (keys.has(key) || seen.has(key))) errors.push(`${config.label} with ${config.duplicateField} "${doc[config.duplicateField]}" already exists`);
+        // Product Master reimports intentionally update the matching product.
+        // Duplicate rows inside the same workbook remain invalid so that the
+        // result never depends on row order. Other master imports retain their
+        // existing duplicate protection unchanged.
+        if (key && (seen.has(key) || (keys.has(key) && entryType !== "Product"))) errors.push(`${config.label} with ${config.duplicateField} "${doc[config.duplicateField]}" already exists`);
         if (key) seen.add(key);
         rows.push({ row: index + 2, status: errors.length ? "Error" : "Valid", message: errors.join("; ") });
         if (!errors.length) documents.push(doc);
@@ -184,7 +188,34 @@ export default function createImportRouter({ authorizeRequest, models }) {
         entryType: req.body.entryType,
         rowCount: documents.length,
       }], { session });
-      await models[req.body.entryType].insertMany(documents, { ordered: true, session });
+      let inserted = documents.length;
+      let updated = 0;
+      if (req.body.entryType === "Product") {
+        const productCollection = mongoose.connection.collection(config.collection);
+        const existingProducts = await productCollection.find({
+          distributorId: req.security.distributorId,
+          firmId: req.security.firmId,
+        }, { projection: { productCode: 1 } }).session(session).toArray();
+        const existingCodes = new Map(existingProducts.map((product) => [clean(product.productCode).toLowerCase(), product.productCode]));
+        updated = documents.filter((document) => existingCodes.has(clean(document.productCode).toLowerCase())).length;
+        inserted = documents.length - updated;
+        await productCollection.bulkWrite(documents.map((document) => ({
+          updateOne: {
+            filter: {
+              distributorId: req.security.distributorId,
+              firmId: req.security.firmId,
+              productCode: existingCodes.get(clean(document.productCode).toLowerCase()) || document.productCode,
+            },
+            update: {
+              $set: { ...document, updatedAt: new Date() },
+              $setOnInsert: { createdAt: new Date() },
+            },
+            upsert: true,
+          },
+        })), { ordered: true, session });
+      } else {
+        await models[req.body.entryType].insertMany(documents, { ordered: true, session });
+      }
       let createdGstRates = 0;
       if (req.body.entryType === "Product") {
         const rates = [...new Set(documents.map((document) => Number(document.gst)).filter((rate) => Number.isFinite(rate) && rate >= 0))];
@@ -224,7 +255,10 @@ export default function createImportRouter({ authorizeRequest, models }) {
       }
       await writeAuditEvent(req, { entityType: "IMPORT_BATCH", entityId: idempotencyKey, action: "IMPORT", after: { entryType: req.body.entryType, rowCount: documents.length } }, session);
       await session.commitTransaction();
-      return res.status(201).json({ success: true, message: `${documents.length} ${config.label} record(s) imported.`, total, inserted: documents.length, failed: 0, createdGstRates, rows });
+      const message = req.body.entryType === "Product"
+        ? `${inserted} Product Master record(s) imported and ${updated} existing record(s) updated.`
+        : `${documents.length} ${config.label} record(s) imported.`;
+      return res.status(201).json({ success: true, message, total, inserted, updated, failed: 0, createdGstRates, rows });
     } catch (error) {
       if (session.inTransaction()) await session.abortTransaction();
       if (error?.code === 11000) return res.status(409).json({ success: false, message: "This import request was already processed or contains duplicates." });
