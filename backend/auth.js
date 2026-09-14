@@ -87,7 +87,7 @@ export const issueAccessToken = (user, source) =>
       ver: Number(user.sessionVersion || 0),
     },
     jwtSecret(),
-    { expiresIn: process.env.JWT_EXPIRES_IN || "30m", issuer: "fmcg-erp", audience: "fmcg-erp-web" }
+    { issuer: "fmcg-erp", audience: "fmcg-erp-web" }
   );
 
 const resolvePrincipal = async (payload) => {

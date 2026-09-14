@@ -1,10 +1,8 @@
-export const SESSION_DURATION_MS = 30 * 60 * 1000;
 export const SESSION_EXPIRES_AT_KEY = "sessionExpiresAt";
 
 export const startSession = () => {
-  const expiresAt = Date.now() + SESSION_DURATION_MS;
-  localStorage.setItem(SESSION_EXPIRES_AT_KEY, String(expiresAt));
-  return expiresAt;
+  localStorage.removeItem(SESSION_EXPIRES_AT_KEY);
+  return 0;
 };
 
 export const getSessionExpiresAt = () => {
@@ -13,7 +11,5 @@ export const getSessionExpiresAt = () => {
 };
 
 export const hasActiveSession = () => {
-  const hasToken = Boolean(localStorage.getItem("token"));
-  const expiresAt = getSessionExpiresAt();
-  return hasToken && expiresAt > Date.now();
+  return Boolean(localStorage.getItem("token"));
 };

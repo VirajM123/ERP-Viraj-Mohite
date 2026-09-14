@@ -18,6 +18,7 @@ const SERIAL_DESKTOP_TRANSACTION_TYPES = new Set([
   // failed import when only the commit acknowledgement was interrupted.
   "DesktopSales",
   "DesktopCounterSales",
+  "DesktopCreditNote",
   "DesktopStockOut",
   "DesktopSelfDamage",
   "DesktopDamageStockOut",
@@ -362,7 +363,8 @@ const apiRequest = async ({ baseUrl, authorization, endpoint, method = "POST", b
 
 const wait = (milliseconds) => new Promise((resolve) => setTimeout(resolve, milliseconds));
 const isRetryableDesktopTransactionError = (error) => error?.status >= 500
-  || [112, 244, 251].includes(Number(error?.code));
+  || [112, 244, 251].includes(Number(error?.code))
+  || /write conflict|please retry your operation|transienttransactionerror|unknowntransactioncommitresult/i.test(String(error?.message || ""));
 
 export const requestDesktopTransaction = async (options, { attempts = 5 } = {}) => {
   let lastError;
@@ -381,6 +383,11 @@ export const requestDesktopTransaction = async (options, { attempts = 5 } = {}) 
 const responseId = (result) => String(result.savedBillId || result.data?._id || result.data?.header?._id || result.purchase?._id || result.creditNote?._id || result.debitNote?._id || result.voucher?._id || result.load?._id || result.saved?._id || "");
 
 export const desktopCommittedTransactionFilter = (entryType, payload, tenant) => {
+  if (entryType === "DesktopCreditNote") return {
+    ...tenant,
+    CreditNoteSeries: String(payload.CreditNoteSeries || "CN").trim(),
+    CreditNoteNo: Number(payload.CreditNoteNo),
+  };
   if (!["DesktopSales", "DesktopCounterSales"].includes(entryType)) return null;
   return {
     ...tenant,
@@ -482,7 +489,7 @@ export const runDesktopImport = async ({ job, plan, state, companyCode, authoriz
               ? "/purchase/reconcile-desktop-import"
               : definition.endpoint;
             const request = { baseUrl, authorization, endpoint, body: payload, idempotencyKey: `desktop-${job.id}-${file.entryType}-${record.row}` };
-            const result = ["DesktopSales", "DesktopCounterSales"].includes(file.entryType)
+            const result = ["DesktopSales", "DesktopCounterSales", "DesktopCreditNote"].includes(file.entryType)
               ? await requestDesktopTransaction(request)
               : await apiRequest(request);
             let id = responseId(result);

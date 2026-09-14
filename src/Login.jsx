@@ -21,7 +21,6 @@ import loginLogo from "../assets/img/Login.ico";
 import loginOfficeHero from "./assets/images/login-office-hero.png";
 import { API_URL } from "./api/config";
 import { businessDateIST } from "./utils/businessDate";
-import { startSession } from "./utils/session";
 
 
 const getTodayDate = () => {
@@ -407,7 +406,6 @@ console.log(
       }
 
       localStorage.setItem("token", result.token);
-      startSession();
       localStorage.setItem("distributorId", result.user.distributorId);
       localStorage.setItem("firmId", result.user.firmId);
       localStorage.setItem("firmCode", result.user.firmCode);

@@ -185,9 +185,46 @@ export default function createImportRouter({ authorizeRequest, models }) {
         rowCount: documents.length,
       }], { session });
       await models[req.body.entryType].insertMany(documents, { ordered: true, session });
+      let createdGstRates = 0;
+      if (req.body.entryType === "Product") {
+        const rates = [...new Set(documents.map((document) => Number(document.gst)).filter((rate) => Number.isFinite(rate) && rate >= 0))];
+        if (rates.length) {
+          const gstCollection = mongoose.connection.collection("Mas_GST");
+          const existingRates = await gstCollection.find({
+            distributorId: req.security.distributorId,
+            firmId: req.security.firmId,
+            vatPercent: { $in: rates },
+            isActive: { $ne: false },
+          }, { projection: { vatPercent: 1 } }).session(session).toArray();
+          const availableRates = new Set(existingRates.map((row) => Number(row.vatPercent)));
+          const missingRates = rates.filter((rate) => !availableRates.has(rate));
+          if (missingRates.length) {
+            const result = await gstCollection.bulkWrite(missingRates.map((rate) => ({
+              updateOne: {
+                filter: { distributorId: req.security.distributorId, firmId: req.security.firmId, gstCode: `GST${rate}` },
+                update: {
+                  $set: { vatPercent: rate, isActive: true },
+                  $setOnInsert: {
+                    gstCode: `GST${rate}`,
+                    distributorId: req.security.distributorId,
+                    firmId: req.security.firmId,
+                    firmName: req.security.firmName || "",
+                    purchaseType: "VAT ON PURCHASE PRICE",
+                    salesType: "VAT ON SALES PRICE",
+                    createdAt: new Date(),
+                  },
+                  $currentDate: { updatedAt: true },
+                },
+                upsert: true,
+              },
+            })), { ordered: true, session });
+            createdGstRates = Number(result.upsertedCount || 0) + Number(result.modifiedCount || 0);
+          }
+        }
+      }
       await writeAuditEvent(req, { entityType: "IMPORT_BATCH", entityId: idempotencyKey, action: "IMPORT", after: { entryType: req.body.entryType, rowCount: documents.length } }, session);
       await session.commitTransaction();
-      return res.status(201).json({ success: true, message: `${documents.length} ${config.label} record(s) imported.`, total, inserted: documents.length, failed: 0, rows });
+      return res.status(201).json({ success: true, message: `${documents.length} ${config.label} record(s) imported.`, total, inserted: documents.length, failed: 0, createdGstRates, rows });
     } catch (error) {
       if (session.inTransaction()) await session.abortTransaction();
       if (error?.code === 11000) return res.status(409).json({ success: false, message: "This import request was already processed or contains duplicates." });

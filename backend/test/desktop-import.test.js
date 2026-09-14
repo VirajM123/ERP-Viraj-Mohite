@@ -332,6 +332,7 @@ test("stock-mutating desktop imports are serialized to avoid write conflicts", (
   assert.equal(desktopTransactionConcurrency("DesktopStockOut"), 1);
   assert.equal(desktopTransactionConcurrency("DesktopSales"), 1);
   assert.equal(desktopTransactionConcurrency("DesktopCounterSales"), 1);
+  assert.equal(desktopTransactionConcurrency("DesktopCreditNote"), 1);
   assert.ok(desktopTransactionConcurrency("DesktopReceipt") >= 1);
 });
 
@@ -344,6 +345,10 @@ test("desktop sales can be reconciled by their stored bill identity after an unc
   assert.deepEqual(
     desktopCommittedTransactionFilter("DesktopCounterSales", { BillSeries: "CS", BillNo: 7 }, tenant),
     { ...tenant, BillSeries: "CS", BillNo: 7 },
+  );
+  assert.deepEqual(
+    desktopCommittedTransactionFilter("DesktopCreditNote", { CreditNoteSeries: " CN ", CreditNoteNo: "8" }, tenant),
+    { ...tenant, CreditNoteSeries: "CN", CreditNoteNo: 8 },
   );
   assert.equal(desktopCommittedTransactionFilter("DesktopReceipt", {}, tenant), null);
 });

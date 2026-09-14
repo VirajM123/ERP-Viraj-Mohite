@@ -10,10 +10,6 @@ import { businessDateIST } from "./utils/businessDate";
 import { resolveInvoiceItemHsn } from "./utils/invoiceHsn";
 import { findPurchaseSupplier, purchaseSupplierValue } from "./utils/purchaseSupplier";
 import {
-  getSessionExpiresAt,
-  startSession,
-} from "./utils/session";
-import {
   loadPermissions,
   hasPermission,
   usePermission,
@@ -310,11 +306,6 @@ const Dashboard = ({ onLogout }) => {
   const [activeSubMenu, setActiveSubMenu] = useState(null);
   const [openFormFor, setOpenFormFor] = useState(null);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
-  const [sessionSecondsRemaining, setSessionSecondsRemaining] = useState(() => {
-    const expiresAt = getSessionExpiresAt();
-    return Math.max(0, Math.ceil((expiresAt - Date.now()) / 1000));
-  });
-  const sessionExpiryNoticeShownRef = useRef(false);
   const [showReceiptForm, setShowReceiptForm] = useState(false);
   const [accountActiveTab, setAccountActiveTab] = useState('basic');
   const [otherAccountActiveTab, setOtherAccountActiveTab] = useState('basic');
@@ -373,46 +364,6 @@ const Dashboard = ({ onLogout }) => {
       ? { configured: true, value: "" }
       : { configured: false, value: "" };
   };
-
-  useEffect(() => {
-    // Give already-authenticated legacy sessions one complete window. New logins
-    // always receive their timestamp in Login.jsx before Dashboard is mounted.
-    let expiresAt = getSessionExpiresAt();
-    if (!expiresAt && localStorage.getItem("token")) {
-      expiresAt = startSession();
-    }
-
-    const updateCountdown = () => {
-      if (!localStorage.getItem("token")) {
-        onLogout();
-        return;
-      }
-
-      const millisecondsRemaining = expiresAt - Date.now();
-      const secondsRemaining = Math.max(
-        0,
-        Math.ceil(millisecondsRemaining / 1000)
-      );
-
-      setSessionSecondsRemaining(secondsRemaining);
-
-      if (millisecondsRemaining <= 0) {
-        if (!sessionExpiryNoticeShownRef.current) {
-          sessionExpiryNoticeShownRef.current = true;
-          window.alert("Your session has expired. Your current screen and unsaved data will remain open. Please log in again before performing another server action.");
-        }
-      }
-    };
-
-    updateCountdown();
-    const countdownTimer = window.setInterval(updateCountdown, 1000);
-
-    return () => window.clearInterval(countdownTimer);
-  }, [onLogout]);
-
-  const sessionCountdownText = `${String(
-    Math.floor(sessionSecondsRemaining / 60)
-  ).padStart(2, "0")}:${String(sessionSecondsRemaining % 60).padStart(2, "0")}`;
 
   const [runtimeGeneralSetup, setRuntimeGeneralSetup] =
     useState({
@@ -60434,21 +60385,6 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
             </div>
 
             <div className="lovable-header-right">
-              <div
-                className={`lovable-session-countdown ${
-                  sessionSecondsRemaining <= 300 ? "ending-soon" : ""
-                }`}
-                title={`The system will automatically log out after ${sessionCountdownText}`}
-                role="timer"
-                aria-live="off"
-              >
-                <Clock3 size={16} />
-                <span className="lovable-session-countdown-copy">
-                  <small></small>
-                  <strong>{sessionCountdownText}</strong>
-                </span>
-              </div>
-
               <div
                 className="lovable-create-dropdown"
                 onMouseLeave={() => setShowCreateDropdown(false)}
