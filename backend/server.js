@@ -2364,6 +2364,9 @@ salesHeaderSchema.index(
   { distributorId: 1, firmId: 1, BillSeries: 1, BillNo: 1 },
   { unique: true }
 );
+salesHeaderSchema.index(
+  { distributorId: 1, firmId: 1, SalesEntryType: 1, BillDate: -1, BillNo: -1, _id: -1 }
+);
 
 const SalesHeader = mongoose.model("T_Sal_Header", salesHeaderSchema);
 

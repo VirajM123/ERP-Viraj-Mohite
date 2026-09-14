@@ -112,6 +112,38 @@ test("desktop sales rows are converted to the ERP sales payload shape", () => {
   assert.equal(payload.items[0].productCode, "P10"); assert.equal(payload.items[0].batchNo, "B1");
 });
 
+test("legacy repeated counter-sale headers export only one bill", () => {
+  const references = {
+    products: new Map([["10", { ProdCode: "P10", ProdName: "Product 10" }]]),
+    accounts: new Map([["20", { AcCode: "A20", AcName: "Customer 20" }]]),
+    companies: new Map([["30", { CompCode: "C30", CompName: "Company 30" }]]),
+    salesmen: new Map(), areas: new Map(), godowns: new Map([["g1", { GDName: "Main" }]]),
+  };
+  const rows = buildDesktopTransactionRows({
+    job: { distributorId: "D", firmId: "F" }, definition: { entryType: "DesktopCounterSales", label: "Counter Sales" }, references,
+    sheets: [
+      { sheet: "Header", rows: [
+        { TrnSeries: "CS", TrnNo: 1, TrnDate: "2026-01-02", SysAcCode: 20, SysCompCode: 30, GDCode: "G1" },
+        { TrnSeries: "CS", TrnNo: 1, TrnDate: "2026-01-02", SysAcCode: 20, SysCompCode: 30, GDCode: "G1" },
+      ] },
+      { sheet: "Details", rows: [
+        { TrnSeries: "CS", TrnNo: 1, SysProdCode: 10, Qty: 1, Rate: 10 },
+        { TrnSeries: "CS", TrnNo: 1, SysProdCode: 10, Qty: 2, Rate: 10 },
+      ] },
+    ],
+  });
+  assert.equal(rows.length, 1);
+  assert.equal(JSON.parse(rows[0]["ERP Payload JSON"]).items.length, 2);
+});
+
+test("sales lists use paginated data and have a matching counter-sales index", () => {
+  const dashboard = fs.readFileSync(new URL("../../src/Dashboard.jsx", import.meta.url), "utf8");
+  const server = fs.readFileSync(new URL("../server.js", import.meta.url), "utf8");
+  assert.doesNotMatch(dashboard, /\$\{API_URL\}\/sales\?distributorId=/);
+  assert.match(dashboard, /\$\{API_URL\}\/sales\/list\?/);
+  assert.match(server, /SalesEntryType: 1, BillDate: -1, BillNo: -1, _id: -1/);
+});
+
 test("desktop purchase rows retain the visible product label and stock fields", () => {
   const references = {
     products: new Map([["10", { ProdCode: "P10", ProdName: "Product 10" }]]),

@@ -84,7 +84,11 @@ const masterName = (references, type, code, codeField, nameField, required = fal
 
 const salesRows = (job, definition, headerRows, detailRows, references) => {
   const details = groupDetails(detailRows);
-  return headerRows.map((header) => {
+  // Some legacy Counter Sales header tables repeat the same bill once per
+  // detail row. Export one document per API identity so createSourceWorkbook
+  // does not multiply the complete item set for every repeated header.
+  const uniqueHeaders = [...new Map(headerRows.map((header) => [key(header), header])).values()];
+  return uniqueHeaders.map((header) => {
     const billDetails = details.get(key(header)) || [];
     const account = masterName(references, "accounts", header.SysAcCode, "AcCode", "AcName", true);
     const company = masterName(references, "companies", number(header.SysCompCode) > 0 ? header.SysCompCode : billDetails[0]?.SysCompCode, "CompCode", "CompName", true);

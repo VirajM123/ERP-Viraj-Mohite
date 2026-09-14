@@ -19915,41 +19915,6 @@ const debitNotePermission = usePermission("VOUCHERS", "DEBIT_NOTE");
       }
     );
   };
-  useEffect(() => {
-    // Load sales bills for validation
-    const loadSalesBillsForValidation = async () => {
-      try {
-        const { distributorId, firmId } = getFirmSession();
-        if (!distributorId || !firmId) return;
-
-        const res = await secureFetch(
-          `${API_URL}/sales?distributorId=${distributorId}&firmId=${firmId}`
-        );
-        const result = await res.json();
-
-        if (res.ok && result.success) {
-          const normalizedSales = (result.sales || []).map((s) => ({
-            ...s,
-            id: s._id || s.id,
-            billDate: s.BillDate || s.billDate || "",
-            billSeries: s.BillSeries || s.billSeries || "",
-            billNo: s.BillNo || s.billNo || "",
-            billType: s.BillType || s.billType || "",
-            partyCode: s.PartyCode || s.partyCode || "",
-            party: s.PartyName || s.party || "",
-            partyName: s.PartyName || s.partyName || "",
-            amount: Number(s.NetAmount || s.amount || 0),
-            status: s.status || "Pending",
-          }));
-          setSalesListData(normalizedSales);
-        }
-      } catch (error) {
-        console.error("Failed to load sales bills for validation:", error);
-      }
-    };
-
-    loadSalesBillsForValidation();
-  }, []);
   const addInvoiceItem = useCallback(() => {
     if (
       openFormFor === "Billing" &&

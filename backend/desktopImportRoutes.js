@@ -9,7 +9,7 @@ import multer from "multer";
 import * as XLSX from "xlsx";
 import { importConfig } from "./importConfig.js";
 import { buildDesktopTransactionRows } from "./desktopTransactionMapper.js";
-import { DESKTOP_IMPORT_ORDER, preflightDesktopImport, publicImportState, rollbackDesktopImport, runDesktopImport } from "./desktopImportBatch.js";
+import { DESKTOP_IMPORT_ORDER, preflightDesktopImport, publicImportState, readDesktopWorkbook, readDesktopWorkbookStreaming, rollbackDesktopImport, runDesktopImport } from "./desktopImportBatch.js";
 import { csvCell, sanitizeSpreadsheetCell, sanitizeSpreadsheetRow } from "./spreadsheetSafety.js";
 
 const execFileAsync = promisify(execFile);
@@ -577,31 +577,32 @@ export default function createDesktopImportRouter({ authorizeRequest }) {
   router.post("/desktop-import/upload-excel", canImportDesktop, rejectActiveJob, allowDesktopImportTime, (req, res, next) => {
     req.desktopImportDirectory = fs.mkdtempSync(path.join(os.tmpdir(), "erp-desktop-excel-"));
     next();
-  }, excelUpload.array("excel", MAX_EXCEL_FILES), (req, res) => {
+  }, excelUpload.array("excel", MAX_EXCEL_FILES), async (req, res) => {
     if (!req.files?.length) {
       fs.rmSync(req.desktopImportDirectory, { recursive: true, force: true });
       return res.status(400).json({ success: false, message: "Please select one or more ERP Excel files." });
     }
     try {
       const seenTypes = new Set();
-      const importedFiles = req.files.map((file) => {
+      const importedFiles = [];
+      for (const file of req.files) {
         const entryType = desktopExcelEntryType(file.originalname);
         if (!entryType) throw Object.assign(new Error(`${file.originalname} is not a recognized ERP desktop export file.`), { status: 415 });
         if (seenTypes.has(entryType)) throw Object.assign(new Error(`Select only one ${desktopExcelLabel(entryType)} file.`), { status: 400 });
         seenTypes.add(entryType);
-        const workbook = XLSX.read(fs.readFileSync(file.path), { type: "buffer", bookSheets: false });
-        if (!workbook.SheetNames.length) throw Object.assign(new Error(`${file.originalname} does not contain a worksheet.`), { status: 415 });
-        const firstSheet = workbook.Sheets[workbook.SheetNames[0]];
-        const rows = XLSX.utils.sheet_to_json(firstSheet, { defval: "" }).length;
-        if (!rows) throw Object.assign(new Error(`${file.originalname} does not contain importable rows.`), { status: 422 });
-        return { id: crypto.randomUUID(), entryType, label: desktopExcelLabel(entryType), fileName: file.originalname, rows, importable: true, filePath: file.path };
-      }).sort((left, right) => DESKTOP_IMPORT_ORDER.indexOf(left.entryType) - DESKTOP_IMPORT_ORDER.indexOf(right.entryType));
+        const records = path.extname(file.originalname).toLowerCase() === ".xls"
+          ? readDesktopWorkbook(file.path, entryType)
+          : await readDesktopWorkbookStreaming(file.path, entryType);
+        importedFiles.push({ id: crypto.randomUUID(), entryType, label: desktopExcelLabel(entryType), fileName: file.originalname, rows: records.length, importable: true, filePath: file.path, records });
+      }
+      importedFiles.sort((left, right) => DESKTOP_IMPORT_ORDER.indexOf(left.entryType) - DESKTOP_IMPORT_ORDER.indexOf(right.entryType));
       const id = crypto.randomUUID();
       const job = {
         id, status: "completed", progress: 100, stage: `${importedFiles.length} Excel file(s) are ready to import`, source: "excel",
         directory: req.desktopImportDirectory, distributorId: req.security.distributorId, firmId: req.security.firmId,
-        firmName: req.security.firmName || "", files: importedFiles.map(({ filePath, ...file }) => file),
+        firmName: req.security.firmName || "", files: importedFiles.map(({ filePath, records, ...file }) => file),
         filePaths: new Map(importedFiles.map((file) => [file.id, file.filePath])), createdAt: new Date().toISOString(),
+        parsedRecords: new Map(importedFiles.map((file) => [file.id, file.records])),
       };
       jobs.set(id, job);
       return res.status(201).json({ success: true, job: { id: job.id, status: job.status, progress: job.progress, stage: job.stage, source: job.source, files: job.files } });

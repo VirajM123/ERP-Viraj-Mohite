@@ -1,5 +1,7 @@
 import fs from "fs";
+import ExcelJS from "exceljs";
 import mongoose from "mongoose";
+import path from "path";
 import * as XLSX from "xlsx";
 import { importConfig } from "./importConfig.js";
 
@@ -81,24 +83,14 @@ const payloadJson = (row) => JSON.parse(Object.keys(row).filter((key) => /^ERP P
   .sort((left, right) => Number(left.match(/\d+$/)?.[0] || 1) - Number(right.match(/\d+$/)?.[0] || 1))
   .map((key) => String(row[key] || "")).join(""));
 
-export const readDesktopWorkbook = (filePath, entryType) => {
-  const workbook = XLSX.read(fs.readFileSync(filePath), { type: "buffer", cellDates: false });
-  const firstSheet = workbook.Sheets[workbook.SheetNames[0]];
-  const rows = XLSX.utils.sheet_to_json(firstSheet, { defval: "" });
+const hydrateDesktopRows = ({ rows, nestedRows = [], entryType }) => {
   const transaction = transactionDefinitions[entryType];
   if (!transaction) return rows
     .map((row, index) => ({ row: index + 2, source: row, payload: row }))
-    // A party without an area is intentionally unmapped in the desktop data;
-    // it is not a malformed Area-to-Party mapping to import.
     .filter((record) => entryType !== "AreaToPartyMapping"
       || (String(record.payload["Area Code"] || "").trim() && String(record.payload["Area Name"] || "").trim()));
   const hasJson = Object.keys(rows[0] || {}).some((key) => /^ERP Payload JSON(?: \d+)?$/.test(key));
-  let nestedRows = [];
-  if (!hasJson && transaction.nested) {
-    const nestedName = workbook.SheetNames.find((name) => normalize(name) === normalize(transaction.nested));
-    nestedRows = nestedName ? XLSX.utils.sheet_to_json(workbook.Sheets[nestedName], { defval: "" }) : [];
-  }
-  const nestedRowsByIdentity = !hasJson && transaction?.nested
+  const nestedRowsByIdentity = !hasJson && transaction.nested
     ? nestedRows.reduce((groups, item) => {
       const key = transaction.identity.map((field) => String(item[field] ?? "")).join("\u0000");
       const group = groups.get(key) || [];
@@ -115,17 +107,103 @@ export const readDesktopWorkbook = (filePath, entryType) => {
       if (transaction.nested) {
         const identityKey = transaction.identity.map((field) => String(row[field] ?? "")).join("\u0000");
         payload[transaction.nested] = (nestedRowsByIdentity.get(identityKey) || [])
-        .map((item) => Object.fromEntries(Object.entries(item).filter(([name]) => !transaction.identity.includes(name)).map(([name, value]) => [name, jsonCell(value)])));
+          .map((item) => Object.fromEntries(Object.entries(item).filter(([name]) => !transaction.identity.includes(name)).map(([name, value]) => [name, jsonCell(value)])));
       }
     }
-    // Older generated Credit Note workbooks can contain a blank desktop
-    // transaction series. The API stores those notes under its canonical CN
-    // default, so normalize them before duplicate preflight and submission.
-    if (entryType === "DesktopCreditNote" && !String(payload.CreditNoteSeries || "").trim()) {
-      payload.CreditNoteSeries = "CN";
-    }
+    if (entryType === "DesktopCreditNote" && !String(payload.CreditNoteSeries || "").trim()) payload.CreditNoteSeries = "CN";
     return { row: index + 2, source: row, payload };
   });
+};
+
+export const readDesktopWorkbook = (filePath, entryType) => {
+  const workbook = XLSX.read(fs.readFileSync(filePath), { type: "buffer", cellDates: false });
+  const firstSheet = workbook.Sheets[workbook.SheetNames[0]];
+  const rows = XLSX.utils.sheet_to_json(firstSheet, { defval: "" });
+  const transaction = transactionDefinitions[entryType];
+  const hasJson = Object.keys(rows[0] || {}).some((key) => /^ERP Payload JSON(?: \d+)?$/.test(key));
+  let nestedRows = [];
+  if (!hasJson && transaction?.nested) {
+    const nestedName = workbook.SheetNames.find((name) => normalize(name) === normalize(transaction.nested));
+    nestedRows = nestedName ? XLSX.utils.sheet_to_json(workbook.Sheets[nestedName], { defval: "" }) : [];
+  }
+  return hydrateDesktopRows({ rows, nestedRows, entryType });
+};
+
+const streamedCellValue = (value) => {
+  if (value instanceof Date) return value.toISOString().slice(0, 10);
+  if (!value || typeof value !== "object") return value ?? "";
+  if (Array.isArray(value.richText)) return value.richText.map((part) => part.text || "").join("");
+  if (Object.hasOwn(value, "result")) return value.result ?? "";
+  if (Object.hasOwn(value, "text")) return value.text ?? "";
+  return String(value);
+};
+
+export const readDesktopWorkbookStreaming = async (filePath, entryType) => {
+  // ExcelJS streams the Office Open XML format. Preserve the existing legacy
+  // BIFF .xls path exactly as it was for the smaller legacy files it supports.
+  if (path.extname(filePath).toLowerCase() === ".xls") return readDesktopWorkbook(filePath, entryType);
+  const transaction = transactionDefinitions[entryType];
+  const firstRows = [];
+  const nestedGroups = new Map();
+  let worksheetIndex = 0;
+  const reader = new ExcelJS.stream.xlsx.WorkbookReader(filePath, {
+    sharedStrings: "ignore", hyperlinks: "ignore", styles: "ignore", worksheets: "emit",
+  });
+  for await (const worksheet of reader) {
+    worksheetIndex += 1;
+    const normalizedSheetName = normalize(worksheet.name);
+    const collectFirst = worksheetIndex === 1;
+    const collectNested = Boolean(transaction?.nested) && normalizedSheetName === normalize(transaction.nested);
+    if (!collectFirst && !collectNested) continue;
+    let headers = [];
+    for await (const row of worksheet) {
+      const values = Array.from({ length: Math.max(0, row.cellCount) }, (_, index) => streamedCellValue(row.getCell(index + 1).value));
+      if (!headers.length) { headers = values.map((value) => String(value || "").trim()); continue; }
+      if (!values.some((value) => value !== "" && value !== null && value !== undefined)) continue;
+      const record = Object.fromEntries(headers.map((header, index) => [header, values[index] ?? ""]).filter(([header]) => header));
+      if (collectFirst) firstRows.push(record);
+      else {
+        const rowIdentity = transaction.identity.map((field) => String(record[field] ?? "")).join("\u0000");
+        const signature = JSON.stringify(record);
+        const signatures = nestedGroups.get(rowIdentity) || new Map();
+        const entry = signatures.get(signature) || { row: record, count: 0 };
+        entry.count += 1;
+        signatures.set(signature, entry);
+        nestedGroups.set(rowIdentity, signatures);
+      }
+    }
+  }
+  if (!firstRows.length) throw Object.assign(new Error(`${path.basename(filePath)} does not contain importable rows.`), { status: 422 });
+
+  // Repair workbooks produced from legacy Counter Sales tables where each
+  // header was repeated once per detail and the exporter consequently wrote
+  // the complete detail set once for every repeated header. Dividing exact
+  // detail repetitions by that header multiplicity preserves genuine repeated
+  // product lines while removing only the exporter-created multiplication.
+  const nestedRows = [];
+  if (transaction?.nested && transaction.identity.length && nestedGroups.size) {
+    const identity = (row) => transaction.identity.map((field) => String(row[field] ?? "")).join("\u0000");
+    const headerCounts = new Map();
+    const uniqueHeaders = new Map();
+    for (const row of firstRows) {
+      const rowIdentity = identity(row);
+      headerCounts.set(rowIdentity, (headerCounts.get(rowIdentity) || 0) + 1);
+      if (!uniqueHeaders.has(rowIdentity)) uniqueHeaders.set(rowIdentity, row);
+    }
+    const repeatedHeaders = [...headerCounts.values()].some((count) => count > 1);
+    for (const [rowIdentity, signatures] of nestedGroups) {
+      const multiplier = repeatedHeaders ? headerCounts.get(rowIdentity) || 1 : 1;
+      for (const { row, count } of signatures.values()) {
+        for (let index = 0; index < Math.ceil(count / multiplier); index += 1) nestedRows.push(row);
+      }
+    }
+    if (repeatedHeaders) {
+      firstRows.length = 0;
+      firstRows.push(...uniqueHeaders.values());
+    }
+  }
+
+  return hydrateDesktopRows({ rows: firstRows, nestedRows, entryType });
 };
 
 const loadKnownReferences = async (tenant) => {
@@ -168,14 +246,15 @@ export const preflightDesktopImport = async ({ job, fileIds, companyCode }) => {
   const chosen = (job.files || []).filter((file) => !fileIds?.length || fileIds.includes(file.id));
   const ordered = [...chosen].sort((left, right) => DESKTOP_IMPORT_ORDER.indexOf(left.entryType) - DESKTOP_IMPORT_ORDER.indexOf(right.entryType));
   const tenant = { distributorId: job.distributorId, firmId: job.firmId };
+  const recordsFor = (file) => job.parsedRecords?.get(file.id) || readDesktopWorkbook(job.filePaths.get(file.id), file.entryType);
   const known = await loadKnownReferences(tenant);
   for (const file of ordered) {
-    if (file.entryType === "Company") readDesktopWorkbook(job.filePaths.get(file.id), file.entryType).forEach(({ payload }) => known.companies.add(normalize(payload["Company Code"])));
-    if (file.entryType === "Product") readDesktopWorkbook(job.filePaths.get(file.id), file.entryType).forEach(({ payload }) => known.products.add(normalize(payload["Product Code"])));
-    if (file.entryType === "Account") readDesktopWorkbook(job.filePaths.get(file.id), file.entryType).forEach(({ payload }) => known.accounts.add(normalize(payload["Account Code"])));
-    if (file.entryType === "Area") readDesktopWorkbook(job.filePaths.get(file.id), file.entryType).forEach(({ payload }) => known.areas.add(normalize(payload["Area Code"])));
-    if (file.entryType === "Salesman") readDesktopWorkbook(job.filePaths.get(file.id), file.entryType).forEach(({ payload }) => known.salesmen.add(normalize(payload["Salesman Code"])));
-    if (["DesktopOpeningStock", "DesktopPurchase", "DesktopStockIn"].includes(file.entryType)) readDesktopWorkbook(job.filePaths.get(file.id), file.entryType).forEach(({ payload }) => {
+    if (file.entryType === "Company") recordsFor(file).forEach(({ payload }) => known.companies.add(normalize(payload["Company Code"])));
+    if (file.entryType === "Product") recordsFor(file).forEach(({ payload }) => known.products.add(normalize(payload["Product Code"])));
+    if (file.entryType === "Account") recordsFor(file).forEach(({ payload }) => known.accounts.add(normalize(payload["Account Code"])));
+    if (file.entryType === "Area") recordsFor(file).forEach(({ payload }) => known.areas.add(normalize(payload["Area Code"])));
+    if (file.entryType === "Salesman") recordsFor(file).forEach(({ payload }) => known.salesmen.add(normalize(payload["Salesman Code"])));
+    if (["DesktopOpeningStock", "DesktopPurchase", "DesktopStockIn"].includes(file.entryType)) recordsFor(file).forEach(({ payload }) => {
       const definition = transactionDefinitions[file.entryType];
       const items = definition.nested ? payload[definition.nested] || [] : [payload];
       for (const item of items) known.stocks.add(`${normalize(payload.GDCode || payload.gdCode)}|${normalize(item.productCode || item.prodCode || item.ProductCode)}`);
@@ -184,7 +263,7 @@ export const preflightDesktopImport = async ({ job, fileIds, companyCode }) => {
   const files = [];
   const report = [];
   for (const file of ordered) {
-    const records = readDesktopWorkbook(job.filePaths.get(file.id), file.entryType);
+    const records = recordsFor(file);
     const master = masterDefinitions[file.entryType];
     const transaction = transactionDefinitions[file.entryType];
     const seen = new Set();
