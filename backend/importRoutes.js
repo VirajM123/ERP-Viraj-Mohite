@@ -30,6 +30,43 @@ const importDuplicateKey = (config, doc, entryType, desktopBatch) =>
     ? [doc.accountCode, doc.accountName].map(clean).join("|")
     : duplicateKey(config, doc);
 
+const syncProductGstRates = async ({ documents, distributorId, firmId, firmName }) => {
+  const rates = [...new Set(documents
+    .map((document) => Number(document.gst))
+    .filter((rate) => Number.isFinite(rate) && rate >= 0))];
+  if (!rates.length) return 0;
+  const gstCollection = mongoose.connection.collection("Mas_GST");
+  const existingRates = await gstCollection.find({
+    distributorId,
+    firmId,
+    vatPercent: { $in: rates },
+    isActive: { $ne: false },
+  }, { projection: { vatPercent: 1 } }).toArray();
+  const availableRates = new Set(existingRates.map((row) => Number(row.vatPercent)));
+  const missingRates = rates.filter((rate) => !availableRates.has(rate));
+  if (!missingRates.length) return 0;
+  const result = await gstCollection.bulkWrite(missingRates.map((rate) => ({
+    updateOne: {
+      filter: { distributorId, firmId, gstCode: `GST${rate}` },
+      update: {
+        $set: { vatPercent: rate, isActive: true },
+        $setOnInsert: {
+          gstCode: `GST${rate}`,
+          distributorId,
+          firmId,
+          firmName: firmName || "",
+          purchaseType: "VAT ON PURCHASE PRICE",
+          salesType: "VAT ON SALES PRICE",
+          createdAt: new Date(),
+        },
+        $currentDate: { updatedAt: true },
+      },
+      upsert: true,
+    },
+  })), { ordered: true });
+  return Number(result.upsertedCount || 0) + Number(result.modifiedCount || 0);
+};
+
 export default function createImportRouter({ authorizeRequest, models }) {
   const router = express.Router();
   const companyViewPermission = authorizeRequest("MASTER", "COMPANY", "view");
@@ -216,49 +253,32 @@ export default function createImportRouter({ authorizeRequest, models }) {
       } else {
         await models[req.body.entryType].insertMany(documents, { ordered: true, session });
       }
-      let createdGstRates = 0;
-      if (req.body.entryType === "Product") {
-        const rates = [...new Set(documents.map((document) => Number(document.gst)).filter((rate) => Number.isFinite(rate) && rate >= 0))];
-        if (rates.length) {
-          const gstCollection = mongoose.connection.collection("Mas_GST");
-          const existingRates = await gstCollection.find({
-            distributorId: req.security.distributorId,
-            firmId: req.security.firmId,
-            vatPercent: { $in: rates },
-            isActive: { $ne: false },
-          }, { projection: { vatPercent: 1 } }).session(session).toArray();
-          const availableRates = new Set(existingRates.map((row) => Number(row.vatPercent)));
-          const missingRates = rates.filter((rate) => !availableRates.has(rate));
-          if (missingRates.length) {
-            const result = await gstCollection.bulkWrite(missingRates.map((rate) => ({
-              updateOne: {
-                filter: { distributorId: req.security.distributorId, firmId: req.security.firmId, gstCode: `GST${rate}` },
-                update: {
-                  $set: { vatPercent: rate, isActive: true },
-                  $setOnInsert: {
-                    gstCode: `GST${rate}`,
-                    distributorId: req.security.distributorId,
-                    firmId: req.security.firmId,
-                    firmName: req.security.firmName || "",
-                    purchaseType: "VAT ON PURCHASE PRICE",
-                    salesType: "VAT ON SALES PRICE",
-                    createdAt: new Date(),
-                  },
-                  $currentDate: { updatedAt: true },
-                },
-                upsert: true,
-              },
-            })), { ordered: true, session });
-            createdGstRates = Number(result.upsertedCount || 0) + Number(result.modifiedCount || 0);
-          }
-        }
-      }
       await writeAuditEvent(req, { entityType: "IMPORT_BATCH", entityId: idempotencyKey, action: "IMPORT", after: { entryType: req.body.entryType, rowCount: documents.length } }, session);
       await session.commitTransaction();
+      // GST masters are a convenience derived from Product Master. Product
+      // rows already carry their own GST percentage, so a GST-master index or
+      // legacy-data problem must not roll back an otherwise valid product
+      // import. Synchronize after the product transaction and report a warning
+      // if this auxiliary step needs administrator attention.
+      let createdGstRates = 0;
+      let warning = "";
+      if (req.body.entryType === "Product") {
+        try {
+          createdGstRates = await syncProductGstRates({
+            documents,
+            distributorId: req.security.distributorId,
+            firmId: req.security.firmId,
+            firmName: req.security.firmName,
+          });
+        } catch (gstError) {
+          console.error("Product import GST rate synchronization failed:", gstError);
+          warning = "Products were saved with their GST percentages, but the GST Master list could not be synchronized automatically.";
+        }
+      }
       const message = req.body.entryType === "Product"
         ? `${inserted} Product Master record(s) imported and ${updated} existing record(s) updated.`
         : `${documents.length} ${config.label} record(s) imported.`;
-      return res.status(201).json({ success: true, message, total, inserted, updated, failed: 0, createdGstRates, rows });
+      return res.status(201).json({ success: true, message, total, inserted, updated, failed: 0, createdGstRates, warning, rows });
     } catch (error) {
       if (session.inTransaction()) await session.abortTransaction();
       if (error?.code === 11000) return res.status(409).json({ success: false, message: "This import request was already processed or contains duplicates." });
