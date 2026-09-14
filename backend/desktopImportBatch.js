@@ -20,6 +20,7 @@ const SERIAL_DESKTOP_TRANSACTION_TYPES = new Set([
   "DesktopSales",
   "DesktopCounterSales",
   "DesktopCreditNote",
+  "DesktopReceipt",
   "DesktopStockOut",
   "DesktopSelfDamage",
   "DesktopDamageStockOut",

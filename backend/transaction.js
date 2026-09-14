@@ -1074,11 +1074,19 @@ router.post(
           const legacyAllocated = Number(previousReceipts[0]?.total || 0);
           const allocation = bill.nowAdjust + bill.discAmt;
           const amountField = Number(invoice.NetAmount ?? invoice.BillAmount ?? 0);
-          const currentAllocated = Math.max(Number(invoice.receiptAllocated || 0), legacyAllocated);
+          // A desktop retry can follow a direct legacy receipt deletion, which
+          // leaves this denormalized invoice value stale. Reconcile only the
+          // desktop-import path from the active receipt documents; manual
+          // receipt posting keeps its existing conservative behavior.
+          const currentAllocated = body._desktopImport === true
+            ? legacyAllocated
+            : Math.max(Number(invoice.receiptAllocated || 0), legacyAllocated);
 
           await sales.updateOne(
             { _id: invoice._id },
-            { $max: { receiptAllocated: currentAllocated } },
+            body._desktopImport === true
+              ? { $set: { receiptAllocated: currentAllocated } }
+              : { $max: { receiptAllocated: currentAllocated } },
             { session }
           );
 

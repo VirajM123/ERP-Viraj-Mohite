@@ -350,7 +350,7 @@ test("stock-mutating desktop imports are serialized to avoid write conflicts", (
   assert.equal(desktopTransactionConcurrency("DesktopSales"), 1);
   assert.equal(desktopTransactionConcurrency("DesktopCounterSales"), 1);
   assert.equal(desktopTransactionConcurrency("DesktopCreditNote"), 1);
-  assert.ok(desktopTransactionConcurrency("DesktopReceipt") >= 1);
+  assert.equal(desktopTransactionConcurrency("DesktopReceipt"), 1);
 });
 
 test("desktop sales can be reconciled by their stored bill identity after an uncertain response", () => {

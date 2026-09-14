@@ -3823,7 +3823,11 @@ const selectParty = (
         header.narration || "",
 
       bankCash:
-        header.bankCash || "",
+        resolveBankCashAccountName(
+          header.bankCash ||
+          header.bankCashName ||
+          ""
+        ),
 
       drawerBankId:
         header.drawerBankId || "",
@@ -8230,6 +8234,7 @@ setTransactionFormMode((prev) => ({
           partyName: r.partyName || "",
           salesman: r.salesmanName || r.salesman || "",
           bankCash: r.bankCash || "",
+          bankCashName: r.bankCashName || "",
           chequeNo: r.chequeNo || "",
           chequeDate: r.chequeDate || "",
           narration: r.narration || "",
@@ -8425,6 +8430,9 @@ setTransactionFormMode((prev) => ({
 
               bankCash:
                 receipt.bankCash || "",
+
+              bankCashName:
+                receipt.bankCashName || "",
 
               receiptAmount:
                 Number(
@@ -9607,7 +9615,11 @@ setTransactionFormMode((prev) => ({
                     header.partyName || "-";
 
                   const debitAccount =
-                    header.bankCash || "-";
+                    resolveBankCashAccountName(
+                      header.bankCash ||
+                      header.bankCashName ||
+                      ""
+                    ) || "-";
 
                   const receiptAmount =
                     Number(header.receiptAmount || 0);
@@ -10084,6 +10096,23 @@ setTransactionFormMode((prev) => ({
         getBankAccountName(second)
       )
     );
+
+  const getBankAccountCode = (account) =>
+    account.accountCode ||
+    account.AccountCode ||
+    account.acCode ||
+    account.AcCode ||
+    "";
+
+  const resolveBankCashAccountName = (value) => {
+    const normalizedValue = normalizeBankValue(value);
+    if (!normalizedValue || normalizedValue === "cash") return value || "";
+    const matchedAccount = bankCashAccounts.find((account) =>
+      normalizeBankValue(getBankAccountCode(account)) === normalizedValue ||
+      normalizeBankValue(getBankAccountName(account)) === normalizedValue
+    );
+    return matchedAccount ? getBankAccountName(matchedAccount) : value;
+  };
 
   const getPdcDateValue = (value) => {
     if (!value) {
