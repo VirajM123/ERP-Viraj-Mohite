@@ -191,6 +191,13 @@ const receiptRows = (job, definition, headerRows, detailRows, references) => {
   return headerRows.map((header) => {
     const party = masterName(references, "accounts", header.SysAcCodeDr, "AcCode", "AcName", true);
     const bank = masterName(references, "accounts", header.SysAcCodeCr, "AcCode", "AcName", true);
+    const draweeBank = ref(references.banks, header.Bankcode ?? header.BankCode);
+    const salesman = ref(references.salesmen, header.SSMcode ?? header.SSMCode);
+    const accountRow = ref(references.accounts, header.SysAcCodeCr);
+    const accountGroupCode = accountRow.SysGrpCode ?? accountRow.SysGroupCode ?? accountRow.GrpCode ?? accountRow.GroupCode;
+    const accountGroup = ref(references.groups, accountGroupCode);
+    const sourceGroupName = text(accountGroup.GrpName || accountGroup.GroupName || accountRow.GrpName || accountRow.GroupName || accountRow.AcGroup);
+    const bankCashGroup = /cash/i.test(sourceGroupName || bank.name) ? "CASH IN HAND" : "BANK ACCOUNTS";
     const receiptBills = (details.get(key(header)) || []).map((row) => ({
       trnSeries: text(row.AdjTrnSeries), trnNo: text(row.AdjTrnNo), trnDate: date(row.AdjTrnDate),
       nowAdjust: number(row.NowAdjAmt), discAmt: number(row.DiscAmt), remark: text(row.Remark),
@@ -198,7 +205,11 @@ const receiptRows = (job, definition, headerRows, detailRows, references) => {
     const receiptAmount = receiptBills.reduce((sum, row) => sum + row.nowAdjust, 0);
     const payload = {
       receiptDate: date(header.TrnDate), billSeries: text(header.TrnSeries), rno: number(header.TrnNo), partyId: party.code, partyName: party.name,
-      bankCash: bank.code || bank.name || "CASH", receiptAmount, narration: text(header.Narr), chequeNo: text(header.Chqno), chequeDate: date(header.ChqDate), receiptBills,
+      bankCash: bank.code || bank.name || "CASH", bankCashName: bank.name, bankCashGroup,
+      salesmanId: text(header.SSMcode ?? header.SSMCode), salesmanName: text(salesman.SSMName || salesman.SalesmanName),
+      drawerBankId: text(header.Bankcode ?? header.BankCode), drawerBankName: text(draweeBank.BankName || draweeBank.BName),
+      receiptAmount, narration: text(header.Narr), chequeNo: text(header.Chqno ?? header.ChqNo), chequeDate: date(header.ChqDate),
+      micr: text(header.MicrCode ?? header.MICRCode), loadNo: text(header.LoadNo), rloadNo: text(header.RloadNo), receiptBills,
     };
     return receiptBills.length ? payloadRow(job, definition, payload, { date: payload.receiptDate, series: payload.billSeries, number: payload.rno, party: payload.partyName, amount: receiptAmount }) : null;
   }).filter(Boolean);

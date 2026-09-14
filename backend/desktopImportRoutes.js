@@ -437,9 +437,10 @@ export const generateDesktopImportFiles = async (job, backupFiles) => {
       const field = aliases.find((alias) => Object.hasOwn(row, alias));
       return [String(field ? row[field] : "").trim().toLowerCase(), row];
     }).filter(([key]) => key));
-    const [referenceProducts, referenceAccounts, referenceCompanies, referenceSalesmen, referenceAreas, referenceGodowns, referenceServices] = await Promise.all([
+    const [referenceProducts, referenceAccounts, referenceCompanies, referenceSalesmen, referenceAreas, referenceGodowns, referenceServices, referenceBanks, referenceGroups] = await Promise.all([
       loadSourceTable("Mas_Product"), loadSourceTable("Mas_Account"), loadSourceTable("Mas_Company"),
       loadSourceTable("Mas_SalesMan"), loadSourceTable("Mas_Area"), loadSourceTable("Mas_GoDown"), loadSourceTable("Mas_Service"),
+      loadSourceTable("Mas_Bank"), loadSourceTable("Mas_Group"),
     ]);
     const references = {
       products: mapReference(referenceProducts, ["SysProdCode", "ProdCode"]),
@@ -449,6 +450,8 @@ export const generateDesktopImportFiles = async (job, backupFiles) => {
       areas: mapReference(referenceAreas, ["AreaCode", "RouteCode"]),
       godowns: mapReference(referenceGodowns, ["GDCode", "GodownCode"]),
       services: mapReference(referenceServices, ["SysServiceCode", "ServiceCode"]),
+      banks: mapReference(referenceBanks, ["BankCode", "BCode", "Code"]),
+      groups: mapReference(referenceGroups, ["SysGrpCode", "SysGroupCode", "GrpCode", "GroupCode"]),
     };
     const generated = [];
     for (let index = 0; index < available.length; index += 1) {

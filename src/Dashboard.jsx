@@ -73030,6 +73030,15 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                         <option value="LIABILITIES">LIABILITIES</option>
                         <option value="EXPENSES">EXPENSES</option>
                         <option value="INCOMES">INCOMES</option>
+                        <option value="FIXED ASSETS">FIXED ASSETS</option>
+                        <option value="CURRENT ASSETS">CURRENT ASSETS</option>
+                        <option value="CURRENT LIABILITIES">CURRENT LIABILITIES</option>
+                        <option value="EXPENSES DIRECT">EXPENSES DIRECT</option>
+                        <option value="EXPENSES INDIRECT">EXPENSES INDIRECT</option>
+                        <option value="TRADING EXPENSES">TRADING EXPENSES</option>
+                        <option value="INCOMES DIRECT">INCOMES DIRECT</option>
+                        <option value="PROFIT&LOSS TRANSFER">PROFIT&amp;LOSS TRANSFER</option>
+                        <option value="TAXES & DUTIES">TAXES &amp; DUTIES</option>
                         <option value="BANK ACCOUNTS">BANK ACCOUNTS</option>
                         <option value="SUNDRY DEBTORS">SUNDRY DEBTORS</option>
                         <option value="SUNDRY CREDITORS">SUNDRY CREDITORS</option>

@@ -7,7 +7,7 @@ import * as XLSX from "xlsx";
 import { canReuseDesktopImportPlan, createSourceWorkbook, localSqlServiceAccount, mapDesktopRows, parseInstalledSqlInstances, parseSqlXmlRows } from "../desktopImportRoutes.js";
 import { loadExistingProductCodes } from "../importRoutes.js";
 import { buildDesktopTransactionRows } from "../desktopTransactionMapper.js";
-import { DESKTOP_IMPORT_ORDER, desktopCommittedTransactionFilter, desktopTransactionConcurrency, readDesktopWorkbook } from "../desktopImportBatch.js";
+import { DESKTOP_IMPORT_ORDER, desktopCommittedTransactionFilter, desktopTransactionConcurrency, ensureDesktopReceiptBankAccounts, readDesktopWorkbook } from "../desktopImportBatch.js";
 import { calculatePurchaseFinancials, calculateSalesFinancials } from "../financialValidation.js";
 
 test("desktop account rows map to the existing ERP Excel structure", () => {
@@ -379,18 +379,43 @@ test("a repeated desktop import refreshes preflight instead of replaying the sta
 });
 
 test("desktop receipt rows map the party, bank and bill allocations for outstanding updates", () => {
-  const references = { products: new Map(), companies: new Map(), salesmen: new Map(), areas: new Map(), godowns: new Map(), accounts: new Map([
-    ["20", { AcCode: "PARTY", AcName: "Customer" }], ["30", { AcCode: "BANK", AcName: "Bank" }],
-  ]) };
+  const references = {
+    products: new Map(), companies: new Map(), areas: new Map(), godowns: new Map(), groups: new Map(),
+    salesmen: new Map([["05", { SSMCode: "05", SSMName: "Sales Person" }]]),
+    banks: new Map([["7", { BankCode: "7", BankName: "Drawee Bank" }]]),
+    accounts: new Map([["20", { AcCode: "PARTY", AcName: "Customer" }], ["30", { AcCode: "BANK", AcName: "Firm Bank" }]]),
+  };
   const [row] = buildDesktopTransactionRows({
     job: { distributorId: "D", firmId: "F" }, definition: { entryType: "DesktopReceipt", label: "Receipt" }, references,
     sheets: [
-      { sheet: "Header", rows: [{ TrnSeries: "R", TrnNo: 2, TrnDate: "2026-01-03", SysAcCodeDr: 20, SysAcCodeCr: 30 }] },
+      { sheet: "Header", rows: [{ TrnSeries: "R", TrnNo: 2, TrnDate: "2026-01-03", SysAcCodeDr: 20, SysAcCodeCr: 30, Bankcode: 7, SSMcode: "05", MicrCode: "MICR", LoadNo: 25, RloadNo: 3 }] },
       { sheet: "Details", rows: [{ TrnSeries: "R", TrnNo: 2, AdjTrnSeries: "S", AdjTrnNo: 1, NowAdjAmt: 75, DiscAmt: 5 }] },
     ],
   });
   const payload = JSON.parse(row["ERP Payload JSON"]);
   assert.equal(payload._desktopImport, true); assert.equal(payload.rno, 2);
   assert.equal(payload.partyId, "PARTY"); assert.equal(payload.bankCash, "BANK"); assert.equal(payload.receiptAmount, 75);
+  assert.equal(payload.bankCashName, "Firm Bank"); assert.equal(payload.bankCashGroup, "BANK ACCOUNTS");
+  assert.equal(payload.drawerBankId, "7"); assert.equal(payload.drawerBankName, "Drawee Bank");
+  assert.equal(payload.salesmanId, "05"); assert.equal(payload.salesmanName, "Sales Person");
+  assert.equal(payload.micr, "MICR"); assert.equal(payload.loadNo, "25"); assert.equal(payload.rloadNo, "3");
   assert.deepEqual(payload.receiptBills[0], { trnSeries: "S", trnNo: "1", trnDate: "", nowAdjust: 75, discAmt: 5, remark: "" });
+});
+
+test("desktop receipt import creates only missing receiving bank accounts", async () => {
+  const inserted = [];
+  const collection = {
+    find() { return { toArray: async () => [{ accountCode: "EXISTING" }] }; },
+    async insertMany(rows) { inserted.push(...rows); return { insertedIds: { 0: "new-id" } }; },
+  };
+  const ids = await ensureDesktopReceiptBankAccounts({
+    tenant: { distributorId: "D", firmId: "F" }, firmName: "Firm", collection,
+    records: [
+      { payload: { bankCash: "EXISTING", bankCashName: "Existing Bank", bankCashGroup: "BANK ACCOUNTS" } },
+      { payload: { bankCash: "CASH1", bankCashName: "Main Cash", bankCashGroup: "CASH IN HAND" } },
+    ],
+  });
+  assert.deepEqual(ids, ["new-id"]);
+  assert.equal(inserted.length, 1);
+  assert.deepEqual({ code: inserted[0].accountCode, name: inserted[0].accountName, group: inserted[0].accountGroup }, { code: "CASH1", name: "Main Cash", group: "CASH IN HAND" });
 });

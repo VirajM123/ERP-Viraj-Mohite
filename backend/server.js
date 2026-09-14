@@ -20281,16 +20281,24 @@ const receiptSchema = new mongoose.Schema(
     billSeries: String,
     billNo: String,
     billDate: String,
+    partyId: { type: String, default: "" },
     partyName: String,
 
     salesman: { type: String, default: "" },
+    salesmanId: { type: String, default: "" },
+    salesmanName: { type: String, default: "" },
     narration: { type: String, default: "" },
 
     bankCode: { type: String, default: "" },
     bankCash: { type: String, default: "" },
+    bankCashName: { type: String, default: "" },
+    bankCashGroup: { type: String, default: "" },
+    drawerBankId: { type: String, default: "" },
+    drawerBankName: { type: String, default: "" },
 
     loadSeries: { type: String, default: "" },
     loadNo: { type: String, default: "" },
+    rloadNo: { type: String, default: "" },
 
     docketNo: { type: String, default: "" },
 

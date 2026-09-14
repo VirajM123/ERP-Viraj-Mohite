@@ -68,6 +68,8 @@ const receiptSchema = new mongoose.Schema(
         salesmanName: String,
 
         bankCash: String,
+        bankCashName: String,
+        bankCashGroup: String,
         receiptAmount: Number,
 
         chequeNo: String,
@@ -1307,6 +1309,8 @@ router.post(
         "",
 
       bankCash: body.bankCash || "",
+      bankCashName: body.bankCashName || "",
+      bankCashGroup: body.bankCashGroup || "",
 
       receiptAmount:
         Number(body.receiptAmount) || 0,
@@ -2110,6 +2114,8 @@ router.put(
   String(
     body.bankCash || ""
   ).trim(),
+        bankCashName: String(body.bankCashName || "").trim(),
+        bankCashGroup: String(body.bankCashGroup || "").trim(),
 
 drawerBankId:
   String(

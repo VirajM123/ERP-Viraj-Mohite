@@ -445,6 +445,22 @@ const ensureDesktopPurchaseSuppliers = async ({ records, tenant, firmName }) => 
   return Object.values(result.insertedIds || {}).map((id) => String(id));
 };
 
+export const ensureDesktopReceiptBankAccounts = async ({ records, tenant, firmName, collection = mongoose.connection.collection("Mas_OtherAccount") }) => {
+  const accounts = new Map(records.map((record) => [normalize(record.payload.bankCash), {
+    accountCode: String(record.payload.bankCash || "").trim(),
+    accountName: String(record.payload.bankCashName || record.payload.bankCash || "").trim(),
+    accountGroup: String(record.payload.bankCashGroup || "BANK ACCOUNTS").trim(),
+  }]).filter(([key, account]) => key && account.accountName));
+  if (!accounts.size) return [];
+  const existing = await collection.find({ ...tenant, accountCode: { $in: [...accounts.values()].map((item) => item.accountCode) }, isActive: { $ne: false } }, { projection: { accountCode: 1 } }).toArray();
+  existing.forEach((item) => accounts.delete(normalize(item.accountCode)));
+  if (!accounts.size) return [];
+  const result = await collection.insertMany([...accounts.values()].map((account) => ({
+    ...account, ...tenant, firmName: firmName || "", isActive: true, createdAt: new Date(), updatedAt: new Date(),
+  })), { ordered: true });
+  return Object.values(result.insertedIds || {}).map((id) => String(id));
+};
+
 export const runDesktopImport = async ({ job, plan, state, companyCode, authorization, baseUrl, retryOnly = false }) => {
   const tenant = { distributorId: job.distributorId, firmId: job.firmId };
   state.status = "running"; state.startedAt ||= new Date().toISOString(); state.updatedAt = new Date().toISOString();
@@ -491,6 +507,10 @@ export const runDesktopImport = async ({ job, plan, state, companyCode, authoriz
             const id = responseId(result);
             if (id) state.rollback.push({ kind: "master", collection: "Mas_Godown", ids: [id], fileId: file.id });
           }
+        }
+        if (file.entryType === "DesktopReceipt") {
+          const accountIds = await ensureDesktopReceiptBankAccounts({ records: candidates, tenant, firmName: job.firmName });
+          if (accountIds.length) state.rollback.push({ kind: "master", collection: "Mas_OtherAccount", ids: accountIds, fileId: file.id });
         }
         const importRecord = async (record) => {
           await waitWhilePaused(state);
