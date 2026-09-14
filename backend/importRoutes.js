@@ -205,6 +205,7 @@ export default function createImportRouter({ authorizeRequest, models }) {
 
   router.post("/import/save", importPermission, validate, async (req, res, next) => {
     const session = await mongoose.startSession();
+    let stage = "starting import transaction";
     try {
       session.startTransaction();
       const { config, rows, documents, total } = req.importValidation;
@@ -218,6 +219,7 @@ export default function createImportRouter({ authorizeRequest, models }) {
         await session.abortTransaction();
         return res.status(400).json({ success: false, message: "Idempotency-Key header is required for import save." });
       }
+      stage = "registering import batch";
       await ImportBatch.create([{
         distributorId: req.security.distributorId,
         firmId: req.security.firmId,
@@ -228,6 +230,7 @@ export default function createImportRouter({ authorizeRequest, models }) {
       let inserted = documents.length;
       let updated = 0;
       if (req.body.entryType === "Product") {
+        stage = "saving Product Master rows";
         const productCollection = mongoose.connection.collection(config.collection);
         const existingProducts = await productCollection.find({
           distributorId: req.security.distributorId,
@@ -251,9 +254,12 @@ export default function createImportRouter({ authorizeRequest, models }) {
           },
         })), { ordered: true, session });
       } else {
+        stage = `saving ${config.label} rows`;
         await models[req.body.entryType].insertMany(documents, { ordered: true, session });
       }
+      stage = "writing import audit";
       await writeAuditEvent(req, { entityType: "IMPORT_BATCH", entityId: idempotencyKey, action: "IMPORT", after: { entryType: req.body.entryType, rowCount: documents.length } }, session);
+      stage = "committing import transaction";
       await session.commitTransaction();
       // GST masters are a convenience derived from Product Master. Product
       // rows already carry their own GST percentage, so a GST-master index or
@@ -282,9 +288,10 @@ export default function createImportRouter({ authorizeRequest, models }) {
     } catch (error) {
       if (session.inTransaction()) await session.abortTransaction();
       if (error?.code === 11000) return res.status(409).json({ success: false, message: "This import request was already processed or contains duplicates." });
+      error.importStage = stage;
       next(error);
     } finally { await session.endSession(); }
   });
-  router.use((error, req, res, next) => { console.error("Excel import error:", error); res.status(error?.code === 11000 ? 409 : 500).json({ success: false, message: error?.code === 11000 ? "A duplicate record was detected. Nothing was imported." : "Import failed. No data was saved.", error: error.message }); });
+  router.use((error, req, res, next) => { console.error("Excel import error:", error); res.status(error?.code === 11000 ? 409 : 500).json({ success: false, message: error?.code === 11000 ? "A duplicate record was detected. Nothing was imported." : "Import failed. No data was saved.", stage: error.importStage || "processing import", error: error.message }); });
   return router;
 }

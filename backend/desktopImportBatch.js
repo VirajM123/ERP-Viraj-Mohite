@@ -7,6 +7,7 @@ import { importConfig } from "./importConfig.js";
 
 const DESKTOP_TRANSACTION_CONCURRENCY = Math.max(1, Math.min(32, Number.parseInt(process.env.DESKTOP_IMPORT_TRANSACTION_CONCURRENCY || "16", 10) || 16));
 const DESKTOP_TRANSACTION_BATCH_SIZE = Math.max(25, Math.min(500, Number.parseInt(process.env.DESKTOP_IMPORT_TRANSACTION_BATCH_SIZE || "100", 10) || 100));
+const DESKTOP_PRODUCT_BATCH_SIZE = Math.max(25, Math.min(250, Number.parseInt(process.env.DESKTOP_IMPORT_PRODUCT_BATCH_SIZE || "100", 10) || 100));
 
 const SERIAL_DESKTOP_TRANSACTION_TYPES = new Set([
   "DesktopPurchase",
@@ -362,7 +363,9 @@ const apiRequest = async ({ baseUrl, authorization, endpoint, method = "POST", b
   const response = await fetch(`${baseUrl}${endpoint}`, { method, headers: { Authorization: authorization, "Content-Type": "application/json", ...(idempotencyKey ? { "Idempotency-Key": idempotencyKey } : {}) }, body: body === undefined ? undefined : JSON.stringify(body) });
   const result = await response.json().catch(() => ({}));
   if (!response.ok) {
-    const error = new Error(result.message || result.error || `${method} ${endpoint} failed (${response.status})`);
+    const stage = String(result.stage || "").trim();
+    const message = result.message || result.error || `${method} ${endpoint} failed (${response.status})`;
+    const error = new Error(stage ? `${message} (stage: ${stage})` : message);
     error.status = response.status;
     error.code = result.code;
     throw error;
@@ -455,9 +458,10 @@ export const runDesktopImport = async ({ job, plan, state, companyCode, authoriz
       if (!candidates.length) continue;
       fileState.status = "running"; fileState.startedAt = new Date().toISOString(); fileState.updatedAt = fileState.startedAt;
       if (masterDefinitions[file.entryType]) {
-        for (let offset = 0; offset < candidates.length; offset += 500) {
+        const masterBatchSize = file.entryType === "Product" ? DESKTOP_PRODUCT_BATCH_SIZE : 500;
+        for (let offset = 0; offset < candidates.length; offset += masterBatchSize) {
           await waitWhilePaused(state);
-          const chunk = candidates.slice(offset, offset + 500);
+          const chunk = candidates.slice(offset, offset + masterBatchSize);
           try {
             const idempotencyKey = `desktop-${job.id}-${file.entryType}-${retryOnly ? "retry-" : ""}${offset}`;
             await apiRequest({ baseUrl, authorization, endpoint: "/import/validate", body: { entryType: file.entryType, company: activeCompanyCode, desktopBatch: true, data: chunk.map((record) => record.payload) } });
