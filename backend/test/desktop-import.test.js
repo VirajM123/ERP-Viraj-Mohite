@@ -5,6 +5,7 @@ import path from "node:path";
 import test from "node:test";
 import * as XLSX from "xlsx";
 import { canReuseDesktopImportPlan, createSourceWorkbook, localSqlServiceAccount, mapDesktopRows, parseInstalledSqlInstances, parseSqlXmlRows } from "../desktopImportRoutes.js";
+import { loadExistingProductCodes } from "../importRoutes.js";
 import { buildDesktopTransactionRows } from "../desktopTransactionMapper.js";
 import { DESKTOP_IMPORT_ORDER, desktopCommittedTransactionFilter, desktopTransactionConcurrency, readDesktopWorkbook } from "../desktopImportBatch.js";
 import { calculatePurchaseFinancials, calculateSalesFinancials } from "../financialValidation.js";
@@ -69,6 +70,22 @@ test("existing area-to-party workbooks ignore rows that have no area mapping", (
     assert.equal(records.length, 1);
     assert.equal(records[0].payload["Account Code"], "A2");
   } finally { fs.rmSync(directory, { recursive: true, force: true }); }
+});
+
+test("product import passes the transaction session through native MongoDB find options", async () => {
+  const session = { id: "session" };
+  let receivedFilter; let receivedOptions;
+  const collection = {
+    find(filter, options) {
+      receivedFilter = filter; receivedOptions = options;
+      return { toArray: async () => [{ productCode: "Existing-Code" }] };
+    },
+  };
+  const codes = await loadExistingProductCodes({ collection, distributorId: "D", firmId: "F", session });
+  assert.deepEqual(receivedFilter, { distributorId: "D", firmId: "F" });
+  assert.equal(receivedOptions.session, session);
+  assert.deepEqual(receivedOptions.projection, { productCode: 1 });
+  assert.equal(codes.get("existing-code"), "Existing-Code");
 });
 
 test("desktop conversion reads rows from pre-JSON SQL Server compatibility levels", () => {

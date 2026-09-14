@@ -67,6 +67,14 @@ const syncProductGstRates = async ({ documents, distributorId, firmId, firmName 
   return Number(result.upsertedCount || 0) + Number(result.modifiedCount || 0);
 };
 
+export const loadExistingProductCodes = async ({ collection, distributorId, firmId, session }) => {
+  const products = await collection.find(
+    { distributorId, firmId },
+    { projection: { productCode: 1 }, session },
+  ).toArray();
+  return new Map(products.map((product) => [clean(product.productCode).toLowerCase(), product.productCode]));
+};
+
 export default function createImportRouter({ authorizeRequest, models }) {
   const router = express.Router();
   const companyViewPermission = authorizeRequest("MASTER", "COMPANY", "view");
@@ -232,11 +240,12 @@ export default function createImportRouter({ authorizeRequest, models }) {
       if (req.body.entryType === "Product") {
         stage = "saving Product Master rows";
         const productCollection = mongoose.connection.collection(config.collection);
-        const existingProducts = await productCollection.find({
+        const existingCodes = await loadExistingProductCodes({
+          collection: productCollection,
           distributorId: req.security.distributorId,
           firmId: req.security.firmId,
-        }, { projection: { productCode: 1 } }).session(session).toArray();
-        const existingCodes = new Map(existingProducts.map((product) => [clean(product.productCode).toLowerCase(), product.productCode]));
+          session,
+        });
         updated = documents.filter((document) => existingCodes.has(clean(document.productCode).toLowerCase())).length;
         inserted = documents.length - updated;
         await productCollection.bulkWrite(documents.map((document) => ({
