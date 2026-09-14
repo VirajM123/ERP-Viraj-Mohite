@@ -7,7 +7,7 @@ import * as XLSX from "xlsx";
 import { canReuseDesktopImportPlan, createSourceWorkbook, localSqlServiceAccount, mapDesktopRows, parseInstalledSqlInstances, parseSqlXmlRows } from "../desktopImportRoutes.js";
 import { loadExistingProductCodes } from "../importRoutes.js";
 import { buildDesktopTransactionRows } from "../desktopTransactionMapper.js";
-import { DESKTOP_IMPORT_ORDER, desktopCommittedTransactionFilter, desktopTransactionConcurrency, ensureDesktopReceiptBankAccounts, readDesktopWorkbook } from "../desktopImportBatch.js";
+import { DESKTOP_IMPORT_ORDER, desktopCommittedTransactionFilter, desktopTransactionConcurrency, ensureDesktopReceiptBankAccounts, readDesktopWorkbook, readDesktopWorkbookStreaming } from "../desktopImportBatch.js";
 import { calculatePurchaseFinancials, calculateSalesFinancials } from "../financialValidation.js";
 
 test("desktop account rows map to the existing ERP Excel structure", () => {
@@ -418,4 +418,23 @@ test("desktop receipt import creates only missing receiving bank accounts", asyn
   assert.deepEqual(ids, ["new-id"]);
   assert.equal(inserted.length, 1);
   assert.deepEqual({ code: inserted[0].accountCode, name: inserted[0].accountName, group: inserted[0].accountGroup }, { code: "CASH1", name: "Main Cash", group: "CASH IN HAND" });
+});
+
+test("streaming receipt reader keeps receiptBills separate when the nested sheet is emitted first", async () => {
+  const directory = fs.mkdtempSync(path.join(os.tmpdir(), "erp-receipt-stream-test-"));
+  try {
+    const job = { id: "stream-order", directory };
+    const definition = { entryType: "DesktopReceipt" };
+    const rows = [{
+      receiptDate: "2026-07-08", billSeries: "", rno: 915, partyId: "2925", partyName: "Customer",
+      bankCash: "16", receiptAmount: 786, distributorId: "D", firmId: "F",
+      receiptBills: [{ trnSeries: "", trnNo: "25", trnDate: "2026-07-08", nowAdjust: 786, discAmt: 0, remark: "" }],
+    }];
+    const generated = createSourceWorkbook(job, definition, [], rows.map((payload) => ({ "ERP Payload JSON": JSON.stringify(payload) })));
+    const records = await readDesktopWorkbookStreaming(generated.filePath, "DesktopReceipt");
+    assert.equal(records.length, 1);
+    assert.equal(records[0].payload.partyId, "2925");
+    assert.equal(records[0].payload.receiptBills.length, 1);
+    assert.equal(records[0].payload.receiptBills[0].nowAdjust, 786);
+  } finally { fs.rmSync(directory, { recursive: true, force: true }); }
 });

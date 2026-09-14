@@ -162,9 +162,9 @@ export const readDesktopWorkbookStreaming = async (filePath, entryType) => {
     // sheet "Data", so do not accidentally parse the Instructions sheet when
     // it happens to be emitted first. Retain first-sheet fallback for legacy
     // workbooks that do not use the generated format.
-    const collectFirst = normalizedSheetName === "data"
-      || (worksheetIndex === 1 && normalizedSheetName !== "instructions");
     const collectNested = Boolean(transaction?.nested) && normalizedSheetName === normalize(transaction.nested);
+    const collectFirst = normalizedSheetName === "data"
+      || (worksheetIndex === 1 && normalizedSheetName !== "instructions" && !collectNested);
     if (!collectFirst && !collectNested) continue;
     let headers = [];
     for await (const row of worksheet) {
