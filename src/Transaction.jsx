@@ -10107,11 +10107,17 @@ setTransactionFormMode((prev) => ({
   const resolveBankCashAccountName = (value) => {
     const normalizedValue = normalizeBankValue(value);
     if (!normalizedValue || normalizedValue === "cash") return value || "";
-    const matchedAccount = bankCashAccounts.find((account) =>
+    const matchedAccount = [
+      ...(otherAccounts || []),
+      ...(accounts || [])
+    ].find((account) =>
       normalizeBankValue(getBankAccountCode(account)) === normalizedValue ||
       normalizeBankValue(getBankAccountName(account)) === normalizedValue
     );
-    return matchedAccount ? getBankAccountName(matchedAccount) : value;
+    if (!matchedAccount) return value;
+    return /cash/i.test(getAccountGroupName(matchedAccount) || getBankAccountName(matchedAccount))
+      ? "Cash"
+      : getBankAccountName(matchedAccount);
   };
 
   const getPdcDateValue = (value) => {
