@@ -11909,6 +11909,7 @@ const applySalesStockMovement = async ({
   direction,
   allowNegativeStock = false,
   initializeMissingStock = false,
+  skipZeroQuantityItems = false,
   session,
 }) => {
   const safeItems =
@@ -11958,6 +11959,10 @@ const applySalesStockMovement = async ({
 
     const totalQty =
       salesQty + freeQty;
+
+    if (skipZeroQuantityItems && totalQty === 0) {
+      continue;
+    }
 
     const purchaseRate = Number(
       item.purchaseRate ??
@@ -12426,7 +12431,10 @@ app.post(
       if (req.body._desktopImport !== true) {
         await enforceTrustedSalesRates({ req, items, distributorId, firmId, gdCode: GDCode, generalSetup, session });
       }
-      const canonicalSales = validateFinancialEnvelope(req.body, items, { vatMode: generalSetup?.vatOn });
+      const canonicalSales = validateFinancialEnvelope(req.body, items, {
+        vatMode: generalSetup?.vatOn,
+        allowZeroQuantityItems: req.body._desktopImport === true,
+      });
       items.splice(0, items.length, ...canonicalSales.items);
       Object.assign(req.body, canonicalSales);
       // Credit controls govern new orders. Applying them while reconstructing
@@ -12499,6 +12507,9 @@ app.post(
 
         initializeMissingStock:
           req.body._desktopImport === true && allowNegativeStock,
+
+        skipZeroQuantityItems:
+          req.body._desktopImport === true,
 
         session,
       });

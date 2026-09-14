@@ -7,7 +7,7 @@ import * as XLSX from "xlsx";
 import { canReuseDesktopImportPlan, createSourceWorkbook, localSqlServiceAccount, mapDesktopRows, parseInstalledSqlInstances, parseSqlXmlRows } from "../desktopImportRoutes.js";
 import { buildDesktopTransactionRows } from "../desktopTransactionMapper.js";
 import { DESKTOP_IMPORT_ORDER, desktopCommittedTransactionFilter, desktopTransactionConcurrency, readDesktopWorkbook } from "../desktopImportBatch.js";
-import { calculatePurchaseFinancials } from "../financialValidation.js";
+import { calculatePurchaseFinancials, calculateSalesFinancials } from "../financialValidation.js";
 
 test("desktop account rows map to the existing ERP Excel structure", () => {
   const [row] = mapDesktopRows({
@@ -243,6 +243,35 @@ test("zero-value historical sales remain editable without creating an invalid jo
   const server = fs.readFileSync(new URL("../server.js", import.meta.url), "utf8");
   assert.match(server, /const isZeroValueSalesEdit =/);
   assert.match(server, /if \(!isZeroValueSalesEdit\) \{\s*await postBalancedJournal/);
+});
+
+test("only desktop sales may retain zero-quantity historical items", () => {
+  const zeroItem = [{ productCode: "P1", quantity: 0, free: 0, rate: 10, gst: 5 }];
+  assert.throws(() => calculateSalesFinancials({}, zeroItem), /quantity must be positive/);
+
+  const historical = calculateSalesFinancials({}, zeroItem, { allowZeroQuantityItems: true });
+  assert.equal(historical.items.length, 1);
+  assert.equal(historical.TotalQty, 0);
+  assert.equal(historical.NetAmount, 0);
+});
+
+test("desktop sales preserve mixed positive and zero-quantity items without changing totals", () => {
+  const historical = calculateSalesFinancials({}, [
+    { productCode: "P1", quantity: 2, free: 0, rate: 10, gst: 5 },
+    { productCode: "P2", quantity: 0, free: 0, rate: 25, gst: 5 },
+  ], { allowZeroQuantityItems: true });
+
+  assert.equal(historical.items.length, 2);
+  assert.equal(historical.TotalQty, 2);
+  assert.equal(historical.GrossAmount, 20);
+  assert.equal(historical.NetAmount, 21);
+});
+
+test("desktop sales skip stock movement only for zero-quantity historical items", () => {
+  const server = fs.readFileSync(new URL("../server.js", import.meta.url), "utf8");
+  assert.match(server, /allowZeroQuantityItems: req\.body\._desktopImport === true/);
+  assert.match(server, /skipZeroQuantityItems:\s*req\.body\._desktopImport === true/);
+  assert.match(server, /if \(skipZeroQuantityItems && totalQty === 0\) \{\s*continue;/);
 });
 
 test("desktop receipts match a blank bill series exactly and retain unmatched legacy allocations", () => {

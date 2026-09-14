@@ -21,7 +21,7 @@ const taxableBase = ({ gross, tpr, scheme, star, cash }, mode) => {
   }
 };
 
-export const calculateSalesFinancials = (body, rows, { vatMode = "GROSS_AMOUNT" } = {}) => {
+export const calculateSalesFinancials = (body, rows, { vatMode = "GROSS_AMOUNT", allowZeroQuantityItems = false } = {}) => {
   if (!Array.isArray(rows) || !rows.length) throw new Error("At least one product is required");
   const totals = { gross: 0, tpr: 0, scheme: 0, star: 0, cash: 0, taxable: 0, cgst: 0, sgst: 0, igst: 0, qty: 0, free: 0 };
   const headerIgst = ["Y", "YES", "TRUE", "1", "IGST"].includes(String(body.isIgst || body.taxType || "").toUpperCase());
@@ -30,7 +30,7 @@ export const calculateSalesFinancials = (body, rows, { vatMode = "GROSS_AMOUNT" 
     const free = number(row.free ?? row.Free ?? row.freeQty, `Item ${index + 1} free quantity`);
     const boxPack = number(row.boxPack ?? row.BoxPack ?? 1, `Item ${index + 1} box pack`);
     const chargedQty = String(row.units ?? row.unit ?? "").toLowerCase() === "box" ? qty * (boxPack || 1) + free : qty + free;
-    if (chargedQty <= 0) throw new Error(`Item ${index + 1} quantity must be positive`);
+    if (chargedQty <= 0 && !(allowZeroQuantityItems && chargedQty === 0)) throw new Error(`Item ${index + 1} quantity must be positive`);
     const rate = number(row.rate ?? row.salesRate ?? row.SRate, `Item ${index + 1} rate`);
     const gross = roundMoney(chargedQty * rate);
     const discount = (amountKeys, percentKeys, label) => {
