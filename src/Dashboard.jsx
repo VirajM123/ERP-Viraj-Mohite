@@ -5519,7 +5519,7 @@ const debitNotePermission = usePermission("VOUCHERS", "DEBIT_NOTE");
             .invoice-a5.invoice-report-3 .r3-items td { height: 3.6mm; }
             .invoice-a5.invoice-report-3 .r3-items th,
             .invoice-a5.invoice-report-3 .r3-items td { font-size: 9.5px; }
-            .invoice-a5.invoice-report-3 .r3-header,
+            .invoice-a5.invoice-report-3 .r3-header { font-size: 10px; }
             .invoice-a5.invoice-report-3 .r3-footer { font-size: 9.5px; }
             .invoice-a5.invoice-report-3 .r3-footer {
               min-height: 28mm;
