@@ -4351,8 +4351,8 @@ const debitNotePermission = usePermission("VOUCHERS", "DEBIT_NOTE");
     const reportThreeInvoice = (copyNumber) => {
       const itemPages = isA5
         ? Array.from(
-            { length: Math.max(1, Math.ceil(visibleItems.length / 7)) },
-            (_, pageIndex) => visibleItems.slice(pageIndex * 7, (pageIndex + 1) * 7)
+            { length: Math.max(1, Math.ceil(visibleItems.length / 12)) },
+            (_, pageIndex) => visibleItems.slice(pageIndex * 12, (pageIndex + 1) * 12)
           )
         : [visibleItems];
 
