@@ -3767,6 +3767,16 @@ const debitNotePermission = usePermission("VOUCHERS", "DEBIT_NOTE");
       Math.max(80, Number(fontSizePercent) || 150)
     );
 
+    /*
+     * A5 landscape has only 138mm of printable height after margins.
+     * Keep its typography at the designed 100% maximum so a short invoice
+     * and its footer stay together on one physical sheet. A4 keeps the
+     * user's saved font scale unchanged.
+     */
+    const effectiveFontScale = isA5
+      ? Math.min(normalizedFontSizePercent, 100) / 100
+      : normalizedFontSizePercent / 100;
+
     const pageClass = [
       "invoice-page",
       isA5 ? "invoice-a5" : "invoice-a4",
@@ -4188,7 +4198,10 @@ const debitNotePermission = usePermission("VOUCHERS", "DEBIT_NOTE");
       (sum, item) => sum + safeNumber(item.qty),
       0
     );
-    const emptyRowCount = Math.max(0, 7 - visibleItems.length);
+    const emptyRowCount = Math.max(
+      0,
+      (isA5 ? 1 : 7) - visibleItems.length
+    );
 
     const taxSummary = Array.from(
       visibleItems.reduce((summaryMap, item) => {
@@ -4313,7 +4326,7 @@ const debitNotePermission = usePermission("VOUCHERS", "DEBIT_NOTE");
       </tr>`).join("");
 
     const reportTwoInvoice = (copyNumber) => `
-      <main class="${pageClass}" style="--r2-font-scale:${normalizedFontSizePercent / 100}">
+      <main class="${pageClass}" style="--r2-font-scale:${effectiveFontScale}">
         ${copies > 1 ? `<div class="copy-label">COPY ${copyNumber} OF ${copies}</div>` : ""}
         <section class="r2-header">
           <div class="r2-from"><b>From:</b><strong>${text(firmName)}</strong>${joinAddress(firmAddressLines)}<div>Pin : &nbsp; ${text(getInvoiceValue(firm, ["pinCode", "PinCode", "pin", "Pin"]))} &nbsp;&nbsp; | Ph : &nbsp; ${text(firmPhone)}</div></div>
@@ -4336,7 +4349,7 @@ const debitNotePermission = usePermission("VOUCHERS", "DEBIT_NOTE");
       </main>`;
 
     const reportThreeInvoice = (copyNumber) => `
-      <main class="${pageClass}" style="--r3-font-scale:${normalizedFontSizePercent / 100}">
+      <main class="${pageClass}" style="--r3-font-scale:${effectiveFontScale}">
         ${copies > 1 ? `<div class="copy-label">COPY ${copyNumber} OF ${copies}</div>` : ""}
         <section class="r3-header">
           <div class="r3-details">
@@ -4398,7 +4411,7 @@ const debitNotePermission = usePermission("VOUCHERS", "DEBIT_NOTE");
       : normalizedReportNumber === "3"
         ? reportThreeInvoice(copyNumber)
         : `
-      <main class="${pageClass}" style="--invoice-font-scale:${normalizedFontSizePercent / 100}">
+      <main class="${pageClass}" style="--invoice-font-scale:${effectiveFontScale}">
         ${copies > 1
         ? `<div class="copy-label">COPY ${copyNumber} OF ${copies}</div>`
         : ""
@@ -5482,6 +5495,27 @@ const debitNotePermission = usePermission("VOUCHERS", "DEBIT_NOTE");
               .invoice-report-1 .invoice-quick-totals strong,
               .invoice-report-1 .footer-total-row strong,
               .invoice-report-1 .tax-summary-table .number { font-size: inherit; }
+
+              /* Keep every A5 invoice format and its footer on one sheet. */
+              .invoice-a5 {
+                width: 200mm !important;
+                height: 138mm !important;
+                min-height: 138mm !important;
+                max-height: 138mm !important;
+                overflow: hidden !important;
+                break-inside: avoid-page !important;
+                page-break-inside: avoid !important;
+              }
+              .invoice-a5.invoice-report-1 .party-grid { min-height: 22mm; }
+              .invoice-a5.invoice-report-1 .invoice-footer-summary-grid { min-height: 22mm; }
+              .invoice-a5.invoice-report-1 .format-one-bank-details { margin-bottom: .5mm; }
+              .invoice-a5.invoice-report-1 .format-one-terms { margin-top: .4mm; line-height: 1.2; }
+              .invoice-a5.invoice-report-2 .r2-items { min-height: 42mm; }
+              .invoice-a5.invoice-report-2 .r2-bottom { min-height: 27mm; }
+              .invoice-a5.invoice-report-2 .r2-footer { min-height: 9mm; }
+              .invoice-a5.invoice-report-3 .r3-items { min-height: 64mm; }
+              .invoice-a5.invoice-report-3 .r3-footer { min-height: 25mm; }
+
               .report-top, .party-grid, .items-wrap, .invoice-bottom, .invoice-footer-summary-grid, .item-row {
                 break-inside: avoid;
                 page-break-inside: avoid;
