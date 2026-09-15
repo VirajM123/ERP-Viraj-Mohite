@@ -4307,7 +4307,7 @@ const debitNotePermission = usePermission("VOUCHERS", "DEBIT_NOTE");
       <tr><td>${money(row.gstPercent / 2)}</td><td>${money(row.cgstAmount)}</td><td>${money(row.gstPercent / 2)}</td>
       <td>${money(row.sgstAmount)}</td><td>${money(row.taxableValue)}</td></tr>`).join("");
 
-    const reportThreeItemRows = visibleItems.map((item) => `
+    const getReportThreeItemRows = (pageItems) => pageItems.map((item) => `
       <tr>
         <td class="r3-product">${text(item.productName)}</td>
         <td class="center">${text(item.hsn)}</td>
@@ -4348,7 +4348,19 @@ const debitNotePermission = usePermission("VOUCHERS", "DEBIT_NOTE");
         </footer>
       </main>`;
 
-    const reportThreeInvoice = (copyNumber) => `
+    const reportThreeInvoice = (copyNumber) => {
+      const itemPages = isA5
+        ? Array.from(
+            { length: Math.max(1, Math.ceil(visibleItems.length / 7)) },
+            (_, pageIndex) => visibleItems.slice(pageIndex * 7, (pageIndex + 1) * 7)
+          )
+        : [visibleItems];
+
+      return itemPages.map((pageItems, pageIndex) => {
+        const isFinalPage = pageIndex === itemPages.length - 1;
+        const reportThreeItemRows = getReportThreeItemRows(pageItems);
+
+        return `
       <main class="${pageClass}" style="--r3-font-scale:${effectiveFontScale}">
         ${copies > 1 ? `<div class="copy-label">COPY ${copyNumber} OF ${copies}</div>` : ""}
         <section class="r3-header">
@@ -4365,7 +4377,7 @@ const debitNotePermission = usePermission("VOUCHERS", "DEBIT_NOTE");
             <h1>GST Invoice</h1>
             <div><span>Invoice No:</span><b>${text(`${billSeries || ""}${billNo || ""}`)}</b></div>
             <div><span>Date :</span><b>${text(formatInvoiceDate(billDate))}</b></div>
-            <p>Page 1 of 1</p>
+            <p>Page ${pageIndex + 1} of ${itemPages.length}</p>
           </div>
           <div class="r3-details r3-customer">
             <div><span>Name</span><strong>${text(partyName)}</strong></div>
@@ -4383,7 +4395,7 @@ const debitNotePermission = usePermission("VOUCHERS", "DEBIT_NOTE");
             <tbody>${reportThreeItemRows}</tbody>
           </table>
         </section>
-        <footer class="r3-footer">
+        ${isFinalPage ? `<footer class="r3-footer">
           <div class="r3-qr">${showBankDetails && bankQrCode ? `<img src="${escapeInvoiceHtml(bankQrCode)}" alt="Payment QR code">` : ""}</div>
           <div class="r3-notes">
             <div class="r3-adjustments">
@@ -4403,8 +4415,10 @@ const debitNotePermission = usePermission("VOUCHERS", "DEBIT_NOTE");
             <div class="r3-net"><strong>Net Payable</strong><strong>${money(netAmount)}</strong></div>
             <p>FOR &nbsp;&nbsp;&nbsp; ${text(firmName)}</p>
           </div>
-        </footer>
+        </footer>` : ""}
       </main>`;
+      }).join("");
+    };
 
     const oneInvoice = (copyNumber) => normalizedReportNumber === "2"
       ? reportTwoInvoice(copyNumber)
@@ -5441,11 +5455,13 @@ const debitNotePermission = usePermission("VOUCHERS", "DEBIT_NOTE");
             .invoice-a5.invoice-report-3 .r3-invoice-meta h1 { margin-bottom: 2.5mm; }
             .invoice-a5.invoice-report-3 .r3-invoice-meta > div { grid-template-columns: 17mm 1fr; min-height: 3mm; }
             .invoice-a5.invoice-report-3 .r3-invoice-meta p { margin-top: 1.5mm; }
-            .invoice-a5.invoice-report-3 .r3-items { min-height: 73mm; }
+            .invoice-a5.invoice-report-3 .r3-items { min-height: 34mm; }
             .invoice-a5.invoice-report-3 .r3-items th { height: 6mm; padding: .4mm .25mm; }
             .invoice-a5.invoice-report-3 .r3-items td { height: 3.6mm; }
             .invoice-a5.invoice-report-3 .r3-items th,
             .invoice-a5.invoice-report-3 .r3-items td { font-size: 9.5px; }
+            .invoice-a5.invoice-report-3 .r3-header,
+            .invoice-a5.invoice-report-3 .r3-footer { font-size: 9.5px; }
             .invoice-a5.invoice-report-3 .r3-footer { min-height: 28mm; padding: 1.5mm 1.5mm 0; column-gap: 2mm; }
             .invoice-a5.invoice-report-3 .r3-qr img { width: 23mm; height: 23mm; }
             .invoice-a5.invoice-report-3 .r3-adjustments { gap: .5mm 2mm; margin-bottom: .8mm; }
@@ -5513,7 +5529,7 @@ const debitNotePermission = usePermission("VOUCHERS", "DEBIT_NOTE");
               .invoice-a5.invoice-report-2 .r2-items { min-height: 42mm; }
               .invoice-a5.invoice-report-2 .r2-bottom { min-height: 27mm; }
               .invoice-a5.invoice-report-2 .r2-footer { min-height: 9mm; }
-              .invoice-a5.invoice-report-3 .r3-items { min-height: 64mm; }
+              .invoice-a5.invoice-report-3 .r3-items { min-height: 34mm; }
               .invoice-a5.invoice-report-3 .r3-footer { min-height: 25mm; }
 
               .report-top, .party-grid, .items-wrap, .invoice-bottom, .invoice-footer-summary-grid, .item-row {
