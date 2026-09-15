@@ -3,7 +3,7 @@ const configuredRoot = String(import.meta.env.VITE_API_ROOT || "").trim();
 // Keep the Render URL active for the deployed site.
 // To use the local backend, comment the Render line and uncomment the local line.
 const defaultRoot = "https://total-solution-backend.onrender.com";
- //const defaultRoot = "http://localhost:5000";
+// const defaultRoot = "http://localhost:5000";
 
 let parsedRoot;
 try {
