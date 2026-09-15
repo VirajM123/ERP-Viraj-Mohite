@@ -5493,7 +5493,23 @@ const debitNotePermission = usePermission("VOUCHERS", "DEBIT_NOTE");
               min-height: 108mm;
               flex: 1 1 auto;
             }
-            .invoice-a4.invoice-report-3 .r3-footer { margin-top: auto; }
+            .invoice-a4.invoice-report-3 .r3-footer {
+              width: 100%;
+              grid-template-columns: 14% minmax(0, 1fr) 30%;
+              margin-top: auto;
+              padding-right: 1.5mm;
+              padding-left: 1.5mm;
+              column-gap: 2mm;
+            }
+            .invoice-a4.invoice-report-3 .r3-notes { padding-right: 2mm; }
+            .invoice-a4.invoice-report-3 .r3-totals {
+              min-width: 0;
+              padding-left: 1mm;
+            }
+            .invoice-a4.invoice-report-3 .r3-totals > div {
+              grid-template-columns: minmax(0, 1fr) 24mm;
+              column-gap: 1.5mm;
+            }
             .invoice-a5.invoice-report-3 {
               display: flex;
               width: 200mm;
