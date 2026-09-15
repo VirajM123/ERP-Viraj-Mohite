@@ -5,22 +5,12 @@ import path from "path";
 import * as XLSX from "xlsx";
 import { importConfig } from "./importConfig.js";
 
-const DESKTOP_TRANSACTION_CONCURRENCY = Math.max(1, Math.min(32, Number.parseInt(process.env.DESKTOP_IMPORT_TRANSACTION_CONCURRENCY || "16", 10) || 16));
+const DESKTOP_TRANSACTION_CONCURRENCY = Math.max(1, Math.min(16, Number.parseInt(process.env.DESKTOP_IMPORT_TRANSACTION_CONCURRENCY || "8", 10) || 8));
 const DESKTOP_TRANSACTION_BATCH_SIZE = Math.max(25, Math.min(500, Number.parseInt(process.env.DESKTOP_IMPORT_TRANSACTION_BATCH_SIZE || "100", 10) || 100));
 const DESKTOP_PRODUCT_BATCH_SIZE = Math.max(25, Math.min(250, Number.parseInt(process.env.DESKTOP_IMPORT_PRODUCT_BATCH_SIZE || "100", 10) || 100));
 
 const SERIAL_DESKTOP_TRANSACTION_TYPES = new Set([
-  "DesktopPurchase",
   "DesktopOpeningStock",
-  "DesktopStockIn",
-  // Sales invoices from the same desktop export repeatedly touch the same
-  // stock rows. Running them in parallel causes avoidable MongoDB write
-  // conflicts and can leave a successfully committed invoice reported as a
-  // failed import when only the commit acknowledgement was interrupted.
-  "DesktopSales",
-  "DesktopCounterSales",
-  "DesktopCreditNote",
-  "DesktopReceipt",
   "DesktopStockOut",
   "DesktopSelfDamage",
   "DesktopDamageStockOut",
@@ -29,6 +19,50 @@ const SERIAL_DESKTOP_TRANSACTION_TYPES = new Set([
 export const desktopTransactionConcurrency = (entryType) => SERIAL_DESKTOP_TRANSACTION_TYPES.has(entryType)
   ? 1
   : DESKTOP_TRANSACTION_CONCURRENCY;
+
+// Vouchers that touch the same stock batch or outstanding bill must retain
+// their original order. Independent vouchers can safely run together. This
+// gives imports bounded parallelism without changing stock/allocation logic.
+export const desktopTransactionConflictKeys = (entryType, payload = {}) => {
+  const definition = transactionDefinitions[entryType];
+  const nested = definition?.nested && Array.isArray(payload[definition.nested])
+    ? payload[definition.nested]
+    : [];
+  const keys = new Set();
+  if (["DesktopPurchase", "DesktopSales", "DesktopCounterSales", "DesktopCreditNote", "DesktopDebitNote"].includes(entryType)) {
+    const godown = normalize(payload.GDCode || payload.gdCode);
+    for (const item of nested) {
+      const product = normalize(item.productCode || item.prodCode || item.ProductCode || item.code || item.productId);
+      if (product) keys.add(`stock|${godown}|${product}`);
+    }
+  }
+  if (entryType === "DesktopReceipt") {
+    for (const bill of nested) {
+      const openingId = normalize(bill.openingTransactionId);
+      if (openingId) keys.add(`opening|${openingId}`);
+      else keys.add(`sale|${normalize(bill.trnSeries || bill.billSeries)}|${normalize(bill.trnNo || bill.billNo)}`);
+    }
+  }
+  return keys;
+};
+
+export const createConflictFreeWaves = (records, entryType, concurrency) => {
+  const pending = [...records];
+  const waves = [];
+  while (pending.length) {
+    const used = new Set();
+    const wave = [];
+    for (let index = 0; index < pending.length && wave.length < concurrency;) {
+      const keys = desktopTransactionConflictKeys(entryType, pending[index].payload);
+      if ([...keys].some((key) => used.has(key))) { index += 1; continue; }
+      keys.forEach((key) => used.add(key));
+      wave.push(pending.splice(index, 1)[0]);
+    }
+    // A record can always enter an empty wave, including records without keys.
+    waves.push(wave.length ? wave : [pending.shift()]);
+  }
+  return waves;
+};
 
 export const DESKTOP_IMPORT_ORDER = [
   "Company", "Category", "Group", "Product", "Account", "Bank", "Area", "Salesman",
@@ -254,6 +288,32 @@ const transactionReferences = (payload, definition) => {
   };
 };
 
+const loadExistingImportKeys = async ({ records, tenant, master, transaction }) => {
+  const definition = master || transaction;
+  const collection = mongoose.connection.collection(definition.collection);
+  const dbFields = master ? master.dbKey : transaction.duplicate;
+  const payloadFields = master ? master.excelKey : (transaction.payloadDuplicate || transaction.duplicate);
+  const projection = Object.fromEntries(dbFields.map((field) => [field, 1]));
+  const documents = [];
+  const identityCondition = (value) => {
+    const trimmed = String(value ?? "").trim();
+    const numeric = Number(trimmed);
+    return trimmed && Number.isFinite(numeric) && numeric !== value
+      ? { $in: [value, numeric] }
+      : value;
+  };
+  // Keep each $or query bounded. It returns only identities present in this
+  // workbook instead of scanning every historical document in the firm.
+  for (let offset = 0; offset < records.length; offset += 400) {
+    const clauses = records.slice(offset, offset + 400).map((record) => Object.fromEntries(
+      dbFields.map((field, index) => [field, identityCondition(record.payload[payloadFields[index]])])
+    ));
+    if (!clauses.length) continue;
+    documents.push(...await collection.find({ ...tenant, $or: clauses }, { projection }).toArray());
+  }
+  return new Set(documents.map((document) => composite(document, dbFields)));
+};
+
 export const preflightDesktopImport = async ({ job, fileIds, companyCode }) => {
   const chosen = (job.files || []).filter((file) => !fileIds?.length || fileIds.includes(file.id));
   const ordered = [...chosen].sort((left, right) => DESKTOP_IMPORT_ORDER.indexOf(left.entryType) - DESKTOP_IMPORT_ORDER.indexOf(right.entryType));
@@ -280,13 +340,7 @@ export const preflightDesktopImport = async ({ job, fileIds, companyCode }) => {
     const transaction = transactionDefinitions[file.entryType];
     const seen = new Set();
     let existing = new Set();
-    if (master) {
-      const docs = await mongoose.connection.collection(master.collection).find(tenant, { projection: Object.fromEntries(master.dbKey.map((key) => [key, 1])) }).toArray();
-      existing = new Set(docs.map((doc) => composite(doc, master.dbKey)));
-    } else if (transaction) {
-      const docs = await mongoose.connection.collection(transaction.collection).find(tenant, { projection: Object.fromEntries(transaction.duplicate.map((key) => [key, 1])) }).toArray();
-      existing = new Set(docs.map((doc) => composite(doc, transaction.duplicate)));
-    }
+    if (master || transaction) existing = await loadExistingImportKeys({ records, tenant, master, transaction });
     let ready = 0; let duplicates = 0; let errors = 0; let warnings = 0;
     for (const record of records) {
       const rowErrors = []; const rowWarnings = [];
@@ -396,10 +450,20 @@ export const requestDesktopTransaction = async (options, { attempts = 5 } = {}) 
 const responseId = (result) => String(result.savedBillId || result.data?._id || result.data?.header?._id || result.purchase?._id || result.creditNote?._id || result.debitNote?._id || result.voucher?._id || result.load?._id || result.saved?._id || "");
 
 export const desktopCommittedTransactionFilter = (entryType, payload, tenant) => {
+  if (entryType === "DesktopPurchase" && Number(payload.vouNo) > 0) return {
+    ...tenant,
+    vouSer: String(payload.vouSer || "").trim(),
+    vouNo: Number(payload.vouNo),
+  };
   if (entryType === "DesktopCreditNote") return {
     ...tenant,
     CreditNoteSeries: String(payload.CreditNoteSeries || "CN").trim(),
     CreditNoteNo: Number(payload.CreditNoteNo),
+  };
+  if (entryType === "DesktopReceipt" && Number(payload.rno) > 0) return {
+    ...tenant,
+    billSeries: String(payload.billSeries || "").trim(),
+    rno: Number(payload.rno),
   };
   if (!["DesktopSales", "DesktopCounterSales"].includes(entryType)) return null;
   return {
@@ -523,7 +587,7 @@ export const runDesktopImport = async ({ job, plan, state, companyCode, authoriz
               ? "/purchase/reconcile-desktop-import"
               : definition.endpoint;
             const request = { baseUrl, authorization, endpoint, body: payload, idempotencyKey: `desktop-${job.id}-${file.entryType}-${record.row}` };
-            const result = ["DesktopSales", "DesktopCounterSales", "DesktopCreditNote"].includes(file.entryType)
+            const result = ["DesktopPurchase", "DesktopSales", "DesktopCounterSales", "DesktopCreditNote", "DesktopReceipt"].includes(file.entryType)
               ? await requestDesktopTransaction(request)
               : await apiRequest(request);
             let id = responseId(result);
@@ -552,14 +616,15 @@ export const runDesktopImport = async ({ job, plan, state, companyCode, authoriz
           }
           fileState.processed += 1; state.processed += 1; fileState.updatedAt = new Date().toISOString(); state.updatedAt = fileState.updatedAt;
         };
-        // Sales use bounded parallelism for throughput; transient stock write
-        // conflicts are retried by requestDesktopTransaction above.
+        // Execute only conflict-free vouchers together. Rows sharing a stock
+        // batch or an allocated bill stay ordered in later waves.
         const concurrency = desktopTransactionConcurrency(file.entryType);
         for (let batchOffset = 0; batchOffset < candidates.length; batchOffset += DESKTOP_TRANSACTION_BATCH_SIZE) {
           const batch = candidates.slice(batchOffset, batchOffset + DESKTOP_TRANSACTION_BATCH_SIZE);
-          for (let offset = 0; offset < batch.length; offset += concurrency) {
+          const waves = createConflictFreeWaves(batch, file.entryType, concurrency);
+          for (const wave of waves) {
             await waitWhilePaused(state);
-            await Promise.all(batch.slice(offset, offset + concurrency).map(importRecord));
+            await Promise.all(wave.map(importRecord));
           }
         }
       }

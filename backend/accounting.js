@@ -13,6 +13,8 @@ const journalSchema = new mongoose.Schema({
   lines: { type: [journalLineSchema], validate: [(value) => value.length >= 2, "Journal requires at least two lines"] },
 }, { timestamps: true, collection: "Acc_Journal" });
 journalSchema.index({ distributorId: 1, firmId: 1, sourceType: 1, sourceId: 1, postingVersion: 1 }, { unique: true });
+journalSchema.index({ distributorId: 1, firmId: 1, status: 1, documentDate: 1, createdAt: 1 });
+journalSchema.index({ distributorId: 1, firmId: 1, "lines.accountCode": 1, documentDate: 1 });
 export const Journal = mongoose.models.Acc_Journal || mongoose.model("Acc_Journal", journalSchema);
 
 export const postBalancedJournal = async (entry, session) => {

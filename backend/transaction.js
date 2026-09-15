@@ -190,6 +190,9 @@ receiptSchema.index({ distributorId: 1, firmId: 1, idempotencyKey: 1 }, {
   partialFilterExpression: { idempotencyKey: { $type: "string", $gt: "" } },
 });
 receiptSchema.index({ distributorId: 1, firmId: 1, billSeries: 1, rno: 1 }, { unique: true });
+receiptSchema.index({ distributorId: 1, firmId: 1, status: 1, receiptDate: -1, rno: -1 });
+receiptSchema.index({ distributorId: 1, firmId: 1, partyId: 1, status: 1, receiptDate: -1 });
+receiptSchema.index({ distributorId: 1, firmId: 1, chequeNo: 1, status: 1 });
 
 /* ==========================
    CHEQUE BOUNCE SCHEMA
@@ -331,6 +334,10 @@ const PDCDocket =
 
 chequeBounceSchema.index({ distributorId: 1, firmId: 1, trnSeries: 1, trnNo: 1 }, { unique: true });
 pdcDocketSchema.index({ distributorId: 1, firmId: 1, docSeries: 1, docVNo: 1 }, { unique: true });
+chequeBounceSchema.index({ distributorId: 1, firmId: 1, status: 1, chqBounceDate: -1, trnNo: -1 });
+chequeBounceSchema.index({ distributorId: 1, firmId: 1, chequeNo: 1, status: 1 });
+pdcDocketSchema.index({ distributorId: 1, firmId: 1, depositDate: -1, docVNo: -1 });
+pdcDocketSchema.index({ distributorId: 1, firmId: 1, "cheques.chequeNo": 1 });
 
 const ChequeBounce =
     mongoose.models.T_ChequeBounce ||
@@ -499,6 +506,8 @@ paymentSchema.index({ distributorId: 1, firmId: 1, idempotencyKey: 1 }, {
   unique: true,
   partialFilterExpression: { idempotencyKey: { $type: "string", $gt: "" } },
 });
+paymentSchema.index({ distributorId: 1, firmId: 1, status: 1, vDate: -1, vNo: -1 });
+paymentSchema.index({ distributorId: 1, firmId: 1, partyCode: 1, status: 1, vDate: -1 });
 
 const Payment = mongoose.models.T_Payment || mongoose.model("T_Payment", paymentSchema);
 
@@ -664,6 +673,7 @@ const Contra =
     contraSchema
   );
 contraSchema.index({ distributorId: 1, firmId: 1, tranVNo: 1 }, { unique: true });
+contraSchema.index({ distributorId: 1, firmId: 1, status: 1, transactionDate: -1, tranVNo: -1 });
 
     /* ==========================
    COLLECTION VOUCHER SCHEMA
@@ -822,6 +832,7 @@ const CollectionVoucher =
     collectionVoucherSchema
   );
 collectionVoucherSchema.index({ distributorId: 1, firmId: 1, colVNo: 1 }, { unique: true });
+collectionVoucherSchema.index({ distributorId: 1, firmId: 1, status: 1, collectionDate: -1, colVNo: -1 });
 
 
 

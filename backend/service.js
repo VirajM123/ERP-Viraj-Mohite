@@ -17,6 +17,7 @@ const Service = mongoose.models.Mas_Service || mongoose.model("Mas_Service", new
   isActive: { type: Boolean, default: true },
 }, { timestamps: true, collection: "Mas_Service" }));
 Service.schema.index({ distributorId: 1, firmId: 1, serviceCode: 1 }, { unique: true });
+Service.schema.index({ distributorId: 1, firmId: 1, isActive: 1, serviceCode: 1 });
 
 const salesItemSchema = new mongoose.Schema({
   serviceId: { type: mongoose.Schema.Types.ObjectId, ref: "Mas_Service", required: true },
@@ -41,6 +42,7 @@ const SalesService = mongoose.models.T_SalesService || mongoose.model("T_SalesSe
   firmName: { type: String, default: "" }, isActive: { type: Boolean, default: true },
 }, { timestamps: true, collection: "T_SalesService" }));
 SalesService.schema.index({ distributorId: 1, firmId: 1, voucherSeries: 1, voucherNo: 1 }, { unique: true });
+SalesService.schema.index({ distributorId: 1, firmId: 1, isActive: 1, voucherDate: -1, voucherNo: -1 });
 
 const clean = (value) => String(value ?? "").trim();
 const round = (value) => Math.round((Number(value) + Number.EPSILON) * 100) / 100;

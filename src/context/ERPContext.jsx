@@ -1,8 +1,7 @@
 import React, {
   createContext,
   useContext,
-  useReducer,
-  useEffect
+  useReducer
 } from "react";
 
 const ERPContext = createContext();
@@ -406,17 +405,6 @@ export const ERPProvider = ({ children }) => {
     ...initialState,
     ...savedData
   });
-
-  useEffect(() => {
-    saveToLocalStorage('erp_receipts', state.receipts);
-    saveToLocalStorage('erp_payments', state.payments);
-    saveToLocalStorage('erp_journals', state.journals);
-    saveToLocalStorage('erp_cheque_bounces', state.chequeBounces);
-    saveToLocalStorage('erp_sales_invoices', state.salesInvoices);
-    saveToLocalStorage('erp_pdc_dockets', state.pdcDockets);
-    saveToLocalStorage('erp_contra', state.contra);
-    saveToLocalStorage('erp_collection_vouchers', state.collectionVouchers);
-  }, [state]);
 
   // Helper functions for common operations
   const value = {

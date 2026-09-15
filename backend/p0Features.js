@@ -25,6 +25,7 @@ const journalVoucherSchema = new mongoose.Schema({
 }, { timestamps: true, collection: "T_JournalVoucher" });
 journalVoucherSchema.index({ distributorId: 1, firmId: 1, vNo: 1 }, { unique: true });
 journalVoucherSchema.index({ distributorId: 1, firmId: 1, idempotencyKey: 1 }, { unique: true, partialFilterExpression: { idempotencyKey: { $type: "string", $gt: "" } } });
+journalVoucherSchema.index({ distributorId: 1, firmId: 1, status: 1, vDate: -1, vNo: -1 });
 const JournalVoucher = mongoose.models.T_JournalVoucher || mongoose.model("T_JournalVoucher", journalVoucherSchema);
 
 const tenant = (req, extra = {}) => ({ ...extra, distributorId: req.auth.distributorId, firmId: req.auth.firmId });
@@ -103,18 +104,42 @@ export const validateCustomerCredit = async ({ req, session }) => {
   const partyName = String(body.PartyName || "").trim();
   const account = await Account.findOne(tenant(req, partyCode ? { accountCode: partyCode, isActive: { $ne: false } } : { accountName: partyName, isActive: { $ne: false } })).session(session).lean();
   if (!account) throw Object.assign(new Error("Invalid or inactive customer account."), { statusCode: 400 });
-  const bills = await Sales.find(tenant(req, { PartyCode: account.accountCode, isActive: { $ne: false }, IsBillCancelled: { $ne: true } }))
-    .select({ NetAmount: 1, receiptAllocated: 1, DueDate: 1, BillDate: 1 }).session(session).lean();
+  // Calculate the historical sales exposure in MongoDB.  Previously every
+  // bill for the party was transferred to Node and reduced there, making save
+  // time grow with the imported history rather than the current voucher.
+  const [salesExposure = {}] = await Sales.aggregate([
+    { $match: tenant(req, { PartyCode: account.accountCode, isActive: { $ne: false }, IsBillCancelled: { $ne: true } }) },
+    { $project: {
+      pending: { $max: [{ $subtract: [{ $ifNull: ["$NetAmount", 0] }, { $ifNull: ["$receiptAllocated", 0] }] }, 0] },
+      DueDate: { $ifNull: ["$DueDate", ""] },
+    } },
+    { $group: {
+      _id: null,
+      outstanding: { $sum: "$pending" },
+      pendingBills: { $sum: { $cond: [{ $gt: ["$pending", 0] }, 1, 0] } },
+      overdueDates: { $push: { $cond: [{ $gt: ["$pending", 0] }, "$DueDate", null] } },
+    } },
+  ]).session(session);
   const openings = await openingOutstanding(req, 'Dr', session);
-  bills.push(...openings.filter(row => row.accountCode === account.accountCode).map(row => ({ NetAmount: row.balanceAmount, receiptAllocated: row.allocatedAmount, BillDate: row.date, DueDate: row.postingDate })));
-  const outstanding = bills.reduce((sum, bill) => sum + Math.max(0, number(bill.NetAmount) - number(bill.receiptAllocated)), 0);
+  const accountOpenings = openings.filter(row => row.accountCode === account.accountCode);
+  const openingOutstandingAmount = accountOpenings.reduce(
+    (sum, row) => sum + Math.max(0, number(row.balanceAmount) - number(row.allocatedAmount)),
+    0
+  );
+  const openingPendingBills = accountOpenings.filter(
+    row => number(row.balanceAmount) - number(row.allocatedAmount) > 0
+  );
+  const outstanding = number(salesExposure.outstanding) + openingOutstandingAmount;
+  const pendingBillCount = number(salesExposure.pendingBills) + openingPendingBills.length;
   const exposure = outstanding + number(body.NetAmount);
   const today = new Date().toISOString().slice(0, 10);
-  const overdue = bills.some((bill) => Math.max(0, number(bill.NetAmount) - number(bill.receiptAllocated)) > 0 && String(bill.DueDate || "") < today);
+  const overdue = (salesExposure.overdueDates || []).some(
+    dueDate => dueDate !== null && String(dueDate || "") < today
+  ) || openingPendingBills.some(row => String(row.postingDate || "") < today);
   const violations = [];
   if (String(account.blackListed || "NO").toUpperCase() === "YES") violations.push("Customer is blacklisted");
   if (number(account.creditAmt) > 0 && exposure > number(account.creditAmt) + 0.01) violations.push(`Credit limit exceeded (${exposure.toFixed(2)} > ${number(account.creditAmt).toFixed(2)})`);
-  if (number(account.creditBills) > 0 && bills.filter((bill) => number(bill.NetAmount) - number(bill.receiptAllocated) > 0).length >= number(account.creditBills)) violations.push("Maximum pending bills limit reached");
+  if (number(account.creditBills) > 0 && pendingBillCount >= number(account.creditBills)) violations.push("Maximum pending bills limit reached");
   if (overdue) violations.push("Customer has overdue bills");
   if (!violations.length) return { outstanding, exposure, violations: [] };
   const override = body.creditOverride || {};
@@ -174,8 +199,10 @@ export default function createP0FeaturesRouter(securityRouter) {
 
   router.get('/reports/party-outstanding', securityRouter.authorizeRequest('REPORTS', 'OUTSTANDING_REPORT', 'view'), async (req, res) => {
     const [sales, purchases, openings] = await Promise.all([
-      mongoose.models.T_Sal_Header.find(tenant(req, { isActive: { $ne: false }, IsBillCancelled: { $ne: true } })).lean(),
-      mongoose.models.T_Pur_Header.find(tenant(req, { isActive: { $ne: false } })).lean(),
+      mongoose.models.T_Sal_Header.find(tenant(req, { isActive: { $ne: false }, IsBillCancelled: { $ne: true } }))
+        .select("PartyCode PartyName BillSeries BillNo BillDate NetAmount receiptAllocated").lean(),
+      mongoose.models.T_Pur_Header.find(tenant(req, { isActive: { $ne: false } }))
+        .select("supplierCode supplierName vouSer vouNo invoiceDate netAmt paymentAllocated").lean(),
       openingOutstanding(req),
     ]);
     let rows = [
@@ -348,7 +375,8 @@ export default function createP0FeaturesRouter(securityRouter) {
   });
   router.get("/reports/credit-control", securityRouter.authorizeRequest("REPORTS", "CREDIT_CONTROL", "view"), async (req, res) => {
     const Account = mongoose.models.Mas_Account, Sales = mongoose.models.T_Sal_Header;
-    const accounts = Account ? await Account.find(tenant(req, { isActive: { $ne: false } })).lean() : [];
+    const accounts = Account ? await Account.find(tenant(req, { isActive: { $ne: false } }))
+      .select("accountCode accountName blackListed creditAmt creditDays creditBills").lean() : [];
     const sales = Sales ? await Sales.find(tenant(req, { isActive: { $ne: false }, IsBillCancelled: { $ne: true } })).select({ PartyCode: 1, NetAmount: 1, receiptAllocated: 1, DueDate: 1 }).lean() : [];
     const openingBills = await openingOutstanding(req, 'Dr');
     sales.push(...openingBills.map(row => ({ PartyCode: row.accountCode, NetAmount: row.balanceAmount, receiptAllocated: row.allocatedAmount, DueDate: row.postingDate })));
@@ -358,23 +386,61 @@ export default function createP0FeaturesRouter(securityRouter) {
   });
   router.get("/dashboard/summary", async (req, res) => {
     const Sales = mongoose.models.T_Sal_Header, Purchase = mongoose.models.T_Pur_Header, Receipt = mongoose.models.T_Receipt, Stock = mongoose.models.Mas_Stock;
-    const [sales, purchases, receipts, stock] = await Promise.all([
-      Sales ? Sales.find(tenant(req, { isActive: { $ne: false }, IsBillCancelled: { $ne: true } })).lean() : [],
-      Purchase ? Purchase.find(tenant(req, { isActive: { $ne: false } })).lean() : [],
-      Receipt ? Receipt.find(tenant(req, { status: { $ne: "REVERSED" } })).lean() : [],
-      Stock ? Stock.find(tenant(req)).lean() : [],
+    const scope = tenant(req);
+    const today = new Date().toISOString().slice(0, 10);
+    const salesMatch = { ...scope, isActive: { $ne: false }, IsBillCancelled: { $ne: true } };
+    const numeric = (field) => ({ $convert: { input: field, to: "double", onError: 0, onNull: 0 } });
+    const pending = { $max: [{ $subtract: [numeric("$NetAmount"), numeric("$receiptAllocated")] }, 0] };
+
+    const [salesFacets, purchaseTotals, receiptTotals, stockFacets, openingBills] = await Promise.all([
+      Sales ? Sales.aggregate([
+        { $match: salesMatch },
+        { $facet: {
+          totals: [{ $group: { _id: null, totalSales: { $sum: numeric("$NetAmount") }, outstanding: { $sum: pending }, totalInvoices: { $sum: 1 }, overdue: { $sum: { $cond: [{ $lt: [{ $ifNull: ["$DueDate", ""] }, today] }, pending, 0] } } } }],
+          recentInvoices: [{ $sort: { BillDate: -1, BillNo: -1, _id: -1 } }, { $limit: 10 }, { $project: { _id: 0, billNo: { $concat: [{ $ifNull: ["$BillSeries", ""] }, { $convert: { input: "$BillNo", to: "string", onError: "", onNull: "" } }] }, date: "$BillDate", party: "$PartyName", amount: "$NetAmount", pending } }],
+          topCustomers: [{ $group: { _id: { $ifNull: ["$PartyName", { $ifNull: ["$PartyCode", "Unknown"] }] }, amount: { $sum: numeric("$NetAmount") } } }, { $sort: { amount: -1 } }, { $limit: 5 }, { $project: { _id: 0, name: "$_id", amount: 1 } }],
+          salesTrend: [{ $group: { _id: { $ifNull: ["$BillDate", "No date"] }, sales: { $sum: numeric("$NetAmount") } } }, { $sort: { _id: -1 } }, { $limit: 30 }, { $sort: { _id: 1 } }, { $project: { _id: 0, label: "$_id", sales: 1, collections: { $literal: 0 } } }],
+          topProducts: [
+            { $unwind: "$items" },
+            { $project: {
+              code: { $ifNull: ["$items.productCode", { $ifNull: ["$items.ProductCode", { $ifNull: ["$items.code", { $ifNull: ["$items.productId", "Unknown"] }] }] }] },
+              name: { $ifNull: ["$items.productName", { $ifNull: ["$items.ProductName", { $ifNull: ["$items.name", ""] }] }] },
+              quantity: { $add: [
+                { $convert: { input: { $ifNull: ["$items.quantity", { $ifNull: ["$items.qty", { $ifNull: ["$items.Qty", 0] }] }] }, to: "double", onError: 0, onNull: 0 } },
+                { $convert: { input: { $ifNull: ["$items.free", { $ifNull: ["$items.Free", { $ifNull: ["$items.freeQty", 0] }] }] }, to: "double", onError: 0, onNull: 0 } },
+              ] },
+              amount: { $convert: { input: { $ifNull: ["$items.netAmount", { $ifNull: ["$items.NetAmount", { $ifNull: ["$items.amount", { $ifNull: ["$items.grossAmount", 0] }] }] }] }, to: "double", onError: 0, onNull: 0 } },
+            } },
+            { $group: { _id: "$code", name: { $first: "$name" }, quantity: { $sum: "$quantity" }, amount: { $sum: "$amount" } } },
+            { $sort: { amount: -1 } }, { $limit: 5 },
+            { $project: { _id: 0, code: "$_id", name: { $cond: [{ $eq: ["$name", ""] }, "$_id", "$name"] }, quantity: 1, amount: 1 } },
+          ],
+        } },
+      ]) : Promise.resolve([{ totals: [], recentInvoices: [], topCustomers: [], topProducts: [], salesTrend: [] }]),
+      Purchase ? Purchase.aggregate([{ $match: { ...scope, isActive: { $ne: false } } }, { $group: { _id: null, total: { $sum: numeric("$netAmt") } } }]) : [],
+      Receipt ? Receipt.aggregate([{ $match: { ...scope, status: { $ne: "REVERSED" } } }, { $group: { _id: null, total: { $sum: numeric("$receiptAmount") } } }]) : [],
+      Stock ? Stock.aggregate([
+        { $match: scope },
+        { $facet: {
+          totals: [{ $group: { _id: null, stockValue: { $sum: { $multiply: [numeric("$Qty"), numeric("$PRate")] } }, lowStock: { $sum: { $cond: [{ $and: [{ $gt: [numeric("$Qty"), 0] }, { $lte: [numeric("$Qty"), 10] }] }, 1, 0] } }, expiry: { $sum: { $cond: [{ $and: [{ $gt: [numeric("$Qty"), 0] }, { $ne: [{ $ifNull: ["$ExpDt", ""] }, ""] }, { $lte: ["$ExpDt", today] }] }, 1, 0] } } } }],
+          lowStockItems: [{ $match: { Qty: { $gt: 0, $lte: 10 } } }, { $limit: 10 }, { $project: { _id: 0, product: "$ProdCode", stock: "$Qty", unit: { $literal: "Units" } } }],
+        } },
+      ]) : Promise.resolve([{ totals: [], lowStockItems: [] }]),
+      openingOutstanding(req, 'Dr'),
     ]);
-    const totalSales = sales.reduce((s, row) => s + number(row.NetAmount), 0), totalPurchase = purchases.reduce((s, row) => s + number(row.netAmt), 0), collection = receipts.reduce((s, row) => s + number(row.receiptAmount), 0);
-    const openingBills = await openingOutstanding(req, 'Dr');
-    const outstanding = sales.reduce((s, row) => s + Math.max(0, number(row.NetAmount) - number(row.receiptAllocated)), 0) + openingBills.reduce((sum, row) => sum + row.balanceAmount - row.allocatedAmount, 0), today = new Date().toISOString().slice(0, 10);
-    const overdue = sales.filter((row) => String(row.DueDate || "") < today).reduce((s, row) => s + Math.max(0, number(row.NetAmount) - number(row.receiptAllocated)), 0) + openingBills.filter(row => row.postingDate < today).reduce((sum, row) => sum + row.balanceAmount - row.allocatedAmount, 0);
-    const stockValue = stock.reduce((s, row) => s + number(row.Qty) * number(row.PRate), 0), lowStock = stock.filter((row) => number(row.Qty) > 0 && number(row.Qty) <= 10).length;
-    const topProducts = Object.values(sales.flatMap((row) => row.items || []).reduce((map, item) => { const key = itemCode(item) || itemName(item) || "Unknown"; map[key] ||= { code: key, name: itemName(item) || key, quantity: 0, amount: 0 }; map[key].quantity += itemQty(item); map[key].amount += number(item.netAmount ?? item.NetAmount ?? item.amount ?? item.grossAmount); return map; }, {})).sort((a, b) => b.amount - a.amount).slice(0, 5);
-    const salesTrend = Object.values(sales.reduce((map, row) => { const key = String(row.BillDate || "No date"); map[key] ||= { label: key, sales: 0, collections: 0 }; map[key].sales += number(row.NetAmount); return map; }, {})).sort((a, b) => a.label.localeCompare(b.label)).slice(-30);
-    const recentInvoices = sales.slice().sort((a, b) => String(b.BillDate).localeCompare(String(a.BillDate))).slice(0, 10).map((row) => ({ billNo: `${row.BillSeries || ""}${row.BillNo}`, date: row.BillDate, party: row.PartyName, amount: row.NetAmount, status: Math.max(0, number(row.NetAmount) - number(row.receiptAllocated)) > 0 ? "Pending" : "Paid" }));
-    const topCustomers = Object.values(sales.reduce((map, row) => { const key = row.PartyName || row.PartyCode || "Unknown"; map[key] ||= { name: key, amount: 0 }; map[key].amount += number(row.NetAmount); return map; }, {})).sort((a, b) => b.amount - a.amount).slice(0, 5);
-    const lowStockItems = stock.filter((row) => number(row.Qty) > 0 && number(row.Qty) <= 10).slice(0, 10).map((row) => ({ product: row.ProdCode, stock: row.Qty, unit: "Units" }));
-    res.json({ success: true, data: { totalSales, totalPurchase, collection, outstanding, overdue, stockValue, lowStock, lowStockItems, expiry: stock.filter((row) => row.ExpDt && row.ExpDt <= today && number(row.Qty) > 0).length, totalInvoices: sales.length, recentInvoices, topCustomers, topProducts, salesTrend } });
+
+    const salesData = salesFacets[0] || {}, salesTotals = salesData.totals?.[0] || {};
+    const stockData = stockFacets[0] || {}, stockTotals = stockData.totals?.[0] || {};
+    const openingOutstandingAmount = openingBills.reduce((sum, row) => sum + number(row.balanceAmount) - number(row.allocatedAmount), 0);
+    const openingOverdue = openingBills.filter(row => row.postingDate < today).reduce((sum, row) => sum + number(row.balanceAmount) - number(row.allocatedAmount), 0);
+    const recentInvoices = (salesData.recentInvoices || []).map(row => ({ ...row, status: number(row.pending) > 0 ? "Pending" : "Paid", pending: undefined }));
+    res.json({ success: true, data: {
+      totalSales: number(salesTotals.totalSales), totalPurchase: number(purchaseTotals[0]?.total), collection: number(receiptTotals[0]?.total),
+      outstanding: number(salesTotals.outstanding) + openingOutstandingAmount, overdue: number(salesTotals.overdue) + openingOverdue,
+      stockValue: number(stockTotals.stockValue), lowStock: number(stockTotals.lowStock), lowStockItems: stockData.lowStockItems || [],
+      expiry: number(stockTotals.expiry), totalInvoices: number(salesTotals.totalInvoices), recentInvoices,
+      topCustomers: salesData.topCustomers || [], topProducts: salesData.topProducts || [], salesTrend: salesData.salesTrend || [],
+    } });
   });
   return router;
 }

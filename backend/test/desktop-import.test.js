@@ -7,7 +7,7 @@ import * as XLSX from "xlsx";
 import { canReuseDesktopImportPlan, createSourceWorkbook, localSqlServiceAccount, mapDesktopRows, parseInstalledSqlInstances, parseSqlXmlRows } from "../desktopImportRoutes.js";
 import { loadExistingProductCodes } from "../importRoutes.js";
 import { buildDesktopTransactionRows } from "../desktopTransactionMapper.js";
-import { DESKTOP_IMPORT_ORDER, desktopCommittedTransactionFilter, desktopTransactionConcurrency, ensureDesktopReceiptBankAccounts, readDesktopWorkbook, readDesktopWorkbookStreaming } from "../desktopImportBatch.js";
+import { DESKTOP_IMPORT_ORDER, createConflictFreeWaves, desktopCommittedTransactionFilter, desktopTransactionConcurrency, ensureDesktopReceiptBankAccounts, readDesktopWorkbook, readDesktopWorkbookStreaming } from "../desktopImportBatch.js";
 import { calculatePurchaseFinancials, calculateSalesFinancials } from "../financialValidation.js";
 
 test("desktop account rows map to the existing ERP Excel structure", () => {
@@ -345,15 +345,24 @@ test("desktop batch order imports stock sources before sales and receipts", () =
   assert.ok(DESKTOP_IMPORT_ORDER.indexOf("DesktopReceipt") < DESKTOP_IMPORT_ORDER.indexOf("DesktopCHB"));
 });
 
-test("stock-mutating desktop imports are serialized to avoid write conflicts", () => {
-  assert.equal(desktopTransactionConcurrency("DesktopPurchase"), 1);
+test("stock-mutating desktop imports parallelize only conflict-free vouchers", () => {
+  assert.ok(desktopTransactionConcurrency("DesktopPurchase") > 1);
   assert.equal(desktopTransactionConcurrency("DesktopOpeningStock"), 1);
-  assert.equal(desktopTransactionConcurrency("DesktopStockIn"), 1);
+  assert.ok(desktopTransactionConcurrency("DesktopStockIn") > 1);
   assert.equal(desktopTransactionConcurrency("DesktopStockOut"), 1);
-  assert.equal(desktopTransactionConcurrency("DesktopSales"), 1);
-  assert.equal(desktopTransactionConcurrency("DesktopCounterSales"), 1);
-  assert.equal(desktopTransactionConcurrency("DesktopCreditNote"), 1);
-  assert.equal(desktopTransactionConcurrency("DesktopReceipt"), 1);
+  assert.ok(desktopTransactionConcurrency("DesktopSales") > 1);
+  assert.ok(desktopTransactionConcurrency("DesktopCounterSales") > 1);
+  assert.ok(desktopTransactionConcurrency("DesktopCreditNote") > 1);
+  assert.ok(desktopTransactionConcurrency("DesktopReceipt") > 1);
+  const records = [
+    { payload: { GDCode: "G1", items: [{ productCode: "P1" }] } },
+    { payload: { GDCode: "G1", items: [{ productCode: "P1" }] } },
+    { payload: { GDCode: "G1", items: [{ productCode: "P2" }] } },
+  ];
+  const waves = createConflictFreeWaves(records, "DesktopSales", 8);
+  assert.equal(waves.length, 2);
+  assert.equal(waves[0].length, 2);
+  assert.equal(waves[1].length, 1);
 });
 
 test("desktop sales can be reconciled by their stored bill identity after an uncertain response", () => {

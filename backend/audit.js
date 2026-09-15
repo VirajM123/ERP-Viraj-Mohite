@@ -15,7 +15,7 @@ const auditEventSchema = new mongoose.Schema({
   userAgent: { type: String, default: "" },
 }, { timestamps: true, collection: "Sys_AuditEvent" });
 
-auditEventSchema.index({ firmId: 1, createdAt: -1 });
+auditEventSchema.index({ distributorId: 1, firmId: 1, createdAt: -1 });
 
 export const AuditEvent = mongoose.models.Sys_AuditEvent || mongoose.model("Sys_AuditEvent", auditEventSchema);
 

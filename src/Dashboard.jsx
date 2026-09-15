@@ -1,4 +1,4 @@
-// Dashboard.jsx
+﻿// Dashboard.jsx
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { createPortal } from "react-dom";
 import * as XLSX from "xlsx-js-style";
@@ -303,6 +303,7 @@ const Dashboard = ({ onLogout }) => {
     "ADMIN",
   ].includes(loggedInRole);
   const [activeMenu, setActiveMenu] = useState(null);
+  const [expandedNavMenu, setExpandedNavMenu] = useState(null);
   const [activeSubMenu, setActiveSubMenu] = useState(null);
   const [openFormFor, setOpenFormFor] = useState(null);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
@@ -428,6 +429,7 @@ const Dashboard = ({ onLogout }) => {
     reportNumber: "1",
     paperSize: "A4",
     orientation: "portrait",
+    fontSizePercent: 150,
 
     copies: 1,
 
@@ -512,6 +514,16 @@ const Dashboard = ({ onLogout }) => {
     {
       value: "1",
       label: "1",
+    },
+
+    {
+      value: "2",
+      label: "2",
+    },
+
+    {
+      value: "3",
+      label: "3",
     },
 
   ];
@@ -751,6 +763,22 @@ const debitNotePermission = usePermission("VOUCHERS", "DEBIT_NOTE");
       }
 
       const details = result?.details || null;
+      const outputStorageKey = `salesInvoiceOutputSettings:${localStorage.getItem("distributorId") || ""}:${localStorage.getItem("firmId") || ""}`;
+      let cachedOutputSettings = null;
+      try {
+        cachedOutputSettings = JSON.parse(localStorage.getItem(outputStorageKey) || "null");
+      } catch {
+        cachedOutputSettings = null;
+      }
+      const resolvedDetails = details
+        ? {
+            ...details,
+            outputSettings: {
+              ...(details.outputSettings || {}),
+              ...(cachedOutputSettings || {}),
+            },
+          }
+        : details;
       const savedQrCode = details?.qrCode || { fileName: "", mimeType: "", dataUrl: "" };
       let printableQrCode = savedQrCode;
       if (savedQrCode.dataUrl) {
@@ -772,14 +800,14 @@ const debitNotePermission = usePermission("VOUCHERS", "DEBIT_NOTE");
         termsAndConditions: details?.termsAndConditions || DEFAULT_INVOICE_TERMS,
         qrCode: printableQrCode,
       });
-      return details ? { ...details, qrCode: printableQrCode } : details;
+      return resolvedDetails ? { ...resolvedDetails, qrCode: printableQrCode } : resolvedDetails;
     } catch (error) {
       console.error("Print account details load error:", error);
       return null;
     }
   };
 
-  const savePrintAccountDetails = async ({ requireBankDetails = false } = {}) => {
+  const savePrintAccountDetails = async ({ requireBankDetails = false, outputSettingsOverride = null } = {}) => {
     const bankName = String(printAccountDetails.bankName || "").trim();
     const accountName = String(printAccountDetails.accountName || "").trim();
     const accountNumber = String(printAccountDetails.accountNumber || "").trim();
@@ -790,6 +818,13 @@ const debitNotePermission = usePermission("VOUCHERS", "DEBIT_NOTE");
       alert("Please enter Bank Name, Account Name, Account Number and IFSC Code.");
       return null;
     }
+
+    const requestedOutputSettings = {
+      reportNumber: String(outputSettingsOverride?.reportNumber ?? salesPrintOptions.reportNumber ?? "1"),
+      paperSize: String(outputSettingsOverride?.paperSize ?? salesPrintOptions.paperSize ?? "A4"),
+      orientation: String(outputSettingsOverride?.orientation ?? salesPrintOptions.orientation ?? "portrait"),
+      fontSizePercent: Math.min(150, Math.max(80, Number(outputSettingsOverride?.fontSizePercent ?? salesPrintOptions.fontSizePercent) || 150)),
+    };
 
     setPrintAccountDetailsSaving(true);
     try {
@@ -810,9 +845,7 @@ const debitNotePermission = usePermission("VOUCHERS", "DEBIT_NOTE");
             showTaxSummary: salesPrintOptions.showTaxSummary,
           },
           outputSettings: {
-            reportNumber: salesPrintOptions.reportNumber,
-            paperSize: salesPrintOptions.paperSize,
-            orientation: salesPrintOptions.orientation,
+            ...requestedOutputSettings,
           },
         }),
       });
@@ -820,6 +853,18 @@ const debitNotePermission = usePermission("VOUCHERS", "DEBIT_NOTE");
       if (!response.ok || result?.success === false) {
         throw new Error(result?.message || "Unable to save print details.");
       }
+      const savedOutputSettings = {
+        ...(result.details?.outputSettings || {}),
+        ...requestedOutputSettings,
+      };
+      localStorage.setItem(
+        `salesInvoiceOutputSettings:${localStorage.getItem("distributorId") || ""}:${localStorage.getItem("firmId") || ""}`,
+        JSON.stringify(savedOutputSettings)
+      );
+      setSalesPrintOptions((previous) => ({
+        ...previous,
+        ...savedOutputSettings,
+      }));
       setPrintAccountDetails({
         bankName: result.details?.bankName || "",
         accountName: result.details?.accountName || "",
@@ -1071,7 +1116,7 @@ const debitNotePermission = usePermission("VOUCHERS", "DEBIT_NOTE");
         true
       );
     };
-  /* 2. REPORT STATES — add inside Dashboard component */
+  /* 2. REPORT STATES â€” add inside Dashboard component */
 
 
 
@@ -1367,6 +1412,8 @@ const debitNotePermission = usePermission("VOUCHERS", "DEBIT_NOTE");
   };
 
   const handleReportClick = (reportName) => {
+    setSidebarCollapsed(true);
+    setExpandedNavMenu(null);
     setSelectedReport(reportName);
     setActiveSubMenu(reportName);
     setOpenFormFor("Report");
@@ -1387,6 +1434,8 @@ const debitNotePermission = usePermission("VOUCHERS", "DEBIT_NOTE");
     ========================================================= */
 
   const openMyReportsPage = () => {
+    setSidebarCollapsed(true);
+    setExpandedNavMenu(null);
     setActiveMenu("reports");
     setActiveSubMenu("My Reports");
 
@@ -2897,7 +2946,7 @@ const debitNotePermission = usePermission("VOUCHERS", "DEBIT_NOTE");
                       ${escapeInvoiceHtml(
           salesPrintOptions.loadNo || ""
         )}
-                      · ${invoicePayloads.length} invoice(s)
+                      Â· ${invoicePayloads.length} invoice(s)
                     </div>
                   </div>
 
@@ -3047,7 +3096,14 @@ const debitNotePermission = usePermission("VOUCHERS", "DEBIT_NOTE");
     try {
       setSalesPrintPreparing(true);
 
-      const savedPrintDetails = await savePrintAccountDetails();
+      const savedPrintDetails = await savePrintAccountDetails({
+        outputSettingsOverride: {
+          reportNumber: selectedReportNumber,
+          paperSize: selectedPaper.value,
+          orientation: selectedPaper.orientation,
+          fontSizePercent: Math.min(150, Math.max(80, Number(salesPrintOptions.fontSizePercent) || 150)),
+        },
+      });
       if (!savedPrintDetails) {
         throw new Error("Print settings could not be saved.");
       }
@@ -3064,6 +3120,9 @@ const debitNotePermission = usePermission("VOUCHERS", "DEBIT_NOTE");
 
         orientation:
           selectedPaper.orientation,
+
+        fontSizePercent:
+          salesPrintOptions.fontSizePercent,
 
         includeButtons:
           action === "preview",
@@ -3378,6 +3437,21 @@ const debitNotePermission = usePermission("VOUCHERS", "DEBIT_NOTE");
         getInvoiceValue(item, ["qty", "Qty", "quantity"], 0)
       );
 
+      const unit = String(
+        getInvoiceValue(item, ["unit", "units", "basicUnit", "Unit"], "PCS")
+      ).trim().toUpperCase();
+
+      const pack = Number(
+        getInvoiceValue(
+          item,
+          ["pack", "Pack", "packing", "Packing", "packSize", "PackSize", "boxPack", "BoxPack", "unitQty", "UnitQty"],
+          1
+        )
+      ) || 1;
+
+      // Rates are saved per basic piece. BOX quantities must include boxPack.
+      const rateQuantity = unit === "BOX" ? qty * pack : qty;
+
       const rate = Number(
         getInvoiceValue(item, ["rate", "Rate", "salesRate"], 0)
       );
@@ -3398,15 +3472,19 @@ const debitNotePermission = usePermission("VOUCHERS", "DEBIT_NOTE");
         )
       );
 
-      const grossAmount = Number(
+      const storedGrossAmount = Number(
         getInvoiceValue(
           item,
           ["grossAmount", "GrossAmount", "gross"],
-          qty * rate
+          rateQuantity * rate
         )
       );
 
-      const taxableAmount = Number(
+      const grossAmount = unit === "BOX"
+        ? rateQuantity * rate
+        : storedGrossAmount;
+
+      const storedTaxableAmount = Number(
         getInvoiceValue(
           item,
           ["taxableAmount", "taxable", "TaxableAmount"],
@@ -3414,7 +3492,11 @@ const debitNotePermission = usePermission("VOUCHERS", "DEBIT_NOTE");
         )
       );
 
-      const cgstAmount = Number(
+      const taxableAmount = unit === "BOX"
+        ? grossAmount - schemeAmount - cashDiscountAmount
+        : storedTaxableAmount;
+
+      let cgstAmount = Number(
         getInvoiceValue(
           item,
           [
@@ -3431,7 +3513,7 @@ const debitNotePermission = usePermission("VOUCHERS", "DEBIT_NOTE");
         )
       );
 
-      const sgstAmount = Number(
+      let sgstAmount = Number(
         getInvoiceValue(
           item,
           [
@@ -3448,7 +3530,7 @@ const debitNotePermission = usePermission("VOUCHERS", "DEBIT_NOTE");
         )
       );
 
-      const igstAmount = Number(
+      let igstAmount = Number(
         getInvoiceValue(
           item,
           [
@@ -3464,6 +3546,22 @@ const debitNotePermission = usePermission("VOUCHERS", "DEBIT_NOTE");
           0
         )
       );
+
+      if (unit === "BOX") {
+        const gstPercent = Number(
+          getInvoiceValue(
+            item,
+            ["gst", "gstPercent", "GSTPercent"],
+            Number(getInvoiceValue(item, ["igstPercent", "IGSTPercent"], 0)) ||
+            Number(getInvoiceValue(item, ["cgstPercent", "CGSTPercent"], 0)) +
+            Number(getInvoiceValue(item, ["sgstPercent", "SGSTPercent"], 0))
+          )
+        );
+        const usesIgst = igstAmount > 0 && cgstAmount === 0 && sgstAmount === 0;
+        igstAmount = usesIgst ? taxableAmount * gstPercent / 100 : 0;
+        cgstAmount = usesIgst ? 0 : taxableAmount * gstPercent / 200;
+        sgstAmount = usesIgst ? 0 : taxableAmount * gstPercent / 200;
+      }
 
       return {
         srNo: index + 1,
@@ -3482,6 +3580,14 @@ const debitNotePermission = usePermission("VOUCHERS", "DEBIT_NOTE");
           "product",
         ]),
 
+        batch: getInvoiceValue(item, [
+          "batch",
+          "batchNo",
+          "Batch",
+          "BatchNo",
+          "batchNumber",
+        ], "*"),
+
         hsn: getInvoiceValue(item, [
           "hsn",
           "hsnCode",
@@ -3493,28 +3599,9 @@ const debitNotePermission = usePermission("VOUCHERS", "DEBIT_NOTE");
           getInvoiceValue(item, ["mrp", "MRP"], 0)
         ),
 
-        unit: getInvoiceValue(
-          item,
-          ["unit", "units", "basicUnit", "Unit"],
-          "PCS"
-        ),
+        unit,
 
-        pack: getInvoiceValue(
-          item,
-          [
-            "pack",
-            "Pack",
-            "packing",
-            "Packing",
-            "packSize",
-            "PackSize",
-            "boxPack",
-            "BoxPack",
-            "unitQty",
-            "UnitQty",
-          ],
-          "-"
-        ),
+        pack,
 
         qty,
 
@@ -3610,25 +3697,15 @@ const debitNotePermission = usePermission("VOUCHERS", "DEBIT_NOTE");
 
         igstAmount,
 
-        netAmount: Number(
-          getInvoiceValue(
-            item,
-            [
-              "netAmount",
-              "NetAmount",
-              "netAmt",
-              "NetAmt",
-              "lineNetAmount",
-              "LineNetAmount",
-              "amount",
-              "Amount",
-            ],
-            taxableAmount +
-            cgstAmount +
-            sgstAmount +
-            igstAmount
-          )
-        ),
+        netAmount: unit === "BOX"
+          ? taxableAmount + cgstAmount + sgstAmount + igstAmount
+          : Number(
+            getInvoiceValue(
+              item,
+              ["netAmount", "NetAmount", "netAmt", "NetAmt", "lineNetAmount", "LineNetAmount", "amount", "Amount"],
+              taxableAmount + cgstAmount + sgstAmount + igstAmount
+            )
+          ),
       };
     });
 
@@ -3651,6 +3728,7 @@ const debitNotePermission = usePermission("VOUCHERS", "DEBIT_NOTE");
       layout = "REPORT_1",
       paperSize = "A4",
       orientation = "portrait",
+      fontSizePercent = 150,
       includeButtons = true,
       copies = 1,
       showScheme = true,
@@ -3683,6 +3761,11 @@ const debitNotePermission = usePermission("VOUCHERS", "DEBIT_NOTE");
 
     const isA5 =
       normalizedPaperSize === "A5";
+
+    const normalizedFontSizePercent = Math.min(
+      150,
+      Math.max(80, Number(fontSizePercent) || 150)
+    );
 
     const pageClass = [
       "invoice-page",
@@ -3780,11 +3863,9 @@ const debitNotePermission = usePermission("VOUCHERS", "DEBIT_NOTE");
       "TAX-INVOICE"
     );
 
-    const grossAmount = safeNumber(
-      readBillValue(
-        ["GrossAmount", "grossAmount"],
-        items.reduce((sum, item) => sum + safeNumber(item.grossAmount), 0)
-      )
+    // Print from invoice lines, not header balances later changed by credit notes.
+    const grossAmount = items.reduce(
+      (sum, item) => sum + safeNumber(item.grossAmount), 0
     );
 
     const schemeAmount = safeNumber(
@@ -3828,32 +3909,20 @@ const debitNotePermission = usePermission("VOUCHERS", "DEBIT_NOTE");
       readBillValue(["CouponAmount", "couponAmount"], 0)
     );
 
-    const taxableValue = safeNumber(
-      readBillValue(
-        ["TaxableValue", "taxableValue"],
-        items.reduce((sum, item) => sum + safeNumber(item.taxableAmount), 0)
-      )
+    const taxableValue = items.reduce(
+      (sum, item) => sum + safeNumber(item.taxableAmount), 0
     );
 
-    const cgstAmount = safeNumber(
-      readBillValue(
-        ["CGSTAmount", "cgstAmount"],
-        items.reduce((sum, item) => sum + safeNumber(item.cgstAmount), 0)
-      )
+    const cgstAmount = items.reduce(
+      (sum, item) => sum + safeNumber(item.cgstAmount), 0
     );
 
-    const sgstAmount = safeNumber(
-      readBillValue(
-        ["SGSTAmount", "sgstAmount"],
-        items.reduce((sum, item) => sum + safeNumber(item.sgstAmount), 0)
-      )
+    const sgstAmount = items.reduce(
+      (sum, item) => sum + safeNumber(item.sgstAmount), 0
     );
 
-    const igstAmount = safeNumber(
-      readBillValue(
-        ["IGSTAmount", "igstAmount"],
-        items.reduce((sum, item) => sum + safeNumber(item.igstAmount), 0)
-      )
+    const igstAmount = items.reduce(
+      (sum, item) => sum + safeNumber(item.igstAmount), 0
     );
 
     const tcsAmount = safeNumber(
@@ -3871,18 +3940,9 @@ const debitNotePermission = usePermission("VOUCHERS", "DEBIT_NOTE");
       readBillValue(["AddLessAmount", "addLessAmount"], 0)
     );
 
-    const netAmount = safeNumber(
-      readBillValue(
-        ["NetAmount", "netAmount"],
-        taxableValue +
-        cgstAmount +
-        sgstAmount +
-        igstAmount +
-        tcsAmount +
-        addLessAmount +
-        roundingAmount
-      )
-    );
+    const netAmount = items.reduce(
+      (sum, item) => sum + safeNumber(item.netAmount), 0
+    ) + tcsAmount + addLessAmount + roundingAmount;
     const goodsReturnAmount = safeNumber(
       readBillValue(
         [
@@ -3911,10 +3971,7 @@ const debitNotePermission = usePermission("VOUCHERS", "DEBIT_NOTE");
 
     const totalSchemeCash = schemeAmount + cashDiscountAmount;
     const totalCnStarDis =
-      starDiscountAmount +
-      creditNoteAmount +
-      displayAmount +
-      couponAmount;
+      starDiscountAmount + displayAmount + couponAmount;
 
     const amountInWords =
       typeof convertAmountToWords === "function"
@@ -4109,7 +4166,10 @@ const debitNotePermission = usePermission("VOUCHERS", "DEBIT_NOTE");
     const termsAndConditions = String(
       printAccountDetails?.termsAndConditions || defaultTermsAndConditions
     ).trim();
-    const termsAndConditionsHtml = text(termsAndConditions).replace(/\r?\n/g, "<br>");
+    const termsAndConditionsHtml = text(termsAndConditions).replace(
+      /\r?\n/g,
+      normalizedReportNumber === "1" ? " &nbsp; | &nbsp; " : "<br>"
+    );
 
     const bankBranch = hasSavedPrintAccount ? "" : getInvoiceValue(
       bank,
@@ -4128,7 +4188,7 @@ const debitNotePermission = usePermission("VOUCHERS", "DEBIT_NOTE");
       (sum, item) => sum + safeNumber(item.qty),
       0
     );
-    const emptyRowCount = 0;
+    const emptyRowCount = Math.max(0, 7 - visibleItems.length);
 
     const taxSummary = Array.from(
       visibleItems.reduce((summaryMap, item) => {
@@ -4221,8 +4281,124 @@ const debitNotePermission = usePermission("VOUCHERS", "DEBIT_NOTE");
       )
       .join("");
 
-    const oneInvoice = (copyNumber) => `
-      <main class="${pageClass}">
+    const reportTwoItemRows = visibleItems.map((item, index) => `
+      <tr><td class="center">${index + 1}</td><td class="r2-product">${text(item.productName)}</td>
+      <td class="center">${text(item.hsn)}</td><td class="number">${money(item.mrp || item.MRP)}</td>
+      <td class="number strong">${qty(item.qty)}</td><td class="number">${qty(item.free)}</td>
+      <td class="number">${money(item.rate)}</td><td class="number">${money(item.taxableAmount)}</td>
+      <td class="number">${percent(safeNumber(item.igstPercent) || safeNumber(item.cgstPercent) + safeNumber(item.sgstPercent))}</td>
+      <td class="number">${money(safeNumber(item.cgstAmount) + safeNumber(item.sgstAmount) + safeNumber(item.igstAmount))}</td>
+      <td class="number strong">${money(item.netAmount)}</td></tr>`).join("");
+
+    const reportTwoTaxRows = taxSummary.map((row) => `
+      <tr><td>${money(row.gstPercent / 2)}</td><td>${money(row.cgstAmount)}</td><td>${money(row.gstPercent / 2)}</td>
+      <td>${money(row.sgstAmount)}</td><td>${money(row.taxableValue)}</td></tr>`).join("");
+
+    const reportThreeItemRows = visibleItems.map((item) => `
+      <tr>
+        <td class="r3-product">${text(item.productName)}</td>
+        <td class="center">${text(item.hsn)}</td>
+        <td class="number">${money(item.mrp || item.MRP)}</td>
+        <td class="center">${qty(item.qty)} ${text(item.unit, "")}</td>
+        <td class="number">${qty(item.free)}</td>
+        <td class="number">${money(item.rate)}</td>
+        <td class="number">${money(item.grossAmount)}</td>
+        <td class="number">${showScheme ? money(item.schemeAmount) : "-"}</td>
+        <td class="number">${money(item.taxableAmount)}</td>
+        <td class="number">${percent(item.sgstPercent)}</td>
+        <td class="number">${money(item.sgstAmount)}</td>
+        <td class="number">${percent(item.cgstPercent)}</td>
+        <td class="number">${money(item.cgstAmount)}</td>
+        <td class="number strong">${money(item.netAmount)}</td>
+      </tr>`).join("");
+
+    const reportTwoInvoice = (copyNumber) => `
+      <main class="${pageClass}" style="--r2-font-scale:${normalizedFontSizePercent / 100}">
+        ${copies > 1 ? `<div class="copy-label">COPY ${copyNumber} OF ${copies}</div>` : ""}
+        <section class="r2-header">
+          <div class="r2-from"><b>From:</b><strong>${text(firmName)}</strong>${joinAddress(firmAddressLines)}<div>Pin : &nbsp; ${text(getInvoiceValue(firm, ["pinCode", "PinCode", "pin", "Pin"]))} &nbsp;&nbsp; | Ph : &nbsp; ${text(firmPhone)}</div></div>
+          <div class="r2-to"><b>To:</b><strong>${text(partyName)}</strong>${joinAddress(partyAddressLines)}<div>PH : &nbsp; ${text(partyPhone || partyMobile)}</div></div>
+          <div class="r2-invoice"><h1>Tax Invoice</h1><div class="r2-page-no">Page 1 of 1</div><div><span>Inv No</span><b>:</b><strong>${text(billNo)}</strong></div><div><span>Inv Date</span><b>:</b><span>${text(formatInvoiceDate(billDate))}</span></div><div><span>Dl. Date</span><b>:</b><span>${text(formatInvoiceDate(readBillValue(["DeliveryDate", "deliveryDate", "DlDate"])))}</span></div><div><span>SM Name</span><b>:</b><span>${text(salesmanName)}</span></div><div><span>SM Ph</span><b>:</b><span>${text(salesmanMobile)}</span></div></div>
+        </section>
+        <section class="r2-registrations"><div><b>GSTIN:</b> ${text(firmGstNo)} &nbsp;&nbsp; PAN : ${text(firmPanNo)}<br><span>FSSAI NO: ${text(firmFoodLicence)}</span></div><div><b>GSTIN :</b> ${text(partyGstNo)} &nbsp;&nbsp; IRN<br><span>RT Name : &nbsp; ${text(areaName)}</span></div></section>
+        <section class="r2-items"><table><colgroup><col style="width:4%"><col style="width:26%"><col style="width:9%"><col style="width:8%"><col style="width:5%"><col style="width:5%"><col style="width:8%"><col style="width:10%"><col style="width:6%"><col style="width:9%"><col style="width:10%"></colgroup><thead><tr><th>Sr No</th><th>Product Name</th><th>HSN<br>Code</th><th>MRP</th><th>Qty</th><th>Free</th><th>Rate</th><th>Taxable</th><th>GST<br>%</th><th>GST<br>Amt</th><th>Net<br>Amount</th></tr></thead><tbody>${reportTwoItemRows}</tbody></table></section>
+        <section class="r2-bottom"><div class="r2-tax"><table><thead><tr><th colspan="2">** CGST **</th><th colspan="2">** SGST **</th><th></th></tr><tr><th>TAX %</th><th>TAX Amt</th><th>TAX%</th><th>Tax Amt</th><th>Taxable Amt</th></tr></thead><tbody>${reportTwoTaxRows}</tbody></table></div>
+          <div class="r2-adjustments"><div>Spl Disc <b>:</b><span>${money(starDiscountAmount)}</span></div><div>Sch <b>:</b><span>${money(schemeAmount)}</span></div><div>Sec Sch / Display <b>:</b><span>${money(displayAmount)}</span></div><div>Other Disc <b>:</b><span>${money(couponAmount)}</span></div><div>CD <b>:</b><span>${money(cashDiscountAmount)}</span></div><div>Total Units (pcs) <b>:</b><span>${qty(totalItemQuantity)}</span></div><div>Round Off <b>:</b><span>${money(roundingAmount)}</span></div></div>
+          <div class="r2-totals"><div>Gross Amt <b>:</b><strong>${money(grossAmount)}</strong></div><div>Discount Amt <b>:</b><span>${money(totalSchemeCash + totalCnStarDis)}</span></div><div>Total Tax <b>:</b><span>${money(cgstAmount + sgstAmount + igstAmount)}</span></div><div>Credit Note Amt <b>:</b><span>${money(creditNoteAmount)}</span></div><div><strong>Net Amt</strong> <b>:</b><strong>${money(netAmount)}</strong></div><div>Program Payout <b>:</b><span>0.00</span></div><div>TCS Amt <b>:</b><span>${money(tcsAmount)}</span></div><div><strong>Receivable Amt</strong> <b>:</b><strong>${money(netAmount - creditNoteAmount)}</strong></div></div></section>
+        <footer class="r2-footer">
+          <div>Amt in Words : &nbsp;&nbsp; ${text(amountInWords, "Zero Only")}</div>
+          <strong>For ${text(firmName)}</strong>
+          ${showDeclaration && termsAndConditions
+            ? `<div class="r2-terms"><b>Terms &amp; Conditions:</b> ${text(termsAndConditions).replace(/\r?\n/g, " &nbsp; | &nbsp; ")}</div>`
+            : ""
+          }
+        </footer>
+      </main>`;
+
+    const reportThreeInvoice = (copyNumber) => `
+      <main class="${pageClass}" style="--r3-font-scale:${normalizedFontSizePercent / 100}">
+        ${copies > 1 ? `<div class="copy-label">COPY ${copyNumber} OF ${copies}</div>` : ""}
+        <section class="r3-header">
+          <div class="r3-details">
+            <div><span>Name :</span><strong>${text(firmName)}</strong></div>
+            <div><span>Address :</span><p>${joinAddress(firmAddressLines)}</p></div>
+            <div><span>Contact No :</span><b>${text(firmPhone || firmMobile)}</b></div>
+            <div><span>State Code :</span><b>${text(firmStateCode)}</b></div>
+            <div><span>GSTIN</span><b>${text(firmGstNo)}</b></div>
+            <div><span>Food Licences :</span><b>${text(firmFoodLicence)}</b></div>
+            <div><span>PAN :</span><b>${text(firmPanNo)}</b></div>
+          </div>
+          <div class="r3-invoice-meta">
+            <h1>GST Invoice</h1>
+            <div><span>Invoice No:</span><b>${text(`${billSeries || ""}${billNo || ""}`)}</b></div>
+            <div><span>Date :</span><b>${text(formatInvoiceDate(billDate))}</b></div>
+            <p>Page 1 of 1</p>
+          </div>
+          <div class="r3-details r3-customer">
+            <div><span>Name</span><strong>${text(partyName)}</strong></div>
+            <div><span>Address</span><p>${joinAddress(partyAddressLines)}</p></div>
+            <div><span>Contact No :</span><b>${text(partyPhone || partyMobile)}</b></div>
+            <div><span>State Code :</span><b>${text(partyStateCode)}</b></div>
+            <div><span>GSTIN</span><b>${text(partyGstNo)}</b></div>
+            <div><span>PAN :</span><b>${text(getInvoiceValue(party, ["panNo", "PANNo", "pan", "PAN"]))}</b></div>
+            <div><span>Food Licences :</span><b>${text(partyFoodLicence)}</b></div>
+          </div>
+        </section>
+        <section class="r3-items">
+          <table><colgroup><col style="width:17%"><col style="width:8%"><col style="width:5%"><col style="width:7%"><col style="width:5%"><col style="width:7%"><col style="width:8%"><col style="width:6%"><col style="width:8%"><col style="width:5%"><col style="width:6%"><col style="width:5%"><col style="width:6%"><col style="width:7%"></colgroup>
+            <thead><tr><th>Product Name</th><th>HSN</th><th>MRP</th><th>Qty</th><th>Free</th><th>Rate</th><th>Gross<br>Amt</th><th>Sch<br>Dis</th><th>Taxable</th><th>SGST<br>%</th><th>SGST<br>Amt</th><th>CGST<br>%</th><th>CGST<br>Amt</th><th>Total</th></tr></thead>
+            <tbody>${reportThreeItemRows}</tbody>
+          </table>
+        </section>
+        <footer class="r3-footer">
+          <div class="r3-qr">${showBankDetails && bankQrCode ? `<img src="${escapeInvoiceHtml(bankQrCode)}" alt="Payment QR code">` : ""}</div>
+          <div class="r3-notes">
+            <div class="r3-adjustments">
+              <div><span>Scheme Amt</span><b>${money(schemeAmount)}</b></div>
+              <div><span>Sales Return</span><b>${money(goodsReturnAmount)}</b></div>
+              <div><span>Cash Disc</span><b>${money(cashDiscountAmount)}</b></div>
+              <div><span>Display</span><b>${money(displayAmount)}</b></div>
+            </div>
+            ${showBankDetails ? `<div class="r3-bank"><strong>Bank Details</strong><span>${text(bankName)}</span><br><strong>A/C No.</strong><span>${text(bankAccountNo)}</span><strong>IFSC</strong><span>${text(bankIfsc)}</span></div>` : ""}
+            ${showDeclaration ? `<div class="r3-terms">${termsAndConditionsHtml}</div>` : ""}
+          </div>
+          <div class="r3-totals">
+            <div><span>Gross Amt</span><b>${money(grossAmount)}</b></div>
+            <div><span>Total Discount</span><b>${money(totalSchemeCash + totalCnStarDis)}</b></div>
+            <div><span>Total GST</span><b>${money(cgstAmount + sgstAmount + igstAmount)}</b></div>
+            <div><span>Cess Amount</span><b>0.00</b></div>
+            <div class="r3-net"><strong>Net Payable</strong><strong>${money(netAmount)}</strong></div>
+            <p>FOR &nbsp;&nbsp;&nbsp; ${text(firmName)}</p>
+          </div>
+        </footer>
+      </main>`;
+
+    const oneInvoice = (copyNumber) => normalizedReportNumber === "2"
+      ? reportTwoInvoice(copyNumber)
+      : normalizedReportNumber === "3"
+        ? reportThreeInvoice(copyNumber)
+        : `
+      <main class="${pageClass}" style="--invoice-font-scale:${normalizedFontSizePercent / 100}">
         ${copies > 1
         ? `<div class="copy-label">COPY ${copyNumber} OF ${copies}</div>`
         : ""
@@ -4379,43 +4555,6 @@ const debitNotePermission = usePermission("VOUCHERS", "DEBIT_NOTE");
                 <strong>${text(amountInWords, "Zero Only")}</strong>
               </div>
 
-              ${showBankDetails && (bankName || bankAccountName || bankAccountNo || bankIfsc || bankQrCode)
-        ? `
-                    <div class="footer-section bank-details">
-                      <div class="bank-details-content">
-                      <div class="footer-section-heading">Bank Details</div>
-                      <div class="footer-detail-row"><span>Bank Name</span><b>:</b><span>${text(bankName)}</span></div>
-                      <div class="footer-detail-row"><span>A/C Name</span><b>:</b><span>${text(bankAccountName)}</span></div>
-                      <div class="footer-detail-row"><span>A/C No.</span><b>:</b><span>${text(bankAccountNo)}</span></div>
-                      <div class="footer-detail-row"><span>IFSC Code</span><b>:</b><span>${text(bankIfsc)}</span></div>
-                      ${bankBranch
-          ? `<div class="footer-detail-row"><span>Branch</span><b>:</b><span>${text(bankBranch)}</span></div>`
-          : ""
-        }
-                      ${bankAccountType
-          ? `<div class="footer-detail-row"><span>A/C Type</span><b>:</b><span>${text(bankAccountType)}</span></div>`
-          : ""
-        }
-                      ${showDeclaration && termsAndConditions
-          ? `<div class="terms-section"><div class="footer-section-heading">Terms &amp; Conditions</div><div>${termsAndConditionsHtml}</div></div>`
-          : ""
-        }
-                      </div>
-                      ${bankQrCode ? `<img class="bank-qr-code" src="${bankQrCode}" alt="Payment QR code" />` : ""}
-                    </div>
-                  `
-        : ""
-      }
-
-              ${showDeclaration && termsAndConditions && !(showBankDetails && (bankName || bankAccountName || bankAccountNo || bankIfsc || bankQrCode))
-        ? `
-                    <div class="footer-section terms-section">
-                      <div class="footer-section-heading">Terms &amp; Conditions</div>
-                      <div>${termsAndConditionsHtml}</div>
-                    </div>
-                  `
-        : ""
-      }
             </div>
 
             <div class="footer-tax-column">
@@ -4485,6 +4624,29 @@ const debitNotePermission = usePermission("VOUCHERS", "DEBIT_NOTE");
             </div>
           </div>
 
+          ${showBankDetails && (bankName || bankAccountName || bankAccountNo || bankIfsc || bankQrCode)
+        ? `
+              <div class="footer-section bank-details format-one-bank-details">
+                <div class="bank-details-content">
+                  <div class="footer-section-heading">Bank Details</div>
+                  <div class="footer-detail-row"><span>Bank Name</span><b>:</b><span>${text(bankName)}</span></div>
+                  <div class="footer-detail-row"><span>A/C Name</span><b>:</b><span>${text(bankAccountName)}</span></div>
+                  <div class="footer-detail-row"><span>A/C No.</span><b>:</b><span>${text(bankAccountNo)}</span></div>
+                  <div class="footer-detail-row"><span>IFSC Code</span><b>:</b><span>${text(bankIfsc)}</span></div>
+                  ${bankBranch ? `<div class="footer-detail-row"><span>Branch</span><b>:</b><span>${text(bankBranch)}</span></div>` : ""}
+                  ${bankAccountType ? `<div class="footer-detail-row"><span>A/C Type</span><b>:</b><span>${text(bankAccountType)}</span></div>` : ""}
+                </div>
+                ${bankQrCode ? `<img class="bank-qr-code" src="${bankQrCode}" alt="Payment QR code" />` : ""}
+              </div>
+            `
+        : ""
+      }
+
+          ${showDeclaration && termsAndConditions
+        ? `<div class="format-one-terms"><b>Terms &amp; Conditions:</b> <span>${termsAndConditionsHtml}</span></div>`
+        : ""
+      }
+
           <div class="invoice-footer-closing">
             <span></span>
             <strong>Thank You! &nbsp; Visit Again !!!</strong>
@@ -4517,7 +4679,7 @@ const debitNotePermission = usePermission("VOUCHERS", "DEBIT_NOTE");
 
           <style>
             @page {
-    size: ${normalizedPaperSize} ${normalizedOrientation};
+    size: ${normalizedPaperSize} ${normalizedReportNumber === "3" ? "landscape" : normalizedOrientation};
     margin: ${isA5 ? "5mm" : "7mm"};
   }
 
@@ -4594,11 +4756,11 @@ const debitNotePermission = usePermission("VOUCHERS", "DEBIT_NOTE");
 
   /*
   * Full A4 portrait printable area.
-  * 210mm × 297mm paper minus print margins.
+  * 210mm Ã— 297mm paper minus print margins.
   */
   /*
   * A4 Portrait:
-  * Paper size 210mm × 297mm.
+  * Paper size 210mm Ã— 297mm.
   */
   .invoice-a4 {
     width: 196mm;
@@ -4609,7 +4771,7 @@ const debitNotePermission = usePermission("VOUCHERS", "DEBIT_NOTE");
 
   /*
   * A5 Landscape:
-  * Paper size 210mm × 148mm.
+  * Paper size 210mm Ã— 148mm.
   * The same report design is fitted to the complete A5 landscape page.
   */
   .invoice-a5 {
@@ -4986,6 +5148,7 @@ const debitNotePermission = usePermission("VOUCHERS", "DEBIT_NOTE");
               justify-content: flex-end;
               align-items: flex-end;
               min-height: 14mm;
+              margin-top: auto;
               padding-top: 4mm;
             }
 
@@ -5046,12 +5209,279 @@ const debitNotePermission = usePermission("VOUCHERS", "DEBIT_NOTE");
             .invoice-a5 .grand-total-row { font-size: 8px; }
             .invoice-a5 .invoice-footer-closing { font-size: 7px; }
 
+            /* Format 1 / A5: one-line bank and terms leave room for more items. */
+            .invoice-a5.invoice-report-1 .invoice-footer-summary-grid { min-height: 24mm; }
+            .invoice-a5.invoice-report-1 .bank-qr-code { width: 20mm; height: 20mm; }
+
+            /* Format 1 / A4: bank and terms stay horizontal, with protected
+               columns for tax and seven-digit invoice totals. */
+            .invoice-a4.invoice-report-1 .invoice-footer-summary-grid {
+              grid-template-columns: 35% 39% 26%;
+              column-gap: 0;
+            }
+            .invoice-a4.invoice-report-1 .tax-summary-table {
+              width: 100%;
+              font-size: 8px;
+              table-layout: fixed;
+            }
+            .invoice-a4.invoice-report-1 .tax-summary-table th,
+            .invoice-a4.invoice-report-1 .tax-summary-table td {
+              padding: .35mm .2mm;
+              font-size: 8px;
+              white-space: normal;
+            }
+            .invoice-a4.invoice-report-1 .tax-summary-table td { white-space: nowrap; }
+            .invoice-a4.invoice-report-1 .footer-total-row {
+              grid-template-columns: minmax(0, 1fr) 2mm 28mm;
+              min-height: 3.2mm;
+              font-size: 9px;
+            }
+            .invoice-a4.invoice-report-1 .grand-total-row {
+              grid-template-columns: minmax(0, 1fr) 2mm 30mm;
+              font-size: 10px;
+            }
+            .invoice-report-1 .crystal-table td.number { white-space: nowrap; }
+
+            /* Report 1 uses the same saved font scale as Report 2. */
+            .invoice-a4.invoice-report-1 { font-size: calc(10px * var(--invoice-font-scale, 1.5)); }
+            .invoice-a5.invoice-report-1 { font-size: calc(8px * var(--invoice-font-scale, 1.5)); }
+            .invoice-report-1 .firm-name { font-size: 1.5em; }
+            .invoice-report-1 .tax-heading { font-size: 1.3em; }
+            .invoice-report-1 .party-heading { font-size: .9em; }
+            .invoice-report-1 .party-name { font-size: 1em; }
+            .invoice-report-1 .crystal-table th,
+            .invoice-report-1 .crystal-table td { font-size: .8em; }
+            .invoice-a4.invoice-report-1 .crystal-table th,
+            .invoice-a4.invoice-report-1 .crystal-table td { font-size: 11px; }
+            .invoice-a5.invoice-report-1 .crystal-table th,
+            .invoice-a5.invoice-report-1 .crystal-table td { font-size: 9.5px; }
+            .invoice-report-1 .invoice-quick-totals { font-size: .8em; }
+            .invoice-report-1 .invoice-bottom { font-size: calc(8px * var(--invoice-font-scale, 1.5)); }
+            .invoice-report-1 .footer-detail-row,
+            .invoice-report-1 .footer-total-row,
+            .invoice-report-1 .format-one-terms,
+            .invoice-report-1 .tax-summary-table { font-size: inherit; line-height: 1.35; }
+            .invoice-report-1 .footer-detail-row,
+            .invoice-report-1 .footer-total-row { min-height: 4mm; }
+            .invoice-report-1 .grand-total-row { font-size: 1.1em; }
+            .invoice-report-1 .invoice-footer-closing { font-size: 1em; }
+            .invoice-report-1 .format-one-terms {
+              width: 100%;
+              min-width: 0;
+              margin-top: .5mm;
+              padding: .7mm 1.5mm 0;
+              white-space: normal;
+              overflow-wrap: break-word;
+              word-break: normal;
+            }
+            .invoice-report-1 .format-one-terms b { white-space: nowrap; }
+            .invoice-report-1 .footer-tax-column {
+              display: flex;
+              flex-direction: column;
+            }
+            .invoice-report-1 .format-one-bank-details {
+              display: flex;
+              align-items: center;
+              gap: 2mm;
+              width: 100%;
+              margin: .5mm 0 0;
+              padding: .7mm 1.5mm 0;
+            }
+            .invoice-report-1 .format-one-bank-details .bank-details-content {
+              display: flex;
+              flex: 1 1 auto;
+              align-items: baseline;
+              gap: 2.5mm;
+              min-width: 0;
+              white-space: nowrap;
+            }
+            .invoice-report-1 .format-one-bank-details .footer-section-heading {
+              flex: 0 0 auto;
+              margin: 0;
+            }
+            .invoice-report-1 .format-one-bank-details .footer-detail-row {
+              display: inline-flex;
+              gap: .5mm;
+              min-height: 0;
+              padding: 0;
+              white-space: nowrap;
+            }
+            .invoice-report-1 .format-one-bank-details .bank-qr-code {
+              flex: 0 0 auto;
+              grid-column: auto;
+              grid-row: auto;
+              transform: none;
+            }
+            .invoice-a5.invoice-report-1 .format-one-terms {
+              margin-top: .3mm;
+              padding: .4mm 1mm 0;
+              line-height: 1.2;
+            }
+            .invoice-a5.invoice-report-1 .format-one-bank-details {
+              gap: 1.2mm;
+              margin-top: .3mm;
+              padding: .4mm 1mm 0;
+            }
+            .invoice-a5.invoice-report-1 .format-one-bank-details .bank-details-content {
+              justify-content: space-between;
+              gap: 1.2mm;
+            }
+
+            /* Report 2: compact dot-matrix style tax invoice. */
+            .invoice-report-2 { font-family: Arial, Helvetica, sans-serif; padding: 3mm 4mm; font-size: calc(7.5px * var(--r2-font-scale, 1)); line-height: 1.25; }
+            .invoice-report-2, .invoice-report-2 * { font-family: Arial, Helvetica, sans-serif !important; }
+            .r2-header { display: grid; grid-template-columns: 35% 36% 29%; min-height: 34mm; padding: 0 2mm 1mm; }
+            .r2-from, .r2-to { display: flex; flex-direction: column; gap: .7mm; padding-right: 3mm; }
+            .r2-from > strong, .r2-to > strong { font-size: 1.08em; text-transform: uppercase; }
+            .r2-invoice { position: relative; padding-left: 2mm; }
+            .r2-invoice h1 { margin: 0 18mm 1.2mm 0; text-align: center; font-size: 2em; line-height: 1; white-space: nowrap; }
+            .r2-page-no { position: absolute; top: .5mm; right: 0; font-size: .8em; white-space: nowrap; }
+            .r2-invoice > div:not(.r2-page-no) { display: grid; grid-template-columns: 15mm 2mm 1fr; min-height: 3.7mm; }
+            .r2-registrations { display: grid; grid-template-columns: 35% 65%; min-height: 12mm; padding: 1mm 2mm; border-bottom: 1px dashed #333; line-height: 1.8; }
+            .r2-registrations > div:last-child { padding-left: 2mm; }
+            .r2-items { min-height: 58mm; border-bottom: 1px dashed #333; }
+            .r2-items table, .r2-tax table { width: 100%; border-collapse: collapse; table-layout: fixed; }
+            .r2-items th { height: 10mm; padding: .5mm .35mm; border-bottom: 1px dashed #333; font-size: 1em; font-weight: 400; text-align: center; vertical-align: middle; }
+            .r2-items td { height: 4.2mm; padding: .45mm .5mm; overflow: hidden; text-overflow: ellipsis; text-align: right; vertical-align: top; white-space: nowrap; font-variant-numeric: tabular-nums; }
+            .r2-items td.center { text-align: center !important; }
+            .r2-items .r2-product { padding-left: 1mm; text-align: left !important; white-space: normal; overflow-wrap: anywhere; line-height: 1.2; }
+            .r2-bottom { display: grid; grid-template-columns: 47% 25% 28%; min-height: 37mm; padding: 1mm 2mm 0; }
+            .r2-tax { padding-right: 5mm; }
+            .r2-tax th, .r2-tax td { height: 4mm; padding: .25mm .6mm; text-align: right; font-weight: 400; }
+            .r2-tax thead th { border-bottom: 1px dashed #555; font-weight: 700; text-align: center; }
+            .r2-adjustments, .r2-totals { padding-left: 2mm; }
+            .r2-adjustments > div, .r2-totals > div { display: grid; grid-template-columns: 1fr 2mm 18mm; min-height: 4mm; }
+            .r2-adjustments span, .r2-totals span, .r2-totals strong:last-child { text-align: right; font-variant-numeric: tabular-nums; }
+            .r2-footer { display: grid; grid-template-columns: 1fr 36%; align-items: center; min-height: 8mm; padding: 1mm 2mm 0; border-top: 1px dashed #333; }
+            .r2-footer > strong { text-align: center; }
+            .r2-terms {
+              grid-column: 1 / -1;
+              min-width: 0;
+              padding-top: .8mm;
+              white-space: normal;
+              overflow-wrap: anywhere;
+              line-height: 1.3;
+            }
+            .invoice-a4.invoice-report-2 .r2-items { min-height: 139mm; }
+            .invoice-a4.invoice-report-2 .r2-bottom { min-height: 55mm; align-items: start; padding-bottom: 2mm; }
+            .invoice-a5.invoice-report-2 { font-size: calc(7px * var(--r2-font-scale, 1)); }
+            .invoice-a5.invoice-report-2 .r2-header { min-height: 25mm; }
+            .invoice-a5.invoice-report-2 .r2-registrations { min-height: 9mm; }
+            .invoice-a5.invoice-report-2 .r2-items { min-height: 48mm; }
+            .invoice-a5.invoice-report-2 .r2-items th { height: 7mm; font-size: 1em; }
+            .invoice-a5.invoice-report-2 .r2-items td { height: 3.4mm; font-size: 1em; }
+            .invoice-a5.invoice-report-2 .r2-bottom { min-height: 30mm; }
+            .invoice-a5.invoice-report-2 .r2-adjustments > div,
+            .invoice-a5.invoice-report-2 .r2-totals > div { min-height: 3mm; }
+            .invoice-a5.invoice-report-2 .r2-footer { min-height: 12mm; font-size: 6.5px; }
+            .invoice-a5.invoice-report-2 .r2-terms { padding-top: .5mm; line-height: 1.2; }
+
+            /* Report 3: reference landscape GST invoice; table sizes match Report 2. */
+            .invoice-report-3 { width: 287mm; min-height: 200mm; padding: 4mm; font-family: Arial, Helvetica, sans-serif; font-size: calc(7.5px * var(--r3-font-scale, 1)); line-height: 1.25; }
+            .invoice-report-3, .invoice-report-3 * { font-family: Arial, Helvetica, sans-serif !important; }
+            .r3-header { display: grid; grid-template-columns: 38% 23% 39%; min-height: 42mm; padding: 1mm 2mm 2mm; column-gap: 4mm; }
+            .r3-details { display: flex; min-width: 0; flex-direction: column; gap: .7mm; }
+            .r3-details > div { display: grid; grid-template-columns: 25mm minmax(0, 1fr); align-items: start; min-height: 3.5mm; column-gap: 2mm; }
+            .r3-details > div > span { white-space: nowrap; }
+            .r3-details > div > b, .r3-details > div > strong { min-width: 0; overflow-wrap: anywhere; }
+            .r3-details strong { text-transform: uppercase; }
+            .r3-details p { min-width: 0; min-height: 8mm; margin: 0; overflow-wrap: anywhere; }
+            .r3-details p div { margin-bottom: .5mm; }
+            .r3-customer { padding-left: 2mm; }
+            .r3-invoice-meta { padding: 3mm 3mm 0; }
+            .r3-invoice-meta h1 { margin: 0 0 5mm; text-align: center; font-size: 1.2em; }
+            .r3-invoice-meta > div { display: grid; grid-template-columns: 22mm minmax(0, 1fr); min-height: 4mm; column-gap: 2mm; }
+            .r3-invoice-meta p { margin: 3mm 0 0; text-align: center; }
+            .r3-items { min-height: 118mm; border-top: 1px solid #222; border-bottom: 1px solid #222; }
+            .r3-items table { width: 100%; border-collapse: collapse; table-layout: fixed; }
+            .r3-items th { height: 8mm; padding: .8mm .7mm; border-right: 1px solid #aaa; border-bottom: 1px solid #222; font-weight: 700; line-height: 1.15; text-align: center; vertical-align: middle; white-space: normal; }
+            .r3-items th:first-child { text-align: left; }
+            .r3-items th:last-child { border-right: 0; }
+            .r3-items td { height: 5mm; padding: .7mm .7mm; overflow: hidden; border-right: 1px solid #ddd; text-overflow: ellipsis; text-align: right; vertical-align: top; white-space: nowrap; font-variant-numeric: tabular-nums; }
+            .r3-items td:last-child { border-right: 0; }
+            .r3-items td.center { text-align: center !important; }
+            .r3-items .r3-product { text-align: left !important; }
+            .r3-footer { display: grid; grid-template-columns: 20% 48% 32%; min-height: 35mm; padding: 3mm 3mm 1mm; column-gap: 5mm; }
+            .r3-qr { display: flex; align-items: flex-start; justify-content: center; min-width: 0; }
+            .r3-qr img { width: 28mm; height: 28mm; object-fit: contain; }
+            .r3-notes { min-width: 0; padding-right: 3mm; border-right: 1px solid #bbb; }
+            .r3-adjustments { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1mm 6mm; margin-bottom: 2mm; }
+            .r3-adjustments > div { display: grid; grid-template-columns: minmax(0, 1fr) 20mm; align-items: baseline; column-gap: 2mm; }
+            .r3-adjustments b { text-align: right; font-variant-numeric: tabular-nums; }
+            .r3-bank { margin-bottom: 1.5mm; line-height: 1.5; }
+            .r3-bank strong { display: inline-block; min-width: 18mm; margin-right: 1.5mm; }
+            .r3-bank span { margin-right: 4mm; overflow-wrap: anywhere; }
+            .r3-terms { margin: 0; line-height: 1.45; }
+            .r3-totals { min-width: 0; padding-left: 2mm; }
+            .r3-totals > div { display: grid; grid-template-columns: minmax(0, 1fr) 27mm; align-items: baseline; min-height: 4.2mm; column-gap: 3mm; }
+            .r3-totals b, .r3-totals > div > strong:last-child { text-align: right; }
+            .r3-totals .r3-net { margin-top: 1mm; padding-top: 1mm; border-top: 1px solid #777; font-size: 1.08em; }
+            .r3-totals p { margin: 2mm 0 0; text-align: center; }
+            .invoice-a4.invoice-report-3 .r3-items th,
+            .invoice-a4.invoice-report-3 .r3-items td { font-size: 11px; }
+            .invoice-a5.invoice-report-3 { width: 200mm; min-height: 138mm; padding: 3mm 4mm; font-size: calc(7px * var(--r3-font-scale, 1)); }
+            .invoice-a5.invoice-report-3 .r3-header { min-height: 31mm; padding: .5mm 1mm 1mm; column-gap: 2mm; }
+            .invoice-a5.invoice-report-3 .r3-details { gap: .35mm; }
+            .invoice-a5.invoice-report-3 .r3-details > div { grid-template-columns: 18mm minmax(0, 1fr); min-height: 2.5mm; column-gap: 1mm; }
+            .invoice-a5.invoice-report-3 .r3-details p { min-height: 4mm; }
+            .invoice-a5.invoice-report-3 .r3-invoice-meta { padding: 2mm 2mm 0; }
+            .invoice-a5.invoice-report-3 .r3-invoice-meta h1 { margin-bottom: 2.5mm; }
+            .invoice-a5.invoice-report-3 .r3-invoice-meta > div { grid-template-columns: 17mm 1fr; min-height: 3mm; }
+            .invoice-a5.invoice-report-3 .r3-invoice-meta p { margin-top: 1.5mm; }
+            .invoice-a5.invoice-report-3 .r3-items { min-height: 73mm; }
+            .invoice-a5.invoice-report-3 .r3-items th { height: 6mm; padding: .4mm .25mm; }
+            .invoice-a5.invoice-report-3 .r3-items td { height: 3.6mm; }
+            .invoice-a5.invoice-report-3 .r3-items th,
+            .invoice-a5.invoice-report-3 .r3-items td { font-size: 9.5px; }
+            .invoice-a5.invoice-report-3 .r3-footer { min-height: 28mm; padding: 1.5mm 1.5mm 0; column-gap: 2mm; }
+            .invoice-a5.invoice-report-3 .r3-qr img { width: 23mm; height: 23mm; }
+            .invoice-a5.invoice-report-3 .r3-adjustments { gap: .5mm 2mm; margin-bottom: .8mm; }
+            .invoice-a5.invoice-report-3 .r3-adjustments > div { grid-template-columns: minmax(0, 1fr) 13mm; column-gap: .7mm; }
+            .invoice-a5.invoice-report-3 .r3-bank { margin-bottom: .7mm; line-height: 1.25; }
+            .invoice-a5.invoice-report-3 .r3-bank strong { min-width: 14mm; margin-right: .7mm; }
+            .invoice-a5.invoice-report-3 .r3-bank span { margin-right: 1.5mm; }
+            .invoice-a5.invoice-report-3 .r3-terms { line-height: 1.25; }
+            .invoice-a5.invoice-report-3 .r3-totals > div { grid-template-columns: minmax(0, 1fr) 19mm; min-height: 3mm; column-gap: 1mm; }
+
+            /* Overflow-safe numeric widths for both reports and paper sizes. */
+            .invoice-report-1 .crystal-table td.number,
+            .invoice-report-1 .crystal-table td.center,
+            .invoice-report-2 .r2-items td,
+            .invoice-report-2 .r2-tax td,
+            .invoice-report-2 .r2-totals span,
+            .invoice-report-2 .r2-totals strong {
+              font-variant-numeric: tabular-nums;
+              letter-spacing: -0.05px;
+            }
+            .invoice-a4.invoice-report-1 .crystal-table td.number,
+            .invoice-a4.invoice-report-1 .crystal-table td.center { font-size: 11px; }
+            .invoice-a5.invoice-report-1 .crystal-table td.number,
+            .invoice-a5.invoice-report-1 .crystal-table td.center { font-size: 9.5px; }
+            .invoice-a4.invoice-report-2 .r2-items th,
+            .invoice-a4.invoice-report-2 .r2-items td { font-size: 11px; }
+            .invoice-a5.invoice-report-2 .r2-items th,
+            .invoice-a5.invoice-report-2 .r2-items td { font-size: 9.5px; }
+
             @media print {
               html, body { width: 100%; margin: 0 !important; padding: 0 !important; background: #fff !important; }
               body { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
               .invoice-preview-toolbar { display: none !important; }
               .preview-shell { width: 100%; margin: 0 !important; padding: 0 !important; background: #fff !important; }
               .invoice-page { margin: 0 auto !important; box-shadow: none !important; }
+              /* Keep monetary and quantity values legible on the physical invoice. */
+              .invoice-a4 .crystal-table td.number { font-size: 9.5px; font-weight: 600; }
+              .invoice-a4 .invoice-quick-totals strong,
+              .invoice-a4 .footer-total-row strong,
+              .invoice-a4 .tax-summary-table .number { font-size: 8.5px; font-weight: 700; }
+              .invoice-a5 .crystal-table td.number { font-size: 7.5px; font-weight: 600; }
+              .invoice-a5 .invoice-quick-totals strong,
+              .invoice-a5 .footer-total-row strong,
+              .invoice-a5 .tax-summary-table .number { font-size: 7px; font-weight: 700; }
+              .invoice-a4.invoice-report-1 .crystal-table td.number { font-size: 11px; }
+              .invoice-a5.invoice-report-1 .crystal-table td.number { font-size: 9.5px; }
+              .invoice-report-1 .invoice-quick-totals strong,
+              .invoice-report-1 .footer-total-row strong,
+              .invoice-report-1 .tax-summary-table .number { font-size: inherit; }
               .report-top, .party-grid, .items-wrap, .invoice-bottom, .invoice-footer-summary-grid, .item-row {
                 break-inside: avoid;
                 page-break-inside: avoid;
@@ -6049,7 +6479,7 @@ const debitNotePermission = usePermission("VOUCHERS", "DEBIT_NOTE");
 
     /*
     * Account Master opened normally from:
-    * Master → Account
+    * Master â†’ Account
     */
     setEditAccountId(null);
     setAccountActiveTab("basic");
@@ -40221,6 +40651,9 @@ ALLOW CHANGE STAR AMOUNT — FINAL SAVE PROTECTION
 
   const handleMenuClick = (menuKey) => {
     setIsFormReadOnly(false);
+    setExpandedNavMenu((currentMenu) =>
+      currentMenu === menuKey ? null : menuKey
+    );
     setActiveMenu(activeMenu === menuKey ? null : menuKey);
 
     if (menuKey === "transactions") {
@@ -41844,6 +42277,8 @@ ALLOW CHANGE STAR AMOUNT — FINAL SAVE PROTECTION
 
   const handleSubMenuClick = async (item) => {
     setIsFormReadOnly(false);
+    setSidebarCollapsed(true);
+    setExpandedNavMenu(null);
     await refreshPermissions();
     /*
     * Save the current entry before changing modules.
@@ -42322,7 +42757,7 @@ if (item === "Import Data") {
 
       return;
     }
-    // ✅ ADD THIS: When Account submenu is clicked, load areas
+    // âœ… ADD THIS: When Account submenu is clicked, load areas
     if (item === "Account") {
       loadAreasForAccount();
     }
@@ -42809,7 +43244,7 @@ else if (item === 'Import Data From Desktop') {
       setShowDashboard(false);
       setShowSettleLoadList(false);
       setShowCreateLoadList(false);
-      setShowSettleLoad(true); // ✅ IMPORTANT FIX
+      setShowSettleLoad(true); // âœ… IMPORTANT FIX
 
       setSettleLoadData(null);
       setSettleLoadFormData({
@@ -43933,7 +44368,7 @@ else if (item === 'Import Data From Desktop') {
           : "GST saved successfully!"
       );
 
-      // ✅ RESET FORM FIELDS
+      // âœ… RESET FORM FIELDS
       setEditGstId(null);
       setGstForm({
         code: "",
@@ -43942,7 +44377,7 @@ else if (item === 'Import Data From Desktop') {
         salesType: "VAT ON SALES PRICE",
       });
 
-      // ✅ CLOSE FORM
+      // âœ… CLOSE FORM
       closeForm();
     } catch (error) {
       console.error(error);
@@ -44750,11 +45185,11 @@ else if (item === 'Import Data From Desktop') {
         search: companyBackendSearch,
       });
 
-      // ✅ RESET FORM FIELDS
+      // âœ… RESET FORM FIELDS
       setEditCompanyId(null);
       setCompanyForm({ code: "", name: "", address: "", branchAddress: "", defaultSupplierId: "" });
 
-      // ✅ CLOSE FORM AND SHOW GRID VIEW
+      // âœ… CLOSE FORM AND SHOW GRID VIEW
       closeForm();
 
       alert(
@@ -44853,7 +45288,7 @@ else if (item === 'Import Data From Desktop') {
       openReadOnlyForm(() => editAccount(account));
       return;
     }
-    // 🔥 FIX: Properly normalize blackListed for display
+    // ðŸ”¥ FIX: Properly normalize blackListed for display
     const blackListedDisplay = String(account.blackListed || "NO").trim().toUpperCase() === "YES" ? "YES" : "NO";
 
     setViewData({
@@ -44864,7 +45299,7 @@ else if (item === 'Import Data From Desktop') {
       gstType: account.gstType || "-",
       invType: account.invType || "-",
       openingBal: account.openingBal || "0",
-      // 🔥 FIX: Display credit fields
+      // ðŸ”¥ FIX: Display credit fields
       creditDays: account.creditDays || "0",
       creditBills: account.creditBills || "0",
       lockDays: account.lockDays || "0",
@@ -45038,8 +45473,8 @@ else if (item === 'Import Data From Desktop') {
 
     setEditAccountId(id);
 
-    // 🔥 FIX: Debug - Log the account data being loaded
-    console.log("📥 EDIT ACCOUNT - Raw data:", {
+    // ðŸ”¥ FIX: Debug - Log the account data being loaded
+    console.log("ðŸ“¥ EDIT ACCOUNT - Raw data:", {
       creditDays: account.creditDays,
       creditBills: account.creditBills,
       lockDays: account.lockDays,
@@ -45062,11 +45497,11 @@ else if (item === 'Import Data From Desktop') {
       }
     }
 
-    // 🔥 FIX: Properly normalize blackListed value - THIS IS THE CRITICAL FIX
+    // ðŸ”¥ FIX: Properly normalize blackListed value - THIS IS THE CRITICAL FIX
     const blackListedValue = String(account.blackListed || "NO").trim().toUpperCase();
     const normalizedBlackListed = blackListedValue === "YES" || blackListedValue === "Y" || blackListedValue === "TRUE" || blackListedValue === "1" ? "YES" : "NO";
 
-    console.log("📥 EDIT ACCOUNT - Normalized blackListed:", normalizedBlackListed);
+    console.log("ðŸ“¥ EDIT ACCOUNT - Normalized blackListed:", normalizedBlackListed);
 
     setAccountForm({
       accountCode: account.accountCode || "",
@@ -45099,17 +45534,17 @@ else if (item === 'Import Data From Desktop') {
       allowInPurchase: account.allowInPurchase || "N",
       drugLicNo: account.drugLicNo || "",
       drugExpDate: account.drugExpDate || "",
-      // 🔥 FIX: Load credit fields properly
+      // ðŸ”¥ FIX: Load credit fields properly
       creditDays: account.creditDays !== undefined && account.creditDays !== null ? String(account.creditDays) : "0",
       creditBills: account.creditBills !== undefined && account.creditBills !== null ? String(account.creditBills) : "0",
       lockDays: account.lockDays !== undefined && account.lockDays !== null ? String(account.lockDays) : "0",
       creditAmt: account.creditAmt !== undefined && account.creditAmt !== null ? String(account.creditAmt) : "0.00",
-      // 🔥 CRITICAL FIX: Set blackListed to the normalized value
+      // ðŸ”¥ CRITICAL FIX: Set blackListed to the normalized value
       blackListed: normalizedBlackListed,
       openingTransactions: account.openingTransactions || [],
     });
 
-    console.log("📥 EDIT ACCOUNT - Form state after set:", {
+    console.log("ðŸ“¥ EDIT ACCOUNT - Form state after set:", {
       blackListed: normalizedBlackListed,
       creditDays: account.creditDays !== undefined && account.creditDays !== null ? String(account.creditDays) : "0",
     });
@@ -45872,37 +46307,37 @@ else if (item === 'Import Data From Desktop') {
   const saveProduct = async (e) => {
     e.preventDefault();
 
-    // ✅ CHECK: Product Code
+    // âœ… CHECK: Product Code
     if (!productForm.code || productForm.code.trim() === "") {
       alert("Product Code is required");
       return;
     }
 
-    // ✅ CHECK: Product Name
+    // âœ… CHECK: Product Name
     if (!productForm.name || productForm.name.trim() === "") {
       alert("Product Name is required");
       return;
     }
 
-    // ✅ CHECK: Company
+    // âœ… CHECK: Company
     if (!productForm.companyId) {
       alert("Please select a Company");
       return;
     }
 
-    // ✅ CHECK: Group
+    // âœ… CHECK: Group
     if (!productForm.group) {
       alert("Please select a Group");
       return;
     }
 
-    // ✅ CHECK: Category
+    // âœ… CHECK: Category
     if (!productForm.category) {
       alert("Please select a Category");
       return;
     }
 
-    // ✅ CHECK: GST
+    // âœ… CHECK: GST
     if (productForm.gst === "" || productForm.gst === null || productForm.gst === undefined) {
       alert("Please select GST %");
       return;
@@ -46049,7 +46484,7 @@ else if (item === 'Import Data From Desktop') {
   const handleAccountInput = (e) => {
     const { name, value } = e.target;
 
-    // 🔥 FIX: Handle blackListed separately with normalization
+    // ðŸ”¥ FIX: Handle blackListed separately with normalization
     if (name === "blackListed") {
       setAccountForm((prev) => ({
         ...prev,
@@ -46058,7 +46493,7 @@ else if (item === 'Import Data From Desktop') {
       return;
     }
 
-    // 🔥 FIX: For credit fields, allow proper input
+    // ðŸ”¥ FIX: For credit fields, allow proper input
     const creditFields = ['creditDays', 'creditBills', 'lockDays', 'creditAmt'];
 
     if (creditFields.includes(name)) {
@@ -46092,7 +46527,7 @@ else if (item === 'Import Data From Desktop') {
       return;
     }
 
-    // 🔥 FIX: Handle GST No field - Auto-format and validate
+    // ðŸ”¥ FIX: Handle GST No field - Auto-format and validate
     if (name === 'gstNo') {
       // Remove all spaces and special characters, keep only alphanumeric
       let gstValue = cleanValue.replace(/[^A-Za-z0-9]/g, '').toUpperCase();
@@ -46134,7 +46569,7 @@ else if (item === 'Import Data From Desktop') {
       return;
     }
 
-    // 🔥 FIX: Handle PAN No field - Auto-format
+    // ðŸ”¥ FIX: Handle PAN No field - Auto-format
     if (name === 'panNo') {
       // Remove spaces and special characters, keep only alphanumeric
       let panValue = cleanValue.replace(/[^A-Za-z0-9]/g, '').toUpperCase();
@@ -46434,8 +46869,8 @@ else if (item === 'Import Data From Desktop') {
       return alert("Distributor/Firm not found. Please login again.");
     }
 
-    // 🔥 FIX: Debug logging for save
-    console.log("📤 Saving account with values:", {
+    // ðŸ”¥ FIX: Debug logging for save
+    console.log("ðŸ“¤ Saving account with values:", {
       creditDays: accountForm.creditDays,
       creditBills: accountForm.creditBills,
       lockDays: accountForm.lockDays,
@@ -46455,8 +46890,8 @@ else if (item === 'Import Data From Desktop') {
         : `${API_URL}/accounts`;
       const method = editAccountId ? "PUT" : "POST";
 
-      // 🔥 FIX: Ensure numeric fields are sent as numbers, not strings
-      // 🔥 FIX: Ensure blackListed is properly normalized to "YES" or "NO"
+      // ðŸ”¥ FIX: Ensure numeric fields are sent as numbers, not strings
+      // ðŸ”¥ FIX: Ensure blackListed is properly normalized to "YES" or "NO"
       const payload = {
         ...accountForm,
         gstType: finalGstType,
@@ -46464,16 +46899,16 @@ else if (item === 'Import Data From Desktop') {
         distributorId,
         firmId,
         firmName,
-        // 🔥 FIX: Convert to numbers and handle empty strings
+        // ðŸ”¥ FIX: Convert to numbers and handle empty strings
         creditDays: Number(accountForm.creditDays || 0),
         creditBills: Number(accountForm.creditBills || 0),
         lockDays: Number(accountForm.lockDays || 0),
         creditAmt: Number(accountForm.creditAmt || 0),
-        // 🔥 FIX: Normalize blackListed
+        // ðŸ”¥ FIX: Normalize blackListed
         blackListed: normalizeYesNo(accountForm.blackListed),
       };
 
-      console.log("📤 Final payload:", {
+      console.log("ðŸ“¤ Final payload:", {
         blackListed: payload.blackListed,
         creditDays: payload.creditDays,
         creditBills: payload.creditBills,
@@ -47127,7 +47562,7 @@ else if (item === 'Import Data From Desktop') {
           : "Other account created successfully!"
       );
 
-      // ✅ RESET FORM FIELDS
+      // âœ… RESET FORM FIELDS
       setEditOtherAccountId(null);
       setOtherAccountActiveTab("basic");
       setOtherAccountForm({
@@ -47163,7 +47598,7 @@ else if (item === 'Import Data From Desktop') {
         gstClsDate: "",
       });
 
-      // ✅ CLOSE FORM AND SHOW GRID VIEW
+      // âœ… CLOSE FORM AND SHOW GRID VIEW
       setOpenFormFor(null);
       closeForm();
     } catch (error) {
@@ -47241,7 +47676,7 @@ else if (item === 'Import Data From Desktop') {
       });
       alert(editGroupId ? "Group updated successfully!" : "Group created successfully!");
 
-      // ✅ RESET FORM AND CLOSE
+      // âœ… RESET FORM AND CLOSE
       setGroupForm({ code: "", name: "" });
       setEditGroupId(null);
       closeForm();
@@ -48419,7 +48854,7 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                   <th>Salesman</th>
                   <th>Area</th>
                   <th className="ltf-amount-column">
-                    Net Amount (₹)
+                    Net Amount (â‚¹)
                   </th>
                 </tr>
               </thead>
@@ -48580,7 +49015,7 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                           </td>
 
                           <td className="ltf-amount-column">
-                            ₹
+                            â‚¹
                             {formatLoadTransferAmount(
                               billAmount
                             )}
@@ -48699,7 +49134,7 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
               <span>Total Amount</span>
 
               <strong>
-                ₹
+                â‚¹
                 {formatLoadTransferAmount(
                   totalLoadedAmount
                 )}
@@ -48720,7 +49155,7 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
               <span>Selected Amount</span>
 
               <strong>
-                ₹
+                â‚¹
                 {formatLoadTransferAmount(
                   loadTransferSelectedAmount
                 )}
@@ -48780,7 +49215,7 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
               fontWeight: '500'
             }}
           >
-            ◀ Prev
+            â—€ Prev
           </button>
 
           <span style={{ fontWeight: '500', fontSize: '14px' }}>
@@ -48800,7 +49235,7 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
               fontWeight: '500'
             }}
           >
-            Next ▶
+            Next â–¶
           </button>
         </div>
       </div>
@@ -48990,10 +49425,10 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
               onChange={(e) => handleFilterChange(masterType, e.target.value)}
             />
             <button className="btn-excel" onClick={() => exportToExcel(filteredData, title, columns)}>
-              📊 Export Excel
+              ðŸ“Š Export Excel
             </button>
             <button className="btn-pdf" onClick={() => exportToPDF(filteredData, title, columns)}>
-              📄 Export PDF
+              ðŸ“„ Export PDF
             </button>
             <button
               className="btn-add-new"
@@ -49626,7 +50061,7 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
       { key: 'partyCode', label: 'Party Code' },
       { key: 'partyName', label: 'Party Name' },
       { key: 'branchName', label: 'Branch Name' },
-      { key: 'amount', label: 'Amount (₹)' },
+      { key: 'amount', label: 'Amount (â‚¹)' },
       { key: 'loadSeries', label: 'Load Series' },
       { key: 'loadNumber', label: 'Load Number' },
       { key: 'status', label: 'Status' },
@@ -51332,23 +51767,23 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                       </td>
 
                       <td class="right">
-                        ₹${invoiceNumber(grossAmount)}
+                        â‚¹${invoiceNumber(grossAmount)}
                       </td>
 
                       <td class="right">
-                        ₹${invoiceNumber(taxableAmount)}
-                      </td>
-
-                      <td></td>
-
-                      <td class="right">
-                        ₹${invoiceNumber(schemeAmount)}
+                        â‚¹${invoiceNumber(taxableAmount)}
                       </td>
 
                       <td></td>
 
                       <td class="right">
-                        ₹${invoiceNumber(
+                        â‚¹${invoiceNumber(schemeAmount)}
+                      </td>
+
+                      <td></td>
+
+                      <td class="right">
+                        â‚¹${invoiceNumber(
         cashDiscountAmount
       )}
                       </td>
@@ -51356,23 +51791,23 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                       <td></td>
 
                       <td class="right">
-                        ₹${invoiceNumber(cgstAmount)}
+                        â‚¹${invoiceNumber(cgstAmount)}
                       </td>
 
                       <td></td>
 
                       <td class="right">
-                        ₹${invoiceNumber(sgstAmount)}
+                        â‚¹${invoiceNumber(sgstAmount)}
                       </td>
 
                       <td></td>
 
                       <td class="right">
-                        ₹${invoiceNumber(igstAmount)}
+                        â‚¹${invoiceNumber(igstAmount)}
                       </td>
 
                       <td class="right">
-                        ₹${invoiceNumber(netAmount)}
+                        â‚¹${invoiceNumber(netAmount)}
                       </td>
                     </tr>
                   </tfoot>
@@ -51382,14 +51817,14 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
               <section class="summary-strip">
                 <div class="summary-cell">
                   <span>TAXABLE AMT</span>
-                  <strong>₹${invoiceNumber(
+                  <strong>â‚¹${invoiceNumber(
         taxableAmount
       )}</strong>
                 </div>
 
                 <div class="summary-cell">
                   <span>SCHE/CASH</span>
-                  <strong>₹${invoiceNumber(
+                  <strong>â‚¹${invoiceNumber(
         schemeAmount +
         cashDiscountAmount
       )}</strong>
@@ -51397,42 +51832,42 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
 
                 <div class="summary-cell">
                   <span>CGST AMT</span>
-                  <strong>₹${invoiceNumber(
+                  <strong>â‚¹${invoiceNumber(
         cgstAmount
       )}</strong>
                 </div>
 
                 <div class="summary-cell">
                   <span>SGST AMT</span>
-                  <strong>₹${invoiceNumber(
+                  <strong>â‚¹${invoiceNumber(
         sgstAmount
       )}</strong>
                 </div>
 
                 <div class="summary-cell">
                   <span>CN/STAR/DIS</span>
-                  <strong>₹${invoiceNumber(
+                  <strong>â‚¹${invoiceNumber(
         totalDiscount
       )}</strong>
                 </div>
 
                 <div class="summary-cell">
                   <span>TCS AMT</span>
-                  <strong>₹${invoiceNumber(
+                  <strong>â‚¹${invoiceNumber(
         tcsAmount
       )}</strong>
                 </div>
 
                 <div class="summary-cell">
                   <span>ROUNDING</span>
-                  <strong>₹${invoiceNumber(
+                  <strong>â‚¹${invoiceNumber(
         roundingAmount
       )}</strong>
                 </div>
 
                 <div class="summary-cell net">
                   <span>NET AMOUNT</span>
-                  <strong>₹${invoiceNumber(
+                  <strong>â‚¹${invoiceNumber(
         netAmount
       )}</strong>
                 </div>
@@ -54784,7 +55219,7 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                     : isQuotationList
                       ? "Today's Quotations"
                       : "Today's Sales"}
-              </span><strong>₹ {todaysSalesAmount.toLocaleString("en-IN")}</strong><small>{new Date().toLocaleDateString("en-GB")}</small></div>
+              </span><strong>â‚¹ {todaysSalesAmount.toLocaleString("en-IN")}</strong><small>{new Date().toLocaleDateString("en-GB")}</small></div>
               <i />
             </div>
             <div className="ts-summary-card indigo">
@@ -54794,12 +55229,12 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
             </div>
             <div className="ts-summary-card orange">
               <div className="ts-summary-icon"><Clock3 size={22} /></div>
-              <div><span>Pending Bills</span><strong>{pendingRows.length.toLocaleString("en-IN")}</strong><small>₹ {pendingAmount.toLocaleString("en-IN")}</small></div>
+              <div><span>Pending Bills</span><strong>{pendingRows.length.toLocaleString("en-IN")}</strong><small>â‚¹ {pendingAmount.toLocaleString("en-IN")}</small></div>
               <i />
             </div>
             <div className="ts-summary-card red">
               <div className="ts-summary-icon"><X size={22} /></div>
-              <div><span>Cancelled Bills</span><strong>{cancelledRows.length.toLocaleString("en-IN")}</strong><small>₹ {cancelledAmount.toLocaleString("en-IN")}</small></div>
+              <div><span>Cancelled Bills</span><strong>{cancelledRows.length.toLocaleString("en-IN")}</strong><small>â‚¹ {cancelledAmount.toLocaleString("en-IN")}</small></div>
               <i />
             </div>
             <div className="ts-summary-card violet">
@@ -54814,7 +55249,7 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                 </span>
 
                 <strong>
-                  ₹{" "}
+                  â‚¹{" "}
                   {(isCreditNoteList ||
                     isPurchaseList
                     ? salesTotalAmount
@@ -55171,7 +55606,7 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                             </td>
 
                             <td className="number-col">
-                              ₹{" "}
+                              â‚¹{" "}
                               {amount.toLocaleString(
                                 "en-IN",
                                 {
@@ -56981,7 +57416,7 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
               <span>Total Amount</span>
 
               <strong>
-                ₹
+                â‚¹
                 {totalAmount.toLocaleString("en-IN", {
                   minimumFractionDigits: 2,
                   maximumFractionDigits: 2,
@@ -57111,7 +57546,7 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                         <td>{item.vehicleNo}</td>
 
                         <td className="ts-load-amount">
-                          ₹
+                          â‚¹
                           {item.totalAmount.toLocaleString(
                             "en-IN",
                             {
@@ -58783,8 +59218,8 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
     }
     else if (type === 'Purchase') {
      setPurchaseFormData({
-        supplier: item.supplierCode || item.supplierName || item.partyName || item.supplier || '',
-        company: item.company || item.companyName || '',
+        supplier: item.supplierId || item.supplierCode || item.historicalSnapshot?.supplier?.code || item.supplierName || item.partyName || item.supplier || '',
+        company: item.companyId || item.companyCode || item.historicalSnapshot?.company?.code || item.company || item.companyName || '',
         storageLocation: item.godownName || item.storageLocation || item.branchName || '',
         invoiceDate: item.invoiceDate || item.billDate || businessDateIST(),
 
@@ -58976,7 +59411,7 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
       // Show loading indicator
       const deleteButton = document.activeElement;
       if (deleteButton) {
-        deleteButton.textContent = '⏳ Deleting...';
+        deleteButton.textContent = 'â³ Deleting...';
         deleteButton.disabled = true;
       }
 
@@ -59039,16 +59474,16 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
         setSettleLoadListData(prev => prev.filter(item => item._id !== id && item.id !== id));
       }
 
-      alert(`✅ ${type} permanently deleted from database!`);
+      alert(`âœ… ${type} permanently deleted from database!`);
 
-      // ✅ CRITICAL FIX: Reset ALL print/preview states FIRST
+      // âœ… CRITICAL FIX: Reset ALL print/preview states FIRST
       setShowBillPrintPreview(false);
       setBillPrintData(null);
       setShowPrintPreview(false);
       setOpenFormFor(null);
       setEditingInvoiceId(null);
 
-      // ✅ FIXED: Only show the appropriate list view
+      // âœ… FIXED: Only show the appropriate list view
       if (
         type === "Sales" ||
         type === "Billing"
@@ -59304,7 +59739,7 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
 
     } catch (error) {
       console.error(`Delete ${type} error:`, error);
-      alert(`❌ Server error. ${type} not deleted.`);
+      alert(`âŒ Server error. ${type} not deleted.`);
     } finally {
 
     }
@@ -59436,6 +59871,21 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
               }}>
                 {SALES_BILL_PAPER_SIZES.map((paper) => <option key={paper.value} value={paper.value}>{paper.label}</option>)}
               </select>
+            </label>
+            <label>
+              <span>Invoice Font Size (%)</span>
+              <input
+                type="number"
+                min="80"
+                max="150"
+                step="5"
+                value={salesPrintOptions.fontSizePercent || 150}
+                disabled={printAccountDetailsSaving}
+                onChange={(event) => setSalesPrintOptions((previous) => ({
+                  ...previous,
+                  fontSizePercent: Math.min(150, Math.max(80, Number(event.target.value) || 150)),
+                }))}
+              />
             </label>
           </div>
 
@@ -60102,6 +60552,7 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
             onClick={() => {
               setShowDashboard(true);
               setActiveMenu(null);
+              setExpandedNavMenu(null);
               setActiveSubMenu(null);
               setOpenFormFor(null);
             }}
@@ -60121,7 +60572,7 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
             {Object.entries(menuItems).map(([key, menu]) => (
               <div key={key} className="nav-item">
                 <div
-                  className={`nav-header ${activeMenu === key ? "active" : ""
+                  className={`nav-header ${expandedNavMenu === key ? "active" : ""
                     }`}
                   title={sidebarCollapsed ? menu.title : undefined}
                   onClick={() => {
@@ -60143,14 +60594,14 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                   <span className="nav-title">{menu.title}</span>
 
                   <span
-                    className={`nav-arrow ${activeMenu === key ? "open" : ""
+                    className={`nav-arrow ${expandedNavMenu === key ? "open" : ""
                       }`}
                   >
                     <ChevronDown size={13} />
                   </span>
                 </div>
 
-                {activeMenu === key && (
+                {expandedNavMenu === key && (
                   <div className="nav-submenu">
                     {menu.items.map((item, idx) => {
                       /*
@@ -60304,6 +60755,8 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                                 title={`Add ${item}`}
                                 onClick={(event) => {
                                   event.stopPropagation();
+                                  setSidebarCollapsed(true);
+                                  setExpandedNavMenu(null);
 
                                   if (activeMenu === "transactions") {
                                     setShowDashboard(false);
@@ -60500,7 +60953,7 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
             {isFormReadOnly && (
               <div className="project-read-only-banner" role="status">
                 <Eye size={15} />
-                View only — this entry cannot be edited
+                View only â€” this entry cannot be edited
               </div>
             )}
             {activeMenu === "reports" &&
@@ -60537,6 +60990,7 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                         View, analyze and generate all business reports from one place.
                       </p>
                     </div>
+
                   </header>
 
                   <section
@@ -60669,7 +61123,7 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                     <article className="report-summary-card">
                       <div>
                         <span>Total Sales (MTD)</span>
-                        <strong>₹ 42,85,620</strong>
+                        <strong>â‚¹ 42,85,620</strong>
 
                         <small className="positive">
                           <ArrowUpRight size={12} />
@@ -60735,7 +61189,7 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                     <article className="report-summary-card">
                       <div>
                         <span>Outstanding Amount</span>
-                        <strong>₹ 18,92,450</strong>
+                        <strong>â‚¹ 18,92,450</strong>
 
                         <small className="negative">
                           <ArrowUpRight size={12} />
@@ -61181,7 +61635,7 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                                           );
                                         }}
                                       >
-                                        ★
+                                        â˜…
                                       </button>
 
                                       <span>
@@ -62339,7 +62793,7 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                         <div>
                           <span>Total Amount</span>
                           <strong>
-                            ₹{" "}
+                            â‚¹{" "}
                             {totalAmount.toLocaleString("en-IN", {
                               minimumFractionDigits: 2,
                               maximumFractionDigits: 2,
@@ -62357,7 +62811,7 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                         <div>
                           <span>Receipt Amount</span>
                           <strong>
-                            ₹{" "}
+                            â‚¹{" "}
                             {totalReceiptAmount.toLocaleString(
                               "en-IN",
                               {
@@ -62378,7 +62832,7 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                         <div>
                           <span>Pending Amount</span>
                           <strong>
-                            ₹{" "}
+                            â‚¹{" "}
                             {totalPendingAmount.toLocaleString(
                               "en-IN",
                               {
@@ -62510,7 +62964,7 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                                     </td>
 
                                     <td className="numeric-column">
-                                      ₹{" "}
+                                      â‚¹{" "}
                                       {Number(
                                         item.totalAmount || 0
                                       ).toLocaleString("en-IN", {
@@ -62520,7 +62974,7 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                                     </td>
 
                                     <td className="numeric-column receipt-amount">
-                                      ₹{" "}
+                                      â‚¹{" "}
                                       {Number(
                                         item.totalReceiptAmount || 0
                                       ).toLocaleString("en-IN", {
@@ -62530,7 +62984,7 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                                     </td>
 
                                     <td className="numeric-column pending-amount">
-                                      ₹{" "}
+                                      â‚¹{" "}
                                       {Number(
                                         item.totalPendingAmount || 0
                                       ).toLocaleString("en-IN", {
@@ -62846,7 +63300,7 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
 
                 <div className="settle-premium-card">
                   {/* =====================================================
-              LOAD INFORMATION — SINGLE ROW
+              LOAD INFORMATION â€” SINGLE ROW
               ===================================================== */}
                   <div className="settle-premium-header-fields">
                     <div className="settle-premium-field settle-field-series">
@@ -62954,7 +63408,7 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
               BILLS TABLE
               ===================================================== */}
                   {/* =====================================================
-        BILLS TABLE — EXACT COLUMNS AS DESIGN
+        BILLS TABLE â€” EXACT COLUMNS AS DESIGN
         ===================================================== */}
                   <div className="settle-premium-grid-shell">
                     <table className="settle-premium-table">
@@ -62971,15 +63425,15 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                           <th className="settle-col-party">Party Name</th>
 
                           <th className="settle-number-column">
-                            Bill Amount (₹)
+                            Bill Amount (â‚¹)
                           </th>
 
                           <th className="settle-number-column">
-                            Receipt/Adjust (₹)
+                            Receipt/Adjust (â‚¹)
                           </th>
 
                           <th className="settle-number-column">
-                            Pending (₹)
+                            Pending (â‚¹)
                           </th>
 
                           <th className="settle-col-check">
@@ -63277,7 +63731,7 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
 
                                 {/* BILL AMOUNT */}
                                 <td className="settle-amount-cell">
-                                  ₹{" "}
+                                  â‚¹{" "}
                                   {shownBillAmount.toLocaleString(
                                     "en-IN",
                                     {
@@ -63289,7 +63743,7 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
 
                                 {/* RECEIPT / ADJUST */}
                                 <td className="settle-amount-cell settle-received-value">
-                                  ₹{" "}
+                                  â‚¹{" "}
                                   {receiptAdjustAmount.toLocaleString(
                                     "en-IN",
                                     {
@@ -63306,7 +63760,7 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                                     : "settle-zero-value"
                                     }`}
                                 >
-                                  ₹{" "}
+                                  â‚¹{" "}
                                   {pendingAmount.toLocaleString(
                                     "en-IN",
                                     {
@@ -63387,7 +63841,7 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                         <div>
                           <span>Receipt/Adjust</span>
                           <strong>
-                            ₹{" "}
+                            â‚¹{" "}
                             {Number(
                               settleLoadSummary.totalReceiptAdjustAmt ||
                               0
@@ -63407,7 +63861,7 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                         <div>
                           <span>Pending Amount</span>
                           <strong>
-                            ₹{" "}
+                            â‚¹{" "}
                             {Number(
                               settleLoadSummary.totalPendingAmt || 0
                             ).toLocaleString("en-IN", {
@@ -63426,7 +63880,7 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                         <div>
                           <span>Cancelled Amount</span>
                           <strong>
-                            ₹{" "}
+                            â‚¹{" "}
                             {Number(
                               settleLoadSummary.totalCancelAmt || 0
                             ).toLocaleString("en-IN", {
@@ -63445,7 +63899,7 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                         <div>
                           <span>Gross Amount</span>
                           <strong>
-                            ₹{" "}
+                            â‚¹{" "}
                             {Number(
                               settleLoadSummary.totalAmt || 0
                             ).toLocaleString("en-IN", {
@@ -63464,7 +63918,7 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                         <div>
                           <span>Cash Amount</span>
                           <strong>
-                            ₹{" "}
+                            â‚¹{" "}
                             {Number(
                               settleLoadSummary.totalCashAmt || 0
                             ).toLocaleString("en-IN", {
@@ -63483,7 +63937,7 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                         <div>
                           <span>Cheque Amount</span>
                           <strong>
-                            ₹{" "}
+                            â‚¹{" "}
                             {Number(
                               settleLoadSummary.totalChequeAmt || 0
                             ).toLocaleString("en-IN", {
@@ -63502,7 +63956,7 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                         <div>
                           <span>Others Amount</span>
                           <strong>
-                            ₹{" "}
+                            â‚¹{" "}
                             {Number(
                               settleLoadSummary.totalOtherAmt || 0
                             ).toLocaleString("en-IN", {
@@ -63549,7 +64003,7 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                       cursor: "pointer",
                     }}
                   >
-                    ×
+                    Ã—
                   </button>
 
                   <div style={{ fontWeight: 700, marginTop: "8px", marginBottom: "14px" }}>
@@ -64256,7 +64710,7 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                           className="billing-action-button billing-preview-button"
                         >
                           <span className="billing-button-icon">
-                            ◉
+                            â—‰
                           </span>
 
                           Preview
@@ -64268,7 +64722,7 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                           onClick={saveQuotation}
                         >
                           <span className="billing-button-icon">
-                            ▣
+                            â–£
                           </span>
 
                           {editingInvoiceId ? "Update" : "Save"}
@@ -64280,7 +64734,7 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                           onClick={saveQuotation}
                         >
                           <span className="billing-button-icon">
-                            ▤
+                            â–¤
                           </span>
 
                           {editingInvoiceId
@@ -64293,7 +64747,7 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                           className="billing-more-button"
                           aria-label="More actions"
                         >
-                          ⋮
+                          â‹®
                         </button>
 
                         <button
@@ -64302,7 +64756,7 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                           onClick={closeForm}
                           aria-label="Close quotation"
                         >
-                          ✕
+                          âœ•
                         </button>
                       </div>
                     </div>
@@ -64653,7 +65107,7 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                                         mapping.accountName ||
                                         "Name not available"}
 
-                                      {isBlacklisted ? " 🚫" : ""}
+                                      {isBlacklisted ? " ðŸš«" : ""}
                                     </option>
                                   );
                                 })}
@@ -64789,7 +65243,7 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                             className="billing-toolbar-button"
                             onClick={handleAddInvoiceRow}
                           >
-                            <span>＋</span>
+                            <span>ï¼‹</span>
                             Add Product
                           </button>
 
@@ -64797,7 +65251,7 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                             type="button"
                             className="billing-toolbar-button"
                           >
-                            <span>▦</span>
+                            <span>â–¦</span>
                             Scan Barcode
                           </button>
 
@@ -64805,7 +65259,7 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                             type="button"
                             className="billing-toolbar-button"
                           >
-                            <span>ÏŸ</span>
+                            <span>ÃÅ¸</span>
                             Fast Add
                           </button>
 
@@ -65822,7 +66276,7 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                                             : "Delete row"
                                         }
                                       >
-                                        🗑
+                                        ðŸ—‘
                                       </button>
                                     </td>
                                   </tr>
@@ -65841,7 +66295,7 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                               className="billing-grid-small-button"
                               onClick={handleAddInvoiceRow}
                             >
-                              ＋ Add Row
+                              ï¼‹ Add Row
                             </button>
 
                             <button
@@ -65852,7 +66306,7 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                                 setSelectedSalesDetailRow(-1);
                               }}
                             >
-                              ♧ Clear All
+                              â™§ Clear All
                             </button>
                           </div>
 
@@ -65901,7 +66355,7 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
 
                                 <span>
                                   <b>MRP:</b>{" "}
-                                  ₹
+                                  â‚¹
                                   {Number(
                                     selectedSalesDetailItem.mrp || 0
                                   ).toFixed(2)}
@@ -65927,7 +66381,7 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
 
                                 <span>
                                   <b>Purchase:</b>{" "}
-                                  ₹
+                                  â‚¹
                                   {getSalesDetailPurchaseRate(
                                     selectedSalesDetailItem
                                   ).toFixed(2)}
@@ -65954,7 +66408,7 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                                   }}
                                 >
                                   <b>Net Amount:</b>{" "}
-                                  ₹
+                                  â‚¹
                                   {getSalesDetailNetAmount(
                                     selectedSalesDetailItem
                                   ).toFixed(2)}
@@ -66135,9 +66589,9 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
 
                                   <span>{batchNo}</span>
 
-                                  <span>₹{mrp}</span>
+                                  <span>â‚¹{mrp}</span>
 
-                                  <span>₹{rate}</span>
+                                  <span>â‚¹{rate}</span>
 
                                   <span>{stock}</span>
                                 </div>
@@ -66179,7 +66633,7 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                           <span>Gross</span>
 
                           <strong>
-                            ₹
+                            â‚¹
                             {Number(
                               invoiceSummary.gross || 0
                             ).toFixed(2)}
@@ -66192,7 +66646,7 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                           <span>TPR</span>
 
                           <strong>
-                            -₹
+                            -â‚¹
                             {Number(
                               invoiceSummary.tpr || 0
                             ).toFixed(2)}
@@ -66205,7 +66659,7 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                           <span>Scheme</span>
 
                           <strong>
-                            -₹
+                            -â‚¹
                             {Number(
                               invoiceSummary.scheme || 0
                             ).toFixed(2)}
@@ -66218,7 +66672,7 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                           <span>Star</span>
 
                           <strong>
-                            -₹
+                            -â‚¹
                             {Number(
                               invoiceSummary.star || 0
                             ).toFixed(2)}
@@ -66231,7 +66685,7 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                           <span>Cash Disc.</span>
 
                           <strong>
-                            -₹
+                            -â‚¹
                             {Number(
                               invoiceSummary.cd || 0
                             ).toFixed(2)}
@@ -66244,7 +66698,7 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                           <span>Display</span>
 
                           <div className="billing-summary-input-wrap">
-                            <span>-₹</span>
+                            <span>-â‚¹</span>
 
                             <input
                               type="text"
@@ -66270,7 +66724,7 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                           <span>Coupon</span>
 
                           <div className="billing-summary-input-wrap">
-                            <span>-₹</span>
+                            <span>-â‚¹</span>
 
                             <input
                               type="text"
@@ -66296,7 +66750,7 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                           <span>Taxable</span>
 
                           <strong>
-                            ₹
+                            â‚¹
                             {Number(
                               invoiceTaxableValue || 0
                             ).toFixed(2)}
@@ -66309,7 +66763,7 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                           <span>CGST</span>
 
                           <strong>
-                            ₹
+                            â‚¹
                             {Number(
                               invoiceSummary.cgst || 0
                             ).toFixed(2)}
@@ -66322,7 +66776,7 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                           <span>SGST</span>
 
                           <strong>
-                            ₹
+                            â‚¹
                             {Number(
                               invoiceSummary.sgst || 0
                             ).toFixed(2)}
@@ -66335,7 +66789,7 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                           <span>IGST</span>
 
                           <strong>
-                            ₹
+                            â‚¹
                             {Number(
                               invoiceSummary.igst || 0
                             ).toFixed(2)}
@@ -66348,7 +66802,7 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                           <span>Add / Less</span>
 
                           <div className="billing-summary-input-wrap billing-add-less-input-wrap">
-                            <span>₹</span>
+                            <span>â‚¹</span>
 
                             <input
                               type="text"
@@ -66374,7 +66828,7 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                           <span>Net Amount</span>
 
                           <strong>
-                            ₹
+                            â‚¹
                             {Number(
                               invoiceNetBeforeCreditNote ||
                               0
@@ -67131,7 +67585,7 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                                   <th>Salesman</th>
                                   <th>Area</th>
                                   <th className="premium-load-amount-heading">
-                                    Amount (₹)
+                                    Amount (â‚¹)
                                   </th>
                                 </tr>
                               </thead>
@@ -67224,7 +67678,7 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                                           </td>
 
                                           <td className="premium-load-amount-cell">
-                                            ₹
+                                            â‚¹
                                             {Number(
                                               item.amount ||
                                               item.billAmount ||
@@ -67258,7 +67712,7 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                             <strong className="premium-load-footer-total">
                               Total Amount:
                               <b>
-                                ₹{" "}
+                                â‚¹{" "}
                                 {Number(
                                   selectedCreateLoadSummary?.totalAmount || 0
                                 ).toLocaleString("en-IN", {
@@ -67318,7 +67772,7 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                               <span>Total Amount</span>
 
                               <strong className="premium-load-total-amount-value">
-                                ₹{" "}
+                                â‚¹{" "}
                                 {Number(
                                   selectedCreateLoadSummary?.totalAmount || 0
                                 ).toLocaleString("en-IN", {
@@ -67970,11 +68424,11 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                                   ? "Product Wise"
                                   : "Party Wise"}
 
-                                <span>•</span>
+                                <span>â€¢</span>
 
                                 {printLoadItems.length} rows
 
-                                <span>•</span>
+                                <span>â€¢</span>
 
                                 {printLoadPages.length} page(s)
                               </p>
@@ -68697,11 +69151,11 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                                 <td>
                                   <div className="firm-ui-location-cell">
                                     <strong>{firm.city || "Not specified"}</strong>
-                                    <span>{firm.state || firm.country || "—"}</span>
+                                    <span>{firm.state || firm.country || "â€”"}</span>
                                   </div>
                                 </td>
 
-                                <td>{firm.mobileNo || "—"}</td>
+                                <td>{firm.mobileNo || "â€”"}</td>
 
                                 <td>
                                   <span className="firm-ui-gst-value">
@@ -69273,7 +69727,7 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                                               year: "numeric",
                                             }
                                           )
-                                          : "—"}
+                                          : "â€”"}
                                       </strong>
 
                                       <span>
@@ -72557,7 +73011,7 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                       </select>
                       {accountForm.blackListed === "YES" && (
                         <div style={{ color: '#dc2626', fontSize: '10px', marginTop: '4px', fontWeight: '600' }}>
-                          ⚠️ This party is BLACKLISTED
+                          âš ï¸ This party is BLACKLISTED
                         </div>
                       )}
                     </div>
@@ -75495,7 +75949,7 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                           type="button"
                           className="billing-action-button billing-preview-button"
                         >
-                          <span className="billing-button-icon">◉</span>
+                          <span className="billing-button-icon">â—‰</span>
                           Preview
                         </button>
 
@@ -75504,7 +75958,7 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                           className="billing-action-button billing-save-button"
                           onClick={saveInvoice}
                         >
-                          <span className="billing-button-icon">▣</span>
+                          <span className="billing-button-icon">â–£</span>
 
                           {editingInvoiceId ? "Update" : "Save"}
                         </button>
@@ -75514,7 +75968,7 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                           className="billing-action-button billing-save-print-button"
                           onClick={saveInvoice}
                         >
-                          <span className="billing-button-icon">▤</span>
+                          <span className="billing-button-icon">â–¤</span>
 
                           {editingInvoiceId
                             ? "Update Invoice"
@@ -75526,7 +75980,7 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                           className="billing-more-button"
                           aria-label="More actions"
                         >
-                          ⋮
+                          â‹®
                         </button>
 
                         <button
@@ -75539,7 +75993,7 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                           }
                           aria-label="Close invoice"
                         >
-                          ✕
+                          âœ•
                         </button>
                       </div>
                     </div>
@@ -75844,7 +76298,7 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                                       }
                                     >
                                       {mapping.accountName}
-                                      {isBlacklisted ? " 🚫" : ""}
+                                      {isBlacklisted ? " ðŸš«" : ""}
                                     </option>
                                   );
                                 })}
@@ -76093,7 +76547,7 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                                 : "Add Product"
                             }
                           >
-                            <span>＋</span>
+                            <span>ï¼‹</span>
                             Add Product
                           </button>
 
@@ -76107,7 +76561,7 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                                 : "Scan Barcode"
                             }
                           >
-                            <span>▦</span>
+                            <span>â–¦</span>
                             Scan Barcode
                           </button>
 
@@ -76121,7 +76575,7 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                                 : "Fast Add"
                             }
                           >
-                            <span>ÏŸ</span>
+                            <span>ÃÅ¸</span>
                             Fast Add
                           </button>
 
@@ -76602,11 +77056,11 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                                                     </span>
 
                                                     <span>
-                                                      ₹{mrp}
+                                                      â‚¹{mrp}
                                                     </span>
 
                                                     <span>
-                                                      ₹{rate}
+                                                      â‚¹{rate}
                                                     </span>
 
                                                     <span>
@@ -77153,7 +77607,7 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                                   : "Add Row"
                               }
                             >
-                              ＋ Add Row
+                              ï¼‹ Add Row
                             </button>
 
                             <button
@@ -77177,7 +77631,7 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                                   : "Clear All"
                               }
                             >
-                              ♧ Clear All
+                              â™§ Clear All
                             </button>
                           </div>
 
@@ -77222,7 +77676,7 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                                 </span>
 
                                 <span>
-                                  <strong>MRP:</strong> ₹
+                                  <strong>MRP:</strong> â‚¹
                                   {Number(
                                     selectedSalesDetailItem.mrp || 0
                                   ).toFixed(2)}
@@ -77257,7 +77711,7 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                                 </span>
 
                                 <span>
-                                  <strong>Purchase:</strong> ₹
+                                  <strong>Purchase:</strong> â‚¹
                                   {getSalesDetailPurchaseRate(
                                     selectedSalesDetailItem
                                   ).toFixed(2)}
@@ -77277,7 +77731,7 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                                     fontWeight: "800",
                                   }}
                                 >
-                                  <strong>Net Amount:</strong> ₹
+                                  <strong>Net Amount:</strong> â‚¹
                                   {getSalesDetailNetAmount(
                                     selectedSalesDetailItem
                                   ).toFixed(2)}
@@ -77369,7 +77823,7 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                           <span>Gross</span>
 
                           <strong>
-                            ₹{Number(
+                            â‚¹{Number(
                               invoiceSummary.gross || 0
                             ).toFixed(2)}
                           </strong>
@@ -77379,7 +77833,7 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                           <span>TPR</span>
 
                           <strong>
-                            -₹{Number(
+                            -â‚¹{Number(
                               invoiceSummary.tpr || 0
                             ).toFixed(2)}
                           </strong>
@@ -77389,7 +77843,7 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                           <span>Scheme</span>
 
                           <strong>
-                            -₹{Number(
+                            -â‚¹{Number(
                               invoiceSummary.scheme || 0
                             ).toFixed(2)}
                           </strong>
@@ -77399,7 +77853,7 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                           <span>Star</span>
 
                           <strong>
-                            -₹{Number(
+                            -â‚¹{Number(
                               invoiceSummary.star || 0
                             ).toFixed(2)}
                           </strong>
@@ -77409,7 +77863,7 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                           <span>Cash Disc.</span>
 
                           <strong>
-                            -₹{Number(
+                            -â‚¹{Number(
                               invoiceSummary.cd || 0
                             ).toFixed(2)}
                           </strong>
@@ -77420,7 +77874,7 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                           <span>Display</span>
 
                           <div className="billing-summary-input-wrap">
-                            <span>-₹</span>
+                            <span>-â‚¹</span>
 
                             <input
                               type="text"
@@ -77444,7 +77898,7 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                           <span>Coupon</span>
 
                           <div className="billing-summary-input-wrap">
-                            <span>-₹</span>
+                            <span>-â‚¹</span>
 
                             <input
                               type="text"
@@ -77467,7 +77921,7 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                           <span>Taxable</span>
 
                           <strong>
-                            ₹{Number(
+                            â‚¹{Number(
                               invoiceTaxableValue || 0
                             ).toFixed(2)}
                           </strong>
@@ -77477,7 +77931,7 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                           <span>CGST</span>
 
                           <strong>
-                            ₹{Number(
+                            â‚¹{Number(
                               invoiceSummary.cgst || 0
                             ).toFixed(2)}
                           </strong>
@@ -77487,7 +77941,7 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                           <span>SGST</span>
 
                           <strong>
-                            ₹{Number(
+                            â‚¹{Number(
                               invoiceSummary.sgst || 0
                             ).toFixed(2)}
                           </strong>
@@ -77497,7 +77951,7 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                           <span>IGST</span>
 
                           <strong>
-                            ₹{Number(
+                            â‚¹{Number(
                               invoiceSummary.igst || 0
                             ).toFixed(2)}
                           </strong>
@@ -77508,7 +77962,7 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                           <span>Add / Less</span>
 
                           <div className="billing-summary-input-wrap billing-add-less-input-wrap">
-                            <span>₹</span>
+                            <span>â‚¹</span>
 
                             <input
                               type="text"
@@ -77532,7 +77986,7 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                           <span>Original Net</span>
 
                           <strong>
-                            ₹{Number(
+                            â‚¹{Number(
                               invoiceNetBeforeCreditNote || 0
                             ).toFixed(2)}
                           </strong>
@@ -77543,7 +77997,7 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                           <span>Credit Note</span>
 
                           <strong>
-                            -₹{Number(
+                            -â‚¹{Number(
                               invoiceSummary.creditNote || 0
                             ).toFixed(2)}
                           </strong>
@@ -77554,7 +78008,7 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                           <span>Net Payable</span>
 
                           <strong>
-                            ₹{Number(
+                            â‚¹{Number(
                               invoiceNetPayable || 0
                             ).toFixed(2)}
                           </strong>
@@ -78131,11 +78585,11 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                                               </span>
 
                                               <span className="billing-product-mrp">
-                                                ₹{mrp.toFixed(2)}
+                                                â‚¹{mrp.toFixed(2)}
                                               </span>
 
                                               <span className="billing-product-rate">
-                                                ₹{rate.toFixed(2)}
+                                                â‚¹{rate.toFixed(2)}
                                               </span>
 
                                               <span className="billing-product-stock">
@@ -78454,7 +78908,7 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
 
                                 {/* Action */}
                                 <td style={{ position: 'sticky', right: 0, backgroundColor: index === purchaseActiveRow ? '#eff6ff' : 'white', zIndex: 5 }}>
-                                  <button className="btn-delete" onClick={() => deletePurchaseItem(index)}>🗑 Delete</button>
+                                  <button className="btn-delete" onClick={() => deletePurchaseItem(index)}>ðŸ—‘ Delete</button>
                                 </td>
                               </tr>
                             ))}
@@ -78474,24 +78928,24 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                     </div>
 
                     <div className="summary-bar purchase-summary-grid">
-                      <div>MRP Total: <span className="amount">₹{purchaseFormData.mrpTotal || '0.00'}</span></div>
+                      <div>MRP Total: <span className="amount">â‚¹{purchaseFormData.mrpTotal || '0.00'}</span></div>
                       <div>TCS %: <span className="amount">{purchaseFormData.tcbPercent || '0.00'}%</span></div>
-                      <div>TCS Amount: <span className="amount">-₹{purchaseFormData.tcbAmount || '0.00'}</span></div>
-                      <div>DISC1: <span className="amount">-₹{purchaseFormData.diBc1 || '0.00'}</span></div>
-                      <div>After DISC1: <span className="amount">₹{purchaseFormData.afterDiBc1 || '0.00'}</span></div>
-                      <div>Gross Amount: <span className="amount">₹{purchaseFormData.groBsAmt || '0.00'}</span></div>
-                      <div>DISC2: <span className="amount">-₹{purchaseFormData.diBc2 || '0.00'}</span></div>
-                      <div>After DISC2: <span className="amount">₹{purchaseFormData.afterDiBc2 || '0.00'}</span></div>
+                      <div>TCS Amount: <span className="amount">-â‚¹{purchaseFormData.tcbAmount || '0.00'}</span></div>
+                      <div>DISC1: <span className="amount">-â‚¹{purchaseFormData.diBc1 || '0.00'}</span></div>
+                      <div>After DISC1: <span className="amount">â‚¹{purchaseFormData.afterDiBc1 || '0.00'}</span></div>
+                      <div>Gross Amount: <span className="amount">â‚¹{purchaseFormData.groBsAmt || '0.00'}</span></div>
+                      <div>DISC2: <span className="amount">-â‚¹{purchaseFormData.diBc2 || '0.00'}</span></div>
+                      <div>After DISC2: <span className="amount">â‚¹{purchaseFormData.afterDiBc2 || '0.00'}</span></div>
 
-                      <div>GST Amount: <span className="amount">+₹{purchaseFormData.qbtAmt || '0.00'}</span></div>
-                      <div>CGST Amount: <span className="amount">₹{Number(purchaseFormData.cgstAmt || 0).toFixed(2)}</span></div>
-                      <div>SGST Amount: <span className="amount">₹{Number(purchaseFormData.sgstAmt || 0).toFixed(2)}</span></div>
-                      <div>IGST Amount: <span className="amount">₹{Number(purchaseFormData.igstAmt || 0).toFixed(2)}</span></div>
+                      <div>GST Amount: <span className="amount">+â‚¹{purchaseFormData.qbtAmt || '0.00'}</span></div>
+                      <div>CGST Amount: <span className="amount">â‚¹{Number(purchaseFormData.cgstAmt || 0).toFixed(2)}</span></div>
+                      <div>SGST Amount: <span className="amount">â‚¹{Number(purchaseFormData.sgstAmt || 0).toFixed(2)}</span></div>
+                      <div>IGST Amount: <span className="amount">â‚¹{Number(purchaseFormData.igstAmt || 0).toFixed(2)}</span></div>
 
-                      <div>DISC3: <span className="amount">-₹{purchaseFormData.diBc3 || '0.00'}</span></div>
-                      <div>After DISC3: <span className="amount">₹{purchaseFormData.afterDiBc3 || '0.00'}</span></div>
-                      <div>Rounding: <span className="amount">₹{purchaseFormData.rounding || '0.00'}</span></div>
-                      <div className="net-amount">Net Amount: <strong>₹{purchaseFormData.netAmt || '0.00'}</strong></div>
+                      <div>DISC3: <span className="amount">-â‚¹{purchaseFormData.diBc3 || '0.00'}</span></div>
+                      <div>After DISC3: <span className="amount">â‚¹{purchaseFormData.afterDiBc3 || '0.00'}</span></div>
+                      <div>Rounding: <span className="amount">â‚¹{purchaseFormData.rounding || '0.00'}</span></div>
+                      <div className="net-amount">Net Amount: <strong>â‚¹{purchaseFormData.netAmt || '0.00'}</strong></div>
                     </div>
                   </section>
 
@@ -79745,7 +80199,7 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                             <span>
                               Gross:
                               <strong>
-                                ₹
+                                â‚¹
                                 {creditNoteItems
                                   .reduce(
                                     (total, row) =>
@@ -79771,7 +80225,7 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                         <div>
                           Gross Amount:
                           <span className="amount">
-                            ₹{Number(
+                            â‚¹{Number(
                               creditNoteSummary.grossAmt || 0
                             ).toFixed(2)}
                           </span>
@@ -79780,7 +80234,7 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                         <div>
                           Scheme Amount:
                           <span className="amount">
-                            -₹{Number(
+                            -â‚¹{Number(
                               creditNoteSummary.schemeAmt || 0
                             ).toFixed(2)}
                           </span>
@@ -79789,7 +80243,7 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                         <div>
                           TPR Amount:
                           <span className="amount">
-                            -₹{Number(
+                            -â‚¹{Number(
                               creditNoteSummary.tprAmt || 0
                             ).toFixed(2)}
                           </span>
@@ -79798,7 +80252,7 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                         <div>
                           Cash Discount:
                           <span className="amount">
-                            -₹{Number(
+                            -â‚¹{Number(
                               creditNoteSummary.cashDisc || 0
                             ).toFixed(2)}
                           </span>
@@ -79807,7 +80261,7 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                         <div>
                           Star Discount:
                           <span className="amount">
-                            -₹{Number(
+                            -â‚¹{Number(
                               creditNoteSummary.starAmt || 0
                             ).toFixed(2)}
                           </span>
@@ -79816,7 +80270,7 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                         <div>
                           Display Amount:
                           <span className="amount">
-                            -₹{Number(
+                            -â‚¹{Number(
                               creditNoteSummary.display || 0
                             ).toFixed(2)}
                           </span>
@@ -79825,7 +80279,7 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                         <div>
                           Coupon Amount:
                           <span className="amount">
-                            -₹{Number(
+                            -â‚¹{Number(
                               creditNoteSummary.coupon || 0
                             ).toFixed(2)}
                           </span>
@@ -79834,7 +80288,7 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                         <div>
                           GST Amount:
                           <span className="amount">
-                            +₹{Number(
+                            +â‚¹{Number(
                               creditNoteSummary.gstAmt || 0
                             ).toFixed(2)}
                           </span>
@@ -79843,7 +80297,7 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                         <div>
                           Cess Amount:
                           <span className="amount">
-                            +₹{Number(
+                            +â‚¹{Number(
                               creditNoteSummary.cessAmt || 0
                             ).toFixed(2)}
                           </span>
@@ -79861,7 +80315,7 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                         <div>
                           TCS Amount:
                           <span className="amount">
-                            +₹{Number(
+                            +â‚¹{Number(
                               creditNoteSummary.tcsAmt || 0
                             ).toFixed(2)}
                           </span>
@@ -79870,7 +80324,7 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                         <div>
                           Bill Balance:
                           <span className="amount">
-                            ₹{Number(
+                            â‚¹{Number(
                               creditNoteSummary.billBalAmt || 0
                             ).toFixed(2)}
                           </span>
@@ -79879,7 +80333,7 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                         <div>
                           Add / Less:
                           <span className="amount">
-                            ₹{Number(
+                            â‚¹{Number(
                               creditNoteSummary.addLess || 0
                             ).toFixed(2)}
                           </span>
@@ -79888,7 +80342,7 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                         <div>
                           Rounding:
                           <span className="amount">
-                            ₹{Number(
+                            â‚¹{Number(
                               creditNoteSummary.rounding || 0
                             ).toFixed(2)}
                           </span>
@@ -79897,7 +80351,7 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                         <div className="net-amount">
                           Net Amount:
                           <strong>
-                            ₹{Number(
+                            â‚¹{Number(
                               creditNoteSummary.netAmt || 0
                             ).toFixed(2)}
                           </strong>
@@ -79947,7 +80401,7 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                                       ""}
                                   </strong>
 
-                                  {" — "}
+                                  {" â€” "}
 
                                   {creditBatchProduct?.productName ||
                                     ""}
@@ -80382,11 +80836,11 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                                               </td>
 
                                               <td className="numeric">
-                                                ₹{mrp.toFixed(2)}
+                                                â‚¹{mrp.toFixed(2)}
                                               </td>
 
                                               <td className="numeric">
-                                                ₹{salesRate.toFixed(2)}
+                                                â‚¹{salesRate.toFixed(2)}
                                               </td>
 
                                               <td className="numeric">
@@ -81674,8 +82128,8 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                                   </span>
 
                                   <span>-</span>
-                                  <span>₹0.00</span>
-                                  <span>₹0.00</span>
+                                  <span>â‚¹0.00</span>
+                                  <span>â‚¹0.00</span>
                                   <span>0.00</span>
                                 </div>
                               );
@@ -81692,15 +82146,15 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                     </div>
 
                     <div className="summary-bar debit-credit-summary-grid">
-                      <div>Gross Amt: <span className="amount">₹{debitNoteSummary.grossAmt.toFixed(2)}</span></div>
-                      <div>GST Amt: <span className="amount">+₹{debitNoteSummary.gstAmt.toFixed(2)}</span></div>
-                      <div className="tcs-field">TCS %: <input className="erp-input small" placeholder="0" value={debitNoteSummary.tcsPercent} onChange={(e) => setDebitNoteSummary({ ...debitNoteSummary, tcsPercent: e.target.value })} /> TCS Amt: ₹{debitNoteSummary.tcsAmt}</div>
-                      <div>Before Vat Disc Amt: <span className="amount">₹{debitNoteSummary.beforeVatDiscAmt.toFixed(2)}</span></div>
-                      <div>Surcharge: <span className="amount">₹{debitNoteSummary.surcharge}</span></div>
-                      <div>Rounding: <span className="amount">₹{debitNoteSummary.rounding}</span></div>
-                      <div>Before Vat Add Amt: <span className="amount">₹{debitNoteSummary.beforeVatAddAmt}</span></div>
-                      <div>After Vat Disc Amt: <span className="amount">₹{debitNoteSummary.afterVatDiscAmt.toFixed(2)}</span></div>
-                      <div className="net-amount">Net Amt: <strong>₹{debitNoteSummary.netAmt}</strong></div>
+                      <div>Gross Amt: <span className="amount">â‚¹{debitNoteSummary.grossAmt.toFixed(2)}</span></div>
+                      <div>GST Amt: <span className="amount">+â‚¹{debitNoteSummary.gstAmt.toFixed(2)}</span></div>
+                      <div className="tcs-field">TCS %: <input className="erp-input small" placeholder="0" value={debitNoteSummary.tcsPercent} onChange={(e) => setDebitNoteSummary({ ...debitNoteSummary, tcsPercent: e.target.value })} /> TCS Amt: â‚¹{debitNoteSummary.tcsAmt}</div>
+                      <div>Before Vat Disc Amt: <span className="amount">â‚¹{debitNoteSummary.beforeVatDiscAmt.toFixed(2)}</span></div>
+                      <div>Surcharge: <span className="amount">â‚¹{debitNoteSummary.surcharge}</span></div>
+                      <div>Rounding: <span className="amount">â‚¹{debitNoteSummary.rounding}</span></div>
+                      <div>Before Vat Add Amt: <span className="amount">â‚¹{debitNoteSummary.beforeVatAddAmt}</span></div>
+                      <div>After Vat Disc Amt: <span className="amount">â‚¹{debitNoteSummary.afterVatDiscAmt.toFixed(2)}</span></div>
+                      <div className="net-amount">Net Amt: <strong>â‚¹{debitNoteSummary.netAmt}</strong></div>
                     </div>
                   </div>
 
@@ -81854,7 +82308,7 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                   <div className="mapping-table-card">
                     <div className="grid-header">
                       <h3>Mapping for {areaToPartyCompany.code} - {areaToPartyCompany.name} ({areaToPartyData.length} accounts)</h3>
-                      <div className="form-actions"><button className="btn-save" onClick={saveAreaToPartyMapping}>💾 Save Mapping</button><button className="btn-cancel" onClick={resetAreaToPartyMapping}>🔄 Reset</button></div>
+                      <div className="form-actions"><button className="btn-save" onClick={saveAreaToPartyMapping}>ðŸ’¾ Save Mapping</button><button className="btn-cancel" onClick={resetAreaToPartyMapping}>ðŸ”„ Reset</button></div>
                     </div>
                     <div className="mapping-table-wrap">
                       <table className="mapping-list-table">
@@ -82028,7 +82482,7 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                   className="ts-pm-close"
                   onClick={() => setShowProductMappingModal(false)}
                 >
-                  ×
+                  Ã—
                 </button>
               </div>
 
@@ -82195,7 +82649,7 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                     padding: '4px 8px'
                   }}
                 >
-                  ✕
+                  âœ•
                 </button>
               </div>
 
@@ -82339,7 +82793,7 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                             <td style={{ padding: '8px' }}>
                               <span style={{ fontWeight: '500', color: '#2563eb' }}>{batch.batchNo}</span>
                             </td>
-                            <td style={{ padding: '8px', textAlign: 'right' }}>₹{Number(
+                            <td style={{ padding: '8px', textAlign: 'right' }}>â‚¹{Number(
                               batch.mrp ??
                               batch.MRP ??
                               0
@@ -82367,7 +82821,7 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                                 ).toFixed(2)}
                               </span>
                             </td>
-                            <td style={{ padding: '8px', textAlign: 'right' }}>₹{Number(
+                            <td style={{ padding: '8px', textAlign: 'right' }}>â‚¹{Number(
                               batch.salesRate ??
                               batch.SalesRate ??
                               batch.sRate ??
@@ -82376,7 +82830,7 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                               batch.Rate ??
                               0
                             ).toFixed(2)}</td>
-                            <td style={{ padding: '8px', textAlign: 'right' }}>₹{Number(
+                            <td style={{ padding: '8px', textAlign: 'right' }}>â‚¹{Number(
                               batch.purchaseRate ??
                               batch.PurchaseRate ??
                               batch.purRate ??
@@ -82794,7 +83248,7 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
             >
               <div className="professional-modal-header">
                 <h3>{viewType} Details</h3>
-                <button onClick={() => setShowViewModal(false)}>×</button>
+                <button onClick={() => setShowViewModal(false)}>Ã—</button>
               </div>
 
               {viewType === "Firm" ? (
@@ -82805,8 +83259,8 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                 <div className="firm-view-grid">
                   <p><b>User Name:</b> {viewData.userName || "-"}</p>
                   <p><b>Role:</b> {viewData.role || "USER"}</p>
-                  <p><b>Password:</b> {viewData.password ? "••••••••" : "-"}</p>
-                  <p><b>Old Password:</b> {viewData.oldPassword ? "••••••••" : "-"}</p>
+                  <p><b>Password:</b> {viewData.password ? "â€¢â€¢â€¢â€¢â€¢â€¢â€¢â€¢" : "-"}</p>
+                  <p><b>Old Password:</b> {viewData.oldPassword ? "â€¢â€¢â€¢â€¢â€¢â€¢â€¢â€¢" : "-"}</p>
                   <p><b>Firm Name:</b> {viewData.firmName || "-"}</p>
                   <p><b>Status:</b> {viewData.status || "Active"}</p>
                   {viewData.createdDate && <p><b>Created:</b> {viewData.createdDate}</p>}
@@ -82892,11 +83346,11 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                     <div><strong>TCS %:</strong> {viewData.tcsPercent || "0.00"}</div>
                     <div><strong>Allow In Purchase:</strong> {viewData.allowInPurchase || "N"}</div>
 
-                    {/* 🔥 FIX: Display credit fields in view modal */}
+                    {/* ðŸ”¥ FIX: Display credit fields in view modal */}
                     <div><strong>Credit Days:</strong> {viewData.creditDays || "0"}</div>
                     <div><strong>Credit Bills:</strong> {viewData.creditBills || "0"}</div>
                     <div><strong>Lock Days:</strong> {viewData.lockDays || "0"}</div>
-                    <div><strong>Credit Amount:</strong> ₹{Number(viewData.creditAmt || 0).toFixed(2)}</div>
+                    <div><strong>Credit Amount:</strong> â‚¹{Number(viewData.creditAmt || 0).toFixed(2)}</div>
                     <div>
                       <strong>Blacklisted:</strong>
                       <span style={{
@@ -82909,7 +83363,7 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                         background: String(viewData.blackListed || 'NO').toUpperCase() === 'YES' ? '#fee2e2' : '#dcfce7',
                         color: String(viewData.blackListed || 'NO').toUpperCase() === 'YES' ? '#dc2626' : '#059669'
                       }}>
-                        {String(viewData.blackListed || 'NO').toUpperCase() === 'YES' ? '⚠️ YES' : 'NO'}
+                        {String(viewData.blackListed || 'NO').toUpperCase() === 'YES' ? 'âš ï¸ YES' : 'NO'}
                       </span>
                     </div>
 
@@ -83062,7 +83516,7 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                     <p>
                       <b>Amount:</b>{" "}
                       <span style={{ fontWeight: "700", color: "#059669" }}>
-                        ₹{parseFloat(viewData.amount || 0).toLocaleString("en-IN", {
+                        â‚¹{parseFloat(viewData.amount || 0).toLocaleString("en-IN", {
                           minimumFractionDigits: 2,
                         })}
                       </span>
@@ -83101,10 +83555,10 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                               {item.qty || item.quantity || "-"}
                             </td>
                             <td style={{ padding: "8px", border: "1px solid #e5e7eb", textAlign: "right" }}>
-                              ₹{parseFloat(item.rate || 0).toFixed(2)}
+                              â‚¹{parseFloat(item.rate || 0).toFixed(2)}
                             </td>
                             <td style={{ padding: "8px", border: "1px solid #e5e7eb", textAlign: "right" }}>
-                              ₹{parseFloat(item.amount || item.grossAmt || 0).toFixed(2)}
+                              â‚¹{parseFloat(item.amount || item.grossAmt || 0).toFixed(2)}
                             </td>
                           </tr>
                         ))}
@@ -83275,9 +83729,9 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
 
                           <span>{batchNo}</span>
 
-                          <span>₹{mrp.toFixed(2)}</span>
+                          <span>â‚¹{mrp.toFixed(2)}</span>
 
-                          <span>₹{rate.toFixed(2)}</span>
+                          <span>â‚¹{rate.toFixed(2)}</span>
 
                           <span>{stock.toFixed(2)}</span>
                         </div>
@@ -83332,7 +83786,7 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                           ?.productCode || ""}
                       </strong>
 
-                      {" — "}
+                      {" â€” "}
 
                       {debitBatchProduct
                         ?.productName || ""}
@@ -83468,11 +83922,11 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                                   <td>{batchNo}</td>
 
                                   <td className="numeric">
-                                    ₹{mrp.toFixed(2)}
+                                    â‚¹{mrp.toFixed(2)}
                                   </td>
 
                                   <td className="numeric">
-                                    ₹{rate.toFixed(2)}
+                                    â‚¹{rate.toFixed(2)}
                                   </td>
 
                                   <td className="numeric">

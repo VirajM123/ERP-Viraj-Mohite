@@ -26,9 +26,10 @@ const printAccountDetailsSchema = new mongoose.Schema(
       showTaxSummary: { type: Boolean, default: true },
     },
     outputSettings: {
-      reportNumber: { type: String, default: "1", enum: ["1"] },
+      reportNumber: { type: String, default: "1", enum: ["1", "2"] },
       paperSize: { type: String, default: "A4", enum: ["A4", "A5"] },
       orientation: { type: String, default: "portrait", enum: ["portrait", "landscape"] },
+      fontSizePercent: { type: Number, default: 150, min: 80, max: 150 },
     },
     isActive: { type: Boolean, default: true },
   },
@@ -95,6 +96,13 @@ router.put("/", async (req, res) => {
     const paperSize = ["A4", "A5"].includes(outputSettings.paperSize)
       ? outputSettings.paperSize
       : current?.outputSettings?.paperSize || "A4";
+    const reportNumber = ["1", "2"].includes(String(outputSettings.reportNumber))
+      ? String(outputSettings.reportNumber)
+      : current?.outputSettings?.reportNumber || "1";
+    const requestedFontSize = Number(outputSettings.fontSizePercent);
+    const fontSizePercent = Number.isFinite(requestedFontSize)
+      ? Math.min(150, Math.max(80, Math.round(requestedFontSize)))
+      : current?.outputSettings?.fontSizePercent || 150;
 
     const update = {
       ...scope,
@@ -112,9 +120,10 @@ router.put("/", async (req, res) => {
         showTaxSummary: bool(printContent.showTaxSummary, current?.printContent?.showTaxSummary ?? true),
       },
       outputSettings: {
-        reportNumber: "1",
+        reportNumber,
         paperSize,
         orientation: paperSize === "A5" ? "landscape" : "portrait",
+        fontSizePercent,
       },
       isActive: true,
     };

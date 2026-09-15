@@ -40,6 +40,38 @@ const hydrateTransactionRows = (workbook, rows, transactionImport) => {
   });
 };
 const transactionImportKey = (entryType, payload, index) => `desktop-${entryType}-${String(payload.BillSeries || payload.vouSer || payload.CreditNoteSeries || payload.DebitNoteSeries || payload.billSeries || payload.docSeries || "no-series")}-${String(payload.BillNo || payload.vouNo || payload.CreditNoteNo || payload.DebitNoteNo || payload.rno || payload.docVNo || payload.vNo || payload.tranVNo || payload.colVNo || index + 1)}-${String(payload.BillDate || payload.invoiceDate || payload.VDate || payload.receiptDate || payload.vDate || payload.transactionDate || payload.collectionDate || "no-date")}`.replace(/[^a-zA-Z0-9_.:-]/g, "-").slice(0, 200);
+const IMPORT_CONCURRENCY = 8;
+const importConflictKeys = (entryType, payload = {}) => {
+  const definition = desktopTransactionImports[entryType];
+  const nested = definition?.nested && Array.isArray(payload[definition.nested]) ? payload[definition.nested] : [];
+  const clean = (value) => String(value ?? "").trim().toLowerCase();
+  const keys = new Set();
+  if (["DesktopPurchase", "DesktopSales", "DesktopCreditNote", "DesktopDebitNote"].includes(entryType)) {
+    const godown = clean(payload.GDCode || payload.gdCode);
+    nested.forEach((item) => {
+      const product = clean(item.productCode || item.prodCode || item.ProductCode || item.code || item.productId);
+      if (product) keys.add(`stock|${godown}|${product}`);
+    });
+  }
+  if (entryType === "DesktopReceipt") nested.forEach((bill) => {
+    if (bill.openingTransactionId) keys.add(`opening|${clean(bill.openingTransactionId)}`);
+    else keys.add(`sale|${clean(bill.trnSeries || bill.billSeries)}|${clean(bill.trnNo || bill.billNo)}`);
+  });
+  return keys;
+};
+const conflictFreeWaves = (records, entryType) => {
+  const pending = [...records]; const waves = [];
+  while (pending.length) {
+    const used = new Set(); const wave = [];
+    for (let index = 0; index < pending.length && wave.length < IMPORT_CONCURRENCY;) {
+      const keys = importConflictKeys(entryType, pending[index].payload);
+      if ([...keys].some((key) => used.has(key))) { index += 1; continue; }
+      keys.forEach((key) => used.add(key)); wave.push(pending.splice(index, 1)[0]);
+    }
+    waves.push(wave.length ? wave : [pending.shift()]);
+  }
+  return waves;
+};
 
 export default function ImportData({ onClose }) {
   const [company, setCompany] = useState(""); const [godown, setGodown] = useState("");
@@ -122,14 +154,20 @@ export default function ImportData({ onClose }) {
     try {
       if (transactionImport) {
         const states = [...validation.rows]; let imported = 0;
-        for (let index = 0; index < rows.length; index += 1) {
-          const payload = transactionPayload(rows[index]);
+        const prepared = rows.map((row, index) => ({ index, payload: transactionPayload(row) }));
+        const waves = conflictFreeWaves(prepared, entryType);
+        let firstFailure = null;
+        for (const wave of waves) {
+          await Promise.all(wave.map(async ({ index, payload }) => {
           payload.distributorId = localStorage.getItem("distributorId") || ""; payload.firmId = localStorage.getItem("firmId") || ""; payload.firmName = localStorage.getItem("firmName") || ""; payload._desktopImport = true;
           const headers = sessionHeaders(true); headers["Idempotency-Key"] = transactionImportKey(entryType, payload, index);
           const response = await fetch(`${API_URL}${transactionImport.endpoint}`, { method: "POST", headers, body: JSON.stringify(payload) });
           const result = await response.json().catch(() => ({}));
-          if (!response.ok) { states[index] = { row: index + 2, status: "Error", message: result.message || "Transaction import failed" }; setValidation({ ...validation, valid: imported, invalid: 1, rows: states }); throw new Error(`Imported ${imported} of ${rows.length}. Row ${index + 2} failed: ${states[index].message}`); }
-          imported += 1; states[index] = { row: index + 2, status: "Imported", message: "Saved through existing business logic" }; setValidation({ ...validation, valid: imported, invalid: 0, rows: states });
+          if (!response.ok) { states[index] = { row: index + 2, status: "Error", message: result.message || "Transaction import failed" }; firstFailure ||= { index, message: states[index].message }; return; }
+          imported += 1; states[index] = { row: index + 2, status: "Imported", message: "Saved through existing business logic" };
+          }));
+          setValidation({ ...validation, valid: imported, invalid: firstFailure ? 1 : 0, rows: [...states] });
+          if (firstFailure) throw new Error(`Imported ${imported} of ${rows.length}. Row ${firstFailure.index + 2} failed: ${firstFailure.message}`);
         }
         setNotice(`${imported} ${transactionImport.label} record(s) imported through the existing voucher business logic.`); return;
       }

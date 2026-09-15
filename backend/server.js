@@ -61,6 +61,13 @@ app.use(cors({
 app.use(express.json({ limit: process.env.JSON_BODY_LIMIT || "2mb" }));
 app.use(express.urlencoded({ extended: true, limit: process.env.FORM_BODY_LIMIT || "512kb" }));
 app.use((req, res, next) => {
+  const requestStartedAt = Date.now();
+  if (typeof res.on === "function") res.on("finish", () => {
+    const elapsedMs = Date.now() - requestStartedAt;
+    if (elapsedMs >= Number(process.env.SLOW_REQUEST_MS || 1000)) {
+      console.warn(`[slow-request] ${req.method} ${req.path} ${res.statusCode} ${elapsedMs.toFixed(1)}ms`);
+    }
+  });
   res.setHeader("X-Content-Type-Options", "nosniff");
   res.setHeader("X-Frame-Options", "DENY");
   res.setHeader("Referrer-Policy", "no-referrer");
@@ -1113,6 +1120,10 @@ const productSchema = new mongoose.Schema(
   },
   { timestamps: true, collection: "Mas_Product" }
 );
+groupSchema.index({ distributorId: 1, firmId: 1, isActive: 1, groupCode: 1 });
+categorySchema.index({ distributorId: 1, firmId: 1, isActive: 1, categoryCode: 1 });
+productSchema.index({ distributorId: 1, firmId: 1, isActive: 1, productCode: 1 });
+productSchema.index({ distributorId: 1, firmId: 1, isActive: 1, companyId: 1, productName: 1 });
 const Group = mongoose.model("Mas_Group", groupSchema);
 const Category = mongoose.model("Mas_Category", categorySchema);
 const Product = mongoose.model("Mas_Product", productSchema);
@@ -1219,6 +1230,9 @@ const accountSchema = new mongoose.Schema(
   },
   { timestamps: true, collection: "Mas_Account" }
 );
+accountSchema.index({ distributorId: 1, firmId: 1, accountCode: 1 });
+accountSchema.index({ distributorId: 1, firmId: 1, isActive: 1, accountName: 1 });
+accountSchema.index({ distributorId: 1, firmId: 1, areaCode: 1, isActive: 1 });
 const Account = mongoose.model("Mas_Account", accountSchema);
 
 const otherAccountSchema = new mongoose.Schema(
@@ -1282,6 +1296,7 @@ otherAccountSchema.index(
   { distributorId: 1, firmId: 1, accountCode: 1 },
   { unique: true }
 );
+otherAccountSchema.index({ distributorId: 1, firmId: 1, isActive: 1, accountName: 1 });
 const gstSchema = new mongoose.Schema(
   {
     gstCode: { type: String, required: true, trim: true },
@@ -1346,6 +1361,7 @@ salesmanSchema.index(
   { distributorId: 1, firmId: 1, salesmanCode: 1 },
   { unique: true }
 );
+salesmanSchema.index({ distributorId: 1, firmId: 1, isActive: 1, salesmanName: 1 });
 
 const Salesman = mongoose.model("Mas_Salesman", salesmanSchema);
 
@@ -1367,6 +1383,7 @@ areaSchema.index(
   { distributorId: 1, firmId: 1, areaCode: 1 },
   { unique: true }
 );
+areaSchema.index({ distributorId: 1, firmId: 1, isActive: 1, areaName: 1 });
 
 const Area = mongoose.model("Mas_Area", areaSchema);
 
@@ -1394,6 +1411,7 @@ godownSchema.index(
   { distributorId: 1, firmId: 1, godownCode: 1 },
   { unique: true }
 );
+godownSchema.index({ distributorId: 1, firmId: 1, isActive: 1, godownName: 1 });
 
 // Keep the model name distinct from the `Godown` description field used by
 // sales, quotation and purchase request payloads. Route-level destructuring of
@@ -1451,6 +1469,7 @@ customerBankSchema.index(
   { distributorId: 1, firmId: 1, bankCode: 1 },
   { unique: true }
 );
+customerBankSchema.index({ distributorId: 1, firmId: 1, isActive: 1, bankName: 1 });
 
 const CustomerBank = mongoose.model(
   "Mas_CustomerBank",
@@ -2094,6 +2113,16 @@ purchaseHeaderSchema.index(
   { distributorId: 1, firmId: 1, vouSer: 1, vouNo: 1 },
   { unique: true }
 );
+// Cover the default purchase list and the most common supplier/date lookups.
+// These are deliberately separate from the unique voucher index: that index
+// cannot satisfy the date sort used by the list once a firm has substantial
+// history.
+purchaseHeaderSchema.index(
+  { distributorId: 1, firmId: 1, isActive: 1, invoiceDate: -1, vouNo: -1, _id: -1 }
+);
+purchaseHeaderSchema.index(
+  { distributorId: 1, firmId: 1, supplierCode: 1, isActive: 1, invoiceDate: -1 }
+);
 
 const Stock = mongoose.model("Mas_Stock", stockSchema);
 app.use(
@@ -2366,6 +2395,12 @@ salesHeaderSchema.index(
 );
 salesHeaderSchema.index(
   { distributorId: 1, firmId: 1, SalesEntryType: 1, BillDate: -1, BillNo: -1, _id: -1 }
+);
+salesHeaderSchema.index(
+  { distributorId: 1, firmId: 1, PartyCode: 1, isActive: 1, IsBillCancelled: 1, DueDate: 1 }
+);
+salesHeaderSchema.index(
+  { distributorId: 1, firmId: 1, GDCode: 1, isActive: 1, BillDate: -1 }
 );
 
 const SalesHeader = mongoose.model("T_Sal_Header", salesHeaderSchema);
@@ -11553,6 +11588,14 @@ app.get(
         await PurchaseHeader.find(
           filter
         )
+          // A list row never consumes the potentially large line-item and
+          // historical snapshot arrays.  The existing detail endpoint still
+          // returns them when a user opens a voucher.
+          .select({
+            items: 0,
+            historicalSnapshot: 0,
+            desktopImportStockKeys: 0,
+          })
           .sort({
             invoiceDate: -1,
             vouNo: -1,
@@ -14251,38 +14294,14 @@ app.get("/api/stock/batches", ensureConnection, async (req, res) => {
       StockModel.find(filter).sort({ ExpDt: 1, Batch: 1 }).lean(),
       includeLocked !== "Y" ? StockModel.countDocuments(allRowsFilter) : Promise.resolve(0),
     ]);
-    console.log(
-      "STOCK BATCH FILTER:",
-      JSON.stringify(filter, null, 2)
-    );
-
-    console.table(
-      rows.map((stockRow) => ({
-        _id:
-          String(stockRow._id || ""),
-
-        ProdCode:
-          stockRow.ProdCode,
-
-        GDCode:
-          stockRow.GDCode,
-
-        Batch:
-          stockRow.Batch,
-
-        MRP:
-          stockRow.MRP,
-
-        PRate:
-          stockRow.PRate,
-
-        SRate:
-          stockRow.SRate,
-
-        Qty:
-          stockRow.Qty,
-      }))
-    );
+    if (process.env.NODE_ENV !== "production" && process.env.DEBUG_STOCK_BATCHES === "true") {
+      console.log("STOCK BATCH FILTER:", JSON.stringify(filter, null, 2));
+      console.table(rows.map((stockRow) => ({
+        _id: String(stockRow._id || ""), ProdCode: stockRow.ProdCode,
+        GDCode: stockRow.GDCode, Batch: stockRow.Batch, MRP: stockRow.MRP,
+        PRate: stockRow.PRate, SRate: stockRow.SRate, Qty: stockRow.Qty,
+      })));
+    }
 
     const batches = rows.map((s) => ({
       batchNo: s.Batch || ".",
