@@ -11807,6 +11807,35 @@ button.lovable-new-invoice-button {
   grid-template-columns: repeat(4, minmax(0, 1fr));
 }
 
+/* Master forms size columns to the available space (usually 5–6 on desktop). */
+.compact-master-form .compact-form-grid-4 {
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 150px), 1fr));
+  gap: 10px 12px;
+}
+
+.compact-master-form .compact-field {
+  gap: 4px;
+}
+
+.compact-master-form .compact-form-grid-4 > .compact-firm-status {
+  grid-column: 1 / -1;
+}
+
+/* Keep the balance and its Dr/Cr selector usable in narrower columns. */
+.compact-master-form .compact-field select[name="openingBalType"] {
+  flex-shrink: 0;
+}
+
+@media (max-width: 600px) {
+  .compact-master-form .compact-form-grid-4 {
+    grid-template-columns: 1fr;
+  }
+
+  .compact-master-form .compact-form-grid-4 > .compact-field {
+    grid-column: 1 / -1 !important;
+  }
+}
+
 /* =========================================================
    FORM FIELDS
 ========================================================= */
@@ -48634,4 +48663,116 @@ td {
   .desktop-import-batch-head select { width: 100%; min-width: 0; }
   .desktop-import-summary-grid { grid-template-columns: repeat(2, 1fr); }
   .desktop-import-live-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+
+/* Compact billing sections: keep actions and amount details, omit repeated titles. */
+.sales-billing-page .billing-header-section .billing-section-title,
+.sales-billing-page .billing-product-heading .billing-section-title,
+.sales-billing-page .billing-compact-summary-header .billing-section-title,
+.purchase-billing-page .billing-product-heading .billing-section-title,
+.credit-billing-page .billing-product-heading .billing-section-title,
+.debit-note-credit-style .debit-credit-product-heading > h3 {
+  display: none !important;
+}
+
+.sales-billing-page .billing-header-section .billing-section-heading,
+.sales-billing-page .billing-compact-summary-header {
+  min-height: 0 !important;
+  margin-bottom: 4px !important;
+  justify-content: flex-end !important;
+}
+
+.sales-billing-page .billing-product-heading {
+  min-height: 0 !important;
+  margin-bottom: 4px !important;
+}
+
+.sales-billing-page .billing-product-heading .billing-product-toolbar {
+  flex: 1 1 auto;
+}
+
+/* Sales and quotation rows: trade discount width for product, unit and taxable. */
+.sales-billing-page .billing-product-table:not(.credit-product-table) :is(th, td):nth-child(2) {
+  width: 230px !important;
+  min-width: 230px !important;
+  max-width: 230px !important;
+}
+.sales-billing-page .billing-product-table:not(.credit-product-table) :is(th, td):nth-child(3) {
+  width: 80px !important;
+  min-width: 80px !important;
+  max-width: 80px !important;
+}
+.sales-billing-page .billing-product-table:not(.credit-product-table) :is(th, td):nth-child(16) {
+  width: 105px !important;
+  min-width: 105px !important;
+  max-width: 105px !important;
+}
+.sales-billing-page .billing-product-table:not(.credit-product-table) :is(th, td):nth-child(10),
+.sales-billing-page .billing-product-table:not(.credit-product-table) :is(th, td):nth-child(14) {
+  width: 74px !important;
+  min-width: 74px !important;
+  max-width: 74px !important;
+}
+.sales-billing-page .billing-product-table:not(.credit-product-table) :is(th, td):nth-child(11),
+.sales-billing-page .billing-product-table:not(.credit-product-table) :is(th, td):nth-child(15) {
+  width: 64px !important;
+  min-width: 64px !important;
+  max-width: 64px !important;
+}
+.sales-billing-page .billing-product-table:not(.credit-product-table) :is(th):nth-child(10),
+.sales-billing-page .billing-product-table:not(.credit-product-table) :is(th):nth-child(11),
+.sales-billing-page .billing-product-table:not(.credit-product-table) :is(th):nth-child(14),
+.sales-billing-page .billing-product-table:not(.credit-product-table) :is(th):nth-child(15) {
+  white-space: normal !important;
+}
+
+/* Debit note: let every product column take its required width and scroll. */
+.debit-note-credit-style .erp-table-container {
+  width: max-content !important;
+  min-width: 100% !important;
+}
+.debit-note-credit-style .product-entry-table {
+  width: max-content !important;
+  min-width: 100% !important;
+  table-layout: auto !important;
+}
+.debit-note-credit-style .product-entry-table :is(th, td) {
+  box-sizing: border-box;
+}
+.debit-note-credit-style .product-entry-table :is(th, td):nth-child(3) {
+  min-width: 180px !important;
+}
+.debit-note-credit-style .product-entry-table :is(th, td):nth-child(4) {
+  min-width: 200px !important;
+}
+.debit-note-credit-style .product-entry-table :is(input, select) {
+  width: 100% !important;
+  min-width: 0 !important;
+  max-width: 100% !important;
+  box-sizing: border-box !important;
+}
+.debit-note-credit-style .product-entry-table :is(th, td):first-child {
+  display: table-cell !important;
+}
+.debit-note-credit-style .product-entry-table :is(th, td):last-child {
+  position: static !important;
+}
+
+/* The duplicate bill meta row sat above the editable invoice fields. */
+.sales-billing-page .billing-header-section .billing-section-heading {
+  display: none !important;
+}
+.sales-billing-page .billing-header-section {
+  padding-top: 6px !important;
+}
+
+/* Include padding and borders inside each table cell's available width. */
+.sales-billing-page .billing-product-table:not(.credit-product-table) :is(input, select) {
+  width: 100% !important;
+  min-width: 0 !important;
+  max-width: 100% !important;
+  box-sizing: border-box !important;
+}
+.sales-billing-page .billing-product-table:not(.credit-product-table) :is(th, td) {
+  box-sizing: border-box !important;
 }

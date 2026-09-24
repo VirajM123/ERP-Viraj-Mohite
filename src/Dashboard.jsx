@@ -1,4 +1,4 @@
-﻿// Dashboard.jsx
+// Dashboard.jsx
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { createPortal } from "react-dom";
 import * as XLSX from "xlsx-js-style";
@@ -7882,6 +7882,7 @@ const debitNotePermission = usePermission("VOUCHERS", "DEBIT_NOTE");
     // Additional Bank Details
     micr: "",
     drawerBank: "",
+    drawerBankCode: "",
 
     // Optional Fields
     narration: "",
@@ -36864,6 +36865,19 @@ ALLOW CHANGE STAR AMOUNT — FINAL SAVE PROTECTION
     const { name, value } = e.target;
     const cleanValue = regexInputValue(name, value);
 
+    if (name === "godown") {
+      const selectedGodown = godowns.find((godown) =>
+        String(godown.godownCode || godown.GDCode || godown.code || godown.name || godown.godownName || "") === cleanValue
+      );
+      setDebitNoteFormData((previous) => ({
+        ...previous,
+        godown: cleanValue,
+        godownCode: cleanValue,
+        godownName: selectedGodown?.godownName || selectedGodown?.name || cleanValue,
+      }));
+      return;
+    }
+
     if (name === "company") {
       const configuredSeries = getConfiguredCompanySeries(
         cleanValue,
@@ -36921,6 +36935,8 @@ ALLOW CHANGE STAR AMOUNT — FINAL SAVE PROTECTION
 
   const updateDebitNoteItem = (index, field, value) => {
     const newItems = [...debitNoteItems];
+    const stockSourceChanged =
+      field === "trn" && newItems[index].trn !== value;
     newItems[index][field] = value;
 
     if (field === 'qty' && value) {
@@ -37216,6 +37232,15 @@ ALLOW CHANGE STAR AMOUNT — FINAL SAVE PROTECTION
 
     setDebitNoteItems(newItems);
     setDebitNoteActiveRow(index);
+
+    if (stockSourceChanged) {
+      const changedItem = newItems[index];
+      const productCode = changedItem.productCode || changedItem.itemCode;
+      if (productCode) {
+        const product = products.find((entry) => getProductCode(entry) === productCode);
+        handleDebitProductSelect(index, product || changedItem, value);
+      }
+    }
   };
 
   const deleteDebitNoteItem = (index) => {
@@ -37274,7 +37299,8 @@ ALLOW CHANGE STAR AMOUNT — FINAL SAVE PROTECTION
 
   const handleDebitProductSelect = async (
     index,
-    selectedEntry
+    selectedEntry,
+    selectedTransactionType
   ) => {
     if (
       index < 0 ||
@@ -37344,7 +37370,7 @@ ALLOW CHANGE STAR AMOUNT — FINAL SAVE PROTECTION
     * GDR = Good Goods Return
     */
     const transactionType = String(
-      selectedRow.trn || "DGR"
+      selectedTransactionType || selectedRow.trn || "DGR"
     )
       .trim()
       .toUpperCase();
@@ -49008,7 +49034,7 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                   <th>Salesman</th>
                   <th>Area</th>
                   <th className="ltf-amount-column">
-                    Net Amount (â‚¹)
+                    Net Amount (₹)
                   </th>
                 </tr>
               </thead>
@@ -49169,7 +49195,7 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                           </td>
 
                           <td className="ltf-amount-column">
-                            â‚¹
+                            ₹
                             {formatLoadTransferAmount(
                               billAmount
                             )}
@@ -49288,7 +49314,7 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
               <span>Total Amount</span>
 
               <strong>
-                â‚¹
+                ₹
                 {formatLoadTransferAmount(
                   totalLoadedAmount
                 )}
@@ -49309,7 +49335,7 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
               <span>Selected Amount</span>
 
               <strong>
-                â‚¹
+                ₹
                 {formatLoadTransferAmount(
                   loadTransferSelectedAmount
                 )}
@@ -49369,7 +49395,7 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
               fontWeight: '500'
             }}
           >
-            â—€ Prev
+            ◀ Prev
           </button>
 
           <span style={{ fontWeight: '500', fontSize: '14px' }}>
@@ -49389,7 +49415,7 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
               fontWeight: '500'
             }}
           >
-            Next â–¶
+            Next ▶
           </button>
         </div>
       </div>
@@ -49579,10 +49605,10 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
               onChange={(e) => handleFilterChange(masterType, e.target.value)}
             />
             <button className="btn-excel" onClick={() => exportToExcel(filteredData, title, columns)}>
-              ðŸ“Š Export Excel
+              📊 Export Excel
             </button>
             <button className="btn-pdf" onClick={() => exportToPDF(filteredData, title, columns)}>
-              ðŸ“„ Export PDF
+              📄 Export PDF
             </button>
             <button
               className="btn-add-new"
@@ -50215,7 +50241,7 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
       { key: 'partyCode', label: 'Party Code' },
       { key: 'partyName', label: 'Party Name' },
       { key: 'branchName', label: 'Branch Name' },
-      { key: 'amount', label: 'Amount (â‚¹)' },
+      { key: 'amount', label: 'Amount (₹)' },
       { key: 'loadSeries', label: 'Load Series' },
       { key: 'loadNumber', label: 'Load Number' },
       { key: 'status', label: 'Status' },
@@ -51921,23 +51947,23 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                       </td>
 
                       <td class="right">
-                        â‚¹${invoiceNumber(grossAmount)}
+                        ₹${invoiceNumber(grossAmount)}
                       </td>
 
                       <td class="right">
-                        â‚¹${invoiceNumber(taxableAmount)}
-                      </td>
-
-                      <td></td>
-
-                      <td class="right">
-                        â‚¹${invoiceNumber(schemeAmount)}
+                        ₹${invoiceNumber(taxableAmount)}
                       </td>
 
                       <td></td>
 
                       <td class="right">
-                        â‚¹${invoiceNumber(
+                        ₹${invoiceNumber(schemeAmount)}
+                      </td>
+
+                      <td></td>
+
+                      <td class="right">
+                        ₹${invoiceNumber(
         cashDiscountAmount
       )}
                       </td>
@@ -51945,23 +51971,23 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                       <td></td>
 
                       <td class="right">
-                        â‚¹${invoiceNumber(cgstAmount)}
+                        ₹${invoiceNumber(cgstAmount)}
                       </td>
 
                       <td></td>
 
                       <td class="right">
-                        â‚¹${invoiceNumber(sgstAmount)}
+                        ₹${invoiceNumber(sgstAmount)}
                       </td>
 
                       <td></td>
 
                       <td class="right">
-                        â‚¹${invoiceNumber(igstAmount)}
+                        ₹${invoiceNumber(igstAmount)}
                       </td>
 
                       <td class="right">
-                        â‚¹${invoiceNumber(netAmount)}
+                        ₹${invoiceNumber(netAmount)}
                       </td>
                     </tr>
                   </tfoot>
@@ -51971,14 +51997,14 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
               <section class="summary-strip">
                 <div class="summary-cell">
                   <span>TAXABLE AMT</span>
-                  <strong>â‚¹${invoiceNumber(
+                  <strong>₹${invoiceNumber(
         taxableAmount
       )}</strong>
                 </div>
 
                 <div class="summary-cell">
                   <span>SCHE/CASH</span>
-                  <strong>â‚¹${invoiceNumber(
+                  <strong>₹${invoiceNumber(
         schemeAmount +
         cashDiscountAmount
       )}</strong>
@@ -51986,42 +52012,42 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
 
                 <div class="summary-cell">
                   <span>CGST AMT</span>
-                  <strong>â‚¹${invoiceNumber(
+                  <strong>₹${invoiceNumber(
         cgstAmount
       )}</strong>
                 </div>
 
                 <div class="summary-cell">
                   <span>SGST AMT</span>
-                  <strong>â‚¹${invoiceNumber(
+                  <strong>₹${invoiceNumber(
         sgstAmount
       )}</strong>
                 </div>
 
                 <div class="summary-cell">
                   <span>CN/STAR/DIS</span>
-                  <strong>â‚¹${invoiceNumber(
+                  <strong>₹${invoiceNumber(
         totalDiscount
       )}</strong>
                 </div>
 
                 <div class="summary-cell">
                   <span>TCS AMT</span>
-                  <strong>â‚¹${invoiceNumber(
+                  <strong>₹${invoiceNumber(
         tcsAmount
       )}</strong>
                 </div>
 
                 <div class="summary-cell">
                   <span>ROUNDING</span>
-                  <strong>â‚¹${invoiceNumber(
+                  <strong>₹${invoiceNumber(
         roundingAmount
       )}</strong>
                 </div>
 
                 <div class="summary-cell net">
                   <span>NET AMOUNT</span>
-                  <strong>â‚¹${invoiceNumber(
+                  <strong>₹${invoiceNumber(
         netAmount
       )}</strong>
                 </div>
@@ -55373,7 +55399,7 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                     : isQuotationList
                       ? "Today's Quotations"
                       : "Today's Sales"}
-              </span><strong>â‚¹ {todaysSalesAmount.toLocaleString("en-IN")}</strong><small>{new Date().toLocaleDateString("en-GB")}</small></div>
+              </span><strong>₹ {todaysSalesAmount.toLocaleString("en-IN")}</strong><small>{new Date().toLocaleDateString("en-GB")}</small></div>
               <i />
             </div>
             <div className="ts-summary-card indigo">
@@ -55383,12 +55409,12 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
             </div>
             <div className="ts-summary-card orange">
               <div className="ts-summary-icon"><Clock3 size={22} /></div>
-              <div><span>Pending Bills</span><strong>{pendingRows.length.toLocaleString("en-IN")}</strong><small>â‚¹ {pendingAmount.toLocaleString("en-IN")}</small></div>
+              <div><span>Pending Bills</span><strong>{pendingRows.length.toLocaleString("en-IN")}</strong><small>₹ {pendingAmount.toLocaleString("en-IN")}</small></div>
               <i />
             </div>
             <div className="ts-summary-card red">
               <div className="ts-summary-icon"><X size={22} /></div>
-              <div><span>Cancelled Bills</span><strong>{cancelledRows.length.toLocaleString("en-IN")}</strong><small>â‚¹ {cancelledAmount.toLocaleString("en-IN")}</small></div>
+              <div><span>Cancelled Bills</span><strong>{cancelledRows.length.toLocaleString("en-IN")}</strong><small>₹ {cancelledAmount.toLocaleString("en-IN")}</small></div>
               <i />
             </div>
             <div className="ts-summary-card violet">
@@ -55403,7 +55429,7 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                 </span>
 
                 <strong>
-                  â‚¹{" "}
+                  ₹{" "}
                   {(isCreditNoteList ||
                     isPurchaseList
                     ? salesTotalAmount
@@ -55759,8 +55785,14 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                               {area}
                             </td>
 
-                            <td className="number-col">
-                              â‚¹{" "}
+                            <td
+                              className="number-col sales-amount-cell"
+                              title={`₹ ${amount.toLocaleString("en-IN", {
+                                minimumFractionDigits: 2,
+                                maximumFractionDigits: 2,
+                              })}`}
+                            >
+                              {"\u20B9"}{" "}
                               {amount.toLocaleString(
                                 "en-IN",
                                 {
@@ -57570,7 +57602,7 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
               <span>Total Amount</span>
 
               <strong>
-                â‚¹
+                ₹
                 {totalAmount.toLocaleString("en-IN", {
                   minimumFractionDigits: 2,
                   maximumFractionDigits: 2,
@@ -57700,7 +57732,7 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                         <td>{item.vehicleNo}</td>
 
                         <td className="ts-load-amount">
-                          â‚¹
+                          ₹
                           {item.totalAmount.toLocaleString(
                             "en-IN",
                             {
@@ -61107,7 +61139,7 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
             {isFormReadOnly && (
               <div className="project-read-only-banner" role="status">
                 <Eye size={15} />
-                View only â€” this entry cannot be edited
+                View only — this entry cannot be edited
               </div>
             )}
             {activeMenu === "reports" &&
@@ -61277,7 +61309,7 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                     <article className="report-summary-card">
                       <div>
                         <span>Total Sales (MTD)</span>
-                        <strong>â‚¹ 42,85,620</strong>
+                        <strong>₹ 42,85,620</strong>
 
                         <small className="positive">
                           <ArrowUpRight size={12} />
@@ -61343,7 +61375,7 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                     <article className="report-summary-card">
                       <div>
                         <span>Outstanding Amount</span>
-                        <strong>â‚¹ 18,92,450</strong>
+                        <strong>₹ 18,92,450</strong>
 
                         <small className="negative">
                           <ArrowUpRight size={12} />
@@ -61789,7 +61821,7 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                                           );
                                         }}
                                       >
-                                        â˜…
+                                        ★
                                       </button>
 
                                       <span>
@@ -62221,7 +62253,7 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                       </select>
                     </div>
 
-                    <div className="compact-firm-status" style={{ gridColumn: 'span 4' }}>
+                    <div className="compact-firm-status" style={{ gridColumn: '1 / -1' }}>
                       <div className="compact-status-icon">
                         <CheckCircle2 size={17} />
                       </div>
@@ -62947,7 +62979,7 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                         <div>
                           <span>Total Amount</span>
                           <strong>
-                            â‚¹{" "}
+                            ₹{" "}
                             {totalAmount.toLocaleString("en-IN", {
                               minimumFractionDigits: 2,
                               maximumFractionDigits: 2,
@@ -62965,7 +62997,7 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                         <div>
                           <span>Receipt Amount</span>
                           <strong>
-                            â‚¹{" "}
+                            ₹{" "}
                             {totalReceiptAmount.toLocaleString(
                               "en-IN",
                               {
@@ -62986,7 +63018,7 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                         <div>
                           <span>Pending Amount</span>
                           <strong>
-                            â‚¹{" "}
+                            ₹{" "}
                             {totalPendingAmount.toLocaleString(
                               "en-IN",
                               {
@@ -63118,7 +63150,7 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                                     </td>
 
                                     <td className="numeric-column">
-                                      â‚¹{" "}
+                                      ₹{" "}
                                       {Number(
                                         item.totalAmount || 0
                                       ).toLocaleString("en-IN", {
@@ -63128,7 +63160,7 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                                     </td>
 
                                     <td className="numeric-column receipt-amount">
-                                      â‚¹{" "}
+                                      ₹{" "}
                                       {Number(
                                         item.totalReceiptAmount || 0
                                       ).toLocaleString("en-IN", {
@@ -63138,7 +63170,7 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                                     </td>
 
                                     <td className="numeric-column pending-amount">
-                                      â‚¹{" "}
+                                      ₹{" "}
                                       {Number(
                                         item.totalPendingAmount || 0
                                       ).toLocaleString("en-IN", {
@@ -63579,15 +63611,15 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                           <th className="settle-col-party">Party Name</th>
 
                           <th className="settle-number-column">
-                            Bill Amount (â‚¹)
+                            Bill Amount (₹)
                           </th>
 
                           <th className="settle-number-column">
-                            Receipt/Adjust (â‚¹)
+                            Receipt/Adjust (₹)
                           </th>
 
                           <th className="settle-number-column">
-                            Pending (â‚¹)
+                            Pending (₹)
                           </th>
 
                           <th className="settle-col-check">
@@ -63789,6 +63821,7 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
 
                                           micr: "",
                                           drawerBank: "",
+                                          drawerBankCode: "",
                                           narration: "",
                                         });
 
@@ -63885,7 +63918,7 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
 
                                 {/* BILL AMOUNT */}
                                 <td className="settle-amount-cell">
-                                  â‚¹{" "}
+                                  ₹{" "}
                                   {shownBillAmount.toLocaleString(
                                     "en-IN",
                                     {
@@ -63897,7 +63930,7 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
 
                                 {/* RECEIPT / ADJUST */}
                                 <td className="settle-amount-cell settle-received-value">
-                                  â‚¹{" "}
+                                  ₹{" "}
                                   {receiptAdjustAmount.toLocaleString(
                                     "en-IN",
                                     {
@@ -63914,7 +63947,7 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                                     : "settle-zero-value"
                                     }`}
                                 >
-                                  â‚¹{" "}
+                                  ₹{" "}
                                   {pendingAmount.toLocaleString(
                                     "en-IN",
                                     {
@@ -63995,7 +64028,7 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                         <div>
                           <span>Receipt/Adjust</span>
                           <strong>
-                            â‚¹{" "}
+                            ₹{" "}
                             {Number(
                               settleLoadSummary.totalReceiptAdjustAmt ||
                               0
@@ -64015,7 +64048,7 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                         <div>
                           <span>Pending Amount</span>
                           <strong>
-                            â‚¹{" "}
+                            ₹{" "}
                             {Number(
                               settleLoadSummary.totalPendingAmt || 0
                             ).toLocaleString("en-IN", {
@@ -64034,7 +64067,7 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                         <div>
                           <span>Cancelled Amount</span>
                           <strong>
-                            â‚¹{" "}
+                            ₹{" "}
                             {Number(
                               settleLoadSummary.totalCancelAmt || 0
                             ).toLocaleString("en-IN", {
@@ -64053,7 +64086,7 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                         <div>
                           <span>Gross Amount</span>
                           <strong>
-                            â‚¹{" "}
+                            ₹{" "}
                             {Number(
                               settleLoadSummary.totalAmt || 0
                             ).toLocaleString("en-IN", {
@@ -64072,7 +64105,7 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                         <div>
                           <span>Cash Amount</span>
                           <strong>
-                            â‚¹{" "}
+                            ₹{" "}
                             {Number(
                               settleLoadSummary.totalCashAmt || 0
                             ).toLocaleString("en-IN", {
@@ -64091,7 +64124,7 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                         <div>
                           <span>Cheque Amount</span>
                           <strong>
-                            â‚¹{" "}
+                            ₹{" "}
                             {Number(
                               settleLoadSummary.totalChequeAmt || 0
                             ).toLocaleString("en-IN", {
@@ -64110,7 +64143,7 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                         <div>
                           <span>Others Amount</span>
                           <strong>
-                            â‚¹{" "}
+                            ₹{" "}
                             {Number(
                               settleLoadSummary.totalOtherAmt || 0
                             ).toLocaleString("en-IN", {
@@ -64157,7 +64190,7 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                       cursor: "pointer",
                     }}
                   >
-                    Ã—
+                    ?
                   </button>
 
                   <div style={{ fontWeight: 700, marginTop: "8px", marginBottom: "14px" }}>
@@ -64292,15 +64325,18 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                       <label>DRAWER BANK</label>
                       <select
                         className="erp-input"
-                        value={receiptFormData.drawerBank || ""}
+                        value={receiptFormData.drawerBankCode || customerBanks.find(
+                          (bank) => bank.bankName === receiptFormData.drawerBank
+                        )?.bankCode || ""}
                         onChange={(e) => {
                           const selectedBank = customerBanks.find(
-                            (b) => b.bankName === e.target.value
+                            (b) => b.bankCode === e.target.value
                           );
 
                           setReceiptFormData((prev) => ({
                             ...prev,
-                            drawerBank: e.target.value,
+                            drawerBank: selectedBank?.bankName || "",
+                            drawerBankCode: selectedBank?.bankCode || "",
                             micr: selectedBank?.micrCode || "",
                             clearingType: selectedBank?.clearingType || "LOCAL",
                           }));
@@ -64311,9 +64347,9 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                         {customerBanks.map((bank) => (
                           <option
                             key={bank.id || bank._id || bank.bankCode}
-                            value={bank.bankName}
+                            value={bank.bankCode}
                           >
-                            {bank.bankName}
+                            {bank.bankCode} - {bank.bankName}
                           </option>
                         ))}
                       </select>
@@ -64864,7 +64900,7 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                           className="billing-action-button billing-preview-button"
                         >
                           <span className="billing-button-icon">
-                            â—‰
+                            ◉
                           </span>
 
                           Preview
@@ -64876,7 +64912,7 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                           onClick={saveQuotation}
                         >
                           <span className="billing-button-icon">
-                            â–£
+                            ▣
                           </span>
 
                           {editingInvoiceId ? "Update" : "Save"}
@@ -64888,7 +64924,7 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                           onClick={saveQuotation}
                         >
                           <span className="billing-button-icon">
-                            â–¤
+                            ▤
                           </span>
 
                           {editingInvoiceId
@@ -64901,7 +64937,7 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                           className="billing-more-button"
                           aria-label="More actions"
                         >
-                          â‹®
+                          ⋮
                         </button>
 
                         <button
@@ -64910,7 +64946,7 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                           onClick={closeForm}
                           aria-label="Close quotation"
                         >
-                          âœ•
+                          ✕
                         </button>
                       </div>
                     </div>
@@ -65261,7 +65297,7 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                                         mapping.accountName ||
                                         "Name not available"}
 
-                                      {isBlacklisted ? " ðŸš«" : ""}
+                                      {isBlacklisted ? " 🚫" : ""}
                                     </option>
                                   );
                                 })}
@@ -65397,7 +65433,7 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                             className="billing-toolbar-button"
                             onClick={handleAddInvoiceRow}
                           >
-                            <span>ï¼‹</span>
+                            <span>＋</span>
                             Add Product
                           </button>
 
@@ -65405,7 +65441,7 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                             type="button"
                             className="billing-toolbar-button"
                           >
-                            <span>â–¦</span>
+                            <span>▦</span>
                             Scan Barcode
                           </button>
 
@@ -65413,7 +65449,7 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                             type="button"
                             className="billing-toolbar-button"
                           >
-                            <span>ÃÅ¸</span>
+                            <span>⚡</span>
                             Fast Add
                           </button>
 
@@ -66430,7 +66466,7 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                                             : "Delete row"
                                         }
                                       >
-                                        ðŸ—‘
+                                        🗑
                                       </button>
                                     </td>
                                   </tr>
@@ -66449,7 +66485,7 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                               className="billing-grid-small-button"
                               onClick={handleAddInvoiceRow}
                             >
-                              ï¼‹ Add Row
+                              ＋ Add Row
                             </button>
 
                             <button
@@ -66460,7 +66496,7 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                                 setSelectedSalesDetailRow(-1);
                               }}
                             >
-                              â™§ Clear All
+                              ♧ Clear All
                             </button>
                           </div>
 
@@ -66509,7 +66545,7 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
 
                                 <span>
                                   <b>MRP:</b>{" "}
-                                  â‚¹
+                                  ₹
                                   {Number(
                                     selectedSalesDetailItem.mrp || 0
                                   ).toFixed(2)}
@@ -66535,7 +66571,7 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
 
                                 <span>
                                   <b>Purchase:</b>{" "}
-                                  â‚¹
+                                  ₹
                                   {getSalesDetailPurchaseRate(
                                     selectedSalesDetailItem
                                   ).toFixed(2)}
@@ -66562,7 +66598,7 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                                   }}
                                 >
                                   <b>Net Amount:</b>{" "}
-                                  â‚¹
+                                  ₹
                                   {getSalesDetailNetAmount(
                                     selectedSalesDetailItem
                                   ).toFixed(2)}
@@ -66743,9 +66779,9 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
 
                                   <span>{batchNo}</span>
 
-                                  <span>â‚¹{mrp}</span>
+                                  <span>₹{mrp}</span>
 
-                                  <span>â‚¹{rate}</span>
+                                  <span>₹{rate}</span>
 
                                   <span>{stock}</span>
                                 </div>
@@ -66787,7 +66823,7 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                           <span>Gross</span>
 
                           <strong>
-                            â‚¹
+                            ₹
                             {Number(
                               invoiceSummary.gross || 0
                             ).toFixed(2)}
@@ -66800,7 +66836,7 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                           <span>TPR</span>
 
                           <strong>
-                            -â‚¹
+                            -₹
                             {Number(
                               invoiceSummary.tpr || 0
                             ).toFixed(2)}
@@ -66813,7 +66849,7 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                           <span>Scheme</span>
 
                           <strong>
-                            -â‚¹
+                            -₹
                             {Number(
                               invoiceSummary.scheme || 0
                             ).toFixed(2)}
@@ -66826,7 +66862,7 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                           <span>Star</span>
 
                           <strong>
-                            -â‚¹
+                            -₹
                             {Number(
                               invoiceSummary.star || 0
                             ).toFixed(2)}
@@ -66839,7 +66875,7 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                           <span>Cash Disc.</span>
 
                           <strong>
-                            -â‚¹
+                            -₹
                             {Number(
                               invoiceSummary.cd || 0
                             ).toFixed(2)}
@@ -66852,7 +66888,7 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                           <span>Display</span>
 
                           <div className="billing-summary-input-wrap">
-                            <span>-â‚¹</span>
+                            <span>-₹</span>
 
                             <input
                               type="text"
@@ -66878,7 +66914,7 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                           <span>Coupon</span>
 
                           <div className="billing-summary-input-wrap">
-                            <span>-â‚¹</span>
+                            <span>-₹</span>
 
                             <input
                               type="text"
@@ -66904,7 +66940,7 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                           <span>Taxable</span>
 
                           <strong>
-                            â‚¹
+                            ₹
                             {Number(
                               invoiceTaxableValue || 0
                             ).toFixed(2)}
@@ -66917,7 +66953,7 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                           <span>CGST</span>
 
                           <strong>
-                            â‚¹
+                            ₹
                             {Number(
                               invoiceSummary.cgst || 0
                             ).toFixed(2)}
@@ -66930,7 +66966,7 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                           <span>SGST</span>
 
                           <strong>
-                            â‚¹
+                            ₹
                             {Number(
                               invoiceSummary.sgst || 0
                             ).toFixed(2)}
@@ -66943,7 +66979,7 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                           <span>IGST</span>
 
                           <strong>
-                            â‚¹
+                            ₹
                             {Number(
                               invoiceSummary.igst || 0
                             ).toFixed(2)}
@@ -66956,7 +66992,7 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                           <span>Add / Less</span>
 
                           <div className="billing-summary-input-wrap billing-add-less-input-wrap">
-                            <span>â‚¹</span>
+                            <span>₹</span>
 
                             <input
                               type="text"
@@ -66982,7 +67018,7 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                           <span>Net Amount</span>
 
                           <strong>
-                            â‚¹
+                            ₹
                             {Number(
                               invoiceNetBeforeCreditNote ||
                               0
@@ -67739,7 +67775,7 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                                   <th>Salesman</th>
                                   <th>Area</th>
                                   <th className="premium-load-amount-heading">
-                                    Amount (â‚¹)
+                                    Amount (₹)
                                   </th>
                                 </tr>
                               </thead>
@@ -67832,7 +67868,7 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                                           </td>
 
                                           <td className="premium-load-amount-cell">
-                                            â‚¹
+                                            ₹
                                             {Number(
                                               item.amount ||
                                               item.billAmount ||
@@ -67866,7 +67902,7 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                             <strong className="premium-load-footer-total">
                               Total Amount:
                               <b>
-                                â‚¹{" "}
+                                ₹{" "}
                                 {Number(
                                   selectedCreateLoadSummary?.totalAmount || 0
                                 ).toLocaleString("en-IN", {
@@ -67926,7 +67962,7 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                               <span>Total Amount</span>
 
                               <strong className="premium-load-total-amount-value">
-                                â‚¹{" "}
+                                ₹{" "}
                                 {Number(
                                   selectedCreateLoadSummary?.totalAmount || 0
                                 ).toLocaleString("en-IN", {
@@ -68578,11 +68614,11 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                                   ? "Product Wise"
                                   : "Party Wise"}
 
-                                <span>â€¢</span>
+                                <span>•</span>
 
                                 {printLoadItems.length} rows
 
-                                <span>â€¢</span>
+                                <span>•</span>
 
                                 {printLoadPages.length} page(s)
                               </p>
@@ -68919,6 +68955,7 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                     onSubmit={saveFirm}
                   >
                     <div className="compact-form-grid compact-form-grid-4">
+                      {/* Firm and contact details */}
                       <div className="compact-field">
                         <label>
                           Firm Code <span>*</span>
@@ -68973,6 +69010,35 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                       </div>
 
                       <div className="compact-field">
+                        <label>Mobile Number</label>
+                        <div className="compact-input-icon">
+                          <input
+                            type="tel"
+                            name="mobileNo"
+                            value={firmData.mobileNo}
+                            onChange={handleFirmInput}
+                            placeholder="Enter mobile number"
+                          />
+                          <Phone size={15} />
+                        </div>
+                      </div>
+
+                      <div className="compact-field">
+                        <label>Phone Number</label>
+                        <div className="compact-input-icon">
+                          <input
+                            type="tel"
+                            name="phoneNo"
+                            value={firmData.phoneNo}
+                            onChange={handleFirmInput}
+                            placeholder="Enter phone number"
+                          />
+                          <Phone size={15} />
+                        </div>
+                      </div>
+
+                      {/* Address details */}
+                      <div className="compact-field">
                         <label>Address Line 1</label>
                         <input
                           type="text"
@@ -69006,18 +69072,6 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                       </div>
 
                       <div className="compact-field">
-                        <label>PIN Code</label>
-                        <input
-                          type="text"
-                          name="pinCode"
-                          value={firmData.pinCode}
-                          onChange={handleFirmInput}
-                          placeholder="Enter PIN code"
-                          inputMode="numeric"
-                        />
-                      </div>
-
-                      <div className="compact-field">
                         <label>State</label>
                         <input
                           type="text"
@@ -69040,33 +69094,18 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                       </div>
 
                       <div className="compact-field">
-                        <label>Mobile Number</label>
-                        <div className="compact-input-icon">
-                          <input
-                            type="tel"
-                            name="mobileNo"
-                            value={firmData.mobileNo}
-                            onChange={handleFirmInput}
-                            placeholder="Enter mobile number"
-                          />
-                          <Phone size={15} />
-                        </div>
+                        <label>PIN Code</label>
+                        <input
+                          type="text"
+                          name="pinCode"
+                          value={firmData.pinCode}
+                          onChange={handleFirmInput}
+                          placeholder="Enter PIN code"
+                          inputMode="numeric"
+                        />
                       </div>
 
-                      <div className="compact-field">
-                        <label>Phone Number</label>
-                        <div className="compact-input-icon">
-                          <input
-                            type="tel"
-                            name="phoneNo"
-                            value={firmData.phoneNo}
-                            onChange={handleFirmInput}
-                            placeholder="Enter phone number"
-                          />
-                          <Phone size={15} />
-                        </div>
-                      </div>
-
+                      {/* Tax and licence details */}
                       <div className="compact-field">
                         <label>GST Number</label>
                         <input
@@ -69305,11 +69344,11 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                                 <td>
                                   <div className="firm-ui-location-cell">
                                     <strong>{firm.city || "Not specified"}</strong>
-                                    <span>{firm.state || firm.country || "â€”"}</span>
+                                    <span>{firm.state || firm.country || "—"}</span>
                                   </div>
                                 </td>
 
-                                <td>{firm.mobileNo || "â€”"}</td>
+                                <td>{firm.mobileNo || "—"}</td>
 
                                 <td>
                                   <span className="firm-ui-gst-value">
@@ -69881,7 +69920,7 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                                               year: "numeric",
                                             }
                                           )
-                                          : "â€”"}
+                                          : "—"}
                                       </strong>
 
                                       <span>
@@ -70291,26 +70330,6 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                     </div>
 
                     <div className="compact-field">
-                      <label>Account Number</label>
-                      <input
-                        name="accountNumber"
-                        value={customerBankForm.accountNumber}
-                        onChange={handleCustomerBankInput}
-                        placeholder="Account Number"
-                      />
-                    </div>
-
-                    <div className="compact-field">
-                      <label>IFSC Code</label>
-                      <input
-                        name="ifscCode"
-                        value={customerBankForm.ifscCode}
-                        onChange={handleCustomerBankInput}
-                        placeholder="IFSC Code"
-                      />
-                    </div>
-
-                    <div className="compact-field">
                       <label>Branch Name</label>
                       <input
                         name="branchName"
@@ -70337,121 +70356,6 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                         <option value="SAME BANK">SAME BANK</option>
                         <option value="OUTSIDE BANK">OUTSIDE BANK</option>
                       </select>
-                    </div>
-
-                    <div className="compact-field">
-                      <label>Customer Name</label>
-                      <input
-                        name="customerName"
-                        value={customerBankForm.customerName}
-                        onChange={handleCustomerBankInput}
-                        placeholder="Customer Name"
-                      />
-                    </div>
-
-                    <div className="compact-field">
-                      <label>Customer Code</label>
-                      <input
-                        name="customerCode"
-                        value={customerBankForm.customerCode}
-                        onChange={handleCustomerBankInput}
-                        placeholder="Customer Code"
-                      />
-                    </div>
-
-                    <div className="compact-field">
-                      <label>Mobile No.</label>
-                      <input
-                        name="mobileNo"
-                        value={customerBankForm.mobileNo}
-                        onChange={handleCustomerBankInput}
-                        placeholder="Mobile No."
-                        maxLength="10"
-                      />
-                    </div>
-
-                    <div className="compact-field">
-                      <label>Email ID</label>
-                      <input
-                        name="emailId"
-                        value={customerBankForm.emailId}
-                        onChange={handleCustomerBankInput}
-                        placeholder="Email ID"
-                        type="email"
-                      />
-                    </div>
-
-                    <div className="compact-field">
-                      <label>UPI ID</label>
-                      <input
-                        name="upiId"
-                        value={customerBankForm.upiId}
-                        onChange={handleCustomerBankInput}
-                        placeholder="UPI ID"
-                      />
-                    </div>
-
-                    <div className="compact-field">
-                      <label>SWIFT Code</label>
-                      <input
-                        name="swiftCode"
-                        value={customerBankForm.swiftCode}
-                        onChange={handleCustomerBankInput}
-                        placeholder="SWIFT Code"
-                      />
-                    </div>
-
-                    <div className="compact-field">
-                      <label>MICR Code</label>
-                      <input
-                        name="micrCode"
-                        value={customerBankForm.micrCode}
-                        onChange={handleCustomerBankInput}
-                        placeholder="MICR Code"
-                      />
-                    </div>
-
-                    <div className="compact-field">
-                      <label>PAN Number</label>
-                      <input
-                        name="panNumber"
-                        value={customerBankForm.panNumber}
-                        onChange={handleCustomerBankInput}
-                        placeholder="PAN Number"
-                      />
-                    </div>
-
-                    <div className="compact-field">
-                      <label>Beneficiary Name</label>
-                      <input
-                        name="beneficiaryName"
-                        value={customerBankForm.beneficiaryName}
-                        onChange={handleCustomerBankInput}
-                        placeholder="Beneficiary Name"
-                      />
-                    </div>
-
-                    <div className="compact-field" style={{ gridColumn: 'span 2' }}>
-                      <label>Remarks</label>
-                      <input
-                        name="remarks"
-                        value={customerBankForm.remarks}
-                        onChange={handleCustomerBankInput}
-                        placeholder="Remarks"
-                      />
-                    </div>
-
-                    <div className="compact-firm-status" style={{ gridColumn: 'span 4' }}>
-                      <div className="compact-status-icon">
-                        <CheckCircle2 size={17} />
-                      </div>
-                      <div>
-                        <strong>Bank Status</strong>
-                        <span>{editCustomerBankId ? 'Update existing bank details' : 'Bank details will be saved as active'}</span>
-                      </div>
-                      <div className="compact-status-switch">
-                        <span />
-                      </div>
                     </div>
                   </div>
                 </form>
@@ -70483,8 +70387,8 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                       onClick={() => exportToExcel(getFilteredCustomerBanks(), 'CustomerBanks_List', [
                         { key: 'bankCode', label: 'Bank Code' },
                         { key: 'bankName', label: 'Bank Name' },
-                        { key: 'accountNumber', label: 'Account No.' },
-                        { key: 'ifscCode', label: 'IFSC Code' },
+                        { key: 'branchName', label: 'Branch Name' },
+                        { key: 'accountType', label: 'Account Type' },
                         { key: 'clearingType', label: 'Clearing Type' }
                       ])}
                     >
@@ -70498,8 +70402,9 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                       onClick={() => exportToPDF(getFilteredCustomerBanks(), 'CustomerBanks_List', [
                         { key: 'bankCode', label: 'Bank Code' },
                         { key: 'bankName', label: 'Bank Name' },
-                        { key: 'accountNumber', label: 'Account No.' },
-                        { key: 'ifscCode', label: 'IFSC Code' }
+                        { key: 'branchName', label: 'Branch Name' },
+                        { key: 'accountType', label: 'Account Type' },
+                        { key: 'clearingType', label: 'Clearing Type' }
                       ])}
                     >
                       <FileText size={16} />
@@ -70533,12 +70438,11 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                       <thead>
                         <tr>
                           <th className="firm-ui-sno-column" style={{ width: '50px' }}>S.No</th>
-                          <th style={{ width: '12%' }}>Bank Code</th>
-                          <th style={{ width: '18%' }}>Bank Name</th>
-                          <th style={{ width: '15%' }}>Account No.</th>
-                          <th style={{ width: '12%' }}>IFSC Code</th>
-                          <th style={{ width: '12%' }}>Clearing Type</th>
-                          <th style={{ width: '10%' }}>Status</th>
+                          <th>Bank Code</th>
+                          <th>Bank Name</th>
+                          <th>Branch Name</th>
+                          <th>Account Type</th>
+                          <th>Clearing Type</th>
                           <th className="firm-ui-action-column" style={{ width: '11%' }}>Actions</th>
                         </tr>
                       </thead>
@@ -70548,17 +70452,12 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                             <tr key={bank._id || bank.id || index}>
                               <td className="firm-ui-sno-column">{index + 1}</td>
                               <td><strong>{bank.bankCode || '-'}</strong></td>
-                              <td>{bank.bankName || '-'}</td>
-                              <td>{bank.accountNumber || '-'}</td>
-                              <td>{bank.ifscCode || '-'}</td>
+                              <td><strong>{bank.bankName || '-'}</strong></td>
+                              <td>{bank.branchName || '-'}</td>
+                              <td>{bank.accountType || '-'}</td>
                               <td>
                                 <span style={{ fontSize: '9px', fontWeight: '600', color: '#475569' }}>
                                   {bank.clearingType || 'LOCAL'}
-                                </span>
-                              </td>
-                              <td>
-                                <span className={`firm-ui-status-badge ${bank.isActive !== false ? 'active' : 'inactive'}`}>
-                                  {bank.isActive !== false ? 'Active' : 'Inactive'}
                                 </span>
                               </td>
                               <td className="firm-ui-action-column">
@@ -70593,7 +70492,7 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                           ))
                         ) : (
                           <tr>
-                            <td colSpan={8}>
+                            <td colSpan={7}>
                               <div className="firm-ui-empty-state">
                                 <div className="firm-ui-empty-icon">
                                   <Landmark size={27} />
@@ -71955,7 +71854,6 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
 
                 <form id="compact-product-master-form" className="compact-master-form" onSubmit={saveProduct}>
                   <div className="compact-form-grid compact-form-grid-4">
-                    {/* Row 1: Product Code, Product Name, Company, Group */}
                     <div className="compact-field">
                       <label>Product Code <span>*</span></label>
                       <input
@@ -71998,24 +71896,6 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                     </div>
 
                     <div className="compact-field">
-                      <label>Group <span>*</span></label>
-                      <select
-                        name="group"
-                        value={productForm.group}
-                        onChange={handleProductInput}
-                        required
-                      >
-                        <option value="">Select Group</option>
-                        {groupsState.map((g) => (
-                          <option key={g.id || g._id} value={g.name || g.groupName}>
-                            {g.name || g.groupName}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-
-                    {/* Row 2: Category, GST %, Basic Unit, HSN Code */}
-                    <div className="compact-field">
                       <label>Category <span>*</span></label>
                       <select
                         name="category"
@@ -72027,6 +71907,23 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                         {categoriesState.map((cat) => (
                           <option key={cat.id || cat._id} value={cat.name || cat.categoryName}>
                             {cat.name || cat.categoryName}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+
+                    <div className="compact-field">
+                      <label>Group <span>*</span></label>
+                      <select
+                        name="group"
+                        value={productForm.group}
+                        onChange={handleProductInput}
+                        required
+                      >
+                        <option value="">Select Group</option>
+                        {groupsState.map((g) => (
+                          <option key={g.id || g._id} value={g.name || g.groupName}>
+                            {g.name || g.groupName}
                           </option>
                         ))}
                       </select>
@@ -72061,36 +71958,13 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                     </div>
 
                     <div className="compact-field">
-                      <label>HSN Code</label>
+                      <label>Inbox Pack</label>
                       <input
-                        name="hsn"
-                        value={productForm.hsn}
-                        onChange={handleProductInput}
-                        placeholder="HSN Code"
-                        maxLength="8"
-                      />
-                    </div>
-
-                    {/* Row 3: EAN Code, Weight, Box Pack, Inbox Pack */}
-                    <div className="compact-field">
-                      <label>EAN Code</label>
-                      <input
-                        name="eanCode"
-                        value={productForm.eanCode}
-                        onChange={handleProductInput}
-                        placeholder="EAN Code"
-                        maxLength="13"
-                      />
-                    </div>
-
-                    <div className="compact-field">
-                      <label>Weight</label>
-                      <input
-                        name="weight"
-                        value={productForm.weight}
+                        name="inboxPack"
+                        value={productForm.inboxPack}
                         onChange={handleProductInput}
                         type="number"
-                        placeholder="0"
+                        placeholder="1"
                       />
                     </div>
 
@@ -72105,18 +71979,6 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                       />
                     </div>
 
-                    <div className="compact-field">
-                      <label>Inbox Pack</label>
-                      <input
-                        name="inboxPack"
-                        value={productForm.inboxPack}
-                        onChange={handleProductInput}
-                        type="number"
-                        placeholder="1"
-                      />
-                    </div>
-
-                    {/* Row 4: Retailer Margin, Distributor Margin, SRate Based On, Min Stock Holding */}
                     <div className="compact-field">
                       <label>Retailer Margin (%)</label>
                       <input
@@ -72140,41 +72002,6 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                     </div>
 
                     <div className="compact-field">
-                      <label>SRate Based On</label>
-                      <select
-                        name="srateSelection"
-                        value={productForm.srateSelection || "MRP"}
-                        onChange={handleProductInput}
-                      >
-                        <option value="PURCHASE_RATE">Purchase Rate</option>
-                        <option value="MRP">MRP</option>
-                      </select>
-                    </div>
-
-                    <div className="compact-field">
-                      <label>Min Stock Holding</label>
-                      <input
-                        name="Min_Stock_Holding"
-                        value={productForm.Min_Stock_Holding}
-                        onChange={handleProductInput}
-                        type="number"
-                        placeholder="0"
-                      />
-                    </div>
-
-                    {/* Row 5: Reorder Level, Rate Per Unit, Description, Allow Fraction */}
-                    <div className="compact-field">
-                      <label>Reorder Level</label>
-                      <input
-                        name="Reorder_Level"
-                        value={productForm.Reorder_Level}
-                        onChange={handleProductInput}
-                        type="number"
-                        placeholder="0"
-                      />
-                    </div>
-
-                    <div className="compact-field">
                       <label>Rate Per Unit</label>
                       <input
                         name="Rate_Per_Unit"
@@ -72186,31 +72013,27 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                     </div>
 
                     <div className="compact-field">
-                      <label>Description</label>
+                      <label>HSN Code</label>
                       <input
-                        name="description"
-                        value={productForm.description}
+                        name="hsn"
+                        value={productForm.hsn}
                         onChange={handleProductInput}
-                        placeholder="Description"
+                        placeholder="HSN Code"
+                        maxLength="8"
                       />
                     </div>
 
                     <div className="compact-field">
-                      <label>Allow Fraction</label>
-                      <select
-                        name="allowFraction"
-                        value={productForm.allowFraction ? "true" : "false"}
-                        onChange={(e) => {
-                          const value = e.target.value === "true";
-                          setProductForm({ ...productForm, allowFraction: value });
-                        }}
-                      >
-                        <option value="false">No</option>
-                        <option value="true">Yes</option>
-                      </select>
+                      <label>EAN Code</label>
+                      <input
+                        name="eanCode"
+                        value={productForm.eanCode}
+                        onChange={handleProductInput}
+                        placeholder="EAN Code"
+                        maxLength="13"
+                      />
                     </div>
 
-                    {/* Row 6: Cess %, Cess Amt, Exp Days, Create */}
                     <div className="compact-field">
                       <label>Cess %</label>
                       <input
@@ -72233,6 +72056,67 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                       />
                     </div>
 
+                    {/* Other product options */}
+                    <div className="compact-field">
+                      <label>SRate Based On</label>
+                      <select
+                        name="srateSelection"
+                        value={productForm.srateSelection || "MRP"}
+                        onChange={handleProductInput}
+                      >
+                        <option value="PURCHASE_RATE">Purchase Rate</option>
+                        <option value="MRP">MRP</option>
+                      </select>
+                    </div>
+
+                    <div className="compact-field">
+                      <label>Allow Fraction</label>
+                      <select
+                        name="allowFraction"
+                        value={productForm.allowFraction ? "true" : "false"}
+                        onChange={(e) => {
+                          const value = e.target.value === "true";
+                          setProductForm({ ...productForm, allowFraction: value });
+                        }}
+                      >
+                        <option value="false">No</option>
+                        <option value="true">Yes</option>
+                      </select>
+                    </div>
+
+                    <div className="compact-field">
+                      <label>Weight</label>
+                      <input
+                        name="weight"
+                        value={productForm.weight}
+                        onChange={handleProductInput}
+                        type="number"
+                        placeholder="0"
+                      />
+                    </div>
+
+                    <div className="compact-field">
+                      <label>Min Stock Holding</label>
+                      <input
+                        name="Min_Stock_Holding"
+                        value={productForm.Min_Stock_Holding}
+                        onChange={handleProductInput}
+                        type="number"
+                        placeholder="0"
+                      />
+                    </div>
+
+                    <div className="compact-field">
+                      <label>Reorder Level</label>
+                      <input
+                        name="Reorder_Level"
+                        value={productForm.Reorder_Level}
+                        onChange={handleProductInput}
+                        type="number"
+                        placeholder="0"
+                      />
+                    </div>
+
                     <div className="compact-field">
                       <label>Exp Days</label>
                       <input
@@ -72241,6 +72125,16 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                         onChange={handleProductInput}
                         type="number"
                         placeholder="0"
+                      />
+                    </div>
+
+                    <div className="compact-field">
+                      <label>Description</label>
+                      <input
+                        name="description"
+                        value={productForm.description}
+                        onChange={handleProductInput}
+                        placeholder="Description"
                       />
                     </div>
 
@@ -72254,8 +72148,7 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                       />
                     </div>
 
-                    {/* Row 7: Active, Locked, IsDrug - Checkboxes */}
-                    <div className="compact-field" style={{ gridColumn: 'span 4' }}>
+                    <div className="compact-field" style={{ gridColumn: '1 / -1' }}>
                       <div style={{ display: 'flex', gap: '30px', alignItems: 'center', paddingTop: '8px' }}>
                         <label style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '11px', fontWeight: '600', color: '#263653' }}>
                           <input
@@ -72284,8 +72177,7 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                       </div>
                     </div>
 
-                    {/* Status Box */}
-                    <div className="compact-firm-status" style={{ gridColumn: 'span 4' }}>
+                    <div className="compact-firm-status" style={{ gridColumn: '1 / -1' }}>
                       <div className="compact-status-icon">
                         <CheckCircle2 size={17} />
                       </div>
@@ -72779,7 +72671,16 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
 
                 <form id="compact-account-master-form" className="compact-master-form" onSubmit={saveAccount}>
                   <div className="compact-form-grid compact-form-grid-4">
-                    {/* Account Code, Account Name, Contact Person, Mobile No */}
+                    <div className="compact-field">
+                      <label>Opening Date</label>
+                      <input
+                        name="openingDate"
+                        type="date"
+                        value={accountForm.openingDate || ''}
+                        onChange={handleAccountInput}
+                      />
+                    </div>
+
                     <div className="compact-field">
                       <label>Account Code <span>*</span></label>
                       <input
@@ -72805,34 +72706,22 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                     </div>
 
                     <div className="compact-field">
-                      <label>Contact Person</label>
+                      <label>Bill To Address 1</label>
                       <input
-                        name="contactPerson"
-                        value={accountForm.contactPerson}
+                        name="billToAdd1"
+                        value={accountForm.billToAdd1}
                         onChange={handleAccountInput}
-                        placeholder="Contact Person"
+                        placeholder="Bill To Address 1"
                       />
                     </div>
 
                     <div className="compact-field">
-                      <label>Mobile No.</label>
+                      <label>Bill To Address 2</label>
                       <input
-                        name="mobileNo"
-                        value={accountForm.mobileNo}
+                        name="add2"
+                        value={accountForm.add2}
                         onChange={handleAccountInput}
-                        placeholder="Mobile No."
-                        maxLength="10"
-                      />
-                    </div>
-
-                    {/* Opening Date, Town, State, Pin Code */}
-                    <div className="compact-field">
-                      <label>Opening Date</label>
-                      <input
-                        name="openingDate"
-                        type="date"
-                        value={accountForm.openingDate || ''}
-                        onChange={handleAccountInput}
+                        placeholder="Bill To Address 2"
                       />
                     </div>
 
@@ -72861,6 +72750,17 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                     </div>
 
                     <div className="compact-field">
+                      <label>Pin Code</label>
+                      <input
+                        name="pinCode"
+                        value={accountForm.pinCode}
+                        onChange={handleAccountInput}
+                        placeholder="Pin Code"
+                        maxLength="6"
+                      />
+                    </div>
+
+                    <div className="compact-field">
                       <label>State</label>
                       <select
                         name="state"
@@ -72877,17 +72777,16 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                     </div>
 
                     <div className="compact-field">
-                      <label>Pin Code</label>
+                      <label>Mobile No.</label>
                       <input
-                        name="pinCode"
-                        value={accountForm.pinCode}
+                        name="mobileNo"
+                        value={accountForm.mobileNo}
                         onChange={handleAccountInput}
-                        placeholder="Pin Code"
-                        maxLength="6"
+                        placeholder="Mobile No."
+                        maxLength="10"
                       />
                     </div>
 
-                    {/* Phone No, Email ID, Tin No, Opening Balance */}
                     <div className="compact-field">
                       <label>Phone No.</label>
                       <input
@@ -72900,6 +72799,16 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                     </div>
 
                     <div className="compact-field">
+                      <label>Contact Person</label>
+                      <input
+                        name="contactPerson"
+                        value={accountForm.contactPerson}
+                        onChange={handleAccountInput}
+                        placeholder="Contact Person"
+                      />
+                    </div>
+
+                    <div className="compact-field">
                       <label>Email ID</label>
                       <input
                         name="emailId"
@@ -72907,16 +72816,6 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                         onChange={handleAccountInput}
                         placeholder="Email ID"
                         type="email"
-                      />
-                    </div>
-
-                    <div className="compact-field">
-                      <label>Tin No.</label>
-                      <input
-                        name="tinNo"
-                        value={accountForm.tinNo}
-                        onChange={handleAccountInput}
-                        placeholder="Tin No."
                       />
                     </div>
 
@@ -72942,75 +72841,6 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                       </div>
                     </div>
 
-                    {/* Address - Full width */}
-                    <div className="compact-field" style={{ gridColumn: 'span 2' }}>
-                      <label>Address (Ship To)</label>
-                      <input
-                        name="address"
-                        value={accountForm.address}
-                        onChange={handleAccountInput}
-                        placeholder="Address"
-                      />
-                    </div>
-
-                    <div className="compact-field">
-                      <label>Bill To Address 1</label>
-                      <input
-                        name="billToAdd1"
-                        value={accountForm.billToAdd1}
-                        onChange={handleAccountInput}
-                        placeholder="Bill To Address 1"
-                      />
-                    </div>
-
-                    <div className="compact-field">
-                      <label>Bill To Address 2</label>
-                      <input
-                        name="add2"
-                        value={accountForm.add2}
-                        onChange={handleAccountInput}
-                        placeholder="Bill To Address 2"
-                      />
-                    </div>
-
-                    {/* Inv Type, Tax On, Drug License No, Drug Exp Date */}
-                    <div className="compact-field">
-                      <label>Invoice Type</label>
-                      <select name="invType" value={accountForm.invType} onChange={handleAccountInput}>
-                        <option value="TAXABLE">TAXABLE</option>
-                        <option value="CST">CST</option>
-                      </select>
-                    </div>
-
-                    <div className="compact-field">
-                      <label>Tax On</label>
-                      <select name="taxOn" value={accountForm.taxOn} onChange={handleAccountInput}>
-                        <option value="SRATE">SRATE</option>
-                        <option value="MRP">MRP</option>
-                      </select>
-                    </div>
-
-                    <div className="compact-field">
-                      <label>Drug License No.</label>
-                      <input
-                        name="drugLicNo"
-                        value={accountForm.drugLicNo}
-                        onChange={handleAccountInput}
-                        placeholder="Drug License No."
-                      />
-                    </div>
-
-                    <div className="compact-field">
-                      <label>Drug Expiry Date</label>
-                      <input
-                        name="drugExpDate"
-                        type="date"
-                        value={accountForm.drugExpDate}
-                        onChange={handleAccountInput}
-                      />
-                    </div>
-
-                    {/* GST Section */}
                     <div className="compact-field">
                       <label>PAN No.</label>
                       <input
@@ -73020,16 +72850,6 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                         placeholder="PAN No. (10 chars)"
                         style={{ textTransform: 'uppercase' }}
                         maxLength="10"
-                      />
-                    </div>
-
-                    <div className="compact-field">
-                      <label>Food License</label>
-                      <input
-                        name="foodLicense"
-                        value={accountForm.foodLicense}
-                        onChange={handleAccountInput}
-                        placeholder="Food License"
                       />
                     </div>
 
@@ -73059,29 +72879,6 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                       </select>
                     </div>
 
-                    {/* TCS %, Tan No, GST Date, GST Close Date */}
-                    <div className="compact-field">
-                      <label>TCS %</label>
-                      <input
-                        name="tcsPercent"
-                        value={accountForm.tcsPercent}
-                        onChange={handleAccountInput}
-                        type="number"
-                        step="0.0001"
-                        placeholder="0.0000"
-                      />
-                    </div>
-
-                    <div className="compact-field">
-                      <label>TAN No.</label>
-                      <input
-                        name="tanNo"
-                        value={accountForm.tanNo}
-                        onChange={handleAccountInput}
-                        placeholder="TAN No."
-                      />
-                    </div>
-
                     <div className="compact-field">
                       <label>GST Date</label>
                       <input
@@ -73102,7 +72899,95 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                       />
                     </div>
 
-                    {/* Credit Settings - 4 columns */}
+                    <div className="compact-field">
+                      <label>Drug License No.</label>
+                      <input
+                        name="drugLicNo"
+                        value={accountForm.drugLicNo}
+                        onChange={handleAccountInput}
+                        placeholder="Drug License No."
+                      />
+                    </div>
+
+                    <div className="compact-field">
+                      <label>Drug Expiry Date</label>
+                      <input
+                        name="drugExpDate"
+                        type="date"
+                        value={accountForm.drugExpDate}
+                        onChange={handleAccountInput}
+                      />
+                    </div>
+
+                    <div className="compact-field">
+                      <label>Food License</label>
+                      <input
+                        name="foodLicense"
+                        value={accountForm.foodLicense}
+                        onChange={handleAccountInput}
+                        placeholder="Food License"
+                      />
+                    </div>
+
+                    <div className="compact-field">
+                      <label>Tin No.</label>
+                      <input
+                        name="tinNo"
+                        value={accountForm.tinNo}
+                        onChange={handleAccountInput}
+                        placeholder="Tin No."
+                      />
+                    </div>
+
+                    <div className="compact-field">
+                      <label>TAN No.</label>
+                      <input
+                        name="tanNo"
+                        value={accountForm.tanNo}
+                        onChange={handleAccountInput}
+                        placeholder="TAN No."
+                      />
+                    </div>
+
+                    <div className="compact-field">
+                      <label>TCS %</label>
+                      <input
+                        name="tcsPercent"
+                        value={accountForm.tcsPercent}
+                        onChange={handleAccountInput}
+                        type="number"
+                        step="0.0001"
+                        placeholder="0.0000"
+                      />
+                    </div>
+
+                    {/* Other account details */}
+                    <div className="compact-field">
+                      <label>Address (Ship To)</label>
+                      <input
+                        name="address"
+                        value={accountForm.address}
+                        onChange={handleAccountInput}
+                        placeholder="Address"
+                      />
+                    </div>
+
+                    <div className="compact-field">
+                      <label>Invoice Type</label>
+                      <select name="invType" value={accountForm.invType} onChange={handleAccountInput}>
+                        <option value="TAXABLE">TAXABLE</option>
+                        <option value="CST">CST</option>
+                      </select>
+                    </div>
+
+                    <div className="compact-field">
+                      <label>Tax On</label>
+                      <select name="taxOn" value={accountForm.taxOn} onChange={handleAccountInput}>
+                        <option value="SRATE">SRATE</option>
+                        <option value="MRP">MRP</option>
+                      </select>
+                    </div>
+
                     <div className="compact-field">
                       <label>Credit Days</label>
                       <input
@@ -73124,6 +73009,16 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                     </div>
 
                     <div className="compact-field">
+                      <label>Credit Amount</label>
+                      <input
+                        name="creditAmt"
+                        value={accountForm.creditAmt ?? '0.00'}
+                        onChange={handleAccountInput}
+                        placeholder="0.00"
+                      />
+                    </div>
+
+                    <div className="compact-field">
                       <label>Lock Days</label>
                       <input
                         name="lockDays"
@@ -73134,17 +73029,6 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                     </div>
 
                     <div className="compact-field">
-                      <label>Credit Amount</label>
-                      <input
-                        name="creditAmt"
-                        value={accountForm.creditAmt ?? '0.00'}
-                        onChange={handleAccountInput}
-                        placeholder="0.00"
-                      />
-                    </div>
-
-                    {/* Blacklisted - Full width */}
-                    <div className="compact-field" style={{ gridColumn: 'span 4' }}>
                       <label>Blacklisted</label>
                       <select
                         name="blackListed"
@@ -73165,13 +73049,12 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                       </select>
                       {accountForm.blackListed === "YES" && (
                         <div style={{ color: '#dc2626', fontSize: '10px', marginTop: '4px', fontWeight: '600' }}>
-                          âš ï¸ This party is BLACKLISTED
+                          Warning: This party is BLACKLISTED
                         </div>
                       )}
                     </div>
 
-                    {/* Status Box */}
-                    <div className="compact-firm-status" style={{ gridColumn: 'span 4' }}>
+                    <div className="compact-firm-status" style={{ gridColumn: '1 / -1' }}>
                       <div className="compact-status-icon">
                         <CheckCircle2 size={17} />
                       </div>
@@ -73608,6 +73491,16 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                 <form id="compact-other-account-master-form" className="compact-master-form" onSubmit={saveOtherAccount}>
                   <div className="compact-form-grid compact-form-grid-4">
                     <div className="compact-field">
+                      <label>Opening Date</label>
+                      <input
+                        name="openingDate"
+                        type="date"
+                        value={otherAccountForm.openingDate || '2026-04-04'}
+                        onChange={handleOtherAccountInput}
+                      />
+                    </div>
+
+                    <div className="compact-field">
                       <label>Account Code <span>*</span></label>
                       <input
                         name="accountCode"
@@ -73632,39 +73525,6 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                     </div>
 
                     <div className="compact-field">
-                      <label>Account Group</label>
-                      <select name="accountGroup" value={otherAccountForm.accountGroup} onChange={handleOtherAccountInput}>
-                        <option value="ASSETS">ASSETS</option>
-                        <option value="LIABILITIES">LIABILITIES</option>
-                        <option value="EXPENSES">EXPENSES</option>
-                        <option value="INCOMES">INCOMES</option>
-                        <option value="FIXED ASSETS">FIXED ASSETS</option>
-                        <option value="CURRENT ASSETS">CURRENT ASSETS</option>
-                        <option value="CURRENT LIABILITIES">CURRENT LIABILITIES</option>
-                        <option value="EXPENSES DIRECT">EXPENSES DIRECT</option>
-                        <option value="EXPENSES INDIRECT">EXPENSES INDIRECT</option>
-                        <option value="TRADING EXPENSES">TRADING EXPENSES</option>
-                        <option value="INCOMES DIRECT">INCOMES DIRECT</option>
-                        <option value="PROFIT&LOSS TRANSFER">PROFIT&amp;LOSS TRANSFER</option>
-                        <option value="TAXES & DUTIES">TAXES &amp; DUTIES</option>
-                        <option value="BANK ACCOUNTS">BANK ACCOUNTS</option>
-                        <option value="SUNDRY DEBTORS">SUNDRY DEBTORS</option>
-                        <option value="SUNDRY CREDITORS">SUNDRY CREDITORS</option>
-                        <option value="CASH IN HAND">CASH IN HAND</option>
-                      </select>
-                    </div>
-
-                    <div className="compact-field">
-                      <label>Opening Date</label>
-                      <input
-                        name="openingDate"
-                        type="date"
-                        value={otherAccountForm.openingDate || '2026-04-04'}
-                        onChange={handleOtherAccountInput}
-                      />
-                    </div>
-
-                    <div className="compact-field">
                       <label>Address</label>
                       <input
                         name="address"
@@ -73675,32 +73535,22 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                     </div>
 
                     <div className="compact-field">
+                      <label>Bill To Add 1</label>
+                      <input
+                        name="billToAdd1"
+                        value={otherAccountForm.billToAdd1}
+                        onChange={handleOtherAccountInput}
+                        placeholder="Bill To Add 1"
+                      />
+                    </div>
+
+                    <div className="compact-field">
                       <label>Town</label>
                       <input
                         name="town"
                         value={otherAccountForm.town}
                         onChange={handleOtherAccountInput}
                         placeholder="Town"
-                      />
-                    </div>
-
-                    <div className="compact-field">
-                      <label>State</label>
-                      <input
-                        name="state"
-                        value={otherAccountForm.state}
-                        onChange={handleOtherAccountInput}
-                        placeholder="State"
-                      />
-                    </div>
-
-                    <div className="compact-field">
-                      <label>Country</label>
-                      <input
-                        name="country"
-                        value={otherAccountForm.country}
-                        onChange={handleOtherAccountInput}
-                        placeholder="Country"
                       />
                     </div>
 
@@ -73716,13 +73566,12 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                     </div>
 
                     <div className="compact-field">
-                      <label>Phone No.</label>
+                      <label>State</label>
                       <input
-                        name="phoneNo"
-                        value={otherAccountForm.phoneNo}
+                        name="state"
+                        value={otherAccountForm.state}
                         onChange={handleOtherAccountInput}
-                        placeholder="Phone No."
-                        maxLength="10"
+                        placeholder="State"
                       />
                     </div>
 
@@ -73738,6 +73587,17 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                     </div>
 
                     <div className="compact-field">
+                      <label>Phone No.</label>
+                      <input
+                        name="phoneNo"
+                        value={otherAccountForm.phoneNo}
+                        onChange={handleOtherAccountInput}
+                        placeholder="Phone No."
+                        maxLength="10"
+                      />
+                    </div>
+
+                    <div className="compact-field">
                       <label>Email ID</label>
                       <input
                         name="emailId"
@@ -73745,16 +73605,6 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                         onChange={handleOtherAccountInput}
                         placeholder="Email ID"
                         type="email"
-                      />
-                    </div>
-
-                    <div className="compact-field">
-                      <label>Tin No.</label>
-                      <input
-                        name="tinNo"
-                        value={otherAccountForm.tinNo}
-                        onChange={handleOtherAccountInput}
-                        placeholder="Tin No."
                       />
                     </div>
 
@@ -73778,6 +73628,131 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                           <option value="Cr">Cr</option>
                         </select>
                       </div>
+                    </div>
+
+                    <div className="compact-field">
+                      <label>PAN No.</label>
+                      <input
+                        name="panNo"
+                        value={otherAccountForm.panNo}
+                        onChange={handleOtherAccountInput}
+                        placeholder="PAN No."
+                      />
+                    </div>
+
+                    <div className="compact-field">
+                      <label>GST No.</label>
+                      <input
+                        name="gstNo"
+                        value={otherAccountForm.gstNo}
+                        onChange={handleOtherAccountInput}
+                        placeholder="GST No."
+                      />
+                    </div>
+
+                    <div className="compact-field">
+                      <label>GST Type</label>
+                      <select name="gstType" value={otherAccountForm.gstType} onChange={handleOtherAccountInput}>
+                        <option value="Unregistered">Unregistered</option>
+                        <option value="Registered">Registered</option>
+                        <option value="Composition">Composition</option>
+                      </select>
+                    </div>
+
+                    <div className="compact-field">
+                      <label>GST Date</label>
+                      <input
+                        name="gstDate"
+                        type="date"
+                        value={otherAccountForm.gstDate}
+                        onChange={handleOtherAccountInput}
+                      />
+                    </div>
+
+                    <div className="compact-field">
+                      <label>GST Close Date</label>
+                      <input
+                        name="gstClsDate"
+                        type="date"
+                        value={otherAccountForm.gstClsDate}
+                        onChange={handleOtherAccountInput}
+                      />
+                    </div>
+
+                    <div className="compact-field">
+                      <label>Food License</label>
+                      <input
+                        name="foodLicense"
+                        value={otherAccountForm.foodLicense}
+                        onChange={handleOtherAccountInput}
+                        placeholder="Food License"
+                      />
+                    </div>
+
+                    <div className="compact-field">
+                      <label>Tin No.</label>
+                      <input
+                        name="tinNo"
+                        value={otherAccountForm.tinNo}
+                        onChange={handleOtherAccountInput}
+                        placeholder="Tin No."
+                      />
+                    </div>
+
+                    <div className="compact-field">
+                      <label>TAN No.</label>
+                      <input
+                        name="tanNo"
+                        value={otherAccountForm.tanNo}
+                        onChange={handleOtherAccountInput}
+                        placeholder="TAN No."
+                      />
+                    </div>
+
+                    <div className="compact-field">
+                      <label>TCS %</label>
+                      <input
+                        name="tcsPercent"
+                        value={otherAccountForm.tcsPercent}
+                        onChange={handleOtherAccountInput}
+                        type="number"
+                        step="0.0001"
+                        placeholder="0.0000"
+                      />
+                    </div>
+
+                    {/* Other account details */}
+                    <div className="compact-field">
+                      <label>Account Group</label>
+                      <select name="accountGroup" value={otherAccountForm.accountGroup} onChange={handleOtherAccountInput}>
+                        <option value="ASSETS">ASSETS</option>
+                        <option value="LIABILITIES">LIABILITIES</option>
+                        <option value="EXPENSES">EXPENSES</option>
+                        <option value="INCOMES">INCOMES</option>
+                        <option value="FIXED ASSETS">FIXED ASSETS</option>
+                        <option value="CURRENT ASSETS">CURRENT ASSETS</option>
+                        <option value="CURRENT LIABILITIES">CURRENT LIABILITIES</option>
+                        <option value="EXPENSES DIRECT">EXPENSES DIRECT</option>
+                        <option value="EXPENSES INDIRECT">EXPENSES INDIRECT</option>
+                        <option value="TRADING EXPENSES">TRADING EXPENSES</option>
+                        <option value="INCOMES DIRECT">INCOMES DIRECT</option>
+                        <option value="PROFIT&LOSS TRANSFER">PROFIT&amp;LOSS TRANSFER</option>
+                        <option value="TAXES & DUTIES">TAXES &amp; DUTIES</option>
+                        <option value="BANK ACCOUNTS">BANK ACCOUNTS</option>
+                        <option value="SUNDRY DEBTORS">SUNDRY DEBTORS</option>
+                        <option value="SUNDRY CREDITORS">SUNDRY CREDITORS</option>
+                        <option value="CASH IN HAND">CASH IN HAND</option>
+                      </select>
+                    </div>
+
+                    <div className="compact-field">
+                      <label>Country</label>
+                      <input
+                        name="country"
+                        value={otherAccountForm.country}
+                        onChange={handleOtherAccountInput}
+                        placeholder="Country"
+                      />
                     </div>
 
                     <div className="compact-field">
@@ -73828,56 +73803,6 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                       </>
                     )}
 
-                    {/* GST Section */}
-                    <div className="compact-field">
-                      <label>PAN No.</label>
-                      <input
-                        name="panNo"
-                        value={otherAccountForm.panNo}
-                        onChange={handleOtherAccountInput}
-                        placeholder="PAN No."
-                      />
-                    </div>
-
-                    <div className="compact-field">
-                      <label>Food License</label>
-                      <input
-                        name="foodLicense"
-                        value={otherAccountForm.foodLicense}
-                        onChange={handleOtherAccountInput}
-                        placeholder="Food License"
-                      />
-                    </div>
-
-                    <div className="compact-field">
-                      <label>GST No.</label>
-                      <input
-                        name="gstNo"
-                        value={otherAccountForm.gstNo}
-                        onChange={handleOtherAccountInput}
-                        placeholder="GST No."
-                      />
-                    </div>
-
-                    <div className="compact-field">
-                      <label>GST Type</label>
-                      <select name="gstType" value={otherAccountForm.gstType} onChange={handleOtherAccountInput}>
-                        <option value="Unregistered">Unregistered</option>
-                        <option value="Registered">Registered</option>
-                        <option value="Composition">Composition</option>
-                      </select>
-                    </div>
-
-                    <div className="compact-field">
-                      <label>Bill To Add 1</label>
-                      <input
-                        name="billToAdd1"
-                        value={otherAccountForm.billToAdd1}
-                        onChange={handleOtherAccountInput}
-                        placeholder="Bill To Add 1"
-                      />
-                    </div>
-
                     <div className="compact-field">
                       <label>Remark</label>
                       <input
@@ -73888,49 +73813,7 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                       />
                     </div>
 
-                    <div className="compact-field">
-                      <label>TCS %</label>
-                      <input
-                        name="tcsPercent"
-                        value={otherAccountForm.tcsPercent}
-                        onChange={handleOtherAccountInput}
-                        type="number"
-                        step="0.0001"
-                        placeholder="0.0000"
-                      />
-                    </div>
-
-                    <div className="compact-field">
-                      <label>TAN No.</label>
-                      <input
-                        name="tanNo"
-                        value={otherAccountForm.tanNo}
-                        onChange={handleOtherAccountInput}
-                        placeholder="TAN No."
-                      />
-                    </div>
-
-                    <div className="compact-field">
-                      <label>GST Date</label>
-                      <input
-                        name="gstDate"
-                        type="date"
-                        value={otherAccountForm.gstDate}
-                        onChange={handleOtherAccountInput}
-                      />
-                    </div>
-
-                    <div className="compact-field">
-                      <label>GST Close Date</label>
-                      <input
-                        name="gstClsDate"
-                        type="date"
-                        value={otherAccountForm.gstClsDate}
-                        onChange={handleOtherAccountInput}
-                      />
-                    </div>
-
-                    <div className="compact-firm-status" style={{ gridColumn: 'span 4' }}>
+                    <div className="compact-firm-status" style={{ gridColumn: '1 / -1' }}>
                       <div className="compact-status-icon">
                         <CheckCircle2 size={17} />
                       </div>
@@ -74464,7 +74347,7 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                       </select>
                     </div>
 
-                    <div className="compact-firm-status" style={{ gridColumn: 'span 4' }}>
+                    <div className="compact-firm-status" style={{ gridColumn: '1 / -1' }}>
                       <div className="compact-status-icon">
                         <CheckCircle2 size={17} />
                       </div>
@@ -74963,7 +74846,7 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                       </select>
                     </div>
 
-                    <div className="compact-firm-status" style={{ gridColumn: 'span 4' }}>
+                    <div className="compact-firm-status" style={{ gridColumn: '1 / -1' }}>
                       <div className="compact-status-icon">
                         <CheckCircle2 size={17} />
                       </div>
@@ -75412,6 +75295,7 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
 
                 <form id="compact-salesman-master-form" className="compact-master-form" onSubmit={saveSalesman}>
                   <div className="compact-form-grid compact-form-grid-4">
+                    {/* Salesman details */}
                     <div className="compact-field">
                       <label>Salesman Code <span>*</span></label>
                       <input
@@ -75455,6 +75339,7 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                       />
                     </div>
 
+                    {/* Address details */}
                     <div className="compact-field" style={{ gridColumn: 'span 2' }}>
                       <label>Address</label>
                       <input
@@ -75472,17 +75357,6 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                         value={salesmanForm.town}
                         onChange={handleSalesmanInput}
                         placeholder="Town"
-                      />
-                    </div>
-
-                    <div className="compact-field">
-                      <label>Pin Code</label>
-                      <input
-                        name="pinCode"
-                        value={salesmanForm.pinCode}
-                        onChange={handleSalesmanInput}
-                        placeholder="Pin Code"
-                        maxLength="6"
                       />
                     </div>
 
@@ -75507,16 +75381,17 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                     </div>
 
                     <div className="compact-field">
-                      <label>Phone No.</label>
+                      <label>Pin Code</label>
                       <input
-                        name="phoneNo"
-                        value={salesmanForm.phoneNo}
+                        name="pinCode"
+                        value={salesmanForm.pinCode}
                         onChange={handleSalesmanInput}
-                        placeholder="Phone No."
-                        maxLength="10"
+                        placeholder="Pin Code"
+                        maxLength="6"
                       />
                     </div>
 
+                    {/* Contact and other details */}
                     <div className="compact-field">
                       <label>Mobile No.</label>
                       <input
@@ -75524,6 +75399,17 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                         value={salesmanForm.mobileNo}
                         onChange={handleSalesmanInput}
                         placeholder="Mobile No."
+                        maxLength="10"
+                      />
+                    </div>
+
+                    <div className="compact-field">
+                      <label>Phone No.</label>
+                      <input
+                        name="phoneNo"
+                        value={salesmanForm.phoneNo}
+                        onChange={handleSalesmanInput}
+                        placeholder="Phone No."
                         maxLength="10"
                       />
                     </div>
@@ -75569,7 +75455,7 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                       />
                     </div>
 
-                    <div className="compact-firm-status" style={{ gridColumn: 'span 4' }}>
+                    <div className="compact-firm-status" style={{ gridColumn: '1 / -1' }}>
                       <div className="compact-status-icon">
                         <CheckCircle2 size={17} />
                       </div>
@@ -76103,7 +75989,7 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                           type="button"
                           className="billing-action-button billing-preview-button"
                         >
-                          <span className="billing-button-icon">â—‰</span>
+                          <span className="billing-button-icon">◉</span>
                           Preview
                         </button>
 
@@ -76112,7 +75998,7 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                           className="billing-action-button billing-save-button"
                           onClick={saveInvoice}
                         >
-                          <span className="billing-button-icon">â–£</span>
+                          <span className="billing-button-icon">▣</span>
 
                           {editingInvoiceId ? "Update" : "Save"}
                         </button>
@@ -76122,7 +76008,7 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                           className="billing-action-button billing-save-print-button"
                           onClick={saveInvoice}
                         >
-                          <span className="billing-button-icon">â–¤</span>
+                          <span className="billing-button-icon">▤</span>
 
                           {editingInvoiceId
                             ? "Update Invoice"
@@ -76134,7 +76020,7 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                           className="billing-more-button"
                           aria-label="More actions"
                         >
-                          â‹®
+                          ⋮
                         </button>
 
                         <button
@@ -76147,7 +76033,7 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                           }
                           aria-label="Close invoice"
                         >
-                          âœ•
+                          ✕
                         </button>
                       </div>
                     </div>
@@ -76452,7 +76338,7 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                                       }
                                     >
                                       {mapping.accountName}
-                                      {isBlacklisted ? " ðŸš«" : ""}
+                                      {isBlacklisted ? " 🚫" : ""}
                                     </option>
                                   );
                                 })}
@@ -76701,7 +76587,7 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                                 : "Add Product"
                             }
                           >
-                            <span>ï¼‹</span>
+                            <span>＋</span>
                             Add Product
                           </button>
 
@@ -76715,7 +76601,7 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                                 : "Scan Barcode"
                             }
                           >
-                            <span>â–¦</span>
+                            <span>▦</span>
                             Scan Barcode
                           </button>
 
@@ -76729,7 +76615,7 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                                 : "Fast Add"
                             }
                           >
-                            <span>ÃÅ¸</span>
+                            <span>⚡</span>
                             Fast Add
                           </button>
 
@@ -77210,11 +77096,11 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                                                     </span>
 
                                                     <span>
-                                                      â‚¹{mrp}
+                                                      ₹{mrp}
                                                     </span>
 
                                                     <span>
-                                                      â‚¹{rate}
+                                                      ₹{rate}
                                                     </span>
 
                                                     <span>
@@ -77761,7 +77647,7 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                                   : "Add Row"
                               }
                             >
-                              ï¼‹ Add Row
+                              ＋ Add Row
                             </button>
 
                             <button
@@ -77785,7 +77671,7 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                                   : "Clear All"
                               }
                             >
-                              â™§ Clear All
+                              ♧ Clear All
                             </button>
                           </div>
 
@@ -77830,7 +77716,7 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                                 </span>
 
                                 <span>
-                                  <strong>MRP:</strong> â‚¹
+                                  <strong>MRP:</strong> ₹
                                   {Number(
                                     selectedSalesDetailItem.mrp || 0
                                   ).toFixed(2)}
@@ -77865,7 +77751,7 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                                 </span>
 
                                 <span>
-                                  <strong>Purchase:</strong> â‚¹
+                                  <strong>Purchase:</strong> ₹
                                   {getSalesDetailPurchaseRate(
                                     selectedSalesDetailItem
                                   ).toFixed(2)}
@@ -77885,7 +77771,7 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                                     fontWeight: "800",
                                   }}
                                 >
-                                  <strong>Net Amount:</strong> â‚¹
+                                  <strong>Net Amount:</strong> ₹
                                   {getSalesDetailNetAmount(
                                     selectedSalesDetailItem
                                   ).toFixed(2)}
@@ -77977,7 +77863,7 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                           <span>Gross</span>
 
                           <strong>
-                            â‚¹{Number(
+                            ₹{Number(
                               invoiceSummary.gross || 0
                             ).toFixed(2)}
                           </strong>
@@ -77987,7 +77873,7 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                           <span>TPR</span>
 
                           <strong>
-                            -â‚¹{Number(
+                            -₹{Number(
                               invoiceSummary.tpr || 0
                             ).toFixed(2)}
                           </strong>
@@ -77997,7 +77883,7 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                           <span>Scheme</span>
 
                           <strong>
-                            -â‚¹{Number(
+                            -₹{Number(
                               invoiceSummary.scheme || 0
                             ).toFixed(2)}
                           </strong>
@@ -78007,7 +77893,7 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                           <span>Star</span>
 
                           <strong>
-                            -â‚¹{Number(
+                            -₹{Number(
                               invoiceSummary.star || 0
                             ).toFixed(2)}
                           </strong>
@@ -78017,7 +77903,7 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                           <span>Cash Disc.</span>
 
                           <strong>
-                            -â‚¹{Number(
+                            -₹{Number(
                               invoiceSummary.cd || 0
                             ).toFixed(2)}
                           </strong>
@@ -78028,7 +77914,7 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                           <span>Display</span>
 
                           <div className="billing-summary-input-wrap">
-                            <span>-â‚¹</span>
+                            <span>-₹</span>
 
                             <input
                               type="text"
@@ -78052,7 +77938,7 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                           <span>Coupon</span>
 
                           <div className="billing-summary-input-wrap">
-                            <span>-â‚¹</span>
+                            <span>-₹</span>
 
                             <input
                               type="text"
@@ -78075,7 +77961,7 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                           <span>Taxable</span>
 
                           <strong>
-                            â‚¹{Number(
+                            ₹{Number(
                               invoiceTaxableValue || 0
                             ).toFixed(2)}
                           </strong>
@@ -78085,7 +77971,7 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                           <span>CGST</span>
 
                           <strong>
-                            â‚¹{Number(
+                            ₹{Number(
                               invoiceSummary.cgst || 0
                             ).toFixed(2)}
                           </strong>
@@ -78095,7 +77981,7 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                           <span>SGST</span>
 
                           <strong>
-                            â‚¹{Number(
+                            ₹{Number(
                               invoiceSummary.sgst || 0
                             ).toFixed(2)}
                           </strong>
@@ -78105,7 +77991,7 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                           <span>IGST</span>
 
                           <strong>
-                            â‚¹{Number(
+                            ₹{Number(
                               invoiceSummary.igst || 0
                             ).toFixed(2)}
                           </strong>
@@ -78116,7 +78002,7 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                           <span>Add / Less</span>
 
                           <div className="billing-summary-input-wrap billing-add-less-input-wrap">
-                            <span>â‚¹</span>
+                            <span>₹</span>
 
                             <input
                               type="text"
@@ -78140,7 +78026,7 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                           <span>Original Net</span>
 
                           <strong>
-                            â‚¹{Number(
+                            ₹{Number(
                               invoiceNetBeforeCreditNote || 0
                             ).toFixed(2)}
                           </strong>
@@ -78151,7 +78037,7 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                           <span>Credit Note</span>
 
                           <strong>
-                            -â‚¹{Number(
+                            -₹{Number(
                               invoiceSummary.creditNote || 0
                             ).toFixed(2)}
                           </strong>
@@ -78162,7 +78048,7 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                           <span>Net Payable</span>
 
                           <strong>
-                            â‚¹{Number(
+                            ₹{Number(
                               invoiceNetPayable || 0
                             ).toFixed(2)}
                           </strong>
@@ -78739,11 +78625,11 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                                               </span>
 
                                               <span className="billing-product-mrp">
-                                                â‚¹{mrp.toFixed(2)}
+                                                ₹{mrp.toFixed(2)}
                                               </span>
 
                                               <span className="billing-product-rate">
-                                                â‚¹{rate.toFixed(2)}
+                                                ₹{rate.toFixed(2)}
                                               </span>
 
                                               <span className="billing-product-stock">
@@ -79062,7 +78948,7 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
 
                                 {/* Action */}
                                 <td style={{ position: 'sticky', right: 0, backgroundColor: index === purchaseActiveRow ? '#eff6ff' : 'white', zIndex: 5 }}>
-                                  <button className="btn-delete" onClick={() => deletePurchaseItem(index)}>ðŸ—‘ Delete</button>
+                                  <button className="btn-delete" onClick={() => deletePurchaseItem(index)}>🗑 Delete</button>
                                 </td>
                               </tr>
                             ))}
@@ -79082,24 +78968,24 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                     </div>
 
                     <div className="summary-bar purchase-summary-grid">
-                      <div>MRP Total: <span className="amount">â‚¹{purchaseFormData.mrpTotal || '0.00'}</span></div>
+                      <div>MRP Total: <span className="amount">₹{purchaseFormData.mrpTotal || '0.00'}</span></div>
                       <div>TCS %: <span className="amount">{purchaseFormData.tcbPercent || '0.00'}%</span></div>
-                      <div>TCS Amount: <span className="amount">-â‚¹{purchaseFormData.tcbAmount || '0.00'}</span></div>
-                      <div>DISC1: <span className="amount">-â‚¹{purchaseFormData.diBc1 || '0.00'}</span></div>
-                      <div>After DISC1: <span className="amount">â‚¹{purchaseFormData.afterDiBc1 || '0.00'}</span></div>
-                      <div>Gross Amount: <span className="amount">â‚¹{purchaseFormData.groBsAmt || '0.00'}</span></div>
-                      <div>DISC2: <span className="amount">-â‚¹{purchaseFormData.diBc2 || '0.00'}</span></div>
-                      <div>After DISC2: <span className="amount">â‚¹{purchaseFormData.afterDiBc2 || '0.00'}</span></div>
+                      <div>TCS Amount: <span className="amount">-₹{purchaseFormData.tcbAmount || '0.00'}</span></div>
+                      <div>DISC1: <span className="amount">-₹{purchaseFormData.diBc1 || '0.00'}</span></div>
+                      <div>After DISC1: <span className="amount">₹{purchaseFormData.afterDiBc1 || '0.00'}</span></div>
+                      <div>Gross Amount: <span className="amount">₹{purchaseFormData.groBsAmt || '0.00'}</span></div>
+                      <div>DISC2: <span className="amount">-₹{purchaseFormData.diBc2 || '0.00'}</span></div>
+                      <div>After DISC2: <span className="amount">₹{purchaseFormData.afterDiBc2 || '0.00'}</span></div>
 
-                      <div>GST Amount: <span className="amount">+â‚¹{purchaseFormData.qbtAmt || '0.00'}</span></div>
-                      <div>CGST Amount: <span className="amount">â‚¹{Number(purchaseFormData.cgstAmt || 0).toFixed(2)}</span></div>
-                      <div>SGST Amount: <span className="amount">â‚¹{Number(purchaseFormData.sgstAmt || 0).toFixed(2)}</span></div>
-                      <div>IGST Amount: <span className="amount">â‚¹{Number(purchaseFormData.igstAmt || 0).toFixed(2)}</span></div>
+                      <div>GST Amount: <span className="amount">+₹{purchaseFormData.qbtAmt || '0.00'}</span></div>
+                      <div>CGST Amount: <span className="amount">₹{Number(purchaseFormData.cgstAmt || 0).toFixed(2)}</span></div>
+                      <div>SGST Amount: <span className="amount">₹{Number(purchaseFormData.sgstAmt || 0).toFixed(2)}</span></div>
+                      <div>IGST Amount: <span className="amount">₹{Number(purchaseFormData.igstAmt || 0).toFixed(2)}</span></div>
 
-                      <div>DISC3: <span className="amount">-â‚¹{purchaseFormData.diBc3 || '0.00'}</span></div>
-                      <div>After DISC3: <span className="amount">â‚¹{purchaseFormData.afterDiBc3 || '0.00'}</span></div>
-                      <div>Rounding: <span className="amount">â‚¹{purchaseFormData.rounding || '0.00'}</span></div>
-                      <div className="net-amount">Net Amount: <strong>â‚¹{purchaseFormData.netAmt || '0.00'}</strong></div>
+                      <div>DISC3: <span className="amount">-₹{purchaseFormData.diBc3 || '0.00'}</span></div>
+                      <div>After DISC3: <span className="amount">₹{purchaseFormData.afterDiBc3 || '0.00'}</span></div>
+                      <div>Rounding: <span className="amount">₹{purchaseFormData.rounding || '0.00'}</span></div>
+                      <div className="net-amount">Net Amount: <strong>₹{purchaseFormData.netAmt || '0.00'}</strong></div>
                     </div>
                   </section>
 
@@ -80353,7 +80239,7 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                             <span>
                               Gross:
                               <strong>
-                                â‚¹
+                                ₹
                                 {creditNoteItems
                                   .reduce(
                                     (total, row) =>
@@ -80379,7 +80265,7 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                         <div>
                           Gross Amount:
                           <span className="amount">
-                            â‚¹{Number(
+                            ₹{Number(
                               creditNoteSummary.grossAmt || 0
                             ).toFixed(2)}
                           </span>
@@ -80388,7 +80274,7 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                         <div>
                           Scheme Amount:
                           <span className="amount">
-                            -â‚¹{Number(
+                            -₹{Number(
                               creditNoteSummary.schemeAmt || 0
                             ).toFixed(2)}
                           </span>
@@ -80397,7 +80283,7 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                         <div>
                           TPR Amount:
                           <span className="amount">
-                            -â‚¹{Number(
+                            -₹{Number(
                               creditNoteSummary.tprAmt || 0
                             ).toFixed(2)}
                           </span>
@@ -80406,7 +80292,7 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                         <div>
                           Cash Discount:
                           <span className="amount">
-                            -â‚¹{Number(
+                            -₹{Number(
                               creditNoteSummary.cashDisc || 0
                             ).toFixed(2)}
                           </span>
@@ -80415,7 +80301,7 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                         <div>
                           Star Discount:
                           <span className="amount">
-                            -â‚¹{Number(
+                            -₹{Number(
                               creditNoteSummary.starAmt || 0
                             ).toFixed(2)}
                           </span>
@@ -80424,7 +80310,7 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                         <div>
                           Display Amount:
                           <span className="amount">
-                            -â‚¹{Number(
+                            -₹{Number(
                               creditNoteSummary.display || 0
                             ).toFixed(2)}
                           </span>
@@ -80433,7 +80319,7 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                         <div>
                           Coupon Amount:
                           <span className="amount">
-                            -â‚¹{Number(
+                            -₹{Number(
                               creditNoteSummary.coupon || 0
                             ).toFixed(2)}
                           </span>
@@ -80442,7 +80328,7 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                         <div>
                           GST Amount:
                           <span className="amount">
-                            +â‚¹{Number(
+                            +₹{Number(
                               creditNoteSummary.gstAmt || 0
                             ).toFixed(2)}
                           </span>
@@ -80451,7 +80337,7 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                         <div>
                           Cess Amount:
                           <span className="amount">
-                            +â‚¹{Number(
+                            +₹{Number(
                               creditNoteSummary.cessAmt || 0
                             ).toFixed(2)}
                           </span>
@@ -80469,7 +80355,7 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                         <div>
                           TCS Amount:
                           <span className="amount">
-                            +â‚¹{Number(
+                            +₹{Number(
                               creditNoteSummary.tcsAmt || 0
                             ).toFixed(2)}
                           </span>
@@ -80478,7 +80364,7 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                         <div>
                           Bill Balance:
                           <span className="amount">
-                            â‚¹{Number(
+                            ₹{Number(
                               creditNoteSummary.billBalAmt || 0
                             ).toFixed(2)}
                           </span>
@@ -80487,7 +80373,7 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                         <div>
                           Add / Less:
                           <span className="amount">
-                            â‚¹{Number(
+                            ₹{Number(
                               creditNoteSummary.addLess || 0
                             ).toFixed(2)}
                           </span>
@@ -80496,7 +80382,7 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                         <div>
                           Rounding:
                           <span className="amount">
-                            â‚¹{Number(
+                            ₹{Number(
                               creditNoteSummary.rounding || 0
                             ).toFixed(2)}
                           </span>
@@ -80505,7 +80391,7 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                         <div className="net-amount">
                           Net Amount:
                           <strong>
-                            â‚¹{Number(
+                            ₹{Number(
                               creditNoteSummary.netAmt || 0
                             ).toFixed(2)}
                           </strong>
@@ -80555,7 +80441,7 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                                       ""}
                                   </strong>
 
-                                  {" â€” "}
+                                  {" — "}
 
                                   {creditBatchProduct?.productName ||
                                     ""}
@@ -80990,11 +80876,11 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                                               </td>
 
                                               <td className="numeric">
-                                                â‚¹{mrp.toFixed(2)}
+                                                ₹{mrp.toFixed(2)}
                                               </td>
 
                                               <td className="numeric">
-                                                â‚¹{salesRate.toFixed(2)}
+                                                ₹{salesRate.toFixed(2)}
                                               </td>
 
                                               <td className="numeric">
@@ -82282,8 +82168,8 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                                   </span>
 
                                   <span>-</span>
-                                  <span>â‚¹0.00</span>
-                                  <span>â‚¹0.00</span>
+                                  <span>₹0.00</span>
+                                  <span>₹0.00</span>
                                   <span>0.00</span>
                                 </div>
                               );
@@ -82300,15 +82186,15 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                     </div>
 
                     <div className="summary-bar debit-credit-summary-grid">
-                      <div>Gross Amt: <span className="amount">â‚¹{debitNoteSummary.grossAmt.toFixed(2)}</span></div>
-                      <div>GST Amt: <span className="amount">+â‚¹{debitNoteSummary.gstAmt.toFixed(2)}</span></div>
-                      <div className="tcs-field">TCS %: <input className="erp-input small" placeholder="0" value={debitNoteSummary.tcsPercent} onChange={(e) => setDebitNoteSummary({ ...debitNoteSummary, tcsPercent: e.target.value })} /> TCS Amt: â‚¹{debitNoteSummary.tcsAmt}</div>
-                      <div>Before Vat Disc Amt: <span className="amount">â‚¹{debitNoteSummary.beforeVatDiscAmt.toFixed(2)}</span></div>
-                      <div>Surcharge: <span className="amount">â‚¹{debitNoteSummary.surcharge}</span></div>
-                      <div>Rounding: <span className="amount">â‚¹{debitNoteSummary.rounding}</span></div>
-                      <div>Before Vat Add Amt: <span className="amount">â‚¹{debitNoteSummary.beforeVatAddAmt}</span></div>
-                      <div>After Vat Disc Amt: <span className="amount">â‚¹{debitNoteSummary.afterVatDiscAmt.toFixed(2)}</span></div>
-                      <div className="net-amount">Net Amt: <strong>â‚¹{debitNoteSummary.netAmt}</strong></div>
+                      <div>Gross Amt: <span className="amount">₹{debitNoteSummary.grossAmt.toFixed(2)}</span></div>
+                      <div>GST Amt: <span className="amount">+₹{debitNoteSummary.gstAmt.toFixed(2)}</span></div>
+                      <div className="tcs-field">TCS %: <input className="erp-input small" placeholder="0" value={debitNoteSummary.tcsPercent} onChange={(e) => setDebitNoteSummary({ ...debitNoteSummary, tcsPercent: e.target.value })} /> TCS Amt: ₹{debitNoteSummary.tcsAmt}</div>
+                      <div>Before Vat Disc Amt: <span className="amount">₹{debitNoteSummary.beforeVatDiscAmt.toFixed(2)}</span></div>
+                      <div>Surcharge: <span className="amount">₹{debitNoteSummary.surcharge}</span></div>
+                      <div>Rounding: <span className="amount">₹{debitNoteSummary.rounding}</span></div>
+                      <div>Before Vat Add Amt: <span className="amount">₹{debitNoteSummary.beforeVatAddAmt}</span></div>
+                      <div>After Vat Disc Amt: <span className="amount">₹{debitNoteSummary.afterVatDiscAmt.toFixed(2)}</span></div>
+                      <div className="net-amount">Net Amt: <strong>₹{debitNoteSummary.netAmt}</strong></div>
                     </div>
                   </div>
 
@@ -82462,7 +82348,7 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                   <div className="mapping-table-card">
                     <div className="grid-header">
                       <h3>Mapping for {areaToPartyCompany.code} - {areaToPartyCompany.name} ({areaToPartyData.length} accounts)</h3>
-                      <div className="form-actions"><button className="btn-save" onClick={saveAreaToPartyMapping}>ðŸ’¾ Save Mapping</button><button className="btn-cancel" onClick={resetAreaToPartyMapping}>ðŸ”„ Reset</button></div>
+                      <div className="form-actions"><button className="btn-save" onClick={saveAreaToPartyMapping}>💾 Save Mapping</button><button className="btn-cancel" onClick={resetAreaToPartyMapping}>🔄 Reset</button></div>
                     </div>
                     <div className="mapping-table-wrap">
                       <table className="mapping-list-table">
@@ -82636,7 +82522,7 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                   className="ts-pm-close"
                   onClick={() => setShowProductMappingModal(false)}
                 >
-                  Ã—
+                  ?
                 </button>
               </div>
 
@@ -82803,7 +82689,7 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                     padding: '4px 8px'
                   }}
                 >
-                  âœ•
+                  ✕
                 </button>
               </div>
 
@@ -82947,7 +82833,7 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                             <td style={{ padding: '8px' }}>
                               <span style={{ fontWeight: '500', color: '#2563eb' }}>{batch.batchNo}</span>
                             </td>
-                            <td style={{ padding: '8px', textAlign: 'right' }}>â‚¹{Number(
+                            <td style={{ padding: '8px', textAlign: 'right' }}>₹{Number(
                               batch.mrp ??
                               batch.MRP ??
                               0
@@ -82975,7 +82861,7 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                                 ).toFixed(2)}
                               </span>
                             </td>
-                            <td style={{ padding: '8px', textAlign: 'right' }}>â‚¹{Number(
+                            <td style={{ padding: '8px', textAlign: 'right' }}>₹{Number(
                               batch.salesRate ??
                               batch.SalesRate ??
                               batch.sRate ??
@@ -82984,7 +82870,7 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                               batch.Rate ??
                               0
                             ).toFixed(2)}</td>
-                            <td style={{ padding: '8px', textAlign: 'right' }}>â‚¹{Number(
+                            <td style={{ padding: '8px', textAlign: 'right' }}>₹{Number(
                               batch.purchaseRate ??
                               batch.PurchaseRate ??
                               batch.purRate ??
@@ -83402,7 +83288,7 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
             >
               <div className="professional-modal-header">
                 <h3>{viewType} Details</h3>
-                <button onClick={() => setShowViewModal(false)}>Ã—</button>
+                <button onClick={() => setShowViewModal(false)}>?</button>
               </div>
 
               {viewType === "Firm" ? (
@@ -83413,8 +83299,8 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                 <div className="firm-view-grid">
                   <p><b>User Name:</b> {viewData.userName || "-"}</p>
                   <p><b>Role:</b> {viewData.role || "USER"}</p>
-                  <p><b>Password:</b> {viewData.password ? "â€¢â€¢â€¢â€¢â€¢â€¢â€¢â€¢" : "-"}</p>
-                  <p><b>Old Password:</b> {viewData.oldPassword ? "â€¢â€¢â€¢â€¢â€¢â€¢â€¢â€¢" : "-"}</p>
+                  <p><b>Password:</b> {viewData.password ? "••••••••" : "-"}</p>
+                  <p><b>Old Password:</b> {viewData.oldPassword ? "••••••••" : "-"}</p>
                   <p><b>Firm Name:</b> {viewData.firmName || "-"}</p>
                   <p><b>Status:</b> {viewData.status || "Active"}</p>
                   {viewData.createdDate && <p><b>Created:</b> {viewData.createdDate}</p>}
@@ -83504,7 +83390,7 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                     <div><strong>Credit Days:</strong> {viewData.creditDays || "0"}</div>
                     <div><strong>Credit Bills:</strong> {viewData.creditBills || "0"}</div>
                     <div><strong>Lock Days:</strong> {viewData.lockDays || "0"}</div>
-                    <div><strong>Credit Amount:</strong> â‚¹{Number(viewData.creditAmt || 0).toFixed(2)}</div>
+                    <div><strong>Credit Amount:</strong> ₹{Number(viewData.creditAmt || 0).toFixed(2)}</div>
                     <div>
                       <strong>Blacklisted:</strong>
                       <span style={{
@@ -83517,7 +83403,7 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                         background: String(viewData.blackListed || 'NO').toUpperCase() === 'YES' ? '#fee2e2' : '#dcfce7',
                         color: String(viewData.blackListed || 'NO').toUpperCase() === 'YES' ? '#dc2626' : '#059669'
                       }}>
-                        {String(viewData.blackListed || 'NO').toUpperCase() === 'YES' ? 'âš ï¸ YES' : 'NO'}
+                        {String(viewData.blackListed || 'NO').toUpperCase() === 'YES' ? "Warning: YES" : 'NO'}
                       </span>
                     </div>
 
@@ -83635,26 +83521,9 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                   <div className="view-details-grid">
                     <div><strong>Bank Code:</strong> {viewData.bankCode || "-"}</div>
                     <div><strong>Bank Name:</strong> {viewData.bankName || "-"}</div>
-                    <div><strong>Account Number:</strong> {viewData.accountNumber || "-"}</div>
-                    <div><strong>IFSC Code:</strong> {viewData.ifscCode || "-"}</div>
                     <div><strong>Branch Name:</strong> {viewData.branchName || "-"}</div>
                     <div><strong>Account Type:</strong> {viewData.accountType || "-"}</div>
-
-                    <div><strong>Customer Code:</strong> {viewData.customerCode || "-"}</div>
-                    <div><strong>Customer Name:</strong> {viewData.customerName || "-"}</div>
-                    <div><strong>Mobile No:</strong> {viewData.mobileNo || "-"}</div>
-                    <div><strong>Email:</strong> {viewData.emailId || "-"}</div>
-                    <div><strong>UPI ID:</strong> {viewData.upiId || "-"}</div>
-
-                    <div><strong>SWIFT Code:</strong> {viewData.swiftCode || "-"}</div>
-                    <div><strong>MICR Code:</strong> {viewData.micrCode || "-"}</div>
-                    <div><strong>PAN Number:</strong> {viewData.panNumber || "-"}</div>
-                    <div><strong>Beneficiary Name:</strong> {viewData.beneficiaryName || "-"}</div>
-                    <div><strong>Remarks:</strong> {viewData.remarks || "-"}</div>
-
-                    <div><strong>Firm Name:</strong> {viewData.firmName || "-"}</div>
-                    <div><strong>Status:</strong> {viewData.isActive !== false ? "Active" : "Inactive"}</div>
-                    <div><strong>Created Date:</strong> {viewData.createdAt || "-"}</div>
+                    <div><strong>Clearing Type:</strong> {viewData.clearingType || "-"}</div>
                   </div>
                 </div>
               ) :
@@ -83670,7 +83539,7 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                     <p>
                       <b>Amount:</b>{" "}
                       <span style={{ fontWeight: "700", color: "#059669" }}>
-                        â‚¹{parseFloat(viewData.amount || 0).toLocaleString("en-IN", {
+                        ₹{parseFloat(viewData.amount || 0).toLocaleString("en-IN", {
                           minimumFractionDigits: 2,
                         })}
                       </span>
@@ -83709,10 +83578,10 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                               {item.qty || item.quantity || "-"}
                             </td>
                             <td style={{ padding: "8px", border: "1px solid #e5e7eb", textAlign: "right" }}>
-                              â‚¹{parseFloat(item.rate || 0).toFixed(2)}
+                              ₹{parseFloat(item.rate || 0).toFixed(2)}
                             </td>
                             <td style={{ padding: "8px", border: "1px solid #e5e7eb", textAlign: "right" }}>
-                              â‚¹{parseFloat(item.amount || item.grossAmt || 0).toFixed(2)}
+                              ₹{parseFloat(item.amount || item.grossAmt || 0).toFixed(2)}
                             </td>
                           </tr>
                         ))}
@@ -83883,9 +83752,9 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
 
                           <span>{batchNo}</span>
 
-                          <span>â‚¹{mrp.toFixed(2)}</span>
+                          <span>₹{mrp.toFixed(2)}</span>
 
-                          <span>â‚¹{rate.toFixed(2)}</span>
+                          <span>₹{rate.toFixed(2)}</span>
 
                           <span>{stock.toFixed(2)}</span>
                         </div>
@@ -83940,7 +83809,7 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                           ?.productCode || ""}
                       </strong>
 
-                      {" â€” "}
+                      {" — "}
 
                       {debitBatchProduct
                         ?.productName || ""}
@@ -84076,11 +83945,11 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                                   <td>{batchNo}</td>
 
                                   <td className="numeric">
-                                    â‚¹{mrp.toFixed(2)}
+                                    ₹{mrp.toFixed(2)}
                                   </td>
 
                                   <td className="numeric">
-                                    â‚¹{rate.toFixed(2)}
+                                    ₹{rate.toFixed(2)}
                                   </td>
 
                                   <td className="numeric">

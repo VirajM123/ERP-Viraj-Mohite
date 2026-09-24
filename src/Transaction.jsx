@@ -1,6 +1,7 @@
 import React, { useState, useCallback, useEffect, useRef } from "react";
 import { secureFetch, usePermission } from "./SecuritySetup";
 import "./Transaction.css";
+import "./VoucherForms.css";
 import { useERP } from "./context/ERPContext";
 import { API_URL } from "./api/config";
 import { businessDateIST } from "./utils/businessDate";
@@ -12314,49 +12315,16 @@ setTransactionFormMode((prev) => ({
   // =========================================================
 
   const renderJournalForm = () => (
-    <div className="journal-billing-page">
+    <div className="journal-billing-page voucher-design voucher-journal">
       <div className="journal-billing-card">
 
         {/* ================= TOP HEADER ================= */}
 
-        <div className="journal-billing-topbar">
-          <div className="journal-billing-title-wrap">
-            <h2>Journal Voucher Entry</h2>
-
-            <span className="journal-billing-badge">
-              New Voucher
-            </span>
-          </div>
-
-          <div className="journal-billing-actions">
-            <button
-              type="button"
-              className="journal-save-header-btn"
-              onClick={saveJournalVoucher}
-            >
-              💾 Save Journal
-            </button>
-
-            <button
-              type="button"
-              className="journal-more-btn"
-              aria-label="More options"
-            >
-              ⋮
-            </button>
-
-            <button
-              type="button"
-              className="journal-close-header-btn"
-              onClick={() =>
-                openTransactionList("Journal Voucher")
-              }
-              aria-label="Close Journal Voucher"
-            >
-              ×
-            </button>
-          </div>
-        </div>
+        <header className="voucher-form-header">
+          <div className="voucher-breadcrumb">Transactions <span>/</span> Journal Voucher</div>
+          <div className="voucher-title-row"><h2>Journal Voucher</h2><span className="voucher-new-badge">{editJournalId ? "Edit" : "New"}</span></div>
+          <p>Create balanced debit and credit entries.</p>
+        </header>
 
         {/* ================= JOURNAL INFORMATION ================= */}
 
@@ -12364,7 +12332,7 @@ setTransactionFormMode((prev) => ({
           <div className="journal-section-heading">
             <div className="journal-heading-left">
               <span className="journal-section-dot" />
-              <h3>Journal Information</h3>
+              <h3>Voucher details</h3>
             </div>
 
             <div className="journal-header-meta">
@@ -12439,7 +12407,7 @@ setTransactionFormMode((prev) => ({
             </div>
 
             <div className="journal-field">
-              <label>Is GST</label>
+              <label>GST applicable</label>
 
               <select
                 name="isGst"
@@ -12451,17 +12419,7 @@ setTransactionFormMode((prev) => ({
               </select>
             </div>
 
-            <div className="journal-field journal-narration-inline">
-              <label>Narration</label>
 
-              <input
-                type="text"
-                name="narr"
-                value={journalFormData.narr || ""}
-                onChange={handleJournalInput}
-                placeholder="Enter narration"
-              />
-            </div>
           </div>
         </section>
 
@@ -12471,7 +12429,7 @@ setTransactionFormMode((prev) => ({
           <div className="journal-grid-heading">
             <div className="journal-heading-left">
               <span className="journal-section-dot" />
-              <h3>Journal Entries</h3>
+              <h3>Journal entries <small className="voucher-entry-count">{journalSummary.totalEntries || 0} entries</small></h3>
             </div>
 
             <button
@@ -12487,11 +12445,11 @@ setTransactionFormMode((prev) => ({
             <table className="journal-entry-grid">
               <thead>
                 <tr>
-                  <th>Seq No</th>
+                  <th>#</th>
                   <th>Account Code</th>
                   <th>Account Name</th>
-                  <th>Debit Amount</th>
-                  <th>Credit Amount</th>
+                  <th>Debit (₹)</th>
+                  <th>Credit (₹)</th>
                 </tr>
               </thead>
 
@@ -12626,6 +12584,10 @@ setTransactionFormMode((prev) => ({
                   </tr>
                 ))}
               </tbody>
+              <tfoot><tr><td colSpan="3">Total</td>
+                <td>{Number(journalSummary.totalDr || 0).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                <td>{Number(journalSummary.totalCr || 0).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+              </tr></tfoot>
             </table>
           </div>
 
@@ -12653,6 +12615,18 @@ setTransactionFormMode((prev) => ({
 
         {/* ================= JOURNAL SUMMARY ================= */}
 
+        <div className="voucher-journal-bottom">
+            <div className="journal-field journal-narration-inline">
+              <label>Narration</label>
+
+              <input
+                type="text"
+                name="narr"
+                value={journalFormData.narr || ""}
+                onChange={handleJournalInput}
+                placeholder="Enter narration"
+              />
+            </div>
         <section className="journal-summary-section">
           <div className="journal-summary-heading">
             <div className="journal-heading-left">
@@ -12729,6 +12703,27 @@ setTransactionFormMode((prev) => ({
             </div>
           </div>
         </section>
+        </div>
+        <footer className="voucher-form-footer">
+          <small>Required fields marked <span>*</span></small>
+          <div className="voucher-footer-actions"><button
+              type="button"
+              className="voucher-secondary-button"
+              onClick={() =>
+                openTransactionList("Journal Voucher")
+              }
+              aria-label="Close Journal Voucher"
+            >
+              Cancel
+            </button>
+<button
+              type="button"
+              className="voucher-primary-button"
+              onClick={saveJournalVoucher}
+            >
+              Save Journal
+            </button></div>
+        </footer>
       </div>
     </div>
   );
@@ -17265,63 +17260,26 @@ setTransactionFormMode((prev) => ({
   // =========================================================
 
   const renderContraForm = () => (
-    <div className="contra-billing-page">
+    <div className="contra-billing-page voucher-design voucher-contra">
       <div className="contra-billing-card">
 
         {/* ================= TOP HEADER ================= */}
 
-        <div className="contra-billing-topbar">
-          <div className="contra-billing-title-wrap">
-            <h2>
-              {editContraId
-                ? "Edit Contra Entry"
-                : "Contra Entry"}
-            </h2>
-
-            <span className="contra-billing-badge">
-              {editContraId ? "Edit Entry" : "New Entry"}
-            </span>
-          </div>
-
-          <div className="contra-billing-actions">
-            <button
-              type="button"
-              className="contra-save-header-btn"
-              onClick={saveContra}
-            >
-              💾 {editContraId ? "Update Contra" : "Save Contra"}
-            </button>
-
-            <button
-              type="button"
-              className="contra-more-btn"
-              aria-label="More options"
-            >
-              ⋮
-            </button>
-
-            <button
-              type="button"
-              className="contra-close-header-btn"
-              aria-label="Close Contra form"
-              onClick={() => {
-                resetContraForm();
-                openTransactionList("Contra");
-              }}
-            >
-              ×
-            </button>
-          </div>
-        </div>
+        <header className="voucher-form-header">
+          <div className="voucher-breadcrumb">Transactions <span>/</span> Contra Voucher</div>
+          <div className="voucher-title-row"><h2>Contra Voucher</h2><span className="voucher-new-badge">{editContraId ? "Edit" : "New"}</span></div>
+          <p>Record cash deposits, withdrawals and bank transfers.</p>
+        </header>
 
         {/* ================= CONTRA INFORMATION ================= */}
 
+        <div className="voucher-contra-body">
         <section className="contra-entry-section">
           <div className="contra-section-heading">
             <div className="contra-heading-left">
               <span className="contra-section-dot" />
 
-              <h3>Contra Information</h3>
+              <h3>Transaction details</h3>
             </div>
 
             <div className="contra-header-meta">
@@ -17358,7 +17316,7 @@ setTransactionFormMode((prev) => ({
 
             <div className="contra-field">
               <label>
-                Transaction VNo <span>*</span>
+                Voucher No. <span>*</span>
               </label>
 
               <input
@@ -17403,23 +17361,26 @@ setTransactionFormMode((prev) => ({
                 Transaction Type <span>*</span>
               </label>
 
-              <select
-                name="transactionType"
-                value={contraFormData.transactionType || ""}
-                onChange={handleContraInput}
-              >
-                <option value="CASH DEPOSIT">
-                  Cash Deposit
-                </option>
-
-                <option value="CASH WITHDRAWAL">
-                  Cash Withdrawal
-                </option>
-
-                <option value="BANK TRANSFER">
-                  Bank Transfer
-                </option>
-              </select>
+              <div className="voucher-type-options" role="radiogroup" aria-label="Transaction Type">
+                <label className="voucher-type-option">
+                  <input type="radio" name="transactionType" value="CASH DEPOSIT"
+                    checked={contraFormData.transactionType === "CASH DEPOSIT"}
+                    onChange={handleContraInput} />
+                  <span>Cash Deposit</span>
+                </label>
+                <label className="voucher-type-option">
+                  <input type="radio" name="transactionType" value="CASH WITHDRAWAL"
+                    checked={contraFormData.transactionType === "CASH WITHDRAWAL"}
+                    onChange={handleContraInput} />
+                  <span>Cash Withdrawal</span>
+                </label>
+                <label className="voucher-type-option">
+                  <input type="radio" name="transactionType" value="BANK TRANSFER"
+                    checked={contraFormData.transactionType === "BANK TRANSFER"}
+                    onChange={handleContraInput} />
+                  <span>Bank Transfer</span>
+                </label>
+              </div>
             </div>
 
             <div className="contra-field">
@@ -17463,7 +17424,7 @@ setTransactionFormMode((prev) => ({
             <div className="contra-heading-left">
               <span className="contra-section-dot" />
 
-              <h3>Contra Summary</h3>
+              <h3>Voucher summary</h3>
             </div>
 
             <span
@@ -17512,7 +17473,7 @@ setTransactionFormMode((prev) => ({
                 : "deposit"
                 }`}
             >
-              <span>Transaction Amount</span>
+              <span>Transfer amount</span>
 
               <strong>
                 ₹
@@ -17526,6 +17487,28 @@ setTransactionFormMode((prev) => ({
             </div>
           </div>
         </section>
+        </div>
+        <footer className="voucher-form-footer">
+          <small>Required fields marked <span>*</span></small>
+          <div className="voucher-footer-actions"><button
+              type="button"
+              className="voucher-secondary-button"
+              aria-label="Close Contra form"
+              onClick={() => {
+                resetContraForm();
+                openTransactionList("Contra");
+              }}
+            >
+              Cancel
+            </button>
+<button
+              type="button"
+              className="voucher-primary-button"
+              onClick={saveContra}
+            >
+              {editContraId ? "Update Contra" : "Save Contra"}
+            </button></div>
+        </footer>
       </div>
     </div>
   );
@@ -18582,52 +18565,17 @@ setTransactionFormMode((prev) => ({
 
     return (
       <>
-        <div className="master-section collection-voucher-section">
-          <div className="collection-premium-header">
-
-            <div className="collection-premium-title">
-              <h2>
-                {editCollectionVoucherId
-                  ? "Edit Collection Voucher"
-                  : "Collection Voucher"}
-              </h2>
-
-              <span>New Voucher</span>
-            </div>
-
-            <div className="collection-premium-actions">
-
-              <button
-                className="collection-save-btn-top"
-                onClick={saveCollectionVoucher}
-              >
-                💾 Save Voucher
-              </button>
-
-              <button
-                className="collection-more-btn"
-                type="button"
-              >
-                ⋮
-              </button>
-
-              <button
-                className="collection-close-btn"
-                onClick={() => {
-                  resetCollectionVoucherForm();
-                  openTransactionList("Collection Voucher");
-                }}
-              >
-                ×
-              </button>
-
-            </div>
-
-          </div>
+        <div className="master-section collection-voucher-section voucher-design voucher-collection">
+          <header className="voucher-form-header">
+          <div className="voucher-breadcrumb">Transactions <span>/</span> Collection Voucher</div>
+          <div className="voucher-title-row"><h2>Collection Voucher</h2><span className="voucher-new-badge">{editCollectionVoucherId ? "Edit" : "New"}</span></div>
+          <p>Select outstanding bills and record collections.</p>
+        </header>
           <div className="collection-voucher-card">
+            <section className="voucher-collection-details"><h3>Collection details</h3>
             <div className="collection-voucher-header-grid">
               <div className="collection-field">
-                <label>Collection Date :</label>
+                <label>Collection Date <span>*</span></label>
                 <input
                   type="date"
                   name="collectionDate"
@@ -18635,9 +18583,8 @@ setTransactionFormMode((prev) => ({
                   onChange={handleCollectionVoucherInput}
                 />
               </div>
-
               <div className="collection-field">
-                <label>Col VNo. :</label>
+                <label>Voucher No. <span>*</span></label>
 
                 <input
                   type="text"
@@ -18681,7 +18628,7 @@ setTransactionFormMode((prev) => ({
               </div>
 
               <div className="collection-field">
-                <label>Collection Type :</label>
+                <label>Collection Type</label>
                 <select
                   name="collectionType"
                   value={collectionVoucherFormData.collectionType}
@@ -18693,35 +18640,24 @@ setTransactionFormMode((prev) => ({
                 </select>
               </div>
 
-              <div className="collection-field collection-narr-field">
-                <label>Narr :</label>
-                <div className="collection-narr-row">
-                  <input
-                    type="text"
-                    name="narration"
-                    value={collectionVoucherFormData.narration}
-                    onChange={handleCollectionVoucherInput}
-                    placeholder="Enter narration"
-                  />
-
-                  <button
+            </div>
+          </section>
+          <section className="voucher-collection-bills">
+            <div className="voucher-bills-heading"><h3>Selected bills <small>{selectedBills.length} bills selected</small></h3><button
                     type="button"
                     className="collection-select-btn"
                     onClick={() =>
                       openSelectionModal(collectionVoucherFormData.collectionType)
                     }
                   >
-                    Select{" "}
+                    + Select{" "}
                     {collectionVoucherFormData.collectionType === "Bill wise"
                       ? "Bills"
                       : collectionVoucherFormData.collectionType ===
                         "Salesman wise"
                         ? "Salesmen"
                         : "Areas"}
-                  </button>
-                </div>
-              </div>
-            </div>
+                  </button></div>
 
             <div className="receipt-grid-wrap collection-grid-wrap">
               <table className="receipt-entry-table collection-voucher-table">
@@ -18743,31 +18679,27 @@ setTransactionFormMode((prev) => ({
                         }}
                       />
                     </th>
-                    <th>Bill Series</th>
-                    <th>Bill No</th>
-                    <th>Bill Date</th>
-                    <th>Party Code</th>
-                    <th>Party Name</th>
-                    <th style={{ textAlign: 'right' }}>Bill Amt</th>
-                    <th style={{ textAlign: 'right' }}>Old Collection</th>
-                    <th style={{ textAlign: 'right' }}>Balance</th>
-                    <th>Collection Amt</th>
-                    <th>Discount</th>
-                    <th>REC Series</th>
-                    <th>REC VNo</th>
+                    <th>Bill / Date</th>
+                    <th>Party / Code</th>
+                    <th style={{ textAlign: 'right' }}>Bill Amt (₹)</th>
+                    <th style={{ textAlign: 'right' }}>Collected (₹)</th>
+                    <th style={{ textAlign: 'right' }}>Balance (₹)</th>
+                    <th>Collection (₹)</th>
+                    <th>Discount (₹)</th>
+                    <th>Receipt</th>
                   </tr>
                 </thead>
 
                 <tbody>
                   {billItems.length === 0 ? (
                     <tr>
-                      <td colSpan="13" className="receipt-empty-row">
-                        Click Select button to load collection bills
+                      <td colSpan="9" className="receipt-empty-row">
+                        Select bills, salesmen or areas to load outstanding bills
                       </td>
                     </tr>
                   ) : (
                     billItems.map((item) => (
-                      <tr key={item.id}>
+                      <tr key={item.id} className={item.selected ? "voucher-selected-row" : ""}>
                         <td>
                           <input
                             type="checkbox"
@@ -18785,11 +18717,8 @@ setTransactionFormMode((prev) => ({
                           />
                         </td>
 
-                        <td>{item.billSeries || "-"}</td>
-                        <td>{item.billNo || "-"}</td>
-                        <td>{item.billDate || "-"}</td>
-                        <td>{item.partyCode || "-"}</td>
-                        <td>{item.partyName || "-"}</td>
+                        <td><strong>{item.billSeries || "-"} / {item.billNo || "-"}</strong><small>{item.billDate || "-"}</small></td>
+                        <td><strong>{item.partyName || "-"}</strong><small>{item.partyCode || "-"}</small></td>
                         <td style={{ textAlign: 'right' }}>₹{formatAmt(item.billAmt)}</td>
                         <td style={{ textAlign: 'right' }}>₹{formatAmt(item.oldCollection)}</td>
                         <td style={{ textAlign: 'right' }}>₹{formatAmt(item.balance)}</td>
@@ -18825,8 +18754,9 @@ setTransactionFormMode((prev) => ({
                           />
                         </td>
 
-                        <td>
+                        <td><div className="voucher-receipt-fields">
                           <input
+                            aria-label="Receipt series"
                             type="text"
                             className="table-input"
                             value={item.recSeries || ""}
@@ -18836,10 +18766,9 @@ setTransactionFormMode((prev) => ({
                             placeholder="Series"
                             style={{ width: '80px' }}
                           />
-                        </td>
-
-                        <td>
+                          <span>/</span>
                           <input
+                            aria-label="Receipt voucher number"
                             type="text"
                             className="table-input"
                             value={item.recVNo || ""}
@@ -18849,7 +18778,7 @@ setTransactionFormMode((prev) => ({
                             placeholder="VNo"
                             style={{ width: '80px' }}
                           />
-                        </td>
+                        </div></td>
                       </tr>
                     ))
                   )}
@@ -18857,23 +18786,59 @@ setTransactionFormMode((prev) => ({
               </table>
             </div>
 
+            <div className="voucher-collection-bottom">
+              <div className="collection-field collection-narr-field">
+                <label>Narration</label>
+                <div className="collection-narr-row">
+                  <input
+                    type="text"
+                    name="narration"
+                    value={collectionVoucherFormData.narration}
+                    onChange={handleCollectionVoucherInput}
+                    placeholder="Enter narration"
+                  />
+
+                  
+                </div>
+              </div>
+
             <div className="collection-bottom-summary">
               <span>
-                Total Collection Amount <b>₹{formatAmt(totalCollectionAmount)}</b>
+                Total collection <b>₹{formatAmt(totalCollectionAmount)}</b>
               </span>
               <span>
-                Total Cash Collection <b>₹{formatAmt(totalCashCollection)}</b>
+                Cash <b>₹{formatAmt(totalCashCollection)}</b>
               </span>
               <span>
-                Total Cheque Collection <b>₹{formatAmt(totalChequeCollection)}</b>
+                Cheque <b>₹{formatAmt(totalChequeCollection)}</b>
               </span>
               <span>
-                Total Bills <b>{selectedBills.length}</b>
+                Selected bills <b>{selectedBills.length}</b>
               </span>
             </div>
+            </div>
+          </section>
           </div>
 
 
+<footer className="voucher-form-footer">
+          <small>Required fields marked <span>*</span></small>
+          <div className="voucher-footer-actions"><button
+                type="button" className="voucher-secondary-button"
+                onClick={() => {
+                  resetCollectionVoucherForm();
+                  openTransactionList("Collection Voucher");
+                }}
+              >
+                Cancel
+              </button>
+<button
+                type="button" className="voucher-primary-button"
+                onClick={saveCollectionVoucher}
+              >
+                Save Voucher
+              </button></div>
+        </footer>
         </div>
 
         {collectionVoucherFormData.collectionType === "Bill wise" && (

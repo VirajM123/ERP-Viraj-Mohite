@@ -4850,9 +4850,16 @@
   }
 
   .erp-transaction-list-page .ts-sales-grid :is(th, td):nth-child(8) {
-    width: 110px;
-    min-width: 110px;
+    width: 130px;
+    min-width: 130px;
     text-align: right;
+  }
+
+  .erp-transaction-list-page .ts-sales-grid td.sales-amount-cell {
+    max-width: 130px;
+    overflow: hidden !important;
+    text-overflow: ellipsis;
+    white-space: nowrap !important;
   }
 
   .erp-transaction-list-page .ts-sales-grid :is(th, td):nth-child(9) {
