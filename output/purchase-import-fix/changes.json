@@ -1,0 +1,10 @@
+[
+  "Preserve a blank purchase series instead of replacing it with 0.",
+  "Add normalized purchase grouping and a parameterized series + number lookup.",
+  "Use a purchase-specific grouping routine for all purchase imports.",
+  "Prepare complete groups before iterating purchases.",
+  "Leave the generic loop for other transaction types only.",
+  "Validate each purchase header and product group without falling back to stale state.",
+  "Replace the shared SQL/dataset duplicate check with an exact parameterized lookup.",
+  "Mark successful purchase groups imported even without IMEI."
+]

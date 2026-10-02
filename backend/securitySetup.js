@@ -417,6 +417,19 @@ export default function createSecuritySetupRouter(User) {
       .trim()
       .toUpperCase();
 
+  const STANDARD_USER_ACCESS = {
+    master: {
+      COMPANY: ["view"], ACCOUNT: ["view"], PRODUCT: ["view"],
+      GROUP: ["view"], CATEGORY: ["view"], GST: ["view"],
+      GODOWN: ["view"],
+    },
+    sales: {
+      SALES_BILLING: ["view", "add", "print"],
+      QUOTATION: ["view", "add", "print"],
+    },
+    reports: { STOCK_REPORT: ["view"] },
+  };
+
   /* =========================================================
      DEFAULT USER PERMISSIONS
   ========================================================= */
@@ -436,15 +449,16 @@ export default function createSecuritySetupRouter(User) {
 
         group.operations.forEach(
           (operation) => {
+            const standardAccess = STANDARD_USER_ACCESS[group.id]?.[operation.operation] || [];
             permissions[group.id][
               operation.operation
             ] = {
-              view: isAdmin,
-              add: isAdmin,
-              edit: isAdmin,
-              delete: isAdmin,
-              print: isAdmin,
-              export: isAdmin,
+              view: isAdmin || standardAccess.includes("view"),
+              add: isAdmin || standardAccess.includes("add"),
+              edit: isAdmin || standardAccess.includes("edit"),
+              delete: isAdmin || standardAccess.includes("delete"),
+              print: isAdmin || standardAccess.includes("print"),
+              export: isAdmin || standardAccess.includes("export"),
             };
           }
         );
@@ -632,7 +646,7 @@ export default function createSecuritySetupRouter(User) {
       }).lean();
 
     if (!security) {
-      return false;
+      return checkPermission(createDefaultPermissions("USER"), moduleCode, operationCode, action);
     }
 
     return checkPermission(

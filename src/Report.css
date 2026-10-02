@@ -5431,3 +5431,1189 @@
     max-height: 732px;
   }
 }
+
+/* Report criteria and export controls use the same blue as report table headers. */
+.report-page .report-filter-heading {
+  display: block !important;
+  margin: -16px -16px 16px;
+  padding: 9px 16px;
+  border-radius: 3px 3px 0 0;
+  background: #174fa8;
+  color: #ffffff;
+}
+
+.report-page .report-filter-heading h2,
+.report-page .report-filter-heading p {
+  margin: 0;
+  color: #ffffff;
+}
+
+.party-classic-report-page .party-filter-group legend {
+  display: inline-flex !important;
+  align-items: center;
+  gap: 7px;
+  padding: 6px 12px;
+  border-radius: 3px;
+  background: #174fa8;
+  color: #ffffff;
+  font-size: 12px;
+}
+
+.party-classic-report-page .party-filter-legend-icon {
+  width: 22px;
+  height: 22px;
+  background: transparent;
+  color: #ffffff;
+}
+
+.report-export-actions {
+  position: relative;
+  z-index: 20;
+  display: inline-flex;
+}
+
+.party-wise-sales-report-page .party-report-export-field {
+  display: flex;
+  grid-column: 1 / -1;
+  min-height: 38px;
+  justify-content: center;
+  align-items: center;
+  margin-top: 8px;
+}
+
+.report-export-button {
+  display: inline-flex;
+  height: 30px;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  padding: 0 12px;
+  border: 1px solid #174fa8;
+  border-radius: 3px;
+  background: #174fa8;
+  color: #ffffff;
+  font-size: 10px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.report-export-button:hover:not(:disabled),
+.report-export-button[aria-expanded="true"] {
+  background: #0f4098;
+}
+
+.report-export-button:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
+.report-export-menu {
+  position: absolute;
+  top: calc(100% + 4px);
+  right: 0;
+  z-index: 21;
+  min-width: 130px;
+  padding: 4px;
+  border: 1px solid #c9d8e9;
+  border-radius: 4px;
+  background: #ffffff;
+  box-shadow: 0 8px 22px rgba(11, 31, 68, 0.15);
+}
+
+.report-export-menu button {
+  display: flex;
+  width: 100%;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 9px;
+  border: 0;
+  border-radius: 3px;
+  background: transparent;
+  color: #174fa8;
+  font-size: 11px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.report-export-menu button:hover,
+.report-export-menu button:focus-visible {
+  background: #eaf2ff;
+}
+
+.party-selection-backdrop {
+  background: rgba(238, 245, 255, 0.78) !important;
+  backdrop-filter: blur(2px) !important;
+}
+
+/* Keep the Party Wise Sales filters directly under the report title. */
+@media (min-width: 701px) {
+  .party-wise-sales-report-page .party-classic-report-window {
+    grid-template-rows: 50px auto 0 minmax(300px, 1fr);
+    gap: 8px;
+  }
+}
+
+.party-classic-report-page.party-wise-sales-report-page .party-filter-group {
+  min-height: 0 !important;
+  padding: 16px !important;
+  border-color: #d8e6f6 !important;
+  background: #f3f8ff !important;
+}
+
+.party-wise-sales-report-page .party-report-export-field .report-export-actions {
+  align-items: center;
+}
+
+.party-wise-sales-report-page .party-report-export-field .report-export-button {
+  height: 36px;
+  padding: 0 16px;
+  border-radius: 6px;
+  background: #174fa8;
+  font-size: 12px;
+}
+
+.party-wise-sales-report-page .party-report-export-field .report-export-menu {
+  top: auto;
+  right: auto;
+  bottom: calc(100% + 6px);
+  left: 50%;
+  min-width: 150px;
+  transform: translateX(-50%);
+}
+
+/* Shared report form layout. Keep each report's existing fields and actions. */
+.report-page,
+.party-classic-report-page {
+  background: #f4f8ff;
+}
+
+.report-page-header,
+.party-classic-report-page .party-report-title-left {
+  min-height: 112px !important;
+  padding: 20px 24px !important;
+  border: 1px solid #d4e5ff !important;
+  border-radius: 12px !important;
+  background: radial-gradient(ellipse at 98% 100%, #bfdbff 0, transparent 38%),
+    linear-gradient(155deg, #fff 30%, #eff7ff 80%, #d8eaff 100%) !important;
+  box-shadow: 0 3px 14px rgba(37, 91, 172, 0.08) !important;
+}
+
+.report-page .report-title-section,
+.party-classic-report-page .party-report-title-left {
+  gap: 16px;
+}
+
+.report-back-button,
+.party-classic-report-page .party-title-back {
+  width: 44px !important;
+  height: 44px !important;
+  flex-basis: 44px !important;
+  border-radius: 8px !important;
+  border-color: #c7d9f5 !important;
+  color: #1258c9 !important;
+  box-shadow: 0 2px 6px rgba(28, 79, 151, 0.09) !important;
+}
+
+.report-title-icon,
+.party-classic-report-page .party-title-icon {
+  width: 46px !important;
+  height: 46px !important;
+  flex-basis: 46px !important;
+  border-radius: 9px !important;
+  background: #e7f1ff !important;
+  color: #115bd7 !important;
+}
+
+.report-title-section h1,
+.party-classic-report-page .party-classic-titlebar h1 {
+  font-size: clamp(20px, 1.7vw, 27px) !important;
+  font-weight: 750;
+}
+
+.report-page .report-title-section p,
+.party-classic-report-page .party-title-content > p {
+  display: block !important;
+  margin: 5px 0 0;
+  color: #5279b3;
+  font-size: 14px;
+  line-height: 1.4;
+}
+
+.report-filter-card,
+.party-classic-report-page .party-filter-group,
+.party-classic-report-page.party-wise-sales-report-page .party-filter-group {
+  min-height: 0 !important;
+  padding: 24px 20px 82px !important;
+  border: 1px solid #c8ddfa !important;
+  border-radius: 10px !important;
+  background: linear-gradient(to bottom, #f3f8ff 0, #f3f8ff calc(100% - 70px), #deecff calc(100% - 70px), #deecff 100%) !important;
+  box-shadow: 0 3px 14px rgba(31, 89, 171, 0.06) !important;
+}
+
+.party-classic-report-page .party-filter-group legend,
+.report-page .report-filter-heading {
+  display: none !important;
+}
+
+.report-filter-grid,
+.gst-filter-grid,
+.party-classic-report-page .party-report-form-grid,
+.party-classic-report-page .party-report-form-row {
+  grid-template-columns: repeat(4, minmax(0, 1fr)) !important;
+  gap: 18px 22px !important;
+}
+
+.report-field,
+.party-classic-report-page .party-report-field {
+  position: relative;
+  gap: 8px !important;
+}
+
+.report-field label,
+.party-classic-report-page .party-report-field label {
+  min-height: 18px !important;
+  color: #0a2253 !important;
+  font-size: 15px !important;
+  font-weight: 700 !important;
+  line-height: 18px !important;
+}
+
+.report-field:has(> select)::before,
+.report-field:has(> input[type="date"])::before,
+.party-classic-report-page .party-report-field:has(> select)::before,
+.party-classic-report-page .party-report-field:has(> input[type="date"])::before {
+  content: "";
+  position: absolute;
+  left: 5px;
+  bottom: 5px;
+  z-index: 1;
+  width: 39px;
+  height: 38px;
+  border-right: 1px solid #d5e2f5;
+  border-radius: 6px 0 0 6px;
+  background: #eaf3ff url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='22' height='22' viewBox='0 0 24 24' fill='none' stroke='%231959d2' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M4 7h16M7 12h10M10 17h4'/%3E%3C/svg%3E") center / 21px no-repeat;
+  pointer-events: none;
+}
+
+.report-field:has(> input[type="date"])::before,
+.party-classic-report-page .party-report-field:has(> input[type="date"])::before {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='22' height='22' viewBox='0 0 24 24' fill='none' stroke='%231959d2' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Crect x='3' y='5' width='18' height='16' rx='2'/%3E%3Cpath d='M7 3v4m10-4v4M3 10h18'/%3E%3C/svg%3E");
+}
+
+.report-field > input:not([type="checkbox"]),
+.report-field > select,
+.party-classic-report-page .party-report-field > input:not([type="checkbox"]),
+.party-classic-report-page .party-report-field > select,
+.party-classic-report-page .party-multi-select-trigger {
+  height: 48px !important;
+  min-height: 48px !important;
+  border: 1px solid #cbdcf6 !important;
+  border-radius: 7px !important;
+  color: #18325e !important;
+  font-size: 15px !important;
+  line-height: normal !important;
+}
+
+.report-field > select,
+.report-field > input[type="date"],
+.party-classic-report-page .party-report-field > select,
+.party-classic-report-page .party-report-field > input[type="date"] {
+  padding-left: 57px !important;
+}
+
+.report-filter-actions,
+.party-classic-report-page .party-title-actions {
+  right: 20px;
+  bottom: 14px;
+  gap: 10px;
+}
+
+.report-export-button,
+.party-classic-report-page .party-title-generate-button {
+  height: 42px !important;
+  padding: 0 18px !important;
+  border-radius: 7px !important;
+  background: #205bc0 !important;
+  font-size: 14px !important;
+  box-shadow: 0 3px 8px rgba(24, 76, 161, 0.18) !important;
+}
+
+.party-classic-report-page .party-title-secondary-button,
+.report-page .report-clear-button {
+  height: 42px !important;
+  border-radius: 7px !important;
+  font-size: 13px !important;
+}
+
+@media (min-width: 701px) {
+  .party-classic-report-page:not(.cheque-details-report-page) .party-classic-report-window {
+    grid-template-rows: 112px auto 0 minmax(300px, 1fr) !important;
+    gap: 10px;
+  }
+
+  .party-classic-report-page:not(.cheque-details-report-page) .party-report-title-left {
+    min-height: 112px !important;
+  }
+
+  .party-classic-report-page:not(.cheque-details-report-page) .party-filter-group {
+    min-height: 0 !important;
+  }
+
+  .party-classic-report-page:not(.cheque-details-report-page) .party-title-actions {
+    margin: 0 20px 14px !important;
+  }
+}
+
+.party-wise-sales-report-page .party-report-export-field {
+  justify-content: flex-end;
+  margin: 10px 0 -68px;
+}
+
+.party-wise-sales-report-page .party-report-export-field .report-export-button {
+  height: 42px !important;
+  font-size: 14px !important;
+}
+
+@media (max-width: 1050px) {
+  .report-filter-grid,
+  .gst-filter-grid,
+  .party-classic-report-page .party-report-form-grid,
+  .party-classic-report-page .party-report-form-row {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  }
+}
+
+@media (max-width: 700px) {
+  .report-page-header,
+  .party-classic-report-page .party-report-title-left { min-height: 88px !important; padding: 14px !important; }
+  .report-page .report-title-section p,
+  .party-classic-report-page .party-title-content > p { font-size: 11px; }
+  .report-filter-card,
+  .party-classic-report-page .party-filter-group { padding: 16px 14px 76px !important; }
+  .report-filter-grid,
+  .gst-filter-grid,
+  .party-classic-report-page .party-report-form-grid,
+  .party-classic-report-page .party-report-form-row { grid-template-columns: 1fr !important; }
+  .party-wise-sales-report-page .party-report-export-field { margin-bottom: -64px; }
+}
+
+/* Keep criteria controls aligned across every report layout. */
+.report-filter-grid,
+.gst-filter-grid,
+.party-classic-report-page .party-report-form-grid,
+.party-classic-report-page .party-report-form-row {
+  grid-template-columns: repeat(4, minmax(0, 1fr)) !important;
+  align-items: start;
+  gap: 18px 22px !important;
+}
+
+.cheque-search-row {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 18px 22px;
+}
+
+.cheque-search-row .report-export-actions {
+  position: absolute;
+  right: 20px;
+  bottom: 14px;
+}
+
+.cheque-search-row .report-export-menu {
+  top: auto;
+  bottom: calc(100% + 6px);
+}
+
+.report-field,
+.party-classic-report-page .party-report-field {
+  gap: 5px !important;
+  align-self: start;
+}
+
+.report-field > label,
+.party-classic-report-page .party-report-field > label {
+  display: flex;
+  min-height: 20px !important;
+  align-items: center;
+  margin: 0 !important;
+  overflow: visible;
+  color: #0a2253 !important;
+  font-size: 15px !important;
+  font-weight: 700 !important;
+  line-height: 20px !important;
+}
+
+.report-field > input:not([type="checkbox"]),
+.report-field > select,
+.party-classic-report-page .party-report-field > input:not([type="checkbox"]),
+.party-classic-report-page .party-report-field > select,
+.party-classic-report-page .party-multi-select-trigger {
+  height: 48px !important;
+  min-height: 48px !important;
+  font-size: 15px !important;
+  line-height: normal !important;
+}
+
+.report-field:has(> select)::before,
+.report-field:has(> input[type="date"])::before,
+.party-classic-report-page .party-report-field:has(> select)::before,
+.party-classic-report-page .party-report-field:has(> input[type="date"])::before {
+  left: 5px;
+  bottom: 5px;
+  width: 39px;
+  height: 38px;
+  background-size: 21px;
+}
+
+.report-field > select,
+.report-field > input[type="date"],
+.party-classic-report-page .party-report-field > select,
+.party-classic-report-page .party-report-field > input[type="date"] {
+  padding-left: 57px !important;
+}
+
+/* Search wrappers draw the only border; their inputs must stay transparent. */
+.party-classic-report-page .party-report-field .party-selector-search input,
+.party-classic-report-page .party-selection-modal .party-report-search input,
+.report-page .party-report-search input,
+.report-page .gst-result-search input,
+.party-classic-report-page .party-report-search input {
+  width: 100% !important;
+  min-width: 0 !important;
+  height: 100% !important;
+  min-height: 0 !important;
+  padding: 0 !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  outline: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+  line-height: normal !important;
+}
+
+.party-classic-report-page .party-report-field .party-selector-search input:focus,
+.party-classic-report-page .party-selection-modal .party-report-search input:focus {
+  border: 0 !important;
+  box-shadow: none !important;
+}
+
+.party-wise-sales-report-page .party-report-export-field {
+  position: absolute;
+  right: 20px;
+  bottom: 14px;
+  z-index: 3;
+  display: flex;
+  width: auto;
+  min-height: 0;
+  margin: 0;
+  padding: 0;
+  justify-content: flex-end;
+}
+
+.party-wise-sales-report-page .party-report-export-field .report-export-menu {
+  right: 0;
+  left: auto;
+  transform: none;
+}
+
+.report-export-button,
+.report-export-menu button,
+.party-toolbar-export button {
+  white-space: nowrap;
+}
+
+.report-export-menu button {
+  min-height: 36px;
+  font-size: 13px;
+}
+
+.report-export-button svg,
+.report-export-menu button svg,
+.party-toolbar-export button svg {
+  flex: 0 0 auto;
+}
+
+.party-toolbar-export {
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.party-toolbar-export button {
+  width: auto;
+  min-width: max-content !important;
+  height: 36px !important;
+  padding: 0 11px !important;
+  font-size: 11px !important;
+  line-height: 1 !important;
+}
+
+@media (max-width: 1100px) {
+  .report-filter-grid,
+  .gst-filter-grid,
+  .party-classic-report-page .party-report-form-grid,
+  .party-classic-report-page .party-report-form-row {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  }
+}
+
+@media (max-width: 700px) {
+  .report-filter-grid,
+  .gst-filter-grid,
+  .party-classic-report-page .party-report-form-grid,
+  .party-classic-report-page .party-report-form-row {
+    grid-template-columns: minmax(0, 1fr) !important;
+  }
+  .cheque-search-row {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .cheque-search-row .report-export-actions { right: 14px; bottom: 14px; }
+}
+
+/* =========================================================
+   2026-10-02 FINAL REPORT UI ALIGNMENT
+   Visual-only overrides. Existing report logic/handlers remain untouched.
+   Matches the approved light-blue report form style across all report pages.
+   ========================================================= */
+
+:root {
+  --ts-report-navy: #0b2557;
+  --ts-report-blue: #1762d5;
+  --ts-report-blue-dark: #0f4fb9;
+  --ts-report-line: #c9dcf7;
+  --ts-report-soft: #eef6ff;
+  --ts-report-soft-2: #dfedff;
+  --ts-report-icon-bg: #e7f1ff;
+  --ts-report-page: #f4f8ff;
+}
+
+/* ---------- One clean report workspace instead of nested white rectangles ---------- */
+.report-page,
+.party-classic-report-page {
+  background: var(--ts-report-page) !important;
+}
+
+.party-classic-report-page .party-classic-report-window,
+.report-page .report-page-body {
+  position: relative;
+  border: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+}
+
+.party-classic-report-page .party-report-content-layout {
+  grid-template-columns: minmax(0, 1fr) !important;
+  gap: 0 !important;
+  padding: 0 10px 14px !important;
+  overflow: visible !important;
+}
+
+/* The reference layout does not use the narrow quick-summary side card. Keep it in code,
+   but hide it visually so the criteria panel uses the full width. */
+.party-classic-report-page .party-report-sidebar {
+  display: none !important;
+}
+
+.party-classic-report-page .party-report-main-column {
+  width: 100% !important;
+  gap: 14px !important;
+}
+
+/* ---------- Header ---------- */
+.report-page-header,
+.party-classic-report-page .party-classic-titlebar {
+  min-height: 112px !important;
+  margin: 0 0 12px !important;
+  padding: 20px 24px !important;
+  border: 1px solid #cfe1fb !important;
+  border-radius: 12px !important;
+  background:
+    radial-gradient(ellipse at 96% 92%, rgba(178, 213, 255, .86) 0 16%, transparent 42%),
+    linear-gradient(154deg, #ffffff 24%, #f6fbff 63%, #e6f2ff 100%) !important;
+  box-shadow: 0 3px 14px rgba(32, 88, 171, .075) !important;
+}
+
+.report-title-section,
+.party-classic-report-page .party-report-title-left {
+  min-height: 68px !important;
+  align-items: center !important;
+  gap: 16px !important;
+  padding: 0 !important;
+  border: 0 !important;
+  background: transparent !important;
+}
+
+.report-back-button,
+.party-classic-report-page .party-title-back {
+  display: inline-flex !important;
+  width: 46px !important;
+  height: 46px !important;
+  flex: 0 0 46px !important;
+  border: 1px solid #c6dafa !important;
+  border-radius: 8px !important;
+  background: #ffffff !important;
+  color: #145ed1 !important;
+  box-shadow: 0 2px 7px rgba(25, 74, 146, .09) !important;
+}
+
+.report-title-icon,
+.party-classic-report-page .party-title-icon {
+  display: inline-flex !important;
+  width: 48px !important;
+  height: 48px !important;
+  flex: 0 0 48px !important;
+  border: 0 !important;
+  border-radius: 10px !important;
+  background: var(--ts-report-icon-bg) !important;
+  color: #1662d8 !important;
+}
+
+.report-title-section h1,
+.party-classic-report-page .party-classic-titlebar h1 {
+  margin: 0 !important;
+  color: #081f4f !important;
+  font-size: clamp(23px, 1.8vw, 31px) !important;
+  line-height: 1.15 !important;
+  font-weight: 780 !important;
+  letter-spacing: -.35px !important;
+}
+
+.report-page .report-title-section p,
+.party-classic-report-page .party-title-content > p {
+  display: block !important;
+  margin: 6px 0 0 !important;
+  color: #4f78b5 !important;
+  font-size: 14px !important;
+  line-height: 1.35 !important;
+}
+
+.report-page .report-category,
+.party-classic-report-page .party-title-content > span {
+  display: none !important;
+}
+
+/* ---------- Criteria card ---------- */
+.report-filter-card,
+.party-classic-report-page .party-filter-group,
+.party-classic-report-page.party-wise-sales-report-page .party-filter-group,
+.gst-filter-card {
+  position: relative !important;
+  width: 100% !important;
+  min-height: 0 !important;
+  margin: 0 !important;
+  padding: 18px 16px 68px !important;
+  border: 1px solid var(--ts-report-line) !important;
+  border-radius: 11px !important;
+  background:
+    linear-gradient(to bottom,
+      #f2f8ff 0,
+      #f2f8ff calc(100% - 64px),
+      #dfedff calc(100% - 64px),
+      #dfedff 100%) !important;
+  box-shadow: 0 3px 13px rgba(32, 88, 171, .055) !important;
+}
+
+.report-filter-heading,
+.party-classic-report-page .party-filter-group legend,
+.party-result-caption {
+  display: none !important;
+}
+
+.report-filter-grid,
+.gst-filter-grid,
+.party-classic-report-page .party-report-form-grid,
+.party-classic-report-page .party-report-form-row {
+  display: grid !important;
+  grid-template-columns: repeat(4, minmax(0, 1fr)) !important;
+  align-items: start !important;
+  gap: 12px 20px !important;
+}
+
+.report-field,
+.party-classic-report-page .party-report-field {
+  position: relative !important;
+  display: flex !important;
+  min-width: 0 !important;
+  flex-direction: column !important;
+  gap: 4px !important;
+  align-self: start !important;
+}
+
+.report-field > label,
+.party-classic-report-page .party-report-field > label {
+  display: flex !important;
+  min-height: 18px !important;
+  align-items: center !important;
+  margin: 0 !important;
+  color: var(--ts-report-navy) !important;
+  font-size: 13px !important;
+  line-height: 18px !important;
+  font-weight: 760 !important;
+}
+
+.party-field-help {
+  display: none !important;
+}
+
+/* Controls */
+.report-field > input:not([type="checkbox"]),
+.report-field > select,
+.party-classic-report-page .party-report-field > input:not([type="checkbox"]),
+.party-classic-report-page .party-report-field > select,
+.party-classic-report-page .party-multi-select-trigger {
+  width: 100% !important;
+  height: 36px !important;
+  min-height: 36px !important;
+  padding: 0 12px 0 44px !important;
+  border: 1px solid #c6d9f4 !important;
+  border-radius: 8px !important;
+  outline: 0 !important;
+  background: #ffffff !important;
+  color: #173568 !important;
+  font-size: 12px !important;
+  line-height: normal !important;
+  box-shadow: inset 0 0 0 1px rgba(255,255,255,.55) !important;
+  transition: border-color .16s ease, box-shadow .16s ease, background .16s ease !important;
+}
+
+.report-field > input:not([type="checkbox"]):hover,
+.report-field > select:hover,
+.party-classic-report-page .party-report-field > input:not([type="checkbox"]):hover,
+.party-classic-report-page .party-report-field > select:hover,
+.party-classic-report-page .party-multi-select-trigger:hover {
+  border-color: #9ebfe9 !important;
+}
+
+.report-field > input:not([type="checkbox"]):focus,
+.report-field > select:focus,
+.party-classic-report-page .party-report-field > input:not([type="checkbox"]):focus,
+.party-classic-report-page .party-report-field > select:focus,
+.party-classic-report-page .party-multi-select-trigger:focus {
+  border-color: #4c89df !important;
+  box-shadow: 0 0 0 3px rgba(36, 105, 212, .10) !important;
+}
+
+.report-field > input:disabled,
+.report-field > select:disabled,
+.party-classic-report-page .party-report-field > input:disabled,
+.party-classic-report-page .party-report-field > select:disabled,
+.party-classic-report-page .party-multi-select-trigger:disabled {
+  background: #f4f7fb !important;
+  color: #8b9ab2 !important;
+}
+
+/* Light-blue icon compartment on the left of every select/date control. */
+.report-field:has(> select)::before,
+.report-field:has(> input[type="date"])::before,
+.party-classic-report-page .party-report-field:has(> select)::before,
+.party-classic-report-page .party-report-field:has(> input[type="date"])::before {
+  content: "" !important;
+  position: absolute !important;
+  left: 5px !important;
+  bottom: 5px !important;
+  z-index: 2 !important;
+  width: 29px !important;
+  height: 26px !important;
+  border-right: 1px solid #d2e1f6 !important;
+  border-radius: 7px 0 0 7px !important;
+  background-color: #e8f2ff !important;
+  background-repeat: no-repeat !important;
+  background-position: center !important;
+  background-size: 17px !important;
+  pointer-events: none !important;
+}
+
+/* Default select icon */
+.report-field:has(> select)::before,
+.party-classic-report-page .party-report-field:has(> select)::before {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24' fill='none' stroke='%23185fd2' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M4 6h16M7 12h10M10 18h4'/%3E%3C/svg%3E") !important;
+}
+
+/* Date icon */
+.report-field:has(> input[type="date"])::before,
+.party-classic-report-page .party-report-field:has(> input[type="date"])::before {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24' fill='none' stroke='%23185fd2' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Crect x='3' y='5' width='18' height='16' rx='2'/%3E%3Cpath d='M7 3v4m10-4v4M3 10h18'/%3E%3C/svg%3E") !important;
+}
+
+/* Company gets a building icon. */
+.party-classic-report-page .party-report-form-grid > .party-report-field:first-child:has(> select)::before,
+.report-filter-grid > .report-field:first-child:has(> select)::before {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24' fill='none' stroke='%23185fd2' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M6 22V4a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v18'/%3E%3Cpath d='M6 12H4a2 2 0 0 0-2 2v8h20v-8a2 2 0 0 0-2-2h-2'/%3E%3Cpath d='M10 6h4M10 10h4M10 14h4M10 18h4'/%3E%3C/svg%3E") !important;
+}
+
+/* Keep native date picker available while matching the reference spacing. */
+.report-field > input[type="date"],
+.party-classic-report-page .party-report-field > input[type="date"] {
+  padding-right: 14px !important;
+}
+
+/* ---------- Export footer ---------- */
+.report-filter-actions,
+.party-classic-report-page .party-title-actions {
+  gap: 10px !important;
+}
+
+/* Keep Reset logic in the code, but make the approved layout show the single Export action. */
+.party-classic-report-page:not(.cheque-details-report-page) .party-title-secondary-button {
+  display: none !important;
+}
+
+.report-export-button,
+.party-classic-report-page .party-title-generate-button,
+.report-page .report-generate-button {
+  min-width: 150px !important;
+  height: 48px !important;
+  padding: 0 20px !important;
+  border: 1px solid var(--ts-report-blue-dark) !important;
+  border-radius: 8px !important;
+  background: linear-gradient(180deg, #2369d8 0%, #1455bd 100%) !important;
+  color: #ffffff !important;
+  font-size: 15px !important;
+  font-weight: 730 !important;
+  box-shadow: 0 4px 10px rgba(24, 77, 164, .20) !important;
+}
+
+.report-export-button:hover:not(:disabled),
+.party-classic-report-page .party-title-generate-button:hover:not(:disabled),
+.report-page .report-generate-button:hover:not(:disabled) {
+  background: linear-gradient(180deg, #1d61cd 0%, #104aa9 100%) !important;
+}
+
+.report-export-menu {
+  top: auto !important;
+  right: 0 !important;
+  bottom: calc(100% + 7px) !important;
+  min-width: 155px !important;
+  border-radius: 8px !important;
+}
+
+/* Position title Export at the bottom-right of the criteria card for classic report screens.
+   This is presentation-only; the existing event handlers remain exactly as they are. */
+@media (min-width: 1101px) {
+  .party-classic-report-page:not(.cheque-details-report-page) .party-title-actions {
+    position: absolute !important;
+    top: 424px !important;
+    right: 36px !important;
+    bottom: auto !important;
+    z-index: 40 !important;
+    margin: 0 !important;
+  }
+}
+
+/* Party Wise already renders its Export inside the criteria section. */
+.party-wise-sales-report-page .party-report-export-field {
+  position: absolute !important;
+  right: 26px !important;
+  bottom: 14px !important;
+  z-index: 40 !important;
+  width: auto !important;
+  margin: 0 !important;
+}
+
+/* ---------- Results/table area ---------- */
+.party-classic-report-page .party-report-results,
+.report-result-card,
+.p0-report-results {
+  border-color: #cbdcf3 !important;
+  border-radius: 9px !important;
+  background: #ffffff !important;
+  box-shadow: 0 2px 10px rgba(29, 76, 145, .04) !important;
+}
+
+.party-report-table thead th,
+.report-page .party-report-table thead th,
+.party-classic-report-page .party-report-table thead th,
+.gst-result-table th {
+  background: #1b5db8 !important;
+  color: #ffffff !important;
+}
+
+/* ---------- Reports landing-page search: remove the double rectangle ---------- */
+*:has(> input[placeholder="Search reports..."]) {
+  min-width: 310px !important;
+  height: 42px !important;
+  display: flex !important;
+  align-items: center !important;
+  gap: 9px !important;
+  padding: 0 12px !important;
+  border: 1px solid #aac8f3 !important;
+  border-radius: 9px !important;
+  background: #ffffff !important;
+  box-shadow: 0 3px 10px rgba(38, 91, 170, .07) !important;
+}
+
+input[placeholder="Search reports..."] {
+  width: 100% !important;
+  height: 38px !important;
+  min-width: 0 !important;
+  padding: 0 2px !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  outline: 0 !important;
+  background: transparent !important;
+  color: #18345f !important;
+  font-size: 13px !important;
+  box-shadow: none !important;
+}
+
+input[placeholder="Search reports..."]::placeholder {
+  color: #8ea1bd !important;
+}
+
+*:has(> input[placeholder="Search reports..."]):focus-within {
+  border-color: #4e88df !important;
+  box-shadow: 0 0 0 3px rgba(45, 111, 213, .10) !important;
+}
+
+/* Remove an extra bordered shell immediately around the search wrapper when present. */
+*:has(> * > input[placeholder="Search reports..."]) {
+  border-color: transparent !important;
+  box-shadow: none !important;
+}
+
+/* ---------- Responsive ---------- */
+@media (max-width: 1100px) {
+  .report-filter-grid,
+  .gst-filter-grid,
+  .party-classic-report-page .party-report-form-grid,
+  .party-classic-report-page .party-report-form-row {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  }
+
+  .party-classic-report-page:not(.cheque-details-report-page) .party-title-actions {
+    position: static !important;
+    margin: -70px 26px 22px auto !important;
+  }
+}
+
+@media (max-width: 700px) {
+  .report-page,
+  .party-classic-report-page {
+    padding: 8px !important;
+  }
+
+  .report-page-header,
+  .party-classic-report-page .party-classic-titlebar {
+    min-height: 92px !important;
+    padding: 14px !important;
+  }
+
+  .report-title-section h1,
+  .party-classic-report-page .party-classic-titlebar h1 {
+    font-size: 21px !important;
+  }
+
+  .report-page .report-title-section p,
+  .party-classic-report-page .party-title-content > p {
+    font-size: 11px !important;
+  }
+
+  .report-filter-card,
+  .party-classic-report-page .party-filter-group,
+  .gst-filter-card {
+    min-height: 0 !important;
+    padding: 18px 14px 86px !important;
+  }
+
+  .report-filter-grid,
+  .gst-filter-grid,
+  .party-classic-report-page .party-report-form-grid,
+  .party-classic-report-page .party-report-form-row {
+    grid-template-columns: minmax(0, 1fr) !important;
+  }
+
+  .party-classic-report-page:not(.cheque-details-report-page) .party-title-actions {
+    position: static !important;
+    width: auto !important;
+    margin: -72px 16px 18px auto !important;
+  }
+
+  *:has(> input[placeholder="Search reports..."]) {
+    min-width: 0 !important;
+    width: 100% !important;
+  }
+}
+
+/* Keep both party sales report icons inside their controls, below the labels. */
+.party-classic-report-page:is(.party-wise-sales-report-page, .all-party-wise-sales-report-page) .party-report-field > select,
+.party-classic-report-page:is(.party-wise-sales-report-page, .all-party-wise-sales-report-page) .party-report-field > input[type="date"],
+.party-classic-report-page:is(.party-wise-sales-report-page, .all-party-wise-sales-report-page) .party-multi-select-trigger {
+  height: 36px !important;
+  min-height: 36px !important;
+  padding-left: 44px !important;
+  line-height: normal !important;
+}
+
+.party-classic-report-page:is(.party-wise-sales-report-page, .all-party-wise-sales-report-page) .party-report-field:has(> select)::before,
+.party-classic-report-page:is(.party-wise-sales-report-page, .all-party-wise-sales-report-page) .party-report-field:has(> input[type="date"])::before {
+  width: 29px !important;
+  height: 26px !important;
+  background-size: 17px !important;
+}
+
+/* The All Party export belongs to the criteria footer at every viewport width. */
+.party-classic-report-page.all-party-wise-sales-report-page .party-filter-group > .party-title-actions {
+  position: absolute !important;
+  top: auto !important;
+  right: 26px !important;
+  bottom: 14px !important;
+  left: auto !important;
+  z-index: 40 !important;
+  width: auto !important;
+  margin: 0 !important;
+}
+
+@media (max-width: 700px) {
+  .party-classic-report-page.all-party-wise-sales-report-page .party-filter-group > .party-title-actions {
+    right: 14px !important;
+  }
+}
+
+/* Shared criteria layout for every report, including stock, GST, and product reports. */
+.report-page .report-filter-card,
+.party-classic-report-page .party-filter-group {
+  min-height: 0 !important;
+  padding-bottom: 68px !important;
+}
+
+.party-classic-report-page .party-report-form-grid-two-rows {
+  gap: 12px !important;
+}
+
+.report-page .report-filter-card .report-field,
+.party-classic-report-page .party-filter-group .party-report-field {
+  gap: 4px !important;
+}
+
+.report-page .report-filter-card .report-field > label,
+.party-classic-report-page .party-filter-group .party-report-field > label {
+  display: flex !important;
+  min-height: 18px !important;
+  align-items: center !important;
+  margin: 0 !important;
+  font-size: 13px !important;
+  line-height: 18px !important;
+}
+
+.report-page .report-filter-card .report-field > select,
+.report-page .report-filter-card .report-field > input:not([type="checkbox"]),
+.party-classic-report-page .party-filter-group .party-report-field > select,
+.party-classic-report-page .party-filter-group .party-report-field > input:not([type="checkbox"]),
+.party-classic-report-page .party-filter-group .party-multi-select-trigger {
+  box-sizing: border-box !important;
+  height: 36px !important;
+  min-height: 36px !important;
+  font-size: 12px !important;
+  line-height: normal !important;
+}
+
+.report-page .report-filter-card .report-field > select,
+.report-page .report-filter-card .report-field > input[type="date"],
+.party-classic-report-page .party-filter-group .party-report-field > select,
+.party-classic-report-page .party-filter-group .party-report-field > input[type="date"],
+.party-classic-report-page .party-filter-group .party-multi-select-trigger {
+  padding-left: 44px !important;
+}
+
+.report-page .report-filter-card .report-field > input:not([type="date"]):not([type="checkbox"]),
+.party-classic-report-page .party-filter-group .party-report-field > input:not([type="date"]):not([type="checkbox"]) {
+  padding-left: 14px !important;
+}
+
+.report-page .report-filter-card .report-field:has(> select)::before,
+.report-page .report-filter-card .report-field:has(> input[type="date"])::before,
+.party-classic-report-page .party-filter-group .party-report-field:has(> select)::before,
+.party-classic-report-page .party-filter-group .party-report-field:has(> input[type="date"])::before {
+  left: 5px !important;
+  bottom: 5px !important;
+  width: 29px !important;
+  height: 26px !important;
+  background-size: 17px !important;
+}
+
+.party-classic-report-page .party-report-form-row:first-child > .party-report-field:first-child:has(> select)::before {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24' fill='none' stroke='%23185fd2' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M6 22V4a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v18'/%3E%3Cpath d='M6 12H4a2 2 0 0 0-2 2v8h20v-8a2 2 0 0 0-2-2h-2'/%3E%3Cpath d='M10 6h4M10 10h4M10 14h4M10 18h4'/%3E%3C/svg%3E") !important;
+}
+
+.party-classic-report-page .party-filter-group > .party-title-actions {
+  position: absolute !important;
+  top: auto !important;
+  right: 26px !important;
+  bottom: 14px !important;
+  left: auto !important;
+  z-index: 40 !important;
+  width: auto !important;
+  margin: 0 !important;
+}
+
+/* The cheque lookup has its own Generate action and a result grid directly below it. */
+.cheque-details-report-page .cheque-generate-button {
+  position: absolute;
+  right: 180px;
+  bottom: 14px;
+  display: inline-flex;
+  height: 36px;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  padding: 0 18px;
+  border: 1px solid #1759bb;
+  border-radius: 7px;
+  background: #2168cf;
+  color: #fff;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.cheque-details-report-page .cheque-generate-button:disabled {
+  opacity: .65;
+  cursor: wait;
+}
+
+.cheque-details-report-page .report-export-button {
+  width: 121px;
+  min-width: 121px !important;
+  height: 36px !important;
+  padding: 0 8px !important;
+  font-size: 13px !important;
+}
+
+.cheque-details-report-page .cheque-results-grid {
+  min-width: 0;
+  overflow: hidden;
+  border: 1px solid #cfe0f8;
+  border-radius: 10px;
+  background: #fff;
+}
+
+.cheque-details-report-page .cheque-results-grid h2 {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  margin: 0;
+  padding: 13px 16px;
+  color: #102a59;
+  font-size: 16px;
+}
+
+.cheque-details-report-page .cheque-results-grid h2 span {
+  color: #637895;
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.cheque-details-report-page .cheque-results-table {
+  width: 100%;
+  min-width: 1050px;
+}
+
+@media (max-width: 700px) {
+  .cheque-details-report-page .cheque-generate-button {
+    right: 172px;
+  }
+}
+
+@media (max-width: 700px) {
+  .party-classic-report-page .party-filter-group > .party-title-actions {
+    right: 14px !important;
+  }
+}

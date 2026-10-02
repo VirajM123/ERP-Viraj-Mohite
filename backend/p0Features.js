@@ -386,13 +386,20 @@ export default function createP0FeaturesRouter(securityRouter) {
   });
   router.get("/dashboard/summary", async (req, res) => {
     const Sales = mongoose.models.T_Sal_Header, Purchase = mongoose.models.T_Pur_Header, Receipt = mongoose.models.T_Receipt, Stock = mongoose.models.Mas_Stock;
+    const CreditNote = mongoose.models.T_CreditNote_Header, DebitNote = mongoose.models.DebitNote;
+    const DamageStock = mongoose.models.Mas_DamStock, Payment = mongoose.models.T_Payment;
     const scope = tenant(req);
     const today = new Date().toISOString().slice(0, 10);
+    const selectedDate = /^\d{4}-\d{2}-\d{2}$/.test(String(req.query.date || "")) ? String(req.query.date) : today;
+    const selectedMonth = selectedDate.slice(0, 7);
+    const previousMonth = new Date(`${selectedMonth}-01T00:00:00Z`);
+    previousMonth.setUTCMonth(previousMonth.getUTCMonth() - 1);
+    const previousMonthKey = previousMonth.toISOString().slice(0, 7);
     const salesMatch = { ...scope, isActive: { $ne: false }, IsBillCancelled: { $ne: true } };
     const numeric = (field) => ({ $convert: { input: field, to: "double", onError: 0, onNull: 0 } });
     const pending = { $max: [{ $subtract: [numeric("$NetAmount"), numeric("$receiptAllocated")] }, 0] };
 
-    const [salesFacets, purchaseTotals, receiptTotals, stockFacets, openingBills] = await Promise.all([
+    const [salesFacets, purchaseTotals, receiptTotals, stockFacets, openingBills, flashSales, flashPurchase, flashCredit, flashDamage, flashDebit, flashPayment, purchaseTrend] = await Promise.all([
       Sales ? Sales.aggregate([
         { $match: salesMatch },
         { $facet: {
@@ -427,6 +434,31 @@ export default function createP0FeaturesRouter(securityRouter) {
         } },
       ]) : Promise.resolve([{ totals: [], lowStockItems: [] }]),
       openingOutstanding(req, 'Dr'),
+      Sales ? Sales.aggregate([{ $match: salesMatch }, { $group: { _id: null,
+        today: { $sum: { $cond: [{ $eq: ["$BillDate", selectedDate] }, numeric("$NetAmount"), 0] } },
+        month: { $sum: { $cond: [{ $eq: [{ $substrBytes: [{ $ifNull: ["$BillDate", ""] }, 0, 7] }, selectedMonth] }, numeric("$NetAmount"), 0] } },
+        previousMonth: { $sum: { $cond: [{ $eq: [{ $substrBytes: [{ $ifNull: ["$BillDate", ""] }, 0, 7] }, previousMonthKey] }, numeric("$NetAmount"), 0] } },
+      } }]) : [],
+      Purchase ? Purchase.aggregate([{ $match: { ...scope, isActive: { $ne: false } } }, { $group: { _id: null,
+        today: { $sum: { $cond: [{ $eq: ["$invoiceDate", selectedDate] }, numeric("$netAmt"), 0] } },
+        month: { $sum: { $cond: [{ $eq: [{ $substrBytes: [{ $ifNull: ["$invoiceDate", ""] }, 0, 7] }, selectedMonth] }, numeric("$netAmt"), 0] } },
+        previousMonth: { $sum: { $cond: [{ $eq: [{ $substrBytes: [{ $ifNull: ["$invoiceDate", ""] }, 0, 7] }, previousMonthKey] }, numeric("$netAmt"), 0] } },
+      } }]) : [],
+      CreditNote ? CreditNote.aggregate([{ $match: { ...scope, isActive: { $ne: false }, Status: { $ne: "Cancelled" } } }, { $group: { _id: null,
+        today: { $sum: { $cond: [{ $eq: ["$VDate", selectedDate] }, numeric("$NetAmount"), 0] } },
+        month: { $sum: { $cond: [{ $eq: [{ $substrBytes: [{ $ifNull: ["$VDate", ""] }, 0, 7] }, selectedMonth] }, numeric("$NetAmount"), 0] } },
+      } }]) : [],
+      DamageStock ? DamageStock.aggregate([{ $match: scope }, { $group: { _id: null, value: { $sum: { $multiply: [numeric("$Qty"), numeric("$PRate")] } } } }]) : [],
+      DebitNote ? DebitNote.aggregate([{ $match: { ...scope, isActive: { $ne: false }, Status: { $ne: "Cancelled" } } }, { $group: { _id: null,
+        month: { $sum: { $cond: [{ $eq: [{ $substrBytes: [{ $ifNull: ["$VDate", ""] }, 0, 7] }, selectedMonth] }, numeric("$NetAmount"), 0] } },
+      } }]) : [],
+      Payment ? Payment.aggregate([{ $match: { ...scope, status: { $ne: "REVERSED" } } }, { $group: { _id: null, total: { $sum: numeric("$amount") } } }]) : [],
+      Purchase ? Purchase.aggregate([
+        { $match: { ...scope, isActive: { $ne: false }, invoiceDate: { $type: "string", $ne: "" } } },
+        { $group: { _id: "$invoiceDate", purchase: { $sum: numeric("$netAmt") } } },
+        { $sort: { _id: -1 } }, { $limit: 30 }, { $sort: { _id: 1 } },
+        { $project: { _id: 0, label: "$_id", purchase: 1 } },
+      ]) : [],
     ]);
 
     const salesData = salesFacets[0] || {}, salesTotals = salesData.totals?.[0] || {};
@@ -439,7 +471,16 @@ export default function createP0FeaturesRouter(securityRouter) {
       outstanding: number(salesTotals.outstanding) + openingOutstandingAmount, overdue: number(salesTotals.overdue) + openingOverdue,
       stockValue: number(stockTotals.stockValue), lowStock: number(stockTotals.lowStock), lowStockItems: stockData.lowStockItems || [],
       expiry: number(stockTotals.expiry), totalInvoices: number(salesTotals.totalInvoices), recentInvoices,
-      topCustomers: salesData.topCustomers || [], topProducts: salesData.topProducts || [], salesTrend: salesData.salesTrend || [],
+      topCustomers: salesData.topCustomers || [], topProducts: salesData.topProducts || [], salesTrend: salesData.salesTrend || [], purchaseTrend,
+      flashCard: { date: selectedDate, todaySales: number(flashSales[0]?.today), monthlySales: number(flashSales[0]?.month),
+        previousMonthSales: number(flashSales[0]?.previousMonth),
+        todayPurchase: number(flashPurchase[0]?.today), monthlyPurchase: number(flashPurchase[0]?.month),
+        previousMonthPurchase: number(flashPurchase[0]?.previousMonth),
+        todaySalesReturns: number(flashCredit[0]?.today), monthlySalesReturns: number(flashCredit[0]?.month),
+        monthlyPurchaseReturns: number(flashDebit[0]?.month),
+        currentStockValue: number(stockTotals.stockValue), damageStockValue: number(flashDamage[0]?.value),
+        totalReceipts: number(receiptTotals[0]?.total), totalPayments: number(flashPayment[0]?.total),
+        partyOutstanding: number(salesTotals.outstanding) + openingOutstandingAmount },
     } });
   });
   return router;

@@ -1,0 +1,220 @@
+/* Sales Invoice List only. The shared voucher list markup and handlers stay intact. */
+@media screen {
+  .erp-transaction-list-page.sales-invoice-modern {
+    --invoice-blue: #245fe4;
+    --invoice-ink: #172b4d;
+    --invoice-muted: #667895;
+    padding: 22px 24px 28px !important;
+    background: #f4f7fc !important;
+    color: var(--invoice-ink) !important;
+  }
+
+  .sales-invoice-modern .ts-sales-page-header {
+    margin: 0 0 6px !important;
+    gap: 18px;
+    align-items: center;
+  }
+
+  .sales-invoice-modern .ts-sales-page-header h1 {
+    color: #152949 !important;
+    font-size: clamp(22px, 1.7vw, 27px);
+    font-weight: 760;
+    letter-spacing: -0.045em;
+  }
+
+  .sales-invoice-modern .ts-sales-page-header p {
+    margin-top: 5px;
+    color: var(--invoice-muted) !important;
+    font-size: 12px;
+  }
+
+  .sales-invoice-modern .ts-sales-page-actions { gap: 8px; }
+
+  .sales-invoice-modern .ts-sales-page-actions .ts-btn {
+    height: 38px;
+    padding: 0 14px;
+    border: 1px solid #d7e1ef !important;
+    border-radius: 8px;
+    background: #fff !important;
+    color: #314464 !important;
+    font-size: 11px;
+    font-weight: 650;
+    box-shadow: 0 2px 5px rgba(31, 56, 101, .04) !important;
+    transition: background .18s ease, border-color .18s ease, box-shadow .18s ease, transform .18s ease;
+  }
+
+  .sales-invoice-modern .ts-sales-page-actions .ts-btn:hover {
+    border-color: #aebfe0 !important;
+    background: #f9fbff !important;
+    box-shadow: 0 4px 11px rgba(31, 56, 101, .09) !important;
+  }
+
+  .sales-invoice-modern .ts-sales-page-actions .ts-btn.primary {
+    padding: 0 17px;
+    border-color: #245fe4 !important;
+    background: linear-gradient(135deg, #3273f5, #245fe4) !important;
+    color: #fff !important;
+    box-shadow: 0 6px 14px rgba(36, 95, 228, .2) !important;
+  }
+
+  .sales-invoice-modern .ts-sales-page-actions .ts-btn.primary:hover {
+    background: linear-gradient(135deg, #2869e9, #1952d2) !important;
+    box-shadow: 0 8px 17px rgba(36, 95, 228, .28) !important;
+  }
+
+  .sales-invoice-modern .ts-reference-list-toolbar {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin: 0 0 12px;
+  }
+
+  .sales-invoice-modern .ts-reference-list-search {
+    min-height: 40px;
+    border: 1px solid #d7e1ee !important;
+    border-radius: 8px !important;
+    background: #fff !important;
+    box-shadow: 0 2px 7px rgba(32, 61, 106, .045) !important;
+  }
+
+  .sales-invoice-modern .ts-reference-list-search:focus-within {
+    border-color: #6998f0 !important;
+    box-shadow: 0 0 0 3px rgba(36, 95, 228, .11) !important;
+  }
+
+  .sales-invoice-modern .ts-reference-list-search > svg { color: #7487a5; }
+  .sales-invoice-modern .ts-reference-list-search > input { color: #20365c !important; font-size: 12px; }
+  .sales-invoice-modern .ts-reference-list-search > input::placeholder { color: #96a4ba; }
+
+  .sales-invoice-modern .ts-open-filter-button {
+    min-height: 40px;
+    padding: 0 14px;
+    border: 1px solid #d7e1ee !important;
+    border-radius: 8px;
+    background: #fff !important;
+    color: #314464 !important;
+    font-size: 11px;
+    font-weight: 650;
+    box-shadow: 0 2px 7px rgba(32, 61, 106, .045) !important;
+  }
+
+  .sales-invoice-modern .ts-open-filter-button:hover,
+  .sales-invoice-modern .ts-open-filter-button.active {
+    border-color: #9ab8ef !important;
+    background: #eef4ff !important;
+    color: #1d56d2 !important;
+  }
+
+  .sales-invoice-modern .ts-grid-card {
+    margin-top: 0;
+    border: 1px solid #d9e4f2 !important;
+    border-radius: 11px;
+    background: #fff;
+    box-shadow: 0 10px 28px rgba(31, 58, 105, .075) !important;
+  }
+
+  .sales-invoice-modern .ts-grid-scroll {
+    min-height: 380px;
+    height: clamp(380px, calc(100vh - 340px), 610px) !important;
+    max-height: 610px !important;
+    scrollbar-color: #b3c1d4 #eef2f8;
+    scrollbar-width: thin;
+  }
+
+  .sales-invoice-modern .ts-sales-grid :is(th, td) {
+    height: 46px;
+    padding: 10px 12px !important;
+    border-right: 1px solid #e8eef7 !important;
+    border-bottom: 1px solid #e8eef7 !important;
+    font-size: 11px;
+  }
+
+  .sales-invoice-modern .ts-sales-grid thead th,
+  .sales-invoice-modern .ts-sales-grid thead th:last-child {
+    height: 42px;
+    border-top: 0 !important;
+    border-bottom: 1px solid #2056bb !important;
+    background: linear-gradient(180deg, #3678ee, #275fc7) !important;
+    color: #fff !important;
+    font-size: 10.5px;
+    font-weight: 700;
+    text-shadow: none;
+  }
+
+  .sales-invoice-modern .ts-sales-grid tbody td {
+    color: #344869;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .sales-invoice-modern .ts-sales-grid tbody tr:nth-child(odd) td,
+  .sales-invoice-modern .ts-sales-grid tbody tr:nth-child(odd) td:last-child {
+    background: #f8faff !important;
+  }
+
+  .sales-invoice-modern .ts-sales-grid tbody tr:hover td,
+  .sales-invoice-modern .ts-sales-grid tbody tr:hover td:last-child {
+    background: #edf4ff !important;
+  }
+
+  .sales-invoice-modern .ts-sales-grid .party-col strong { color: #20365a; font-weight: 700; }
+  .sales-invoice-modern .ts-sales-grid td.sales-amount-cell { color: #172f56; font-weight: 700; }
+  .sales-invoice-modern .ts-invoice-link { color: #1c5fdd; font-size: 11px; }
+
+  .sales-invoice-modern .ts-sales-grid :is(th, td).actions-col {
+    width: 190px !important;
+    min-width: 190px !important;
+    max-width: 190px !important;
+  }
+
+  .sales-invoice-modern .ts-row-actions { gap: 5px; }
+  .sales-invoice-modern .ts-row-actions button {
+    width: 27px;
+    height: 27px;
+    border-radius: 6px;
+    box-shadow: none;
+  }
+
+  .sales-invoice-modern .ts-row-actions .view,
+  .sales-invoice-modern .ts-row-actions .edit { background: #f6f9ff; }
+  .sales-invoice-modern .ts-row-actions .pdf,
+  .sales-invoice-modern .ts-row-actions .delete { background: #fff9f9; }
+
+  .sales-invoice-modern .ts-row-actions button:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 3px 8px rgba(30, 57, 103, .12);
+  }
+
+  .sales-invoice-modern .ts-grid-footer {
+    min-height: 56px;
+    padding: 9px 13px;
+    border-top: 1px solid #e5edf7 !important;
+    background: #fff !important;
+    color: #6b7b96;
+    font-size: 11px;
+  }
+
+  .sales-invoice-modern .ts-pagination-wrap > select,
+  .sales-invoice-modern .ts-pagination button {
+    border: 1px solid #dbe4f0;
+    border-radius: 7px;
+    background: #fff;
+  }
+
+  .sales-invoice-modern .ts-pagination button.active {
+    border-color: #245fe4;
+    background: #245fe4;
+    color: #fff;
+  }
+
+  .sales-invoice-modern :is(button, input, select):focus-visible {
+    outline: 2px solid #245fe4;
+    outline-offset: 2px;
+  }
+}
+
+@media screen and (max-width: 800px) {
+  .erp-transaction-list-page.sales-invoice-modern { padding: 16px 12px 20px !important; }
+  .sales-invoice-modern .ts-sales-page-header { align-items: flex-start; }
+  .sales-invoice-modern .ts-sales-page-actions { justify-content: flex-start; }
+  .sales-invoice-modern .ts-grid-scroll { height: min(60vh, 550px) !important; min-height: 320px; }
+}

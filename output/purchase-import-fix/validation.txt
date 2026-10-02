@@ -1,0 +1,9 @@
+﻿PASS: Original code reproduced a partial A/1 import followed by a false duplicate for its remaining line.
+PASS: Different series with the same number and the same series with different numbers all import completely.
+PASS: An existing exact series/number is skipped once and all other groups continue.
+PASS: Whitespace, leading zeroes and integral decimal Excel numbers group consistently.
+PASS: Blank series and literal series 0 remain separate purchases.
+PASS: Successful rows are skipped on retry, including files without IMEI.
+PASS: The same grouping also works when IMEI is present.
+PASS: Series containing an apostrophe remain intact.
+PASS: Invalid transaction numbers cannot reuse a previous identity.

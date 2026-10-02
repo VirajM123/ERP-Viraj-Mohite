@@ -1,0 +1,1589 @@
+GDCode varchar 10 0 (space((1)))
+SysProdCode int 4 0 ((0))
+Batch varchar 20 0 (space((1)))
+ExpDt datetime 8 1 NULL
+MfgDt datetime 8 1 NULL
+MRP decimal 9 0 ((0))
+PRate decimal 9 1 ((0))
+SRate decimal 9 1 ((0))
+Qty decimal 9 0 ((0))
+IsLocked varchar 1 1 NULL
+BoxPack int 4 1 NULL
+InBoxPack int 4 1 NULL
+
+
+
+CREATE Proc [dbo].[Add_Sales]                                          
+---For Sales Header & Details                                                
+@TrnSeries varchar(20) output,                                              
+@TrnNo INT output,                                                
+@TrnDate datetime,                                             
+@DueDate datetime,                                                
+@SysAcCode int,                                                
+@DSysAcCode int,                                                
+@SysCompCode int,
+@SysAcCodeSeqNo int,                                                
+@SSMCode varchar(10),                                                
+@AreaCode varchar(10),                                              
+@BillType varchar(1),                                              
+@NARR varchar(100),                                               
+@GDCode varchar(10),                                                 
+@TPRAmt decimal(18,2),                                                
+@SchAmt decimal(18,2),                                                
+@BtmAmt decimal(18,2),                                                
+@DiscAC int,                                                
+@StarPer decimal(18,2),                                                
+@StarAmt decimal(18,2),                                                
+@StarAC int,                                                
+@CDPer  decimal(18,2),                                                
+@CDAmt decimal(18,2),                                                
+@CDAC int,                                                
+@AddOthPer  decimal(18,2),                                                
+@AddothAmt decimal(18,2),                                                
+@AddOthAC int ,                                                
+@LessOthPer  decimal(18,2),                                                
+@LessothAmt decimal(18,2),                                                
+@LessOthAC int,                                                
+@VatAmt decimal(18,2),                                                
+@SurChargeAmt decimal(18,2),                                                
+@SurChargeAC int,                                                  
+@RetAmt  decimal(18,2),                                                
+@RetVATAmt  decimal(18,2),                         
+@RetSchAmt   decimal(18,2),                         
+@RetCDAmt   decimal(18,2),                                               
+@RetSurChargeAmt  decimal(18,2),                         
+@RetNetAmt decimal(18,2),                                             
+@RetRndAmt decimal(18,2),                      
+@DisplayAmt decimal(18,2),                                                
+@DisplayAC int,                                                
+@CouponAmt decimal(18,2),                                                
+@CouponAC int,                                                  
+@ADDLessAmt  decimal(18,2),                                                
+@ADDLessAC int,                                                
+@RNDAmt  decimal(18,2),                                                
+@RNDAC int,                                                
+@GrossAmt  decimal(18,2),                                                
+@NetAmt decimal(18,2),         
+@LoadNetAmt decimal(18,2),                                             
+@TaxCalcOn varchar(1),                                                
+@InvType  varchar(1),                                                
+@TaxApply  varchar(1),                                                
+@VatCalcOn  varchar(1),                                                
+@PName  varchar(50),                 
+@LoadNo int,            
+@LoadSeries Varchar(20),
+@RLoadNo int,                                          
+@Pending  varchar(1),                                                
+@Adjusted  varchar(1), 
+@EntryType  varchar(1),                                             
+@CancelAmt decimal(18,2),     
+@VanCode varchar(50),      
+@PONumber Varchar(50),                                    
+@StrSeqNoItem varchar(max),                                                
+@strEntType varchar(max),                      
+@StrSysProdCode varchar(max),                                                
+@StrUnit varchar(max),                                                
+@StrBatch varchar(max),                                                
+@StrMRP varchar(max),                                                
+@StrExpDt varchar(max),                                                
+@StrMfgDt varchar(max),                                                
+@StrWeight varchar(max),                                                
+@StrRatePerUnit varchar(max),                                                
+@StrQty varchar(max),               
+@StrRate varchar(max),                                                
+@StrPRate varchar(max),                                                
+@StrSRate varchar(max),       
+@StrLoadQty varchar(max),     
+@StrLoadFrQty varchar(max),     
+@StrOQty varchar(max),                                                
+@StrORate varchar(max),                                                
+@StrFrQty varchar(max),                                        
+@StrFrBatch varchar(max),                                                
+@StrFrMrp varchar(max),                                                
+@StrFrExpDt varchar(max),                                     
+@StrFrMfgdt varchar(max),                                                
+@StrTPRPer varchar(max),                                                
+@StrTPRAmt varchar(max),                                                
+@StrSchPer varchar(max),                                                
+@StrSchAmt varchar(max),                                                
+@StrCDPer varchar(max),                                                
+@StrCDAmt varchar(max),                                                
+@StrSchNo varchar(max), 
+@StrFrSchNo varchar(max), 
+@StrDiscSchNo varchar(max),                                              
+@StrSchName varchar(max),                                    
+@StrSysCompCode varchar(max),                                                
+@StrVATPer varchar(max),                                                
+@StrVATAmt varchar(max),                                                
+@StrVATType varchar(max),                                                
+@StrTaxable varchar(max),                                                
+--@StrPrAcCode varchar(max),                                                
+@StrAreaCode varchar(max),                                      
+@StrBoxPack varchar(max),                                                
+@StrInBoxPack varchar(max),                                                
+@StrBoxName varchar(max),                                                
+@StrInBoxName varchar(max),                                                
+@StrStarProdLevel varchar(max),                                                
+@StrCDProdLevel varchar(max),                                                
+@StrBtmProdLevel varchar(max),                                                
+@StrADDOthProdLevel varchar(max),                                                
+@StrLessOthProdLevel varchar(max),                                                
+@StrRelation varchar(max),                                
+@StrSalSysAcCode varchar(max),                            
+@StrSRSysAcCode varchar(max),                            
+@StrVatSysAcCode varchar(max),    
+@StrMTPer Varchar(MAX),      
+
+@StrCGST Varchar(MAX), 
+@StrSGST Varchar(MAX), 
+@StrIGST Varchar(MAX), 
+@StrCGSTSysAcCode Varchar(MAX), 
+@StrSGSTSysAcCode Varchar(MAX), 
+@StrIGSTSysAcCode Varchar(MAX), 
+@TCSPer decimal(18,4),
+@TCSAmt decimal(18,2),
+@StrStarPer1 Varchar(Max),
+@IRN Varchar(Max), 
+@AckNo Varchar(Max),
+@DocumentNo Varchar(Max),
+@EwbillNo Varchar(Max),
+@PiPayID Varchar(50),
+---@AckDate Varchar(10),                            
+@ProdCount int,                                               
+---For Bottom Scheme                                              
+@strBtSrNo varchar(max),  
+@StrBtmTrn varchar(max),                                            
+@strBtSchNo varchar(max),                                              
+@strBtSchName varchar(max),                                              
+@strBtFrQty varchar(max),                                              
+@strBtDiscP varchar(max),                                              
+@strBtDiscA varchar(max),                                              
+@strBtDiscAmt varchar(max),                                              
+@strBTOnUnits varchar(max),                                              
+@strBtOnAmt varchar(max),                                              
+@strBtOnWeight varchar(max),                                              
+@strBtFrSysProdCode varchar(max),                                              
+@strBtBatch varchar(max),                                              
+@strBtMRP varchar(max),                                              
+@strBtExpDt varchar(max),                               
+@strBtMfgDt varchar(max),                     
+@strBtSlabNo varchar(max),                                               
+@BtmCount int,                                            
+---For Mastrn                                                
+@strMasTrnTrn varchar(max),                                              
+@strMasTrnDorC varchar(max),                                              
+@strMasTrnPrAcCode varchar(max),                                              
+@strMasTrnAmt varchar(max),                                              
+@strMasTrnSeqNo varchar(max),                       
+@strMasTrnVatAmt varchar(max),                                              
+@strMasTrnVarPrAcCode varchar(max),                                              
+@strMasTrnVatPer varchar(max),                                              
+@strMasTrnVatType varchar(max),                                          
+@MasTrnCount int,               
+@AllowNegativeStock Varchar(1),        
+@AdjOther decimal(18,2),      
+@StrCess Varchar(Max),
+@StrCessAmt Varchar(Max),          
+@StrCessPerPCS Varchar(Max),
+@StrCessPerPCSAmt Varchar(Max),         
+@StrCrateSize Varchar(Max),         
+@StrCrateQty Varchar(Max),         
+@StrCrateSysProdCode Varchar(Max),         
+@TmpCrnCount int,          
+@UserName  varchar(10)                                              
+                                            
+As                                               
+Declare                                              
+                         
+@TmpIsAutoVno varchar(1),                                                
+@TmpCompCode varchar(10),                                              
+@TmpSysProdCode int,                                                
+@TmpUnit varchar(10),                                                
+@TmpBatch varchar(20),                                                
+@TmpMRP decimal(18,2),                                                
+@TmpExpDt datetime,                                                
+@TmpMfgDt datetime,                                                
+@TmpWeight decimal(18,3),                                                
+@TmpRatePerUnit decimal(18,4),                                                
+@TmpQty  decimal(18,3),                           
+@TmpRate  decimal(18,6),                                                
+@TmpPRate  decimal(18,6),                                                
+@TmpSRate  decimal(18,6),          
+@TmpLoadQty  decimal(18,3),      
+@TmpLoadFrQty  decimal(18,3),                                                                                   
+@TmpOQty  decimal(18,3),                                                
+@TmpORate  decimal(18,6),                                                
+@TmpFrQty  decimal(18,3),                                                
+@TmpFrBatch   varchar(10),                                                
+@TmpFrMrp decimal(18,2),                                                
+@TmpFrExpDt datetime,                                                
+@TmpFrMfgdt datetime,                                                
+@TmpTPRPer decimal(18,2),                                                
+@TmpTPRAmt decimal(18,2),                                                
+@TmpSchPer decimal(18,2),                                                
+@TmpSchAmt decimal(18,2),                                                
+@TmpCDPer decimal(18,2),                                                
+@TmpCDAmt decimal(18,2),                                                
+@TmpSchNo int,  
+@TmpFrSchNo int, 
+@TmpDiscSchNo int,                                               
+@TmpSchName varchar(50),                                                
+@TmpSysCompCode int,                                                
+@TmpVATPer decimal(18,2),                                                
+@TmpVATAmt decimal(18,2),                                                
+@TmpVATType varchar(1),                                                
+@TmpTaxable decimal(18,2),                                                
+@TmpSysAcCode int,                                                
+@TmpAreaCode varchar(10),                     
+@TmpSSMCode varchar(10),                                                
+@TmpGDCode varchar(10),                                                 
+@TmpBoxPack int,                                                
+@TmpInBoxPack int,                                                
+@TmpBoxName varchar(20),                                               
+@TmpInBoxName varchar(20),                                                
+@TmpStarProdLevel decimal(18,3),                                                
+@TmpCDProdLevel  decimal(18,3),                                                
+@TmpBtmProdLevel  decimal(18,3),                                                
+@TmpADDOthProdLevel decimal(18,3),                                                
+@TmpLessOthProdLevel decimal(18,3),                                                
+@TmpRelation int,                             
+@TmpSalSysAcCode int,                            
+@TmpSRSysAcCode int,                            
+@TmpVatSysAcCode int,                                               
+@TmpEntType varchar(3),      
+@TmpMTPer decimal(18,2),  
+@TmpCess decimal(18,2),
+@TmpCessAmt decimal(18,2),
+@TmpCessPerPCS decimal(18,2),
+@TmpCessPerPCSAmt decimal(18,2),
+
+@TmpCGST decimal(18,2),
+@TmpSGST decimal(18,2),
+@TmpIGST decimal(18,2),
+@TmpCGSTSysAcCode int,
+@TmpSGSTSysAcCode int,
+@TmpIGSTSysAcCode int,
+     
+@TmpCrateSize int,
+@TmpCrateQty decimal(18,3),
+@TmpCrateSysProdCode int,
+@TmpStarPer1 decimal(18,2),
+                                        
+--For Btm Scheme                                            
+@BtSrNo INT,                                              
+@BtSchNo INT,                                              
+@BtSchName Varchar(50),  
+@BtmTrn Varchar(3),          
+@BtFrQty Decimal(18,3),                                                
+@BtDiscP Decimal(18,2),                                            
+@BtDiscA Decimal(18,2),                                            
+@BtDiscAmt Decimal(18,2),                                            
+@BtOnQty Decimal(18,3),                                            
+@BtOnAmt Decimal(18,2),                                            
+@BtOnWeight Decimal(18,3),                          
+@BtFrSysProdCode INT,                                            
+@BtBatch Varchar(10),                                              
+@BtMRP Decimal(18,2),                                   
+@BtExpDt Datetime,                                            
+@BtMfgDt Datetime,                    
+@BtSlabNo INT,                                            
+@BtSysCompCode INT,                                            
+@BtmCompCode Varchar(10),                                              
+@BtmSSMCode Varchar(10),                                              
+@BtmAreaCode Varchar(10),                                              
+--MasTran                       
+@MasTrnTrn varchar(3),                                              
+@MasTrnDorC varchar(1),                                              
+@MasTrnPrAcCode int,                                              
+@MasTrnSalSeqNo int,                          
+@MasTrnCrnSeqNo int,                                              
+@MasTrnAmt  Decimal(18,2),                                            
+@MasTrnVatAmt  Decimal(18,2),                                            
+@MasTrnVarPrAcCode int,                                              
+@MasTrnVatPer  Decimal(18,2),                                            
+@MasTrnVatType varchar(1),                                          
+                                          
+-- For Internal                                            
+@Trn Varchar(3),                                            
+@TmpV1   INT,                                                  
+@TmpV2   INT,                                                  
+@TmpV3   INT,                                                  
+@TmpV4   INT,                                                  
+@TmpV5   INT,                                                  
+@TmpV6   INT,                                             
+@TmpV7   INT,                           
+@TmpV8   INT,                                                  
+@TmpV9   INT,                                                  
+@TmpV10   INT,                                                  
+@TmpV11   INT,                                                  
+@TmpV12   INT,                                                  
+@TmpV13   INT,                                                  
+@TmpV14   INT,                          
+@TmpV15   INT,                                                  
+@TmpV16   INT,                                                  
+@TmpV17   INT,                                                  
+@TmpV18   INT,                                                  
+@TmpV19   INT,                                                  
+@TmpV20   INT,                                                  
+@TmpV21   INT,                                            
+@TmpV22   INT,                                                  
+@TmpV23   INT,               
+@TmpV24   INT,                                                  
+@TmpV25   INT,                                                  
+@TmpV26   INT,                                                   
+@TmpV27   INT,                                                  
+@TmpV28   INT,                                                  
+@TmpV29   INT,                                                  
+@TmpV30   INT,                                                  
+@TmpV31   INT,                                                
+@TmpV32   INT,                                                  
+@TmpV33   INT,                
+@TmpV34   INT,                                                  
+@TmpV35   INT,                                                  
+@TmpV36   INT,                                                  
+@TmpV37   INT,                                                  
+@TmpV38   INT,                                                  
+@TmpV39   INT,                                                  
+@TmpV40   INT,                                                  
+@TmpV41   INT,                                                  
+@TmpV42   INT,                          
+@TmpV43   INT,                                                  
+@TmpV44   INT,                                                  
+@TmpV45   INT,                                              
+@TmpV46   INT,                                                  
+@TmpV47   INT,                                                  
+@TmpV48   INT,                                                  
+@TmpV49   INT,                                                  
+@TmpV50   INT,        
+@TmpV51   INT,    
+@TmpV52   INT,
+@TmpV53   INT,
+@TmpV54   INT, 
+@TmpV55   INT, 
+@TmpV56   INT, 
+@TmpV57   INT, 
+@TmpV58   INT, 
+@TmpV59   INT, 
+@TmpV60   INT, 
+@TmpV61   INT, 
+@TmpV62   INT, 
+@TmpV63   INT, 
+@TmpV64   INT, 
+@TmpV65   INT, 
+@TmpV66   INT, 
+@TmpV67   INT, 
+@TmpV68   INT, 
+@TmpV69   INT, 
+                                   
+@TmpStkQty Decimal(18,3),                                                
+@TmpCOUNT INT,                                   
+@TmpBtmCOUNT INT,                                            
+@TmpSeqNoItem INT,                                                  
+@TmpSeqNoBtm INT,                                          
+@TmpMasTranCOUNT INT,                        
+                        
+--For Return                        
+@SeriesType VARCHAR(1),                        
+@LastUsed VARCHAR(20),                        
+@DSeries VARCHAR(20),                        
+@MSeries VARCHAR(20),                        
+@YSeries VARCHAR(20),                        
+@RetSeries varchar(20),                        
+@RetVno INT,                        
+@TmpGDRAmt Decimal(18,2),                        
+@TmpDGRAmt Decimal(18,2),                                           
+@TmpSeqNo int,                                  
+@TmpItemCode varchar(20)                      
+                                            
+SET    @Trn='SAL'                                            
+SET @TmpGDCode=@GDCode                          
+                                                
+SET NOCOUNT ON                                       
+                                                
+BEGIN TRAN
+     
+ UPDATE Mas_Series SET lastUsed =@TrnSeries where trn='SAL' AND seriesType='U'                                                                                                 
+ IF @@ERROR<>0                                                 
+ GOTO UNDOTRAN                                                    
+                                                  
+ SELECT @TmpIsAutoVno=ParaValue FROM SetUpParameters WHERE ParaName='Auto Invoice Numbers'                                           
+ IF @TmpIsAutoVno='Y'                             
+ BEGIN                                                  
+	 SELECT @TrnNo=ISNULL(MAX(TrnNo),0)+1 FROM T_SAL_Header WHERE TrnSeries=@TrnSeries                                              
+	 IF @@ERROR<>0                                                   
+	 GOTO UNDOTRAN                                              
+ END                                                  
+	                                      
+IF @TmpIsAutoVno<>'Y'                                                  
+BEGIN                                                     
+	IF EXISTS(SELECT TrnNo,TrnSeries FROM T_SAL_Header WHERE TrnSeries=@TrnSeries AND TrnNo=@TrnNo)                                                  
+	BEGIN                                                  
+		RAISERROR('Duplicate Voucher No Not Allowed.',16,-1)                                                  
+		IF @@TRANCOUNT = 1                                                  
+		ROLLBACK TRAN                                                  
+		ELSE                                                  
+		COMMIT TRAN                                                  
+		RETURN 1                                                  
+	END                                                  
+END                                                  
+                                                  
+ SELECT @TmpCompCode=CompCode FROM Mas_Company WHERE SysCompCode=@SysCompCode                                                  
+                                               
+ IF @@ERROR<>0                                                  
+  GOTO UNDOTRAN                                                  
+                                                
+ ---------------------------------------------                                             
+--insert t_sal_header
+
+--IF len(@ackdate)=0 or @ackdate='1900/01/01'                 
+--SET @ackdate=Null                
+--ELSE                
+--SET @ackdate=Convert(datetime,Substring(@ackdate,1,10)) 
+
+                                                    
+ Insert into T_SAL_HEADER                                                   
+ (TrnSeries,TrnNo,TrnDate,DueDate,SysAcCode,DSysAcCode,SSMCode,AreaCode,SysCompCode,SysAcCodeSeqNo,BillType,GDCode,Narr,                                                  
+ TPRAmt,SchAmt,BtmAmt,DiscAC,StarPer,StarAmt,StarAC,CDPer,CDAmt,CDAC,AddOthPer,AddothAmt,AddOthAC,                                                  
+ LessOthPer,LessothAmt,LessOthAC,VatAmt,SurChargeAmt,SurChargeAC,                                                  
+ RetAmt,RetVatAmt,RetSurChargeAmt,DisplayAmt,DisplayAC,CouponAmt,CouponAC,                                                  
+ ADDLessAmt,ADDLessAC,RNDAmt,RNDAC,GrossAmt,NetAmt,Loadno,RLoadNo,                                                  
+ TaxCalcOn,InvType,TaxApply,VatCalcOn,PName,Pending,Adjusted,CancelAmt,
+ AddUser,AddDate,EntryType  ,LoadNetValue,VanCode,PONo,AdjOther,LoadSeries,TCSPer,TCSAmt,IRN,ACKNO,DocumentNo,Ewbillno,PiPayID               
+ )                                                  
+ VALUES(@TrnSeries,@TrnNo,@TrnDate,@DueDate,@SysAcCode,@DSysAcCode,@SSMCode,@AreaCode,@SysCompCode,@SysAcCodeSeqNo,@BillType,@GDCode,@NARR,                                                  
+ @TPRAmt,@SchAmt,@BtmAmt,@DiscAC,@StarPer,@StarAmt,@StarAC,@CDPer,@CDAmt,@CDAC,@AddOthPer,@AddothAmt,@AddOthAC,                                                  
+ @LessOthPer,@LessothAmt,@LessOthAC,@VatAmt,@SurChargeAmt,@SurChargeAC,                                                  
+ @RetAmt,@RetVatAmt,@RetSurChargeAmt,@DisplayAmt,@DisplayAC,@CouponAmt,@CouponAC,                                                  
+ @ADDLessAmt,@ADDLessAC,@RNDAmt,@RNDAC,@GrossAmt,@NetAmt,@LoadNo,@RLoadNo,                                                  
+ @TaxCalcOn,@InvType,@TaxApply,@VatCalcOn,@PName,@Pending,@Adjusted,@CancelAmt,@UserName,getdate(),
+ @EntryType,@LoadNetAmt,@VanCode,@PONumber,@AdjOther,@LoadSeries,@TCSPer,@TCSAmt,@IRN,@ackno,@DocumentNo,@Ewbillno,@PiPayID)                          
+                                      
+ IF @@ERROR<>0                                                  
+ GOTO UNDOTRAN                                                  
+ ---------------------------------------------                                              
+ SET @TmpV1=1       
+ SET @TmpV2=1                                              
+ SET @TmpV3=1                                              
+ SET @TmpV4=1                                              
+ SET @TmpV5=1                                              
+ SET @TmpV6=1                                              
+ SET @TmpV7=1                                              
+ SET @TmpV8=1                                              
+ SET @TmpV9=1                                              
+ SET @TmpV10=1                                              
+ SET @TmpV11=1                                              
+ SET @TmpV12=1                              
+ SET @TmpV13=1                                              
+ SET @TmpV14=1                                              
+ SET @TmpV15=1                                              
+ SET @TmpV16=1                                              
+ SET @TmpV17=1                                              
+ SET @TmpV18=1                                              
+ SET @TmpV19=1                                              
+ SET @TmpV20=1                                              
+ SET @TmpV21=1                                              
+ SET @TmpV22=1                                              
+ SET @TmpV23=1                                              
+ SET @TmpV24=1                                              
+ SET @TmpV25=1                                              
+ SET @TmpV26=1                                               
+ SET @TmpV27=1                                              
+ SET @TmpV28=1                                              
+ SET @TmpV29=1                                              
+ SET @TmpV30=1                                              
+ SET @TmpV31=1                                              
+ SET @TmpV32=1                                              
+ SET @TmpV33=1                                              
+ SET @TmpV34=1                                              
+ SET @TmpV35=1                                              
+ SET @TmpV36=1                                              
+ SET @TmpV37=1                                              
+ SET @TmpV38=1                                              
+ SET @TmpV39=1                                           
+ SET @TmpV40=1                                              
+ SET @TmpV41=1                                              
+ SET @TmpV42=1                                              
+ SET @TmpV43=1                                              
+ SET @TmpV44=1                                              
+ SET @TmpV45=1                                              
+ SET @TmpV46=1                                              
+ SET @TmpV47=1                                              
+ SET @TmpV48=1                                              
+ SET @TmpV49=1                                              
+ SET @TmpV50=1                                         
+ SET @TmpV51=1            
+ SET @TmpV52=1   
+ SET @TmpV53=1   
+ SET @TmpV54=1                                 
+ SET @TmpV55=1                                
+ SET @TmpV56=1                                
+ SET @TmpV57=1                                
+ SET @TmpV58=1                                
+ SET @TmpV59=1                                
+ SET @TmpV60=1                                
+ SET @TmpV61=1                                
+ SET @TmpV62=1                                
+ SET @TmpV63=1                                
+ SET @TmpV64=1                                
+ SET @TmpV65=1                                
+ SET @TmpV66=1                                
+ 
+ SET @TmpCOUNT=1                                                
+ SET @TmpSeqNoItem=0                                                
+                                                
+ SET @TmpGDRAmt=0                                      
+ SET @TmpDGRAmt=0                        
+                                      
+ WHILE @TmpCOUNT <= @ProdCount                                                  
+ BEGIN                                      
+                                                
+ SET @TmpSysProdCode=Convert(int,Substring(@StrSysProdCode,@TmpV1,20))                                                
+ SET @TmpUnit=Convert(varchar(10),Substring(@StrUnit,@TmpV2,20))                                                
+ SET @TmpBatch=Convert(varchar(20),Substring(@StrBatch,@TmpV3,20))                                               
+ SET @TmpMRP=Convert(decimal(18,2),Substring(@StrMRP,@TmpV4,20))                                              
+                                              
+ IF Substring(@StrExpDt,@TmpV5,20) <> ''                                                
+  SET @TmpExpDt=Convert(datetime,Substring(@StrExpDt,@TmpV5,20))                                   
+ ELSE                                                 
+  SET @TmpExpDt=Null                                              
+                                                
+ IF Substring(@StrMfgDt,@TmpV6,20) <> ''                                                
+  SET @TmpMfgDt=Convert(datetime,Substring(@StrMfgDt,@TmpV6,20))                                                
+ ELSE                                                 
+  SET @TmpMfgDt=Null                                              
+                                                
+ SET @TmpWeight=Convert(decimal(18,3),Substring(@StrWeight,@TmpV7,20))                                                
+ SET @TmpRatePerUnit=Convert(decimal(18,4),Substring(@StrRatePerUnit,@TmpV8,20))                                                
+ SET @TmpQty=Convert(decimal(18,3),Substring(@StrQty,@TmpV9,20))                                                
+ SET @TmpRate=Convert(decimal(18,6),Substring(@StrRate,@TmpV10,20))                        
+ SET @TmpPRate=Convert(decimal(18,6),Substring(@StrPRate,@TmpV11,20))                                                
+ SET @TmpSRate=Convert(decimal(18,6),Substring(@StrSRate,@TmpV12,20))                                                
+ SET @TmpOQty=Convert(decimal(18,3),Substring(@StrOQty,@TmpV13,20))                                                
+ SET @TmpORate=Convert(decimal(18,6),Substring(@StrORate,@TmpV14,20))                                                
+ SET @TmpFrQty=Convert(decimal(18,3),Substring(@StrFrQty,@TmpV15,20))                                                
+ SET @TmpFrBatch=Convert(varchar(10),Substring(@StrFrBatch,@TmpV16,20))                                        
+ SET @TmpFrMrp=Convert(decimal(18,2),Substring(@StrFrMrp,@TmpV17,20))                                                
+                                              
+ IF Substring(@StrFrExpDt,@TmpV18,20) <> ''                                                
+  SET @TmpFrExpDt=Convert(datetime,Substring(@StrFrExpDt,@TmpV18,20))                                            
+ ELSE                                                 
+  SET @TmpFrExpDt=Null                                              
+                                              
+ IF Substring(@StrFrMfgDt,@TmpV19,20) <> ''                                                
+  SET @TmpFrMfgDt=Convert(datetime,Substring(@StrFrMfgDt,@TmpV19,20))                                                
+ ELSE                                                 
+  SET @TmpFrMfgDt=Null                                                
+                                                
+ SET @TmpTPRPer=Convert(decimal(18,2),Substring(@StrTPRPer,@TmpV20,20))                                                
+ SET @TmpTPRAmt=Convert(decimal(18,2),Substring(@StrTPRAmt,@TmpV21,20))                                                
+ SET @TmpSchPer=Convert(decimal(18,2),Substring(@StrSchPer,@TmpV22,20))                 
+ SET @TmpSchAmt=Convert(decimal(18,2),Substring(@StrSchAmt,@TmpV23,20))                                                
+ SET @TmpCDPer=Convert(decimal(18,2),Substring(@StrCDPer,@TmpV24,20))                                                
+ SET @TmpCDAmt=Convert(decimal(18,2),Substring(@StrCDAmt,@TmpV25,20))                                            
+ SET @TmpSchNo=Convert(int,Substring(@StrSchNo,@TmpV26,20)) 
+ SET @TmpFrSchNo=Convert(int,Substring(@StrFrSchNo,@TmpV26,20))     
+ SET @TmpDiscSchNo=Convert(int,Substring(@StrDiscSchNo,@TmpV26,20))                                             
+ SET @TmpSchName=Convert(varchar(50),Substring(@StrSchName,@TmpV27,50))                                                
+ SET @TmpSysCompCode=Convert(int,Substring(@StrSysCompCode,@TmpV28,20))                                                
+ SET @TmpVATPer=Convert(decimal(18,2),Substring(@StrVATPer,@TmpV29,20))                                                
+ SET @TmpVATAmt=Convert(decimal(18,2),Substring(@StrVATAmt,@TmpV30,20))               
+ SET @TmpVATType=Convert(varchar(1),Substring(@StrVATType,@TmpV31,20))                                                
+ SET @TmpTaxable=Convert(decimal(18,2),Substring(@StrTaxable,@TmpV32,20))           
+ SET @TmpAreaCode=Convert(varchar(10),Substring(@StrAreaCode,@TmpV34,20))                                                
+ SET @TmpBoxPack=Convert(int,Substring(@StrBoxPack,@TmpV35,20))                                                
+ SET @TmpInBoxPack= Convert(int,Substring(@StrInBoxPack,@TmpV36,20))                                                
+ SET @TmpBoxName=Convert(varchar(6),Substring(@StrBoxName,@TmpV37,20))                                                
+ SET @TmpInBoxName=Convert(varchar(6),Substring(@StrInBoxName,@TmpV38,20))                                                
+ SET @TmpStarProdLevel=Convert(decimal(18,3),Substring(@StrStarProdLevel,@TmpV39,20))                                            
+ SET @TmpCDProdLevel=Convert(decimal(18,3),Substring(@StrCDProdLevel,@TmpV40,20))                                                
+ SET @TmpBtmProdLevel=Convert(decimal(18,3),Substring(@StrBtmProdLevel,@TmpV41,20))                                                
+ SET @TmpADDOthProdLevel=Convert(decimal(18,3),Substring(@StrADDOthProdLevel,@TmpV42,20))                            
+ SET @TmpLessOthProdLevel=Convert(decimal(18,3),Substring(@StrLessOthProdLevel,@TmpV43,20))                                                
+ SET @TmpRelation=Convert(int,Substring(@StrRelation,@TmpV44,20))                                                
+ --SET @TmpSeqNoItem=Convert(int,Substring(@StrSeqNoItem,@TmpV45,20))                                               
+ SET @TmpEntType=Convert(varchar(3),Substring(@strEntType,@TmpV46,20))                                                  
+ SET @TmpSalSysAcCode=Convert(varchar(20),Substring(@StrSalSysAcCode,@TmpV47,20))                             
+ SET @TmpVatSysAcCode=Convert(varchar(20),Substring(@StrVatSysAcCode,@TmpV48,20))                                                 
+ SET @TmpLoadQty=Convert(decimal(18,3),Substring(@StrLoadQty,@TmpV49,20))    
+ SET @TmpLoadFrQty=Convert(decimal(18,3),Substring(@StrLoadFrQty,@TmpV49,20))     
+ SET @TmpMTPer=Convert(decimal(18,2),Substring(@StrMTPer,@TmpV52,20))                                                                              
+
+ SET @TmpCess=Convert(decimal(18,2),Substring(@StrCess,@TmpV53,20))                                                                              
+ SET @TmpCessAmt=Convert(decimal(18,2),Substring(@StrCessAmt,@TmpV54,20))                                                                              
+     
+ 
+ SET @TmpCGST=Convert(decimal(18,2),Substring(@StrCGST,@TmpV55,20))                                                                              
+ SET @TmpSGST=Convert(decimal(18,2),Substring(@StrSGST,@TmpV56,20))                                                                              
+ SET @TmpIGST=Convert(decimal(18,2),Substring(@StrIGST,@TmpV57,20))                                                                              
+ SET @TmpCGSTSysAcCode=Convert(int,Substring(@StrCGSTSysAcCode,@TmpV58,20))                                                                              
+ SET @TmpSGSTSysAcCode=Convert(int,Substring(@StrSGSTSysAcCode,@TmpV59,20))                                                                              
+ SET @TmpIGSTSysAcCode=Convert(int,Substring(@StrIGSTSysAcCode,@TmpV60,20))                                                                              
+ SET @TmpCessPerPCS=Convert(decimal(18,2),Substring(@StrCessPerPCS,@TmpV61,20))                                                                              
+ SET @TmpCessPerPCSAmt=Convert(decimal(18,2),Substring(@StrCessPerPCSAmt,@TmpV62,20))                                                                              
+ 
+ SET @TmpCrateSize=Convert(int,Substring(@StrCrateSize,@TmpV63,20))                                                                              
+ SET @TmpCrateQty=Convert(decimal(18,3),Substring(@StrCrateQty,@TmpV64,20))                                                                              
+ SET @TmpCrateSysProdCode=Convert(int,Substring(@StrCrateSysProdCode,@TmpV65,20))                                                                              
+ SET @TmpStarPer1=Convert(decimal(18,2),Substring(@StrStarPer1,@TmpV66,20))                                                                              
+
+     
+ IF @TmpEntType='SAL'                                                
+ BEGIN                       
+ SET @TmpSeqNoItem=@TmpSeqNoItem+1                                                    
+ /*FETCH SSMCode OF ITEM LEVEL AreaCode*/                                                  
+ IF NOT EXISTS(SELECT SSMCode FROM Mas_AreaMapping WHERE SysCompCode=@TmpSysCompCode And AreaCode=@AreaCode)                   
+ BEGIN                                                  
+  RAISERROR('Salesman To Area %s Not Assigned For %s',16,-1,@AreaCode,@TmpCompCode)                                            
+  IF @@TRANCOUNT = 1                                                  
+   ROLLBACK TRAN                                                  
+  ELSE                                                  
+   COMMIT TRAN                                                  
+   RETURN 1                                    
+ END                                                   
+ ELSE                                  
+ BEGIN                                                  
+  SELECT @TmpSSMCode=SSMCode FROM Mas_AreaMapping WHERE SysCompCode=@TmpSysCompCode And AreaCode=@AreaCode                                                     
+  IF @@ERROR<>0                                         
+   GOTO UNDOTRAN                                                  
+ END                                                  
+                                      
+ 
+--insert T_SAL_ITEMS
+                                                
+ Insert into T_SAL_DETAILS(                                                  
+ TrnSeries,TrnNo,TrnDate,SysProdCode,Unit,Batch,MRP,ExpDt,MfgDt,Weight,RatePerUnit,Qty,Rate,PRate,SRate,LoadQty,OQty,ORate,                                                  
+ FrQty,FrBatch,FrMrp,FrExpDt,FrMfgdt,TPRPer,TPRAmt,SchPer,SchAmt,CDPer,CDAmt,SchNo,FrSchNo,DiscSchNo,SysCompCode,                                              
+ VATPer,VATAmt,VATType,Taxable,SysAcCode,AreaCode,SSMCode,GDCode,RLoadNo,LoadNo,                                              
+ Box,InBox,BoxName,InBoxName,StarProdLevel,CDProdLevel,BtmProdLevel,ADDOthProdLevel,LessOthProdLevel,EnteryType,Relation,
+ SalSysAcCode,VatSysAcCode,SeqNo,LoadFrQty,MTPer,Cess,CessAmt,CGST,SGST,IGST,CGSTSysAcCode,SGSTSysAcCode,IGSTSysAcCode,CessPerPCS,CessPerPCSAmt,
+ CrateSize,CrateQty,CrateSysProdCode,LoadSeries,StarPer)                                                  
+ VALUES(@TrnSeries,@TrnNo,@TrnDate,@TmpSysProdCode,@TmpUnit,@TmpBatch,@TmpMRP,@TmpExpDt,@TmpMfgDt,@TmpWeight,@TmpRatePerUnit,                                     
+ @TmpQty,@TmpRate,@TmpPRate,@TmpSRate,@TmpLoadQty,@TmpOQty,@TmpORate,@TmpFrQty,@TmpFrBatch,@TmpFrMrp,@TmpFrExpDt,@TmpFrMfgdt,                                              
+ @TmpTPRPer,@TmpTPRAmt,@TmpSchPer,@TmpSchAmt,@TmpCDPer,@TmpCDAmt,@TmpSchNo,@TmpFrSchNo,@TmpDiscSchNo,@TmpSysCompCode,@TmpVATPer,                                              
+ @TmpVATAmt,@TmpVATType,@TmpTaxable,@SysAcCode,@TmpAreaCode,@TmpSSMCode,@TmpGDCode,@RLoadNo,@LoadNo,                                              
+ @TmpBoxPack,@TmpInBoxPack,@TmpBoxName,@TmpInBoxName,@TmpStarProdLevel,@TmpCDProdLevel,@TmpBtmProdLevel,                                              
+ @TmpADDOthProdLevel,@TmpLessOthProdLevel,'S',@TmpRelation,@TmpSalSysAcCode,@TmpVatSysAcCode,@TmpSeqNoItem,@TmpLoadFrQty,@TmpMTPer,
+ @TmpCess,@TmpCessAmt,@TmpCGST,@TmpSGST,@TmpIGST,@TmpCGSTSysAcCode,@TmpSGSTSysAcCode,@TmpIGSTSysAcCode,@TmpCessPerPCS,@TmpCessPerPCSAmt,
+ @TmpCrateSize,@TmpCrateQty,@TmpCrateSysProdCode,@LoadSeries,@TmpStarPer1)                                                  
+                                                   
+ IF @@ERROR<>0                                                  
+ GOTO UNDOTRAN                                      
+                                                  
+--update budget of scheme in mas_scheme
+ IF @TmpSchNo>0                                              
+ BEGIN                                              
+ UPDATE Mas_Scheme SET ExstQty=ExstQty+@TmpFrQty, ExstDisc=ExstDisc+@TmpSchAmt                          
+ WHERE  SCHNO=@TmpSchNo                                              
+ IF @@ERROR<>0                                              
+ GOTO UNDOTRAN                                              
+ END                                            
+  
+  --update netbal in Documentno
+ UPDATE t_Sal_header SET documentno= @trnseries+cast(@trnno as varchar(20))  WHERE TrnSeries=@TrnSeries AND TrnNo=@TrnNo                                                
+ IF @@ERROR<>0                                                  
+ GOTO UNDOTRAN   
+                                          
+--update netbal in mas_product
+ UPDATE Mas_Product SET netbal=netbal-(@TmpOQty+@TmpFrQty) where SysProdCode=@TmpSysProdCode                                              
+ IF @@ERROR<>0                                              
+ GOTO UNDOTRAN                                             
+ 
+--                                            
+ UPDATE Mas_Stock                                              
+ SET Qty=QTY-(@TmpOQty)                                              
+ WHERE  SysProdCode=@TmpSysProdCode AND BATCH=@TmpBatch AND MRP=@TmpMRP                                             
+ --AND ExpDt=@TmpExpDt AND MfgDt=@TmpMfgDt             
+ AND GDCode=@TmpGDCode                                              
+ IF @@ERROR<>0                                              
+ GOTO UNDOTRAN                                              
+                                                 
+ SELECT @TmpStkQty=Qty FROM Mas_Stock                                              
+ WHERE  SysProdCode=@TmpSysProdCode AND BATCH=@TmpBatch AND MRP=@TmpMRP                                             
+ --AND ExpDt=@TmpExpDt AND MfgDt=@TmpMfgDt                             
+ AND GDCode=@TmpGDCode                                              
+ IF @@ERROR<>0                                              
+ GOTO UNDOTRAN                        
+                     
+ IF @AllowNegativeStock<>'Y'                          
+ IF @TmpStkQty<0                                               
+ BEGIN                                              
+ SET @TmpStkQty=0                                          
+ RAISERROR('Stock Will Be Negative! LineNo:%d BillNo %d ',16,-1,@TmpCount,@TrnNo)                                              
+ IF @@TRANCOUNT = 1                                              
+  ROLLBACK TRAN                                              
+ ELSE                                              
+  COMMIT TRAN                                              
+  RETURN 1                                              
+ END                                             
+                                            
+ UPDATE Mas_Stock                                              
+ SET Qty=QTY-(@TmpFrQty)                                              
+ WHERE  SysProdCode=@TmpSysProdCode AND BATCH=@TmpFrBatch AND MRP=@TmpFrMRP                                             
+ --AND ExpDt=@TmpFrExpDt AND MfgDt=@TmpFrMfgDt                                   
+ AND GDCode=@TmpGDCode                                              
+ IF @@ERROR<>0                                              
+ GOTO UNDOTRAN                               
+                                                 
+ SELECT @TmpStkQty=Qty FROM Mas_Stock                                              
+ WHERE  SysProdCode=@TmpSysProdCode AND BATCH=@TmpFrBatch AND MRP=@TmpFrMRP                                             
+ --AND ExpDt=@TmpFrExpDt AND MfgDt=@TmpFrMfgDt                                  
+ AND GDCode=@TmpGDCode                                              
+ IF @@ERROR<>0                                              
+ GOTO UNDOTRAN                                              
+                  
+ IF @AllowNegativeStock<>'Y'                              
+ IF @TmpStkQty<0                                               
+ BEGIN                                              
+ SET @TmpStkQty=0                                                  
+ RAISERROR('Stock Will Be Negative! LineNo:%d BillNo %d ',16,-1,@TmpCount,@TrnNo)                                             
+ IF @@TRANCOUNT = 1                                              
+  ROLLBACK TRAN                                              
+ ELSE                                                
+  COMMIT TRAN                                              
+  RETURN 1                 
+ END                                            
+                                            
+-- UPDATE M_STOCK                                              
+-- SET Qty=QTY-(@TmpOQty)                                              
+-- WHERE  SysProdCode=@TmpSysProdCode AND BATCH=@TmpBatch AND MRP=@TmpMRP                                             
+-- --AND ExpDt=@TmpExpDt AND MfgDt=@TmpMfgDt                                              
+-- IF @@ERROR<>0                                              
+-- GOTO UNDOTRAN                                            
+--                                            
+-- UPDATE M_STOCK                                              
+-- SET Qty=QTY-(@TmpFrQty)                                              
+-- WHERE  SysProdCode=@TmpSysProdCode AND BATCH=@TmpFrBatch AND MRP=@TmpFrMRP                                             
+-- --AND ExpDt=@TmpFrExpDt AND MfgDt=@TmpFrMfgDt                                             
+-- IF @@ERROR<>0                                              
+-- GOTO UNDOTRAN       
+                      
+ END --End Of Sal Trn                        
+                        
+ IF @TmpEntType='GDR'                        
+ BEGIN                        
+ SET @TmpGDRAmt=@TmpGDRAmt+(@TmpOQty*@TmpORate)                        
+ END --End Of GDR Trn                        
+                         
+ IF @TmpEntType='DGR'                        
+ BEGIN                        
+ SET @TmpDGRAmt=@TmpDGRAmt+(@TmpOQty*@TmpORate)        
+ END --End Of DGR Trn                      
+                                 
+ SET @TmpV1=@TmpV1+20                                                  
+ SET @TmpV2=@TmpV2+20                                                  
+ SET @TmpV3=@TmpV3+20                                                    
+ SET @TmpV4=@TmpV4+20                                              
+ SET @TmpV5=@TmpV5+20                                                  
+ SET @TmpV6=@TmpV6+20                                                  
+ SET @TmpV7=@TmpV7+20                                                  
+ SET @TmpV8=@TmpV8+20                                                  
+ SET @TmpV9=@TmpV9+20                                                  
+ SET @TmpV10=@TmpV10+20                                                    
+ SET @TmpV11=@TmpV11+20                                                  
+ SET @TmpV12=@TmpV12+20                                                    
+ SET @TmpV13=@TmpV13+20                                                  
+ SET @TmpV14=@TmpV14+20                                                  
+ SET @TmpV15=@TmpV15+20                                                
+ SET @TmpV16=@TmpV16+20                                                  
+ SET @TmpV17=@TmpV17+20           
+ SET @TmpV18=@TmpV18+20                                                  
+ SET @TmpV19=@TmpV19+20                                                
+ SET @TmpV20=@TmpV20+20                                                  
+ SET @TmpV21=@TmpV21+20                                                  
+ SET @TmpV22=@TmpV22+20                                                    
+ SET @TmpV23=@TmpV23+20                                                  
+ SET @TmpV24=@TmpV24+20                                             
+ SET @TmpV25=@TmpV25+20                                                  
+ SET @TmpV26=@TmpV26+20                                                  
+ SET @TmpV27=@TmpV27+50                                                  
+ SET @TmpV28=@TmpV28+20                                                  
+ SET @TmpV29=@TmpV29+20                                                  
+ SET @TmpV30=@TmpV30+20                                                  
+ SET @TmpV31=@TmpV31+20                                                  
+ SET @TmpV32=@TmpV32+20                                                  
+ SET @TmpV33=@TmpV33+20                                                  
+ SET @TmpV34=@TmpV34+20                                                  
+ SET @TmpV35=@TmpV35+20                                                  
+ SET @TmpV36=@TmpV36+20                                             
+ SET @TmpV37=@TmpV37+20                                                  
+ SET @TmpV38=@TmpV38+20                                           
+ SET @TmpV39=@TmpV39+20                                                  
+ SET @TmpV40=@TmpV40+20                                                  
+ SET @TmpV41=@TmpV41+20                                                  
+ SET @TmpV42=@TmpV42+20                                                  
+ SET @TmpV43=@TmpV43+20                                                  
+ SET @TmpV44=@TmpV44+20                                                  
+ SET @TmpV45=@TmpV45+20                                                  
+ SET @TmpV46=@TmpV46+20                            
+ SET @TmpV47=@TmpV47+20                               
+ SET @TmpV48=@TmpV48+20                                                  
+ SET @TmpV49=@TmpV49+20                                        
+ SET @TmpV50=@TmpV50+20                                              
+ SET @TmpV51=@TmpV51+20      
+ SET @TmpV52=@TmpV52+20
+ SET @TmpV53=@TmpV53+20
+ SET @TmpV54=@TmpV54+20
+
+ SET @TmpV55=@TmpV55+20
+ SET @TmpV56=@TmpV56+20
+ SET @TmpV57=@TmpV57+20
+ SET @TmpV58=@TmpV58+20
+ SET @TmpV59=@TmpV59+20
+ SET @TmpV60=@TmpV60+20
+ SET @TmpV61=@TmpV61+20
+ SET @TmpV62=@TmpV62+20
+ SET @TmpV63=@TmpV63+20
+ SET @TmpV64=@TmpV64+20
+ SET @TmpV65=@TmpV65+20
+ SET @TmpV66=@TmpV66+20
+
+                                               
+ SET @TmpCOUNT=@TmpCOUNT+1                                                  
+                                                
+END  /*loop end for item grid*/                         
+                                                  
+/*----------------RETURN ITEM ENTRIES--------------------------------------*/            
+--IF @TmpGDRAmt>0 OR @TmpDGRAmt>0       
+
+If @TmpCrnCount>0                
+                 
+BEGIN                        
+ SET @DSeries=''                        
+ SET @MSeries=''                        
+ SET @YSeries=''                        
+                        
+ SET @DSeries=RTRIM(SUBSTRING(CONVERT(VARCHAR(20),DAY(@TrnDate)),1,2))                        
+ SET @MSeries=RTRIM(SUBSTRING(CONVERT(VARCHAR(20),MONTH(@TrnDate)),1,2))                        
+    IF Cast(@MSeries As INT) > 3                         
+  SET @YSeries=RTRIM(SUBSTRING(CONVERT(VARCHAR(20),YEAR(@TrnDate)),3,4))+RTRIM(SUBSTRING(CONVERT(VARCHAR(4),YEAR(DATEADD(Year,1,@TrnDate))),3,4))                        
+ ELSE                        
+  SET @YSeries=RTRIM(SUBSTRING(CONVERT(VARCHAR(20),YEAR(DATEADD(Year,-1,@TrnDate))),3,4))+RTRIM(SUBSTRING(CONVERT(VARCHAR(4),YEAR(@TrnDate)),3,4))                        
+                        
+ IF Cast(@DSeries As INT)<10                            
+  SET @DSERIES='0'+Cast(@DSeries As INT)                        
+                        
+ IF Cast(@MSeries As INT)<10                 
+ SET @MSERIES='0'+Cast(@MSeries As INT)                        
+                        
+  Select @Retseries=Series From T_CompanySeries where SysCompcode=@TmpSysCompCode and type='CRN'
+if @Retseries is null
+  BEGIN                       
+ SELECT @SeriesType=SeriesType,@LastUsed=LastUsed FROM Mas_Series WHERE TRN='CRN'                        
+ IF @@ERROR<>0                        
+  GOTO UNDOTRAN                        
+                        
+ IF @SeriesType='D'                             
+ BEGIN                        
+  SET @Retseries=@DSeries                         
+ END                        
+                        
+ IF @SeriesType='M'                        
+ BEGIN                        
+  SET @Retseries=@MSeries                        
+ END                        
+                        
+ IF @SeriesType='Y'                        
+ BEGIN                        
+  SET @Retseries=@YSeries                        
+ END                        
+                        
+ IF @SeriesType='U'                        
+ BEGIN                        
+  SET @Retseries=@LastUsed                        
+ END                        
+ END                       
+ UPDATE Mas_Series SET lastUsed =@Retseries where trn='CRN' AND seriesType='U'                                                 
+ IF @@ERROR<>0                                                   
+  GOTO UNDOTRAN                                                      
+                                                    
+ /*FIND MAXVNO*/                        
+ SELECT @RetVNO=ISNULL(MAX(TrnNo),0)+1 FROM T_Crn_Header WHERE TrnSeries=@Retseries                                                   
+ IF @@ERROR<>0                                                     
+  GOTO UNDOTRAN                                                
+                         
+ insert into T_Crn_Header                                    
+ (TrnSeries,TrnNo,TrnDate,GDCode,SysCompCode,SysAcCode,DSysAcCode,SSMCode,AreaCode,Narr,Amt,VatAmt,                                    
+ BefVatDisc,AftVatDisc,NetAmt,RndAmt,RndAc,SurchargAmt,SurchargAc,BillNo,                                    
+ BillSeries,IsExternal,AddUser,AddDate,EntryType,PName,
+ InBill,CDAmt,TPRAmt,StarAmt,DisplayAmt,DisplayAc,CouponAmt,CouponAc,RefNo,RefDate,TCSPer,TCSAmt,IRN,ACKNO,DocumentNo,Ewbillno
+ )                                    
+ values                                    
+ (@Retseries,@RetVno,@TrnDate,@GDCode,@SysCompCode,@SysAcCode,@DSysAcCode,@SSMCode,@AreaCode,@Narr,@RetAmt,@RetVatAmt,                        
+ @RetSchAmt,0.00,@RetNetAmt,@RetRndAmt,@RNDAC,@RetSurChargeAmt,@SurChargeAC,@TrnNo,                                    
+ @TrnSeries,'N',@UserName,getdate(),@EntryType,@PName,
+ 'Y',@RetCDAmt,@TPRAmt,@StarAmt,@DisplayAmt,@DisplayAC,@CouponAmt,@CouponAC,0,NULL,0.00,0.00,null,null,@Retseries+cast(@RetVno as varchar(20)),null)                          
+ IF @@ERROR<>0                                                      
+  GOTO UNDOTRAN                       
+                      
+ SET @TmpV1=1                                              
+ SET @TmpV2=1                                              
+ SET @TmpV3=1                                              
+ SET @TmpV4=1                                              
+ SET @TmpV5=1                                              
+ SET @TmpV6=1                                              
+ SET @TmpV7=1                                         
+ SET @TmpV8=1                                              
+ SET @TmpV9=1                                              
+ SET @TmpV10=1                                              
+ SET @TmpV11=1                                              
+ SET @TmpV12=1                              
+ SET @TmpV13=1                                              
+ SET @TmpV14=1                                              
+ SET @TmpV15=1                                              
+ SET @TmpV16=1                                   
+ SET @TmpV17=1                                              
+ SET @TmpV18=1                                              
+ SET @TmpV19=1                                              
+ SET @TmpV20=1                                              
+ SET @TmpV21=1                                              
+ SET @TmpV22=1                                              
+ SET @TmpV23=1                                              
+ SET @TmpV24=1                                              
+ SET @TmpV25=1                                              
+ SET @TmpV26=1                                               
+ SET @TmpV27=1                                              
+ SET @TmpV28=1                                              
+ SET @TmpV29=1                                              
+ SET @TmpV30=1        
+ SET @TmpV31=1                                              
+ SET @TmpV32=1                                              
+ SET @TmpV33=1                                              
+ SET @TmpV34=1                                              
+ SET @TmpV35=1                                              
+ SET @TmpV36=1                                              
+ SET @TmpV37=1                                              
+ SET @TmpV38=1                                              
+ SET @TmpV39=1                                           
+ SET @TmpV40=1                                              
+ SET @TmpV41=1                                              
+ SET @TmpV42=1                                              
+ SET @TmpV43=1                                              
+ SET @TmpV44=1                                              
+ SET @TmpV45=1                                              
+ SET @TmpV46=1                                              
+ SET @TmpV47=1                       
+ SET @TmpV48=1   
+ SET @TmpV49=1   
+ SET @TmpV50=1   
+ SET @TmpV51=1   
+ SET @TmpV52=1   
+ SET @TmpV53=1   
+ SET @TmpV54=1   
+ SET @TmpV55=1   
+ SET @TmpV56=1   
+ SET @TmpV57=1   
+ SET @TmpV58=1   
+ SET @TmpV59=1   
+ SET @TmpV60=1   
+ SET @TmpV61=1   
+ SET @TmpV62=1   
+ SET @TmpV63=1   
+                  
+ SET @TmpCOUNT=1                                                
+ SET @TmpSeqNo=0                      
+                      
+ WHILE @TmpCOUNT <= @ProdCount                                                
+ BEGIN                                                  
+                                                
+ SET @TmpSysProdCode=Convert(int,Substring(@StrSysProdCode,@TmpV1,20))                                                
+ SET @TmpUnit=Convert(varchar(5),Substring(@StrUnit,@TmpV2,20))                                                
+ SET @TmpBatch=Convert(varchar(20),Substring(@StrBatch,@TmpV3,20))                                               
+ SET @TmpMRP=Convert(decimal(18,2),Substring(@StrMRP,@TmpV4,20))                      
+ IF Substring(@StrExpDt,@TmpV5,20) <> ''                                                
+  SET @TmpExpDt=Convert(datetime,Substring(@StrExpDt,@TmpV5,20))                                                
+ ELSE                       
+  SET @TmpExpDt=Null                      
+ IF Substring(@StrMfgDt,@TmpV6,20) <> ''                                                
+  SET @TmpMfgDt=Convert(datetime,Substring(@StrMfgDt,@TmpV6,20))                                                
+ ELSE                                                 
+  SET @TmpMfgDt=Null                      
+ SET @TmpWeight=Convert(decimal(18,3),Substring(@StrWeight,@TmpV7,20))                                                
+ SET @TmpRatePerUnit=Convert(decimal(18,4),Substring(@StrRatePerUnit,@TmpV8,20))                                                
+ SET @TmpQty=Convert(decimal(18,3),Substring(@StrQty,@TmpV9,20))                                           
+ SET @TmpRate=Convert(decimal(18,6),Substring(@StrRate,@TmpV10,20))                                                
+ SET @TmpPRate=Convert(decimal(18,6),Substring(@StrPRate,@TmpV11,20))                                                
+ SET @TmpSRate=Convert(decimal(18,6),Substring(@StrSRate,@TmpV12,20))                                                
+ SET @TmpOQty=Convert(decimal(18,3),Substring(@StrOQty,@TmpV13,20))                                                
+ SET @TmpORate=Convert(decimal(18,6),Substring(@StrORate,@TmpV14,20))                                                
+ SET @TmpFrQty=Convert(decimal(18,3),Substring(@StrFrQty,@TmpV15,20))                                                
+ SET @TmpFrBatch=Convert(varchar(10),Substring(@StrFrBatch,@TmpV16,20))                                                
+ SET @TmpFrMrp=Convert(decimal(18,2),Substring(@StrFrMrp,@TmpV17,20))                      
+ IF Substring(@StrFrExpDt,@TmpV18,20) <> ''                                                
+  SET @TmpFrExpDt=Convert(datetime,Substring(@StrFrExpDt,@TmpV18,20))                                                
+ ELSE                                                 
+  SET @TmpFrExpDt=Null                      
+ IF Substring(@StrFrMfgDt,@TmpV19,20) <> ''                                                
+  SET @TmpFrMfgDt=Convert(datetime,Substring(@StrFrMfgDt,@TmpV19,20))            
+ ELSE                                                 
+  SET @TmpFrMfgDt=Null                        
+ SET @TmpTPRPer=Convert(decimal(18,2),Substring(@StrTPRPer,@TmpV20,20))                                                
+ SET @TmpTPRAmt=Convert(decimal(18,2),Substring(@StrTPRAmt,@TmpV21,20))                                                
+ SET @TmpSchPer=Convert(decimal(18,2),Substring(@StrSchPer,@TmpV22,20))                                                
+ SET @TmpSchAmt=Convert(decimal(18,2),Substring(@StrSchAmt,@TmpV23,20))                                                
+ SET @TmpCDPer=Convert(decimal(18,2),Substring(@StrCDPer,@TmpV24,20))                                                
+ SET @TmpCDAmt=Convert(decimal(18,2),Substring(@StrCDAmt,@TmpV25,20))                                                
+ SET @TmpSchNo=Convert(int,Substring(@StrSchNo,@TmpV26,20))                                                
+ SET @TmpSchName=Convert(varchar(50),Substring(@StrSchName,@TmpV27,50))                                                
+ SET @TmpSysCompCode=Convert(int,Substring(@StrSysCompCode,@TmpV28,20))                                                
+ SET @TmpVATPer=Convert(decimal(18,2),Substring(@StrVATPer,@TmpV29,20))                                                
+ SET @TmpVATAmt=Convert(decimal(18,2),Substring(@StrVATAmt,@TmpV30,20))                                                
+ SET @TmpVATType=Convert(varchar(1),Substring(@StrVATType,@TmpV31,20))                                                
+ SET @TmpTaxable=Convert(decimal(18,2),Substring(@StrTaxable,@TmpV32,20))                                                
+ SET @TmpAreaCode=Convert(varchar(10),Substring(@StrAreaCode,@TmpV34,20))                                                
+ SET @TmpBoxPack=Convert(int,Substring(@StrBoxPack,@TmpV35,20))                                                
+ SET @TmpInBoxPack= Convert(int,Substring(@StrInBoxPack,@TmpV36,20))                                                
+ SET @TmpBoxName=Convert(varchar(6),Substring(@StrBoxName,@TmpV37,20))                                                
+ SET @TmpInBoxName=Convert(varchar(6),Substring(@StrInBoxName,@TmpV38,20))                                                
+ SET @TmpStarProdLevel=Convert(decimal(18,3),Substring(@StrStarProdLevel,@TmpV39,20))                                            
+ SET @TmpCDProdLevel=Convert(decimal(18,3),Substring(@StrCDProdLevel,@TmpV40,20))                                                
+ SET @TmpBtmProdLevel=Convert(decimal(18,3),Substring(@StrBtmProdLevel,@TmpV41,20))                                      
+ SET @TmpADDOthProdLevel=Convert(decimal(18,3),Substring(@StrADDOthProdLevel,@TmpV42,20))                            
+ SET @TmpLessOthProdLevel=Convert(decimal(18,3),Substring(@StrLessOthProdLevel,@TmpV43,20))                                                
+ SET @TmpRelation=Convert(int,Substring(@StrRelation,@TmpV44,20))                                                
+ SET @TmpSeqNoItem=Convert(int,Substring(@StrSeqNoItem,@TmpV45,20))                                               
+ SET @TmpEntType=Convert(varchar(3),Substring(@strEntType,@TmpV46,20))                                                  
+ SET @TmpSRSysAcCode=Convert(varchar(20),Substring(@StrSRSysAcCode,@TmpV47,20))                             
+ SET @TmpVatSysAcCode=Convert(varchar(20),Substring(@StrVatSysAcCode,@TmpV48,20))                                       
+ SET @TmpCGST=Convert(decimal(18,2),Substring(@StrCGST,@TmpV49,20))                                       
+ SET @TmpSGST=Convert(decimal(18,2),Substring(@StrSGST,@TmpV50,20))                                       
+ SET @TmpIGST=Convert(decimal(18,2),Substring(@StrIGST,@TmpV51,20))                                       
+ SET @TmpCGSTSysAcCode=Convert(int,Substring(@StrCGSTSysAcCode,@TmpV52,20))                                       
+ SET @TmpSGSTSysAcCode=Convert(int,Substring(@StrSGSTSysAcCode,@TmpV53,20))                                       
+ SET @TmpIGSTSysAcCode=Convert(int,Substring(@StrIGSTSysAcCode,@TmpV54,20))                                       
+ SET @TmpCrateSize=Convert(int,Substring(@StrCrateSize,@TmpV55,20))                                       
+ SET @TmpCrateQty=Convert(decimal(18,3),Substring(@StrCrateQty,@TmpV56,20))                                        
+ SET @TmpCrateSysProdCode=Convert(int,Substring(@StrCrateSysProdCode,@TmpV57,20))                                       
+ SET @TmpStarProdLevel=Convert(decimal(18,3),Substring(@StrStarProdLevel,@TmpV58,20))                                            
+ SET @TmpMTPer=Convert(decimal(18,2),Substring(@StrMTPer,@TmpV59,20))                                                                                 
+ SET @TmpCess=Convert(decimal(18,2),Substring(@StrCess,@TmpV60,20))                                                                              
+ SET @TmpCessAmt=Convert(decimal(18,2),Substring(@StrCessAmt,@TmpV61,20))                                                                              
+ SET @TmpCessPerPCS=Convert(decimal(18,2),Substring(@StrCessPerPCS,@TmpV62,20))                                                                              
+ SET @TmpCessPerPCSAmt=Convert(decimal(18,2),Substring(@StrCessPerPCSAmt,@TmpV63,20))                                                                              
+
+                       
+ IF @TmpEntType='GDR' OR @TmpEntType='DGR'                      
+ BEGIN                                        
+ SET @TmpSeqNo=@TmpSeqNo+1                      
+                                   
+ SET @TmpCompCode=''                                   
+ SELECT @TmpCompCode=CompCode FROM Mas_Company WHERE SysCompCode=@TmpSysCompCode                                  
+ IF @@ERROR<>0                                                          
+ GOTO UNDOTRAN                                     
+                                                          
+ /*FETCH SSMCode OF ITEM LEVEL AreaCode*/                
+ IF NOT EXISTS(SELECT SSMCode FROM Mas_AreaMapping WHERE SysCompCode=@TmpSysCompCode And AreaCode=@TmpAreaCode)                                                          
+ BEGIN                                                          
+  RAISERROR('Salesman To Area %s Not Assigned For %s',16,-1,@TmpAreaCode,@TmpCompCode)                                                    
+  IF @@TRANCOUNT = 1                                                          
+   ROLLBACK TRAN                                                          
+  ELSE                                                          
+   COMMIT TRAN                                                          
+   RETURN 1                                            
+ END                                                           
+ ELSE                                                          
+ BEGIN                                                          
+  SELECT @TmpSSMCode=SSMCode FROM Mas_AreaMapping WHERE SysCompCode=@TmpSysCompCode And AreaCode=@TmpAreaCode                                                             
+  IF @@ERROR<>0                                                          
+   GOTO UNDOTRAN                                                          
+ END                      
+                                          
+ /*START INSERTING RECORD INTO T_CRN_Details */                      
+ insert into T_CRN_Details(                                    
+ Trn,TrnSeries,TrnNo,TrnDate,SysProdCode,Batch,MRP,ExpDt,MfgDt,Unit,Qty,                                    
+ FrQty,Rate,Oqty,Orate,PRate,SRate,GDCode,SSMCode,AreaCode,SysAcCode,SysCompCode,                                    
+ RatePerUnit,BoxPack,INBoxPack,BoxName,INBoxName,Weight,SchPer,SchDisc,SchAc,CDPer,CDAmt,CDAc,                                    
+ AVDisc1,AVDisc2,AVAc,Taxable,Vat,VatType,VatAmt,SRSysAcCode,VatSysAcCode,SeqNo,
+ CGST,SGST,IGST,CGSTSysAcCode,SGSTSysAcCode,IGSTSysAcCode,CrateSize,CrateQty,CrateSysProdCode,
+ TPRPer,TPRAmt,StarPer,StarAmt,Cess,CessAmt,CessPerPCS,CessPerPCSAmt)                                    
+ values                                    
+ (@TmpEntType,@RetSeries,@RetVno,@TrnDate,@TmpSysProdCode,@TmpBatch,@TmpMRP,@TmpExpDt,@TmpMfgDt,@TmpUnit,@TmpQty,                                    
+ @TmpFrQty,@TmpRate,@TmpOqty,@TmpOrate,@TmpPRate,@TmpSRate,@GDCode,@TmpSSMCode,@TmpAreaCode,@SysAcCode,@TmpSysCompCode,                                    
+ @TmpRatePerUnit,@TmpBoxPack,@TmpInBoxPack,@TmpBoxName,@TmpINBoxName,@TmpWeight,@TmpSchPer,@TmpSchAmt,@DiscAC,@TmpCDPer,@TmpCDAmt,@CDAc,                                    
+ 0.00,0.00,0,@TmpTaxable,@TmpVATPer,@TmpVatType,@TmpVatAmt,@TmpSRSysAcCode,@TmpVatSysAcCode,@TmpSeqNo,
+ @TmpCGST,@TmpSGST,@TmpIGST,@TmpCGSTSysAcCode,@TmpSGSTSysAcCode,@TmpIGSTSysAcCode,@TmpCrateSize,@TmpCrateQty,@TmpCrateSysProdCode,
+ @TmpTPRPer,@TmpTPRAmt,@TmpMTPer,@TmpStarProdLevel,@TmpCess,@TmpCessAmt,@TmpCessPerPCS,@TmpCessPerPCSAmt)                                   
+                                
+ IF @@ERROR<>0                                                          
+  GOTO UNDOTRAN                     
+              
+ IF @TmpEntType='GDR'                          
+  BEGIN                  
+               
+   /* Mas_Product UPDATE NETBAL OF PRODUCT*/                                    
+   UPDATE Mas_Product SET netbal=netbal+(@TmpOQty+@TmpFrQty) where SysProdCode=@TmpSysProdCode                                                      
+   IF @@ERROR<>0                                                      
+   GOTO UNDOTRAN                                                                   
+                           
+   IF NOT EXISTS(SELECT * FROM Mas_Stock  WHERE  SysProdCode=@TmpSysProdCode AND BATCH=@TmpBatch AND MRP=@TmpMRP AND GDCode=@GDCode)                                                          
+   BEGIN                                  
+                                                      
+   INSERT INTO Mas_Stock                                   
+   (GDCode,SysProdCode,batch,Expdt,MfgDt,MRP,PRate,SRate,Qty,IsLocked,BoxPack,InBoxPack)                                   
+   Values (@GDCode,@TmpSysProdCode,@TmpBatch,@TmpExpDt,@TmpMfgDt,@TmpMRP,                                
+   @TmpPRate,@TmpSRate,@TmpOQty+@TmpFrQty,'N',@TmpBoxPack,@TmpInBoxPack)                                  
+   IF @@ERROR<>0                                  
+    GOTO UNDOTRAN                                            
+   END                                                           
+   ELSE                                                          
+   BEGIN                                                          
+     UPDATE Mas_Stock                                                      
+     SET Qty=QTY+(@TmpOQty+@TmpFrQty)                                                      
+     WHERE  SysProdCode=@TmpSysProdCode AND BATCH=@TmpBatch AND MRP=@TmpMRP                                          
+     AND GDCode=@GDCode                                    
+     --AND ExpDt=@TmpExpDt AND MfgDt=@TmpMfgDt                                                    
+     IF @@ERROR<>0                                                      
+   GOTO UNDOTRAN                                            
+   END                                  
+                                                     
+--   IF NOT EXISTS(SELECT * FROM M_STOCK  WHERE  SysProdCode=@TmpSysProdCode AND BATCH=@TmpBatch AND MRP=@TmpMRP)                                                          
+--   BEGIN                                  
+--   SELECT @TmpItemCode=ProdCode FROM Mas_Product WHERE SysProdCode=@TmpSysProdCode                                                   
+--   INSERT INTO M_STOCK                                   
+--   (SysProdCode,ProdCode,batch,Expdt,MfgDt,MRP,PRate,SRate,Qty,AddUser,AddDate)                                   
+--   Values (@TmpSysProdCode,@TmpItemCode,@TmpBatch,@TmpExpDt,@TmpMfgDt,@TmpMRP,                                
+--   @TmpPRate,@TmpSRate,@TmpOQty+@TmpFrQty,@UserName,GetDate())                                  
+--   IF @@ERROR<>0                                                      
+--    GOTO UNDOTRAN                                            
+--   END                                                           
+--   ELSE                                                          
+--   BEGIN                                                          
+--     UPDATE M_STOCK                                                      
+--     SET Qty=QTY+(@TmpOQty+@TmpFrQty)                                                      
+--     WHERE  SysProdCode=@TmpSysProdCode AND BATCH=@TmpBatch AND MRP=@TmpMRP                                              
+--     --AND ExpDt=@TmpExpDt AND MfgDt=@TmpMfgDt                                                    
+--     IF @@ERROR<>0                                       
+--   GOTO UNDOTRAN                                            
+--   END    
+                                  
+  END       
+                       
+ IF @TmpEntType='DGR'                              
+ BEGIN                   
+  IF NOT EXISTS(SELECT * FROM Mas_DamStock  WHERE  SysProdCode=@TmpSysProdCode AND BATCH=@TmpBatch AND MRP=@TmpMRP AND GDCode=@GDCode)                            
+  BEGIN                                  
+      
+  INSERT INTO Mas_DamStock                                   
+  (GDCode,SysProdCode,batch,Expdt,MfgDt,MRP,PRate,SRate,Qty)                                   
+  Values (@GDCode,@TmpSysProdCode,@TmpBatch,@TmpExpDt,@TmpMfgDt,@TmpMRP,                                
+  @TmpPRate,@TmpSRate,@TmpOQty+@TmpFrQty)                                  
+  IF @@ERROR<>0                                                      
+   GOTO UNDOTRAN                                            
+  END                                                           
+  ELSE                                                          
+  BEGIN                                                          
+    UPDATE Mas_DamStock                                                      
+    SET Qty=QTY+(@TmpOQty+@TmpFrQty)                                                      
+    WHERE  SysProdCode=@TmpSysProdCode AND BATCH=@TmpBatch AND MRP=@TmpMRP                                          
+    AND GDCode=@GDCode                                    
+    --AND ExpDt=@TmpExpDt AND MfgDt=@TmpMfgDt                                                    
+    IF @@ERROR<>0                                                      
+  GOTO UNDOTRAN                                            
+  END                          
+ END                            
+ END --END OF GDR & DGR                          
+                                                     
+ SET @TmpV1=@TmpV1+20                                                  
+ SET @TmpV2=@TmpV2+20                                                  
+ SET @TmpV3=@TmpV3+20                                                    
+ SET @TmpV4=@TmpV4+20                                              
+ SET @TmpV5=@TmpV5+20                                                  
+ SET @TmpV6=@TmpV6+20                                                  
+ SET @TmpV7=@TmpV7+20                                                  
+ SET @TmpV8=@TmpV8+20                                  
+ SET @TmpV9=@TmpV9+20                                                  
+ SET @TmpV10=@TmpV10+20                                                    
+ SET @TmpV11=@TmpV11+20                                                  
+ SET @TmpV12=@TmpV12+20                                                    
+ SET @TmpV13=@TmpV13+20                                                  
+ SET @TmpV14=@TmpV14+20                                                  
+ SET @TmpV15=@TmpV15+20                                                    
+ SET @TmpV16=@TmpV16+20                                                  
+ SET @TmpV17=@TmpV17+20                                           
+ SET @TmpV18=@TmpV18+20                            
+ SET @TmpV19=@TmpV19+20                                                
+ SET @TmpV20=@TmpV20+20                                                  
+ SET @TmpV21=@TmpV21+20                                                  
+ SET @TmpV22=@TmpV22+20                                                    
+ SET @TmpV23=@TmpV23+20                                 
+ SET @TmpV24=@TmpV24+20                                             
+ SET @TmpV25=@TmpV25+20                                                  
+ SET @TmpV26=@TmpV26+20                                                  
+ SET @TmpV27=@TmpV27+50                                                  
+ SET @TmpV28=@TmpV28+20                                                  
+ SET @TmpV29=@TmpV29+20                                                  
+ SET @TmpV30=@TmpV30+20                                                  
+ SET @TmpV31=@TmpV31+20                                                  
+ SET @TmpV32=@TmpV32+20                                                  
+ SET @TmpV33=@TmpV33+20                                                  
+ SET @TmpV34=@TmpV34+20                                                  
+ SET @TmpV35=@TmpV35+20                                                  
+ SET @TmpV36=@TmpV36+20                  
+ SET @TmpV37=@TmpV37+20                                                  
+ SET @TmpV38=@TmpV38+20                                                  
+ SET @TmpV39=@TmpV39+20                                                  
+ SET @TmpV40=@TmpV40+20                                                  
+ SET @TmpV41=@TmpV41+20                                                  
+ SET @TmpV42=@TmpV42+20                                                  
+ SET @TmpV43=@TmpV43+20                                                  
+ SET @TmpV44=@TmpV44+20                                                  
+ SET @TmpV45=@TmpV45+20                                                  
+ SET @TmpV46=@TmpV46+20                            
+ SET @TmpV47=@TmpV47+20                                                   
+ SET @TmpV48=@TmpV48+20             
+ SET @TmpV49=@TmpV49+20                       
+ SET @TmpV50=@TmpV50+20                       
+ SET @TmpV51=@TmpV51+20                       
+ SET @TmpV52=@TmpV52+20                       
+ SET @TmpV53=@TmpV53+20                       
+ SET @TmpV54=@TmpV54+20                       
+ SET @TmpV55=@TmpV55+20                       
+ SET @TmpV56=@TmpV56+20                       
+ SET @TmpV57=@TmpV57+20                       
+ SET @TmpV58=@TmpV58+20                       
+ SET @TmpV59=@TmpV59+20                       
+ SET @TmpV60=@TmpV60+20                       
+ SET @TmpV61=@TmpV61+20                       
+ SET @TmpV62=@TmpV62+20                       
+ SET @TmpV63=@TmpV63+20                       
+
+          
+ SET @TmpCOUNT=@TmpCOUNT+1                                   
+                                                        
+END /*loop end for item grid*/                              
+                         
+END /*END OF @TmpGDRAmt>0 OR @TmpDGRAmt>0*/                        
+                        
+                                 
+/*----------------END OF RETURN ENTRIES (D) -------------------------------*/                        
+                            
+/*BOTTOM SCHEME */                        
+                             
+ SET @TmpV1=1
+ SET @TmpV2=1                                              
+ SET @TmpV3=1                                              
+ SET @TmpV4=1                                              
+ SET @TmpV5=1                                              
+ SET @TmpV6=1                                              
+ SET @TmpV7=1
+ SET @TmpV8=1                                              
+ SET @TmpV9=1                                              
+ SET @TmpV10=1                                              
+ SET @TmpV11=1                                              
+ SET @TmpV12=1                                            
+ SET @TmpV13=1                                            
+ SET @TmpV14=1                  
+ SET @TmpV15=1     
+ SET @TmpV16=1                                          
+ SET @TmpSeqNoBtm=1                        
+ SET @TmpBtmCOUNT=1                                        
+ WHILE  @TmpBtmCOUNT <= @BtmCount                                              
+                    
+ BEGIN                                              
+  SET @BtSchNo=CONVERT(INT,SUBSTRING(@strBtSchNo,@TmpV1,20))   
+  SET @BtmTrn =convert(VARCHAR(3),SUBSTRING(@StrBtmTrn,@TmpV16,20))                                            
+  SET @BtSchName=CONVERT(VARCHAR(50),SUBSTRING(@strBtSchName,@TmpV2,50))                                              
+  SET @BtFrSysProdCode=CONVERT(INT,SUBSTRING(@strBtFrSysProdCode,@TmpV3,20))                                              
+  SET @BtFrQty=CONVERT(DECIMAL(18,3),SUBSTRING(@strBtFrQty,@TmpV4,20))                                              
+  SET @BtBatch=CONVERT(VARCHAR(10),SUBSTRING(@strBTBatch,@TmpV5,20))                                              
+  SET @BtMRP=CONVERT(DECIMAL(18,2),SUBSTRING(@strBTMRP,@TmpV6,20))                                            
+  SET @BtOnQty=CONVERT(DECIMAL(18,3),SUBSTRING(@strBtOnUnits,@TmpV7,20))                                              
+  SET @BtOnAmt=CONVERT(DECIMAL(18,2),SUBSTRING(@strBtOnAmt,@TmpV8,20))                                            
+  SET @BtOnWeight=CONVERT(DECIMAL(18,3),SUBSTRING(@strBtOnWeight,@TmpV9,20))                                              
+  SET @BtDiscP=CONVERT(DECIMAL(18,2),SUBSTRING(@strBtDiscP,@TmpV10,20))                                              
+  SET @BtDiscA=CONVERT(DECIMAL(18,2),SUBSTRING(@strBtDiscA,@TmpV11,20))                                              
+  SET @BtDiscAmt=CONVERT(DECIMAL(18,2),SUBSTRING(@strBtDiscAmt,@TmpV12,20))                                              
+                                            
+  IF Substring(@StrBtExpDt,@TmpV13,20) <> ''                                                
+   SET @BtExpDt=Convert(datetime,Substring(@StrBtExpDt,@TmpV13,20))                                   
+  ELSE                                                 
+   SET @BtExpDt=Null                                            
+                
+  IF Substring(@StrBtMfgDt,@TmpV14,20) <> ''                                                
+   SET @BtMfgDt=Convert(datetime,Substring(@StrBtMfgDt,@TmpV14,20))                                                
+  ELSE                                                 
+   SET @BtMfgDt=Null                                            
+  SET @BtSlabNo=CONVERT(INT,SUBSTRING(@strBtSlabNo,@TmpV15,20))                    
+                                            
+  IF @BtSchNo>0                                              
+  BEGIN                                              
+  UPDATE Mas_Scheme SET ExstQty=ExstQty+@BtFrQty, ExstDisc=ExstDisc+@BtDiscAmt                                              
+  WHERE  SCHNO=@BtSchNo                                            
+  IF @@ERROR<>0                                              
+   GOTO UNDOTRAN                        
+                        
+  /*START INSERTING RECORD INTO T_BtmScheme */                                              
+  INSERT INTO T_BtmScheme(Trn,TrnSeries,TrnNo,TrnDate,SysAcCode,SchNo,SchName,SysProdCode,FrQty,SchAmt,OnAmt,OnWeight,OnQty,MRP,Batch,ExpDt,MfgDt,DiscPer,DiscAmt,SlabNo,SeqNo)                                              
+  VALUES(@BtmTrn,@TrnSeries,@TrnNo,@TrnDate,@SysAcCode,@BtSchNo,@BtSchName, @BtFrSysProdCode,@BtFrQty,@BtDiscAmt,@BtOnAmt,@BtOnWeight,@BtOnQty,@BtMRP,@BtBatch,@BtExpDt,@BtMfgDt,@BtDiscP,@BtDiscA,@BtSlabNo,@TmpSeqNoBtm)                                              
+  SET @TmpSeqNoBtm=@TmpSeqNoBtm+1                                                
+  IF @@ERROR<>0                                              
+   GOTO UNDOTRAN                        
+                        
+  /*UPDATE  MRP STOCK AND MSTOCK FOR BOTTOM SCHEME*/                                              
+  IF @BtFrQty>0                                               
+  BEGIN                                              
+  /* get SysCompCode, case_pack,out_pack,weight from Mas_Product */                                              
+  SELECT @BtSysCompCode=SysCompCode,@TmpBoxPack=BOXPACK,@TmpInBoxPack=INBOXPACK,@TmpUnit=BasicUnit,@TmpWeight=Weight,@TmpRatePerUnit=RatePerUnit FROM Mas_Product WHERE SysProdCode=@BtFrSysProdCode                                                          
+  
+                               
+  SELECT @BtmAreaCode=AreaCode FROM Mas_Party WHERE SysCompCode=@BtSysCompCode And SysAcCode=@SysAcCode                                 
+  /*FETCH SSMCode OF ITEM LEVEL AreaCode*/                                     
+  IF NOT EXISTS(SELECT SSMCode FROM Mas_AreaMapping WHERE SysCompCode=@BtSysCompCode And AreaCode=@BtmAreaCode)                                              
+   BEGIN                                              
+    RAISERROR('Salesman To Area %s Not Assigned For %s',16,-1,@BtmAreaCode,@BtmCompCode)                                              
+    IF @@TRANCOUNT = 1                                              
+     ROLLBACK TRAN                                              
+    ELSE                                              
+     COMMIT TRAN                                              
+     RETURN 1                                              
+   END                                               
+  ELSE                                              
+ BEGIN                                         
+  SELECT @BtmSSMCode=SSMCode FROM Mas_AreaMapping WHERE SysCompCode=@BtSysCompCode And AreaCode=@BtmAreaCode                                                 
+  IF @@ERROR<>0                                              
+    GOTO UNDOTRAN                                              
+ END                                              
+  SET @TmpSeqNoItem=@TmpSeqNoItem+1                                          
+--  Insert into T_SAL_DETAILS(SeqNo,TrnSeries,TrnNo,TrnDate,GDCode,SSMCode,SysProdCode,                          
+--  FrQty,FrBatch,FrMrp,FrExpDt,FrMfgdt,SchNo,SysCompCode,SysAcCode,                          
+--  AreaCode,Unit,Batch,Mrp,ExpDt,Mfgdt,EnteryType,Box,InBox,Weight,RatePerUnit)                                              
+--  VALUES(@TmpSeqNoItem,@TrnSeries,@TrnNo,@TrnDate,@TmpGDCode,@BtmSSMCode,@BtFrSysProdCode,                          
+--  @BtFrQty,@BtBatch,@BtMRP,@BtExpDt,@BtMfgDt,@BtSchNo,@BtSysCompCode,                          
+--  @SysAcCode,@BtmAreaCode,@TmpUnit,@BtBatch,@BtMRP,@BtExpDt,@BtMfgDt,'B',@TmpBoxPack,@TmpInBoxPack,@TmpWeight,                          
+--  @TmpRatePerUnit)                               
+--  IF @@ERROR<>0                                              
+--   GOTO UNDOTRAN                                    
+                                             
+  /* Mas_Product UPDATE NETBAL OF PRODUCT*/                                              
+  UPDATE Mas_Product SET netbal=netbal-@BtFrQty where SysProdCode=@BtFrSysProdCode                      
+  IF @@ERROR<>0                                              
+   GOTO UNDOTRAN                                              
+  IF @BtmTrn='DGR'
+  UPDATE Mas_DamStock                                              
+  SET Qty=QTY+(@BtFrQty)                                              
+  WHERE  SysProdCode=@BtFrSysProdCode AND BATCH=@BtBatch AND MRP=@BtMRP                                             
+  --AND ExpDt=@BtExpDt AND MfgDt=@BtMfgDt                                   
+  AND GDCode=@TmpGDCode                                              
+  IF @@ERROR<>0                                              
+   GOTO UNDOTRAN                                            
+                                                 
+  SELECT @TmpStkQty=Qty FROM Mas_DamStock                                              
+  WHERE  SysProdCode=@BtFrSysProdCode AND BATCH=@BtBatch AND MRP=@BtMRP                                             
+  --AND ExpDt=@BtExpDt AND MfgDt=@BtMfgDt                                   
+  AND GDCode=@TmpGDCode                                              
+  IF @@ERROR<>0                                              
+   GOTO UNDOTRAN                                              
+               
+  IF @AllowNegativeStock<>'Y'                               
+  IF @TmpStkQty<0                                               
+  BEGIN                                              
+   SET @TmpStkQty=0                                                  
+   RAISERROR('Stock Of Scheme Product Will Be Negative! LineNo:%d',16,-1,@TmpBtmCOUNT)                                              
+   IF @@TRANCOUNT = 1                                              
+    ROLLBACK TRAN                                              
+   ELSE                                              
+    COMMIT TRAN                                              
+    RETURN 1                                              
+  END                     
+
+
+
+  IF @BtmTrn<>'DGR'
+  IF  @BtmTrn='SAL'                                       
+  UPDATE Mas_Stock                                              
+  SET Qty=QTY-(@BtFrQty)                                              
+  WHERE  SysProdCode=@BtFrSysProdCode AND BATCH=@BtBatch AND MRP=@BtMRP                                             
+  --AND ExpDt=@BtExpDt AND MfgDt=@BtMfgDt                                   
+  AND GDCode=@TmpGDCode                                              
+  IF @@ERROR<>0                                              
+   GOTO UNDOTRAN
+ 
+  IF  @BtmTrn='GDR'                  
+   UPDATE Mas_Stock                                              
+  SET Qty=QTY+(@BtFrQty)                                              
+  WHERE  SysProdCode=@BtFrSysProdCode AND BATCH=@BtBatch AND MRP=@BtMRP                                             
+  --AND ExpDt=@BtExpDt AND MfgDt=@BtMfgDt                                   
+  AND GDCode=@TmpGDCode                                              
+  IF @@ERROR<>0                                              
+   GOTO UNDOTRAN
+                                           
+                                                 
+  SELECT @TmpStkQty=Qty FROM Mas_Stock                                              
+  WHERE  SysProdCode=@BtFrSysProdCode AND BATCH=@BtBatch AND MRP=@BtMRP                                             
+  --AND ExpDt=@BtExpDt AND MfgDt=@BtMfgDt                                   
+  AND GDCode=@TmpGDCode                                              
+  IF @@ERROR<>0                                              
+   GOTO UNDOTRAN                                              
+               
+  IF @AllowNegativeStock<>'Y'                               
+  IF @TmpStkQty<0                                               
+  BEGIN                                              
+   SET @TmpStkQty=0                                                  
+   RAISERROR('Stock Of Scheme Product Will Be Negative! LineNo:%d',16,-1,@TmpBtmCOUNT)                                              
+   IF @@TRANCOUNT = 1                                              
+    ROLLBACK TRAN                                              
+   ELSE                                              
+    COMMIT TRAN                                              
+    RETURN 1                                              
+  END                                            
+                                            
+--  UPDATE M_STOCK                                              
+--  SET Qty=QTY-(@BtFrQty)                                              
+--  WHERE  SysProdCode=@BtFrSysProdCode AND BATCH=@BtBatch AND MRP=@BtMRP                                             
+--  --AND ExpDt=@BtExpDt AND MfgDt=@BtMfgDt                                
+--  IF @@ERROR<>0                                              
+--  GOTO UNDOTRAN                                            
+                                            
+  END --End Of @BtFrQty                                                  
+END --End Of BtmSchNo  
+  
+if @BtmTrn='QPS'
+BEGIN
+
+ UPDATE Mas_GenQpsScheme
+	SET AdjTrnSeries=@TrnSeries,
+		AdjTrnNo=@TrnNo,
+		AdjTrnDate=@TrnDate
+	WHERE SysAcCode=@SysAcCode
+AND SchNo=@BtSchNo 
+                                        
+  IF @@ERROR<>0                                              
+    GOTO UNDOTRAN   
+END                               
+                                              
+                                                
+                                            
+ SET @TmpV1=@TmpV1+20                                              
+ SET @TmpV2=@TmpV2+50                                              
+ SET @TmpV3=@TmpV3+20                                                
+ SET @TmpV4=@TmpV4+20                                 
+ SET @TmpV5=@TmpV5+20                                              
+ SET @TmpV6=@TmpV6+20                                              
+ SET @TmpV7=@TmpV7+20                                              
+ SET @TmpV8=@TmpV8+20                                              
+ SET @TmpV9=@TmpV9+20                                              
+ SET @TmpV10=@TmpV10+20                                              
+ SET @TmpV11=@TmpV11+20                                              
+ SET @TmpV12=@TmpV12+20                                              
+ SET @TmpV13=@TmpV13+20                                              
+ SET @TmpV14=@TmpV14+20                  
+ SET @TmpV15=@TmpV15+20   
+ SET @TmpV16=@TmpV16+20                                            
+ SET @TmpBtmCOUNT=@TmpBtmCOUNT+1                                            
+                                              
+ END /*END OF BOTTOM SCHEME TABLE*/                    
+                                            
+/*START MASTRAN */                                              
+ SET @TmpV1=1                                              
+ SET @TmpV2=1                                              
+ SET @TmpV3=1                                              
+ SET @TmpV4=1                              
+ SET @TmpV5=1                                              
+ SET @TmpV6=1                                              
+ SET @TmpV7=1                                       
+ SET @TmpV8=1                                              
+ SET @TmpMasTranCOUNT=1                       
+ SET @MasTrnSalSeqNo=0             
+ SET @MasTrnCrnSeqNo=0                                               
+ 
+WHILE  @TmpMasTranCOUNT <= @MasTrnCount                                              
+ BEGIN                                              
+                                          
+  SET @MasTrnTrn=CONVERT(VARCHAR(3),SUBSTRING(@StrMasTrnTrn,@TmpV1,20))                                                
+  SET @MasTrnDorC=CONVERT(VARCHAR(1),SUBSTRING(@StrMasTrnDorC,@TmpV2,20))                                              
+  SET @MasTrnPrAcCode=CONVERT(INT,SUBSTRING(@StrMasTrnPrAcCode,@TmpV3,20))                            
+  SET @MasTrnAmt=CONVERT(DECIMAL(18,2),SUBSTRING(@StrMasTrnAmt,@TmpV5,20))                                    
+  --SET @MasTrnSeqNo=CONVERT(INT,SUBSTRING(@StrMasTrnSeqNo,@TmpV4,20))                                              
+  SET @MasTrnVatAmt=CONVERT(DECIMAL(18,2),SUBSTRING(@StrMasTrnVatAmt,@TmpV5,20))                                              
+  SET @MasTrnVarPrAcCode=CONVERT(INT,SUBSTRING(@StrMasTrnVarPrAcCode,@TmpV6,20))                                            
+  SET @MasTrnVatPer=CONVERT(DECIMAL(18,2),SUBSTRING(@StrMasTrnVatPer,@TmpV7,20))                                              
+  SET @MasTrnVatType=CONVERT(VARCHAR(1),SUBSTRING(@StrMasTrnVatType,@TmpV8,20))                                    
+                        
+  --INSERT INTO T_AllTran                         
+  IF @MasTrnTrn='SAL'                        
+   BEGIN                      
+   SET @MasTrnSalSeqNo=@MasTrnSalSeqNo+1                                           
+   insert into T_AllTran                                          
+   (Trn,TrnSeries,TrnNo,TrnDate,DorC,SysAcCode,Amt,Aamt,Bamt,ClrDate,seqno,                                          
+   VatAmt,VatSysAcCode,VatPer,VatType,RevSysAcCode ,DueDate,Narr                       
+   ) Values (                                          
+   @MasTrnTrn,@TrnSeries,@TrnNo,@TrnDate,@MasTrnDorC,@MasTrnPrAcCode,@MasTrnAmt,0.00,@MasTrnAmt,null,                                          
+   @MasTrnSalSeqNo,@MasTrnVatAmt,@MasTrnVarPrAcCode,@MasTrnVatPer,@MasTrnVatType,0,@DueDate,@NARR                                          
+   )                        
+   IF @@ERROR<>0                                              
+   GOTO UNDOTRAN                         
+   END                           
+  ELSE                            
+   BEGIN                       
+   SET @MasTrnCrnSeqNo=@MasTrnCrnSeqNo+1                                              
+   insert into T_AllTran                                          
+   (Trn,TrnSeries,TrnNo,TrnDate,DorC,SysAcCode,Amt,Aamt,Bamt,ClrDate,seqno,                                          
+   VatAmt,VatSysAcCode,VatPer,VatType,RevSysAcCode ,DueDate,Narr                       
+   ) Values (                  
+   @MasTrnTrn,@Retseries,@Retvno,@TrnDate,@MasTrnDorC,@MasTrnPrAcCode,@MasTrnAmt,0.00,@MasTrnAmt,null,                                          
+   @MasTrnCrnSeqNo,@MasTrnVatAmt,@MasTrnVarPrAcCode,@MasTrnVatPer,@MasTrnVatType,0,@DueDate,@NARR                                          
+   )          
+   IF @@ERROR<>0                                              
+   GOTO UNDOTRAN           
+          
+   IF @MasTrnTrn='CRN' And @MasTrnPrAcCode=@SysAcCode          
+   BEGIN          
+    UPDATE T_AllTran SET Aamt=@MasTrnAmt,Bamt=Amt-@MasTrnAmt Where TRN='SAL' AND SysAcCode=@SysAcCode AND TrnSeries=@TrnSeries AND TrnNo=@TrnNo           
+    IF @@ERROR<>0                                              
+    GOTO UNDOTRAN           
+   END           
+                          
+   END                              
+                          
+                          
+ /* Mas_Account UPDATE NETBAL OF ACCOUNT*/                      
+ IF @MasTrnDorC='D'                            
+  BEGIN                                               
+   UPDATE Mas_Account SET netbal=netbal-@MasTrnAmt where SysAcCode=@MasTrnPrAcCode                                                                
+   IF @@ERROR<>0                                                                
+   GOTO UNDOTRAN                            
+  END                            
+ ELSE                            
+  BEGIN                                               
+   UPDATE Mas_Account SET netbal=netbal+@MasTrnAmt where SysAcCode=@MasTrnPrAcCode                                                                
+   IF @@ERROR<>0                                                                
+   GOTO UNDOTRAN                            
+  END                           
+                                        
+  SET @TmpV1=@TmpV1+20                                              
+  SET @TmpV2=@TmpV2+20                                              
+  SET @TmpV3=@TmpV3+20                                                
+  SET @TmpV4=@TmpV4+20                                              
+  SET @TmpV5=@TmpV5+20                                              
+  SET @TmpV6=@TmpV6+20                                              
+  SET @TmpV7=@TmpV7+20                                              
+  SET @TmpV8=@TmpV8+20                                              
+  SET @TmpMasTranCOUNT=@TmpMasTranCOUNT+1                                            
+                                              
+ END /*END OF T_AllTran TABLE*/               
+
+
+IF EXISTS(SELECT TrnNo,TrnSeries FROM T_MTDistributor_Header WHERE PONo=@Narr and BillSeries='' and BillNo=0)                                                  
+	BEGIN                                                  
+		UPDATE T_MTDistributor_Header Set BillSeries=@TrnSeries,BillNo=@TrnNo 
+		WHERE PONo=@Narr  
+		IF @@ERROR<>0                                                                
+		GOTO UNDOTRAN                                             
+	END                                 
+                                          
+INSERT INTO Mas_Logdetails(OPDate,OPName,UserName,OPDetails,OPType)
+VALUES(GETDATE(),'SALES - ADD',@UserName,Rtrim(@TrnSeries)+'\'+LtriM(Str(@TrnNo,10))+str(@NetAmt,10),'E')  
+IF @@ERROR<>0          
+GOTO UNDOTRAN                                                                   
+                                                
+                          
+COMMIT TRAN                                                 
+RETURN 0                                                  
+
+UNDOTRAN:                                                  
+IF @@TRANCOUNT = 1                                                  
+ROLLBACK TRAN                                                  
+ELSE                                                  
+COMMIT TRAN                                                  
+RETURN 1 
+
+

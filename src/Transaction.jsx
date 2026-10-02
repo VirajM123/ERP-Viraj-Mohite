@@ -28,6 +28,13 @@ import {
   ChevronLeft,
   ChevronRight,
   ChevronDown,
+  Save,
+  Copy,
+  MoreVertical,
+  X,
+  Building2,
+  ArrowLeftRight,
+  IndianRupee,
 } from "lucide-react";
 
 const Transaction = ({
@@ -42,6 +49,8 @@ const Transaction = ({
   setShowReceiptForm,
   openFormFor,
   transactionFormMode,
+  transactionEntryRequest,
+  onTransactionEntryHandled,
   setActiveTransaction,
   setTransactionFormMode,
   autoVoucherNo = true,
@@ -536,7 +545,7 @@ if (menu === "PDC Docket") {
   useEffect(() => {
     const receiptFormIsOpen =
       activeTransaction === "Receipt" &&
-      showReceiptForm === true;
+      transactionFormMode?.["Receipt"] === true;
 
     if (
       !receiptFormIsOpen ||
@@ -560,7 +569,7 @@ if (menu === "PDC Docket") {
     );
   }, [
     activeTransaction,
-    showReceiptForm,
+    transactionFormMode?.["Receipt"],
     editReceiptId,
     autoVoucherNo,
     state.receipts?.length,
@@ -1575,6 +1584,8 @@ if (menu === "PDC Docket") {
     narration: "",
     collectionType: "Bill wise"
   });
+  const [collectionSalesInvoices, setCollectionSalesInvoices] = useState(null);
+  const [collectionBillsLoading, setCollectionBillsLoading] = useState(false);
   useEffect(() => {
     const collectionVoucherFormIsOpen =
       activeTransaction ===
@@ -1640,7 +1651,8 @@ if (menu === "PDC Docket") {
   // =========================
   // Replace the entire getCollectionPendingBills function
   const getCollectionPendingBills = () => {
-    if (!Array.isArray(salesInvoices) || salesInvoices.length === 0) {
+    const invoices = collectionSalesInvoices ?? salesInvoices;
+    if (!Array.isArray(invoices) || invoices.length === 0) {
       return [];
     }
 
@@ -1758,7 +1770,7 @@ if (menu === "PDC Docket") {
       };
     };
 
-    return salesInvoices
+    return invoices
       .map((invoice, index) => {
         const header =
           invoice.header ||
@@ -1854,16 +1866,17 @@ if (menu === "PDC Docket") {
             )
           ) || 0;
 
-        const oldCollection =
-          getReceiptAdjustedAmount(
-            billSeries,
-            billNo
-          );
-
-        const balance = Math.max(
-          billAmount - oldCollection,
-          0
+        const storedBalance = pickValue(
+          invoice.BalanceAmount,
+          invoice.balanceAmount,
+          header.BalanceAmount,
+          header.balanceAmount
         );
+        const receiptCollection = getReceiptAdjustedAmount(billSeries, billNo);
+        const balance = storedBalance !== undefined && storedBalance !== null && storedBalance !== ""
+          ? Math.max(Number(storedBalance) || 0, 0)
+          : Math.max(billAmount - receiptCollection, 0);
+        const oldCollection = Math.max(billAmount - balance, 0);
 
         return {
           id:
@@ -2572,11 +2585,35 @@ if (menu === "PDC Docket") {
   const openSelectionModal = async (type) => {
     setCurrentSelectionType(type);
 
+    if (collectionSalesInvoices === null) {
+      setCollectionBillsLoading(true);
+      try {
+        const distributorId = localStorage.getItem("distributorId") || "";
+        const firmId = localStorage.getItem("firmId") || "";
+        const invoices = [];
+        let page = 1;
+        let totalPages = 1;
+        while (page <= totalPages) {
+          const query = new URLSearchParams({ distributorId, firmId, page: String(page), limit: "100", salesEntryType: "BILLING" });
+          const response = await secureFetch(`${API_URL}/sales/list?${query.toString()}`);
+          const result = await response.json();
+          if (!response.ok || result.success === false) throw new Error(result.message || "Unable to load pending bills.");
+          invoices.push(...(Array.isArray(result.sales) ? result.sales : []));
+          totalPages = Number(result.pagination?.totalPages) || 1;
+          page += 1;
+        }
+        setCollectionSalesInvoices(invoices);
+      } catch (error) {
+        console.error("Collection bill load error:", error);
+        alert(error.message || "Unable to load pending bills.");
+        setCollectionBillsLoading(false);
+        return;
+      }
+      setCollectionBillsLoading(false);
+    }
+
     if (type === "Bill wise") {
       // Load ALL bills for Bill wise selection
-      const bills = getCollectionPendingBills(); // Now returns ALL bills with balance > 0
-      console.log("BILL WISE BILLS =", bills);
-      setBillItems(bills);
       setShowBillSelectionModal(true);
     } else if (type === "Salesman wise") {
       const salesmenData = getUniqueSalesmen();
@@ -2597,6 +2634,19 @@ if (menu === "PDC Docket") {
   };
   const allCollectionBillsSelected =
     billItems.length > 0 && billItems.every((item) => item.selected);
+
+  const updateBillItem = (id, field, value) => {
+    setBillItems((previous) =>
+      previous.map((item) => item.id === id ? { ...item, [field]: value } : item)
+    );
+  };
+
+  useEffect(() => {
+    if (transactionEntryRequest?.menu) {
+      openTransactionEntry(transactionEntryRequest.menu);
+      onTransactionEntryHandled?.();
+    }
+  }, [transactionEntryRequest]);
 
   const handleSelectAllCollectionBills = (checked) => {
     setBillItems((prev) =>
@@ -7986,6 +8036,7 @@ const response = await secureFetch(
   };
 
   const resetCollectionVoucherForm = () => {
+    setCollectionSalesInvoices(null);
     setCollectionVoucherFormData({
       collectionDate:
         new Date()
@@ -15905,7 +15956,17 @@ setTransactionFormMode((prev) => ({
               className="pdc-save-header-btn"
               onClick={savePDCDocket}
             >
-              💾 {editPDCDocketId ? "Update PDC" : "Save PDC"}
+              <Save size={18} /> {editPDCDocketId ? "Update PDC" : "Save PDC"}
+            </button>
+
+            <button
+              type="button"
+              className="pdc-copy-btn"
+              aria-label="Copy docket number"
+              title="Copy docket number"
+              onClick={() => navigator.clipboard?.writeText(String(pdcDocketFormData.docVNo || ""))}
+            >
+              <Copy size={18} />
             </button>
 
             <button
@@ -15913,7 +15974,7 @@ setTransactionFormMode((prev) => ({
               className="pdc-more-btn"
               aria-label="More options"
             >
-              ⋮
+              <MoreVertical size={20} />
             </button>
 
             <button
@@ -15925,7 +15986,7 @@ setTransactionFormMode((prev) => ({
                 openTransactionList("PDC Docket");
               }}
             >
-              ×
+              <X size={20} />
             </button>
           </div>
         </div>
@@ -15933,29 +15994,6 @@ setTransactionFormMode((prev) => ({
         {/* ================= PDC HEADER DETAILS ================= */}
 
         <section className="pdc-entry-section">
-          <div className="pdc-section-heading">
-            <div className="pdc-heading-left">
-              <span className="pdc-section-dot" />
-              <h3>PDC Docket Details</h3>
-            </div>
-
-            <div className="pdc-heading-status">
-              <span>
-                Series:
-                <strong>
-                  {pdcDocketFormData.docSeries || "-"}
-                </strong>
-              </span>
-
-              <span>
-                Docket No:
-                <strong>
-                  {pdcDocketFormData.docVNo || "-"}
-                </strong>
-              </span>
-            </div>
-          </div>
-
           <div className="pdc-header-two-rows">
 
             {/* ================= FIRST ROW ================= */}
@@ -16150,31 +16188,14 @@ setTransactionFormMode((prev) => ({
 
         <section className="pdc-cheque-section">
           <div className="pdc-grid-heading">
-            <div className="pdc-heading-left">
-              <span className="pdc-section-dot" />
-              <h3>PDC Cheque Details</h3>
-            </div>
-
-            <div className="pdc-grid-count">
-              <span>
-                Total Cheques:
-                <strong>
-                  {pdcDocketFormData.totalCheques || 0}
-                </strong>
-              </span>
-
-              <span>
-                Total Amount:
-                <strong>
-                  ₹
-                  {Number(
-                    pdcDocketFormData.totalAmount || 0
-                  ).toLocaleString("en-IN", {
-                    minimumFractionDigits: 2,
-                    maximumFractionDigits: 2
-                  })}
-                </strong>
-              </span>
+            <div className="pdc-grid-heading-actions">
+              <div className="pdc-grid-count">
+                <span>Total Cheques: <strong>{pdcDocketFormData.totalCheques || 0}</strong></span>
+                <span>Total Amount: <strong>₹{Number(pdcDocketFormData.totalAmount || 0).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</strong></span>
+              </div>
+              <button type="button" className="pdc-load-btn" onClick={() => loadPDCDocketGrid()}>
+                <Plus size={19} /> Load Cheques
+              </button>
             </div>
           </div>
 
@@ -16225,8 +16246,11 @@ setTransactionFormMode((prev) => ({
                       colSpan="12"
                       className="pdc-empty-row"
                     >
-                      Select House Bank, Clearing Type,
-                      From Date and To Date to load cheques
+                      <div className="pdc-empty-state">
+                        <span className="pdc-empty-icon"><FileText size={30} /></span>
+                        <strong>No cheques to display</strong>
+                        <span>Select House Bank, Clearing Type, From Date and To Date to load cheques.</span>
+                      </div>
                     </td>
                   </tr>
                 ) : (
@@ -16313,41 +16337,35 @@ setTransactionFormMode((prev) => ({
 
           <div className="pdc-summary-section">
             <div className="pdc-summary-card">
-              <span>Total Cheques</span>
-
-              <strong>
-                {pdcDocketFormData.totalCheques || 0}
-              </strong>
+              <span className="pdc-summary-icon"><FileText size={25} /></span>
+              <div className="pdc-summary-copy">
+                <span>Total Cheques</span>
+                <strong>{pdcDocketFormData.totalCheques || 0}</strong>
+              </div>
             </div>
 
             <div className="pdc-summary-card total">
-              <span>Total Amount</span>
-
-              <strong>
-                ₹
-                {Number(
-                  pdcDocketFormData.totalAmount || 0
-                ).toLocaleString("en-IN", {
-                  minimumFractionDigits: 2,
-                  maximumFractionDigits: 2
-                })}
-              </strong>
+              <span className="pdc-summary-icon"><IndianRupee size={25} /></span>
+              <div className="pdc-summary-copy">
+                <span>Total Amount</span>
+                <strong>₹{Number(pdcDocketFormData.totalAmount || 0).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</strong>
+              </div>
             </div>
 
             <div className="pdc-summary-card">
-              <span>House Bank</span>
-
-              <strong>
-                {pdcDocketFormData.houseBank || "-"}
-              </strong>
+              <span className="pdc-summary-icon"><Building2 size={25} /></span>
+              <div className="pdc-summary-copy">
+                <span>House Bank</span>
+                <strong>{pdcDocketFormData.houseBank || "-"}</strong>
+              </div>
             </div>
 
             <div className="pdc-summary-card">
-              <span>Clearing Type</span>
-
-              <strong>
-                {pdcDocketFormData.clearingType || "-"}
-              </strong>
+              <span className="pdc-summary-icon"><ArrowLeftRight size={25} /></span>
+              <div className="pdc-summary-copy">
+                <span>Clearing Type</span>
+                <strong>{pdcDocketFormData.clearingType || "-"}</strong>
+              </div>
             </div>
           </div>
         </section>
@@ -18646,17 +18664,18 @@ setTransactionFormMode((prev) => ({
             <div className="voucher-bills-heading"><h3>Selected bills <small>{selectedBills.length} bills selected</small></h3><button
                     type="button"
                     className="collection-select-btn"
+                    disabled={collectionBillsLoading}
                     onClick={() =>
                       openSelectionModal(collectionVoucherFormData.collectionType)
                     }
                   >
-                    + Select{" "}
-                    {collectionVoucherFormData.collectionType === "Bill wise"
-                      ? "Bills"
-                      : collectionVoucherFormData.collectionType ===
-                        "Salesman wise"
-                        ? "Salesmen"
-                        : "Areas"}
+                    {collectionBillsLoading ? "Loading bills..." : `+ Select ${
+                      collectionVoucherFormData.collectionType === "Bill wise"
+                        ? "Bills"
+                        : collectionVoucherFormData.collectionType === "Salesman wise"
+                          ? "Salesmen"
+                          : "Areas"
+                    }`}
                   </button></div>
 
             <div className="receipt-grid-wrap collection-grid-wrap">
@@ -18892,7 +18911,7 @@ setTransactionFormMode((prev) => ({
   console.log("Length =", state.receipts?.length);
   return (
     <div
-      className={`transaction-page ${isFormReadOnly ? "is-form-read-only" : ""}`}
+      className={`transaction-page ${isFormReadOnly ? "is-form-read-only" : ""} ${activeTransaction === "PDC Docket" && transactionFormMode?.["PDC Docket"] ? "pdc-docket-form-page" : ""}`}
       onClickCapture={(event) => {
         if (event.target.closest("button.edit, [class*='action-button'][class*='edit']")) {
           setIsFormReadOnly(false);

@@ -222,6 +222,7 @@
 .stock-batch-table tbody tr:hover td {
   background: #eff6ff;
 }
+.stock-batch-table tbody tr { cursor: pointer; }
 
 .stock-batch-select {
   border: 0;
@@ -373,3 +374,40 @@
   .stock-narration-field { grid-column: span 1; }
   .stock-selected-batch { gap: 10px; flex-wrap: wrap; }
 }
+
+.stock-adjustment-page .stock-value-footer {
+  gap: 5px;
+  padding: 8px 12px;
+  background: #fff;
+  border-top: 1px solid #d7e3f2;
+}
+.stock-adjustment-page .stock-value-footer > div {
+  min-height: 42px;
+  padding: 5px 8px;
+  background: #f8fafc;
+  border: 1px solid #d7e3f2;
+  border-radius: 5px;
+  box-shadow: none;
+  text-align: center;
+}
+.stock-adjustment-page .stock-value-footer span { font-size: 10px; color: #536782; }
+.stock-adjustment-page .stock-value-footer strong { font-size: 13px; color: #11264c; }
+
+.stock-adjustment-page .billing-product-table.stock-entry-table :is(th, td):nth-child(2) {
+  width: 105px !important;
+  min-width: 105px !important;
+  max-width: 105px !important;
+}
+.stock-adjustment-page .billing-product-table.stock-entry-table :is(th, td):nth-child(3) {
+  width: 390px !important;
+  min-width: 390px !important;
+  max-width: 390px !important;
+}
+.stock-adjustment-page .billing-product-table.stock-entry-table :is(th, td):nth-child(9) {
+  width: 72px !important;
+  min-width: 72px !important;
+  max-width: 72px !important;
+  text-align: center;
+}
+.stock-row-batch { display: block; color: #64748b; font-size: 10px; }
+.stock-adjustment-page .billing-product-table.stock-entry-table :is(input, select) { width: 100% !important; min-width: 0 !important; box-sizing: border-box; }

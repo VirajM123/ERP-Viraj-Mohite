@@ -278,3 +278,47 @@
   .transaction-page .voucher-design .voucher-type-options { flex-direction: column; }
   .transaction-page .voucher-design .voucher-type-option + .voucher-type-option { border-left: 0; border-top: 1px solid #cbd8e7; }
 }
+
+/* Match the compact billing header and summary rhythm on voucher entries. */
+.transaction-page .voucher-design :is(.contra-billing-card, .journal-billing-card),
+.transaction-page .voucher-design.voucher-collection {
+  background: #fff !important;
+  box-shadow: 0 1px 3px #12264a14 !important;
+}
+.transaction-page .voucher-design .voucher-form-header {
+  padding: 12px 14px !important;
+  border-bottom: 1px solid #d7e3f2;
+}
+.transaction-page .voucher-design .voucher-breadcrumb,
+.transaction-page .voucher-design .voucher-form-header p { display: none; }
+.transaction-page .voucher-design h2 { font-size: 16px !important; }
+.transaction-page .voucher-design .voucher-new-badge { font-size: 10px; padding: 3px 8px; }
+.transaction-page .voucher-design :is(.contra-entry-section, .contra-summary-section,
+  .journal-entry-header-section, .journal-grid-section, .voucher-collection-details, .voucher-collection-bills) {
+  padding: 12px !important;
+  border-radius: 0 !important;
+}
+.transaction-page .voucher-design :is(.contra-field, .journal-field, .collection-field) { gap: 4px !important; }
+.transaction-page .voucher-design :is(.contra-field, .journal-field, .collection-field) > label { font-size: 10px !important; }
+.transaction-page .voucher-design :is(input:not([type="checkbox"]):not([type="radio"]), select) {
+  height: 29px !important;
+  min-height: 29px !important;
+  font-size: 11px !important;
+  padding: 4px 8px !important;
+}
+.transaction-page .voucher-design .collection-voucher-header-grid,
+.transaction-page .voucher-design .journal-header-two-rows { gap: 10px !important; }
+.transaction-page .voucher-design .voucher-form-footer { margin-top: 10px; padding: 10px 14px; }
+.transaction-page .voucher-design .collection-bottom-summary { background: #fff !important; border: 0 !important; }
+.transaction-page .voucher-design .collection-bottom-summary > span {
+  background: #f8fafc !important;
+  border: 1px solid #d7e3f2 !important;
+  border-radius: 5px !important;
+  box-shadow: none !important;
+}
+.transaction-page .voucher-design :is(.contra-summary-card, .journal-summary-card) {
+  background: #f8fafc !important;
+  border: 1px solid #d7e3f2 !important;
+  border-radius: 5px !important;
+  padding: 6px 9px !important;
+}

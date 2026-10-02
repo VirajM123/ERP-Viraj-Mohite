@@ -10,6 +10,7 @@ import {
   Building2,
   CalendarDays,
   Check,
+  ChevronDown,
   ChevronFirst,
   ChevronLast,
   ChevronLeft,
@@ -34,6 +35,71 @@ import autoTable from "jspdf-autotable";
 import "./Report.css";
 import { API_ROOT } from "./api/config";
 import { secureFetch } from "./SecuritySetup";
+
+const EXCEL_HEADER_COLOR = "1F4E79";
+const EXCEL_TOTAL_COLOR = "D9EAF7";
+
+const styleExcelHeaderAndTotal = (sheet, columnCount, headerRowIndex, totalRowIndex) => {
+  const headerStyle = {
+    font: { bold: true, color: { rgb: "FFFFFF" } },
+    fill: { patternType: "solid", fgColor: { rgb: EXCEL_HEADER_COLOR } },
+    alignment: { horizontal: "center", vertical: "center", wrapText: true },
+  };
+  const totalStyle = {
+    font: { bold: true, color: { rgb: "000000" } },
+    fill: { patternType: "solid", fgColor: { rgb: EXCEL_TOTAL_COLOR } },
+    alignment: { vertical: "center" },
+  };
+
+  for (let columnIndex = 0; columnIndex < columnCount; columnIndex += 1) {
+    const headerAddress = XLSX.utils.encode_cell({ r: headerRowIndex, c: columnIndex });
+    const totalAddress = XLSX.utils.encode_cell({ r: totalRowIndex, c: columnIndex });
+    if (sheet[headerAddress]) sheet[headerAddress].s = headerStyle;
+    if (!sheet[totalAddress]) sheet[totalAddress] = { t: "s", v: "" };
+    sheet[totalAddress].s = totalStyle;
+  }
+};
+
+const ReportExportActions = ({ generate, exportCsv, exportExcel, ready, loading, disabled = false }) => {
+  const [pendingFormat, setPendingFormat] = useState(null);
+  const [menuOpen, setMenuOpen] = useState(false);
+
+  useEffect(() => {
+    if (!pendingFormat || loading) return;
+    if (ready) {
+      if (pendingFormat === "csv") exportCsv();
+      else exportExcel();
+    }
+    setPendingFormat(null);
+  }, [pendingFormat, ready, loading, exportCsv, exportExcel]);
+
+  const exportReport = async (format) => {
+    setMenuOpen(false);
+    if (ready) {
+      if (format === "csv") exportCsv();
+      else exportExcel();
+      return;
+    }
+    await generate();
+    setPendingFormat(format);
+  };
+
+  return (
+    <div className="report-export-actions" onBlur={(event) => {
+      if (!event.currentTarget.contains(event.relatedTarget)) setMenuOpen(false);
+    }} onKeyDown={(event) => {
+      if (event.key === "Escape") setMenuOpen(false);
+    }}>
+      <button type="button" className="report-export-button" aria-haspopup="menu" aria-expanded={menuOpen} onClick={() => setMenuOpen((open) => !open)} disabled={loading || disabled}>
+        <Download size={15} /> {loading ? "Preparing..." : "Export"} <ChevronDown size={14} />
+      </button>
+      {menuOpen && <div className="report-export-menu" role="menu">
+        <button type="button" role="menuitem" onClick={() => exportReport("excel")}><FileSpreadsheet size={15} /> Excel</button>
+        <button type="button" role="menuitem" onClick={() => exportReport("csv")}><Download size={15} /> CSV</button>
+      </div>}
+    </div>
+  );
+};
 
 const REPORT_INFORMATION = {
   "Party Wise Sales Report": {
@@ -405,6 +471,7 @@ const Report = ({
 
     setChequeLoading(true);
     setChequeError("");
+    setChequeResult(null);
     try {
       const query = new URLSearchParams({ chequeNo });
       const response = await secureFetch(
@@ -502,6 +569,19 @@ const Report = ({
     const workbook = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(workbook, sheet, "Cheque Details");
     XLSX.writeFile(workbook, `Cheque_${chequeResult.chequeNo}_Details.xlsx`, { cellStyles: true });
+  };
+
+  const exportChequeCsv = () => {
+    const rows = chequeExportRows();
+    const columns = Object.keys(rows[0] || {});
+    const escapeCsv = (value) => `"${String(value ?? "").replace(/"/g, '""')}"`;
+    const csv = [columns.map(escapeCsv).join(","), ...rows.map((row) => columns.map((key) => escapeCsv(row[key])).join(","))].join("\r\n");
+    const url = URL.createObjectURL(new Blob([`\uFEFF${csv}`], { type: "text/csv;charset=utf-8" }));
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `Cheque_${chequeResult.chequeNo}_Details.csv`;
+    link.click();
+    URL.revokeObjectURL(url);
   };
 
   const exportChequePdf = () => {
@@ -1248,7 +1328,7 @@ const Report = ({
 
       const headerStyle = {
         font: { bold: true, color: { rgb: "FFFFFF" } },
-        fill: { patternType: "solid", fgColor: { rgb: "267BB3" } },
+        fill: { patternType: "solid", fgColor: { rgb: EXCEL_HEADER_COLOR } },
         alignment: { horizontal: "center", vertical: "center", wrapText: true },
         border: thinBorder,
       };
@@ -1266,8 +1346,8 @@ const Report = ({
       };
 
       const totalStyle = {
-        font: { bold: true, color: { rgb: "163D5C" } },
-        fill: { patternType: "solid", fgColor: { rgb: "B7D6EA" } },
+        font: { bold: true, color: { rgb: "000000" } },
+        fill: { patternType: "solid", fgColor: { rgb: EXCEL_TOTAL_COLOR } },
         alignment: { vertical: "center" },
         border: thinBorder,
       };
@@ -2002,14 +2082,14 @@ const Report = ({
       right: { style: "thin", color: { rgb: "C7D4DF" } },
     };
     const headerStyle = {
-      font: { bold: true, color: { rgb: "27445D" } },
-      fill: { patternType: "solid", fgColor: { rgb: "DCEBF5" } },
+      font: { bold: true, color: { rgb: "FFFFFF" } },
+      fill: { patternType: "solid", fgColor: { rgb: EXCEL_HEADER_COLOR } },
       alignment: { horizontal: "center", vertical: "center", wrapText: true },
       border,
     };
     const totalStyle = {
-      font: { bold: true, color: { rgb: "31543A" } },
-      fill: { patternType: "solid", fgColor: { rgb: "E4F0E6" } },
+      font: { bold: true, color: { rgb: "000000" } },
+      fill: { patternType: "solid", fgColor: { rgb: EXCEL_TOTAL_COLOR } },
       alignment: { vertical: "center" },
       border,
     };
@@ -3510,7 +3590,7 @@ const Report = ({
 
       const headerStyle = {
         font: { bold: true, color: { rgb: "FFFFFF" } },
-        fill: { patternType: "solid", fgColor: { rgb: "267BB3" } },
+        fill: { patternType: "solid", fgColor: { rgb: EXCEL_HEADER_COLOR } },
         alignment: { horizontal: "center", vertical: "center", wrapText: true },
         border: thinBorder,
       };
@@ -3528,8 +3608,8 @@ const Report = ({
       };
 
       const totalStyle = {
-        font: { bold: true, color: { rgb: "163D5C" } },
-        fill: { patternType: "solid", fgColor: { rgb: "B7D6EA" } },
+        font: { bold: true, color: { rgb: "000000" } },
+        fill: { patternType: "solid", fgColor: { rgb: EXCEL_TOTAL_COLOR } },
         alignment: { vertical: "center" },
         border: thinBorder,
       };
@@ -4045,7 +4125,7 @@ const Report = ({
 
       const headerStyle = {
         font: { bold: true, color: { rgb: "FFFFFF" } },
-        fill: { patternType: "solid", fgColor: { rgb: "267BB3" } },
+        fill: { patternType: "solid", fgColor: { rgb: EXCEL_HEADER_COLOR } },
         alignment: { horizontal: "center", vertical: "center", wrapText: true },
         border: thinBorder,
       };
@@ -4063,8 +4143,8 @@ const Report = ({
       };
 
       const totalStyle = {
-        font: { bold: true, color: { rgb: "163D5C" } },
-        fill: { patternType: "solid", fgColor: { rgb: "B7D6EA" } },
+        font: { bold: true, color: { rgb: "000000" } },
+        fill: { patternType: "solid", fgColor: { rgb: EXCEL_TOTAL_COLOR } },
         alignment: { vertical: "center" },
         border: thinBorder,
       };
@@ -4764,7 +4844,7 @@ const Report = ({
     REPORT_INFORMATION[selectedReport] || {
       title: selectedReport || "Reports",
       category: "Report",
-      description: "Select report filters and generate the report.",
+      description: "Select report criteria and export the report.",
       icon: FileBarChart,
     };
 
@@ -4886,6 +4966,20 @@ const Report = ({
     }
     return productSalesMockData;
   }, [products, productSalesMockData]);
+
+  const productOptionSource =
+    reportProductList.length > 0 ? reportProductList : productOptionList;
+  const selectedProductNames = useMemo(() =>
+    (productReportFilters.selectedProductCodes || [])
+      .map((selectedCode) => {
+        const product = productOptionSource.find(
+          (item, index) => getProductOptionCode(item, index) === selectedCode
+        );
+        return product ? getProductOptionName(product) : "";
+      })
+      .filter(Boolean),
+    [productReportFilters.selectedProductCodes, productOptionSource]
+  );
 
   const updateProductReportFilter = (field, value) => {
     setProductReportFilters((previous) => ({
@@ -5354,6 +5448,7 @@ const Report = ({
 
       const worksheet = XLSX.utils.aoa_to_sheet(worksheetData);
       worksheet["!cols"] = productReportColumns.map(() => ({ wch: 16 }));
+      styleExcelHeaderAndTotal(worksheet, productReportColumns.length, tableHeaderRowIndex, totalRowIndex);
       worksheet["!merges"] = [
         { s: { r: 0, c: 0 }, e: { r: 0, c: columnCount - 1 } },
         { s: { r: 1, c: 0 }, e: { r: 1, c: columnCount - 1 } },
@@ -5698,6 +5793,7 @@ const Report = ({
 
       const worksheet = XLSX.utils.aoa_to_sheet(worksheetData);
       worksheet["!cols"] = allProductReportColumns.map(() => ({ wch: 16 }));
+      styleExcelHeaderAndTotal(worksheet, allProductReportColumns.length, tableHeaderRowIndex, totalRowIndex);
       worksheet["!merges"] = [
         { s: { r: 0, c: 0 }, e: { r: 0, c: columnCount - 1 } },
       ];
@@ -6063,7 +6159,7 @@ const Report = ({
           </div>
           <div className="report-filter-actions gst-filter-actions">
             <button type="button" className="report-clear-button" onClick={resetGstReport}>Clear</button>
-            <button type="button" className="report-generate-button" onClick={generateGstReport} disabled={gstLoading}>{gstLoading ? <RefreshCw size={14} className="party-spinning-icon" /> : <FileBarChart size={14} />}{gstLoading ? "Generating..." : "Generate Report"}</button>
+            <ReportExportActions generate={generateGstReport} exportCsv={exportGstCsv} exportExcel={exportGstExcel} ready={gstGenerated} loading={gstLoading} />
           </div>
         </div>
 
@@ -6113,6 +6209,45 @@ const Report = ({
     const unmatchedBounces = chequeResult?.unmatchedBounces || [];
     const unmatchedDockets = chequeResult?.unmatchedDockets || [];
     const hasResult = summaries.length + unmatchedBounces.length + unmatchedDockets.length > 0;
+    const chequeGridRows = [
+      ...summaries.map((summary) => ({
+        key: String(summary.receiptId || `receipt-${summary.receiptNo}`),
+        type: "Receipt",
+        party: summary.partyName,
+        bank: summary.bankName,
+        reference: summary.receiptNo,
+        date: summary.receiptDate,
+        chequeDate: summary.chequeDate,
+        amount: summary.amount,
+        bills: summary.bills?.length || 0,
+        bounces: summary.bounces?.length || 0,
+        dockets: summary.dockets?.length || 0,
+      })),
+      ...unmatchedBounces.map((bounce, index) => ({
+        key: String(bounce._id || `bounce-${index}`),
+        type: "Bounce",
+        party: bounce.partyName,
+        bank: bounce.bankName,
+        reference: `${bounce.trnSeries || "CB"}-${bounce.trnNo || bounce.chqBounceNo || ""}`,
+        date: bounce.chqBounceDate,
+        amount: bounce.totalAmt || bounce.chequeAmt,
+        bills: 0,
+        bounces: 1,
+        dockets: 0,
+      })),
+      ...unmatchedDockets.map((docket, index) => ({
+        key: String(docket.docketId || `docket-${index}`),
+        type: "PDC Docket",
+        party: docket.partyName,
+        bank: docket.bankName,
+        reference: docket.docketNo,
+        date: docket.depositDate || docket.addedAt,
+        amount: docket.amount,
+        bills: 0,
+        bounces: 0,
+        dockets: 1,
+      })),
+    ];
 
     return (
       <div className="party-classic-report-page cheque-details-report-page">
@@ -6129,17 +6264,6 @@ const Report = ({
                 <p>Trace receipts, adjusted bills, bounce entries and PDC docket activity.</p>
               </div>
             </div>
-            <div className="party-title-actions">
-              <button type="button" className="party-title-secondary-button" disabled={!hasResult} onClick={exportChequeExcel}>
-                <FileSpreadsheet size={15} /> Excel
-              </button>
-              <button type="button" className="party-title-secondary-button" disabled={!hasResult} onClick={exportChequePdf}>
-                <FileText size={15} /> PDF
-              </button>
-              <button type="button" className="party-title-secondary-button" disabled={!hasResult} onClick={() => window.print()}>
-                <Printer size={15} /> Print
-              </button>
-            </div>
           </div>
 
           <div className="party-report-content-layout cheque-report-layout">
@@ -6154,26 +6278,45 @@ const Report = ({
                         id="find-cheque-number"
                         autoFocus
                         value={chequeSearch}
-                        onChange={(event) => setChequeSearch(event.target.value)}
+                        onChange={(event) => { setChequeSearch(event.target.value); setChequeResult(null); setChequeError(""); }}
                         placeholder="Enter exact cheque number"
                         autoComplete="off"
                       />
                     </div>
-                    <button type="submit" className="party-title-generate-button" disabled={chequeLoading}>
-                      {chequeLoading ? <RefreshCw size={16} className="party-spinning-icon" /> : <Search size={16} />}
-                      {chequeLoading ? "Finding..." : "Find Cheque"}
+                    <button type="submit" className="cheque-generate-button" disabled={chequeLoading}>
+                      <Search size={15} /> {chequeLoading ? "Generating..." : "Generate"}
                     </button>
+                    <ReportExportActions generate={findChequeDetails} exportCsv={exportChequeCsv} exportExcel={exportChequeExcel} ready={hasResult} loading={chequeLoading} />
                   </div>
                 </fieldset>
               </form>
 
               {chequeError && <div className="party-report-error" role="alert">{chequeError}</div>}
 
+              {hasResult && (
+                <section className="cheque-results-grid" aria-label="Cheque details">
+                  <h2>Cheque Details <span>{chequeGridRows.length} record{chequeGridRows.length === 1 ? "" : "s"}</span></h2>
+                  <div className="cheque-table-scroll">
+                    <table className="party-report-table cheque-results-table">
+                      <thead><tr><th>Type</th><th>Cheque No.</th><th>Party</th><th>Bank</th><th>Reference</th><th>Date</th><th>Cheque Date</th><th>Amount</th><th>Adjusted Bills</th><th>Bounces</th><th>PDC Dockets</th></tr></thead>
+                      <tbody>{chequeGridRows.map((row) => (
+                        <tr key={row.key}>
+                          <td>{row.type}</td><td>{chequeResult.chequeNo}</td><td>{row.party || "-"}</td><td>{row.bank || "-"}</td>
+                          <td>{row.reference || "-"}</td><td>{formatChequeDate(row.date)}</td><td>{formatChequeDate(row.chequeDate)}</td>
+                          <td className="party-report-number">₹{formatChequeAmount(row.amount)}</td>
+                          <td className="party-report-number">{row.bills}</td><td className="party-report-number">{row.bounces}</td><td className="party-report-number">{row.dockets}</td>
+                        </tr>
+                      ))}</tbody>
+                    </table>
+                  </div>
+                </section>
+              )}
+
               {!hasResult && !chequeError && (
                 <div className="party-empty-report cheque-empty-report">
                   <Search size={38} />
                   <h3>Enter a cheque number</h3>
-                  <p>Press Enter or click Find Cheque to load its complete transaction trail.</p>
+                  <p>Press Enter or click Generate to load its complete transaction trail.</p>
                 </div>
               )}
 
@@ -6310,7 +6453,7 @@ const Report = ({
         </div>
 
           <div className="report-filter-card">
-          <div className="report-filter-heading"><div><h2>Report Filters</h2><p>Figures are loaded from the current firm's persistent transactions.</p></div></div>
+          <div className="report-filter-heading"><div><h2>Report Criteria</h2><p>Figures are loaded from the current firm's persistent transactions.</p></div></div>
           <div className="report-filter-grid">
             {isStockDataReport && <div className="report-field"><label>Company</label><select value={p0Filters.companyCode} onChange={(e) => updateP0Filter("companyCode", e.target.value)}><option value="">All Companies</option>{companies.map((company, index) => { const value = getCompanyCode(company, index); return <option key={company._id || value} value={value}>{getCompanyName(company) || value}</option>; })}</select></div>}
             {isCurrentStock && <div className="report-field"><label>Report Type</label><select value={p0Filters.reportType} onChange={(e) => updateP0Filter("reportType", e.target.value)}><option value="details">Details</option><option value="summary">Summary</option></select></div>}
@@ -6333,11 +6476,11 @@ const Report = ({
           </div>
           <div className="report-filter-actions">
             <button type="button" className="report-clear-button" onClick={() => { setP0Filters(defaultP0Filters()); setP0Rows([]); setP0Summary(null); setP0Generated(false); setP0Error(""); }}>Clear</button>
-            <button type="button" className="report-generate-button" onClick={generateP0Report} disabled={p0Loading}>{p0Loading ? "Generating..." : "Generate Report"}</button>
+            <ReportExportActions generate={generateP0Report} exportCsv={exportP0Csv} exportExcel={exportP0Excel} ready={p0Generated} loading={p0Loading} />
           </div>
         </div>
 
-        {p0Error && <div className="report-result-card"><X size={34} /><h3>Report could not be generated</h3><p>{p0Error}</p></div>}
+        {p0Error && <div className="party-report-error" role="alert">{p0Error}</div>}
         {!p0Error && p0Rows.length === 0 && <div className="report-result-card"><FileBarChart size={38} /><h3>{p0Generated ? "No records found" : "No report generated"}</h3><p>{p0Generated ? "No data matches the selected report filters." : "Select filters and click Generate Report."}</p></div>}
         {p0Rows.length > 0 && (
           <div className="party-report-results p0-report-results">
@@ -6402,7 +6545,7 @@ const Report = ({
             <div className="report-field"><label>Discount Details</label><select value={purchaseAnalysisFilters.discountDetails} onChange={(event) => setPurchaseAnalysisFilters((old) => ({ ...old, discountDetails: event.target.value }))}><option value="no">No</option><option value="yes">Yes</option></select></div>
             {!isBillWise && <><div className="report-field"><label>Report With</label><select value={purchaseAnalysisFilters.reportWith} onChange={(event) => setPurchaseAnalysisFilters((old) => ({ ...old, reportWith: event.target.value }))}><option value="category">Category</option><option value="company">Company</option><option value="godown">Godown</option></select></div><div className="report-field"><label>Order By</label><select value={purchaseAnalysisFilters.orderBy} onChange={(event) => setPurchaseAnalysisFilters((old) => ({ ...old, orderBy: event.target.value }))}><option value="productName">Product Name</option><option value="productCode">Product Code</option><option value="company">Company</option><option value="voucher">Voucher</option><option value="amount">Net Amount</option></select></div></>}
           </div>
-          <div className="report-filter-actions"><button type="button" className="report-generate-button" onClick={generatePurchaseAnalysisReport} disabled={purchaseAnalysisLoading}>{purchaseAnalysisLoading ? "Generating..." : "Generate Report"}</button><button type="button" className="report-clear-button" onClick={clearPurchaseAnalysisReport}><RefreshCw size={14} /> Reset Filter</button></div>
+          <div className="report-filter-actions"><ReportExportActions generate={generatePurchaseAnalysisReport} exportCsv={exportPurchaseAnalysisCsv} exportExcel={exportPurchaseAnalysisExcel} ready={purchaseAnalysisGenerated} loading={purchaseAnalysisLoading} /><button type="button" className="report-clear-button" onClick={clearPurchaseAnalysisReport}><RefreshCw size={14} /> Reset Filter</button></div>
         </div>
 
         {purchaseAnalysisError && <div className="party-report-error" role="alert">{purchaseAnalysisError}</div>}
@@ -6473,7 +6616,7 @@ const Report = ({
 
         <div className="report-filter-card">
           <div className="report-filter-heading">
-            <div><h2>Report Filters</h2><p>Choose one company or All Companies to load actual database records.</p></div>
+            <div><h2>Report Criteria</h2><p>Choose one company or All Companies to load actual database records.</p></div>
           </div>
 
           <div className="report-filter-grid">
@@ -6563,16 +6706,14 @@ const Report = ({
           </div>
 
           <div className="report-filter-actions">
-            <button type="button" className="report-generate-button" onClick={generateStockSalesReport} disabled={stockSalesLoading}>
-              {stockSalesLoading ? "Generating..." : "Generate Report"}
-            </button>
+            <ReportExportActions generate={generateStockSalesReport} exportCsv={exportStockSalesCsv} exportExcel={exportStockSalesExcel} ready={stockSalesGenerated} loading={stockSalesLoading} />
             <button type="button" className="report-clear-button" onClick={clearStockSalesReport}>
               <RefreshCw size={14} /> Reset Filter
             </button>
           </div>
         </div>
 
-        {stockSalesError && <div className="report-result-card"><X size={34} /><h3>Report could not be loaded</h3><p>{stockSalesError}</p></div>}
+        {stockSalesError && <div className="party-report-error" role="alert">{stockSalesError}</div>}
         {!stockSalesError && !stockSalesGenerated && <div className="report-result-card"><FileBarChart size={38} /><h3>No report generated</h3><p>Select filters and click Generate Report.</p></div>}
         {!stockSalesError && stockSalesGenerated && stockSalesRows.length === 0 && <div className="report-result-card"><PackageSearch size={38} /><h3>No matching records</h3><p>No stock or sales records match the selected filters.</p></div>}
 
@@ -6684,7 +6825,7 @@ const Report = ({
 
   if (selectedReport === "All Party Wise Sales Report") {
     return (
-      <div className="party-classic-report-page">
+      <div className="party-classic-report-page all-party-wise-sales-report-page">
         <div className="party-classic-report-window">
           <div className="party-classic-titlebar">
             <div className="party-report-title-left">
@@ -6711,31 +6852,6 @@ const Report = ({
               </div>
             </div>
 
-            <div className="party-title-actions">
-              <button
-                type="button"
-                className="party-title-secondary-button"
-                title="Clear current filters"
-                onClick={clearAllPartySalesFilters}
-              >
-                <RefreshCw size={15} />
-                Reset Filter
-              </button>
-
-              <button
-                type="button"
-                className="party-title-generate-button"
-                onClick={generateAllPartySalesReport}
-                disabled={isAllPartyReportLoading || isCriteriaLoading}
-              >
-                {isAllPartyReportLoading ? (
-                  <RefreshCw size={16} className="party-spinning-icon" />
-                ) : (
-                  <BarChart3 size={16} />
-                )}
-                {isAllPartyReportLoading ? "Generating..." : "Generate Report"}
-              </button>
-            </div>
           </div>
 
           <div className="party-report-content-layout">
@@ -6746,7 +6862,7 @@ const Report = ({
                     <span className="party-filter-legend-icon">
                       <BarChart3 size={15} />
                     </span>
-                    Report Filters
+                    Report Criteria
                   </legend>
 
                   <div className="party-report-form-grid">
@@ -6973,6 +7089,19 @@ const Report = ({
                         <option value="netAmount">Net Amount</option>
                       </select>
                     </div>
+                  </div>
+                  <div className="party-title-actions">
+                    <button
+                      type="button"
+                      className="party-title-secondary-button"
+                      title="Clear current filters"
+                      onClick={clearAllPartySalesFilters}
+                    >
+                      <RefreshCw size={15} />
+                      Reset Filter
+                    </button>
+
+                    <ReportExportActions generate={generateAllPartySalesReport} exportCsv={exportAllPartyReportToCsv} exportExcel={exportAllPartyReportToExcel} ready={isAllPartyReportGenerated} loading={isAllPartyReportLoading} disabled={isCriteriaLoading} />
                   </div>
                 </fieldset>
 
@@ -7458,44 +7587,12 @@ const Report = ({
               </div>
             </div>
 
-            <div className="party-title-actions">
-              <button
-                type="button"
-                className="party-title-secondary-button"
-                title="Clear current filters"
-                onClick={clearPartySalesFilters}
-              >
-                <RefreshCw size={15} />
-                Reset Filter
-              </button>
-
-              <button
-                type="button"
-                className="party-title-generate-button"
-                onClick={generatePartySalesReport}
-                disabled={isPartyReportLoading || isCriteriaLoading}
-              >
-                {isPartyReportLoading ? (
-                  <RefreshCw size={16} className="party-spinning-icon" />
-                ) : (
-                  <FileBarChart size={16} />
-                )}
-                {isPartyReportLoading ? "Generating..." : "Generate Report"}
-              </button>
-            </div>
           </div>
 
           <div className="party-report-content-layout">
             <main className="party-report-main-column">
               <div className="party-report-filter-panel">
-                <fieldset className="party-filter-group">
-                  <legend>
-                    <span className="party-filter-legend-icon">
-                      <FileBarChart size={15} />
-                    </span>
-                    Report Filters
-                  </legend>
-
+                <fieldset className="party-filter-group" aria-label="Report filters">
                   <div className="party-report-form-grid">
                     <div className="party-report-field">
                       <label>Company</label>
@@ -7583,95 +7680,6 @@ const Report = ({
                             <span>▼</span>
                           </button>
 
-                          {showPartySelector && (
-                            <div className="party-checkbox-dropdown party-checkbox-dropdown-large">
-                              <div className="party-selector-header">
-                                <div>
-                                  <strong>Select Parties</strong>
-                                  <small>{partySalesFilters.selectedPartyCodes.length} Selected</small>
-                                </div>
-                                <button
-                                  type="button"
-                                  className="party-close-btn"
-                                  onClick={() => setShowPartySelector(false)}
-                                >
-                                  <X size={16} />
-                                </button>
-                              </div>
-
-                              <div className="party-selector-search">
-                                <Search size={15} />
-                                <input
-                                  type="text"
-                                  value={partySelectorSearch}
-                                  autoFocus
-                                  placeholder="Search in parties..."
-                                  onChange={(event) => setPartySelectorSearch(event.target.value)}
-                                />
-                              </div>
-
-                              <div className="party-selector-sort-label">
-                                <span>Sort by Name (A-Z)</span>
-                              </div>
-
-                              <div className="modern-party-list">
-                                {visiblePartyOptions.length > 0 ? (
-                                  visiblePartyOptions.map((party, index) => {
-                                    const partyCode = getAccountCode(party, index);
-                                    const checked = partySalesFilters.selectedPartyCodes.includes(partyCode);
-
-                                    return (
-                                      <label
-                                        key={partyCode}
-                                        className={`party-card ${checked ? "selected" : ""}`}
-                                      >
-                                        <input
-                                          type="checkbox"
-                                          checked={checked}
-                                          onChange={(event) =>
-                                            toggleValueInArray(
-                                              "selectedPartyCodes",
-                                              partyCode,
-                                              event.target.checked
-                                            )
-                                          }
-                                        />
-                                        <div className="party-card-details">
-                                          <div className="party-card-header">
-                                            <span className="party-name">{getAccountName(party)}</span>
-                                            <span className="party-code">{partyCode}</span>
-                                          </div>
-                                          <div className="party-card-footer">
-                                            <span className="party-location">{party.town || party.city || ""}</span>
-                                            <span className="party-phone">{party.mobileNo || party.phone || ""}</span>
-                                          </div>
-                                        </div>
-                                      </label>
-                                    );
-                                  })
-                                ) : (
-                                  <div className="party-empty">No parties found</div>
-                                )}
-                              </div>
-
-                              <div className="party-selector-footer">
-                                <button
-                                  type="button"
-                                  className="party-cancel-btn"
-                                  onClick={() => setShowPartySelector(false)}
-                                >
-                                  Cancel
-                                </button>
-                                <button
-                                  type="button"
-                                  className="party-apply-btn"
-                                  onClick={() => setShowPartySelector(false)}
-                                >
-                                  Apply Selection
-                                </button>
-                              </div>
-                            </div>
-                          )}
                         </div>
                       </div>
                     )}
@@ -7819,8 +7827,104 @@ const Report = ({
                         <option value="netAmount">Net Amount</option>
                       </select>
                     </div>
+                    <div className="party-report-export-field">
+                      <ReportExportActions generate={generatePartySalesReport} exportCsv={exportPartyReportToCsv} exportExcel={exportPartyReportToExcel} ready={isPartyReportGenerated} loading={isPartyReportLoading} disabled={isCriteriaLoading} />
+                    </div>
                   </div>
                 </fieldset>
+
+                {showPartySelector && (
+                  <div
+                    className="party-selection-backdrop"
+                    onMouseDown={(event) => {
+                      if (event.target === event.currentTarget) {
+                        setShowPartySelector(false);
+                      }
+                    }}
+                  >
+                    <div className="party-selection-modal party-selection-modal-large">
+                      <div className="party-selection-modal-header">
+                        <div>
+                          <strong>Select Parties</strong>
+                          <span>{partySalesFilters.selectedPartyCodes.length} Selected</span>
+                        </div>
+                        <button type="button" onClick={() => setShowPartySelector(false)}>
+                          <X size={15} />
+                        </button>
+                      </div>
+
+                      <div className="party-selector-search">
+                        <Search size={13} />
+                        <input
+                          type="text"
+                          value={partySelectorSearch}
+                          autoFocus
+                          placeholder="Search parties by code or name..."
+                          onChange={(event) => setPartySelectorSearch(event.target.value)}
+                        />
+                      </div>
+
+                      <div className="party-selector-sort-label">
+                        <span>Sort by Name (A-Z)</span>
+                      </div>
+
+                      <label className="party-check-row party-check-all">
+                        <input
+                          type="checkbox"
+                          checked={
+                            companyFilteredAccounts.length > 0 &&
+                            partySalesFilters.selectedPartyCodes.length === companyFilteredAccounts.length
+                          }
+                          onChange={(event) => {
+                            toggleAllParties(event.target.checked);
+                            setIsPartyReportGenerated(false);
+                            setPartyReportRows([]);
+                          }}
+                        />
+                        <span>Select All Parties</span>
+                      </label>
+
+                      <div className="party-checkbox-list modern-party-list">
+                        {visiblePartyOptions.length > 0 ? (
+                          visiblePartyOptions.map((party, index) => {
+                            const partyCode = getAccountCode(party, index);
+                            const checked = partySalesFilters.selectedPartyCodes.includes(partyCode);
+                            return (
+                              <label key={partyCode} className={`party-card ${checked ? "selected" : ""}`}>
+                                <input
+                                  type="checkbox"
+                                  checked={checked}
+                                  onChange={(event) =>
+                                    toggleValueInArray("selectedPartyCodes", partyCode, event.target.checked)
+                                  }
+                                />
+                                <div className="party-card-details">
+                                  <div className="party-card-header">
+                                    <span className="party-name">{getAccountName(party)}</span>
+                                    <span className="party-code">{partyCode}</span>
+                                  </div>
+                                  <div className="party-card-footer">
+                                    <span className="party-location">{party.town || party.city || ""}</span>
+                                    <span className="party-phone">{party.mobileNo || party.phone || ""}</span>
+                                  </div>
+                                </div>
+                              </label>
+                            );
+                          })
+                        ) : (
+                          <div className="party-selector-empty">No parties found</div>
+                        )}
+                      </div>
+
+                      <div className="party-selection-modal-footer">
+                        <span>{partySalesFilters.selectedPartyCodes.length} party(s) selected</span>
+                        <button type="button" onClick={() => setShowPartySelector(false)}>
+                          <Check size={13} /> Done
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                )}
 
                 {showAreaSelector && (
                   <div
@@ -8269,20 +8373,6 @@ const Report = ({
   // PRODUCT WISE SALES REPORT - RENDER (SIMPLIFIED)
   // =========================================================
   if (selectedReport === "Product Wise Sales Report") {
-    const productOptionSource =
-      reportProductList.length > 0 ? reportProductList : productOptionList;
-
-    const selectedProductNames = useMemo(() => {
-      return (productReportFilters.selectedProductCodes || [])
-        .map((selectedCode) => {
-          const product = productOptionSource.find(
-            (p, index) => getProductOptionCode(p, index) === selectedCode
-          );
-          return product ? getProductOptionName(product) : "";
-        })
-        .filter(Boolean);
-    }, [productReportFilters.selectedProductCodes, productOptionSource]);
-
     return (
       <div className="party-classic-report-page">
         <div className="party-classic-report-window">
@@ -8309,31 +8399,6 @@ const Report = ({
               </div>
             </div>
 
-            <div className="party-title-actions">
-              <button
-                type="button"
-                className="party-title-secondary-button"
-                title="Clear current filters"
-                onClick={clearProductSalesFilters}
-              >
-                <RefreshCw size={15} />
-                Reset Filter
-              </button>
-
-              <button
-                type="button"
-                className="party-title-generate-button"
-                onClick={generateProductSalesReport}
-                disabled={isProductReportLoading}
-              >
-                {isProductReportLoading ? (
-                  <RefreshCw size={16} className="party-spinning-icon" />
-                ) : (
-                  <PackageSearch size={16} />
-                )}
-                {isProductReportLoading ? "Generating..." : "Generate Report"}
-              </button>
-            </div>
           </div>
 
           <div className="party-report-content-layout">
@@ -8344,7 +8409,7 @@ const Report = ({
                     <span className="party-filter-legend-icon">
                       <PackageSearch size={15} />
                     </span>
-                    Report Filters
+                    Report Criteria
                   </legend>
 
                   <div className="party-report-form-grid-two-rows">
@@ -8848,6 +8913,12 @@ const Report = ({
                       </div>
                     </div>
                   )}
+                  <div className="party-title-actions">
+                    <button type="button" className="party-title-secondary-button" title="Clear current filters" onClick={clearProductSalesFilters}>
+                      <RefreshCw size={15} /> Reset Filter
+                    </button>
+                    <ReportExportActions generate={generateProductSalesReport} exportCsv={exportProductReportToCsv} exportExcel={exportProductReportToExcel} ready={isProductReportGenerated} loading={isProductReportLoading} disabled={false} />
+                  </div>
                 </fieldset>
               </div>
 
@@ -9323,31 +9394,6 @@ const Report = ({
               </div>
             </div>
 
-            <div className="party-title-actions">
-              <button
-                type="button"
-                className="party-title-secondary-button"
-                title="Clear current filters"
-                onClick={clearAllProductSalesFilters}
-              >
-                <RefreshCw size={15} />
-                Reset Filter
-              </button>
-
-              <button
-                type="button"
-                className="party-title-generate-button"
-                onClick={generateAllProductWiseSalesReport}
-                disabled={isAllProductReportLoading}
-              >
-                {isAllProductReportLoading ? (
-                  <RefreshCw size={16} className="party-spinning-icon" />
-                ) : (
-                  <FileBarChart size={16} />
-                )}
-                {isAllProductReportLoading ? "Generating..." : "Generate Report"}
-              </button>
-            </div>
           </div>
 
           <div className="party-report-content-layout">
@@ -9358,7 +9404,7 @@ const Report = ({
                     <span className="party-filter-legend-icon">
                       <FileBarChart size={15} />
                     </span>
-                    Report Filters
+                    Report Criteria
                   </legend>
 
                   <div className="party-report-form-grid-two-rows">
@@ -9514,6 +9560,12 @@ const Report = ({
                         </select>
                       </div>
                     </div>
+                  </div>
+                  <div className="party-title-actions">
+                    <button type="button" className="party-title-secondary-button" title="Clear current filters" onClick={clearAllProductSalesFilters}>
+                      <RefreshCw size={15} /> Reset Filter
+                    </button>
+                    <ReportExportActions generate={generateAllProductWiseSalesReport} exportCsv={exportAllProductReportToCsv} exportExcel={exportAllProductReportToExcel} ready={isAllProductReportGenerated} loading={isAllProductReportLoading} disabled={false} />
                   </div>
                 </fieldset>
 
@@ -10040,31 +10092,6 @@ const Report = ({
               </div>
             </div>
 
-            <div className="party-title-actions">
-              <button
-                type="button"
-                className="party-title-secondary-button"
-                title="Clear current filters"
-                onClick={clearCompanyPurchaseFilters}
-              >
-                <RefreshCw size={15} />
-                Reset Filter
-              </button>
-
-              <button
-                type="button"
-                className="party-title-generate-button"
-                onClick={generateCompanyPurchaseReport}
-                disabled={isCompanyPurchaseLoading || isPurchaseCriteriaLoading}
-              >
-                {isCompanyPurchaseLoading ? (
-                  <RefreshCw size={16} className="party-spinning-icon" />
-                ) : (
-                  <Building2 size={16} />
-                )}
-                {isCompanyPurchaseLoading ? "Generating..." : "Generate Report"}
-              </button>
-            </div>
           </div>
 
           <div className="party-report-content-layout">
@@ -10075,7 +10102,7 @@ const Report = ({
                     <span className="party-filter-legend-icon">
                       <Building2 size={15} />
                     </span>
-                    Report Filters
+                    Report Criteria
                   </legend>
 
                   <div className="party-report-form-grid-two-rows">
@@ -10437,6 +10464,12 @@ const Report = ({
                       </div>
                     </div>
                   )}
+                  <div className="party-title-actions">
+                    <button type="button" className="party-title-secondary-button" title="Clear current filters" onClick={clearCompanyPurchaseFilters}>
+                      <RefreshCw size={15} /> Reset Filter
+                    </button>
+                    <ReportExportActions generate={generateCompanyPurchaseReport} exportCsv={exportCompanyPurchaseToCsv} exportExcel={exportCompanyPurchaseToExcel} ready={isCompanyPurchaseGenerated} loading={isCompanyPurchaseLoading} disabled={isPurchaseCriteriaLoading} />
+                  </div>
                 </fieldset>
               </div>
 
@@ -10759,8 +10792,8 @@ const Report = ({
       <div className="report-filter-card">
         <div className="report-filter-heading">
           <div>
-            <h2>Report Filters</h2>
-            <p>Select the required options before generating the report.</p>
+            <h2>Report Criteria</h2>
+            <p>Select the required options before exporting the report.</p>
           </div>
         </div>
 
@@ -10867,20 +10900,12 @@ const Report = ({
           <button type="button" className="report-clear-button">
             Clear
           </button>
-          <button type="button" className="report-generate-button">
-            Generate Report
-          </button>
+          <div className="report-export-actions" title="Export is unavailable for this report">
+            <button type="button" className="report-export-button" disabled><Download size={15} /> Export <ChevronDown size={14} /></button>
+          </div>
         </div>
       </div>
 
-      <div className="report-result-card">
-        <FileBarChart size={38} />
-        <h3>No report generated</h3>
-        <p>
-          Select the report filters and click Generate Report to load the
-          information.
-        </p>
-      </div>
     </div>
   );
 };

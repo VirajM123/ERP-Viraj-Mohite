@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 760 160" role="img" aria-labelledby="title">
+  <title id="title">Total Solution — Integrated Business Solutions</title>
+  <rect width="760" height="160" rx="23" fill="#edf4f8"/>
+  <defs><clipPath id="sun"><circle cx="85" cy="80" r="65"/></clipPath></defs>
+  <circle cx="85" cy="80" r="65" fill="#ff6900" clip-path="url(#sun)"/>
+  <rect x="17" y="88" width="136" height="72" fill="#edf4f8"/>
+  <path d="M24 94h122l-5 7H29zm7 13h108l-5 7H36zm10 13h88l-7 7H48zm12 13h64l-12 7H65z" fill="#05c3e9"/>
+  <text x="178" y="77" fill="#06090d" font-family="Arial,Helvetica,sans-serif" font-size="57" font-weight="750" letter-spacing="-2">TOTAL SOLUTION</text>
+  <text x="182" y="111" fill="#101820" font-family="Arial,Helvetica,sans-serif" font-size="21" letter-spacing="1.3">INTEGRATED BUSINESS SOLUTIONS</text>
+</svg>

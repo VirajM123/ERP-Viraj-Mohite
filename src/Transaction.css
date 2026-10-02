@@ -12398,3 +12398,274 @@ background:#f3f4f6;
     );
   }
 }
+/* Compact invoice treatment for transaction entry forms only. */
+.transaction-page :is(.receipt-billing-page, .pdc-billing-page, .cheque-bounce-billing-page, .payment-section) {
+  color: #11264c;
+  background: #fff;
+  border: 1px solid #d7e3f2;
+  border-radius: 7px;
+  box-shadow: 0 1px 3px #12264a14;
+}
+.transaction-page :is(.receipt-billing-topbar, .pdc-billing-topbar, .cheque-bounce-topbar) {
+  padding: 10px 14px !important;
+  background: #fff !important;
+  border-bottom: 1px solid #d7e3f2 !important;
+}
+.transaction-page :is(.receipt-billing-title-wrap, .pdc-billing-title-wrap, .cheque-bounce-title-area) h2 {
+  font-size: 16px !important;
+  color: #11264c !important;
+}
+.transaction-page :is(.receipt-billing-page, .pdc-billing-page, .cheque-bounce-billing-page, .payment-section) :is(input, select, textarea) {
+  border-color: #cbd5e1 !important;
+  border-radius: 4px !important;
+  box-shadow: none !important;
+}
+.transaction-page :is(.receipt-invoice-summary-card, .pdc-summary-card, .cheque-bounce-summary-card, .payment-summary-grid .summary-card) {
+  min-height: 42px !important;
+  padding: 6px 9px !important;
+  background: #f8fafc !important;
+  border: 1px solid #d7e3f2 !important;
+  border-radius: 5px !important;
+  box-shadow: none !important;
+  color: #11264c !important;
+}
+.transaction-page :is(.receipt-invoice-summary-card, .pdc-summary-card, .cheque-bounce-summary-card, .payment-summary-grid .summary-card) :is(strong, h3) {
+  font-size: 13px !important;
+  line-height: 1.3 !important;
+}
+.transaction-page .payment-section .form-section {
+  border-color: #d7e3f2 !important;
+  box-shadow: none !important;
+}
+
+/* PDC docket entry layout */
+.transaction-page.pdc-docket-form-page {
+  padding-top: 4px;
+}
+
+.transaction-page .pdc-billing-page {
+  padding: 4px 0 16px;
+  background: transparent;
+  border: 0;
+  box-shadow: none;
+  color: #0b1d49;
+}
+
+.transaction-page .pdc-billing-card {
+  border: 1px solid #d7e6fa;
+  border-radius: 11px;
+  box-shadow: 0 2px 10px #183e7610;
+}
+
+.transaction-page .pdc-billing-topbar {
+  min-height: 56px;
+  padding: 9px 14px !important;
+  border-bottom-color: #dce9f9 !important;
+}
+
+.transaction-page .pdc-billing-title-wrap { gap: 10px; }
+.transaction-page .pdc-billing-title-wrap h2 {
+  font-size: 18px !important;
+  letter-spacing: -0.02em;
+}
+.transaction-page .pdc-billing-badge {
+  height: 23px;
+  padding: 0 9px;
+  font-size: 10px;
+  background: #e5f0ff;
+  color: #0753d8;
+}
+.transaction-page .pdc-billing-header-actions { gap: 9px; }
+.transaction-page .pdc-save-header-btn {
+  min-width: 110px;
+  height: 34px;
+  gap: 6px;
+  border-color: #14913c;
+  border-radius: 6px;
+  background: linear-gradient(#20ad4d, #128c39);
+  font-size: 12px;
+}
+.transaction-page .pdc-copy-btn,
+.transaction-page .pdc-more-btn,
+.transaction-page .pdc-close-header-btn {
+  width: 34px;
+  min-width: 34px;
+  height: 34px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border: 1px solid #d4e2f5;
+  border-radius: 6px;
+  background: #fff;
+  color: #526b9b;
+  cursor: pointer;
+}
+.transaction-page .pdc-copy-btn:hover,
+.transaction-page .pdc-more-btn:hover,
+.transaction-page .pdc-close-header-btn:hover { background: #f2f7ff; }
+
+.transaction-page .pdc-entry-section,
+.transaction-page .pdc-cheque-section {
+  margin: 10px 14px 0;
+  width: auto;
+  padding: 0;
+  border: 1px solid #e3eefb;
+  border-radius: 9px;
+  box-shadow: 0 2px 7px #15345a09;
+  overflow: hidden;
+}
+.transaction-page .pdc-entry-section { margin-top: 10px; }
+.transaction-page .pdc-cheque-section { margin-top: 12px; }
+.transaction-page .pdc-section-heading,
+.transaction-page .pdc-grid-heading {
+  min-height: 40px;
+  margin: 0;
+  padding: 6px 12px;
+  background: #f8fafc;
+  gap: 10px;
+}
+.transaction-page .pdc-section-heading { justify-content: flex-end; }
+.transaction-page .pdc-heading-status,
+.transaction-page .pdc-grid-count {
+  font-size: 11px;
+  gap: 12px;
+  color: #7489af;
+}
+.transaction-page .pdc-heading-status strong,
+.transaction-page .pdc-grid-count strong { color: #0c1e4b; }
+.transaction-page .pdc-grid-heading-actions { display: flex; width: 100%; align-items: center; justify-content: space-between; gap: 12px; }
+.transaction-page .pdc-grid-count span + span { border-left: 1px solid #aec2e2; padding-left: 17px; }
+.transaction-page .pdc-load-btn {
+  height: 32px;
+  padding: 0 11px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border: 1px solid #2860ff;
+  border-radius: 6px;
+  background: #fff;
+  color: #0753e8;
+  font-size: 11px;
+  font-weight: 700;
+  white-space: nowrap;
+  cursor: pointer;
+}
+.transaction-page .pdc-load-btn:hover { background: #ecf3ff; }
+
+.transaction-page .pdc-header-two-rows {
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  padding: 8px 12px;
+  column-gap: 10px;
+  row-gap: 5px;
+  align-items: end;
+}
+.transaction-page .pdc-narration-inline { grid-column: span 3; }
+.transaction-page .pdc-field { gap: 2px; }
+.transaction-page .pdc-field label {
+  font-size: 10px;
+  font-weight: 600;
+  color: #142650;
+}
+.transaction-page .pdc-field input,
+.transaction-page .pdc-field select {
+  height: 29px;
+  padding: 3px 8px;
+  border: 1px solid #cbdcf5 !important;
+  border-radius: 6px !important;
+  font-size: 12px;
+  color: #102759;
+}
+.transaction-page .pdc-field input:focus,
+.transaction-page .pdc-field select:focus { box-shadow: 0 0 0 3px #2366ee1c !important; }
+
+.transaction-page .pdc-grid-scroll {
+  height: 265px;
+  margin: 0 8px 8px;
+  width: calc(100% - 16px);
+  border-color: #d3e2f8;
+  border-radius: 7px;
+}
+.transaction-page .pdc-entry-table { min-width: 1350px; }
+.transaction-page .pdc-entry-table th {
+  height: 44px;
+  padding: 10px 14px;
+  background: #f0f6ff;
+  font-size: 13px;
+  font-weight: 600;
+}
+.transaction-page .pdc-entry-table td { height: 40px; font-size: 13px; }
+.transaction-page .pdc-entry-table input[type="checkbox"] { width: 19px; height: 19px; accent-color: #1762ee; }
+.transaction-page .pdc-empty-row { height: 168px !important; padding: 14px !important; font-style: normal !important; }
+.transaction-page .pdc-empty-state { display: flex; flex-direction: column; align-items: center; gap: 8px; }
+.transaction-page .pdc-empty-icon {
+  width: 62px;
+  height: 62px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  background: #edf3fb;
+  color: #536b9b;
+}
+.transaction-page .pdc-empty-state strong { color: #122653; font-size: 14px; font-weight: 500; }
+.transaction-page .pdc-empty-state > span:last-child { color: #7a91bc; font-size: 13px; }
+
+.transaction-page .pdc-summary-section { margin: 14px 23px 17px; width: calc(100% - 46px); gap: 18px; }
+.transaction-page .pdc-summary-card {
+  min-height: 82px !important;
+  padding: 13px 20px !important;
+  flex-direction: row;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 22px;
+  border: 1px solid #cfe0f8 !important;
+  border-radius: 7px !important;
+  background: #fff !important;
+}
+.transaction-page .pdc-summary-card .pdc-summary-icon {
+  width: 52px;
+  min-width: 52px;
+  height: 52px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 13px;
+  background: #e7f1ff;
+  color: #0c5df5;
+}
+.transaction-page .pdc-summary-card.total .pdc-summary-icon { background: #e5f9eb; color: #11a140; }
+.transaction-page .pdc-summary-copy { display: flex; min-width: 0; flex-direction: column; gap: 5px; }
+.transaction-page .pdc-summary-copy span { color: #536b9b; font-size: 13px; font-weight: 500; }
+.transaction-page .pdc-summary-copy strong {
+  color: #0c1e4b !important;
+  font-size: 20px !important;
+  line-height: 1.2 !important;
+}
+.transaction-page .pdc-summary-card.total .pdc-summary-copy strong { color: #0756e6 !important; }
+
+@media (max-width: 1200px) {
+  .transaction-page .pdc-header-two-rows { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .transaction-page .pdc-summary-section { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .transaction-page .pdc-grid-heading { align-items: flex-start; flex-direction: column; }
+  .transaction-page .pdc-grid-heading-actions { width: 100%; justify-content: space-between; }
+}
+@media (max-width: 700px) {
+  .transaction-page .pdc-billing-topbar { align-items: flex-start; flex-direction: column; }
+  .transaction-page .pdc-billing-header-actions { width: 100%; justify-content: flex-end; }
+  .transaction-page .pdc-section-heading { align-items: flex-start; flex-direction: column; }
+  .transaction-page .pdc-heading-status { display: flex; }
+  .transaction-page .pdc-header-two-rows { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .transaction-page .pdc-narration-inline { grid-column: span 2; }
+  .transaction-page .pdc-grid-heading-actions { align-items: flex-start; flex-direction: column; gap: 12px; }
+  .transaction-page .pdc-grid-count { display: flex; }
+}
+@media (max-width: 520px) {
+  .transaction-page .pdc-billing-title-wrap h2 { font-size: 22px !important; }
+  .transaction-page .pdc-entry-section,
+  .transaction-page .pdc-cheque-section { margin-left: 10px; margin-right: 10px; }
+  .transaction-page .pdc-header-two-rows,
+  .transaction-page .pdc-summary-section { grid-template-columns: 1fr; }
+  .transaction-page .pdc-narration-inline { grid-column: auto; }
+  .transaction-page .pdc-summary-section { margin-left: 10px; width: calc(100% - 20px); }
+}

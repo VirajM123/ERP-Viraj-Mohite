@@ -1,4 +1,5 @@
 import React from "react";
+import { ShieldCheck, RefreshCw, Save, Info, Crown, Folder, Building2 } from "lucide-react";
 import "./SecuritySetup.css";
 import { API_URL } from "./api/config";
 import { authenticatedFetch, isTrustedApiDestination } from "./api/client";
@@ -448,6 +449,26 @@ const createFullPermission = () => ({
     print: true,
     export: true,
 });
+
+const STANDARD_USER_ACCESS = {
+    master: {
+        COMPANY: ["view"], ACCOUNT: ["view"], PRODUCT: ["view"],
+        GROUP: ["view"], CATEGORY: ["view"], GST: ["view"],
+        GODOWN: ["view"],
+    },
+    sales: {
+        SALES_BILLING: ["view", "add", "print"],
+        QUOTATION: ["view", "add", "print"],
+    },
+    reports: { STOCK_REPORT: ["view"] },
+};
+
+const createStandardPermission = (groupId, operationCode) => {
+    const access = STANDARD_USER_ACCESS[groupId]?.[operationCode] || [];
+    return Object.fromEntries(
+        Object.keys(createBlankPermission()).map((key) => [key, access.includes(key)])
+    );
+};
 
 const parseBoolean = (value) => {
     return (
@@ -1563,14 +1584,7 @@ const SecuritySetup = ({
                         ] =
                           user.isAdministrator
     ? createFullPermission()
-    : {
-          view: false,
-          add: false,
-          edit: false,
-          delete: false,
-          print: false,
-          export: false,
-      };
+    : createStandardPermission(group.id, operation.operation);
                     });
                 }
             );
@@ -1787,12 +1801,12 @@ const SecuritySetup = ({
             ================================================= */}
 
             <div className="security-page-header">
+                <div className="security-page-emblem" aria-hidden="true"><ShieldCheck size={38} strokeWidth={1.9} /></div>
                 <div className="security-page-heading">
                     <h1>Security Setup</h1>
 
                     <p>
-                        Set user authorities and access
-                        permissions.
+                        Manage user authorities and access permissions for modules and operations.
                     </p>
                 </div>
 
@@ -1806,10 +1820,10 @@ const SecuritySetup = ({
                         disabled={saving}
                     >
                         <span className="security-button-icon">
-                            ◌
+                            <RefreshCw size={17} />
                         </span>
 
-                        Reset to Default
+                        Restore defaults
                     </button>
 
                     <button
@@ -1822,7 +1836,7 @@ const SecuritySetup = ({
                         }
                     >
                         <span className="security-button-icon">
-                            ▣
+                            <Save size={17} />
                         </span>
 
                         {saving
@@ -1849,7 +1863,7 @@ const SecuritySetup = ({
                             </h2>
 
                             <span>
-                                Select an operation
+                                Select a module to manage permissions
                             </span>
                         </div>
 
@@ -1872,7 +1886,7 @@ const SecuritySetup = ({
                             value={
                                 operationSearch
                             }
-                            placeholder="Search operations..."
+                            placeholder="Search modules..."
                             onChange={(event) =>
                                 setOperationSearch(
                                     event.target
@@ -1943,9 +1957,7 @@ const SecuritySetup = ({
                                                 </span>
 
                                                 <span className="security-group-icon">
-                                                    {
-                                                        group.icon
-                                                    }
+                                                    <Folder size={17} fill="#ffcf73" strokeWidth={1.7} />
                                                 </span>
 
                                                 <span className="security-group-name">
@@ -1995,6 +2007,9 @@ const SecuritySetup = ({
                                                                         : ""}
                                                                 </span>
 
+                                                                {operation.operation === "COMPANY"
+                                                                    ? <Building2 className="security-operation-icon" size={15} />
+                                                                    : <Folder className="security-operation-icon" size={14} strokeWidth={1.6} />}
                                                                 <span className="security-operation-name">
                                                                     {
                                                                         operation.name
@@ -2021,30 +2036,25 @@ const SecuritySetup = ({
                     <div className="security-users-header">
                         <div className="security-users-heading">
                             <div>
-                                <h2>Users</h2>
+                                <h2>{selectedOperation ? `Permissions - ${selectedOperation.name}` : "Permissions"}</h2>
 
                                 <p>
                                     {selectedOperation
-                                        ? `Managing permissions for ${selectedOperation.groupName} / ${selectedOperation.name}`
+                                        ? "Manage user permissions for the selected module."
                                         : "Select an operation to manage authorities"}
                                 </p>
                             </div>
 
-                            {selectedOperation && (
-                                <div className="security-selected-operation-badge">
-                                    <span>
-                                        {
-                                            selectedOperation.groupName
-                                        }
-                                    </span>
-
-                                    <strong>
-                                        {
-                                            selectedOperation.name
-                                        }
-                                    </strong>
+                            <div className="security-access-summary" role="note">
+                                <div className="security-access-summary-item">
+                                    <span className="security-access-summary-icon"><Info size={18} /></span>
+                                    <div><strong>Standard access</strong><p>New users can view core records and add sales bills or quotations. Administrators can adjust access separately.</p></div>
                                 </div>
-                            )}
+                                <div className="security-access-summary-item security-admin-summary">
+                                    <span className="security-access-summary-icon"><Crown size={19} fill="currentColor" /></span>
+                                    <div><strong>Admin access</strong><p>Full control, including Edit, Delete, Print and Export.</p></div>
+                                </div>
+                            </div>
                         </div>
 
                         <div className="security-users-tools">
@@ -2137,6 +2147,8 @@ const SecuritySetup = ({
                                             </div>
                                         </th>
 
+                                        <th className="security-role-column">Role</th>
+
                                         <th className="security-all-column">
                                             All
                                         </th>
@@ -2201,7 +2213,7 @@ const SecuritySetup = ({
                                             <td
                                                 colSpan={
                                                     PERMISSION_COLUMNS.length +
-                                                    2
+                                                    3
                                                 }
                                                 className="security-no-users"
                                             >
@@ -2262,9 +2274,7 @@ const SecuritySetup = ({
                                                                     </strong>
 
                                                                     <span>
-                                                                        {
-                                                                            user.roleName
-                                                                        }
+                                                                        {user.email || user.emailId || user.userEmail || user.roleName}
                                                                     </span>
                                                                 </div>
                                                             </div>
@@ -2275,6 +2285,10 @@ const SecuritySetup = ({
                                                                     Access
                                                                 </span>
                                                             )}
+                                                        </td>
+
+                                                        <td className="security-role-cell">
+                                                            <span className={`security-role-badge ${user.isAdministrator ? "is-admin" : ""}`}>{user.isAdministrator ? "Admin" : user.roleName}</span>
                                                         </td>
 
                                                         <td className="security-permission-cell">

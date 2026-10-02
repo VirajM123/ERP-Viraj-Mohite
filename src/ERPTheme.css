@@ -3021,8 +3021,8 @@
   }
 
   .erp-master-list-page .erp-list-page-header > div:first-child {
-    min-height: 64px;
-    padding-bottom: 20px;
+    min-height: 50px;
+    padding-bottom: 6px;
   }
 
   .erp-master-list-page .erp-list-toolbar {
@@ -3440,11 +3440,11 @@
 
   .erp-master-list-page .erp-list-page-header > div:first-child {
     display: flex;
-    min-height: 62px;
+    min-height: 50px;
     align-items: flex-start;
     justify-content: center;
     flex-direction: column;
-    padding: 0 210px 16px 0;
+    padding: 0 210px 6px 0;
   }
 
   .erp-master-list-page .erp-list-page-header h1 {
@@ -3633,12 +3633,12 @@
     .collection-voucher-premium-heading
   ) {
     display: flex;
-    min-height: 62px;
+    min-height: 50px;
     align-items: flex-start;
     justify-content: space-between;
     gap: 16px;
     margin: 0;
-    padding: 0 0 16px;
+    padding: 0 0 6px;
     border: 0;
     background: transparent;
     box-shadow: none;

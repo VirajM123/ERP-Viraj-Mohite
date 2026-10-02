@@ -36,6 +36,14 @@ test("direct stock adjustment middleware denies users without permission records
   assert.equal(res.statusCode, 403);
 });
 
+test("new users receive standard access without sensitive authorities", async (t) => {
+  t.mock.method(mongoose.models.Mas_SecuritySetup, "findOne", () => ({ lean: async () => null }));
+  assert.equal(await router.authorize("D", "F", "U", "USER", "MASTER", "PRODUCT", "view"), true);
+  assert.equal(await router.authorize("D", "F", "U", "USER", "SALES", "SALES_BILLING", "add"), true);
+  assert.equal(await router.authorize("D", "F", "U", "USER", "SALES", "SALES_BILLING", "delete"), false);
+  assert.equal(await router.authorize("D", "F", "U", "USER", "TOOLS", "SECURITY_SETUP", "view"), false);
+});
+
 test("tenant header conflicts are rejected", () => {
   assert.equal(hasTenantMismatch({ "x-firm-id": "OTHER" }, { firmId: "F" }), true);
   assert.equal(hasTenantMismatch({ "x-distributor-id": "OTHER" }, { distributorId: "D" }), true);

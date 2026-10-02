@@ -4,8 +4,13 @@ import { createPortal } from "react-dom";
 import * as XLSX from "xlsx-js-style";
 import jsPDF from 'jspdf';
 import 'jspdf-autotable';
+import { downloadSalesInvoicePdf, printSalesInvoiceHtml } from "./utils/invoiceOutput";
 import './Dashboard.css';
-import totalSolutionLogo from "./assets/images/Totalsolution-sidebar-dark.png";
+import './DashboardMockup.css';
+import './DashboardHorizontalNav.css';
+import './SalesInvoiceListModern.css';
+import landscapeLogo from "./assets/images/total-solution-landscape.svg";
+import DashboardHome from "./DashboardHome";
 import { businessDateIST } from "./utils/businessDate";
 import { resolveInvoiceItemHsn } from "./utils/invoiceHsn";
 import { findPurchaseSupplier, purchaseSupplierValue } from "./utils/purchaseSupplier";
@@ -23,6 +28,8 @@ import { ACCOUNT_STATES } from "./data/accountStates";
 import ImportData from "./ImportData";
 import ImportDataFromDesktop from "./ImportDataFromDesktop";
 import { API_URL } from "./api/config";
+
+const dashLogo = "/TotalSolution.ico";
 
 const DEFAULT_INVOICE_TERMS = "1. Goods once sold will not be taken back or exchanged.\n2. Interest will be charged on overdue payments.\n3. Subject to local jurisdiction only.";
 
@@ -304,13 +311,27 @@ const Dashboard = ({ onLogout }) => {
   ].includes(loggedInRole);
   const [activeMenu, setActiveMenu] = useState(null);
   const [expandedNavMenu, setExpandedNavMenu] = useState(null);
+  const navCloseTimerRef = useRef(null);
   const [activeSubMenu, setActiveSubMenu] = useState(null);
   const [openFormFor, setOpenFormFor] = useState(null);
-  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(true);
+  const [headerSearch, setHeaderSearch] = useState("");
+  const headerSearchRef = useRef(null);
+  useEffect(() => {
+    const focusHeaderSearch = (event) => {
+      if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "k") {
+        event.preventDefault();
+        headerSearchRef.current?.focus();
+      }
+    };
+    window.addEventListener("keydown", focusHeaderSearch);
+    return () => window.removeEventListener("keydown", focusHeaderSearch);
+  }, []);
   const [showReceiptForm, setShowReceiptForm] = useState(false);
   const [accountActiveTab, setAccountActiveTab] = useState('basic');
   const [otherAccountActiveTab, setOtherAccountActiveTab] = useState('basic');
   const [transactionFormMode, setTransactionFormMode] = useState({});
+  const [transactionEntryRequest, setTransactionEntryRequest] = useState(null);
   const [masterReturnContext, setMasterReturnContext] = useState(null);
   const [showImportData, setShowImportData] = useState(false); // <-- ADD THIS HERE
   const [showDesktopImport, setShowDesktopImport] = useState(false);
@@ -1134,6 +1155,7 @@ const debitNotePermission = usePermission("VOUCHERS", "DEBIT_NOTE");
 
   const [selectedReport, setSelectedReport] =
     useState(null);
+  const [reportPickerCollapsed, setReportPickerCollapsed] = useState(false);
 
   /* ===== My Reports page states (merged from old Dashboard) ===== */
   const [showMyReports, setShowMyReports] =
@@ -1401,24 +1423,21 @@ const debitNotePermission = usePermission("VOUCHERS", "DEBIT_NOTE");
     setCreateLoadSearchDebounced,
   ] = useState("");
   const handleReportCategoryClick = (category) => {
-    setExpandedReportCategory((previousCategory) =>
-      previousCategory === category ? null : category
-    );
-
-    setActiveSubMenu(category);
-    setSelectedReport(null);
-    setOpenFormFor(null);
-    setShowDashboard(false);
+    setExpandedReportCategory(category);
   };
 
   const handleReportClick = (reportName) => {
     setSidebarCollapsed(true);
     setExpandedNavMenu(null);
+    setActiveMenu("reports");
+    const report = allReportItems.find((item) => item.name === reportName);
+    if (report) setReportCategoryFilter(getReportCatalogCategory(report));
     setSelectedReport(reportName);
+    setReportPickerCollapsed(true);
     setActiveSubMenu(reportName);
     setOpenFormFor("Report");
     setShowDashboard(false);
-    setShowMyReports(false);
+    setShowMyReports(true);
 
     setShowSalesList(false);
     setShowPurchaseList(false);
@@ -1439,8 +1458,9 @@ const debitNotePermission = usePermission("VOUCHERS", "DEBIT_NOTE");
     setActiveMenu("reports");
     setActiveSubMenu("My Reports");
 
-    setSelectedReport(null);
-    setOpenFormFor(null);
+    setSelectedReport("Party Wise Sales Report");
+    setReportPickerCollapsed(true);
+    setOpenFormFor("Report");
     setExpandedReportCategory(null);
 
     setShowMyReports(true);
@@ -2946,7 +2966,7 @@ const debitNotePermission = usePermission("VOUCHERS", "DEBIT_NOTE");
                       ${escapeInvoiceHtml(
           salesPrintOptions.loadNo || ""
         )}
-                      Â· ${invoicePayloads.length} invoice(s)
+                      · ${invoicePayloads.length} invoice(s)
                     </div>
                   </div>
 
@@ -3013,19 +3033,20 @@ const debitNotePermission = usePermission("VOUCHERS", "DEBIT_NOTE");
           )
       ) || SALES_BILL_PAPER_SIZES[0];
 
-    const invoiceWindow = window.open(
+    const invoiceWindow = action === "preview" ? window.open(
       "",
       "_blank",
       "width=1200,height=900,left=60,top=30"
-    );
+    ) : null;
 
-    if (!invoiceWindow) {
+    if (action === "preview" && !invoiceWindow) {
       alert(
         "Invoice popup was blocked. Please allow popups for this website."
       );
       return;
     }
 
+    if (invoiceWindow) {
     invoiceWindow.document.open();
 
     invoiceWindow.document.write(`
@@ -3092,6 +3113,7 @@ const debitNotePermission = usePermission("VOUCHERS", "DEBIT_NOTE");
     `);
 
     invoiceWindow.document.close();
+    }
 
     try {
       setSalesPrintPreparing(true);
@@ -3185,7 +3207,7 @@ const debitNotePermission = usePermission("VOUCHERS", "DEBIT_NOTE");
           );
 
         if (!result) {
-          invoiceWindow.close();
+          invoiceWindow?.close();
           return;
         }
 
@@ -3196,27 +3218,31 @@ const debitNotePermission = usePermission("VOUCHERS", "DEBIT_NOTE");
           );
       }
 
-      invoiceWindow.document.open();
-      invoiceWindow.document.write(
-        invoiceHtml
-      );
-      invoiceWindow.document.close();
-      invoiceWindow.focus();
-
-      setShowSalesPrintFormatModal(false);
-
-      if (action === "print") {
-        window.setTimeout(() => {
-          invoiceWindow.focus();
-          invoiceWindow.print();
-        }, 700);
+      if (action === "pdf") {
+        const invoiceName = enteredLoadNo
+          ? `Load_${salesPrintOptions.loadSeries || ""}_${enteredLoadNo}`
+          : `Invoice_${salesPrintOptions.trnSeries || "INV"}_${salesPrintOptions.fromTrnNo || ""}`;
+        await downloadSalesInvoicePdf(
+          invoiceHtml,
+          selectedPaper.value,
+          `${invoiceName.replace(/[^a-z0-9_-]/gi, "_")}.pdf`
+        );
+      } else if (action === "print") {
+        await printSalesInvoiceHtml(invoiceHtml);
+      } else {
+        invoiceWindow.document.open();
+        invoiceWindow.document.write(invoiceHtml);
+        invoiceWindow.document.close();
+        invoiceWindow.focus();
       }
+      setShowSalesPrintFormatModal(false);
     } catch (error) {
       console.error(
         "Sales Invoice print error:",
         error
       );
 
+      if (invoiceWindow) {
       invoiceWindow.document.open();
 
       invoiceWindow.document.write(`
@@ -3242,6 +3268,9 @@ const debitNotePermission = usePermission("VOUCHERS", "DEBIT_NOTE");
       `);
 
       invoiceWindow.document.close();
+      } else {
+        alert(error?.message || "Unable to prepare invoice.");
+      }
     } finally {
       setSalesPrintPreparing(false);
     }
@@ -7635,6 +7664,19 @@ const debitNotePermission = usePermission("VOUCHERS", "DEBIT_NOTE");
   const [selectedProductForBatch, setSelectedProductForBatch] = useState(null);
 
   const [showDashboard, setShowDashboard] = useState(true); // Set to true by default
+  useEffect(() => {
+    const returnToDashboard = (event) => {
+      if (event.key !== "Escape" || event.defaultPrevented || event.isComposing) return;
+      if (showDashboard && !activeMenu && !activeSubMenu && !openFormFor && !expandedNavMenu) return;
+      setShowDashboard(true);
+      setActiveMenu(null);
+      setExpandedNavMenu(null);
+      setActiveSubMenu(null);
+      setOpenFormFor(null);
+    };
+    window.addEventListener("keydown", returnToDashboard);
+    return () => window.removeEventListener("keydown", returnToDashboard);
+  }, [showDashboard, activeMenu, activeSubMenu, openFormFor, expandedNavMenu]);
   const [showCreateDropdown, setShowCreateDropdown] = useState(false);
   const [revenuePeriod, setRevenuePeriod] = useState("7D");
   // VOUCHER LIST STATE VARIABLES
@@ -13203,7 +13245,12 @@ const debitNotePermission = usePermission("VOUCHERS", "DEBIT_NOTE");
     if (openFormFor !== "Create Load") return;
 
     const handleCreateLoadEscape = (event) => {
-      if (event.key !== "Escape") return;
+      if (
+        event.key !== "Escape" ||
+        (!showCreateLoadSalesmanBox && !showCreateLoadAreaBox)
+      ) return;
+
+      event.preventDefault();
 
       /*
         Only close the open dropdowns.
@@ -13224,7 +13271,7 @@ const debitNotePermission = usePermission("VOUCHERS", "DEBIT_NOTE");
         handleCreateLoadEscape
       );
     };
-  }, [openFormFor]);
+  }, [openFormFor, showCreateLoadSalesmanBox, showCreateLoadAreaBox]);
 
 
 
@@ -13380,34 +13427,14 @@ const debitNotePermission = usePermission("VOUCHERS", "DEBIT_NOTE");
   // Group/Category forms
   const [groupForm, setGroupForm] = useState({ code: '', name: '' });
   const [categoryForm, setCategoryForm] = useState({ code: '', name: '' });
-  const reportMenuItems = {
-    Sales: [
-      "Party Wise Sales Report",
-      "All Party Wise Sales Report",
-      "Product Wise Sales Report",
-      "All Product Wise Sales Report",
-    ],
-
-    Purchase: [
-      "Company/Bill Wise Purchase Report",
-      "Product Wise Purchase Report",
-    ],
-
-    Stock: [
-      "Current Stock Report",
-      "As On Date Stock Report",
-      "Damage Stock Report",
-      "Product Ledger",
-    ],
-
-    "GST Report": [
-      "Sales GST Register",
-      "Purchase GST Register",
-      "CRN GST Register",
-      "GST Summary",
-      "GSTR1 Report",
-    ],
-  };
+  const reportMenuItems = Object.fromEntries(
+    reportCatalogCategories.map((category) => [
+      category.name,
+      allReportItems
+        .filter((report) => getReportCatalogCategory(report) === category.id)
+        .map((report) => report.name),
+    ]).filter(([, reports]) => reports.length > 0)
+  );
   const menuItems = {
     dashboard: {
       title: "Dashboard",
@@ -13491,10 +13518,7 @@ const debitNotePermission = usePermission("VOUCHERS", "DEBIT_NOTE");
     reports: {
       title: "Reports",
       icon: "📈",
-      items: [
-        "My Reports",
-
-      ]
+      items: Object.keys(reportMenuItems)
     },
 
     tools: {
@@ -13515,6 +13539,7 @@ const debitNotePermission = usePermission("VOUCHERS", "DEBIT_NOTE");
       items: []
     }
   };
+  const sidebarIconComponents = { dashboard: LayoutDashboard, master: Users, mapping: Box, sales: ShoppingCart, stockManagement: Package, vouchers: FileText, transactions: CreditCard, reports: FileBarChart, tools: Settings, logout: ChevronLeft };
   const handleGodownInput = (e) => {
     const { name, value } = e.target;
     setGodownForm({ ...godownForm, [name]: regexInputValue(name, value) });
@@ -18853,19 +18878,23 @@ const debitNotePermission = usePermission("VOUCHERS", "DEBIT_NOTE");
     setOpenFormFor("Billing");
   };
 
-  const openNewTransactionFromHeader = () => {
-    closeCreateDropdown();
-
+  const navigateTransaction = (item, openNew = false) => {
+    setSidebarCollapsed(true);
+    setExpandedNavMenu(null);
     setShowDashboard(false);
     setActiveMenu("transactions");
-    setActiveSubMenu("Receipt");
-    setActiveTransactionMenu("Receipt");
+    setActiveSubMenu(item);
     setOpenFormFor(null);
+    setActiveTransactionMenu(item);
+    setTransactionFormMode((prev) => ({ ...prev, [item]: false }));
+    if (item === "Receipt") setShowReceiptForm(false);
+    setTransactionEntryRequest(openNew ? { menu: item } : null);
+  };
 
-    setTransactionFormMode((prev) => ({
-      ...prev,
-      Receipt: true,
-    }));
+  const openNewTransactionFromHeader = () => {
+    closeCreateDropdown();
+    setActiveMenu("transactions");
+    navigateTransaction("Receipt", true);
   };
 
   const openNewPurchaseFromHeader = () => {
@@ -18907,6 +18936,29 @@ const debitNotePermission = usePermission("VOUCHERS", "DEBIT_NOTE");
         return "Product Code";
     }
   };
+
+
+  const renderFlashDashboard = () => <DashboardHome userName={loggedUserName} accountCount={accounts?.length} itemCount={products?.length} onQuickAction={(item) => {
+    setSidebarCollapsed(true);
+    setExpandedNavMenu(null);
+    if (item === "Receipt") {
+      navigateTransaction("Receipt", true);
+      return;
+    }
+    if (item === "Billing") {
+      openNewSalesInvoice();
+      return;
+    }
+    if (item === "Purchase") setEditingPurchaseId(null);
+    if (item === "Credit Note") setEditingCreditNoteId(null);
+    if (item === "Create Load") {
+      setEditingCreateLoadId(null);
+      setEditingCreateLoadBills([]);
+    }
+    setShowDashboard(false);
+    setActiveMenu(item === "Purchase" || item === "Credit Note" ? "vouchers" : "sales");
+    handlePlusClick(item);
+  }} />;
 
   const renderDashboard = () => {
     const userFirstName =
@@ -52229,7 +52281,7 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
 
       openSalesPrintFormatSelection(
         actualSalesBill,
-        "preview"
+        "pdf"
       );
     };
     const getSalesOutstandingAmount = (item) => {
@@ -53702,7 +53754,7 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
 
       return (
         <div
-          className={`erp-transaction-list-page ts-sales-list-page ${isCreditNoteList
+          className={`erp-transaction-list-page ts-sales-list-page ${title === "Sales" ? "sales-invoice-modern" : ""} ${isCreditNoteList
             ? "is-credit-note"
             : isPurchaseList
               ? "is-purchase"
@@ -55939,7 +55991,7 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                                     <button
                                       type="button"
                                       className="pdf"
-                                      title="Preview / PDF"
+                                      title="Download Sales Invoice PDF"
                                       onClick={() =>
                                         handlePreviewVoucher(
                                           item
@@ -59597,7 +59649,7 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
       // Show loading indicator
       const deleteButton = document.activeElement;
       if (deleteButton) {
-        deleteButton.textContent = 'â³ Deleting...';
+        deleteButton.textContent = '⏳ Deleting...';
         deleteButton.disabled = true;
       }
 
@@ -59660,7 +59712,7 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
         setSettleLoadListData(prev => prev.filter(item => item._id !== id && item.id !== id));
       }
 
-      alert(`âœ… ${type} permanently deleted from database!`);
+      alert(`✅ ${type} permanently deleted from database!`);
 
       // âœ… CRITICAL FIX: Reset ALL print/preview states FIRST
       setShowBillPrintPreview(false);
@@ -59925,7 +59977,7 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
 
     } catch (error) {
       console.error(`Delete ${type} error:`, error);
-      alert(`âŒ Server error. ${type} not deleted.`);
+      alert(`❌ Server error. ${type} not deleted.`);
     } finally {
 
     }
@@ -60681,6 +60733,18 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
 
               <button
                 type="button"
+                className="sales-print-classic-button preview"
+                disabled={salesPrintPreparing}
+                onClick={() => {
+                  openSelectedSalesInvoiceFormat({ action: "pdf" });
+                }}
+              >
+                <FileText size={16} />
+                PDF
+              </button>
+
+              <button
+                type="button"
                 className="sales-print-classic-button cancel"
                 disabled={salesPrintPreparing}
                 onClick={
@@ -60732,38 +60796,19 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
         }}
       >
         <aside className="sidebar">
-          {/* ==================== SIDEBAR BRAND ==================== */}
-          <div
-            className="logo-section lovable-logo-section"
-            onClick={() => {
-              setShowDashboard(true);
-              setActiveMenu(null);
-              setExpandedNavMenu(null);
-              setActiveSubMenu(null);
-              setOpenFormFor(null);
-            }}
-            title="Open Dashboard"
-          >
-            <div className="lovable-brand-logo-wrapper">
-              <img
-                src={totalSolutionLogo}
-                alt="Total Solution"
-                className="lovable-brand-logo"
-              />
-            </div>
-          </div>
+          <div className="sidebar-rail-top" aria-hidden="true"><ChevronLeft size={24} /></div>
 
           {/* ==================== SIDEBAR MENU ==================== */}
           <nav className="nav-menu">
             {Object.entries(menuItems).map(([key, menu]) => (
-              <div key={key} className="nav-item">
+              <div key={key} className={`nav-item ${key === "reports" ? "nav-item-reports" : ""}`} onMouseEnter={() => { window.clearTimeout(navCloseTimerRef.current); setExpandedNavMenu(key === "logout" ? null : key); }} onMouseLeave={() => { navCloseTimerRef.current = window.setTimeout(() => setExpandedNavMenu(null), 350); }}>
                 <div
-                  className={`nav-header ${expandedNavMenu === key ? "active" : ""
+                  className={`nav-header ${expandedNavMenu === key || (key === "dashboard" && showDashboard && !activeSubMenu) ? "active" : ""
                     }`}
                   title={sidebarCollapsed ? menu.title : undefined}
                   onClick={() => {
                     if (key === "logout") {
-                      handleLogout();
+                      if (window.confirm("Do you want to logout?")) handleLogout();
                       return;
                     }
 
@@ -60775,55 +60820,25 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                     }
                   }}
                 >
-                  <span className="nav-icon">{menu.icon}</span>
+                  <span className="nav-icon">{React.createElement(sidebarIconComponents[key] || LayoutDashboard, { size: 23, strokeWidth: 2 })}</span>
 
                   <span className="nav-title">{menu.title}</span>
 
-                  <span
+                  {key !== "logout" && <span
                     className={`nav-arrow ${expandedNavMenu === key ? "open" : ""
                       }`}
                   >
                     <ChevronDown size={13} />
-                  </span>
+                  </span>}
                 </div>
 
-                {expandedNavMenu === key && (
+                {expandedNavMenu === key && key !== "logout" && (
                   <div className="nav-submenu">
                     {menu.items.map((item, idx) => {
                       /*
                       * Special nested layout only for Reports.
                       */
                       if (key === "reports") {
-                        /*
-                        * MY REPORTS (merged from old Dashboard)
-                        * Opens the complete report selection page.
-                        */
-                        if (item === "My Reports") {
-                          return (
-                            <div
-                              key={item}
-                              className="nav-subitem-wrapper report-menu-group"
-                            >
-                              <div
-                                className={`nav-subitem report-category-row ${showMyReports &&
-                                    activeSubMenu === "My Reports"
-                                    ? "active"
-                                    : ""
-                                  }`}
-                                onClick={() => openMyReportsPage()}
-                              >
-                                <span className="submenu-text">
-                                  {item}
-                                </span>
-
-                                <span className="report-menu-arrow">
-                                  <ChevronRight size={16} />
-                                </span>
-                              </div>
-                            </div>
-                          );
-                        }
-
                         const childReports =
                           reportMenuItems[item] || [];
 
@@ -60834,6 +60849,7 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                           <div
                             key={item}
                             className="nav-subitem-wrapper report-menu-group"
+                            onMouseEnter={() => setExpandedReportCategory(item)}
                           >
                             <div
                               className={`nav-subitem report-category-row ${isCategoryOpen ? "active" : ""
@@ -60898,9 +60914,11 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                             className={`nav-subitem ${activeSubMenu === item ? "active" : ""
                               }`}
                             onClick={() => {
-                              if (activeMenu === "tools") {
-                                handleSubMenuClick(item);
+                              if (key === "transactions") {
+                                navigateTransaction(item);
+                                return;
                               }
+                              handleSubMenuClick(item);
                             }}
                           >
                             <span
@@ -60908,18 +60926,12 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                               onClick={(event) => {
                                 event.stopPropagation();
 
-                                handleSubMenuClick(item);
-
-                                if (activeMenu === "transactions") {
-                                  setActiveTransactionMenu(item);
-
-                                  setTransactionFormMode((prev) => ({
-                                    ...prev,
-                                    [item]: false,
-                                  }));
-
+                                if (key === "transactions") {
+                                  navigateTransaction(item);
                                   return;
                                 }
+
+                                handleSubMenuClick(item);
 
                                 setTransactionFormMode((prev) => ({
                                   ...prev,
@@ -60930,11 +60942,11 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                               {item}
                             </span>
 
-                            {(activeMenu !== "tools" ||
+                            {(key !== "tools" ||
                               item === "Company Wise Series Setup" ||
                               item === "Batch Lock and Change Sales Rate") && (
                               <span
-                                className={`plus-icon ${activeMenu === "tools" ? "tools-plus-icon" : ""}`}
+                                className={`plus-icon ${key === "tools" ? "tools-plus-icon" : ""}`}
                                 role="button"
                                 tabIndex={0}
                                 aria-label={`Add ${item}`}
@@ -60944,17 +60956,8 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                                   setSidebarCollapsed(true);
                                   setExpandedNavMenu(null);
 
-                                  if (activeMenu === "transactions") {
-                                    setShowDashboard(false);
-                                    setActiveSubMenu(item);
-                                    setOpenFormFor(null);
-                                    setActiveTransactionMenu(item);
-
-                                    setTransactionFormMode((prev) => ({
-                                      ...prev,
-                                      [item]: true,
-                                    }));
-
+                                  if (key === "transactions") {
+                                    navigateTransaction(item, true);
                                     return;
                                   }
 
@@ -60962,6 +60965,11 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                                 }}
                                 onKeyDown={(event) => {
                                   if (event.key === "Enter" || event.key === " ") {
+                                    if (key === "transactions") {
+                                      event.preventDefault();
+                                      navigateTransaction(item, true);
+                                      return;
+                                    }
                                     handlePlusClick(item, event);
                                   }
                                 }}
@@ -61003,24 +61011,16 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
 
         <main className="main-content">
           <header className="top-nav lovable-top-nav">
-            <div className="lovable-breadcrumb">
-              <button
-                type="button"
-                className="lovable-sidebar-toggle"
-                aria-label="Toggle sidebar"
-                aria-expanded={!sidebarCollapsed}
-                title={sidebarCollapsed ? "Expand sidebar" : "Collapse sidebar"}
-                onClick={() => setSidebarCollapsed((previous) => !previous)}
-              >
-                <Menu size={18} />
+            <div className="dashboard-header-left">
+              <button type="button" className="dashboard-header-logo" aria-label="Open Dashboard" onClick={() => { setShowDashboard(true); setActiveMenu(null); setExpandedNavMenu(null); setActiveSubMenu(null); setOpenFormFor(null); }}>
+                <span className="dashboard-brand"><span className="dashboard-brand-icon"><img src={dashLogo} alt="" /></span><span className="dashboard-brand-text"><strong>Total Solution ERP</strong></span></span>
               </button>
-
-              <span>Home</span>
-              <span className="lovable-breadcrumb-arrow"></span>
-
-              <strong>
-                {activeSubMenu || "Dashboard"}
-              </strong>
+              <div className="dashboard-global-search">
+                <Search size={21} aria-hidden="true" />
+                <input ref={headerSearchRef} type="search" value={headerSearch} onChange={(event) => setHeaderSearch(event.target.value)} placeholder="Search anything... (e.g. product, party, invoice...)" aria-label="Search modules" />
+                <span className="dashboard-search-shortcut" aria-hidden="true">Ctrl + K</span>
+                {headerSearch.trim() && <div className="dashboard-search-results" role="listbox">{Object.entries(menuItems).flatMap(([key, menu]) => menu.items.map((item) => ({ key, item }))).filter(({ item }) => item.toLowerCase().includes(headerSearch.trim().toLowerCase())).slice(0, 8).map(({ key, item }) => <button type="button" key={`${key}-${item}`} onClick={() => { setHeaderSearch(""); setShowDashboard(false); if (key === "transactions") { navigateTransaction(item); } else { setActiveMenu(key); handlePlusClick(item); } }}>{item}</button>)}</div>}
+              </div>
             </div>
 
             <div className="lovable-header-right">
@@ -61143,43 +61143,10 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
               </div>
             )}
             {activeMenu === "reports" &&
-              selectedReport &&
-              openFormFor === "Report" && (
-                <Report
-                  selectedReport={selectedReport}
-                  companies={companies}
-                  accounts={accounts}
-                  products={products}
-                  godowns={godowns}
-                  onBack={() => {
-                    setSelectedReport(null);
-                    setOpenFormFor(null);
-                    setActiveSubMenu("My Reports");
-                    setShowMyReports(true);
-                  }}
-                />
-              )}
-
-            {activeMenu === "reports" &&
-              showMyReports &&
-              !selectedReport &&
-              openFormFor !== "Report" && (
+              (showMyReports || selectedReport) && (
                 <main className="report-catalog-page">
-                  <header className="report-catalog-header">
-                    <span className="report-catalog-header-icon">
-                      <FileBarChart size={25} />
-                    </span>
-
-                    <div>
-                      <h1>Reports</h1>
-                      <p>
-                        View, analyze and generate all business reports from one place.
-                      </p>
-                    </div>
-
-                  </header>
-
-                  <section
+                  {!selectedReport && (
+                    <section
                     className="report-catalog-categories"
                     aria-label="Report categories"
                   >
@@ -61196,14 +61163,22 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                             setReportCategoryFilter(category.id);
                             setReportSearchText("");
                             setShowReportSearchDropdown(false);
+                            const firstReport = allReportItems.find((report) => getReportCatalogCategory(report) === category.id);
+                            setSelectedReport(firstReport?.name || null);
+                            setReportPickerCollapsed(Boolean(firstReport));
+                            setOpenFormFor(firstReport ? "Report" : null);
+                            setExpandedNavMenu(null);
                           }}
                         >
                           <strong>{category.name}</strong>
                         </button>
                       );
                     })}
-                  </section>
+                    </section>
+                  )}
 
+                  <div className={`report-catalog-workspace ${reportPickerCollapsed && selectedReport ? "report-catalog-workspace-expanded" : ""}`}>
+                  {!reportPickerCollapsed && (
                   <section className="report-catalog-list-card">
                     <div className="report-catalog-list-header">
                       <div className="report-catalog-list-title">
@@ -61213,7 +61188,7 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
 
                         <div>
                           <h2>{activeReportCatalogCategory.name}</h2>
-                          <p>Select a report below to generate or view it.</p>
+                          <p>Select a report below to set its export criteria.</p>
                         </div>
                       </div>
 
@@ -61240,12 +61215,13 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                             <button
                               type="button"
                               key={report.name}
-                              className="report-catalog-link"
+                              className={`report-catalog-link ${selectedReport === report.name ? "active" : ""}`}
                               onClick={() => handleReportClick(report.name)}
                               title={report.description}
                             >
                               <ReportIcon size={14} />
                               <span>{report.name}</span>
+                              <ChevronRight size={15} className="report-catalog-link-arrow" />
                             </button>
                           );
                         })}
@@ -61265,10 +61241,36 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                     <footer className="report-catalog-footer">
                       <HelpCircle size={17} />
                       <span>
-                        Select a category above and click the required report to generate or view.
+                        Select a category above and click the report you want to export.
                       </span>
                     </footer>
                   </section>
+                  )}
+                  <section className="report-catalog-detail" aria-label="Selected report">
+                    {selectedReport && openFormFor === "Report" ? (
+                      <Report
+                        selectedReport={selectedReport}
+                        companies={companies}
+                        accounts={accounts}
+                        products={products}
+                        godowns={godowns}
+                        onBack={() => {
+                          setSelectedReport(null);
+                          setReportPickerCollapsed(false);
+                          setOpenFormFor(null);
+                          setActiveSubMenu("My Reports");
+                          setShowMyReports(true);
+                        }}
+                      />
+                    ) : (
+                      <div className="report-catalog-detail-empty">
+                        <FileBarChart size={34} />
+                        <h2>Select a report</h2>
+                        <p>Choose a report from the list to set its export criteria.</p>
+                      </div>
+                    )}
+                  </section>
+                  </div>
                 </main>
               )}
 
@@ -68908,7 +68910,7 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
             {((!activeSubMenu && showDashboard) || (activeSubMenu === 'Dashboard')) &&
               openFormFor !== 'Firm Master' &&
               openFormFor !== 'User Master' && (
-                renderDashboard()
+                renderFlashDashboard()
               )}
             {/* =========================================================
         FIRM MASTER - COMPACT FORM VIEW
@@ -71812,6 +71814,8 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                 showReceiptForm={showReceiptForm}
                 setShowReceiptForm={setShowReceiptForm}
                 transactionFormMode={transactionFormMode}
+                transactionEntryRequest={transactionEntryRequest}
+                onTransactionEntryHandled={() => setTransactionEntryRequest(null)}
                 setTransactionFormMode={setTransactionFormMode}
                 autoVoucherNo={
                   runtimeGeneralSetup.autoVoucherNo === true
@@ -75956,7 +75960,7 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
               (activeSubMenu === "Billing" ||
                 activeSubMenu === "Counter Sales" ||
                 isSettleAdjustMode) && (
-                <div className="sales-billing-page">
+                <div className="sales-billing-page sales-invoice-entry-page">
                   <div className="sales-billing-card">
 
                     {/* =====================================================
@@ -75989,7 +75993,7 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                           type="button"
                           className="billing-action-button billing-preview-button"
                         >
-                          <span className="billing-button-icon">◉</span>
+                          <span className="billing-button-icon">▶</span>
                           Preview
                         </button>
 
@@ -75998,7 +76002,7 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                           className="billing-action-button billing-save-button"
                           onClick={saveInvoice}
                         >
-                          <span className="billing-button-icon">▣</span>
+                          <span className="billing-button-icon">✓</span>
 
                           {editingInvoiceId ? "Update" : "Save"}
                         </button>
@@ -76008,7 +76012,7 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                           className="billing-action-button billing-save-print-button"
                           onClick={saveInvoice}
                         >
-                          <span className="billing-button-icon">▤</span>
+                          <span className="billing-button-icon">✓</span>
 
                           {editingInvoiceId
                             ? "Update Invoice"
@@ -76033,7 +76037,7 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                           }
                           aria-label="Close invoice"
                         >
-                          ✕
+                          ×
                         </button>
                       </div>
                     </div>
@@ -76338,7 +76342,7 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                                       }
                                     >
                                       {mapping.accountName}
-                                      {isBlacklisted ? " 🚫" : ""}
+                                      {isBlacklisted ? " 🔒" : ""}
                                     </option>
                                   );
                                 })}
@@ -76587,7 +76591,7 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                                 : "Add Product"
                             }
                           >
-                            <span>＋</span>
+                            <span>+</span>
                             Add Product
                           </button>
 
@@ -76601,7 +76605,7 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                                 : "Scan Barcode"
                             }
                           >
-                            <span>▦</span>
+                            <span>▤</span>
                             Scan Barcode
                           </button>
 
@@ -77647,7 +77651,7 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                                   : "Add Row"
                               }
                             >
-                              ＋ Add Row
+                              + Add Row
                             </button>
 
                             <button
@@ -77671,7 +77675,7 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                                   : "Clear All"
                               }
                             >
-                              ♧ Clear All
+                              ✕ Clear All
                             </button>
                           </div>
 
@@ -78948,7 +78952,7 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
 
                                 {/* Action */}
                                 <td style={{ position: 'sticky', right: 0, backgroundColor: index === purchaseActiveRow ? '#eff6ff' : 'white', zIndex: 5 }}>
-                                  <button className="btn-delete" onClick={() => deletePurchaseItem(index)}>🗑 Delete</button>
+                                  <button className="btn-delete" onClick={() => deletePurchaseItem(index)}>Delete</button>
                                 </td>
                               </tr>
                             ))}

@@ -46,6 +46,7 @@ export default function StockManagement({ mode, view = "list", products = [], go
   const [loadingProducts, setLoadingProducts] = useState(false);
   const [dropdownIndex, setDropdownIndex] = useState(0);
   const [selectedBatch, setSelectedBatch] = useState(null);
+  const [queuedRows, setQueuedRows] = useState([]);
   const [newBatch, setNewBatch] = useState(false);
   const [showBatchModal, setShowBatchModal] = useState(false);
   const [batchProduct, setBatchProduct] = useState(null);
@@ -77,6 +78,7 @@ export default function StockManagement({ mode, view = "list", products = [], go
     setSearchText("");
     setBatchCache({});
     setSelectedBatch(null);
+    setQueuedRows([]);
     setNewBatch(false);
     setEntryMode("create");
     setEditingAdjustment(null);
@@ -92,6 +94,7 @@ export default function StockManagement({ mode, view = "list", products = [], go
     setForm((previous) => ({ ...createForm(), godownCode: previous.godownCode, companyCode: previous.companyCode }));
     setSearchText("");
     setSelectedBatch(null);
+    setQueuedRows([]);
     setNewBatch(false);
     setEntryMode("create");
     setEditingAdjustment(null);
@@ -203,9 +206,21 @@ export default function StockManagement({ mode, view = "list", products = [], go
     setDropdownIndex(0);
   };
 
-  const openBatchModalForProduct = (product, requestedMode = "") => {
-    const batches = batchCache[`${form.godownCode}_${productCode(product)}`] || [];
-    const initialMode = requestedMode || (batches.length > 0 || !isStockIn ? "existing" : "new");
+  const openBatchModalForProduct = async (product, requestedMode = "") => {
+    const key = `${form.godownCode}_${productCode(product)}`;
+    let batches = batchCache[key];
+    if (!batches) {
+      try {
+        const query = new URLSearchParams({ distributorId: localStorage.getItem("distributorId") || "", firmId: localStorage.getItem("firmId") || "", gdCode: form.godownCode, prodCode: productCode(product), stockType: isDamageStock ? "DAMAGE" : "SALEABLE" });
+        const response = await secureFetch(`${API_URL}/stock/batches?${query}`);
+        const result = await response.json();
+        if (response.ok && Array.isArray(result.batches)) {
+          batches = result.batches;
+          setBatchCache((previous) => ({ ...previous, [key]: batches }));
+        }
+      } catch { /* Show the picker empty state when batches cannot load. */ }
+    }
+    const initialMode = requestedMode || ((batches?.length || !isStockIn) ? "existing" : "new");
     setBatchProduct(product);
     setBatchMode(initialMode);
     chooseProduct(product, null, initialMode === "new");
@@ -250,7 +265,24 @@ export default function StockManagement({ mode, view = "list", products = [], go
   );
   const grossAmount = quantity * num(form.purchaseRate);
 
+  const clearCurrentRow = () => {
+    setForm((previous) => ({ ...previous, requestId: requestId(), productCode: "", productName: "", unit: "PCS", batch: ".", manufacturingDate: "", expiryDate: "", mrp: "", purchaseRate: "", salesRate: "", quantity: "", freeQuantity: "", boxPack: "1", inBoxPack: "1" }));
+    setSearchText("");
+    setSelectedBatch(null);
+    setNewBatch(false);
+    setShowProducts(false);
+    setShowBatchModal(false);
+  };
+
+  const addRow = () => {
+    if (!form.productCode || totalQuantity <= 0) return alert("Select a product and enter Qty or Free Qty before adding a row.");
+    if (!isStockIn && !selectedBatch) return alert("Select an existing batch before adding a row.");
+    setQueuedRows((previous) => [...previous, { ...form, selectedBatch }]);
+    clearCurrentRow();
+  };
+
   const resetForm = () => {
+    setQueuedRows([]);
     setForm((previous) => ({ ...createForm(), godownCode: previous.godownCode, companyCode: previous.companyCode }));
     setSearchText("");
     setSelectedBatch(null);
@@ -266,6 +298,7 @@ export default function StockManagement({ mode, view = "list", products = [], go
   };
 
   const openAdjustment = (row, nextMode) => {
+    setQueuedRows([]);
     setForm({
       ...createForm(),
       requestId: text(row.RequestId) || requestId(),
@@ -306,21 +339,26 @@ export default function StockManagement({ mode, view = "list", products = [], go
   };
 
   const save = async () => {
-    if (!form.godownCode || !form.productCode || totalQuantity <= 0) return alert("Select a godown and product, then enter Qty or Free Qty.");
-    if (!isStockIn && !selectedBatch) return alert("Select an existing product batch for Stock Out.");
-    if (!isStockIn && entryMode === "create" && totalQuantity > availableStock) return alert(`Only ${availableStock} ${isDamageStock ? "damaged" : "saleable"} units are available in the selected batch.`);
+    const rows = [...queuedRows, ...(form.productCode ? [{ ...form, selectedBatch }] : [])];
+    if (!form.godownCode || rows.length === 0) return alert("Select a godown and product, then enter Qty or Free Qty.");
+    for (const row of rows) {
+      if (num(row.quantity) + num(row.freeQuantity) <= 0) return alert(`Enter Qty or Free Qty for ${row.productCode}.`);
+      if (!isStockIn && !row.selectedBatch) return alert(`Select an existing batch for ${row.productCode}.`);
+      if (!isStockIn && entryMode === "create" && num(row.quantity) + num(row.freeQuantity) > num(row.selectedBatch?.stockQty ?? row.selectedBatch?.qty)) return alert(`Insufficient stock for ${row.productCode}.`);
+    }
 
     setSaving(true);
     try {
-      const payload = { ...form, adjustmentType: mode, distributorId: localStorage.getItem("distributorId") || "", firmId: localStorage.getItem("firmId") || "", firmName: localStorage.getItem("firmName") || "", gdCode: form.godownCode, prodCode: form.productCode, godownName: text(selectedGodown?.name || selectedGodown?.godownName || editingAdjustment?.GodownName), quantity, freeQuantity, mrp: num(form.mrp), purchaseRate: num(form.purchaseRate), salesRate: num(form.salesRate) };
       const isEditing = entryMode === "edit" && editingAdjustment?._id;
-      const response = await secureFetch(isEditing ? `${API_URL}/stock/adjustments/${editingAdjustment._id}` : `${API_URL}/stock/adjust`, {
-        method: isEditing ? "PUT" : "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
-      });
-      const result = await response.json();
-      if (!response.ok || !result.success) throw new Error(result.message || "Stock could not be saved.");
-      alert(`${result.message} New balance: ${num(result.stock?.quantity)}.`);
+      for (const [index, row] of rows.entries()) {
+        const payload = { ...row, adjustmentType: mode, distributorId: localStorage.getItem("distributorId") || "", firmId: localStorage.getItem("firmId") || "", firmName: localStorage.getItem("firmName") || "", gdCode: form.godownCode, prodCode: row.productCode, godownName: text(selectedGodown?.name || selectedGodown?.godownName || editingAdjustment?.GodownName), quantity: num(row.quantity), freeQuantity: num(row.freeQuantity), mrp: num(row.mrp), purchaseRate: num(row.purchaseRate), salesRate: num(row.salesRate) };
+        const response = await secureFetch(isEditing ? `${API_URL}/stock/adjustments/${editingAdjustment._id}` : `${API_URL}/stock/adjust`, {
+          method: isEditing ? "PUT" : "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload),
+        });
+        const result = await response.json();
+        if (!response.ok || !result.success) throw new Error(`${index} row(s) saved. ${result.message || "Stock could not be saved."}`);
+      }
+      alert(`${rows.length} stock row(s) saved.`);
       resetForm();
       setEntryMode("create");
       setEditingAdjustment(null);
@@ -471,14 +509,15 @@ export default function StockManagement({ mode, view = "list", products = [], go
         <div className="billing-field stock-narration-field"><label>Narration</label><input className="billing-control" value={form.narration} readOnly={isReadOnly} onChange={(event) => update("narration", event.target.value)} placeholder="Reason for adjustment" /></div>
       </div></section>
 
-      <section className="billing-form-section billing-product-section"><div className="billing-product-heading"><div className="billing-section-title"><span className="billing-section-number"></span><h3>Product Entry</h3></div></div><div className="billing-product-table-shell"><div className="billing-product-table-scroll stock-entry-scroll"><table className="billing-product-table stock-entry-table"><thead><tr><th>#</th><th>Product</th><th>Item Name</th><th>Units</th><th>Qty</th><th>Free</th><th>Rate</th><th>Gross Amt</th></tr></thead><tbody><tr>
-        <td>1</td><td className="billing-product-search-cell"><input ref={productInputRef} className="billing-table-control billing-product-search" value={searchText} placeholder="Type code/name" readOnly={isReadOnly} onFocus={() => { if (!isReadOnly) openProductSearch(); }} onKeyDown={(event) => { if (!isReadOnly) handleProductKeyDown(event); }} onChange={(event) => { setSearchText(event.target.value); update("productCode", ""); setDropdownIndex(0); openProductSearch(); }} /></td>
+      <section className="billing-form-section billing-product-section"><div className="billing-product-heading"><div className="billing-section-title"><span className="billing-section-number"></span><h3>Product Entry</h3></div></div><div className="billing-product-table-shell"><div className="billing-product-table-scroll stock-entry-scroll"><table className="billing-product-table stock-entry-table"><thead><tr><th>#</th><th>Product</th><th>Item Name</th><th>Units</th><th>Qty</th><th>Free</th><th>Rate</th><th>Gross Amt</th><th>Action</th></tr></thead><tbody>
+        {queuedRows.map((row, index) => <tr key={row.requestId + index}><td>{index + 1}</td><td>{row.productCode}<small className="stock-row-batch">Batch: {row.batch}</small></td><td>{row.productName}</td><td>{row.unit}</td><td>{row.quantity}</td><td>{row.freeQuantity}</td><td>{num(row.purchaseRate).toFixed(2)}</td><td>{(num(row.quantity) * num(row.purchaseRate)).toFixed(2)}</td><td><button type="button" className="billing-delete-row-button" title="Remove product" onClick={() => setQueuedRows((previous) => previous.filter((_, rowIndex) => rowIndex !== index))}><Trash2 size={14} /></button></td></tr>)}
+        <tr><td>{queuedRows.length + 1}</td><td className="billing-product-search-cell"><input ref={productInputRef} className="billing-table-control billing-product-search" value={searchText} placeholder="Type code/name" readOnly={isReadOnly} onFocus={() => { if (!isReadOnly) openProductSearch(); }} onKeyDown={(event) => { if (!isReadOnly) handleProductKeyDown(event); }} onChange={(event) => { setSearchText(event.target.value); update("productCode", ""); setSelectedBatch(null); setDropdownIndex(0); openProductSearch(); }} /></td>
         <td><input className="billing-table-control billing-calculated-control" value={form.productName} readOnly /></td><td><input className="billing-table-control billing-calculated-control" value={form.unit} readOnly /></td>
         <td><input className="billing-table-control billing-numeric-control" type="number" min="0" step="any" value={form.quantity} readOnly={isReadOnly} onChange={(event) => update("quantity", event.target.value)} /></td><td><input className="billing-table-control billing-numeric-control" type="number" min="0" step="any" value={form.freeQuantity} readOnly={isReadOnly} onChange={(event) => update("freeQuantity", event.target.value)} /></td>
         <td><input className="billing-table-control billing-numeric-control" type="number" min="0" step="any" value={form.purchaseRate} readOnly={isReadOnly || !newBatch} onChange={(event) => update("purchaseRate", event.target.value)} /></td><td><input className="billing-table-control billing-numeric-control billing-calculated-control billing-row-amount" value={grossAmount.toFixed(2)} readOnly /></td>
-      </tr></tbody></table></div><div className="billing-grid-footer"><div className="stock-selected-batch"><span>Batch: <strong>{form.productCode ? form.batch || "." : "-"}</strong></span><span>MRP: <strong>{form.productCode ? num(form.mrp).toFixed(2) : "-"}</strong></span><span>Current Stock: <strong>{form.productCode ? currentStock.toFixed(2) : "-"}</strong></span></div><div className="billing-grid-totals"><span>Total Qty: <strong>{totalQuantity.toFixed(2)}</strong></span></div></div></div>
+      <td>{!isReadOnly && <button type="button" className="billing-delete-row-button" title="Clear selected product" disabled={!form.productCode} onClick={clearCurrentRow}><Trash2 size={14} /></button>}</td></tr></tbody></table></div><div className="billing-grid-footer"><div className="billing-grid-footer-actions">{!isReadOnly && entryMode === "create" && <><button type="button" className="billing-grid-small-button" onClick={addRow}><Plus size={14} /> Add Row</button><button type="button" className="billing-grid-small-button" onClick={() => { setQueuedRows([]); clearCurrentRow(); }}>Clear All</button></>}</div><div className="stock-selected-batch"><span>Batch: <strong>{form.productCode ? form.batch || "." : "-"}</strong></span><span>MRP: <strong>{form.productCode ? num(form.mrp).toFixed(2) : "-"}</strong></span><span>Current Stock: <strong>{form.productCode ? currentStock.toFixed(2) : "-"}</strong></span></div><div className="billing-grid-totals"><span>Total Qty: <strong>{(queuedRows.reduce((sum, row) => sum + num(row.quantity) + num(row.freeQuantity), 0) + totalQuantity).toFixed(2)}</strong></span></div></div></div>
       </section>
-      <section className="stock-value-footer"><div><span>Stock Value as per MRP</span><strong>{(totalQuantity * num(form.mrp)).toFixed(2)}</strong></div><div><span>Stock Value as per Purchase Rate</span><strong>{(totalQuantity * num(form.purchaseRate)).toFixed(2)}</strong></div><div><span>Stock Value as per Sales Rate</span><strong>{(totalQuantity * num(form.salesRate)).toFixed(2)}</strong></div></section>
+      <section className="stock-value-footer"><div><span>Stock Value as per MRP</span><strong>{(queuedRows.reduce((sum, row) => sum + (num(row.quantity) + num(row.freeQuantity)) * num(row.mrp), 0) + totalQuantity * num(form.mrp)).toFixed(2)}</strong></div><div><span>Stock Value as per Purchase Rate</span><strong>{(queuedRows.reduce((sum, row) => sum + (num(row.quantity) + num(row.freeQuantity)) * num(row.purchaseRate), 0) + totalQuantity * num(form.purchaseRate)).toFixed(2)}</strong></div><div><span>Stock Value as per Sales Rate</span><strong>{(queuedRows.reduce((sum, row) => sum + (num(row.quantity) + num(row.freeQuantity)) * num(row.salesRate), 0) + totalQuantity * num(form.salesRate)).toFixed(2)}</strong></div></section>
     </div>
 
     {showProducts && createPortal(<div className="billing-product-dropdown stock-product-dropdown" style={{ top: dropdownPosition.top, left: dropdownPosition.left }} onMouseDown={(event) => { event.preventDefault(); event.stopPropagation(); }}><div className="billing-product-dropdown-header"><span>Code</span><span>Product</span><span>Batch</span><span>MRP</span><span>Rate</span><span>Stock</span></div>{loadingProducts && dropdownRows.length === 0 ? <div className="stock-dropdown-empty">Loading products and batches...</div> : dropdownRows.length === 0 ? <div className="stock-dropdown-empty">No matching stock batch found.</div> : dropdownRows.map(({ product, batch, isNew }, index) => <div key={`${productCode(product)}-${batch?.batch || "new"}-${batch?.mrp || 0}-${index}`} className={`billing-product-dropdown-row ${dropdownIndex === index ? "is-active" : ""}`} onMouseEnter={() => setDropdownIndex(index)} onMouseDown={(event) => { event.preventDefault(); openBatchModalForProduct(product, isNew && isStockIn ? "new" : "existing"); }}><span className="billing-product-code">{productCode(product)}</span><span>{productName(product)}</span><span>{isNew ? "+ New Batch" : batch?.batch || batch?.batchNo || "."}</span><span>{num(batch?.mrp ?? product.mrp).toFixed(2)}</span><span>{num(batch?.purchaseRate ?? product.purchaseRate ?? product.Rate_Per_Unit).toFixed(2)}</span><span>{isNew ? "-" : num(batch?.stockQty).toFixed(2)}</span></div>)}</div>, document.body)}
@@ -494,7 +533,7 @@ export default function StockManagement({ mode, view = "list", products = [], go
 
           {batchMode === "existing" ? (
             <div className="stock-batch-table-wrap"><table className="stock-batch-table"><thead><tr><th>Batch</th><th>MRP</th><th>Expiry Date</th><th>Mfg Date</th><th>Stock</th><th>Sales Rate</th><th>Purchase Rate</th></tr></thead><tbody>
-              {batchModalRows.length === 0 ? <tr><td colSpan="7" className="stock-batch-empty">No existing batch found.</td></tr> : batchModalRows.map((batch, index) => <tr key={`${batch.batch || batch.batchNo}-${batch.mrp}-${index}`} onDoubleClick={() => chooseProduct(batchProduct, batch, false)}><td><button type="button" className="stock-batch-select" onClick={() => chooseProduct(batchProduct, batch, false)}>{batch.batch || batch.batchNo || "."}</button></td><td>{num(batch.mrp).toFixed(2)}</td><td>{formatDate(batch.expDate)}</td><td>{formatDate(batch.mfgDate)}</td><td className="stock-number">{num(batch.stockQty).toFixed(2)}</td><td className="stock-number">{num(batch.salesRate ?? batch.sRate).toFixed(2)}</td><td className="stock-number">{num(batch.purchaseRate).toFixed(2)}</td></tr>)}
+              {batchModalRows.length === 0 ? <tr><td colSpan="7" className="stock-batch-empty">No existing batch found.</td></tr> : batchModalRows.map((batch, index) => <tr key={`${batch.batch || batch.batchNo}-${batch.mrp}-${index}`} onClick={() => chooseProduct(batchProduct, batch, false)}><td><button type="button" className="stock-batch-select" onClick={() => chooseProduct(batchProduct, batch, false)}>{batch.batch || batch.batchNo || "."}</button></td><td>{num(batch.mrp).toFixed(2)}</td><td>{formatDate(batch.expDate)}</td><td>{formatDate(batch.mfgDate)}</td><td className="stock-number">{num(batch.stockQty).toFixed(2)}</td><td className="stock-number">{num(batch.salesRate ?? batch.sRate).toFixed(2)}</td><td className="stock-number">{num(batch.purchaseRate).toFixed(2)}</td></tr>)}
             </tbody></table></div>
           ) : (
             <div className="stock-modal-new-batch"><div className="billing-field"><label>Batch No. <span>*</span></label><input className="billing-control" value={form.batch} onChange={(event) => update("batch", event.target.value || ".")} /></div><div className="billing-field"><label>MRP</label><input className="billing-control" type="number" min="0" value={form.mrp} onChange={(event) => update("mrp", event.target.value)} /></div><div className="billing-field"><label>Purchase Rate</label><input className="billing-control" type="number" min="0" value={form.purchaseRate} onChange={(event) => update("purchaseRate", event.target.value)} /></div><div className="billing-field"><label>Sales Rate</label><input className="billing-control" type="number" min="0" value={form.salesRate} onChange={(event) => update("salesRate", event.target.value)} /></div><div className="billing-field"><label>Mfg. Date</label><input className="billing-control" type="date" value={form.manufacturingDate} onChange={(event) => update("manufacturingDate", event.target.value)} /></div><div className="billing-field"><label>Expiry Date</label><input className="billing-control" type="date" value={form.expiryDate} onChange={(event) => update("expiryDate", event.target.value)} /></div></div>
