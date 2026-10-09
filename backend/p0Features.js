@@ -107,6 +107,7 @@ export const validateCustomerCredit = async ({ req, session }) => {
   // Calculate the historical sales exposure in MongoDB.  Previously every
   // bill for the party was transferred to Node and reduced there, making save
   // time grow with the imported history rather than the current voucher.
+  const today = new Date().toISOString().slice(0, 10);
   const [salesExposure = {}] = await Sales.aggregate([
     { $match: tenant(req, { PartyCode: account.accountCode, isActive: { $ne: false }, IsBillCancelled: { $ne: true } }) },
     { $project: {
@@ -117,11 +118,14 @@ export const validateCustomerCredit = async ({ req, session }) => {
       _id: null,
       outstanding: { $sum: "$pending" },
       pendingBills: { $sum: { $cond: [{ $gt: ["$pending", 0] }, 1, 0] } },
-      overdueDates: { $push: { $cond: [{ $gt: ["$pending", 0] }, "$DueDate", null] } },
+      hasOverdue: { $max: { $cond: [
+        { $and: [{ $gt: ["$pending", 0] }, { $lt: ["$DueDate", today] }] },
+        1,
+        0,
+      ] } },
     } },
   ]).session(session);
-  const openings = await openingOutstanding(req, 'Dr', session);
-  const accountOpenings = openings.filter(row => row.accountCode === account.accountCode);
+  const accountOpenings = await openingOutstanding(req, 'Dr', session, account.accountCode);
   const openingOutstandingAmount = accountOpenings.reduce(
     (sum, row) => sum + Math.max(0, number(row.balanceAmount) - number(row.allocatedAmount)),
     0
@@ -132,10 +136,7 @@ export const validateCustomerCredit = async ({ req, session }) => {
   const outstanding = number(salesExposure.outstanding) + openingOutstandingAmount;
   const pendingBillCount = number(salesExposure.pendingBills) + openingPendingBills.length;
   const exposure = outstanding + number(body.NetAmount);
-  const today = new Date().toISOString().slice(0, 10);
-  const overdue = (salesExposure.overdueDates || []).some(
-    dueDate => dueDate !== null && String(dueDate || "") < today
-  ) || openingPendingBills.some(row => String(row.postingDate || "") < today);
+  const overdue = Boolean(salesExposure.hasOverdue) || openingPendingBills.some(row => String(row.postingDate || "") < today);
   const violations = [];
   if (String(account.blackListed || "NO").toUpperCase() === "YES") violations.push("Customer is blacklisted");
   if (number(account.creditAmt) > 0 && exposure > number(account.creditAmt) + 0.01) violations.push(`Credit limit exceeded (${exposure.toFixed(2)} > ${number(account.creditAmt).toFixed(2)})`);
@@ -386,11 +387,15 @@ export default function createP0FeaturesRouter(securityRouter) {
   });
   router.get("/dashboard/summary", async (req, res) => {
     const Sales = mongoose.models.T_Sal_Header, Purchase = mongoose.models.T_Pur_Header, Receipt = mongoose.models.T_Receipt, Stock = mongoose.models.Mas_Stock;
+    const Load = mongoose.models.T_Load_Header;
+    const Account = mongoose.models.Mas_Account, Product = mongoose.models.Mas_Product;
     const CreditNote = mongoose.models.T_CreditNote_Header, DebitNote = mongoose.models.DebitNote;
     const DamageStock = mongoose.models.Mas_DamStock, Payment = mongoose.models.T_Payment;
     const scope = tenant(req);
     const today = new Date().toISOString().slice(0, 10);
     const selectedDate = /^\d{4}-\d{2}-\d{2}$/.test(String(req.query.date || "")) ? String(req.query.date) : today;
+    const requestedStart = String(req.query.fromDate || "");
+    const selectedStart = /^\d{4}-\d{2}-\d{2}$/.test(requestedStart) && requestedStart <= selectedDate ? requestedStart : selectedDate;
     const selectedMonth = selectedDate.slice(0, 7);
     const previousMonth = new Date(`${selectedMonth}-01T00:00:00Z`);
     previousMonth.setUTCMonth(previousMonth.getUTCMonth() - 1);
@@ -398,13 +403,21 @@ export default function createP0FeaturesRouter(securityRouter) {
     const salesMatch = { ...scope, isActive: { $ne: false }, IsBillCancelled: { $ne: true } };
     const numeric = (field) => ({ $convert: { input: field, to: "double", onError: 0, onNull: 0 } });
     const pending = { $max: [{ $subtract: [numeric("$NetAmount"), numeric("$receiptAllocated")] }, 0] };
+    const pendingEInvoiceMatch = {
+      BillDate: { $lte: selectedDate },
+      SalesEntryType: { $ne: "COUNTER_SALES" },
+      $expr: { $eq: [{ $trim: { input: { $ifNull: ["$IRNNo", ""] } } }, ""] },
+    };
 
-    const [salesFacets, purchaseTotals, receiptTotals, stockFacets, openingBills, flashSales, flashPurchase, flashCredit, flashDamage, flashDebit, flashPayment, purchaseTrend] = await Promise.all([
+    const [salesFacets, purchaseTotals, receiptTotals, stockFacets, openingBills, flashSales, flashPurchase, flashCredit, flashDamage, flashDebit, flashPayment, purchaseTrend, accountCount, productCount, collectionRows, loadRows] = await Promise.all([
       Sales ? Sales.aggregate([
         { $match: salesMatch },
         { $facet: {
           totals: [{ $group: { _id: null, totalSales: { $sum: numeric("$NetAmount") }, outstanding: { $sum: pending }, totalInvoices: { $sum: 1 }, overdue: { $sum: { $cond: [{ $lt: [{ $ifNull: ["$DueDate", ""] }, today] }, pending, 0] } } } }],
           recentInvoices: [{ $sort: { BillDate: -1, BillNo: -1, _id: -1 } }, { $limit: 10 }, { $project: { _id: 0, billNo: { $concat: [{ $ifNull: ["$BillSeries", ""] }, { $convert: { input: "$BillNo", to: "string", onError: "", onNull: "" } }] }, date: "$BillDate", party: "$PartyName", amount: "$NetAmount", pending } }],
+          pendingEInvoices: [{ $match: { BillDate: { $lte: selectedDate }, SalesEntryType: { $ne: "COUNTER_SALES" } } }, { $sort: { BillDate: -1, BillNo: -1, _id: -1 } }, { $limit: 12 }, { $project: { billNo: { $concat: [{ $ifNull: ["$BillSeries", ""] }, { $convert: { input: "$BillNo", to: "string", onError: "", onNull: "" } }] }, date: "$BillDate", party: "$PartyName", amount: "$NetAmount", irnNo: "$IRNNo" } }],
+          generateEInvoices: [{ $match: pendingEInvoiceMatch }, { $sort: { BillDate: -1, BillNo: -1, _id: -1 } }, { $limit: 12 }, { $project: { billNo: { $concat: [{ $ifNull: ["$BillSeries", ""] }, { $convert: { input: "$BillNo", to: "string", onError: "", onNull: "" } }] }, date: "$BillDate", party: "$PartyName", amount: "$NetAmount", irnNo: "$IRNNo" } }],
+          generateEInvoiceCount: [{ $match: pendingEInvoiceMatch }, { $count: "total" }],
           topCustomers: [{ $group: { _id: { $ifNull: ["$PartyName", { $ifNull: ["$PartyCode", "Unknown"] }] }, amount: { $sum: numeric("$NetAmount") } } }, { $sort: { amount: -1 } }, { $limit: 5 }, { $project: { _id: 0, name: "$_id", amount: 1 } }],
           salesTrend: [{ $group: { _id: { $ifNull: ["$BillDate", "No date"] }, sales: { $sum: numeric("$NetAmount") } } }, { $sort: { _id: -1 } }, { $limit: 30 }, { $sort: { _id: 1 } }, { $project: { _id: 0, label: "$_id", sales: 1, collections: { $literal: 0 } } }],
           topProducts: [
@@ -436,11 +449,13 @@ export default function createP0FeaturesRouter(securityRouter) {
       openingOutstanding(req, 'Dr'),
       Sales ? Sales.aggregate([{ $match: salesMatch }, { $group: { _id: null,
         today: { $sum: { $cond: [{ $eq: ["$BillDate", selectedDate] }, numeric("$NetAmount"), 0] } },
+        period: { $sum: { $cond: [{ $and: [{ $gte: ["$BillDate", selectedStart] }, { $lte: ["$BillDate", selectedDate] }] }, numeric("$NetAmount"), 0] } },
         month: { $sum: { $cond: [{ $eq: [{ $substrBytes: [{ $ifNull: ["$BillDate", ""] }, 0, 7] }, selectedMonth] }, numeric("$NetAmount"), 0] } },
         previousMonth: { $sum: { $cond: [{ $eq: [{ $substrBytes: [{ $ifNull: ["$BillDate", ""] }, 0, 7] }, previousMonthKey] }, numeric("$NetAmount"), 0] } },
       } }]) : [],
       Purchase ? Purchase.aggregate([{ $match: { ...scope, isActive: { $ne: false } } }, { $group: { _id: null,
         today: { $sum: { $cond: [{ $eq: ["$invoiceDate", selectedDate] }, numeric("$netAmt"), 0] } },
+        period: { $sum: { $cond: [{ $and: [{ $gte: ["$invoiceDate", selectedStart] }, { $lte: ["$invoiceDate", selectedDate] }] }, numeric("$netAmt"), 0] } },
         month: { $sum: { $cond: [{ $eq: [{ $substrBytes: [{ $ifNull: ["$invoiceDate", ""] }, 0, 7] }, selectedMonth] }, numeric("$netAmt"), 0] } },
         previousMonth: { $sum: { $cond: [{ $eq: [{ $substrBytes: [{ $ifNull: ["$invoiceDate", ""] }, 0, 7] }, previousMonthKey] }, numeric("$netAmt"), 0] } },
       } }]) : [],
@@ -459,6 +474,10 @@ export default function createP0FeaturesRouter(securityRouter) {
         { $sort: { _id: -1 } }, { $limit: 30 }, { $sort: { _id: 1 } },
         { $project: { _id: 0, label: "$_id", purchase: 1 } },
       ]) : [],
+      Account ? Account.countDocuments({ ...scope, isActive: true }) : 0,
+      Product ? Product.countDocuments({ ...scope, isActive: true }) : 0,
+      Receipt ? Receipt.find({ ...scope, status: { $ne: "REVERSED" }, receiptDate: { $lte: selectedDate } }).select({ receiptDate: 1, receiptAmount: 1, bankCash: 1, bankCashName: 1, bankCashGroup: 1, chequeNo: 1 }).lean() : [],
+      Load ? Load.find({ DistributorId: req.auth.distributorId, FirmId: req.auth.firmId, IsCancelled: { $ne: true } }).select({ LoadSeries: 1, LoadNo: 1, LoadDate: 1, Status: 1, IsSettled: 1, TotalBills: 1, TotalAmount: 1 }).sort({ LoadDate: -1, LoadNo: -1 }).lean() : [],
     ]);
 
     const salesData = salesFacets[0] || {}, salesTotals = salesData.totals?.[0] || {};
@@ -467,14 +486,19 @@ export default function createP0FeaturesRouter(securityRouter) {
     const openingOverdue = openingBills.filter(row => row.postingDate < today).reduce((sum, row) => sum + number(row.balanceAmount) - number(row.allocatedAmount), 0);
     const recentInvoices = (salesData.recentInvoices || []).map(row => ({ ...row, status: number(row.pending) > 0 ? "Pending" : "Paid", pending: undefined }));
     res.json({ success: true, data: {
+      accountCount, productCount,
       totalSales: number(salesTotals.totalSales), totalPurchase: number(purchaseTotals[0]?.total), collection: number(receiptTotals[0]?.total),
       outstanding: number(salesTotals.outstanding) + openingOutstandingAmount, overdue: number(salesTotals.overdue) + openingOverdue,
       stockValue: number(stockTotals.stockValue), lowStock: number(stockTotals.lowStock), lowStockItems: stockData.lowStockItems || [],
       expiry: number(stockTotals.expiry), totalInvoices: number(salesTotals.totalInvoices), recentInvoices,
+      pendingEInvoices: salesData.pendingEInvoices || [],
+      generateEInvoices: salesData.generateEInvoices || [], generateEInvoiceCount: number(salesData.generateEInvoiceCount?.[0]?.total),
+      collectionRows: collectionRows.map(row => ({ date: row.receiptDate, amount: number(row.receiptAmount), bankCash: row.bankCash || "", bankCashName: row.bankCashName || "", bankCashGroup: row.bankCashGroup || "", chequeNo: row.chequeNo || "" })),
+      loads: loadRows.map(row => ({ id: row._id, number: `${row.LoadSeries || ""}${row.LoadNo ?? ""}`, date: row.LoadDate || "", status: row.Status || "ACTIVE", delivered: row.IsSettled === true || String(row.Status || "").toUpperCase() === "SETTLED", bills: number(row.TotalBills), amount: number(row.TotalAmount) })),
       topCustomers: salesData.topCustomers || [], topProducts: salesData.topProducts || [], salesTrend: salesData.salesTrend || [], purchaseTrend,
-      flashCard: { date: selectedDate, todaySales: number(flashSales[0]?.today), monthlySales: number(flashSales[0]?.month),
+      flashCard: { date: selectedDate, todaySales: number(flashSales[0]?.today), periodSales: number(flashSales[0]?.period), monthlySales: number(flashSales[0]?.month),
         previousMonthSales: number(flashSales[0]?.previousMonth),
-        todayPurchase: number(flashPurchase[0]?.today), monthlyPurchase: number(flashPurchase[0]?.month),
+        todayPurchase: number(flashPurchase[0]?.today), periodPurchase: number(flashPurchase[0]?.period), monthlyPurchase: number(flashPurchase[0]?.month),
         previousMonthPurchase: number(flashPurchase[0]?.previousMonth),
         todaySalesReturns: number(flashCredit[0]?.today), monthlySalesReturns: number(flashCredit[0]?.month),
         monthlyPurchaseReturns: number(flashDebit[0]?.month),

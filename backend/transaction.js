@@ -193,6 +193,7 @@ receiptSchema.index({ distributorId: 1, firmId: 1, billSeries: 1, rno: 1 }, { un
 receiptSchema.index({ distributorId: 1, firmId: 1, status: 1, receiptDate: -1, rno: -1 });
 receiptSchema.index({ distributorId: 1, firmId: 1, partyId: 1, status: 1, receiptDate: -1 });
 receiptSchema.index({ distributorId: 1, firmId: 1, chequeNo: 1, status: 1 });
+receiptSchema.index({ distributorId: 1, firmId: 1, "receiptBills.trnSeries": 1, "receiptBills.trnNo": 1, status: 1 });
 
 /* ==========================
    CHEQUE BOUNCE SCHEMA
@@ -534,6 +535,26 @@ const findPurchaseForAllocation = async (req, allocation, session) => {
 
 const reservePaymentAllocations = async (req, allocations, partyName, session) => {
   const reserved = [];
+  const purchaseAllocations = allocations.filter((allocation) => !allocation.openingTransactionId);
+  const Purchase = getPurchaseModel();
+  if (purchaseAllocations.length && !Purchase) throw new Error("Purchase model is unavailable.");
+  const purchaseFilters = purchaseAllocations.map((allocation) => {
+    const numericVoucher = Number(String(allocation.voucherNo).match(/(\d+)$/)?.[1] || allocation.voucherNo);
+    if (!Number.isFinite(numericVoucher) || numericVoucher <= 0) {
+      throw Object.assign(new Error(`Invalid purchase voucher ${allocation.voucherNo}.`), { statusCode: 400 });
+    }
+    const series = String(allocation.trnSeries || "").trim();
+    return { vouNo: numericVoucher, ...(series ? { vouSer: series } : {}) };
+  });
+  const purchases = purchaseFilters.length
+    ? await Purchase.find(tenantFilter(req, { isActive: { $ne: false }, $or: purchaseFilters })).session(session)
+    : [];
+  const purchasesByNumber = new Map();
+  for (const purchase of purchases) {
+    const matches = purchasesByNumber.get(purchase.vouNo) || [];
+    matches.push(purchase);
+    purchasesByNumber.set(purchase.vouNo, matches);
+  }
   for (const allocation of allocations) {
     if (allocation.openingTransactionId) {
       const opening = await allocateOpening(req, allocation.openingTransactionId, allocation.allocatedAmount, 'Cr', req.body.partyCode || partyName, session, req.body.vDate);
@@ -541,7 +562,15 @@ const reservePaymentAllocations = async (req, allocations, partyName, session) =
       reserved.push({ ...allocation, amount: opening.balanceAmount, previouslyAdjusted: opening.allocatedAmount });
       continue;
     }
-    const purchase = await findPurchaseForAllocation(req, allocation, session);
+    const filter = purchaseFilters[purchaseAllocations.indexOf(allocation)];
+    const matches = (purchasesByNumber.get(filter.vouNo) || []).filter((item) =>
+      (!Object.hasOwn(filter, "vouSer") || item.vouSer === filter.vouSer));
+    const purchase = matches.length > 1
+      ? await findPurchaseForAllocation(req, allocation, session)
+      : matches[0];
+    if (!purchase) {
+      throw Object.assign(new Error(`Purchase ${allocation.trnSeries}-${filter.vouNo} was not found.`), { statusCode: 404 });
+    }
     if (partyName && String(purchase.supplierName || "").trim().toLowerCase() !== partyName.trim().toLowerCase()) {
       throw Object.assign(new Error("Every allocated purchase must belong to the selected supplier."), { statusCode: 400 });
     }
@@ -558,6 +587,7 @@ const reservePaymentAllocations = async (req, allocations, partyName, session) =
     if (result.modifiedCount !== 1) {
       throw Object.assign(new Error("Purchase outstanding changed during payment. Please reload and retry."), { statusCode: 409 });
     }
+    purchase.paymentAllocated = alreadyAllocated + allocation.allocatedAmount;
     reserved.push({ ...allocation, purchaseId: purchase._id, amount: billAmount, previouslyAdjusted: alreadyAllocated });
   }
   return reserved;
@@ -1057,6 +1087,39 @@ router.post(
       let savedReceipt;
       await session.withTransaction(async () => {
         const sales = mongoose.connection.collection("T_Sal_Header");
+        const salesBills = bills.filter((bill) => !bill.openingTransactionId);
+        const salesFilterFor = (bill) => {
+          const billFilter = tenantFilter(req, {
+            BillNo: Number.isFinite(Number(bill.trnNo)) ? Number(bill.trnNo) : bill.trnNo,
+            ...(body._desktopImport === true ? { BillSeries: bill.trnSeries } : {}),
+          });
+          if (body._desktopImport === true && bill.trnDate) billFilter.BillDate = bill.trnDate;
+          if (body._desktopImport !== true && bill.trnSeries) billFilter.BillSeries = bill.trnSeries;
+          return billFilter;
+        };
+        const salesFilters = salesBills.map(salesFilterFor);
+        const invoices = salesFilters.length
+          ? await sales.find({ $or: salesFilters }, { session, projection: { NetAmount: 1, BillAmount: 1, partyCode: 1, AccountCode: 1, receiptAllocated: 1, BillNo: 1, BillSeries: 1, BillDate: 1 } }).toArray()
+          : [];
+        const invoicesByNumber = new Map();
+        for (const invoice of invoices) {
+          const matches = invoicesByNumber.get(invoice.BillNo) || [];
+          matches.push(invoice);
+          invoicesByNumber.set(invoice.BillNo, matches);
+        }
+        const priorAllocations = salesBills.length ? await Receipt.aggregate([
+          { $match: tenantFilter(req, { status: { $ne: "REVERSED" }, receiptBills: { $elemMatch: { $or: salesBills.map((bill) => ({ trnSeries: bill.trnSeries, trnNo: bill.trnNo })) } } }) },
+          { $unwind: "$receiptBills" },
+          { $match: { $or: salesBills.map((bill) => ({ "receiptBills.trnSeries": bill.trnSeries, "receiptBills.trnNo": bill.trnNo })), "receiptBills.openingTransactionId": { $in: [null, ""] } } },
+          { $group: { _id: { series: "$receiptBills.trnSeries", no: "$receiptBills.trnNo" }, total: { $sum: {
+            $cond: [
+              { $eq: ["$receiptBills.legacyOverAllocation", true] },
+              { $ifNull: ["$receiptBills.appliedAmount", 0] },
+              { $add: ["$receiptBills.nowAdjust", "$receiptBills.discAmt"] },
+            ],
+          } } } },
+        ]).session(session) : [];
+        const priorByBill = new Map(priorAllocations.map((row) => [JSON.stringify([row._id.series, row._id.no]), Number(row.total || 0)]));
         for (const bill of bills) {
           if (bill.openingTransactionId) {
             const opening = await allocateOpening(req, bill.openingTransactionId, bill.nowAdjust + bill.discAmt, 'Dr', body.partyId || body.partyName, session, body.receiptDate);
@@ -1066,16 +1129,17 @@ router.post(
             bill.trnDate = opening.date;
             continue;
           }
-          const billFilter = tenantFilter(req, {
-            BillNo: Number.isFinite(Number(bill.trnNo)) ? Number(bill.trnNo) : bill.trnNo,
-            // A blank desktop series is a real legacy series, not a wildcard.
-            // Without this constraint an old allocation can be applied to a
-            // newer invoice that reused the same bill number in another series.
-            ...(body._desktopImport === true ? { BillSeries: bill.trnSeries } : {}),
-          });
-          if (body._desktopImport === true && bill.trnDate) billFilter.BillDate = bill.trnDate;
-          if (body._desktopImport !== true && bill.trnSeries) billFilter.BillSeries = bill.trnSeries;
-          const invoice = await sales.findOne(billFilter, { session, projection: { NetAmount: 1, BillAmount: 1, partyCode: 1, AccountCode: 1, receiptAllocated: 1 } });
+          // A blank desktop series is a real legacy series, not a wildcard.
+          // Match the same fields as the original lookup, including its date.
+          const billFilter = salesFilterFor(bill);
+          const matches = (invoicesByNumber.get(billFilter.BillNo) || []).filter((item) =>
+            (!Object.hasOwn(billFilter, "BillSeries") || item.BillSeries === billFilter.BillSeries) &&
+            (!Object.hasOwn(billFilter, "BillDate") || item.BillDate === billFilter.BillDate));
+          // A series-free legacy reference may be ambiguous. Keep MongoDB's
+          // original findOne selection for that rare case.
+          const invoice = matches.length > 1
+            ? await sales.findOne(billFilter, { session, projection: { NetAmount: 1, BillAmount: 1, partyCode: 1, AccountCode: 1, receiptAllocated: 1 } })
+            : matches[0];
           if (!invoice && body._desktopImport === true) {
             // Desktop exports can contain receipts for bills from an older
             // period that is outside the selected Sales export. Retain the
@@ -1086,19 +1150,7 @@ router.post(
           }
           if (!invoice) throw Object.assign(new Error(`Sales bill ${bill.trnSeries}-${bill.trnNo} was not found in this firm.`), { statusCode: 404 });
 
-          const previousReceipts = await Receipt.aggregate([
-            { $match: tenantFilter(req, { status: { $ne: "REVERSED" }, receiptBills: { $elemMatch: { trnSeries: bill.trnSeries, trnNo: bill.trnNo } } }) },
-            { $unwind: "$receiptBills" },
-            { $match: { "receiptBills.trnSeries": bill.trnSeries, "receiptBills.trnNo": bill.trnNo, "receiptBills.openingTransactionId": { $in: [null, ''] } } },
-            { $group: { _id: null, total: { $sum: {
-              $cond: [
-                { $eq: ["$receiptBills.legacyOverAllocation", true] },
-                { $ifNull: ["$receiptBills.appliedAmount", 0] },
-                { $add: ["$receiptBills.nowAdjust", "$receiptBills.discAmt"] },
-              ],
-            } } } },
-          ]).session(session);
-          const legacyAllocated = Number(previousReceipts[0]?.total || 0);
+          const legacyAllocated = priorByBill.get(JSON.stringify([bill.trnSeries, bill.trnNo])) || 0;
           const allocation = bill.nowAdjust + bill.discAmt;
           const amountField = Number(invoice.NetAmount ?? invoice.BillAmount ?? 0);
           // A desktop retry can follow a direct legacy receipt deletion, which
@@ -1126,6 +1178,7 @@ router.post(
               { $set: { receiptAllocated: Math.min(amountField, currentAllocated + availableAmount) } },
               { session }
             );
+            invoice.receiptAllocated = Math.min(amountField, currentAllocated + availableAmount);
             continue;
           }
 
@@ -1162,6 +1215,7 @@ router.post(
   }
 );
           if (reserved.modifiedCount !== 1) throw Object.assign(new Error(`Receipt exceeds the pending amount for bill ${bill.trnSeries}-${bill.trnNo}.`), { statusCode: 409 });
+          invoice.receiptAllocated = currentAllocated + allocation;
         }
 
         const importedRno = Number(body.rno || 0);

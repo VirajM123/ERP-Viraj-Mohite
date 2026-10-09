@@ -160,8 +160,9 @@ export async function saveAccountWithOpenings(req, save) {
   } finally { await session.endSession(); }
 }
 
-export async function openingOutstanding(req, side, session) {
+export async function openingOutstanding(req, side, session, accountCode) {
   return OpeningTransaction.find(openingTenant(req, { status: 'POSTED', mode: 'OPENING', ...(side ? { balanceType: side } : {}),
+    ...(accountCode ? { accountCode } : {}),
     postingDate: { $lte: businessDateIST() },
     $expr: { $gt: ['$balanceAmount', '$allocatedAmount'] } })).session(session || null).lean();
 }

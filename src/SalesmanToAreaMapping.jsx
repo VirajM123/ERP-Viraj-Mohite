@@ -96,6 +96,9 @@ const SalesmanToAreaMapping = ({ companies = [], areas = [], salesmen = [] }) =>
       );
 
       const result = await res.json();
+      if (!res.ok || result.success === false) {
+        throw new Error(result.message || "Failed to load salesman area mappings");
+      }
       const savedMappings = result?.mappings || [];
 
       const mergedRows = baseRows.map((row) => {
@@ -115,7 +118,9 @@ const SalesmanToAreaMapping = ({ companies = [], areas = [], salesmen = [] }) =>
       setMappingRows(mergedRows);
     } catch (error) {
       console.error(error);
-      setMappingRows(baseRows);
+      setLoadedCompany(null);
+      setMappingRows([]);
+      alert(error.message || "Failed to load salesman area mappings");
     } finally {
       setLoading(false);
     }
@@ -146,9 +151,12 @@ const SalesmanToAreaMapping = ({ companies = [], areas = [], salesmen = [] }) =>
     }
 
     const mappedRows = mappingRows.filter((row) => row.salesmanCode);
+    const unmappedAreaCodes = mappingRows
+      .filter((row) => !row.salesmanCode && row.areaCode)
+      .map((row) => row.areaCode);
 
-    if (mappedRows.length === 0) {
-      alert("Please select at least one salesman");
+    if (mappingRows.length === 0) {
+      alert("No areas available to save");
       return;
     }
 
@@ -175,6 +183,7 @@ const SalesmanToAreaMapping = ({ companies = [], areas = [], salesmen = [] }) =>
           distributorId,
           firmId,
           firmName,
+          unmappedAreaCodes,
           mappings: mappedRows.map((row) => ({
             areaCode: row.areaCode,
             areaName: row.areaName,
@@ -186,7 +195,7 @@ const SalesmanToAreaMapping = ({ companies = [], areas = [], salesmen = [] }) =>
 
       const result = await res.json();
 
-      if (!res.ok || result.success === false) {
+      if (!res.ok || result.success === false || result.count !== mappedRows.length) {
         alert(result.message || "Mapping save failed");
         return;
       }

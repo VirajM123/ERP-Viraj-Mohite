@@ -427,6 +427,60 @@ export const buildGstSummaryRows = ({ salesRows, purchaseRows, crnRows, debitRow
 
 const totalColumns = (columns, rows) => Object.fromEntries(columns.filter((column) => !["SrNo", "TrnNo"].includes(column.key) && rows.some((row) => typeof row[column.key] === "number")).map((column) => [column.key, sum(rows, (row) => row[column.key])]));
 
+// Report dependencies: sales-register -> sales + referenced accounts;
+// purchase-register -> purchases + referenced accounts; crn-register -> credits +
+// referenced accounts; gstr1 -> sales + credits + referenced accounts (including
+// cancelled documents for Docs); summary -> all four transaction collections +
+// referenced accounts. Items stay intact because GST and HSN rounding is per invoice.
+const GST_REPORT_SOURCES = {
+  "sales-register": ["sales"],
+  "purchase-register": ["purchases"],
+  "crn-register": ["credits"],
+  gstr1: ["sales", "credits"],
+  summary: ["sales", "purchases", "credits", "debits"],
+};
+
+const project = (fields) => ({ _id: 0, ...Object.fromEntries(fields.split(/\s+/).filter(Boolean).map((field) => [field, 1])) });
+const SALES_FIELDS = project("BillDate BillSeries vouSer CreditNoteSeries DebitNoteSeries BillNo VNo PartyCode PartyName GSTNo gstNo BillType BillStatus Status isActive IsBillCancelled TaxOn taxOn TaxableValue CGSTAmount SGSTAmount IGSTAmount OriginalNetAmount NetAmount GrossAmount Rounding RoundingAmount AddLessAmount CreditNoteAmount Surcharge CessAmount IRNNo irnNo IrnNo historicalSnapshot.irnNo PlaceOfSupply placeOfSupply items Items");
+const PURCHASE_FIELDS = project("invoiceDate vouSer vouNo supplierCode supplierName invoiceNumber mrpTotal groBsAmt TaxableValue ceBsAmt cgstAmt sgstAmt igstAmt tcbAmount tdsAmount diBc3 rounding netAmt grossAmount surcharge isActive IsBillCancelled BillStatus Status items Items");
+const CREDIT_FIELDS = project("VDate CreditNoteSeries DebitNoteSeries vouSer CreditNoteNo VNo PartyCode PartyName GSTNo gstNo BillSeries BillNo RefBy RefDate Narration NetAmount amount TaxableValue GSTAmount CessAmount Rounding AddLess IRNNo irnNo IrnNo historicalSnapshot.irnNo PlaceOfSupply placeOfSupply TaxOn taxOn isActive IsBillCancelled BillStatus Status items Items");
+const DEBIT_FIELDS = project("VDate DebitNoteSeries DebitNoteNo SupplierCode SupplierName NetAmount GrossAmount RoundingAmount mrpTotal groBsAmt TaxableValue ceBsAmt tcbAmount tdsAmount diBc3 surcharge invoiceNumber isActive IsBillCancelled BillStatus Status items Items");
+const ACCOUNT_FIELDS = project("accountCode code accountName gstNo gstType gstDate gstClsDate tinNo address billToAdd1 add2 town state");
+
+// Mirror active(): BillStatus takes precedence unless blank, then Status is used.
+const mongoText = (field) => ({ $trim: { input: { $convert: { input: `$${field}`, to: "string", onNull: "", onError: "" } } } });
+const activeQuery = {
+  isActive: { $ne: false }, IsBillCancelled: { $ne: true },
+  $expr: { $let: { vars: { billStatus: mongoText("BillStatus") }, in: {
+    $ne: [{ $toUpper: { $cond: [{ $ne: ["$$billStatus", ""] }, "$$billStatus", mongoText("Status")] } }, "CANCELLED"],
+  } } },
+};
+const exactText = (value) => new RegExp(`^\\s*${String(value).replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\s*$`, "i");
+const mongoFirstText = (fields) => fields.reduceRight((fallback, field) => {
+  const candidate = mongoText(field);
+  return { $cond: [{ $ne: [candidate, ""] }, candidate, fallback] };
+}, "");
+const mongoTrimmedValue = (reference) => ({ $trim: { input: { $convert: { input: reference, to: "string", onNull: "", onError: "" } } } });
+const noDamageQuery = { $expr: { $not: [{ $anyElementTrue: [{ $map: {
+  input: { $cond: [{ $isArray: "$items" }, "$items", { $cond: [{ $isArray: "$Items" }, "$Items", []] }] },
+  as: "item",
+  in: { $let: { vars: { trn: mongoTrimmedValue("$$item.TRN") }, in: {
+    $eq: [{ $toUpper: { $cond: [{ $ne: ["$$trn", ""] }, "$$trn", mongoTrimmedValue("$$item.trn")] } }, "DGR"],
+  } } },
+} }] }] } };
+const documentQuery = (report, source, filters) => {
+  const clauses = [];
+  if (report !== "gstr1") clauses.push(activeQuery);
+  if (source === "sales" && text(filters.billType) && text(filters.billType).toLowerCase() !== "all") {
+    clauses.push({ BillType: exactText(filters.billType) });
+  }
+  if (report === "gstr1" && source === "sales" && text(filters.withDamage, "Y").toUpperCase() !== "Y") clauses.push(noDamageQuery);
+  if (["sales", "credits"].includes(source) && text(filters.specificSeries).toUpperCase() === "Y" && text(filters.series)) {
+    clauses.push({ $expr: { $eq: [mongoFirstText(["BillSeries", "vouSer", "CreditNoteSeries", "DebitNoteSeries"]), text(filters.series)] } });
+  }
+  return clauses.length ? { $and: clauses } : {};
+};
+
 export default function createGstReportsRouter({ SalesHeader, PurchaseHeader, CreditNote, DebitNote, Account, OtherAccount }) {
   const router = express.Router();
   router.get("/gst/:report", async (req, res) => {
@@ -438,12 +492,35 @@ export default function createGstReportsRouter({ SalesHeader, PurchaseHeader, Cr
       if (fromDate > toDate) return res.status(400).json({ success: false, message: "From Date cannot be greater than To Date." });
       const scope = { distributorId, firmId };
       const between = { $gte: fromDate, $lte: toDate };
-      const [sales, purchases, credits, debits, customers, suppliers] = await Promise.all([
-        SalesHeader.find({ ...scope, BillDate: between }).lean(), PurchaseHeader.find({ ...scope, invoiceDate: between }).lean(), CreditNote.find({ ...scope, VDate: between }).lean(), DebitNote.find({ ...scope, VDate: between }).lean(), Account.find(scope).lean(), OtherAccount.find(scope).lean(),
+      const report = req.params.report;
+      const sources = GST_REPORT_SOURCES[report];
+      if (!sources) return res.status(404).json({ success: false, message: "Unknown GST report." });
+      const needsSales = sources.includes("sales");
+      const needsPurchases = sources.includes("purchases");
+      const needsCredits = sources.includes("credits");
+      const needsDebits = sources.includes("debits");
+      const filters = req.query;
+      const [sales, purchases, credits, debits] = await Promise.all([
+        needsSales ? SalesHeader.find({ ...scope, BillDate: between, ...documentQuery(report, "sales", filters) }, SALES_FIELDS).lean() : [],
+        needsPurchases ? PurchaseHeader.find({ ...scope, invoiceDate: between, ...documentQuery(report, "purchases", filters) }, PURCHASE_FIELDS).lean() : [],
+        needsCredits ? CreditNote.find({ ...scope, VDate: between, ...documentQuery(report, "credits", filters) }, CREDIT_FIELDS).lean() : [],
+        needsDebits ? DebitNote.find({ ...scope, VDate: between, ...documentQuery(report, "debits", filters) }, DEBIT_FIELDS).lean() : [],
       ]);
-      const accounts = buildAccountMap([...customers, ...suppliers]); const filters = req.query;
-      const salesRows = buildSalesGSTRows(sales, accounts, filters); const purchaseRows = buildPurchaseGSTRows(purchases, accounts, filters); const crnRows = buildCrnGSTRows(credits, accounts, filters);
-      const debitRows = buildPurchaseGSTRows(debits.map((row) => ({ ...row, invoiceDate: row.VDate, vouSer: row.DebitNoteSeries, vouNo: row.DebitNoteNo, supplierCode: row.SupplierCode, supplierName: row.SupplierName, netAmt: row.NetAmount, grossAmount: row.GrossAmount, rounding: row.RoundingAmount, cgstAmt: sum(invoiceItems(row), (item) => item.CGST), sgstAmt: sum(invoiceItems(row), (item) => item.SGST), igstAmt: sum(invoiceItems(row), (item) => item.IGST) })), accounts, filters);
+      const codes = [...new Set([
+        ...sales.map((row) => text(row.PartyCode)),
+        ...purchases.map((row) => text(row.supplierCode)),
+        ...credits.map((row) => text(row.PartyCode)),
+        ...debits.map((row) => text(row.SupplierCode)),
+      ])];
+      const [customers, suppliers] = codes.length ? await Promise.all([
+        Account.find({ ...scope, $or: [{ accountCode: { $in: codes } }, { code: { $in: codes } }] }, ACCOUNT_FIELDS).lean(),
+        OtherAccount.find({ ...scope, $or: [{ accountCode: { $in: codes } }, { code: { $in: codes } }] }, ACCOUNT_FIELDS).lean(),
+      ]) : [[], []];
+      const accounts = buildAccountMap([...customers, ...suppliers]);
+      const salesRows = needsSales ? buildSalesGSTRows(sales, accounts, filters) : [];
+      const purchaseRows = needsPurchases ? buildPurchaseGSTRows(purchases, accounts, filters) : [];
+      const crnRows = report === "crn-register" || report === "summary" ? buildCrnGSTRows(credits, accounts, filters) : [];
+      const debitRows = needsDebits ? buildPurchaseGSTRows(debits.map((row) => ({ ...row, invoiceDate: row.VDate, vouSer: row.DebitNoteSeries, vouNo: row.DebitNoteNo, supplierCode: row.SupplierCode, supplierName: row.SupplierName, netAmt: row.NetAmount, grossAmount: row.GrossAmount, rounding: row.RoundingAmount, cgstAmt: sum(invoiceItems(row), (item) => item.CGST), sgstAmt: sum(invoiceItems(row), (item) => item.SGST), igstAmt: sum(invoiceItems(row), (item) => item.IGST) })), accounts, filters) : [];
       let rows; let columns; let title; let sections;
       switch (req.params.report) {
         case "sales-register": rows = salesRows; columns = salesColumns; title = "Sales GST Register"; break;

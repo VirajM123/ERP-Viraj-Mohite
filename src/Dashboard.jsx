@@ -11,6 +11,8 @@ import './DashboardHorizontalNav.css';
 import './SalesInvoiceListModern.css';
 import landscapeLogo from "./assets/images/total-solution-landscape.svg";
 import DashboardHome from "./DashboardHome";
+import SearchablePartySelect from "./components/SearchablePartySelect";
+import UserProfileModal from "./components/UserProfileModal";
 import { businessDateIST } from "./utils/businessDate";
 import { resolveInvoiceItemHsn } from "./utils/invoiceHsn";
 import { findPurchaseSupplier, purchaseSupplierValue } from "./utils/purchaseSupplier";
@@ -22,6 +24,7 @@ import {
   refreshPermissions,
 } from "./SecuritySetup";
 import Report from "./Report";
+import EInvoiceReport from "./EInvoiceReport";
 import AccountOpeningTransactions from "./AccountOpeningTransactions";
 import AccountCompanyAreaMappings from "./AccountCompanyAreaMappings";
 import { ACCOUNT_STATES } from "./data/accountStates";
@@ -7677,7 +7680,7 @@ const debitNotePermission = usePermission("VOUCHERS", "DEBIT_NOTE");
     window.addEventListener("keydown", returnToDashboard);
     return () => window.removeEventListener("keydown", returnToDashboard);
   }, [showDashboard, activeMenu, activeSubMenu, openFormFor, expandedNavMenu]);
-  const [showCreateDropdown, setShowCreateDropdown] = useState(false);
+  const [showProfileModal, setShowProfileModal] = useState(false);
   const [revenuePeriod, setRevenuePeriod] = useState("7D");
   // VOUCHER LIST STATE VARIABLES
   const [showSalesList, setShowSalesList] = useState(false);
@@ -13063,21 +13066,32 @@ const debitNotePermission = usePermission("VOUCHERS", "DEBIT_NOTE");
   };
 
 
+  const loadedDashboardLookups = useRef(new Set());
   useEffect(() => {
-
-    loadCompanies();
-    loadCompanyWiseSeries();
-    loadGroups();
-    loadCategories();
-    loadProducts();
-    loadAccounts();
-    loadOtherAccounts();
-    loadGst();
-    loadSalesmen();
-    loadAreas();
-    loadGodowns();
-    loadCustomerBanks();
-  }, []);
+    const screen = openFormFor || activeSubMenu;
+    if (!screen) return;
+    const transactionForm = ["Billing", "Counter Sales", "Quotation", "Purchase", "Credit Note", "Debit Note", "Create Load", "Settle Load", "Receipt"].includes(openFormFor);
+    const lookupLoaders = [
+      ["companies", transactionForm || ["Product", "Company Master", "Company Wise Series Setup", "Salesman To Area", "Area To Party"].includes(screen), loadCompanies],
+      ["series", transactionForm || screen === "Company Wise Series Setup", loadCompanyWiseSeries],
+      ["groups", screen === "Product", loadGroups],
+      ["categories", screen === "Product", loadCategories],
+      ["products", transactionForm, loadProducts],
+      ["accounts", accountPermission.view && (transactionForm || openFormFor === "Account" || screen === "Area To Party"), loadAccounts],
+      ["otherAccounts", screen === "Other Account", loadOtherAccounts],
+      ["gst", screen === "GST Master", loadGst],
+      ["salesmen", transactionForm || screen === "Salesman" || screen === "Salesman To Area", loadSalesmen],
+      ["areas", ["Area", "Account", "Salesman To Area", "Area To Party"].includes(screen), loadAreas],
+      ["godowns", transactionForm || screen === "GoDown Master", loadGodowns],
+      ["customerBanks", screen === "Customer Bank Master", loadCustomerBanks],
+    ];
+    lookupLoaders.forEach(([key, needed, loader]) => {
+      if (needed && !loadedDashboardLookups.current.has(key)) {
+        loadedDashboardLookups.current.add(key);
+        void loader();
+      }
+    });
+  }, [activeSubMenu, openFormFor, accountPermission.view]);
   // Add this useEffect near other useEffects (around line 300-350)
   useEffect(() => {
     // Load areas when Account form is opened
@@ -13480,6 +13494,7 @@ const debitNotePermission = usePermission("VOUCHERS", "DEBIT_NOTE");
         "Print Load",
         "Settle Load",
         "Bill Print",
+        "E-Invoice",
         "Load Transfer"
       ]
     },
@@ -17394,7 +17409,7 @@ const debitNotePermission = usePermission("VOUCHERS", "DEBIT_NOTE");
     loadCategoryMaster,
   ]);
 
-  const loadProducts = async () => {
+  const loadProducts = async (search = "") => {
     try {
       const distributorId = localStorage.getItem("distributorId");
       const firmId = localStorage.getItem("firmId");
@@ -17404,9 +17419,8 @@ const debitNotePermission = usePermission("VOUCHERS", "DEBIT_NOTE");
         return;
       }
 
-      const res = await secureFetch(
-        `${API_URL}/products?distributorId=${distributorId}&firmId=${firmId}`
-      );
+      const query = new URLSearchParams({ distributorId, firmId, q: String(search || "").trim(), limit: "50" });
+      const res = await secureFetch(`${API_URL}/products/lookup?${query}`);
 
       const result = await res.json();
 
@@ -17414,18 +17428,31 @@ const debitNotePermission = usePermission("VOUCHERS", "DEBIT_NOTE");
         return alert(result.message || "Failed to load products");
       }
 
-      setProducts(
-        (result.products || []).map((p) => ({
+      const found = (result.products || []).map((p) => ({
           id: p._id,
           code: p.productCode,
           name: p.productName,
           ...p,
-        }))
-      );
+        }));
+      setProducts((previous) => {
+        if (!String(search || "").trim()) return found;
+        const byCode = new Map(previous.filter((product) => product._id).map((product) => [product.productCode, product]));
+        found.forEach((product) => byCode.set(product.productCode, product));
+        return [...byCode.values()];
+      });
     } catch (error) {
       console.error(error);
     }
   };
+  useEffect(() => {
+    const search = openFormFor === "Purchase" ? purchaseProductListFilter
+      : openFormFor === "Credit Note" ? creditProductListFilter
+      : openFormFor === "Debit Note" ? debitProductListFilter
+      : ["Billing", "Counter Sales", "Quotation"].includes(openFormFor) ? productListFilter : "";
+    if (!String(search || "").trim()) return;
+    const timer = window.setTimeout(() => { void loadProducts(search); }, 250);
+    return () => window.clearTimeout(timer);
+  }, [openFormFor, productListFilter, purchaseProductListFilter, creditProductListFilter, debitProductListFilter]);
   const loadProductMaster = useCallback(
     async ({
       page = 1,
@@ -18858,26 +18885,6 @@ const debitNotePermission = usePermission("VOUCHERS", "DEBIT_NOTE");
     { billNo: "INV-1026", customer: "Shree Mart", amount: 3200 }
   ]
 
-  const closeCreateDropdown = () => {
-    setShowCreateDropdown(false);
-  };
-
-  const openNewInvoiceFromHeader = () => {
-    closeCreateDropdown();
-
-    setShowDashboard(false);
-    setActiveMenu("sales");
-    setActiveSubMenu("Billing");
-
-    setShowSalesList(false);
-    setShowPurchaseList(false);
-    setShowReceiptForm(false);
-    setShowSettleLoad(false);
-    setShowSettleLoadList(false);
-
-    setOpenFormFor("Billing");
-  };
-
   const navigateTransaction = (item, openNew = false) => {
     setSidebarCollapsed(true);
     setExpandedNavMenu(null);
@@ -18891,27 +18898,6 @@ const debitNotePermission = usePermission("VOUCHERS", "DEBIT_NOTE");
     setTransactionEntryRequest(openNew ? { menu: item } : null);
   };
 
-  const openNewTransactionFromHeader = () => {
-    closeCreateDropdown();
-    setActiveMenu("transactions");
-    navigateTransaction("Receipt", true);
-  };
-
-  const openNewPurchaseFromHeader = () => {
-    closeCreateDropdown();
-
-    setShowDashboard(false);
-    setActiveMenu("purchase");
-    setActiveSubMenu("Purchase");
-
-    setShowPurchaseList(false);
-    setShowSalesList(false);
-    setShowReceiptForm(false);
-    setShowSettleLoad(false);
-    setShowSettleLoadList(false);
-
-    setOpenFormFor("Purchase");
-  };
   const getProductSelectionLabel = (
     mode = getRuntimeProductSelectionMode()
   ) => {
@@ -18938,11 +18924,11 @@ const debitNotePermission = usePermission("VOUCHERS", "DEBIT_NOTE");
   };
 
 
-  const renderFlashDashboard = () => <DashboardHome userName={loggedUserName} accountCount={accounts?.length} itemCount={products?.length} onQuickAction={(item) => {
+  const renderFlashDashboard = () => <DashboardHome userName={loggedUserName} firmName={loggedFirmName} accountCount={accounts?.length} itemCount={products?.length} onQuickAction={(item) => {
     setSidebarCollapsed(true);
     setExpandedNavMenu(null);
-    if (item === "Receipt") {
-      navigateTransaction("Receipt", true);
+    if (["Receipt", "PDC Docket"].includes(item)) {
+      navigateTransaction(item, true);
       return;
     }
     if (item === "Billing") {
@@ -18956,7 +18942,7 @@ const debitNotePermission = usePermission("VOUCHERS", "DEBIT_NOTE");
       setEditingCreateLoadBills([]);
     }
     setShowDashboard(false);
-    setActiveMenu(item === "Purchase" || item === "Credit Note" ? "vouchers" : "sales");
+    setActiveMenu(["Purchase", "Credit Note"].includes(item) ? "vouchers" : item === "Stock In" ? "stockManagement" : item === "Account" ? "master" : "sales");
     handlePlusClick(item);
   }} />;
 
@@ -24878,7 +24864,8 @@ ALLOW CHANGE STAR AMOUNT — FINAL SAVE PROTECTION
           salesPageAfterSave,
       }));
 
-      await loadSalesBills({
+      // Refresh the list while the saved bill can already be confirmed.
+      void loadSalesBills({
         page:
           salesPageAfterSave,
 
@@ -28679,7 +28666,8 @@ ALLOW CHANGE STAR AMOUNT — FINAL SAVE PROTECTION
         })
       );
 
-      await loadPurchaseBills({
+      // The voucher is committed; let the list refresh in the background.
+      void loadPurchaseBills({
         page: 1,
         limit:
           purchaseRowsPerPage,
@@ -42555,6 +42543,12 @@ ALLOW CHANGE STAR AMOUNT — FINAL SAVE PROTECTION
     setShowSettleLoad(false);
     setShowPrintPreview(false);
 
+    if (item === "E-Invoice") {
+      setActiveMenu("sales");
+      setOpenFormFor("E-Invoice");
+      return;
+    }
+
     if (item === "Logout") {
       handleLogout();
       return;
@@ -43040,6 +43034,11 @@ if (item === "Import Data") {
     e?.preventDefault();
     e?.stopPropagation();
     setIsFormReadOnly(false);
+
+    if (item === "E-Invoice") {
+      handleSubMenuClick(item);
+      return;
+    }
 
     /*
     * Billing and Quotation must use their own
@@ -48300,9 +48299,8 @@ else if (item === 'Import Data From Desktop') {
 
       const result = await res.json();
 
-      if (!res.ok) {
-        setAreaToPartyData(baseRows);
-        return;
+      if (!res.ok || result.success === false) {
+        throw new Error(result.message || "Failed to load Area To Party mappings");
       }
 
       const savedMappings = result.mappings || [];
@@ -48324,9 +48322,16 @@ else if (item === 'Import Data From Desktop') {
       setAreaToPartyData(mergedRows);
     } catch (error) {
       console.error(error);
-      setAreaToPartyData(baseRows);
+      setAreaToPartyData([]);
+      alert(error.message || "Failed to load Area To Party mappings");
     }
   };
+
+  useEffect(() => {
+    if (areaToPartyCompany && accounts.length > 0 && areaToPartyData.length === 0) {
+      void handleAreaToPartyCompanySelect(areaToPartyCompany);
+    }
+  }, [accounts]);
 
   const handleAreaToPartyCellClick = (rowIndex, cellType) => {
     if (cellType !== "areaName") return;
@@ -48370,9 +48375,16 @@ else if (item === 'Import Data From Desktop') {
   };
 
   const handleAreaToPartyAccountFieldChange = (rowIndex, field, value) => {
+    const selectedArea = field === "areaCode"
+      ? areas.find((area) => String(area.code || area.areaCode || "") === String(value))
+      : null;
     setAreaToPartyData((previousRows) =>
       previousRows.map((row, index) =>
-        index === rowIndex ? { ...row, [field]: value } : row
+        index === rowIndex
+          ? field === "areaCode"
+            ? { ...row, areaCode: value, areaName: selectedArea?.name || selectedArea?.areaName || "" }
+            : { ...row, [field]: value }
+          : row
       )
     );
   };
@@ -48414,8 +48426,6 @@ else if (item === 'Import Data From Desktop') {
               ...currentRow,
               partyCode: saved.partyCode ?? currentRow.partyCode,
               partyName: saved.partyName ?? currentRow.partyName,
-              areaCode: saved.areaCode ?? currentRow.areaCode,
-              areaName: saved.areaName ?? currentRow.areaName,
               closingDate: saved.closingDate ?? currentRow.closingDate,
               isLock: saved.isLock ?? currentRow.isLock,
               isStar: saved.isStar ?? currentRow.isStar,
@@ -48454,9 +48464,11 @@ else if (item === 'Import Data From Desktop') {
       onChange={(event) =>
         handleAreaToPartyAccountFieldChange(rowIndex, field, event.target.value)
       }
-      onBlur={(event) =>
-        saveAreaToPartyAccountFields(rowIndex, { [field]: event.target.value })
-      }
+      onBlur={(event) => {
+        if (field !== "areaCode") {
+          saveAreaToPartyAccountFields(rowIndex, { [field]: event.target.value });
+        }
+      }}
       onKeyDown={(event) => {
         if (event.key === "Enter") event.currentTarget.blur();
       }}
@@ -48489,6 +48501,9 @@ else if (item === 'Import Data From Desktop') {
 
     if (mappedRows.length === 0) {
       return alert("Please select at least one area");
+    }
+    if (mappedRows.some((row) => !row.areaName || !row.accountCode || !row.accountName)) {
+      return alert("Please select a valid area for each mapped account");
     }
 
     const distributorId = localStorage.getItem("distributorId");
@@ -48524,7 +48539,7 @@ else if (item === 'Import Data From Desktop') {
 
       const result = await res.json();
 
-      if (!res.ok) {
+      if (!res.ok || result.success === false || result.count !== mappedRows.length) {
         return alert(result.message || "Area To Party mapping save failed");
       }
 
@@ -61024,92 +61039,16 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
             </div>
 
             <div className="lovable-header-right">
-              <div
-                className="lovable-create-dropdown"
-                onMouseLeave={() => setShowCreateDropdown(false)}
-              >
-                <button
-                  type="button"
-                  className="lovable-new-invoice-button lovable-create-trigger"
-                  onClick={() => {
-                    setShowCreateDropdown((prev) => !prev);
-                  }}
-                  aria-haspopup="menu"
-                  aria-expanded={showCreateDropdown}
-                >
-                  <Plus size={17} />
-
-                  <span>New</span>
-
-                  <span className="lovable-create-trigger-divider" />
-
-                  <ChevronDown
-                    size={15}
-                    className={showCreateDropdown ? "open" : ""}
-                  />
-                </button>
-
-                {showCreateDropdown && (
-                  <div
-                    className="lovable-create-menu"
-                    role="menu"
-                  >
-                    <button
-                      type="button"
-                      role="menuitem"
-                      onClick={openNewInvoiceFromHeader}
-                    >
-                      <span className="lovable-create-menu-icon invoice">
-                        <ReceiptText size={17} />
-                      </span>
-
-                      <span className="lovable-create-menu-copy">
-                        <strong>New Invoice</strong>
-                        <small>Create a sales invoice</small>
-                      </span>
-                    </button>
-
-                    <button
-                      type="button"
-                      role="menuitem"
-                      onClick={openNewTransactionFromHeader}
-                    >
-                      <span className="lovable-create-menu-icon transaction">
-                        <BadgeIndianRupee size={17} />
-                      </span>
-
-                      <span className="lovable-create-menu-copy">
-                        <strong>New Transaction</strong>
-                        <small>Create receipt transaction</small>
-                      </span>
-                    </button>
-
-                    <button
-                      type="button"
-                      role="menuitem"
-                      onClick={openNewPurchaseFromHeader}
-                    >
-                      <span className="lovable-create-menu-icon purchase">
-                        <ShoppingCart size={17} />
-                      </span>
-
-                      <span className="lovable-create-menu-copy">
-                        <strong>New Purchase</strong>
-                        <small>Create purchase invoice</small>
-                      </span>
-                    </button>
-                  </div>
-                )}
-              </div>
-
               <button
                 type="button"
-                className="lovable-header-icon-button"
-                aria-label="Help"
+                className="dashboard-profile-trigger"
+                onClick={() => setShowProfileModal(true)}
+                aria-label={`Open profile for ${loggedUserName || "signed-in user"}`}
               >
-                <HelpCircle size={19} />
+                <span className="dashboard-profile-avatar" aria-hidden="true">{getUserInitials(loggedUserName)}</span>
+                <span className="dashboard-profile-name">{loggedUserName || "My profile"}</span>
+                <ChevronDown size={15} aria-hidden="true" />
               </button>
-
               <button
                 type="button"
                 className="lovable-header-icon-button lovable-notification-button"
@@ -61127,15 +61066,19 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                 <Sun size={19} />
               </button>
 
-              <div className="lovable-user-profile">
-                <div className="lovable-user-information">
-                  <strong>{loggedUserName || "Administrator"}</strong>
-                </div>
-              </div>
             </div>
           </header>
 
+          {showProfileModal && <UserProfileModal onClose={() => setShowProfileModal(false)} />}
+
           <div className="content-body">
+            {activeSubMenu === "E-Invoice" && openFormFor === "E-Invoice" && (
+              <EInvoiceReport onClose={() => {
+                setActiveSubMenu(null);
+                setOpenFormFor(null);
+                setShowDashboard(true);
+              }} />
+            )}
             {isFormReadOnly && (
               <div className="project-read-only-banner" role="status">
                 <Eye size={15} />
@@ -65220,7 +65163,7 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                           </label>
 
                           <div className="billing-party-input-wrapper">
-                            <select
+                            <SearchablePartySelect
                               id="quotation-party"
                               name="party"
                               className="billing-control"
@@ -65303,7 +65246,7 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                                     </option>
                                   );
                                 })}
-                            </select>
+                            </SearchablePartySelect>
 
                             <button
                               type="button"
@@ -76284,7 +76227,7 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                           </label>
 
                           <div className="billing-party-input-wrapper">
-                            <select
+                            <SearchablePartySelect
                               id="billing-party"
                               name="party"
                               className="billing-control"
@@ -76346,7 +76289,7 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                                     </option>
                                   );
                                 })}
-                            </select>
+                            </SearchablePartySelect>
 
                             {/* Opens Account Master */}
                             <button
@@ -78223,12 +78166,12 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                       {/* 6. Supplier */}
                       <div className="labeled-input">
                         <label>Supplier *</label>
-                        <select name="supplier" className="erp-select" value={purchaseSupplierValue(findPurchaseSupplier(otherAccounts, purchaseFormData.supplier))} onChange={handlePurchaseInputChange} required>
+                        <SearchablePartySelect name="supplier" className="erp-select" value={purchaseSupplierValue(findPurchaseSupplier(otherAccounts, purchaseFormData.supplier))} onChange={handlePurchaseInputChange} required>
                           <option value="">Select Supplier</option>
                           {otherAccounts
                             .filter(acc => acc.accountGroup === 'SUNDRY CREDITORS' && acc.isActive !== false)
                             .map(acc => <option key={acc.id || acc._id} value={purchaseSupplierValue(acc)}>{acc.accountName}</option>)}
-                        </select>
+                        </SearchablePartySelect>
                       </div>
 
                       {/* 7. Invoice Number */}
@@ -79232,7 +79175,7 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                             Party <span>*</span>
                           </label>
 
-                          <select
+                          <SearchablePartySelect
                             name="party"
                             className="erp-select"
                             value={
@@ -79257,7 +79200,7 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                                 {mapping.accountName}
                               </option>
                             ))}
-                          </select>
+                          </SearchablePartySelect>
                         </div>
 
                         {/* 7. Original Bill Series */}
@@ -81284,7 +81227,7 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                       <div className="labeled-input">
                         <label>Supplier *</label>
 
-                        <select
+                        <SearchablePartySelect
                           name="supplier"
                           className="erp-select"
                           value={
@@ -81340,7 +81283,7 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                                 </option>
                               );
                             })}
-                        </select>
+                        </SearchablePartySelect>
                       </div>
 
                       {/* ROW 2 */}
@@ -82436,17 +82379,10 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                                               onClick={(e) => {
                                                 e.stopPropagation();
 
-                                                const selectedAreaCode = area.code || area.areaCode || "";
-                                                const selectedAreaName = area.name || area.areaName || "";
-
                                                 handleAreaToPartySelect(
                                                   originalIndex,
                                                   area
                                                 );
-                                                saveAreaToPartyAccountFields(originalIndex, {
-                                                  areaCode: selectedAreaCode,
-                                                  areaName: selectedAreaName,
-                                                });
 
                                                 // Close popup immediately
                                                 setShowAreaToPartyDropdown(false);

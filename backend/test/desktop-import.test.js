@@ -5,7 +5,8 @@ import path from "node:path";
 import test from "node:test";
 import * as XLSX from "xlsx";
 import { canReuseDesktopImportPlan, createSourceWorkbook, localSqlServiceAccount, mapDesktopRows, parseInstalledSqlInstances, parseSqlXmlRows } from "../desktopImportRoutes.js";
-import { loadExistingProductCodes } from "../importRoutes.js";
+import { loadExistingProductCodes, matchingImportDocuments } from "../importRoutes.js";
+import { getImportConfig } from "../importConfig.js";
 import { buildDesktopTransactionRows } from "../desktopTransactionMapper.js";
 import { DESKTOP_IMPORT_ORDER, createConflictFreeWaves, desktopCommittedTransactionFilter, desktopTransactionConcurrency, ensureDesktopReceiptBankAccounts, readDesktopWorkbook, readDesktopWorkbookStreaming } from "../desktopImportBatch.js";
 import { calculatePurchaseFinancials, calculateSalesFinancials } from "../financialValidation.js";
@@ -72,20 +73,58 @@ test("existing area-to-party workbooks ignore rows that have no area mapping", (
   } finally { fs.rmSync(directory, { recursive: true, force: true }); }
 });
 
-test("product import passes the transaction session through native MongoDB find options", async () => {
+test("product import looks up only supplied codes within the transaction", async () => {
   const session = { id: "session" };
-  let receivedFilter; let receivedOptions;
+  let receivedPipeline; let receivedOptions;
   const collection = {
-    find(filter, options) {
-      receivedFilter = filter; receivedOptions = options;
+    aggregate(pipeline, options) {
+      receivedPipeline = pipeline; receivedOptions = options;
       return { toArray: async () => [{ productCode: "Existing-Code" }] };
     },
   };
-  const codes = await loadExistingProductCodes({ collection, distributorId: "D", firmId: "F", session });
-  assert.deepEqual(receivedFilter, { distributorId: "D", firmId: "F" });
+  const codes = await loadExistingProductCodes({ collection, distributorId: "D", firmId: "F", session, productCodes: [" existing-code "] });
+  assert.deepEqual(receivedPipeline[0], { $match: { distributorId: "D", firmId: "F" } });
+  assert.deepEqual(receivedPipeline[1].$match.$expr.$in[1], ["existing-code"]);
   assert.equal(receivedOptions.session, session);
-  assert.deepEqual(receivedOptions.projection, { productCode: 1 });
+  assert.deepEqual(receivedPipeline[2], { $project: { productCode: 1 } });
   assert.equal(codes.get("existing-code"), "Existing-Code");
+});
+
+test("master import validation fetches only incoming identities and duplicate fields", async () => {
+  let pipeline;
+  const collection = {
+    aggregate(stages) {
+      pipeline = stages;
+      return { toArray: async () => [{ companyCode: "C1", accountCode: "A1" }] };
+    },
+  };
+  const matches = await matchingImportDocuments({
+    collection, distributorId: "D", firmId: "F",
+    config: getImportConfig("AreaToPartyMapping"), entryType: "AreaToPartyMapping", desktopBatch: false,
+    data: [{ "Company Code": " c1 ", "Account Code": "A1" }, { "Company Code": "C1", "Account Code": "A2" }],
+  });
+  assert.deepEqual(pipeline[0], { $match: { distributorId: "D", firmId: "F" } });
+  assert.deepEqual(pipeline[1].$match.$expr.$in[1], ["c1"]);
+  assert.deepEqual(pipeline[2], { $project: { companyCode: 1, accountCode: 1 } });
+  assert.deepEqual(matches, [{ companyCode: "C1", accountCode: "A1" }]);
+});
+
+test("desktop Load conversion keeps series matching and bill order", () => {
+  const rows = buildDesktopTransactionRows({
+    job: { distributorId: "D", firmId: "F" },
+    definition: { entryType: "DesktopLoads", label: "Load" },
+    sheets: [
+      { sheet: "Header", rows: [{ LoadNo: 1, LoadSeries: "A" }, { LoadNo: 2, LoadSeries: "B" }] },
+      { sheet: "Details", rows: [
+        { LoadNo: 1, LoadSeries: "A", TrnNo: 11, SysAcCode: 1 },
+        { LoadNo: 2, LoadSeries: "B", TrnNo: 21, SysAcCode: 1 },
+        { LoadNo: 1, LoadSeries: "B", TrnNo: 12, SysAcCode: 1 },
+        { LoadNo: 1, LoadSeries: "", TrnNo: 13, SysAcCode: 1 },
+      ] },
+    ],
+    references: { companies: new Map(), accounts: new Map([["1", { AcCode: "A1", AcName: "Account" }]]), salesmen: new Map(), areas: new Map() },
+  });
+  assert.deepEqual(rows.map((row) => JSON.parse(row["ERP Payload JSON"]).Bills.map((bill) => bill.BillNo)), [[11, 13], [21]]);
 });
 
 test("desktop conversion reads rows from pre-JSON SQL Server compatibility levels", () => {

@@ -1,4 +1,5 @@
-import React, { useCallback, useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import SearchablePartySelect from "./components/SearchablePartySelect";
 import { ClipboardList, Eye, MoreVertical, Pencil, Plus, ReceiptText, Save, Search, Trash2, X } from "lucide-react";
 import { API_URL } from "./api/config";
 import { secureFetch } from "./SecuritySetup";
@@ -24,19 +25,31 @@ export function ServiceMaster({ isFormOpen, onOpenForm, onCloseForm, onSaved }) 
   const [form, setForm] = useState(emptyService), [editingId, setEditingId] = useState(null);
   const [search, setSearch] = useState(""), [page, setPage] = useState(1), [pages, setPages] = useState(1), [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(false), [saving, setSaving] = useState(false);
+  const [debouncedSearch, setDebouncedSearch] = useState(search);
+  const listRequestId = useRef(0);
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => setDebouncedSearch(search), 300);
+    return () => window.clearTimeout(timer);
+  }, [search]);
 
   const loadRows = useCallback(async () => {
     const scope = sessionScope(); if (!scope.distributorId || !scope.firmId) return;
+    const requestId = ++listRequestId.current;
     setLoading(true);
     try {
-      const params = new URLSearchParams({ ...scope, page: String(page), limit: "20", search });
+      const params = new URLSearchParams({ ...scope, page: String(page), limit: "20", search: debouncedSearch });
       const response = await secureFetch(`${API_URL}/services?${params}`), result = await response.json();
       if (!response.ok || result.success === false) throw new Error(result.message || "Failed to load services.");
+      if (requestId !== listRequestId.current) return;
       setRows(result.services || []); setPages(result.pagination?.totalPages || 1); setTotal(result.pagination?.totalRecords || 0);
-    } catch (error) { alert(error.message); setRows([]); } finally { setLoading(false); }
-  }, [page, search]);
+    } catch (error) { if (requestId === listRequestId.current) { alert(error.message); setRows([]); } } finally { if (requestId === listRequestId.current) setLoading(false); }
+  }, [page, debouncedSearch]);
 
-  useEffect(() => { if (!isFormOpen) loadRows(); }, [isFormOpen, loadRows]);
+  useEffect(() => {
+    if (!isFormOpen && search === debouncedSearch) loadRows();
+    return () => { listRequestId.current += 1; };
+  }, [isFormOpen, search, debouncedSearch, loadRows]);
   useEffect(() => {
     if (!isFormOpen) return;
     const loadGst = async () => {
@@ -92,8 +105,14 @@ export function SalesService({ isFormOpen, onOpenForm, onCloseForm }) {
   const [form, setForm] = useState(emptyVoucher), [items, setItems] = useState([emptyRow()]), [editingId, setEditingId] = useState(null);
   const [search, setSearch] = useState(""), [page, setPage] = useState(1), [pages, setPages] = useState(1), [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(false), [saving, setSaving] = useState(false);
+  const [debouncedSearch, setDebouncedSearch] = useState(search);
+  const listRequestId = useRef(0);
   const [serviceDropdownIndex, setServiceDropdownIndex] = useState(-1);
   const [showServiceMaster, setShowServiceMaster] = useState(false);
+  useEffect(() => {
+    const timer = window.setTimeout(() => setDebouncedSearch(search), 300);
+    return () => window.clearTimeout(timer);
+  }, [search]);
   const totals = useMemo(() => {
     const totalAmount = items.reduce((sum, row) => sum + Number(row.amount || 0), 0);
     const gstAmount = items.reduce((sum, row) => sum + Number(row.gstAmount || 0), 0);
@@ -104,13 +123,18 @@ export function SalesService({ isFormOpen, onOpenForm, onCloseForm }) {
   }, [items, form.addAmount, form.lessAmount]);
 
   const loadList = useCallback(async () => {
-    const scope = sessionScope(); if (!scope.distributorId || !scope.firmId) return; setLoading(true);
-    try { const params = new URLSearchParams({ ...scope, page: String(page), limit: "20", search }); const response = await secureFetch(`${API_URL}/sales-services?${params}`), result = await response.json();
+    const scope = sessionScope(); if (!scope.distributorId || !scope.firmId) return;
+    const requestId = ++listRequestId.current; setLoading(true);
+    try { const params = new URLSearchParams({ ...scope, page: String(page), limit: "20", search: debouncedSearch }); const response = await secureFetch(`${API_URL}/sales-services?${params}`), result = await response.json();
       if (!response.ok || result.success === false) throw new Error(result.message || "Failed to load Sales Services.");
+      if (requestId !== listRequestId.current) return;
       setVouchers(result.vouchers || []); setPages(result.pagination?.totalPages || 1); setTotal(result.pagination?.totalRecords || 0);
-    } catch (error) { alert(error.message); setVouchers([]); } finally { setLoading(false); }
-  }, [page, search]);
-  useEffect(() => { if (!isFormOpen) loadList(); }, [isFormOpen, loadList]);
+    } catch (error) { if (requestId === listRequestId.current) { alert(error.message); setVouchers([]); } } finally { if (requestId === listRequestId.current) setLoading(false); }
+  }, [page, debouncedSearch]);
+  useEffect(() => {
+    if (!isFormOpen && search === debouncedSearch) loadList();
+    return () => { listRequestId.current += 1; };
+  }, [isFormOpen, search, debouncedSearch, loadList]);
   const loadLookups = useCallback(async () => { try { const scope = sessionScope(), query = new URLSearchParams({ distributorId: scope.distributorId, firmId: scope.firmId });
       const [serviceResponse, partyResponse] = await Promise.all([secureFetch(`${API_URL}/services?${query}&limit=100`), secureFetch(`${API_URL}/accounts?${query}`)]);
       const [serviceResult, partyResult] = await Promise.all([serviceResponse.json(), partyResponse.json()]);
@@ -186,7 +210,7 @@ export function SalesService({ isFormOpen, onOpenForm, onCloseForm }) {
       <div className="billing-field"><label>To Date</label><input className="billing-control" type="date" min={form.fromDate} value={form.toDate} onChange={(e) => setForm({ ...form, toDate: e.target.value })} /></div>
       <div className="billing-field"><label>Voucher Series</label><input className="billing-control" value={form.voucherSeries} onChange={(e) => setForm({ ...form, voucherSeries: e.target.value.toUpperCase(), voucherNo: "" })} placeholder="Enter series" readOnly={!!editingId} /></div>
       <div className="billing-field"><label>Voucher No.</label><input className="billing-control billing-readonly-control" value={form.voucherNo} placeholder="Loading..." readOnly /></div>
-      <div className="billing-field service-party-field"><label>Party <span>*</span></label><select className="billing-control" value={form.partyId} onChange={(e) => changeParty(e.target.value)} required><option value="">Select Party</option>{parties.map((party) => <option key={party._id} value={party._id}>{party.accountCode} - {party.accountName}</option>)}</select></div>
+      <div className="billing-field service-party-field"><label>Party <span>*</span></label><SearchablePartySelect className="billing-control" value={form.partyId} onChange={(e) => changeParty(e.target.value)} required><option value="">Select Party</option>{parties.map((party) => <option key={party._id} value={party._id}>{party.accountCode} - {party.accountName}</option>)}</SearchablePartySelect></div>
       <div className="billing-field service-narration-field"><label>Narration</label><input className="billing-control" value={form.narration} onChange={(e) => setForm({ ...form, narration: e.target.value })} placeholder="Enter narration" /></div>
     </div></section>
     <section className="billing-form-section billing-product-section voucher-lines"><div className="billing-product-heading"><div className="billing-section-title"><span className="billing-section-number" /><h3>Service Entry</h3></div><div className="billing-product-toolbar"><button type="button" className="billing-toolbar-button" onClick={() => setShowServiceMaster(true)}><Plus size={14} />Add Service</button></div></div><div className="billing-product-table-shell"><div className="billing-product-table-scroll"><table className="billing-product-table service-voucher-table"><thead><tr><th className="billing-sticky-left">Sr No.</th><th>Service Code</th><th>Service Name</th><th>Amount</th><th>GST %</th><th>GST Amount</th><th>IGST</th><th>CGST</th><th>SGST</th><th className="billing-sticky-right">Action</th></tr></thead><tbody>{items.map((row, index) => <tr key={index}><td className="billing-sticky-left">{index + 1}</td><td><input className="billing-table-control service-code-control" value={row.serviceCode} placeholder="Code" readOnly /></td><td className="service-name service-search-cell"><input className="billing-table-control billing-product-search service-search-control" value={row.serviceSearch ?? row.serviceName ?? ""} placeholder="Search service" autoComplete="off" onFocus={() => setServiceDropdownIndex(index)} onBlur={() => window.setTimeout(() => setServiceDropdownIndex((current) => current === index ? -1 : current), 150)} onChange={(e) => { searchService(index, e.target.value); setServiceDropdownIndex(index); }} onKeyDown={(e) => { if (e.key === "Escape") setServiceDropdownIndex(-1); if (e.key === "Enter" && serviceDropdownIndex === index) { const match = matchingServices(row.serviceSearch ?? row.serviceName)[0]; if (match) { e.preventDefault(); chooseService(index, match._id); } } }} />{serviceDropdownIndex === index && <div className="service-selection-dropdown">{matchingServices(row.serviceSearch ?? row.serviceName).length ? matchingServices(row.serviceSearch ?? row.serviceName).map((service) => <button key={service._id} type="button" className={service._id === row.serviceId ? "is-selected" : ""} onMouseDown={(e) => e.preventDefault()} onClick={() => chooseService(index, service._id)}><span className="service-selection-code">{service.serviceCode}</span><strong>{service.serviceName}</strong><span className="service-selection-gst">GST {asMoney(service.gstPercent)}%</span></button>) : <div className="service-selection-empty">No matching services</div>}</div>}</td><td><input className="billing-table-control billing-numeric-control" type="number" min="0" step="0.01" value={row.amount} onChange={(e) => changeAmount(index, e.target.value)} /></td><td><input className="billing-table-control billing-numeric-control billing-calculated-control" value={asMoney(row.gstPercent)} readOnly /></td><td><input className="billing-table-control billing-numeric-control billing-calculated-control" value={asMoney(row.gstAmount)} readOnly /></td><td><input className="billing-table-control billing-numeric-control billing-calculated-control" value={asMoney(row.igstAmount)} readOnly /></td><td><input className="billing-table-control billing-numeric-control billing-calculated-control" value={asMoney(row.cgstAmount)} readOnly /></td><td><input className="billing-table-control billing-numeric-control billing-calculated-control" value={asMoney(row.sgstAmount)} readOnly /></td><td className="billing-sticky-right"><button type="button" className="billing-delete-row-button service-delete-row-button" title="Delete row" aria-label={`Delete service row ${index + 1}`} disabled={items.length === 1} onClick={() => { setItems(items.filter((_, rowIndex) => rowIndex !== index)); setServiceDropdownIndex(-1); }}><Trash2 size={14} /></button></td></tr>)}</tbody></table></div><div className="billing-grid-footer"><div className="billing-grid-footer-actions"><button type="button" className="billing-grid-small-button" onClick={() => setItems([...items, emptyRow()])}><Plus size={14} /> Add Row</button><button type="button" className="billing-grid-small-button billing-clear-all-button" onClick={() => { setItems([emptyRow()]); setServiceDropdownIndex(-1); }}>Clear All</button></div><div className="service-grid-hint">Search by service name or code, then select a result</div><div className="billing-grid-totals"><span>Total Items: <strong>{items.filter((row) => row.serviceId).length}</strong></span><span>Total Amount: <strong>₹ {asMoney(totals.totalAmount)}</strong></span></div></div></div></section>

@@ -50015,3 +50015,20 @@ td {
     grid-column: span 2 !important;
   }
 }
+
+/* Keep the named save action when two buttons invoke the same save handler. */
+.sales-billing-header-actions > .billing-save-button,
+.purchase-billing-header-actions > .purchase-header-save,
+.debit-credit-header-actions > .debit-credit-save-btn,
+.receipt-billing-header-actions > .receipt-save-draft-btn,
+.mapping-header-actions > .mapping-button-primary {
+  display: none !important;
+}
+
+/* Quotation and Sales Service have no separate mobile save bar. */
+@media (max-width: 900px) {
+  .sales-billing-page:not(.sales-invoice-entry-page)
+    .sales-billing-header-actions > .billing-save-print-button {
+    display: inline-flex !important;
+  }
+}

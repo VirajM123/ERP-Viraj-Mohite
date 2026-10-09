@@ -1,4 +1,5 @@
 import React, { useState, useCallback, useEffect, useRef } from "react";
+import SearchablePartySelect from "./components/SearchablePartySelect";
 import { secureFetch, usePermission } from "./SecuritySetup";
 import "./Transaction.css";
 import "./VoucherForms.css";
@@ -656,6 +657,7 @@ if (menu === "PDC Docket") {
     setPaymentListCurrentPage(1);
   };
   const [paymentPartySuggestions, setPaymentPartySuggestions] = useState([]);
+  const [paymentPartySuggestionIndex, setPaymentPartySuggestionIndex] = useState(0);
   const [editPaymentId, setEditPaymentId] = useState(null);
   const paymentIdempotencyKey = useRef(
     globalThis.crypto?.randomUUID?.() || `payment-${Date.now()}-${Math.random().toString(36).slice(2)}`
@@ -13667,8 +13669,8 @@ setTransactionFormMode((prev) => ({
           }}
         /></div>
         <div className="labeled-input payment-narration"><label>Narr</label><input name="narr" value={paymentFormData.narr} onChange={handlePaymentInput} /></div>
-        <div className="labeled-input"><label>Party Name</label><div className="live-search-box"><input value={paymentFormData.partyName} onChange={(e) => { const value = e.target.value; setPaymentFormData(prev => ({ ...prev, partyName: value })); if (!value.trim()) { setPaymentPartySuggestions([]); return; } const matches = pendingPurchaseBills.filter((bill) => bill.party?.toLowerCase().includes(value.toLowerCase())).map((bill) => bill.party); setPaymentPartySuggestions([...new Set(matches)]); }} />
-          {paymentPartySuggestions.length > 0 && (<div className="live-dropdown">{paymentPartySuggestions.map((party, idx) => (<div key={idx} className="live-item" onClick={() => selectPaymentParty(party)}>{party}</div>))}</div>)}</div></div>
+        <div className="labeled-input"><label>Party Name</label><div className="live-search-box"><input value={paymentFormData.partyName} onChange={(e) => { const value = e.target.value; setPaymentFormData(prev => ({ ...prev, partyName: value })); setPaymentPartySuggestionIndex(0); if (!value.trim()) { setPaymentPartySuggestions([]); return; } const matches = pendingPurchaseBills.filter((bill) => bill.party?.toLowerCase().includes(value.toLowerCase())).map((bill) => bill.party); setPaymentPartySuggestions([...new Set(matches)]); }} onKeyDown={(e) => { if (e.key === "ArrowDown" || e.key === "ArrowUp") { if (!paymentPartySuggestions.length) return; e.preventDefault(); setPaymentPartySuggestionIndex((index) => (index + (e.key === "ArrowDown" ? 1 : -1) + paymentPartySuggestions.length) % paymentPartySuggestions.length); } else if (e.key === "Enter" && paymentPartySuggestions.length) { e.preventDefault(); selectPaymentParty(paymentPartySuggestions[paymentPartySuggestionIndex]); } else if (e.key === "Escape") { setPaymentPartySuggestions([]); } }} />
+          {paymentPartySuggestions.length > 0 && (<div className="live-dropdown">{paymentPartySuggestions.map((party, idx) => (<div key={idx} className="live-item" style={idx === paymentPartySuggestionIndex ? { background: "#eaf2ff" } : undefined} onMouseEnter={() => setPaymentPartySuggestionIndex(idx)} onClick={() => selectPaymentParty(party)}>{party}</div>))}</div>)}</div></div>
         <div className="labeled-input"><label>Dr Amt</label><input name="drAmt" value={paymentFormData.drAmt} onChange={handlePaymentInput} /></div>
         <div className="labeled-input"><label>Chq No</label><input name="chqNo" value={paymentFormData.chqNo} onChange={handlePaymentInput} /></div>
         <div className="labeled-input"><label>Bank/Cash</label><select name="bankCash" value={paymentFormData.bankCash} onChange={handlePaymentInput}><option value="">Select</option><option value="Cash">Cash</option><option value="Bank">Bank</option></select></div>
@@ -14707,7 +14709,7 @@ setTransactionFormMode((prev) => ({
                 Party Name <span>*</span>
               </label>
 
-              <select
+              <SearchablePartySelect
                 name="partyName"
                 value={chequeBounceFormData.partyName || ""}
                 onChange={handleChequeBounceInput}
@@ -14722,7 +14724,7 @@ setTransactionFormMode((prev) => ({
                     {party}
                   </option>
                 ))}
-              </select>
+              </SearchablePartySelect>
             </div>
 
             <div className="cheque-bounce-field">

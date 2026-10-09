@@ -468,6 +468,44 @@ body .dashboard-container.dashboard-container .dashboard-search-shortcut {
 
 body .dashboard-container.dashboard-container .lovable-header-right { gap: 12px; }
 
+body .dashboard-container.dashboard-container .dashboard-profile-trigger {
+  display: inline-flex;
+  align-items: center;
+  gap: 9px;
+  min-height: 36px;
+  padding: 3px 9px 3px 4px;
+  border: 1px solid #d4dfef;
+  border-radius: 8px;
+  background: #fff;
+  color: #233959;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+body .dashboard-container.dashboard-container .dashboard-profile-trigger:hover,
+body .dashboard-container.dashboard-container .dashboard-profile-trigger:focus-visible {
+  border-color: #2f6fc6;
+  background: #f5f9ff;
+  outline: none;
+}
+
+.dashboard-profile-avatar {
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  flex: 0 0 28px;
+  border-radius: 50%;
+  background: #2f6fc6;
+  color: #fff;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.dashboard-profile-name { max-width: 140px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
 body .dashboard-container.dashboard-container .lovable-new-invoice-button,
 body .dashboard-container.dashboard-container:has(.flash-dashboard) .lovable-new-invoice-button {
   min-width: 107px;

@@ -1,0 +1,18 @@
+.user-profile-overlay{position:fixed;inset:0;z-index:10000;display:grid;place-items:center;padding:20px;background:rgba(15,30,55,.5)}
+.user-profile-modal{width:min(620px,100%);max-height:min(800px,calc(100vh - 40px));overflow:auto;border-radius:12px;background:#fff;box-shadow:0 24px 70px rgba(8,24,51,.28);color:#14233e;font-family:inherit}
+.user-profile-modal-header{display:flex;align-items:center;justify-content:space-between;padding:20px 26px;border-bottom:1px solid #e5ebf2}
+.user-profile-modal-header h2{margin:0;font-size:21px;font-weight:700}
+.user-profile-modal-header button{display:grid;place-items:center;width:32px;height:32px;border:0;border-radius:7px;background:transparent;color:#61738e;cursor:pointer}
+.user-profile-modal-header button:hover{background:#edf3fb}
+.user-profile-identity{display:flex;align-items:center;gap:20px;margin:0 26px;padding:23px 0;border-bottom:1px solid #e5ebf2}
+.user-profile-modal-avatar{display:grid;place-items:center;width:72px;height:72px;flex:0 0 72px;border-radius:50%;background:#2f6fc6;color:#fff;font-size:25px;font-weight:700}
+.user-profile-identity div{display:flex;flex-direction:column;align-items:flex-start;gap:7px}
+.user-profile-identity strong{font-size:20px}
+.user-profile-identity div span{padding:4px 10px;border-radius:7px;background:#e8f1ff;color:#2865b8;font-size:12px;font-weight:700}
+.user-profile-details{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:20px 28px;margin:0;padding:23px 26px 28px}
+.user-profile-details div{min-width:0}
+.user-profile-details dt{margin-bottom:5px;color:#587095;font-size:13px}
+.user-profile-details dd{overflow-wrap:anywhere;margin:0;font-size:14px;font-weight:550}
+.user-profile-modal footer{padding:14px 26px;background:#f5f8fc;color:#587095;text-align:center;font-size:12px}
+.user-profile-message{padding:28px;color:#587095}
+@media(max-width:520px){.user-profile-details{grid-template-columns:1fr}.user-profile-modal-header,.user-profile-details{padding-left:18px;padding-right:18px}.user-profile-identity{margin-left:18px;margin-right:18px}}

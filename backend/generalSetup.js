@@ -810,12 +810,20 @@ router.get("/", async (req, res) => {
           firmName,
         });
 
+      try {
       const createdSetup =
         await GeneralSetup.create(
           defaultSetup
         );
 
       setup = createdSetup.toObject();
+      } catch (error) {
+        // Another request may have created the tenant's unique setup after
+        // the read above. Return that document instead of failing the GET.
+        if (error?.code !== 11000) throw error;
+        setup = await GeneralSetup.findOne({ distributorId, firmId, isActive: true }).lean();
+        if (!setup) throw error;
+      }
     }
 
     return res.json({

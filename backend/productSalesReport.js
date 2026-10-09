@@ -1,6 +1,121 @@
 import { ensureConnection } from "./server.js";
 import express from "express";
 
+// Keep the alias order used by getProductDetails and getItemValue below. An
+// empty first alias is significant: the old calculation did not try later keys.
+const firstItemValue = (...keys) => keys.reduceRight(
+  (fallback, key) => ({ $ifNull: [`$items.${key}`, fallback] }), ""
+);
+
+const firstTruthyItemValue = (...keys) => keys.reduceRight(
+  (fallback, key) => ({ $cond: [`$items.${key}`, `$items.${key}`, fallback] }), 0
+);
+
+const textValue = (expression) => ({
+  $trim: { input: { $convert: { input: { $cond: [{ $in: [expression, [0, false]] }, "", expression] }, to: "string", onError: "", onNull: "" } } },
+});
+
+const numericValue = (keys, fallback = 0) => ({
+  $let: {
+    vars: { raw: firstItemValue(...keys) },
+    in: {
+      $cond: [
+        { $eq: ["$$raw", ""] },
+        fallback,
+        { $cond: [
+          { $eq: [{ $trim: { input: { $convert: { input: "$$raw", to: "string", onError: "?", onNull: "?" } } } }, ""] },
+          0,
+          { $convert: { input: "$$raw", to: "double", onError: fallback, onNull: fallback } },
+        ] },
+      ],
+    },
+  },
+});
+
+const productFields = {
+  combined: textValue(firstItemValue("product", "Product", "productDisplay", "productDescription")),
+  explicitCode: textValue(firstItemValue("productCode", "ProductCode", "prodCode", "ProdCode", "productId", "ProductId", "code")),
+  explicitName: textValue(firstItemValue("productName", "ProductName", "prodName", "ProdName", "name")),
+};
+
+const productCodeExpression = {
+  $cond: [
+    { $ne: ["$explicitCode", ""] }, "$explicitCode",
+    { $cond: [
+      { $gte: ["$separator", 0] },
+      { $trim: { input: { $substrBytes: ["$combined", 0, "$separator"] } } },
+      "",
+    ] },
+  ],
+};
+
+const productNameExpression = {
+  $cond: [
+    { $ne: ["$explicitName", ""] }, "$explicitName",
+    { $cond: [
+      { $gte: ["$separator", 0] },
+      { $trim: { input: { $substrBytes: ["$combined", { $add: ["$separator", 3] }, { $subtract: [{ $strLenBytes: "$combined" }, { $add: ["$separator", 3] }] }] } } },
+      "$combined",
+    ] },
+  ],
+};
+
+const itemPipeline = (match, selectedProductCodes) => [
+  { $match: match },
+  { $project: { BillDate: 1, BillSeries: 1, BillNo: 1, PartyCode: 1, PartyName: 1, CompanyName: 1, CreditNoteAmount: 1, items: 1 } },
+  { $match: { items: { $type: "array" } } },
+  { $unwind: { path: "$items", includeArrayIndex: "itemIndex" } },
+  { $set: productFields },
+  { $set: { separator: { $indexOfBytes: ["$combined", " - "] } } },
+  { $set: { productCode: productCodeExpression, savedProductName: productNameExpression } },
+  { $match: { productCode: { $in: [...selectedProductCodes] } } },
+];
+
+const grossExpression = numericValue(
+  ["grossAmount", "GrossAmount", "grossAmt", "GrossAmt"],
+  { $multiply: [
+    numericValue(["qty", "Qty", "quantity", "Quantity", "saleQty", "SaleQty"]),
+    numericValue(["salesRate", "SalesRate", "saleRate", "SaleRate", "sRate", "SRate", "rate", "Rate"],
+      { $convert: { input: firstTruthyItemValue("selectedBatch.salesRate", "selectedBatch.SalesRate", "selectedBatch.sRate", "selectedBatch.SRate"), to: "double", onError: 0, onNull: 0 } }),
+  ] }
+);
+
+export const buildProductSalesSummaryPipeline = (match, selectedProductCodes, orderBy) => {
+  const sortField = orderBy === "productCode" ? "productCode" : orderBy === "amt" ? "amt" : orderBy === "qty" ? "qty" : "productName";
+  const sortDirection = orderBy === "amt" || orderBy === "qty" ? -1 : 1;
+  return [
+    ...itemPipeline(match, selectedProductCodes),
+    { $sort: { BillDate: 1, BillSeries: 1, BillNo: 1, _id: 1, itemIndex: 1 } },
+    { $group: {
+      _id: "$productCode",
+      productName: { $first: "$savedProductName" },
+      firstBillDate: { $first: "$BillDate" },
+      firstBillSeries: { $first: "$BillSeries" },
+      firstBillNo: { $first: "$BillNo" },
+      firstBillId: { $first: "$_id" },
+      firstItemIndex: { $first: "$itemIndex" },
+      qty: { $sum: numericValue(["qty", "Qty", "quantity", "Quantity", "saleQty", "SaleQty"]) },
+      amt: { $sum: grossExpression },
+      tprAmt: { $sum: numericValue(["tprAmount", "TPRAmount", "tprAmt", "TPRAmt"]) },
+      cdAmt: { $sum: numericValue(["cashDiscountAmount", "CashDiscountAmount", "cashDiscountAmt", "cdAmount", "cdAmt", "CDAmount"]) },
+    } },
+    { $sort: { firstBillDate: 1, firstBillSeries: 1, firstBillNo: 1, firstBillId: 1, firstItemIndex: 1 } },
+    { $setWindowFields: { sortBy: { firstBillDate: 1, firstBillSeries: 1, firstBillNo: 1, firstBillId: 1, firstItemIndex: 1 }, output: { srNo: { $documentNumber: {} } } } },
+    { $set: { productCode: "$_id" } },
+    { $lookup: { from: "Mas_Product", let: { code: "$productCode" }, pipeline: [
+      { $match: { distributorId: match.distributorId, firmId: match.firmId } },
+      { $match: { $expr: { $eq: ["$productCode", "$$code"] } } },
+      { $project: { _id: 0, productName: 1 } },
+    ], as: "master" } },
+    { $set: { productName: { $cond: [{ $ne: ["$productName", ""] }, "$productName", { $ifNull: [{ $arrayElemAt: ["$master.productName", -1] }, ""] }] } } },
+    { $set: { sortText: { $toLower: { $trim: { input: { $convert: { input: `$${sortField}`, to: "string", onError: "", onNull: "" } } } } } } },
+    { $sort: { [sortDirection < 0 ? sortField : "sortText"]: sortDirection, firstBillDate: 1, firstBillSeries: 1, firstBillNo: 1, firstBillId: 1, firstItemIndex: 1 } },
+    { $project: { _id: 0, rowId: "$productCode", srNo: 1, productCode: 1, productName: 1, qty: 1, amt: 1, tprAmt: 1, cdAmt: 1,
+      weight: { $literal: 0 }, disc: { $literal: 0 }, cdPercent: { $literal: 0 },
+      partyCode: { $literal: "" }, partyName: { $literal: "" }, branchName: { $literal: "" }, address: { $literal: "" } } },
+  ];
+};
+
 const createProductSalesReportRouter = (securityRouter) => {
   const router = express.Router();
 
@@ -164,7 +279,7 @@ const createProductSalesReportRouter = (securityRouter) => {
         const distributorId = String(req.query.distributorId || "").trim();
         const firmId = String(req.query.firmId || "").trim();
         const companyCode = String(req.query.companyCode || "").trim();
-        const selectedProductCodes = String(req.query.selectedProductCodes || "").split(",").filter(Boolean);
+        const selectedProductCodes = new Set(String(req.query.selectedProductCodes || "").split(",").filter(Boolean));
         const reportLevel = String(req.query.reportLevel || "summary").trim();
         const scope = String(req.query.scope || "all").trim();
         const selectedAreaCodes = String(req.query.selectedAreaCodes || "").split(",").filter(Boolean);
@@ -174,6 +289,13 @@ const createProductSalesReportRouter = (securityRouter) => {
         const toDate = String(req.query.toDate || "").trim();
         const withCreditNote = String(req.query.withCreditNote || "no").toLowerCase() === "yes";
         const orderBy = String(req.query.orderBy || "productName").trim();
+        const paginated = req.query.limit !== undefined;
+        const limit = paginated ? Number(req.query.limit) : 0;
+        const offset = req.query.offset === undefined ? 0 : Number(req.query.offset);
+
+        if (paginated && (!Number.isSafeInteger(limit) || limit < 1 || limit > 500 || !Number.isSafeInteger(offset) || offset < 0)) {
+          return res.status(400).json({ success: false, message: "limit must be 1–500 and offset must be a non-negative integer." });
+        }
 
         if (!distributorId || !firmId) {
           return res.status(400).json({
@@ -196,7 +318,7 @@ const createProductSalesReportRouter = (securityRouter) => {
           });
         }
 
-        if (selectedProductCodes.length === 0) {
+        if (selectedProductCodes.size === 0) {
           return res.status(400).json({
             success: false,
             message: "Please select at least one product.",
@@ -225,10 +347,63 @@ const createProductSalesReportRouter = (securityRouter) => {
           match.SalesmanCode = { $in: selectedSalesmanCodes };
         }
 
-        // Load sales bills
-        const bills = await SalesHeader.find(match)
-          .sort({ BillDate: 1, BillSeries: 1, BillNo: 1 })
-          .lean();
+        if (reportLevel === "summary") {
+          const rows = await SalesHeader.aggregate(
+            buildProductSalesSummaryPipeline(match, selectedProductCodes, orderBy)
+          ).allowDiskUse(true);
+          // Keep the endpoint's localeCompare ordering for the much smaller
+          // grouped result. MongoDB still performs the expensive group and sort.
+          const sortText = (value) => String(value || "").trim().toLowerCase();
+          rows.sort((first, second) => {
+            if (orderBy === "amt" || orderBy === "qty") return Number(second[orderBy] || 0) - Number(first[orderBy] || 0);
+            const field = orderBy === "productCode" ? "productCode" : orderBy === "billDate" ? "billDate" : "productName";
+            return sortText(first[field]).localeCompare(sortText(second[field]));
+          });
+          return res.json({ success: true, count: rows.length, reportLevel, scope, rows, columns: getProductColumns(reportLevel) });
+        }
+
+        // Project only the item aliases used by the existing detail calculation.
+        const itemKeys = [
+          "product", "Product", "productDisplay", "productDescription", "productCode", "ProductCode", "prodCode", "ProdCode", "productId", "ProductId", "code",
+          "productName", "ProductName", "prodName", "ProdName", "name", "qty", "Qty", "quantity", "Quantity", "saleQty", "SaleQty",
+          "freeQty", "FreeQty", "freeQuantity", "salesRate", "SalesRate", "saleRate", "SaleRate", "sRate", "SRate", "rate", "Rate",
+          "mrp", "MRP", "productMrp", "ProductMRP", "grossAmount", "GrossAmount", "grossAmt", "GrossAmt",
+          "tprAmount", "TPRAmount", "tprAmt", "TPRAmt", "schemeAmount", "SchemeAmount", "schemeAmt", "schAmount", "schAmt", "SchAmount",
+          "cashDiscountPercent", "CashDiscountPercent", "cashDiscountPer", "cdPercent", "cdPer", "CDPct", "CDPercent",
+          "cashDiscountAmount", "CashDiscountAmount", "cashDiscountAmt", "cdAmount", "cdAmt", "CDAmount",
+          "netAmount", "NetAmount", "netAmt", "amount", "Amount",
+          "selectedBatch.salesRate", "selectedBatch.SalesRate", "selectedBatch.sRate", "selectedBatch.SRate", "selectedBatch.mrp", "selectedBatch.MRP",
+        ];
+        const detailProjection = Object.fromEntries(itemKeys.map((key) => [`items.${key}`, 1]));
+        const detailPipeline = itemPipeline(match, selectedProductCodes);
+        if (paginated) {
+          const originalOrder = { BillDate: 1, BillSeries: 1, BillNo: 1, _id: 1, itemIndex: 1 };
+          detailPipeline.push(
+            { $setWindowFields: { sortBy: originalOrder, output: { originalSrNo: { $documentNumber: {} } } } },
+            { $lookup: { from: "Mas_Product", let: { code: "$productCode" }, pipeline: [
+              { $match: { distributorId, firmId } },
+              { $match: { $expr: { $eq: ["$productCode", "$$code"] } } },
+              { $project: { _id: 0, productName: 1 } },
+            ], as: "master" } },
+            { $set: {
+              sortName: { $toLower: { $trim: { input: { $cond: [{ $ne: ["$savedProductName", ""] }, "$savedProductName", { $ifNull: [{ $arrayElemAt: ["$master.productName", -1] }, ""] }] } } } },
+              sortCode: { $toLower: "$productCode" },
+              sortQty: numericValue(["qty", "Qty", "quantity", "Quantity", "saleQty", "SaleQty"]),
+              sortAmt: grossExpression,
+            } }
+          );
+          const sortKey = orderBy === "productCode" ? "sortCode" : orderBy === "qty" ? "sortQty" : orderBy === "amt" ? "sortAmt" : orderBy === "billDate" ? "BillDate" : "sortName";
+          detailPipeline.push(
+            { $sort: { [sortKey]: orderBy === "qty" || orderBy === "amt" ? -1 : 1, ...originalOrder } },
+            { $skip: offset }, { $limit: limit + 1 }
+          );
+        } else {
+          detailPipeline.push({ $sort: { BillDate: 1, BillSeries: 1, BillNo: 1, _id: 1, itemIndex: 1 } });
+        }
+        detailPipeline.push({ $project: { _id: 1, BillDate: 1, BillSeries: 1, BillNo: 1, PartyCode: 1, PartyName: 1, CompanyName: 1, CreditNoteAmount: 1, itemIndex: 1, originalSrNo: 1, ...detailProjection } });
+        const bills = await SalesHeader.aggregate(detailPipeline).allowDiskUse(true);
+        const hasMore = paginated && bills.length > limit;
+        if (hasMore) bills.pop();
 
         if (bills.length === 0) {
           return res.json({
@@ -238,6 +413,7 @@ const createProductSalesReportRouter = (securityRouter) => {
             scope,
             rows: [],
             columns: getProductColumns(reportLevel),
+            ...(paginated ? { nextOffset: null } : {}),
           });
         }
 
@@ -245,7 +421,7 @@ const createProductSalesReportRouter = (securityRouter) => {
         const productMasters = await Product.find({
           distributorId,
           firmId,
-          productCode: { $in: selectedProductCodes },
+          productCode: { $in: [...selectedProductCodes] },
         })
           .select({ _id: 1, productCode: 1, productName: 1, companyName: 1 })
           .lean();
@@ -259,13 +435,13 @@ const createProductSalesReportRouter = (securityRouter) => {
         const summaryMap = new Map();
 
         bills.forEach((bill) => {
-          const items = Array.isArray(bill.items) ? bill.items : [];
+          const items = bill.items ? [bill.items] : [];
           
           items.forEach((item, itemIndex) => {
             const { productCode, productName: savedProductName } = getProductDetails(item);
             
             // Skip if product not in selected list
-            if (!selectedProductCodes.includes(productCode)) {
+            if (!selectedProductCodes.has(productCode)) {
               return;
             }
 
@@ -311,7 +487,7 @@ const createProductSalesReportRouter = (securityRouter) => {
               getItemValue(item, "cashDiscountAmount", "CashDiscountAmount", "cashDiscountAmt", "cdAmount", "cdAmt", "CDAmount")
             );
 
-            const creditNoteAmount = withCreditNote && itemIndex === 0
+            const creditNoteAmount = withCreditNote && bill.itemIndex === 0
               ? toNumber(bill.CreditNoteAmount)
               : 0;
 
@@ -321,8 +497,8 @@ const createProductSalesReportRouter = (securityRouter) => {
             );
 
             const row = {
-              rowId: `${bill._id}-${itemIndex}`,
-              srNo: detailRows.length + 1,
+              rowId: `${bill._id}-${bill.itemIndex}`,
+              srNo: paginated ? bill.originalSrNo : detailRows.length + 1,
               trn: "SALES",
               billDate: bill.BillDate || "",
               billSeries: bill.BillSeries || "",
@@ -381,10 +557,10 @@ const createProductSalesReportRouter = (securityRouter) => {
         let rows = reportLevel === "summary" ? Array.from(summaryMap.values()) : detailRows;
         
         // Add srNo
-        rows = rows.map((row, index) => ({ ...row, srNo: index + 1 }));
+        rows = rows.map((row, index) => ({ ...row, srNo: paginated ? row.srNo : index + 1 }));
 
         // Sort rows
-        rows.sort((first, second) => {
+        if (!paginated) rows.sort((first, second) => {
           const sortText = (value) => String(value || "").trim().toLowerCase();
           
           if (orderBy === "productCode") {
@@ -414,6 +590,7 @@ const createProductSalesReportRouter = (securityRouter) => {
           scope,
           rows,
           columns: getProductColumns(reportLevel),
+          ...(paginated ? { nextOffset: hasMore ? offset + limit : null } : {}),
         });
       } catch (error) {
         console.error("Product sales report error:", error);

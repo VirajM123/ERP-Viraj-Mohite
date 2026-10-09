@@ -2680,18 +2680,6 @@ const Report = ({
   }, [selectedReport, productReportFilters.company, allProductReportFilters.company]);
 
   useEffect(() => {
-    if (selectedReport !== "Product Wise Sales Report" && selectedReport !== "All Product Wise Sales Report") {
-      return;
-    }
-
-    const companyCode = selectedReport === "Product Wise Sales Report"
-      ? productReportFilters.company
-      : allProductReportFilters.company;
-
-    loadProductReportCriteria(companyCode);
-  }, [selectedReport, productReportFilters.company, allProductReportFilters.company]);
-
-  useEffect(() => {
     if (selectedReport !== "Party Wise Sales Report" && selectedReport !== "All Party Wise Sales Report") {
       return;
     }

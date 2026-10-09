@@ -38,11 +38,20 @@ import { apiErrorHandler } from "./apiError.js";
 import { buildAllowedOrigins, corsOriginAllowed } from "./corsOrigins.js";
 import { commitTransactionReliably } from "./transactionCommit.js";
 import { purchaseSupplierFilter } from "./purchaseSupplier.js";
+import { saveEInvoiceJson } from "./einvoiceJsonFiles.js";
+import { observeRequest } from "./observability.js";
 dotenv.config();
 
 assertSecurityConfiguration();
 
 const app = express();
+app.use(observeRequest);
+let shuttingDown = false;
+app.get("/health/live", (req, res) => res.status(200).json({ status: "ok" }));
+app.get("/health/ready", (req, res) => {
+  const ready = !shuttingDown && mongoose.connection.readyState === 1;
+  res.status(ready ? 200 : 503).json({ status: ready ? "ok" : "unavailable" });
+});
 if (process.env.TRUST_PROXY) app.set("trust proxy", process.env.TRUST_PROXY === "true" ? 1 : process.env.TRUST_PROXY);
 
 const allowedOrigins = buildAllowedOrigins(
@@ -131,9 +140,39 @@ const connectDB = async () => {
 };
 
 connectDB().then(() => {
-  app.listen(PORT, () => {
+  const server = app.listen(PORT, () => {
     console.log(`🚀 Server running on port ${PORT}`);
   });
+  const shutdown = () => {
+    if (shuttingDown) return;
+    shuttingDown = true;
+    const configuredDrainMs = Number(process.env.SHUTDOWN_DRAIN_MS);
+    const drainMs = Number.isFinite(configuredDrainMs) && configuredDrainMs > 0
+      ? Math.min(configuredDrainMs, 120_000) : 30_000;
+    const drainTimer = setTimeout(() => {
+      console.error(`HTTP shutdown exceeded ${drainMs}ms; closing remaining connections.`);
+      server.closeAllConnections();
+    }, drainMs);
+    drainTimer.unref();
+    const exitTimer = setTimeout(() => {
+      console.error("Shutdown did not finish after connections were closed.");
+      process.exit(1);
+    }, drainMs + 5_000);
+    exitTimer.unref();
+    server.close(async (error) => {
+      clearTimeout(drainTimer);
+      if (error) console.error("HTTP shutdown failed:", error);
+      try {
+        await mongoose.disconnect();
+      } catch (disconnectError) {
+        console.error("MongoDB shutdown failed:", disconnectError);
+      }
+      clearTimeout(exitTimer);
+      process.exitCode = error ? 1 : 0;
+    });
+  };
+  process.once("SIGTERM", shutdown);
+  process.once("SIGINT", shutdown);
 });
 export const ensureConnection = (req, res, next) => {
   if (mongoose.connection.readyState === 1) {
@@ -737,6 +776,37 @@ app.post(
     }
   }
 );
+
+app.get("/api/profile", ensureConnection, async (req, res) => {
+  try {
+    const source = req.auth?.source === "REGISTER" ? Register : User;
+    const user = await source.findById(req.auth?.id).lean();
+    if (!user || !user.isActive) {
+      return res.status(404).json({ success: false, message: "Profile not found." });
+    }
+    return res.json({
+      success: true,
+      profile: {
+        userId: user.userId || user.userName || "",
+        userName: user.userName || "",
+        role: user.role || "USER",
+        firmName: user.firmName || "",
+        firmCode: user.firmCode || "",
+        salesmanCode: user.salesmanCode || "",
+        distributorId: user.distributorId || "",
+        isActive: Boolean(user.isActive),
+        email: user.email || "",
+        mobileNo: user.mobileNo || "",
+        createdAt: user.createdAt || null,
+        updatedAt: user.updatedAt || null,
+        source: req.auth.source,
+      },
+    });
+  } catch (error) {
+    console.error("Profile load error:", error);
+    return res.status(500).json({ success: false, message: "Unable to load profile." });
+  }
+});
 
 app.get("/api/users", ensureConnection, requireRoles("DISTRIBUTOR_ADMIN"), async (req, res) => {
   try {
@@ -5703,6 +5773,34 @@ app.get(
     });
   }
 });
+app.get("/api/products/lookup", ensureConnection, securityRouter.authorizeRequest("master", "PRODUCT", "view"), async (req, res) => {
+  try {
+    const distributorId = String(req.query.distributorId || "").trim();
+    const firmId = String(req.query.firmId || "").trim();
+    if (!distributorId || !firmId || distributorId !== req.auth.distributorId || firmId !== req.auth.firmId) {
+      return res.status(403).json({ success: false, message: "Invalid firm selection." });
+    }
+    const q = String(req.query.q || "").trim().slice(0, 100);
+    const limit = Math.min(Math.max(Number.parseInt(req.query.limit, 10) || 30, 1), 50);
+    const filter = { distributorId, firmId, isActive: true };
+    if (q) {
+      const pattern = new RegExp(q.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "i");
+      filter.$or = [{ productCode: pattern }, { productName: pattern }, { eanCode: pattern }];
+    }
+    if (req.query.companyCode) {
+      const code = String(req.query.companyCode).trim();
+      filter.$and = [{ $or: [{ companyId: code }, { companyName: code }] }];
+    }
+    const products = await Product.find(filter)
+      .select("productCode productName companyId companyName group category description gst basicUnit boxPack inboxPack retailerMargin distributorMargin hsn weight eanCode Rate_Per_Unit srateSelection Reorder_Level Min_Stock_Holding cess cessAmt ExpDays create active locked isDrug allowFraction")
+      .sort({ productName: 1, _id: 1 }).limit(limit).lean();
+    return res.json({ success: true, products });
+  } catch (error) {
+    console.error("Product lookup error:", error);
+    return res.status(500).json({ success: false, message: "Failed to search products." });
+  }
+});
+
 app.get(
   "/api/products/list",
   ensureConnection,
@@ -6145,6 +6243,31 @@ app.get(
   GET /api/accounts/list
   is used only by Account Master grid.
   ========================================================= */
+
+app.get("/api/accounts/lookup", ensureConnection, securityRouter.authorizeRequest("MASTER", "ACCOUNT", "view"), async (req, res) => {
+  try {
+    const distributorId = String(req.query.distributorId || "").trim();
+    const firmId = String(req.query.firmId || "").trim();
+    if (!distributorId || !firmId || distributorId !== req.auth.distributorId || firmId !== req.auth.firmId) {
+      return res.status(403).json({ success: false, message: "Invalid firm selection." });
+    }
+    const q = String(req.query.q || "").trim().slice(0, 100);
+    const limit = Math.min(Math.max(Number.parseInt(req.query.limit, 10) || 30, 1), 50);
+    const filter = { distributorId, firmId, isActive: true };
+    if (q) {
+      const pattern = new RegExp(q.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "i");
+      filter.$or = [{ accountCode: pattern }, { accountName: pattern }, { partyCode: pattern }, { partyName: pattern }];
+    }
+    if (req.query.areaCode) filter.areaCode = String(req.query.areaCode).trim();
+    const accounts = await Account.find(filter)
+      .select("accountCode accountName partyCode partyName areaCode areaName blackListed isLock creditDays creditBills creditAmt")
+      .sort({ accountName: 1, _id: 1 }).limit(limit).lean();
+    return res.json({ success: true, accounts });
+  } catch (error) {
+    console.error("Account lookup error:", error);
+    return res.status(500).json({ success: false, message: "Failed to search accounts." });
+  }
+});
 
 app.get(
   "/api/accounts/list",
@@ -9916,11 +10039,11 @@ app.get("/api/salesman-area-mappings", ensureConnection, async (req, res) => {
     const filter = {
       distributorId,
       firmId,
-      isActive: true,
+      isActive: { $ne: false },
     };
 
     if (companyCode) {
-      filter.companyCode = companyCode;
+      filter.$expr = { $eq: [{ $toString: "$companyCode" }, String(companyCode)] };
     }
 
     const mappings = await SalesmanAreaMapping.find(filter).sort({
@@ -9953,6 +10076,9 @@ app.post("/api/salesman-area-mappings", ensureConnection, async (req, res) => {
     const mappings = Array.isArray(req.body.mappings)
       ? req.body.mappings
       : [];
+    const unmappedAreaCodes = Array.isArray(req.body.unmappedAreaCodes)
+      ? req.body.unmappedAreaCodes.map((code) => String(code || "").trim()).filter(Boolean)
+      : [];
 
     if (!distributorId || !firmId) {
       return res.status(400).json({
@@ -9968,7 +10094,7 @@ app.post("/api/salesman-area-mappings", ensureConnection, async (req, res) => {
       });
     }
 
-    if (mappings.length === 0) {
+    if (mappings.length === 0 && unmappedAreaCodes.length === 0) {
       return res.status(400).json({
         success: false,
         message: "At least one mapping is required",
@@ -10007,14 +10133,20 @@ app.post("/api/salesman-area-mappings", ensureConnection, async (req, res) => {
         },
       }));
 
-    if (operations.length === 0) {
+    if (operations.length === 0 && unmappedAreaCodes.length === 0) {
       return res.status(400).json({
         success: false,
         message: "Valid salesman mapping data not found",
       });
     }
 
-    await SalesmanAreaMapping.bulkWrite(operations);
+    if (operations.length) await SalesmanAreaMapping.bulkWrite(operations);
+    if (unmappedAreaCodes.length) {
+      await SalesmanAreaMapping.updateMany(
+        { distributorId, firmId, companyCode, areaCode: { $in: unmappedAreaCodes }, isActive: true },
+        { $set: { isActive: false } }
+      );
+    }
 
     res.status(201).json({
       success: true,
@@ -10057,7 +10189,7 @@ app.get(
       const mappingFilter = {
         distributorId,
         firmId,
-        isActive: true,
+        isActive: { $ne: false },
       };
 
       if (companyCode) {
@@ -10526,19 +10658,21 @@ app.post(
         );
       }
 
-      console.log(
-        "PURCHASE STOCK SAVE DEBUG:",
-        {
-          prodCode,
-          batchNo,
-          mrp,
-          qty,
-          finalPurchaseRate,
-          finalSalesRate,
-          rawPurRate:
-            item.purRate,
-        }
-      );
+      if (typeof process !== "undefined" && process.env.DEBUG_PURCHASE_STOCK === "true") {
+        console.log(
+          "PURCHASE STOCK SAVE DEBUG:",
+          {
+            prodCode,
+            batchNo,
+            mrp,
+            qty,
+            finalPurchaseRate,
+            finalSalesRate,
+            rawPurRate:
+              item.purRate,
+          }
+        );
+      }
 
       const updatedStock =
         await Stock.findOneAndUpdate(
@@ -11546,10 +11680,16 @@ app.get(
         COUNT ALL MATCHING RECORDS
         ===================================================== */
 
-      const totalRecords =
-        await PurchaseHeader.countDocuments(
-          filter
-        );
+      const loadPurchasePage = (pageToLoad) => PurchaseHeader.find(filter)
+        .select({ items: 0, historicalSnapshot: 0, desktopImportStockKeys: 0 })
+        .sort({ invoiceDate: -1, vouNo: -1, _id: -1 })
+        .skip((pageToLoad - 1) * limit)
+        .limit(limit)
+        .lean();
+      const [totalRecords, requestedPurchases] = await Promise.all([
+        PurchaseHeader.countDocuments(filter),
+        loadPurchasePage(page),
+      ]);
 
       const totalPages =
         Math.max(
@@ -11584,26 +11724,11 @@ app.get(
         LOAD ONLY THE CURRENT PAGE
         ===================================================== */
 
-      const purchases =
-        await PurchaseHeader.find(
-          filter
-        )
-          // A list row never consumes the potentially large line-item and
-          // historical snapshot arrays.  The existing detail endpoint still
-          // returns them when a user opens a voucher.
-          .select({
-            items: 0,
-            historicalSnapshot: 0,
-            desktopImportStockKeys: 0,
-          })
-          .sort({
-            invoiceDate: -1,
-            vouNo: -1,
-            _id: -1,
-          })
-          .skip(skip)
-          .limit(limit)
-          .lean();
+      // A list row excludes line items and snapshots. If deletion reduced the
+      // page count, repeat only the page query for the corrected page.
+      const purchases = currentPage === page
+        ? requestedPurchases
+        : await loadPurchasePage(currentPage);
 
       /* =====================================================
         RESPONSE
@@ -12902,6 +13027,117 @@ app.post(
   }
 );
 app.get(
+  "/api/sales/einvoice-candidates",
+  ensureConnection,
+  securityRouter.authorizeRequest("SALES", "SALES_BILLING", "view"),
+  async (req, res) => {
+    try {
+      const distributorId = String(req.query.distributorId || "").trim();
+      const firmId = String(req.query.firmId || "").trim();
+      if (!distributorId || !firmId || distributorId !== req.auth.distributorId || firmId !== req.auth.firmId) {
+        return res.status(403).json({ success: false, message: "Invalid firm selection." });
+      }
+      const scope = { distributorId, firmId };
+      const fromDate = String(req.query.fromDate || "").trim();
+      const toDate = String(req.query.toDate || "").trim();
+      if ((fromDate && !/^\d{4}-\d{2}-\d{2}$/.test(fromDate)) || (toDate && !/^\d{4}-\d{2}-\d{2}$/.test(toDate)) || (fromDate && toDate && fromDate > toDate)) {
+        return res.status(400).json({ success: false, message: "Invalid invoice date range." });
+      }
+      const minimumAmount = Number(req.query.minimumAmount || 0);
+      const loadNo = Number(req.query.loadNo || 0);
+      const startNo = Number(req.query.startNo || 0);
+      const endNo = Number(req.query.endNo || 0);
+      if (![minimumAmount, loadNo, startNo, endNo].every(Number.isFinite)) {
+        return res.status(400).json({ success: false, message: "Invalid invoice filter." });
+      }
+      const level = String(req.query.level || "Load Wise");
+      const series = String(req.query.series || "").trim();
+      const salesFilter = { ...scope, isActive: { $ne: false }, IsBillCancelled: { $ne: true }, SalesEntryType: { $ne: "COUNTER_SALES" }, ...(req.auth.role === "SALESMAN" ? { SalesmanCode: req.auth.salesmanCode || "__UNASSIGNED__" } : {}) };
+      if (fromDate || toDate) salesFilter.BillDate = { ...(fromDate ? { $gte: fromDate } : {}), ...(toDate ? { $lte: toDate } : {}) };
+      if (minimumAmount > 0) salesFilter.NetAmount = { $gte: minimumAmount };
+      if (level === "Load Wise") {
+        if (series) salesFilter.LoadSeries = series;
+        if (loadNo) salesFilter.LoadNo = loadNo;
+      } else if (level === "Bill Wise") {
+        if (series) salesFilter.BillSeries = series;
+        if (startNo || endNo) salesFilter.BillNo = { ...(startNo ? { $gte: startNo } : {}), ...(endNo ? { $lte: endNo } : {}) };
+      }
+      const [sales, firm] = await Promise.all([
+        SalesHeader.find(salesFilter)
+          .select("BillDate BillSeries BillNo LoadSeries LoadNo PartyCode PartyName NetAmount IRNNo EwayBillNo AckNo")
+          .sort({ BillDate: 1, BillNo: 1 }).lean(),
+        Register.findOne({ ...scope, isActive: { $ne: false } }).select("firmCode firmName address1 address2 city pinCode state phoneNo mobileNo email gstNo").lean(),
+      ]);
+      const codes = [...new Set(sales.map((bill) => bill.PartyCode).filter(Boolean))];
+      const accounts = await Account.find({ ...scope, accountCode: { $in: codes } }).select("accountCode gstNo").lean();
+      const parties = Object.fromEntries(accounts.map((account) => [account.accountCode, account]));
+      return res.json({ success: true, sales, firm, parties });
+    } catch (error) {
+      console.error("E-Invoice candidates error:", error);
+      return res.status(500).json({ success: false, message: "Could not load E-Invoice records." });
+    }
+  }
+);
+
+app.post(
+  "/api/sales/einvoice-details",
+  ensureConnection,
+  securityRouter.authorizeRequest("SALES", "SALES_BILLING", "view"),
+  async (req, res) => {
+    try {
+      const ids = req.body?.ids;
+      if (!Array.isArray(ids) || !ids.length || ids.length > 500 || ids.some((id) => !mongoose.isValidObjectId(id))) {
+        return res.status(400).json({ success: false, message: "Select valid invoices (maximum 500 at a time)." });
+      }
+      const scope = { distributorId: req.auth.distributorId, firmId: req.auth.firmId };
+      const sales = await SalesHeader.find({ ...scope, _id: { $in: ids }, isActive: { $ne: false }, IsBillCancelled: { $ne: true }, SalesEntryType: { $ne: "COUNTER_SALES" }, ...(req.auth.role === "SALESMAN" ? { SalesmanCode: req.auth.salesmanCode || "__UNASSIGNED__" } : {}) }).lean();
+      if (sales.length !== new Set(ids.map(String)).size) {
+        return res.status(404).json({ success: false, message: "One or more selected invoices are unavailable. Reload the list." });
+      }
+      const codes = [...new Set(sales.map((bill) => bill.PartyCode).filter(Boolean))];
+      const accounts = await Account.find({ ...scope, accountCode: { $in: codes } }).select("accountCode accountName address add2 town state pinCode phoneNo mobileNo emailId gstNo").lean();
+      return res.json({ success: true, sales, parties: Object.fromEntries(accounts.map((account) => [account.accountCode, account])) });
+    } catch (error) {
+      console.error("E-Invoice details error:", error);
+      return res.status(500).json({ success: false, message: "Could not load selected invoices." });
+    }
+  }
+);
+
+app.post(
+  "/api/sales/einvoice-json",
+  securityRouter.authorizeRequest("SALES", "SALES_BILLING", "view"),
+  async (req, res) => {
+    try {
+      if (!req.auth?.firmId || !req.auth?.distributorId) {
+        return res.status(403).json({ success: false, message: "Invalid firm selection." });
+      }
+      const saved = await saveEInvoiceJson({
+        payload: req.body?.invoices,
+        firmId: req.auth.firmId,
+      });
+      return res.status(201).json({ success: true, ...saved });
+    } catch (error) {
+      if (error.message?.startsWith("Select a valid E-Invoice")) {
+        return res.status(400).json({ success: false, message: error.message });
+      }
+      console.error("E-Invoice JSON save error:", error);
+      return res.status(500).json({ success: false, message: "Could not save E-Invoice JSON." });
+    }
+  }
+);
+app.post(
+  "/api/sales/einvoice-upload",
+  securityRouter.authorizeRequest("SALES", "SALES_BILLING", "view"),
+  (req, res) => {
+    return res.status(501).json({
+      success: false,
+      message: "E-Invoice portal API is not configured yet. The JSON remains saved in TsEinvoiceJSon.",
+    });
+  }
+);
+
+app.get(
   "/api/sales",
   ensureConnection,
   securityRouter.authorizeRequest(
@@ -14124,10 +14360,16 @@ app.get(
         COUNT AND PAGINATION
         ===================================================== */
 
-      const totalRecords =
-        await SalesHeader.countDocuments(
-          filter
-        );
+      const loadSalesPage = (pageToLoad) => SalesHeader.find(filter)
+        .select({ items: 0, Items: 0 })
+        .sort({ BillDate: -1, BillNo: -1, _id: -1 })
+        .skip((pageToLoad - 1) * limit)
+        .limit(limit)
+        .lean();
+      const [totalRecords, requestedSales] = await Promise.all([
+        SalesHeader.countDocuments(filter),
+        loadSalesPage(page),
+      ]);
 
       const totalPages = Math.max(
         1,
@@ -14154,26 +14396,11 @@ app.get(
         LOAD SALES LIST
         ===================================================== */
 
-      const sales =
-        await SalesHeader.find(
-          filter
-        )
-          /*
-          * Exclude products/items from the list API.
-          * The edit and print APIs can load full items.
-          */
-          .select({
-            items: 0,
-            Items: 0,
-          })
-          .sort({
-            BillDate: -1,
-            BillNo: -1,
-            _id: -1,
-          })
-          .skip(skip)
-          .limit(limit)
-          .lean();
+      // Keep the existing page clamp after a deletion while loading the
+      // normal requested page alongside the count.
+      const sales = currentPage === page
+        ? requestedSales
+        : await loadSalesPage(currentPage);
 
       /* =====================================================
         RESPONSE
@@ -26816,7 +27043,10 @@ app.get(
   "/api/credit-note/list",
   ensureConnection,
   securityRouter.authorizeRequest("VOUCHERS", "CREDIT_NOTE", "view"),   // ADD THIS
-  async (req, res) => {
+  async (req, res, next) => {
+  if (req.query.page !== undefined || req.query.limit !== undefined) {
+    return next();
+  }
   try {
     const { distributorId, firmId } = req.query;
 
@@ -31876,6 +32106,7 @@ app.get(
         .split(",")
         .map((code) => code.trim())
         .filter(Boolean);
+      const selectedProductCodes = new Set(productCodes);
 
       // Parse area codes
       const selectedAreaCodes = String(req.query.selectedAreaCodes || "")
@@ -31934,6 +32165,7 @@ app.get(
 
       // Load all matching sales bills
       const bills = await SalesHeader.find(match)
+        .select({ _id: 1, BillDate: 1, BillSeries: 1, BillNo: 1, PartyCode: 1, PartyName: 1, CompanyName: 1, Narration: 1, items: 1 })
         .sort({ BillDate: 1, BillSeries: 1, BillNo: 1 })
         .lean();
 
@@ -32000,7 +32232,7 @@ app.get(
           ).trim();
 
           // Skip if product codes are specified and this product is not in the list
-          if (productCodes.length > 0 && !productCodes.includes(productCode)) {
+          if (selectedProductCodes.size > 0 && !selectedProductCodes.has(productCode)) {
             continue;
           }
 
@@ -32687,11 +32919,19 @@ const stockReportTenant = (req) => {
   return distributorId && firmId ? { distributorId, firmId } : null;
 };
 
-const loadStockReportMasters = async (tenantFilter) => {
-  const [productRows, companyRows] = await Promise.all([
-    Product.find({ ...tenantFilter, isActive: { $ne: false } }).lean(),
-    Company.find({ ...tenantFilter, isActive: { $ne: false } }).lean(),
-  ]);
+const loadStockReportMasters = async (tenantFilter, productSearch = "", companyCode = "") => {
+  const companyRows = await Company.find({ ...tenantFilter, isActive: { $ne: false } }).lean();
+  const selectedCompany = companyRows.find((row) => [row._id, row.companyCode, row.companyName].some((value) => String(value || "") === String(companyCode || "")));
+  const acceptedCompanyKeys = [companyCode, selectedCompany?._id, selectedCompany?.companyCode, selectedCompany?.companyName]
+    .filter(Boolean).map((value) => new RegExp(`^${String(value).replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}$`, "i"));
+  const escapedSearch = String(productSearch || "").replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const productFilter = {
+    ...tenantFilter,
+    isActive: { $ne: false },
+    ...(productSearch ? { $or: [{ productCode: new RegExp(escapedSearch, "i") }, { productName: new RegExp(escapedSearch, "i") }] } : {}),
+    ...(companyCode ? { $and: [{ $or: ["companyId", "companyCode", "companyName"].map((field) => ({ [field]: { $in: acceptedCompanyKeys } })) }] } : {}),
+  };
+  const productRows = await Product.find(productFilter).lean();
   const productsByCode = new Map(productRows.map((row) => [String(row.productCode || "").trim(), row]));
   const companiesByKey = new Map();
   companyRows.forEach((row) => {
@@ -32939,12 +33179,42 @@ app.get("/api/reports/product-ledger", ensureConnection, securityRouter.authoriz
     const companyCode = String(req.query.companyCode || "").trim();
     const godownCode = String(req.query.godownCode || "").trim();
     const dateAllowed = (value) => (!fromDate || String(value) >= fromDate) && (!toDate || String(value) <= toDate);
-    const [purchases, sales, adjustments, currentStocks, masters] = await Promise.all([
-      PurchaseHeader.find({ ...tenantFilter, isActive: { $ne: false }, ...(godownCode ? { gdCode: godownCode } : {}) }).lean(),
-      SalesHeader.find({ ...tenantFilter, isActive: { $ne: false }, IsBillCancelled: { $ne: true }, ...(godownCode ? { GDCode: godownCode } : {}) }).lean(),
-      StockAdjustment.find({ ...tenantFilter, Status: "COMPLETED", AdjustmentType: { $in: ["IN", "OUT"] }, ...(godownCode ? { GDCode: godownCode } : {}) }).lean(),
-      Stock.find({ ...tenantFilter, ...(godownCode ? { GDCode: godownCode } : {}), ...(batchSearch ? { Batch: new RegExp(`^${batchSearch.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}$`, "i") } : {}) }).select("ProdCode Qty").lean(),
-      loadStockReportMasters(tenantFilter),
+    const masters = await loadStockReportMasters(tenantFilter, companyCode ? "" : productSearch, companyCode);
+    const matchingCodes = [...masters.productsByCode.entries()]
+      .filter(([code, product]) => (!productSearch || `${code} ${product.productName || ""}`.toLowerCase().includes(productSearch)) && stockReportMatchesCompany(product, companyCode, masters))
+      .map(([code]) => code);
+    const narrowProducts = Boolean(productSearch || companyCode);
+    const escapedProductSearch = productSearch.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    const productPattern = productSearch ? new RegExp(escapedProductSearch, "i") : null;
+    const itemFields = ["productCode", "ProductCode", "ProdCode", "prodCode", "code", "productId"];
+    const itemConditions = narrowProducts ? itemFields.map((field) => ({ [field]: { $in: matchingCodes } })) : [];
+    if (productPattern && !companyCode) {
+      itemConditions.push(...itemFields.map((field) => ({ [field]: productPattern })));
+      itemConditions.push({ productName: productPattern }, { ProductName: productPattern }, { product: productPattern });
+    }
+    if (companyCode && matchingCodes.length) {
+      itemConditions.push({ product: { $in: matchingCodes.map((code) => new RegExp(`^${String(code).replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}(?: - |$)`, "i")) } });
+    }
+    const itemFilter = narrowProducts ? { items: { $elemMatch: { $or: itemConditions.length ? itemConditions : [{ productCode: "__NO_MATCH__" }] } } } : {};
+    const adjustmentProductFilter = narrowProducts
+      ? { ...(productPattern && !companyCode ? { $or: [{ ProdCode: { $in: matchingCodes } }, { ProdCode: productPattern }, { ProductName: productPattern }] } : { ProdCode: { $in: matchingCodes } }) }
+      : {};
+    const throughDate = (filter, field) => toDate
+      ? { $and: [filter, { $or: [{ [field]: { $lte: toDate } }, { [field]: null }] }] }
+      : filter;
+    const purchaseFilter = throughDate({ ...tenantFilter, isActive: { $ne: false }, ...(godownCode ? { gdCode: godownCode } : {}), ...itemFilter }, "invoiceDate");
+    const salesFilter = throughDate({ ...tenantFilter, isActive: { $ne: false }, IsBillCancelled: { $ne: true }, ...(godownCode ? { GDCode: godownCode } : {}), ...itemFilter }, "BillDate");
+    const adjustmentFilter = throughDate({ ...tenantFilter, Status: "COMPLETED", AdjustmentType: { $in: ["IN", "OUT"] }, ...(godownCode ? { GDCode: godownCode } : {}), ...adjustmentProductFilter }, "VoucherDate");
+    const stockProductFilter = companyCode ? { ProdCode: { $in: matchingCodes } } : {};
+    const stockFilter = { ...tenantFilter, ...(godownCode ? { GDCode: godownCode } : {}), ...stockProductFilter, ...(batchSearch ? { Batch: new RegExp(`^${batchSearch.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}$`, "i") } : {}) };
+    const [purchases, sales, adjustments, currentStocks, futurePurchases, futureSales, futureAdjustments] = await Promise.all([
+      PurchaseHeader.find(purchaseFilter).lean(),
+      SalesHeader.find(salesFilter).lean(),
+      StockAdjustment.find(adjustmentFilter).lean(),
+      Stock.find(stockFilter).select("ProdCode Qty").lean(),
+      toDate ? PurchaseHeader.find({ ...tenantFilter, isActive: { $ne: false }, ...(godownCode ? { gdCode: godownCode } : {}), ...itemFilter, invoiceDate: { $gt: toDate } }).select("items").lean() : [],
+      toDate ? SalesHeader.find({ ...tenantFilter, isActive: { $ne: false }, IsBillCancelled: { $ne: true }, ...(godownCode ? { GDCode: godownCode } : {}), ...itemFilter, BillDate: { $gt: toDate } }).select("items").lean() : [],
+      toDate ? StockAdjustment.find({ ...tenantFilter, Status: "COMPLETED", AdjustmentType: { $in: ["IN", "OUT"] }, ...(godownCode ? { GDCode: godownCode } : {}), ...adjustmentProductFilter, VoucherDate: { $gt: toDate } }).select("ProdCode ProductName Batch AdjustmentType TotalQty Qty").lean() : [],
     ]);
     const entries = [];
     const pushEntry = ({ date, series, no, invDate = "", invNo = "", trn, partyCode = "", partyName = "", item, addQty = 0, lessQty = 0, mrp = 0, batch = ".", sRate = 0, pRate = 0, qty = 0, freeQty = 0, boxPack = 1, inBoxPack = 1 }) => {
@@ -32985,8 +33255,28 @@ app.get("/api/reports/product-ledger", ensureConnection, securityRouter.authoriz
         qty: row.Qty, freeQty: row.FreeQty, boxPack: row.BoxPack, inBoxPack: row.InBoxPack });
     });
     entries.sort((a, b) => String(a.Date).localeCompare(String(b.Date)) || String(a.TrnSeries).localeCompare(String(b.TrnSeries)) || String(a.TrnNo).localeCompare(String(b.TrnNo)));
+    // Current stock is today's balance. Remove later movements before calculating
+    // the opening balance for a report whose end date is in the past.
+    const futureByProduct = new Map();
+    const addFutureMovement = (item, delta, batch) => {
+      const code = stockReportItemCode(item) || String(item?.ProdCode || "");
+      const product = masters.productsByCode.get(code) || {};
+      if (productSearch && !`${code} ${product.productName || stockReportPick(item, "productName", "ProductName")}`.toLowerCase().includes(productSearch)) return;
+      if (batchSearch && String(batch || ".").trim().toLowerCase() !== batchSearch) return;
+      if (!stockReportMatchesCompany(product, companyCode, masters)) return;
+      futureByProduct.set(code, (futureByProduct.get(code) || 0) + delta);
+    };
+    futurePurchases.forEach((bill) => (bill.items || []).forEach((item) => addFutureMovement(item,
+      stockReportItemQty(item) + stockReportNumber(stockReportPick(item, "free", "Free", "freeQty", "FreeQty")),
+      stockReportPick(item, "batchNo", "batch", "Batch") || item.selectedBatch?.Batch)));
+    futureSales.forEach((bill) => (bill.items || []).forEach((item) => addFutureMovement(item,
+      -stockReportItemQty(item) - stockReportNumber(stockReportPick(item, "free", "Free", "freeQty", "FreeQty")),
+      stockReportPick(item, "batchNo", "batch", "Batch") || item.selectedBatch?.Batch)));
+    futureAdjustments.forEach((row) => addFutureMovement(row,
+      (row.AdjustmentType === "IN" ? 1 : -1) * stockReportNumber(row.TotalQty, row.Qty), row.Batch));
     const currentByProduct = new Map();
     currentStocks.forEach((row) => currentByProduct.set(row.ProdCode, (currentByProduct.get(row.ProdCode) || 0) + stockReportNumber(row.Qty)));
+    futureByProduct.forEach((delta, code) => currentByProduct.set(code, (currentByProduct.get(code) || 0) - delta));
     const netByProduct = new Map();
     entries.forEach((row) => netByProduct.set(row.ProductCode, (netByProduct.get(row.ProductCode) || 0) + stockReportNumber(row.AddQty) - stockReportNumber(row.LessQty)));
     const balances = new Map([...netByProduct.keys()].map((code) => [code, (currentByProduct.get(code) || 0) - (netByProduct.get(code) || 0)]));

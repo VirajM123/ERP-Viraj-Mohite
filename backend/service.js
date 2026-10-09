@@ -152,9 +152,11 @@ export default function createServiceRouter(securityRouter) {
     try {
       const scope = requestTenant(req, req.query, res); if (!scope) return;
       const { page, limit } = paging(req.query), filter = listFilter(req.query, scope, ["serviceCode", "serviceName", "hsnCode", "description"]);
-      const totalRecords = await Service.countDocuments(filter), totalPages = Math.max(Math.ceil(totalRecords / limit), 1);
+      const loadPage = (pageToLoad) => Service.find(filter).sort({ serviceCode: 1, _id: 1 }).skip((pageToLoad - 1) * limit).limit(limit).lean();
+      const [totalRecords, requestedServices] = await Promise.all([Service.countDocuments(filter), loadPage(page)]);
+      const totalPages = Math.max(Math.ceil(totalRecords / limit), 1);
       const currentPage = Math.min(page, totalPages);
-      const services = await Service.find(filter).sort({ serviceCode: 1 }).skip((currentPage - 1) * limit).limit(limit).lean();
+      const services = currentPage === page ? requestedServices : await loadPage(currentPage);
       res.json({ success: true, services, pagination: { currentPage, limit, totalRecords, totalPages } });
     } catch (error) { res.status(500).json({ success: false, message: "Failed to load Service Master.", error: error.message }); }
   });
@@ -200,9 +202,11 @@ export default function createServiceRouter(securityRouter) {
       const scope = requestTenant(req, req.query, res); if (!scope) return;
       const { page, limit } = paging(req.query), filter = listFilter(req.query, scope, ["voucherSeries", "partyCode", "partyName", "narration"]);
       const numeric = Number(clean(req.query.search)); if (clean(req.query.search) && Number.isFinite(numeric)) filter.$or.push({ voucherNo: numeric });
-      const totalRecords = await SalesService.countDocuments(filter), totalPages = Math.max(Math.ceil(totalRecords / limit), 1);
+      const loadPage = (pageToLoad) => SalesService.find(filter).sort({ voucherDate: -1, voucherNo: -1, _id: -1 }).skip((pageToLoad - 1) * limit).limit(limit).lean();
+      const [totalRecords, requestedVouchers] = await Promise.all([SalesService.countDocuments(filter), loadPage(page)]);
+      const totalPages = Math.max(Math.ceil(totalRecords / limit), 1);
       const currentPage = Math.min(page, totalPages);
-      const vouchers = await SalesService.find(filter).sort({ voucherDate: -1, voucherNo: -1 }).skip((currentPage - 1) * limit).limit(limit).lean();
+      const vouchers = currentPage === page ? requestedVouchers : await loadPage(currentPage);
       res.json({ success: true, vouchers, pagination: { currentPage, limit, totalRecords, totalPages } });
     } catch (error) { res.status(500).json({ success: false, message: "Failed to load Sales Service list.", error: error.message }); }
   });

@@ -1,0 +1,8 @@
+.searchable-party-select { position: relative; width: 100%; min-width: 0; }
+.searchable-party-select > input { width: 100%; box-sizing: border-box; }
+.searchable-party-select > input:not(:disabled) { padding-right: 24px; }
+.searchable-party-select::after { content: ""; position: absolute; right: 11px; top: 50%; width: 6px; height: 6px; border-right: 1.5px solid #64748b; border-bottom: 1.5px solid #64748b; transform: translateY(-65%) rotate(45deg); pointer-events: none; }
+.searchable-party-options { position: absolute; z-index: 1000; top: calc(100% + 3px); left: 0; right: 0; max-height: 240px; overflow-y: auto; background: #fff; border: 1px solid #cbd5e1; border-radius: 6px; box-shadow: 0 8px 24px rgba(15, 23, 42, .16); }
+.searchable-party-options > button { display: block; width: 100%; border: 0; border-radius: 0; background: #fff; color: #172554; padding: 8px 10px; text-align: left; cursor: pointer; font: inherit; }
+.searchable-party-options > button:hover, .searchable-party-options > button.active { background: #eaf2ff; }
+.searchable-party-empty { padding: 9px 10px; color: #64748b; }

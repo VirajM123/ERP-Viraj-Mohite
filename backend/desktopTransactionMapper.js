@@ -275,18 +275,27 @@ const salesServiceRows = (job, definition, rows, references) => rows.map((row) =
   return payloadRow(job, definition, payload, { date: payload.voucherDate, series: payload.voucherSeries, number: payload.voucherNo, party: payload.partyName, amount: number(row.NetAmt) || amount });
 });
 
-const loadRows = (job, definition, headers, sales, references) => headers.map((header) => {
-  const loadSeries = text(header.LoadSeries);
-  const loadNo = number(header.LoadNo);
-  const company = masterName(references, "companies", header.SysCompCode, "CompCode", "CompName");
-  const bills = sales.filter((row) => number(row.LoadNo) === loadNo && (!loadSeries || !text(row.LoadSeries) || text(row.LoadSeries) === loadSeries)).map((row) => {
-    const party = masterName(references, "accounts", row.SysAcCode, "AcCode", "AcName", true);
-    const salesman = ref(references.salesmen, row.SSMCode); const area = ref(references.areas, row.AreaCode);
-    return { BillDate: date(row.TrnDate), BillSeries: text(row.TrnSeries), BillNo: number(row.TrnNo), BillType: text(row.BillType) || "Credit", PartyCode: party.code, PartyName: party.name, SalesmanCode: text(row.SSMCode), SalesmanName: text(salesman.SSMName), AreaCode: text(row.AreaCode), AreaName: text(area.AreaName), Amount: number(row.NetAmt), Selected: true };
-  });
-  const payload = { LoadSeries: loadSeries || "LD", LoadNo: loadNo, LoadDate: date(header.LoadDate), CompanyCode: company.code, CompanyName: company.name, DeliveryBoyCode: text(header.DCode), DeliveryBoyName: text(header.CourierName || header.ContactName), VehicleNo: text(header.VanCode), DriverMobile: text(header.ContactNo), BillFromDate: date(header.FromDt), BillToDate: date(header.ToDt), Narration: text(header.Narr), Bills: bills, DistributorId: job.distributorId, FirmId: job.firmId };
-  return bills.length ? payloadRow(job, definition, payload, { date: payload.LoadDate, series: payload.LoadSeries, number: payload.LoadNo, party: payload.DeliveryBoyName, amount: number(header.TotAmt) }) : null;
-}).filter(Boolean);
+const loadRows = (job, definition, headers, sales, references) => {
+  const salesByLoadNo = new Map();
+  for (const row of sales) {
+    const loadNo = number(row.LoadNo);
+    const rows = salesByLoadNo.get(loadNo) || [];
+    rows.push(row);
+    salesByLoadNo.set(loadNo, rows);
+  }
+  return headers.map((header) => {
+    const loadSeries = text(header.LoadSeries);
+    const loadNo = number(header.LoadNo);
+    const company = masterName(references, "companies", header.SysCompCode, "CompCode", "CompName");
+    const bills = (salesByLoadNo.get(loadNo) || []).filter((row) => !loadSeries || !text(row.LoadSeries) || text(row.LoadSeries) === loadSeries).map((row) => {
+      const party = masterName(references, "accounts", row.SysAcCode, "AcCode", "AcName", true);
+      const salesman = ref(references.salesmen, row.SSMCode); const area = ref(references.areas, row.AreaCode);
+      return { BillDate: date(row.TrnDate), BillSeries: text(row.TrnSeries), BillNo: number(row.TrnNo), BillType: text(row.BillType) || "Credit", PartyCode: party.code, PartyName: party.name, SalesmanCode: text(row.SSMCode), SalesmanName: text(salesman.SSMName), AreaCode: text(row.AreaCode), AreaName: text(area.AreaName), Amount: number(row.NetAmt), Selected: true };
+    });
+    const payload = { LoadSeries: loadSeries || "LD", LoadNo: loadNo, LoadDate: date(header.LoadDate), CompanyCode: company.code, CompanyName: company.name, DeliveryBoyCode: text(header.DCode), DeliveryBoyName: text(header.CourierName || header.ContactName), VehicleNo: text(header.VanCode), DriverMobile: text(header.ContactNo), BillFromDate: date(header.FromDt), BillToDate: date(header.ToDt), Narration: text(header.Narr), Bills: bills, DistributorId: job.distributorId, FirmId: job.firmId };
+    return bills.length ? payloadRow(job, definition, payload, { date: payload.LoadDate, series: payload.LoadSeries, number: payload.LoadNo, party: payload.DeliveryBoyName, amount: number(header.TotAmt) }) : null;
+  }).filter(Boolean);
+};
 
 const settleLoadRows = (job, definition, rows, references) => [...groupDetails(rows).values()].map((group) => {
   const first = group[0] || {};

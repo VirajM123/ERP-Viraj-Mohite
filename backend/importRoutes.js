@@ -67,11 +67,40 @@ const syncProductGstRates = async ({ documents, distributorId, firmId, firmName 
   return Number(result.upsertedCount || 0) + Number(result.modifiedCount || 0);
 };
 
-export const loadExistingProductCodes = async ({ collection, distributorId, firmId, session }) => {
-  const products = await collection.find(
-    { distributorId, firmId },
-    { projection: { productCode: 1 }, session },
-  ).toArray();
+const normalizedIdentity = (field) => ({
+  $toLower: { $trim: { input: { $convert: { input: `$${field}`, to: "string", onError: "", onNull: "" } } } },
+});
+
+export const matchingImportDocuments = async ({ collection, distributorId, firmId, config, entryType, desktopBatch, data, session }) => {
+  const fields = config.duplicateField === "mappingKey"
+    ? config.label === "Area To Party Mapping"
+      ? ["companyCode", "accountCode"]
+      : ["companyCode", "areaCode", "salesmanCode"]
+    : desktopBatch && entryType === "Account"
+      ? ["accountCode", "accountName"]
+      : [config.duplicateField];
+  const sourceColumns = fields.map((field) => config.columns.find((column) => column.field === field)?.excel);
+  const firstValues = [...new Set(data.map((row) => clean(row[sourceColumns[0]]).toLowerCase()).filter(Boolean))];
+  if (!firstValues.length) return [];
+  const projection = Object.fromEntries(fields.map((field) => [field, 1]));
+  // Compare only the first identity component in MongoDB, then use the original
+  // duplicate-key function below for exact composite and legacy matching.
+  return collection.aggregate([
+    { $match: { distributorId, firmId } },
+    { $match: { $expr: { $in: [normalizedIdentity(fields[0]), firstValues] } } },
+    { $project: projection },
+  ], { session }).toArray();
+};
+
+export const loadExistingProductCodes = async ({ collection, distributorId, firmId, session, productCodes }) => {
+  const codes = [...new Set((productCodes || []).map((code) => clean(code).toLowerCase()).filter(Boolean))];
+  const products = codes.length
+    ? await collection.aggregate([
+      { $match: { distributorId, firmId } },
+      { $match: { $expr: { $in: [normalizedIdentity("productCode"), codes] } } },
+      { $project: { productCode: 1 } },
+    ], { session }).toArray()
+    : [];
   return new Map(products.map((product) => [clean(product.productCode).toLowerCase(), product.productCode]));
 };
 
@@ -111,7 +140,11 @@ export default function createImportRouter({ authorizeRequest, models }) {
       const missingColumns = config.columns.filter((column) => column.required && !headers.includes(column.excel)).map((column) => column.excel);
       if (missingColumns.length) return res.status(422).json({ success: false, message: `Missing required column(s): ${missingColumns.join(", ")}`, missingColumns });
       const collection = mongoose.connection.collection(config.collection);
-      const existing = await collection.find({ distributorId, firmId }).toArray();
+      // Product imports update existing codes, so validation only needs the
+      // workbook-level duplicate check. Save reads matching codes in its transaction.
+      const existing = entryType === "Product"
+        ? []
+        : await matchingImportDocuments({ collection, distributorId, firmId, config, entryType, desktopBatch, data });
       const keys = new Set(existing.map((doc) => importDuplicateKey(config, doc, entryType, desktopBatch).toLowerCase()).filter(Boolean));
       let areaToPartyReferences = null;
       let salesmanToAreaReferences = null;
@@ -245,6 +278,7 @@ export default function createImportRouter({ authorizeRequest, models }) {
           distributorId: req.security.distributorId,
           firmId: req.security.firmId,
           session,
+          productCodes: documents.map((document) => document.productCode),
         });
         updated = documents.filter((document) => existingCodes.has(clean(document.productCode).toLowerCase())).length;
         inserted = documents.length - updated;

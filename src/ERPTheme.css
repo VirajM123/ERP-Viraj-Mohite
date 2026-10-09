@@ -5207,3 +5207,17 @@
     background: linear-gradient(180deg, #ffffff 0%, #f6f9fe 100%) !important;
   }
 }
+
+/* Keep Master list paging visible while the rows scroll inside the card. */
+@media screen {
+  .erp-master-list-page .erp-list-table-scroll {
+    max-height: clamp(240px, calc(100vh - 430px), 610px);
+    overflow-y: auto;
+  }
+
+  .erp-master-list-page .erp-list-table thead th {
+    position: sticky;
+    top: 0;
+    z-index: 2;
+  }
+}
