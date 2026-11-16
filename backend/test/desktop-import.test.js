@@ -2,8 +2,8 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
+import { createRequire } from "node:module";
 import test from "node:test";
-import * as XLSX from "xlsx";
 import { canReuseDesktopImportPlan, createSourceWorkbook, localSqlServiceAccount, mapDesktopRows, parseInstalledSqlInstances, parseSqlXmlRows } from "../desktopImportRoutes.js";
 import { loadExistingProductCodes, matchingImportDocuments } from "../importRoutes.js";
 import { getImportConfig } from "../importConfig.js";
@@ -11,6 +11,8 @@ import { buildDesktopTransactionRows } from "../desktopTransactionMapper.js";
 import { DESKTOP_IMPORT_ORDER, createConflictFreeWaves, desktopCommittedTransactionFilter, desktopTransactionConcurrency, ensureDesktopReceiptBankAccounts, readDesktopWorkbook, readDesktopWorkbookStreaming } from "../desktopImportBatch.js";
 import { calculatePurchaseFinancials, calculateSalesFinancials } from "../financialValidation.js";
 
+const require = createRequire(import.meta.url);
+const XLSX = require("xlsx");
 test("desktop account rows map to the existing ERP Excel structure", () => {
   const [row] = mapDesktopRows({
     entryType: "Account",
@@ -66,7 +68,7 @@ test("existing area-to-party workbooks ignore rows that have no area mapping", (
       { "Company Code": "C1", "Account Code": "A1", "Area Code": "", "Area Name": "" },
       { "Company Code": "C1", "Account Code": "A2", "Area Code": "N", "Area Name": "North" },
     ]), "Data");
-    XLSX.writeFile(workbook, filePath);
+    XLSX.writeFileXLSX(workbook, filePath);
     const records = readDesktopWorkbook(filePath, "AreaToPartyMapping");
     assert.equal(records.length, 1);
     assert.equal(records[0].payload["Account Code"], "A2");
@@ -315,7 +317,7 @@ test("previously generated credit-note workbooks normalize a blank series before
     const workbook = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(workbook, XLSX.utils.json_to_sheet([{ distributorId: "D", firmId: "F", CreditNoteSeries: "", CreditNoteNo: 1, PartyCode: "A20" }]), "Data");
     XLSX.utils.book_append_sheet(workbook, XLSX.utils.json_to_sheet([{ CreditNoteSeries: "", CreditNoteNo: 1, ProductCode: "P10", Qty: 1 }]), "items");
-    XLSX.writeFile(workbook, filePath);
+    XLSX.writeFileXLSX(workbook, filePath);
     const [record] = readDesktopWorkbook(filePath, "DesktopCreditNote");
     assert.equal(record.payload.CreditNoteSeries, "CN");
     assert.equal(record.payload.items.length, 1);

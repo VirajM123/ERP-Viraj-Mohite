@@ -47,9 +47,17 @@ export default function DashboardHome({ userName, firmName, accountCount, itemCo
   const [invoiceAction, setInvoiceAction] = useState("");
   const [invoiceMessage, setInvoiceMessage] = useState("");
   const periodStart = period === "today" ? date : period === "week" ? weekStart(date) : period === "month" ? firstOfMonth(date) : fromDate;
+  const collectionStart = collectionPeriod === "today" ? date : collectionPeriod === "week" ? shiftDate(weekStart(date), -7) : firstOfMonth(date);
+  const collectionEnd = collectionPeriod === "week" ? shiftDate(weekStart(date), -1) : date;
   useEffect(() => {
     let cancelled = false;
-    secureFetch(`${API_URL}/p0/dashboard/summary?date=${encodeURIComponent(date)}&fromDate=${encodeURIComponent(periodStart)}`)
+    const query = new URLSearchParams({
+      date,
+      fromDate: periodStart,
+      collectionFromDate: collectionStart,
+      collectionToDate: collectionEnd,
+    });
+    secureFetch(`${API_URL}/p0/dashboard/summary?${query}`)
       .then(async (response) => {
         const result = await response.json();
         if (!response.ok || !result.success) throw new Error(result.message || "Unable to load dashboard summary");
@@ -57,7 +65,7 @@ export default function DashboardHome({ userName, firmName, accountCount, itemCo
       })
       .catch((cause) => { if (!cancelled) { setSummary(null); setError(cause.message || "Unable to load dashboard summary"); } });
     return () => { cancelled = true; };
-  }, [date, periodStart]);
+  }, [date, periodStart, collectionStart, collectionEnd]);
 
   const flash = summary?.flashCard;
   const salesPoints = summary?.salesTrend || [];
@@ -72,8 +80,6 @@ export default function DashboardHome({ userName, firmName, accountCount, itemCo
   const taskInvoices = taskTab === "einvoice" ? generateEInvoices : pendingInvoices;
   const loads = summary?.loads || [];
   const pendingLoads = loads.filter((row) => !row.delivered);
-  const collectionStart = collectionPeriod === "today" ? date : collectionPeriod === "week" ? shiftDate(weekStart(date), -7) : firstOfMonth(date);
-  const collectionEnd = collectionPeriod === "week" ? shiftDate(weekStart(date), -1) : date;
   const collectionReceipts = (summary?.collectionRows || []).filter((row) => row.date >= collectionStart && row.date <= collectionEnd);
   const collectionAmounts = collectionReceipts.reduce((result, row) => {
     const method = collectionMethod(row);
@@ -148,7 +154,7 @@ export default function DashboardHome({ userName, firmName, accountCount, itemCo
         <div className="flash-dashboard-panel-heading"><h2>Pending Approvals / Pending Tasks</h2><button type="button" className="flash-dashboard-link" onClick={() => go(taskTab === "invoices" || taskTab === "einvoice" ? "E-Invoice" : taskTab === "delivery" ? "Create Load" : "PDC Docket")}>View All</button></div>
         <div className="flash-dashboard-tabs" role="tablist" aria-label="Pending tasks">
           <button type="button" role="tab" aria-selected={taskTab === "invoices"} className={taskTab === "invoices" ? "active" : ""} onClick={() => setTaskTab("invoices")}>Invoices ({pendingInvoices.length})</button>
-          <button type="button" role="tab" aria-selected={taskTab === "delivery"} className={taskTab === "delivery" ? "active" : ""} onClick={() => setTaskTab("delivery")}>Pending Deliveries ({pendingLoads.length})</button>
+          <button type="button" role="tab" aria-selected={taskTab === "delivery"} className={taskTab === "delivery" ? "active" : ""} onClick={() => setTaskTab("delivery")}>Pending Deliveries ({summary?.pendingLoadCount ?? pendingLoads.length})</button>
           <button type="button" role="tab" aria-selected={taskTab === "pdc"} className={taskTab === "pdc" ? "active" : ""} onClick={() => setTaskTab("pdc")}>Pending PDC</button>
           <button type="button" role="tab" aria-selected={taskTab === "einvoice"} className={taskTab === "einvoice" ? "active" : ""} onClick={() => setTaskTab("einvoice")}>Generate E-Invoice ({summary?.generateEInvoiceCount || 0})</button>
         </div>

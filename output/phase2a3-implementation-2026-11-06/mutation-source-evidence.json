@@ -1,0 +1,1142 @@
+[
+  {
+    "file": "backend/accounting.js",
+    "line": 33,
+    "call": "Journal.create",
+    "text": "Journal.create([{ ...entry, postingVersion }], { session })"
+  },
+  {
+    "file": "backend/accounting.js",
+    "line": 52,
+    "call": "original.save",
+    "text": "original.save({ session })"
+  },
+  {
+    "file": "backend/audit.js",
+    "line": 39,
+    "call": "AuditEvent.create",
+    "text": "AuditEvent.create([{\n  ...event,\n  distributorId: req.auth.distributorId,\n  firmId: req.auth.firmId,\n  userId: req.auth.userId,\n  before: redactAuditValue(event.before),\n  after: redactAuditValue(event.after),\n  requestId: String(req.headers[\"x-request-id\"] || \"\"),\n  ip: String(req.ip || \"\"),\n  userAgent: String(req.headers[\"user-agent\"] || \"\").slice(0, 300),\n}], { session })"
+  },
+  {
+    "file": "backend/auth.js",
+    "line": 41,
+    "call": "model.updateOne",
+    "text": "model.updateOne(\r\n      { _id: id, password: stored },\r\n      { $set: { password: await hashPassword(candidate), oldPassword: \"\" } }\r\n    )"
+  },
+  {
+    "file": "backend/auth.js",
+    "line": 181,
+    "call": "collection.findOneAndUpdate",
+    "text": "collection.findOneAndUpdate(\r\n          { _id: `${req.path}:${req.ip}:${windowStart}` },\r\n          { $inc: { count: 1 }, $setOnInsert: { expiresAt: new Date(windowStart + windowMs) } },\r\n          { upsert: true, returnDocument: \"after\" }\r\n        )"
+  },
+  {
+    "file": "backend/batchLock.js",
+    "line": 250,
+    "call": "Stock.bulkWrite",
+    "text": "Stock.bulkWrite(operations, { session })"
+  },
+  {
+    "file": "backend/batchLock.js",
+    "line": 251,
+    "call": "BatchRateAudit.insertMany",
+    "text": "BatchRateAudit.insertMany(auditRows, { session })"
+  },
+  {
+    "file": "backend/companyWiseSeries.js",
+    "line": 140,
+    "call": "CompanyWiseSeries.bulkWrite",
+    "text": "CompanyWiseSeries.bulkWrite(\n      [...uniqueRows.values()].map((row) => ({\n        updateOne: {\n          filter: { ...scope, companyCode: row.companyCode },\n          update: { $set: row, $setOnInsert: scope },\n          upsert: true,\n        },\n      }))\n    )"
+  },
+  {
+    "file": "backend/counters.js",
+    "line": 19,
+    "call": "DocumentCounter.updateOne",
+    "text": "DocumentCounter.updateOne(\n      counterFilter,\n      {\n        $max: { value: Number(minimumValue || 0) },\n        $setOnInsert: counterFilter,\n      },\n      { upsert: true, session }\n    )"
+  },
+  {
+    "file": "backend/counters.js",
+    "line": 35,
+    "call": "DocumentCounter.updateOne",
+    "text": "DocumentCounter.updateOne(\n      counterFilter,\n      { $max: { value: Number(minimumValue || 0) } }\n    )"
+  },
+  {
+    "file": "backend/counters.js",
+    "line": 41,
+    "call": "DocumentCounter.findOneAndUpdate",
+    "text": "DocumentCounter.findOneAndUpdate(\n    counterFilter,\n    { $inc: { value: 1 } },\n    { new: true, session, runValidators: true }\n  )"
+  },
+  {
+    "file": "backend/desktopImportBatch.js",
+    "line": 506,
+    "call": "collection.insertMany",
+    "text": "collection.insertMany([...suppliers.values()].map((supplier) => ({\r\n    ...supplier, ...tenant, firmName: firmName || \"\", accountGroup: \"SUNDRY CREDITORS\", isActive: true,\r\n    createdAt: new Date(), updatedAt: new Date(),\r\n  })), { ordered: true })"
+  },
+  {
+    "file": "backend/desktopImportBatch.js",
+    "line": 523,
+    "call": "collection.insertMany",
+    "text": "collection.insertMany([...accounts.values()].map((account) => ({\n    ...account, ...tenant, firmName: firmName || \"\", isActive: true, createdAt: new Date(), updatedAt: new Date(),\n  })), { ordered: true })"
+  },
+  {
+    "file": "backend/desktopImportBatch.js",
+    "line": 645,
+    "call": "mongoose.connection.collection(action.collection).deleteMany",
+    "text": "mongoose.connection.collection(action.collection).deleteMany({ _id: { $in: action.ids.map((id) => new mongoose.Types.ObjectId(id)) } })"
+  },
+  {
+    "file": "backend/financialPeriods.js",
+    "line": 119,
+    "call": "PeriodControl.replaceOne",
+    "text": "PeriodControl.replaceOne({ ...tenant, revision: expectedRevision }, after, { session, runValidators: true })"
+  },
+  {
+    "file": "backend/financialPeriods.js",
+    "line": 121,
+    "call": "PeriodControl.create",
+    "text": "PeriodControl.create([after], { session })"
+  },
+  {
+    "file": "backend/financialPeriods.js",
+    "line": 144,
+    "call": "PeriodControl.updateOne",
+    "text": "PeriodControl.updateOne({ ...tenant, revision: control.revision }, { $inc: { revision: 1 } }, { session })"
+  },
+  {
+    "file": "backend/generalSetup.js",
+    "line": 815,
+    "call": "GeneralSetup.create",
+    "text": "GeneralSetup.create(\n          defaultSetup\n        )"
+  },
+  {
+    "file": "backend/generalSetup.js",
+    "line": 877,
+    "call": "GeneralSetup.findOneAndUpdate",
+    "text": "GeneralSetup.findOneAndUpdate(\n        { distributorId, firmId },\n        {\n          $set: updateData,\n          $setOnInsert: { distributorId, firmId },\n        },\n        {\n          new: true,\n          upsert: true,\n          runValidators: true,\n          setDefaultsOnInsert: true,\n          session,\n        }\n      )"
+  },
+  {
+    "file": "backend/importRoutes.js",
+    "line": 48,
+    "call": "gstCollection.bulkWrite",
+    "text": "gstCollection.bulkWrite(missingRates.map((rate) => ({\n    updateOne: {\n      filter: { distributorId, firmId, gstCode: `GST${rate}` },\n      update: {\n        $set: { vatPercent: rate, isActive: true },\n        $setOnInsert: {\n          gstCode: `GST${rate}`,\n          distributorId,\n          firmId,\n          firmName: firmName || \"\",\n          purchaseType: \"VAT ON PURCHASE PRICE\",\n          salesType: \"VAT ON SALES PRICE\",\n          createdAt: new Date(),\n        },\n        $currentDate: { updatedAt: true },\n      },\n      upsert: true,\n    },\n  })), { ordered: true })"
+  },
+  {
+    "file": "backend/importRoutes.js",
+    "line": 264,
+    "call": "ImportBatch.create",
+    "text": "ImportBatch.create([{\n        distributorId: req.security.distributorId,\n        firmId: req.security.firmId,\n        idempotencyKey,\n        entryType: req.body.entryType,\n        rowCount: documents.length,\n      }], { session })"
+  },
+  {
+    "file": "backend/importRoutes.js",
+    "line": 285,
+    "call": "productCollection.bulkWrite",
+    "text": "productCollection.bulkWrite(documents.map((document) => ({\n          updateOne: {\n            filter: {\n              distributorId: req.security.distributorId,\n              firmId: req.security.firmId,\n              productCode: existingCodes.get(clean(document.productCode).toLowerCase()) || document.productCode,\n            },\n            update: {\n              $set: { ...document, updatedAt: new Date() },\n              $setOnInsert: { createdAt: new Date() },\n            },\n            upsert: true,\n          },\n        })), { ordered: true, session })"
+  },
+  {
+    "file": "backend/importRoutes.js",
+    "line": 301,
+    "call": "models[req.body.entryType].insertMany",
+    "text": "models[req.body.entryType].insertMany(documents, { ordered: true, session })"
+  },
+  {
+    "file": "backend/openingBalances.js",
+    "line": 134,
+    "call": "OpeningTransaction.updateOne",
+    "text": "OpeningTransaction.updateOne({ _id: old._id }, { $set: { status: 'REVERSED' } }, { session })"
+  },
+  {
+    "file": "backend/openingBalances.js",
+    "line": 135,
+    "call": "Journal.updateMany",
+    "text": "Journal.updateMany(openingTenant(req, { sourceType: 'OPENING_BALANCE', sourceId: String(old._id), status: 'POSTED' }), { $set: { status: 'REVERSED' } }, { session })"
+  },
+  {
+    "file": "backend/openingBalances.js",
+    "line": 139,
+    "call": "OpeningTransaction.findOneAndUpdate",
+    "text": "OpeningTransaction.findOneAndUpdate(openingTenant(req, { accountId: account._id, referenceKey: row.referenceKey }),\n          { $set: row }, { upsert: true, new: true, runValidators: true, session })"
+  },
+  {
+    "file": "backend/openingBalances.js",
+    "line": 143,
+    "call": "Journal.updateMany",
+    "text": "Journal.updateMany(openingTenant(req, { sourceType: 'OPENING_BALANCE', sourceId: String(saved._id), status: 'POSTED' }), { $set: { status: 'REVERSED' } }, { session })"
+  },
+  {
+    "file": "backend/openingBalances.js",
+    "line": 156,
+    "call": "account.save",
+    "text": "account.save({ session })"
+  },
+  {
+    "file": "backend/openingBalances.js",
+    "line": 181,
+    "call": "OpeningTransaction.updateOne",
+    "text": "OpeningTransaction.updateOne({ _id: row._id, $expr: { $gte: [{ $subtract: ['$balanceAmount', '$allocatedAmount'] }, money(amount)] } }, { $inc: { allocatedAmount: money(amount) } }, { session })"
+  },
+  {
+    "file": "backend/openingBalances.js",
+    "line": 187,
+    "call": "OpeningTransaction.updateOne",
+    "text": "OpeningTransaction.updateOne({ _id: id, allocatedAmount: { $gte: money(amount) } }, { $inc: { allocatedAmount: -money(amount) } }, { session })"
+  },
+  {
+    "file": "backend/openingBalances.js",
+    "line": 197,
+    "call": "reversal.save",
+    "text": "reversal.save({ session })"
+  },
+  {
+    "file": "backend/p0Features.js",
+    "line": 66,
+    "call": "StockMovement.deleteMany",
+    "text": "StockMovement.deleteMany({\r\n      distributorId,\r\n      firmId,\r\n      sourceType,\r\n      sourceId: String(sourceId),\r\n    })"
+  },
+  {
+    "file": "backend/p0Features.js",
+    "line": 94,
+    "call": "StockMovement.insertMany",
+    "text": "StockMovement.insertMany(consolidatedRows, { session, ordered: true })"
+  },
+  {
+    "file": "backend/p0Features.js",
+    "line": 249,
+    "call": "JournalVoucher.create",
+    "text": "JournalVoucher.create([{ distributorId: req.auth.distributorId, firmId: req.auth.firmId, vDate: String(req.body.vDate), vNo, narration: String(req.body.narration || req.body.narr || \"\"), reference: String(req.body.reference || \"\"), lines, idempotencyKey }], { session })"
+  },
+  {
+    "file": "backend/p0Features.js",
+    "line": 268,
+    "call": "voucher.save",
+    "text": "voucher.save({ session })"
+  },
+  {
+    "file": "backend/p0Features.js",
+    "line": 284,
+    "call": "voucher.save",
+    "text": "voucher.save({ session })"
+  },
+  {
+    "file": "backend/printAccountDetails.js",
+    "line": 131,
+    "call": "PrintAccountDetails.findOneAndUpdate",
+    "text": "PrintAccountDetails.findOneAndUpdate(\n      scope,\n      { $set: update },\n      { new: true, upsert: true, runValidators: true, setDefaultsOnInsert: true }\n    )"
+  },
+  {
+    "file": "backend/productMapping.js",
+    "line": 99,
+    "call": "ProductMapping.findOneAndUpdate",
+    "text": "ProductMapping.findOneAndUpdate({ ...filter, _id: before._id }, {\n            $set: update,\n          }, { new: true, runValidators: true })"
+  },
+  {
+    "file": "backend/productMapping.js",
+    "line": 102,
+    "call": "ProductMapping.create",
+    "text": "ProductMapping.create({ ...filter, ...update })"
+  },
+  {
+    "file": "backend/productMapping.js",
+    "line": 122,
+    "call": "ProductMapping.findOneAndUpdate",
+    "text": "ProductMapping.findOneAndUpdate(\n        { ...scope(req), _id: req.params.id, isActive: true },\n        { $set: { isActive: false } },\n        { new: true }\n      )"
+  },
+  {
+    "file": "backend/securitySetup.js",
+    "line": 771,
+    "call": "SecuritySetup.create",
+    "text": "SecuritySetup.create({\r\n            distributorId,\r\n            firmId,\r\n            firmName: user.firmName,\r\n            userId: user.userId,\r\n            userName: user.userName,\r\n            role: normalizeRole(user.role),\r\n            permissions: createDefaultPermissions(\r\n              normalizeRole(user.role)\r\n            ),\r\n          })"
+  },
+  {
+    "file": "backend/securitySetup.js",
+    "line": 928,
+    "call": "SecuritySetup.findOneAndUpdate",
+    "text": "SecuritySetup.findOneAndUpdate(\n          {\r\n            distributorId,\r\n            firmId,\r\n            userId: user.userId,\r\n          },\r\n          {\r\n            $set: {\r\n              permissions: user.permissions,\r\n              updatedBy,\r\n              isActive: true,\n              userName: target.userName,\n              role: normalizeRole(target.role),\n              firmName: target.firmName,\n            },\r\n          },\r\n          {\r\n            new: true,\r\n            upsert: true,\n            session,\n            runValidators: true,\n          }\n        )"
+  },
+  {
+    "file": "backend/server.js",
+    "line": 425,
+    "call": "Register.create",
+    "text": "Register.create({\r\n      distributorId,\r\n      firmId,\r\n      firmCode: firmCode.trim(),\r\n      firmName: firmName.trim(),\r\n      address1: address1 || \"\",\r\n      address2: address2 || \"\",\r\n      city: city || \"\",\r\n      pinCode: pinCode || \"\",\r\n      state: state || \"\",\r\n      country: country || \"India\",\r\n      phoneNo: phoneNo || \"\",\r\n      mobileNo: mobileNo || \"\",\r\n      tinNo: tinNo || \"\",\r\n      regNo: regNo || \"\",\r\n      gstNo: gstNo || \"\",\r\n      drugLicNo: drugLicNo || \"\",\r\n      foodLicenceNo: foodLicenceNo || \"\",\r\n      apiKey: apiKey || \"\",\r\n      email: email || \"\",\r\n      userName: userName.trim(),\r\n      role: \"DISTRIBUTOR_ADMIN\",\r\n      password: await hashPassword(password),\r\n    })"
+  },
+  {
+    "file": "backend/server.js",
+    "line": 1029,
+    "call": "User.create",
+    "text": "User.create({\r\n      userId: \"USR\" + Date.now(),\r\n      distributorId,\r\n      firmId,\r\n      firmName,\r\n      userName,\r\n      oldPassword: \"\",\r\n      password: await hashPassword(password),\r\n      role: safeRole,\r\n      salesmanCode: assignedSalesmanCode,\r\n      isActive: true,\r\n    })"
+  },
+  {
+    "file": "backend/server.js",
+    "line": 1085,
+    "call": "User.findOneAndUpdate",
+    "text": "User.findOneAndUpdate(\r\n      { _id: req.params.id, distributorId: req.auth.distributorId, firmId: req.auth.firmId },\r\n      { $set: update, $inc: { sessionVersion: 1 } },\r\n      { new: true }\r\n    )"
+  },
+  {
+    "file": "backend/server.js",
+    "line": 1112,
+    "call": "User.findOneAndUpdate",
+    "text": "User.findOneAndUpdate(\r\n      { _id: req.params.id, distributorId: req.auth.distributorId, firmId: req.auth.firmId },\r\n      { $set: { isActive: false }, $inc: { sessionVersion: 1 } },\r\n      { new: true }\r\n    )"
+  },
+  {
+    "file": "backend/server.js",
+    "line": 2066,
+    "call": "AreaToPartyMapping.updateMany",
+    "text": "AreaToPartyMapping.updateMany(scope, { $set: { isActive: false } }, { session })"
+  },
+  {
+    "file": "backend/server.js",
+    "line": 2068,
+    "call": "AreaToPartyMapping.bulkWrite",
+    "text": "AreaToPartyMapping.bulkWrite(rows.map((row) => ({\r\n    updateOne: {\r\n      filter: { ...scope, companyCode: row.companyCode },\r\n      update: { $set: { ...row, accountName: account.accountName, isActive: true } },\r\n      upsert: true,\r\n    },\r\n  })), { session })"
+  },
+  {
+    "file": "backend/server.js",
+    "line": 5104,
+    "call": "Company.create",
+    "text": "Company.create({\r\n      defaultSupplierId,\r\n      companyCode: code.trim(),\r\n      companyName: name.trim(),\r\n      companyAddress: address || \"\",\r\n      branchOfficeAddress: branchAddress || \"\",\r\n      gstNo: String(req.body.gstNo || \"\").trim(),\r\n      state: String(req.body.state || \"\").trim(),\r\n      pinCode: String(req.body.pinCode || \"\").trim(),\r\n      distributorId,\r\n      firmId,\r\n      firmName: firmName || \"\",\r\n      isActive: true,\r\n    })"
+  },
+  {
+    "file": "backend/server.js",
+    "line": 5161,
+    "call": "Company.findOneAndUpdate",
+    "text": "Company.findOneAndUpdate(\r\n      { _id: req.params.id, distributorId: req.auth.distributorId, firmId: req.auth.firmId },\r\n      { $set: updateData },\r\n      { new: true, runValidators: true }\r\n    )"
+  },
+  {
+    "file": "backend/server.js",
+    "line": 5249,
+    "call": "Company.findOneAndUpdate",
+    "text": "Company.findOneAndUpdate(\r\n      { _id: req.params.id, distributorId: req.auth.distributorId, firmId: req.auth.firmId },\r\n      { $set: { isActive: false } }\r\n    )"
+  },
+  {
+    "file": "backend/server.js",
+    "line": 5478,
+    "call": "Group.create",
+    "text": "Group.create({\r\n      groupCode: code.trim(),\r\n      groupName: name.trim(),\r\n      distributorId,\r\n      firmId,\r\n      firmName: firmName || \"\",\r\n      isActive: true,\r\n    })"
+  },
+  {
+    "file": "backend/server.js",
+    "line": 5712,
+    "call": "Category.create",
+    "text": "Category.create({\r\n      categoryCode: code.trim(),\r\n      categoryName: name.trim(),\r\n      distributorId,\r\n      firmId,\r\n      firmName: firmName || \"\",\r\n      isActive: true,\r\n    })"
+  },
+  {
+    "file": "backend/server.js",
+    "line": 6164,
+    "call": "Product.create",
+    "text": "Product.create({\r\n      productCode: code.trim(),\r\n      productName: name.trim(),\r\n      ...req.body,\r\n      distributorId,\r\n      firmId,\r\n      firmName: firmName || \"\",\r\n      isActive: true,\r\n    })"
+  },
+  {
+    "file": "backend/server.js",
+    "line": 6612,
+    "call": "Account.create",
+    "text": "Account.create([{\r\n      ...(req.body.openingTransactions !== undefined ? { openingTransactions: req.body.openingTransactions } : {}),\r\n      accountCode,\r\n      accountName,\r\n\r\n      openingDate: req.body.openingDate || \"\",\r\n      address: req.body.address || \"\",\r\n      town: townValue,\r\n      state: req.body.state || \"MAHARASHTRA\",\r\n      pinCode: req.body.pinCode || \"\",\r\n      phoneNo: req.body.phoneNo || \"\",\r\n      mobileNo: req.body.mobileNo || \"\",\r\n      emailId: req.body.emailId || \"\",\r\n      tinNo: req.body.tinNo || \"\",\r\n      openingBal: Number(req.body.openingBal || 0),\r\n      openingBalType: req.body.openingBalType || \"Dr\",\r\n      contactPerson: req.body.contactPerson || \"\",\r\n\r\n      invType: req.body.invType || \"TAXABLE\",\r\n      taxOn: req.body.taxOn || \"SRATE\",\r\n\r\n      panNo: req.body.panNo || \"\",\r\n      foodLicense: req.body.foodLicense || \"\",\r\n      gstNo: req.body.gstNo || \"\",\r\n      billToAdd1: req.body.billToAdd1 || \"\",\r\n      tanNo: req.body.tanNo || \"\",\r\n      gstType: req.body.gstType || \"Unregistered\",\r\n      gstDate: req.body.gstDate || \"\",\r\n      gstClsDate: req.body.gstClsDate || \"\",\r\n      add2: req.body.add2 || \"\",\r\n      tcsPercent: Number(req.body.tcsPercent || 0),\r\n      allowInPurchase: req.body.allowInPurchase || \"N\",\r\n\r\n      drugLicNo: req.body.drugLicNo || \"\",\r\n      drugExpDate: req.body.drugExpDate || \"\",\r\n\r\n      // NEW FIELDS\r\n      creditDays: Number(req.body.creditDays || 0),\r\n      creditBills: Number(req.body.creditBills || 0),\r\n      lockDays: Number(req.body.lockDays || 0),\r\n      creditAmt: Number(req.body.creditAmt || 0),\r\n      blackListed: String(req.body.blackListed || \"NO\").trim().toUpperCase() === \"YES\" ? \"YES\" : \"NO\",\r\n      lastBillDate: req.body.lastBillDate || \"\",\r\n      lastInvoiceDate: req.body.lastInvoiceDate || \"\",\r\n      // END NEW FIELDS\r\n\r\n      areaCode: areaCodeValue || \"\",\r\n      distributorId,\r\n      firmId,\r\n      firmName,\r\n      isActive: true,\r\n    }], { session })"
+  },
+  {
+    "file": "backend/server.js",
+    "line": 6996,
+    "call": "OtherAccount.create",
+    "text": "OtherAccount.create({\r\n      ...req.body,\r\n      accountCode,\r\n      accountName,\r\n      distributorId,\r\n      firmId,\r\n      firmName,\r\n      branch: req.body.branch || req.body.branchName || \"\",\r\n      branchName: req.body.branchName || req.body.branch || \"\",\r\n      openingBal: Number(req.body.openingBal || 0),\r\n      tcsPercent: Number(req.body.tcsPercent || 0),\r\n      isActive: true,\r\n    })"
+  },
+  {
+    "file": "backend/server.js",
+    "line": 7229,
+    "call": "Register.create",
+    "text": "Register.create({\r\n      distributorId,\r\n      firmId: await generateFirmId(),\r\n\r\n      firmCode,\r\n      firmName,\r\n\r\n      address1: String(req.body.address1 || \"\").trim(),\r\n      address2: String(req.body.address2 || \"\").trim(),\r\n      city: String(req.body.city || \"\").trim(),\r\n      pinCode: String(req.body.pinCode || \"\").trim(),\r\n      state: String(req.body.state || \"\").trim(),\r\n      country: String(req.body.country || \"India\").trim(),\r\n\r\n      phoneNo: String(req.body.phoneNo || \"\").trim(),\r\n      mobileNo: String(req.body.mobileNo || \"\").trim(),\r\n      tinNo: String(req.body.tinNo || \"\").trim(),\r\n      regNo: String(req.body.regNo || \"\").trim(),\r\n      gstNo: String(req.body.gstNo || \"\").trim(),\r\n      drugLicNo: String(req.body.drugLicNo || \"\").trim(),\r\n      foodLicenceNo: String(req.body.foodLicenceNo || \"\").trim(),\r\n      apiKey: String(req.body.apiKey || \"\").trim(),\r\n      email: String(req.body.email || baseUser.email || \"\").trim(),\r\n\r\n      userName: baseUser.userName,\r\n      password: baseUser.password,\r\n      role: baseUser.role || \"DISTRIBUTOR_ADMIN\",\r\n      isActive: true,\r\n    })"
+  },
+  {
+    "file": "backend/server.js",
+    "line": 7599,
+    "call": "GST.create",
+    "text": "GST.create({\r\n      gstCode,\r\n      vatPercent,\r\n      purchaseType:\r\n        req.body.purchaseType || \"VAT ON PURCHASE PRICE\",\r\n      salesType:\r\n        req.body.salesType || \"VAT ON SALES PRICE\",\r\n      distributorId,\r\n      firmId,\r\n      firmName,\r\n      isActive: true,\r\n    })"
+  },
+  {
+    "file": "backend/server.js",
+    "line": 8190,
+    "call": "Salesman.create",
+    "text": "Salesman.create({\r\n      salesmanCode,\r\n      salesmanName,\r\n      salesmanType: req.body.salesmanType || req.body.type || \"SALESMAN\",\r\n\r\n      dateOfBirth: req.body.dateOfBirth || \"\",\r\n      address: req.body.address || \"\",\r\n      town: req.body.town || \"\",\r\n      pinCode: req.body.pinCode || \"\",\r\n      state: req.body.state || \"\",\r\n      country: req.body.country || \"India\",\r\n\r\n      phoneNo: req.body.phoneNo || \"\",\r\n      mobileNo: req.body.mobileNo || \"\",\r\n      emailId: req.body.emailId || \"\",\r\n\r\n      qualification: req.body.qualification || \"\",\r\n      reference: req.body.reference || \"\",\r\n      imeiNo: req.body.imeiNo || \"\",\r\n\r\n      distributorId,\r\n      firmId,\r\n      firmName,\r\n      isActive: true,\r\n    })"
+  },
+  {
+    "file": "backend/server.js",
+    "line": 8281,
+    "call": "salesBill.save",
+    "text": "salesBill.save()"
+  },
+  {
+    "file": "backend/server.js",
+    "line": 8284,
+    "call": "LoadHeader.updateMany",
+    "text": "LoadHeader.updateMany(\r\n      {\r\n        $or: [\r\n          { distributorId, firmId },\r\n          { DistributorId: distributorId, FirmId: firmId },\r\n        ],\r\n        Bills: {\r\n          $elemMatch: {\r\n            $or: [\r\n              { BillSeries: billSeries, BillNo: billNoNum },\r\n              { BillSeries: billSeries, BillNo: billNoStr },\r\n              { billSeries: billSeries, billNo: billNoStr },\r\n              { billSeries: billSeries, billNo: billNoNum },\r\n              { Series: billSeries, BillNo: billNoNum },\r\n              { Series: billSeries, BillNo: billNoStr },\r\n            ],\r\n          },\r\n        },\r\n      },\r\n      {\r\n        $set: {\r\n          \"Bills.$.BillType\": newBillType,\r\n          \"Bills.$.billType\": newBillType,\r\n        },\r\n      }\r\n    )"
+  },
+  {
+    "file": "backend/server.js",
+    "line": 8550,
+    "call": "SalesHeader.findOneAndUpdate",
+    "text": "SalesHeader.findOneAndUpdate(\r\n      { _id: id, distributorId, firmId, isActive: true },\r\n      {\r\n        $set: {\r\n          firmName,\r\n          BillDate,\r\n          Godown,\r\n          GDCode,\r\n          CompanyCode: CompanyCode || \"\",\r\n          CompanyName: CompanyName || \"\",\r\n          AreaCode: AreaCode || \"\",\r\n          AreaName: AreaName || \"\",\r\n          PartyCode: PartyCode || \"\",\r\n          PartyName,\r\n          BillSeries: String(BillSeries || \"\").trim(),\r\n          BillNo: Number(BillNo),\r\n          BillType: BillType || \"Credit\",\r\n          SalesEntryType:\r\n            SalesEntryType\r\n              ? normalizeSalesEntryType(SalesEntryType)\r\n              : normalizeSalesEntryType(oldBill.SalesEntryType),\r\n          DueDate,\r\n          SalesmanCode: SalesmanCode || \"\",\r\n          SalesmanName: SalesmanName || \"\",\r\n          Narration: Narration || \"\",\r\n          GrossAmount: Number(\r\n            req.body.GrossAmount || 0\r\n          ),\r\n\r\n          TPRAmount: Number(\r\n            req.body.TPRAmount || 0\r\n          ),\r\n\r\n          SchemeAmount: Number(\r\n            req.body.SchemeAmount || 0\r\n          ),\r\n\r\n          StarDiscountAmount: Number(\r\n            req.body.StarDiscountAmount || 0\r\n          ),\r\n\r\n          CashDiscountAmount: Number(\r\n            req.body.CashDiscountAmount || 0\r\n          ),\r\n\r\n          DisplayAmount: Number(\r\n            req.body.DisplayAmount || 0\r\n          ),\r\n\r\n          CouponAmount: Number(\r\n            req.body.CouponAmount || 0\r\n          ),\r\n\r\n          AddLessAmount: Number(\r\n            req.body.AddLessAmount || 0\r\n          ),\r\n\r\n          TaxableValue: Number(\r\n            req.body.TaxableValue || 0\r\n          ),\r\n\r\n          SGSTAmount: Number(\r\n            req.body.SGSTAmount || 0\r\n          ),\r\n\r\n          CGSTAmount: Number(\r\n            req.body.CGSTAmount || 0\r\n          ),\r\n\r\n          IGSTAmount: Number(\r\n            req.body.IGSTAmount || 0\r\n          ),\r\n\r\n          /*\r\n            Keep the original invoice amount before Credit Note.\r\n          */\r\n          OriginalNetAmount: Number(\r\n            req.body.OriginalNetAmount ??\r\n            oldBill.OriginalNetAmount ??\r\n            req.body.NetAmount ??\r\n            oldBill.NetAmount ??\r\n            0\r\n          ),\r\n\r\n          /*\r\n            Preserve the existing Credit Note amount when editing\r\n            unless the frontend explicitly sends a new value.\r\n          */\r\n          CreditNoteAmount: Number(\r\n            req.body.CreditNoteAmount ??\r\n            oldBill.CreditNoteAmount ??\r\n            0\r\n          ),\r\n\r\n          NetAmount: Number(\r\n            req.body.NetAmount ?? oldBill.NetAmount ?? 0\r\n          ),\r\n          TotalQty: Number(req.body.TotalQty || 0),\r\n          TotalFreeQty: Number(req.body.TotalFreeQty || 0),\r\n          TotalItems: items.length,\r\n          items: normalizedItems,\r\n        },\r\n      },\r\n      { new: true, session }\r\n    )"
+  },
+  {
+    "file": "backend/server.js",
+    "line": 8938,
+    "call": "load.save",
+    "text": "load.save({\r\n      session,\r\n    })"
+  },
+  {
+    "file": "backend/server.js",
+    "line": 9332,
+    "call": "Area.create",
+    "text": "Area.create({\r\n      areaCode,\r\n      areaName,\r\n      distributorId,\r\n      firmId,\r\n      firmName,\r\n      isActive: true,\r\n    })"
+  },
+  {
+    "file": "backend/server.js",
+    "line": 9643,
+    "call": "GodownModel.create",
+    "text": "GodownModel.create({\r\n      godownCode,\r\n      godownName,\r\n\r\n      address: req.body.address || \"\",\r\n      location: req.body.location || \"\",\r\n\r\n      distributorId,\r\n      firmId,\r\n      firmName,\r\n\r\n      isActive: true,\r\n    })"
+  },
+  {
+    "file": "backend/server.js",
+    "line": 9980,
+    "call": "CustomerBank.create",
+    "text": "CustomerBank.create({\r\n      bankCode,\r\n      bankName,\r\n\r\n      accountNumber: req.body.accountNumber || \"\",\r\n      ifscCode: req.body.ifscCode || \"\",\r\n      branchName: req.body.branchName || \"\",\r\n      accountType: req.body.accountType || \"Savings\",\r\n      clearingType: String(req.body.clearingType || \"LOCAL\").trim(),\r\n\r\n      customerName: req.body.customerName || \"\",\r\n      customerCode: req.body.customerCode || \"\",\r\n      mobileNo: req.body.mobileNo || \"\",\r\n      emailId: req.body.emailId || \"\",\r\n      upiId: req.body.upiId || \"\",\r\n      beneficiaryName: req.body.beneficiaryName || \"\",\r\n\r\n      swiftCode: req.body.swiftCode || \"\",\r\n      micrCode: req.body.micrCode || \"\",\r\n      panNumber: req.body.panNumber || \"\",\r\n\r\n      remarks: req.body.remarks || \"\",\r\n\r\n      distributorId,\r\n      firmId,\r\n      firmName,\r\n\r\n      isActive: true,\r\n    })"
+  },
+  {
+    "file": "backend/server.js",
+    "line": 10146,
+    "call": "SalesmanAreaMapping.bulkWrite",
+    "text": "SalesmanAreaMapping.bulkWrite(operations)"
+  },
+  {
+    "file": "backend/server.js",
+    "line": 10148,
+    "call": "SalesmanAreaMapping.updateMany",
+    "text": "SalesmanAreaMapping.updateMany(\n        { distributorId, firmId, companyCode, areaCode: { $in: unmappedAreaCodes }, isActive: true },\n        { $set: { isActive: false } }\n      )"
+  },
+  {
+    "file": "backend/server.js",
+    "line": 10382,
+    "call": "AreaToPartyMapping.bulkWrite",
+    "text": "AreaToPartyMapping.bulkWrite(operations)"
+  },
+  {
+    "file": "backend/server.js",
+    "line": 10518,
+    "call": "PurchaseHeader.create",
+    "text": "PurchaseHeader.create(\r\n      [{\r\n        distributorId,\r\n        firmId,\r\n        firmName,\r\n        invoiceDate,\r\n        vouSer: String(vouSer || \"\").trim(),\r\n        vouNo: assignedVouNo,\r\n        vno: vno || \"\",\r\n        supplierCode: supplierCode || \"\",\r\n        supplierName,\r\n        company,\r\n        gdCode,\r\n        godownName,\r\n        isIgst: isIgst || \"N\",\r\n        invoiceNumber,\r\n        narration,\r\n\r\n        mrpTotal: Number(req.body.mrpTotal || 0),\r\n        grossAmount: Number(req.body.grossAmount || 0),\r\n        cgstAmt: Number(req.body.cgstAmt || 0),\r\n        sgstAmt: Number(req.body.sgstAmt || 0),\r\n        igstAmt: Number(req.body.igstAmt || 0),\r\n        qbtAmt: Number(req.body.qbtAmt || 0),\r\n        rounding: Number(req.body.rounding || 0),\r\n        netAmt: Number(req.body.netAmt || 0),\r\n\r\n        items,\r\n        historicalSnapshot: purchaseSnapshot,\r\n        isActive: true,\r\n      }],\r\n      { session }\r\n    )"
+  },
+  {
+    "file": "backend/server.js",
+    "line": 10681,
+    "call": "Stock.findOneAndUpdate",
+    "text": "Stock.findOneAndUpdate(\r\n          {\r\n            distributorId,\r\n            firmId,\r\n            GDCode: gdCode,\r\n            ProdCode: prodCode,\r\n            Batch: batchNo,\r\n            MRP: mrp,\r\n          },\r\n          {\r\n            $setOnInsert: {\r\n              distributorId,\r\n              firmId,\r\n\r\n              GDCode: gdCode,\r\n              ProdCode: prodCode,\r\n              Batch: batchNo,\r\n              MRP: mrp,\r\n            },\r\n\r\n            $set: {\r\n              firmName,\r\n              isActive: true,\r\n\r\n              ExpDt:\r\n                item.expDate ||\r\n                item.selectedBatch?.expDate ||\r\n                null,\r\n\r\n              MfgDt:\r\n                item.mfgDate ||\r\n                item.selectedBatch?.mfgDate ||\r\n                null,\r\n\r\n              PRate:\r\n                finalPurchaseRate,\r\n\r\n              SRate:\r\n                finalSalesRate,\r\n\r\n              IsLocked:\r\n                item.isLocked ||\r\n                item.selectedBatch?.isLocked ||\r\n                \"N\",\r\n\r\n              BoxPack: Number(\r\n                item.boxPack ??\r\n                item.BoxPack ??\r\n                item.selectedBatch?.boxPack ??\r\n                item.selectedBatch?.BoxPack ??\r\n                1\r\n              ),\r\n\r\n              InBoxPack: Number(\r\n                item.inBoxPack ??\r\n                item.inboxPack ??\r\n                item.InBoxPack ??\r\n                item.selectedBatch?.inBoxPack ??\r\n                item.selectedBatch?.inboxPack ??\r\n                item.selectedBatch?.InBoxPack ??\r\n                item.ratePerUnit ??\r\n                1\r\n              ),\r\n            },\r\n\r\n            $inc: {\r\n              Qty: qty,\r\n            },\r\n          },\r\n          {\r\n            upsert: true,\r\n            new: true,\r\n            session,\r\n            runValidators: true,\r\n            setDefaultsOnInsert: true,\r\n          }\r\n        )"
+  },
+  {
+    "file": "backend/server.js",
+    "line": 10877,
+    "call": "Stock.findOneAndUpdate",
+    "text": "Stock.findOneAndUpdate(\r\n        stockFilter,\r\n        {\r\n          $setOnInsert: {\r\n            distributorId: String(distributorId).trim(),\r\n            firmId: String(firmId).trim(),\r\n            firmName: String(firmName || \"\").trim(),\r\n            GDCode: String(gdCode).trim(),\r\n            ProdCode: prodCode,\r\n            Batch: batchNo,\r\n            MRP: Number.isFinite(mrp) ? mrp : 0,\r\n          },\r\n          $inc: { Qty: -qty },\r\n        },\r\n        { upsert: true, new: true, session, setDefaultsOnInsert: true }\r\n      )"
+  },
+  {
+    "file": "backend/server.js",
+    "line": 10933,
+    "call": "Stock.findOneAndUpdate",
+    "text": "Stock.findOneAndUpdate(\r\n      stockFilter,\r\n      {\r\n        $setOnInsert: {\r\n          distributorId: String(distributorId).trim(),\r\n          firmId: String(firmId).trim(),\r\n          GDCode: String(gdCode).trim(),\r\n          ProdCode: prodCode,\r\n          Batch: batchNo,\r\n          MRP: Number.isFinite(mrp) ? mrp : 0,\r\n        },\r\n        $set: {\r\n          firmName: String(firmName || \"\").trim(),\r\n          isActive: true,\r\n          ExpDt: item.expDate || item.selectedBatch?.expDate || null,\r\n          MfgDt: item.mfgDate || item.selectedBatch?.mfgDate || null,\r\n          ...(finalPurchaseRate > 0\r\n            ? { PRate: finalPurchaseRate }\r\n            : Number(existingStock?.PRate || 0) > 0\r\n              ? { PRate: Number(existingStock.PRate || 0) }\r\n              : {}),\r\n          ...(finalSalesRate > 0\r\n            ? { SRate: finalSalesRate }\r\n            : Number(existingStock?.SRate || 0) > 0\r\n              ? { SRate: Number(existingStock.SRate || 0) }\r\n              : {}),\r\n          IsLocked: String(\r\n            item.isLocked ||\r\n              item.selectedBatch?.isLocked ||\r\n              existingStock?.IsLocked ||\r\n              \"N\"\r\n          )\r\n            .trim()\r\n            .toUpperCase(),\r\n          ...(boxPack > 0\r\n            ? { BoxPack: boxPack }\r\n            : Number(existingStock?.BoxPack || 0) > 0\r\n              ? { BoxPack: Number(existingStock.BoxPack || 0) }\r\n              : {}),\r\n          ...(inBoxPack > 0\r\n            ? { InBoxPack: inBoxPack }\r\n            : Number(existingStock?.InBoxPack || 0) > 0\r\n              ? { InBoxPack: Number(existingStock.InBoxPack || 0) }\r\n              : {}),\r\n        },\r\n        $inc: { Qty: qty },\r\n      },\r\n      { upsert: true, new: true, session, runValidators: true, setDefaultsOnInsert: true }\r\n    )"
+  },
+  {
+    "file": "backend/server.js",
+    "line": 11078,
+    "call": "Stock.updateOne",
+    "text": "Stock.updateOne(filter, { $set: { isActive: true, ...(purchaseRate > 0 ? { PRate: purchaseRate } : {}), ...(salesRate > 0 ? { SRate: salesRate } : {}) } }, { session })"
+  },
+  {
+    "file": "backend/server.js",
+    "line": 11118,
+    "call": "purchase.save",
+    "text": "purchase.save({ session })"
+  },
+  {
+    "file": "backend/server.js",
+    "line": 11218,
+    "call": "PurchaseHeader.findOneAndUpdate",
+    "text": "PurchaseHeader.findOneAndUpdate(\r\n        { _id: id, distributorId, firmId, isActive: true },\r\n        {\r\n          $set: {\r\n            firmName,\r\n            invoiceDate,\r\n            vouSer: String(vouSer || \"\").trim(),\r\n            vouNo: Number(vouNo),\r\n            vno: vno || \"\",\r\n            supplierCode: supplierCode || \"\",\r\n            supplierName,\r\n            company,\r\n            gdCode,\r\n            godownName,\r\n            isIgst: isIgst || \"N\",\r\n            invoiceNumber,\r\n            narration,\r\n\r\n            mrpTotal: Number(req.body.mrpTotal || 0),\r\n            grossAmount: Number(req.body.grossAmount || 0),\r\n            cgstAmt: Number(req.body.cgstAmt || 0),\r\n            sgstAmt: Number(req.body.sgstAmt || 0),\r\n            igstAmt: Number(req.body.igstAmt || 0),\r\n            qbtAmt: Number(req.body.qbtAmt || 0),\r\n            rounding: Number(req.body.rounding || 0),\r\n            netAmt: Number(req.body.netAmt || 0),\r\n\r\n            items,\r\n            historicalSnapshot: purchaseSnapshot,\r\n          },\r\n        },\r\n        { new: true, session }\r\n      )"
+  },
+  {
+    "file": "backend/server.js",
+    "line": 12226,
+    "call": "Stock.findOneAndUpdate",
+    "text": "Stock.findOneAndUpdate(\r\n        stockFilter,\r\n        {\r\n          $setOnInsert: {\r\n            distributorId:\r\n              String(distributorId).trim(),\r\n\r\n            firmId:\r\n              String(firmId).trim(),\r\n\r\n            firmName:\r\n              String(firmName || \"\").trim(),\r\n\r\n            GDCode:\r\n              String(gdCode).trim(),\r\n\r\n            ProdCode:\r\n              prodCode,\r\n\r\n            Batch:\r\n              batchNo,\r\n\r\n            MRP:\r\n              Number.isFinite(mrp)\r\n                ? mrp\r\n                : 0,\r\n          },\r\n\r\n          $set: {\r\n            ...(purchaseRate > 0\r\n              ? {\r\n                  PRate: purchaseRate,\r\n                }\r\n              : Number(existingStock?.PRate || 0) > 0\r\n                ? {\r\n                    PRate: Number(existingStock.PRate || 0),\r\n                  }\r\n                : {}),\r\n\r\n            ...(salesRate > 0\r\n              ? {\r\n                  SRate: salesRate,\r\n                }\r\n              : Number(existingStock?.SRate || 0) > 0\r\n                ? {\r\n                    SRate: Number(existingStock.SRate || 0),\r\n                  }\r\n                : {}),\r\n\r\n            ...(boxPack > 0\r\n              ? {\r\n                  BoxPack: boxPack,\r\n                }\r\n              : Number(existingStock?.BoxPack || 0) > 0\r\n                ? {\r\n                    BoxPack: Number(existingStock.BoxPack || 0),\r\n                  }\r\n                : {}),\r\n\r\n            ...(inBoxPack > 0\r\n              ? {\r\n                  InBoxPack: inBoxPack,\r\n                }\r\n              : Number(existingStock?.InBoxPack || 0) > 0\r\n                ? {\r\n                    InBoxPack: Number(existingStock.InBoxPack || 0),\r\n                  }\r\n                : {}),\r\n\r\n            IsLocked:\r\n              String(\r\n                item.isLocked ||\r\n                  item.selectedBatch?.isLocked ||\r\n                  existingStock?.IsLocked ||\r\n                  \"N\"\r\n              )\r\n                .trim()\r\n                .toUpperCase(),\r\n          },\r\n\r\n          $inc: {\r\n            Qty:\r\n              totalQty,\r\n          },\r\n        },\r\n        {\r\n          upsert: true,\r\n          new: true,\r\n          session,\r\n          setDefaultsOnInsert: true,\r\n        }\r\n      )"
+  },
+  {
+    "file": "backend/server.js",
+    "line": 12338,
+    "call": "Stock.findOneAndUpdate",
+    "text": "Stock.findOneAndUpdate(\n        stockFilter,\r\n        {\r\n         $setOnInsert: {\r\n  distributorId:\r\n    String(distributorId).trim(),\r\n\r\n  firmId:\r\n    String(firmId).trim(),\r\n\r\n  firmName:\r\n    String(firmName || \"\").trim(),\r\n\r\n  GDCode:\r\n    String(gdCode).trim(),\r\n\r\n  ProdCode:\r\n    prodCode,\r\n\r\n  Batch:\r\n    batchNo,\r\n\r\n  MRP:\r\n    Number.isFinite(mrp)\r\n      ? mrp\r\n      : 0,\r\n},\r\n\r\n          $set: {\r\n            /*\r\n             * Do not overwrite a valid purchase rate with zero.\r\n             */\r\n            ...(purchaseRate > 0\r\n              ? {\r\n                PRate:\r\n                  purchaseRate,\r\n              }\r\n              : {}),\r\n\r\n            ...(salesRate > 0\r\n              ? {\r\n                SRate:\r\n                  salesRate,\r\n              }\r\n              : {}),\r\n\r\n            BoxPack:\r\n              boxPack,\r\n\r\n            InBoxPack:\r\n              inBoxPack,\r\n\r\n            IsLocked:\r\n              \"N\",\r\n          },\r\n\r\n          $inc: {\n            Qty:\n              exactStockExists ? -totalQty : 0,\n          },\r\n        },\r\n        {\r\n          upsert: true,\r\n          new: true,\r\n          session,\r\n          setDefaultsOnInsert: true,\r\n        }\r\n      )"
+  },
+  {
+    "file": "backend/server.js",
+    "line": 12418,
+    "call": "Stock.updateOne",
+    "text": "Stock.updateOne(\r\n        {\r\n          ...stockFilter,\r\n\r\n          IsLocked: {\r\n            $ne: \"Y\",\r\n          },\r\n\r\n          Qty: {\r\n            $gte:\r\n              totalQty,\r\n          },\r\n        },\r\n        {\r\n          $inc: {\r\n            Qty:\r\n              -totalQty,\r\n          },\r\n        },\r\n        {\r\n          session,\r\n        }\r\n      )"
+  },
+  {
+    "file": "backend/server.js",
+    "line": 12696,
+    "call": "SalesHeader.create",
+    "text": "SalesHeader.create(\r\n          [\r\n            {\r\n              distributorId,\r\n              firmId,\r\n              firmName,\r\n\r\n              BillDate,\r\n              Godown,\r\n              GDCode,\r\n\r\n              CompanyCode:\r\n                CompanyCode || \"\",\r\n\r\n              CompanyName:\r\n                CompanyName || \"\",\r\n\r\n              AreaCode:\r\n                AreaCode || \"\",\r\n\r\n              AreaName:\r\n                AreaName || \"\",\r\n\r\n              PartyCode:\r\n                PartyCode || \"\",\r\n\r\n              PartyName,\r\n\r\n              BillSeries:\r\n                normalizedBillSeries,\r\n\r\n              BillNo:\r\n                assignedBillNo,\r\n\r\n              BillType:\r\n                BillType || \"Credit\",\r\n\r\n              SalesEntryType:\r\n                normalizedEntryType,\r\n\r\n              DueDate,\r\n\r\n              SalesmanCode:\r\n                SalesmanCode || \"\",\r\n\r\n              SalesmanName:\r\n                SalesmanName || \"\",\r\n\r\n              Narration:\r\n                Narration || \"\",\r\n\r\n              GrossAmount:\r\n                Number(\r\n                  req.body\r\n                    .GrossAmount ||\r\n                  0\r\n                ),\r\n\r\n              TPRAmount:\r\n                Number(\r\n                  req.body\r\n                    .TPRAmount ||\r\n                  0\r\n                ),\r\n\r\n              SchemeAmount:\r\n                Number(\r\n                  req.body\r\n                    .SchemeAmount ||\r\n                  0\r\n                ),\r\n\r\n              StarDiscountAmount:\r\n                Number(\r\n                  req.body\r\n                    .StarDiscountAmount ||\r\n                  0\r\n                ),\r\n\r\n              CashDiscountAmount:\r\n                Number(\r\n                  req.body\r\n                    .CashDiscountAmount ||\r\n                  0\r\n                ),\r\n\r\n              DisplayAmount:\r\n                Number(\r\n                  req.body\r\n                    .DisplayAmount ||\r\n                  0\r\n                ),\r\n\r\n              CouponAmount:\r\n                Number(\r\n                  req.body\r\n                    .CouponAmount ||\r\n                  0\r\n                ),\r\n\r\n              AddLessAmount:\r\n                Number(\r\n                  req.body\r\n                    .AddLessAmount ||\r\n                  0\r\n                ),\r\n\r\n              TaxableValue:\r\n                Number(\r\n                  req.body\r\n                    .TaxableValue ||\r\n                  0\r\n                ),\r\n\r\n              SGSTAmount:\r\n                Number(\r\n                  req.body\r\n                    .SGSTAmount ||\r\n                  0\r\n                ),\r\n\r\n              CGSTAmount:\r\n                Number(\r\n                  req.body\r\n                    .CGSTAmount ||\r\n                  0\r\n                ),\r\n\r\n              IGSTAmount:\r\n                Number(\r\n                  req.body\r\n                    .IGSTAmount ||\r\n                  0\r\n                ),\r\n\r\n              OriginalNetAmount:\r\n                Number(\r\n                  req.body\r\n                    .OriginalNetAmount ??\r\n                  req.body\r\n                    .NetAmount ??\r\n                  0\r\n                ),\r\n\r\n              CreditNoteAmount:\r\n                Number(\r\n                  req.body\r\n                    .CreditNoteAmount ||\r\n                  0\r\n                ),\r\n\r\n              NetAmount:\r\n                Number(\r\n                  req.body\r\n                    .NetAmount ||\r\n                  0\r\n                ),\r\n\r\n              TotalQty:\r\n                Number(\r\n                  req.body\r\n                    .TotalQty ||\r\n                  0\r\n                ),\r\n\r\n              TotalFreeQty:\r\n                Number(\r\n                  req.body\r\n                    .TotalFreeQty ||\r\n                  0\r\n                ),\r\n\r\n               TotalItems:\r\n                 items.length,\r\n\r\n              historicalSnapshot,\r\n\r\n              creditControl,\r\n\r\n               items,\r\n\r\n              isActive:\r\n                true,\r\n            },\r\n          ],\r\n          {\r\n            session,\r\n          }\r\n        )"
+  },
+  {
+    "file": "backend/server.js",
+    "line": 14656,
+    "call": "StockModel.findOneAndUpdate",
+    "text": "StockModel.findOneAndUpdate(\r\n      { ...stockKey, Qty: { $gte: Math.abs(quantityDelta) }, IsLocked: { $ne: \"Y\" } },\r\n      { $inc: { Qty: quantityDelta } },\r\n      { new: true, runValidators: true, session }\r\n    )"
+  },
+  {
+    "file": "backend/server.js",
+    "line": 14689,
+    "call": "StockModel.findOneAndUpdate",
+    "text": "StockModel.findOneAndUpdate(\r\n    stockKey,\r\n    {\r\n      $inc: { Qty: quantityDelta },\r\n      $set: setValues,\r\n      $setOnInsert: { ...stockKey, IsLocked: \"N\" },\r\n    },\r\n    { new: true, upsert: true, runValidators: true, session }\r\n  )"
+  },
+  {
+    "file": "backend/server.js",
+    "line": 14771,
+    "call": "StockAdjustment.updateOne",
+    "text": "StockAdjustment.updateOne(\r\n      { _id: originalAdjustment._id, distributorId, firmId, Status: \"COMPLETED\" },\r\n      { $set: { Status: \"PENDING\" } },\r\n      { session }\r\n    )"
+  },
+  {
+    "file": "backend/server.js",
+    "line": 14784,
+    "call": "StockAdjustment.updateOne",
+    "text": "StockAdjustment.updateOne(\r\n      { _id: originalAdjustment._id, distributorId, firmId, Status: \"PENDING\" },\r\n      {\r\n        $set: {\r\n          VoucherDate: replacementAdjustment.VoucherDate,\r\n          AdjustmentType: replacementAdjustment.AdjustmentType,\r\n          GDCode: replacementAdjustment.GDCode,\r\n          GodownName: replacementAdjustment.GodownName,\r\n          CompanyCode: replacementAdjustment.CompanyCode,\r\n          ProdCode: replacementAdjustment.ProdCode,\r\n          ProductName: replacementAdjustment.ProductName,\r\n          Unit: replacementAdjustment.Unit,\r\n          Batch: replacementAdjustment.Batch,\r\n          MRP: replacementAdjustment.MRP,\r\n          PRate: replacementAdjustment.PRate,\r\n          SRate: replacementAdjustment.SRate,\r\n          MfgDate: replacementAdjustment.MfgDate,\r\n          ExpiryDate: replacementAdjustment.ExpiryDate,\r\n          BoxPack: replacementAdjustment.BoxPack,\r\n          InBoxPack: replacementAdjustment.InBoxPack,\r\n          Qty: replacementAdjustment.Qty,\r\n          FreeQty: replacementAdjustment.FreeQty,\r\n          TotalQty: replacementAdjustment.TotalQty,\r\n          BalanceAfter: Number(stockRow.Qty || 0),\r\n          Narration: replacementAdjustment.Narration,\r\n          Status: \"COMPLETED\",\r\n        },\r\n      },\r\n      { session }\r\n    )"
+  },
+  {
+    "file": "backend/server.js",
+    "line": 14893,
+    "call": "StockAdjustment.updateOne",
+    "text": "StockAdjustment.updateOne(\r\n      { _id: adjustment._id, distributorId, firmId, Status: \"COMPLETED\" },\r\n      { $set: { Status: \"PENDING\" } },\r\n      { session }\r\n    )"
+  },
+  {
+    "file": "backend/server.js",
+    "line": 14904,
+    "call": "StockAdjustment.findOneAndUpdate",
+    "text": "StockAdjustment.findOneAndUpdate(\r\n      { _id: adjustment._id, distributorId, firmId, Status: \"PENDING\" },\r\n      { $set: { Status: \"CANCELLED\", CancelledAt: new Date(), CancelledBy: req.auth.userId, CancellationReason: cancellationReason } },\r\n      { new: true, session }\r\n    )"
+  },
+  {
+    "file": "backend/server.js",
+    "line": 15024,
+    "call": "StockAdjustment.create",
+    "text": "StockAdjustment.create([{\r\n      RequestId: requestId,\r\n      VoucherNo: `${voucherPrefix}-${Date.now()}`,\r\n      VoucherDate: String(req.body?.voucherDate || \"\").trim() || new Date().toISOString().slice(0, 10),\r\n      AdjustmentType: adjustmentType,\r\n      GDCode,\r\n      GodownName: String(req.body?.godownName || \"\").trim(),\r\n      CompanyCode: String(req.body?.companyCode || \"\").trim(),\r\n      ProdCode,\r\n      ProductName: String(req.body?.productName || \"\").trim(),\r\n      Unit: String(req.body?.unit || \"PCS\").trim(),\r\n      Batch,\r\n      MRP,\r\n      PRate,\r\n      SRate,\r\n      MfgDate: String(req.body?.manufacturingDate || \"\").trim(),\r\n      ExpiryDate: String(req.body?.expiryDate || \"\").trim(),\r\n      BoxPack: Number(req.body?.boxPack || 1),\r\n      InBoxPack: Number(req.body?.inBoxPack || 1),\r\n      Qty: quantity,\r\n      FreeQty: freeQuantity,\r\n      TotalQty: totalQuantity,\r\n      Narration: String(req.body?.narration || \"\").trim(),\r\n      distributorId,\r\n      firmId,\r\n      firmName,\r\n    }], { session })"
+  },
+  {
+    "file": "backend/server.js",
+    "line": 15057,
+    "call": "StockModel.findOneAndUpdate",
+    "text": "StockModel.findOneAndUpdate(\r\n        stockKey,\r\n        {\r\n          $inc: { Qty: totalQuantity },\r\n          $set: {\r\n            PRate,\r\n            SRate,\r\n            ExpDt: req.body?.expiryDate || null,\r\n            MfgDt: req.body?.manufacturingDate || null,\r\n            BoxPack: Number(req.body?.boxPack || 1),\r\n            InBoxPack: Number(req.body?.inBoxPack || 1),\r\n            firmName,\r\n          },\r\n          $setOnInsert: { ...stockKey, IsLocked: \"N\" },\r\n        },\r\n        { new: true, upsert: true, runValidators: true, session }\r\n      )"
+  },
+  {
+    "file": "backend/server.js",
+    "line": 15075,
+    "call": "StockModel.findOneAndUpdate",
+    "text": "StockModel.findOneAndUpdate(\r\n        { ...stockKey, Qty: { $gte: totalQuantity }, IsLocked: { $ne: \"Y\" } },\r\n        { $inc: { Qty: -totalQuantity } },\r\n        { new: true, runValidators: true, session }\r\n      )"
+  },
+  {
+    "file": "backend/server.js",
+    "line": 15091,
+    "call": "StockAdjustment.updateOne",
+    "text": "StockAdjustment.updateOne(\r\n      { _id: adjustment._id },\r\n      { $set: { Status: \"COMPLETED\", BalanceAfter: Number(stockRow.Qty || 0) } },\r\n      { session }\r\n    )"
+  },
+  {
+    "file": "backend/server.js",
+    "line": 15546,
+    "call": "QuotationHeader.create",
+    "text": "QuotationHeader.create({\r\n          distributorId:\r\n            String(distributorId).trim(),\r\n\r\n          firmId:\r\n            String(firmId).trim(),\r\n\r\n          firmName:\r\n            String(firmName || \"\").trim(),\r\n\r\n          BillDate,\r\n          Godown,\r\n          GDCode,\r\n\r\n          CompanyCode:\r\n            String(CompanyCode || \"\").trim(),\r\n\r\n          CompanyName:\r\n            String(CompanyName || \"\").trim(),\r\n\r\n          AreaCode:\r\n            String(AreaCode || \"\").trim(),\r\n\r\n          AreaName:\r\n            String(AreaName || \"\").trim(),\r\n\r\n          PartyCode:\r\n            String(PartyCode || \"\").trim(),\r\n\r\n          PartyName:\r\n            String(PartyName || \"\").trim(),\r\n\r\n          BillSeries:\r\n            String(BillSeries || \"\").trim(),\r\n\r\n          BillNo: assignedQuotationNo,\r\n\r\n          BillType:\r\n            BillType || \"Credit\",\r\n\r\n          DueDate,\r\n\r\n          SalesmanCode:\r\n            String(\r\n              SalesmanCode || \"\"\r\n            ).trim(),\r\n\r\n          SalesmanName:\r\n            String(\r\n              SalesmanName || \"\"\r\n            ).trim(),\r\n\r\n          Narration:\r\n            String(Narration || \"\").trim(),\r\n\r\n          GrossAmount: Number(\r\n            req.body.GrossAmount || 0\r\n          ),\r\n\r\n          TPRAmount: Number(\r\n            req.body.TPRAmount || 0\r\n          ),\r\n\r\n          SchemeAmount: Number(\r\n            req.body.SchemeAmount || 0\r\n          ),\r\n\r\n          StarDiscountAmount: Number(\r\n            req.body.StarDiscountAmount || 0\r\n          ),\r\n\r\n          CashDiscountAmount: Number(\r\n            req.body.CashDiscountAmount || 0\r\n          ),\r\n\r\n          DisplayAmount: Number(\r\n            req.body.DisplayAmount || 0\r\n          ),\r\n\r\n          CouponAmount: Number(\r\n            req.body.CouponAmount || 0\r\n          ),\r\n\r\n          /*\r\n            This keeps the sign:\r\n            Number(\"-25\") = -25\r\n            Number(\"+25\") = 25\r\n          */\r\n          AddLessAmount: Number(\r\n            req.body.AddLessAmount || 0\r\n          ),\r\n\r\n          TaxableValue: Number(\r\n            req.body.TaxableValue || 0\r\n          ),\r\n\r\n          SGSTAmount: Number(\r\n            req.body.SGSTAmount || 0\r\n          ),\r\n\r\n          CGSTAmount: Number(\r\n            req.body.CGSTAmount || 0\r\n          ),\r\n\r\n          IGSTAmount: Number(\r\n            req.body.IGSTAmount || 0\r\n          ),\r\n\r\n          OriginalNetAmount: Number(\r\n            req.body.OriginalNetAmount ??\r\n            req.body.NetAmount ??\r\n            0\r\n          ),\r\n\r\n          NetAmount: Number(\r\n            req.body.NetAmount || 0\r\n          ),\r\n\r\n          TotalQty: Number(\r\n            req.body.TotalQty || 0\r\n          ),\r\n\r\n          TotalFreeQty: Number(\r\n            req.body.TotalFreeQty || 0\r\n          ),\r\n\r\n          TotalItems:\r\n            normalizedItems.length,\r\n\r\n          items: normalizedItems,\r\n          isActive: true,\r\n        })"
+  },
+  {
+    "file": "backend/server.js",
+    "line": 17045,
+    "call": "SalesHeader.updateMany",
+    "text": "SalesHeader.updateMany(\r\n          {\r\n            distributorId:\r\n              DistributorId,\r\n\r\n            firmId: FirmId,\r\n\r\n            isActive: true,\r\n\r\n            $or:\r\n              oldBillConditions,\r\n          },\r\n\r\n          {\r\n            $set: {\r\n              IsLoaded: false,\r\n              LoadSeries: \"\",\r\n              LoadNo: null,\r\n            },\r\n          },\r\n\r\n          {\r\n            session,\r\n          }\r\n        )"
+  },
+  {
+    "file": "backend/server.js",
+    "line": 17282,
+    "call": "LoadHeader.findOneAndUpdate",
+    "text": "LoadHeader.findOneAndUpdate(\r\n          { _id: id, DistributorId: req.auth.distributorId, FirmId: req.auth.firmId },\r\n\r\n          {\r\n            $set: {\r\n              LoadSeries:\r\n                cleanLoadSeries,\r\n\r\n              LoadNo:\r\n                cleanLoadNo,\r\n\r\n              LoadDate,\r\n\r\n              CompanyCode:\r\n                String(\r\n                  CompanyCode || \"\"\r\n                ).trim(),\r\n\r\n              CompanyName:\r\n                String(\r\n                  CompanyName || \"\"\r\n                ).trim(),\r\n\r\n              DeliveryBoyCode:\r\n                String(\r\n                  DeliveryBoyCode || \"\"\r\n                ).trim(),\r\n\r\n              DeliveryBoyName:\r\n                String(\r\n                  DeliveryBoyName || \"\"\r\n                ).trim(),\r\n\r\n              DeliveryBy:\r\n                String(\r\n                  DeliveryBy ||\r\n                  DeliveryBoyName ||\r\n                  \"\"\r\n                ).trim(),\r\n\r\n              VehicleNo:\r\n                String(\r\n                  VehicleNo || \"\"\r\n                )\r\n                  .trim()\r\n                  .toUpperCase(),\r\n\r\n              DriverMobile:\r\n                String(\r\n                  DriverMobile || \"\"\r\n                ).trim(),\r\n\r\n              SalesmanCode:\r\n                String(\r\n                  SalesmanCode || \"\"\r\n                ).trim(),\r\n\r\n              SalesmanName:\r\n                String(\r\n                  SalesmanName || \"\"\r\n                ).trim(),\r\n\r\n              SelectedSalesmen:\r\n                Array.isArray(\r\n                  SelectedSalesmen\r\n                )\r\n                  ? SelectedSalesmen\r\n                  : [],\r\n\r\n              SelectedAreas:\r\n                Array.isArray(\r\n                  SelectedAreas\r\n                )\r\n                  ? SelectedAreas\r\n                  : [],\r\n\r\n              BillFromDate,\r\n              BillToDate,\r\n\r\n              Narration:\r\n                String(\r\n                  Narration || \"\"\r\n                ).trim(),\r\n\r\n              Remarks:\r\n                String(\r\n                  Remarks || \"\"\r\n                ).trim(),\r\n\r\n              Bills:\r\n                cleanBills,\r\n\r\n              TotalBills:\r\n                finalSummary.totalBills,\r\n\r\n              TotalParties:\r\n                finalSummary.totalParties,\r\n\r\n              TotalSalesmen:\r\n                finalSummary.totalSalesmen,\r\n\r\n              TotalAreas:\r\n                finalSummary.totalAreas,\r\n\r\n              TotalAmount:\r\n                finalSummary.totalAmount,\r\n\r\n              LoadSummary:\r\n                finalSummary,\r\n\r\n              FirmName:\r\n                FirmName || \"\",\r\n\r\n              Status: \"ACTIVE\",\r\n              IsCancelled: false,\r\n\r\n              UpdatedBy,\r\n              UpdatedAt:\r\n                new Date(),\r\n            },\r\n          },\r\n\r\n          {\r\n            new: true,\r\n            session,\r\n          }\r\n        )"
+  },
+  {
+    "file": "backend/server.js",
+    "line": 17413,
+    "call": "SalesHeader.updateMany",
+    "text": "SalesHeader.updateMany(\r\n        {\r\n          distributorId:\r\n            DistributorId,\r\n\r\n          firmId: FirmId,\r\n\r\n          isActive: true,\r\n\r\n          $or:\r\n            billConditions,\r\n        },\r\n\r\n        {\r\n          $set: {\r\n            IsLoaded: true,\r\n            LoadSeries:\r\n              cleanLoadSeries,\r\n            LoadNo:\r\n              cleanLoadNo,\r\n          },\r\n        },\r\n\r\n        {\r\n          session,\r\n        }\r\n      )"
+  },
+  {
+    "file": "backend/server.js",
+    "line": 18739,
+    "call": "LoadHeader.create",
+    "text": "LoadHeader.create(\r\n        [\r\n          {\r\n            LoadSeries: cleanLoadSeries,\r\n            LoadNo: cleanLoadNo,\r\n            LoadDate,\r\n\r\n            CompanyCode: String(\r\n              CompanyCode || \"\"\r\n            ).trim(),\r\n\r\n            CompanyName: String(\r\n              CompanyName || \"\"\r\n            ).trim(),\r\n\r\n            DeliveryBoyCode: String(\r\n              DeliveryBoyCode || \"\"\r\n            ).trim(),\r\n\r\n            DeliveryBoyName: String(\r\n              DeliveryBoyName || \"\"\r\n            ).trim(),\r\n\r\n            DeliveryBy: String(\r\n              DeliveryBy ||\r\n              DeliveryBoyName ||\r\n              \"\"\r\n            ).trim(),\r\n\r\n            VehicleNo: String(\r\n              VehicleNo || \"\"\r\n            )\r\n              .trim()\r\n              .toUpperCase(),\r\n\r\n            DriverMobile: String(\r\n              DriverMobile || \"\"\r\n            ).trim(),\r\n\r\n            SalesmanCode: String(\r\n              SalesmanCode || \"\"\r\n            ).trim(),\r\n\r\n            SalesmanName: String(\r\n              SalesmanName || \"\"\r\n            ).trim(),\r\n\r\n            SelectedSalesmen:\r\n              Array.isArray(SelectedSalesmen)\r\n                ? SelectedSalesmen\r\n                : [],\r\n\r\n            SelectedAreas:\r\n              Array.isArray(SelectedAreas)\r\n                ? SelectedAreas\r\n                : [],\r\n\r\n            BillFromDate,\r\n            BillToDate,\r\n\r\n            Narration: String(\r\n              Narration || \"\"\r\n            ).trim(),\r\n\r\n            Remarks: String(\r\n              Remarks || \"\"\r\n            ).trim(),\r\n\r\n            Bills: cleanBills,\r\n\r\n            TotalBills:\r\n              finalSummary.totalBills,\r\n\r\n            TotalParties:\r\n              finalSummary.totalParties,\r\n\r\n            TotalSalesmen:\r\n              finalSummary.totalSalesmen,\r\n\r\n            TotalAreas:\r\n              finalSummary.totalAreas,\r\n\r\n            TotalAmount:\r\n              finalSummary.totalAmount,\r\n\r\n            LoadSummary: finalSummary,\r\n\r\n            DistributorId,\r\n            FirmId,\r\n            FirmName,\r\n\r\n            Status: \"ACTIVE\",\r\n            IsCancelled: false,\r\n            IsLocked: false,\r\n\r\n            CreatedBy,\r\n            UpdatedBy,\r\n          },\r\n        ],\r\n        {\r\n          session,\r\n        }\r\n      )"
+  },
+  {
+    "file": "backend/server.js",
+    "line": 18843,
+    "call": "SalesHeader.updateMany",
+    "text": "SalesHeader.updateMany(\r\n        {\r\n          distributorId: DistributorId,\r\n          firmId: FirmId,\r\n          isActive: true,\r\n          $or: billConditions,\r\n        },\r\n        {\r\n          $set: {\r\n            IsLoaded: true,\r\n            LoadSeries: cleanLoadSeries,\r\n            LoadNo: cleanLoadNo,\r\n          },\r\n        },\r\n        {\r\n          session,\r\n        }\r\n      )"
+  },
+  {
+    "file": "backend/server.js",
+    "line": 19452,
+    "call": "sourceLoad.save",
+    "text": "sourceLoad.save()"
+  },
+  {
+    "file": "backend/server.js",
+    "line": 20129,
+    "call": "currentSourceLoad.save",
+    "text": "currentSourceLoad.save({\r\n          session,\r\n        })"
+  },
+  {
+    "file": "backend/server.js",
+    "line": 20212,
+    "call": "destinationLoad.save",
+    "text": "destinationLoad.save({\r\n        session,\r\n      })"
+  },
+  {
+    "file": "backend/server.js",
+    "line": 20219,
+    "call": "SalesHeader.updateMany",
+    "text": "SalesHeader.updateMany(\r\n        {\r\n          _id: {\r\n            $in:\r\n              validBillObjectIds,\r\n          },\r\n\r\n          distributorId,\r\n          firmId,\r\n\r\n          isActive: true,\r\n        },\r\n\r\n        {\r\n          $set: {\r\n            IsLoaded: true,\r\n\r\n            LoadSeries:\r\n              String(\r\n                destinationLoad.LoadSeries ||\r\n                \"\"\r\n              ).trim(),\r\n\r\n            LoadNo:\r\n              Number(\r\n                destinationLoad.LoadNo\r\n              ),\r\n          },\r\n        },\r\n\r\n        {\r\n          session,\r\n        }\r\n      )"
+  },
+  {
+    "file": "backend/server.js",
+    "line": 20848,
+    "call": "SettleLoad.findOneAndUpdate",
+    "text": "SettleLoad.findOneAndUpdate(\r\n          {\r\n            distributorId,\r\n            firmId,\r\n            loadSeries: cleanLoadSeries,\r\n            loadNo: cleanLoadNo,\r\n          },\r\n          {\r\n            $set: {\r\n              firmName,\r\n              loadDate:\r\n                loadDate ||\r\n                load.LoadDate ||\r\n                \"\",\r\n\r\n              settlementDate,\r\n              narration,\r\n\r\n              totalBills:\r\n                normalizedItems.length,\r\n\r\n              totalAmount:\r\n                Number(\r\n                  summary.totalAmount ??\r\n                  totalAmount\r\n                ),\r\n\r\n              totalReceiptAmount:\r\n                Number(\r\n                  summary.totalReceiptAmount ??\r\n                  totalReceiptAmount\r\n                ),\r\n\r\n              totalPendingAmount:\r\n                Number(\r\n                  summary.totalPendingAmount ??\r\n                  totalPendingAmount\r\n                ),\r\n\r\n              totalCancelBills:\r\n                Number(\r\n                  summary.totalCancelBills ??\r\n                  totalCancelBills\r\n                ),\r\n\r\n              status: \"SETTLED\",\r\n              isActive: true,\r\n              bills: normalizedItems,\r\n            },\r\n          },\r\n          {\r\n            new: true,\r\n            upsert: true,\r\n            session,\r\n            setDefaultsOnInsert: true,\r\n          }\r\n        )"
+  },
+  {
+    "file": "backend/server.js",
+    "line": 20940,
+    "call": "Receipt.findOneAndUpdate",
+    "text": "Receipt.findOneAndUpdate(\r\n          {\r\n            distributorId,\r\n            firmId,\r\n            billSeries:\r\n              item.billSeries,\r\n            billNo:\r\n              item.billNo,\r\n          },\r\n          {\r\n            $set: {\r\n              firmName,\r\n\r\n              receiptDate:\r\n                item.receiptDate ||\r\n                settlementDate,\r\n\r\n              receiptSeries:\r\n                item.receiptSeries ||\r\n                \"RC\",\r\n\r\n              rno: receiptNumber,\r\n\r\n              billSeries:\r\n                item.billSeries,\r\n\r\n              billNo:\r\n                item.billNo,\r\n\r\n              billDate:\r\n                item.billDate,\r\n\r\n              partyName:\r\n                item.partyName,\r\n\r\n              salesman:\r\n                item.salesman,\r\n\r\n              narration:\r\n                item.receiptNarration ||\r\n                narration,\r\n\r\n              bankCode:\r\n                item.bankCode || \"\",\r\n\r\n              bankCash:\r\n                item.bankCash ||\r\n                item.bankName ||\r\n                \"\",\r\n              drawerBank:\r\n                item.drawerBank || \"\",\r\n              loadSeries:\r\n                cleanLoadSeries,\r\n\r\n              loadNo:\r\n                cleanLoadNo,\r\n\r\n              receiptAmount:\r\n                Number(\r\n                  item.receiptAmount || 0\r\n                ),\r\n\r\n              chequeNo:\r\n                item.chequeNo || \"\",\r\n\r\n              chequeDate:\r\n                item.chequeDate || \"\",\r\n\r\n              micr:\r\n                item.micr || \"\",\r\n\r\n              receiptSource:\r\n                \"SETTLE_LOAD\",\r\n\r\n              addUser:\r\n                req.body.userName ||\r\n                \"ADMIN\",\r\n\r\n              receiptBills: [\r\n                {\r\n                  trnSeries:\r\n                    item.billSeries,\r\n\r\n                  trnNo:\r\n                    item.billNo,\r\n\r\n                  trnDate:\r\n                    item.billDate,\r\n\r\n                  amount:\r\n                    item.originalBillAmount,\r\n\r\n                  adjustAmt:\r\n                    Number(\r\n                      item.receiptAmount ||\r\n                      0\r\n                    ),\r\n\r\n                  balanceAmt:\r\n                    Number(\r\n                      item.pendingAmount ||\r\n                      0\r\n                    ),\r\n\r\n                  nowAdjust:\r\n                    Number(\r\n                      item.receiptAmount ||\r\n                      0\r\n                    ),\r\n\r\n                  remark:\r\n                    item.receiptNarration ||\r\n                    \"\",\r\n                },\r\n              ],\r\n            },\r\n          },\r\n          {\r\n            upsert: true,\r\n            new: true,\r\n            session,\r\n          }\r\n        )"
+  },
+  {
+    "file": "backend/server.js",
+    "line": 21079,
+    "call": "Receipt.updateMany",
+    "text": "Receipt.updateMany(\r\n          {\r\n            distributorId,\r\n            firmId,\r\n            billSeries:\r\n              item.billSeries,\r\n            billNo:\r\n              item.billNo,\r\n            receiptSource:\r\n              \"SETTLE_LOAD\",\r\n          },\r\n          { $set: { status: \"REVERSED\", reversedAt: new Date(), reversedBy: req.auth.userId, reversalReason: \"Settlement allocation removed\" } },\r\n          { session }\r\n        )"
+  },
+  {
+    "file": "backend/server.js",
+    "line": 21120,
+    "call": "SalesHeader.updateMany",
+    "text": "SalesHeader.updateMany(\r\n          {\r\n            distributorId,\r\n            firmId,\r\n            isActive: true,\r\n            $or: pendingConditions,\r\n          },\r\n          {\r\n            $set: {\r\n              IsLoaded: false,\r\n              LoadSeries: \"\",\r\n              LoadNo: null,\r\n            },\r\n          },\r\n          {\r\n            session,\r\n          }\r\n        )"
+  },
+  {
+    "file": "backend/server.js",
+    "line": 21168,
+    "call": "SalesHeader.updateMany",
+    "text": "SalesHeader.updateMany(\r\n          {\r\n            distributorId,\r\n            firmId,\r\n            isActive: true,\r\n            $or: completedConditions,\r\n          },\r\n          {\r\n            $set: {\r\n              IsLoaded: true,\r\n              LoadSeries:\r\n                cleanLoadSeries,\r\n              LoadNo:\r\n                Number(cleanLoadNo),\r\n            },\r\n          },\r\n          {\r\n            session,\r\n          }\r\n        )"
+  },
+  {
+    "file": "backend/server.js",
+    "line": 21194,
+    "call": "SalesHeader.updateOne",
+    "text": "SalesHeader.updateOne(\r\n          {\r\n            distributorId,\r\n            firmId,\r\n            isActive: true,\r\n            BillSeries:\r\n              item.billSeries,\r\n            BillNo:\r\n              Number(item.billNo || 0),\r\n          },\r\n          {\r\n            $set: {\r\n              BillType:\r\n                item.billType ||\r\n                \"Credit\",\r\n            },\r\n          },\r\n          {\r\n            session,\r\n          }\r\n        )"
+  },
+  {
+    "file": "backend/server.js",
+    "line": 21327,
+    "call": "load.save",
+    "text": "load.save({\r\n        session,\r\n      })"
+  },
+  {
+    "file": "backend/server.js",
+    "line": 21465,
+    "call": "SettleLoad.create",
+    "text": "SettleLoad.create({\r\n      distributorId,\r\n      firmId,\r\n      firmName,\r\n      loadSeries: cleanLoadSeries,\r\n      loadNo: cleanLoadNo,\r\n      loadDate,\r\n      settlementDate,\r\n      narration,\r\n      totalBills: bills.length,\r\n      totalAmount,\r\n      totalReceiptAmount,\r\n      totalPendingAmount,\r\n      totalCancelBills,\r\n      status: \"SETTLED\",\r\n      bills,\r\n    })"
+  },
+  {
+    "file": "backend/server.js",
+    "line": 21493,
+    "call": "SalesHeader.updateMany",
+    "text": "SalesHeader.updateMany(\r\n        {\r\n          distributorId,\r\n          firmId,\r\n          isActive: true,\r\n          $or: pendingConditions,\r\n        },\r\n        {\r\n          $set: {\r\n            IsLoaded: false,\r\n            LoadSeries: \"\",\r\n            LoadNo: null,\r\n          },\r\n        }\r\n      )"
+  },
+  {
+    "file": "backend/server.js",
+    "line": 22452,
+    "call": "SettleLoad.findOneAndUpdate",
+    "text": "SettleLoad.findOneAndUpdate(\r\n      { _id: req.params.id, distributorId: req.auth.distributorId, firmId: req.auth.firmId },\r\n      {\r\n        settlementDate,\r\n        narration,\r\n        bills,\r\n        totalBills: bills.length,\r\n        totalAmount,\r\n        totalReceiptAmount,\r\n        totalPendingAmount,\r\n        totalCancelBills,\r\n        status: \"SETTLED\",\r\n      },\r\n      { new: true }\r\n    )"
+  },
+  {
+    "file": "backend/server.js",
+    "line": 22516,
+    "call": "Receipt.create",
+    "text": "Receipt.create([{\r\n      distributorId, firmId, firmName: req.auth.firmName,\r\n      receiptDate, receiptSeries, rno, billSeries, billNo,\r\n      billDate: salesBill.BillDate || \"\", partyName: salesBill.PartyName || \"\",\r\n      salesman: req.body.salesman || salesBill.SalesmanName || \"\", narration: req.body.narration || \"\",\r\n      bankCode: req.body.bankCode || \"\", bankCash: req.body.bankCash || \"\",\r\n      loadSeries: req.body.loadSeries || \"\", loadNo: req.body.loadNo || \"\", docketNo: req.body.docketNo || \"\",\r\n      addUser: req.auth.userId, receiptSource: req.body.receiptSource || \"DIRECT\",\r\n      receiptAmount, chequeNo: req.body.chequeNo || \"\", chequeDate: req.body.chequeDate || \"\", micr: req.body.micr || \"\",\r\n      receiptBills: [{ trnSeries: billSeries, trnNo: billNo, trnDate: salesBill.BillDate || \"\", amount: receiptAmount, adjustAmt: 0, balanceAmt: Number(salesBill.NetAmount || 0) - receiptAmount, nowAdjust: receiptAmount, remark: req.body.narration || \"\" }],\r\n    }], { session })"
+  },
+  {
+    "file": "backend/server.js",
+    "line": 22683,
+    "call": "bill.save",
+    "text": "bill.save({ session })"
+  },
+  {
+    "file": "backend/server.js",
+    "line": 23559,
+    "call": "stockModel.updateOne",
+    "text": "stockModel.updateOne(\r\n            {\r\n              ...stockFilter,\r\n\r\n              Qty: {\r\n                $gte:\r\n                  quantity,\r\n              },\r\n            },\r\n            {\r\n              $inc: {\r\n                Qty:\r\n                  -quantity,\r\n              },\r\n            },\r\n            {\r\n              session,\r\n            }\r\n          )"
+  },
+  {
+    "file": "backend/server.js",
+    "line": 23606,
+    "call": "stockModel.findOneAndUpdate",
+    "text": "stockModel.findOneAndUpdate(\r\n          stockFilter,\r\n          {\r\n            $setOnInsert: {\r\n              distributorId,\r\n              firmId,\r\n              firmName,\r\n\r\n              GDCode:\r\n                gdCode,\r\n\r\n              ProdCode:\r\n                item.ProductCode,\r\n\r\n              Batch:\r\n                item.Batch || \".\",\r\n\r\n              MRP:\r\n                debitNumber(\r\n                  item.MRP\r\n                ),\r\n            },\r\n\r\n            $set: {\r\n              PRate:\r\n                debitNumber(\r\n                  item.PRate\r\n                ),\r\n\r\n              SRate:\r\n                debitNumber(\r\n                  item.Rate\r\n                ),\r\n\r\n              BoxPack:\r\n                debitNumber(\r\n                  item.BoxPack\r\n                ) || 1,\r\n\r\n              InBoxPack:\r\n                debitNumber(\r\n                  item.InBoxPack\r\n                ) || 1,\r\n\r\n              IsLocked:\r\n                \"N\",\r\n            },\r\n\r\n            $inc: {\r\n              Qty:\r\n                quantity,\r\n            },\r\n          },\r\n          {\r\n            upsert:\r\n              true,\r\n\r\n            new:\r\n              true,\r\n\r\n            session,\r\n          }\r\n        )"
+  },
+  {
+    "file": "backend/server.js",
+    "line": 24598,
+    "call": "DebitNote.create",
+    "text": "DebitNote.create(\r\n          [\r\n            {\r\n              ...req.body,\r\n\r\n              distributorId,\r\n              firmId,\r\n              firmName,\r\n\r\n              VNo:\r\n                debitNoteNo,\r\n\r\n              DebitNoteSeries:\r\n                debitNoteSeries,\r\n\r\n              DebitNoteNo:\r\n                debitNoteNo,\r\n\r\n              debitNoteSeries,\r\n              debitNoteNo,\r\n\r\n              GDCode:\r\n                gdCode,\r\n\r\n              GrossAmount:\r\n                calculatedDebit.grossAmount,\r\n\r\n              GSTAmount:\r\n                calculatedDebit.cgstAmt + calculatedDebit.sgstAmt + calculatedDebit.igstAmt,\r\n\r\n              NetAmount:\r\n                calculatedDebit.netAmt,\r\n\r\n              amount:\r\n                calculatedDebit.netAmt,\r\n\r\n              TotalQty:\r\n                items.reduce(\r\n                  (sum, item) =>\r\n                    sum +\r\n                    debitNumber(\r\n                      item.Qty\r\n                    ),\r\n                  0\r\n                ),\r\n\r\n              TotalFreeQty:\r\n                items.reduce(\r\n                  (sum, item) =>\r\n                    sum +\r\n                    debitNumber(\r\n                      item.Free\r\n                    ),\r\n                  0\r\n                ),\r\n\r\n              TotalItems:\r\n                items.length,\r\n\r\n              items,\r\n\r\n              Status:\r\n                req.body.Status ||\r\n                \"Approved\",\r\n\r\n              isActive:\r\n                true,\r\n            },\r\n          ],\r\n          {\r\n            session,\r\n          }\r\n        )"
+  },
+  {
+    "file": "backend/server.js",
+    "line": 24901,
+    "call": "DebitNote.findOneAndUpdate",
+    "text": "DebitNote.findOneAndUpdate(\r\n          { _id: id, distributorId, firmId },\r\n          {\r\n            $set: {\r\n              ...req.body,\r\n\r\n              distributorId,\r\n              firmId,\r\n              firmName,\r\n\r\n              VNo:\r\n                debitNoteNo,\r\n\r\n              DebitNoteSeries:\r\n                debitNoteSeries,\r\n\r\n              DebitNoteNo:\r\n                debitNoteNo,\r\n\r\n              debitNoteSeries,\r\n              debitNoteNo,\r\n\r\n              GDCode:\r\n                newGdCode,\r\n\r\n              GrossAmount:\r\n                calculatedDebit.grossAmount,\r\n\r\n              GSTAmount:\r\n                calculatedDebit.cgstAmt + calculatedDebit.sgstAmt + calculatedDebit.igstAmt,\r\n\r\n              NetAmount:\r\n                calculatedDebit.netAmt,\r\n\r\n              amount:\r\n                calculatedDebit.netAmt,\r\n\r\n              TotalQty:\r\n                newItems.reduce(\r\n                  (sum, item) =>\r\n                    sum +\r\n                    debitNumber(\r\n                      item.Qty\r\n                    ),\r\n                  0\r\n                ),\r\n\r\n              TotalFreeQty:\r\n                newItems.reduce(\r\n                  (sum, item) =>\r\n                    sum +\r\n                    debitNumber(\r\n                      item.Free\r\n                    ),\r\n                  0\r\n                ),\r\n\r\n              TotalItems:\r\n                newItems.length,\r\n\r\n              items:\r\n                newItems,\r\n\r\n              UpdatedBy:\r\n                req.body.UpdatedBy ||\r\n                \"\",\r\n\r\n              isActive:\r\n                true,\r\n            },\r\n          },\r\n          {\r\n            new:\r\n              true,\r\n\r\n            session,\r\n\r\n            runValidators:\r\n              true,\r\n          }\r\n        )"
+  },
+  {
+    "file": "backend/server.js",
+    "line": 25100,
+    "call": "DebitNote.findOneAndUpdate",
+    "text": "DebitNote.findOneAndUpdate({ _id: id, distributorId, firmId }, { $set: { isActive: false, status: \"CANCELLED\", cancelledAt: new Date(), cancelledBy: req.auth.userId } }, { session })"
+  },
+  {
+    "file": "backend/server.js",
+    "line": 25410,
+    "call": "stockModel.findOneAndUpdate",
+    "text": "stockModel.findOneAndUpdate(\r\n          stockFilter,\r\n          {\r\n            $setOnInsert: {\r\n              distributorId,\r\n              firmId,\r\n              firmName,\r\n\r\n              GDCode:\r\n                gdCode,\r\n\r\n              ProdCode:\r\n                item.ProductCode,\r\n\r\n              Batch:\r\n                item.Batch || \".\",\r\n\r\n              MRP:\r\n                creditNoteNumber(\r\n                  item.MRP\r\n                ),\r\n            },\r\n\r\n            $set: {\r\n              PRate:\r\n                creditNoteNumber(\r\n                  item.PRate\r\n                ),\r\n\r\n              SRate:\r\n                creditNoteNumber(\r\n                  item.Rate\r\n                ),\r\n\r\n              BoxPack:\r\n                creditNoteNumber(\r\n                  item.BoxPack\r\n                ) || 1,\r\n\r\n              InBoxPack:\r\n                creditNoteNumber(\r\n                  item.InBoxPack\r\n                ) || 1,\r\n\r\n              IsLocked:\r\n                \"N\",\r\n            },\r\n\r\n            $inc: {\r\n              Qty:\r\n                movementQty,\r\n            },\r\n          },\r\n          {\r\n            upsert:\r\n              true,\r\n\r\n            new:\r\n              true,\r\n\r\n            session,\r\n\r\n            setDefaultsOnInsert:\r\n              true,\r\n          }\r\n        )"
+  },
+  {
+    "file": "backend/server.js",
+    "line": 25478,
+    "call": "stockModel.updateOne",
+    "text": "stockModel.updateOne(\r\n            {\r\n              ...stockFilter,\r\n\r\n              Qty: {\r\n                $gte:\r\n                  Math.abs(\r\n                    movementQty\r\n                  ),\r\n              },\r\n            },\r\n            {\r\n              $inc: {\r\n                Qty:\r\n                  movementQty,\r\n              },\r\n            },\r\n            {\r\n              session,\r\n            }\r\n          )"
+  },
+  {
+    "file": "backend/server.js",
+    "line": 25627,
+    "call": "SalesHeader.updateOne",
+    "text": "SalesHeader.updateOne(\r\n      {\r\n        _id:\r\n          salesBill._id,\r\n      },\r\n      update,\r\n      {\r\n        session,\r\n      }\r\n    )"
+  },
+  {
+    "file": "backend/server.js",
+    "line": 26183,
+    "call": "CreditNote.create",
+    "text": "CreditNote.create(\r\n          [\r\n            {\r\n              ...req.body,\r\n\r\n              distributorId,\r\n              firmId,\r\n              firmName,\r\n\r\n              VNo:\r\n                creditNoteNo,\r\n\r\n              CreditNoteSeries:\r\n                creditNoteSeries,\r\n\r\n              CreditNoteNo:\r\n                creditNoteNo,\r\n\r\n              BillSeries:\r\n                billSeries,\r\n\r\n              BillNo:\r\n                billNo,\r\n\r\n              creditNoteSeries:\r\n                creditNoteSeries,\r\n\r\n              creditNoteNo:\r\n                creditNoteNo,\r\n\r\n              billSeries,\r\n              billNo,\r\n\r\n              Godown:\r\n                godownName,\r\n\r\n              GDCode:\r\n                gdCode,\r\n\r\n              GrossAmount:\r\n                grossAmount,\r\n\r\n              TaxableValue:\r\n                taxableValue,\r\n\r\n              CGSTAmount:\r\n                cgstAmount,\r\n\r\n              SGSTAmount:\r\n                sgstAmount,\r\n\r\n              IGSTAmount:\r\n                igstAmount,\r\n\r\n              NetAmount:\r\n                creditAmount,\r\n\r\n              amount:\r\n                creditAmount,\r\n\r\n              items:\r\n                normalizedItems,\r\n\r\n              TotalQty:\r\n                normalizedItems.reduce(\r\n                  (total, item) =>\r\n                    total +\r\n                    Number(\r\n                      item.Qty || 0\r\n                    ),\r\n                  0\r\n                ),\r\n\r\n              TotalFreeQty:\r\n                normalizedItems.reduce(\r\n                  (total, item) =>\r\n                    total +\r\n                    Number(\r\n                      item.Free || 0\r\n                    ),\r\n                  0\r\n                ),\r\n\r\n              TotalItems:\r\n                normalizedItems.length,\r\n\r\n              isActive:\r\n                true,\r\n\r\n              Status:\r\n                req.body.Status ||\r\n                \"Approved\",\r\n            },\r\n          ],\r\n          {\r\n            session,\r\n          }\r\n        )"
+  },
+  {
+    "file": "backend/server.js",
+    "line": 26358,
+    "call": "stockModel.findOneAndUpdate",
+    "text": "stockModel.findOneAndUpdate(\r\n          stockFilter,\r\n          stockUpdate,\r\n          {\r\n            upsert: true,\r\n            new: true,\r\n            session,\r\n            setDefaultsOnInsert: true,\r\n          }\r\n        )"
+  },
+  {
+    "file": "backend/server.js",
+    "line": 26379,
+    "call": "SalesHeader.updateOne",
+    "text": "SalesHeader.updateOne(\r\n          {\r\n            _id:\r\n              salesBill._id,\r\n          },\r\n          {\r\n            $inc: {\r\n              CreditNoteAmount:\r\n                creditAmount,\r\n\r\n              NetAmount:\r\n                -creditAmount,\r\n\r\n              GrossAmount:\r\n                -grossAmount,\r\n\r\n              TaxableValue:\r\n                -taxableValue,\r\n\r\n              CGSTAmount:\r\n                -cgstAmount,\r\n\r\n              SGSTAmount:\r\n                -sgstAmount,\r\n\r\n              IGSTAmount:\r\n                -igstAmount,\r\n            },\r\n\r\n            $set: {\r\n              CreditNoteAdjusted:\r\n                true,\r\n\r\n              LastCreditNoteSeries:\r\n                creditNoteSeries,\r\n\r\n              LastCreditNoteNo:\r\n                creditNoteNo,\r\n            },\r\n          },\r\n          {\r\n            session,\r\n          }\r\n        )"
+  },
+  {
+    "file": "backend/server.js",
+    "line": 26892,
+    "call": "CreditNote.findOneAndUpdate",
+    "text": "CreditNote.findOneAndUpdate(\r\n          { _id: id, distributorId, firmId },\r\n          {\r\n            $set: {\r\n              ...req.body,\r\n\r\n              distributorId,\r\n              firmId,\r\n              firmName,\r\n\r\n              VNo:\r\n                creditNoteNo,\r\n\r\n              CreditNoteSeries:\r\n                creditNoteSeries,\r\n\r\n              CreditNoteNo:\r\n                creditNoteNo,\r\n\r\n              creditNoteSeries,\r\n              creditNoteNo,\r\n\r\n              BillSeries:\r\n                newBillSeries,\r\n\r\n              BillNo:\r\n                newBillNo,\r\n\r\n              billSeries:\r\n                newBillSeries,\r\n\r\n              billNo:\r\n                newBillNo,\r\n\r\n              Godown:\r\n                newGodown,\r\n\r\n              GDCode:\r\n                newGdCode,\r\n\r\n              NetAmount:\r\n                newAmounts.creditAmount,\r\n\r\n              amount:\r\n                newAmounts.creditAmount,\r\n\r\n              GrossAmount:\r\n                newAmounts.grossAmount,\r\n\r\n              TaxableValue:\r\n                newAmounts.taxableValue,\r\n\r\n              CGSTAmount:\r\n                newAmounts.cgstAmount,\r\n\r\n              SGSTAmount:\r\n                newAmounts.sgstAmount,\r\n\r\n              IGSTAmount:\r\n                newAmounts.igstAmount,\r\n\r\n              items:\r\n                newItems,\r\n\r\n              TotalQty:\r\n                totalQty,\r\n\r\n              TotalFreeQty:\r\n                totalFreeQty,\r\n\r\n              TotalItems:\r\n                newItems.length,\r\n\r\n              UpdatedBy:\r\n                String(\r\n                  req.body.UpdatedBy ||\r\n                  req.body.updatedBy ||\r\n                  \"\"\r\n                ),\r\n\r\n              Status:\r\n                req.body.Status ||\r\n                oldCreditNote.Status ||\r\n                \"Approved\",\r\n\r\n              isActive:\r\n                true,\r\n            },\r\n          },\r\n          {\r\n            new:\r\n              true,\r\n\r\n            runValidators:\r\n              true,\r\n\r\n            session,\r\n          }\r\n        )"
+  },
+  {
+    "file": "backend/server.js",
+    "line": 27673,
+    "call": "Register.findOneAndUpdate",
+    "text": "Register.findOneAndUpdate(\r\n      { _id: id, distributorId: req.auth.distributorId, firmId: req.auth.firmId },\r\n      {\r\n        firmCode: String(req.body.firmCode || \"\").trim(),\r\n        firmName: String(req.body.firmName || \"\").trim(),\r\n        address1: req.body.address1 || \"\",\r\n        address2: req.body.address2 || \"\",\r\n        city: req.body.city || \"\",\r\n        pinCode: req.body.pinCode || \"\",\r\n        state: req.body.state || \"\",\r\n        country: req.body.country || \"India\",\r\n        phoneNo: req.body.phoneNo || \"\",\r\n        mobileNo: req.body.mobileNo || \"\",\r\n        tinNo: req.body.tinNo || \"\",\r\n        regNo: req.body.regNo || \"\",\r\n        gstNo: req.body.gstNo || \"\",\r\n        drugLicNo: req.body.drugLicNo || \"\",\r\n        foodLicenceNo: req.body.foodLicenceNo || \"\",\r\n        apiKey: req.body.apiKey || \"\",\r\n      },\r\n      { new: true }\r\n    )"
+  },
+  {
+    "file": "backend/server.js",
+    "line": 27720,
+    "call": "Register.findOneAndUpdate",
+    "text": "Register.findOneAndUpdate(\r\n      { _id: req.params.id, distributorId: req.auth.distributorId, firmId: req.auth.firmId },\r\n      { $set: { isActive: false }, $inc: { sessionVersion: 1 } }, { new: true }\r\n    )"
+  },
+  {
+    "file": "backend/server.js",
+    "line": 27761,
+    "call": "Group.findOneAndUpdate",
+    "text": "Group.findOneAndUpdate(\r\n      { _id: id, distributorId: req.auth.distributorId, firmId: req.auth.firmId },\r\n      {\r\n        groupCode: code.trim(),\r\n        groupName: name.trim(),\r\n      },\r\n      { new: true, runValidators: true }\r\n    )"
+  },
+  {
+    "file": "backend/server.js",
+    "line": 27805,
+    "call": "Group.findOneAndUpdate",
+    "text": "Group.findOneAndUpdate(\r\n      filter,\r\n      { $set: { isActive: false } }, { new: true }\r\n    )"
+  },
+  {
+    "file": "backend/server.js",
+    "line": 27845,
+    "call": "Category.findOneAndUpdate",
+    "text": "Category.findOneAndUpdate(\r\n      { _id: id, distributorId: req.auth.distributorId, firmId: req.auth.firmId },\r\n      {\r\n        categoryCode: code.trim(),\r\n        categoryName: name.trim(),\r\n      },\r\n      { new: true, runValidators: true }\r\n    )"
+  },
+  {
+    "file": "backend/server.js",
+    "line": 27889,
+    "call": "Category.findOneAndUpdate",
+    "text": "Category.findOneAndUpdate(\r\n      filter,\r\n      { $set: { isActive: false } }, { new: true }\r\n    )"
+  },
+  {
+    "file": "backend/server.js",
+    "line": 27934,
+    "call": "Product.findOneAndUpdate",
+    "text": "Product.findOneAndUpdate(\r\n      { _id: req.params.id, distributorId: req.auth.distributorId, firmId: req.auth.firmId },\r\n      updateData,\r\n      { new: true, runValidators: true }\r\n    )"
+  },
+  {
+    "file": "backend/server.js",
+    "line": 27974,
+    "call": "Product.findOneAndUpdate",
+    "text": "Product.findOneAndUpdate(\r\n      filter,\r\n      { $set: { isActive: false } }, { new: true }\r\n    )"
+  },
+  {
+    "file": "backend/server.js",
+    "line": 28093,
+    "call": "Account.findOneAndUpdate",
+    "text": "Account.findOneAndUpdate(\r\n        { _id: id, distributorId: req.auth.distributorId, firmId: req.auth.firmId },\r\n        updateData,\r\n        { new: true, runValidators: true, session }\r\n      )"
+  },
+  {
+    "file": "backend/server.js",
+    "line": 28196,
+    "call": "Account.findOneAndUpdate",
+    "text": "Account.findOneAndUpdate(\r\n        {\r\n          _id: existing._id,\r\n          distributorId: req.auth.distributorId,\r\n          firmId: req.auth.firmId,\r\n        },\r\n        { $set: updateData },\r\n        { new: true, runValidators: true }\r\n      )"
+  },
+  {
+    "file": "backend/server.js",
+    "line": 28210,
+    "call": "AreaToPartyMapping.updateMany",
+    "text": "AreaToPartyMapping.updateMany(\r\n          {\r\n            distributorId: req.auth.distributorId,\r\n            firmId: req.auth.firmId,\r\n            accountCode: previousAccountCode,\r\n          },\r\n          { $set: mappingUpdates }\r\n        )"
+  },
+  {
+    "file": "backend/server.js",
+    "line": 28292,
+    "call": "Account.findOneAndUpdate",
+    "text": "Account.findOneAndUpdate(\r\n      filter,\r\n      { $set: { isActive: false } }, { new: true }\r\n    )"
+  },
+  {
+    "file": "backend/server.js",
+    "line": 28342,
+    "call": "OtherAccount.findOneAndUpdate",
+    "text": "OtherAccount.findOneAndUpdate(\r\n      { _id: id, distributorId: req.auth.distributorId, firmId: req.auth.firmId },\r\n      updateData,\r\n      { new: true, runValidators: true }\r\n    )"
+  },
+  {
+    "file": "backend/server.js",
+    "line": 28383,
+    "call": "OtherAccount.findOneAndUpdate",
+    "text": "OtherAccount.findOneAndUpdate(\r\n      filter,\r\n      { $set: { isActive: false } }, { new: true }\r\n    )"
+  },
+  {
+    "file": "backend/server.js",
+    "line": 28426,
+    "call": "GST.findOneAndUpdate",
+    "text": "GST.findOneAndUpdate(\r\n      { _id: id, distributorId: req.auth.distributorId, firmId: req.auth.firmId },\r\n      {\r\n        gstCode: gstCode.trim(),\r\n        vatPercent: Number(vatPercent),\r\n        purchaseType: purchaseType || \"VAT ON PURCHASE PRICE\",\r\n        salesType: salesType || \"VAT ON SALES PRICE\",\r\n      },\r\n      { new: true, runValidators: true }\r\n    )"
+  },
+  {
+    "file": "backend/server.js",
+    "line": 28477,
+    "call": "GST.findOneAndUpdate",
+    "text": "GST.findOneAndUpdate(\r\n      filter,\r\n      { $set: { isActive: false } }, { new: true }\r\n    )"
+  },
+  {
+    "file": "backend/server.js",
+    "line": 28524,
+    "call": "Salesman.findOneAndUpdate",
+    "text": "Salesman.findOneAndUpdate(\r\n      { _id: id, distributorId: req.auth.distributorId, firmId: req.auth.firmId },\r\n      updateData,\r\n      { new: true, runValidators: true }\r\n    )"
+  },
+  {
+    "file": "backend/server.js",
+    "line": 28570,
+    "call": "Salesman.findOneAndUpdate",
+    "text": "Salesman.findOneAndUpdate(\r\n      filter,\r\n      { $set: { isActive: false } }, { new: true }\r\n    )"
+  },
+  {
+    "file": "backend/server.js",
+    "line": 28610,
+    "call": "Area.findOneAndUpdate",
+    "text": "Area.findOneAndUpdate(\r\n      { _id: id, distributorId: req.auth.distributorId, firmId: req.auth.firmId },\r\n      {\r\n        areaCode: areaCode.trim(),\r\n        areaName: areaName.trim(),\r\n      },\r\n      { new: true, runValidators: true }\r\n    )"
+  },
+  {
+    "file": "backend/server.js",
+    "line": 28659,
+    "call": "Area.findOneAndUpdate",
+    "text": "Area.findOneAndUpdate(\r\n      filter,\r\n      { $set: { isActive: false } }, { new: true }\r\n    )"
+  },
+  {
+    "file": "backend/server.js",
+    "line": 28699,
+    "call": "GodownModel.findOneAndUpdate",
+    "text": "GodownModel.findOneAndUpdate(\r\n      { _id: id, distributorId: req.auth.distributorId, firmId: req.auth.firmId },\r\n      {\r\n        godownCode: godownCode.trim(),\r\n        godownName: godownName.trim(),\r\n        address: address || \"\",\r\n        location: location || \"\",\r\n      },\r\n      { new: true, runValidators: true }\r\n    )"
+  },
+  {
+    "file": "backend/server.js",
+    "line": 28749,
+    "call": "GodownModel.findOneAndUpdate",
+    "text": "GodownModel.findOneAndUpdate(\r\n      filter,\r\n      { $set: { isActive: false } }, { new: true }\r\n    )"
+  },
+  {
+    "file": "backend/server.js",
+    "line": 28797,
+    "call": "CustomerBank.findOneAndUpdate",
+    "text": "CustomerBank.findOneAndUpdate(\r\n      { _id: id, distributorId: req.auth.distributorId, firmId: req.auth.firmId },\r\n      { $set: updateData },\r\n      { new: true, runValidators: true }\r\n    )"
+  },
+  {
+    "file": "backend/server.js",
+    "line": 28833,
+    "call": "CustomerBank.findOneAndUpdate",
+    "text": "CustomerBank.findOneAndUpdate(\r\n      filter,\r\n      { $set: { isActive: false } }, { new: true }\r\n    )"
+  },
+  {
+    "file": "backend/server.js",
+    "line": 29483,
+    "call": "QuotationHeader.findOneAndUpdate",
+    "text": "QuotationHeader.findOneAndUpdate(\r\n          {\r\n            _id: quotationId,\r\n            distributorId:\r\n              String(\r\n                distributorId\r\n              ).trim(),\r\n            firmId:\r\n              String(\r\n                firmId\r\n              ).trim(),\r\n          },\r\n          {\r\n            $set: updateData,\r\n          },\r\n          {\r\n            new: true,\r\n            runValidators: true,\r\n          }\r\n        )"
+  },
+  {
+    "file": "backend/server.js",
+    "line": 29579,
+    "call": "QuotationHeader.findOneAndUpdate",
+    "text": "QuotationHeader.findOneAndUpdate({ _id: id, distributorId, firmId }, { $set: { isActive: false, status: \"CANCELLED\", cancelledAt: new Date(), cancelledBy: req.auth.userId } })"
+  },
+  {
+    "file": "backend/server.js",
+    "line": 29653,
+    "call": "Stock.updateOne",
+    "text": "Stock.updateOne(\r\n          {\r\n            distributorId,\r\n            firmId,\r\n            GDCode: purchase.gdCode,\r\n            ProdCode: prodCode,\r\n            Batch: batchNo,\r\n            MRP: Number.isFinite(mrp) ? mrp : 0,\r\n          },\r\n          { $inc: { Qty: -qty } }\r\n        )"
+  },
+  {
+    "file": "backend/server.js",
+    "line": 29667,
+    "call": "PurchaseHeader.findOneAndUpdate",
+    "text": "PurchaseHeader.findOneAndUpdate(\r\n      { _id: id, distributorId, firmId },\r\n      { $set: { isActive: false, status: \"CANCELLED\", cancelledAt: new Date(), cancelledBy: req.auth.userId, cancellationReason: String(req.body.reason || \"Deleted by user\") } },\r\n      { new: true, session }\r\n    )"
+  },
+  {
+    "file": "backend/server.js",
+    "line": 29870,
+    "call": "CreditNote.findOneAndUpdate",
+    "text": "CreditNote.findOneAndUpdate({ _id: id, distributorId, firmId }, { $set: { isActive: false, status: \"CANCELLED\", cancelledAt: new Date(), cancelledBy: req.auth.userId } }, { session })"
+  },
+  {
+    "file": "backend/server.js",
+    "line": 29898,
+    "call": "SalesHeader.updateOne",
+    "text": "SalesHeader.updateOne(\r\n          {\r\n            _id:\r\n              salesBill._id,\r\n          },\r\n          {\r\n            $set: {\r\n              CreditNoteAdjusted:\r\n                Boolean(\r\n                  remainingCreditNote\r\n                ),\r\n\r\n              LastCreditNoteSeries:\r\n                remainingCreditNote\r\n                  ?.CreditNoteSeries ||\r\n                \"\",\r\n\r\n              LastCreditNoteNo:\r\n                remainingCreditNote\r\n                  ?.CreditNoteNo ||\r\n                0,\r\n            },\r\n          },\r\n          {\r\n            session,\r\n          }\r\n        )"
+  },
+  {
+    "file": "backend/server.js",
+    "line": 30029,
+    "call": "SalesHeader.updateMany",
+    "text": "SalesHeader.updateMany(\r\n        {\r\n          distributorId,\r\n          firmId,\r\n          isActive: true,\r\n          $or: billConditions\r\n        },\r\n        {\r\n          $set: {\r\n            IsLoaded: false,\r\n            LoadSeries: \"\",\r\n            LoadNo: null\r\n          }\r\n        },\r\n        { session }\r\n      )"
+  },
+  {
+    "file": "backend/server.js",
+    "line": 30047,
+    "call": "LoadHeader.findOneAndUpdate",
+    "text": "LoadHeader.findOneAndUpdate({ _id: id, DistributorId: distributorId, FirmId: firmId }, { $set: { IsCancelled: true, CancelledAt: new Date(), CancelledBy: req.auth.userId } }, { session })"
+  },
+  {
+    "file": "backend/server.js",
+    "line": 30108,
+    "call": "SalesHeader.updateMany",
+    "text": "SalesHeader.updateMany(\r\n        {\r\n          distributorId,\r\n          firmId,\r\n          isActive: true,\r\n          $or: billConditions\r\n        },\r\n        {\r\n          $set: {\r\n            IsLoaded: false,\r\n            LoadSeries: \"\",\r\n            LoadNo: null\r\n          }\r\n        }\r\n      )"
+  },
+  {
+    "file": "backend/server.js",
+    "line": 30125,
+    "call": "SettleLoad.findOneAndUpdate",
+    "text": "SettleLoad.findOneAndUpdate({ _id: id, distributorId, firmId }, { $set: { isActive: false, status: \"CANCELLED\", cancelledAt: new Date(), cancelledBy: req.auth.userId } })"
+  },
+  {
+    "file": "backend/server.js",
+    "line": 30363,
+    "call": "BillPrintSettings.findOneAndUpdate",
+    "text": "BillPrintSettings.findOneAndUpdate(\r\n          {\r\n            distributorId,\r\n            firmId,\r\n          },\r\n          {\r\n            $set: updateData,\r\n            $setOnInsert: {\r\n              distributorId,\r\n              firmId,\r\n            },\r\n          },\r\n          {\r\n            new: true,\r\n            upsert: true,\r\n            runValidators: true,\r\n          }\r\n        )"
+  },
+  {
+    "file": "backend/service.js",
+    "line": 167,
+    "call": "Service.create",
+    "text": "Service.create({ ...(await servicePayload(req.body, scope)), ...scope, firmName: clean(req.body.firmName) })"
+  },
+  {
+    "file": "backend/service.js",
+    "line": 176,
+    "call": "Service.findOneAndUpdate",
+    "text": "Service.findOneAndUpdate({ _id: req.params.id, ...scope, isActive: { $ne: false } },\n        { $set: await servicePayload(req.body, scope) }, { new: true, runValidators: true })"
+  },
+  {
+    "file": "backend/service.js",
+    "line": 192,
+    "call": "Service.findOneAndUpdate",
+    "text": "Service.findOneAndUpdate(filter, { $set: { isActive: false } })"
+  },
+  {
+    "file": "backend/service.js",
+    "line": 236,
+    "call": "SalesService.create",
+    "text": "SalesService.create({ ...payload, voucherNo, ...scope, firmName: clean(req.body.firmName) })"
+  },
+  {
+    "file": "backend/service.js",
+    "line": 248,
+    "call": "voucher.save",
+    "text": "voucher.save()"
+  },
+  {
+    "file": "backend/service.js",
+    "line": 256,
+    "call": "SalesService.findOneAndUpdate",
+    "text": "SalesService.findOneAndUpdate({ _id: req.params.id, ...scope, isActive: { $ne: false } }, { $set: { isActive: false } })"
+  },
+  {
+    "file": "backend/transaction.js",
+    "line": 582,
+    "call": "purchase.constructor.updateOne",
+    "text": "purchase.constructor.updateOne(\r\n      { _id: purchase._id, $expr: { $eq: [{ $ifNull: [\"$paymentAllocated\", 0] }, alreadyAllocated] } },\r\n      { $inc: { paymentAllocated: allocation.allocatedAmount } },\r\n      { session }\r\n    )"
+  },
+  {
+    "file": "backend/transaction.js",
+    "line": 619,
+    "call": "Purchase.updateOne",
+    "text": "Purchase.updateOne(\r\n      { _id: allocation.purchaseId },\r\n      { $set: { paymentAllocated: nextPaymentAllocated } },\r\n      { session }\r\n    )"
+  },
+  {
+    "file": "backend/transaction.js",
+    "line": 934,
+    "call": "Payment.create",
+    "text": "Payment.create([{\r\n          distributorId: req.auth.distributorId, firmId: req.auth.firmId,\r\n          vDate: String(req.body.vDate), vNo,\r\n          partyCode: String(req.body.partyCode || req.body.partyId || \"\"), partyName,\r\n          bankCash, amount, narration: String(req.body.narration || req.body.narr || \"\"),\r\n          reference: String(req.body.reference || req.body.chqNo || \"\"),\r\n          chequeNo: String(req.body.chequeNo || req.body.chqNo || \"\"), chequeDate: String(req.body.chequeDate || req.body.chqDate || \"\"),\r\n          clearingDate: String(req.body.clearingDate || \"\"), partyBankName: String(req.body.partyBankName || \"\"),\r\n          bankAccountNo: String(req.body.bankAccountNo || \"\"), allocations, idempotencyKey,\r\n        }], { session })"
+  },
+  {
+    "file": "backend/transaction.js",
+    "line": 997,
+    "call": "payment.save",
+    "text": "payment.save({ session })"
+  },
+  {
+    "file": "backend/transaction.js",
+    "line": 1035,
+    "call": "payment.save",
+    "text": "payment.save({ session })"
+  },
+  {
+    "file": "backend/transaction.js",
+    "line": 1164,
+    "call": "sales.updateOne",
+    "text": "sales.updateOne(\n            { _id: invoice._id },\r\n            body._desktopImport === true\n              ? { $set: { receiptAllocated: currentAllocated } }\n              : { $max: { receiptAllocated: currentAllocated } },\n            { session }\n          )"
+  },
+  {
+    "file": "backend/transaction.js",
+    "line": 1176,
+    "call": "sales.updateOne",
+    "text": "sales.updateOne(\n              { _id: invoice._id },\n              { $set: { receiptAllocated: Math.min(amountField, currentAllocated + availableAmount) } },\n              { session }\n            )"
+  },
+  {
+    "file": "backend/transaction.js",
+    "line": 1185,
+    "call": "sales.updateOne",
+    "text": "sales.updateOne(\n  {\r\n    _id: invoice._id,\r\n\r\n    $expr: {\r\n      $gte: [\r\n        {\r\n          $subtract: [\r\n            amountField,\r\n            {\r\n              $ifNull: [\r\n                \"$receiptAllocated\",\r\n                currentAllocated\r\n              ]\r\n            }\r\n          ]\r\n        },\r\n        allocation\r\n      ]\r\n    }\r\n  },\r\n\r\n  {\r\n    $inc: {\r\n      receiptAllocated: allocation\r\n    }\r\n  },\r\n\r\n  {\r\n    session\r\n  }\r\n)"
+  },
+  {
+    "file": "backend/transaction.js",
+    "line": 1243,
+    "call": "Receipt.create",
+    "text": "Receipt.create([receiptData], { session })"
+  },
+  {
+    "file": "backend/transaction.js",
+    "line": 1454,
+    "call": "Receipt.create",
+    "text": "Receipt.create(receiptData)"
+  },
+  {
+    "file": "backend/transaction.js",
+    "line": 2291,
+    "call": "Receipt.findOneAndUpdate",
+    "text": "Receipt.findOneAndUpdate(\r\n          tenantFilter(req, { _id: receiptId }),\r\n\r\n          {\r\n            $set:\r\n              updateData\r\n          },\r\n\r\n          {\r\n            new: true,\r\n            runValidators: true\r\n          }\r\n        )"
+  },
+  {
+    "file": "backend/transaction.js",
+    "line": 2384,
+    "call": "sales.updateOne",
+    "text": "sales.updateOne(\r\n                { _id: salesBill._id },\r\n                {\r\n                  $set: {\r\n                    receiptAllocated: Math.max(\r\n                      0,\r\n                      Number(salesBill.receiptAllocated || 0) - allocation\r\n                    ),\r\n                  },\r\n                },\r\n                { session }\r\n              )"
+  },
+  {
+    "file": "backend/transaction.js",
+    "line": 2400,
+    "call": "receipt.save",
+    "text": "receipt.save({ session })"
+  },
+  {
+    "file": "backend/transaction.js",
+    "line": 2567,
+    "call": "ChequeBounce.create",
+    "text": "ChequeBounce.create(\r\n          payload\r\n        )"
+  },
+  {
+    "file": "backend/transaction.js",
+    "line": 2674,
+    "call": "ChequeBounce.findOneAndUpdate",
+    "text": "ChequeBounce.findOneAndUpdate(\r\n        tenantFilter(req, { _id: chequeBounceId }),\r\n        updatePayload,\r\n        { new: true }\r\n      )"
+  },
+  {
+    "file": "backend/transaction.js",
+    "line": 3198,
+    "call": "ChequeBounce.findOneAndUpdate",
+    "text": "ChequeBounce.findOneAndUpdate(tenantFilter(req, { _id: req.params.id }), { $set: { status: \"REVERSED\" } })"
+  },
+  {
+    "file": "backend/transaction.js",
+    "line": 3223,
+    "call": "PDCDocket.create",
+    "text": "PDCDocket.create({ ...req.body, distributorId, firmId, docSeries, docVNo })"
+  },
+  {
+    "file": "backend/transaction.js",
+    "line": 3331,
+    "call": "PDCDocket.findOneAndUpdate",
+    "text": "PDCDocket.findOneAndUpdate(\r\n          tenantFilter(req, { _id: pdcId }),\r\n          updateData,\r\n          {\r\n            new: true,\r\n            runValidators: true\r\n          }\r\n        )"
+  },
+  {
+    "file": "backend/transaction.js",
+    "line": 3921,
+    "call": "PDCDocket.findOneAndUpdate",
+    "text": "PDCDocket.findOneAndUpdate(tenantFilter(req, { _id: req.params.id }), { $set: { status: \"REVERSED\" } })"
+  },
+  {
+    "file": "backend/transaction.js",
+    "line": 3948,
+    "call": "Contra.create",
+    "text": "Contra.create({ ...req.body, distributorId, firmId, tranVNo })"
+  },
+  {
+    "file": "backend/transaction.js",
+    "line": 4029,
+    "call": "Contra.findOneAndUpdate",
+    "text": "Contra.findOneAndUpdate(\r\n          tenantFilter(req, { _id: contraId }),\r\n          updateData,\r\n          {\r\n            new: true,\r\n            runValidators: true\r\n          }\r\n        )"
+  },
+  {
+    "file": "backend/transaction.js",
+    "line": 4533,
+    "call": "Contra.findOneAndUpdate",
+    "text": "Contra.findOneAndUpdate(tenantFilter(req, { _id: req.params.id }), { $set: { status: \"REVERSED\" } })"
+  },
+  {
+    "file": "backend/transaction.js",
+    "line": 4624,
+    "call": "CollectionVoucher.create",
+    "text": "CollectionVoucher.create({ ...req.body, distributorId, firmId, colVNo })"
+  },
+  {
+    "file": "backend/transaction.js",
+    "line": 4717,
+    "call": "CollectionVoucher.findOneAndUpdate",
+    "text": "CollectionVoucher.findOneAndUpdate(\r\n          tenantFilter(req, { _id: voucherId }),\r\n          updateData,\r\n          {\r\n            new: true,\r\n            runValidators: true\r\n          }\r\n        )"
+  },
+  {
+    "file": "backend/transaction.js",
+    "line": 5257,
+    "call": "CollectionVoucher.findOneAndUpdate",
+    "text": "CollectionVoucher.findOneAndUpdate(tenantFilter(req, { _id: req.params.id }), { $set: { status: \"REVERSED\" } })"
+  }
+]

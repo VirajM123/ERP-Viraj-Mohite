@@ -1,10 +1,12 @@
 import fs from "fs";
 import ExcelJS from "exceljs";
 import mongoose from "mongoose";
+import { createRequire } from "node:module";
 import path from "path";
-import * as XLSX from "xlsx";
 import { importConfig } from "./importConfig.js";
 
+const require = createRequire(import.meta.url);
+const XLSX = require("xlsx");
 const DESKTOP_TRANSACTION_CONCURRENCY = Math.max(1, Math.min(16, Number.parseInt(process.env.DESKTOP_IMPORT_TRANSACTION_CONCURRENCY || "8", 10) || 8));
 const DESKTOP_TRANSACTION_BATCH_SIZE = Math.max(25, Math.min(500, Number.parseInt(process.env.DESKTOP_IMPORT_TRANSACTION_BATCH_SIZE || "100", 10) || 100));
 const DESKTOP_PRODUCT_BATCH_SIZE = Math.max(25, Math.min(250, Number.parseInt(process.env.DESKTOP_IMPORT_PRODUCT_BATCH_SIZE || "100", 10) || 100));

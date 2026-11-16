@@ -63,13 +63,9 @@ const Transaction = ({
   const pdcDocketPermission = usePermission("TRANSACTIONS", "PDC_DOCKET");           // NEW
 const contraPermission = usePermission("TRANSACTIONS", "CONTRA");                 // NEW
 const collectionVoucherPermission = usePermission("TRANSACTIONS", "COLLECTION_VOUCHER"); // NEW
-  const erpContext = useERP();
-  console.log("ERP CONTEXT =", erpContext);
-  console.log("ERP STATE =", erpContext?.state);
-  console.log("ERP RECEIPTS =", erpContext?.state?.receipts);
+const erpContext = useERP();
 
-
-  const { state, dispatch } = useERP();
+const { state, dispatch } = useERP();
   const [isFormReadOnly, setIsFormReadOnly] = useState(false);
 
   useEffect(() => {
@@ -157,7 +153,23 @@ const collectionVoucherPermission = usePermission("TRANSACTIONS", "COLLECTION_VO
       setOpeningBillsError('');
     } catch (error) { setOpeningBillsError(error.message); }
   }, [activeTransaction]);
-  useEffect(() => { loadOpeningBills(); }, [loadOpeningBills, transactionFormMode]);
+  useEffect(() => {
+    const receiptFormIsOpen =
+      activeTransaction === "Receipt" &&
+      transactionFormMode?.["Receipt"] === true;
+    const paymentFormIsOpen =
+      activeTransaction === "Payment" &&
+      transactionFormMode?.["Payment"] === true;
+
+    if (receiptFormIsOpen || paymentFormIsOpen) {
+      loadOpeningBills();
+    }
+  }, [
+    activeTransaction,
+    loadOpeningBills,
+    transactionFormMode?.["Receipt"],
+    transactionFormMode?.["Payment"],
+  ]);
   const [pendingBillsApi, setPendingBillsApi] =
     useState([]);
   // const [salesmanBills, setSalesmanBills] = useState([]);
@@ -316,47 +328,34 @@ if (menu === "PDC Docket") {
       return;
     }
 
-    loadCollectionVouchers();
-  }, []);
+    let cancelled = false;
+    const receiptFormIsOpen =
+      activeTransaction === "Receipt" &&
+      transactionFormMode?.["Receipt"] === true;
+    const chequeBounceFormIsOpen =
+      activeTransaction === "Cheque Bounce" &&
+      transactionFormMode?.["Cheque Bounce"] === true;
+    const pdcDocketFormIsOpen =
+      activeTransaction === "PDC Docket" &&
+      transactionFormMode?.["PDC Docket"] === true;
 
-
-  useEffect(() => {
-    const distributorId = localStorage.getItem("distributorId");
-    const firmId = localStorage.getItem("firmId");
-
-    if (!distributorId || !firmId) {
-      return;
+    if (receiptFormIsOpen || chequeBounceFormIsOpen) {
+      loadReceipts(() => !cancelled);
     }
 
-    loadPDCDockets();
-    loadContra();
-  }, []);
-
-  useEffect(() => {
-    const distributorId = localStorage.getItem("distributorId");
-    const firmId = localStorage.getItem("firmId");
-
-    if (!distributorId || !firmId) {
-      return;
+    if (pdcDocketFormIsOpen) {
+      loadPDCDockets(() => !cancelled);
     }
 
-    loadReceipts();
-  }, []);
-
-
-
-
-
-  useEffect(() => {
-    const distributorId = localStorage.getItem("distributorId");
-    const firmId = localStorage.getItem("firmId");
-
-    if (!distributorId || !firmId) {
-      return;
-    }
-
-    loadChequeBounces();
-  }, []);
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    activeTransaction,
+    transactionFormMode?.["Receipt"],
+    transactionFormMode?.["Cheque Bounce"],
+    transactionFormMode?.["PDC Docket"],
+  ]);
   // =========================
   // MODAL STATES FOR COLLECTION VOUCHER
   // =========================
@@ -709,9 +708,11 @@ if (menu === "PDC Docket") {
     state.payments?.length,
     editPaymentId,
   ]);
-
   useEffect(() => {
-    if (activeTransaction !== "Payment") return;
+    if (
+      activeTransaction !== "Payment" ||
+      transactionFormMode?.["Payment"] === true
+    ) return;
     let cancelled = false;
     secureFetch(`${API_URL}/transaction/payment`)
       .then(async (response) => {
@@ -724,7 +725,7 @@ if (menu === "PDC Docket") {
       })
       .catch((error) => console.error("Payment list load error:", error));
     return () => { cancelled = true; };
-  }, [activeTransaction]);
+  }, [activeTransaction, transactionFormMode?.["Payment"]]);
   const [paymentItems, setPaymentItems] = useState([{
     id: Date.now(),
     srNo: 1,
@@ -863,7 +864,10 @@ if (menu === "PDC Docket") {
     editJournalId,
   ]);
   useEffect(() => {
-    if (activeTransaction !== "Journal Voucher") return;
+    if (
+      activeTransaction !== "Journal Voucher" ||
+      transactionFormMode?.["Journal Voucher"] === true
+    ) return;
     let cancelled = false;
     secureFetch(`${API_URL}/p0/journal-voucher`).then(async (response) => {
       const result = await response.json();
@@ -871,7 +875,10 @@ if (menu === "PDC Docket") {
       if (!cancelled) dispatch({ type: "SET_JOURNALS", payload: result.data || [] });
     }).catch((error) => console.error("Journal list load error:", error));
     return () => { cancelled = true; };
-  }, [activeTransaction]);
+  }, [
+    activeTransaction,
+    transactionFormMode?.["Journal Voucher"],
+  ]);
   const [journalItems, setJournalItems] = useState([{
     id: Date.now(),
     seqNo: 1,
@@ -2437,8 +2444,6 @@ if (menu === "PDC Docket") {
       return sum + adjustedSum;
     }, 0);
   };
-  console.log("salesInvoices =", salesInvoices);
-
   const regularPendingBills = (salesInvoices || [])
     .map((invoice, index) => {
       const header = invoice.header || {};
@@ -4960,13 +4965,6 @@ const saveChequeBounce =
       ? `${API_URL}/transaction/cheque-bounce/${encodeURIComponent(editChequeBounceId)}`
       : `${API_URL}/transaction/cheque-bounce`;
 
-    console.log(
-      "CHEQUE BOUNCE MODE =",
-      isEditingChequeBounce ? "UPDATE" : "CREATE"
-    );
-
-    console.log("CHEQUE BOUNCE PAYLOAD =", payload);
-
     try {
       const response =
         await secureFetch(
@@ -5633,7 +5631,7 @@ const response = await secureFetch(url, {
         );
       }
     };
-  const loadPDCDockets = async () => {
+  const loadPDCDockets = async (shouldApply = () => true) => {
 
     try {
 
@@ -5652,7 +5650,7 @@ const response = await secureFetch(url, {
         );
       }
 
-      if (result.success) {
+      if (result.success && shouldApply()) {
 
         dispatch({
           type: "SET_PDC_DOCKETS",
@@ -6045,32 +6043,6 @@ const response = await secureFetch(url, {
     pdcDocketAppliedFilters,
     loadPDCDocketList,
   ]);
-
-  const loadContra = async () => {
-
-    try {
-
-      const response = await secureFetch(
-        `${API_URL}/transaction/contra`,
-      );
-
-      const result = await response.json();
-
-      if (result.success) {
-
-        dispatch({
-          type: "SET_CONTRA",
-          payload: result.data
-        });
-
-      }
-
-    } catch (err) {
-
-      console.log(err);
-
-    }
-  };
 
   /* =========================================================
    LOAD CONTRA PAGINATED LIST
@@ -7529,43 +7501,6 @@ const response = await secureFetch(
       console.log(err);
     }
   };
-  const loadCollectionVouchers =
-    async () => {
-      try {
-        const response =
-          await secureFetch(
-            `${API_URL}/transaction/collection-voucher`
-          );
-
-        const result =
-          await response.json();
-
-        if (
-          !response.ok ||
-          result.success === false
-        ) {
-          throw new Error(
-            result.message ||
-            "Failed to load Collection Vouchers."
-          );
-        }
-
-        dispatch({
-          type:
-            "SET_COLLECTION_VOUCHERS",
-
-          payload:
-            Array.isArray(result.data)
-              ? result.data
-              : [],
-        });
-      } catch (error) {
-        console.error(
-          "Collection Voucher load error:",
-          error
-        );
-      }
-    };
   /* =========================================================
    LOAD COLLECTION VOUCHER PAGINATED LIST
    ========================================================= */
@@ -8260,20 +8195,15 @@ setTransactionFormMode((prev) => ({
   // =========================
 
 
-  const loadReceipts = async () => {
+  const loadReceipts = async (shouldApply = () => true) => {
     try {
-      console.log("LOAD RECEIPTS START");
-
       const response = await secureFetch(
         `${API_URL}/transaction/receipt`
       );
 
       const result = await response.json();
 
-      console.log("RECEIPT API RESULT =", result);
-
       if (!result.success) {
-        console.log("Receipt load failed:", result.message);
         return;
       }
 
@@ -8310,14 +8240,15 @@ setTransactionFormMode((prev) => ({
         },
       }));
 
-      dispatch({
-        type: "SET_RECEIPTS",
-        payload: receipts,
-      });
+      if (shouldApply()) {
+        dispatch({
+          type: "SET_RECEIPTS",
+          payload: receipts,
+        });
+      }
 
-      console.log("FINAL RECEIPTS =", receipts);
     } catch (err) {
-      console.log("LOAD RECEIPTS ERROR =", err);
+      console.error("LOAD RECEIPTS ERROR =", err);
     }
   };
   /* =========================================================
@@ -14963,6 +14894,13 @@ setTransactionFormMode((prev) => ({
   const printPDCDocket = (docket) => {
     const h = docket.header || docket || {};
     const rows = docket.cheques || docket.details || [];
+    const escapeHtml = (value) => String(value ?? "").replace(/[&<>"']/g, (character) => ({
+      "&": "&amp;",
+      "<": "&lt;",
+      ">": "&gt;",
+      "\"": "&quot;",
+      "'": "&#39;",
+    })[character]);
 
     const houseBankName =
       h.bankName || h.houseBankName || h.houseBank || "-";
@@ -15043,18 +14981,18 @@ setTransactionFormMode((prev) => ({
 
           <div class="top-section">
             <div>
-              <div class="info-line">DOCKET NO : ${h.pdcNo || h.docVNo || "-"}</div>
-              <div class="info-line">TOTAL CHEQUES : ${h.totalCheques || 0}</div>
+              <div class="info-line">DOCKET NO : ${escapeHtml(h.pdcNo || h.docVNo || "-")}</div>
+              <div class="info-line">TOTAL CHEQUES : ${escapeHtml(h.totalCheques || 0)}</div>
               <div class="info-line">DOCKET VALUE : ${parseFloat(h.totalAmount || 0).toFixed(2)}</div>
-              <div class="info-line">BANK NAME : ${houseBankName}</div>
-              <div class="info-line">BANK A/C NO : ${houseBankAccountNo}</div>
-              <div class="info-line">IFSC CODE : ${houseBankIFSC}</div>
-              <div class="info-line">BRANCH : ${houseBankBranch}</div>
+              <div class="info-line">BANK NAME : ${escapeHtml(houseBankName)}</div>
+              <div class="info-line">BANK A/C NO : ${escapeHtml(houseBankAccountNo)}</div>
+              <div class="info-line">IFSC CODE : ${escapeHtml(houseBankIFSC)}</div>
+              <div class="info-line">BRANCH : ${escapeHtml(houseBankBranch)}</div>
             </div>
 
             <div>
               <div class="info-line">Page No. :</div>
-              <div class="info-line">Date : ${h.depositDate || "-"}</div>
+              <div class="info-line">Date : ${escapeHtml(h.depositDate || "-")}</div>
             </div>
           </div>
 
@@ -15073,11 +15011,11 @@ setTransactionFormMode((prev) => ({
         ? `<tr><td colspan="5" style="text-align:center;">No Cheque Details</td></tr>`
         : rows.map(row => `
                       <tr>
-                        <td>${row.chequeNo || row.chqNo || "-"}</td>
-                        <td>${row.chequeDate || row.chqDate || "-"}</td>
-                        <td>${row.bankName || "-"}</td>
+                        <td>${escapeHtml(row.chequeNo || row.chqNo || "-")}</td>
+                        <td>${escapeHtml(row.chequeDate || row.chqDate || "-")}</td>
+                        <td>${escapeHtml(row.bankName || "-")}</td>
                         <td class="amount">${parseFloat(row.amount || row.chequeAmount || 0).toFixed(2)}</td>
-                        <td>${row.partyName || "-"}</td>
+                        <td>${escapeHtml(row.partyName || "-")}</td>
                       </tr>
                     `).join("")
       }
@@ -18909,8 +18847,6 @@ setTransactionFormMode((prev) => ({
       </>
     );
   };
-  console.log("State Receipts =", state.receipts);
-  console.log("Length =", state.receipts?.length);
   return (
     <div
       className={`transaction-page ${isFormReadOnly ? "is-form-read-only" : ""} ${activeTransaction === "PDC Docket" && transactionFormMode?.["PDC Docket"] ? "pdc-docket-form-page" : ""}`}

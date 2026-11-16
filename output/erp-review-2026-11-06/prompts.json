@@ -1,0 +1,224 @@
+[
+  {
+    "id": "01-access-and-home",
+    "screens": [
+      "Login",
+      "Firm Registration",
+      "Dashboard",
+      "User Profile"
+    ],
+    "file": "01-access-and-home.png",
+    "mode": "built-in image_gen",
+    "prompt": "Use case: ui-mockup. Create a polished high-resolution UI/UX design review board for the existing Total Solution Indian FMCG distributor ERP. This is a proposed redesign, with fictional demo data, not a screenshot or implemented functionality. Render a separate fully designed desktop screen panel for EACH title listed below, arranged in a clean grid with generous separation and exact readable title labels outside each panel. Maximize resolution, landscape wide board. Consistent white/light slate canvas, navy text, restrained blue #24549a primary, teal positive, amber exceptions, thin borders, compact 36px controls, readable tabular numerals, practical information-dense tables. Narrow persistent left navigation grouped Sales, Inventory, Accounting, Reports, Administration; top firm selector, FY 2026-27, date 06 Nov 2026, global search. No decorative photos, gradients, device frames, huge whitespace or marketing charts. Screen contents must vary to genuinely fit the named workflow. Show real control labels, actionable exceptions, strong primary action, clear units and INR amounts, keyboard shortcut hints, sticky totals where relevant. All list screens show bounded pagination, search, status, and separate View/Edit actions. Entry screens show sectioned fields, validation near field, Draft versus Posted distinction and accounting preview before posting, without pretending current backend already supports these. Report screens show date/as-of filters, opening/movement/closing where relevant, export, reconciliation status, data freshness and table totals. Data is explicitly sample, no claim of legal compliance. Panel titles: Login; Firm Registration; Dashboard; User Profile. Tailor master screens to identity, tax/units/credit controls rather than generic invoice forms. Login should be simple firm-aware login; dashboard should prioritize due collections, stock exceptions and dispatch tasks."
+  },
+  {
+    "id": "02-organisation",
+    "screens": [
+      "Firm Master",
+      "User Master",
+      "Company Master",
+      "Customer Bank Master"
+    ],
+    "file": "02-organisation.png",
+    "mode": "built-in image_gen",
+    "prompt": "Use case: ui-mockup. Produce a UI design review contact sheet for Total Solution, an Indian FMCG accounting ERP. CRITICAL: render EXACTLY the listed independent desktop screen panels, equal size in a clean grid, each with its EXACT screen title clearly printed above its own fully designed screen. DO NOT add any other screens or combine titles as tabs. White/slate surfaces, navy labelled left sidebar, blue #24549a actions, fine borders, high information density, legible table text and tabular numbers, consistent 36px desktop controls. Each panel includes Total Solution branding, sample firm, FY 2026-27 and date 06 Nov 2026. Fictional FMCG grocery examples only: biscuits, tea, soap, oil, rice. No medicines or pharmacy, no invented brand. Each panel is specific to its workflow, with real labels, primary action, filters or sectioned form, appropriate table and footer totals. These are conceptual future layouts, label board 'PROPOSED DESIGN • SAMPLE DATA'. No implementation or compliance claim. Maximize resolution.  Exactly 4 equal independent panels: Firm Master | User Master | Company Master | Customer Bank Master. Only these screens. Compact list and selected-record form within each panel. Fictional suppliers Fresh Foods, Grocery Supply, Home Care Supply. Product Biscuits 75g or Tea 250g; groups Foods, Home Care; service Freight or Handling, no doctor services. No medicines, pharmaceuticals, hospital or medical names. Code/name search, visible status, save/cancel. Tailor form fields only to each named screen. Do not add other master screens or login/dashboard. No tax-rate advice or reference tables. Include firm and date in each panel."
+  },
+  {
+    "id": "03-products",
+    "screens": [
+      "Product",
+      "Group Master",
+      "Category Master",
+      "GST Master",
+      "Service",
+      "Scheme"
+    ],
+    "file": "03-products.png",
+    "mode": "built-in image_gen",
+    "prompt": "Use case: ui-mockup. Produce a UI design review contact sheet for Total Solution, an Indian FMCG accounting ERP. CRITICAL: render EXACTLY the listed independent desktop screen panels, equal size in a clean grid, each with its EXACT screen title clearly printed above its own fully designed screen. DO NOT add any other screens or combine titles as tabs. White/slate surfaces, navy labelled left sidebar, blue #24549a actions, fine borders, high information density, legible table text and tabular numbers, consistent 36px desktop controls. Each panel includes Total Solution branding, sample firm, FY 2026-27 and date 06 Nov 2026. Fictional FMCG grocery examples only: biscuits, tea, soap, oil, rice. No medicines or pharmacy, no invented brand. Each panel is specific to its workflow, with real labels, primary action, filters or sectioned form, appropriate table and footer totals. These are conceptual future layouts, label board 'PROPOSED DESIGN • SAMPLE DATA'. No implementation or compliance claim. Maximize resolution.  Exactly 6 equal independent panels: Product | Group Master | Category Master | GST Master | Service | Scheme. Only these screens. Compact list and selected-record form within each panel. Fictional suppliers Fresh Foods, Grocery Supply, Home Care Supply. Product Biscuits 75g or Tea 250g; groups Foods, Home Care; service Freight or Handling, no doctor services. No medicines, pharmaceuticals, hospital or medical names. Code/name search, visible status, save/cancel. Tailor form fields only to each named screen. Do not add other master screens or login/dashboard. No tax-rate advice or reference tables. Include firm and date in each panel."
+  },
+  {
+    "id": "04-accounts-and-territory",
+    "screens": [
+      "Account",
+      "Other Account",
+      "Salesman",
+      "Area",
+      "GoDown Master"
+    ],
+    "file": "04-accounts-and-territory.png",
+    "mode": "built-in image_gen",
+    "prompt": "Use case: ui-mockup. Produce a UI design review contact sheet for Total Solution, an Indian FMCG accounting ERP. CRITICAL: render EXACTLY the listed independent desktop screen panels, equal size in a clean grid, each with its EXACT screen title clearly printed above its own fully designed screen. DO NOT add any other screens or combine titles as tabs. White/slate surfaces, navy labelled left sidebar, blue #24549a actions, fine borders, high information density, legible table text and tabular numbers, consistent 36px desktop controls. Each panel includes Total Solution branding, sample firm, FY 2026-27 and date 06 Nov 2026. Fictional FMCG grocery examples only: biscuits, tea, soap, oil, rice. No medicines or pharmacy, no invented brand. Each panel is specific to its workflow, with real labels, primary action, filters or sectioned form, appropriate table and footer totals. These are conceptual future layouts, label board 'PROPOSED DESIGN • SAMPLE DATA'. No implementation or compliance claim. Maximize resolution.  Exactly 5 equal independent panels: Account | Other Account | Salesman | Area | GoDown Master. Only these screens. Compact list and selected-record form within each panel. Fictional suppliers Fresh Foods, Grocery Supply, Home Care Supply. Product Biscuits 75g or Tea 250g; groups Foods, Home Care; service Freight or Handling, no doctor services. No medicines, pharmaceuticals, hospital or medical names. Code/name search, visible status, save/cancel. Tailor form fields only to each named screen. Do not add other master screens or login/dashboard. No tax-rate advice or reference tables. Include firm and date in each panel."
+  },
+  {
+    "id": "05-mapping-and-openings",
+    "screens": [
+      "Salesman To Area",
+      "Area To Party",
+      "Account Company Area Mappings",
+      "Account Opening Transactions"
+    ],
+    "file": "05-mapping-and-openings.png",
+    "mode": "built-in image_gen",
+    "prompt": "Use case: ui-mockup. Create a polished high-resolution UI/UX design review board for the existing Total Solution Indian FMCG distributor ERP. This is a proposed redesign, with fictional demo data, not a screenshot or implemented functionality. Render a separate fully designed desktop screen panel for EACH title listed below, arranged in a clean grid with generous separation and exact readable title labels outside each panel. Maximize resolution, landscape wide board. Consistent white/light slate canvas, navy text, restrained blue #24549a primary, teal positive, amber exceptions, thin borders, compact 36px controls, readable tabular numerals, practical information-dense tables. Narrow persistent left navigation grouped Sales, Inventory, Accounting, Reports, Administration; top firm selector, FY 2026-27, date 06 Nov 2026, global search. No decorative photos, gradients, device frames, huge whitespace or marketing charts. Screen contents must vary to genuinely fit the named workflow. Show real control labels, actionable exceptions, strong primary action, clear units and INR amounts, keyboard shortcut hints, sticky totals where relevant. All list screens show bounded pagination, search, status, and separate View/Edit actions. Entry screens show sectioned fields, validation near field, Draft versus Posted distinction and accounting preview before posting, without pretending current backend already supports these. Report screens show date/as-of filters, opening/movement/closing where relevant, export, reconciliation status, data freshness and table totals. Data is explicitly sample, no claim of legal compliance. Panel titles: Salesman To Area; Area To Party; Account Company Area Mappings; Account Opening Transactions. CRITICAL exactly 4 equally sized independent panels, one per listed title, NO other panels or screen titles. Correct brand Total Solution. Fictional FMCG ONLY biscuits, tea, soap, cooking oil, rice; NO medicines or pharmacies. Date 06 Nov 2026. Details: Salesman To Area: salesman selector, company, assigned/unassigned areas. Area To Party: company and area, searchable parties assignment. Account Company Area Mappings: account header, company rows and area mapping. Account Opening Transactions: dated bill-wise Dr/Cr opening rows; distinguish genuine opening from reference to existing document."
+  },
+  {
+    "id": "06-sales",
+    "screens": [
+      "Billing",
+      "Counter Sales",
+      "Quotation",
+      "Sales Service"
+    ],
+    "file": "06-sales.png",
+    "mode": "built-in image_gen",
+    "prompt": "Use case: ui-mockup. Create a polished high-resolution UI/UX design review board for the existing Total Solution Indian FMCG distributor ERP. This is a proposed redesign, with fictional demo data, not a screenshot or implemented functionality. Render a separate fully designed desktop screen panel for EACH title listed below, arranged in a clean grid with generous separation and exact readable title labels outside each panel. Maximize resolution, landscape wide board. Consistent white/light slate canvas, navy text, restrained blue #24549a primary, teal positive, amber exceptions, thin borders, compact 36px controls, readable tabular numerals, practical information-dense tables. Narrow persistent left navigation grouped Sales, Inventory, Accounting, Reports, Administration; top firm selector, FY 2026-27, date 06 Nov 2026, global search. No decorative photos, gradients, device frames, huge whitespace or marketing charts. Screen contents must vary to genuinely fit the named workflow. Show real control labels, actionable exceptions, strong primary action, clear units and INR amounts, keyboard shortcut hints, sticky totals where relevant. All list screens show bounded pagination, search, status, and separate View/Edit actions. Entry screens show sectioned fields, validation near field, Draft versus Posted distinction and accounting preview before posting, without pretending current backend already supports these. Report screens show date/as-of filters, opening/movement/closing where relevant, export, reconciliation status, data freshness and table totals. Data is explicitly sample, no claim of legal compliance. Panel titles: Billing; Counter Sales; Quotation; Sales Service. CRITICAL exactly 4 equally sized independent panels, one per listed title, NO other panels or screen titles. Correct brand Total Solution. Fictional FMCG ONLY biscuits, tea, soap, cooking oil, rice; NO medicines or pharmacies. Date 06 Nov 2026. Details: Billing: FMCG grocery invoice with paid/free quantities, case/piece pack, batch expiry, rate discounts, tax and sticky total; credit exposure. Counter Sales: quick barcode cash/card/UPI grocery checkout. Quotation: grocery quote with validity and conversion action. Sales Service: ACCOUNTING SERVICE INVOICE with service code, HSN/SAC, quantity rate GST and invoice total, not salesman visit tracking."
+  },
+  {
+    "id": "07-distribution",
+    "screens": [
+      "Create Load",
+      "Print Load",
+      "Settle Load",
+      "Load Transfer",
+      "Bill Print",
+      "E-Invoice"
+    ],
+    "file": "07-distribution.png",
+    "mode": "built-in image_gen",
+    "prompt": "Use case: ui-mockup. Create a polished high-resolution UI/UX design review board for the existing Total Solution Indian FMCG distributor ERP. This is a proposed redesign, with fictional demo data, not a screenshot or implemented functionality. Render a separate fully designed desktop screen panel for EACH title listed below, arranged in a clean grid with generous separation and exact readable title labels outside each panel. Maximize resolution, landscape wide board. Consistent white/light slate canvas, navy text, restrained blue #24549a primary, teal positive, amber exceptions, thin borders, compact 36px controls, readable tabular numerals, practical information-dense tables. Narrow persistent left navigation grouped Sales, Inventory, Accounting, Reports, Administration; top firm selector, FY 2026-27, date 06 Nov 2026, global search. No decorative photos, gradients, device frames, huge whitespace or marketing charts. Screen contents must vary to genuinely fit the named workflow. Show real control labels, actionable exceptions, strong primary action, clear units and INR amounts, keyboard shortcut hints, sticky totals where relevant. All list screens show bounded pagination, search, status, and separate View/Edit actions. Entry screens show sectioned fields, validation near field, Draft versus Posted distinction and accounting preview before posting, without pretending current backend already supports these. Report screens show date/as-of filters, opening/movement/closing where relevant, export, reconciliation status, data freshness and table totals. Data is explicitly sample, no claim of legal compliance. Panel titles: Create Load; Print Load; Settle Load; Load Transfer; Bill Print; E-Invoice. CRITICAL exactly 6 equally sized independent panels, one per listed title, NO other panels or screen titles. Correct brand Total Solution. Fictional FMCG ONLY biscuits, tea, soap, cooking oil, rice; NO medicines or pharmacies. Date 06 Nov 2026. Details: Create Load: route vehicle salesman and selected invoices. Print Load: load selector and dispatch manifest print preview. Settle Load: invoices delivered/returned, cash/cheque/UPI collections and variance. Load Transfer: source and destination loads, selected bills and totals. Bill Print: invoice selector and print settings with invoice preview. E-Invoice: invoice status list with validation errors, IRN, acknowledge date and JSON export."
+  },
+  {
+    "id": "08-stock-and-returns",
+    "screens": [
+      "Stock In",
+      "Stock Out",
+      "Self Damage (Godown Damage)",
+      "Damage Stock Out",
+      "Credit Note",
+      "Debit Note"
+    ],
+    "file": "08-stock-and-returns.png",
+    "mode": "built-in image_gen",
+    "prompt": "Use case: ui-mockup. Create a polished high-resolution UI/UX design review board for the existing Total Solution Indian FMCG distributor ERP. This is a proposed redesign, with fictional demo data, not a screenshot or implemented functionality. Render a separate fully designed desktop screen panel for EACH title listed below, arranged in a clean grid with generous separation and exact readable title labels outside each panel. Maximize resolution, landscape wide board. Consistent white/light slate canvas, navy text, restrained blue #24549a primary, teal positive, amber exceptions, thin borders, compact 36px controls, readable tabular numerals, practical information-dense tables. Narrow persistent left navigation grouped Sales, Inventory, Accounting, Reports, Administration; top firm selector, FY 2026-27, date 06 Nov 2026, global search. No decorative photos, gradients, device frames, huge whitespace or marketing charts. Screen contents must vary to genuinely fit the named workflow. Show real control labels, actionable exceptions, strong primary action, clear units and INR amounts, keyboard shortcut hints, sticky totals where relevant. All list screens show bounded pagination, search, status, and separate View/Edit actions. Entry screens show sectioned fields, validation near field, Draft versus Posted distinction and accounting preview before posting, without pretending current backend already supports these. Report screens show date/as-of filters, opening/movement/closing where relevant, export, reconciliation status, data freshness and table totals. Data is explicitly sample, no claim of legal compliance. Panel titles: Stock In; Stock Out; Self Damage (Godown Damage); Damage Stock Out; Credit Note; Debit Note. CRITICAL exactly 6 equally sized independent panels, one per listed title, NO other panels or screen titles. Correct brand Total Solution. Fictional FMCG ONLY biscuits, tea, soap, cooking oil, rice; NO medicines or pharmacies. Date 06 Nov 2026. Details: Stock In: godown batch expiry product quantity cost and reason. Stock Out: available batch quantity and reason. Self Damage (Godown Damage): move saleable to damaged quantity, reason evidence. Damage Stock Out: dispose damaged quantity, authorization and reason. Credit Note: customer sales return original invoice reference item returns and output tax adjustment, saleable/damaged disposition. Debit Note: supplier purchase return original supplier invoice and input-tax adjustment."
+  },
+  {
+    "id": "09-purchase-and-cash",
+    "screens": [
+      "Purchase",
+      "Receipt",
+      "Payment",
+      "Collection Voucher"
+    ],
+    "file": "09-purchase-and-cash.png",
+    "mode": "built-in image_gen",
+    "prompt": "Use case: ui-mockup. Produce a UI design review contact sheet for Total Solution, an Indian FMCG accounting ERP. CRITICAL: render EXACTLY the listed independent desktop screen panels, equal size in a clean grid, each with its EXACT screen title clearly printed above its own fully designed screen. DO NOT add any other screens or combine titles as tabs. White/slate surfaces, navy labelled left sidebar, blue #24549a actions, fine borders, high information density, legible table text and tabular numbers, consistent 36px desktop controls. Each panel includes Total Solution branding, sample firm, FY 2026-27 and date 06 Nov 2026. Fictional FMCG grocery examples only: biscuits, tea, soap, oil, rice. No medicines or pharmacy, no invented brand. Each panel is specific to its workflow, with real labels, primary action, filters or sectioned form, appropriate table and footer totals. These are conceptual future layouts, label board 'PROPOSED DESIGN • SAMPLE DATA'. No implementation or compliance claim. Maximize resolution. EXACT 4 PANEL TITLES: Purchase | Receipt | Payment | Collection Voucher. Purchase: supplier invoice, grocery item grid, pack/paid/free quantities and GST breakup. Receipt: customer, bank/cash ledger, bill allocation and unapplied advance. Payment: supplier and bank, bill allocation and advance. Collection Voucher: collector/route, customer bill allocations and collection method."
+  },
+  {
+    "id": "10-banking-and-journals",
+    "screens": [
+      "Cheque Bounce",
+      "PDC Docket",
+      "Journal Voucher",
+      "Contra"
+    ],
+    "file": "10-banking-and-journals.png",
+    "mode": "built-in image_gen",
+    "prompt": "Use case: ui-mockup. Produce a UI design review contact sheet for Total Solution, an Indian FMCG accounting ERP. CRITICAL: render EXACTLY the listed independent desktop screen panels, equal size in a clean grid, each with its EXACT screen title clearly printed above its own fully designed screen. DO NOT add any other screens or combine titles as tabs. White/slate surfaces, navy labelled left sidebar, blue #24549a actions, fine borders, high information density, legible table text and tabular numbers, consistent 36px desktop controls. Each panel includes Total Solution branding, sample firm, FY 2026-27 and date 06 Nov 2026. Fictional FMCG grocery examples only: biscuits, tea, soap, oil, rice. No medicines or pharmacy, no invented brand. Each panel is specific to its workflow, with real labels, primary action, filters or sectioned form, appropriate table and footer totals. These are conceptual future layouts, label board 'PROPOSED DESIGN • SAMPLE DATA'. No implementation or compliance claim. Maximize resolution. EXACT 4 PANEL TITLES: Cheque Bounce | PDC Docket | Journal Voucher | Contra. Cheque Bounce: original receipt reference, bank rejection reason, charges ledger and accounting preview. PDC Docket: cheque list with pending/deposited/cleared distinction, house bank and clearing date. Journal Voucher: account selection and debit/credit lines with difference zero validation. Contra: cash/bank source and destination, amount and balanced transfer preview."
+  },
+  {
+    "id": "11-administration",
+    "screens": [
+      "General Setup",
+      "Company Wise Series Setup",
+      "Batch Lock and Change Sales Rate",
+      "Security Setup",
+      "Import Data",
+      "Import Data From Desktop"
+    ],
+    "file": "11-administration.png",
+    "mode": "built-in image_gen",
+    "prompt": "Use case: ui-mockup. Produce a UI design review contact sheet for Total Solution, an Indian FMCG accounting ERP. CRITICAL: render EXACTLY the listed independent desktop screen panels, equal size in a clean grid, each with its EXACT screen title clearly printed above its own fully designed screen. DO NOT add any other screens or combine titles as tabs. White/slate surfaces, navy labelled left sidebar, blue #24549a actions, fine borders, high information density, legible table text and tabular numbers, consistent 36px desktop controls. Each panel includes Total Solution branding, sample firm, FY 2026-27 and date 06 Nov 2026. Fictional FMCG grocery examples only: biscuits, tea, soap, oil, rice. No medicines or pharmacy, no invented brand. Each panel is specific to its workflow, with real labels, primary action, filters or sectioned form, appropriate table and footer totals. These are conceptual future layouts, label board 'PROPOSED DESIGN • SAMPLE DATA'. No implementation or compliance claim. Maximize resolution. EXACT 6 PANEL TITLES: General Setup | Company Wise Series Setup | Batch Lock and Change Sales Rate | Security Setup | Import Data | Import Data From Desktop. General Setup: grouped searchable settings with labelled defaults. Company Wise Series Setup: company rows, document-type series, effective FY and duplicate validation. Batch Lock and Change Sales Rate: batch product godown and old/new rate with lock status. Security Setup: user/role module-operation permission matrix and save audit. Import Data: upload map columns validate preview rejected rows and commit. Import Data From Desktop: source workbook/entity mapping, dry-run results, retry idempotency and error download."
+  },
+  {
+    "id": "12-sales-and-purchase-reports",
+    "screens": [
+      "Party Wise Sales Report",
+      "All Party Wise Sales Report",
+      "Product Wise Sales Report",
+      "All Product Wise Sales Report",
+      "Company/Bill Wise Purchase Report",
+      "Product Wise Purchase Report"
+    ],
+    "file": "12-sales-and-purchase-reports.png",
+    "mode": "built-in image_gen",
+    "prompt": "Use case: ui-mockup. Produce a UI design review contact sheet for Total Solution, an Indian FMCG accounting ERP. CRITICAL: render EXACTLY the listed independent desktop screen panels, equal size in a clean grid, each with its EXACT screen title clearly printed above its own fully designed screen. DO NOT add any other screens or combine titles as tabs. White/slate surfaces, navy labelled left sidebar, blue #24549a actions, fine borders, high information density, legible table text and tabular numbers, consistent 36px desktop controls. Each panel includes Total Solution branding, sample firm, FY 2026-27 and date 06 Nov 2026. Fictional FMCG grocery examples only: biscuits, tea, soap, oil, rice. No medicines or pharmacy, no invented brand. Each panel is specific to its workflow, with real labels, primary action, filters or sectioned form, appropriate table and footer totals. These are conceptual future layouts, label board 'PROPOSED DESIGN • SAMPLE DATA'. No implementation or compliance claim. Maximize resolution. EXACT 6 PANEL TITLES: Party Wise Sales Report | All Party Wise Sales Report | Product Wise Sales Report | All Product Wise Sales Report | Company/Bill Wise Purchase Report | Product Wise Purchase Report. Each distinct report gets its own independent screen, relevant party/product/company/date filters and report table, subtotals and source-document drilldown. Party reports group by party, product reports group by grocery SKU, company/bill report groups supplier company and voucher, product purchase report shows purchased quantities/cost/tax. Show data timestamp and export action. No charts necessary."
+  },
+  {
+    "id": "13-inventory-reports",
+    "screens": [
+      "Stock And Sales Report",
+      "Current Stock Report",
+      "As On Date Stock Report",
+      "Damage Stock Report",
+      "Product Ledger",
+      "Stock Movement Ledger"
+    ],
+    "file": "13-inventory-reports.png",
+    "mode": "built-in image_gen",
+    "prompt": "Use case: ui-mockup. Produce a UI design review contact sheet for Total Solution, an Indian FMCG accounting ERP. CRITICAL: render EXACTLY the listed independent desktop screen panels, equal size in a clean grid, each with its EXACT screen title clearly printed above its own fully designed screen. DO NOT add any other screens or combine titles as tabs. White/slate surfaces, navy labelled left sidebar, blue #24549a actions, fine borders, high information density, legible table text and tabular numbers, consistent 36px desktop controls. Each panel includes Total Solution branding, sample firm, FY 2026-27 and date 06 Nov 2026. Fictional FMCG grocery examples only: biscuits, tea, soap, oil, rice. No medicines or pharmacy, no invented brand. Each panel is specific to its workflow, with real labels, primary action, filters or sectioned form, appropriate table and footer totals. These are conceptual future layouts, label board 'PROPOSED DESIGN • SAMPLE DATA'. No implementation or compliance claim. Maximize resolution.  EXACTLY 6 DISTINCT SCREEN PANELS. Titles verbatim: Stock And Sales Report | Current Stock Report | As On Date Stock Report | Damage Stock Report | Product Ledger | Stock Movement Ledger. Every panel must include the branded ERP shell, working date 06 Nov 2026 and FY2026-27, compact filters and appropriate report data. No pharmaceuticals, medical suppliers, 2024 or 2025 dates. All examples groceries. Report periods April-November 2026. Use clear account group names and visible opening/movement/closing where applicable. Show 'Illustrative values — verify calculations'. No legal thresholds or statutory tax advice in labels. As-of reports separate from period reports. Include export and source drilldown. Render full screen layouts, not table-only tiles."
+  },
+  {
+    "id": "14-tax-reports",
+    "screens": [
+      "Sales GST Register",
+      "Purchase GST Register",
+      "CRN GST Register",
+      "GST Summary",
+      "GSTR1 Report"
+    ],
+    "file": "14-tax-reports.png",
+    "mode": "built-in image_gen",
+    "prompt": "Use case: ui-mockup. Produce a UI design review contact sheet for Total Solution, an Indian FMCG accounting ERP. CRITICAL: render EXACTLY the listed independent desktop screen panels, equal size in a clean grid, each with its EXACT screen title clearly printed above its own fully designed screen. DO NOT add any other screens or combine titles as tabs. White/slate surfaces, navy labelled left sidebar, blue #24549a actions, fine borders, high information density, legible table text and tabular numbers, consistent 36px desktop controls. Each panel includes Total Solution branding, sample firm, FY 2026-27 and date 06 Nov 2026. Fictional FMCG grocery examples only: biscuits, tea, soap, oil, rice. No medicines or pharmacy, no invented brand. Each panel is specific to its workflow, with real labels, primary action, filters or sectioned form, appropriate table and footer totals. These are conceptual future layouts, label board 'PROPOSED DESIGN • SAMPLE DATA'. No implementation or compliance claim. Maximize resolution.  EXACTLY 5 DISTINCT SCREEN PANELS. Titles verbatim: Sales GST Register | Purchase GST Register | CRN GST Register | GST Summary | GSTR1 Report. Every panel must include the branded ERP shell, working date 06 Nov 2026 and FY2026-27, compact filters and appropriate report data. No pharmaceuticals, medical suppliers, 2024 or 2025 dates. All examples groceries. Report periods April-November 2026. Use clear account group names and visible opening/movement/closing where applicable. Show 'Illustrative values — verify calculations'. No legal thresholds or statutory tax advice in labels. As-of reports separate from period reports. Include export and source drilldown. Render full screen layouts, not table-only tiles."
+  },
+  {
+    "id": "15-financial-reports",
+    "screens": [
+      "General Ledger",
+      "Party Ledger",
+      "Trial Balance",
+      "Cash Book",
+      "Bank Book",
+      "Day Book",
+      "Profit & Loss",
+      "Balance Sheet"
+    ],
+    "file": "15-financial-reports.png",
+    "mode": "built-in image_gen",
+    "prompt": "Use case: ui-mockup. Produce a UI design review contact sheet for Total Solution, an Indian FMCG accounting ERP. CRITICAL: render EXACTLY the listed independent desktop screen panels, equal size in a clean grid, each with its EXACT screen title clearly printed above its own fully designed screen. DO NOT add any other screens or combine titles as tabs. White/slate surfaces, navy labelled left sidebar, blue #24549a actions, fine borders, high information density, legible table text and tabular numbers, consistent 36px desktop controls. Each panel includes Total Solution branding, sample firm, FY 2026-27 and date 06 Nov 2026. Fictional FMCG grocery examples only: biscuits, tea, soap, oil, rice. No medicines or pharmacy, no invented brand. Each panel is specific to its workflow, with real labels, primary action, filters or sectioned form, appropriate table and footer totals. These are conceptual future layouts, label board 'PROPOSED DESIGN • SAMPLE DATA'. No implementation or compliance claim. Maximize resolution.  EXACTLY 8 DISTINCT SCREEN PANELS. Titles verbatim: General Ledger | Party Ledger | Trial Balance | Cash Book | Bank Book | Day Book | Profit & Loss | Balance Sheet. Every panel must include the branded ERP shell, working date 06 Nov 2026 and FY2026-27, compact filters and appropriate report data. No pharmaceuticals, medical suppliers, 2024 or 2025 dates. All examples groceries. Report periods April-November 2026. Use clear account group names and visible opening/movement/closing where applicable. Show 'Illustrative values — verify calculations'. No legal thresholds or statutory tax advice in labels. As-of reports separate from period reports. Include export and source drilldown. Render full screen layouts, not table-only tiles."
+  },
+  {
+    "id": "16-control-and-report-discovery",
+    "screens": [
+      "Reports Catalogue",
+      "Find Cheque Details",
+      "Credit Control Report",
+      "Party Outstanding Report",
+      "Permission Audit Report",
+      "Audit Trail Report",
+      "Dashboard Reconciliation"
+    ],
+    "file": "16-control-and-report-discovery.png",
+    "mode": "built-in image_gen",
+    "prompt": "Use case: ui-mockup. Produce a UI design review contact sheet for Total Solution, an Indian FMCG accounting ERP. CRITICAL: render EXACTLY the listed independent desktop screen panels, equal size in a clean grid, each with its EXACT screen title clearly printed above its own fully designed screen. DO NOT add any other screens or combine titles as tabs. White/slate surfaces, navy labelled left sidebar, blue #24549a actions, fine borders, high information density, legible table text and tabular numbers, consistent 36px desktop controls. Each panel includes Total Solution branding, sample firm, FY 2026-27 and date 06 Nov 2026. Fictional FMCG grocery examples only: biscuits, tea, soap, oil, rice. No medicines or pharmacy, no invented brand. Each panel is specific to its workflow, with real labels, primary action, filters or sectioned form, appropriate table and footer totals. These are conceptual future layouts, label board 'PROPOSED DESIGN • SAMPLE DATA'. No implementation or compliance claim. Maximize resolution.  EXACTLY 7 DISTINCT SCREEN PANELS. Titles verbatim: Reports Catalogue | Find Cheque Details | Credit Control Report | Party Outstanding Report | Permission Audit Report | Audit Trail Report | Dashboard Reconciliation. Every panel must include the branded ERP shell, working date 06 Nov 2026 and FY2026-27, compact filters and appropriate report data. No pharmaceuticals, medical suppliers, 2024 or 2025 dates. All examples groceries. Report periods April-November 2026. Use clear account group names and visible opening/movement/closing where applicable. Show 'Illustrative values — verify calculations'. No legal thresholds or statutory tax advice in labels. As-of reports separate from period reports. Include export and source drilldown. Render full screen layouts, not table-only tiles."
+  },
+  {
+    "id": "17-company-wise-purchase-report",
+    "screens": [
+      "Company Wise Purchase Report"
+    ],
+    "file": "17-company-wise-purchase-report.png",
+    "mode": "built-in image_gen",
+    "prompt": "Use case: ui-mockup. Produce a UI design review contact sheet for Total Solution, an Indian FMCG accounting ERP. CRITICAL: render EXACTLY the listed independent desktop screen panels, equal size in a clean grid, each with its EXACT screen title clearly printed above its own fully designed screen. DO NOT add any other screens or combine titles as tabs. White/slate surfaces, navy labelled left sidebar, blue #24549a actions, fine borders, high information density, legible table text and tabular numbers, consistent 36px desktop controls. Each panel includes Total Solution branding, sample firm, FY 2026-27 and date 06 Nov 2026. Fictional FMCG grocery examples only: biscuits, tea, soap, oil, rice. No medicines or pharmacy, no invented brand. Each panel is specific to its workflow, with real labels, primary action, filters or sectioned form, appropriate table and footer totals. These are conceptual future layouts, label board 'PROPOSED DESIGN • SAMPLE DATA'. No implementation or compliance claim. Maximize resolution.  EXACTLY 1 DISTINCT SCREEN PANELS. Titles verbatim: Company Wise Purchase Report. Every panel must include the branded ERP shell, working date 06 Nov 2026 and FY2026-27, compact filters and appropriate report data. No pharmaceuticals, medical suppliers, 2024 or 2025 dates. All examples groceries. Report periods April-November 2026. Use clear account group names and visible opening/movement/closing where applicable. Show 'Illustrative values — verify calculations'. No legal thresholds or statutory tax advice in labels. As-of reports separate from period reports. Include export and source drilldown. Render full screen layouts, not table-only tiles."
+  }
+]

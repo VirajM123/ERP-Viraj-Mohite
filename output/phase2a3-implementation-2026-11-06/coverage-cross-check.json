@@ -1,0 +1,1100 @@
+{
+  "routeRegistrations": 270,
+  "priorCandidates": 134,
+  "additionalRoutes": [
+    {
+      "file": "backend/batchLock.js",
+      "line": 51,
+      "method": "GET",
+      "path": "/stock",
+      "classification": "Not a financial writer",
+      "reason": "Read route; no direct DB mutation and no invocation of financial mutation helpers found during source cross-check"
+    },
+    {
+      "file": "backend/batchLock.js",
+      "line": 143,
+      "method": "GET",
+      "path": "/history",
+      "classification": "Not a financial writer",
+      "reason": "Read route; no direct DB mutation and no invocation of financial mutation helpers found during source cross-check"
+    },
+    {
+      "file": "backend/companyWiseSeries.js",
+      "line": 73,
+      "method": "GET",
+      "path": "/",
+      "classification": "Not a financial writer",
+      "reason": "Read route; no direct DB mutation and no invocation of financial mutation helpers found during source cross-check"
+    },
+    {
+      "file": "backend/desktopImportRoutes.js",
+      "line": 618,
+      "method": "GET",
+      "path": "/desktop-import/jobs/:jobId",
+      "classification": "Not a financial writer",
+      "reason": "Read route; no direct DB mutation and no invocation of financial mutation helpers found during source cross-check"
+    },
+    {
+      "file": "backend/desktopImportRoutes.js",
+      "line": 624,
+      "method": "GET",
+      "path": "/desktop-import/jobs/:jobId/files/:fileId",
+      "classification": "Not a financial writer",
+      "reason": "Read route; no direct DB mutation and no invocation of financial mutation helpers found during source cross-check"
+    },
+    {
+      "file": "backend/desktopImportRoutes.js",
+      "line": 710,
+      "method": "GET",
+      "path": "/desktop-import/jobs/:jobId/import/report",
+      "classification": "Not a financial writer",
+      "reason": "Read route; no direct DB mutation and no invocation of financial mutation helpers found during source cross-check"
+    },
+    {
+      "file": "backend/financialPeriods.js",
+      "line": 152,
+      "method": "GET",
+      "path": "/assessment",
+      "classification": "Not a financial writer",
+      "reason": "Read route; no direct DB mutation and no invocation of financial mutation helpers found during source cross-check"
+    },
+    {
+      "file": "backend/gstReports.js",
+      "line": 486,
+      "method": "GET",
+      "path": "/gst/:report",
+      "classification": "Not a financial writer",
+      "reason": "Read route; no direct DB mutation and no invocation of financial mutation helpers found during source cross-check"
+    },
+    {
+      "file": "backend/importRoutes.js",
+      "line": 120,
+      "method": "GET",
+      "path": "/import/types",
+      "classification": "Not a financial writer",
+      "reason": "Read route; no direct DB mutation and no invocation of financial mutation helpers found during source cross-check"
+    },
+    {
+      "file": "backend/openingBalances.js",
+      "line": 204,
+      "method": "GET",
+      "path": "/lookup",
+      "classification": "Not a financial writer",
+      "reason": "Read route; no direct DB mutation and no invocation of financial mutation helpers found during source cross-check"
+    },
+    {
+      "file": "backend/openingBalances.js",
+      "line": 210,
+      "method": "GET",
+      "path": "/account/:id",
+      "classification": "Not a financial writer",
+      "reason": "Read route; no direct DB mutation and no invocation of financial mutation helpers found during source cross-check"
+    },
+    {
+      "file": "backend/p0Features.js",
+      "line": 207,
+      "method": "GET",
+      "path": "/reports/party-outstanding",
+      "classification": "Not a financial writer",
+      "reason": "Read route; no direct DB mutation and no invocation of financial mutation helpers found during source cross-check"
+    },
+    {
+      "file": "backend/p0Features.js",
+      "line": 226,
+      "method": "GET",
+      "path": "/journal-voucher/next-no",
+      "classification": "Not a financial writer",
+      "reason": "Read route; no direct DB mutation and no invocation of financial mutation helpers found during source cross-check"
+    },
+    {
+      "file": "backend/p0Features.js",
+      "line": 230,
+      "method": "GET",
+      "path": "/journal-voucher",
+      "classification": "Not a financial writer",
+      "reason": "Read route; no direct DB mutation and no invocation of financial mutation helpers found during source cross-check"
+    },
+    {
+      "file": "backend/p0Features.js",
+      "line": 292,
+      "method": "GET",
+      "path": "/reports/financial/:report",
+      "classification": "Not a financial writer",
+      "reason": "Read route; no direct DB mutation and no invocation of financial mutation helpers found during source cross-check"
+    },
+    {
+      "file": "backend/p0Features.js",
+      "line": 308,
+      "method": "GET",
+      "path": "/reports/stock-movement",
+      "classification": "Not a financial writer",
+      "reason": "Read route; no direct DB mutation and no invocation of financial mutation helpers found during source cross-check"
+    },
+    {
+      "file": "backend/p0Features.js",
+      "line": 373,
+      "method": "GET",
+      "path": "/reports/audit-trail",
+      "classification": "Not a financial writer",
+      "reason": "Read route; no direct DB mutation and no invocation of financial mutation helpers found during source cross-check"
+    },
+    {
+      "file": "backend/p0Features.js",
+      "line": 377,
+      "method": "GET",
+      "path": "/reports/permission-audit",
+      "classification": "Not a financial writer",
+      "reason": "Read route; no direct DB mutation and no invocation of financial mutation helpers found during source cross-check"
+    },
+    {
+      "file": "backend/p0Features.js",
+      "line": 383,
+      "method": "GET",
+      "path": "/reports/credit-control",
+      "classification": "Not a financial writer",
+      "reason": "Read route; no direct DB mutation and no invocation of financial mutation helpers found during source cross-check"
+    },
+    {
+      "file": "backend/p0Features.js",
+      "line": 394,
+      "method": "GET",
+      "path": "/dashboard/summary",
+      "classification": "Not a financial writer",
+      "reason": "Read route; no direct DB mutation and no invocation of financial mutation helpers found during source cross-check"
+    },
+    {
+      "file": "backend/printAccountDetails.js",
+      "line": 54,
+      "method": "GET",
+      "path": "/",
+      "classification": "Not a financial writer",
+      "reason": "Read route; no direct DB mutation and no invocation of financial mutation helpers found during source cross-check"
+    },
+    {
+      "file": "backend/productMapping.js",
+      "line": 53,
+      "method": "GET",
+      "path": "/",
+      "classification": "Not a financial writer",
+      "reason": "Read route; no direct DB mutation and no invocation of financial mutation helpers found during source cross-check"
+    },
+    {
+      "file": "backend/productMapping.js",
+      "line": 61,
+      "method": "GET",
+      "path": "/:productCode",
+      "classification": "Not a financial writer",
+      "reason": "Read route; no direct DB mutation and no invocation of financial mutation helpers found during source cross-check"
+    },
+    {
+      "file": "backend/productSalesReport.js",
+      "line": 197,
+      "method": "GET",
+      "path": "/api/reports/product-sales/criteria",
+      "classification": "Not a financial writer",
+      "reason": "Read route; no direct DB mutation and no invocation of financial mutation helpers found during source cross-check"
+    },
+    {
+      "file": "backend/productSalesReport.js",
+      "line": 272,
+      "method": "GET",
+      "path": "/api/reports/product-sales",
+      "classification": "Not a financial writer",
+      "reason": "Read route; no direct DB mutation and no invocation of financial mutation helpers found during source cross-check"
+    },
+    {
+      "file": "backend/securitySetup.js",
+      "line": 810,
+      "method": "GET",
+      "path": "/my-permissions",
+      "classification": "Not a financial writer",
+      "reason": "Read route; no direct DB mutation and no invocation of financial mutation helpers found during source cross-check"
+    },
+    {
+      "file": "backend/server.js",
+      "line": 51,
+      "method": "GET",
+      "path": "/health/live",
+      "classification": "Not a financial writer",
+      "reason": "Read route; no direct DB mutation and no invocation of financial mutation helpers found during source cross-check"
+    },
+    {
+      "file": "backend/server.js",
+      "line": 52,
+      "method": "GET",
+      "path": "/health/ready",
+      "classification": "Not a financial writer",
+      "reason": "Read route; no direct DB mutation and no invocation of financial mutation helpers found during source cross-check"
+    },
+    {
+      "file": "backend/server.js",
+      "line": 783,
+      "method": "GET",
+      "path": "/api/profile",
+      "classification": "Not a financial writer",
+      "reason": "Read route; no direct DB mutation and no invocation of financial mutation helpers found during source cross-check"
+    },
+    {
+      "file": "backend/server.js",
+      "line": 814,
+      "method": "GET",
+      "path": "/api/users",
+      "classification": "Not a financial writer",
+      "reason": "Read route; no direct DB mutation and no invocation of financial mutation helpers found during source cross-check"
+    },
+    {
+      "file": "backend/server.js",
+      "line": 2531,
+      "method": "GET",
+      "path": "/api/reports/party-sales",
+      "classification": "Not a financial writer",
+      "reason": "Read route; no direct DB mutation and no invocation of financial mutation helpers found during source cross-check"
+    },
+    {
+      "file": "backend/server.js",
+      "line": 4845,
+      "method": "GET",
+      "path": "/api/companies",
+      "classification": "Not a financial writer",
+      "reason": "Read route; no direct DB mutation and no invocation of financial mutation helpers found during source cross-check"
+    },
+    {
+      "file": "backend/server.js",
+      "line": 4910,
+      "method": "GET",
+      "path": "/api/companies/list",
+      "classification": "Not a financial writer",
+      "reason": "Read route; no direct DB mutation and no invocation of financial mutation helpers found during source cross-check"
+    },
+    {
+      "file": "backend/server.js",
+      "line": 5267,
+      "method": "GET",
+      "path": "/api/groups",
+      "classification": "Not a financial writer",
+      "reason": "Read route; no direct DB mutation and no invocation of financial mutation helpers found during source cross-check"
+    },
+    {
+      "file": "backend/server.js",
+      "line": 5302,
+      "method": "GET",
+      "path": "/api/groups/list",
+      "classification": "Not a financial writer",
+      "reason": "Read route; no direct DB mutation and no invocation of financial mutation helpers found during source cross-check"
+    },
+    {
+      "file": "backend/server.js",
+      "line": 5501,
+      "method": "GET",
+      "path": "/api/categories",
+      "classification": "Not a financial writer",
+      "reason": "Read route; no direct DB mutation and no invocation of financial mutation helpers found during source cross-check"
+    },
+    {
+      "file": "backend/server.js",
+      "line": 5535,
+      "method": "GET",
+      "path": "/api/categories/list",
+      "classification": "Not a financial writer",
+      "reason": "Read route; no direct DB mutation and no invocation of financial mutation helpers found during source cross-check"
+    },
+    {
+      "file": "backend/server.js",
+      "line": 5735,
+      "method": "GET",
+      "path": "/api/products",
+      "classification": "Not a financial writer",
+      "reason": "Read route; no direct DB mutation and no invocation of financial mutation helpers found during source cross-check"
+    },
+    {
+      "file": "backend/server.js",
+      "line": 5779,
+      "method": "GET",
+      "path": "/api/products/lookup",
+      "classification": "Not a financial writer",
+      "reason": "Read route; no direct DB mutation and no invocation of financial mutation helpers found during source cross-check"
+    },
+    {
+      "file": "backend/server.js",
+      "line": 5807,
+      "method": "GET",
+      "path": "/api/products/list",
+      "classification": "Not a financial writer",
+      "reason": "Read route; no direct DB mutation and no invocation of financial mutation helpers found during source cross-check"
+    },
+    {
+      "file": "backend/server.js",
+      "line": 6188,
+      "method": "GET",
+      "path": "/api/accounts",
+      "classification": "Not a financial writer",
+      "reason": "Read route; no direct DB mutation and no invocation of financial mutation helpers found during source cross-check"
+    },
+    {
+      "file": "backend/server.js",
+      "line": 6250,
+      "method": "GET",
+      "path": "/api/accounts/lookup",
+      "classification": "Not a financial writer",
+      "reason": "Read route; no direct DB mutation and no invocation of financial mutation helpers found during source cross-check"
+    },
+    {
+      "file": "backend/server.js",
+      "line": 6275,
+      "method": "GET",
+      "path": "/api/accounts/list",
+      "classification": "Not a financial writer",
+      "reason": "Read route; no direct DB mutation and no invocation of financial mutation helpers found during source cross-check"
+    },
+    {
+      "file": "backend/server.js",
+      "line": 6687,
+      "method": "GET",
+      "path": "/api/other-accounts",
+      "classification": "Not a financial writer",
+      "reason": "Read route; no direct DB mutation and no invocation of financial mutation helpers found during source cross-check"
+    },
+    {
+      "file": "backend/server.js",
+      "line": 6737,
+      "method": "GET",
+      "path": "/api/other-accounts/list",
+      "classification": "Not a financial writer",
+      "reason": "Read route; no direct DB mutation and no invocation of financial mutation helpers found during source cross-check"
+    },
+    {
+      "file": "backend/server.js",
+      "line": 7031,
+      "method": "GET",
+      "path": "/api/firms",
+      "classification": "Not a financial writer",
+      "reason": "Read route; no direct DB mutation and no invocation of financial mutation helpers found during source cross-check"
+    },
+    {
+      "file": "backend/server.js",
+      "line": 7286,
+      "method": "GET",
+      "path": "/api/gst",
+      "classification": "Not a financial writer",
+      "reason": "Read route; no direct DB mutation and no invocation of financial mutation helpers found during source cross-check"
+    },
+    {
+      "file": "backend/server.js",
+      "line": 7336,
+      "method": "GET",
+      "path": "/api/gst/list",
+      "classification": "Not a financial writer",
+      "reason": "Read route; no direct DB mutation and no invocation of financial mutation helpers found during source cross-check"
+    },
+    {
+      "file": "backend/server.js",
+      "line": 7632,
+      "method": "GET",
+      "path": "/api/sales/bill",
+      "classification": "Not a financial writer",
+      "reason": "Read route; no direct DB mutation and no invocation of financial mutation helpers found during source cross-check"
+    },
+    {
+      "file": "backend/server.js",
+      "line": 7856,
+      "method": "GET",
+      "path": "/api/salesmen",
+      "classification": "Not a financial writer",
+      "reason": "Read route; no direct DB mutation and no invocation of financial mutation helpers found during source cross-check"
+    },
+    {
+      "file": "backend/server.js",
+      "line": 7906,
+      "method": "GET",
+      "path": "/api/salesmen/list",
+      "classification": "Not a financial writer",
+      "reason": "Read route; no direct DB mutation and no invocation of financial mutation helpers found during source cross-check"
+    },
+    {
+      "file": "backend/server.js",
+      "line": 8326,
+      "method": "GET",
+      "path": "/api/sales/change-bill-type",
+      "classification": "Not a financial writer",
+      "reason": "Read route; no direct DB mutation and no invocation of financial mutation helpers found during source cross-check"
+    },
+    {
+      "file": "backend/server.js",
+      "line": 9042,
+      "method": "GET",
+      "path": "/api/areas",
+      "classification": "Not a financial writer",
+      "reason": "Read route; no direct DB mutation and no invocation of financial mutation helpers found during source cross-check"
+    },
+    {
+      "file": "backend/server.js",
+      "line": 9087,
+      "method": "GET",
+      "path": "/api/areas/list",
+      "classification": "Not a financial writer",
+      "reason": "Read route; no direct DB mutation and no invocation of financial mutation helpers found during source cross-check"
+    },
+    {
+      "file": "backend/server.js",
+      "line": 9362,
+      "method": "GET",
+      "path": "/api/godowns",
+      "classification": "Not a financial writer",
+      "reason": "Read route; no direct DB mutation and no invocation of financial mutation helpers found during source cross-check"
+    },
+    {
+      "file": "backend/server.js",
+      "line": 9413,
+      "method": "GET",
+      "path": "/api/godowns/list",
+      "classification": "Not a financial writer",
+      "reason": "Read route; no direct DB mutation and no invocation of financial mutation helpers found during source cross-check"
+    },
+    {
+      "file": "backend/server.js",
+      "line": 9678,
+      "method": "GET",
+      "path": "/api/customer-banks",
+      "classification": "Not a financial writer",
+      "reason": "Read route; no direct DB mutation and no invocation of financial mutation helpers found during source cross-check"
+    },
+    {
+      "file": "backend/server.js",
+      "line": 9720,
+      "method": "GET",
+      "path": "/api/customer-banks/list",
+      "classification": "Not a financial writer",
+      "reason": "Read route; no direct DB mutation and no invocation of financial mutation helpers found during source cross-check"
+    },
+    {
+      "file": "backend/server.js",
+      "line": 10031,
+      "method": "GET",
+      "path": "/api/salesman-area-mappings",
+      "classification": "Not a financial writer",
+      "reason": "Read route; no direct DB mutation and no invocation of financial mutation helpers found during source cross-check"
+    },
+    {
+      "file": "backend/server.js",
+      "line": 10168,
+      "method": "GET",
+      "path": "/api/area-to-party-mappings",
+      "classification": "Not a financial writer",
+      "reason": "Read route; no direct DB mutation and no invocation of financial mutation helpers found during source cross-check"
+    },
+    {
+      "file": "backend/server.js",
+      "line": 10399,
+      "method": "GET",
+      "path": "/api/account-company-area-mappings",
+      "classification": "Not a financial writer",
+      "reason": "Read route; no direct DB mutation and no invocation of financial mutation helpers found during source cross-check"
+    },
+    {
+      "file": "backend/server.js",
+      "line": 10420,
+      "method": "GET",
+      "path": "/api/purchase/next-vou-no",
+      "classification": "Not a financial writer",
+      "reason": "Read route; no direct DB mutation and no invocation of financial mutation helpers found during source cross-check"
+    },
+    {
+      "file": "backend/server.js",
+      "line": 11289,
+      "method": "GET",
+      "path": "/api/purchase",
+      "classification": "Not a financial writer",
+      "reason": "Read route; no direct DB mutation and no invocation of financial mutation helpers found during source cross-check"
+    },
+    {
+      "file": "backend/server.js",
+      "line": 11337,
+      "method": "GET",
+      "path": "/api/purchase/list",
+      "classification": "Not a financial writer",
+      "reason": "Read route; no direct DB mutation and no invocation of financial mutation helpers found during source cross-check"
+    },
+    {
+      "file": "backend/server.js",
+      "line": 11801,
+      "method": "GET",
+      "path": "/api/purchase/find-bill",
+      "classification": "Not a financial writer",
+      "reason": "Read route; no direct DB mutation and no invocation of financial mutation helpers found during source cross-check"
+    },
+    {
+      "file": "backend/server.js",
+      "line": 13032,
+      "method": "GET",
+      "path": "/api/sales/einvoice-candidates",
+      "classification": "Not a financial writer",
+      "reason": "Read route; no direct DB mutation and no invocation of financial mutation helpers found during source cross-check"
+    },
+    {
+      "file": "backend/server.js",
+      "line": 13143,
+      "method": "GET",
+      "path": "/api/sales",
+      "classification": "Not a financial writer",
+      "reason": "Read route; no direct DB mutation and no invocation of financial mutation helpers found during source cross-check"
+    },
+    {
+      "file": "backend/server.js",
+      "line": 13198,
+      "method": "GET",
+      "path": "/api/sales/list",
+      "classification": "Not a financial writer",
+      "reason": "Read route; no direct DB mutation and no invocation of financial mutation helpers found during source cross-check"
+    },
+    {
+      "file": "backend/server.js",
+      "line": 14504,
+      "method": "GET",
+      "path": "/api/stock/batches",
+      "classification": "Not a financial writer",
+      "reason": "Read route; no direct DB mutation and no invocation of financial mutation helpers found during source cross-check"
+    },
+    {
+      "file": "backend/server.js",
+      "line": 15137,
+      "method": "GET",
+      "path": "/api/stock/credit-note-batches",
+      "classification": "Not a financial writer",
+      "reason": "Read route; no direct DB mutation and no invocation of financial mutation helpers found during source cross-check"
+    },
+    {
+      "file": "backend/server.js",
+      "line": 15361,
+      "method": "GET",
+      "path": "/api/quotation/next-bill-no",
+      "classification": "Not a financial writer",
+      "reason": "Read route; no direct DB mutation and no invocation of financial mutation helpers found during source cross-check"
+    },
+    {
+      "file": "backend/server.js",
+      "line": 15713,
+      "method": "GET",
+      "path": "/api/quotation",
+      "classification": "Not a financial writer",
+      "reason": "Read route; no direct DB mutation and no invocation of financial mutation helpers found during source cross-check"
+    },
+    {
+      "file": "backend/server.js",
+      "line": 15749,
+      "method": "GET",
+      "path": "/api/quotation/list",
+      "classification": "Not a financial writer",
+      "reason": "Read route; no direct DB mutation and no invocation of financial mutation helpers found during source cross-check"
+    },
+    {
+      "file": "backend/server.js",
+      "line": 16706,
+      "method": "GET",
+      "path": "/api/create-load/sales-bills",
+      "classification": "Not a financial writer",
+      "reason": "Read route; no direct DB mutation and no invocation of financial mutation helpers found during source cross-check"
+    },
+    {
+      "file": "backend/server.js",
+      "line": 17468,
+      "method": "GET",
+      "path": "/api/create-load",
+      "classification": "Not a financial writer",
+      "reason": "Read route; no direct DB mutation and no invocation of financial mutation helpers found during source cross-check"
+    },
+    {
+      "file": "backend/server.js",
+      "line": 17504,
+      "method": "GET",
+      "path": "/api/create-load/list",
+      "classification": "Not a financial writer",
+      "reason": "Read route; no direct DB mutation and no invocation of financial mutation helpers found during source cross-check"
+    },
+    {
+      "file": "backend/server.js",
+      "line": 18897,
+      "method": "GET",
+      "path": "/api/settle-load",
+      "classification": "Not a financial writer",
+      "reason": "Read route; no direct DB mutation and no invocation of financial mutation helpers found during source cross-check"
+    },
+    {
+      "file": "backend/server.js",
+      "line": 19512,
+      "method": "GET",
+      "path": "/api/load-transfer/bill",
+      "classification": "Not a financial writer",
+      "reason": "Read route; no direct DB mutation and no invocation of financial mutation helpers found during source cross-check"
+    },
+    {
+      "file": "backend/server.js",
+      "line": 20307,
+      "method": "GET",
+      "path": "/api/print-load",
+      "classification": "Not a financial writer",
+      "reason": "Read route; no direct DB mutation and no invocation of financial mutation helpers found during source cross-check"
+    },
+    {
+      "file": "backend/server.js",
+      "line": 21533,
+      "method": "GET",
+      "path": "/api/settle-load/list",
+      "classification": "Not a financial writer",
+      "reason": "Read route; no direct DB mutation and no invocation of financial mutation helpers found during source cross-check"
+    },
+    {
+      "file": "backend/server.js",
+      "line": 22365,
+      "method": "GET",
+      "path": "/api/settle-load/:id",
+      "classification": "Not a financial writer",
+      "reason": "Read route; no direct DB mutation and no invocation of financial mutation helpers found during source cross-check"
+    },
+    {
+      "file": "backend/server.js",
+      "line": 22538,
+      "method": "GET",
+      "path": "/api/receipt",
+      "classification": "Not a financial writer",
+      "reason": "Read route; no direct DB mutation and no invocation of financial mutation helpers found during source cross-check"
+    },
+    {
+      "file": "backend/server.js",
+      "line": 22566,
+      "method": "GET",
+      "path": "/api/receipt/next-no",
+      "classification": "Not a financial writer",
+      "reason": "Read route; no direct DB mutation and no invocation of financial mutation helpers found during source cross-check"
+    },
+    {
+      "file": "backend/server.js",
+      "line": 22588,
+      "method": "GET",
+      "path": "/api/receipt/bill-balance",
+      "classification": "Not a financial writer",
+      "reason": "Read route; no direct DB mutation and no invocation of financial mutation helpers found during source cross-check"
+    },
+    {
+      "file": "backend/server.js",
+      "line": 23674,
+      "method": "GET",
+      "path": "/api/debit-note/next-no",
+      "classification": "Not a financial writer",
+      "reason": "Read route; no direct DB mutation and no invocation of financial mutation helpers found during source cross-check"
+    },
+    {
+      "file": "backend/server.js",
+      "line": 23764,
+      "method": "GET",
+      "path": "/api/debit-note",
+      "classification": "Not a financial writer",
+      "reason": "Read route; no direct DB mutation and no invocation of financial mutation helpers found during source cross-check"
+    },
+    {
+      "file": "backend/server.js",
+      "line": 23829,
+      "method": "GET",
+      "path": "/api/debit-note/list",
+      "classification": "Not a financial writer",
+      "reason": "Read route; no direct DB mutation and no invocation of financial mutation helpers found during source cross-check"
+    },
+    {
+      "file": "backend/server.js",
+      "line": 25672,
+      "method": "GET",
+      "path": "/api/credit-note/sales-bill",
+      "classification": "Not a financial writer",
+      "reason": "Read route; no direct DB mutation and no invocation of financial mutation helpers found during source cross-check"
+    },
+    {
+      "file": "backend/server.js",
+      "line": 25724,
+      "method": "GET",
+      "path": "/api/credit-note/next-bill-no",
+      "classification": "Not a financial writer",
+      "reason": "Read route; no direct DB mutation and no invocation of financial mutation helpers found during source cross-check"
+    },
+    {
+      "file": "backend/server.js",
+      "line": 27045,
+      "method": "GET",
+      "path": "/api/credit-note/list",
+      "classification": "Not a financial writer",
+      "reason": "Read route; no direct DB mutation and no invocation of financial mutation helpers found during source cross-check"
+    },
+    {
+      "file": "backend/server.js",
+      "line": 27088,
+      "method": "GET",
+      "path": "/api/credit-note/list",
+      "classification": "Not a financial writer",
+      "reason": "Read route; no direct DB mutation and no invocation of financial mutation helpers found during source cross-check"
+    },
+    {
+      "file": "backend/server.js",
+      "line": 28238,
+      "method": "GET",
+      "path": "/api/areas-for-account",
+      "classification": "Not a financial writer",
+      "reason": "Read route; no direct DB mutation and no invocation of financial mutation helpers found during source cross-check"
+    },
+    {
+      "file": "backend/server.js",
+      "line": 28904,
+      "method": "GET",
+      "path": "/api/quotation/:id",
+      "classification": "Not a financial writer",
+      "reason": "Read route; no direct DB mutation and no invocation of financial mutation helpers found during source cross-check"
+    },
+    {
+      "file": "backend/server.js",
+      "line": 30224,
+      "method": "GET",
+      "path": "/api/bill-print/health",
+      "classification": "Not a financial writer",
+      "reason": "Read route; no direct DB mutation and no invocation of financial mutation helpers found during source cross-check"
+    },
+    {
+      "file": "backend/server.js",
+      "line": 30235,
+      "method": "GET",
+      "path": "/api/bill-print/settings",
+      "classification": "Not a financial writer",
+      "reason": "Read route; no direct DB mutation and no invocation of financial mutation helpers found during source cross-check"
+    },
+    {
+      "file": "backend/server.js",
+      "line": 30409,
+      "method": "GET",
+      "path": "/api/bill-print/load-details",
+      "classification": "Not a financial writer",
+      "reason": "Read route; no direct DB mutation and no invocation of financial mutation helpers found during source cross-check"
+    },
+    {
+      "file": "backend/server.js",
+      "line": 30734,
+      "method": "GET",
+      "path": "/api/sales/:id/print-details",
+      "classification": "Not a financial writer",
+      "reason": "Read route; no direct DB mutation and no invocation of financial mutation helpers found during source cross-check"
+    },
+    {
+      "file": "backend/server.js",
+      "line": 31243,
+      "method": "GET",
+      "path": "/api/sales/find-bill",
+      "classification": "Not a financial writer",
+      "reason": "Read route; no direct DB mutation and no invocation of financial mutation helpers found during source cross-check"
+    },
+    {
+      "file": "backend/server.js",
+      "line": 31388,
+      "method": "GET",
+      "path": "/api/reports/all-party-sales",
+      "classification": "Not a financial writer",
+      "reason": "Read route; no direct DB mutation and no invocation of financial mutation helpers found during source cross-check"
+    },
+    {
+      "file": "backend/server.js",
+      "line": 31969,
+      "method": "GET",
+      "path": "/api/connection-status",
+      "classification": "Not a financial writer",
+      "reason": "Read route; no direct DB mutation and no invocation of financial mutation helpers found during source cross-check"
+    },
+    {
+      "file": "backend/server.js",
+      "line": 31978,
+      "method": "GET",
+      "path": "/api/reports/product-sales/criteria",
+      "classification": "Not a financial writer",
+      "reason": "Read route; no direct DB mutation and no invocation of financial mutation helpers found during source cross-check"
+    },
+    {
+      "file": "backend/server.js",
+      "line": 32069,
+      "method": "GET",
+      "path": "/api/reports/product-wise-sales",
+      "classification": "Not a financial writer",
+      "reason": "Read route; no direct DB mutation and no invocation of financial mutation helpers found during source cross-check"
+    },
+    {
+      "file": "backend/server.js",
+      "line": 32356,
+      "method": "GET",
+      "path": "/api/reports/product-sales/criteria",
+      "classification": "Not a financial writer",
+      "reason": "Read route; no direct DB mutation and no invocation of financial mutation helpers found during source cross-check"
+    },
+    {
+      "file": "backend/server.js",
+      "line": 32446,
+      "method": "GET",
+      "path": "/api/reports/all-product-wise-sales",
+      "classification": "Not a financial writer",
+      "reason": "Read route; no direct DB mutation and no invocation of financial mutation helpers found during source cross-check"
+    },
+    {
+      "file": "backend/server.js",
+      "line": 33070,
+      "method": "GET",
+      "path": "/api/reports/current-stock",
+      "classification": "Not a financial writer",
+      "reason": "Read route; no direct DB mutation and no invocation of financial mutation helpers found during source cross-check"
+    },
+    {
+      "file": "backend/server.js",
+      "line": 33105,
+      "method": "GET",
+      "path": "/api/reports/as-on-date-stock",
+      "classification": "Not a financial writer",
+      "reason": "Read route; no direct DB mutation and no invocation of financial mutation helpers found during source cross-check"
+    },
+    {
+      "file": "backend/server.js",
+      "line": 33122,
+      "method": "GET",
+      "path": "/api/reports/damage-stock",
+      "classification": "Not a financial writer",
+      "reason": "Read route; no direct DB mutation and no invocation of financial mutation helpers found during source cross-check"
+    },
+    {
+      "file": "backend/server.js",
+      "line": 33174,
+      "method": "GET",
+      "path": "/api/reports/product-ledger",
+      "classification": "Not a financial writer",
+      "reason": "Read route; no direct DB mutation and no invocation of financial mutation helpers found during source cross-check"
+    },
+    {
+      "file": "backend/server.js",
+      "line": 33323,
+      "method": "GET",
+      "path": "/api/reports/company-wise-purchase",
+      "classification": "Not a financial writer",
+      "reason": "Read route; no direct DB mutation and no invocation of financial mutation helpers found during source cross-check"
+    },
+    {
+      "file": "backend/server.js",
+      "line": 33501,
+      "method": "GET",
+      "path": "/api/reports/company-purchase/criteria",
+      "classification": "Not a financial writer",
+      "reason": "Read route; no direct DB mutation and no invocation of financial mutation helpers found during source cross-check"
+    },
+    {
+      "file": "backend/server.js",
+      "line": 33612,
+      "method": "GET",
+      "path": "/api/reports/stock-and-sales/criteria",
+      "classification": "Not a financial writer",
+      "reason": "Read route; no direct DB mutation and no invocation of financial mutation helpers found during source cross-check"
+    },
+    {
+      "file": "backend/server.js",
+      "line": 33645,
+      "method": "GET",
+      "path": "/api/reports/stock-and-sales",
+      "classification": "Not a financial writer",
+      "reason": "Read route; no direct DB mutation and no invocation of financial mutation helpers found during source cross-check"
+    },
+    {
+      "file": "backend/server.js",
+      "line": 34014,
+      "method": "GET",
+      "path": "/api/reports/purchase-analysis/criteria",
+      "classification": "Not a financial writer",
+      "reason": "Read route; no direct DB mutation and no invocation of financial mutation helpers found during source cross-check"
+    },
+    {
+      "file": "backend/server.js",
+      "line": 34038,
+      "method": "GET",
+      "path": "/api/reports/purchase-analysis",
+      "classification": "Not a financial writer",
+      "reason": "Read route; no direct DB mutation and no invocation of financial mutation helpers found during source cross-check"
+    },
+    {
+      "file": "backend/service.js",
+      "line": 151,
+      "method": "GET",
+      "path": "/services",
+      "classification": "Not a financial writer",
+      "reason": "Read route; no direct DB mutation and no invocation of financial mutation helpers found during source cross-check"
+    },
+    {
+      "file": "backend/service.js",
+      "line": 200,
+      "method": "GET",
+      "path": "/sales-services",
+      "classification": "Not a financial writer",
+      "reason": "Read route; no direct DB mutation and no invocation of financial mutation helpers found during source cross-check"
+    },
+    {
+      "file": "backend/service.js",
+      "line": 214,
+      "method": "GET",
+      "path": "/sales-services/next-voucher-no",
+      "classification": "Not a financial writer",
+      "reason": "Read route; no direct DB mutation and no invocation of financial mutation helpers found during source cross-check"
+    },
+    {
+      "file": "backend/transaction.js",
+      "line": 37,
+      "method": "GET",
+      "path": "/receipt/opening-bills",
+      "classification": "Not a financial writer",
+      "reason": "Read route; no direct DB mutation and no invocation of financial mutation helpers found during source cross-check"
+    },
+    {
+      "file": "backend/transaction.js",
+      "line": 40,
+      "method": "GET",
+      "path": "/payment/opening-bills",
+      "classification": "Not a financial writer",
+      "reason": "Read route; no direct DB mutation and no invocation of financial mutation helpers found during source cross-check"
+    },
+    {
+      "file": "backend/transaction.js",
+      "line": 884,
+      "method": "GET",
+      "path": "/payment/next-no",
+      "classification": "Not a financial writer",
+      "reason": "Read route; no direct DB mutation and no invocation of financial mutation helpers found during source cross-check"
+    },
+    {
+      "file": "backend/transaction.js",
+      "line": 893,
+      "method": "GET",
+      "path": "/payment",
+      "classification": "Not a financial writer",
+      "reason": "Read route; no direct DB mutation and no invocation of financial mutation helpers found during source cross-check"
+    },
+    {
+      "file": "backend/transaction.js",
+      "line": 1477,
+      "method": "GET",
+      "path": "/receipt",
+      "classification": "Not a financial writer",
+      "reason": "Read route; no direct DB mutation and no invocation of financial mutation helpers found during source cross-check"
+    },
+    {
+      "file": "backend/transaction.js",
+      "line": 1509,
+      "method": "GET",
+      "path": "/receipt/list",
+      "classification": "Not a financial writer",
+      "reason": "Read route; no direct DB mutation and no invocation of financial mutation helpers found during source cross-check"
+    },
+    {
+      "file": "backend/transaction.js",
+      "line": 2331,
+      "method": "GET",
+      "path": "/receipt/:id",
+      "classification": "Not a financial writer",
+      "reason": "Read route; no direct DB mutation and no invocation of financial mutation helpers found during source cross-check"
+    },
+    {
+      "file": "backend/transaction.js",
+      "line": 2418,
+      "method": "GET",
+      "path": "/cheque-bounce-next-no/:series",
+      "classification": "Not a financial writer",
+      "reason": "Read route; no direct DB mutation and no invocation of financial mutation helpers found during source cross-check"
+    },
+    {
+      "file": "backend/transaction.js",
+      "line": 2687,
+      "method": "GET",
+      "path": "/cheque-bounce",
+      "classification": "Not a financial writer",
+      "reason": "Read route; no direct DB mutation and no invocation of financial mutation helpers found during source cross-check"
+    },
+    {
+      "file": "backend/transaction.js",
+      "line": 2718,
+      "method": "GET",
+      "path": "/cheque-bounce/list",
+      "classification": "Not a financial writer",
+      "reason": "Read route; no direct DB mutation and no invocation of financial mutation helpers found during source cross-check"
+    },
+    {
+      "file": "backend/transaction.js",
+      "line": 3172,
+      "method": "GET",
+      "path": "/cheque-bounce/:id",
+      "classification": "Not a financial writer",
+      "reason": "Read route; no direct DB mutation and no invocation of financial mutation helpers found during source cross-check"
+    },
+    {
+      "file": "backend/transaction.js",
+      "line": 3359,
+      "method": "GET",
+      "path": "/pdc-docket",
+      "classification": "Not a financial writer",
+      "reason": "Read route; no direct DB mutation and no invocation of financial mutation helpers found during source cross-check"
+    },
+    {
+      "file": "backend/transaction.js",
+      "line": 3396,
+      "method": "GET",
+      "path": "/pdc-docket/list",
+      "classification": "Not a financial writer",
+      "reason": "Read route; no direct DB mutation and no invocation of financial mutation helpers found during source cross-check"
+    },
+    {
+      "file": "backend/transaction.js",
+      "line": 4057,
+      "method": "GET",
+      "path": "/contra",
+      "classification": "Not a financial writer",
+      "reason": "Read route; no direct DB mutation and no invocation of financial mutation helpers found during source cross-check"
+    },
+    {
+      "file": "backend/transaction.js",
+      "line": 4092,
+      "method": "GET",
+      "path": "/contra/list",
+      "classification": "Not a financial writer",
+      "reason": "Read route; no direct DB mutation and no invocation of financial mutation helpers found during source cross-check"
+    },
+    {
+      "file": "backend/transaction.js",
+      "line": 4548,
+      "method": "GET",
+      "path": "/contra-next-no",
+      "classification": "Not a financial writer",
+      "reason": "Read route; no direct DB mutation and no invocation of financial mutation helpers found during source cross-check"
+    },
+    {
+      "file": "backend/transaction.js",
+      "line": 4746,
+      "method": "GET",
+      "path": "/collection-voucher",
+      "classification": "Not a financial writer",
+      "reason": "Read route; no direct DB mutation and no invocation of financial mutation helpers found during source cross-check"
+    },
+    {
+      "file": "backend/transaction.js",
+      "line": 4777,
+      "method": "GET",
+      "path": "/collection-voucher/list",
+      "classification": "Not a financial writer",
+      "reason": "Read route; no direct DB mutation and no invocation of financial mutation helpers found during source cross-check"
+    },
+    {
+      "file": "backend/transaction.js",
+      "line": 5274,
+      "method": "GET",
+      "path": "/collection-voucher-next-no",
+      "classification": "Not a financial writer",
+      "reason": "Read route; no direct DB mutation and no invocation of financial mutation helpers found during source cross-check"
+    }
+  ],
+  "extraMutation": {
+    "file": "backend/companyWiseSeries.js",
+    "line": 178,
+    "call": "CompanyWiseSeries.findOneAndDelete",
+    "classification": "Not a financial writer"
+  }
+}

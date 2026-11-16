@@ -50,6 +50,14 @@ export default function createSecuritySetupRouter(User) {
 
   const DEFAULT_OPERATION_GROUPS = [
     {
+      id: "accounting", name: "Accounting", operations: [
+        { id: "financial-period-view", name: "Financial period view", module: "ACCOUNTING", operation: "FINANCIAL_PERIOD_VIEW" },
+        { id: "financial-period-configure", name: "Financial period configure", module: "ACCOUNTING", operation: "FINANCIAL_PERIOD_CONFIGURE" },
+        { id: "financial-period-close", name: "Financial period close", module: "ACCOUNTING", operation: "FINANCIAL_PERIOD_CLOSE" },
+        { id: "financial-period-reopen", name: "Financial period reopen", module: "ACCOUNTING", operation: "FINANCIAL_PERIOD_REOPEN" },
+      ],
+    },
+    {
       id: "master",
       name: "Master",
       icon: "📁",

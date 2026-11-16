@@ -1,0 +1,23 @@
+ M backend/accounting.js
+ M backend/p0Features.js
+ M backend/securitySetup.js
+ M backend/server.js
+ M backend/test/ledger-opening.test.js
+ M src/api/config.js
+?? ERP_ACCOUNTING_DIAGNOSIS_REPORT.md
+?? ERP_PERFORMANCE_REVIEW_AND_POSSIBLE_FIXES.md
+?? backend/financialPeriods.js
+?? backend/test/financial-periods.test.js
+?? backend/test/phase1-accounting.test.js
+?? backend/test/phase1-isolation.mjs
+?? backend/test/phase2a-accounting.test.js
+?? output/erp-current-style-2026-11-06.zip
+?? output/erp-current-style-2026-11-06/
+?? output/erp-review-2026-11-06.zip
+?? output/erp-review-2026-11-06/
+?? output/form-design-concepts/
+?? output/phase1-2026-11-06/
+?? output/phase2a-2026-11-06/
+?? output/phase2a1-2026-11-06/
+?? output/phase2a2-2026-11-06/
+?? output/phase2a3-2026-11-06/

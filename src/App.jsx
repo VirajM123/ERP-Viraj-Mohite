@@ -1,7 +1,8 @@
-import React, { useState } from "react";
+import React, { lazy, Suspense, useState } from "react";
 import Login from "./Login";
-import Dashboard from "./Dashboard";
 import { useSortableListTables } from "./hooks/useSortableListTables";
+
+const Dashboard = lazy(() => import("./Dashboard"));
 
 function App() {
   useSortableListTables();
@@ -23,7 +24,9 @@ function App() {
   return (
     <>
       {isLoggedIn ? (
-        <Dashboard onLogout={handleLogout} />
+        <Suspense fallback={<div role="status">Loading ERP...</div>}>
+          <Dashboard onLogout={handleLogout} />
+        </Suspense>
       ) : (
         <Login onLoginSuccess={handleLoginSuccess} />
       )}

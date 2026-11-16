@@ -11,7 +11,7 @@ test('ledger carries prior invoices less receipts and opening-date openings with
     entry('2026-04-01', 'OPENING_BALANCE', 200), entry('2026-04-01', 'SALES', 50), entry('2026-04-02', 'RECEIPT', 0, 100),
   ] }; });
   const rows = await financialRows({ auth: { distributorId: 'D1', firmId: 'F1' }, query: { fromDate: '2026-04-01', toDate: '2026-04-30' } }, true);
-  assert.deepEqual(filter, { distributorId: 'D1', firmId: 'F1', status: 'POSTED', documentDate: { $lte: '2026-04-30' } });
+  assert.deepEqual(filter, { distributorId: 'D1', firmId: 'F1', $or: [{ status: 'POSTED' }, { status: 'REVERSED', sourceType: { $ne: 'OPENING_BALANCE' } }], documentDate: { $lte: '2026-04-30' } });
   assert.equal(rows.length, 3);
   assert.equal(rows[0].narration, 'Opening Balance');
   assert.equal(rows[0].debit, 800);

@@ -399,12 +399,11 @@ case "DELETE_CHEQUE_BOUNCE": {
 }
 
 export const ERPProvider = ({ children }) => {
-  const savedData = loadFromLocalStorage();
-  
-  const [state, dispatch] = useReducer(erpReducer, {
-    ...initialState,
-    ...savedData
-  });
+  const [state, dispatch] = useReducer(
+    erpReducer,
+    initialState,
+    (state) => ({ ...state, ...loadFromLocalStorage() })
+  );
 
   // Helper functions for common operations
   const value = {

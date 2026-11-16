@@ -1,0 +1,21 @@
+{
+    "checked":  316,
+    "changed":  [
+                    {
+                        "path":  "backend/accounting.js",
+                        "before":  "6D6FC9835A369E2D01992F99CE9778D4C6580EA96FD6DCEDBED2FBA9EBE688BC",
+                        "after":  "81BC410ED2BD6D02F4678E45030E985BFADA8C04ABEBA83B52B246E432ADCEF9"
+                    },
+                    {
+                        "path":  "backend/p0Features.js",
+                        "before":  "F23784B87FEA6F9F795EC4C921E1A1176863D8B3AC4CF63EEEA63058A156B450",
+                        "after":  "CDD4C3FA81075353E2146D168D2006C11896F495C8F5CBD1A404AFB30207CE49"
+                    },
+                    {
+                        "path":  "backend/test/ledger-opening.test.js",
+                        "before":  "0AE374E01E2641ECBE55E5D9AC5EA3524F1B023F65388A1F033D45CE04AB5826",
+                        "after":  "3F809BF2F0FAB324D33DCED6202DFFF3178F48ED3C5F338B8D39380749FFF118"
+                    }
+                ],
+    "configPreserved":  true
+}

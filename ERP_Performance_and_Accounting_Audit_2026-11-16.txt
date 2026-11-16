@@ -1,0 +1,123 @@
+ERP PERFORMANCE & ACCOUNTING AUDIT
+Static source analysis - no application code changed
+
+========================================================================================
+READ ME
+========================================================================================
+
+Topic: Details
+Review date: 2026-11-16
+Purpose: Read-only source-level review of performance and accounting risks; no application code/configuration/database changes made.
+Scope: First-party React/Vite frontend and Express/Mongoose backend paths, accounting/reporting, dashboard, stock lookup, shared state and existing repository artifacts.
+Limitations: No production traces, live database/index inventory, transaction dataset, accountant reconciliation, hosting response headers or user/device performance measurements were available. Priorities describe risk to validate, not measured loss or speedup.
+Priority guide: P1 = confirm and address promptly due potential report/book completeness or scale bottleneck. P2 = important controls/optimization; validate assumptions and profile before implementation.
+Recommended order: 1) Finance reconciles service/contra/bounced-cheque posting scope and report correctness. 2) Establish chart-of-accounts mapping and dated opening/closing semantics. 3) Measure dashboard, reports and outstanding on the largest firm and tune query/payload shape. 4) Profile initial bundle and stock search; then implement changes in a reviewed, tested phase.
+Important accounting note: This is not an audit opinion or tax-compliance determination. Any historic correction/backfill must be driven by reconciled source documents and approved accounting treatment.
+Existing artifacts: The repository contains older untracked diagnosis documents. Findings here were checked against current source where referenced; an earlier reversal-status concern was not repeated because current financialRows includes reversed non-opening journal events.
+Files changed: Only this requested workbook was created; pre-existing worktree edits and untracked files were left untouched.
+
+========================================================================================
+PERFORMANCE
+========================================================================================
+
+PERF-01 | P1 | Dashboard summary repeats broad historical database work
+Observed evidence / impact: The summary launches 16 parallel operations. Several aggregate over tenant history; sales facets include full-history totals, trends and item unwind. Parallel fan-out can amplify DB load as concurrent users grow.
+Recommended fix (no code changed): Profile query plans and timings per aggregation; push date bounds to period-specific calculations, separate all-time metrics from period KPIs, consolidate repeated scans or maintain reconciled daily summaries; stage noncritical widgets.
+Suggested verification: Record explain stats, response p50/p95 and DB CPU on a large firm; reconcile every KPI with existing reports before/after any summary change.
+Source locations: backend/p0Features.js:394-450, 418
+Confidence / caveat: High for code pattern; production impact not measured.
+
+PERF-02 | P1 | Financial reports read and materialize ledger rows in application memory
+Observed evidence / impact: FinancialRows fetches matching journal documents, sorts them, flattens every journal line, then the route filters/groups rows in Node. Large ledgers and broad date ranges can consume memory and delay responses.
+Recommended fix (no code changed): Apply tenant/date/account filters and projection in MongoDB; aggregate summary reports server-side; paginate ledger detail and stream complete exports separately. Confirm deployed indexes with explain before adding any.
+Suggested verification: Benchmark general ledger, trial balance and balance sheet using largest expected date range; compare rows, memory, latency and totals to control accounts.
+Source locations: backend/p0Features.js:173-191, 292-305
+Confidence / caveat: High for unbounded materialization; scale impact depends on journal volume.
+
+PERF-03 | P1 | Party-outstanding report loads entire sales and purchase history
+Observed evidence / impact: The endpoint fetches all tenant sales and purchase headers, maps, sorts and filters them in process memory; no page or date bound is applied. Response time and memory grow with transaction history.
+Recommended fix (no code changed): Move aggregation/filtering to database, return paginated outstanding lines and summary totals; retain a complete export path and date-aware allocation semantics.
+Suggested verification: Test largest firm with realistic history; reconcile totals and individual aging balances, including opening items, notes and advances.
+Source locations: backend/p0Features.js:207-230
+Confidence / caveat: High for code pattern; production volume unknown.
+
+PERF-04 | P1 | Large dashboard detail collections are returned without pagination
+Observed evidence / impact: Dashboard reads all receipts through selected date and every non-cancelled load, then returns details; the UI filters collection rows locally. Payload and client work grow over time.
+Recommended fix (no code changed): Return grouped receipt totals for dashboard periods; fetch drill-down pages on demand. Cap recent load/task lists and expose counts separately.
+Suggested verification: Compare API payload bytes and latency at increasing history sizes; ensure date/window filtering matches current dashboard totals.
+Source locations: backend/p0Features.js:418, 485-503; src/DashboardHome.jsx:50-54, 75-83
+Confidence / caveat: High; exact impact depends on tenant history.
+
+PERF-05 | P1 | Initial application statically pulls a very large dashboard module graph
+Observed evidence / impact: App statically imports Dashboard; Dashboard statically imports report, transaction, setup, stock and export/PDF dependencies. Several first-party source modules are exceptionally large, increasing initial parse/evaluation and maintenance cost.
+Recommended fix (no code changed): Lazy-load the authenticated dashboard/workspaces and load export libraries on demand; split only at real route/workspace boundaries. Verify the production bundle and preserve navigation/permission behavior.
+Suggested verification: Measure production initial JS transfer, parse/evaluate and login-to-ready time on representative devices; inspect generated bundle/chunks.
+Source locations: src/App.jsx:1-3; src/Dashboard.jsx:1-42; Dashboard.jsx source size ~2.5 MiB
+Confidence / caveat: High for static import chain; actual compressed transfer/runtime not measured.
+
+PERF-06 | P2 | Stock product search can issue up to 40 concurrent batch requests
+Observed evidence / impact: Each visible matching product can trigger its own /stock/batches call through Promise.all; rapid search changes may leave in-flight work running. Batch cache key excludes stock type.
+Recommended fix (no code changed): Use a bounded bulk lookup or fetch batches on selection; debounce and abort stale requests, limit concurrency, and key/invalidate cache by godown, product and stock type.
+Suggested verification: Use browser network traces while searching and switching SALEABLE/DAMAGE; confirm request cap, correct stock type and stale-result handling.
+Source locations: src/StockManagement.jsx:90-99, 143-164
+Confidence / caveat: High for request fan-out; user-perceived impact not measured.
+
+PERF-07 | P2 | ERP state reparses localStorage on every provider render; transaction logs are verbose
+Observed evidence / impact: ERPProvider evaluates loadFromLocalStorage on every render even though useReducer only uses its initial argument once. Storage contains whole arrays; Transaction logs context/receipt data in render paths.
+Recommended fix (no code changed): Use a one-time reducer initializer; keep server history paginated and local storage to necessary drafts/preferences; remove or development-gate verbose logs after profiling.
+Suggested verification: Profile startup and transaction updates with realistic localStorage volume; confirm persisted drafts and logout/firm isolation still work.
+Source locations: src/context/ERPContext.jsx:14-59, 401-405; src/Transaction.jsx:67-69
+Confidence / caveat: High for repeated parsing/log statements; user impact depends on stored data and production logging.
+
+========================================================================================
+ACCOUNTING
+========================================================================================
+
+ACCT-01 | P1 | Sales Service vouchers have no general-ledger posting lifecycle
+Observed evidence / impact: Create/edit/soft-delete save SalesService records without journal posting/reversal in the reviewed route. Revenue, receivable and tax reports may omit these vouchers unless another explicit posting process exists.
+Recommended fix (no code changed): Confirm intended accounting treatment and whether an external posting path exists. If not, design atomic posting, edit reversal/repost, cancellation, audit trail and tax/report integration; reconcile historical vouchers before any backfill.
+Suggested verification: For a dated service invoice, reconcile subledger, customer balance, revenue, GST and journal; then edit/cancel and verify reversal history.
+Source locations: backend/service.js:225-258
+Confidence / caveat: High for missing posting in this route; external/manual posting not assessed.
+
+ACCT-02 | P1 | Contra and cheque-bounce saves do not show matching ledger/allocation effects
+Observed evidence / impact: Contra persists a document only; cheque-bounce create persists a record only in the reviewed handlers. Neither shown path posts a journal or updates receipt allocations/bank treatment.
+Recommended fix (no code changed): Define contra source/destination accounts and bounced-cheque lifecycle; atomically update ledger, receipt allocations, audit and reversals. Reconcile existing records before remediation.
+Suggested verification: Test cash-to-bank transfer and a bounced allocated receipt through creation, edit, cancellation, GL, party outstanding and bank reconciliation.
+Source locations: backend/transaction.js:2498-2567, 3937-3948
+Confidence / caveat: High for these create routes; any separate manual workflow is unknown.
+
+ACCT-03 | P1 | Financial-statement account classification relies on account-code text
+Observed evidence / impact: Cash/bank books and P&L/balance sheet select rows with regexes such as /cash/, /bank/, /sales|purchase|income|expense|discount|gst/. Account codes need not encode account nature; valid accounts can be omitted or misclassified.
+Recommended fix (no code changed): Use chart-of-accounts metadata (account type, normal side, cash/bank and tax-control flags) and map every active account before generating statements. Do not rely on code names.
+Suggested verification: Reconcile every mapped account to trial balance and compare bank book, P&L and balance sheet for codes without descriptive words and GST control accounts.
+Source locations: backend/p0Features.js:292-305
+Confidence / caveat: High for classification method; specific misstatements depend on the account master.
+
+ACCT-04 | P1 | Date-filtered trial balance and balance sheet omit brought-forward ledger activity
+Observed evidence / impact: Opening/brought-forward rows are synthesized only when financialRows is called with includeOpening=true (GL and party ledger). Trial balance and balance sheet do not request that mode; with a fromDate they filter to the selected period only.
+Recommended fix (no code changed): Separate opening balances, period movement and closing balances. Use cumulative balances through the as-of date for balance sheet; define trial-balance columns and reconcile migration openings.
+Suggested verification: Seed prior-period cash/capital and current-period zero activity; run date-filtered TB/BS and reconcile closing balances to an unfiltered ledger and verified opening balances.
+Source locations: backend/p0Features.js:173-191, 292-305
+Confidence / caveat: High for reviewed report behavior; correctness depends on date filters and existing opening data.
+
+ACCT-05 | P1 | Party-outstanding and credit-control views cover a limited set of balance sources
+Observed evidence / impact: Outstanding is constructed from sales, purchases and opening items. Service vouchers, journal adjustments, standalone credit/debit notes and unallocated advances are not included in that construction; historical allocations are represented by current allocation fields.
+Recommended fix (no code changed): Define a dated receivable/payable allocation subledger covering invoices, notes, advances, journals and reversals; reconcile party subledgers to GL control accounts. Verify required categories with finance before changing policy.
+Suggested verification: Test advance-before-invoice, standalone note, journal write-off, backdated bill and receipt after cutoff; reconcile dated outstanding and credit exposure to GL.
+Source locations: backend/p0Features.js:207-230, 339-352
+Confidence / caveat: Medium-high; endpoint scope is confirmed, accounting policy/external adjustments unknown.
+
+ACCT-06 | P2 | Journal checks validate aggregate balance but not robust per-line/account constraints
+Observed evidence / impact: The common journal check enforces line count and totals, but does not visibly enforce one-sided nonnegative lines, active tenant account membership or exact minor-unit precision. A balanced total alone cannot assure valid coding.
+Recommended fix (no code changed): Require valid active account IDs and one nonnegative debit-or-credit side per line; validate precision and equality using a consistent decimal/paise model. Preserve approved control accounts.
+Suggested verification: Add negative and dual-sided line tests, unknown/inactive account tests and rounding-boundary tests; confirm every rejected payload leaves no voucher or journal.
+Source locations: backend/p0Features.js:154-164; backend/accounting.js:21-28
+Confidence / caveat: High for missing visible guards; exploitability/materiality not assessed.
+
+ACCT-07 | P2 | Sales calculator charges free quantity and silently clamps excess credit/discount inputs
+Observed evidence / impact: Calculator includes free quantity in chargedQty and gross; combined discounts can clamp commercial net to zero, and header creditNote is also clamped rather than rejected. This can diverge from commercial/tax intent.
+Recommended fix (no code changed): Confirm pricing, promotional-goods and tax policy with finance; distinguish billed quantity from free stock quantity, validate combined discounts and reject or explicitly post excess credit instead of silently clamping.
+Suggested verification: Use test cases: 10 billed + 2 free at rate 100; discounts totaling > gross; credit note > invoice value; compare tax, stock, invoice, journal and GST treatment.
+Source locations: backend/financialValidation.js:32-60
+Confidence / caveat: High for arithmetic; intended sales/tax policy must be confirmed before calling it a defect.

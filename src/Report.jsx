@@ -5,6 +5,8 @@ import React, {
 } from "react";
 import {
   ArrowLeft,
+  ArrowUpDown,
+  BadgeCheck,
   BarChart3,
   BookOpen,
   Building2,
@@ -19,10 +21,13 @@ import {
   FileBarChart,
   FileSpreadsheet,
   FileText,
+  IndianRupee,
+  MapPin,
   PackageSearch,
   Printer,
   RefreshCw,
   Search,
+  SlidersHorizontal,
   ShoppingCart,
   Users,
   Warehouse,
@@ -35,6 +40,8 @@ import autoTable from "jspdf-autotable";
 import "./Report.css";
 import { API_ROOT } from "./api/config";
 import { secureFetch } from "./SecuritySetup";
+import ChartOfAccountsSetup from "./ChartOfAccountsSetup";
+import { csvCell } from "../shared/spreadsheetSafety.js";
 
 const EXCEL_HEADER_COLOR = "1F4E79";
 const EXCEL_TOTAL_COLOR = "D9EAF7";
@@ -60,9 +67,10 @@ const styleExcelHeaderAndTotal = (sheet, columnCount, headerRowIndex, totalRowIn
   }
 };
 
-const ReportExportActions = ({ generate, exportCsv, exportExcel, ready, loading, disabled = false }) => {
+const ReportExportActions = ({ generate, exportCsv, exportExcel, ready, loading, disabled = false, showFilterToggle = true }) => {
   const [pendingFormat, setPendingFormat] = useState(null);
   const [menuOpen, setMenuOpen] = useState(false);
+  const [filtersCollapsed, setFiltersCollapsed] = useState(false);
 
   useEffect(() => {
     if (!pendingFormat || loading) return;
@@ -72,6 +80,10 @@ const ReportExportActions = ({ generate, exportCsv, exportExcel, ready, loading,
     }
     setPendingFormat(null);
   }, [pendingFormat, ready, loading, exportCsv, exportExcel]);
+
+  useEffect(() => {
+    setFiltersCollapsed(ready);
+  }, [ready]);
 
   const exportReport = async (format) => {
     setMenuOpen(false);
@@ -85,11 +97,24 @@ const ReportExportActions = ({ generate, exportCsv, exportExcel, ready, loading,
   };
 
   return (
-    <div className="report-export-actions" onBlur={(event) => {
+    <div className={`report-export-actions${filtersCollapsed ? " report-filters-collapsed" : ""}`} onBlur={(event) => {
       if (!event.currentTarget.contains(event.relatedTarget)) setMenuOpen(false);
     }} onKeyDown={(event) => {
       if (event.key === "Escape") setMenuOpen(false);
     }}>
+      {ready && showFilterToggle && (
+        <button
+          type="button"
+          className="report-filters-toggle"
+          aria-expanded={!filtersCollapsed}
+          onClick={() => setFiltersCollapsed((collapsed) => !collapsed)}
+        >
+          {filtersCollapsed ? "Show Filters" : "Hide Filters"}
+        </button>
+      )}
+      <button type="button" className="report-generate-button" onClick={generate} disabled={loading || disabled}>
+        <FileBarChart size={15} /> {loading ? "Generating..." : "Generate report"}
+      </button>
       <button type="button" className="report-export-button" aria-haspopup="menu" aria-expanded={menuOpen} onClick={() => setMenuOpen((open) => !open)} disabled={loading || disabled}>
         <Download size={15} /> {loading ? "Preparing..." : "Export"} <ChevronDown size={14} />
       </button>
@@ -353,6 +378,7 @@ const Report = ({
   const [p0Loading, setP0Loading] = useState(false);
   const [p0Error, setP0Error] = useState("");
   const [p0Generated, setP0Generated] = useState(false);
+  const [chartSetupOpen, setChartSetupOpen] = useState(false);
   const isP0Report = Boolean(P0_REPORT_ENDPOINTS[selectedReport]);
   const isGstReport = Boolean(GST_REPORT_ENDPOINTS[selectedReport]);
   const defaultGstFilters = () => ({
@@ -387,6 +413,39 @@ const Report = ({
       String(value ?? "").toLowerCase().includes(query)
     ));
   }, [visibleGstRows, gstSearch]);
+  const filteredGstTotals = useMemo(() => {
+    if (!gstSearch.trim()) return gstTotals;
+
+    return filteredGstRows.reduce((totals, row) => {
+      visibleGstColumns.forEach((column) => {
+        if (["SrNo", "TrnNo"].includes(column.key)) return;
+        const value = row[column.key];
+        if (typeof value !== "number" || !Number.isFinite(value)) return;
+        totals[column.key] = (totals[column.key] || 0) + value;
+      });
+      return totals;
+    }, {});
+  }, [filteredGstRows, gstSearch, gstTotals, visibleGstColumns]);
+  const filteredGstSummary = useMemo(() => {
+    if (!gstSearch.trim() || selectedReport === "GST Summary" || selectedReport === "GSTR1 Report") {
+      return gstSummary;
+    }
+
+    const sumField = (primaryField, fallbackFields = []) => filteredGstRows.reduce((total, row) => {
+      const value = row[primaryField] || fallbackFields
+        .map((field) => row[field])
+        .find(Boolean) || 0;
+      const numericValue = Number(value);
+      return total + (Number.isFinite(numericValue) ? numericValue : 0);
+    }, 0);
+
+    return {
+      records: filteredGstRows.length,
+      taxable: sumField("Taxable", ["SalesValue", "DeemedTaxableValue"]),
+      gst: sumField("TotalGST", ["TotalTax", "GSTAmt"]),
+      billValue: sumField("BillValue", ["BillAmt"]),
+    };
+  }, [filteredGstRows, gstSearch, gstSummary, selectedReport]);
   const [chequeSearch, setChequeSearch] = useState("");
   const [chequeResult, setChequeResult] = useState(null);
   const [chequeLoading, setChequeLoading] = useState(false);
@@ -422,6 +481,17 @@ const Report = ({
       )
     );
   }, [stockSalesRows, stockSalesSearch]);
+  const filteredStockSalesSummary = useMemo(() => {
+    if (!stockSalesSearch.trim()) return stockSalesSummary;
+
+    return filteredStockSalesRows.reduce((summary, row) => ({
+      records: summary.records + 1,
+      stockQty: summary.stockQty + Number(row.StockQty || 0),
+      totalSalesQty: summary.totalSalesQty + Number(row.TotalSalesQty || 0),
+      freeQty: summary.freeQty + Number(row.FreeQty || 0),
+      salesAmount: summary.salesAmount + Number(row.SalesAmount || 0),
+    }), { records: 0, stockQty: 0, totalSalesQty: 0, freeQty: 0, salesAmount: 0 });
+  }, [filteredStockSalesRows, stockSalesSearch, stockSalesSummary]);
   const [purchaseAnalysisFilters, setPurchaseAnalysisFilters] = useState({
     companyCode: "",
     godownCode: "",
@@ -574,8 +644,7 @@ const Report = ({
   const exportChequeCsv = () => {
     const rows = chequeExportRows();
     const columns = Object.keys(rows[0] || {});
-    const escapeCsv = (value) => `"${String(value ?? "").replace(/"/g, '""')}"`;
-    const csv = [columns.map(escapeCsv).join(","), ...rows.map((row) => columns.map((key) => escapeCsv(row[key])).join(","))].join("\r\n");
+    const csv = [columns.map(csvCell).join(","), ...rows.map((row) => columns.map((key) => csvCell(row[key])).join(","))].join("\r\n");
     const url = URL.createObjectURL(new Blob([`\uFEFF${csv}`], { type: "text/csv;charset=utf-8" }));
     const link = document.createElement("a");
     link.href = url;
@@ -613,7 +682,12 @@ const Report = ({
       Object.entries(p0Filters).forEach(([key, value]) => { if (String(value || "").trim()) query.set(key, value); });
       const response = await secureFetch(`${API_BASE_URL}${P0_REPORT_ENDPOINTS[selectedReport]}?${query}`);
       const result = await response.json();
-      if (!response.ok || result.success === false) throw new Error(result.message || "Report could not be generated.");
+      if (!response.ok || result.success === false) {
+        const unmapped = Array.isArray(result.unmappedAccounts) && result.unmappedAccounts.length
+          ? ` Unmapped accounts: ${result.unmappedAccounts.join(", ")}.`
+          : "";
+        throw new Error(`${result.message || "Report could not be generated."}${unmapped}`);
+      }
       const rows = Array.isArray(result.rows)
         ? result.rows
         : Object.entries(result.data || {}).flatMap(([key, value]) => Array.isArray(value)
@@ -657,10 +731,9 @@ const Report = ({
   };
 
   const exportP0Csv = () => {
-    const escapeCsv = (value) => `"${String(value ?? "").replace(/"/g, '""')}"`;
     const csv = [
-      p0ColumnDefinitions.map((column) => escapeCsv(column.label)).join(","),
-      ...p0Rows.map((row) => p0Columns.map((key) => escapeCsv(row[key])).join(",")),
+      p0ColumnDefinitions.map((column) => csvCell(column.label)).join(","),
+      ...p0Rows.map((row) => p0Columns.map((key) => csvCell(row[key])).join(",")),
     ].join("\r\n");
     const blob = new Blob([`\uFEFF${csv}`], { type: "text/csv;charset=utf-8" });
     const url = URL.createObjectURL(blob);
@@ -1491,14 +1564,9 @@ const Report = ({
         )
       );
 
-      const escapeCsvValue = (value) => {
-        const text = String(value ?? "");
-        return `"${text.replace(/"/g, '""')}"`;
-      };
-
       const csvContent =
         "\uFEFF" +
-        csvRows.map((row) => row.map(escapeCsvValue).join(",")).join("\r\n");
+        csvRows.map((row) => row.map(csvCell).join(",")).join("\r\n");
 
       const csvBlob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
       const csvUrl = URL.createObjectURL(csvBlob);
@@ -1806,7 +1874,10 @@ const Report = ({
   const [partyReportZoom, setPartyReportZoom] = useState("100");
   const [partyCurrentPage, setPartyCurrentPage] = useState(1);
   const [partyRowsPerPage, setPartyRowsPerPage] = useState(10);
-  const [showAdvancedPartyFilters, setShowAdvancedPartyFilters] = useState(false);
+  const [showAdvancedPartyFilters, setShowAdvancedPartyFilters] = useState(true);
+  useEffect(() => {
+    setShowAdvancedPartyFilters(!isPartyReportGenerated);
+  }, [isPartyReportGenerated]);
   const [showPartySelector, setShowPartySelector] = useState(false);
   const [showAreaSelector, setShowAreaSelector] = useState(false);
   const [showSalesmanSelector, setShowSalesmanSelector] = useState(false);
@@ -2066,7 +2137,7 @@ const Report = ({
     ];
     if (includeFooter && selectedReport !== "GST Summary" && selectedReport !== "GSTR1 Report" && rows.length) {
       matrix.push(columns.map((column, index) => (
-        index === 0 ? "TOTAL" : Object.prototype.hasOwnProperty.call(gstTotals, column.key) ? gstTotals[column.key] : ""
+        index === 0 ? "TOTAL" : Object.prototype.hasOwnProperty.call(filteredGstTotals, column.key) ? filteredGstTotals[column.key] : ""
       )));
     }
     return matrix;
@@ -2333,10 +2404,9 @@ const Report = ({
 
   const exportStockSalesCsv = () => {
     const columns = getStockSalesExportColumns();
-    const escapeCsv = (value) => `"${String(value ?? "").replace(/"/g, '""')}"`;
     const csv = [
-      columns.map((column) => escapeCsv(column.label)).join(","),
-      ...filteredStockSalesRows.map((row) => columns.map((column) => escapeCsv(row[column.key])).join(",")),
+      columns.map((column) => csvCell(column.label)).join(","),
+      ...filteredStockSalesRows.map((row) => columns.map((column) => csvCell(row[column.key])).join(",")),
     ].join("\r\n");
     const url = URL.createObjectURL(new Blob(["\uFEFF", csv], { type: "text/csv;charset=utf-8" }));
     const link = document.createElement("a");
@@ -2503,10 +2573,9 @@ const Report = ({
   };
 
   const exportPurchaseAnalysisCsv = () => {
-    const escapeCsv = (value) => `"${String(value ?? "").replace(/"/g, '""')}"`;
     const content = [
-      purchaseAnalysisColumns.map((column) => escapeCsv(column.label)).join(","),
-      ...filteredPurchaseAnalysisRows.map((row) => purchaseAnalysisColumns.map((column) => escapeCsv(row[column.key])).join(",")),
+      purchaseAnalysisColumns.map((column) => csvCell(column.label)).join(","),
+      ...filteredPurchaseAnalysisRows.map((row) => purchaseAnalysisColumns.map((column) => csvCell(row[column.key])).join(",")),
     ].join("\r\n");
     const url = URL.createObjectURL(new Blob(["\uFEFF", content], { type: "text/csv;charset=utf-8" }));
     const link = document.createElement("a");
@@ -2740,6 +2809,35 @@ const Report = ({
     setPartyReportRows([]);
     setPartyReportError("");
     setPartyCurrentPage(1);
+  };
+
+  const resetPartySalesFilters = () => {
+    setPartySalesFilters({
+      company: "",
+      reportLevel: "salesSummary",
+      selectedPartyCodes: [],
+      selectedArea: "no",
+      selectedAreaCodes: [],
+      selectedSalesman: "no",
+      selectedSalesmanCodes: [],
+      productWise: "no",
+      fromDate: getFinancialYearStart(),
+      toDate: getTodayDate(),
+      withCreditNote: "no",
+      orderBy: "partyName",
+    });
+    setPartySelectorSearch("");
+    setAreaSelectorSearch("");
+    setSalesmanSelectorSearch("");
+    setShowPartySelector(false);
+    setShowAreaSelector(false);
+    setShowSalesmanSelector(false);
+    setPartyReportRows([]);
+    setPartyReportColumns([]);
+    setPartyReportSearch("");
+    setPartyCurrentPage(1);
+    setIsPartyReportGenerated(false);
+    setPartyReportError("");
   };
 
   const updateAllPartySalesFilter = (field, value) => {
@@ -3759,14 +3857,9 @@ const Report = ({
         )
       );
 
-      const escapeCsvValue = (value) => {
-        const text = String(value ?? "");
-        return `"${text.replace(/"/g, '""')}"`;
-      };
-
       const csvContent =
         "\uFEFF" +
-        csvRows.map((row) => row.map(escapeCsvValue).join(",")).join("\r\n");
+        csvRows.map((row) => row.map(csvCell).join(",")).join("\r\n");
 
       const csvBlob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
       const csvUrl = URL.createObjectURL(csvBlob);
@@ -4318,14 +4411,9 @@ const Report = ({
         )
       );
 
-      const escapeCsvValue = (value) => {
-        const text = String(value ?? "");
-        return `"${text.replace(/"/g, '""')}"`;
-      };
-
       const csvContent =
         "\uFEFF" +
-        csvRows.map((row) => row.map(escapeCsvValue).join(",")).join("\r\n");
+        csvRows.map((row) => row.map(csvCell).join(",")).join("\r\n");
 
       const csvBlob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
       const csvUrl = URL.createObjectURL(csvBlob);
@@ -4614,7 +4702,9 @@ const Report = ({
   const partyQuickSummary = useMemo(() => {
     const partyCodes = new Set();
     const invoices = new Set();
-    let totalAmount = 0;
+    let totalSales = 0;
+    let totalCreditNotes = 0;
+    let totalNetSales = 0;
     let totalQuantity = 0;
 
     partyReportRows.forEach((row) => {
@@ -4626,14 +4716,18 @@ const Report = ({
         .filter((value) => value !== undefined && value !== null && value !== "")
         .join("-");
       if (invoiceKey) invoices.add(invoiceKey);
-      totalAmount += Number(row.netAmount || row.billAmount || row.amount || 0);
+      totalSales += Number(row.grossAmount || row.billAmount || row.amount || 0);
+      totalCreditNotes += Number(row.creditNoteAmount || 0);
+      totalNetSales += Number(row.netAmount || row.billAmount || row.amount || 0);
       totalQuantity += Number(row.qty || row.quantity || row.totalQty || 0);
     });
 
     return {
       totalParties: partyCodes.size,
       totalInvoices: invoices.size,
-      totalAmount,
+      totalSales,
+      totalCreditNotes,
+      totalNetSales,
       totalQuantity,
     };
   }, [partyReportRows]);
@@ -5309,8 +5403,6 @@ const Report = ({
   const productReportTotals = useMemo(() => {
     return filteredProductReportRows.reduce(
       (total, row) => ({
-        Rate: total.Rate + Number(row.Rate || 0),
-        MRP: total.MRP + Number(row.MRP || 0),
         Qty: total.Qty + Number(row.Qty || 0),
         FreeQty: total.FreeQty + Number(row.FreeQty || 0),
         AMT: total.AMT + Number(row.AMT || 0),
@@ -5318,11 +5410,8 @@ const Report = ({
         TPRAMT: total.TPRAMT + Number(row.TPRAMT || 0),
         Disc: total.Disc + Number(row.Disc || 0),
         CDAMT: total.CDAMT + Number(row.CDAMT || 0),
-        CDPercent: total.CDPercent + Number(row.CDPercent || 0),
       }),
       {
-        Rate: 0,
-        MRP: 0,
         Qty: 0,
         FreeQty: 0,
         AMT: 0,
@@ -5330,7 +5419,6 @@ const Report = ({
         TPRAMT: 0,
         Disc: 0,
         CDAMT: 0,
-        CDPercent: 0,
       }
     );
   }, [filteredProductReportRows]);
@@ -5341,6 +5429,13 @@ const Report = ({
   const getProductTotalValue = (column, columnIndex, totals) => {
     if (columnIndex === 0) return "TOTAL";
     const totalFieldMap = {
+      Qty: "Qty",
+      FreeQty: "FreeQty",
+      AMT: "AMT",
+      Weight: "Weight",
+      TPRAMT: "TPRAMT",
+      Disc: "Disc",
+      CDAMT: "CDAMT",
       openingStock: "openingStock",
       totalQty: "totalQty",
       freeQty: "freeQty",
@@ -5486,14 +5581,9 @@ const Report = ({
         )
       );
 
-      const escapeCsvValue = (value) => {
-        const text = String(value ?? "");
-        return `"${text.replace(/"/g, '""')}"`;
-      };
-
       const csvContent =
         "\uFEFF" +
-        csvRows.map((row) => row.map(escapeCsvValue).join(",")).join("\r\n");
+        csvRows.map((row) => row.map(csvCell).join(",")).join("\r\n");
 
       const csvBlob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
       const csvUrl = URL.createObjectURL(csvBlob);
@@ -5830,14 +5920,9 @@ const Report = ({
         )
       );
 
-      const escapeCsvValue = (value) => {
-        const text = String(value ?? "");
-        return `"${text.replace(/"/g, '""')}"`;
-      };
-
       const csvContent =
         "\uFEFF" +
-        csvRows.map((row) => row.map(escapeCsvValue).join(",")).join("\r\n");
+        csvRows.map((row) => row.map(csvCell).join(",")).join("\r\n");
 
       const csvBlob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
       const csvUrl = URL.createObjectURL(csvBlob);
@@ -6178,10 +6263,10 @@ const Report = ({
               <tbody>
                 {filteredGstRows.length ? filteredGstRows.map((row, rowIndex) => <tr className={(isSummary || isGstr1) && row.RowType ? `gst-summary-${row.RowType}` : ""} key={`${row.TrnSeries || row.Section || row.AccountName || activeGstrSheet || "gst"}-${row.TrnNo || row.SrNo || rowIndex}-${rowIndex}`}>{visibleGstColumns.map((column) => <td key={column.key} className={numericKeys.has(column.key) ? "party-report-number" : ""}>{formatCell(column, row[column.key])}</td>)}</tr>) : <tr><td colSpan={Math.max(visibleGstColumns.length, 1)} className="gst-empty-cell">No GST records match the selected criteria.</td></tr>}
               </tbody>
-              {!isSummary && !isGstr1 && !!filteredGstRows.length && <tfoot><tr>{visibleGstColumns.map((column, index) => <td key={column.key} className={numericKeys.has(column.key) ? "party-report-number" : ""}>{index === 0 ? "TOTAL" : Object.prototype.hasOwnProperty.call(gstTotals, column.key) ? formatCell(column, gstTotals[column.key]) : ""}</td>)}</tr></tfoot>}
+              {!isSummary && !isGstr1 && !!filteredGstRows.length && <tfoot><tr>{visibleGstColumns.map((column, index) => <td key={column.key} className={numericKeys.has(column.key) ? "party-report-number" : ""}>{index === 0 ? "TOTAL" : Object.prototype.hasOwnProperty.call(filteredGstTotals, column.key) ? formatCell(column, filteredGstTotals[column.key]) : ""}</td>)}</tr></tfoot>}
             </table>
           </div></div>
-          <div className="party-report-statusbar"><span>Records: {gstSummary?.records || 0}</span><span>Taxable: ₹ {formatReportNumber(gstSummary?.taxable || 0)} · GST: ₹ {formatReportNumber(gstSummary?.gst || 0)} · Bill Value: ₹ {formatReportNumber(gstSummary?.billValue || 0)}</span><span>Period: {gstFilters.fromDate} to {gstFilters.toDate}</span></div>
+          <div className="party-report-statusbar"><span>Records: {filteredGstSummary?.records || 0}</span><span>Taxable: ₹ {formatReportNumber(filteredGstSummary?.taxable || 0)} · GST: ₹ {formatReportNumber(filteredGstSummary?.gst || 0)} · Bill Value: ₹ {formatReportNumber(filteredGstSummary?.billValue || 0)}</span><span>Period: {gstFilters.fromDate} to {gstFilters.toDate}</span></div>
         </div>}
 
         {!gstGenerated && !gstError && <div className="report-result-card"><FileBarChart size={38} /><h3>No report generated</h3><p>Select the criteria from the supplied GST report design and click Generate Report.</p></div>}
@@ -6421,9 +6506,11 @@ const Report = ({
 
   if (isP0Report) {
     const showAccount = ["General Ledger", "Party Ledger", "Party Outstanding Report"].includes(selectedReport);
+    const isFinancialStatement = ["Trial Balance", "Profit & Loss", "Balance Sheet", "Cash Book", "Bank Book"].includes(selectedReport);
+    const isAsOfFinancialReport = ["Trial Balance", "Balance Sheet"].includes(selectedReport);
     const showProduct = ["Product Ledger", "Stock Movement Ledger"].includes(selectedReport);
     const isStockDataReport = ["Current Stock Report", "As On Date Stock Report", "Damage Stock Report", "Product Ledger", "Stock Movement Ledger"].includes(selectedReport);
-    const showDateRange = !["Current Stock Report", "As On Date Stock Report", "Party Outstanding Report"].includes(selectedReport);
+    const showDateRange = !["Current Stock Report", "As On Date Stock Report", "Party Outstanding Report", "Trial Balance", "Balance Sheet"].includes(selectedReport);
     const isCurrentStock = selectedReport === "Current Stock Report";
     const isAsOnDateStock = selectedReport === "As On Date Stock Report";
     const isDamageStock = selectedReport === "Damage Stock Report";
@@ -6438,7 +6525,10 @@ const Report = ({
             <div className="report-title-icon"><ReportIcon size={22} /></div>
             <div><span className="report-category">{reportInformation.category}</span><h1>{reportInformation.title}</h1><p>{reportInformation.description}</p></div>
           </div>
+          {isFinancialStatement && <button type="button" className="report-clear-button" onClick={() => setChartSetupOpen((open) => !open)}>{chartSetupOpen ? "Hide Chart Setup" : "Chart of Accounts Setup"}</button>}
         </div>
+
+        {isFinancialStatement && chartSetupOpen && <ChartOfAccountsSetup onClose={() => setChartSetupOpen(false)} />}
 
           <div className="report-filter-card">
           <div className="report-filter-heading"><div><h2>Report Criteria</h2><p>Figures are loaded from the current firm's persistent transactions.</p></div></div>
@@ -6448,6 +6538,7 @@ const Report = ({
             {(isCurrentStock || isAsOnDateStock || isDamageStock) && <div className="report-field"><label>Report Level</label><select value={p0Filters.reportLevel} onChange={(e) => updateP0Filter("reportLevel", e.target.value)}><option value="productBatch">Product / Batch</option><option value="product">Product</option><option value="company">Company</option></select></div>}
             {showDateRange && <div className="report-field"><label>From Date</label><input type="date" value={p0Filters.fromDate} onChange={(e) => updateP0Filter("fromDate", e.target.value)} /></div>}
             {showDateRange && <div className="report-field"><label>To Date</label><input type="date" value={p0Filters.toDate} onChange={(e) => updateP0Filter("toDate", e.target.value)} /></div>}
+            {isAsOfFinancialReport && <div className="report-field"><label>As On Date</label><input type="date" value={p0Filters.toDate} onChange={(e) => updateP0Filter("toDate", e.target.value)} /></div>}
             {isAsOnDateStock && <div className="report-field"><label>As On Date</label><input type="date" value={p0Filters.asOnDate} onChange={(e) => updateP0Filter("asOnDate", e.target.value)} /></div>}
             {showAccount && <div className="report-field report-field-wide"><label>Account / Party</label><input value={p0Filters.account} placeholder="Account code or name" onChange={(e) => updateP0Filter("account", e.target.value)} /></div>}
             {showProduct && <div className="report-field report-field-wide"><label>Product</label><select value={p0Filters.product} onChange={(e) => updateP0Filter("product", e.target.value)}><option value="">All Products</option>{products.map((product, index) => { const code = product.productCode || product.code || product._id || index; const name = product.productName || product.name || code; return <option key={product._id || code} value={code}>{name}</option>; })}</select></div>}
@@ -6609,7 +6700,7 @@ const Report = ({
 
           <div className="report-filter-grid">
             <div className="report-field">
-              <label>Company</label>
+              <label><Building2 size={14} /> Company</label>
               <select
                 value={stockSalesFilters.companyCode}
                 onChange={(event) => setStockSalesFilters((old) => ({ ...old, companyCode: event.target.value }))}
@@ -6623,7 +6714,7 @@ const Report = ({
             </div>
 
             <div className="report-field">
-              <label>Report Level</label>
+              <label><BarChart3 size={14} /> Report Level</label>
               <select value={stockSalesFilters.reportLevel} onChange={(event) => setStockSalesFilters((old) => ({ ...old, reportLevel: event.target.value }))}>
                 <option value="unit">Unit Wise</option>
                 <option value="product">Product Wise</option>
@@ -6735,11 +6826,11 @@ const Report = ({
               </div>
             </div>
             <div className="stock-sales-summary">
-              <span>Records <strong>{stockSalesSummary?.records || 0}</strong></span>
-              <span>Stock Qty <strong>{numberText(stockSalesSummary?.stockQty, 3)}</strong></span>
-              <span>Sales Qty <strong>{numberText(stockSalesSummary?.totalSalesQty, 3)}</strong></span>
-              <span>Free Qty <strong>{numberText(stockSalesSummary?.freeQty, 3)}</strong></span>
-              <span>Sales Amount <strong>₹ {numberText(stockSalesSummary?.salesAmount)}</strong></span>
+              <span>Records <strong>{filteredStockSalesSummary?.records || 0}</strong></span>
+              <span>Stock Qty <strong>{numberText(filteredStockSalesSummary?.stockQty, 3)}</strong></span>
+              <span>Sales Qty <strong>{numberText(filteredStockSalesSummary?.totalSalesQty, 3)}</strong></span>
+              <span>Free Qty <strong>{numberText(filteredStockSalesSummary?.freeQty, 3)}</strong></span>
+              <span>Sales Amount <strong>₹ {numberText(filteredStockSalesSummary?.salesAmount)}</strong></span>
             </div>
             <div className="party-report-grid-container stock-sales-table-wrap">
               {filteredStockSalesRows.length === 0 ? (
@@ -7565,7 +7656,7 @@ const Report = ({
               </button>
 
               <div className="party-title-icon">
-                <Users size={21} />
+                <BarChart3 size={21} />
               </div>
 
               <div className="party-title-content">
@@ -7574,14 +7665,24 @@ const Report = ({
                 <p>Detailed party-wise sales analysis with advanced filtering and insights</p>
               </div>
             </div>
-
+            <div className="party-report-breadcrumb">Reports <span>›</span> Party Wise Sales Report</div>
           </div>
 
           <div className="party-report-content-layout">
             <main className="party-report-main-column">
               <div className="party-report-filter-panel">
                 <fieldset className="party-filter-group" aria-label="Report filters">
-                  <div className="party-report-form-grid">
+                  <div className="party-report-filter-heading">
+                    <div><SlidersHorizontal size={16} /><strong>Report Criteria</strong></div>
+                    <button
+                      type="button"
+                      aria-expanded={showAdvancedPartyFilters}
+                      onClick={() => setShowAdvancedPartyFilters((expanded) => !expanded)}
+                    >
+                      {showAdvancedPartyFilters ? "Collapse" : "Show Filters"}
+                    </button>
+                  </div>
+                  {showAdvancedPartyFilters && <div className="party-report-form-grid">
                     <div className="party-report-field">
                       <label>Company</label>
                       <select
@@ -7645,7 +7746,7 @@ const Report = ({
 
                     {partySalesFilters.reportLevel === "selectedParty" && (
                       <div className="party-report-field party-field-wide">
-                        <label>Selected Parties</label>
+                        <label><Users size={14} /> Selected Parties</label>
                         <div className="party-multi-select">
                           <button
                             type="button"
@@ -7673,7 +7774,7 @@ const Report = ({
                     )}
 
                     <div className="party-report-field">
-                      <label>Selected Area</label>
+                      <label><MapPin size={14} /> Selected Area</label>
                       <select
                         value={partySalesFilters.selectedArea}
                         disabled={!partySalesFilters.company}
@@ -7699,7 +7800,7 @@ const Report = ({
                     </div>
 
                     <div className="party-report-field">
-                      <label>Select Salesman</label>
+                      <label><Users size={14} /> Select Salesman</label>
                       <select
                         value={partySalesFilters.selectedSalesman}
                         disabled={!partySalesFilters.company}
@@ -7725,7 +7826,7 @@ const Report = ({
                     </div>
 
                     <div className="party-report-field">
-                      <label>Product Wise</label>
+                      <label><PackageSearch size={14} /> Product Wise</label>
                       <select
                         value={
                           partySalesFilters.reportLevel === "salesDetails"
@@ -7763,7 +7864,7 @@ const Report = ({
                     </div>
 
                     <div className="party-report-field">
-                      <label>From Date</label>
+                      <label><CalendarDays size={14} /> From Date</label>
                       <input
                         type="date"
                         value={partySalesFilters.fromDate}
@@ -7774,7 +7875,7 @@ const Report = ({
                     </div>
 
                     <div className="party-report-field">
-                      <label>To Date</label>
+                      <label><CalendarDays size={14} /> To Date</label>
                       <input
                         type="date"
                         value={partySalesFilters.toDate}
@@ -7785,7 +7886,7 @@ const Report = ({
                     </div>
 
                     <div className="party-report-field">
-                      <label>With Credit Note</label>
+                      <label><FileText size={14} /> With Credit Note</label>
                       <select
                         value={partySalesFilters.withCreditNote}
                         onChange={(event) =>
@@ -7798,7 +7899,7 @@ const Report = ({
                     </div>
 
                     <div className="party-report-field">
-                      <label>Order By</label>
+                      <label><ArrowUpDown size={14} /> Order By</label>
                       <select
                         value={partySalesFilters.orderBy}
                         onChange={(event) =>
@@ -7815,9 +7916,17 @@ const Report = ({
                         <option value="netAmount">Net Amount</option>
                       </select>
                     </div>
-                    <div className="party-report-export-field">
-                      <ReportExportActions generate={generatePartySalesReport} exportCsv={exportPartyReportToCsv} exportExcel={exportPartyReportToExcel} ready={isPartyReportGenerated} loading={isPartyReportLoading} disabled={isCriteriaLoading} />
-                    </div>
+                  </div>}
+                  <div className="party-report-export-field">
+                    <button
+                      type="button"
+                      className="party-report-reset-button"
+                      onClick={resetPartySalesFilters}
+                      disabled={isCriteriaLoading || isPartyReportLoading}
+                    >
+                      <RefreshCw size={14} /> Reset
+                    </button>
+                    <ReportExportActions generate={generatePartySalesReport} exportCsv={exportPartyReportToCsv} exportExcel={exportPartyReportToExcel} ready={isPartyReportGenerated} loading={isPartyReportLoading} disabled={isCriteriaLoading} showFilterToggle={false} />
                   </div>
                 </fieldset>
 
@@ -8104,7 +8213,7 @@ const Report = ({
                       <FileBarChart size={17} />
                     </div>
                     <div>
-                      <strong>Report Results</strong>
+                      <strong>Party Wise Sales Report</strong>
                       <span>
                         {isPartyReportGenerated
                           ? `${filteredPartySalesRows.length} records found`
@@ -8204,6 +8313,16 @@ const Report = ({
                   </div>
                 </div>
 
+                {isPartyReportGenerated && (
+                  <div className="party-report-metrics" aria-label="Report summary">
+                    <article><span className="party-metric-icon parties"><Users size={18} /></span><div><small>Total Parties</small><strong>{partyQuickSummary.totalParties.toLocaleString("en-IN")}</strong></div></article>
+                    <article><span className="party-metric-icon sales"><IndianRupee size={18} /></span><div><small>Total Sales</small><strong>₹ {formatReportNumber(partyQuickSummary.totalSales)}</strong></div></article>
+                    <article><span className="party-metric-icon credit"><FileText size={18} /></span><div><small>Total Credit Note</small><strong>₹ {formatReportNumber(partyQuickSummary.totalCreditNotes)}</strong></div></article>
+                    <article><span className="party-metric-icon net"><BadgeCheck size={18} /></span><div><small>Net Sales</small><strong>₹ {formatReportNumber(partyQuickSummary.totalNetSales)}</strong></div></article>
+                    <article><span className="party-metric-icon orders"><ShoppingCart size={18} /></span><div><small>Total Orders</small><strong>{partyQuickSummary.totalInvoices.toLocaleString("en-IN")}</strong></div></article>
+                  </div>
+                )}
+
                 <div className="party-report-grid-container">
                   {!isPartyReportGenerated ? (
                     <div className="party-empty-report">
@@ -8299,58 +8418,30 @@ const Report = ({
 
                 <div className="party-report-statusbar">
                   <span>
-                    Records: {isPartyReportGenerated ? filteredPartySalesRows.length : 0}
+                    Showing {partyStartRecord} to {partyEndRecord} of {isPartyReportGenerated ? filteredPartySalesRows.length : 0} entries
                   </span>
-                  <span>
-                    Level: {partySalesFilters.reportLevel === "salesSummary" ? "Sales Summary" : partySalesFilters.reportLevel === "salesDetails" ? "Sales Details" : "Selected Party"}
-                  </span>
-                  <span>
-                    Period: {partySalesFilters.fromDate || "--"} to {partySalesFilters.toDate || "--"}
-                  </span>
+                  <div className="party-report-pagination" aria-label="Report pagination">
+                    <button type="button" onClick={() => setPartyCurrentPage(1)} disabled={partySafeCurrentPage <= 1} aria-label="First page">First</button>
+                    <button type="button" onClick={() => setPartyCurrentPage((page) => Math.max(1, page - 1))} disabled={partySafeCurrentPage <= 1} aria-label="Previous page">Previous</button>
+                    <span>Page {partySafeCurrentPage} of {partyTotalPages}</span>
+                    <button type="button" onClick={() => setPartyCurrentPage((page) => Math.min(partyTotalPages, page + 1))} disabled={partySafeCurrentPage >= partyTotalPages} aria-label="Next page">Next</button>
+                    <button type="button" onClick={() => setPartyCurrentPage(partyTotalPages)} disabled={partySafeCurrentPage >= partyTotalPages} aria-label="Last page">Last</button>
+                    <label>
+                      <span className="sr-only">Rows per page</span>
+                      <select
+                        value={partyRowsPerPage}
+                        onChange={(event) => {
+                          setPartyRowsPerPage(Number(event.target.value));
+                          setPartyCurrentPage(1);
+                        }}
+                      >
+                        {[10, 25, 50, 100].map((size) => <option key={size} value={size}>{size} / page</option>)}
+                      </select>
+                    </label>
+                  </div>
                 </div>
               </div>
             </main>
-
-            <aside className="party-report-sidebar">
-              <section className="party-sidebar-card">
-                <div className="party-sidebar-card-title">
-                  <BarChart3 size={18} />
-                  <strong>Quick Summary</strong>
-                </div>
-
-                <div className="party-summary-item">
-                  <span className="party-summary-icon"><Users size={17} /></span>
-                  <div>
-                    <small>Total Records</small>
-                    <strong>{filteredPartySalesRows.length.toLocaleString("en-IN")}</strong>
-                  </div>
-                </div>
-
-                <div className="party-summary-item">
-                  <span className="party-summary-icon"><FileText size={17} /></span>
-                  <div>
-                    <small>Report Level</small>
-                    <strong>{partySalesFilters.reportLevel === "salesSummary" ? "Sales Summary" : partySalesFilters.reportLevel === "salesDetails" ? "Sales Details" : "Selected Party"}</strong>
-                  </div>
-                </div>
-
-                <div className="party-summary-item">
-                  <span className="party-summary-icon"><ShoppingCart size={17} /></span>
-                  <div>
-                    <small>Total Quantity</small>
-                    <strong>{formatReportNumber(partySalesTotals.qty || 0)}</strong>
-                  </div>
-                </div>
-
-                <div className="party-summary-item">
-                  <span className="party-summary-icon"><BarChart3 size={17} /></span>
-                  <div>
-                    <small>Total Amount</small>
-                    <strong>₹ {formatReportNumber(partySalesTotals.netAmount || 0)}</strong>
-                  </div>
-                </div>
-              </section>
-            </aside>
           </div>
         </div>
       </div>
@@ -9090,12 +9181,8 @@ const Report = ({
                           <tfoot>
                             <tr>
                               <td colSpan="6" style={{ fontWeight: 'bold', textAlign: 'right' }}>TOTAL</td>
-                              <td className="party-report-number" style={{ fontWeight: 'bold' }}>
-                                {formatReportNumber(productReportTotals.Rate || 0)}
-                              </td>
-                              <td className="party-report-number" style={{ fontWeight: 'bold' }}>
-                                {formatReportNumber(productReportTotals.MRP || 0)}
-                              </td>
+                              <td className="party-report-number" style={{ fontWeight: 'bold' }}></td>
+                              <td className="party-report-number" style={{ fontWeight: 'bold' }}></td>
                               <td className="party-report-number" style={{ fontWeight: 'bold' }}>
                                 {formatReportNumber(productReportTotals.Qty || 0)}
                               </td>
@@ -9117,9 +9204,7 @@ const Report = ({
                               <td className="party-report-number" style={{ fontWeight: 'bold' }}>
                                 {formatReportNumber(productReportTotals.CDAMT || 0)}
                               </td>
-                              <td className="party-report-number" style={{ fontWeight: 'bold' }}>
-                                {formatReportNumber(productReportTotals.CDPercent || 0)}
-                              </td>
+                              <td className="party-report-number" style={{ fontWeight: 'bold' }}></td>
                               <td colSpan="2"></td>
                             </tr>
                           </tfoot>

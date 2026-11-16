@@ -57,6 +57,26 @@ test("financial totals are derived from quantity, rate, discounts and tax", () =
   assert.throws(() => validateFinancialEnvelope({}, [{ qty: -1, rate: 10 }]), /valid number/);
 });
 
+test("sales calculations keep free units in stock quantity but not billed gross", () => {
+  const result = validateFinancialEnvelope(
+    {},
+    [{ qty: 10, free: 2, rate: 100 }],
+    { vatMode: "GROSS_AMOUNT" }
+  );
+  assert.equal(result.GrossAmount, 1000);
+  assert.equal(result.TotalQty, 12);
+  assert.equal(result.TotalFreeQty, 2);
+
+  assert.throws(
+    () => validateFinancialEnvelope({}, [{ qty: 1, rate: 100, schemeAmt: 80, starAmt: 80 }]),
+    /combined discounts cannot exceed gross/i
+  );
+  assert.throws(
+    () => validateFinancialEnvelope({ CreditNoteAmount: 101 }, [{ qty: 1, rate: 100 }]),
+    /credit note amount cannot exceed invoice value/i
+  );
+});
+
 test("purchase financial validation rejects a zero Purchase Rate before journal posting", () => {
   assert.throws(
     () => validateFinancialEnvelope(

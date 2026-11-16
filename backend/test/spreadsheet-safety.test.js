@@ -11,6 +11,7 @@ test("spreadsheet formula payloads are neutralized without changing numeric nega
   assert.equal(sanitizeSpreadsheetCell("ordinary text"), "ordinary text");
   assert.deepEqual(sanitizeSpreadsheetRow({ text: "=1+1", amount: -2 }), { text: "'=1+1", amount: -2 });
   assert.equal(csvCell('=HYPERLINK("bad")'), '"\'=HYPERLINK(""bad"")"');
+  assert.equal(csvCell(-125.5), '"-125.5"');
 });
 
 test("desktop backup preflight rejects renamed arbitrary files", () => {

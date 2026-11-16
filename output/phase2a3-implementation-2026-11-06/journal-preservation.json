@@ -1,0 +1,11 @@
+{
+  "baselineFiles": 161,
+  "isolatedChanged": [
+    "./backend/p0Features.js"
+  ],
+  "originalFilesChecked": 343,
+  "originalDifferences": [],
+  "salesServicePreserved": true,
+  "accountingPreserved": true,
+  "openingBalancesPreserved": true
+}

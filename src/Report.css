@@ -3575,7 +3575,8 @@
 }
 
 /* Fix for the all party report status bar */
-.party-report-statusbar {
+.report-page .party-report-statusbar,
+.party-classic-report-page .party-report-statusbar {
   display: flex;
   min-height: 28px;
   align-items: center;
@@ -5255,7 +5256,8 @@
   font-weight: 750;
 }
 
-.party-report-statusbar {
+.report-page .party-report-statusbar,
+.party-classic-report-page .party-report-statusbar {
   display: flex;
   min-height: 28px;
   align-items: center;
@@ -6390,6 +6392,307 @@ input[placeholder="Search reports..."]::placeholder {
     padding: 8px !important;
   }
 
+  .party-classic-report-page.party-wise-sales-report-page {
+    height: auto !important;
+    min-height: calc(100vh - 74px) !important;
+    min-width: 0 !important;
+    overflow: visible !important;
+    padding: 0 28px 28px !important;
+    background: #ffffff !important;
+  }
+
+  .party-wise-sales-report-page .party-classic-report-window {
+    height: auto !important;
+    min-width: 0 !important;
+    overflow: visible !important;
+    background: #ffffff !important;
+  }
+
+  .party-wise-sales-report-page .party-classic-titlebar {
+    min-height: 94px !important;
+    margin: 0 -28px 16px !important;
+    padding: 16px 42px !important;
+    border-bottom: 1px solid #e6edf7 !important;
+    background: linear-gradient(110deg, #f3f8ff 0%, #e3efff 100%) !important;
+  }
+
+  .party-wise-sales-report-page .party-title-icon {
+    width: 54px !important;
+    height: 54px !important;
+    flex-basis: 54px !important;
+    border-radius: 15px !important;
+    background: #e4efff !important;
+    color: #1762d5 !important;
+  }
+
+  .party-wise-sales-report-page .party-title-content > span {
+    color: #1d67df !important;
+  }
+
+  .party-wise-sales-report-page .party-classic-titlebar h1 {
+    color: #173466 !important;
+  }
+
+  .party-wise-sales-report-page .party-title-content > p {
+    color: #687b99 !important;
+  }
+
+  .party-wise-sales-report-page .party-report-breadcrumb {
+    color: #637795;
+    font-size: 11px;
+    white-space: nowrap;
+  }
+
+  .party-wise-sales-report-page .party-report-breadcrumb span {
+    display: inline !important;
+    padding: 0 7px;
+    color: #9aa8bc;
+  }
+
+  .party-wise-sales-report-page .party-report-content-layout {
+    display: block !important;
+    padding: 0 !important;
+    overflow: visible !important;
+  }
+
+  .party-wise-sales-report-page .party-report-main-column {
+    gap: 16px !important;
+  }
+
+  .party-wise-sales-report-page .party-filter-group {
+    padding: 0 18px 14px !important;
+    border: 0 !important;
+    border-radius: 0 !important;
+    box-shadow: none !important;
+  }
+
+  .party-wise-sales-report-page .party-filter-group::before {
+    display: none !important;
+  }
+
+  .party-report-filter-heading {
+    display: flex;
+    min-height: 38px;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    margin: 0 -18px 13px;
+    padding: 0 6px 0 4px;
+    border-bottom: 1px solid #edf0f5;
+  }
+
+  .party-report-filter-heading > div {
+    display: flex;
+    align-items: center;
+    gap: 9px;
+    color: #263750;
+    font-size: 13px;
+  }
+
+  .party-report-filter-heading > div svg {
+    color: #2867d8;
+  }
+
+  .party-report-filter-heading button {
+    border: 0;
+    background: transparent;
+    color: #2867d8;
+    font-size: 11px;
+    font-weight: 650;
+    cursor: pointer;
+  }
+
+  .party-wise-sales-report-page .party-report-form-grid {
+    grid-template-columns: repeat(4, minmax(0, 1fr)) !important;
+    gap: 12px 16px !important;
+  }
+
+  .party-wise-sales-report-page .party-report-export-field {
+    position: static !important;
+    display: flex !important;
+    justify-content: flex-end !important;
+    width: auto !important;
+    margin: 12px -18px 0 !important;
+    padding: 12px 0 0 !important;
+    border-top: 1px solid #edf0f5;
+  }
+
+  .party-wise-sales-report-page .party-report-results {
+    min-height: 320px !important;
+    margin-top: 0 !important;
+    border-color: #e4e9f1 !important;
+    border-radius: 10px !important;
+    box-shadow: 0 3px 12px rgba(28, 48, 78, .04) !important;
+  }
+
+  .party-wise-sales-report-page .party-report-toolbar {
+    min-height: 58px !important;
+    padding: 10px 14px !important;
+  }
+
+  .party-wise-sales-report-page .party-grid-heading strong {
+    color: #20375e !important;
+    font-size: 14px !important;
+  }
+
+  .party-wise-sales-report-page .party-report-metrics {
+    display: grid;
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+    gap: 10px;
+    padding: 0 12px 12px;
+  }
+
+  .party-wise-sales-report-page .party-report-metrics article {
+    display: flex;
+    min-width: 0;
+    min-height: 60px;
+    align-items: center;
+    gap: 10px;
+    padding: 9px 11px;
+    border: 1px solid #e7ebf2;
+    border-radius: 8px;
+    background: #ffffff;
+    box-shadow: 0 2px 6px rgba(28, 48, 78, .035);
+  }
+
+  .party-report-metrics article > div {
+    min-width: 0;
+  }
+
+  .party-report-metrics small {
+    display: block;
+    overflow: hidden;
+    color: #78869d;
+    font-size: 10px;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .party-report-metrics strong {
+    display: block;
+    overflow: hidden;
+    margin-top: 3px;
+    color: #20375e;
+    font-size: 14px;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .party-metric-icon {
+    display: inline-flex;
+    width: 38px;
+    height: 38px;
+    flex: 0 0 38px;
+    align-items: center;
+    justify-content: center;
+    border-radius: 50%;
+  }
+
+  .party-metric-icon.parties,
+  .party-metric-icon.net { background: #eaf2ff; color: #3374df; }
+  .party-metric-icon.sales { background: #e4f7ed; color: #178c5c; }
+  .party-metric-icon.credit { background: #fff1e2; color: #ef7c20; }
+  .party-metric-icon.orders { background: #f3eaff; color: #8b50d7; }
+
+  .party-wise-sales-report-page .party-report-grid-container {
+    min-height: 200px !important;
+    max-height: min(52vh, 560px);
+  }
+
+  .party-wise-sales-report-page .party-report-table thead th {
+    background: #f4f7fc !important;
+    color: #34445d !important;
+  }
+
+  .party-wise-sales-report-page .party-report-statusbar {
+    min-height: 42px !important;
+    flex-wrap: wrap;
+    padding: 5px 12px !important;
+    color: #66758e !important;
+  }
+
+  .party-report-pagination {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+
+  .party-report-pagination button,
+  .party-report-pagination select {
+    min-height: 30px;
+    padding: 0 9px;
+    border: 1px solid #dfe5ef;
+    border-radius: 6px;
+    background: #ffffff;
+    color: #42526c;
+    font-size: 10px;
+  }
+
+  .party-report-pagination button {
+    cursor: pointer;
+  }
+
+  .party-report-pagination button:disabled {
+    color: #a4afbf;
+    cursor: not-allowed;
+  }
+
+  .party-report-pagination > span {
+    padding: 0 4px;
+    white-space: nowrap;
+  }
+
+  .party-report-pagination select {
+    padding-right: 22px;
+  }
+
+  @media (max-width: 1000px) {
+    .party-wise-sales-report-page .party-report-metrics {
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+    }
+  }
+
+  @media (max-width: 760px) {
+    .party-classic-report-page.party-wise-sales-report-page {
+      padding: 0 16px 20px !important;
+    }
+
+    .party-wise-sales-report-page .party-classic-titlebar {
+      margin: 0 -16px 12px !important;
+      padding: 14px 18px !important;
+    }
+
+    .party-wise-sales-report-page .party-report-breadcrumb {
+      display: none;
+    }
+
+    .party-wise-sales-report-page .party-report-form-grid {
+      grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+    }
+
+    .party-wise-sales-report-page .party-report-metrics {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+  }
+
+  @media (max-width: 500px) {
+    .party-wise-sales-report-page .party-title-icon {
+      width: 42px !important;
+      height: 42px !important;
+      flex-basis: 42px !important;
+    }
+
+    .party-wise-sales-report-page .party-report-form-grid,
+    .party-wise-sales-report-page .party-report-metrics {
+      grid-template-columns: minmax(0, 1fr) !important;
+    }
+
+    .party-report-pagination {
+      width: 100%;
+      flex-wrap: wrap;
+    }
+  }
+
   .report-page-header,
   .party-classic-report-page .party-classic-titlebar {
     min-height: 92px !important;
@@ -6615,5 +6918,769 @@ input[placeholder="Search reports..."]::placeholder {
 @media (max-width: 700px) {
   .party-classic-report-page .party-filter-group > .party-title-actions {
     right: 14px !important;
+  }
+}
+
+.chart-setup-panel {
+  margin: 0 0 12px;
+  padding: 18px;
+  border: 1px solid #d6e0ef;
+  border-radius: 12px;
+  background: #fff;
+}
+
+.chart-setup-header,
+.chart-setup-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.chart-setup-header h2 {
+  margin: 0 0 5px;
+  color: #102a59;
+  font-size: 17px;
+}
+
+.chart-setup-header p {
+  margin: 0;
+  color: #637895;
+  font-size: 12px;
+}
+
+.chart-setup-actions {
+  justify-content: flex-end;
+  flex-shrink: 0;
+}
+
+.chart-setup-table-wrap {
+  margin-top: 14px;
+  overflow: auto;
+  max-height: 55vh;
+}
+
+.chart-setup-table {
+  min-width: 1160px;
+}
+
+.chart-setup-table select {
+  min-width: 104px;
+  max-width: 160px;
+  padding: 6px 8px;
+  border: 1px solid #cbd6e5;
+  border-radius: 6px;
+  background: #fff;
+  color: #18345e;
+  font: inherit;
+}
+
+.chart-setup-table .report-clear-button,
+.chart-setup-actions .report-clear-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+}
+
+.chart-setup-empty {
+  margin: 16px 0 0;
+  color: #637895;
+  font-size: 13px;
+}
+
+.chart-setup-success {
+  margin-top: 10px;
+  padding: 9px 12px;
+  border: 1px solid #b8dfc7;
+  border-radius: 8px;
+  background: #effaf2;
+  color: #176534;
+  font-size: 12px;
+}
+
+@media (max-width: 700px) {
+  .chart-setup-header {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .chart-setup-actions {
+    justify-content: flex-start;
+  }
+}
+
+/* Unified compact report workspace */
+.report-page,
+.party-classic-report-page {
+  min-width: 0 !important;
+  padding: clamp(12px, 1.8vw, 26px) !important;
+  background: #f5f7fb !important;
+  color: #192943 !important;
+  font-family: Inter, "Segoe UI", Arial, sans-serif !important;
+}
+
+.party-classic-report-page .party-classic-report-window,
+.party-classic-report-page .party-report-content-layout,
+.party-classic-report-page .party-report-main-column {
+  width: 100% !important;
+  min-width: 0 !important;
+  background: transparent !important;
+}
+
+.party-classic-report-page .party-report-content-layout {
+  padding: 0 !important;
+}
+
+.party-classic-report-page .party-report-main-column {
+  gap: 16px !important;
+}
+
+.report-page-header,
+.party-classic-report-page .party-classic-titlebar {
+  display: flex !important;
+  min-height: 84px !important;
+  align-items: center !important;
+  justify-content: space-between !important;
+  gap: 16px !important;
+  margin: 0 0 16px !important;
+  padding: 16px 20px !important;
+  border: 1px solid #e4e9f1 !important;
+  border-radius: 12px !important;
+  background: #ffffff !important;
+  box-shadow: 0 3px 12px rgba(28, 48, 78, .045) !important;
+}
+
+.report-title-section,
+.party-classic-report-page .party-report-title-left {
+  min-width: 0 !important;
+  align-items: center !important;
+  gap: 14px !important;
+  padding: 0 !important;
+  border: 0 !important;
+  background: transparent !important;
+}
+
+.report-back-button,
+.party-classic-report-page .party-title-back {
+  width: 38px !important;
+  height: 38px !important;
+  flex: 0 0 38px !important;
+  border: 1px solid #e0e6ef !important;
+  border-radius: 9px !important;
+  background: #ffffff !important;
+  color: #53647d !important;
+  box-shadow: none !important;
+}
+
+.report-title-icon,
+.party-classic-report-page .party-title-icon {
+  width: 42px !important;
+  height: 42px !important;
+  flex: 0 0 42px !important;
+  border: 0 !important;
+  border-radius: 11px !important;
+  background: #edf3ff !important;
+  color: #3975e8 !important;
+}
+
+.report-title-section h1,
+.party-classic-report-page .party-classic-titlebar h1 {
+  margin: 0 !important;
+  color: #192943 !important;
+  font-size: clamp(20px, 1.65vw, 25px) !important;
+  line-height: 1.2 !important;
+  font-weight: 720 !important;
+  letter-spacing: -.3px !important;
+}
+
+.report-page .report-category,
+.party-classic-report-page .party-title-content > span {
+  display: block !important;
+  margin: 0 0 4px !important;
+  color: #6681a6 !important;
+  font-size: 10px !important;
+  line-height: 1.2 !important;
+  font-weight: 700 !important;
+  letter-spacing: .65px !important;
+  text-transform: uppercase !important;
+}
+
+.report-page .report-title-section p,
+.party-classic-report-page .party-title-content > p {
+  margin: 5px 0 0 !important;
+  color: #73819a !important;
+  font-size: 12px !important;
+  line-height: 1.45 !important;
+}
+
+.report-filter-card,
+.party-classic-report-page .party-filter-group,
+.report-page .gst-filter-card {
+  position: relative !important;
+  width: 100% !important;
+  min-height: 0 !important;
+  margin: 0 !important;
+  padding: 18px !important;
+  border: 1px solid #e4e9f1 !important;
+  border-radius: 12px !important;
+  background: #ffffff !important;
+  box-shadow: 0 3px 12px rgba(28, 48, 78, .04) !important;
+}
+
+.report-page .report-filter-heading {
+  display: flex !important;
+  align-items: flex-start !important;
+  justify-content: space-between !important;
+  gap: 12px !important;
+  margin: 0 0 14px !important;
+  padding: 0 0 13px !important;
+  border-bottom: 1px solid #edf0f5 !important;
+}
+
+.report-page .report-filter-heading h2 {
+  margin: 0 !important;
+  color: #263750 !important;
+  font-size: 14px !important;
+  font-weight: 700 !important;
+}
+
+.report-page .report-filter-heading p {
+  margin: 4px 0 0 !important;
+  color: #8491a5 !important;
+  font-size: 11px !important;
+}
+
+.party-classic-report-page .party-filter-group legend {
+  display: block !important;
+  float: none !important;
+  width: auto !important;
+  margin: 0 0 14px !important;
+  padding: 0 0 12px !important;
+  border: 0 !important;
+  border-bottom: 1px solid #edf0f5 !important;
+  color: #263750 !important;
+  font-size: 14px !important;
+  line-height: 1.3 !important;
+  font-weight: 700 !important;
+}
+
+.party-classic-report-page.party-wise-sales-report-page .party-filter-group::before {
+  content: "Report filters";
+  display: block;
+  margin: 0 0 14px;
+  padding: 0 0 12px;
+  border-bottom: 1px solid #edf0f5;
+  color: #263750;
+  font-size: 14px;
+  line-height: 1.3;
+  font-weight: 700;
+}
+
+.report-page .gst-filter-card:not(.gstr1-criteria-card)::before {
+  content: "Report filters";
+  display: block;
+  margin: 0 0 14px;
+  padding: 0 0 12px;
+  border-bottom: 1px solid #edf0f5;
+  color: #263750;
+  font-size: 14px;
+  line-height: 1.3;
+  font-weight: 700;
+}
+
+.report-filter-grid,
+.gst-filter-grid,
+.party-classic-report-page .party-report-form-grid,
+.party-classic-report-page .party-report-form-row {
+  grid-template-columns: repeat(4, minmax(0, 1fr)) !important;
+  align-items: start !important;
+  gap: 13px 16px !important;
+}
+
+.report-field,
+.party-classic-report-page .party-report-field {
+  gap: 5px !important;
+}
+
+.report-field > label,
+.party-classic-report-page .party-report-field > label {
+  min-height: 16px !important;
+  color: #51617a !important;
+  font-size: 11px !important;
+  line-height: 16px !important;
+  font-weight: 650 !important;
+}
+
+.report-field > input:not([type="checkbox"]),
+.report-field > select,
+.party-classic-report-page .party-report-field > input:not([type="checkbox"]),
+.party-classic-report-page .party-report-field > select,
+.party-classic-report-page .party-multi-select-trigger {
+  width: 100% !important;
+  height: 38px !important;
+  min-height: 38px !important;
+  padding-top: 0 !important;
+  padding-bottom: 0 !important;
+  border: 1px solid #dce3ed !important;
+  border-radius: 8px !important;
+  background-color: #ffffff !important;
+  color: #34445d !important;
+  font-size: 12px !important;
+  line-height: normal !important;
+  box-shadow: none !important;
+}
+
+.report-field > select,
+.party-classic-report-page .party-report-field > select,
+.party-classic-report-page .party-multi-select-trigger,
+.party-wise-sales-report-page .party-report-export-field .report-export-button {
+  padding-left: 12px !important;
+}
+
+.report-field > input:not([type="date"]):not([type="checkbox"]),
+.party-classic-report-page .party-report-field > input:not([type="date"]):not([type="checkbox"]) {
+  padding-left: 12px !important;
+}
+
+.report-field > input[type="date"],
+.party-classic-report-page .party-report-field > input[type="date"] {
+  padding-left: 12px !important;
+}
+
+.report-field:has(> select)::before,
+.report-field:has(> input[type="date"])::before,
+.party-classic-report-page .party-report-field:has(> select)::before,
+.party-classic-report-page .party-report-field:has(> input[type="date"])::before {
+  display: none !important;
+}
+
+.report-field > input:focus,
+.report-field > select:focus,
+.party-classic-report-page .party-report-field > input:focus,
+.party-classic-report-page .party-report-field > select:focus,
+.party-classic-report-page .party-multi-select-trigger:focus {
+  border-color: #78a1eb !important;
+  box-shadow: 0 0 0 3px rgba(57, 117, 232, .11) !important;
+}
+
+.report-filter-actions,
+.party-classic-report-page .party-filter-group > .party-title-actions {
+  position: static !important;
+  display: flex !important;
+  width: 100% !important;
+  min-height: 42px !important;
+  align-items: center !important;
+  justify-content: flex-end !important;
+  gap: 9px !important;
+  margin: 14px 0 0 !important;
+  padding: 12px 0 0 !important;
+  border-top: 1px solid #edf0f5 !important;
+}
+
+.party-classic-report-page.party-wise-sales-report-page .party-report-export-field {
+  position: static !important;
+  display: flex !important;
+  grid-column: 1 / -1 !important;
+  min-height: 42px !important;
+  justify-content: flex-end !important;
+  align-items: center !important;
+  margin: 2px 0 0 !important;
+  padding-top: 12px !important;
+  border-top: 1px solid #edf0f5 !important;
+}
+
+.report-export-actions {
+  position: relative !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  gap: 8px !important;
+}
+
+.report-page .report-generate-button,
+.party-classic-report-page .report-generate-button {
+  order: 0 !important;
+  display: inline-flex !important;
+  min-width: 142px !important;
+  height: 40px !important;
+  align-items: center !important;
+  justify-content: center !important;
+  gap: 7px !important;
+  padding: 0 15px !important;
+  border: 1px solid #2e66d2 !important;
+  border-radius: 8px !important;
+  background: #326bd9 !important;
+  color: #ffffff !important;
+  font-size: 12px !important;
+  font-weight: 650 !important;
+  box-shadow: 0 3px 8px rgba(41, 96, 193, .18) !important;
+  cursor: pointer !important;
+}
+
+.report-page .report-generate-button:hover:not(:disabled),
+.party-classic-report-page .report-generate-button:hover:not(:disabled) {
+  background: #285dc4 !important;
+}
+
+.report-page .report-export-button,
+.party-classic-report-page .report-export-button {
+  min-width: 104px !important;
+  height: 40px !important;
+  padding: 0 12px !important;
+  border: 1px solid #dce3ed !important;
+  border-radius: 8px !important;
+  background: #ffffff !important;
+  color: #3c4d67 !important;
+  font-size: 12px !important;
+  font-weight: 600 !important;
+  box-shadow: none !important;
+}
+
+.report-page .report-export-button:hover:not(:disabled),
+.report-page .report-export-button[aria-expanded="true"],
+.party-classic-report-page .report-export-button:hover:not(:disabled),
+.party-classic-report-page .report-export-button[aria-expanded="true"] {
+  border-color: #b9c9e0 !important;
+  background: #f8faff !important;
+}
+
+.report-export-menu {
+  top: auto !important;
+  right: 0 !important;
+  bottom: calc(100% + 7px) !important;
+  min-width: 148px !important;
+  padding: 5px !important;
+  border: 1px solid #e0e6ef !important;
+  border-radius: 9px !important;
+  box-shadow: 0 10px 24px rgba(25, 43, 69, .14) !important;
+}
+
+.report-export-menu button {
+  padding: 9px 10px !important;
+  border-radius: 6px !important;
+  color: #3d4d65 !important;
+  font-size: 12px !important;
+}
+
+.report-export-menu button:hover,
+.report-export-menu button:focus-visible {
+  background: #f1f5fc !important;
+}
+
+.report-page .report-filter-actions > .report-clear-button,
+.party-classic-report-page .party-title-secondary-button {
+  order: -1 !important;
+  height: 38px !important;
+  padding: 0 12px !important;
+  border: 1px solid #dce3ed !important;
+  border-radius: 8px !important;
+  background: #ffffff !important;
+  color: #5e6d83 !important;
+  font-size: 11px !important;
+  font-weight: 600 !important;
+}
+
+.party-classic-report-page .party-title-secondary-button {
+  display: inline-flex !important;
+}
+
+.party-classic-report-page .party-title-generate-button {
+  height: 40px !important;
+  border-radius: 8px !important;
+  font-size: 12px !important;
+}
+
+.report-page .party-report-results,
+.party-classic-report-page .party-report-results,
+.report-page .report-result-card,
+.report-page .p0-report-results,
+.report-page .purchase-analysis-results,
+.report-page .stock-sales-results,
+.report-page .gst-report-results,
+.party-classic-report-page .cheque-results-grid {
+  min-width: 0 !important;
+  min-height: 180px !important;
+  margin-top: 16px !important;
+  overflow: hidden !important;
+  border: 1px solid #e4e9f1 !important;
+  border-radius: 12px !important;
+  background: #ffffff !important;
+  box-shadow: 0 3px 12px rgba(28, 48, 78, .04) !important;
+}
+
+.report-page .report-result-card {
+  min-height: 180px !important;
+  align-items: center !important;
+  justify-content: center !important;
+  padding: 22px !important;
+}
+
+.report-page .report-result-card > svg,
+.party-classic-report-page .party-empty-report svg {
+  color: #7893bb !important;
+}
+
+.report-page .report-result-card h3,
+.party-classic-report-page .party-empty-report strong {
+  color: #34445d !important;
+  font-size: 14px !important;
+}
+
+.report-page .report-result-card p,
+.party-classic-report-page .party-empty-report span {
+  color: #8491a5 !important;
+  font-size: 11px !important;
+}
+
+.report-page .party-report-toolbar,
+.report-page .p0-result-toolbar,
+.party-classic-report-page .party-report-toolbar {
+  min-height: 58px !important;
+  padding: 10px 14px !important;
+  border-bottom: 1px solid #edf0f5 !important;
+  background: #ffffff !important;
+}
+
+.report-page .party-grid-heading strong,
+.party-classic-report-page .party-grid-heading strong,
+.report-page .p0-result-toolbar strong {
+  color: #263750 !important;
+  font-size: 13px !important;
+}
+
+.report-page .party-grid-heading span,
+.party-classic-report-page .party-grid-heading span,
+.report-page .p0-result-toolbar span {
+  color: #8491a5 !important;
+  font-size: 10px !important;
+}
+
+.report-page .party-grid-heading-icon,
+.party-classic-report-page .party-grid-heading-icon {
+  border-radius: 9px !important;
+  background: #edf3ff !important;
+  color: #3975e8 !important;
+}
+
+.report-page .party-report-search,
+.report-page .party-grid-zoom-select,
+.report-page .party-grid-refresh-button,
+.report-page .party-toolbar-export button,
+.party-classic-report-page .party-report-search,
+.party-classic-report-page .party-grid-zoom-select,
+.party-classic-report-page .party-grid-refresh-button,
+.party-classic-report-page .party-toolbar-export button {
+  min-height: 34px !important;
+  border-color: #e0e6ef !important;
+  border-radius: 7px !important;
+  font-size: 11px !important;
+}
+
+.report-page .party-report-table,
+.party-classic-report-page .party-report-table {
+  color: #3c4c64 !important;
+  font-size: 11px !important;
+}
+
+.report-page .party-report-table th,
+.report-page .party-report-table td,
+.party-classic-report-page .party-report-table th,
+.party-classic-report-page .party-report-table td {
+  height: 40px !important;
+  padding: 8px 12px !important;
+  border-color: #edf0f5 !important;
+  font-size: 11px !important;
+}
+
+.report-page .party-report-table thead th,
+.party-classic-report-page .party-report-table thead th,
+.report-page .gst-result-table th {
+  background: #f6f8fb !important;
+  color: #65748b !important;
+  font-size: 10px !important;
+  font-weight: 700 !important;
+  letter-spacing: .3px !important;
+}
+
+.report-page .party-report-table tbody tr:nth-child(even) td,
+.party-classic-report-page .party-report-table tbody tr:nth-child(even) td {
+  background: #fbfcfe !important;
+}
+
+.report-page .party-report-table tbody tr:hover td,
+.party-classic-report-page .party-report-table tbody tr:hover td {
+  background: #f5f8fe !important;
+}
+
+.report-page .party-report-table tfoot td,
+.party-classic-report-page .party-report-table tfoot td {
+  background: #f2f6fc !important;
+  color: #2b3f5d !important;
+}
+
+.party-report-statusbar {
+  min-height: 32px !important;
+  padding: 0 14px !important;
+  border-top: 1px solid #edf0f5 !important;
+  background: #fafbfd !important;
+  color: #8491a5 !important;
+  font-size: 10px !important;
+}
+
+.report-page .report-page-header > .report-clear-button {
+  height: 38px !important;
+  padding: 0 13px !important;
+  border: 1px solid #dce3ed !important;
+  border-radius: 8px !important;
+  background: #ffffff !important;
+  color: #53647d !important;
+  font-size: 11px !important;
+}
+
+.party-classic-report-page .cheque-search-row {
+  align-items: flex-end !important;
+  gap: 10px !important;
+}
+
+.party-classic-report-page .cheque-generate-button {
+  position: static !important;
+  height: 40px !important;
+  border-radius: 8px !important;
+  font-size: 12px !important;
+}
+
+/* Keep criteria compact across report types without reserving empty footer space. */
+.report-page .report-filter-card,
+.party-classic-report-page .party-filter-group,
+.report-page .gst-filter-card {
+  padding: 14px !important;
+}
+
+.report-page .report-filter-heading {
+  margin-bottom: 10px !important;
+  padding-bottom: 8px !important;
+}
+
+.party-classic-report-page .party-filter-group legend,
+.party-classic-report-page.party-wise-sales-report-page .party-filter-group::before,
+.report-page .gst-filter-card:not(.gstr1-criteria-card)::before {
+  margin-bottom: 10px !important;
+  padding-bottom: 8px !important;
+}
+
+.report-filter-grid,
+.gst-filter-grid,
+.party-classic-report-page .party-report-form-grid,
+.party-classic-report-page .party-report-form-row {
+  gap: 10px 12px !important;
+}
+
+.report-field,
+.party-classic-report-page .party-report-field {
+  gap: 3px !important;
+}
+
+.report-field > input:not([type="checkbox"]),
+.report-field > select,
+.party-classic-report-page .party-report-field > input:not([type="checkbox"]),
+.party-classic-report-page .party-report-field > select,
+.party-classic-report-page .party-multi-select-trigger {
+  height: 34px !important;
+  min-height: 34px !important;
+}
+
+.report-filter-actions,
+.party-classic-report-page .party-filter-group > .party-title-actions {
+  min-height: 34px !important;
+  margin-top: 10px !important;
+  padding-top: 8px !important;
+}
+
+.party-classic-report-page.party-wise-sales-report-page .party-report-export-field {
+  min-height: 34px !important;
+  margin-top: 0 !important;
+  padding-top: 8px !important;
+}
+
+@media (max-width: 1100px) {
+  .report-filter-grid,
+  .gst-filter-grid,
+  .party-classic-report-page .party-report-form-grid,
+  .party-classic-report-page .party-report-form-row {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  }
+}
+
+@media (max-width: 700px) {
+  .report-page,
+  .party-classic-report-page {
+    padding: 10px !important;
+  }
+
+  .report-page-header,
+  .party-classic-report-page .party-classic-titlebar {
+    min-height: 72px !important;
+    padding: 13px !important;
+  }
+
+  .report-title-section,
+  .party-classic-report-page .party-report-title-left {
+    gap: 10px !important;
+  }
+
+  .report-title-icon,
+  .party-classic-report-page .party-title-icon {
+    width: 36px !important;
+    height: 36px !important;
+    flex-basis: 36px !important;
+  }
+
+  .report-page .report-title-section p,
+  .party-classic-report-page .party-title-content > p {
+    font-size: 11px !important;
+  }
+
+  .report-filter-card,
+  .party-classic-report-page .party-filter-group,
+  .report-page .gst-filter-card {
+    padding: 14px !important;
+  }
+
+  .report-filter-grid,
+  .gst-filter-grid,
+  .party-classic-report-page .party-report-form-grid,
+  .party-classic-report-page .party-report-form-row {
+    grid-template-columns: minmax(0, 1fr) !important;
+  }
+
+  .report-page .report-filter-actions,
+  .party-classic-report-page .party-filter-group > .party-title-actions {
+    align-items: stretch !important;
+    flex-wrap: wrap !important;
+  }
+
+  .report-page .report-filter-actions > .report-export-actions,
+  .party-classic-report-page .party-filter-group > .party-title-actions > .report-export-actions {
+    width: 100% !important;
+    justify-content: flex-end !important;
+  }
+
+  .report-page .party-report-toolbar,
+  .report-page .p0-result-toolbar,
+  .party-classic-report-page .party-report-toolbar {
+    align-items: flex-start !important;
+    flex-direction: column !important;
+  }
+
+  .report-page .party-grid-toolbar-actions,
+  .party-classic-report-page .party-grid-toolbar-actions {
+    width: 100% !important;
+    flex-wrap: wrap !important;
+  }
+
+  .party-report-statusbar {
+    align-items: flex-start !important;
+    flex-direction: column !important;
+    padding: 8px 12px !important;
   }
 }

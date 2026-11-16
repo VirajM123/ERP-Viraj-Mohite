@@ -1,0 +1,1194 @@
+[
+    {
+        "path":  ".env.example",
+        "hash":  "90EE5938564E54DDD2DD4DB78852355EA701DCE41D48484705F0B3871099D9A8"
+    },
+    {
+        "path":  ".gitignore",
+        "hash":  "E44F23011A56B0ED68CAFF9A20FD5D2661C4224DFF840942F44B7E5BB634A83C"
+    },
+    {
+        "path":  "FMCG_ERP_AUDIT_REPORT_MR.md",
+        "hash":  "6DE6A4DD988FD5BD0543CB0FDF02AA8876588820F5A1F407EC0817DA5240265E"
+    },
+    {
+        "path":  "IMPLEMENTATION_PROGRESS.md",
+        "hash":  "C075E1C2D2C7A06CDA8B2AECFF8455F2042704001541E0DF30EC9A93938E5F4A"
+    },
+    {
+        "path":  "REMEDIATION-STATUS.md",
+        "hash":  "05BC0440B10CDCAB47C5496533EE7B84F2F3E6D284312276243D89D289FABB38"
+    },
+    {
+        "path":  "REMEDIATION_REPORT_MR.md",
+        "hash":  "B64C183BFB48E841B6C79199E1267D8528D4E2FECEC6CC156535EABE2D940E9C"
+    },
+    {
+        "path":  "REMEDIATION_TRACKER.md",
+        "hash":  "D136802B6308C097D9F710E7CA0A04BFF4717A113B546A80A15B99B58ABAC2DB"
+    },
+    {
+        "path":  "TODO.md",
+        "hash":  "64F159197F79CD797CC6EEF4808ED0DF7E061EFDD39E9C0FB855DC6048969E37"
+    },
+    {
+        "path":  "assets/img/BANK.png",
+        "hash":  "BDA29E144B6E47E0B6918B3192632E8ACB84DDC28E19AF3FD343E8E54E8F9917"
+    },
+    {
+        "path":  "assets/img/CASH.png",
+        "hash":  "CDA2F6B6836D92A1E4D0E4F0C71BBD5BAA7AD1E876D2D4B8C804080B539C16A3"
+    },
+    {
+        "path":  "assets/img/DashLogo.jfif",
+        "hash":  "E4C410736FAA59AA376A0717E4995A34292137E2E58C2B7E230BF16F41B780A4"
+    },
+    {
+        "path":  "assets/img/Login.ico",
+        "hash":  "62D79ED49E3E26882E330E1BB7C1804F331CA0685570E69363767D3521AF84CD"
+    },
+    {
+        "path":  "assets/img/UPI.png",
+        "hash":  "B95C9C870669A8FEF87DED9AEB5C2D901A13A62BFB2B455863A3625F571F4D89"
+    },
+    {
+        "path":  "backend/.env.example",
+        "hash":  "8A0086D37424AFE66071E9D16A698007BF277C3D897C5BCA00C19E6B553D3878"
+    },
+    {
+        "path":  "backend/README.md",
+        "hash":  "59E3EA1854BF385FC7D26F3A11BE379226DCC926576EBBD5BBF95B423182D805"
+    },
+    {
+        "path":  "backend/accounting.js",
+        "hash":  "6D6FC9835A369E2D01992F99CE9778D4C6580EA96FD6DCEDBED2FBA9EBE688BC"
+    },
+    {
+        "path":  "backend/apiError.js",
+        "hash":  "42F638D841E350654084E10FF1D8308880811C2F134B129BF7C663C4ED515055"
+    },
+    {
+        "path":  "backend/audit.js",
+        "hash":  "1F6E6F9A85892E835E37969131CA83363866448E19ABF5B6D32ACA01FE126732"
+    },
+    {
+        "path":  "backend/auth.js",
+        "hash":  "5F6B0AEDF7FE4F9087426A190AE2EE7C70C8B7A7CB04EC91243F671F8DD44E7B"
+    },
+    {
+        "path":  "backend/batchLock.js",
+        "hash":  "271A9032BA42D0F71954143AE15AB18C3BFCB0B95A81E34143691F32C4FF40D5"
+    },
+    {
+        "path":  "backend/businessDate.js",
+        "hash":  "FFE8E9C603955E7E396F7386DF3D7537E8F8D1B9651424A51F0816CAD487B17E"
+    },
+    {
+        "path":  "backend/companyWiseSeries.js",
+        "hash":  "326D8B59A3988E01070C54806983F16E17DF3DC47569F3C93F3F107BB2B0FCBB"
+    },
+    {
+        "path":  "backend/corsOrigins.js",
+        "hash":  "5EC07B3CB19B59CE27F21DAB3CD366695D073721FC7F99E304DE5D0388D59CDE"
+    },
+    {
+        "path":  "backend/counters.js",
+        "hash":  "41C7F288E1370F7E2D4B2CBB9CD5BDE484BAADFCAB23DB9D9FA41E007C0CAF02"
+    },
+    {
+        "path":  "backend/desktopImportBatch.js",
+        "hash":  "878BEF3E241EEDCE86625BC345FB9C0A3E2EDFAF6F8538DF334C24F43F409D19"
+    },
+    {
+        "path":  "backend/desktopImportRoutes.js",
+        "hash":  "22FFE59FB5BFE7D05D98B7D39B1339CD10E5D5E7B6458CFFA3AEDD7B3651FB81"
+    },
+    {
+        "path":  "backend/desktopTransactionMapper.js",
+        "hash":  "569CB77971AA2C3380ED023C92F30A4CD650DF9D03C81B09B480F342F242AC00"
+    },
+    {
+        "path":  "backend/einvoiceJsonFiles.js",
+        "hash":  "8249B741BD938E571EF19A2A9A4750709F850D2485125078AFF2C0616B7FCE97"
+    },
+    {
+        "path":  "backend/financialValidation.js",
+        "hash":  "883A74512617B6B6A45239E71DD9B8DD593E8089D56B35014CFD57832F24FA8E"
+    },
+    {
+        "path":  "backend/generalSetup.js",
+        "hash":  "8A7B3775877EC84E3CA4834350D3E0402727767C94E03532706FD8EBE5CD0DF2"
+    },
+    {
+        "path":  "backend/gstReports.js",
+        "hash":  "FC446A8102A4D7DF89EC1B9605B45A35E07D019CBF30765D586D0143A6EB900C"
+    },
+    {
+        "path":  "backend/importConfig.js",
+        "hash":  "D385472F69F5D6C3850E4D14150340B1C4FD23264756876ECB632EC739CA51EB"
+    },
+    {
+        "path":  "backend/importRoutes.js",
+        "hash":  "671D508481CF3170B8BE939D7D06B0A675C1CF2EE3ACB63AB8248E0675E74910"
+    },
+    {
+        "path":  "backend/masterUsageGuard.js",
+        "hash":  "E1C3A2116659FFE1956E677D79108E2BAC0297797D9297BBCEFEE8C5DCCE7030"
+    },
+    {
+        "path":  "backend/observability.js",
+        "hash":  "CE5BE138E5C01EE5397326D93876BC7B846B1B6B4EF0D96FC66007A7BE3F325A"
+    },
+    {
+        "path":  "backend/openingBalances.js",
+        "hash":  "D390C6943AFABA18CEB2CD5A92CD26F064120765E6B26F5F9E1ADFC07AC39302"
+    },
+    {
+        "path":  "backend/p0Features.js",
+        "hash":  "F23784B87FEA6F9F795EC4C921E1A1176863D8B3AC4CF63EEEA63058A156B450"
+    },
+    {
+        "path":  "backend/package-lock.json",
+        "hash":  "17EC5F5A92BE170D9D45F14EADED03C10D636657F78BF799653F26320D644F8E"
+    },
+    {
+        "path":  "backend/package.json",
+        "hash":  "E00AADC028A672D65F44192883FFE87029C8CBDE8B1863411C6BE693C86314CE"
+    },
+    {
+        "path":  "backend/printAccountDetails.js",
+        "hash":  "D01CF9A19673BC6133335B27897EFB6F97FF4B49C452BBDA4EBC903076B609EF"
+    },
+    {
+        "path":  "backend/productMapping.js",
+        "hash":  "2D264D72F56EB263EE4103443D149E8AABE1BD01BBD645E160A9CAFB7AAF37B0"
+    },
+    {
+        "path":  "backend/productSalesReport.js",
+        "hash":  "F61EF5B48729FEB628BCB98F584F28086621FC06E6ACE945B18CAAACDD0E03D4"
+    },
+    {
+        "path":  "backend/purchaseSupplier.js",
+        "hash":  "658D0FC334DF35BCA2E3C7818755BD5080E876C7B77EC0EA5C99F88C3DC071F3"
+    },
+    {
+        "path":  "backend/scripts/verifyReceiptIndex.js",
+        "hash":  "333ABD10ABAC8F531C06575E10E5A9F76DBAFD760CB10E10BFDA12226D885A7C"
+    },
+    {
+        "path":  "backend/securitySetup.js",
+        "hash":  "590979527C2421EDB40DA16E478181FC795AEADB9A403EBB6B0DC30A85C1393E"
+    },
+    {
+        "path":  "backend/server.js",
+        "hash":  "A2D58AFDF4ECB6A20424D154244A74FE0E2296408766F879A8E66869D5C8D041"
+    },
+    {
+        "path":  "backend/service.js",
+        "hash":  "F6458D9A20604B689B52E547AAC9587C583E2C80D9D30E03090241BE004ED1B3"
+    },
+    {
+        "path":  "backend/spreadsheetSafety.js",
+        "hash":  "749C5D3ECA1A73D33C83EA524A90BA0D51B9DEB220047AE71FBA6FACEE699976"
+    },
+    {
+        "path":  "backend/test/company-default-supplier.test.js",
+        "hash":  "9FB97B76A92DE8BF4C4836541519A5A41EE225EA4F9C42ACEF9431B9F2DD95F8"
+    },
+    {
+        "path":  "backend/test/cors-origins.test.js",
+        "hash":  "C58B81F1AFF260A504B9414E6B49EDE5630EB190CC2925820266F454F7C5C025"
+    },
+    {
+        "path":  "backend/test/debit-note-stock.test.js",
+        "hash":  "85EB36E36D8DB64AD523E077D02844F427D4B945C56AAC60686DEBF3B461C45B"
+    },
+    {
+        "path":  "backend/test/desktop-import.test.js",
+        "hash":  "3406D3841C26F363BF81D08FE52CB1F1D69806A330EB46997AC8591BA7354620"
+    },
+    {
+        "path":  "backend/test/einvoice-json-files.test.js",
+        "hash":  "ACC779663000D6D0DBF82E0C0D3E46B6CFF528B10427BBC8D1403AD87479E490"
+    },
+    {
+        "path":  "backend/test/godown-model-shadow.test.js",
+        "hash":  "233B824C3D562CD4BA9905DBA0B2B136704EF9D2B74EDF1F978B8CD76431B0D3"
+    },
+    {
+        "path":  "backend/test/gst-reports.test.js",
+        "hash":  "19EBCE74FCD342798D5E0F4805FF3CF7C6D16B62C7F34D9ED61FCEECE725FD58"
+    },
+    {
+        "path":  "backend/test/invoice-hsn.test.js",
+        "hash":  "5114B277249EFA19BCF9DFD1B093BE1FBE4B56CFF8EC10A02D41C32FD1F23146"
+    },
+    {
+        "path":  "backend/test/ledger-opening.test.js",
+        "hash":  "0AE374E01E2641ECBE55E5D9AC5EA3524F1B023F65388A1F033D45CE04AB5826"
+    },
+    {
+        "path":  "backend/test/master-usage-guard.test.js",
+        "hash":  "F36CCFD5767B29BE1AA7B3B78C68F5F56FBAD38CFB90FF151A95FF23D261F60F"
+    },
+    {
+        "path":  "backend/test/opening-accounting.test.js",
+        "hash":  "279471AF880CEE1A6B26C52000C648E8A29B0332EAB8B384A30909B7D8DA2884"
+    },
+    {
+        "path":  "backend/test/opening-transactions.test.js",
+        "hash":  "7F436CF8AB54DC1ABA937CB3742A978267588B75D9BC5B0AF9D05DEC27F494F3"
+    },
+    {
+        "path":  "backend/test/p0-features.test.js",
+        "hash":  "4D5EAEA31B0016AACE276DBA6BA7834ED90C28E12779EE513966CB3B38D08F25"
+    },
+    {
+        "path":  "backend/test/payment.test.js",
+        "hash":  "96D72F843DC9C20C6E96CFA042947581284706A6B01D92A52254D66262B0A12E"
+    },
+    {
+        "path":  "backend/test/product-sales-report.test.js",
+        "hash":  "04504287FB6AEEEEE7B6E7426B1FE06068A7740F531BBC80F5EFBC72AB5D9369"
+    },
+    {
+        "path":  "backend/test/purchase-errors.test.js",
+        "hash":  "BED3ECE92FE0D4EBC5F7FEF9013C03AB0E09926657DCE26E82ABD6822EC3E0BB"
+    },
+    {
+        "path":  "backend/test/purchase-supplier.test.js",
+        "hash":  "A4088619D4D73C12755744ED3BE72BEF373A20FDEAA97AFF58866F2B1F4635CA"
+    },
+    {
+        "path":  "backend/test/remediation.test.js",
+        "hash":  "B556E85A00A0D609F910E239C50E6C970C2D4AC26AEB4F9154A3584CF173B52D"
+    },
+    {
+        "path":  "backend/test/security-policy.test.js",
+        "hash":  "D05463A5C010758A134800A99D2C1149FAE2468A8DE8EC796ED793BF4D61C67D"
+    },
+    {
+        "path":  "backend/test/spreadsheet-safety.test.js",
+        "hash":  "EC7515E2F9BA96CF7845EBB88AA4D7D2183CB176176D6A89847816BE52BCFACE"
+    },
+    {
+        "path":  "backend/test/transaction-commit.test.js",
+        "hash":  "5EB0C066B7C123316BFE2143C3012D5A10D9C030CD844F4C765EB643787B3D24"
+    },
+    {
+        "path":  "backend/transaction.js",
+        "hash":  "932E51FF068752422D678A5E40A52F418BB4345E6DADD795E31DDB244C8A7764"
+    },
+    {
+        "path":  "backend/transactionCommit.js",
+        "hash":  "1C466804F6B095AF036AE2A124080B4BD75497D228A3414D6A01958F4883888F"
+    },
+    {
+        "path":  "dashboard-horizontal-nav-mockup.png",
+        "hash":  "F1A86A2CFF9F1E3538A63BAB8BF27F61C0441FB074EF83365D6FCDDAAA21B51E"
+    },
+    {
+        "path":  "design-mockups/reports/report-catalog.png",
+        "hash":  "57C0F51B9317345C2DCE24F8CE6323F84F5229226ED68825343158D436BEA60E"
+    },
+    {
+        "path":  "design-mockups/reports/report-filter.png",
+        "hash":  "BFCF7DCF2C9F9BC6AE58E0782F190163550958726A353C367A6BE4643B2AFCF6"
+    },
+    {
+        "path":  "design-mockups/reports/report-generated-data.png",
+        "hash":  "FC78CACC4132D7A6592438947B8662F6BE32CD853E26884C5B09B32D1A0C81BE"
+    },
+    {
+        "path":  "design/dashboard-sidebar-header-concept-v2.png",
+        "hash":  "2681F2B16BCB2CFABCED01D2C3CD2B963C2548C3B1F5097C25A384A8619A9866"
+    },
+    {
+        "path":  "design/dashboard-sidebar-header-concept.png",
+        "hash":  "79B417FB4ECF57ABE8C6133632A6A4F78E31EB190B520D8013C56011DAEDEA32"
+    },
+    {
+        "path":  "design/reports-form-mockup.png",
+        "hash":  "C0CA98D16C09139D6A1DC8E3B4D7871C59A7EACD0605ADE9524DC9E31C2FE59E"
+    },
+    {
+        "path":  "design/sales-invoice-list-modern.png",
+        "hash":  "90F93CB780517E1F1A43CF9DC1819E37BF35C861771FF80FCA7B0B107FF4A5B1"
+    },
+    {
+        "path":  "docs/BACKUP_AND_RECOVERY.md",
+        "hash":  "1FFFF93DFBB0B5D735E6178002E32640F741E270A98B06685F3B06FEFCA6C2CA"
+    },
+    {
+        "path":  "docs/SECURITY_OPERATIONS.md",
+        "hash":  "4E49CE35ED7E14F5D94615C3A3AF519F3ED6443DB4938DF250B7B50A201800B6"
+    },
+    {
+        "path":  "docs/silent-printing.md",
+        "hash":  "E5E684934EA52F050FE9E89B3EA6376333E6081D78746BC2363B43820C2CEA4F"
+    },
+    {
+        "path":  "eslint.config.js",
+        "hash":  "0C0EA299B8F71BECC9258370D12E3B7CD3A5EA390AA73D00E4929BE29A538B7E"
+    },
+    {
+        "path":  "gh.zip",
+        "hash":  "DA7EAEB29CD9251CC477402681EFC72AC2283CED94E63A69C1E3BC9ACA99EB9B"
+    },
+    {
+        "path":  "gh_cli/LICENSE",
+        "hash":  "8999137010582DA29456C10E0A628BF3FA7EAD05AB3AE5F424AD25CD0DD94574"
+    },
+    {
+        "path":  "gh_cli/bin/gh.exe",
+        "hash":  "C9D45316C3EE3270CCA8A713C93F3FB48855EF8CFFB90A80D356AD265A9C2275"
+    },
+    {
+        "path":  "index.html",
+        "hash":  "EFA4CE0E9BB2166ADF9F9151A368EA69B24D7C72A0F7D51995DD0C0D40169797"
+    },
+    {
+        "path":  "l.includes(\u0027All",
+        "hash":  "E3B0C44298FC1C149AFBF4C8996FB92427AE41E4649B934CA495991B7852B855"
+    },
+    {
+        "path":  "output/Dashboard-HEAD-20261001.jsx",
+        "hash":  "A2B8917DFC4830780F02323647ADF96371CFA4494BFCF64FAC5E97E51404AB03"
+    },
+    {
+        "path":  "output/Dashboard-intermediate-recovery.jsx",
+        "hash":  "528C83B3E9C54DEDD301B362D8D757FA8518600B2657B380835CAD5DD1A10122"
+    },
+    {
+        "path":  "output/Pipay.vb",
+        "hash":  "A6EBB09E99E35457350CBD6D8DD4FFEB0A4DCAB565CE1DBA160F5A82FB2DF75C"
+    },
+    {
+        "path":  "output/build-stock-fix.cjs",
+        "hash":  "66F2A0B2EFA440006C989037874964F7375A455C5C4C7AB047D5420CE4D93FB1"
+    },
+    {
+        "path":  "output/build-stock-fix.py",
+        "hash":  "E64733C091097C603C3DCBE8067855F1DE6840D21FB8DC9AAE5C0702672876FF"
+    },
+    {
+        "path":  "output/dashboard-mockup/total-solution-erp-dashboard-v2.png",
+        "hash":  "C21B128162D109D3DAA9BDC8380691FA7B1E6C4E06F7B2014C773CC1084B8D31"
+    },
+    {
+        "path":  "output/dashboard-mockup/total-solution-erp-dashboard.png",
+        "hash":  "AC672EB5EFCC610DE21E42A49FFE321E4070C1987DB010E040B6933596085AFD"
+    },
+    {
+        "path":  "output/data-load-audit-2026-10-05.md",
+        "hash":  "AEA26164BFFD2CE679C334F19E6FB2C540D9A02120DE37A676AFBC1473716BA9"
+    },
+    {
+        "path":  "output/import-messages-fix-20260929/Checks.exe",
+        "hash":  "BD95B710E8FC38984D917D5158546CC19D0AD41BB9946934FFE1D789C0929A8B"
+    },
+    {
+        "path":  "output/import-messages-fix-20260929/Checks.vb",
+        "hash":  "F7A34B022ACEE78495219BDB31218B17D03A73F33D0C9ED8C2E35A126436F911"
+    },
+    {
+        "path":  "output/import-messages-fix-20260929/ImportFlowHelpers.vb",
+        "hash":  "58EB20A88CAFDE38A4E1D554F210E9F8316397F46EB47FA65763A356C4D60058"
+    },
+    {
+        "path":  "output/import-messages-fix-20260929/OverrideCheck.dll",
+        "hash":  "A2ECC3F222B0E06F3CD8C27A8087553E0C36AD0C570FC39607799D1123416DFF"
+    },
+    {
+        "path":  "output/import-messages-fix-20260929/OverrideDesignerStub.vb",
+        "hash":  "39D876F750A87C25C71DEAE99C9CBC9FCAC226301769D122C968CFBE20CC9D20"
+    },
+    {
+        "path":  "output/import-messages-fix-20260929/README.md",
+        "hash":  "83B051DE3AA53E8AB8267D11A692FE7A78C9D01CFEADB9982E699B707444FBBB"
+    },
+    {
+        "path":  "output/import-messages-fix-20260929/WinImportData.txt",
+        "hash":  "8EDAF503BD61851DF31F61DBA8C2C96C1EBAFF385FA78AEACE33A1511ACB9DB7"
+    },
+    {
+        "path":  "output/import-messages-fix-20260929/WinImportData.vb",
+        "hash":  "8EDAF503BD61851DF31F61DBA8C2C96C1EBAFF385FA78AEACE33A1511ACB9DB7"
+    },
+    {
+        "path":  "output/import-messages-fix-20260929/audit-purchase.cjs",
+        "hash":  "744E25FA3FFC67E04AC0E36FA08D3634B77490678098E22BC3EA6C4DA9BDA10E"
+    },
+    {
+        "path":  "output/import-messages-fix-20260929/build.cjs",
+        "hash":  "09332A425A4D1A0BABD6CBBDCB0FB671636ACA5E9B37CDB9B0F2CA304A9A626A"
+    },
+    {
+        "path":  "output/import-messages-fix-20260929/msg_Override.txt",
+        "hash":  "E113E25088DAFA10C9390825CD12A61B83FCE895C8FAAC078C5AA9BDD67AF7D1"
+    },
+    {
+        "path":  "output/import-messages-fix-20260929/msg_Override.vb",
+        "hash":  "E113E25088DAFA10C9390825CD12A61B83FCE895C8FAAC078C5AA9BDD67AF7D1"
+    },
+    {
+        "path":  "output/import-messages-fix-20260929/scope-check.cjs",
+        "hash":  "C2ADAC6568B83AECF07FBBA049EE708DDFFB81E3A4EC29436DA45E46113EA5E9"
+    },
+    {
+        "path":  "output/import-messages-fix-20260929/tests.cjs",
+        "hash":  "34EF13F7FE422B1DB66DF36951A216638CDFDB077CBB3795082ACB4AC107834E"
+    },
+    {
+        "path":  "output/jnj-purchase-fix-20260928/Analysis.md",
+        "hash":  "B3E52D81C98B3D6798C7EC5EE403F460F2967437ED4859132FDFA0450E6B67A8"
+    },
+    {
+        "path":  "output/jnj-purchase-fix-20260928/Checks.exe",
+        "hash":  "5B183A8E4328BA79B30D1F77B12101758E6460F58A71A49CDB46262269832C7D"
+    },
+    {
+        "path":  "output/jnj-purchase-fix-20260928/Checks.vb",
+        "hash":  "423338C13F6038669F8185C3C950DFDE86093226979768EDFD2C656E56EA39FD"
+    },
+    {
+        "path":  "output/jnj-purchase-fix-20260928/WinImportData.txt",
+        "hash":  "4FF45B8BCCCD85012F28DA6F21C6B1A3906669FAC7BAF01B115B6ED11757F45F"
+    },
+    {
+        "path":  "output/jnj-purchase-fix-20260928/WinImportData.vb",
+        "hash":  "4FF45B8BCCCD85012F28DA6F21C6B1A3906669FAC7BAF01B115B6ED11757F45F"
+    },
+    {
+        "path":  "output/jnj-purchase-fix-20260928/build.cjs",
+        "hash":  "9F34C78965F462ED498FA2125A58E664E7FEC32C443757AE821CE5A53A281943"
+    },
+    {
+        "path":  "output/jnj-purchase-fix-20260928/checks.cjs",
+        "hash":  "FB351474193B879812F48032246682D440ADF6F642987EFE97283D2E5901E387"
+    },
+    {
+        "path":  "output/jnj-purchase-fix-20260928/helpers.vb",
+        "hash":  "8B46B1762982971928990852107564A2D8A3C846C86A4F0E9D8881074C827B92"
+    },
+    {
+        "path":  "output/jnj-purchase-fix-20260928/input.tsv",
+        "hash":  "FAC4229724C641CD7AF14304261FF07744F8A2B4F21F38A26340CFFF511654EC"
+    },
+    {
+        "path":  "output/purchase-import-fix/PurchaseGroupingChecks.exe",
+        "hash":  "15CC8A7A98C9CDDBE90818BFC0334369CA29C6619A215EADBFAA90A189948B0E"
+    },
+    {
+        "path":  "output/purchase-import-fix/PurchaseGroupingChecks.vb",
+        "hash":  "2A51F3A8B3851A29BA70BC5097859D6E6FAE15973EB2D16ABACA97BC486C2423"
+    },
+    {
+        "path":  "output/purchase-import-fix/README.md",
+        "hash":  "6E1A92AA86260DF9452F918105F5D4EE0741D8CB1405084636A91A5B675712E0"
+    },
+    {
+        "path":  "output/purchase-import-fix/WinImportData.txt",
+        "hash":  "F9C8AA3C708E83BB7E355603A8B768F89B859E29861F2BDEC7C7F8E426C02ECA"
+    },
+    {
+        "path":  "output/purchase-import-fix/WinImportData.vb",
+        "hash":  "F9C8AA3C708E83BB7E355603A8B768F89B859E29861F2BDEC7C7F8E426C02ECA"
+    },
+    {
+        "path":  "output/purchase-import-fix/build-checks.cjs",
+        "hash":  "DB8979B9470DB0B46A205AB7EDF01F76A9485833B1779D9C442A91B5BD5BD4A7"
+    },
+    {
+        "path":  "output/purchase-import-fix/build-fix.cjs",
+        "hash":  "9B8CEDF04D0F586B654696493B45F08538BB52BC845D4680850F9612C68A4BF7"
+    },
+    {
+        "path":  "output/purchase-import-fix/changes.json",
+        "hash":  "A6A63C5E9498F9E3A6FFE9A07C6F8739C091D9BE62D0A9E9C5EA4FBB89FA32C3"
+    },
+    {
+        "path":  "output/purchase-import-fix/validation.txt",
+        "hash":  "FD243C4ABB324B4E0601F832B5F4BF8E1342927CFE8253893FE53B6BE6C5ED1F"
+    },
+    {
+        "path":  "output/sales-imei-fix-20260929/README.md",
+        "hash":  "E31CFA17D3E6CF6F72AE1A8099B6C6BA084A168F277DA7BD244AC7163ADA946D"
+    },
+    {
+        "path":  "output/sales-imei-fix-20260929/WinImportData.txt",
+        "hash":  "E9DEBD11DC8611D5BC1E295E28BAE77F2D9A07D70DA1188C2A6F25BEACDBF48A"
+    },
+    {
+        "path":  "output/sales-imei-fix-20260929/WinImportData.vb",
+        "hash":  "E9DEBD11DC8611D5BC1E295E28BAE77F2D9A07D70DA1188C2A6F25BEACDBF48A"
+    },
+    {
+        "path":  "output/sales-imei-fix-20260929/build.cjs",
+        "hash":  "C92AD7831D7CB3014A08959FDA38A93F2D7D859D2ADCC612A40458960F5A7D89"
+    },
+    {
+        "path":  "output/sales-imei-fix-20260929/checks.cjs",
+        "hash":  "3F9D41175E798751CA3B52AFC482E9F3201A29C175D1B5DC1838109DAF3EF3DD"
+    },
+    {
+        "path":  "output/sales-imei-fix-20260929/diagnose-invoice-22.sql",
+        "hash":  "11663DAEA88CF313332E71946A54C68874A6D49E5AE487E1B972DD0BBA29CC67"
+    },
+    {
+        "path":  "output/sales-item-grouping-fix-20260929/Checks.exe",
+        "hash":  "AED7D57E7944BF92DED63E2B0551E560AC68F1D51A34B55A680CF2961CBAEC8E"
+    },
+    {
+        "path":  "output/sales-item-grouping-fix-20260929/Checks.vb",
+        "hash":  "C28EBA65000A51BF734F8D16D7F6B005C68176B0361EE63CE1F196ABE13CAB43"
+    },
+    {
+        "path":  "output/sales-item-grouping-fix-20260929/Complete-Sales-Grouping-Fix.zip",
+        "hash":  "A0821A6DE631112E2D384D6F650A45173B026E0C2FFDC8A7022C2816D26E5FA4"
+    },
+    {
+        "path":  "output/sales-item-grouping-fix-20260929/Grouping.template.vb",
+        "hash":  "7FA9AEC3341CF59169B3EFFF20CBB414753CBF672CC4169FC677481CAFA3893E"
+    },
+    {
+        "path":  "output/sales-item-grouping-fix-20260929/GroupingHelpers.vb",
+        "hash":  "82F044B5FD77108767947E87BF05842F72E05FF4D3A97E9170CE48C3929DC512"
+    },
+    {
+        "path":  "output/sales-item-grouping-fix-20260929/Import.txt",
+        "hash":  "E5EE4FD35E27F0595AA68DEC123DE95E8178F9BF7BBE4A6CB34FA6608C1B7EE6"
+    },
+    {
+        "path":  "output/sales-item-grouping-fix-20260929/Import.vb",
+        "hash":  "E5EE4FD35E27F0595AA68DEC123DE95E8178F9BF7BBE4A6CB34FA6608C1B7EE6"
+    },
+    {
+        "path":  "output/sales-item-grouping-fix-20260929/README.md",
+        "hash":  "10C68EB9ADCEBAE67D3CB14F64234D60FF56D9A4B9B40F0C0CBF55CC3A86B2DA"
+    },
+    {
+        "path":  "output/sales-item-grouping-fix-20260929/WinImportData.txt",
+        "hash":  "8EF81663D50A2863F4F2A1BF734CC0552DB841F033B82E903E2C3900FAF1A195"
+    },
+    {
+        "path":  "output/sales-item-grouping-fix-20260929/WinImportData.vb",
+        "hash":  "8EF81663D50A2863F4F2A1BF734CC0552DB841F033B82E903E2C3900FAF1A195"
+    },
+    {
+        "path":  "output/sales-item-grouping-fix-20260929/build.cjs",
+        "hash":  "035D1CF4000B34C76599E1BA9D4BD585E47B090DD170B769E8D399281AD03CE4"
+    },
+    {
+        "path":  "output/sales-item-grouping-fix-20260929/fields.json",
+        "hash":  "0232EA9797177B94FAB8D53F90D6755E891EA5FE0B673F04AEB611A753438696"
+    },
+    {
+        "path":  "output/sales-item-grouping-fix-20260929/test-build.cjs",
+        "hash":  "09B208F46226E069E01BA3C1F712EF8C2AD71846C2FE61C77EAC3FE135F2B51A"
+    },
+    {
+        "path":  "output/sales-missing-stock-fix-20260929/Checks.sql",
+        "hash":  "1CA45FFD7AC1CD27DF445EDA07D2C66FA92C19AC395AFCED67290C6122C94D68"
+    },
+    {
+        "path":  "output/sales-missing-stock-fix-20260929/CompileCheck.dll",
+        "hash":  "28C55F2028F407554DC24456B0896FB12ED23E82D936DDCD3F1BCB56271D306A"
+    },
+    {
+        "path":  "output/sales-missing-stock-fix-20260929/CompileCheck.vb",
+        "hash":  "009794106B8C35FC96F674DF6350CE71719A685F4FFD484B5CFD68F369E97068"
+    },
+    {
+        "path":  "output/sales-missing-stock-fix-20260929/README.md",
+        "hash":  "FF0D9543F8753D147627ADA6AD29AEB52CB2B613000A4A2898BE352BE5CD0D89"
+    },
+    {
+        "path":  "output/sales-missing-stock-fix-20260929/StockRows.sql",
+        "hash":  "E6FDA69F3C768D8D14EC01A5606E95BA1FE1062EDF76906DE916021AC1F9CC8A"
+    },
+    {
+        "path":  "output/sales-missing-stock-fix-20260929/StockRowsHelper.vb",
+        "hash":  "2CFB42588FC586AD7D0AD97A6073A39BE0F4DA9661292FA4DD5157D7FD335D48"
+    },
+    {
+        "path":  "output/sales-missing-stock-fix-20260929/WinImportData.txt",
+        "hash":  "6A276DE0A804CDA32C819A553D3C4DD4DF506FA10FB1A2F182463155D5109B66"
+    },
+    {
+        "path":  "output/sales-missing-stock-fix-20260929/WinImportData.vb",
+        "hash":  "6A276DE0A804CDA32C819A553D3C4DD4DF506FA10FB1A2F182463155D5109B66"
+    },
+    {
+        "path":  "output/sales-missing-stock-fix-20260929/build-checks.cjs",
+        "hash":  "3A9BB27EF7DA27A18D4D9386F87F97D3A632F7BDF02B18A8ACF74047383BBF46"
+    },
+    {
+        "path":  "output/sales-purchase-fix-20260929/Checks.exe",
+        "hash":  "B6E8808F2EE6584A9CB8893D5063C4BE554DB961846F15091EDBE1C68C064107"
+    },
+    {
+        "path":  "output/sales-purchase-fix-20260929/Checks.vb",
+        "hash":  "28BF19C5E77EAF130D91564920DB90CB04AB4D1E5B08B1DF02924B2566DF5975"
+    },
+    {
+        "path":  "output/sales-purchase-fix-20260929/Import.txt",
+        "hash":  "6ECA6E8E1DDEAB580E9BF1E7DC80992B32A738FADB09EE12800557097C0D9712"
+    },
+    {
+        "path":  "output/sales-purchase-fix-20260929/Import.vb",
+        "hash":  "6ECA6E8E1DDEAB580E9BF1E7DC80992B32A738FADB09EE12800557097C0D9712"
+    },
+    {
+        "path":  "output/sales-purchase-fix-20260929/ImportTotalsHelper.vb",
+        "hash":  "CC744CC427578C92E6742B1C0BEEA295E5E6595ADF6934DACA83F5144105A39E"
+    },
+    {
+        "path":  "output/sales-purchase-fix-20260929/InvoiceHelpers.vb",
+        "hash":  "F672E2F22C599C0801E4C63E16BBEEA042B530D8EDBE0E111C00E8F4F2F01DC5"
+    },
+    {
+        "path":  "output/sales-purchase-fix-20260929/README.md",
+        "hash":  "21B7FFB039C80D7A3DA9AEFCA79CA9741431BFA327D0132BCCE7B54546523307"
+    },
+    {
+        "path":  "output/sales-purchase-fix-20260929/WinImportData.txt",
+        "hash":  "A5AEBE9CE3C845A41B4C1445F8C604AAD7168E8F9800B06DBE227FFF0FAA6E04"
+    },
+    {
+        "path":  "output/sales-purchase-fix-20260929/WinImportData.vb",
+        "hash":  "A5AEBE9CE3C845A41B4C1445F8C604AAD7168E8F9800B06DBE227FFF0FAA6E04"
+    },
+    {
+        "path":  "output/sales-purchase-fix-20260929/build.cjs",
+        "hash":  "35E3E919CF87204117AF79193FD188050642AF23E7857218C91F6368A87C884F"
+    },
+    {
+        "path":  "output/sales-purchase-fix-20260929/extract.ps1",
+        "hash":  "4A655C482BA30BC405F7DBB3DEBC1AAC20729B73587245C6AFDEB96682DFF05B"
+    },
+    {
+        "path":  "output/sales-purchase-fix-20260929/scope-check.cjs",
+        "hash":  "B6C8655B257685CD63F56E0B0629B3979F7995F2C67D2A110A7ADF33D6DF5568"
+    },
+    {
+        "path":  "output/sales-purchase-fix-20260929/source.tsv",
+        "hash":  "9C829007C658A23DC8E2D8F7175DD544CAE75C1CBB536ECC99D201FBBC5CCF84"
+    },
+    {
+        "path":  "output/sales-purchase-fix-20260929/tests.cjs",
+        "hash":  "A68B9B60C06EF81A6A0A6B2A9D83A40BF8B1DC42A6AE1A0C4BDFF19B31CEB9E1"
+    },
+    {
+        "path":  "output/security-setup/security-setup-mockup.png",
+        "hash":  "54290F947090FB665868F0F3B497BE8FA9EB8065A2D4EACA2B12F05695FBEF8F"
+    },
+    {
+        "path":  "output/stock-schema-analysis.txt",
+        "hash":  "86DA9A8FDB2167D3C6676D12476B3A15D8EF70253E765F563C4BB19EA630EB12"
+    },
+    {
+        "path":  "output/ui-concepts/restyle-vouchers.mjs",
+        "hash":  "125344E99F8B0F858E8664A00DC337F1914955875A6BC8AEE394B3EA0516653B"
+    },
+    {
+        "path":  "output/ui-concepts/restyle-vouchers.py",
+        "hash":  "69CCCC931424D1AC862CDC35B7C5D2F67CD92ADC459A339E9C40ED04ED76351A"
+    },
+    {
+        "path":  "output/ui-concepts/verify-voucher-logic.mjs",
+        "hash":  "0AB8D3CE8B8F209F3188F529BD78A48A2EA99F8E73B4E491C93A1C957CBF9674"
+    },
+    {
+        "path":  "output/ui-concepts/voucher-forms-concept-01-prompt.txt",
+        "hash":  "E9D391C809C7B1951AEF636A3B6DB6506452902DB26A378697DC6DDBD3043EDD"
+    },
+    {
+        "path":  "output/ui-concepts/voucher-forms-concept-01.png",
+        "hash":  "874C0CB682BFB29F63368D46EDE3A7C11FDD553C7EADEBC0A58412019D567E8B"
+    },
+    {
+        "path":  "output/user-profile-modal-design.png",
+        "hash":  "DE5679CE706D072681833C030A2DD90E949A4619EA4A46F97D6F42A0162A1811"
+    },
+    {
+        "path":  "package-lock.json",
+        "hash":  "B740E6574D58BF1F7D1BCAAD0D19C148E4844355A5AEBE8A24AFEF568CBF3FE5"
+    },
+    {
+        "path":  "package.json",
+        "hash":  "B24198A42B90823A75FD5A3B4A653FDAEED9FC5E04BF832F5A20233001CBBE8B"
+    },
+    {
+        "path":  "public/TotalSolution.ico",
+        "hash":  "62D79ED49E3E26882E330E1BB7C1804F331CA0685570E69363767D3521AF84CD"
+    },
+    {
+        "path":  "scripts/configure-edge-silent-print.ps1",
+        "hash":  "173BD3C90149061789828F74ED5983D6E8F328C8A64948BF5A00DBDF0820E1CA"
+    },
+    {
+        "path":  "shared/openingTransactions.js",
+        "hash":  "A691D332A04EFDF5F7A0EB4265841127DABFEAE206F6391A584A09C4F005C298"
+    },
+    {
+        "path":  "src/AccountCompanyAreaMappings.css",
+        "hash":  "11CBFAD97EAD8F3670AB9C390539E0DE68DB8F21C19CE1BA534CFF99B7DD6623"
+    },
+    {
+        "path":  "src/AccountCompanyAreaMappings.jsx",
+        "hash":  "948A5394892DA291764F3B545DAED58FD04DC94201627FC0BD2E4CE9AEB05C0D"
+    },
+    {
+        "path":  "src/AccountOpeningTransactions.css",
+        "hash":  "E098AE2F98AB8D1686D640459260F4BACF77295CC3F0FDD10355FD26D0D29BAF"
+    },
+    {
+        "path":  "src/AccountOpeningTransactions.jsx",
+        "hash":  "F9A2DFB1C9BDC6EF36AFC1B92AC45915794190EFE5536CFE8695D14B20C9ADF8"
+    },
+    {
+        "path":  "src/App.jsx",
+        "hash":  "3E251568AF98A9E66C63A72D83A8277AC511EC8BB1DA8DC9FFD5FCB15F53CB7C"
+    },
+    {
+        "path":  "src/BatchLockSalesRate.css",
+        "hash":  "8A6A9AF43FD536086B6BE32919C94CCC369D4C87968D2225C815EDF848B68246"
+    },
+    {
+        "path":  "src/BatchLockSalesRate.jsx",
+        "hash":  "58C0CF46CD4EE7048DD022E7C96BEAAE322CF7737B316F1B1205D79747867E29"
+    },
+    {
+        "path":  "src/CompanyWiseSeriesSetup.css",
+        "hash":  "931A0123718AD110D4A95F974D28B0A694A831B650B636027185B28D3D10370F"
+    },
+    {
+        "path":  "src/CompanyWiseSeriesSetup.jsx",
+        "hash":  "F16F2BCFBE779BA6645C33E3A72AFCD0C21A9E855A37E2FB5D320ED943562457"
+    },
+    {
+        "path":  "src/Dashboard.css",
+        "hash":  "39EF27EFE6F8C6B649694845100555E6D783503B3BA58C2B2C3AE1858AAE0881"
+    },
+    {
+        "path":  "src/Dashboard.jsx",
+        "hash":  "879B50B6E0DADF2FA5C122E73DC16C15CCFC5A2678AE5A94C2CC943C98A93120"
+    },
+    {
+        "path":  "src/DashboardHome.jsx",
+        "hash":  "757F5F5E82B985542BD1635028731A62F7B4038B3C1770AF3167D028E5E8F1A2"
+    },
+    {
+        "path":  "src/DashboardHorizontalNav.css",
+        "hash":  "BF886477D7A8C9C0E72F4D29B70F5418772581BECC506875DC95C86B5644A5E3"
+    },
+    {
+        "path":  "src/DashboardMockup.css",
+        "hash":  "78DBF54C8BFA555EBA51028BA52C0D9BEED8967809E754F4A109D1B98BCD1E82"
+    },
+    {
+        "path":  "src/EInvoiceReport.css",
+        "hash":  "81CEF54E9E538E3AF323614C2DB9CE90EC7BB04810E8B93C4E0A31CA41D127EB"
+    },
+    {
+        "path":  "src/EInvoiceReport.jsx",
+        "hash":  "D1FBF1826665EF0C5EE8823F956D15C36F69A4E9020C5B32F2EBD781B25FC963"
+    },
+    {
+        "path":  "src/ERPTheme.css",
+        "hash":  "865C0080C3B4D22E02FB8499C2F1DFBBE15F2DA555B170A18A2EEBE33F960999"
+    },
+    {
+        "path":  "src/FleetTheme.css",
+        "hash":  "AFDB6D4DBCDACF114EE1653596B830F76A40BE044B6470C3FE91BDBFDE0D6D38"
+    },
+    {
+        "path":  "src/GeneralSetup1.css",
+        "hash":  "2A7401B80504ECF65CD70828AAEEA99BB9D82D66C7786850FB8C96E8AC5CEC90"
+    },
+    {
+        "path":  "src/GeneralSetup1.jsx",
+        "hash":  "81BA54A1A2474F418072771883A73C27611CB1EB36CF9EB997B312A3351D577C"
+    },
+    {
+        "path":  "src/ImportData.jsx",
+        "hash":  "48553C0C27D6F43E7DAB2FDE91101207EBCC78CC2FB58805DB2D436E3CB94BD2"
+    },
+    {
+        "path":  "src/ImportDataFromDesktop.jsx",
+        "hash":  "7F72BD9DAA408787FCA0AAC5314867F249D549927815DB1B4E3121E309144C2A"
+    },
+    {
+        "path":  "src/Login.css",
+        "hash":  "E894F92E4FE2B6264C7177916E03B48B1A242259D1AAB5AB2060F4EDEF7D961A"
+    },
+    {
+        "path":  "src/Login.jsx",
+        "hash":  "DA6C610105534B3645B14E051F3EC5F151EBCFC69191D6F8047DBEE1B5935539"
+    },
+    {
+        "path":  "src/Mapping.css",
+        "hash":  "57E907D7C53F0871DCA2C6C7492C103F1C80EB21C0C98CA072949ED7E2C17E84"
+    },
+    {
+        "path":  "src/Report.css",
+        "hash":  "E6019EDEEF928007F742C344305DB8D372BEBB9477C47F86F77E7C59F4A30B4E"
+    },
+    {
+        "path":  "src/Report.jsx",
+        "hash":  "64725CE5FDC77207F8C9DC076393EB249DFB93310D55063CEFDE747EF986CC6B"
+    },
+    {
+        "path":  "src/SalesInvoiceListModern.css",
+        "hash":  "D9BCC730CD3C3FE7926AD2BF355454E9E7769336944C9D711E1BADFE9E7C50F8"
+    },
+    {
+        "path":  "src/SalesmanToAreaMapping.jsx",
+        "hash":  "20EA8E4E9E435097F07D04E5A7829D64A4ED648C44C87F67D70E016D621DA96F"
+    },
+    {
+        "path":  "src/SecuritySetup.css",
+        "hash":  "31434BEA96B24FBF4BB6BC16F2113F047C3DF35442764A3DD7F343999ABB1C77"
+    },
+    {
+        "path":  "src/SecuritySetup.jsx",
+        "hash":  "756D828743F82D765B5ABDCEF4196A86EECA40FBBFF9BC2FDD632BFCCEE357F8"
+    },
+    {
+        "path":  "src/ServiceManagement.css",
+        "hash":  "2AC9623E24D884C2686A965598F0C00CEFE2539926EE787EAD299CFAADFCE80F"
+    },
+    {
+        "path":  "src/ServiceManagement.jsx",
+        "hash":  "F6F04E09581DB88285E92C64A44A7CD5CA1E9F2F0BD092F12B538C2C62227757"
+    },
+    {
+        "path":  "src/StockManagement.css",
+        "hash":  "BE57FAD9DF1278E7E0CE7C2F8B692C512055BA9BC8C976429AE1BD1B28192407"
+    },
+    {
+        "path":  "src/StockManagement.jsx",
+        "hash":  "486B0EEB01AE86F1E24B4C648D5E451F054A2DBE7DF8D0F981558BFCFDFF351B"
+    },
+    {
+        "path":  "src/Transaction.css",
+        "hash":  "B6879E75FE348471C973864C5326E35188A54EC3FC226643873EC22E2802BCFC"
+    },
+    {
+        "path":  "src/Transaction.jsx",
+        "hash":  "A432EDAE4B6C287F7D94D8184DDAE0E8AD3555989A5BF9E2328799396D1FCBDF"
+    },
+    {
+        "path":  "src/VoucherForms.css",
+        "hash":  "A34FBE235D009CFB661B1377F92FE3BB06D83B353BDB15A28D7AE7236589855A"
+    },
+    {
+        "path":  "src/api/client.js",
+        "hash":  "08648DE020F51B018FFCB44CACC95A17F80732C7FFAEBA273A5150612EA6BDFA"
+    },
+    {
+        "path":  "src/api/config.js",
+        "hash":  "DE3A2B5F581905C9A6E83F808F0655DB547BB9224DA7C5D6D00672F693463158"
+    },
+    {
+        "path":  "src/assets/images/Totalsolution-sidebar-dark.png",
+        "hash":  "06716754D26072843647828139538B472218DDC6AF40C9CB2E80424D10BD60C4"
+    },
+    {
+        "path":  "src/assets/images/Totalsolution-sidebar-original.png",
+        "hash":  "4A0691AC81B52EAF036F2109012A492A0033A22353EE7182CA8A63B32E84E638"
+    },
+    {
+        "path":  "src/assets/images/Totalsolution.png",
+        "hash":  "1182446C30C07E3992B4FC08BBC7C302A63B7F040924DAABF94E5D128B533093"
+    },
+    {
+        "path":  "src/assets/images/login-office-hero.png",
+        "hash":  "9DBCD22E9DD359C8E951AF5F00E1431490D211FF1B0312FAF26A6D8D38A3C351"
+    },
+    {
+        "path":  "src/assets/images/total-solution-landscape.svg",
+        "hash":  "AA0D45E4C7A64BACCB52271FDD800B93F3406257851A469551EEF9ABAE3D1EFF"
+    },
+    {
+        "path":  "src/assets/images/total-solution-mark.png",
+        "hash":  "2E6AF71857A2A62337115CD15C9E4F6486999A994D0F84A04542DF854CDF70D1"
+    },
+    {
+        "path":  "src/components/SearchablePartySelect.css",
+        "hash":  "9D9E1F718680CB09E9048802708B317F95D737839A8B7FEC1D6973B95A41F882"
+    },
+    {
+        "path":  "src/components/SearchablePartySelect.jsx",
+        "hash":  "AB15505AFFA81683C33BEA0EEFD45E85FA0EADD59801A76A597BFB41FDE388C4"
+    },
+    {
+        "path":  "src/components/UserProfileModal.css",
+        "hash":  "9999DB91E7DBD381648D4675EC9CCC8CCE516D871685A96BDC7211D1228F2039"
+    },
+    {
+        "path":  "src/components/UserProfileModal.jsx",
+        "hash":  "8C131E1F815278A6D97DEE1CECD19F715C921E3BB63F5D988BEF105874931FF8"
+    },
+    {
+        "path":  "src/context/ERPContext.jsx",
+        "hash":  "08F7AC64A48BEB079553E1BAB95A8DDBEF6D9B39461D41CECFB292CD5A1600DD"
+    },
+    {
+        "path":  "src/data/accountStates.js",
+        "hash":  "7DDF5D0BAFA1B97CBA01D53931B0CA0B4364287C00657061F0814E9454279211"
+    },
+    {
+        "path":  "src/hooks/useSortableListTables.js",
+        "hash":  "5C452A60F8206BE2EB74F0C79337B9780948AA90A08AFAD1BD225A4C5A8E5698"
+    },
+    {
+        "path":  "src/main.jsx",
+        "hash":  "7A8241BC355782F157A60BD4650251169CEE0D7F426F51E6ABBE21937BBF429B"
+    },
+    {
+        "path":  "src/utils/businessDate.js",
+        "hash":  "5ABFA4971E540BEB24DBE46DC8017CE4FC96A4B05FB4D64D8B428F356A045E97"
+    },
+    {
+        "path":  "src/utils/invoiceHsn.js",
+        "hash":  "E898DEB93D40CCA5A52D17AF53B66355C56ABBC2DA59C8FB0A0FD1CDA252EDD6"
+    },
+    {
+        "path":  "src/utils/invoiceOutput.js",
+        "hash":  "78EFFBE7B477EFF1AB048051D69F35D940B4CDF491810BA414588BBCEF2F9C20"
+    },
+    {
+        "path":  "src/utils/purchaseSupplier.js",
+        "hash":  "DBCF0B6908FEB6DA5F71A13860A5BF27CEF148D0C7BE96E710DB97475B8029D1"
+    },
+    {
+        "path":  "src/utils/session.js",
+        "hash":  "2E8CFB2B38E220166499E576941A056FB0FBE7C0557E4890684FA9203D4F15D4"
+    },
+    {
+        "path":  "vite.config.js",
+        "hash":  "DE76947D71AB918E344C48D43C3F58826905375AF7867A3040726E7C4E93DC52"
+    },
+    {
+        "path":  "ERP_ACCOUNTING_DIAGNOSIS_REPORT.md",
+        "hash":  "F669C29353BC3A4D2CAA4674531123B7EF056033DF1E04EE919D380711F27046"
+    },
+    {
+        "path":  "ERP_PERFORMANCE_REVIEW_AND_POSSIBLE_FIXES.md",
+        "hash":  "BD2BDAC74B049420FBBFFC96C331F190706276444F43DD1E80D2CE06BCD7FF93"
+    },
+    {
+        "path":  "output/erp-current-style-2026-11-06.zip",
+        "hash":  "39033D2861C5C4F3EA7591C817EF29761FE1FB5407FC852B3171169114457249"
+    },
+    {
+        "path":  "output/erp-current-style-2026-11-06/01-access-and-home.png",
+        "hash":  "65D73B25538EACEEECD37F8DAB1937503DFBD4C79B079436C38566093A516179"
+    },
+    {
+        "path":  "output/erp-current-style-2026-11-06/02-organisation.png",
+        "hash":  "D4353FFEAA8B0D2564AD4AFEB68216685FC39BB3B37F615F9DC48E9AC11267C8"
+    },
+    {
+        "path":  "output/erp-current-style-2026-11-06/03-products.png",
+        "hash":  "AE53D57AFA9474F97F1AF66A9A2425101E8FE40EECDF1757D19F8E49F3C074BA"
+    },
+    {
+        "path":  "output/erp-current-style-2026-11-06/04-accounts-and-territory.png",
+        "hash":  "4CC479562BE28EF519C23A27074F48ECA933CB7CB90F60386DC3BCCDDD581433"
+    },
+    {
+        "path":  "output/erp-current-style-2026-11-06/05-mapping-and-openings.png",
+        "hash":  "81BDAFE0FB81F203BB92B26DD01AC087B70FC7EB7A2C10F5DCF610FD65945D20"
+    },
+    {
+        "path":  "output/erp-current-style-2026-11-06/06-sales.png",
+        "hash":  "4B6AF54C6319ED5D0EDC1678E85AF348C8C10B9334AF1BCE1B000697D6B21965"
+    },
+    {
+        "path":  "output/erp-current-style-2026-11-06/07-distribution.png",
+        "hash":  "1CF130740DA317EF88346E0975F6BDFB6D7B2CABBDE3D8885FD61FDA35C205D1"
+    },
+    {
+        "path":  "output/erp-current-style-2026-11-06/08-stock-and-returns.png",
+        "hash":  "430A0EF6935FC4288D6382FD504191264F6F00F00BC834F6CC91BAB21FADE30A"
+    },
+    {
+        "path":  "output/erp-current-style-2026-11-06/09-purchase-and-cash.png",
+        "hash":  "97188BADA440D6CB6F02D969A7E63C2242155EA8B8EA2738A7B7B4B0FD83ADD7"
+    },
+    {
+        "path":  "output/erp-current-style-2026-11-06/10-banking-and-journals.png",
+        "hash":  "6DE1C848AB1DBD7708429A367AF55CCCEBB98724D2E65C760738CB2D927E41BC"
+    },
+    {
+        "path":  "output/erp-current-style-2026-11-06/11-administration.png",
+        "hash":  "841E9F31C0197F398BEDD84EDC767EBF6FBE8968B11EACA0CF27CA6E179A8740"
+    },
+    {
+        "path":  "output/erp-current-style-2026-11-06/12-sales-and-purchase-reports.png",
+        "hash":  "CD5F9657105FC1AC3128037CF486C6F1D257B7CFB3A6240B33F8FB0D463B745A"
+    },
+    {
+        "path":  "output/erp-current-style-2026-11-06/13-inventory-reports.png",
+        "hash":  "3A8B8C7BB36F20449521B70536E5CD2572D6139DD217D56DC5C920FF30533348"
+    },
+    {
+        "path":  "output/erp-current-style-2026-11-06/14-tax-reports.png",
+        "hash":  "01BFDC3AA5AD3AC2A541713E1AE9C357C8591A19E000ABB31C2AB0C8367CE834"
+    },
+    {
+        "path":  "output/erp-current-style-2026-11-06/15-financial-reports.png",
+        "hash":  "A753FDEF885CA797A3BBEA375679B111EF3727E90EB3FB6DC67C4A2BA9D067A1"
+    },
+    {
+        "path":  "output/erp-current-style-2026-11-06/16-control-and-report-discovery.png",
+        "hash":  "ECB0DDA1F626D61A75465B2848C77CDE99580194D1F7225726B6DF6C27F89079"
+    },
+    {
+        "path":  "output/erp-current-style-2026-11-06/17-company-wise-purchase-report.png",
+        "hash":  "A2498E4B7AC88DC02465C04055755D9896ED5F8A4E83B26E37B4A6A36E952E4A"
+    },
+    {
+        "path":  "output/erp-current-style-2026-11-06/README.md",
+        "hash":  "553720501874C7B8E7652F03100B4BED19F3CA863770494D8274D1759E45FC46"
+    },
+    {
+        "path":  "output/erp-current-style-2026-11-06/SCREEN-COVERAGE.md",
+        "hash":  "2512CD239023344570415B479C2080D9693E9532E6CB11772ECFAB6556936004"
+    },
+    {
+        "path":  "output/erp-current-style-2026-11-06/billing-full.png",
+        "hash":  "0A208BBBB2ABE9A70424D751E2F66D4F9755EE1E79ECB520322F0631C136C774"
+    },
+    {
+        "path":  "output/erp-current-style-2026-11-06/index.html",
+        "hash":  "D3B7F32D7EC58134A4849CE06DFF40DD32BCD9A3E35763DDE5C20E072012553A"
+    },
+    {
+        "path":  "output/erp-current-style-2026-11-06/prompts.json",
+        "hash":  "73AB5418D3DFDD89416D3F9BEC1CE039205D5A6B6A842401E08294B1A84CCA27"
+    },
+    {
+        "path":  "output/erp-review-2026-11-06.zip",
+        "hash":  "8B873853089C3139D18DE1B765774DAFCC02ABA53382FC2A5E6FD7B336AE2318"
+    },
+    {
+        "path":  "output/erp-review-2026-11-06/01-access-and-home.png",
+        "hash":  "21E0F3E99DF036E49AF3B69D5D17232C913CEA742999D575C9A3ED45DDCF0850"
+    },
+    {
+        "path":  "output/erp-review-2026-11-06/02-organisation.png",
+        "hash":  "253C688EF32BDD4443248899FBDBBD1AA88D98693D2C9DC3E63E262CF51D99D4"
+    },
+    {
+        "path":  "output/erp-review-2026-11-06/03-products.png",
+        "hash":  "E44D3175156491178642DC7FCDA15AD6E066EF7F8EA023923CD2ED3AA90F9216"
+    },
+    {
+        "path":  "output/erp-review-2026-11-06/04-accounts-and-territory.png",
+        "hash":  "CF54672CB8BC80A5E07C167BB01E3B140428AD3E547FD06BC1C71C44BE6528A5"
+    },
+    {
+        "path":  "output/erp-review-2026-11-06/05-mapping-and-openings.png",
+        "hash":  "0526436D55AF286CC9F492AD281A032977D06576D3B4D8E3BBE44920A4813E1D"
+    },
+    {
+        "path":  "output/erp-review-2026-11-06/06-sales.png",
+        "hash":  "95F095896F7A24424B1BA3981FF20D5611C5ADFCE3680BEC770ADF16596E37F0"
+    },
+    {
+        "path":  "output/erp-review-2026-11-06/07-distribution.png",
+        "hash":  "07BD88AF99A0FC9203C9B734D7182E6FF29B7EE993BECD061219B7BAC797BD14"
+    },
+    {
+        "path":  "output/erp-review-2026-11-06/08-stock-and-returns.png",
+        "hash":  "2340BB4A27319C478988AAE939082A0FF3DC6AAB79F77FEA55D57DC86B936E30"
+    },
+    {
+        "path":  "output/erp-review-2026-11-06/09-purchase-and-cash.png",
+        "hash":  "08E5A068095BB908D84A78921E796D6F48AF0C514CF72E8499D0C0D9FD5850D4"
+    },
+    {
+        "path":  "output/erp-review-2026-11-06/10-banking-and-journals.png",
+        "hash":  "3685A90FC7A856D7D2D78C4D31740AA630CD82FD3FDED9284F3CA738C7F67297"
+    },
+    {
+        "path":  "output/erp-review-2026-11-06/11-administration.png",
+        "hash":  "F33FC5EF1A18182FE208D1063F6503495A6C873DCA02A857145C43D53E6DA7A3"
+    },
+    {
+        "path":  "output/erp-review-2026-11-06/12-sales-and-purchase-reports.png",
+        "hash":  "DC4192FA0467AE5F76F7460BA3A2A133CF73EAEACB626D849A0FED5803D28CBE"
+    },
+    {
+        "path":  "output/erp-review-2026-11-06/13-inventory-reports.png",
+        "hash":  "ED7A881B9E36A702169A39898082CBAA723CD0A71EBC1DE53D182F5BAC10F047"
+    },
+    {
+        "path":  "output/erp-review-2026-11-06/14-tax-reports.png",
+        "hash":  "7B84B9D09A1EF268005430B3B8D8AD21B074DF05BD4B0E7A4DA994B6092F0A99"
+    },
+    {
+        "path":  "output/erp-review-2026-11-06/15-financial-reports.png",
+        "hash":  "FABC8C27470B63807FE3881B0191B1AAE5E982A1C4C936AD2286BD52A7C3949F"
+    },
+    {
+        "path":  "output/erp-review-2026-11-06/16-control-and-report-discovery.png",
+        "hash":  "B0607D6EAC0F600D9FC36CAEA95EC4ABA42F7F7F5DA9F21692B07719C62DC3A8"
+    },
+    {
+        "path":  "output/erp-review-2026-11-06/17-company-wise-purchase-report.png",
+        "hash":  "901CD3A56B21522E0282807BEF297E511AE28994E229AA279831D4B3027FF316"
+    },
+    {
+        "path":  "output/erp-review-2026-11-06/DESIGN-NOTES.md",
+        "hash":  "2B227DBFE2060B08ACD50836F7DFD79B129112927EF0E69C8FAFAB5BB1BE8F7B"
+    },
+    {
+        "path":  "output/erp-review-2026-11-06/REVIEW.md",
+        "hash":  "67B831299B0A903563B9671E99812B811CBC82F7DC160A76AA62705EB0CCDF72"
+    },
+    {
+        "path":  "output/erp-review-2026-11-06/SCREEN-CATALOGUE.md",
+        "hash":  "9B15DF02C16A1F8F6371CD841796939608B22EEC8E669C92861E0ACC02EF923B"
+    },
+    {
+        "path":  "output/erp-review-2026-11-06/VALIDATION.md",
+        "hash":  "D11CE1A1E1B42AAB8E6E992A155390DDE717BDB344D9590B35A437959CB75D3E"
+    },
+    {
+        "path":  "output/erp-review-2026-11-06/index.html",
+        "hash":  "F403D4F4E36BD7DC24F3E72864E6986D5BEA976582AFDACA9437D3C2D54FCEBE"
+    },
+    {
+        "path":  "output/erp-review-2026-11-06/prompts.json",
+        "hash":  "F863F24FDB928002B1218791C2C194D13EC9B9DCA4D061503143D0D19F144824"
+    },
+    {
+        "path":  "output/form-design-concepts/credit-note-design.png",
+        "hash":  "DC2079C7E779AA2AC169334FCEAA45C3133DCFDED3D31C216FAEEDAC91B4E75A"
+    },
+    {
+        "path":  "output/form-design-concepts/credit-note-sales-style-v2.png",
+        "hash":  "96887F7999D88A9ED1EC728C550B012CEDE52CE7C620D80B790051BF8BEE6034"
+    },
+    {
+        "path":  "output/form-design-concepts/debit-note-design.png",
+        "hash":  "773E7F0149062BBC7BCD4BF025B1D7A70B078B44027398A57F93C190B2556156"
+    },
+    {
+        "path":  "output/form-design-concepts/debit-note-sales-style-v2.png",
+        "hash":  "B9CEA59AFD384379C61A614FCC5F4593871161946C956B1C0839364962653A65"
+    },
+    {
+        "path":  "output/form-design-concepts/stock-management-design.png",
+        "hash":  "8C018F455BD20ED03CD1B271CF3890B22709C9146397B5B5C829CA7C586F7722"
+    },
+    {
+        "path":  "output/form-design-concepts/stock-management-sales-style-v2.png",
+        "hash":  "82D65EFEE1D4722027C60C2B44EBB2B38B2C10ACF25B0788AA37E312042A3DB4"
+    }
+]

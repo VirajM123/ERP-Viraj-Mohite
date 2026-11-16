@@ -29,10 +29,11 @@ export const calculateSalesFinancials = (body, rows, { vatMode = "GROSS_AMOUNT",
     const qty = number(row.qty ?? row.quantity ?? row.Qty, `Item ${index + 1} quantity`);
     const free = number(row.free ?? row.Free ?? row.freeQty, `Item ${index + 1} free quantity`);
     const boxPack = number(row.boxPack ?? row.BoxPack ?? 1, `Item ${index + 1} box pack`);
-    const chargedQty = String(row.units ?? row.unit ?? "").toLowerCase() === "box" ? qty * (boxPack || 1) + free : qty + free;
+    const billedQty = String(row.units ?? row.unit ?? "").toLowerCase() === "box" ? qty * (boxPack || 1) : qty;
+    const chargedQty = billedQty + free;
     if (chargedQty <= 0 && !(allowZeroQuantityItems && chargedQty === 0)) throw new Error(`Item ${index + 1} quantity must be positive`);
     const rate = number(row.rate ?? row.salesRate ?? row.SRate, `Item ${index + 1} rate`);
-    const gross = roundMoney(chargedQty * rate);
+    const gross = roundMoney(billedQty * rate);
     const discount = (amountKeys, percentKeys, label) => {
       const pct = percentKeys.map((key) => row[key]).find((value) => value !== undefined && value !== null && value !== "");
       const amount = amountKeys.map((key) => row[key]).find((value) => value !== undefined && value !== null && value !== "");
@@ -44,6 +45,7 @@ export const calculateSalesFinancials = (body, rows, { vatMode = "GROSS_AMOUNT",
     const scheme = discount(["schemeAmt", "schemeAmount"], ["schemePct", "schemePercent"], "Scheme");
     const star = discount(["starAmt", "starAmount"], ["starPct", "starPercent"], "Star discount");
     const cash = discount(["cdAmt", "cashDiscountAmount"], ["cdPct", "cashDiscountPercent"], "Cash discount");
+    if (roundMoney(tpr + scheme + star + cash) > gross) throw new Error(`Item ${index + 1} combined discounts cannot exceed gross amount`);
     const commercialNet = roundMoney(Math.max(0, gross - tpr - scheme - star - cash));
     const taxable = roundMoney(taxableBase({ gross, tpr, scheme, star, cash }, vatMode));
     const gstPercent = percent(row.gst ?? row.gstPercent ?? row.GSTPercent ?? 0, `Item ${index + 1} GST`);
@@ -57,7 +59,8 @@ export const calculateSalesFinancials = (body, rows, { vatMode = "GROSS_AMOUNT",
   const display = number(body.DisplayAmount || 0, "Display amount"), coupon = number(body.CouponAmount || 0, "Coupon amount");
   const addLess = number(body.AddLessAmount || 0, "Add/Less amount", true), creditNote = number(body.CreditNoteAmount || 0, "Credit note amount");
   const originalNet = roundMoney(items.reduce((sum, item) => sum + item.commercialNet, 0) + totals.cgst + totals.sgst + totals.igst - display - coupon + addLess);
-  return { items, GrossAmount: totals.gross, TPRAmount: totals.tpr, SchemeAmount: totals.scheme, StarDiscountAmount: totals.star, CashDiscountAmount: totals.cash, TaxableValue: totals.taxable, CGSTAmount: totals.cgst, SGSTAmount: totals.sgst, IGSTAmount: totals.igst, OriginalNetAmount: originalNet, NetAmount: roundMoney(Math.max(0, originalNet - creditNote)), TotalQty: totals.qty, TotalFreeQty: totals.free, TotalItems: items.length };
+  if (creditNote > originalNet) throw new Error("Credit note amount cannot exceed invoice value");
+  return { items, GrossAmount: totals.gross, TPRAmount: totals.tpr, SchemeAmount: totals.scheme, StarDiscountAmount: totals.star, CashDiscountAmount: totals.cash, TaxableValue: totals.taxable, CGSTAmount: totals.cgst, SGSTAmount: totals.sgst, IGSTAmount: totals.igst, OriginalNetAmount: originalNet, NetAmount: roundMoney(originalNet - creditNote), TotalQty: totals.qty, TotalFreeQty: totals.free, TotalItems: items.length };
 };
 
 export const calculatePurchaseFinancials = (body, rows) => {

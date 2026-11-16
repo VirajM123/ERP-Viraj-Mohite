@@ -1,0 +1,3964 @@
+{
+  "reviewedAt": "2026-11-06T07:08:29.340Z",
+  "candidateCount": 134,
+  "actualRouteCount": 270,
+  "scope": "Static source review; not deployed/runtime coverage certification",
+  "profiles": {
+    "master": [
+      "N",
+      "Master/configuration/security or mapping only; no dated transaction, stock quantity or journal mutation. Referenced master changes affect future documents; do not guard these as historical postings."
+    ],
+    "read": [
+      "N",
+      "Read/validation/export or job-file preparation only. E-invoice JSON writes an export file, upload returns 501; neither changes ERP financial documents."
+    ],
+    "control": [
+      "N",
+      "Period configuration/reopen/blocked-close control and audit, not a source financial document. Own authenticated ACCOUNTING grants and active transaction retained."
+    ],
+    "service": [
+      "T",
+      "APPROVED HERE only: SALES/SALES_SERVICE add/edit/delete + requestTenant. voucherDate requested and persisted original on edit/delete. Baseline has no transaction. Party/firm/service reads, number floor/increment, create/save/soft-delete must share active session; guard before counter or document mutation. Desktop supplied numbering remains unchanged."
+    ],
+    "journal": [
+      "S",
+      "TRANSACTIONS/JOURNAL_VOUCHER; tenant(req.auth). withTransaction already includes number/document/journal/audit. Dates: stored and proposed vDate, selected original journal documentDate, actual reversal argument (edit proposed-or-stored; delete stored). Guard before number/reversal/save; preserve idempotent existing-result path."
+    ],
+    "purchase": [
+      "S",
+      "VOUCHERS/PURCHASE; tenant source shown in evidence (some body-derived; compare against req.auth before guard). Existing transaction covers number/header/stock/journal/audit. Dates: invoiceDate original/proposed, selected journal dates and actual reversal date (businessDateIST for cancellation). Repair uses persisted invoiceDate, reactivation stock movements and missing-journal creation; guard before first mutation. No new date rule needed for own posting dates."
+    ],
+    "salesedit": [
+      "S",
+      "SALES/SALES_BILLING; existing active transaction. req.auth plus tenant-scoped source reads. BillDate stored/proposed, selected journal and actual reversal dates; cancellation uses businessDateIST. Preflight before stock reversal/header/load snapshot/journal/movement/audit. Include zero-value skip-posting path and both cancellation entry points."
+    ],
+    "salescreate": [
+      "T",
+      "UNAPPROVED: active document transaction but nextDocumentNumber deliberately reserves independently (server.js:12633-12645 omits session). Move number reservation into same transaction requires separate approval. BillDate; party/company/godown/tax/rate/credit/stock and idempotent commit reconciliation must remain intact."
+    ],
+    "billtype": [
+      "T",
+      "UNAPPROVED: body tenant, global authentication but no route grant. SalesHeader and embedded LoadHeader bill-type updates have no transaction. Persisted BillDate and affected load dates must be resolved; no authorization correction authorized here."
+    ],
+    "allocation": [
+      "B",
+      "TRANSACTIONS PAYMENT/RECEIPT and authenticated tenant. Primary create/edit/delete have withTransaction but mutate purchase/sales/opening allocated counters before journal. Own old/new vDate or receiptDate and selected original/reversal journal dates are available. Business decision needed on whether linked source invoice/opening posting periods must also be OPEN; do not substitute receipt bill reference date for postingDate. releaseOpening has no tenant in signature. Existing early idempotent/no-op behavior retained."
+    ],
+    "legacyreceipt": [
+      "T",
+      "UNAPPROVED nontransactional legacy receipt writer: preserve posted-receipt immutability rejection; non-POSTED edit still mutates. Date receiptDate stored/proposed; tenantFilter on lookup/update but update payload tenant fields require review. Duplicate POST at transaction.js:1270 is shadowed by first handler (no next), still inventoried as dormant code."
+    ],
+    "serverreceipt": [
+      "B",
+      "Legacy /api/receipt has active transaction and number+Receipt create but no balanced journal call. receiptDate defaults from existing behavior; linked bill BillDate. Decide reference-period policy and relationship to primary receipt workflow before integration. Do not add posting as incidental guard work."
+    ],
+    "cheque": [
+      "T",
+      "UNAPPROVED: TRANSACTIONS route-specific add/edit/delete, no transaction around counter/document/status mutation. chqBounceDate / pdcDate or docDate / transactionDate / collectionDate respectively, stored and proposed. Create cheque-bounce trusts body tenant; other creates force auth tenant; edits initially load tenantFilter but may copy body tenant into update. Delete status REVERSED with no invented cancellation posting/date. No common journal call in these families."
+    ],
+    "stock": [
+      "B",
+      "VOUCHERS/STOCK_ADJUSTMENT; existing transaction and authenticated tenant. Create VoucherDate defaults UTC today; edit/delete movementDate is businessDateIST, while original/replacement VoucherDate may differ. Require explicit effective-date treatment of these existing movements before integration; do not change dates/valuation. moveStockForAdjustment, Stock/DamStock, request-id/status locks, movements and audit are one dependency set."
+    ],
+    "batch": [
+      "B",
+      "TOOLS/BATCH_LOCK and BATCH_RATE_OVERRIDE conditional edit grants; auth tenant. Stock/product reads before transaction; stock SRate/IsLocked + audit bulk writes inside it. No authoritative financial effective date; decide whether rate/lock is a period-controlled event. If included, same-session source-read boundary change also needs approval."
+    ],
+    "opening": [
+      "B",
+      "MASTER/ACCOUNT, authenticated tenant on main account routes. saveAccountWithOpenings legacy path save(null); transactional path saves account before deriving old/new opening postingDate. Direct opening/journal supersession, allocations and account summary/history semantics require business decision AND separate transaction approval for legacy branch. Do not turn reference row.date into postingDate or rewrite historical events. Delete master can affect legacy opening visibility; no opening reversal is implemented."
+    ],
+    "otheropening": [
+      "B",
+      "MASTER/OTHER_ACCOUNT; openingBal can be created/edited and account soft-deleted with no authoritative opening posting date/transaction. Requires effective-date and opening-summary policy, then separate same-session architecture approval. No journal posting added."
+    ],
+    "import": [
+      "B",
+      "importPermission + req.security tenant; Account import carries openingBal without openingDate/billwise events (importConfig.js). Active transaction includes ImportBatch + master inserts; Product upsert and postcommit GST sync are master-only. Decide legacy opening effective-date semantics for Account rows; do not fabricate dates."
+    ],
+    "dispatch": [
+      "B",
+      "TOOLS desktop-import grant, owned job tenant + forwarded Authorization. runDesktopImport dispatches mapped sales/purchase/notes/receipt/service/stock/cheque/etc to target HTTP writers, repair targets purchase reconciliation; independent per-record commits, not one Mongo transaction. Retry/resume may continue writes; pause does not undo in-flight writes. Inherits each target blocker/date policy. Direct supplier/bank master inserts have no transaction; rollback deletes captured master IDs without tenant predicate and calls transaction DELETE endpoints. Require scope/compensation decisions; no global batch transaction authorized."
+    ],
+    "load": [
+      "B",
+      "Load snapshots mutate sales/load financial-document metadata and totals; conservatively included, even without journal. CREATE_LOAD/SETTLE_LOAD grants where present; load-transfer lacks route-specific grant. LoadDate / loadDate, embedded BillDate and receiptDate are not one authoritative posting date. Create/edit/transfer/load-delete have transaction; GET load-bills repairs snapshots without one; legacy settle create/edit/delete lack transaction. settle-load/save additionally upserts/reverses Receipt and sales statuses inside existing transaction. Requires business decision for snapshot/settlement and generated receipt effective dates; any missing boundary separately approved."
+    ],
+    "quotation": [
+      "N",
+      "Quotation document/number only; inspected create/edit/delete do not mutate stock, journals, sales allocations or posted invoices. Prospective quote, outside financial-period enforcement; counter is QUOTATION only."
+    ],
+    "debit": [
+      "S",
+      "VOUCHERS/DEBIT_NOTE, authenticated tenant (cancellation body scope must match req.auth). Existing transaction includes tenant references, original purchase limits, stock helper, number/note/journal/audit. Dates old/new VDate, original/latest journal date and actual reversal argument; delete uses businessDateIST. Guard before stock and numbering. Reference purchase is validated but no allocation counter mutation; preserve return limits."
+    ],
+    "allocationNote": [
+      "B",
+      "VOUCHERS/CREDIT_NOTE, existing transaction. Old/new VDate, original/latest journal and actual reversal date (delete businessDateIST) available. In addition stock helper and adjustSalesBillForCreditNote / direct SalesHeader updates change referenced sales return/credit metadata. Resolve linked source-period policy before implementation; no tax, valuation or reversal-date redesign authorized."
+    ]
+  },
+  "candidates": [
+    {
+      "file": "backend/batchLock.js",
+      "line": 156,
+      "method": "PUT",
+      "path": "/stock",
+      "permissionEvidence": [],
+      "transactionEvidence": [
+        "startSession",
+        "startTransaction",
+        "commitTransaction"
+      ],
+      "dateTokens": [
+        "update",
+        "Date"
+      ],
+      "mutationCandidates": [
+        "Stock.bulkWrite(",
+        "BatchRateAudit.insertMany("
+      ],
+      "posting": false,
+      "guarded": false,
+      "category": "Requires an accounting or effective-date business decision",
+      "profile": "batch",
+      "dependencies": "TOOLS/BATCH_LOCK and BATCH_RATE_OVERRIDE conditional edit grants; auth tenant. Stock/product reads before transaction; stock SRate/IsLocked + audit bulk writes inside it. No authoritative financial effective date; decide whether rate/lock is a period-controlled event. If included, same-session source-read boundary change also needs approval.",
+      "authorizationEvidence": [
+        "authorize(user.distributorId, user.firmId, user.userId, user.role, \"TOOLS\", \"BATCH_LOCK\", \"edit\")",
+        "authorize(user.distributorId, user.firmId, user.userId, user.role, \"TOOLS\", \"BATCH_RATE_OVERRIDE\", \"edit\")"
+      ],
+      "mutationSites": [
+        "250: Stock.bulkWrite",
+        "251: BatchRateAudit.insertMany"
+      ],
+      "sourceSha256": "ea6c0f04d99a4623f7560a05471e4b89eddb366f62e15e26ca64ffa9f3b53dee"
+    },
+    {
+      "file": "backend/companyWiseSeries.js",
+      "line": 100,
+      "method": "PUT",
+      "path": "/",
+      "permissionEvidence": [],
+      "transactionEvidence": [],
+      "dateTokens": [
+        "update"
+      ],
+      "mutationCandidates": [
+        "CompanyWiseSeries.bulkWrite("
+      ],
+      "posting": false,
+      "guarded": false,
+      "category": "Not a financial writer",
+      "profile": "master",
+      "dependencies": "Master/configuration/security or mapping only; no dated transaction, stock quantity or journal mutation. Referenced master changes affect future documents; do not guard these as historical postings.",
+      "authorizationEvidence": [],
+      "mutationSites": [
+        "140: CompanyWiseSeries.bulkWrite"
+      ],
+      "sourceSha256": "da81fd178c516c07a10b0eb6c2fa5c4113716f7f6490a4f9b9f6b1f6d78e51c2"
+    },
+    {
+      "file": "backend/companyWiseSeries.js",
+      "line": 171,
+      "method": "DELETE",
+      "path": "/:id",
+      "permissionEvidence": [],
+      "transactionEvidence": [],
+      "dateTokens": [],
+      "mutationCandidates": [],
+      "posting": false,
+      "guarded": false,
+      "category": "Not a financial writer",
+      "profile": "master",
+      "dependencies": "Master/configuration/security or mapping only; no dated transaction, stock quantity or journal mutation. Referenced master changes affect future documents; do not guard these as historical postings.",
+      "authorizationEvidence": [],
+      "mutationSites": [
+        "178: CompanyWiseSeries.findOneAndDelete"
+      ],
+      "sourceSha256": "44046238c0798cfa99eef6f152edfc4f5a508205fc8194975a56adf14c04f3ac"
+    },
+    {
+      "file": "backend/desktopImportRoutes.js",
+      "line": 544,
+      "method": "POST",
+      "path": "/desktop-import/generate",
+      "permissionEvidence": [],
+      "transactionEvidence": [],
+      "dateTokens": [
+        "Date"
+      ],
+      "mutationCandidates": [],
+      "posting": false,
+      "guarded": false,
+      "category": "Not a financial writer",
+      "profile": "read",
+      "dependencies": "Read/validation/export or job-file preparation only. E-invoice JSON writes an export file, upload returns 501; neither changes ERP financial documents.",
+      "authorizationEvidence": [],
+      "mutationSites": [],
+      "sourceSha256": "6fb1d17b26cf802bfb76fb204b9634978a1a6385c1cf94b4d32bced6abbbaf35"
+    },
+    {
+      "file": "backend/desktopImportRoutes.js",
+      "line": 580,
+      "method": "POST",
+      "path": "/desktop-import/upload-excel",
+      "permissionEvidence": [],
+      "transactionEvidence": [],
+      "dateTokens": [
+        "Date"
+      ],
+      "mutationCandidates": [],
+      "posting": false,
+      "guarded": false,
+      "category": "Not a financial writer",
+      "profile": "read",
+      "dependencies": "Read/validation/export or job-file preparation only. E-invoice JSON writes an export file, upload returns 501; neither changes ERP financial documents.",
+      "authorizationEvidence": [],
+      "mutationSites": [],
+      "sourceSha256": "8d2da04aa49ccca141a71e41df27bf9d222ff66a50299fb584aad092a48799e3"
+    },
+    {
+      "file": "backend/desktopImportRoutes.js",
+      "line": 631,
+      "method": "POST",
+      "path": "/desktop-import/jobs/:jobId/preflight",
+      "permissionEvidence": [],
+      "transactionEvidence": [],
+      "dateTokens": [],
+      "mutationCandidates": [],
+      "posting": false,
+      "guarded": false,
+      "category": "Not a financial writer",
+      "profile": "read",
+      "dependencies": "Read/validation/export or job-file preparation only. E-invoice JSON writes an export file, upload returns 501; neither changes ERP financial documents.",
+      "authorizationEvidence": [],
+      "mutationSites": [],
+      "sourceSha256": "8b62bb8479649ec4f7e3a9525139e6c1d5f3d9a0795db0284532a9024f75f068"
+    },
+    {
+      "file": "backend/desktopImportRoutes.js",
+      "line": 649,
+      "method": "POST",
+      "path": "/desktop-import/jobs/:jobId/import",
+      "permissionEvidence": [],
+      "transactionEvidence": [],
+      "dateTokens": [
+        "Date"
+      ],
+      "mutationCandidates": [],
+      "posting": false,
+      "guarded": false,
+      "category": "Requires an accounting or effective-date business decision",
+      "profile": "dispatch",
+      "dependencies": "TOOLS desktop-import grant, owned job tenant + forwarded Authorization. runDesktopImport dispatches mapped sales/purchase/notes/receipt/service/stock/cheque/etc to target HTTP writers, repair targets purchase reconciliation; independent per-record commits, not one Mongo transaction. Retry/resume may continue writes; pause does not undo in-flight writes. Inherits each target blocker/date policy. Direct supplier/bank master inserts have no transaction; rollback deletes captured master IDs without tenant predicate and calls transaction DELETE endpoints. Require scope/compensation decisions; no global batch transaction authorized.",
+      "authorizationEvidence": [],
+      "mutationSites": [],
+      "sourceSha256": "f76f83349c2de291579d9820fa8b23e9c285744faf3664f7df55d42fabce3a91"
+    },
+    {
+      "file": "backend/desktopImportRoutes.js",
+      "line": 677,
+      "method": "POST",
+      "path": "/desktop-import/jobs/:jobId/import/pause",
+      "permissionEvidence": [],
+      "transactionEvidence": [],
+      "dateTokens": [
+        "Date"
+      ],
+      "mutationCandidates": [],
+      "posting": false,
+      "guarded": false,
+      "category": "Requires an accounting or effective-date business decision",
+      "profile": "dispatch",
+      "dependencies": "TOOLS desktop-import grant, owned job tenant + forwarded Authorization. runDesktopImport dispatches mapped sales/purchase/notes/receipt/service/stock/cheque/etc to target HTTP writers, repair targets purchase reconciliation; independent per-record commits, not one Mongo transaction. Retry/resume may continue writes; pause does not undo in-flight writes. Inherits each target blocker/date policy. Direct supplier/bank master inserts have no transaction; rollback deletes captured master IDs without tenant predicate and calls transaction DELETE endpoints. Require scope/compensation decisions; no global batch transaction authorized.",
+      "authorizationEvidence": [],
+      "mutationSites": [],
+      "sourceSha256": "85ca07f4a23a4a3158b45d5436f846460ca3c62b2ff7bbd098a419ff60bb3b37"
+    },
+    {
+      "file": "backend/desktopImportRoutes.js",
+      "line": 684,
+      "method": "POST",
+      "path": "/desktop-import/jobs/:jobId/import/resume",
+      "permissionEvidence": [],
+      "transactionEvidence": [],
+      "dateTokens": [
+        "Date"
+      ],
+      "mutationCandidates": [],
+      "posting": false,
+      "guarded": false,
+      "category": "Requires an accounting or effective-date business decision",
+      "profile": "dispatch",
+      "dependencies": "TOOLS desktop-import grant, owned job tenant + forwarded Authorization. runDesktopImport dispatches mapped sales/purchase/notes/receipt/service/stock/cheque/etc to target HTTP writers, repair targets purchase reconciliation; independent per-record commits, not one Mongo transaction. Retry/resume may continue writes; pause does not undo in-flight writes. Inherits each target blocker/date policy. Direct supplier/bank master inserts have no transaction; rollback deletes captured master IDs without tenant predicate and calls transaction DELETE endpoints. Require scope/compensation decisions; no global batch transaction authorized.",
+      "authorizationEvidence": [],
+      "mutationSites": [],
+      "sourceSha256": "8b06835a4299b0b6c0c0aecc25153485423ad520be14b5c51a1e2265b630eab9"
+    },
+    {
+      "file": "backend/desktopImportRoutes.js",
+      "line": 691,
+      "method": "POST",
+      "path": "/desktop-import/jobs/:jobId/import/retry",
+      "permissionEvidence": [],
+      "transactionEvidence": [],
+      "dateTokens": [],
+      "mutationCandidates": [],
+      "posting": false,
+      "guarded": false,
+      "category": "Requires an accounting or effective-date business decision",
+      "profile": "dispatch",
+      "dependencies": "TOOLS desktop-import grant, owned job tenant + forwarded Authorization. runDesktopImport dispatches mapped sales/purchase/notes/receipt/service/stock/cheque/etc to target HTTP writers, repair targets purchase reconciliation; independent per-record commits, not one Mongo transaction. Retry/resume may continue writes; pause does not undo in-flight writes. Inherits each target blocker/date policy. Direct supplier/bank master inserts have no transaction; rollback deletes captured master IDs without tenant predicate and calls transaction DELETE endpoints. Require scope/compensation decisions; no global batch transaction authorized.",
+      "authorizationEvidence": [],
+      "mutationSites": [],
+      "sourceSha256": "f95d5618c1dd2458a75793911b8b66064cba6383aabc5a8f64cad47445f392a9"
+    },
+    {
+      "file": "backend/desktopImportRoutes.js",
+      "line": 702,
+      "method": "POST",
+      "path": "/desktop-import/jobs/:jobId/import/rollback",
+      "permissionEvidence": [],
+      "transactionEvidence": [],
+      "dateTokens": [],
+      "mutationCandidates": [],
+      "posting": false,
+      "guarded": false,
+      "category": "Requires an accounting or effective-date business decision",
+      "profile": "dispatch",
+      "dependencies": "TOOLS desktop-import grant, owned job tenant + forwarded Authorization. runDesktopImport dispatches mapped sales/purchase/notes/receipt/service/stock/cheque/etc to target HTTP writers, repair targets purchase reconciliation; independent per-record commits, not one Mongo transaction. Retry/resume may continue writes; pause does not undo in-flight writes. Inherits each target blocker/date policy. Direct supplier/bank master inserts have no transaction; rollback deletes captured master IDs without tenant predicate and calls transaction DELETE endpoints. Require scope/compensation decisions; no global batch transaction authorized.",
+      "authorizationEvidence": [],
+      "mutationSites": [],
+      "sourceSha256": "aafe79bbd5326c965ef87cbfc8f255bf9436e0c75bd0c5c8a7e52d4af92dc884"
+    },
+    {
+      "file": "backend/financialPeriods.js",
+      "line": 155,
+      "method": "POST",
+      "path": "/${action.toLowerCase()}",
+      "permissionEvidence": [],
+      "transactionEvidence": [
+        "startSession",
+        "withTransaction"
+      ],
+      "dateTokens": [],
+      "mutationCandidates": [],
+      "posting": false,
+      "guarded": false,
+      "category": "Not a financial writer",
+      "profile": "control",
+      "dependencies": "Period configuration/reopen/blocked-close control and audit, not a source financial document. Own authenticated ACCOUNTING grants and active transaction retained.",
+      "authorizationEvidence": [],
+      "mutationSites": [],
+      "sourceSha256": "ec2ef8ba38b0acde4a271b00e8fba723592a32d0c1230d1dc044e3e96f241611"
+    },
+    {
+      "file": "backend/generalSetup.js",
+      "line": 781,
+      "method": "GET",
+      "path": "/",
+      "permissionEvidence": [],
+      "transactionEvidence": [],
+      "dateTokens": [],
+      "mutationCandidates": [
+        "GeneralSetup.create("
+      ],
+      "posting": false,
+      "guarded": false,
+      "category": "Not a financial writer",
+      "profile": "master",
+      "dependencies": "Master/configuration/security or mapping only; no dated transaction, stock quantity or journal mutation. Referenced master changes affect future documents; do not guard these as historical postings.",
+      "authorizationEvidence": [],
+      "mutationSites": [
+        "815: GeneralSetup.create"
+      ],
+      "sourceSha256": "3743ffb5ae37394872081f221fd8d326ee9844f640a992f3aa8eaad02594aa40"
+    },
+    {
+      "file": "backend/generalSetup.js",
+      "line": 853,
+      "method": "PUT",
+      "path": "/",
+      "permissionEvidence": [],
+      "transactionEvidence": [
+        "startSession",
+        "withTransaction"
+      ],
+      "dateTokens": [
+        "buildSetupUpdate",
+        "findOneAndUpdate"
+      ],
+      "mutationCandidates": [
+        "GeneralSetup.findOneAndUpdate("
+      ],
+      "posting": false,
+      "guarded": false,
+      "category": "Not a financial writer",
+      "profile": "master",
+      "dependencies": "Master/configuration/security or mapping only; no dated transaction, stock quantity or journal mutation. Referenced master changes affect future documents; do not guard these as historical postings.",
+      "authorizationEvidence": [],
+      "mutationSites": [
+        "877: GeneralSetup.findOneAndUpdate"
+      ],
+      "sourceSha256": "b7e663c66c6b2dcb062165c8ca4ebdbbcc97cbd812e17fa2a193f96fd978b7f1"
+    },
+    {
+      "file": "backend/importRoutes.js",
+      "line": 242,
+      "method": "POST",
+      "path": "/import/validate",
+      "permissionEvidence": [],
+      "transactionEvidence": [],
+      "dateTokens": [
+        "validate"
+      ],
+      "mutationCandidates": [],
+      "posting": false,
+      "guarded": false,
+      "category": "Not a financial writer",
+      "profile": "read",
+      "dependencies": "Read/validation/export or job-file preparation only. E-invoice JSON writes an export file, upload returns 501; neither changes ERP financial documents.",
+      "authorizationEvidence": [],
+      "mutationSites": [],
+      "sourceSha256": "61a1c8be1fd7cb0d70b6e704df75ff9bade8f2f672d652a3bdbe14ab24275ce4"
+    },
+    {
+      "file": "backend/importRoutes.js",
+      "line": 247,
+      "method": "POST",
+      "path": "/import/save",
+      "permissionEvidence": [],
+      "transactionEvidence": [
+        "startSession",
+        "startTransaction",
+        "commitTransaction"
+      ],
+      "dateTokens": [
+        "validate",
+        "update",
+        "Date"
+      ],
+      "mutationCandidates": [
+        "ImportBatch.create(",
+        "productCollection.bulkWrite("
+      ],
+      "posting": false,
+      "guarded": false,
+      "category": "Requires an accounting or effective-date business decision",
+      "profile": "import",
+      "dependencies": "importPermission + req.security tenant; Account import carries openingBal without openingDate/billwise events (importConfig.js). Active transaction includes ImportBatch + master inserts; Product upsert and postcommit GST sync are master-only. Decide legacy opening effective-date semantics for Account rows; do not fabricate dates.",
+      "authorizationEvidence": [],
+      "mutationSites": [
+        "264: ImportBatch.create",
+        "285: productCollection.bulkWrite",
+        "301: models[req.body.entryType].insertMany"
+      ],
+      "sourceSha256": "360c89384bea46df35e85bb72d3ea6082687fe63071aab35fa7683e4f5d59175"
+    },
+    {
+      "file": "backend/p0Features.js",
+      "line": 233,
+      "method": "POST",
+      "path": "/journal-voucher",
+      "permissionEvidence": [
+        "authorizeRequest(\"TRANSACTIONS\", \"JOURNAL_VOUCHER\", \"add\"), async (req, res) => {\r"
+      ],
+      "transactionEvidence": [
+        "startSession",
+        "withTransaction"
+      ],
+      "dateTokens": [
+        "documentDate",
+        "vDate"
+      ],
+      "mutationCandidates": [
+        "JournalVoucher.create("
+      ],
+      "posting": true,
+      "guarded": false,
+      "category": "Safe to integrate using existing transaction boundaries",
+      "profile": "journal",
+      "dependencies": "TRANSACTIONS/JOURNAL_VOUCHER; tenant(req.auth). withTransaction already includes number/document/journal/audit. Dates: stored and proposed vDate, selected original journal documentDate, actual reversal argument (edit proposed-or-stored; delete stored). Guard before number/reversal/save; preserve idempotent existing-result path.",
+      "authorizationEvidence": [
+        "securityRouter.authorizeRequest(\"TRANSACTIONS\", \"JOURNAL_VOUCHER\", \"add\")"
+      ],
+      "mutationSites": [
+        "249: JournalVoucher.create"
+      ],
+      "sourceSha256": "e4bd7611223aa3f09bda819f9caccdd0e15cc49a59aca87563c07ca4dab4916e"
+    },
+    {
+      "file": "backend/p0Features.js",
+      "line": 257,
+      "method": "PUT",
+      "path": "/journal-voucher/:id",
+      "permissionEvidence": [
+        "authorizeRequest(\"TRANSACTIONS\", \"JOURNAL_VOUCHER\", \"edit\"), async (req, res) => {\r"
+      ],
+      "transactionEvidence": [
+        "startSession",
+        "withTransaction"
+      ],
+      "dateTokens": [
+        "documentDate",
+        "vDate",
+        "Date"
+      ],
+      "mutationCandidates": [
+        "voucher.save("
+      ],
+      "posting": true,
+      "guarded": false,
+      "category": "Safe to integrate using existing transaction boundaries",
+      "profile": "journal",
+      "dependencies": "TRANSACTIONS/JOURNAL_VOUCHER; tenant(req.auth). withTransaction already includes number/document/journal/audit. Dates: stored and proposed vDate, selected original journal documentDate, actual reversal argument (edit proposed-or-stored; delete stored). Guard before number/reversal/save; preserve idempotent existing-result path.",
+      "authorizationEvidence": [
+        "securityRouter.authorizeRequest(\"TRANSACTIONS\", \"JOURNAL_VOUCHER\", \"edit\")"
+      ],
+      "mutationSites": [
+        "268: voucher.save"
+      ],
+      "sourceSha256": "cce5c21a766960462759fab451fe0e87c475390e3dc28bd38afe9dceb639c4f8"
+    },
+    {
+      "file": "backend/p0Features.js",
+      "line": 276,
+      "method": "DELETE",
+      "path": "/journal-voucher/:id",
+      "permissionEvidence": [
+        "authorizeRequest(\"TRANSACTIONS\", \"JOURNAL_VOUCHER\", \"delete\"), async (req, res) => {\r"
+      ],
+      "transactionEvidence": [
+        "startSession",
+        "withTransaction"
+      ],
+      "dateTokens": [
+        "documentDate",
+        "vDate",
+        "Date"
+      ],
+      "mutationCandidates": [
+        "voucher.save("
+      ],
+      "posting": true,
+      "guarded": false,
+      "category": "Safe to integrate using existing transaction boundaries",
+      "profile": "journal",
+      "dependencies": "TRANSACTIONS/JOURNAL_VOUCHER; tenant(req.auth). withTransaction already includes number/document/journal/audit. Dates: stored and proposed vDate, selected original journal documentDate, actual reversal argument (edit proposed-or-stored; delete stored). Guard before number/reversal/save; preserve idempotent existing-result path.",
+      "authorizationEvidence": [
+        "securityRouter.authorizeRequest(\"TRANSACTIONS\", \"JOURNAL_VOUCHER\", \"delete\")"
+      ],
+      "mutationSites": [
+        "284: voucher.save"
+      ],
+      "sourceSha256": "af27142571d4e018d5b1d62376418b3132ddf3c266b73629b639159df1e961fe"
+    },
+    {
+      "file": "backend/printAccountDetails.js",
+      "line": 72,
+      "method": "PUT",
+      "path": "/",
+      "permissionEvidence": [],
+      "transactionEvidence": [],
+      "dateTokens": [
+        "update",
+        "findOneAndUpdate"
+      ],
+      "mutationCandidates": [
+        "PrintAccountDetails.findOneAndUpdate("
+      ],
+      "posting": false,
+      "guarded": false,
+      "category": "Not a financial writer",
+      "profile": "master",
+      "dependencies": "Master/configuration/security or mapping only; no dated transaction, stock quantity or journal mutation. Referenced master changes affect future documents; do not guard these as historical postings.",
+      "authorizationEvidence": [],
+      "mutationSites": [
+        "131: PrintAccountDetails.findOneAndUpdate"
+      ],
+      "sourceSha256": "d640de15203b6b6343b597f32dbd89050595b712bd10fb0b30c4e606cc705bb0"
+    },
+    {
+      "file": "backend/productMapping.js",
+      "line": 70,
+      "method": "POST",
+      "path": "/",
+      "permissionEvidence": [],
+      "transactionEvidence": [],
+      "dateTokens": [
+        "update",
+        "findOneAndUpdate"
+      ],
+      "mutationCandidates": [
+        "ProductMapping.findOneAndUpdate(",
+        "ProductMapping.create("
+      ],
+      "posting": false,
+      "guarded": false,
+      "category": "Not a financial writer",
+      "profile": "master",
+      "dependencies": "Master/configuration/security or mapping only; no dated transaction, stock quantity or journal mutation. Referenced master changes affect future documents; do not guard these as historical postings.",
+      "authorizationEvidence": [],
+      "mutationSites": [
+        "99: ProductMapping.findOneAndUpdate",
+        "102: ProductMapping.create"
+      ],
+      "sourceSha256": "b98d6cb14bdbae1adf99c4bfe4751ac6860b6470aede649366905b95acab63b2"
+    },
+    {
+      "file": "backend/productMapping.js",
+      "line": 119,
+      "method": "DELETE",
+      "path": "/:id",
+      "permissionEvidence": [],
+      "transactionEvidence": [],
+      "dateTokens": [
+        "findOneAndUpdate"
+      ],
+      "mutationCandidates": [
+        "ProductMapping.findOneAndUpdate("
+      ],
+      "posting": false,
+      "guarded": false,
+      "category": "Not a financial writer",
+      "profile": "master",
+      "dependencies": "Master/configuration/security or mapping only; no dated transaction, stock quantity or journal mutation. Referenced master changes affect future documents; do not guard these as historical postings.",
+      "authorizationEvidence": [],
+      "mutationSites": [
+        "122: ProductMapping.findOneAndUpdate"
+      ],
+      "sourceSha256": "59573b0dd871cd0588b113fad989cc8e06f69f0fa1cc20b3e55624f52eb261fd"
+    },
+    {
+      "file": "backend/securitySetup.js",
+      "line": 740,
+      "method": "GET",
+      "path": "/",
+      "permissionEvidence": [],
+      "transactionEvidence": [],
+      "dateTokens": [],
+      "mutationCandidates": [
+        "SecuritySetup.create("
+      ],
+      "posting": false,
+      "guarded": false,
+      "category": "Not a financial writer",
+      "profile": "master",
+      "dependencies": "Master/configuration/security or mapping only; no dated transaction, stock quantity or journal mutation. Referenced master changes affect future documents; do not guard these as historical postings.",
+      "authorizationEvidence": [],
+      "mutationSites": [
+        "771: SecuritySetup.create"
+      ],
+      "sourceSha256": "92fbee8f10eea5667e243b565e831e3200642880a567603e148c673f49994782"
+    },
+    {
+      "file": "backend/securitySetup.js",
+      "line": 878,
+      "method": "PUT",
+      "path": "/",
+      "permissionEvidence": [],
+      "transactionEvidence": [
+        "startSession",
+        "withTransaction"
+      ],
+      "dateTokens": [
+        "findOneAndUpdate"
+      ],
+      "mutationCandidates": [
+        "SecuritySetup.findOneAndUpdate("
+      ],
+      "posting": false,
+      "guarded": false,
+      "category": "Not a financial writer",
+      "profile": "master",
+      "dependencies": "Master/configuration/security or mapping only; no dated transaction, stock quantity or journal mutation. Referenced master changes affect future documents; do not guard these as historical postings.",
+      "authorizationEvidence": [],
+      "mutationSites": [
+        "928: SecuritySetup.findOneAndUpdate"
+      ],
+      "sourceSha256": "6ff6b7122bbda4ac5efa613e7bb8f1af66081cc41326583b358e74cb61241ea1"
+    },
+    {
+      "file": "backend/server.js",
+      "line": 352,
+      "method": "POST",
+      "path": "/api/register",
+      "permissionEvidence": [],
+      "transactionEvidence": [],
+      "dateTokens": [],
+      "mutationCandidates": [
+        "Register.create("
+      ],
+      "posting": false,
+      "guarded": false,
+      "category": "Not a financial writer",
+      "profile": "master",
+      "dependencies": "Master/configuration/security or mapping only; no dated transaction, stock quantity or journal mutation. Referenced master changes affect future documents; do not guard these as historical postings.",
+      "authorizationEvidence": [],
+      "mutationSites": [
+        "425: Register.create"
+      ],
+      "sourceSha256": "786ce2ee8e0ef3df08d1b72b333363870c59234b6558e3852882269fa2bd3643"
+    },
+    {
+      "file": "backend/server.js",
+      "line": 476,
+      "method": "POST",
+      "path": "/api/login/firms",
+      "permissionEvidence": [],
+      "transactionEvidence": [],
+      "dateTokens": [
+        "candidate"
+      ],
+      "mutationCandidates": [],
+      "posting": false,
+      "guarded": false,
+      "category": "Not a financial writer",
+      "profile": "read",
+      "dependencies": "Read/validation/export or job-file preparation only. E-invoice JSON writes an export file, upload returns 501; neither changes ERP financial documents.",
+      "authorizationEvidence": [],
+      "mutationSites": [],
+      "sourceSha256": "4f6f48cc67368450587ebfc0336d752668fe30c58fd71be67c11e25838fb714f"
+    },
+    {
+      "file": "backend/server.js",
+      "line": 632,
+      "method": "POST",
+      "path": "/api/login",
+      "permissionEvidence": [],
+      "transactionEvidence": [],
+      "dateTokens": [],
+      "mutationCandidates": [],
+      "posting": false,
+      "guarded": false,
+      "category": "Not a financial writer",
+      "profile": "read",
+      "dependencies": "Read/validation/export or job-file preparation only. E-invoice JSON writes an export file, upload returns 501; neither changes ERP financial documents.",
+      "authorizationEvidence": [],
+      "mutationSites": [],
+      "sourceSha256": "8d930262c0699e481aa8cab31aeaa00a1a502d3f2af351dcdb96eb0bb68791bf"
+    },
+    {
+      "file": "backend/server.js",
+      "line": 960,
+      "method": "POST",
+      "path": "/api/users",
+      "permissionEvidence": [
+        "requireRoles(\"DISTRIBUTOR_ADMIN\"), async (req, res) => {\r"
+      ],
+      "transactionEvidence": [],
+      "dateTokens": [
+        "Date"
+      ],
+      "mutationCandidates": [
+        "User.create("
+      ],
+      "posting": false,
+      "guarded": false,
+      "category": "Not a financial writer",
+      "profile": "master",
+      "dependencies": "Master/configuration/security or mapping only; no dated transaction, stock quantity or journal mutation. Referenced master changes affect future documents; do not guard these as historical postings.",
+      "authorizationEvidence": [],
+      "mutationSites": [
+        "1029: User.create"
+      ],
+      "sourceSha256": "be7162440963843fd614b3d193db9b2847775e8ac5b8bcd1953e23106505618a"
+    },
+    {
+      "file": "backend/server.js",
+      "line": 1060,
+      "method": "PUT",
+      "path": "/api/users/:id",
+      "permissionEvidence": [
+        "requireRoles(\"DISTRIBUTOR_ADMIN\"), async (req, res) => {\r"
+      ],
+      "transactionEvidence": [],
+      "dateTokens": [
+        "update",
+        "findOneAndUpdate"
+      ],
+      "mutationCandidates": [
+        "User.findOneAndUpdate("
+      ],
+      "posting": false,
+      "guarded": false,
+      "category": "Not a financial writer",
+      "profile": "master",
+      "dependencies": "Master/configuration/security or mapping only; no dated transaction, stock quantity or journal mutation. Referenced master changes affect future documents; do not guard these as historical postings.",
+      "authorizationEvidence": [],
+      "mutationSites": [
+        "1085: User.findOneAndUpdate"
+      ],
+      "sourceSha256": "7bd6f4a1234c02a7c97389569c5403996389b01e64794d59d58cd243865c00be"
+    },
+    {
+      "file": "backend/server.js",
+      "line": 1110,
+      "method": "DELETE",
+      "path": "/api/users/:id",
+      "permissionEvidence": [
+        "requireRoles(\"DISTRIBUTOR_ADMIN\"), async (req, res) => {\r"
+      ],
+      "transactionEvidence": [],
+      "dateTokens": [
+        "findOneAndUpdate",
+        "Update",
+        "date",
+        "openingDate",
+        "gstDate",
+        "gstClsDate",
+        "closingDate",
+        "drugExpDate",
+        "lastBillDate",
+        "lastInvoiceDate"
+      ],
+      "mutationCandidates": [
+        "User.findOneAndUpdate("
+      ],
+      "posting": false,
+      "guarded": false,
+      "category": "Not a financial writer",
+      "profile": "master",
+      "dependencies": "Master/configuration/security or mapping only; no dated transaction, stock quantity or journal mutation. Referenced master changes affect future documents; do not guard these as historical postings.",
+      "authorizationEvidence": [],
+      "mutationSites": [
+        "1112: User.findOneAndUpdate"
+      ],
+      "sourceSha256": "ffe15497677eb838cdeca5fc09980114c8661401c6a187067aefe2db81636202"
+    },
+    {
+      "file": "backend/server.js",
+      "line": 1598,
+      "method": "GET",
+      "path": "/api/reports/party-sales/criteria",
+      "permissionEvidence": [],
+      "transactionEvidence": [],
+      "dateTokens": [
+        "update",
+        "invoiceDate",
+        "Date",
+        "date",
+        "VoucherDate",
+        "MfgDate",
+        "ExpiryDate",
+        "BillDate",
+        "DueDate"
+      ],
+      "mutationCandidates": [
+        "AreaToPartyMapping.updateMany(",
+        "AreaToPartyMapping.bulkWrite("
+      ],
+      "posting": false,
+      "guarded": false,
+      "category": "Not a financial writer",
+      "profile": "read",
+      "dependencies": "Read/validation/export or job-file preparation only. E-invoice JSON writes an export file, upload returns 501; neither changes ERP financial documents.",
+      "authorizationEvidence": [],
+      "mutationSites": [],
+      "sourceSha256": "f955bec48dfad2453f902701693fc26fb019621e0db7d35e28ca06444d469c4f"
+    },
+    {
+      "file": "backend/server.js",
+      "line": 5068,
+      "method": "POST",
+      "path": "/api/companies",
+      "permissionEvidence": [
+        "authorizeRequest(\r"
+      ],
+      "transactionEvidence": [],
+      "dateTokens": [],
+      "mutationCandidates": [
+        "Company.create("
+      ],
+      "posting": false,
+      "guarded": false,
+      "category": "Not a financial writer",
+      "profile": "master",
+      "dependencies": "Master/configuration/security or mapping only; no dated transaction, stock quantity or journal mutation. Referenced master changes affect future documents; do not guard these as historical postings.",
+      "authorizationEvidence": [
+        "securityRouter.authorizeRequest( \"MASTER\", \"COMPANY\", \"add\" )"
+      ],
+      "mutationSites": [
+        "5104: Company.create"
+      ],
+      "sourceSha256": "bbd35e61bf8b933534104d2e84a1519cd9ddd82e9bcb19b0c278a20cc78b8855"
+    },
+    {
+      "file": "backend/server.js",
+      "line": 5125,
+      "method": "PUT",
+      "path": "/api/companies/:id",
+      "permissionEvidence": [
+        "authorizeRequest(\r"
+      ],
+      "transactionEvidence": [],
+      "dateTokens": [
+        "findOneAndUpdate",
+        "update"
+      ],
+      "mutationCandidates": [
+        "Company.findOneAndUpdate("
+      ],
+      "posting": false,
+      "guarded": false,
+      "category": "Not a financial writer",
+      "profile": "master",
+      "dependencies": "Master/configuration/security or mapping only; no dated transaction, stock quantity or journal mutation. Referenced master changes affect future documents; do not guard these as historical postings.",
+      "authorizationEvidence": [
+        "securityRouter.authorizeRequest( \"MASTER\", \"COMPANY\", \"edit\" )"
+      ],
+      "mutationSites": [
+        "5161: Company.findOneAndUpdate"
+      ],
+      "sourceSha256": "34dd322579977ffce8e1dd01527a231c1f417b782aefa4c33810d862da5f7637"
+    },
+    {
+      "file": "backend/server.js",
+      "line": 5179,
+      "method": "DELETE",
+      "path": "/api/companies/:id",
+      "permissionEvidence": [
+        "authorizeRequest(\r"
+      ],
+      "transactionEvidence": [],
+      "dateTokens": [
+        "findOneAndUpdate"
+      ],
+      "mutationCandidates": [
+        "Company.findOneAndUpdate("
+      ],
+      "posting": false,
+      "guarded": false,
+      "category": "Not a financial writer",
+      "profile": "master",
+      "dependencies": "Master/configuration/security or mapping only; no dated transaction, stock quantity or journal mutation. Referenced master changes affect future documents; do not guard these as historical postings.",
+      "authorizationEvidence": [
+        "securityRouter.authorizeRequest( \"MASTER\", \"COMPANY\", \"delete\" )"
+      ],
+      "mutationSites": [
+        "5249: Company.findOneAndUpdate"
+      ],
+      "sourceSha256": "3c9f6b2dbe46c9fa7beca366f192e82e4ac317960aa51330bef8aad35a547496"
+    },
+    {
+      "file": "backend/server.js",
+      "line": 5459,
+      "method": "POST",
+      "path": "/api/groups",
+      "permissionEvidence": [
+        "authorizeRequest(\r"
+      ],
+      "transactionEvidence": [],
+      "dateTokens": [],
+      "mutationCandidates": [
+        "Group.create("
+      ],
+      "posting": false,
+      "guarded": false,
+      "category": "Not a financial writer",
+      "profile": "master",
+      "dependencies": "Master/configuration/security or mapping only; no dated transaction, stock quantity or journal mutation. Referenced master changes affect future documents; do not guard these as historical postings.",
+      "authorizationEvidence": [
+        "securityRouter.authorizeRequest( \"master\", \"GROUP\", \"add\" )"
+      ],
+      "mutationSites": [
+        "5478: Group.create"
+      ],
+      "sourceSha256": "60e1cd3b4b98c4658fc0851f87b82ddb032b0175c510fe27685079440ddbfcff"
+    },
+    {
+      "file": "backend/server.js",
+      "line": 5693,
+      "method": "POST",
+      "path": "/api/categories",
+      "permissionEvidence": [
+        "authorizeRequest(\r"
+      ],
+      "transactionEvidence": [],
+      "dateTokens": [],
+      "mutationCandidates": [
+        "Category.create("
+      ],
+      "posting": false,
+      "guarded": false,
+      "category": "Not a financial writer",
+      "profile": "master",
+      "dependencies": "Master/configuration/security or mapping only; no dated transaction, stock quantity or journal mutation. Referenced master changes affect future documents; do not guard these as historical postings.",
+      "authorizationEvidence": [
+        "securityRouter.authorizeRequest( \"master\", \"CATEGORY\", \"add\" )"
+      ],
+      "mutationSites": [
+        "5712: Category.create"
+      ],
+      "sourceSha256": "7c58b8aaef88916a6cf0ad47907885bab1e419536e0855aed697d325c65d3556"
+    },
+    {
+      "file": "backend/server.js",
+      "line": 6146,
+      "method": "POST",
+      "path": "/api/products",
+      "permissionEvidence": [
+        "authorizeRequest(\r"
+      ],
+      "transactionEvidence": [],
+      "dateTokens": [],
+      "mutationCandidates": [
+        "Product.create("
+      ],
+      "posting": false,
+      "guarded": false,
+      "category": "Not a financial writer",
+      "profile": "master",
+      "dependencies": "Master/configuration/security or mapping only; no dated transaction, stock quantity or journal mutation. Referenced master changes affect future documents; do not guard these as historical postings.",
+      "authorizationEvidence": [
+        "securityRouter.authorizeRequest( \"master\", \"PRODUCT\", \"add\" )"
+      ],
+      "mutationSites": [
+        "6164: Product.create"
+      ],
+      "sourceSha256": "bf3f39eca78dcbb9e55031df97394cc0bc606e0a2e54df5e2f6d268e35330d33"
+    },
+    {
+      "file": "backend/server.js",
+      "line": 6565,
+      "method": "POST",
+      "path": "/api/accounts",
+      "permissionEvidence": [
+        "authorizeRequest(\r"
+      ],
+      "transactionEvidence": [],
+      "dateTokens": [
+        "openingDate",
+        "gstDate",
+        "gstClsDate",
+        "drugExpDate",
+        "lastBillDate",
+        "lastInvoiceDate"
+      ],
+      "mutationCandidates": [
+        "Account.create("
+      ],
+      "posting": false,
+      "guarded": false,
+      "category": "Requires an accounting or effective-date business decision",
+      "profile": "opening",
+      "dependencies": "MASTER/ACCOUNT, authenticated tenant on main account routes. saveAccountWithOpenings legacy path save(null); transactional path saves account before deriving old/new opening postingDate. Direct opening/journal supersession, allocations and account summary/history semantics require business decision AND separate transaction approval for legacy branch. Do not turn reference row.date into postingDate or rewrite historical events. Delete master can affect legacy opening visibility; no opening reversal is implemented.",
+      "authorizationEvidence": [
+        "securityRouter.authorizeRequest( \"MASTER\", \"ACCOUNT\", \"add\" )"
+      ],
+      "mutationSites": [
+        "6612: Account.create"
+      ],
+      "sourceSha256": "920833ff6fa7072bdd8cbd0da9bfeb4e013f36ab68b278c46553c14d88455bb7"
+    },
+    {
+      "file": "backend/server.js",
+      "line": 6972,
+      "method": "POST",
+      "path": "/api/other-accounts",
+      "permissionEvidence": [
+        "authorizeRequest(\r"
+      ],
+      "transactionEvidence": [],
+      "dateTokens": [],
+      "mutationCandidates": [
+        "OtherAccount.create("
+      ],
+      "posting": false,
+      "guarded": false,
+      "category": "Requires an accounting or effective-date business decision",
+      "profile": "otheropening",
+      "dependencies": "MASTER/OTHER_ACCOUNT; openingBal can be created/edited and account soft-deleted with no authoritative opening posting date/transaction. Requires effective-date and opening-summary policy, then separate same-session architecture approval. No journal posting added.",
+      "authorizationEvidence": [
+        "securityRouter.authorizeRequest( \"master\", \"OTHER_ACCOUNT\", \"add\" )"
+      ],
+      "mutationSites": [
+        "6996: OtherAccount.create"
+      ],
+      "sourceSha256": "c1ebec5b671049121fd26453cd500119c4ae4ad012108f2c2f1022b6873fd6f1"
+    },
+    {
+      "file": "backend/server.js",
+      "line": 7199,
+      "method": "POST",
+      "path": "/api/firms",
+      "permissionEvidence": [
+        "requireRoles(\"DISTRIBUTOR_ADMIN\"), async (req, res) => {\r"
+      ],
+      "transactionEvidence": [],
+      "dateTokens": [],
+      "mutationCandidates": [
+        "Register.create("
+      ],
+      "posting": false,
+      "guarded": false,
+      "category": "Not a financial writer",
+      "profile": "master",
+      "dependencies": "Master/configuration/security or mapping only; no dated transaction, stock quantity or journal mutation. Referenced master changes affect future documents; do not guard these as historical postings.",
+      "authorizationEvidence": [],
+      "mutationSites": [
+        "7229: Register.create"
+      ],
+      "sourceSha256": "c9d5093e3d129cc2cbedb6de3c2b8aec8062cba7e9c5a4b49e481a4ff58ad4fe"
+    },
+    {
+      "file": "backend/server.js",
+      "line": 7563,
+      "method": "POST",
+      "path": "/api/gst",
+      "permissionEvidence": [
+        "authorizeRequest(\r"
+      ],
+      "transactionEvidence": [],
+      "dateTokens": [],
+      "mutationCandidates": [
+        "GST.create("
+      ],
+      "posting": false,
+      "guarded": false,
+      "category": "Not a financial writer",
+      "profile": "master",
+      "dependencies": "Master/configuration/security or mapping only; no dated transaction, stock quantity or journal mutation. Referenced master changes affect future documents; do not guard these as historical postings.",
+      "authorizationEvidence": [
+        "securityRouter.authorizeRequest( \"master\", \"GST\", \"add\" )"
+      ],
+      "mutationSites": [
+        "7599: GST.create"
+      ],
+      "sourceSha256": "83067f3c07eb6bae92f86c6165093deae9b8836191bfda64a7a7a0d543c76c53"
+    },
+    {
+      "file": "backend/server.js",
+      "line": 8154,
+      "method": "POST",
+      "path": "/api/salesmen",
+      "permissionEvidence": [
+        "authorizeRequest(\r"
+      ],
+      "transactionEvidence": [],
+      "dateTokens": [],
+      "mutationCandidates": [
+        "Salesman.create("
+      ],
+      "posting": false,
+      "guarded": false,
+      "category": "Not a financial writer",
+      "profile": "master",
+      "dependencies": "Master/configuration/security or mapping only; no dated transaction, stock quantity or journal mutation. Referenced master changes affect future documents; do not guard these as historical postings.",
+      "authorizationEvidence": [
+        "securityRouter.authorizeRequest( \"master\", \"SALESMAN\", \"add\" )"
+      ],
+      "mutationSites": [
+        "8190: Salesman.create"
+      ],
+      "sourceSha256": "9f5ec37c2bb6c31e21519e7288fe76f8bc618b817f009d1f6851d66e47b9eea9"
+    },
+    {
+      "file": "backend/server.js",
+      "line": 8236,
+      "method": "PUT",
+      "path": "/api/sales/change-bill-type-f4",
+      "permissionEvidence": [],
+      "transactionEvidence": [],
+      "dateTokens": [
+        "Update"
+      ],
+      "mutationCandidates": [
+        "salesBill.save(",
+        "LoadHeader.updateMany("
+      ],
+      "posting": false,
+      "guarded": false,
+      "category": "Requires an approved transaction-boundary change",
+      "profile": "billtype",
+      "dependencies": "UNAPPROVED: body tenant, global authentication but no route grant. SalesHeader and embedded LoadHeader bill-type updates have no transaction. Persisted BillDate and affected load dates must be resolved; no authorization correction authorized here.",
+      "authorizationEvidence": [],
+      "mutationSites": [
+        "8281: salesBill.save",
+        "8284: LoadHeader.updateMany"
+      ],
+      "sourceSha256": "97606a878bddafe268b0c366d7c57a65765f79cb6c66b3ee0b2aabe2039e2be4"
+    },
+    {
+      "file": "backend/server.js",
+      "line": 8332,
+      "method": "PUT",
+      "path": "/api/sales/:id",
+      "permissionEvidence": [
+        "authorizeRequest(\r"
+      ],
+      "transactionEvidence": [
+        "startSession",
+        "startTransaction"
+      ],
+      "dateTokens": [
+        "BillDate",
+        "DueDate",
+        "findOneAndUpdate",
+        "Update",
+        "Date",
+        "documentDate",
+        "movementDate",
+        "update"
+      ],
+      "mutationCandidates": [
+        "SalesHeader.findOneAndUpdate(",
+        "load.save("
+      ],
+      "posting": true,
+      "guarded": false,
+      "category": "Safe to integrate using existing transaction boundaries",
+      "profile": "salesedit",
+      "dependencies": "SALES/SALES_BILLING; existing active transaction. req.auth plus tenant-scoped source reads. BillDate stored/proposed, selected journal and actual reversal dates; cancellation uses businessDateIST. Preflight before stock reversal/header/load snapshot/journal/movement/audit. Include zero-value skip-posting path and both cancellation entry points.",
+      "authorizationEvidence": [
+        "securityRouter.authorizeRequest( \"SALES\", \"SALES_BILLING\", \"edit\" )"
+      ],
+      "mutationSites": [
+        "8550: SalesHeader.findOneAndUpdate",
+        "8938: load.save"
+      ],
+      "sourceSha256": "199e249c5c5f9c2adf6833a210901ff050e9e34dc89a64f295a3f05a3902ef1a"
+    },
+    {
+      "file": "backend/server.js",
+      "line": 9301,
+      "method": "POST",
+      "path": "/api/areas",
+      "permissionEvidence": [
+        "authorizeRequest(\r"
+      ],
+      "transactionEvidence": [],
+      "dateTokens": [],
+      "mutationCandidates": [
+        "Area.create("
+      ],
+      "posting": false,
+      "guarded": false,
+      "category": "Not a financial writer",
+      "profile": "master",
+      "dependencies": "Master/configuration/security or mapping only; no dated transaction, stock quantity or journal mutation. Referenced master changes affect future documents; do not guard these as historical postings.",
+      "authorizationEvidence": [
+        "securityRouter.authorizeRequest( \"master\", \"AREA\", \"add\" )"
+      ],
+      "mutationSites": [
+        "9332: Area.create"
+      ],
+      "sourceSha256": "27c0b4ba1cf71e15143114358760ad4f0039949b97c1f21f1631981c31e6e009"
+    },
+    {
+      "file": "backend/server.js",
+      "line": 9607,
+      "method": "POST",
+      "path": "/api/godowns",
+      "permissionEvidence": [
+        "authorizeRequest(\r"
+      ],
+      "transactionEvidence": [],
+      "dateTokens": [],
+      "mutationCandidates": [
+        "GodownModel.create("
+      ],
+      "posting": false,
+      "guarded": false,
+      "category": "Not a financial writer",
+      "profile": "master",
+      "dependencies": "Master/configuration/security or mapping only; no dated transaction, stock quantity or journal mutation. Referenced master changes affect future documents; do not guard these as historical postings.",
+      "authorizationEvidence": [
+        "securityRouter.authorizeRequest( \"master\", \"GODOWN\", \"add\" )"
+      ],
+      "mutationSites": [
+        "9643: GodownModel.create"
+      ],
+      "sourceSha256": "c769113a90a11d0dfb0bfaa184108f7783c006aaa4e19a1e814f25a5ce9e2092"
+    },
+    {
+      "file": "backend/server.js",
+      "line": 9957,
+      "method": "POST",
+      "path": "/api/customer-banks",
+      "permissionEvidence": [
+        "authorizeRequest(\"MASTER\", \"CUSTOMER_BANK\", \"add\"), async (req, res) => {\r"
+      ],
+      "transactionEvidence": [],
+      "dateTokens": [],
+      "mutationCandidates": [
+        "CustomerBank.create("
+      ],
+      "posting": false,
+      "guarded": false,
+      "category": "Not a financial writer",
+      "profile": "master",
+      "dependencies": "Master/configuration/security or mapping only; no dated transaction, stock quantity or journal mutation. Referenced master changes affect future documents; do not guard these as historical postings.",
+      "authorizationEvidence": [
+        "securityRouter.authorizeRequest(\"MASTER\", \"CUSTOMER_BANK\", \"add\")"
+      ],
+      "mutationSites": [
+        "9980: CustomerBank.create"
+      ],
+      "sourceSha256": "126789117adaedc60d5e175d18caad3d26df24ef1b1e55ef709803c4e0385e71"
+    },
+    {
+      "file": "backend/server.js",
+      "line": 10070,
+      "method": "POST",
+      "path": "/api/salesman-area-mappings",
+      "permissionEvidence": [],
+      "transactionEvidence": [],
+      "dateTokens": [
+        "update"
+      ],
+      "mutationCandidates": [
+        "SalesmanAreaMapping.bulkWrite(",
+        "SalesmanAreaMapping.updateMany("
+      ],
+      "posting": false,
+      "guarded": false,
+      "category": "Not a financial writer",
+      "profile": "master",
+      "dependencies": "Master/configuration/security or mapping only; no dated transaction, stock quantity or journal mutation. Referenced master changes affect future documents; do not guard these as historical postings.",
+      "authorizationEvidence": [],
+      "mutationSites": [
+        "10146: SalesmanAreaMapping.bulkWrite",
+        "10148: SalesmanAreaMapping.updateMany"
+      ],
+      "sourceSha256": "e01d789dfed6d7701c1b28f28c33eeae5695e9d04e1348bc3b9bc96f3380b5bd"
+    },
+    {
+      "file": "backend/server.js",
+      "line": 10318,
+      "method": "POST",
+      "path": "/api/area-to-party-mappings",
+      "permissionEvidence": [],
+      "transactionEvidence": [],
+      "dateTokens": [
+        "update"
+      ],
+      "mutationCandidates": [
+        "AreaToPartyMapping.bulkWrite("
+      ],
+      "posting": false,
+      "guarded": false,
+      "category": "Not a financial writer",
+      "profile": "master",
+      "dependencies": "Master/configuration/security or mapping only; no dated transaction, stock quantity or journal mutation. Referenced master changes affect future documents; do not guard these as historical postings.",
+      "authorizationEvidence": [],
+      "mutationSites": [
+        "10382: AreaToPartyMapping.bulkWrite"
+      ],
+      "sourceSha256": "0366dc004df14e85fc57b3de4ec70dcdea32a72be86882a610db04f8e1fabda0"
+    },
+    {
+      "file": "backend/server.js",
+      "line": 10449,
+      "method": "POST",
+      "path": "/api/purchase",
+      "permissionEvidence": [
+        "authorizeRequest(\"VOUCHERS\", \"PURCHASE\", \"add\"),\r"
+      ],
+      "transactionEvidence": [
+        "startSession",
+        "startTransaction"
+      ],
+      "dateTokens": [
+        "invoiceDate",
+        "documentDate",
+        "update",
+        "Date",
+        "findOneAndUpdate",
+        "expDate",
+        "mfgDate"
+      ],
+      "mutationCandidates": [
+        "PurchaseHeader.create(",
+        "Stock.findOneAndUpdate("
+      ],
+      "posting": true,
+      "guarded": false,
+      "category": "Safe to integrate using existing transaction boundaries",
+      "profile": "purchase",
+      "dependencies": "VOUCHERS/PURCHASE; tenant source shown in evidence (some body-derived; compare against req.auth before guard). Existing transaction covers number/header/stock/journal/audit. Dates: invoiceDate original/proposed, selected journal dates and actual reversal date (businessDateIST for cancellation). Repair uses persisted invoiceDate, reactivation stock movements and missing-journal creation; guard before first mutation. No new date rule needed for own posting dates.",
+      "authorizationEvidence": [
+        "securityRouter.authorizeRequest(\"VOUCHERS\", \"PURCHASE\", \"add\")"
+      ],
+      "mutationSites": [
+        "10518: PurchaseHeader.create",
+        "10681: Stock.findOneAndUpdate"
+      ],
+      "sourceSha256": "5ac76c44c55ca9577d7b18a7129839cbce507a2732c8bf982b8a777ac205de4d"
+    },
+    {
+      "file": "backend/server.js",
+      "line": 10992,
+      "method": "POST",
+      "path": "/api/purchase/reconcile-desktop-import",
+      "permissionEvidence": [
+        "authorizeRequest(\"VOUCHERS\", \"PURCHASE\", \"add\"),\r"
+      ],
+      "transactionEvidence": [
+        "startSession",
+        "startTransaction"
+      ],
+      "dateTokens": [
+        "documentDate",
+        "invoiceDate",
+        "movementDate",
+        "Date"
+      ],
+      "mutationCandidates": [
+        "Stock.updateOne(",
+        "purchase.save("
+      ],
+      "posting": true,
+      "guarded": false,
+      "category": "Safe to integrate using existing transaction boundaries",
+      "profile": "purchase",
+      "dependencies": "VOUCHERS/PURCHASE; tenant source shown in evidence (some body-derived; compare against req.auth before guard). Existing transaction covers number/header/stock/journal/audit. Dates: invoiceDate original/proposed, selected journal dates and actual reversal date (businessDateIST for cancellation). Repair uses persisted invoiceDate, reactivation stock movements and missing-journal creation; guard before first mutation. No new date rule needed for own posting dates.",
+      "authorizationEvidence": [
+        "securityRouter.authorizeRequest(\"VOUCHERS\", \"PURCHASE\", \"add\")"
+      ],
+      "mutationSites": [
+        "11078: Stock.updateOne",
+        "11118: purchase.save"
+      ],
+      "sourceSha256": "4bc2feb892519b12f577374156b8b32cc370cb7d9d1043cb6d9528b16af71c22"
+    },
+    {
+      "file": "backend/server.js",
+      "line": 11135,
+      "method": "PUT",
+      "path": "/api/purchase/:id",
+      "permissionEvidence": [
+        "authorizeRequest(\"VOUCHERS\", \"PURCHASE\", \"edit\"),\r"
+      ],
+      "transactionEvidence": [
+        "startSession",
+        "startTransaction"
+      ],
+      "dateTokens": [
+        "invoiceDate",
+        "update",
+        "Date",
+        "findOneAndUpdate",
+        "documentDate"
+      ],
+      "mutationCandidates": [
+        "PurchaseHeader.findOneAndUpdate("
+      ],
+      "posting": true,
+      "guarded": false,
+      "category": "Safe to integrate using existing transaction boundaries",
+      "profile": "purchase",
+      "dependencies": "VOUCHERS/PURCHASE; tenant source shown in evidence (some body-derived; compare against req.auth before guard). Existing transaction covers number/header/stock/journal/audit. Dates: invoiceDate original/proposed, selected journal dates and actual reversal date (businessDateIST for cancellation). Repair uses persisted invoiceDate, reactivation stock movements and missing-journal creation; guard before first mutation. No new date rule needed for own posting dates.",
+      "authorizationEvidence": [
+        "securityRouter.authorizeRequest(\"VOUCHERS\", \"PURCHASE\", \"edit\")"
+      ],
+      "mutationSites": [
+        "11218: PurchaseHeader.findOneAndUpdate"
+      ],
+      "sourceSha256": "26ab7fb90446b2e2ff473fceb0359be3521081ef0ff233815b0db3542514ab72"
+    },
+    {
+      "file": "backend/server.js",
+      "line": 11900,
+      "method": "GET",
+      "path": "/api/sales/next-bill-no",
+      "permissionEvidence": [],
+      "transactionEvidence": [],
+      "dateTokens": [
+        "findOneAndUpdate",
+        "update"
+      ],
+      "mutationCandidates": [
+        "Stock.findOneAndUpdate(",
+        "Stock.updateOne("
+      ],
+      "posting": false,
+      "guarded": false,
+      "category": "Not a financial writer",
+      "profile": "read",
+      "dependencies": "Read/validation/export or job-file preparation only. E-invoice JSON writes an export file, upload returns 501; neither changes ERP financial documents.",
+      "authorizationEvidence": [],
+      "mutationSites": [],
+      "sourceSha256": "69193f7067cd1a435e358ff2892584d831f834c88a0df872439cdcb0c48fba95"
+    },
+    {
+      "file": "backend/server.js",
+      "line": 12483,
+      "method": "POST",
+      "path": "/api/sales",
+      "permissionEvidence": [
+        "authorizeRequest(\r"
+      ],
+      "transactionEvidence": [
+        "startSession",
+        "startTransaction"
+      ],
+      "dateTokens": [
+        "BillDate",
+        "DueDate",
+        "documentDate",
+        "movementDate"
+      ],
+      "mutationCandidates": [
+        "SalesHeader.create("
+      ],
+      "posting": true,
+      "guarded": false,
+      "category": "Requires an approved transaction-boundary change",
+      "profile": "salescreate",
+      "dependencies": "UNAPPROVED: active document transaction but nextDocumentNumber deliberately reserves independently (server.js:12633-12645 omits session). Move number reservation into same transaction requires separate approval. BillDate; party/company/godown/tax/rate/credit/stock and idempotent commit reconciliation must remain intact.",
+      "authorizationEvidence": [
+        "securityRouter.authorizeRequest( \"SALES\", \"SALES_BILLING\", \"add\" )"
+      ],
+      "mutationSites": [
+        "12696: SalesHeader.create"
+      ],
+      "sourceSha256": "d51855e7df62e0277d4cdb7ca5311b8723e489f31de54367958923fea7311e97"
+    },
+    {
+      "file": "backend/server.js",
+      "line": 13085,
+      "method": "POST",
+      "path": "/api/sales/einvoice-details",
+      "permissionEvidence": [
+        "authorizeRequest(\"SALES\", \"SALES_BILLING\", \"view\"),"
+      ],
+      "transactionEvidence": [],
+      "dateTokens": [],
+      "mutationCandidates": [],
+      "posting": false,
+      "guarded": false,
+      "category": "Not a financial writer",
+      "profile": "read",
+      "dependencies": "Read/validation/export or job-file preparation only. E-invoice JSON writes an export file, upload returns 501; neither changes ERP financial documents.",
+      "authorizationEvidence": [
+        "securityRouter.authorizeRequest(\"SALES\", \"SALES_BILLING\", \"view\")"
+      ],
+      "mutationSites": [],
+      "sourceSha256": "fb563b5099585c282a669c4fc5ee8cdca684855c36d3de82cb6c375a7c8f8c6b"
+    },
+    {
+      "file": "backend/server.js",
+      "line": 13110,
+      "method": "POST",
+      "path": "/api/sales/einvoice-json",
+      "permissionEvidence": [
+        "authorizeRequest(\"SALES\", \"SALES_BILLING\", \"view\"),"
+      ],
+      "transactionEvidence": [],
+      "dateTokens": [],
+      "mutationCandidates": [],
+      "posting": false,
+      "guarded": false,
+      "category": "Not a financial writer",
+      "profile": "read",
+      "dependencies": "Read/validation/export or job-file preparation only. E-invoice JSON writes an export file, upload returns 501; neither changes ERP financial documents.",
+      "authorizationEvidence": [
+        "securityRouter.authorizeRequest(\"SALES\", \"SALES_BILLING\", \"view\")"
+      ],
+      "mutationSites": [],
+      "sourceSha256": "c41a334a31119a1ab24fbd77cb92c11237b35f5125d126f09a8051ecf0763bec"
+    },
+    {
+      "file": "backend/server.js",
+      "line": 13132,
+      "method": "POST",
+      "path": "/api/sales/einvoice-upload",
+      "permissionEvidence": [
+        "authorizeRequest(\"SALES\", \"SALES_BILLING\", \"view\"),"
+      ],
+      "transactionEvidence": [],
+      "dateTokens": [],
+      "mutationCandidates": [],
+      "posting": false,
+      "guarded": false,
+      "category": "Not a financial writer",
+      "profile": "read",
+      "dependencies": "Read/validation/export or job-file preparation only. E-invoice JSON writes an export file, upload returns 501; neither changes ERP financial documents.",
+      "authorizationEvidence": [
+        "securityRouter.authorizeRequest(\"SALES\", \"SALES_BILLING\", \"view\")"
+      ],
+      "mutationSites": [],
+      "sourceSha256": "81a5065466cee34842eeac97f5cf163f0697518668361ef2a41b40e7093d855b"
+    },
+    {
+      "file": "backend/server.js",
+      "line": 14579,
+      "method": "GET",
+      "path": "/api/stock/adjustments",
+      "permissionEvidence": [
+        "authorizeRequest(\"VOUCHERS\", \"STOCK_ADJUSTMENT\", \"view\"),\r"
+      ],
+      "transactionEvidence": [],
+      "dateTokens": [
+        "findOneAndUpdate",
+        "ExpiryDate",
+        "MfgDate"
+      ],
+      "mutationCandidates": [
+        "StockModel.findOneAndUpdate("
+      ],
+      "posting": false,
+      "guarded": false,
+      "category": "Not a financial writer",
+      "profile": "read",
+      "dependencies": "Read/validation/export or job-file preparation only. E-invoice JSON writes an export file, upload returns 501; neither changes ERP financial documents.",
+      "authorizationEvidence": [
+        "securityRouter.authorizeRequest(\"VOUCHERS\", \"STOCK_ADJUSTMENT\", \"view\")"
+      ],
+      "mutationSites": [],
+      "sourceSha256": "672784e89efd91d95182bec5c0247d92aa0b65fab2aaa5fa77b1540aedaf57a3"
+    },
+    {
+      "file": "backend/server.js",
+      "line": 14700,
+      "method": "PUT",
+      "path": "/api/stock/adjustments/:id",
+      "permissionEvidence": [
+        "authorizeRequest(\"VOUCHERS\", \"STOCK_ADJUSTMENT\", \"edit\"),\r"
+      ],
+      "transactionEvidence": [
+        "startSession",
+        "startTransaction"
+      ],
+      "dateTokens": [
+        "VoucherDate",
+        "voucherDate",
+        "MfgDate",
+        "manufacturingDate",
+        "ExpiryDate",
+        "expiryDate",
+        "movementDate",
+        "update"
+      ],
+      "mutationCandidates": [
+        "StockAdjustment.updateOne("
+      ],
+      "posting": false,
+      "guarded": false,
+      "category": "Requires an accounting or effective-date business decision",
+      "profile": "stock",
+      "dependencies": "VOUCHERS/STOCK_ADJUSTMENT; existing transaction and authenticated tenant. Create VoucherDate defaults UTC today; edit/delete movementDate is businessDateIST, while original/replacement VoucherDate may differ. Require explicit effective-date treatment of these existing movements before integration; do not change dates/valuation. moveStockForAdjustment, Stock/DamStock, request-id/status locks, movements and audit are one dependency set.",
+      "authorizationEvidence": [
+        "securityRouter.authorizeRequest(\"VOUCHERS\", \"STOCK_ADJUSTMENT\", \"edit\")"
+      ],
+      "mutationSites": [
+        "14771: StockAdjustment.updateOne",
+        "14784: StockAdjustment.updateOne"
+      ],
+      "sourceSha256": "e25ca68998054883c69f584a9aa34651418de6da42b1adc7987b088727588c1a"
+    },
+    {
+      "file": "backend/server.js",
+      "line": 14863,
+      "method": "DELETE",
+      "path": "/api/stock/adjustments/:id",
+      "permissionEvidence": [
+        "authorizeRequest(\"VOUCHERS\", \"STOCK_ADJUSTMENT\", \"delete\"),\r"
+      ],
+      "transactionEvidence": [
+        "startSession",
+        "startTransaction"
+      ],
+      "dateTokens": [
+        "findOneAndUpdate",
+        "Date",
+        "movementDate"
+      ],
+      "mutationCandidates": [
+        "StockAdjustment.updateOne(",
+        "StockAdjustment.findOneAndUpdate("
+      ],
+      "posting": false,
+      "guarded": false,
+      "category": "Requires an accounting or effective-date business decision",
+      "profile": "stock",
+      "dependencies": "VOUCHERS/STOCK_ADJUSTMENT; existing transaction and authenticated tenant. Create VoucherDate defaults UTC today; edit/delete movementDate is businessDateIST, while original/replacement VoucherDate may differ. Require explicit effective-date treatment of these existing movements before integration; do not change dates/valuation. moveStockForAdjustment, Stock/DamStock, request-id/status locks, movements and audit are one dependency set.",
+      "authorizationEvidence": [
+        "securityRouter.authorizeRequest(\"VOUCHERS\", \"STOCK_ADJUSTMENT\", \"delete\")"
+      ],
+      "mutationSites": [
+        "14893: StockAdjustment.updateOne",
+        "14904: StockAdjustment.findOneAndUpdate"
+      ],
+      "sourceSha256": "70f808bddcfabcefe46f78857929d15971f84b976929289fb3228789e8037fd3"
+    },
+    {
+      "file": "backend/server.js",
+      "line": 14937,
+      "method": "POST",
+      "path": "/api/stock/adjust",
+      "permissionEvidence": [
+        "authorizeRequest(\"VOUCHERS\", \"STOCK_ADJUSTMENT\", \"add\"),\r"
+      ],
+      "transactionEvidence": [
+        "startSession",
+        "startTransaction"
+      ],
+      "dateTokens": [
+        "Date",
+        "VoucherDate",
+        "voucherDate",
+        "MfgDate",
+        "manufacturingDate",
+        "ExpiryDate",
+        "expiryDate",
+        "findOneAndUpdate",
+        "movementDate",
+        "update"
+      ],
+      "mutationCandidates": [
+        "StockAdjustment.create(",
+        "StockModel.findOneAndUpdate(",
+        "StockAdjustment.updateOne("
+      ],
+      "posting": false,
+      "guarded": false,
+      "category": "Requires an accounting or effective-date business decision",
+      "profile": "stock",
+      "dependencies": "VOUCHERS/STOCK_ADJUSTMENT; existing transaction and authenticated tenant. Create VoucherDate defaults UTC today; edit/delete movementDate is businessDateIST, while original/replacement VoucherDate may differ. Require explicit effective-date treatment of these existing movements before integration; do not change dates/valuation. moveStockForAdjustment, Stock/DamStock, request-id/status locks, movements and audit are one dependency set.",
+      "authorizationEvidence": [
+        "securityRouter.authorizeRequest(\"VOUCHERS\", \"STOCK_ADJUSTMENT\", \"add\")"
+      ],
+      "mutationSites": [
+        "15024: StockAdjustment.create",
+        "15057: StockModel.findOneAndUpdate",
+        "15075: StockModel.findOneAndUpdate",
+        "15091: StockAdjustment.updateOne"
+      ],
+      "sourceSha256": "0660c75e427883dbb2beb457d48d3a0b31abc1458349523543c03aa46bb6e5fb"
+    },
+    {
+      "file": "backend/server.js",
+      "line": 15391,
+      "method": "POST",
+      "path": "/api/quotation",
+      "permissionEvidence": [
+        "authorizeRequest(\"SALES\", \"QUOTATION\", \"add\"),\r"
+      ],
+      "transactionEvidence": [],
+      "dateTokens": [
+        "BillDate",
+        "DueDate",
+        "documentDate"
+      ],
+      "mutationCandidates": [
+        "QuotationHeader.create("
+      ],
+      "posting": false,
+      "guarded": false,
+      "category": "Not a financial writer",
+      "profile": "quotation",
+      "dependencies": "Quotation document/number only; inspected create/edit/delete do not mutate stock, journals, sales allocations or posted invoices. Prospective quote, outside financial-period enforcement; counter is QUOTATION only.",
+      "authorizationEvidence": [
+        "securityRouter.authorizeRequest(\"SALES\", \"QUOTATION\", \"add\")"
+      ],
+      "mutationSites": [
+        "15546: QuotationHeader.create"
+      ],
+      "sourceSha256": "51c9e6e95873446dd7d562ad30529dbe499c6b4c9f0a59f617252b6679dd5a26"
+    },
+    {
+      "file": "backend/server.js",
+      "line": 16889,
+      "method": "PUT",
+      "path": "/api/create-load/:id",
+      "permissionEvidence": [
+        "authorizeRequest(\"SALES\", \"CREATE_LOAD\", \"edit\"),\r"
+      ],
+      "transactionEvidence": [
+        "startSession",
+        "startTransaction"
+      ],
+      "dateTokens": [
+        "LoadDate",
+        "BillFromDate",
+        "BillToDate",
+        "BillDate",
+        "billDate",
+        "findOneAndUpdate",
+        "Date",
+        "Update",
+        "update"
+      ],
+      "mutationCandidates": [
+        "SalesHeader.updateMany(",
+        "LoadHeader.findOneAndUpdate("
+      ],
+      "posting": false,
+      "guarded": false,
+      "category": "Requires an accounting or effective-date business decision",
+      "profile": "load",
+      "dependencies": "Load snapshots mutate sales/load financial-document metadata and totals; conservatively included, even without journal. CREATE_LOAD/SETTLE_LOAD grants where present; load-transfer lacks route-specific grant. LoadDate / loadDate, embedded BillDate and receiptDate are not one authoritative posting date. Create/edit/transfer/load-delete have transaction; GET load-bills repairs snapshots without one; legacy settle create/edit/delete lack transaction. settle-load/save additionally upserts/reverses Receipt and sales statuses inside existing transaction. Requires business decision for snapshot/settlement and generated receipt effective dates; any missing boundary separately approved.",
+      "authorizationEvidence": [
+        "securityRouter.authorizeRequest(\"SALES\", \"CREATE_LOAD\", \"edit\")"
+      ],
+      "mutationSites": [
+        "17045: SalesHeader.updateMany",
+        "17282: LoadHeader.findOneAndUpdate",
+        "17413: SalesHeader.updateMany"
+      ],
+      "sourceSha256": "6238635cab2bc48cb23225c70fb8b8074c7334207fb9243389a0dbada09b0a33"
+    },
+    {
+      "file": "backend/server.js",
+      "line": 18410,
+      "method": "POST",
+      "path": "/api/create-load",
+      "permissionEvidence": [
+        "authorizeRequest(\"SALES\", \"CREATE_LOAD\", \"add\"),\r"
+      ],
+      "transactionEvidence": [
+        "startSession",
+        "startTransaction"
+      ],
+      "dateTokens": [
+        "LoadDate",
+        "BillFromDate",
+        "BillToDate",
+        "documentDate",
+        "BillDate",
+        "billDate"
+      ],
+      "mutationCandidates": [
+        "LoadHeader.create(",
+        "SalesHeader.updateMany("
+      ],
+      "posting": false,
+      "guarded": false,
+      "category": "Requires an accounting or effective-date business decision",
+      "profile": "load",
+      "dependencies": "Load snapshots mutate sales/load financial-document metadata and totals; conservatively included, even without journal. CREATE_LOAD/SETTLE_LOAD grants where present; load-transfer lacks route-specific grant. LoadDate / loadDate, embedded BillDate and receiptDate are not one authoritative posting date. Create/edit/transfer/load-delete have transaction; GET load-bills repairs snapshots without one; legacy settle create/edit/delete lack transaction. settle-load/save additionally upserts/reverses Receipt and sales statuses inside existing transaction. Requires business decision for snapshot/settlement and generated receipt effective dates; any missing boundary separately approved.",
+      "authorizationEvidence": [
+        "securityRouter.authorizeRequest(\"SALES\", \"CREATE_LOAD\", \"add\")"
+      ],
+      "mutationSites": [
+        "18739: LoadHeader.create",
+        "18843: SalesHeader.updateMany"
+      ],
+      "sourceSha256": "f77b4d512e210aa3e516a475ebcf0e2d096cc3cbcb907972a14862ba4b84c0a2"
+    },
+    {
+      "file": "backend/server.js",
+      "line": 19298,
+      "method": "GET",
+      "path": "/api/load-transfer/load-bills",
+      "permissionEvidence": [],
+      "transactionEvidence": [],
+      "dateTokens": [
+        "BillDate",
+        "loadDate",
+        "LoadDate"
+      ],
+      "mutationCandidates": [
+        "sourceLoad.save("
+      ],
+      "posting": false,
+      "guarded": false,
+      "category": "Requires an accounting or effective-date business decision",
+      "profile": "load",
+      "dependencies": "Load snapshots mutate sales/load financial-document metadata and totals; conservatively included, even without journal. CREATE_LOAD/SETTLE_LOAD grants where present; load-transfer lacks route-specific grant. LoadDate / loadDate, embedded BillDate and receiptDate are not one authoritative posting date. Create/edit/transfer/load-delete have transaction; GET load-bills repairs snapshots without one; legacy settle create/edit/delete lack transaction. settle-load/save additionally upserts/reverses Receipt and sales statuses inside existing transaction. Requires business decision for snapshot/settlement and generated receipt effective dates; any missing boundary separately approved.",
+      "authorizationEvidence": [],
+      "mutationSites": [
+        "19452: sourceLoad.save"
+      ],
+      "sourceSha256": "0845c6ae8ea46d41edcf5d042f7282d99b6cf26ced2bfbd54a2260a2b00a87a4"
+    },
+    {
+      "file": "backend/server.js",
+      "line": 19656,
+      "method": "POST",
+      "path": "/api/load-transfer",
+      "permissionEvidence": [],
+      "transactionEvidence": [
+        "startSession",
+        "startTransaction"
+      ],
+      "dateTokens": [
+        "update"
+      ],
+      "mutationCandidates": [
+        "currentSourceLoad.save(",
+        "destinationLoad.save(",
+        "SalesHeader.updateMany("
+      ],
+      "posting": false,
+      "guarded": false,
+      "category": "Requires an accounting or effective-date business decision",
+      "profile": "load",
+      "dependencies": "Load snapshots mutate sales/load financial-document metadata and totals; conservatively included, even without journal. CREATE_LOAD/SETTLE_LOAD grants where present; load-transfer lacks route-specific grant. LoadDate / loadDate, embedded BillDate and receiptDate are not one authoritative posting date. Create/edit/transfer/load-delete have transaction; GET load-bills repairs snapshots without one; legacy settle create/edit/delete lack transaction. settle-load/save additionally upserts/reverses Receipt and sales statuses inside existing transaction. Requires business decision for snapshot/settlement and generated receipt effective dates; any missing boundary separately approved.",
+      "authorizationEvidence": [],
+      "mutationSites": [
+        "20129: currentSourceLoad.save",
+        "20212: destinationLoad.save",
+        "20219: SalesHeader.updateMany"
+      ],
+      "sourceSha256": "f8028257e0ad9934b77087bebb024bf9f2d02c0549c73c5a2ebdd439191b40a3"
+    },
+    {
+      "file": "backend/server.js",
+      "line": 20599,
+      "method": "POST",
+      "path": "/api/settle-load/save",
+      "permissionEvidence": [
+        "authorizeRequest(\"SALES\", \"SETTLE_LOAD\", \"add\"),\r"
+      ],
+      "transactionEvidence": [
+        "startSession",
+        "startTransaction"
+      ],
+      "dateTokens": [
+        "loadDate",
+        "settlementDate",
+        "billDate",
+        "receiptDate",
+        "chequeDate",
+        "update",
+        "findOneAndUpdate",
+        "LoadDate",
+        "trnDate",
+        "Date",
+        "Update",
+        "BillDate",
+        "ChequeDate",
+        "SettlementDate"
+      ],
+      "mutationCandidates": [
+        "SettleLoad.findOneAndUpdate(",
+        "Receipt.findOneAndUpdate(",
+        "Receipt.updateMany(",
+        "SalesHeader.updateMany(",
+        "SalesHeader.updateOne(",
+        "load.save("
+      ],
+      "posting": false,
+      "guarded": false,
+      "category": "Requires an accounting or effective-date business decision",
+      "profile": "load",
+      "dependencies": "Load snapshots mutate sales/load financial-document metadata and totals; conservatively included, even without journal. CREATE_LOAD/SETTLE_LOAD grants where present; load-transfer lacks route-specific grant. LoadDate / loadDate, embedded BillDate and receiptDate are not one authoritative posting date. Create/edit/transfer/load-delete have transaction; GET load-bills repairs snapshots without one; legacy settle create/edit/delete lack transaction. settle-load/save additionally upserts/reverses Receipt and sales statuses inside existing transaction. Requires business decision for snapshot/settlement and generated receipt effective dates; any missing boundary separately approved.",
+      "authorizationEvidence": [
+        "securityRouter.authorizeRequest(\"SALES\", \"SETTLE_LOAD\", \"add\")"
+      ],
+      "mutationSites": [
+        "20848: SettleLoad.findOneAndUpdate",
+        "20940: Receipt.findOneAndUpdate",
+        "21079: Receipt.updateMany",
+        "21120: SalesHeader.updateMany",
+        "21168: SalesHeader.updateMany",
+        "21194: SalesHeader.updateOne",
+        "21327: load.save"
+      ],
+      "sourceSha256": "22748ce135940512a3f930e828939a5c67b792bb2a5db8a0540ddbdfb3cbf417"
+    },
+    {
+      "file": "backend/server.js",
+      "line": 21358,
+      "method": "POST",
+      "path": "/api/settle-load",
+      "permissionEvidence": [
+        "authorizeRequest(\"SALES\", \"SETTLE_LOAD\", \"add\"),\r"
+      ],
+      "transactionEvidence": [],
+      "dateTokens": [
+        "loadDate",
+        "settlementDate",
+        "billDate",
+        "chequeDate"
+      ],
+      "mutationCandidates": [
+        "SettleLoad.create(",
+        "SalesHeader.updateMany("
+      ],
+      "posting": false,
+      "guarded": false,
+      "category": "Requires an accounting or effective-date business decision",
+      "profile": "load",
+      "dependencies": "Load snapshots mutate sales/load financial-document metadata and totals; conservatively included, even without journal. CREATE_LOAD/SETTLE_LOAD grants where present; load-transfer lacks route-specific grant. LoadDate / loadDate, embedded BillDate and receiptDate are not one authoritative posting date. Create/edit/transfer/load-delete have transaction; GET load-bills repairs snapshots without one; legacy settle create/edit/delete lack transaction. settle-load/save additionally upserts/reverses Receipt and sales statuses inside existing transaction. Requires business decision for snapshot/settlement and generated receipt effective dates; any missing boundary separately approved.",
+      "authorizationEvidence": [
+        "securityRouter.authorizeRequest(\"SALES\", \"SETTLE_LOAD\", \"add\")"
+      ],
+      "mutationSites": [
+        "21465: SettleLoad.create",
+        "21493: SalesHeader.updateMany"
+      ],
+      "sourceSha256": "e71b1df71b03f3d780504e3d93f6d85cd8a1f6031e458213ff96bef083a40b47"
+    },
+    {
+      "file": "backend/server.js",
+      "line": 22393,
+      "method": "PUT",
+      "path": "/api/settle-load/:id",
+      "permissionEvidence": [
+        "authorizeRequest(\"SALES\", \"SETTLE_LOAD\", \"edit\"),\r"
+      ],
+      "transactionEvidence": [],
+      "dateTokens": [
+        "settlementDate",
+        "billDate",
+        "chequeDate",
+        "findOneAndUpdate",
+        "update"
+      ],
+      "mutationCandidates": [
+        "SettleLoad.findOneAndUpdate("
+      ],
+      "posting": false,
+      "guarded": false,
+      "category": "Requires an accounting or effective-date business decision",
+      "profile": "load",
+      "dependencies": "Load snapshots mutate sales/load financial-document metadata and totals; conservatively included, even without journal. CREATE_LOAD/SETTLE_LOAD grants where present; load-transfer lacks route-specific grant. LoadDate / loadDate, embedded BillDate and receiptDate are not one authoritative posting date. Create/edit/transfer/load-delete have transaction; GET load-bills repairs snapshots without one; legacy settle create/edit/delete lack transaction. settle-load/save additionally upserts/reverses Receipt and sales statuses inside existing transaction. Requires business decision for snapshot/settlement and generated receipt effective dates; any missing boundary separately approved.",
+      "authorizationEvidence": [
+        "securityRouter.authorizeRequest(\"SALES\", \"SETTLE_LOAD\", \"edit\")"
+      ],
+      "mutationSites": [
+        "22452: SettleLoad.findOneAndUpdate"
+      ],
+      "sourceSha256": "f25dac92da2bd2865e1b3c3917b2b678a792e656c4103107cd977a42c2f62ed5"
+    },
+    {
+      "file": "backend/server.js",
+      "line": 22488,
+      "method": "POST",
+      "path": "/api/receipt",
+      "permissionEvidence": [
+        "authorizeRequest(\"TRANSACTIONS\", \"RECEIPT\", \"add\"), async (req, res) => {\r"
+      ],
+      "transactionEvidence": [
+        "startSession",
+        "startTransaction"
+      ],
+      "dateTokens": [
+        "receiptDate",
+        "documentDate",
+        "billDate",
+        "BillDate",
+        "chequeDate",
+        "trnDate"
+      ],
+      "mutationCandidates": [
+        "Receipt.create("
+      ],
+      "posting": false,
+      "guarded": false,
+      "category": "Requires an accounting or effective-date business decision",
+      "profile": "serverreceipt",
+      "dependencies": "Legacy /api/receipt has active transaction and number+Receipt create but no balanced journal call. receiptDate defaults from existing behavior; linked bill BillDate. Decide reference-period policy and relationship to primary receipt workflow before integration. Do not add posting as incidental guard work.",
+      "authorizationEvidence": [
+        "securityRouter.authorizeRequest(\"TRANSACTIONS\", \"RECEIPT\", \"add\")"
+      ],
+      "mutationSites": [
+        "22516: Receipt.create"
+      ],
+      "sourceSha256": "d5e49d51c7ef6e6c5e1bb311deda4111ec45d5883a311e8fde08266410255fc2"
+    },
+    {
+      "file": "backend/server.js",
+      "line": 22606,
+      "method": "GET",
+      "path": "/api/create-load/next-no",
+      "permissionEvidence": [],
+      "transactionEvidence": [],
+      "dateTokens": [
+        "Date",
+        "documentDate",
+        "movementDate"
+      ],
+      "mutationCandidates": [
+        "bill.save("
+      ],
+      "posting": true,
+      "guarded": false,
+      "category": "Not a financial writer",
+      "profile": "read",
+      "dependencies": "Read/validation/export or job-file preparation only. E-invoice JSON writes an export file, upload returns 501; neither changes ERP financial documents.",
+      "authorizationEvidence": [],
+      "mutationSites": [],
+      "sourceSha256": "1e6e29bfde597a7255613cb2848e7f92ea414fffdecc7b68aa03bb82d03848d7"
+    },
+    {
+      "file": "backend/server.js",
+      "line": 22694,
+      "method": "PUT",
+      "path": "/api/sales/cancel-bill",
+      "permissionEvidence": [
+        "authorizeRequest(\"SALES\", \"SALES_BILLING\", \"delete\"),\r",
+        "authorizeRequest(\"REPORTS\", \"GST_REPORTS\", \"view\"),\r"
+      ],
+      "transactionEvidence": [
+        "startSession",
+        "startTransaction"
+      ],
+      "dateTokens": [
+        "VDate",
+        "RefDate",
+        "update",
+        "findOneAndUpdate"
+      ],
+      "mutationCandidates": [
+        "stockModel.updateOne(",
+        "stockModel.findOneAndUpdate("
+      ],
+      "posting": false,
+      "guarded": false,
+      "category": "Safe to integrate using existing transaction boundaries",
+      "profile": "salesedit",
+      "dependencies": "SALES/SALES_BILLING; existing active transaction. req.auth plus tenant-scoped source reads. BillDate stored/proposed, selected journal and actual reversal dates; cancellation uses businessDateIST. Preflight before stock reversal/header/load snapshot/journal/movement/audit. Include zero-value skip-posting path and both cancellation entry points.",
+      "authorizationEvidence": [
+        "securityRouter.authorizeRequest(\"SALES\", \"SALES_BILLING\", \"delete\")"
+      ],
+      "mutationSites": [],
+      "sourceSha256": "d9f61a8283c58afcd65b7dc7d21a240393cf31bc3e313e728ebd69b36bb02d3d"
+    },
+    {
+      "file": "backend/server.js",
+      "line": 24427,
+      "method": "POST",
+      "path": "/api/debit-note",
+      "permissionEvidence": [
+        "authorizeRequest(\"VOUCHERS\", \"DEBIT_NOTE\", \"add\"),   // ADD THIS\r"
+      ],
+      "transactionEvidence": [
+        "startSession",
+        "startTransaction"
+      ],
+      "dateTokens": [
+        "documentDate",
+        "VDate"
+      ],
+      "mutationCandidates": [
+        "DebitNote.create("
+      ],
+      "posting": true,
+      "guarded": false,
+      "category": "Safe to integrate using existing transaction boundaries",
+      "profile": "debit",
+      "dependencies": "VOUCHERS/DEBIT_NOTE, authenticated tenant (cancellation body scope must match req.auth). Existing transaction includes tenant references, original purchase limits, stock helper, number/note/journal/audit. Dates old/new VDate, original/latest journal date and actual reversal argument; delete uses businessDateIST. Guard before stock and numbering. Reference purchase is validated but no allocation counter mutation; preserve return limits.",
+      "authorizationEvidence": [
+        "securityRouter.authorizeRequest(\"VOUCHERS\", \"DEBIT_NOTE\", \"add\")"
+      ],
+      "mutationSites": [
+        "24598: DebitNote.create"
+      ],
+      "sourceSha256": "26609ebcb34acfde6cfde5ed3fda6797d9c25875ff03e6e36165a45a7a457ac5"
+    },
+    {
+      "file": "backend/server.js",
+      "line": 24718,
+      "method": "PUT",
+      "path": "/api/debit-note/:id",
+      "permissionEvidence": [
+        "authorizeRequest(\"VOUCHERS\", \"DEBIT_NOTE\", \"edit\"),   // ADD THIS\r"
+      ],
+      "transactionEvidence": [
+        "startSession",
+        "startTransaction"
+      ],
+      "dateTokens": [
+        "findOneAndUpdate",
+        "documentDate",
+        "VDate",
+        "update"
+      ],
+      "mutationCandidates": [
+        "DebitNote.findOneAndUpdate("
+      ],
+      "posting": true,
+      "guarded": false,
+      "category": "Safe to integrate using existing transaction boundaries",
+      "profile": "debit",
+      "dependencies": "VOUCHERS/DEBIT_NOTE, authenticated tenant (cancellation body scope must match req.auth). Existing transaction includes tenant references, original purchase limits, stock helper, number/note/journal/audit. Dates old/new VDate, original/latest journal date and actual reversal argument; delete uses businessDateIST. Guard before stock and numbering. Reference purchase is validated but no allocation counter mutation; preserve return limits.",
+      "authorizationEvidence": [
+        "securityRouter.authorizeRequest(\"VOUCHERS\", \"DEBIT_NOTE\", \"edit\")"
+      ],
+      "mutationSites": [
+        "24901: DebitNote.findOneAndUpdate"
+      ],
+      "sourceSha256": "5e916b3ce4ecb9bc28804752881a82f1c4d97a6f5a0102cd48c4d4ce264be069"
+    },
+    {
+      "file": "backend/server.js",
+      "line": 25025,
+      "method": "DELETE",
+      "path": "/api/debit-note/:id",
+      "permissionEvidence": [
+        "authorizeRequest(\"VOUCHERS\", \"DEBIT_NOTE\", \"delete\"),   // ADD THIS\r"
+      ],
+      "transactionEvidence": [
+        "startSession",
+        "startTransaction"
+      ],
+      "dateTokens": [
+        "findOneAndUpdate",
+        "Date",
+        "documentDate",
+        "update"
+      ],
+      "mutationCandidates": [
+        "DebitNote.findOneAndUpdate(",
+        "stockModel.findOneAndUpdate(",
+        "stockModel.updateOne(",
+        "SalesHeader.updateOne("
+      ],
+      "posting": true,
+      "guarded": false,
+      "category": "Safe to integrate using existing transaction boundaries",
+      "profile": "debit",
+      "dependencies": "VOUCHERS/DEBIT_NOTE, authenticated tenant (cancellation body scope must match req.auth). Existing transaction includes tenant references, original purchase limits, stock helper, number/note/journal/audit. Dates old/new VDate, original/latest journal date and actual reversal argument; delete uses businessDateIST. Guard before stock and numbering. Reference purchase is validated but no allocation counter mutation; preserve return limits.",
+      "authorizationEvidence": [
+        "securityRouter.authorizeRequest(\"VOUCHERS\", \"DEBIT_NOTE\", \"delete\")"
+      ],
+      "mutationSites": [
+        "25100: DebitNote.findOneAndUpdate"
+      ],
+      "sourceSha256": "7edeab35a3de49ea3a6d7bc483dd01aa4c3c68822dc02f0391c68e4e43d4c7dc"
+    },
+    {
+      "file": "backend/server.js",
+      "line": 25770,
+      "method": "POST",
+      "path": "/api/credit-note",
+      "permissionEvidence": [
+        "authorizeRequest(\"VOUCHERS\", \"CREDIT_NOTE\", \"add\"),   // ADD THIS\r"
+      ],
+      "transactionEvidence": [
+        "startSession",
+        "startTransaction"
+      ],
+      "dateTokens": [
+        "documentDate",
+        "VDate",
+        "validate",
+        "revalidate",
+        "stockUpdate",
+        "findOneAndUpdate",
+        "Update",
+        "Validate"
+      ],
+      "mutationCandidates": [
+        "CreditNote.create(",
+        "stockModel.findOneAndUpdate(",
+        "SalesHeader.updateOne("
+      ],
+      "posting": true,
+      "guarded": false,
+      "category": "Requires an accounting or effective-date business decision",
+      "profile": "allocationNote",
+      "dependencies": "VOUCHERS/CREDIT_NOTE, existing transaction. Old/new VDate, original/latest journal and actual reversal date (delete businessDateIST) available. In addition stock helper and adjustSalesBillForCreditNote / direct SalesHeader updates change referenced sales return/credit metadata. Resolve linked source-period policy before implementation; no tax, valuation or reversal-date redesign authorized.",
+      "authorizationEvidence": [
+        "securityRouter.authorizeRequest(\"VOUCHERS\", \"CREDIT_NOTE\", \"add\")"
+      ],
+      "mutationSites": [
+        "26183: CreditNote.create",
+        "26358: stockModel.findOneAndUpdate",
+        "26379: SalesHeader.updateOne"
+      ],
+      "sourceSha256": "9cb640e7cc5c88e54cd0ce5ed5727120f95f82186fcfcbde43ba98cf463c89f2"
+    },
+    {
+      "file": "backend/server.js",
+      "line": 26484,
+      "method": "PUT",
+      "path": "/api/credit-note/:id",
+      "permissionEvidence": [
+        "authorizeRequest(\"VOUCHERS\", \"CREDIT_NOTE\", \"edit\"),   // ADD THIS\r"
+      ],
+      "transactionEvidence": [
+        "startSession",
+        "startTransaction"
+      ],
+      "dateTokens": [
+        "findOneAndUpdate",
+        "documentDate",
+        "VDate",
+        "update"
+      ],
+      "mutationCandidates": [
+        "CreditNote.findOneAndUpdate("
+      ],
+      "posting": true,
+      "guarded": false,
+      "category": "Requires an accounting or effective-date business decision",
+      "profile": "allocationNote",
+      "dependencies": "VOUCHERS/CREDIT_NOTE, existing transaction. Old/new VDate, original/latest journal and actual reversal date (delete businessDateIST) available. In addition stock helper and adjustSalesBillForCreditNote / direct SalesHeader updates change referenced sales return/credit metadata. Resolve linked source-period policy before implementation; no tax, valuation or reversal-date redesign authorized.",
+      "authorizationEvidence": [
+        "securityRouter.authorizeRequest(\"VOUCHERS\", \"CREDIT_NOTE\", \"edit\")"
+      ],
+      "mutationSites": [
+        "26892: CreditNote.findOneAndUpdate"
+      ],
+      "sourceSha256": "254e6fabb0ae69c6dfa2953db665b9a520cd6f8decf1f4d603ad718ea7ed6bda"
+    },
+    {
+      "file": "backend/server.js",
+      "line": 27669,
+      "method": "PUT",
+      "path": "/api/firms/:id",
+      "permissionEvidence": [
+        "requireRoles(\"DISTRIBUTOR_ADMIN\"), async (req, res) => {\r"
+      ],
+      "transactionEvidence": [],
+      "dateTokens": [
+        "findOneAndUpdate",
+        "update"
+      ],
+      "mutationCandidates": [
+        "Register.findOneAndUpdate("
+      ],
+      "posting": false,
+      "guarded": false,
+      "category": "Not a financial writer",
+      "profile": "master",
+      "dependencies": "Master/configuration/security or mapping only; no dated transaction, stock quantity or journal mutation. Referenced master changes affect future documents; do not guard these as historical postings.",
+      "authorizationEvidence": [],
+      "mutationSites": [
+        "27673: Register.findOneAndUpdate"
+      ],
+      "sourceSha256": "6135a33bd1bbb692a4e661f0797e95daad9b27347824042092ca97022e50ca44"
+    },
+    {
+      "file": "backend/server.js",
+      "line": 27718,
+      "method": "DELETE",
+      "path": "/api/firms/:id",
+      "permissionEvidence": [
+        "requireRoles(\"DISTRIBUTOR_ADMIN\"), async (req, res) => {\r"
+      ],
+      "transactionEvidence": [],
+      "dateTokens": [
+        "findOneAndUpdate"
+      ],
+      "mutationCandidates": [
+        "Register.findOneAndUpdate("
+      ],
+      "posting": false,
+      "guarded": false,
+      "category": "Not a financial writer",
+      "profile": "master",
+      "dependencies": "Master/configuration/security or mapping only; no dated transaction, stock quantity or journal mutation. Referenced master changes affect future documents; do not guard these as historical postings.",
+      "authorizationEvidence": [],
+      "mutationSites": [
+        "27720: Register.findOneAndUpdate"
+      ],
+      "sourceSha256": "054b6352f815cca49df42d153891e0f1d8063fd2a62e417e2887f2907c836078"
+    },
+    {
+      "file": "backend/server.js",
+      "line": 27741,
+      "method": "PUT",
+      "path": "/api/groups/:id",
+      "permissionEvidence": [
+        "authorizeRequest(\r"
+      ],
+      "transactionEvidence": [],
+      "dateTokens": [
+        "findOneAndUpdate",
+        "update"
+      ],
+      "mutationCandidates": [
+        "Group.findOneAndUpdate("
+      ],
+      "posting": false,
+      "guarded": false,
+      "category": "Not a financial writer",
+      "profile": "master",
+      "dependencies": "Master/configuration/security or mapping only; no dated transaction, stock quantity or journal mutation. Referenced master changes affect future documents; do not guard these as historical postings.",
+      "authorizationEvidence": [
+        "securityRouter.authorizeRequest( \"master\", \"GROUP\", \"edit\" )"
+      ],
+      "mutationSites": [
+        "27761: Group.findOneAndUpdate"
+      ],
+      "sourceSha256": "7f28ff2dbd93a43f2a3d23848089b0bb73d57268ffe48b4e332b8ab957ee2fc6"
+    },
+    {
+      "file": "backend/server.js",
+      "line": 27790,
+      "method": "DELETE",
+      "path": "/api/groups/:id",
+      "permissionEvidence": [
+        "authorizeRequest(\r"
+      ],
+      "transactionEvidence": [],
+      "dateTokens": [
+        "findOneAndUpdate"
+      ],
+      "mutationCandidates": [
+        "Group.findOneAndUpdate("
+      ],
+      "posting": false,
+      "guarded": false,
+      "category": "Not a financial writer",
+      "profile": "master",
+      "dependencies": "Master/configuration/security or mapping only; no dated transaction, stock quantity or journal mutation. Referenced master changes affect future documents; do not guard these as historical postings.",
+      "authorizationEvidence": [
+        "securityRouter.authorizeRequest( \"master\", \"GROUP\", \"delete\" )"
+      ],
+      "mutationSites": [
+        "27805: Group.findOneAndUpdate"
+      ],
+      "sourceSha256": "4ae489a25fb22d09cab3fbb4613abc06d6bf20d46fb52fd852eb96cd6972db26"
+    },
+    {
+      "file": "backend/server.js",
+      "line": 27825,
+      "method": "PUT",
+      "path": "/api/categories/:id",
+      "permissionEvidence": [
+        "authorizeRequest(\r"
+      ],
+      "transactionEvidence": [],
+      "dateTokens": [
+        "findOneAndUpdate",
+        "update"
+      ],
+      "mutationCandidates": [
+        "Category.findOneAndUpdate("
+      ],
+      "posting": false,
+      "guarded": false,
+      "category": "Not a financial writer",
+      "profile": "master",
+      "dependencies": "Master/configuration/security or mapping only; no dated transaction, stock quantity or journal mutation. Referenced master changes affect future documents; do not guard these as historical postings.",
+      "authorizationEvidence": [
+        "securityRouter.authorizeRequest( \"master\", \"CATEGORY\", \"edit\" )"
+      ],
+      "mutationSites": [
+        "27845: Category.findOneAndUpdate"
+      ],
+      "sourceSha256": "7b863856dca30cbca16cc12bcb735ccd5ea37a343fb5ee65a847b17a2895cbd6"
+    },
+    {
+      "file": "backend/server.js",
+      "line": 27874,
+      "method": "DELETE",
+      "path": "/api/categories/:id",
+      "permissionEvidence": [
+        "authorizeRequest(\r"
+      ],
+      "transactionEvidence": [],
+      "dateTokens": [
+        "findOneAndUpdate"
+      ],
+      "mutationCandidates": [
+        "Category.findOneAndUpdate("
+      ],
+      "posting": false,
+      "guarded": false,
+      "category": "Not a financial writer",
+      "profile": "master",
+      "dependencies": "Master/configuration/security or mapping only; no dated transaction, stock quantity or journal mutation. Referenced master changes affect future documents; do not guard these as historical postings.",
+      "authorizationEvidence": [
+        "securityRouter.authorizeRequest( \"master\", \"CATEGORY\", \"delete\" )"
+      ],
+      "mutationSites": [
+        "27889: Category.findOneAndUpdate"
+      ],
+      "sourceSha256": "19db70dde5661d13ec071a8ba8366d7ec982f69d13fff2e3fedf347d0eb00b5c"
+    },
+    {
+      "file": "backend/server.js",
+      "line": 27909,
+      "method": "PUT",
+      "path": "/api/products/:id",
+      "permissionEvidence": [
+        "authorizeRequest(\r"
+      ],
+      "transactionEvidence": [],
+      "dateTokens": [
+        "findOneAndUpdate",
+        "update"
+      ],
+      "mutationCandidates": [
+        "Product.findOneAndUpdate("
+      ],
+      "posting": false,
+      "guarded": false,
+      "category": "Not a financial writer",
+      "profile": "master",
+      "dependencies": "Master/configuration/security or mapping only; no dated transaction, stock quantity or journal mutation. Referenced master changes affect future documents; do not guard these as historical postings.",
+      "authorizationEvidence": [
+        "securityRouter.authorizeRequest( \"master\", \"PRODUCT\", \"edit\" )"
+      ],
+      "mutationSites": [
+        "27934: Product.findOneAndUpdate"
+      ],
+      "sourceSha256": "bbbf4260a3258947308c3170315755ae61faa5b9283e404290ed13b7c875aab0"
+    },
+    {
+      "file": "backend/server.js",
+      "line": 27960,
+      "method": "DELETE",
+      "path": "/api/products/:id",
+      "permissionEvidence": [
+        "authorizeRequest(\r"
+      ],
+      "transactionEvidence": [],
+      "dateTokens": [
+        "findOneAndUpdate"
+      ],
+      "mutationCandidates": [
+        "Product.findOneAndUpdate("
+      ],
+      "posting": false,
+      "guarded": false,
+      "category": "Not a financial writer",
+      "profile": "master",
+      "dependencies": "Master/configuration/security or mapping only; no dated transaction, stock quantity or journal mutation. Referenced master changes affect future documents; do not guard these as historical postings.",
+      "authorizationEvidence": [
+        "securityRouter.authorizeRequest( \"master\", \"PRODUCT\", \"delete\" )"
+      ],
+      "mutationSites": [
+        "27974: Product.findOneAndUpdate"
+      ],
+      "sourceSha256": "d5c240ac9383a30d73ef4f1d0c0f1fe20db116c5f1eb8309c472f23293575d01"
+    },
+    {
+      "file": "backend/server.js",
+      "line": 27994,
+      "method": "PUT",
+      "path": "/api/accounts/:id",
+      "permissionEvidence": [
+        "authorizeRequest(\r"
+      ],
+      "transactionEvidence": [],
+      "dateTokens": [
+        "openingDate",
+        "gstDate",
+        "gstClsDate",
+        "drugExpDate",
+        "update",
+        "findOneAndUpdate"
+      ],
+      "mutationCandidates": [
+        "Account.findOneAndUpdate("
+      ],
+      "posting": false,
+      "guarded": false,
+      "category": "Requires an accounting or effective-date business decision",
+      "profile": "opening",
+      "dependencies": "MASTER/ACCOUNT, authenticated tenant on main account routes. saveAccountWithOpenings legacy path save(null); transactional path saves account before deriving old/new opening postingDate. Direct opening/journal supersession, allocations and account summary/history semantics require business decision AND separate transaction approval for legacy branch. Do not turn reference row.date into postingDate or rewrite historical events. Delete master can affect legacy opening visibility; no opening reversal is implemented.",
+      "authorizationEvidence": [
+        "securityRouter.authorizeRequest( \"MASTER\", \"ACCOUNT\", \"edit\" )"
+      ],
+      "mutationSites": [
+        "28093: Account.findOneAndUpdate"
+      ],
+      "sourceSha256": "ca53ed672db771d2d34511cfd26ecba07f89eca6585251c85b2914519593ba81"
+    },
+    {
+      "file": "backend/server.js",
+      "line": 28131,
+      "method": "PATCH",
+      "path": "/api/accounts/:id/mapping-details",
+      "permissionEvidence": [
+        "authorizeRequest(\"MASTER\", \"ACCOUNT\", \"edit\"),\r"
+      ],
+      "transactionEvidence": [],
+      "dateTokens": [
+        "closingDate",
+        "gstClsDate",
+        "findOneAndUpdate",
+        "update"
+      ],
+      "mutationCandidates": [
+        "Account.findOneAndUpdate(",
+        "AreaToPartyMapping.updateMany("
+      ],
+      "posting": false,
+      "guarded": false,
+      "category": "Not a financial writer",
+      "profile": "master",
+      "dependencies": "Master/configuration/security or mapping only; no dated transaction, stock quantity or journal mutation. Referenced master changes affect future documents; do not guard these as historical postings.",
+      "authorizationEvidence": [
+        "securityRouter.authorizeRequest(\"MASTER\", \"ACCOUNT\", \"edit\")"
+      ],
+      "mutationSites": [
+        "28196: Account.findOneAndUpdate",
+        "28210: AreaToPartyMapping.updateMany"
+      ],
+      "sourceSha256": "bdea654591280fe8a4783c3036daf209142c520b9425f7b9a82735533906c8b2"
+    },
+    {
+      "file": "backend/server.js",
+      "line": 28278,
+      "method": "DELETE",
+      "path": "/api/accounts/:id",
+      "permissionEvidence": [
+        "authorizeRequest(\r"
+      ],
+      "transactionEvidence": [],
+      "dateTokens": [
+        "findOneAndUpdate"
+      ],
+      "mutationCandidates": [
+        "Account.findOneAndUpdate("
+      ],
+      "posting": false,
+      "guarded": false,
+      "category": "Requires an accounting or effective-date business decision",
+      "profile": "opening",
+      "dependencies": "MASTER/ACCOUNT, authenticated tenant on main account routes. saveAccountWithOpenings legacy path save(null); transactional path saves account before deriving old/new opening postingDate. Direct opening/journal supersession, allocations and account summary/history semantics require business decision AND separate transaction approval for legacy branch. Do not turn reference row.date into postingDate or rewrite historical events. Delete master can affect legacy opening visibility; no opening reversal is implemented.",
+      "authorizationEvidence": [
+        "securityRouter.authorizeRequest( \"MASTER\", \"ACCOUNT\", \"delete\" )"
+      ],
+      "mutationSites": [
+        "28292: Account.findOneAndUpdate"
+      ],
+      "sourceSha256": "0cbb0768be3e51324fbf8c503b8a6e13801b01ccdf4ad668a4ecb79ad026e4b0"
+    },
+    {
+      "file": "backend/server.js",
+      "line": 28312,
+      "method": "PUT",
+      "path": "/api/other-accounts/:id",
+      "permissionEvidence": [
+        "authorizeRequest(\r"
+      ],
+      "transactionEvidence": [],
+      "dateTokens": [
+        "findOneAndUpdate",
+        "update"
+      ],
+      "mutationCandidates": [
+        "OtherAccount.findOneAndUpdate("
+      ],
+      "posting": false,
+      "guarded": false,
+      "category": "Requires an accounting or effective-date business decision",
+      "profile": "otheropening",
+      "dependencies": "MASTER/OTHER_ACCOUNT; openingBal can be created/edited and account soft-deleted with no authoritative opening posting date/transaction. Requires effective-date and opening-summary policy, then separate same-session architecture approval. No journal posting added.",
+      "authorizationEvidence": [
+        "securityRouter.authorizeRequest( \"master\", \"OTHER_ACCOUNT\", \"edit\" )"
+      ],
+      "mutationSites": [
+        "28342: OtherAccount.findOneAndUpdate"
+      ],
+      "sourceSha256": "9710cf5d6e424a099c7ad29a6b6248559cc8fbfd6df7b1ddc4c7edd76d0c78b1"
+    },
+    {
+      "file": "backend/server.js",
+      "line": 28368,
+      "method": "DELETE",
+      "path": "/api/other-accounts/:id",
+      "permissionEvidence": [
+        "authorizeRequest(\r"
+      ],
+      "transactionEvidence": [],
+      "dateTokens": [
+        "findOneAndUpdate"
+      ],
+      "mutationCandidates": [
+        "OtherAccount.findOneAndUpdate("
+      ],
+      "posting": false,
+      "guarded": false,
+      "category": "Requires an accounting or effective-date business decision",
+      "profile": "otheropening",
+      "dependencies": "MASTER/OTHER_ACCOUNT; openingBal can be created/edited and account soft-deleted with no authoritative opening posting date/transaction. Requires effective-date and opening-summary policy, then separate same-session architecture approval. No journal posting added.",
+      "authorizationEvidence": [
+        "securityRouter.authorizeRequest( \"master\", \"OTHER_ACCOUNT\", \"delete\" )"
+      ],
+      "mutationSites": [
+        "28383: OtherAccount.findOneAndUpdate"
+      ],
+      "sourceSha256": "5bdfbadd7d05a9f247ceb4a0651e4204827deafb042e9516196ceb9d0945aa76"
+    },
+    {
+      "file": "backend/server.js",
+      "line": 28403,
+      "method": "PUT",
+      "path": "/api/gst/:id",
+      "permissionEvidence": [
+        "authorizeRequest(\r"
+      ],
+      "transactionEvidence": [],
+      "dateTokens": [
+        "findOneAndUpdate",
+        "update"
+      ],
+      "mutationCandidates": [
+        "GST.findOneAndUpdate("
+      ],
+      "posting": false,
+      "guarded": false,
+      "category": "Not a financial writer",
+      "profile": "master",
+      "dependencies": "Master/configuration/security or mapping only; no dated transaction, stock quantity or journal mutation. Referenced master changes affect future documents; do not guard these as historical postings.",
+      "authorizationEvidence": [
+        "securityRouter.authorizeRequest( \"master\", \"GST\", \"edit\" )"
+      ],
+      "mutationSites": [
+        "28426: GST.findOneAndUpdate"
+      ],
+      "sourceSha256": "8f52f1b2afbcc09e968b47beb620b053d051a57081ac314a2b895a2ebff2e3e7"
+    },
+    {
+      "file": "backend/server.js",
+      "line": 28462,
+      "method": "DELETE",
+      "path": "/api/gst/:id",
+      "permissionEvidence": [
+        "authorizeRequest(\r"
+      ],
+      "transactionEvidence": [],
+      "dateTokens": [
+        "findOneAndUpdate"
+      ],
+      "mutationCandidates": [
+        "GST.findOneAndUpdate("
+      ],
+      "posting": false,
+      "guarded": false,
+      "category": "Not a financial writer",
+      "profile": "master",
+      "dependencies": "Master/configuration/security or mapping only; no dated transaction, stock quantity or journal mutation. Referenced master changes affect future documents; do not guard these as historical postings.",
+      "authorizationEvidence": [
+        "securityRouter.authorizeRequest( \"master\", \"GST\", \"delete\" )"
+      ],
+      "mutationSites": [
+        "28477: GST.findOneAndUpdate"
+      ],
+      "sourceSha256": "c402af82bcba3efe5185587383be15ea2f7c29c00556c37fe60cb49628b26051"
+    },
+    {
+      "file": "backend/server.js",
+      "line": 28497,
+      "method": "PUT",
+      "path": "/api/salesmen/:id",
+      "permissionEvidence": [
+        "authorizeRequest(\r"
+      ],
+      "transactionEvidence": [],
+      "dateTokens": [
+        "findOneAndUpdate",
+        "update"
+      ],
+      "mutationCandidates": [
+        "Salesman.findOneAndUpdate("
+      ],
+      "posting": false,
+      "guarded": false,
+      "category": "Not a financial writer",
+      "profile": "master",
+      "dependencies": "Master/configuration/security or mapping only; no dated transaction, stock quantity or journal mutation. Referenced master changes affect future documents; do not guard these as historical postings.",
+      "authorizationEvidence": [
+        "securityRouter.authorizeRequest( \"master\", \"SALESMAN\", \"edit\" )"
+      ],
+      "mutationSites": [
+        "28524: Salesman.findOneAndUpdate"
+      ],
+      "sourceSha256": "ddf979ffaeacadd9bd85115b996b717994d1cb8532fb733e9ce99005691b50e0"
+    },
+    {
+      "file": "backend/server.js",
+      "line": 28555,
+      "method": "DELETE",
+      "path": "/api/salesmen/:id",
+      "permissionEvidence": [
+        "authorizeRequest(\r"
+      ],
+      "transactionEvidence": [],
+      "dateTokens": [
+        "findOneAndUpdate"
+      ],
+      "mutationCandidates": [
+        "Salesman.findOneAndUpdate("
+      ],
+      "posting": false,
+      "guarded": false,
+      "category": "Not a financial writer",
+      "profile": "master",
+      "dependencies": "Master/configuration/security or mapping only; no dated transaction, stock quantity or journal mutation. Referenced master changes affect future documents; do not guard these as historical postings.",
+      "authorizationEvidence": [
+        "securityRouter.authorizeRequest( \"master\", \"SALESMAN\", \"delete\" )"
+      ],
+      "mutationSites": [
+        "28570: Salesman.findOneAndUpdate"
+      ],
+      "sourceSha256": "e0bcea7517b0cd76e297ca3594c18535c2c8ee09e551a2977608fc1aba74458f"
+    },
+    {
+      "file": "backend/server.js",
+      "line": 28590,
+      "method": "PUT",
+      "path": "/api/areas/:id",
+      "permissionEvidence": [
+        "authorizeRequest(\r"
+      ],
+      "transactionEvidence": [],
+      "dateTokens": [
+        "findOneAndUpdate",
+        "update"
+      ],
+      "mutationCandidates": [
+        "Area.findOneAndUpdate("
+      ],
+      "posting": false,
+      "guarded": false,
+      "category": "Not a financial writer",
+      "profile": "master",
+      "dependencies": "Master/configuration/security or mapping only; no dated transaction, stock quantity or journal mutation. Referenced master changes affect future documents; do not guard these as historical postings.",
+      "authorizationEvidence": [
+        "securityRouter.authorizeRequest( \"master\", \"AREA\", \"edit\" )"
+      ],
+      "mutationSites": [
+        "28610: Area.findOneAndUpdate"
+      ],
+      "sourceSha256": "9f0b29eb34d33cb679725c1c1a0967779289ed15a140cae144c9ec3093f6efc9"
+    },
+    {
+      "file": "backend/server.js",
+      "line": 28644,
+      "method": "DELETE",
+      "path": "/api/areas/:id",
+      "permissionEvidence": [
+        "authorizeRequest(\r"
+      ],
+      "transactionEvidence": [],
+      "dateTokens": [
+        "findOneAndUpdate"
+      ],
+      "mutationCandidates": [
+        "Area.findOneAndUpdate("
+      ],
+      "posting": false,
+      "guarded": false,
+      "category": "Not a financial writer",
+      "profile": "master",
+      "dependencies": "Master/configuration/security or mapping only; no dated transaction, stock quantity or journal mutation. Referenced master changes affect future documents; do not guard these as historical postings.",
+      "authorizationEvidence": [
+        "securityRouter.authorizeRequest( \"master\", \"AREA\", \"delete\" )"
+      ],
+      "mutationSites": [
+        "28659: Area.findOneAndUpdate"
+      ],
+      "sourceSha256": "2bee85c059d5704c9501707a856537592b7485f3da642dc64e8f778cc2e0d16a"
+    },
+    {
+      "file": "backend/server.js",
+      "line": 28679,
+      "method": "PUT",
+      "path": "/api/godowns/:id",
+      "permissionEvidence": [
+        "authorizeRequest(\r"
+      ],
+      "transactionEvidence": [],
+      "dateTokens": [
+        "findOneAndUpdate",
+        "update"
+      ],
+      "mutationCandidates": [
+        "GodownModel.findOneAndUpdate("
+      ],
+      "posting": false,
+      "guarded": false,
+      "category": "Not a financial writer",
+      "profile": "master",
+      "dependencies": "Master/configuration/security or mapping only; no dated transaction, stock quantity or journal mutation. Referenced master changes affect future documents; do not guard these as historical postings.",
+      "authorizationEvidence": [
+        "securityRouter.authorizeRequest( \"master\", \"GODOWN\", \"edit\" )"
+      ],
+      "mutationSites": [
+        "28699: GodownModel.findOneAndUpdate"
+      ],
+      "sourceSha256": "f315a634f8ed72144b7d2fb1c948d056879fc9b87da08e7b6b8e8ffd8bac65ed"
+    },
+    {
+      "file": "backend/server.js",
+      "line": 28734,
+      "method": "DELETE",
+      "path": "/api/godowns/:id",
+      "permissionEvidence": [
+        "authorizeRequest(\r"
+      ],
+      "transactionEvidence": [],
+      "dateTokens": [
+        "findOneAndUpdate"
+      ],
+      "mutationCandidates": [
+        "GodownModel.findOneAndUpdate("
+      ],
+      "posting": false,
+      "guarded": false,
+      "category": "Not a financial writer",
+      "profile": "master",
+      "dependencies": "Master/configuration/security or mapping only; no dated transaction, stock quantity or journal mutation. Referenced master changes affect future documents; do not guard these as historical postings.",
+      "authorizationEvidence": [
+        "securityRouter.authorizeRequest( \"master\", \"GODOWN\", \"delete\" )"
+      ],
+      "mutationSites": [
+        "28749: GodownModel.findOneAndUpdate"
+      ],
+      "sourceSha256": "a9cd893b17a91e001455cf058cbf175d76098488817016969ae6cd3d57407c72"
+    },
+    {
+      "file": "backend/server.js",
+      "line": 28768,
+      "method": "PUT",
+      "path": "/api/customer-banks/:id",
+      "permissionEvidence": [
+        "authorizeRequest(\"MASTER\", \"CUSTOMER_BANK\", \"edit\"), async (req, res) => {\r"
+      ],
+      "transactionEvidence": [],
+      "dateTokens": [
+        "findOneAndUpdate",
+        "update"
+      ],
+      "mutationCandidates": [
+        "CustomerBank.findOneAndUpdate("
+      ],
+      "posting": false,
+      "guarded": false,
+      "category": "Not a financial writer",
+      "profile": "master",
+      "dependencies": "Master/configuration/security or mapping only; no dated transaction, stock quantity or journal mutation. Referenced master changes affect future documents; do not guard these as historical postings.",
+      "authorizationEvidence": [
+        "securityRouter.authorizeRequest(\"MASTER\", \"CUSTOMER_BANK\", \"edit\")"
+      ],
+      "mutationSites": [
+        "28797: CustomerBank.findOneAndUpdate"
+      ],
+      "sourceSha256": "74ad21fc0216f96df69fddd3fc3bb7f404e6e7e43777c7a1838cb2d659bd1775"
+    },
+    {
+      "file": "backend/server.js",
+      "line": 28826,
+      "method": "DELETE",
+      "path": "/api/customer-banks/:id",
+      "permissionEvidence": [
+        "authorizeRequest(\"MASTER\", \"CUSTOMER_BANK\", \"delete\"), async (req, res) => {\r"
+      ],
+      "transactionEvidence": [],
+      "dateTokens": [
+        "findOneAndUpdate"
+      ],
+      "mutationCandidates": [
+        "CustomerBank.findOneAndUpdate("
+      ],
+      "posting": false,
+      "guarded": false,
+      "category": "Not a financial writer",
+      "profile": "master",
+      "dependencies": "Master/configuration/security or mapping only; no dated transaction, stock quantity or journal mutation. Referenced master changes affect future documents; do not guard these as historical postings.",
+      "authorizationEvidence": [
+        "securityRouter.authorizeRequest(\"MASTER\", \"CUSTOMER_BANK\", \"delete\")"
+      ],
+      "mutationSites": [
+        "28833: CustomerBank.findOneAndUpdate"
+      ],
+      "sourceSha256": "d30c94b6c36b95e8aae86feb8f7f26c0bda82c23f8e7d2b256831db83a89078f"
+    },
+    {
+      "file": "backend/server.js",
+      "line": 28853,
+      "method": "DELETE",
+      "path": "/api/sales/:id",
+      "permissionEvidence": [
+        "authorizeRequest(\r"
+      ],
+      "transactionEvidence": [
+        "startSession",
+        "startTransaction"
+      ],
+      "dateTokens": [],
+      "mutationCandidates": [],
+      "posting": false,
+      "guarded": false,
+      "category": "Safe to integrate using existing transaction boundaries",
+      "profile": "salesedit",
+      "dependencies": "SALES/SALES_BILLING; existing active transaction. req.auth plus tenant-scoped source reads. BillDate stored/proposed, selected journal and actual reversal dates; cancellation uses businessDateIST. Preflight before stock reversal/header/load snapshot/journal/movement/audit. Include zero-value skip-posting path and both cancellation entry points.",
+      "authorizationEvidence": [
+        "securityRouter.authorizeRequest( \"SALES\", \"SALES_BILLING\", \"delete\" )"
+      ],
+      "mutationSites": [],
+      "sourceSha256": "db86b4a1a3661d626eabc842035d69dfaea24029beec85e62f1e0f20505aaac0"
+    },
+    {
+      "file": "backend/server.js",
+      "line": 28988,
+      "method": "PUT",
+      "path": "/api/quotation/:id",
+      "permissionEvidence": [
+        "authorizeRequest(\"SALES\", \"QUOTATION\", \"edit\"),\r"
+      ],
+      "transactionEvidence": [],
+      "dateTokens": [
+        "BillDate",
+        "DueDate",
+        "findOneAndUpdate",
+        "update"
+      ],
+      "mutationCandidates": [
+        "QuotationHeader.findOneAndUpdate("
+      ],
+      "posting": false,
+      "guarded": false,
+      "category": "Not a financial writer",
+      "profile": "quotation",
+      "dependencies": "Quotation document/number only; inspected create/edit/delete do not mutate stock, journals, sales allocations or posted invoices. Prospective quote, outside financial-period enforcement; counter is QUOTATION only.",
+      "authorizationEvidence": [
+        "securityRouter.authorizeRequest(\"SALES\", \"QUOTATION\", \"edit\")"
+      ],
+      "mutationSites": [
+        "29483: QuotationHeader.findOneAndUpdate"
+      ],
+      "sourceSha256": "d7c002a0361c879b4e31f341544673d4980c1da9c8f407558017e462b2842297"
+    },
+    {
+      "file": "backend/server.js",
+      "line": 29549,
+      "method": "DELETE",
+      "path": "/api/quotation/:id",
+      "permissionEvidence": [
+        "authorizeRequest(\"SALES\", \"QUOTATION\", \"delete\"),\r"
+      ],
+      "transactionEvidence": [],
+      "dateTokens": [
+        "findOneAndUpdate",
+        "Date"
+      ],
+      "mutationCandidates": [
+        "QuotationHeader.findOneAndUpdate("
+      ],
+      "posting": false,
+      "guarded": false,
+      "category": "Not a financial writer",
+      "profile": "quotation",
+      "dependencies": "Quotation document/number only; inspected create/edit/delete do not mutate stock, journals, sales allocations or posted invoices. Prospective quote, outside financial-period enforcement; counter is QUOTATION only.",
+      "authorizationEvidence": [
+        "securityRouter.authorizeRequest(\"SALES\", \"QUOTATION\", \"delete\")"
+      ],
+      "mutationSites": [
+        "29579: QuotationHeader.findOneAndUpdate"
+      ],
+      "sourceSha256": "8f35990eb809b50894f1923f3d8fe1fa1a2049b1bb7d12643d01b8e278302783"
+    },
+    {
+      "file": "backend/server.js",
+      "line": 29596,
+      "method": "DELETE",
+      "path": "/api/purchase/:id",
+      "permissionEvidence": [
+        "authorizeRequest(\"VOUCHERS\", \"PURCHASE\", \"delete\"),\r"
+      ],
+      "transactionEvidence": [
+        "startSession",
+        "startTransaction"
+      ],
+      "dateTokens": [
+        "findOneAndUpdate",
+        "Date",
+        "documentDate",
+        "movementDate"
+      ],
+      "mutationCandidates": [
+        "Stock.updateOne(",
+        "PurchaseHeader.findOneAndUpdate("
+      ],
+      "posting": true,
+      "guarded": false,
+      "category": "Safe to integrate using existing transaction boundaries",
+      "profile": "purchase",
+      "dependencies": "VOUCHERS/PURCHASE; tenant source shown in evidence (some body-derived; compare against req.auth before guard). Existing transaction covers number/header/stock/journal/audit. Dates: invoiceDate original/proposed, selected journal dates and actual reversal date (businessDateIST for cancellation). Repair uses persisted invoiceDate, reactivation stock movements and missing-journal creation; guard before first mutation. No new date rule needed for own posting dates.",
+      "authorizationEvidence": [
+        "securityRouter.authorizeRequest(\"VOUCHERS\", \"PURCHASE\", \"delete\")"
+      ],
+      "mutationSites": [
+        "29653: Stock.updateOne",
+        "29667: PurchaseHeader.findOneAndUpdate"
+      ],
+      "sourceSha256": "4e111c4421e0dc0f211c98eb3bd88fa0ae3add1af92df68b757fae17f45cfa84"
+    },
+    {
+      "file": "backend/server.js",
+      "line": 29707,
+      "method": "DELETE",
+      "path": "/api/credit-note/:id",
+      "permissionEvidence": [
+        "authorizeRequest(\"VOUCHERS\", \"CREDIT_NOTE\", \"delete\"),   // ADD THIS\r"
+      ],
+      "transactionEvidence": [
+        "startSession",
+        "startTransaction"
+      ],
+      "dateTokens": [
+        "findOneAndUpdate",
+        "Date",
+        "documentDate",
+        "Update"
+      ],
+      "mutationCandidates": [
+        "CreditNote.findOneAndUpdate(",
+        "SalesHeader.updateOne("
+      ],
+      "posting": true,
+      "guarded": false,
+      "category": "Requires an accounting or effective-date business decision",
+      "profile": "allocationNote",
+      "dependencies": "VOUCHERS/CREDIT_NOTE, existing transaction. Old/new VDate, original/latest journal and actual reversal date (delete businessDateIST) available. In addition stock helper and adjustSalesBillForCreditNote / direct SalesHeader updates change referenced sales return/credit metadata. Resolve linked source-period policy before implementation; no tax, valuation or reversal-date redesign authorized.",
+      "authorizationEvidence": [
+        "securityRouter.authorizeRequest(\"VOUCHERS\", \"CREDIT_NOTE\", \"delete\")"
+      ],
+      "mutationSites": [
+        "29870: CreditNote.findOneAndUpdate",
+        "29898: SalesHeader.updateOne"
+      ],
+      "sourceSha256": "17bde2350b88454ee60dba6fdf5c593c2654232e2a3031252a9d4488c38322cf"
+    },
+    {
+      "file": "backend/server.js",
+      "line": 29970,
+      "method": "DELETE",
+      "path": "/api/create-load/:id",
+      "permissionEvidence": [
+        "authorizeRequest(\"SALES\", \"CREATE_LOAD\", \"delete\"),\r"
+      ],
+      "transactionEvidence": [
+        "startSession",
+        "startTransaction"
+      ],
+      "dateTokens": [
+        "findOneAndUpdate",
+        "Date"
+      ],
+      "mutationCandidates": [
+        "SalesHeader.updateMany(",
+        "LoadHeader.findOneAndUpdate("
+      ],
+      "posting": false,
+      "guarded": false,
+      "category": "Requires an accounting or effective-date business decision",
+      "profile": "load",
+      "dependencies": "Load snapshots mutate sales/load financial-document metadata and totals; conservatively included, even without journal. CREATE_LOAD/SETTLE_LOAD grants where present; load-transfer lacks route-specific grant. LoadDate / loadDate, embedded BillDate and receiptDate are not one authoritative posting date. Create/edit/transfer/load-delete have transaction; GET load-bills repairs snapshots without one; legacy settle create/edit/delete lack transaction. settle-load/save additionally upserts/reverses Receipt and sales statuses inside existing transaction. Requires business decision for snapshot/settlement and generated receipt effective dates; any missing boundary separately approved.",
+      "authorizationEvidence": [
+        "securityRouter.authorizeRequest(\"SALES\", \"CREATE_LOAD\", \"delete\")"
+      ],
+      "mutationSites": [
+        "30029: SalesHeader.updateMany",
+        "30047: LoadHeader.findOneAndUpdate"
+      ],
+      "sourceSha256": "52ea44990a8958078d720f2b882de9c8493d40b240dd025ebaae33a4b7fb4b28"
+    },
+    {
+      "file": "backend/server.js",
+      "line": 30068,
+      "method": "DELETE",
+      "path": "/api/settle-load/:id",
+      "permissionEvidence": [
+        "authorizeRequest(\"SALES\", \"SETTLE_LOAD\", \"delete\"),\r"
+      ],
+      "transactionEvidence": [],
+      "dateTokens": [
+        "findOneAndUpdate",
+        "Date"
+      ],
+      "mutationCandidates": [
+        "SalesHeader.updateMany(",
+        "SettleLoad.findOneAndUpdate("
+      ],
+      "posting": false,
+      "guarded": false,
+      "category": "Requires an accounting or effective-date business decision",
+      "profile": "load",
+      "dependencies": "Load snapshots mutate sales/load financial-document metadata and totals; conservatively included, even without journal. CREATE_LOAD/SETTLE_LOAD grants where present; load-transfer lacks route-specific grant. LoadDate / loadDate, embedded BillDate and receiptDate are not one authoritative posting date. Create/edit/transfer/load-delete have transaction; GET load-bills repairs snapshots without one; legacy settle create/edit/delete lack transaction. settle-load/save additionally upserts/reverses Receipt and sales statuses inside existing transaction. Requires business decision for snapshot/settlement and generated receipt effective dates; any missing boundary separately approved.",
+      "authorizationEvidence": [
+        "securityRouter.authorizeRequest(\"SALES\", \"SETTLE_LOAD\", \"delete\")"
+      ],
+      "mutationSites": [
+        "30108: SalesHeader.updateMany",
+        "30125: SettleLoad.findOneAndUpdate"
+      ],
+      "sourceSha256": "631acddd4b177bc2fa6fb49bf2e0e5a80ea0b88a3dbee89c26cd560cf7d0cd01"
+    },
+    {
+      "file": "backend/server.js",
+      "line": 30295,
+      "method": "PUT",
+      "path": "/api/bill-print/settings",
+      "permissionEvidence": [],
+      "transactionEvidence": [],
+      "dateTokens": [
+        "findOneAndUpdate"
+      ],
+      "mutationCandidates": [
+        "BillPrintSettings.findOneAndUpdate("
+      ],
+      "posting": false,
+      "guarded": false,
+      "category": "Not a financial writer",
+      "profile": "master",
+      "dependencies": "Master/configuration/security or mapping only; no dated transaction, stock quantity or journal mutation. Referenced master changes affect future documents; do not guard these as historical postings.",
+      "authorizationEvidence": [],
+      "mutationSites": [
+        "30363: BillPrintSettings.findOneAndUpdate"
+      ],
+      "sourceSha256": "8fff13f88ce4c0648ea01cfa8fded1c3273f2cdaed66f7cf37cf7177f68d1dcc"
+    },
+    {
+      "file": "backend/service.js",
+      "line": 164,
+      "method": "POST",
+      "path": "/services",
+      "permissionEvidence": [],
+      "transactionEvidence": [],
+      "dateTokens": [],
+      "mutationCandidates": [
+        "Service.create("
+      ],
+      "posting": false,
+      "guarded": false,
+      "category": "Not a financial writer",
+      "profile": "master",
+      "dependencies": "Master/configuration/security or mapping only; no dated transaction, stock quantity or journal mutation. Referenced master changes affect future documents; do not guard these as historical postings.",
+      "authorizationEvidence": [],
+      "mutationSites": [
+        "167: Service.create"
+      ],
+      "sourceSha256": "87d90c65a9b6437bad6b9078e0c603cabb94494f9e6a679e08370eb753d7b88d"
+    },
+    {
+      "file": "backend/service.js",
+      "line": 172,
+      "method": "PUT",
+      "path": "/services/:id",
+      "permissionEvidence": [],
+      "transactionEvidence": [],
+      "dateTokens": [
+        "findOneAndUpdate"
+      ],
+      "mutationCandidates": [
+        "Service.findOneAndUpdate("
+      ],
+      "posting": false,
+      "guarded": false,
+      "category": "Not a financial writer",
+      "profile": "master",
+      "dependencies": "Master/configuration/security or mapping only; no dated transaction, stock quantity or journal mutation. Referenced master changes affect future documents; do not guard these as historical postings.",
+      "authorizationEvidence": [],
+      "mutationSites": [
+        "176: Service.findOneAndUpdate"
+      ],
+      "sourceSha256": "3dd65d4eea6c2f4cc006c2ac8c7fe82d7ea0d7cc4b38f8998a62353dd8aacdf9"
+    },
+    {
+      "file": "backend/service.js",
+      "line": 183,
+      "method": "DELETE",
+      "path": "/services/:id",
+      "permissionEvidence": [],
+      "transactionEvidence": [],
+      "dateTokens": [
+        "findOneAndUpdate"
+      ],
+      "mutationCandidates": [
+        "Service.findOneAndUpdate("
+      ],
+      "posting": false,
+      "guarded": false,
+      "category": "Not a financial writer",
+      "profile": "master",
+      "dependencies": "Master/configuration/security or mapping only; no dated transaction, stock quantity or journal mutation. Referenced master changes affect future documents; do not guard these as historical postings.",
+      "authorizationEvidence": [],
+      "mutationSites": [
+        "192: Service.findOneAndUpdate"
+      ],
+      "sourceSha256": "b9b2f6b126316289fc208708a6afcd4003f5bea50109f48b4aec04f2401b85ee"
+    },
+    {
+      "file": "backend/service.js",
+      "line": 225,
+      "method": "POST",
+      "path": "/sales-services",
+      "permissionEvidence": [],
+      "transactionEvidence": [],
+      "dateTokens": [
+        "voucherDate",
+        "Date",
+        "documentDate"
+      ],
+      "mutationCandidates": [
+        "SalesService.create("
+      ],
+      "posting": false,
+      "guarded": false,
+      "category": "Requires an approved transaction-boundary change",
+      "profile": "service",
+      "dependencies": "APPROVED HERE only: SALES/SALES_SERVICE add/edit/delete + requestTenant. voucherDate requested and persisted original on edit/delete. Baseline has no transaction. Party/firm/service reads, number floor/increment, create/save/soft-delete must share active session; guard before counter or document mutation. Desktop supplied numbering remains unchanged.",
+      "authorizationEvidence": [],
+      "mutationSites": [
+        "236: SalesService.create"
+      ],
+      "sourceSha256": "0285331d37a38880785bca3666baad250c46a9e85d818b5a3ae5eb7461335027"
+    },
+    {
+      "file": "backend/service.js",
+      "line": 241,
+      "method": "PUT",
+      "path": "/sales-services/:id",
+      "permissionEvidence": [],
+      "transactionEvidence": [],
+      "dateTokens": [
+        "update"
+      ],
+      "mutationCandidates": [
+        "voucher.save("
+      ],
+      "posting": false,
+      "guarded": false,
+      "category": "Requires an approved transaction-boundary change",
+      "profile": "service",
+      "dependencies": "APPROVED HERE only: SALES/SALES_SERVICE add/edit/delete + requestTenant. voucherDate requested and persisted original on edit/delete. Baseline has no transaction. Party/firm/service reads, number floor/increment, create/save/soft-delete must share active session; guard before counter or document mutation. Desktop supplied numbering remains unchanged.",
+      "authorizationEvidence": [],
+      "mutationSites": [
+        "248: voucher.save"
+      ],
+      "sourceSha256": "db838acafe0e78529e2db0f04da317e0f6f7022d6bc05eb27b6a9026e748ee38"
+    },
+    {
+      "file": "backend/service.js",
+      "line": 253,
+      "method": "DELETE",
+      "path": "/sales-services/:id",
+      "permissionEvidence": [],
+      "transactionEvidence": [],
+      "dateTokens": [
+        "findOneAndUpdate"
+      ],
+      "mutationCandidates": [
+        "SalesService.findOneAndUpdate("
+      ],
+      "posting": false,
+      "guarded": false,
+      "category": "Requires an approved transaction-boundary change",
+      "profile": "service",
+      "dependencies": "APPROVED HERE only: SALES/SALES_SERVICE add/edit/delete + requestTenant. voucherDate requested and persisted original on edit/delete. Baseline has no transaction. Party/firm/service reads, number floor/increment, create/save/soft-delete must share active session; guard before counter or document mutation. Desktop supplied numbering remains unchanged.",
+      "authorizationEvidence": [],
+      "mutationSites": [
+        "256: SalesService.findOneAndUpdate"
+      ],
+      "sourceSha256": "f14bbdd7577a195e8474e978aa9538e2e553a4ceebe9211fd96a16e5697f7664"
+    },
+    {
+      "file": "backend/transaction.js",
+      "line": 358,
+      "method": "GET",
+      "path": "/find-cheque-details",
+      "permissionEvidence": [
+        "authorizeRequest(\"REPORTS\", \"PARTY_WISE_SALES\", \"view\"),\r"
+      ],
+      "transactionEvidence": [],
+      "dateTokens": [
+        "receiptDate",
+        "chqBounceDate",
+        "depositDate",
+        "clearingDate",
+        "chequeDate",
+        "vDate",
+        "Date",
+        "transactionDate",
+        "collectionDate",
+        "billDate"
+      ],
+      "mutationCandidates": [
+        "purchase.constructor.updateOne(",
+        "Purchase.updateOne("
+      ],
+      "posting": false,
+      "guarded": false,
+      "category": "Not a financial writer",
+      "profile": "read",
+      "dependencies": "Read/validation/export or job-file preparation only. E-invoice JSON writes an export file, upload returns 501; neither changes ERP financial documents.",
+      "authorizationEvidence": [
+        "securityRouter.authorizeRequest(\"REPORTS\", \"PARTY_WISE_SALES\", \"view\")"
+      ],
+      "mutationSites": [],
+      "sourceSha256": "4cc7d2b07bd6350f640d37d394da93ac98986f8076224f8e0cdbeddbda82be44"
+    },
+    {
+      "file": "backend/transaction.js",
+      "line": 902,
+      "method": "POST",
+      "path": "/payment",
+      "permissionEvidence": [
+        "authorizeRequest(\"TRANSACTIONS\", \"PAYMENT\", \"add\"),\r"
+      ],
+      "transactionEvidence": [
+        "startSession",
+        "withTransaction"
+      ],
+      "dateTokens": [
+        "vDate",
+        "date",
+        "documentDate",
+        "chequeDate",
+        "chqDate",
+        "clearingDate"
+      ],
+      "mutationCandidates": [
+        "Payment.create("
+      ],
+      "posting": true,
+      "guarded": false,
+      "category": "Requires an accounting or effective-date business decision",
+      "profile": "allocation",
+      "dependencies": "TRANSACTIONS PAYMENT/RECEIPT and authenticated tenant. Primary create/edit/delete have withTransaction but mutate purchase/sales/opening allocated counters before journal. Own old/new vDate or receiptDate and selected original/reversal journal dates are available. Business decision needed on whether linked source invoice/opening posting periods must also be OPEN; do not substitute receipt bill reference date for postingDate. releaseOpening has no tenant in signature. Existing early idempotent/no-op behavior retained.",
+      "authorizationEvidence": [
+        "securityRouter.authorizeRequest(\"TRANSACTIONS\", \"PAYMENT\", \"add\")"
+      ],
+      "mutationSites": [
+        "934: Payment.create"
+      ],
+      "sourceSha256": "9454526ca2a4fb5dd9a3686ba2e54ab6c3de092e04f74d959a338a587aec4340"
+    },
+    {
+      "file": "backend/transaction.js",
+      "line": 968,
+      "method": "PUT",
+      "path": "/payment/:id",
+      "permissionEvidence": [
+        "authorizeRequest(\"TRANSACTIONS\", \"PAYMENT\", \"edit\"),\r"
+      ],
+      "transactionEvidence": [
+        "startSession",
+        "withTransaction"
+      ],
+      "dateTokens": [
+        "documentDate",
+        "vDate",
+        "chequeDate",
+        "chqDate",
+        "clearingDate",
+        "Date"
+      ],
+      "mutationCandidates": [
+        "payment.save("
+      ],
+      "posting": true,
+      "guarded": false,
+      "category": "Requires an accounting or effective-date business decision",
+      "profile": "allocation",
+      "dependencies": "TRANSACTIONS PAYMENT/RECEIPT and authenticated tenant. Primary create/edit/delete have withTransaction but mutate purchase/sales/opening allocated counters before journal. Own old/new vDate or receiptDate and selected original/reversal journal dates are available. Business decision needed on whether linked source invoice/opening posting periods must also be OPEN; do not substitute receipt bill reference date for postingDate. releaseOpening has no tenant in signature. Existing early idempotent/no-op behavior retained.",
+      "authorizationEvidence": [
+        "securityRouter.authorizeRequest(\"TRANSACTIONS\", \"PAYMENT\", \"edit\")"
+      ],
+      "mutationSites": [
+        "997: payment.save"
+      ],
+      "sourceSha256": "6bc60bb1dbf6b8732ae8c8b0e2e914a240d51c0dfe451d968a50c234079cd766"
+    },
+    {
+      "file": "backend/transaction.js",
+      "line": 1017,
+      "method": "DELETE",
+      "path": "/payment/:id",
+      "permissionEvidence": [
+        "authorizeRequest(\"TRANSACTIONS\", \"PAYMENT\", \"delete\"),\r"
+      ],
+      "transactionEvidence": [
+        "startSession",
+        "withTransaction"
+      ],
+      "dateTokens": [
+        "documentDate",
+        "vDate",
+        "Date"
+      ],
+      "mutationCandidates": [
+        "payment.save("
+      ],
+      "posting": true,
+      "guarded": false,
+      "category": "Requires an accounting or effective-date business decision",
+      "profile": "allocation",
+      "dependencies": "TRANSACTIONS PAYMENT/RECEIPT and authenticated tenant. Primary create/edit/delete have withTransaction but mutate purchase/sales/opening allocated counters before journal. Own old/new vDate or receiptDate and selected original/reversal journal dates are available. Business decision needed on whether linked source invoice/opening posting periods must also be OPEN; do not substitute receipt bill reference date for postingDate. releaseOpening has no tenant in signature. Existing early idempotent/no-op behavior retained.",
+      "authorizationEvidence": [
+        "securityRouter.authorizeRequest(\"TRANSACTIONS\", \"PAYMENT\", \"delete\")"
+      ],
+      "mutationSites": [
+        "1035: payment.save"
+      ],
+      "sourceSha256": "a6071c35734876832db185c2cd196a2c7db66100c78aa9ba45e3aa3eb92884e8"
+    },
+    {
+      "file": "backend/transaction.js",
+      "line": 1051,
+      "method": "POST",
+      "path": "/receipt",
+      "permissionEvidence": [
+        "authorizeRequest(\"TRANSACTIONS\", \"RECEIPT\", \"add\"),\r"
+      ],
+      "transactionEvidence": [
+        "startSession",
+        "withTransaction"
+      ],
+      "dateTokens": [
+        "trnDate",
+        "billDate",
+        "BillDate",
+        "receiptDate",
+        "date",
+        "documentDate"
+      ],
+      "mutationCandidates": [
+        "sales.updateOne(",
+        "Receipt.create("
+      ],
+      "posting": true,
+      "guarded": false,
+      "category": "Requires an accounting or effective-date business decision",
+      "profile": "allocation",
+      "dependencies": "TRANSACTIONS PAYMENT/RECEIPT and authenticated tenant. Primary create/edit/delete have withTransaction but mutate purchase/sales/opening allocated counters before journal. Own old/new vDate or receiptDate and selected original/reversal journal dates are available. Business decision needed on whether linked source invoice/opening posting periods must also be OPEN; do not substitute receipt bill reference date for postingDate. releaseOpening has no tenant in signature. Existing early idempotent/no-op behavior retained.",
+      "authorizationEvidence": [
+        "securityRouter.authorizeRequest(\"TRANSACTIONS\", \"RECEIPT\", \"add\")"
+      ],
+      "mutationSites": [
+        "1164: sales.updateOne",
+        "1176: sales.updateOne",
+        "1185: sales.updateOne",
+        "1243: Receipt.create"
+      ],
+      "sourceSha256": "b11ba4d8f97f7867329c0e1e3b9ce5b2eee14bc2d9c7814d302b82436a9bcb8a"
+    },
+    {
+      "file": "backend/transaction.js",
+      "line": 1270,
+      "method": "POST",
+      "path": "/receipt",
+      "permissionEvidence": [
+        "authorizeRequest(\"TRANSACTIONS\", \"RECEIPT\", \"add\"),\r"
+      ],
+      "transactionEvidence": [],
+      "dateTokens": [
+        "trnDate",
+        "billDate",
+        "Validate",
+        "receiptDate",
+        "chequeDate"
+      ],
+      "mutationCandidates": [
+        "Receipt.create("
+      ],
+      "posting": false,
+      "guarded": false,
+      "category": "Requires an approved transaction-boundary change",
+      "profile": "legacyreceipt",
+      "dependencies": "UNAPPROVED nontransactional legacy receipt writer: preserve posted-receipt immutability rejection; non-POSTED edit still mutates. Date receiptDate stored/proposed; tenantFilter on lookup/update but update payload tenant fields require review. Duplicate POST at transaction.js:1270 is shadowed by first handler (no next), still inventoried as dormant code.",
+      "authorizationEvidence": [
+        "securityRouter.authorizeRequest(\"TRANSACTIONS\", \"RECEIPT\", \"add\")"
+      ],
+      "mutationSites": [
+        "1454: Receipt.create"
+      ],
+      "sourceSha256": "5758dfc8a1fcebec5cee66d7a542e8539f55b3d8e2b781b51391f5510ee4a7c9"
+    },
+    {
+      "file": "backend/transaction.js",
+      "line": 1981,
+      "method": "PUT",
+      "path": "/receipt/:id",
+      "permissionEvidence": [
+        "authorizeRequest(\"TRANSACTIONS\", \"RECEIPT\", \"edit\"),\r"
+      ],
+      "transactionEvidence": [],
+      "dateTokens": [
+        "trnDate",
+        "billDate",
+        "receiptDate",
+        "chequeDate",
+        "findOneAndUpdate",
+        "update"
+      ],
+      "mutationCandidates": [
+        "Receipt.findOneAndUpdate("
+      ],
+      "posting": false,
+      "guarded": false,
+      "category": "Requires an approved transaction-boundary change",
+      "profile": "legacyreceipt",
+      "dependencies": "UNAPPROVED nontransactional legacy receipt writer: preserve posted-receipt immutability rejection; non-POSTED edit still mutates. Date receiptDate stored/proposed; tenantFilter on lookup/update but update payload tenant fields require review. Duplicate POST at transaction.js:1270 is shadowed by first handler (no next), still inventoried as dormant code.",
+      "authorizationEvidence": [
+        "securityRouter.authorizeRequest(\"TRANSACTIONS\", \"RECEIPT\", \"edit\")"
+      ],
+      "mutationSites": [
+        "2291: Receipt.findOneAndUpdate"
+      ],
+      "sourceSha256": "eacfb1c5c010b0894b126de66d4df9413c35b153a76ccf9231f85702c8e64882"
+    },
+    {
+      "file": "backend/transaction.js",
+      "line": 2354,
+      "method": "DELETE",
+      "path": "/receipt/:id",
+      "permissionEvidence": [
+        "authorizeRequest(\"TRANSACTIONS\", \"RECEIPT\", \"delete\"),\r"
+      ],
+      "transactionEvidence": [
+        "startSession",
+        "withTransaction"
+      ],
+      "dateTokens": [
+        "documentDate",
+        "receiptDate",
+        "Date"
+      ],
+      "mutationCandidates": [
+        "sales.updateOne(",
+        "receipt.save("
+      ],
+      "posting": true,
+      "guarded": false,
+      "category": "Requires an accounting or effective-date business decision",
+      "profile": "allocation",
+      "dependencies": "TRANSACTIONS PAYMENT/RECEIPT and authenticated tenant. Primary create/edit/delete have withTransaction but mutate purchase/sales/opening allocated counters before journal. Own old/new vDate or receiptDate and selected original/reversal journal dates are available. Business decision needed on whether linked source invoice/opening posting periods must also be OPEN; do not substitute receipt bill reference date for postingDate. releaseOpening has no tenant in signature. Existing early idempotent/no-op behavior retained.",
+      "authorizationEvidence": [
+        "securityRouter.authorizeRequest(\"TRANSACTIONS\", \"RECEIPT\", \"delete\")"
+      ],
+      "mutationSites": [
+        "2384: sales.updateOne",
+        "2400: receipt.save"
+      ],
+      "sourceSha256": "f9ac474ea8015d96fbdd885ea2e4a1fca6668c03be32681373318beced418198"
+    },
+    {
+      "file": "backend/transaction.js",
+      "line": 2498,
+      "method": "POST",
+      "path": "/cheque-bounce",
+      "permissionEvidence": [
+        "authorizeRequest(\"TRANSACTIONS\", \"CHEQUE_BOUNCE\", \"add\"),\r"
+      ],
+      "transactionEvidence": [],
+      "dateTokens": [
+        "documentDate",
+        "chqBounceDate"
+      ],
+      "mutationCandidates": [
+        "ChequeBounce.create("
+      ],
+      "posting": false,
+      "guarded": false,
+      "category": "Requires an approved transaction-boundary change",
+      "profile": "cheque",
+      "dependencies": "UNAPPROVED: TRANSACTIONS route-specific add/edit/delete, no transaction around counter/document/status mutation. chqBounceDate / pdcDate or docDate / transactionDate / collectionDate respectively, stored and proposed. Create cheque-bounce trusts body tenant; other creates force auth tenant; edits initially load tenantFilter but may copy body tenant into update. Delete status REVERSED with no invented cancellation posting/date. No common journal call in these families.",
+      "authorizationEvidence": [
+        "securityRouter.authorizeRequest(\"TRANSACTIONS\", \"CHEQUE_BOUNCE\", \"add\")"
+      ],
+      "mutationSites": [
+        "2567: ChequeBounce.create"
+      ],
+      "sourceSha256": "5afd963e55f551dc2a82279ea036dbac72d9a96e3d75c6900ad4b355631983a4"
+    },
+    {
+      "file": "backend/transaction.js",
+      "line": 2595,
+      "method": "PUT",
+      "path": "/cheque-bounce/:id",
+      "permissionEvidence": [
+        "authorizeRequest(\"TRANSACTIONS\", \"CHEQUE_BOUNCE\", \"edit\"),\r"
+      ],
+      "transactionEvidence": [],
+      "dateTokens": [
+        "findOneAndUpdate",
+        "Update"
+      ],
+      "mutationCandidates": [
+        "ChequeBounce.findOneAndUpdate("
+      ],
+      "posting": false,
+      "guarded": false,
+      "category": "Requires an approved transaction-boundary change",
+      "profile": "cheque",
+      "dependencies": "UNAPPROVED: TRANSACTIONS route-specific add/edit/delete, no transaction around counter/document/status mutation. chqBounceDate / pdcDate or docDate / transactionDate / collectionDate respectively, stored and proposed. Create cheque-bounce trusts body tenant; other creates force auth tenant; edits initially load tenantFilter but may copy body tenant into update. Delete status REVERSED with no invented cancellation posting/date. No common journal call in these families.",
+      "authorizationEvidence": [
+        "securityRouter.authorizeRequest(\"TRANSACTIONS\", \"CHEQUE_BOUNCE\", \"edit\")"
+      ],
+      "mutationSites": [
+        "2674: ChequeBounce.findOneAndUpdate"
+      ],
+      "sourceSha256": "8a5b96ddcd50e98307e841ef3b3147131e0c1b5bf24fa2d86dd1df8069a10799"
+    },
+    {
+      "file": "backend/transaction.js",
+      "line": 3193,
+      "method": "DELETE",
+      "path": "/cheque-bounce/:id",
+      "permissionEvidence": [
+        "authorizeRequest(\"TRANSACTIONS\", \"CHEQUE_BOUNCE\", \"delete\"),\r"
+      ],
+      "transactionEvidence": [],
+      "dateTokens": [
+        "findOneAndUpdate"
+      ],
+      "mutationCandidates": [
+        "ChequeBounce.findOneAndUpdate("
+      ],
+      "posting": false,
+      "guarded": false,
+      "category": "Requires an approved transaction-boundary change",
+      "profile": "cheque",
+      "dependencies": "UNAPPROVED: TRANSACTIONS route-specific add/edit/delete, no transaction around counter/document/status mutation. chqBounceDate / pdcDate or docDate / transactionDate / collectionDate respectively, stored and proposed. Create cheque-bounce trusts body tenant; other creates force auth tenant; edits initially load tenantFilter but may copy body tenant into update. Delete status REVERSED with no invented cancellation posting/date. No common journal call in these families.",
+      "authorizationEvidence": [
+        "securityRouter.authorizeRequest(\"TRANSACTIONS\", \"CHEQUE_BOUNCE\", \"delete\")"
+      ],
+      "mutationSites": [
+        "3198: ChequeBounce.findOneAndUpdate"
+      ],
+      "sourceSha256": "d690e237998de6101cad8402f17a5fb04692991c3e28733c4bf7a311644a6d6a"
+    },
+    {
+      "file": "backend/transaction.js",
+      "line": 3212,
+      "method": "POST",
+      "path": "/pdc-docket",
+      "permissionEvidence": [
+        "authorizeRequest(\"TRANSACTIONS\", \"PDC_DOCKET\", \"add\"),\r"
+      ],
+      "transactionEvidence": [],
+      "dateTokens": [
+        "documentDate",
+        "pdcDate",
+        "docDate"
+      ],
+      "mutationCandidates": [
+        "PDCDocket.create("
+      ],
+      "posting": false,
+      "guarded": false,
+      "category": "Requires an approved transaction-boundary change",
+      "profile": "cheque",
+      "dependencies": "UNAPPROVED: TRANSACTIONS route-specific add/edit/delete, no transaction around counter/document/status mutation. chqBounceDate / pdcDate or docDate / transactionDate / collectionDate respectively, stored and proposed. Create cheque-bounce trusts body tenant; other creates force auth tenant; edits initially load tenantFilter but may copy body tenant into update. Delete status REVERSED with no invented cancellation posting/date. No common journal call in these families.",
+      "authorizationEvidence": [
+        "securityRouter.authorizeRequest(\"TRANSACTIONS\", \"PDC_DOCKET\", \"add\")"
+      ],
+      "mutationSites": [
+        "3223: PDCDocket.create"
+      ],
+      "sourceSha256": "d37c9e294f2f291ae8880d4aeb0899b7df0c7efb0acf07c8da2c0c74c54796e7"
+    },
+    {
+      "file": "backend/transaction.js",
+      "line": 3243,
+      "method": "PUT",
+      "path": "/pdc-docket/:id",
+      "permissionEvidence": [
+        "authorizeRequest(\r"
+      ],
+      "transactionEvidence": [],
+      "dateTokens": [
+        "findOneAndUpdate"
+      ],
+      "mutationCandidates": [
+        "PDCDocket.findOneAndUpdate("
+      ],
+      "posting": false,
+      "guarded": false,
+      "category": "Requires an approved transaction-boundary change",
+      "profile": "cheque",
+      "dependencies": "UNAPPROVED: TRANSACTIONS route-specific add/edit/delete, no transaction around counter/document/status mutation. chqBounceDate / pdcDate or docDate / transactionDate / collectionDate respectively, stored and proposed. Create cheque-bounce trusts body tenant; other creates force auth tenant; edits initially load tenantFilter but may copy body tenant into update. Delete status REVERSED with no invented cancellation posting/date. No common journal call in these families.",
+      "authorizationEvidence": [
+        "securityRouter.authorizeRequest( \"TRANSACTIONS\", \"PDC_DOCKET\", \"edit\" )"
+      ],
+      "mutationSites": [
+        "3331: PDCDocket.findOneAndUpdate"
+      ],
+      "sourceSha256": "d3c39a846966b0b138da740158643fef9f709f031dc3c4cd4d62a95df5d5628f"
+    },
+    {
+      "file": "backend/transaction.js",
+      "line": 3915,
+      "method": "DELETE",
+      "path": "/pdc-docket/:id",
+      "permissionEvidence": [
+        "authorizeRequest(\"TRANSACTIONS\", \"PDC_DOCKET\", \"delete\"),\r"
+      ],
+      "transactionEvidence": [],
+      "dateTokens": [
+        "findOneAndUpdate"
+      ],
+      "mutationCandidates": [
+        "PDCDocket.findOneAndUpdate("
+      ],
+      "posting": false,
+      "guarded": false,
+      "category": "Requires an approved transaction-boundary change",
+      "profile": "cheque",
+      "dependencies": "UNAPPROVED: TRANSACTIONS route-specific add/edit/delete, no transaction around counter/document/status mutation. chqBounceDate / pdcDate or docDate / transactionDate / collectionDate respectively, stored and proposed. Create cheque-bounce trusts body tenant; other creates force auth tenant; edits initially load tenantFilter but may copy body tenant into update. Delete status REVERSED with no invented cancellation posting/date. No common journal call in these families.",
+      "authorizationEvidence": [
+        "securityRouter.authorizeRequest(\"TRANSACTIONS\", \"PDC_DOCKET\", \"delete\")"
+      ],
+      "mutationSites": [
+        "3921: PDCDocket.findOneAndUpdate"
+      ],
+      "sourceSha256": "1d5d9887ed05d2d78ae7b86b363599720ef7a23b30fec004a6e8797e7cb252cb"
+    },
+    {
+      "file": "backend/transaction.js",
+      "line": 3937,
+      "method": "POST",
+      "path": "/contra",
+      "permissionEvidence": [
+        "authorizeRequest(\"TRANSACTIONS\", \"CONTRA\", \"add\"),\r"
+      ],
+      "transactionEvidence": [],
+      "dateTokens": [
+        "documentDate",
+        "transactionDate"
+      ],
+      "mutationCandidates": [
+        "Contra.create("
+      ],
+      "posting": false,
+      "guarded": false,
+      "category": "Requires an approved transaction-boundary change",
+      "profile": "cheque",
+      "dependencies": "UNAPPROVED: TRANSACTIONS route-specific add/edit/delete, no transaction around counter/document/status mutation. chqBounceDate / pdcDate or docDate / transactionDate / collectionDate respectively, stored and proposed. Create cheque-bounce trusts body tenant; other creates force auth tenant; edits initially load tenantFilter but may copy body tenant into update. Delete status REVERSED with no invented cancellation posting/date. No common journal call in these families.",
+      "authorizationEvidence": [
+        "securityRouter.authorizeRequest(\"TRANSACTIONS\", \"CONTRA\", \"add\")"
+      ],
+      "mutationSites": [
+        "3948: Contra.create"
+      ],
+      "sourceSha256": "f9c64bab4e62dc1347d90b8a5123bdd4a543760cbc1ff2547634fc7dcde9c49c"
+    },
+    {
+      "file": "backend/transaction.js",
+      "line": 3965,
+      "method": "PUT",
+      "path": "/contra/:id",
+      "permissionEvidence": [
+        "authorizeRequest(\r"
+      ],
+      "transactionEvidence": [],
+      "dateTokens": [
+        "findOneAndUpdate"
+      ],
+      "mutationCandidates": [
+        "Contra.findOneAndUpdate("
+      ],
+      "posting": false,
+      "guarded": false,
+      "category": "Requires an approved transaction-boundary change",
+      "profile": "cheque",
+      "dependencies": "UNAPPROVED: TRANSACTIONS route-specific add/edit/delete, no transaction around counter/document/status mutation. chqBounceDate / pdcDate or docDate / transactionDate / collectionDate respectively, stored and proposed. Create cheque-bounce trusts body tenant; other creates force auth tenant; edits initially load tenantFilter but may copy body tenant into update. Delete status REVERSED with no invented cancellation posting/date. No common journal call in these families.",
+      "authorizationEvidence": [
+        "securityRouter.authorizeRequest( \"TRANSACTIONS\", \"CONTRA\", \"edit\" )"
+      ],
+      "mutationSites": [
+        "4029: Contra.findOneAndUpdate"
+      ],
+      "sourceSha256": "b4d248db8e9cad25ef60149fe3bec8eb5d183bb20a2cd1381bd5b50e4b2b442c"
+    },
+    {
+      "file": "backend/transaction.js",
+      "line": 4527,
+      "method": "DELETE",
+      "path": "/contra/:id",
+      "permissionEvidence": [
+        "authorizeRequest(\"TRANSACTIONS\", \"CONTRA\", \"delete\"),\r"
+      ],
+      "transactionEvidence": [],
+      "dateTokens": [
+        "findOneAndUpdate"
+      ],
+      "mutationCandidates": [
+        "Contra.findOneAndUpdate("
+      ],
+      "posting": false,
+      "guarded": false,
+      "category": "Requires an approved transaction-boundary change",
+      "profile": "cheque",
+      "dependencies": "UNAPPROVED: TRANSACTIONS route-specific add/edit/delete, no transaction around counter/document/status mutation. chqBounceDate / pdcDate or docDate / transactionDate / collectionDate respectively, stored and proposed. Create cheque-bounce trusts body tenant; other creates force auth tenant; edits initially load tenantFilter but may copy body tenant into update. Delete status REVERSED with no invented cancellation posting/date. No common journal call in these families.",
+      "authorizationEvidence": [
+        "securityRouter.authorizeRequest(\"TRANSACTIONS\", \"CONTRA\", \"delete\")"
+      ],
+      "mutationSites": [
+        "4533: Contra.findOneAndUpdate"
+      ],
+      "sourceSha256": "3243195ef8a300d96e0c838eb882ff8a87d4f332b5e6ac6222d74fd4d3b567e0"
+    },
+    {
+      "file": "backend/transaction.js",
+      "line": 4613,
+      "method": "POST",
+      "path": "/collection-voucher",
+      "permissionEvidence": [
+        "authorizeRequest(\"TRANSACTIONS\", \"COLLECTION_VOUCHER\", \"add\"),\r"
+      ],
+      "transactionEvidence": [],
+      "dateTokens": [
+        "documentDate",
+        "collectionDate"
+      ],
+      "mutationCandidates": [
+        "CollectionVoucher.create("
+      ],
+      "posting": false,
+      "guarded": false,
+      "category": "Requires an approved transaction-boundary change",
+      "profile": "cheque",
+      "dependencies": "UNAPPROVED: TRANSACTIONS route-specific add/edit/delete, no transaction around counter/document/status mutation. chqBounceDate / pdcDate or docDate / transactionDate / collectionDate respectively, stored and proposed. Create cheque-bounce trusts body tenant; other creates force auth tenant; edits initially load tenantFilter but may copy body tenant into update. Delete status REVERSED with no invented cancellation posting/date. No common journal call in these families.",
+      "authorizationEvidence": [
+        "securityRouter.authorizeRequest(\"TRANSACTIONS\", \"COLLECTION_VOUCHER\", \"add\")"
+      ],
+      "mutationSites": [
+        "4624: CollectionVoucher.create"
+      ],
+      "sourceSha256": "29c8182aa1c6f90522a5d67a26e50bf6b85f7488f4ce7cf0c63ed4bbed5fd399"
+    },
+    {
+      "file": "backend/transaction.js",
+      "line": 4640,
+      "method": "PUT",
+      "path": "/collection-voucher/:id",
+      "permissionEvidence": [
+        "authorizeRequest(\r"
+      ],
+      "transactionEvidence": [],
+      "dateTokens": [
+        "findOneAndUpdate"
+      ],
+      "mutationCandidates": [
+        "CollectionVoucher.findOneAndUpdate("
+      ],
+      "posting": false,
+      "guarded": false,
+      "category": "Requires an approved transaction-boundary change",
+      "profile": "cheque",
+      "dependencies": "UNAPPROVED: TRANSACTIONS route-specific add/edit/delete, no transaction around counter/document/status mutation. chqBounceDate / pdcDate or docDate / transactionDate / collectionDate respectively, stored and proposed. Create cheque-bounce trusts body tenant; other creates force auth tenant; edits initially load tenantFilter but may copy body tenant into update. Delete status REVERSED with no invented cancellation posting/date. No common journal call in these families.",
+      "authorizationEvidence": [
+        "securityRouter.authorizeRequest( \"TRANSACTIONS\", \"COLLECTION_VOUCHER\", \"edit\" )"
+      ],
+      "mutationSites": [
+        "4717: CollectionVoucher.findOneAndUpdate"
+      ],
+      "sourceSha256": "f66a04beaba24cb28acd751fe96d83d4a0ac755ab54801a1f4a9d81fbac68dc0"
+    },
+    {
+      "file": "backend/transaction.js",
+      "line": 5250,
+      "method": "DELETE",
+      "path": "/collection-voucher/:id",
+      "permissionEvidence": [
+        "authorizeRequest(\"TRANSACTIONS\", \"COLLECTION_VOUCHER\", \"delete\"),\r"
+      ],
+      "transactionEvidence": [],
+      "dateTokens": [
+        "findOneAndUpdate"
+      ],
+      "mutationCandidates": [
+        "CollectionVoucher.findOneAndUpdate("
+      ],
+      "posting": false,
+      "guarded": false,
+      "category": "Requires an approved transaction-boundary change",
+      "profile": "cheque",
+      "dependencies": "UNAPPROVED: TRANSACTIONS route-specific add/edit/delete, no transaction around counter/document/status mutation. chqBounceDate / pdcDate or docDate / transactionDate / collectionDate respectively, stored and proposed. Create cheque-bounce trusts body tenant; other creates force auth tenant; edits initially load tenantFilter but may copy body tenant into update. Delete status REVERSED with no invented cancellation posting/date. No common journal call in these families.",
+      "authorizationEvidence": [
+        "securityRouter.authorizeRequest(\"TRANSACTIONS\", \"COLLECTION_VOUCHER\", \"delete\")"
+      ],
+      "mutationSites": [
+        "5257: CollectionVoucher.findOneAndUpdate"
+      ],
+      "sourceSha256": "7c1cd3f21328c95618bcd35d319d01b04b202789673645631b040cc993a72498"
+    }
+  ]
+}

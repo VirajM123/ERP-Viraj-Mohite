@@ -4,6 +4,7 @@ import { nextDocumentNumber } from "./counters.js";
 import { postBalancedJournal } from "./accounting.js";
 import { writeAuditEvent } from "./audit.js";
 import { openingOutstanding, openingBillRows, allocateOpening, releaseOpening, reverseOpeningAwareJournal } from './openingBalances.js';
+import { buildPdcDocketUpdate } from "./pdcDocketUpdate.js";
 
 export const paymentAmountFromBody = (body) => {
   const amount = Number(body.amount ?? body.drAmt ?? body.crAmt ?? body.summary?.totalDrAmt ?? 0);
@@ -1444,11 +1445,6 @@ receiptBills: adjustedBills,
       firmId: body.firmId || "",
       distributorId: body.distributorId || ""
     };
-
-    console.log(
-      "FINAL RECEIPT DATA =",
-      JSON.stringify(receiptData, null, 2)
-    );
 
     const receipt =
       await Receipt.create(receiptData);
@@ -3269,13 +3265,12 @@ router.put(
 
       const body = req.body || {};
 
-      const distributorId =
-        body.distributorId ||
-        existing.distributorId;
-
-      const firmId =
-        body.firmId ||
-        existing.firmId;
+      const distributorId = String(req.auth.distributorId || "").trim();
+      const firmId = String(req.auth.firmId || "").trim();
+      if ((body.distributorId && String(body.distributorId).trim() !== distributorId) ||
+          (body.firmId && String(body.firmId).trim() !== firmId)) {
+        return res.status(403).json({ success: false, message: "The requested firm does not match your session." });
+      }
 
       const docSeries = String(
         body.docSeries || ""
@@ -3303,29 +3298,11 @@ router.put(
         });
       }
 
-      const updateData = {
+      const updateData = buildPdcDocketUpdate({
         ...body,
-
-        distributorId,
-        firmId,
-
         docSeries,
         docVNo,
-
-        totalAmount:
-          Number(body.totalAmount) || 0,
-
-        totalCheques:
-          Number(body.totalCheques) || 0,
-
-        cheques:
-          Array.isArray(body.cheques)
-            ? body.cheques
-            : []
-      };
-
-      delete updateData._id;
-      delete updateData.id;
+      }, { distributorId, firmId });
 
       const updated =
         await PDCDocket.findOneAndUpdate(

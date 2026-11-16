@@ -5,14 +5,16 @@ import fs from "fs";
 import os from "os";
 import path from "path";
 import { promisify } from "util";
+import { createRequire } from "node:module";
 import multer from "multer";
-import * as XLSX from "xlsx";
 import { importConfig } from "./importConfig.js";
 import { buildDesktopTransactionRows } from "./desktopTransactionMapper.js";
 import { DESKTOP_IMPORT_ORDER, preflightDesktopImport, publicImportState, readDesktopWorkbook, readDesktopWorkbookStreaming, rollbackDesktopImport, runDesktopImport } from "./desktopImportBatch.js";
 import { csvCell, sanitizeSpreadsheetCell, sanitizeSpreadsheetRow } from "./spreadsheetSafety.js";
 
 const execFileAsync = promisify(execFile);
+const require = createRequire(import.meta.url);
+const XLSX = require("xlsx");
 const MAX_BACKUP_BYTES = Math.min(512 * 1024 * 1024, Math.max(1, Number(process.env.DESKTOP_IMPORT_MAX_BYTES || 256 * 1024 * 1024)));
 const MAX_BACKUP_FILES = Math.min(4, Math.max(1, Number(process.env.DESKTOP_IMPORT_MAX_FILES || 2)));
 const MAX_BACKUP_TOTAL_BYTES = Math.min(1024 * 1024 * 1024, Math.max(MAX_BACKUP_BYTES, Number(process.env.DESKTOP_IMPORT_MAX_TOTAL_BYTES || 512 * 1024 * 1024)));
@@ -347,7 +349,7 @@ const createWorkbook = (job, entryType, rows) => {
   const workbook = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(workbook, sheet, "Data");
   XLSX.utils.book_append_sheet(workbook, instructions, "Instructions");
-  XLSX.writeFile(workbook, filePath, { compression: true });
+  XLSX.writeFileXLSX(workbook, filePath, { compression: true });
   return { id: crypto.randomUUID(), entryType, label: config.label, fileName, filePath, rows: rows.length };
 };
 
@@ -391,7 +393,7 @@ export const createSourceWorkbook = (job, definition, sheets, dataRows) => {
     });
     if (rows.length) XLSX.utils.book_append_sheet(workbook, XLSX.utils.json_to_sheet(rows), nestedField);
   }
-  XLSX.writeFile(workbook, filePath, { compression: true });
+  XLSX.writeFileXLSX(workbook, filePath, { compression: true });
   return { id: crypto.randomUUID(), entryType: definition.entryType, label: definition.label, fileName, filePath, rows: dataRows.length, sourceRows: sheets.reduce((total, source) => total + source.rows.length, 0), importable: true };
 };
 

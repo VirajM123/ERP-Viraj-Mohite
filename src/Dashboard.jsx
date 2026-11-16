@@ -1,10 +1,6 @@
 // Dashboard.jsx
-import React, { useState, useRef, useEffect, useCallback } from 'react';
+import React, { lazy, Suspense, useState, useRef, useEffect, useCallback } from 'react';
 import { createPortal } from "react-dom";
-import * as XLSX from "xlsx-js-style";
-import jsPDF from 'jspdf';
-import 'jspdf-autotable';
-import { downloadSalesInvoicePdf, printSalesInvoiceHtml } from "./utils/invoiceOutput";
 import './Dashboard.css';
 import './DashboardMockup.css';
 import './DashboardHorizontalNav.css';
@@ -23,16 +19,28 @@ import {
   secureFetch,
   refreshPermissions,
 } from "./SecuritySetup";
-import Report from "./Report";
-import EInvoiceReport from "./EInvoiceReport";
-import AccountOpeningTransactions from "./AccountOpeningTransactions";
-import AccountCompanyAreaMappings from "./AccountCompanyAreaMappings";
 import { ACCOUNT_STATES } from "./data/accountStates";
-import ImportData from "./ImportData";
-import ImportDataFromDesktop from "./ImportDataFromDesktop";
 import { API_URL } from "./api/config";
 
 const dashLogo = "/TotalSolution.ico";
+
+const lazyWithFallback = (importer) => {
+  const Component = lazy(importer);
+  return function DeferredComponent(props) {
+    return (
+      <Suspense fallback={<div role="status">Loading module...</div>}>
+        <Component {...props} />
+      </Suspense>
+    );
+  };
+};
+
+const Report = lazyWithFallback(() => import("./Report"));
+const EInvoiceReport = lazyWithFallback(() => import("./EInvoiceReport"));
+const AccountOpeningTransactions = lazyWithFallback(() => import("./AccountOpeningTransactions"));
+const AccountCompanyAreaMappings = lazyWithFallback(() => import("./AccountCompanyAreaMappings"));
+const ImportData = lazyWithFallback(() => import("./ImportData"));
+const ImportDataFromDesktop = lazyWithFallback(() => import("./ImportDataFromDesktop"));
 
 const DEFAULT_INVOICE_TERMS = "1. Goods once sold will not be taken back or exchanged.\n2. Interest will be charged on overdue payments.\n3. Subject to local jurisdiction only.";
 
@@ -40,14 +48,15 @@ const DEFAULT_INVOICE_TERMS = "1. Goods once sold will not be taken back or exch
 // Change this at the top of Dashboard.jsx:
 //import logo from "./assets/TotalSolution.ico";
 // Note: Adjust the "../" or "./" depending on exactly where Dashboard.jsx sits relative to assets
-import SalesmanToAreaMapping from './SalesmanToAreaMapping';
-import Transaction from "./Transaction";
-import GeneralSetup1 from "./GeneralSetup1";
-import CompanyWiseSeriesSetup from "./CompanyWiseSeriesSetup";
-import BatchLockSalesRate from "./BatchLockSalesRate";
-import SecuritySetup from "./SecuritySetup";
-import StockManagement from "./StockManagement";
-import { SalesService, ServiceMaster } from "./ServiceManagement";
+const SalesmanToAreaMapping = lazyWithFallback(() => import("./SalesmanToAreaMapping"));
+const Transaction = lazyWithFallback(() => import("./Transaction"));
+const GeneralSetup1 = lazyWithFallback(() => import("./GeneralSetup1"));
+const CompanyWiseSeriesSetup = lazyWithFallback(() => import("./CompanyWiseSeriesSetup"));
+const BatchLockSalesRate = lazyWithFallback(() => import("./BatchLockSalesRate"));
+const SecuritySetup = lazyWithFallback(() => import("./SecuritySetup"));
+const StockManagement = lazyWithFallback(() => import("./StockManagement"));
+const SalesService = lazyWithFallback(() => import("./ServiceManagement").then((module) => ({ default: module.SalesService })));
+const ServiceMaster = lazyWithFallback(() => import("./ServiceManagement").then((module) => ({ default: module.ServiceMaster })));
 import {
   LineChart,
   Line,
@@ -3222,6 +3231,7 @@ const debitNotePermission = usePermission("VOUCHERS", "DEBIT_NOTE");
       }
 
       if (action === "pdf") {
+        const { downloadSalesInvoicePdf } = await import("./utils/invoiceOutput");
         const invoiceName = enteredLoadNo
           ? `Load_${salesPrintOptions.loadSeries || ""}_${enteredLoadNo}`
           : `Invoice_${salesPrintOptions.trnSeries || "INV"}_${salesPrintOptions.fromTrnNo || ""}`;
@@ -3231,6 +3241,7 @@ const debitNotePermission = usePermission("VOUCHERS", "DEBIT_NOTE");
           `${invoiceName.replace(/[^a-z0-9_-]/gi, "_")}.pdf`
         );
       } else if (action === "print") {
+        const { printSalesInvoiceHtml } = await import("./utils/invoiceOutput");
         await printSalesInvoiceHtml(invoiceHtml);
       } else {
         invoiceWindow.document.open();
@@ -5427,6 +5438,17 @@ const debitNotePermission = usePermission("VOUCHERS", "DEBIT_NOTE");
             .r2-items td { height: 4.2mm; padding: .45mm .5mm; overflow: hidden; text-overflow: ellipsis; text-align: right; vertical-align: top; white-space: nowrap; font-variant-numeric: tabular-nums; }
             .r2-items td.center { text-align: center !important; }
             .r2-items .r2-product { padding-left: 1mm; text-align: left !important; white-space: normal; overflow-wrap: anywhere; line-height: 1.2; }
+            .invoice-report-2 .r2-items th:first-child,
+            .invoice-report-2 .r2-items td:first-child { text-align: center; }
+            .invoice-report-2 .r2-items th:nth-child(2) {
+              padding-left: 1mm;
+              text-align: left;
+            }
+            .invoice-report-2 .r2-items th:nth-child(3) { text-align: center; }
+            .invoice-report-2 .r2-items th:nth-child(n+4) {
+              padding-right: .8mm;
+              text-align: right;
+            }
             .r2-bottom { display: grid; grid-template-columns: 47% 25% 28%; min-height: 37mm; padding: 1mm 2mm 0; }
             .r2-tax { padding-right: 5mm; }
             .r2-tax th, .r2-tax td { height: 4mm; padding: .25mm .6mm; text-align: right; font-weight: 400; }
@@ -10701,7 +10723,8 @@ const debitNotePermission = usePermission("VOUCHERS", "DEBIT_NOTE");
       setShowCreateLoadList(false);
     };
 
-    const exportSettleLoadToExcel = () => {
+    const exportSettleLoadToExcel = async () => {
+      const XLSX = await import("xlsx-js-style");
       const exportData = settleLoadItems.map(item => ({
         'Sr No': item.sr,
         'Adjust': item.adjust === 'Y' ? 'Yes' : 'No',
@@ -12527,7 +12550,8 @@ const debitNotePermission = usePermission("VOUCHERS", "DEBIT_NOTE");
     setSettleLoadOptions({ ...settleLoadOptions, [option]: !settleLoadOptions[option] });
   };
 
-  const exportSettleLoadToExcel = () => {
+  const exportSettleLoadToExcel = async () => {
+    const XLSX = await import("xlsx-js-style");
     const exportData = settleLoadItems.map(item => ({
       'Sr No': item.sr,
       'Adjust': item.adjust,
@@ -14931,6 +14955,7 @@ const debitNotePermission = usePermission("VOUCHERS", "DEBIT_NOTE");
         const isA5 =
           billPrintFormData.PaperSize === "A5";
 
+        const { default: jsPDF } = await import("jspdf");
         const pdf = new jsPDF({
           orientation:
             isA5 ? "landscape" : "portrait",
@@ -40719,7 +40744,8 @@ ALLOW CHANGE STAR AMOUNT — FINAL SAVE PROTECTION
   };
 
   // Export to Excel
-  const exportToExcel = (data, filename, columns) => {
+  const exportToExcel = async (data, filename, columns) => {
+    const XLSX = await import("xlsx-js-style");
     const worksheet = XLSX.utils.json_to_sheet(data);
     const range = worksheet["!ref"] ? XLSX.utils.decode_range(worksheet["!ref"]) : null;
     if (range) {
@@ -40745,7 +40771,11 @@ ALLOW CHANGE STAR AMOUNT — FINAL SAVE PROTECTION
   };
 
   // Export to PDF
-  const exportToPDF = (data, title, columns) => {
+  const exportToPDF = async (data, title, columns) => {
+    const [{ default: jsPDF }] = await Promise.all([
+      import("jspdf"),
+      import("jspdf-autotable"),
+    ]);
     const doc = new jsPDF();
     doc.text(title, 14, 15);
 
@@ -41859,7 +41889,7 @@ ALLOW CHANGE STAR AMOUNT — FINAL SAVE PROTECTION
       printWindow.print();
     }, 300);
   };
-  const handleExportToExcel = () => {
+  const handleExportToExcel = async () => {
     /*
     * Print Load API already returns the final rows
     * displayed in the preview.
@@ -41878,6 +41908,8 @@ ALLOW CHANGE STAR AMOUNT — FINAL SAVE PROTECTION
       );
       return;
     }
+
+    const XLSX = await import("xlsx-js-style");
 
     const isPartyWise =
       printLoadFormData.reportLevel ===

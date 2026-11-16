@@ -1,0 +1,13 @@
+{
+    "checked":  328,
+    "changed":  [
+                    "backend/securitySetup.js",
+                    "backend/server.js"
+                ],
+    "preservedExistingDirtyFiles":  [
+                                        "backend/accounting.js",
+                                        "backend/p0Features.js",
+                                        "backend/test/ledger-opening.test.js",
+                                        "src/api/config.js"
+                                    ]
+}

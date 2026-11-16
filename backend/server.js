@@ -10,6 +10,7 @@ import companyWiseSeriesRoutes from "./companyWiseSeries.js";
 import createBatchLockRouter from "./batchLock.js";
 import printAccountDetailsRoutes from "./printAccountDetails.js";
 import createSecuritySetupRouter from "./securitySetup.js";
+import createFinancialPeriodsRouter from "./financialPeriods.js";
 import createImportRouter from "./importRoutes.js";
 import createDesktopImportRouter from "./desktopImportRoutes.js";
 import createProductSalesReportRouter from "./productSalesReport.js";
@@ -184,6 +185,20 @@ export const ensureConnection = (req, res, next) => {
     message: "Database not connected. Please try again.",
   });
 };
+const authenticatedTenantScope = (req, res, supplied = {}) => {
+  const distributorId = String(req.auth?.distributorId || "").trim();
+  const firmId = String(req.auth?.firmId || "").trim();
+  if (!distributorId || !firmId) {
+    res.status(401).json({ success: false, message: "User session not found." });
+    return null;
+  }
+  if ((supplied.distributorId && String(supplied.distributorId).trim() !== distributorId) ||
+      (supplied.firmId && String(supplied.firmId).trim() !== firmId)) {
+    res.status(403).json({ success: false, message: "The requested firm does not match your session." });
+    return null;
+  }
+  return { distributorId, firmId };
+};
 const userSchema = new mongoose.Schema(
   {
     userId: { type: String, default: "" },
@@ -225,6 +240,8 @@ const Company = mongoose.model("Mas_Company", companySchema);
 
 const securityRouter =
     createSecuritySetupRouter(User);
+
+app.use("/api/financial-periods", ensureConnection, createFinancialPeriodsRouter(securityRouter));
 
 const authorizeFeatureMethods = (moduleCode, operationCode, actions) => (req, res, next) => {
   const action = actions[req.method];
@@ -8230,10 +8247,12 @@ app.post(
     });
   }
 });
-app.put("/api/sales/change-bill-type-f4", ensureConnection, async (req, res) => {
+app.put("/api/sales/change-bill-type-f4", ensureConnection,
+  securityRouter.authorizeRequest("SALES", "SALES_BILLING", "edit"), async (req, res) => {
   try {
-    const distributorId = String(req.body.distributorId || "").trim();
-    const firmId = String(req.body.firmId || "").trim();
+    const scope = authenticatedTenantScope(req, res, req.body);
+    if (!scope) return;
+    const { distributorId, firmId } = scope;
     const bills = Array.isArray(req.body.bills) ? req.body.bills : [];
 
     const bill = bills[0] || {};
@@ -10025,16 +10044,13 @@ app.post("/api/customer-banks", ensureConnection, securityRouter.authorizeReques
   }
 });
 
-app.get("/api/salesman-area-mappings", ensureConnection, async (req, res) => {
+app.get("/api/salesman-area-mappings", ensureConnection,
+  securityRouter.authorizeRequest("MAPPING", "SALESMAN_TO_AREA", "view"), async (req, res) => {
   try {
-    const { distributorId, firmId, companyCode } = req.query;
-
-    if (!distributorId || !firmId) {
-      return res.status(400).json({
-        success: false,
-        message: "distributorId and firmId are required",
-      });
-    }
+    const scope = authenticatedTenantScope(req, res, req.query);
+    if (!scope) return;
+    const { distributorId, firmId } = scope;
+    const { companyCode } = req.query;
 
     const filter = {
       distributorId,
@@ -10064,10 +10080,12 @@ app.get("/api/salesman-area-mappings", ensureConnection, async (req, res) => {
   }
 });
 
-app.post("/api/salesman-area-mappings", ensureConnection, async (req, res) => {
+app.post("/api/salesman-area-mappings", ensureConnection,
+  securityRouter.authorizeRequest("MAPPING", "SALESMAN_TO_AREA", "edit"), async (req, res) => {
   try {
-    const distributorId = String(req.body.distributorId || "").trim();
-    const firmId = String(req.body.firmId || "").trim();
+    const scope = authenticatedTenantScope(req, res, req.body);
+    if (!scope) return;
+    const { distributorId, firmId } = scope;
     const firmName = String(req.body.firmName || "").trim();
 
     const companyCode = String(req.body.companyCode || "").trim();
@@ -10165,15 +10183,12 @@ app.post("/api/salesman-area-mappings", ensureConnection, async (req, res) => {
 app.get(
   "/api/area-to-party-mappings",
   ensureConnection,
+  securityRouter.authorizeRequest("MAPPING", "AREA_TO_PARTY", "view"),
   async (req, res) => {
     try {
-      const distributorId = String(
-        req.query.distributorId || ""
-      ).trim();
-
-      const firmId = String(
-        req.query.firmId || ""
-      ).trim();
+      const scope = authenticatedTenantScope(req, res, req.query);
+      if (!scope) return;
+      const { distributorId, firmId } = scope;
 
       const companyCode = String(
         req.query.companyCode || ""
@@ -10312,10 +10327,12 @@ app.get(
   }
 );
 
-app.post("/api/area-to-party-mappings", ensureConnection, async (req, res) => {
+app.post("/api/area-to-party-mappings", ensureConnection,
+  securityRouter.authorizeRequest("MAPPING", "AREA_TO_PARTY", "edit"), async (req, res) => {
   try {
-    const distributorId = String(req.body.distributorId || "").trim();
-    const firmId = String(req.body.firmId || "").trim();
+    const scope = authenticatedTenantScope(req, res, req.body);
+    if (!scope) return;
+    const { distributorId, firmId } = scope;
     const firmName = String(req.body.firmName || "").trim();
 
     const companyCode = String(req.body.companyCode || "").trim();
@@ -14498,74 +14515,94 @@ app.get(
 //Quotation backend 
 
 
-app.get("/api/stock/batches", ensureConnection, async (req, res) => {
-  try {
-    const { distributorId, firmId, gdCode, prodCode, includeLocked = "N", stockType = "SALEABLE" } = req.query;
+app.get(
+  "/api/stock/batches",
+  ensureConnection,
+  securityRouter.authorizeRequest("VOUCHERS", "STOCK_ADJUSTMENT", "view"),
+  async (req, res) => {
+    try {
+      const { gdCode, prodCode, includeLocked = "N", stockType = "SALEABLE" } = req.query;
+      const godownCode = String(gdCode || "").trim();
+      const productCode = String(prodCode || "").trim();
+      const normalizedStockType = String(stockType).trim().toUpperCase();
+      if (!godownCode || !productCode) {
+        return res.status(400).json({ success: false, message: "Godown and product are required." });
+      }
+      if (!["SALEABLE", "DAMAGE"].includes(normalizedStockType)) {
+        return res.status(400).json({ success: false, message: "Invalid stock type." });
+      }
 
-    const filter = {
-      distributorId: String(distributorId || "").trim(),
-      firmId: String(firmId || "").trim(),
-      GDCode: String(gdCode || "").trim(),
-      ProdCode: String(prodCode || "").trim(),
-      $or: [{ isActive: true }, { isActive: { $exists: false } }],
-    };
+      const filter = {
+        distributorId: String(req.auth.distributorId || "").trim(),
+        firmId: String(req.auth.firmId || "").trim(),
+        GDCode: godownCode,
+        ProdCode: productCode,
+        $or: [{ isActive: true }, { isActive: { $exists: false } }],
+      };
 
-    const allRowsFilter = { ...filter };
+      const allRowsFilter = { ...filter };
 
-    if (includeLocked !== "Y") {
-      filter.IsLocked = { $ne: "Y" };
+      if (includeLocked !== "Y") {
+        filter.IsLocked = { $ne: "Y" };
+      }
+
+      const StockModel = normalizedStockType === "DAMAGE" ? DamStock : Stock;
+      const rows = await StockModel.find(filter)
+        .select("Batch MRP SRate PRate Qty GDCode ProdCode IsLocked BoxPack InBoxPack MfgDt ExpDt -_id")
+        .sort({ ExpDt: 1, Batch: 1 })
+        .lean();
+      const totalBatchCount = includeLocked !== "Y" && rows.length === 0
+        ? await StockModel.countDocuments(allRowsFilter)
+        : 0;
+      if (process.env.NODE_ENV !== "production" && process.env.DEBUG_STOCK_BATCHES === "true") {
+        console.log("STOCK BATCH FILTER:", JSON.stringify(filter, null, 2));
+        console.table(rows.map((stockRow) => ({
+          ProdCode: stockRow.ProdCode,
+          GDCode: stockRow.GDCode,
+          Batch: stockRow.Batch,
+          MRP: stockRow.MRP,
+          PRate: stockRow.PRate,
+          SRate: stockRow.SRate,
+          Qty: stockRow.Qty,
+        })));
+      }
+
+      const batches = rows.map((s) => ({
+        batchNo: s.Batch || ".",
+        batch: s.Batch || ".",
+        mrp: Number(s.MRP || 0),
+        salesRate: Number(s.SRate || 0),
+        sRate: Number(s.SRate || 0),
+        purchaseRate: Number(s.PRate || 0),
+        stockQty: Number(s.Qty || 0),
+        qty: Number(s.Qty || 0),
+        gdCode: s.GDCode || "",
+        prodCode: s.ProdCode || "",
+        isLocked: s.IsLocked || "N",
+        boxPack: Number(s.BoxPack || 1),
+        inboxPack: Number(s.InBoxPack || 1),
+        mfgDate: s.MfgDt || "",
+        expDate: s.ExpDt || "",
+      }));
+
+      res.json({
+        success: true,
+        count: batches.length,
+        batches,
+        allBatchesLocked:
+          includeLocked !== "Y" &&
+          totalBatchCount > 0 &&
+          batches.length === 0,
+      });
+    } catch (error) {
+      console.error("❌ Stock batch load error:", error);
+      res.status(500).json({
+        success: false,
+        message: "Failed to load stock batches",
+      });
     }
-
-    const StockModel = String(stockType).trim().toUpperCase() === "DAMAGE" ? DamStock : Stock;
-    const [rows, totalBatchCount] = await Promise.all([
-      StockModel.find(filter).sort({ ExpDt: 1, Batch: 1 }).lean(),
-      includeLocked !== "Y" ? StockModel.countDocuments(allRowsFilter) : Promise.resolve(0),
-    ]);
-    if (process.env.NODE_ENV !== "production" && process.env.DEBUG_STOCK_BATCHES === "true") {
-      console.log("STOCK BATCH FILTER:", JSON.stringify(filter, null, 2));
-      console.table(rows.map((stockRow) => ({
-        _id: String(stockRow._id || ""), ProdCode: stockRow.ProdCode,
-        GDCode: stockRow.GDCode, Batch: stockRow.Batch, MRP: stockRow.MRP,
-        PRate: stockRow.PRate, SRate: stockRow.SRate, Qty: stockRow.Qty,
-      })));
-    }
-
-    const batches = rows.map((s) => ({
-      batchNo: s.Batch || ".",
-      batch: s.Batch || ".",
-      mrp: Number(s.MRP || 0),
-      salesRate: Number(s.SRate || 0),
-      sRate: Number(s.SRate || 0),
-      purchaseRate: Number(s.PRate || 0),
-      stockQty: Number(s.Qty || 0),
-      qty: Number(s.Qty || 0),
-      gdCode: s.GDCode || "",
-      prodCode: s.ProdCode || "",
-      isLocked: s.IsLocked || "N",
-      boxPack: Number(s.BoxPack || 1),
-      inboxPack: Number(s.InBoxPack || 1),
-      mfgDate: s.MfgDt || "",
-      expDate: s.ExpDt || "",
-    }));
-
-    res.json({
-      success: true,
-      count: batches.length,
-      batches,
-      allBatchesLocked:
-        includeLocked !== "Y" &&
-        totalBatchCount > 0 &&
-        batches.length === 0,
-    });
-  } catch (error) {
-    console.error("❌ Stock batch load error:", error.message);
-    res.status(500).json({
-      success: false,
-      message: "Failed to load stock batches",
-      error: error.message,
-    });
   }
-});
+);
 
 // ============================================================
 // MANUAL SALEABLE STOCK MANAGEMENT

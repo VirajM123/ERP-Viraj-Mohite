@@ -11,6 +11,8 @@ const num = (value) => Number.isFinite(Number(value)) ? Number(value) : 0;
 const text = (value) => String(value ?? "").trim();
 const productCode = (row) => text(row?.code || row?.productCode || row?.ProdCode);
 const productName = (row) => text(row?.name || row?.productName || row?.ProdName);
+const batchCacheKey = (distributorId, firmId, godownCode, code, stockType) =>
+  JSON.stringify([distributorId, firmId, godownCode, stockType, code]);
 const companyValues = (row) => [row?._id, row?.id, row?.code, row?.companyCode, row?.name, row?.companyName].map((value) => text(value).toLowerCase()).filter(Boolean);
 const productCompanyValues = (row) => [row?.companyId, row?.companyCode, row?.CompanyCode, row?.companyName, row?.CompanyName, row?.company].map((value) => text(value).toLowerCase()).filter(Boolean);
 
@@ -44,6 +46,7 @@ export default function StockManagement({ mode, view = "list", products = [], go
   const [dropdownPosition, setDropdownPosition] = useState({ top: 0, left: 0 });
   const [batchCache, setBatchCache] = useState({});
   const [loadingProducts, setLoadingProducts] = useState(false);
+  const [batchLoadError, setBatchLoadError] = useState("");
   const [dropdownIndex, setDropdownIndex] = useState(0);
   const [selectedBatch, setSelectedBatch] = useState(null);
   const [queuedRows, setQueuedRows] = useState([]);
@@ -58,6 +61,8 @@ export default function StockManagement({ mode, view = "list", products = [], go
   const [entryMode, setEntryMode] = useState("create");
   const [editingAdjustment, setEditingAdjustment] = useState(null);
   const [deletingId, setDeletingId] = useState("");
+  const tenantDistributorId = localStorage.getItem("distributorId") || "";
+  const tenantFirmId = localStorage.getItem("firmId") || "";
 
   const selectedGodown = godowns.find((row) => text(row.code || row.godownCode) === form.godownCode);
   const selectedCompany = companies.find((row) => text(row.code || row.companyCode) === form.companyCode);
@@ -77,12 +82,13 @@ export default function StockManagement({ mode, view = "list", products = [], go
     setForm((previous) => ({ ...createForm(), godownCode: previous.godownCode || text(godowns[0]?.code || godowns[0]?.godownCode) }));
     setSearchText("");
     setBatchCache({});
+    setBatchLoadError("");
     setSelectedBatch(null);
     setQueuedRows([]);
     setNewBatch(false);
     setEntryMode("create");
     setEditingAdjustment(null);
-  }, [mode]);
+  }, [mode, tenantDistributorId, tenantFirmId]);
 
   useEffect(() => {
     if (view !== "form") return;
@@ -141,37 +147,56 @@ export default function StockManagement({ mode, view = "list", products = [], go
 
   useEffect(() => {
     if (!showProducts || !form.godownCode || matchedProducts.length === 0) return;
-    let cancelled = false;
-    const missing = matchedProducts.filter((product) => !batchCache[`${form.godownCode}_${productCode(product)}`]);
-    if (missing.length === 0) return;
+    const controller = new AbortController();
+    const stockType = isDamageStock ? "DAMAGE" : "SALEABLE";
+    const missing = matchedProducts.filter((product) => !batchCache[batchCacheKey(tenantDistributorId, tenantFirmId, form.godownCode, productCode(product), stockType)]);
+    if (missing.length === 0) {
+      setLoadingProducts(false);
+      return () => controller.abort();
+    }
 
     const load = async () => {
       setLoadingProducts(true);
-      const loaded = await Promise.all(missing.map(async (product) => {
-        const code = productCode(product);
-        try {
-          const query = new URLSearchParams({ distributorId: localStorage.getItem("distributorId") || "", firmId: localStorage.getItem("firmId") || "", gdCode: form.godownCode, prodCode: code, stockType: isDamageStock ? "DAMAGE" : "SALEABLE" });
-          const response = await secureFetch(`${API_URL}/stock/batches?${query}`);
-          const result = await response.json();
-          return [`${form.godownCode}_${code}`, response.ok && Array.isArray(result.batches) ? result.batches : []];
-        } catch {
-          return [`${form.godownCode}_${code}`, []];
-        }
-      }));
-      if (!cancelled) {
+      setBatchLoadError("");
+      const loaded = [];
+      const failures = [];
+      for (let index = 0; index < missing.length; index += 4) {
+        if (controller.signal.aborted) return;
+        const batch = await Promise.all(missing.slice(index, index + 4).map(async (product) => {
+          const code = productCode(product);
+          try {
+            const query = new URLSearchParams({ distributorId: tenantDistributorId, firmId: tenantFirmId, gdCode: form.godownCode, prodCode: code, stockType });
+            const response = await secureFetch(`${API_URL}/stock/batches?${query}`, { signal: controller.signal });
+            const result = await response.json();
+            if (!response.ok || !result.success || !Array.isArray(result.batches)) {
+              throw new Error(result.message || "Unable to load stock batches.");
+            }
+            return [batchCacheKey(tenantDistributorId, tenantFirmId, form.godownCode, code, stockType), result.batches];
+          } catch (error) {
+            if (error.name === "AbortError") return null;
+            failures.push(`${productName(product)}: ${error.message || "Unable to load stock batches."}`);
+            return [batchCacheKey(tenantDistributorId, tenantFirmId, form.godownCode, code, stockType), []];
+          }
+        }));
+        loaded.push(...batch.filter(Boolean));
+      }
+      if (!controller.signal.aborted) {
         setBatchCache((previous) => ({ ...previous, ...Object.fromEntries(loaded) }));
+        setBatchLoadError(failures.length
+          ? `Unable to load batches for ${failures.length} product(s). ${failures[0]}`
+          : "");
         setLoadingProducts(false);
       }
     };
     load();
-    return () => { cancelled = true; };
-  }, [showProducts, form.godownCode, matchedProducts, batchCache, isDamageStock]);
+    return () => controller.abort();
+  }, [showProducts, form.godownCode, matchedProducts, batchCache, isDamageStock, tenantDistributorId, tenantFirmId]);
 
   const dropdownRows = useMemo(() => matchedProducts.flatMap((product) => {
-    const batches = batchCache[`${form.godownCode}_${productCode(product)}`] || [];
-    const existing = batches.map((batch) => ({ product, batch, isNew: false }));
+    const batches = batchCache[batchCacheKey(tenantDistributorId, tenantFirmId, form.godownCode, productCode(product), isDamageStock ? "DAMAGE" : "SALEABLE")] || [];
+    const existing = batches.map((batch) => ({ product, batch, isNew: false }))
     return isStockIn ? [{ product, batch: null, isNew: true }, ...existing] : existing;
-  }), [matchedProducts, batchCache, form.godownCode, isStockIn]);
+  }), [matchedProducts, batchCache, tenantDistributorId, tenantFirmId, form.godownCode, isStockIn, isDamageStock]);
 
   const openProductSearch = () => {
     if (!form.godownCode) {
@@ -207,11 +232,12 @@ export default function StockManagement({ mode, view = "list", products = [], go
   };
 
   const openBatchModalForProduct = async (product, requestedMode = "") => {
-    const key = `${form.godownCode}_${productCode(product)}`;
+    const stockType = isDamageStock ? "DAMAGE" : "SALEABLE";
+    const key = batchCacheKey(tenantDistributorId, tenantFirmId, form.godownCode, productCode(product), stockType);
     let batches = batchCache[key];
     if (!batches) {
       try {
-        const query = new URLSearchParams({ distributorId: localStorage.getItem("distributorId") || "", firmId: localStorage.getItem("firmId") || "", gdCode: form.godownCode, prodCode: productCode(product), stockType: isDamageStock ? "DAMAGE" : "SALEABLE" });
+        const query = new URLSearchParams({ distributorId: tenantDistributorId, firmId: tenantFirmId, gdCode: form.godownCode, prodCode: productCode(product), stockType });
         const response = await secureFetch(`${API_URL}/stock/batches?${query}`);
         const result = await response.json();
         if (response.ok && Array.isArray(result.batches)) {
@@ -228,7 +254,7 @@ export default function StockManagement({ mode, view = "list", products = [], go
   };
 
   const batchModalRows = batchProduct
-    ? batchCache[`${form.godownCode}_${productCode(batchProduct)}`] || []
+    ? batchCache[batchCacheKey(tenantDistributorId, tenantFirmId, form.godownCode, productCode(batchProduct), isDamageStock ? "DAMAGE" : "SALEABLE")] || []
     : [];
 
   const handleProductKeyDown = (event) => {
@@ -520,7 +546,7 @@ export default function StockManagement({ mode, view = "list", products = [], go
       <section className="stock-value-footer"><div><span>Stock Value as per MRP</span><strong>{(queuedRows.reduce((sum, row) => sum + (num(row.quantity) + num(row.freeQuantity)) * num(row.mrp), 0) + totalQuantity * num(form.mrp)).toFixed(2)}</strong></div><div><span>Stock Value as per Purchase Rate</span><strong>{(queuedRows.reduce((sum, row) => sum + (num(row.quantity) + num(row.freeQuantity)) * num(row.purchaseRate), 0) + totalQuantity * num(form.purchaseRate)).toFixed(2)}</strong></div><div><span>Stock Value as per Sales Rate</span><strong>{(queuedRows.reduce((sum, row) => sum + (num(row.quantity) + num(row.freeQuantity)) * num(row.salesRate), 0) + totalQuantity * num(form.salesRate)).toFixed(2)}</strong></div></section>
     </div>
 
-    {showProducts && createPortal(<div className="billing-product-dropdown stock-product-dropdown" style={{ top: dropdownPosition.top, left: dropdownPosition.left }} onMouseDown={(event) => { event.preventDefault(); event.stopPropagation(); }}><div className="billing-product-dropdown-header"><span>Code</span><span>Product</span><span>Batch</span><span>MRP</span><span>Rate</span><span>Stock</span></div>{loadingProducts && dropdownRows.length === 0 ? <div className="stock-dropdown-empty">Loading products and batches...</div> : dropdownRows.length === 0 ? <div className="stock-dropdown-empty">No matching stock batch found.</div> : dropdownRows.map(({ product, batch, isNew }, index) => <div key={`${productCode(product)}-${batch?.batch || "new"}-${batch?.mrp || 0}-${index}`} className={`billing-product-dropdown-row ${dropdownIndex === index ? "is-active" : ""}`} onMouseEnter={() => setDropdownIndex(index)} onMouseDown={(event) => { event.preventDefault(); openBatchModalForProduct(product, isNew && isStockIn ? "new" : "existing"); }}><span className="billing-product-code">{productCode(product)}</span><span>{productName(product)}</span><span>{isNew ? "+ New Batch" : batch?.batch || batch?.batchNo || "."}</span><span>{num(batch?.mrp ?? product.mrp).toFixed(2)}</span><span>{num(batch?.purchaseRate ?? product.purchaseRate ?? product.Rate_Per_Unit).toFixed(2)}</span><span>{isNew ? "-" : num(batch?.stockQty).toFixed(2)}</span></div>)}</div>, document.body)}
+    {showProducts && createPortal(<div className="billing-product-dropdown stock-product-dropdown" style={{ top: dropdownPosition.top, left: dropdownPosition.left }} onMouseDown={(event) => { event.preventDefault(); event.stopPropagation(); }}><div className="billing-product-dropdown-header"><span>Code</span><span>Product</span><span>Batch</span><span>MRP</span><span>Rate</span><span>Stock</span></div>{batchLoadError && <div className="stock-dropdown-empty" role="alert">{batchLoadError}</div>}{loadingProducts && dropdownRows.length === 0 ? <div className="stock-dropdown-empty">Loading products and batches...</div> : dropdownRows.length === 0 ? <div className="stock-dropdown-empty">No matching stock batch found.</div> : dropdownRows.map(({ product, batch, isNew }, index) => <div key={`${productCode(product)}-${batch?.batch || "new"}-${batch?.mrp || 0}-${index}`} className={`billing-product-dropdown-row ${dropdownIndex === index ? "is-active" : ""}`} onMouseEnter={() => setDropdownIndex(index)} onMouseDown={(event) => { event.preventDefault(); openBatchModalForProduct(product, isNew && isStockIn ? "new" : "existing"); }}><span className="billing-product-code">{productCode(product)}</span><span>{productName(product)}</span><span>{isNew ? "+ New Batch" : batch?.batch || batch?.batchNo || "."}</span><span>{num(batch?.mrp ?? product.mrp).toFixed(2)}</span><span>{num(batch?.purchaseRate ?? product.purchaseRate ?? product.Rate_Per_Unit).toFixed(2)}</span><span>{isNew ? "-" : num(batch?.stockQty).toFixed(2)}</span></div>)}</div>, document.body)}
 
     {showBatchModal && batchProduct && createPortal(
       <div className="stock-batch-modal-overlay" onMouseDown={(event) => { if (event.target === event.currentTarget) setShowBatchModal(false); }}>

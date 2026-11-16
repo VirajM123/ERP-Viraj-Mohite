@@ -1,0 +1,12 @@
+const fs=require('fs'),path=require('path'),parser=require('../../node_modules/@babel/parser');
+const root=path.resolve(__dirname,'checkout'), out=__dirname;
+const candidates=JSON.parse(fs.readFileSync(path.resolve(out,'../phase2a3-2026-11-06/route-candidates.json')));
+const routes=[],mutations=[];
+function walk(n,fn){if(!n||typeof n!=='object')return; if(n.type)fn(n);for(const [k,v] of Object.entries(n)){if(['loc','start','end','tokens','comments'].includes(k))continue;if(Array.isArray(v))v.forEach(x=>walk(x,fn));else if(v&&typeof v==='object')walk(v,fn);}}
+for(const file of fs.readdirSync(path.join(root,'backend')).filter(f=>f.endsWith('.js'))){const rel='backend/'+file,src=fs.readFileSync(path.join(root,rel),'utf8'),ast=parser.parse(src,{sourceType:'module'});
+walk(ast,n=>{if(n.type!=='CallExpression')return;const callee=src.slice(n.callee.start,n.callee.end);if(/^(app|router)\.(get|post|put|patch|delete)$/.test(callee)){const text=src.slice(n.start,n.end);const calls=[];walk(n,x=>{if(x.type==='CallExpression')calls.push({line:x.loc.start.line,call:src.slice(x.callee.start,x.callee.end),text:src.slice(x.start,x.end)});}); routes.push({file:rel,line:n.loc.start.line,method:callee.split('.')[1].toUpperCase(),path:n.arguments[0]?.value??src.slice(n.arguments[0].start,n.arguments[0].end),text,calls});}
+if(/\.(create|save|updateOne|updateMany|findOneAndUpdate|replaceOne|insertMany|bulkWrite|deleteMany|deleteOne|findByIdAndUpdate)$/.test(callee))mutations.push({file:rel,line:n.loc.start.line,call:callee,text:src.slice(n.start,n.end)});
+});}
+fs.writeFileSync(path.join(out,'route-source-evidence.json'),JSON.stringify(routes,null,2));fs.writeFileSync(path.join(out,'mutation-source-evidence.json'),JSON.stringify(mutations,null,2));
+for(const c of candidates){const r=routes.find(r=>r.file===c.file&&r.line===c.line);console.log('\n'+c.file+':'+c.line+' '+c.method+' '+c.path+(r?'':' [NOT EXECUTABLE ROUTE]'));if(r){console.log(r.calls.filter(c=>/authorizeRequest|authorize$|startTransaction|withTransaction|commitTransaction|\.save$|\.create$|updateOne$|updateMany$|findOneAndUpdate$|insertMany$|bulkWrite$|deleteMany$|nextDocumentNumber|saveAccountWithOpenings|cancelSalesBill|recordStock|postBalanced|reverseSource/.test(c.call)).map(c=>c.line+' '+c.text.replace(/\s+/g,' ').slice(0,340)).join('\n'));}}
+console.log('Actual routes: '+routes.length+', mutation sites: '+mutations.length);

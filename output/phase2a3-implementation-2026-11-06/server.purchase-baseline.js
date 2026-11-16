@@ -1,0 +1,34208 @@
+import express from "express";
+import { validateOpeningTransactions } from "../shared/openingTransactions.js";
+import createOpeningBalancesRouter, { saveAccountWithOpenings } from "./openingBalances.js";
+import mongoose from "mongoose";
+import cors from "cors";
+import dotenv from "dotenv";
+import createTransactionRouter from "./transaction.js"; 
+import generalSetupRoutes from "./generalSetup.js";
+import companyWiseSeriesRoutes from "./companyWiseSeries.js";
+import createBatchLockRouter from "./batchLock.js";
+import printAccountDetailsRoutes from "./printAccountDetails.js";
+import createSecuritySetupRouter from "./securitySetup.js";
+import createFinancialPeriodsRouter from "./financialPeriods.js";
+import createImportRouter from "./importRoutes.js";
+import createDesktopImportRouter from "./desktopImportRoutes.js";
+import createProductSalesReportRouter from "./productSalesReport.js";
+import createGstReportsRouter from "./gstReports.js";
+import {
+  authenticateApi,
+  assertSecurityConfiguration,
+  createRateLimiter,
+  hashPassword,
+  issueAccessToken,
+  migrateLegacyPassword,
+  requireRoles,
+  validatePasswordStrength,
+  verifyPassword,
+} from "./auth.js";
+import { writeAuditEvent } from "./audit.js";
+import { postBalancedJournal, reverseSourceJournal } from "./accounting.js";
+import { nextDocumentNumber } from "./counters.js";
+import { businessDateIST } from "./businessDate.js";
+import { validateFinancialEnvelope } from "./financialValidation.js";
+import createP0FeaturesRouter, { recordStockMovements, validateCustomerCredit } from "./p0Features.js";
+import createServiceRouter from "./service.js";
+import createProductMappingRouter from "./productMapping.js";
+import { assertMasterNotUsed } from "./masterUsageGuard.js";
+import { apiErrorHandler } from "./apiError.js";
+import { buildAllowedOrigins, corsOriginAllowed } from "./corsOrigins.js";
+import { commitTransactionReliably } from "./transactionCommit.js";
+import { purchaseSupplierFilter } from "./purchaseSupplier.js";
+import { saveEInvoiceJson } from "./einvoiceJsonFiles.js";
+import { observeRequest } from "./observability.js";
+dotenv.config();
+
+assertSecurityConfiguration();
+
+const app = express();
+app.use(observeRequest);
+let shuttingDown = false;
+app.get("/health/live", (req, res) => res.status(200).json({ status: "ok" }));
+app.get("/health/ready", (req, res) => {
+  const ready = !shuttingDown && mongoose.connection.readyState === 1;
+  res.status(ready ? 200 : 503).json({ status: ready ? "ok" : "unavailable" });
+});
+if (process.env.TRUST_PROXY) app.set("trust proxy", process.env.TRUST_PROXY === "true" ? 1 : process.env.TRUST_PROXY);
+
+const allowedOrigins = buildAllowedOrigins(
+  process.env.CORS_ORIGINS || "http://localhost:5173"
+);
+app.disable("x-powered-by");
+app.use(cors({
+  origin(origin, callback) {
+    if (corsOriginAllowed(origin, allowedOrigins)) return callback(null, true);
+    const error = new Error("Origin is not allowed by CORS policy.");
+    error.code = "CORS_ORIGIN_DENIED";
+    return callback(error);
+  },
+  credentials: false,
+}));
+app.use(express.json({ limit: process.env.JSON_BODY_LIMIT || "2mb" }));
+app.use(express.urlencoded({ extended: true, limit: process.env.FORM_BODY_LIMIT || "512kb" }));
+app.use((req, res, next) => {
+  const requestStartedAt = Date.now();
+  if (typeof res.on === "function") res.on("finish", () => {
+    const elapsedMs = Date.now() - requestStartedAt;
+    if (elapsedMs >= Number(process.env.SLOW_REQUEST_MS || 1000)) {
+      console.warn(`[slow-request] ${req.method} ${req.path} ${res.statusCode} ${elapsedMs.toFixed(1)}ms`);
+    }
+  });
+  res.setHeader("X-Content-Type-Options", "nosniff");
+  res.setHeader("X-Frame-Options", "DENY");
+  res.setHeader("Referrer-Policy", "no-referrer");
+  res.setHeader("Permissions-Policy", "camera=(), microphone=(), geolocation=()");
+  res.setHeader("Content-Security-Policy", "default-src 'none'; frame-ancestors 'none'; base-uri 'none'");
+  if (process.env.NODE_ENV === "production") res.setHeader("Strict-Transport-Security", "max-age=31536000; includeSubDomains");
+  req.setTimeout(Number(process.env.REQUEST_TIMEOUT_MS || 30000));
+  res.setTimeout(Number(process.env.RESPONSE_TIMEOUT_MS || 30000));
+  if (process.env.NODE_ENV === "production") {
+    const sendJson = res.json.bind(res);
+    res.json = (payload) => {
+      if (res.statusCode >= 500 && payload && typeof payload === "object") {
+        const { error, stack, ...safe } = payload;
+        return sendJson({ ...safe, message: "The request could not be completed." });
+      }
+      return sendJson(payload);
+    };
+  }
+  next();
+});
+app.use("/api", createRateLimiter({ windowMs: 60_000, max: Number(process.env.API_RATE_LIMIT || 600) }));
+app.use("/api", createRateLimiter({
+  windowMs: 15 * 60_000,
+  max: Number(process.env.AUTH_RATE_LIMIT || 20),
+  paths: new Set(["/login", "/login/firms", "/register"]),
+}));
+app.use("/api", authenticateApi);
+// Feature routers that require operation-level authorization are mounted after
+// the security policy router is created below.
+
+
+const PORT = process.env.PORT || 5000;
+
+const MONGODB_URI = process.env.MONGODB_URI;
+
+if (!MONGODB_URI) {
+  console.error("❌ MONGODB_URI is missing in .env file");
+  process.exit(1);
+}
+
+console.log("✅ ENV loaded");
+mongoose.set("strictQuery", false);
+
+const connectDB = async () => {
+  try {
+    console.log("🔄 Connecting to MongoDB Atlas...");
+
+    await mongoose.connect(process.env.MONGODB_URI, {
+      serverSelectionTimeoutMS: 30000,
+      connectTimeoutMS: 30000,
+      socketTimeoutMS: 45000,
+      family: 4,
+    });
+
+    console.log("✅ MongoDB connected successfully");
+    console.log("📊 Connected to Database:", mongoose.connection.name);
+  } catch (error) {
+    console.error("❌ MongoDB Connection Failed:", error.message);
+    process.exit(1);
+  }
+};
+
+connectDB().then(() => {
+  const server = app.listen(PORT, () => {
+    console.log(`🚀 Server running on port ${PORT}`);
+  });
+  const shutdown = () => {
+    if (shuttingDown) return;
+    shuttingDown = true;
+    const configuredDrainMs = Number(process.env.SHUTDOWN_DRAIN_MS);
+    const drainMs = Number.isFinite(configuredDrainMs) && configuredDrainMs > 0
+      ? Math.min(configuredDrainMs, 120_000) : 30_000;
+    const drainTimer = setTimeout(() => {
+      console.error(`HTTP shutdown exceeded ${drainMs}ms; closing remaining connections.`);
+      server.closeAllConnections();
+    }, drainMs);
+    drainTimer.unref();
+    const exitTimer = setTimeout(() => {
+      console.error("Shutdown did not finish after connections were closed.");
+      process.exit(1);
+    }, drainMs + 5_000);
+    exitTimer.unref();
+    server.close(async (error) => {
+      clearTimeout(drainTimer);
+      if (error) console.error("HTTP shutdown failed:", error);
+      try {
+        await mongoose.disconnect();
+      } catch (disconnectError) {
+        console.error("MongoDB shutdown failed:", disconnectError);
+      }
+      clearTimeout(exitTimer);
+      process.exitCode = error ? 1 : 0;
+    });
+  };
+  process.once("SIGTERM", shutdown);
+  process.once("SIGINT", shutdown);
+});
+export const ensureConnection = (req, res, next) => {
+  if (mongoose.connection.readyState === 1) {
+    return next();
+  }
+
+  return res.status(503).json({
+    success: false,
+    message: "Database not connected. Please try again.",
+  });
+};
+const userSchema = new mongoose.Schema(
+  {
+    userId: { type: String, default: "" },
+    distributorId: { type: String, required: true },
+    firmId: { type: String, required: true },
+    firmName: { type: String, default: "" },
+    userName: { type: String, required: true, trim: true },
+    oldPassword: { type: String, default: "" },
+    password: { type: String, required: true },
+    role: { type: String, default: "USER" },
+    salesmanCode: { type: String, default: "", trim: true },
+    isActive: { type: Boolean, default: true },
+    sessionVersion: { type: Number, default: 0 },
+  },
+  { timestamps: true, collection: "Mas_User" }
+);
+
+const companySchema = new mongoose.Schema(
+  {
+    companyCode: String,
+    defaultSupplierId: { type: String, default: "" },
+    companyName: String,
+    companyAddress: String,
+    branchOfficeAddress: String,
+    gstNo: { type: String, default: "" },
+    state: { type: String, default: "" },
+    pinCode: { type: String, default: "" },
+    distributorId: String,
+    firmId: String,
+    firmName: String,
+    isActive: { type: Boolean, default: true },
+    sessionVersion: { type: Number, default: 0 },
+  },
+  { timestamps: true, collection: "Mas_Company" }
+);
+
+const User = mongoose.model("Mas_User", userSchema);
+const Company = mongoose.model("Mas_Company", companySchema);
+
+const securityRouter =
+    createSecuritySetupRouter(User);
+
+app.use("/api/financial-periods", ensureConnection, createFinancialPeriodsRouter(securityRouter));
+
+const authorizeFeatureMethods = (moduleCode, operationCode, actions) => (req, res, next) => {
+  const action = actions[req.method];
+  if (!action) return res.status(405).json({ success: false, message: "Method not allowed." });
+  return securityRouter.authorizeRequest(moduleCode, operationCode, action)(req, res, next);
+};
+
+app.use(
+    "/api/security-setup",
+    ensureConnection,
+    securityRouter
+);
+const transactionRoutes = createTransactionRouter(securityRouter);   // NEW — after securityRouter exists
+app.use(
+  "/api/general-setup",
+  ensureConnection,
+  authorizeFeatureMethods("TOOLS", "GENERAL_SETUP_1", { GET: "view", PUT: "edit" }),
+  generalSetupRoutes
+);
+app.use(
+  "/api/company-wise-series",
+  ensureConnection,
+  authorizeFeatureMethods("TOOLS", "COMPANY_WISE_SERIES", { GET: "view", PUT: "edit", DELETE: "delete" }),
+  companyWiseSeriesRoutes
+);
+app.use(
+  "/api/print-account-details",
+  ensureConnection,
+  authorizeFeatureMethods("TOOLS", "PRINT_SETTINGS", { GET: "view", PUT: "edit" }),
+  printAccountDetailsRoutes
+);
+app.use("/api/transaction", transactionRoutes);         
+app.use("/api", ensureConnection, createServiceRouter(securityRouter));
+const registerSchema = new mongoose.Schema(
+  {
+    distributorId: { type: String, default: null },
+    firmId: { type: String, default: null },
+
+    firmCode: { type: String, required: true, trim: true },
+    firmName: { type: String, required: true, trim: true },
+
+    address1: { type: String, default: "", trim: true },
+    address2: { type: String, default: "", trim: true },
+    city: { type: String, default: "", trim: true },
+    pinCode: { type: String, default: "", trim: true },
+    state: { type: String, default: "", trim: true },
+    country: { type: String, default: "India", trim: true },
+
+    phoneNo: { type: String, default: "", trim: true },
+    mobileNo: { type: String, default: "", trim: true },
+    tinNo: { type: String, default: "", trim: true },
+    regNo: { type: String, default: "", trim: true },
+    gstNo: { type: String, default: "", trim: true },
+    drugLicNo: { type: String, default: "", trim: true },
+    foodLicenceNo: { type: String, default: "", trim: true },
+    apiKey: { type: String, default: "", trim: true },
+
+    email: { type: String, default: "", trim: true, lowercase: true },
+    userName: { type: String, required: true, trim: true },
+
+    password: { type: String, required: true },
+
+    role: {
+      type: String,
+      enum: [
+        "DISTRIBUTOR_ADMIN",
+        "ADMIN",
+        "MANAGER",
+        "ACCOUNTANT",
+        "SALESMAN",
+        "GODOWN",
+        "USER",
+      ],
+      default: "DISTRIBUTOR_ADMIN",
+      trim: true,
+      uppercase: true,
+    },
+    isActive: { type: Boolean, default: true },
+  },
+  {
+    timestamps: true,
+    collection: "Mas_Register",
+  }
+);
+registerSchema.index({ firmCode: 1, firmName: 1 });
+registerSchema.index({ firmId: 1 }, { unique: true });
+registerSchema.index({ userName: 1 });
+registerSchema.index({ userName: 1, firmId: 1 });
+registerSchema.index({ distributorId: 1 });
+
+const Register = mongoose.model("Mas_Register", registerSchema);
+
+const generateDistributorId = async () => {
+  const last = await Register.findOne({
+    distributorId: { $regex: /^DIST-\d+$/ },
+  }).sort({ createdAt: -1 });
+
+  if (!last?.distributorId) return "DIST-1001";
+
+  const num = Number(last.distributorId.split("-")[1]);
+  return `DIST-${num + 1}`;
+};
+
+const generateFirmId = async () => {
+  const firms = await Register.find(
+    { firmId: { $regex: /^FIRM-\d+$/ } },
+    { firmId: 1 }
+  );
+
+  let maxNo = 2000;
+
+  firms.forEach((firm) => {
+    const no = Number(String(firm.firmId).split("-")[1]);
+    if (!isNaN(no) && no > maxNo) {
+      maxNo = no;
+    }
+  });
+
+  return `FIRM-${maxNo + 1}`;
+};
+
+app.post("/api/register", ensureConnection, async (req, res) => {
+  try {
+    const {
+      firmCode,
+      firmName,
+      userName,
+      password,
+      address1,
+      address2,
+      city,
+      pinCode,
+      state,
+      country,
+      phoneNo,
+      mobileNo,
+      tinNo,
+      regNo,
+      gstNo,
+      drugLicNo,
+      foodLicenceNo,
+      apiKey,
+      email,
+    } = req.body;
+
+    if (!firmCode || !firmName || !userName || !password) {
+      return res.status(400).json({
+        success: false,
+        message: "firmCode, firmName, userName and password are required",
+      });
+    }
+
+    if (!validatePasswordStrength(password)) {
+      return res.status(400).json({
+        success: false,
+        message: "Password must be 12-128 characters and include uppercase, lowercase, number, and symbol characters.",
+      });
+    }
+
+    const existingFirm = await Register.findOne({
+      firmCode: firmCode.trim(),
+      firmName: firmName.trim(),
+    });
+
+    if (existingFirm) {
+      return res.status(409).json({
+        success: false,
+        message: "Firm already exists with this firm code and name",
+      });
+    }
+
+    const existingUser = await Register.findOne({
+      userName: userName.trim(),
+      isActive: true,
+    });
+
+    let distributorId;
+
+    if (existingUser) {
+      if (!(await verifyPassword(password, existingUser.password))) {
+        return res.status(401).json({
+          success: false,
+          message:
+            "This username already exists. Enter correct old password to add another firm.",
+        });
+      }
+
+      distributorId = existingUser.distributorId;
+    } else {
+      distributorId = await generateDistributorId();
+    }
+
+    const firmId = await generateFirmId();
+
+    const savedUser = await Register.create({
+      distributorId,
+      firmId,
+      firmCode: firmCode.trim(),
+      firmName: firmName.trim(),
+      address1: address1 || "",
+      address2: address2 || "",
+      city: city || "",
+      pinCode: pinCode || "",
+      state: state || "",
+      country: country || "India",
+      phoneNo: phoneNo || "",
+      mobileNo: mobileNo || "",
+      tinNo: tinNo || "",
+      regNo: regNo || "",
+      gstNo: gstNo || "",
+      drugLicNo: drugLicNo || "",
+      foodLicenceNo: foodLicenceNo || "",
+      apiKey: apiKey || "",
+      email: email || "",
+      userName: userName.trim(),
+      role: "DISTRIBUTOR_ADMIN",
+      password: await hashPassword(password),
+    });
+
+    const data = savedUser.toObject();
+    delete data.password;
+
+    res.status(201).json({
+      success: true,
+      message: "Registration completed successfully",
+      data,
+    });
+  } catch (error) {
+    console.error("❌ Register error:", error.message);
+
+    if (error.code === 11000) {
+      return res.status(409).json({
+        success: false,
+        message: "Duplicate entry. Firm code, firm name, or username already exists.",
+      });
+    }
+
+    res.status(500).json({
+      success: false,
+      message: "Registration failed. Please try again later.",
+      error: error.message,
+    });
+  }
+});
+
+app.post(
+  "/api/login/firms",
+  ensureConnection,
+  async (req, res) => {
+    try {
+      const userName = String(
+        req.body.userName || ""
+      ).trim();
+
+      const password = String(
+        req.body.password || ""
+      );
+
+      if (!userName || !password) {
+        return res.status(400).json({
+          success: false,
+          message:
+            "Username and password are required",
+        });
+      }
+
+      /*
+       * Distributor administrator firms.
+       */
+      const registerCandidates = await Register.find({ userName, isActive: true });
+      const registerFirms = [];
+      for (const candidate of registerCandidates) {
+        if (await verifyPassword(password, candidate.password)) {
+          await migrateLegacyPassword(Register, candidate._id, password, candidate.password);
+          registerFirms.push(candidate.toObject());
+        }
+      }
+      const safeRegisterFirms = registerFirms
+        .map(({ password: _password, oldPassword: _oldPassword, ...firm }) => firm);
+
+      /*
+       * Normal users created from User Master.
+       */
+      const normalCandidates = await User.find({ userName, isActive: true });
+      const normalUserFirms = [];
+      for (const candidate of normalCandidates) {
+        if (await verifyPassword(password, candidate.password)) {
+          await migrateLegacyPassword(User, candidate._id, password, candidate.password);
+          const { password: _password, oldPassword: _oldPassword, ...safeUser } = candidate.toObject();
+          normalUserFirms.push(safeUser);
+        }
+      }
+
+      const allFirms = [
+        ...safeRegisterFirms.map((firm) => ({
+          distributorId:
+            firm.distributorId,
+
+          firmId:
+            firm.firmId,
+
+          firmCode:
+            firm.firmCode || "",
+
+          firmName:
+            firm.firmName,
+
+          userName:
+            firm.userName,
+
+          role: String(
+            firm.role ||
+            "DISTRIBUTOR_ADMIN"
+          )
+            .trim()
+            .toUpperCase(),
+
+          userSource: "REGISTER",
+        })),
+
+        ...normalUserFirms.map((user) => ({
+          distributorId:
+            user.distributorId,
+
+          firmId:
+            user.firmId,
+
+          firmCode: "",
+
+          firmName:
+            user.firmName,
+
+          userName:
+            user.userName,
+
+          role: String(
+            user.role || "USER"
+          )
+            .trim()
+            .toUpperCase(),
+
+          userSource: "USER",
+        })),
+      ];
+
+      /*
+       * Remove duplicate firm entries.
+       */
+      const uniqueFirmMap = new Map();
+
+      allFirms.forEach((firm) => {
+        const key = String(
+          firm.firmId || ""
+        ).trim();
+
+        if (key && !uniqueFirmMap.has(key)) {
+          uniqueFirmMap.set(key, firm);
+        }
+      });
+
+      const firms = Array.from(
+        uniqueFirmMap.values()
+      ).sort((first, second) =>
+        String(
+          first.firmName || ""
+        ).localeCompare(
+          String(second.firmName || "")
+        )
+      );
+
+      if (firms.length === 0) {
+        return res.status(401).json({
+          success: false,
+          message:
+            "Invalid username or password",
+        });
+      }
+
+      return res.json({
+        success: true,
+
+        distributorId:
+          firms[0].distributorId,
+
+        firms,
+      });
+    } catch (error) {
+      console.error(
+        "Login firms error:",
+        error
+      );
+
+      return res.status(500).json({
+        success: false,
+        message:
+          "Failed to load firms",
+        error: error.message,
+      });
+    }
+  }
+);
+app.post(
+  "/api/login",
+  ensureConnection,
+  async (req, res) => {
+    try {
+      const userName = String(
+        req.body.userName || ""
+      ).trim();
+
+      const password = String(
+        req.body.password || ""
+      );
+
+      const firmId = String(
+        req.body.firmId || ""
+      ).trim();
+
+      if (!userName || !password) {
+        return res.status(400).json({
+          success: false,
+          message:
+            "Username and password are required",
+        });
+      }
+
+      if (!firmId) {
+        return res.status(400).json({
+          success: false,
+          message:
+            "Please select firm",
+        });
+      }
+
+      /*
+       * First check distributor administrator.
+       */
+      const registerUser =
+        await Register.findOne({
+          userName,
+          firmId,
+          isActive: true,
+        }).lean();
+
+      if (
+        registerUser &&
+        await verifyPassword(password, registerUser.password)
+      ) {
+        await migrateLegacyPassword(Register, registerUser._id, password, registerUser.password);
+        const role = String(
+          registerUser.role ||
+          "DISTRIBUTOR_ADMIN"
+        )
+          .trim()
+          .toUpperCase();
+
+        return res.json({
+          success: true,
+          message: "Login successful",
+          token: issueAccessToken(registerUser, "REGISTER"),
+
+         user: {
+    id: registerUser._id,
+
+    userId: registerUser.userName,   // <-- ADD THIS
+
+    distributorId: registerUser.distributorId,
+    firmId: registerUser.firmId,
+    firmCode: registerUser.firmCode,
+    firmName: registerUser.firmName,
+    userName: registerUser.userName,
+    role,
+    userSource: "REGISTER",
+},
+        });
+      }
+
+      /*
+       * If not administrator, check User Master.
+       */
+      const normalUser =
+        await User.findOne({
+          userName,
+          firmId,
+          isActive: true,
+        }).lean();
+
+      if (
+        !normalUser ||
+        !(await verifyPassword(password, normalUser.password))
+      ) {
+        return res.status(401).json({
+          success: false,
+          message:
+            "Invalid username, password or firm",
+        });
+      }
+
+      await migrateLegacyPassword(User, normalUser._id, password, normalUser.password);
+      const role = String(
+        normalUser.role || "USER"
+      )
+        .trim()
+        .toUpperCase();
+
+      return res.json({
+        success: true,
+        message: "Login successful",
+        token: issueAccessToken(normalUser, "USER"),
+
+        user: {
+          id: normalUser._id,
+
+          userId:
+            normalUser.userId || "",
+
+          distributorId:
+            normalUser.distributorId,
+
+          firmId:
+            normalUser.firmId,
+
+          firmCode: "",
+
+          firmName:
+            normalUser.firmName,
+
+          userName:
+            normalUser.userName,
+
+          role,
+          salesmanCode: normalUser.salesmanCode || "",
+
+          userSource: "USER",
+        },
+      });
+    } catch (error) {
+      console.error(
+        "Login error:",
+        error
+      );
+
+      return res.status(500).json({
+        success: false,
+        message:
+          "Login failed. Please try again later.",
+        error: error.message,
+      });
+    }
+  }
+);
+
+app.get("/api/profile", ensureConnection, async (req, res) => {
+  try {
+    const source = req.auth?.source === "REGISTER" ? Register : User;
+    const user = await source.findById(req.auth?.id).lean();
+    if (!user || !user.isActive) {
+      return res.status(404).json({ success: false, message: "Profile not found." });
+    }
+    return res.json({
+      success: true,
+      profile: {
+        userId: user.userId || user.userName || "",
+        userName: user.userName || "",
+        role: user.role || "USER",
+        firmName: user.firmName || "",
+        firmCode: user.firmCode || "",
+        salesmanCode: user.salesmanCode || "",
+        distributorId: user.distributorId || "",
+        isActive: Boolean(user.isActive),
+        email: user.email || "",
+        mobileNo: user.mobileNo || "",
+        createdAt: user.createdAt || null,
+        updatedAt: user.updatedAt || null,
+        source: req.auth.source,
+      },
+    });
+  } catch (error) {
+    console.error("Profile load error:", error);
+    return res.status(500).json({ success: false, message: "Unable to load profile." });
+  }
+});
+
+app.get("/api/users", ensureConnection, requireRoles("DISTRIBUTOR_ADMIN"), async (req, res) => {
+  try {
+    const distributorId = String(
+      req.query.distributorId || ""
+    ).trim();
+
+    const firmId = String(
+      req.query.firmId || ""
+    ).trim();
+
+    const search = String(
+      req.query.search || ""
+    ).trim();
+
+    const requestedPage = Number.parseInt(
+      req.query.page,
+      10
+    );
+
+    const requestedLimit = Number.parseInt(
+      req.query.limit,
+      10
+    );
+
+    const page =
+      Number.isFinite(requestedPage) &&
+        requestedPage > 0
+        ? requestedPage
+        : 1;
+
+    const limit =
+      Number.isFinite(requestedLimit) &&
+        requestedLimit > 0
+        ? Math.min(requestedLimit, 100)
+        : 10;
+
+    if (!distributorId || !firmId) {
+      return res.status(400).json({
+        success: false,
+        message:
+          "distributorId and firmId are required",
+      });
+    }
+
+    const escapedSearch = search.replace(
+      /[.*+?^${}()|[\]\\]/g,
+      "\\$&"
+    );
+
+    const filter = {
+      distributorId,
+      firmId,
+      isActive: true,
+    };
+
+    if (escapedSearch) {
+      const searchRegex = new RegExp(
+        escapedSearch,
+        "i"
+      );
+
+      filter.$or = [
+        { userId: searchRegex },
+        { userName: searchRegex },
+        { role: searchRegex },
+        { firmName: searchRegex },
+      ];
+    }
+
+    const totalRecords =
+      await User.countDocuments(filter);
+
+    const totalPages = Math.max(
+      1,
+      Math.ceil(totalRecords / limit)
+    );
+
+    const currentPage = Math.min(
+      page,
+      totalPages
+    );
+
+    const skip =
+      (currentPage - 1) * limit;
+
+    const users = await User.find(filter)
+      /*
+      * Password fields are not needed in the list.
+      * Do not send them unnecessarily.
+      */
+      .select("-password")
+      .sort({
+        createdAt: -1,
+        _id: -1,
+      })
+      .skip(skip)
+      .limit(limit)
+      .lean();
+
+    return res.json({
+      success: true,
+
+      users,
+
+      count: users.length,
+
+      pagination: {
+        currentPage,
+        page: currentPage,
+        limit,
+        totalRecords,
+        totalPages,
+
+        hasPreviousPage:
+          currentPage > 1,
+
+        hasNextPage:
+          currentPage < totalPages,
+
+        startRecord:
+          totalRecords === 0
+            ? 0
+            : skip + 1,
+
+        endRecord:
+          totalRecords === 0
+            ? 0
+            : Math.min(
+              skip + users.length,
+              totalRecords
+            ),
+      },
+    });
+  } catch (error) {
+    console.error(
+      "❌ User Master pagination load error:",
+      error
+    );
+
+    return res.status(500).json({
+      success: false,
+      message: "Failed to fetch users",
+      error: error.message,
+    });
+  }
+});
+app.post("/api/users", ensureConnection, requireRoles("DISTRIBUTOR_ADMIN"), async (req, res) => {
+  try {
+    const distributorId = String(req.body.distributorId || "").trim();
+    const firmId = String(req.body.firmId || "").trim();
+    const firmName = String(req.body.firmName || "").trim();
+    const userName = String(req.body.userName || "").trim();
+    const oldPassword = String(req.body.oldPassword || "");
+    const password = String(req.body.password || "");
+
+    if (!distributorId || !firmId) {
+      return res.status(400).json({
+        success: false,
+        message: "Distributor/Firm not found. Please login again.",
+      });
+    }
+
+    if (!userName || !password) {
+      return res.status(400).json({
+        success: false,
+        message: "User Name and Password are required",
+      });
+    }
+    if (!validatePasswordStrength(password)) {
+      return res.status(400).json({ success: false, message: "Password must be 12-128 characters and include uppercase, lowercase, number, and symbol characters." });
+    }
+
+    const existingUser = await User.findOne({
+      distributorId,
+      firmId,
+      userName,
+      isActive: true,
+    });
+
+    if (existingUser) {
+      return res.status(409).json({
+        success: false,
+        message: "This user already exists for this firm",
+      });
+    }
+
+    const allowedUserRoles = [
+      "ADMIN",
+      "MANAGER",
+      "ACCOUNTANT",
+      "SALESMAN",
+      "GODOWN",
+      "USER",
+    ];
+
+    const requestedRole = String(
+      req.body.role || "USER"
+    )
+      .trim()
+      .toUpperCase();
+
+    const safeRole =
+      allowedUserRoles.includes(requestedRole)
+        ? requestedRole
+        : "USER";
+
+    const assignedSalesmanCode = safeRole === "SALESMAN" ? String(req.body.salesmanCode || "").trim() : "";
+    if (safeRole === "SALESMAN") {
+      if (!assignedSalesmanCode) return res.status(400).json({ success: false, message: "A salesman master must be assigned to a SALESMAN user." });
+      const assignedSalesman = await mongoose.connection.collection("Mas_Salesman").findOne({
+        distributorId, firmId, salesmanCode: assignedSalesmanCode, isActive: { $ne: false },
+      });
+      if (!assignedSalesman) return res.status(400).json({ success: false, message: "The assigned salesman is invalid or inactive." });
+    }
+
+    const newUser = await User.create({
+      userId: "USR" + Date.now(),
+      distributorId,
+      firmId,
+      firmName,
+      userName,
+      oldPassword: "",
+      password: await hashPassword(password),
+      role: safeRole,
+      salesmanCode: assignedSalesmanCode,
+      isActive: true,
+    });
+
+    const data = newUser.toObject();
+    delete data.password;
+
+    res.status(201).json({
+      success: true,
+      message: "User created successfully",
+      data,
+    });
+  } catch (error) {
+    console.error("❌ User creation error:", error);
+
+    res.status(500).json({
+      success: false,
+      message: error.message || "User creation failed",
+    });
+  }
+});
+
+app.put("/api/users/:id", ensureConnection, requireRoles("DISTRIBUTOR_ADMIN"), async (req, res) => {
+  try {
+    const update = {
+        userName: String(req.body.userName || "").trim(),
+        role: ["ADMIN", "MANAGER", "ACCOUNTANT", "SALESMAN", "GODOWN", "USER"].includes(
+          String(req.body.role || "USER").trim().toUpperCase()
+        ) ? String(req.body.role || "USER").trim().toUpperCase() : "USER",
+        salesmanCode: String(req.body.role || "").trim().toUpperCase() === "SALESMAN" ? String(req.body.salesmanCode || "").trim() : "",
+        isActive: req.body.isActive ?? true,
+        oldPassword: "",
+      };
+    if (update.role === "SALESMAN") {
+      if (!update.salesmanCode) return res.status(400).json({ success: false, message: "A salesman master must be assigned to a SALESMAN user." });
+      const assignedSalesman = await mongoose.connection.collection("Mas_Salesman").findOne({
+        distributorId: req.auth.distributorId, firmId: req.auth.firmId,
+        salesmanCode: update.salesmanCode, isActive: { $ne: false },
+      });
+      if (!assignedSalesman) return res.status(400).json({ success: false, message: "The assigned salesman is invalid or inactive." });
+    }
+    if (req.body.password) {
+      if (!validatePasswordStrength(req.body.password)) {
+        return res.status(400).json({ success: false, message: "Password must be 12-128 characters and include uppercase, lowercase, number, and symbol characters." });
+      }
+      update.password = await hashPassword(req.body.password);
+    }
+    const updatedUser = await User.findOneAndUpdate(
+      { _id: req.params.id, distributorId: req.auth.distributorId, firmId: req.auth.firmId },
+      { $set: update, $inc: { sessionVersion: 1 } },
+      { new: true }
+    ).select("-password -oldPassword");
+
+    if (!updatedUser) {
+      return res.status(404).json({ success: false, message: "User not found" });
+    }
+
+    res.json({
+      success: true,
+      message: "User updated successfully",
+      data: updatedUser,
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: "User update failed",
+      error: error.message,
+    });
+  }
+});
+
+// ---------- USER ----------
+app.delete("/api/users/:id", ensureConnection, requireRoles("DISTRIBUTOR_ADMIN"), async (req, res) => {
+  try {
+    const deletedUser = await User.findOneAndUpdate(
+      { _id: req.params.id, distributorId: req.auth.distributorId, firmId: req.auth.firmId },
+      { $set: { isActive: false }, $inc: { sessionVersion: 1 } },
+      { new: true }
+    );
+
+    if (!deletedUser) {
+      return res.status(404).json({ success: false, message: "User not found" });
+    }
+
+    res.json({
+      success: true,
+      message: "User deleted successfully",
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: "User delete failed",
+      error: error.message,
+    });
+  }
+});
+const groupSchema = new mongoose.Schema(
+  {
+    groupCode: { type: String, required: true, trim: true },
+    groupName: { type: String, required: true, trim: true },
+    distributorId: { type: String, required: true },
+    firmId: { type: String, required: true },
+    firmName: { type: String, default: "" },
+    isActive: { type: Boolean, default: true },
+  },
+  { timestamps: true, collection: "Mas_Group" }
+);
+
+const categorySchema = new mongoose.Schema(
+  {
+    categoryCode: { type: String, required: true, trim: true },
+    categoryName: { type: String, required: true, trim: true },
+    distributorId: { type: String, required: true },
+    firmId: { type: String, required: true },
+    firmName: { type: String, default: "" },
+    isActive: { type: Boolean, default: true },
+  },
+  { timestamps: true, collection: "Mas_Category" }
+);
+
+// In server.js - Update productSchema
+const productSchema = new mongoose.Schema(
+  {
+    productCode: String,
+    productName: String,
+    companyId: String,
+    companyName: String,
+    group: String,
+    category: String,
+    description: String,
+    gst: Number,
+    basicUnit: String,
+    boxPack: Number,
+    inboxPack: Number,
+    retailerMargin: Number,
+    distributorMargin: Number,
+    hsn: String,
+    weight: Number,
+    eanCode: { type: String, default: "", trim: true },
+    Rate_Per_Unit: Number,
+    srateSelection: { type: String, default: "PURCHASE_RATE" },
+    Reorder_Level: Number,
+    Min_Stock_Holding: Number,
+    cess: Number,
+    cessAmt: Number,
+    ExpDays: Number,
+    create: String,
+    active: Boolean,
+    locked: Boolean,
+    isDrug: { type: Boolean, default: false },  // ← ADD THIS
+    allowFraction: Boolean,
+    distributorId: String,
+    firmId: String,
+    firmName: String,
+    isActive: { type: Boolean, default: true },
+  },
+  { timestamps: true, collection: "Mas_Product" }
+);
+groupSchema.index({ distributorId: 1, firmId: 1, isActive: 1, groupCode: 1 });
+categorySchema.index({ distributorId: 1, firmId: 1, isActive: 1, categoryCode: 1 });
+productSchema.index({ distributorId: 1, firmId: 1, isActive: 1, productCode: 1 });
+productSchema.index({ distributorId: 1, firmId: 1, isActive: 1, companyId: 1, productName: 1 });
+const Group = mongoose.model("Mas_Group", groupSchema);
+const Category = mongoose.model("Mas_Category", categorySchema);
+const Product = mongoose.model("Mas_Product", productSchema);
+
+const applyProductMasterTaxRates = async ({ items, distributorId, firmId, session }) => {
+  const codes = items.map((item) => String(item.productCode || item.ProductCode || item.productId || item.code || String(item.product || "").split(" - ")[0] || "").trim());
+  if (codes.some((code) => !code)) throw new Error("Every invoice item must contain a product code.");
+  const products = await Product.find({ distributorId, firmId, productCode: { $in: [...new Set(codes)] }, isActive: true }).session(session).lean();
+  const productMap = new Map(products.map((product) => [String(product.productCode), product]));
+  for (let index = 0; index < items.length; index += 1) {
+    const product = productMap.get(codes[index]);
+    if (!product) throw new Error(`Product ${codes[index]} was not found in this firm.`);
+    items[index].gst = Number(product.gst || 0);
+    items[index].gstPercent = Number(product.gst || 0);
+    items[index].GSTPercent = Number(product.gst || 0);
+    items[index].hsn = String(product.hsn || "");
+    items[index].HSN = String(product.hsn || "");
+    items[index].productName = String(product.productName || items[index].productName || "");
+    items[index].ProductName = String(product.productName || items[index].ProductName || "");
+  }
+};
+
+const openingTransactionSchema = new mongoose.Schema({
+  transactionType: { type: String, enum: ['SAL', 'PUR', 'CRN', 'DRN', 'REC', 'PAY', 'JOU', 'OPB'], required: true },
+  transactionSeries: { type: String, default: '' },
+  transactionNo: { type: String, required: true },
+  date: { type: String, required: true },
+  originalAmount: { type: Number, required: true, min: 0 },
+  balanceAmount: { type: Number, required: true, min: 0 },
+  balanceType: { type: String, enum: ['Dr', 'Cr'], required: true },
+  company: { type: String, default: '' },
+  salesman: { type: String, default: '' },
+  areaName: { type: String, default: '' },
+  adjusted: { type: String, enum: ['Y', 'N'], default: 'N' },
+  appeared: { type: String, default: 'M' },
+  mode: String, sourceType: String, sourceId: String,
+}, { _id: false });
+
+const accountSchema = new mongoose.Schema(
+  {
+    accountCode: { type: String, required: true, trim: true },
+    accountName: { type: String, required: true, trim: true },
+    partyCode: { type: String, default: "" },
+    partyName: { type: String, default: "" },
+
+    openingDate: { type: String, default: "" },
+
+    address: { type: String, default: "" },
+    town: { type: String, default: "" },
+    state: { type: String, default: "" },
+    pinCode: { type: String, default: "" },
+
+    phoneNo: { type: String, default: "" },
+    mobileNo: { type: String, default: "" },
+    emailId: { type: String, default: "" },
+
+    tinNo: { type: String, default: "" },
+    openingBal: { type: Number, default: 0 },
+    openingBalType: { type: String, default: "Dr" },
+    openingTransactions: { type: [openingTransactionSchema], default: undefined },
+
+    contactPerson: { type: String, default: "" },
+    invType: { type: String, default: "TAXABLE" },
+    taxOn: { type: String, default: "SRATE" },
+
+    panNo: { type: String, default: "" },
+    foodLicense: { type: String, default: "" },
+    gstNo: { type: String, default: "" },
+    billToAdd1: { type: String, default: "" },
+    tanNo: { type: String, default: "" },
+
+    gstType: { type: String, default: "Unregistered" },
+    gstDate: { type: String, default: "" },
+    gstClsDate: { type: String, default: "" },
+    closingDate: { type: String, default: "" },
+
+    add2: { type: String, default: "" },
+    tcsPercent: { type: Number, default: 0 },
+    allowInPurchase: { type: String, default: "N" },
+
+    drugLicNo: { type: String, default: "" },
+    drugExpDate: { type: String, default: "" },
+
+    // 🔥 FIX: These fields must be properly defined
+    creditDays: { type: Number, default: 0 },
+    creditBills: { type: Number, default: 0 },
+    lockDays: { type: Number, default: 0 },
+    creditAmt: { type: Number, default: 0 },
+    blackListed: { type: String, default: "NO", enum: ["YES", "NO"] },
+    lastBillDate: { type: String, default: "" },
+    lastInvoiceDate: { type: String, default: "" },
+
+    distributorId: { type: String, required: true },
+    firmId: { type: String, required: true },
+    firmName: { type: String, default: "" },
+
+    areaCode: { type: String, default: "" },
+    areaName: { type: String, default: "" },
+    isLock: { type: String, default: "NO" },
+    isStar: { type: String, default: "NO" },
+    unrecoChq: { type: String, default: "" },
+
+    isActive: { type: Boolean, default: true },
+  },
+  { timestamps: true, collection: "Mas_Account" }
+);
+accountSchema.index({ distributorId: 1, firmId: 1, accountCode: 1 });
+accountSchema.index({ distributorId: 1, firmId: 1, isActive: 1, accountName: 1 });
+accountSchema.index({ distributorId: 1, firmId: 1, areaCode: 1, isActive: 1 });
+const Account = mongoose.model("Mas_Account", accountSchema);
+
+const otherAccountSchema = new mongoose.Schema(
+  {
+    lastAccount: { type: String, default: "" },
+
+    accountCode: { type: String, required: true, trim: true },
+    accountName: { type: String, required: true, trim: true },
+    accountGroup: { type: String, default: "" },
+
+    openingDate: { type: String, default: "" },
+
+    address: { type: String, default: "" },
+    town: { type: String, default: "" },
+    state: { type: String, default: "" },
+    country: { type: String, default: "India" },
+    pinCode: { type: String, default: "" },
+
+    phoneNo: { type: String, default: "" },
+    mobileNo: { type: String, default: "" },
+    emailId: { type: String, default: "" },
+
+    tinNo: { type: String, default: "" },
+
+    openingBal: { type: Number, default: 0 },
+    openingBalType: { type: String, default: "Dr" },
+
+    invType: { type: String, default: "TAXABLE" },
+    taxOn: { type: String, default: "SRATE" },
+
+    bankAccountNo: { type: String, default: "" },
+    ifscCode: { type: String, default: "" },
+    branch: { type: String, default: "" },
+    branchName: { type: String, default: "" },
+
+    panNo: { type: String, default: "" },
+    foodLicense: { type: String, default: "" },
+    gstNo: { type: String, default: "" },
+
+    billToAdd1: { type: String, default: "" },
+    remark: { type: String, default: "" },
+
+    tcsPercent: { type: Number, default: 0 },
+    tanNo: { type: String, default: "" },
+
+    gstType: { type: String, default: "Unregistered" },
+    gstDate: { type: String, default: "" },
+    add2: { type: String, default: "" },
+    gstClsDate: { type: String, default: "" },
+
+    distributorId: { type: String, required: true },
+    firmId: { type: String, required: true },
+    firmName: { type: String, default: "" },
+
+    isActive: { type: Boolean, default: true },
+  },
+  { timestamps: true, collection: "Mas_OtherAccount" }
+);
+
+otherAccountSchema.index(
+  { distributorId: 1, firmId: 1, accountCode: 1 },
+  { unique: true }
+);
+otherAccountSchema.index({ distributorId: 1, firmId: 1, isActive: 1, accountName: 1 });
+const gstSchema = new mongoose.Schema(
+  {
+    gstCode: { type: String, required: true, trim: true },
+    vatPercent: { type: Number, required: true },
+
+    purchaseType: {
+      type: String,
+      default: "VAT ON PURCHASE PRICE",
+    },
+    salesType: {
+      type: String,
+      default: "VAT ON SALES PRICE",
+    },
+
+    distributorId: { type: String, required: true },
+    firmId: { type: String, required: true },
+    firmName: { type: String, default: "" },
+
+    isActive: { type: Boolean, default: true },
+  },
+  { timestamps: true, collection: "Mas_GST" }
+);
+
+gstSchema.index(
+  { distributorId: 1, firmId: 1, gstCode: 1 },
+  { unique: true }
+);
+
+const GST = mongoose.model("Mas_GST", gstSchema);
+
+const salesmanSchema = new mongoose.Schema(
+  {
+    salesmanCode: { type: String, required: true, trim: true },
+    salesmanName: { type: String, required: true, trim: true },
+    salesmanType: { type: String, default: "SALESMAN" },
+
+    dateOfBirth: { type: String, default: "" },
+    address: { type: String, default: "" },
+    town: { type: String, default: "" },
+    pinCode: { type: String, default: "" },
+    state: { type: String, default: "" },
+    country: { type: String, default: "India" },
+
+    phoneNo: { type: String, default: "" },
+    mobileNo: { type: String, default: "" },
+    emailId: { type: String, default: "" },
+
+    qualification: { type: String, default: "" },
+    reference: { type: String, default: "" },
+    imeiNo: { type: String, default: "" },
+
+    distributorId: { type: String, required: true },
+    firmId: { type: String, required: true },
+    firmName: { type: String, default: "" },
+
+    isActive: { type: Boolean, default: true },
+  },
+  { timestamps: true, collection: "Mas_Salesman" }
+);
+
+salesmanSchema.index(
+  { distributorId: 1, firmId: 1, salesmanCode: 1 },
+  { unique: true }
+);
+salesmanSchema.index({ distributorId: 1, firmId: 1, isActive: 1, salesmanName: 1 });
+
+const Salesman = mongoose.model("Mas_Salesman", salesmanSchema);
+
+const areaSchema = new mongoose.Schema(
+  {
+    areaCode: { type: String, required: true, trim: true },
+    areaName: { type: String, required: true, trim: true },
+
+    distributorId: { type: String, required: true },
+    firmId: { type: String, required: true },
+    firmName: { type: String, default: "" },
+
+    isActive: { type: Boolean, default: true },
+  },
+  { timestamps: true, collection: "Mas_Area" }
+);
+
+areaSchema.index(
+  { distributorId: 1, firmId: 1, areaCode: 1 },
+  { unique: true }
+);
+areaSchema.index({ distributorId: 1, firmId: 1, isActive: 1, areaName: 1 });
+
+const Area = mongoose.model("Mas_Area", areaSchema);
+
+const godownSchema = new mongoose.Schema(
+  {
+    godownCode: { type: String, required: true, trim: true },
+    godownName: { type: String, required: true, trim: true },
+
+    address: { type: String, default: "" },
+    location: { type: String, default: "" },
+
+    distributorId: { type: String, required: true },
+    firmId: { type: String, required: true },
+    firmName: { type: String, default: "" },
+
+    isActive: { type: Boolean, default: true },
+  },
+  {
+    timestamps: true,
+    collection: "Mas_Godown",
+  }
+);
+
+godownSchema.index(
+  { distributorId: 1, firmId: 1, godownCode: 1 },
+  { unique: true }
+);
+godownSchema.index({ distributorId: 1, firmId: 1, isActive: 1, godownName: 1 });
+
+// Keep the model name distinct from the `Godown` description field used by
+// sales, quotation and purchase request payloads. Route-level destructuring of
+// that field must never shadow the database model.
+const GodownModel = mongoose.models.Mas_Godown || mongoose.model("Mas_Godown", godownSchema);
+// ============================================================
+// PURCHASE BILL MODEL
+// Fix: ReferenceError: PurchaseBill is not defined
+// ============================================================
+const PurchaseBillSchema = new mongoose.Schema(
+  {},
+  {
+    strict: false,
+    collection: 'purchasebills'
+  }
+);
+
+const PurchaseBill =
+  mongoose.models.PurchaseBill ||
+  mongoose.model('PurchaseBill', PurchaseBillSchema);
+const customerBankSchema = new mongoose.Schema(
+  {
+    bankCode: { type: String, required: true, trim: true },
+    bankName: { type: String, required: true, trim: true },
+
+    accountNumber: { type: String, default: "", trim: true }, // NOT REQUIRED NOW
+    ifscCode: { type: String, default: "", trim: true },
+    branchName: { type: String, default: "", trim: true },
+
+    accountType: { type: String, default: "Savings" },
+    clearingType: { type: String, default: "LOCAL", trim: true },
+
+    customerName: { type: String, default: "" },
+    customerCode: { type: String, default: "" },
+    mobileNo: { type: String, default: "" },
+    emailId: { type: String, default: "" },
+    upiId: { type: String, default: "" },
+    beneficiaryName: { type: String, default: "" },
+
+    swiftCode: { type: String, default: "" },
+    micrCode: { type: String, default: "" },
+    panNumber: { type: String, default: "" },
+    remarks: { type: String, default: "" },
+
+    distributorId: { type: String, required: true },
+    firmId: { type: String, required: true },
+    firmName: { type: String, default: "" },
+
+    isActive: { type: Boolean, default: true },
+  },
+  { timestamps: true, collection: "Mas_CustomerBank" }
+);
+
+customerBankSchema.index(
+  { distributorId: 1, firmId: 1, bankCode: 1 },
+  { unique: true }
+);
+customerBankSchema.index({ distributorId: 1, firmId: 1, isActive: 1, bankName: 1 });
+
+const CustomerBank = mongoose.model(
+  "Mas_CustomerBank",
+  customerBankSchema
+);
+
+const salesmanAreaMappingSchema = new mongoose.Schema(
+  {
+    companyCode: { type: String, required: true, trim: true },
+    companyName: { type: String, required: true, trim: true },
+
+    areaCode: { type: String, required: true, trim: true },
+    areaName: { type: String, required: true, trim: true },
+
+    salesmanCode: { type: String, required: true, trim: true },
+    salesmanName: { type: String, required: true, trim: true },
+
+    distributorId: { type: String, required: true },
+    firmId: { type: String, required: true },
+    firmName: { type: String, default: "" },
+
+    isActive: { type: Boolean, default: true },
+  },
+  {
+    timestamps: true,
+    collection: "Mas_SalesmanAreaMapping",
+  }
+);
+
+salesmanAreaMappingSchema.index(
+  { distributorId: 1, firmId: 1, companyCode: 1, areaCode: 1 },
+  { unique: true }
+);
+
+const SalesmanAreaMapping = mongoose.model(
+  "Mas_SalesmanAreaMapping",
+  salesmanAreaMappingSchema
+);
+
+
+/* =========================================================
+  PARTY SALES REPORT CRITERIA
+
+  Loads:
+  1. Companies
+  2. Parties mapped to selected company
+  3. Areas mapped to selected company
+  4. Salesmen mapped to selected company
+
+  GET /api/reports/party-sales/criteria
+  ========================================================= */
+
+app.get(
+  "/api/reports/party-sales/criteria",
+  ensureConnection,
+  async (req, res) => {
+    try {
+      const distributorId = String(
+        req.query.distributorId || ""
+      ).trim();
+
+      const firmId = String(
+        req.query.firmId || ""
+      ).trim();
+
+      const companyCode = String(
+        req.query.companyCode || ""
+      ).trim();
+
+      if (!distributorId || !firmId) {
+        return res.status(400).json({
+          success: false,
+          message:
+            "distributorId and firmId are required.",
+        });
+      }
+
+      const baseFilter = {
+        distributorId,
+        firmId,
+        isActive: true,
+      };
+
+      /*
+      * Company master is always returned so the company
+      * dropdown can load even before selecting a company.
+      */
+      const companies = await Company.find(baseFilter)
+        .select({
+          _id: 1,
+          companyCode: 1,
+          companyName: 1,
+        })
+        .sort({
+          companyName: 1,
+          companyCode: 1,
+        })
+        .lean();
+
+      /*
+      * Until a company is selected, there is no company-wise
+      * party/area/salesman mapping to return.
+      */
+      if (!companyCode) {
+        return res.json({
+          success: true,
+          companies,
+          parties: [],
+          areas: [],
+          salesmen: [],
+          partyMappings: [],
+          salesmanAreaMappings: [],
+        });
+      }
+
+      const mappingFilter = {
+        ...baseFilter,
+        companyCode,
+      };
+
+      const [
+        partyMappings,
+        salesmanAreaMappings,
+      ] = await Promise.all([
+        AreaToPartyMapping.find(mappingFilter)
+          .sort({
+            accountName: 1,
+            accountCode: 1,
+          })
+          .lean(),
+
+        SalesmanAreaMapping.find(mappingFilter)
+          .sort({
+            areaName: 1,
+            salesmanName: 1,
+          })
+          .lean(),
+      ]);
+
+      /*
+      * Build unique mapped party codes.
+      */
+      const mappedPartyCodes = [
+        ...new Set(
+          partyMappings
+            .map((mapping) =>
+              String(
+                mapping.accountCode || ""
+              ).trim()
+            )
+            .filter(Boolean)
+        ),
+      ];
+
+      /*
+      * Load original Account Master information for mapped
+      * parties. Mapping values are used as fallback.
+      */
+      const accountMasters =
+        mappedPartyCodes.length > 0
+          ? await Account.find({
+            ...baseFilter,
+            accountCode: {
+              $in: mappedPartyCodes,
+            },
+          })
+            .select({
+              _id: 1,
+              accountCode: 1,
+              accountName: 1,
+              areaCode: 1,
+              town: 1,
+              address: 1,
+              mobileNo: 1,
+              phoneNo: 1,
+              gstNo: 1,
+            })
+            .lean()
+          : [];
+
+      const accountMasterMap = new Map(
+        accountMasters.map((account) => [
+          String(
+            account.accountCode || ""
+          ).trim(),
+          account,
+        ])
+      );
+
+      const parties = partyMappings
+        .map((mapping) => {
+          const accountCode = String(
+            mapping.accountCode || ""
+          ).trim();
+
+          const account =
+            accountMasterMap.get(accountCode);
+
+          return {
+            _id:
+              account?._id ||
+              mapping._id,
+
+            accountCode,
+
+            accountName:
+              account?.accountName ||
+              mapping.accountName ||
+              "",
+
+            areaCode:
+              mapping.areaCode ||
+              account?.areaCode ||
+              "",
+
+            areaName:
+              mapping.areaName || "",
+
+            companyCode:
+              mapping.companyCode ||
+              companyCode,
+
+            companyName:
+              mapping.companyName || "",
+
+            town:
+              account?.town || "",
+
+            address:
+              account?.address || "",
+
+            mobileNo:
+              account?.mobileNo || "",
+
+            phoneNo:
+              account?.phoneNo || "",
+
+            gstNo:
+              account?.gstNo || "",
+          };
+        })
+        .filter(
+          (party) => party.accountCode
+        );
+
+      /*
+      * Areas come from both mapping collections:
+      * - Area-to-party mappings
+      * - Salesman-to-area mappings
+      */
+      const areaMap = new Map();
+
+      partyMappings.forEach((mapping) => {
+        const areaCode = String(
+          mapping.areaCode || ""
+        ).trim();
+
+        if (!areaCode) {
+          return;
+        }
+
+        areaMap.set(areaCode, {
+          areaCode,
+          areaName:
+            mapping.areaName || areaCode,
+          companyCode,
+        });
+      });
+
+      salesmanAreaMappings.forEach(
+        (mapping) => {
+          const areaCode = String(
+            mapping.areaCode || ""
+          ).trim();
+
+          if (!areaCode) {
+            return;
+          }
+
+          const oldArea =
+            areaMap.get(areaCode);
+
+          areaMap.set(areaCode, {
+            areaCode,
+            areaName:
+              mapping.areaName ||
+              oldArea?.areaName ||
+              areaCode,
+            companyCode,
+          });
+        }
+      );
+
+      const areas = Array.from(
+        areaMap.values()
+      ).sort((first, second) =>
+        String(first.areaName).localeCompare(
+          String(second.areaName)
+        )
+      );
+
+      /*
+      * Build unique company-mapped salesmen.
+      */
+      const salesmanMap = new Map();
+
+      salesmanAreaMappings.forEach(
+        (mapping) => {
+          const salesmanCode = String(
+            mapping.salesmanCode || ""
+          ).trim();
+
+          if (!salesmanCode) {
+            return;
+          }
+
+          const existing =
+            salesmanMap.get(salesmanCode);
+
+          salesmanMap.set(salesmanCode, {
+            salesmanCode,
+            salesmanName:
+              mapping.salesmanName ||
+              existing?.salesmanName ||
+              salesmanCode,
+
+            companyCode,
+
+            /*
+            * A salesman can be attached to more than one area.
+            */
+            areaCodes: [
+              ...new Set([
+                ...(existing?.areaCodes || []),
+                String(
+                  mapping.areaCode || ""
+                ).trim(),
+              ]),
+            ].filter(Boolean),
+          });
+        }
+      );
+
+      const mappedSalesmanCodes =
+        Array.from(
+          salesmanMap.keys()
+        );
+
+      /*
+      * Read original salesman names/details from master.
+      */
+      if (mappedSalesmanCodes.length > 0) {
+        const salesmanMasters =
+          await Salesman.find({
+            ...baseFilter,
+            salesmanCode: {
+              $in: mappedSalesmanCodes,
+            },
+          })
+            .select({
+              _id: 1,
+              salesmanCode: 1,
+              salesmanName: 1,
+              mobileNo: 1,
+              phoneNo: 1,
+            })
+            .lean();
+
+        salesmanMasters.forEach(
+          (salesman) => {
+            const salesmanCode = String(
+              salesman.salesmanCode || ""
+            ).trim();
+
+            const mapped =
+              salesmanMap.get(salesmanCode);
+
+            if (!mapped) {
+              return;
+            }
+
+            salesmanMap.set(salesmanCode, {
+              ...mapped,
+              _id: salesman._id,
+              salesmanName:
+                salesman.salesmanName ||
+                mapped.salesmanName,
+              mobileNo:
+                salesman.mobileNo || "",
+              phoneNo:
+                salesman.phoneNo || "",
+            });
+          }
+        );
+      }
+
+      const salesmen = Array.from(
+        salesmanMap.values()
+      ).sort((first, second) =>
+        String(
+          first.salesmanName
+        ).localeCompare(
+          String(second.salesmanName)
+        )
+      );
+
+      return res.json({
+        success: true,
+        companyCode,
+        companies,
+        parties,
+        areas,
+        salesmen,
+        partyMappings,
+
+        salesmanAreaMappings,
+      });
+    } catch (error) {
+      console.error(
+        "Party sales criteria error:",
+        error
+      );
+
+      return res.status(500).json({
+        success: false,
+        message:
+          "Failed to load report criteria.",
+        error: error.message,
+      });
+    }
+  }
+);
+const areaToPartyMappingSchema = new mongoose.Schema(
+  {
+    companyCode: String,
+    companyName: String,
+
+    accountCode: String,
+    accountName: String,
+
+    areaCode: String,
+    areaName: String,
+
+    // Customer code/name used by this specific company. These can differ
+    // from Account Master and therefore belong on the company mapping.
+    compaccode: { type: String, default: "" },
+    compacname: { type: String, default: "" },
+
+    distributorId: { type: String, required: true },
+    firmId: { type: String, required: true },
+    firmName: { type: String, default: "" },
+
+    isActive: { type: Boolean, default: true },
+  },
+  { timestamps: true, collection: "Mas_AreaToPartyMapping" }
+);
+
+areaToPartyMappingSchema.index(
+  { distributorId: 1, firmId: 1, companyCode: 1, accountCode: 1 },
+  { unique: true }
+);
+
+const AreaToPartyMapping = mongoose.model(
+  "Mas_AreaToPartyMapping",
+  areaToPartyMappingSchema
+);
+
+const validateAccountCompanyMappings = async (req, accountCode, accountName, session = null) => {
+  if (req.body.companyAreaMappings === undefined) return null;
+  if (!Array.isArray(req.body.companyAreaMappings)) {
+    throw Object.assign(new Error("Company area mappings must be a list."), { statusCode: 400 });
+  }
+
+  const rows = req.body.companyAreaMappings.filter((row) =>
+    row && [row.companyCode, row.areaCode, row.compaccode, row.compacname].some((value) => String(value || "").trim())
+  );
+  const normalized = [];
+  const companyCodes = new Set();
+  for (const row of rows) {
+    const companyCode = String(row.companyCode || "").trim();
+    const areaCode = String(row.areaCode || "").trim();
+    const compaccode = String(row.compaccode || "").trim();
+    const compacname = String(row.compacname || "").trim();
+    if (!companyCode || !areaCode || !compaccode || !compacname) {
+      throw Object.assign(new Error("Company, Area, Company Account Code and Company Account Name are required for every mapped row."), { statusCode: 400 });
+    }
+    if (companyCodes.has(companyCode)) {
+      throw Object.assign(new Error(`Company ${companyCode} is mapped more than once.`), { statusCode: 400 });
+    }
+    companyCodes.add(companyCode);
+    normalized.push({ companyCode, areaCode, compaccode, compacname });
+  }
+
+  const scope = { distributorId: req.auth.distributorId, firmId: req.auth.firmId, isActive: { $ne: false } };
+  const companies = await Company.find({ ...scope, companyCode: { $in: normalized.map((row) => row.companyCode) } })
+    .select("companyCode companyName").session(session).lean();
+  const areas = await Area.find({ ...scope, areaCode: { $in: normalized.map((row) => row.areaCode) } })
+    .select("areaCode areaName").session(session).lean();
+  const companyMap = new Map(companies.map((company) => [String(company.companyCode), company]));
+  const areaMap = new Map(areas.map((area) => [String(area.areaCode), area]));
+  if (companyMap.size !== companyCodes.size || areaMap.size !== new Set(normalized.map((row) => row.areaCode)).size) {
+    throw Object.assign(new Error("Select active companies and areas from this firm."), { statusCode: 400 });
+  }
+
+  return normalized.map((row) => ({
+    ...row,
+    companyName: String(companyMap.get(row.companyCode).companyName || "").trim(),
+    areaName: String(areaMap.get(row.areaCode).areaName || "").trim(),
+    accountCode,
+    accountName,
+    distributorId: req.auth.distributorId,
+    firmId: req.auth.firmId,
+    firmName: String(req.auth.firmName || req.body.firmName || "").trim(),
+    isActive: true,
+  }));
+};
+
+const syncAccountCompanyMappings = async (req, account, rows, session = null) => {
+  if (rows === null) return;
+  const scope = { distributorId: req.auth.distributorId, firmId: req.auth.firmId, accountCode: account.accountCode };
+  await AreaToPartyMapping.updateMany(scope, { $set: { isActive: false } }, { session });
+  if (!rows.length) return;
+  await AreaToPartyMapping.bulkWrite(rows.map((row) => ({
+    updateOne: {
+      filter: { ...scope, companyCode: row.companyCode },
+      update: { $set: { ...row, accountName: account.accountName, isActive: true } },
+      upsert: true,
+    },
+  })), { session });
+};
+
+// Mounted after the actual supported master/mapping models are registered so
+// imported records receive the same defaults and validation as normal saves.
+const importRouter = createImportRouter({
+  authorizeRequest: securityRouter.authorizeRequest,
+  models: {
+    Company,
+    Category,
+    Group,
+    Account,
+    Product,
+    Bank: CustomerBank,
+    Salesman,
+    Area,
+    AreaToPartyMapping,
+    SalesmanToAreaMapping: SalesmanAreaMapping,
+  },
+});
+app.use("/api", ensureConnection, importRouter);
+app.use("/api", ensureConnection, createDesktopImportRouter({
+  authorizeRequest: securityRouter.authorizeRequest,
+}));
+app.use("/api/product-mappings", ensureConnection, createProductMappingRouter({
+  authorizeRequest: securityRouter.authorizeRequest,
+  Product,
+}));
+
+const productSalesReportRouter = createProductSalesReportRouter(securityRouter);
+app.use("/api/reports", ensureConnection, productSalesReportRouter);
+
+const stockSchema = new mongoose.Schema(
+  {
+    GDCode: { type: String, required: true },
+    ProdCode: { type: String, required: true },
+    Batch: { type: String, default: "." },
+    ExpDt: { type: String, default: null },
+    MfgDt: { type: String, default: null },
+    MRP: { type: Number, default: 0 },
+    PRate: { type: Number, default: 0 },
+    SRate: { type: Number, default: 0 },
+    Qty: { type: Number, default: 0 },
+    IsLocked: { type: String, default: "N" },
+    BoxPack: { type: Number, default: 1 },
+    InBoxPack: { type: Number, default: 1 },
+
+    distributorId: { type: String, required: true },
+    firmId: { type: String, required: true },
+    firmName: { type: String, default: "" },
+  },
+  { timestamps: true, collection: "Mas_Stock" }
+);
+
+stockSchema.index(
+  { distributorId: 1, firmId: 1, GDCode: 1, ProdCode: 1, Batch: 1, MRP: 1 },
+  { unique: true }
+);
+
+const purchaseHeaderSchema = new mongoose.Schema(
+  {
+    distributorId: String,
+    firmId: String,
+    firmName: String,
+
+    invoiceDate: String,
+    vouSer: String,
+    vouNo: Number,
+    vno: String,
+
+    supplierCode: String,
+    supplierName: String,
+    company: String,
+
+    gdCode: String,
+    godownName: String,
+
+    isIgst: { type: String, default: "N" },
+    invoiceNumber: String,
+    narration: String,
+
+    discountPercent: Number,
+    mrpTotal: Number,
+    tcbPercent: Number,
+    tcbAmount: Number,
+    diBc1: Number,
+    afterDiBc1: Number,
+    groBsAmt: Number,
+    diBc2: Number,
+    afterDiBc2: Number,
+    qbtAmt: Number,
+    rounding: Number,
+    diBc3: Number,
+    afterDiBc3: Number,
+    ceBsAmt: Number,
+    grossAmount: Number,
+    cgstAmt: Number,
+    sgstAmt: Number,
+    igstAmt: Number,
+    netAmt: Number,
+
+    items: Array,
+    desktopImportReconciledAt: Date,
+    desktopImportStockKeys: { type: [String], default: undefined },
+    historicalSnapshot: { type: mongoose.Schema.Types.Mixed, default: null },
+    paymentAllocated: { type: Number, default: 0 },
+    isActive: { type: Boolean, default: true },
+  },
+  { timestamps: true, collection: "T_Pur_Header" }
+);
+
+purchaseHeaderSchema.index(
+  { distributorId: 1, firmId: 1, vouSer: 1, vouNo: 1 },
+  { unique: true }
+);
+// Cover the default purchase list and the most common supplier/date lookups.
+// These are deliberately separate from the unique voucher index: that index
+// cannot satisfy the date sort used by the list once a firm has substantial
+// history.
+purchaseHeaderSchema.index(
+  { distributorId: 1, firmId: 1, isActive: 1, invoiceDate: -1, vouNo: -1, _id: -1 }
+);
+purchaseHeaderSchema.index(
+  { distributorId: 1, firmId: 1, supplierCode: 1, isActive: 1, invoiceDate: -1 }
+);
+
+const Stock = mongoose.model("Mas_Stock", stockSchema);
+app.use(
+  "/api/batch-lock",
+  ensureConnection,
+  createBatchLockRouter({
+    Stock,
+    Product,
+    Company,
+    authorizeRequest: securityRouter.authorizeRequest,
+    authorize: securityRouter.authorize,
+  })
+);
+
+const stockAdjustmentSchema = new mongoose.Schema(
+  {
+    RequestId: { type: String, required: true },
+    VoucherNo: { type: String, required: true },
+    VoucherDate: { type: String, required: true },
+    AdjustmentType: { type: String, enum: ["IN", "OUT", "DAMAGE_IN", "DAMAGE_OUT"], required: true },
+    GDCode: { type: String, required: true },
+    GodownName: { type: String, default: "" },
+    CompanyCode: { type: String, default: "" },
+    ProdCode: { type: String, required: true },
+    ProductName: { type: String, default: "" },
+    Unit: { type: String, default: "PCS" },
+    Batch: { type: String, default: "." },
+    MRP: { type: Number, default: 0 },
+    PRate: { type: Number, default: 0 },
+    SRate: { type: Number, default: 0 },
+    MfgDate: { type: String, default: "" },
+    ExpiryDate: { type: String, default: "" },
+    BoxPack: { type: Number, default: 1 },
+    InBoxPack: { type: Number, default: 1 },
+    Qty: { type: Number, default: 0 },
+    FreeQty: { type: Number, default: 0 },
+    TotalQty: { type: Number, default: 0 },
+    BalanceAfter: { type: Number, default: 0 },
+    Narration: { type: String, default: "" },
+    Status: { type: String, enum: ["PENDING", "COMPLETED", "FAILED", "CANCELLED"], default: "PENDING" },
+    CancelledAt: Date,
+    CancelledBy: { type: String, default: "" },
+    CancellationReason: { type: String, default: "" },
+    EditHistory: { type: [mongoose.Schema.Types.Mixed], default: [] },
+    distributorId: { type: String, required: true },
+    firmId: { type: String, required: true },
+    firmName: { type: String, default: "" },
+  },
+  { timestamps: true, collection: "T_Stock_Adjustment" }
+);
+
+stockAdjustmentSchema.index(
+  { distributorId: 1, firmId: 1, RequestId: 1 },
+  { unique: true }
+);
+
+const StockAdjustment = mongoose.model("T_Stock_Adjustment", stockAdjustmentSchema);
+const PurchaseHeader = mongoose.model("T_Pur_Header", purchaseHeaderSchema);
+
+const enforceTrustedSalesRates = async ({ req, items, distributorId, firmId, gdCode, generalSetup, session }) => {
+  const normalize = (value) => String(value ?? "").trim();
+  const itemKey = (productCode, batch, mrp) => [normalize(productCode).toUpperCase(), normalize(batch || ".").toUpperCase(), Number(mrp || 0)].join("\u0000");
+  const productCodes = [...new Set(items.map((item) => normalize(item.productCode || item.productId || item.code || String(item.product || "").split(" - ")[0])).filter(Boolean))];
+  const stockRows = await Stock.find({ distributorId, firmId, GDCode: normalize(gdCode), ProdCode: { $in: productCodes } }).session(session).lean();
+  const products = await Product.find({ distributorId, firmId, productCode: { $in: productCodes }, isActive: true }).session(session).lean();
+  const stockByKey = new Map(stockRows.map((row) => [itemKey(row.ProdCode, row.Batch, row.MRP), row]));
+  const productByCode = new Map(products.map((row) => [normalize(row.productCode).toUpperCase(), row]));
+  const overrideRequested = items.some((item) => {
+    const code = normalize(item.productCode || item.productId || item.code || String(item.product || "").split(" - ")[0]);
+    const stock = stockByKey.get(itemKey(code, item.batchNo || item.Batch || item.selectedBatch?.Batch, item.mrp ?? item.MRP ?? item.selectedBatch?.MRP));
+    const product = productByCode.get(code.toUpperCase());
+    const trusted = Number(stock?.SRate || product?.Rate_Per_Unit || 0);
+    const submitted = Number(item.rate ?? item.salesRate ?? item.SRate ?? 0);
+    return trusted <= 0 || Math.abs(submitted - trusted) > 0.001;
+  });
+  let overrideAllowed = false;
+  if (overrideRequested && generalSetup?.allowChangeSaleRate === true) {
+    overrideAllowed = await securityRouter.authorize(
+      distributorId, firmId, req.auth.userId, req.auth.role,
+      "SALES", "SALES_RATE_OVERRIDE", "edit"
+    );
+  }
+  const overrideReason = normalize(req.body.rateOverrideReason || req.body.overrideReason);
+
+  for (let index = 0; index < items.length; index += 1) {
+    const item = items[index];
+    const code = normalize(item.productCode || item.productId || item.code || String(item.product || "").split(" - ")[0]);
+    const stock = stockByKey.get(itemKey(code, item.batchNo || item.Batch || item.selectedBatch?.Batch, item.mrp ?? item.MRP ?? item.selectedBatch?.MRP));
+    const product = productByCode.get(code.toUpperCase());
+    const trustedRate = Number(stock?.SRate || product?.Rate_Per_Unit || 0);
+    const submittedRate = Number(item.rate ?? item.salesRate ?? item.SRate ?? 0);
+    const changed = trustedRate <= 0 || Math.abs(submittedRate - trustedRate) > 0.001;
+    if (changed && (!overrideAllowed || !overrideReason)) {
+      const error = new Error(trustedRate > 0
+        ? `Sales rate for product ${code} must be ${trustedRate.toFixed(2)}. A permitted override with a reason is required.`
+        : `A trusted sales rate is unavailable for product ${code}. A permitted override with a reason is required.`);
+      error.statusCode = 403;
+      throw error;
+    }
+    const appliedRate = changed ? submittedRate : trustedRate;
+    Object.assign(item, {
+      rate: appliedRate,
+      salesRate: appliedRate,
+      SRate: appliedRate,
+      originalRate: trustedRate,
+      appliedRate,
+      rateOverrideReason: changed ? overrideReason : "",
+      rateOverrideBy: changed ? req.auth.userId : "",
+      rateOverrideAt: changed ? new Date() : null,
+    });
+  }
+};
+
+const salesHeaderSchema = new mongoose.Schema(
+  {
+    distributorId: String,
+    firmId: String,
+    firmName: String,
+
+    BillDate: String,
+    Godown: String,
+    GDCode: String,
+
+    CompanyCode: String,
+    CompanyName: String,
+    AreaCode: String,
+    AreaName: String,
+    PartyCode: String,
+    PartyName: String,
+
+    BillSeries: String,
+    BillNo: Number,
+    BillType: String,
+    SalesEntryType: {
+      type: String,
+      enum: ["BILLING", "COUNTER_SALES"],
+      default: "BILLING",
+    },
+
+    BillStatus: {
+      type: String,
+      default: "ACTIVE",
+    },
+
+    IsBillCancelled: {
+      type: Boolean,
+      default: false,
+    },
+
+    CancelledAt: Date,
+    CancelledBy: { type: String, default: "" },
+    CancelReason: { type: String, default: "" },
+    DueDate: String,
+
+    SalesmanCode: String,
+    SalesmanName: String,
+    Narration: String,
+
+    LoadSeries: {
+      type: String,
+      default: "",
+    },
+
+    LoadNo: {
+      type: Number,
+      default: null,
+    },
+
+    IsLoaded: {
+      type: Boolean,
+      default: false,
+    },
+
+    GrossAmount: {
+      type: Number,
+      default: 0,
+    },
+
+    TPRAmount: {
+      type: Number,
+      default: 0,
+    },
+
+    SchemeAmount: {
+      type: Number,
+      default: 0,
+    },
+
+    StarDiscountAmount: {
+      type: Number,
+      default: 0,
+    },
+
+    CashDiscountAmount: {
+      type: Number,
+      default: 0,
+    },
+
+    DisplayAmount: {
+      type: Number,
+      default: 0,
+    },
+
+    CouponAmount: {
+      type: Number,
+      default: 0,
+    },
+
+    AddLessAmount: {
+      type: Number,
+      default: 0,
+    },
+
+    TaxableValue: {
+      type: Number,
+      default: 0,
+    },
+
+    SGSTAmount: {
+      type: Number,
+      default: 0,
+    },
+
+    CGSTAmount: {
+      type: Number,
+      default: 0,
+    },
+
+    IGSTAmount: {
+      type: Number,
+      default: 0,
+    },
+
+    OriginalNetAmount: {
+      type: Number,
+      default: 0,
+    },
+
+    CreditNoteAmount: {
+      type: Number,
+      default: 0,
+    },
+
+    NetAmount: {
+      type: Number,
+      default: 0,
+    },
+
+    TotalQty: Number,
+    TotalFreeQty: Number,
+    TotalItems: Number,
+    historicalSnapshot: { type: mongoose.Schema.Types.Mixed, default: null },
+    creditControl: { type: mongoose.Schema.Types.Mixed, default: null },
+
+    items: Array,
+
+    isActive: {
+      type: Boolean,
+      default: true,
+    },
+  },
+  {
+    timestamps: true,
+    collection: "T_Sal_Header",
+  }
+);
+salesHeaderSchema.index(
+  { distributorId: 1, firmId: 1, BillSeries: 1, BillNo: 1 },
+  { unique: true }
+);
+salesHeaderSchema.index(
+  { distributorId: 1, firmId: 1, SalesEntryType: 1, BillDate: -1, BillNo: -1, _id: -1 }
+);
+salesHeaderSchema.index(
+  { distributorId: 1, firmId: 1, PartyCode: 1, isActive: 1, IsBillCancelled: 1, DueDate: 1 }
+);
+salesHeaderSchema.index(
+  { distributorId: 1, firmId: 1, GDCode: 1, isActive: 1, BillDate: -1 }
+);
+
+const SalesHeader = mongoose.model("T_Sal_Header", salesHeaderSchema);
+
+const normalizeSalesEntryType = (value) =>
+  String(value || "")
+    .trim()
+    .toUpperCase()
+    .replace(/[\s-]+/g, "_") === "COUNTER_SALES"
+    ? "COUNTER_SALES"
+    : "BILLING";
+
+/*
+ * SalesEntryType was added after sales billing was already in use. Keep
+ * records without the field (and records written with an older casing/name)
+ * in Billing, while recognizing all common Counter Sales spellings.
+ */
+const buildSalesEntryTypeFilter = (value) => {
+  const counterSalesPattern = /^COUNTER[\s_-]*SALES$/i;
+
+  if (normalizeSalesEntryType(value) === "COUNTER_SALES") {
+    return {
+      $or: [
+        { SalesEntryType: counterSalesPattern },
+        { salesEntryType: counterSalesPattern },
+      ],
+    };
+  }
+
+  return {
+    $nor: [
+      { SalesEntryType: counterSalesPattern },
+      { salesEntryType: counterSalesPattern },
+    ],
+  };
+};
+
+const buildSalesHistoricalSnapshot = async ({ distributorId, firmId, companyCode, partyCode, items, session }) => {
+  const productCodes = [...new Set(items.map((item) => String(item.productCode || item.productId || item.code || "").trim()).filter(Boolean))];
+  const company = await Company.findOne({ distributorId, firmId, companyCode }).session(session).lean();
+  const party = await Account.findOne({ distributorId, firmId, accountCode: partyCode }).session(session).lean();
+  const products = await Product.find({ distributorId, firmId, productCode: { $in: productCodes } }).session(session).lean();
+  const productMap = new Map(products.map((product) => [String(product.productCode), product]));
+  return {
+    capturedAt: new Date(),
+    company: company ? { code: company.companyCode, name: company.companyName, address: company.companyAddress, branchAddress: company.branchOfficeAddress || "", gstin: company.gstNo || "", state: company.state || "", pinCode: company.pinCode || "" } : null,
+    party: party ? { code: party.accountCode, name: party.accountName, address: party.address || "", address2: party.add2 || "", town: party.town || "", pinCode: party.pinCode || "", gstin: party.gstNo || "", state: party.state || "", placeOfSupply: party.state || "" } : null,
+    products: items.map((item) => {
+      const code = String(item.productCode || item.productId || item.code || "").trim();
+      const product = productMap.get(code);
+      return { code, name: product?.productName || item.productName || "", hsn: product?.hsn || item.hsn || "", gstRate: Number(product?.gst ?? item.GSTPercent ?? item.gstPercent ?? 0), unit: product?.basicUnit || item.unit || "", mrp: Number(item.mrp ?? item.MRP ?? 0), rate: Number(item.rate ?? item.SRate ?? 0) };
+    }),
+  };
+};
+app.get(
+  "/api/reports/party-sales",
+  ensureConnection,
+  securityRouter.authorizeRequest("REPORTS", "PARTY_WISE_SALES", "view"),
+  async (req, res) => {
+    try {
+      const distributorId = String(
+        req.query.distributorId || ""
+      ).trim();
+
+      const firmId = String(
+        req.query.firmId || ""
+      ).trim();
+
+      const companyCode = String(
+        req.query.companyCode || ""
+      ).trim();
+
+      const reportLevel = String(
+        req.query.reportLevel ||
+        "salesSummary"
+      ).trim();
+
+      const productWise =
+        String(
+          req.query.productWise ||
+          "no"
+        ).toLowerCase() === "yes";
+
+      const withCreditNote =
+        String(
+          req.query.withCreditNote ||
+          "no"
+        ).toLowerCase() === "yes";
+
+      const fromDate = String(
+        req.query.fromDate || ""
+      ).trim();
+
+      const toDate = String(
+        req.query.toDate || ""
+      ).trim();
+
+      const orderBy = String(
+        req.query.orderBy ||
+        "partyName"
+      ).trim();
+
+      /*
+      * Convert comma-separated query parameters
+      * into cleaned arrays.
+      */
+      const parseCsv = (value) =>
+        String(value || "")
+          .split(",")
+          .map((item) =>
+            item.trim()
+          )
+          .filter(Boolean);
+
+      const selectedPartyCodes =
+        parseCsv(
+          req.query.selectedPartyCodes
+        );
+
+      const selectedAreaCodes =
+        parseCsv(
+          req.query.selectedAreaCodes
+        );
+
+      const selectedSalesmanCodes =
+        parseCsv(
+          req.query
+            .selectedSalesmanCodes
+        );
+
+      /*
+      * Basic validation.
+      */
+      if (
+        !distributorId ||
+        !firmId
+      ) {
+        return res
+          .status(400)
+          .json({
+            success: false,
+            message:
+              "distributorId and firmId are required.",
+          });
+      }
+
+      if (
+        !fromDate ||
+        !toDate
+      ) {
+        return res
+          .status(400)
+          .json({
+            success: false,
+            message:
+              "From Date and To Date are required.",
+          });
+      }
+
+      if (fromDate > toDate) {
+        return res
+          .status(400)
+          .json({
+            success: false,
+            message:
+              "From Date cannot be greater than To Date.",
+          });
+      }
+
+      if (
+        reportLevel ===
+        "selectedParty" &&
+        selectedPartyCodes.length ===
+        0
+      ) {
+        return res
+          .status(400)
+          .json({
+            success: false,
+            message:
+              "Select at least one party.",
+          });
+      }
+
+      /*
+      * Prepare sales bill filter.
+      */
+      const match = {
+        distributorId,
+        firmId,
+        isActive: true,
+
+        IsBillCancelled: {
+          $ne: true,
+        },
+
+        BillStatus: {
+          $ne: "CANCELLED",
+        },
+
+        BillDate: {
+          $gte: fromDate,
+          $lte: toDate,
+        },
+      };
+
+      if (companyCode) {
+        match.CompanyCode =
+          companyCode;
+      }
+
+      if (
+        selectedPartyCodes.length >
+        0
+      ) {
+        match.PartyCode = {
+          $in: selectedPartyCodes,
+        };
+      }
+
+      if (
+        selectedAreaCodes.length >
+        0
+      ) {
+        match.AreaCode = {
+          $in: selectedAreaCodes,
+        };
+      }
+
+      if (
+        selectedSalesmanCodes.length >
+        0
+      ) {
+        match.SalesmanCode = {
+          $in:
+            selectedSalesmanCodes,
+        };
+      }
+
+      /*
+      * Load all matching sales bills.
+      */
+      const bills =
+        await SalesHeader.find(
+          match
+        )
+          .sort({
+            BillDate: 1,
+            BillSeries: 1,
+            BillNo: 1,
+          })
+          .lean();
+
+      /*
+      * Return an empty report cleanly.
+      */
+      if (bills.length === 0) {
+        return res.json({
+          success: true,
+          count: 0,
+          reportLevel,
+          productWise,
+          rows: [],
+          columns: [],
+        });
+      }
+
+      /*
+      * Safely convert different possible
+      * numeric field formats.
+      */
+      const toNumber = (
+        ...values
+      ) => {
+        for (const value of values) {
+          if (
+            value !== undefined &&
+            value !== null &&
+            value !== ""
+          ) {
+            const number =
+              Number(value);
+
+            if (
+              !Number.isNaN(number)
+            ) {
+              return number;
+            }
+          }
+        }
+
+        return 0;
+      };
+
+      /*
+      * Read the first available property
+      * from an invoice item.
+      */
+      const getItemValue = (
+        item,
+        ...keys
+      ) => {
+        for (const key of keys) {
+          if (
+            item?.[key] !==
+            undefined &&
+            item?.[key] !== null
+          ) {
+            return item[key];
+          }
+        }
+
+        return "";
+      };
+
+      /*
+      * Read product code and product name
+      * from all supported invoice formats.
+      *
+      * Some invoices store:
+      * product: "986523 - BOURNVILLA 250 GM"
+      */
+      const getProductDetails = (
+        item = {}
+      ) => {
+        const combinedProduct =
+          String(
+            getItemValue(
+              item,
+              "product",
+              "Product",
+              "productDisplay",
+              "productDescription"
+            ) || ""
+          ).trim();
+
+        let productCode =
+          String(
+            getItemValue(
+              item,
+              "productCode",
+              "ProductCode",
+              "prodCode",
+              "ProdCode",
+              "productId",
+              "ProductId",
+              "code"
+            ) || ""
+          ).trim();
+
+        let productName =
+          String(
+            getItemValue(
+              item,
+              "productName",
+              "ProductName",
+              "prodName",
+              "ProdName",
+              "name"
+            ) || ""
+          ).trim();
+
+        if (combinedProduct) {
+          const separatorIndex =
+            combinedProduct.indexOf(
+              " - "
+            );
+
+          if (
+            separatorIndex >= 0
+          ) {
+            const parsedCode =
+              combinedProduct
+                .slice(
+                  0,
+                  separatorIndex
+                )
+                .trim();
+
+            const parsedName =
+              combinedProduct
+                .slice(
+                  separatorIndex +
+                  3
+                )
+                .trim();
+
+            if (!productCode) {
+              productCode =
+                parsedCode;
+            }
+
+            if (!productName) {
+              productName =
+                parsedName;
+            }
+          } else if (
+            !productName
+          ) {
+            productName =
+              combinedProduct;
+          }
+        }
+
+        return {
+          productCode,
+          productName,
+        };
+      };
+
+      /*
+      * Collect every product code used in
+      * the selected sales invoices.
+      */
+      const soldProductCodes = [
+        ...new Set(
+          bills
+            .flatMap((bill) => {
+              const items =
+                Array.isArray(
+                  bill.items
+                )
+                  ? bill.items
+                  : [];
+
+              return items.map(
+                (item) =>
+                  getProductDetails(
+                    item
+                  ).productCode
+              );
+            })
+            .filter(Boolean)
+        ),
+      ];
+
+      /*
+      * Load matching product master rows.
+      * This provides product-name fallback
+      * where old invoices only have code.
+      */
+      const productMasters =
+        soldProductCodes.length >
+          0
+          ? await Product.find({
+            distributorId,
+            firmId,
+
+            productCode: {
+              $in:
+                soldProductCodes,
+            },
+          })
+            .select({
+              productCode: 1,
+              productName: 1,
+              companyId: 1,
+              companyName: 1,
+            })
+            .lean()
+          : [];
+
+      const productMasterMap =
+        new Map(
+          productMasters.map(
+            (product) => [
+              String(
+                product.productCode ||
+                ""
+              ).trim(),
+              product,
+            ]
+          )
+        );
+
+      /*
+      * Load every Mas_Stock row for the
+      * products appearing in selected bills.
+      *
+      * PRate, SRate, MRP and Batch are read
+      * from this collection.
+      */
+      const stockRows =
+        soldProductCodes.length >
+          0
+          ? await Stock.find({
+            distributorId,
+            firmId,
+
+            ProdCode: {
+              $in:
+                soldProductCodes,
+            },
+          })
+            .select({
+              _id: 1,
+              GDCode: 1,
+              ProdCode: 1,
+              Batch: 1,
+              MRP: 1,
+              PRate: 1,
+              SRate: 1,
+              Qty: 1,
+              MfgDt: 1,
+              ExpDt: 1,
+              BoxPack: 1,
+              InBoxPack: 1,
+              IsLocked: 1,
+            })
+            .lean()
+          : [];
+
+      /*
+      * Create product-wise stock lookup.
+      * A product can have several batches,
+      * MRP values and godowns.
+      */
+      const stockProductMap =
+        new Map();
+
+      stockRows.forEach(
+        (stock) => {
+          const productCode =
+            String(
+              stock.ProdCode ||
+              ""
+            ).trim();
+
+          if (!productCode) {
+            return;
+          }
+
+          if (
+            !stockProductMap.has(
+              productCode
+            )
+          ) {
+            stockProductMap.set(
+              productCode,
+              []
+            );
+          }
+
+          stockProductMap
+            .get(productCode)
+            .push(stock);
+        }
+      );
+
+      /*
+      * Normalize batch value so empty batch
+      * and "." can be matched consistently.
+      */
+      const normalizeBatch = (
+        value
+      ) => {
+        const batch = String(
+          value ?? ""
+        ).trim();
+
+        return batch || ".";
+      };
+
+      /*
+      * Find the most accurate Mas_Stock row
+      * for one sales invoice item.
+      *
+      * Matching priority:
+      * 1. Product + Godown + Batch + MRP
+      * 2. Product + Batch + MRP
+      * 3. Product + Godown + Batch
+      * 4. Product + Batch
+      * 5. Product + Godown + MRP
+      * 6. Product + MRP
+      * 7. Product + Godown
+      * 8. First product stock row
+      */
+      const findItemStock = (
+        bill,
+        item,
+        productCode
+      ) => {
+        if (!productCode) {
+          return null;
+        }
+
+        const stockOptions =
+          stockProductMap.get(
+            productCode
+          ) || [];
+
+        if (
+          stockOptions.length ===
+          0
+        ) {
+          return null;
+        }
+
+        const selectedBatch =
+          item?.selectedBatch &&
+            typeof item
+              .selectedBatch ===
+            "object"
+            ? item.selectedBatch
+            : {};
+
+        const godownCode =
+          String(
+            bill.GDCode ||
+            item.GDCode ||
+            item.gdCode ||
+            selectedBatch.GDCode ||
+            selectedBatch.gdCode ||
+            ""
+          ).trim();
+
+        const batch =
+          normalizeBatch(
+            getItemValue(
+              item,
+              "batchNo",
+              "BatchNo",
+              "batch",
+              "Batch"
+            ) ||
+            selectedBatch.batchNo ||
+            selectedBatch.BatchNo ||
+            selectedBatch.batch ||
+            selectedBatch.Batch
+          );
+
+        const mrp = toNumber(
+          getItemValue(
+            item,
+            "mrp",
+            "MRP",
+            "productMrp",
+            "ProductMRP"
+          ),
+          selectedBatch.mrp,
+          selectedBatch.MRP
+        );
+
+        const sameGodown = (
+          stock
+        ) =>
+          !godownCode ||
+          String(
+            stock.GDCode || ""
+          ).trim() === godownCode;
+
+        const sameBatch = (
+          stock
+        ) =>
+          normalizeBatch(
+            stock.Batch
+          ) === batch;
+
+        const sameMrp = (
+          stock
+        ) =>
+          mrp <= 0 ||
+          Number(
+            stock.MRP || 0
+          ) === mrp;
+
+        return (
+          stockOptions.find(
+            (stock) =>
+              sameGodown(stock) &&
+              sameBatch(stock) &&
+              sameMrp(stock)
+          ) ||
+          stockOptions.find(
+            (stock) =>
+              sameBatch(stock) &&
+              sameMrp(stock)
+          ) ||
+          stockOptions.find(
+            (stock) =>
+              sameGodown(stock) &&
+              sameBatch(stock)
+          ) ||
+          stockOptions.find(
+            (stock) =>
+              sameBatch(stock)
+          ) ||
+          stockOptions.find(
+            (stock) =>
+              sameGodown(stock) &&
+              sameMrp(stock)
+          ) ||
+          stockOptions.find(
+            (stock) =>
+              sameMrp(stock)
+          ) ||
+          stockOptions.find(
+            (stock) =>
+              sameGodown(stock)
+          ) ||
+          stockOptions[0] ||
+          null
+        );
+      };
+
+      /*
+      * Build one report row for every
+      * product in every matching invoice.
+      */
+      const detailRows = [];
+
+      bills.forEach((bill) => {
+        const items =
+          Array.isArray(
+            bill.items
+          )
+            ? bill.items
+            : [];
+
+        /*
+        * Sales Details and Selected Party
+        * Product Wise require actual items.
+        *
+        * For older header-only invoices,
+        * keep one blank product row only
+        * when products were not requested.
+        */
+        const productsRequired =
+          reportLevel ===
+          "salesDetails" ||
+          productWise;
+
+        const reportItems =
+          items.length > 0
+            ? items
+            : productsRequired
+              ? []
+              : [{}];
+
+        reportItems.forEach(
+          (
+            item,
+            itemIndex
+          ) => {
+            const selectedBatch =
+              item?.selectedBatch &&
+                typeof item
+                  .selectedBatch ===
+                "object"
+                ? item.selectedBatch
+                : {};
+
+            const {
+              productCode,
+              productName:
+              savedProductName,
+            } =
+              getProductDetails(
+                item
+              );
+
+            const productMaster =
+              productMasterMap.get(
+                productCode
+              );
+
+            const productName =
+              savedProductName ||
+              productMaster
+                ?.productName ||
+              "";
+
+            const stockRow =
+              findItemStock(
+                bill,
+                item,
+                productCode
+              );
+
+            const qty = toNumber(
+              getItemValue(
+                item,
+                "qty",
+                "Qty",
+                "quantity",
+                "Quantity",
+                "saleQty",
+                "SaleQty"
+              )
+            );
+
+            const freeQty =
+              toNumber(
+                getItemValue(
+                  item,
+                  "freeQty",
+                  "FreeQty",
+                  "freeQuantity"
+                )
+              );
+
+            /*
+            * Sale rate first uses the actual
+            * invoice rate. Mas_Stock SRate is
+            * used only when invoice rate is absent.
+            */
+            const salesRate =
+              toNumber(
+                getItemValue(
+                  item,
+                  "salesRate",
+                  "SalesRate",
+                  "saleRate",
+                  "SaleRate",
+                  "sRate",
+                  "SRate",
+                  "rate",
+                  "Rate"
+                ),
+                selectedBatch.salesRate,
+                selectedBatch.SalesRate,
+                selectedBatch.sRate,
+                selectedBatch.SRate,
+                stockRow?.SRate
+              );
+
+            /*
+            * Purchase rate uses Mas_Stock PRate
+            * where it is not saved in invoice item.
+            */
+            const purchaseRate =
+              toNumber(
+                getItemValue(
+                  item,
+                  "purchaseRate",
+                  "PurchaseRate",
+                  "pRate",
+                  "PRate",
+                  "prate"
+                ),
+                selectedBatch
+                  .purchaseRate,
+                selectedBatch
+                  .PurchaseRate,
+                selectedBatch.pRate,
+                selectedBatch.PRate,
+                selectedBatch.PRate,
+                stockRow?.PRate
+              );
+
+            const mrp = toNumber(
+              getItemValue(
+                item,
+                "mrp",
+                "MRP",
+                "productMrp",
+                "ProductMRP"
+              ),
+              selectedBatch.mrp,
+              selectedBatch.MRP,
+              stockRow?.MRP
+            );
+
+            const batch =
+              normalizeBatch(
+                getItemValue(
+                  item,
+                  "batchNo",
+                  "BatchNo",
+                  "batch",
+                  "Batch"
+                ) ||
+                selectedBatch
+                  .batchNo ||
+                selectedBatch
+                  .BatchNo ||
+                selectedBatch
+                  .batch ||
+                selectedBatch
+                  .Batch ||
+                stockRow?.Batch
+              );
+
+            const godownCode =
+              String(
+                bill.GDCode ||
+                stockRow
+                  ?.GDCode ||
+                ""
+              ).trim();
+
+            const godownName =
+              String(
+                bill.Godown ||
+                godownCode ||
+                ""
+              ).trim();
+
+            const stockQty =
+              toNumber(
+                stockRow?.Qty
+              );
+
+            const mfgDate =
+              String(
+                getItemValue(
+                  item,
+                  "mfgDate",
+                  "MfgDate",
+                  "MfgDt",
+                  "manufacturingDate"
+                ) ||
+                selectedBatch
+                  .mfgDate ||
+                selectedBatch
+                  .MfgDt ||
+                stockRow?.MfgDt ||
+                ""
+              );
+
+            const expiryDate =
+              String(
+                getItemValue(
+                  item,
+                  "expiryDate",
+                  "ExpiryDate",
+                  "expDate",
+                  "ExpDate",
+                  "ExpDt"
+                ) ||
+                selectedBatch
+                  .expiryDate ||
+                selectedBatch
+                  .expDate ||
+                selectedBatch
+                  .ExpDt ||
+                stockRow?.ExpDt ||
+                ""
+              );
+
+            const grossAmount =
+              toNumber(
+                getItemValue(
+                  item,
+                  "grossAmount",
+                  "GrossAmount",
+                  "grossAmt",
+                  "GrossAmt"
+                ),
+                qty * salesRate
+              );
+
+            const schemePercent =
+              toNumber(
+                getItemValue(
+                  item,
+                  "schemePercent",
+                  "SchemePercent",
+                  "schemePer",
+                  "SchemePer",
+                  "scheme",
+                  "schPercent",
+                  "schPer",
+                  "schPct",
+                  "SchPercent"
+                )
+              );
+
+            const schemeAmount =
+              toNumber(
+                getItemValue(
+                  item,
+                  "schemeAmount",
+                  "SchemeAmount",
+                  "schemeAmt",
+                  "schAmount",
+                  "schAmt",
+                  "SchAmount"
+                )
+              );
+
+            const cashDiscountPercent =
+              toNumber(
+                getItemValue(
+                  item,
+                  "cashDiscountPercent",
+                  "CashDiscountPercent",
+                  "cashDiscountPer",
+                  "cdPercent",
+                  "cdPer",
+                  "CDPct",
+                  "CDPercent"
+                )
+              );
+
+            const cashDiscountAmount =
+              toNumber(
+                getItemValue(
+                  item,
+                  "cashDiscountAmount",
+                  "CashDiscountAmount",
+                  "cashDiscountAmt",
+                  "cdAmount",
+                  "cdAmt",
+                  "CDAmount"
+                )
+              );
+
+            const tprPercent =
+              toNumber(
+                getItemValue(
+                  item,
+                  "tprPercent",
+                  "TPRPercent",
+                  "tprPer",
+                  "TPRPer"
+                )
+              );
+
+            const tprAmount =
+              toNumber(
+                getItemValue(
+                  item,
+                  "tprAmount",
+                  "TPRAmount",
+                  "tprAmt",
+                  "TPRAmt"
+                )
+              );
+
+            const cgstPercent =
+              toNumber(
+                getItemValue(
+                  item,
+                  "cgstPercent",
+                  "CGSTPercent",
+                  "cgstPer"
+                )
+              );
+
+            const sgstPercent =
+              toNumber(
+                getItemValue(
+                  item,
+                  "sgstPercent",
+                  "SGSTPercent",
+                  "sgstPer"
+                )
+              );
+
+            const igstPercent =
+              toNumber(
+                getItemValue(
+                  item,
+                  "igstPercent",
+                  "IGSTPercent",
+                  "igstPer"
+                )
+              );
+
+            const gstPercent =
+              igstPercent ||
+              cgstPercent +
+              sgstPercent ||
+              toNumber(
+                getItemValue(
+                  item,
+                  "gstPercent",
+                  "GSTPercent",
+                  "gst",
+                  "GST"
+                )
+              );
+
+            const cgstAmount =
+              toNumber(
+                getItemValue(
+                  item,
+                  "cgstAmount",
+                  "CGSTAmount",
+                  "cgstAmt"
+                )
+              );
+
+            const sgstAmount =
+              toNumber(
+                getItemValue(
+                  item,
+                  "sgstAmount",
+                  "SGSTAmount",
+                  "sgstAmt"
+                )
+              );
+
+            const igstAmount =
+              toNumber(
+                getItemValue(
+                  item,
+                  "igstAmount",
+                  "IGSTAmount",
+                  "igstAmt"
+                )
+              );
+
+            const gstAmount =
+              cgstAmount +
+              sgstAmount +
+              igstAmount;
+
+            const taxableAmount =
+              toNumber(
+                getItemValue(
+                  item,
+                  "taxableAmount",
+                  "TaxableAmount",
+                  "taxableValue",
+                  "TaxableValue"
+                ),
+                grossAmount -
+                schemeAmount -
+                cashDiscountAmount -
+                tprAmount
+              );
+
+            const calculatedNet =
+              taxableAmount +
+              gstAmount;
+
+            const originalItemNet =
+              toNumber(
+                getItemValue(
+                  item,
+                  "netAmount",
+                  "NetAmount",
+                  "netAmt",
+                  "amount",
+                  "Amount"
+                ),
+                calculatedNet
+              );
+
+            /*
+            * CreditNoteAmount is stored at
+            * bill-header level.
+            *
+            * Apply it only to the first item
+            * row so it is not deducted once
+            * for every product.
+            */
+            const creditNoteAmount =
+              withCreditNote &&
+                itemIndex === 0
+                ? toNumber(
+                  bill
+                    .CreditNoteAmount
+                )
+                : 0;
+
+            const netAmount =
+              originalItemNet -
+              creditNoteAmount;
+
+            detailRows.push({
+              rowId: `${String(
+                bill._id
+              )}-${itemIndex}`,
+
+              srNo:
+                detailRows.length +
+                1,
+
+              trn: "SALES",
+
+              billDate:
+                bill.BillDate || "",
+
+              billSeries:
+                bill.BillSeries ||
+                "",
+
+              billNo:
+                bill.BillNo ?? "",
+
+              billReference: [
+                bill.BillSeries,
+                bill.BillNo,
+              ]
+                .filter(
+                  (value) =>
+                    value !==
+                    undefined &&
+                    value !==
+                    null &&
+                    value !== ""
+                )
+                .join("-"),
+
+              billType:
+                bill.BillType ||
+                "",
+
+              companyCode:
+                bill.CompanyCode ||
+                "",
+
+              companyName:
+                bill.CompanyName ||
+                "",
+
+              partyCode:
+                bill.PartyCode ||
+                "",
+
+              partyName:
+                bill.PartyName ||
+                "",
+
+              productCode,
+              productName,
+
+              batch,
+              mrp,
+              qty,
+              freeQty,
+
+              salesRate,
+              purchaseRate,
+
+              godownCode,
+              godownName,
+              stockQty,
+
+              mfgDate,
+              expiryDate,
+
+              grossAmount,
+
+              tprPercent,
+              tprAmount,
+
+              schemePercent,
+              schemeAmount,
+
+              cashDiscountPercent,
+              cashDiscountAmount,
+
+              taxableAmount,
+
+              gstPercent,
+              cgstPercent,
+              cgstAmount,
+              sgstPercent,
+              sgstAmount,
+              igstPercent,
+              igstAmount,
+              gstAmount,
+
+              creditNoteAmount,
+              netAmount,
+
+              areaCode:
+                bill.AreaCode ||
+                "",
+
+              areaName:
+                bill.AreaName ||
+                "",
+
+              salesmanCode:
+                bill.SalesmanCode ||
+                "",
+
+              salesmanName:
+                bill.SalesmanName ||
+                "",
+            });
+          }
+        );
+      });
+
+      let rows = detailRows;
+
+      /*
+      * Sales Summary is grouped by party.
+      *
+      * When Product Wise is Yes, summary
+      * is grouped by party and product.
+      *
+      * Selected Party is intentionally not
+      * grouped because it must show each bill.
+      */
+      if (
+        reportLevel ===
+        "salesSummary"
+      ) {
+        const groupedRows =
+          new Map();
+
+        detailRows.forEach(
+          (row) => {
+            const groupKey =
+              productWise
+                ? `${row.partyCode}__${row.productCode}`
+                : row.partyCode ||
+                row.partyName;
+
+            if (
+              !groupedRows.has(
+                groupKey
+              )
+            ) {
+              groupedRows.set(
+                groupKey,
+                {
+                  rowId:
+                    groupKey,
+
+                  srNo: 0,
+
+                  partyCode:
+                    row.partyCode,
+
+                  partyName:
+                    row.partyName,
+
+                  ...(productWise
+                    ? {
+                      productCode:
+                        row.productCode,
+
+                      productName:
+                        row.productName,
+
+                      qty: 0,
+                    }
+                    : {}),
+
+                  grossAmount: 0,
+                  tprAmount: 0,
+                  schemeAmount: 0,
+                  cashDiscountAmount: 0,
+                  taxableAmount: 0,
+                  gstAmount: 0,
+                  creditNoteAmount: 0,
+                  netAmount: 0,
+
+                  areaName:
+                    row.areaName,
+
+                  salesmanName:
+                    row.salesmanName,
+                }
+              );
+            }
+
+            const group =
+              groupedRows.get(
+                groupKey
+              );
+
+            if (productWise) {
+              group.qty +=
+                toNumber(
+                  row.qty
+                );
+            }
+
+            group.grossAmount +=
+              toNumber(
+                row.grossAmount
+              );
+
+            group.tprAmount +=
+              toNumber(
+                row.tprAmount
+              );
+
+            group.schemeAmount +=
+              toNumber(
+                row.schemeAmount
+              );
+
+            group.cashDiscountAmount +=
+              toNumber(
+                row.cashDiscountAmount
+              );
+
+            group.taxableAmount +=
+              toNumber(
+                row.taxableAmount
+              );
+
+            group.gstAmount +=
+              toNumber(
+                row.gstAmount
+              );
+
+            group.creditNoteAmount +=
+              toNumber(
+                row.creditNoteAmount
+              );
+
+            group.netAmount +=
+              toNumber(
+                row.netAmount
+              );
+          }
+        );
+
+        rows = Array.from(
+          groupedRows.values()
+        );
+      }
+
+      /*
+      * Sort final report rows.
+      */
+      const sortText = (
+        value
+      ) =>
+        String(value || "")
+          .trim()
+          .toLowerCase();
+
+      rows.sort(
+        (first, second) => {
+          if (
+            orderBy ===
+            "partyCode"
+          ) {
+            return sortText(
+              first.partyCode
+            ).localeCompare(
+              sortText(
+                second.partyCode
+              )
+            );
+          }
+
+          if (
+            orderBy === "trn"
+          ) {
+            const firstSeries =
+              sortText(
+                first.billSeries
+              );
+
+            const secondSeries =
+              sortText(
+                second.billSeries
+              );
+
+            const seriesResult =
+              firstSeries.localeCompare(
+                secondSeries
+              );
+
+            if (
+              seriesResult !== 0
+            ) {
+              return seriesResult;
+            }
+
+            return (
+              Number(
+                first.billNo || 0
+              ) -
+              Number(
+                second.billNo || 0
+              )
+            );
+          }
+
+          if (
+            orderBy ===
+            "areaName"
+          ) {
+            return sortText(
+              first.areaName
+            ).localeCompare(
+              sortText(
+                second.areaName
+              )
+            );
+          }
+
+          if (
+            orderBy ===
+            "salesmanName"
+          ) {
+            return sortText(
+              first.salesmanName
+            ).localeCompare(
+              sortText(
+                second
+                  .salesmanName
+              )
+            );
+          }
+
+          if (
+            orderBy ===
+            "netAmountDesc"
+          ) {
+            return (
+              Number(
+                second.netAmount ||
+                0
+              ) -
+              Number(
+                first.netAmount ||
+                0
+              )
+            );
+          }
+
+          if (
+            orderBy ===
+            "productName"
+          ) {
+            return sortText(
+              first.productName
+            ).localeCompare(
+              sortText(
+                second.productName
+              )
+            );
+          }
+
+          const partyResult =
+            sortText(
+              first.partyName
+            ).localeCompare(
+              sortText(
+                second.partyName
+              )
+            );
+
+          if (
+            partyResult !== 0
+          ) {
+            return partyResult;
+          }
+
+          const dateResult =
+            sortText(
+              first.billDate
+            ).localeCompare(
+              sortText(
+                second.billDate
+              )
+            );
+
+          if (
+            dateResult !== 0
+          ) {
+            return dateResult;
+          }
+
+          return (
+            Number(
+              first.billNo || 0
+            ) -
+            Number(
+              second.billNo || 0
+            )
+          );
+        }
+      );
+
+      rows = rows.map(
+        (row, index) => ({
+          ...row,
+          srNo: index + 1,
+        })
+      );
+
+      /*
+      * Product information must appear:
+      *
+      * 1. When Product Wise = Yes
+      * 2. Always for Sales Details
+      */
+      const showProductDetails =
+        productWise ||
+        reportLevel ===
+        "salesDetails";
+
+      /*
+      * Detail columns are used by:
+      * - Sales Details
+      * - Selected Party
+      */
+      const detailColumns = [
+        {
+          key: "srNo",
+          label: "Sr No",
+        },
+        {
+          key: "trn",
+          label: "Trn",
+        },
+        {
+          key: "billDate",
+          label: "Bill Date",
+        },
+        {
+          key: "billSeries",
+          label: "Bill Series",
+        },
+        {
+          key: "billNo",
+          label: "Bill No",
+        },
+        {
+          key: "billType",
+          label: "Bill Type",
+        },
+        {
+          key: "partyCode",
+          label: "Party Code",
+        },
+        {
+          key: "partyName",
+          label: "Party Name",
+        },
+      ];
+
+      if (showProductDetails) {
+        detailColumns.push(
+          {
+            key: "productCode",
+            label:
+              "Product Code",
+          },
+          {
+            key: "productName",
+            label:
+              "Product Name",
+          },
+          {
+            key: "batch",
+            label: "Batch",
+          },
+          {
+            key: "mrp",
+            label: "MRP",
+            type: "number",
+          },
+          {
+            key: "qty",
+            label: "Qty",
+            type: "number",
+          },
+          {
+            key: "freeQty",
+            label: "Free Qty",
+            type: "number",
+          },
+          {
+            key: "salesRate",
+            label: "Sale Rate",
+            type: "number",
+          },
+          {
+            key: "purchaseRate",
+            label: "Pur Rate",
+            type: "number",
+          },
+          {
+            key: "godownCode",
+            label: "Godown Code",
+          },
+          {
+            key: "godownName",
+            label: "Godown",
+          },
+          {
+            key: "stockQty",
+            label:
+              "Current Stock",
+            type: "number",
+          },
+          {
+            key: "mfgDate",
+            label: "Mfg Date",
+          },
+          {
+            key: "expiryDate",
+            label: "Expiry Date",
+          }
+        );
+      }
+
+      detailColumns.push(
+        {
+          key: "grossAmount",
+          label: "Gross Amt",
+          type: "number",
+        },
+        {
+          key: "tprPercent",
+          label: "TPR %",
+          type: "number",
+        },
+        {
+          key: "tprAmount",
+          label: "TPR Amt",
+          type: "number",
+        },
+        {
+          key: "schemePercent",
+          label: "Sch %",
+          type: "number",
+        },
+        {
+          key: "schemeAmount",
+          label: "Sch Amt",
+          type: "number",
+        },
+        {
+          key:
+            "cashDiscountPercent",
+          label: "CD %",
+          type: "number",
+        },
+        {
+          key:
+            "cashDiscountAmount",
+          label: "CD Amt",
+          type: "number",
+        },
+        {
+          key: "taxableAmount",
+          label: "Taxable Amt",
+          type: "number",
+        },
+        {
+          key: "gstPercent",
+          label: "GST %",
+          type: "number",
+        },
+        {
+          key: "gstAmount",
+          label: "GST Amt",
+          type: "number",
+        },
+        {
+          key:
+            "creditNoteAmount",
+          label: "Credit Note",
+          type: "number",
+        },
+        {
+          key: "netAmount",
+          label: "Net Amt",
+          type: "number",
+        },
+        {
+          key: "areaName",
+          label: "Area Name",
+        },
+        {
+          key: "salesmanName",
+          label:
+            "Salesman Name",
+        }
+      );
+
+      /*
+      * Summary columns.
+      */
+      const summaryColumns = [
+        {
+          key: "srNo",
+          label: "Sr No",
+        },
+        {
+          key: "partyCode",
+          label: "Party Code",
+        },
+        {
+          key: "partyName",
+          label: "Party Name",
+        },
+      ];
+
+      if (productWise) {
+        summaryColumns.push(
+          {
+            key: "productCode",
+            label:
+              "Product Code",
+          },
+          {
+            key: "productName",
+            label:
+              "Product Name",
+          },
+          {
+            key: "qty",
+            label: "Qty",
+            type: "number",
+          }
+        );
+      }
+
+      summaryColumns.push(
+        {
+          key: "grossAmount",
+          label: "Gross Amt",
+          type: "number",
+        },
+        {
+          key: "tprAmount",
+          label: "TPR Amt",
+          type: "number",
+        },
+        {
+          key: "schemeAmount",
+          label: "Sch Amt",
+          type: "number",
+        },
+        {
+          key:
+            "cashDiscountAmount",
+          label: "CD Amt",
+          type: "number",
+        },
+        {
+          key: "taxableAmount",
+          label: "Taxable Amt",
+          type: "number",
+        },
+        {
+          key: "gstAmount",
+          label: "GST Amt",
+          type: "number",
+        },
+        {
+          key:
+            "creditNoteAmount",
+          label: "Credit Note",
+          type: "number",
+        },
+        {
+          key: "netAmount",
+          label: "Net Amt",
+          type: "number",
+        },
+        {
+          key: "areaName",
+          label: "Area Name",
+        },
+        {
+          key: "salesmanName",
+          label:
+            "Salesman Name",
+        }
+      );
+
+      return res.json({
+        success: true,
+        count: rows.length,
+        reportLevel,
+        productWise,
+        rows,
+
+        columns:
+          reportLevel ===
+            "salesSummary"
+            ? summaryColumns
+            : detailColumns,
+      });
+    } catch (error) {
+      console.error(
+        "Party sales report error:",
+        error
+      );
+
+      return res
+        .status(500)
+        .json({
+          success: false,
+          message:
+            "Failed to generate party sales report.",
+          error: error.message,
+        });
+    }
+  }
+);
+
+
+const quotationHeaderSchema =
+  new mongoose.Schema(
+    {
+      distributorId: {
+        type: String,
+        required: true,
+      },
+
+      firmId: {
+        type: String,
+        required: true,
+      },
+
+      firmName: {
+        type: String,
+        default: "",
+      },
+
+      BillDate: {
+        type: String,
+        default: "",
+      },
+
+      Godown: {
+        type: String,
+        default: "",
+      },
+
+      GDCode: {
+        type: String,
+        default: "",
+      },
+
+      CompanyCode: {
+        type: String,
+        default: "",
+      },
+
+      CompanyName: {
+        type: String,
+        default: "",
+      },
+
+      AreaCode: {
+        type: String,
+        default: "",
+      },
+
+      AreaName: {
+        type: String,
+        default: "",
+      },
+
+      PartyCode: {
+        type: String,
+        default: "",
+      },
+
+      PartyName: {
+        type: String,
+        default: "",
+      },
+
+      BillSeries: {
+        type: String,
+        default: "",
+        trim: true,
+      },
+
+      BillNo: {
+        type: Number,
+        required: true,
+      },
+
+      BillType: {
+        type: String,
+        default: "Credit",
+      },
+
+      DueDate: {
+        type: String,
+        default: "",
+      },
+
+      SalesmanCode: {
+        type: String,
+        default: "",
+      },
+
+      SalesmanName: {
+        type: String,
+        default: "",
+      },
+
+      Narration: {
+        type: String,
+        default: "",
+      },
+
+      GrossAmount: {
+        type: Number,
+        default: 0,
+      },
+
+      TPRAmount: {
+        type: Number,
+        default: 0,
+      },
+
+      SchemeAmount: {
+        type: Number,
+        default: 0,
+      },
+
+      StarDiscountAmount: {
+        type: Number,
+        default: 0,
+      },
+
+      CashDiscountAmount: {
+        type: Number,
+        default: 0,
+      },
+
+      DisplayAmount: {
+        type: Number,
+        default: 0,
+      },
+
+      CouponAmount: {
+        type: Number,
+        default: 0,
+      },
+
+      AddLessAmount: {
+        type: Number,
+        default: 0,
+      },
+
+      TaxableValue: {
+        type: Number,
+        default: 0,
+      },
+
+      SGSTAmount: {
+        type: Number,
+        default: 0,
+      },
+
+      CGSTAmount: {
+        type: Number,
+        default: 0,
+      },
+
+      IGSTAmount: {
+        type: Number,
+        default: 0,
+      },
+
+      OriginalNetAmount: {
+        type: Number,
+        default: 0,
+      },
+
+      NetAmount: {
+        type: Number,
+        default: 0,
+      },
+
+      TotalQty: {
+        type: Number,
+        default: 0,
+      },
+
+      TotalFreeQty: {
+        type: Number,
+        default: 0,
+      },
+
+      TotalItems: {
+        type: Number,
+        default: 0,
+      },
+
+      items: {
+        type: Array,
+        default: [],
+      },
+
+      isActive: {
+        type: Boolean,
+        default: true,
+      },
+    },
+    {
+      timestamps: true,
+      collection: "T_Quotation_Header",
+    }
+  );
+
+quotationHeaderSchema.index(
+  {
+    distributorId: 1,
+    firmId: 1,
+    BillSeries: 1,
+    BillNo: 1,
+  },
+  {
+    unique: true,
+  }
+);
+
+const QuotationHeader = mongoose.model(
+  "T_Quotation_Header",
+  quotationHeaderSchema
+);
+
+const loadHeaderSchema = new mongoose.Schema(
+  {
+    LoadSeries: {
+      type: String,
+      default: "",
+      trim: true,
+    },
+
+    LoadNo: {
+      type: Number,
+      required: true,
+    },
+
+    LoadDate: {
+      type: String,
+      default: "",
+    },
+
+    CompanyCode: {
+      type: String,
+      default: "",
+      trim: true,
+    },
+
+    CompanyName: {
+      type: String,
+      default: "",
+      trim: true,
+    },
+
+    DeliveryBoyCode: {
+      type: String,
+      default: "",
+      trim: true,
+    },
+
+    DeliveryBoyName: {
+      type: String,
+      default: "",
+      trim: true,
+    },
+
+    DeliveryBy: {
+      type: String,
+      default: "",
+      trim: true,
+    },
+
+    VehicleNo: {
+      type: String,
+      default: "",
+      trim: true,
+      uppercase: true,
+    },
+
+    DriverMobile: {
+      type: String,
+      default: "",
+      trim: true,
+    },
+
+    SalesmanCode: {
+      type: String,
+      default: "",
+      trim: true,
+    },
+
+    SalesmanName: {
+      type: String,
+      default: "",
+      trim: true,
+    },
+
+    SelectedSalesmen: {
+      type: [
+        {
+          salesmanCode: {
+            type: String,
+            default: "",
+          },
+
+          salesmanName: {
+            type: String,
+            default: "",
+          },
+        },
+      ],
+      default: [],
+    },
+
+    SelectedAreas: {
+      type: [
+        {
+          areaCode: {
+            type: String,
+            default: "",
+          },
+
+          areaName: {
+            type: String,
+            default: "",
+          },
+        },
+      ],
+      default: [],
+    },
+
+    BillFromDate: {
+      type: String,
+      default: "",
+    },
+
+    BillToDate: {
+      type: String,
+      default: "",
+    },
+
+    Narration: {
+      type: String,
+      default: "",
+      trim: true,
+    },
+
+    Remarks: {
+      type: String,
+      default: "",
+      trim: true,
+    },
+
+    Bills: {
+      type: Array,
+      default: [],
+    },
+
+    TotalBills: {
+      type: Number,
+      default: 0,
+    },
+
+    TotalParties: {
+      type: Number,
+      default: 0,
+    },
+
+    TotalSalesmen: {
+      type: Number,
+      default: 0,
+    },
+
+    TotalAreas: {
+      type: Number,
+      default: 0,
+    },
+
+    TotalAmount: {
+      type: Number,
+      default: 0,
+    },
+
+    LoadSummary: {
+      totalSalesmen: {
+        type: Number,
+        default: 0,
+      },
+
+      totalAreas: {
+        type: Number,
+        default: 0,
+      },
+
+      totalBills: {
+        type: Number,
+        default: 0,
+      },
+
+      totalParties: {
+        type: Number,
+        default: 0,
+      },
+
+      totalAmount: {
+        type: Number,
+        default: 0,
+      },
+    },
+
+    DistributorId: {
+      type: String,
+      required: true,
+      trim: true,
+    },
+
+    FirmId: {
+      type: String,
+      required: true,
+      trim: true,
+    },
+
+    FirmName: {
+      type: String,
+      default: "",
+      trim: true,
+    },
+
+    Status: {
+      type: String,
+      default: "ACTIVE",
+    },
+
+    IsCancelled: {
+      type: Boolean,
+      default: false,
+    },
+
+    IsLocked: {
+      type: Boolean,
+      default: false,
+    },
+
+    CreatedBy: {
+      type: String,
+      default: "",
+    },
+
+    UpdatedBy: {
+      type: String,
+      default: "",
+    },
+  },
+  {
+    timestamps: {
+      createdAt: "CreatedAt",
+      updatedAt: "UpdatedAt",
+    },
+
+    collection: "T_Load_Header",
+  }
+);
+
+loadHeaderSchema.index(
+  {
+    DistributorId: 1,
+    FirmId: 1,
+    LoadSeries: 1,
+    LoadNo: 1,
+  },
+  {
+    unique: true,
+  }
+);
+
+const LoadHeader = mongoose.model(
+  "T_Load_Header",
+  loadHeaderSchema
+);
+
+
+const OtherAccount = mongoose.model("Mas_OtherAccount", otherAccountSchema);
+app.get(
+  "/api/companies",
+  ensureConnection,
+
+  securityRouter.authorizeRequest(
+    "MASTER",
+    "COMPANY",
+    "view"
+  ),
+
+  async (req, res) => {
+
+    const {
+      distributorId,
+      firmId,
+    } = req.security;
+
+    try {
+      const distributorId = String(
+        req.query.distributorId || ""
+      ).trim();
+
+      const firmId = String(
+        req.query.firmId || ""
+      ).trim();
+
+      if (!distributorId || !firmId) {
+        return res.status(400).json({
+          success: false,
+          message:
+            "distributorId and firmId are required",
+        });
+      }
+
+      const companies = await Company.find({
+        distributorId,
+        firmId,
+        isActive: true,
+      })
+        .sort({
+          companyName: 1,
+          companyCode: 1,
+        })
+        .lean();
+
+      return res.json({
+        success: true,
+        count: companies.length,
+        companies,
+      });
+    } catch (error) {
+      console.error(
+        "Company load error:",
+        error
+      );
+
+      return res.status(500).json({
+        success: false,
+        message:
+          "Failed to fetch companies",
+        error: error.message,
+      });
+    }
+  }
+);
+app.get(
+  "/api/companies/list",
+  ensureConnection,
+  async (req, res) => {
+    try {
+      const distributorId = String(
+        req.query.distributorId || ""
+      ).trim();
+
+      const firmId = String(
+        req.query.firmId || ""
+      ).trim();
+
+      const search = String(
+        req.query.search || ""
+      ).trim();
+
+      const requestedPage = Number.parseInt(
+        req.query.page,
+        10
+      );
+
+      const requestedLimit = Number.parseInt(
+        req.query.limit,
+        10
+      );
+
+      const page =
+        Number.isFinite(requestedPage) &&
+          requestedPage > 0
+          ? requestedPage
+          : 1;
+
+      const limit =
+        Number.isFinite(requestedLimit) &&
+          requestedLimit > 0
+          ? Math.min(requestedLimit, 100)
+          : 10;
+
+      if (!distributorId || !firmId) {
+        return res.status(400).json({
+          success: false,
+          message:
+            "distributorId and firmId are required",
+        });
+      }
+
+      const escapedSearch = search.replace(
+        /[.*+?^${}()|[\]\\]/g,
+        "\\$&"
+      );
+
+      const filter = {
+        distributorId,
+        firmId,
+        isActive: true,
+      };
+
+      if (escapedSearch) {
+        const searchRegex = new RegExp(
+          escapedSearch,
+          "i"
+        );
+
+        filter.$or = [
+          {
+            companyCode: searchRegex,
+          },
+          {
+            companyName: searchRegex,
+          },
+          {
+            companyAddress: searchRegex,
+          },
+          {
+            branchOfficeAddress: searchRegex,
+          },
+          {
+            firmName: searchRegex,
+          },
+        ];
+      }
+
+      const totalRecords =
+        await Company.countDocuments(filter);
+
+      const totalPages = Math.max(
+        1,
+        Math.ceil(totalRecords / limit)
+      );
+
+      const currentPage = Math.min(
+        page,
+        totalPages
+      );
+
+      const skip =
+        (currentPage - 1) * limit;
+
+      const companies = await Company.find(
+        filter
+      )
+        .sort({
+          createdAt: -1,
+          _id: -1,
+        })
+        .skip(skip)
+        .limit(limit)
+        .lean();
+
+      return res.json({
+        success: true,
+        companies,
+        count: companies.length,
+
+        pagination: {
+          currentPage,
+          page: currentPage,
+          limit,
+          totalRecords,
+          totalPages,
+
+          hasPreviousPage:
+            currentPage > 1,
+
+          hasNextPage:
+            currentPage < totalPages,
+
+          startRecord:
+            totalRecords === 0
+              ? 0
+              : skip + 1,
+
+          endRecord:
+            totalRecords === 0
+              ? 0
+              : Math.min(
+                skip + companies.length,
+                totalRecords
+              ),
+        },
+      });
+    } catch (error) {
+      console.error(
+        "Company Master list pagination error:",
+        error
+      );
+
+      return res.status(500).json({
+        success: false,
+        message:
+          "Failed to fetch company list",
+        error: error.message,
+      });
+    }
+  }
+);
+
+app.post(
+    "/api/companies",
+    ensureConnection,
+
+    securityRouter.authorizeRequest(
+        "MASTER",
+        "COMPANY",
+        "add"
+    ),
+
+    async (req,res)=>{
+  try {
+ const {
+    distributorId,
+    firmId,
+} = req.security;
+
+const {
+    firmName,
+    code,
+    name,
+    address,
+    branchAddress,
+} = req.body;
+
+    if (!distributorId || !firmId || !code || !name) {
+      return res.status(400).json({
+        success: false,
+        message: "distributorId, firmId, code and name are required",
+      });
+    }
+
+    const defaultSupplierId = String(req.body.defaultSupplierId || "").trim();
+    if (defaultSupplierId && (!mongoose.isValidObjectId(defaultSupplierId) || !await OtherAccount.exists({ _id: defaultSupplierId, distributorId, firmId, accountGroup: "SUNDRY CREDITORS", isActive: { $ne: false } }))) {
+      return res.status(400).json({ success: false, message: "Select an active supplier from this firm." });
+    }
+    const company = await Company.create({
+      defaultSupplierId,
+      companyCode: code.trim(),
+      companyName: name.trim(),
+      companyAddress: address || "",
+      branchOfficeAddress: branchAddress || "",
+      gstNo: String(req.body.gstNo || "").trim(),
+      state: String(req.body.state || "").trim(),
+      pinCode: String(req.body.pinCode || "").trim(),
+      distributorId,
+      firmId,
+      firmName: firmName || "",
+      isActive: true,
+    });
+
+    res.status(201).json({ success: true, message: "Company created successfully", data: company });
+  } catch (error) {
+    res.status(500).json({ success: false, message: "Company creation failed", error: error.message });
+  }
+});
+
+app.put(
+    "/api/companies/:id",
+    ensureConnection,
+
+    securityRouter.authorizeRequest(
+        "MASTER",
+        "COMPANY",
+        "edit"
+    ), async (req, res) => {
+  try {
+    const { code, name, address, branchAddress } = req.body;
+
+    if (!code || !name) {
+      return res.status(400).json({
+        success: false,
+        message: "Code and Name are required",
+      });
+    }
+
+    const updateData = {
+      companyCode: code.trim(),
+      companyName: name.trim(),
+      companyAddress: address || "",
+      branchOfficeAddress: branchAddress || "",
+    };
+    if (Object.hasOwn(req.body, "defaultSupplierId")) {
+      const defaultSupplierId = String(req.body.defaultSupplierId || "").trim();
+      if (defaultSupplierId && (!mongoose.isValidObjectId(defaultSupplierId) || !await OtherAccount.exists({ _id: defaultSupplierId, distributorId: req.auth.distributorId, firmId: req.auth.firmId, accountGroup: "SUNDRY CREDITORS", isActive: { $ne: false } }))) {
+        return res.status(400).json({ success: false, message: "Select an active supplier from this firm." });
+      }
+      updateData.defaultSupplierId = defaultSupplierId;
+    }
+    if (Object.hasOwn(req.body, "gstNo")) updateData.gstNo = String(req.body.gstNo || "").trim();
+    if (Object.hasOwn(req.body, "state")) updateData.state = String(req.body.state || "").trim();
+    if (Object.hasOwn(req.body, "pinCode")) updateData.pinCode = String(req.body.pinCode || "").trim();
+
+    const company = await Company.findOneAndUpdate(
+      { _id: req.params.id, distributorId: req.auth.distributorId, firmId: req.auth.firmId },
+      { $set: updateData },
+      { new: true, runValidators: true }
+    );
+
+    if (!company) {
+      return res.status(404).json({ success: false, message: "Company not found" });
+    }
+
+    res.json({ success: true, message: "Company updated successfully", data: company });
+  } catch (error) {
+    if (error.code === 11000) return res.status(409).json({ success: false, message: "Company code already exists for this firm" });
+    res.status(500).json({ success: false, message: "Company update failed", error: error.message });
+  }
+});
+
+// ---------- COMPANY ----------
+app.delete(
+    "/api/companies/:id",
+    ensureConnection,
+
+    securityRouter.authorizeRequest(
+        "MASTER",
+        "COMPANY",
+        "delete"
+    ), async (req, res) => {
+  try {
+    const company = await Company.findOne({ _id: req.params.id, distributorId: req.auth.distributorId, firmId: req.auth.firmId });
+
+    if (!company) {
+      return res.status(404).json({
+        success: false,
+        message: "Company not found",
+      });
+    }
+
+    const distributorId = company.distributorId;
+    const firmId = company.firmId;
+    const companyCode = String(company.companyCode || "").trim();
+    const companyName = String(company.companyName || "").trim();
+
+    const usedIn = [];
+
+    const salesUsed = await SalesHeader.exists({
+      distributorId,
+      firmId,
+      isActive: true,
+      CompanyCode: companyCode,
+    });
+
+    if (salesUsed) usedIn.push("Sales");
+
+    const purchaseUsed = await PurchaseHeader.exists({
+      distributorId,
+      firmId,
+      isActive: true,
+      $or: [
+        { company: companyCode },
+        { company: companyName },
+      ],
+    });
+
+    if (purchaseUsed) usedIn.push("Purchase");
+
+    const creditNoteUsed = await CreditNote.exists({
+      distributorId,
+      firmId,
+      isActive: true,
+      CompanyCode: companyCode,
+    });
+
+    if (creditNoteUsed) usedIn.push("Credit Note");
+
+    if (usedIn.length > 0) {
+      return res.status(400).json({
+        success: false,
+        message: `Cannot delete company "${companyName}". It is used in: ${usedIn.join(", ")}.`,
+      });
+    }
+
+    await assertMasterNotUsed({
+      connection: mongoose.connection,
+      scope: { distributorId, firmId },
+      type: "company",
+      record: { _id: company._id, code: companyCode, name: companyName },
+    });
+
+    await Company.findOneAndUpdate(
+      { _id: req.params.id, distributorId: req.auth.distributorId, firmId: req.auth.firmId },
+      { $set: { isActive: false } }
+    );
+
+    res.json({
+      success: true,
+      message: "Company deleted successfully",
+    });
+  } catch (error) {
+    res.status(error.statusCode || 500).json({
+      success: false,
+      message: error.statusCode ? error.message : "Company delete failed",
+      error: error.message,
+    });
+  }
+});
+
+app.get(
+  "/api/groups",
+  ensureConnection,
+  securityRouter.authorizeRequest(
+    "master",
+    "GROUP",
+    "view"
+  ),
+  async (req, res) => {
+  try {
+    const { distributorId, firmId } = req.query;
+
+    if (!distributorId || !firmId) {
+      return res.status(400).json({
+        success: false,
+        message: "distributorId and firmId are required",
+      });
+    }
+
+    const groups = await Group.find({
+      distributorId,
+      firmId,
+      isActive: true,
+    }).sort({ createdAt: -1 });
+
+    res.json({ success: true, count: groups.length, groups });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: "Failed to fetch groups",
+      error: error.message,
+    });
+  }
+});
+
+app.get(
+  "/api/groups/list",
+  ensureConnection,
+  securityRouter.authorizeRequest(
+    "master",
+    "GROUP",
+    "view"
+  ),
+  async (req, res) => {
+    try {
+      const distributorId = String(
+        req.query.distributorId || ""
+      ).trim();
+
+      const firmId = String(
+        req.query.firmId || ""
+      ).trim();
+
+      const search = String(
+        req.query.search || ""
+      ).trim();
+
+      const requestedPage = Number.parseInt(
+        req.query.page,
+        10
+      );
+
+      const requestedLimit = Number.parseInt(
+        req.query.limit,
+        10
+      );
+
+      const page =
+        Number.isFinite(requestedPage) &&
+          requestedPage > 0
+          ? requestedPage
+          : 1;
+
+      const limit =
+        Number.isFinite(requestedLimit) &&
+          requestedLimit > 0
+          ? Math.min(requestedLimit, 100)
+          : 10;
+
+      if (!distributorId || !firmId) {
+        return res.status(400).json({
+          success: false,
+          message:
+            "distributorId and firmId are required",
+        });
+      }
+
+      const escapedSearch = search.replace(
+        /[.*+?^${}()|[\]\\]/g,
+        "\\$&"
+      );
+
+      const filter = {
+        distributorId,
+        firmId,
+        isActive: true,
+      };
+
+      if (escapedSearch) {
+        const searchRegex = new RegExp(
+          escapedSearch,
+          "i"
+        );
+
+        filter.$or = [
+          {
+            groupCode: searchRegex,
+          },
+          {
+            groupName: searchRegex,
+          },
+          {
+            firmName: searchRegex,
+          },
+        ];
+      }
+
+      const totalRecords =
+        await Group.countDocuments(filter);
+
+      const totalPages = Math.max(
+        1,
+        Math.ceil(totalRecords / limit)
+      );
+
+      const currentPage = Math.min(
+        page,
+        totalPages
+      );
+
+      const skip =
+        (currentPage - 1) * limit;
+
+      const groups = await Group.find(filter)
+        .sort({
+          createdAt: -1,
+          _id: -1,
+        })
+        .skip(skip)
+        .limit(limit)
+        .lean();
+
+      return res.json({
+        success: true,
+
+        groups,
+
+        count: groups.length,
+
+        pagination: {
+          currentPage,
+          page: currentPage,
+          limit,
+          totalRecords,
+          totalPages,
+
+          hasPreviousPage:
+            currentPage > 1,
+
+          hasNextPage:
+            currentPage < totalPages,
+
+          startRecord:
+            totalRecords === 0
+              ? 0
+              : skip + 1,
+
+          endRecord:
+            totalRecords === 0
+              ? 0
+              : Math.min(
+                skip + groups.length,
+                totalRecords
+              ),
+        },
+      });
+    } catch (error) {
+      console.error(
+        "Group Master list pagination error:",
+        error
+      );
+
+      return res.status(500).json({
+        success: false,
+        message:
+          "Failed to fetch Group Master list",
+        error: error.message,
+      });
+    }
+  }
+);
+
+app.post(
+  "/api/groups",
+  ensureConnection,
+  securityRouter.authorizeRequest(
+    "master",
+    "GROUP",
+    "add"
+  ),
+  async (req, res) => {
+  try {
+    const { distributorId, firmId, firmName, code, name } = req.body;
+
+    if (!distributorId || !firmId || !code || !name) {
+      return res.status(400).json({
+        success: false,
+        message: "distributorId, firmId, code and name are required",
+      });
+    }
+
+    const group = await Group.create({
+      groupCode: code.trim(),
+      groupName: name.trim(),
+      distributorId,
+      firmId,
+      firmName: firmName || "",
+      isActive: true,
+    });
+
+    res.status(201).json({
+      success: true,
+      message: "Group created successfully",
+      data: group,
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: "Group creation failed",
+      error: error.message,
+    });
+  }
+});
+
+app.get(
+  "/api/categories",
+  ensureConnection,
+  securityRouter.authorizeRequest(
+    "master",
+    "CATEGORY",
+    "view"
+  ),
+  async (req, res) => {
+  try {
+    const { distributorId, firmId } = req.query;
+
+    if (!distributorId || !firmId) {
+      return res.status(400).json({
+        success: false,
+        message: "distributorId and firmId are required",
+      });
+    }
+
+    const categories = await Category.find({
+      distributorId,
+      firmId,
+      isActive: true,
+    }).sort({ createdAt: -1 });
+
+    res.json({ success: true, count: categories.length, categories });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: "Failed to fetch categories",
+      error: error.message,
+    });
+  }
+});
+app.get(
+  "/api/categories/list",
+  ensureConnection,
+  securityRouter.authorizeRequest(
+    "master",
+    "CATEGORY",
+    "view"
+  ),
+  async (req, res) => {
+    try {
+      const distributorId = String(
+        req.query.distributorId || ""
+      ).trim();
+
+      const firmId = String(
+        req.query.firmId || ""
+      ).trim();
+
+      const search = String(
+        req.query.search || ""
+      ).trim();
+
+      const requestedPage = Number.parseInt(
+        req.query.page,
+        10
+      );
+
+      const requestedLimit = Number.parseInt(
+        req.query.limit,
+        10
+      );
+
+      const page =
+        Number.isFinite(requestedPage) &&
+          requestedPage > 0
+          ? requestedPage
+          : 1;
+
+      const limit =
+        Number.isFinite(requestedLimit) &&
+          requestedLimit > 0
+          ? Math.min(requestedLimit, 100)
+          : 10;
+
+      if (!distributorId || !firmId) {
+        return res.status(400).json({
+          success: false,
+          message:
+            "distributorId and firmId are required",
+        });
+      }
+
+      const escapedSearch = search.replace(
+        /[.*+?^${}()|[\]\\]/g,
+        "\\$&"
+      );
+
+      const filter = {
+        distributorId,
+        firmId,
+        isActive: true,
+      };
+
+      if (escapedSearch) {
+        const searchRegex = new RegExp(
+          escapedSearch,
+          "i"
+        );
+
+        filter.$or = [
+          {
+            categoryCode: searchRegex,
+          },
+          {
+            categoryName: searchRegex,
+          },
+          {
+            firmName: searchRegex,
+          },
+        ];
+      }
+
+      const totalRecords =
+        await Category.countDocuments(filter);
+
+      const totalPages = Math.max(
+        1,
+        Math.ceil(totalRecords / limit)
+      );
+
+      const currentPage = Math.min(
+        page,
+        totalPages
+      );
+
+      const skip =
+        (currentPage - 1) * limit;
+
+      const categories =
+        await Category.find(filter)
+          .sort({
+            createdAt: -1,
+            _id: -1,
+          })
+          .skip(skip)
+          .limit(limit)
+          .lean();
+
+      return res.json({
+        success: true,
+
+        categories,
+
+        count: categories.length,
+
+        pagination: {
+          currentPage,
+          page: currentPage,
+          limit,
+          totalRecords,
+          totalPages,
+
+          hasPreviousPage:
+            currentPage > 1,
+
+          hasNextPage:
+            currentPage < totalPages,
+
+          startRecord:
+            totalRecords === 0
+              ? 0
+              : skip + 1,
+
+          endRecord:
+            totalRecords === 0
+              ? 0
+              : Math.min(
+                skip + categories.length,
+                totalRecords
+              ),
+        },
+      });
+    } catch (error) {
+      console.error(
+        "Category Master list pagination error:",
+        error
+      );
+
+      return res.status(500).json({
+        success: false,
+        message:
+          "Failed to fetch Category Master list",
+        error: error.message,
+      });
+    }
+  }
+);
+
+app.post(
+  "/api/categories",
+  ensureConnection,
+  securityRouter.authorizeRequest(
+    "master",
+    "CATEGORY",
+    "add"
+  ),
+  async (req, res) => {
+  try {
+    const { distributorId, firmId, firmName, code, name } = req.body;
+
+    if (!distributorId || !firmId || !code || !name) {
+      return res.status(400).json({
+        success: false,
+        message: "distributorId, firmId, code and name are required",
+      });
+    }
+
+    const category = await Category.create({
+      categoryCode: code.trim(),
+      categoryName: name.trim(),
+      distributorId,
+      firmId,
+      firmName: firmName || "",
+      isActive: true,
+    });
+
+    res.status(201).json({
+      success: true,
+      message: "Category created successfully",
+      data: category,
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: "Category creation failed",
+      error: error.message,
+    });
+  }
+});
+
+app.get(
+  "/api/products",
+  ensureConnection,
+  securityRouter.authorizeRequest(
+    "master",
+    "PRODUCT",
+    "view"
+  ),
+  async (req, res) => {
+  try {
+    const { distributorId, firmId, companyCode = "", companyName = "" } = req.query;
+
+    if (!distributorId || !firmId) {
+      return res.status(400).json({
+        success: false,
+        message: "distributorId and firmId are required",
+      });
+    }
+
+    const filter = {
+      distributorId,
+      firmId,
+      isActive: true,
+    };
+
+    if (companyCode || companyName) {
+      filter.$or = [
+        { companyId: String(companyCode).trim() },
+        { companyCode: String(companyCode).trim() },
+        { companyName: String(companyName).trim() },
+      ];
+    }
+
+    const products = await Product.find(filter).sort({ createdAt: -1 });
+
+    res.json({ success: true, count: products.length, products });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: "Failed to fetch products",
+      error: error.message,
+    });
+  }
+});
+app.get("/api/products/lookup", ensureConnection, securityRouter.authorizeRequest("master", "PRODUCT", "view"), async (req, res) => {
+  try {
+    const distributorId = String(req.query.distributorId || "").trim();
+    const firmId = String(req.query.firmId || "").trim();
+    if (!distributorId || !firmId || distributorId !== req.auth.distributorId || firmId !== req.auth.firmId) {
+      return res.status(403).json({ success: false, message: "Invalid firm selection." });
+    }
+    const q = String(req.query.q || "").trim().slice(0, 100);
+    const limit = Math.min(Math.max(Number.parseInt(req.query.limit, 10) || 30, 1), 50);
+    const filter = { distributorId, firmId, isActive: true };
+    if (q) {
+      const pattern = new RegExp(q.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "i");
+      filter.$or = [{ productCode: pattern }, { productName: pattern }, { eanCode: pattern }];
+    }
+    if (req.query.companyCode) {
+      const code = String(req.query.companyCode).trim();
+      filter.$and = [{ $or: [{ companyId: code }, { companyName: code }] }];
+    }
+    const products = await Product.find(filter)
+      .select("productCode productName companyId companyName group category description gst basicUnit boxPack inboxPack retailerMargin distributorMargin hsn weight eanCode Rate_Per_Unit srateSelection Reorder_Level Min_Stock_Holding cess cessAmt ExpDays create active locked isDrug allowFraction")
+      .sort({ productName: 1, _id: 1 }).limit(limit).lean();
+    return res.json({ success: true, products });
+  } catch (error) {
+    console.error("Product lookup error:", error);
+    return res.status(500).json({ success: false, message: "Failed to search products." });
+  }
+});
+
+app.get(
+  "/api/products/list",
+  ensureConnection,
+  securityRouter.authorizeRequest(
+    "master",
+    "PRODUCT",
+    "view"
+  ),
+  async (req, res) => {
+    try {
+      const distributorId = String(
+        req.query.distributorId || ""
+      ).trim();
+
+      const firmId = String(
+        req.query.firmId || ""
+      ).trim();
+
+      const search = String(
+        req.query.search || ""
+      ).trim();
+
+      const companyCode = String(
+        req.query.companyCode || ""
+      ).trim();
+
+      const groupCode = String(
+        req.query.groupCode || ""
+      ).trim();
+
+      const categoryCode = String(
+        req.query.categoryCode || ""
+      ).trim();
+
+      const requestedPage = Number.parseInt(
+        req.query.page,
+        10
+      );
+
+      const requestedLimit = Number.parseInt(
+        req.query.limit,
+        10
+      );
+
+      const page =
+        Number.isFinite(requestedPage) &&
+          requestedPage > 0
+          ? requestedPage
+          : 1;
+
+      const limit =
+        Number.isFinite(requestedLimit) &&
+          requestedLimit > 0
+          ? Math.min(requestedLimit, 100)
+          : 20;
+
+      if (!distributorId || !firmId) {
+        return res.status(400).json({
+          success: false,
+          message:
+            "distributorId and firmId are required",
+        });
+      }
+
+      /*
+      * Main filters.
+      */
+      const filter = {
+        distributorId,
+        firmId,
+
+        /*
+        * Include active records and old records
+        * where isActive may not exist.
+        */
+        isActive: {
+          $ne: false,
+        },
+      };
+
+      /*
+      * Store all optional filters inside $and.
+      *
+      * This avoids conflicts between:
+      * - product search
+      * - company filter
+      * - group filter
+      * - category filter
+      */
+      const andConditions = [];
+
+      if (companyCode) {
+        andConditions.push({
+          $or: [
+            {
+              CompanyCode: companyCode,
+            },
+            {
+              companyCode,
+            },
+            {
+              CompCode: companyCode,
+            },
+          ],
+        });
+      }
+
+      if (groupCode) {
+        andConditions.push({
+          $or: [
+            {
+              GroupCode: groupCode,
+            },
+            {
+              groupCode,
+            },
+          ],
+        });
+      }
+
+      if (categoryCode) {
+        andConditions.push({
+          $or: [
+            {
+              CategoryCode: categoryCode,
+            },
+            {
+              categoryCode,
+            },
+          ],
+        });
+      }
+
+      /*
+      * Backend product search.
+      */
+      if (search) {
+        const escapedSearch = search.replace(
+          /[.*+?^${}()|[\]\\]/g,
+          "\\$&"
+        );
+
+        const searchRegex = new RegExp(
+          escapedSearch,
+          "i"
+        );
+
+        andConditions.push({
+          $or: [
+            {
+              ProdCode: searchRegex,
+            },
+            {
+              productCode: searchRegex,
+            },
+            {
+              code: searchRegex,
+            },
+
+            {
+              ProdName: searchRegex,
+            },
+            {
+              productName: searchRegex,
+            },
+            {
+              name: searchRegex,
+            },
+
+            {
+              ShortCode: searchRegex,
+            },
+            {
+              shortCode: searchRegex,
+            },
+
+            {
+              EANNo: searchRegex,
+            },
+            {
+              EANCode: searchRegex,
+            },
+            {
+              eanCode: searchRegex,
+            },
+            {
+              barcode: searchRegex,
+            },
+
+            {
+              CompanyCode: searchRegex,
+            },
+            {
+              companyCode: searchRegex,
+            },
+
+            {
+              CompanyName: searchRegex,
+            },
+            {
+              companyName: searchRegex,
+            },
+
+            {
+              GroupCode: searchRegex,
+            },
+            {
+              groupCode: searchRegex,
+            },
+
+            {
+              GroupName: searchRegex,
+            },
+            {
+              groupName: searchRegex,
+            },
+
+            {
+              CategoryCode: searchRegex,
+            },
+            {
+              categoryCode: searchRegex,
+            },
+
+            {
+              CategoryName: searchRegex,
+            },
+            {
+              categoryName: searchRegex,
+            },
+
+            {
+              HSNCode: searchRegex,
+            },
+            {
+              hsnCode: searchRegex,
+            },
+            {
+              hsn: searchRegex,
+            },
+          ],
+        });
+      }
+
+      if (andConditions.length > 0) {
+        filter.$and = andConditions;
+      }
+
+      /*
+      * Count matching records.
+      */
+      const totalRecords =
+        await Product.countDocuments(filter);
+
+      const totalPages = Math.max(
+        1,
+        Math.ceil(totalRecords / limit)
+      );
+
+      /*
+      * Prevent requesting a page greater than
+      * the available page count.
+      */
+      const currentPage = Math.min(
+        page,
+        totalPages
+      );
+
+      const skip =
+        (currentPage - 1) * limit;
+
+      /*
+      * Fetch only the current page.
+      */
+      const products = await Product.find(
+        filter
+      )
+        .sort({
+          ProdName: 1,
+          productName: 1,
+          ProdCode: 1,
+          productCode: 1,
+          _id: 1,
+        })
+        .skip(skip)
+        .limit(limit)
+        .lean();
+
+      return res.status(200).json({
+        success: true,
+
+        products,
+
+        count: products.length,
+
+        pagination: {
+          currentPage,
+          page: currentPage,
+          limit,
+
+          totalRecords,
+          totalPages,
+
+          hasPreviousPage:
+            currentPage > 1,
+
+          hasNextPage:
+            currentPage < totalPages,
+
+          startRecord:
+            totalRecords === 0
+              ? 0
+              : skip + 1,
+
+          endRecord:
+            totalRecords === 0
+              ? 0
+              : Math.min(
+                skip + products.length,
+                totalRecords
+              ),
+        },
+      });
+    } catch (error) {
+      console.error(
+        "Product Master pagination error:",
+        error
+      );
+
+      return res.status(500).json({
+        success: false,
+        message:
+          "Failed to load Product Master",
+        error: error.message,
+      });
+    }
+  }
+);
+
+app.post(
+  "/api/products",
+  ensureConnection,
+  securityRouter.authorizeRequest(
+    "master",
+    "PRODUCT",
+    "add"
+  ), async (req, res) => {
+  try {
+    const { distributorId, firmId, firmName, code, name } = req.body;
+
+    if (!distributorId || !firmId || !code || !name) {
+      return res.status(400).json({
+        success: false,
+        message: "distributorId, firmId, code and name are required",
+      });
+    }
+
+    const product = await Product.create({
+      productCode: code.trim(),
+      productName: name.trim(),
+      ...req.body,
+      distributorId,
+      firmId,
+      firmName: firmName || "",
+      isActive: true,
+    });
+
+    res.status(201).json({
+      success: true,
+      message: "Product created successfully",
+      data: product,
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: "Product creation failed",
+      error: error.message,
+    });
+  }
+});
+// ==================== GET ACCOUNTS WITH AREA DATA ====================
+app.get(
+  "/api/accounts",
+  ensureConnection,
+  securityRouter.authorizeRequest(
+    "MASTER",
+    "ACCOUNT",
+    "view"
+  ),
+  async (req, res) => {
+  try {
+    const { distributorId, firmId } = req.query;
+
+    if (!distributorId || !firmId) {
+      return res.status(400).json({
+        success: false,
+        message: "distributorId and firmId are required",
+      });
+    }
+
+    // Fetch accounts with area data populated
+    const accounts = await Account.find({
+      distributorId,
+      firmId,
+      isActive: true,
+    })
+      .select('accountCode accountName partyCode partyName PartyCode PartyName openingDate closingDate ClosingDate address address1 address2 Address1 Address2 add2 town Town state pinCode phone phoneNo Phone mobileNo MobileNo emailId tinNo openingBal openingBalType openingTransactions contactPerson invType taxOn panNo foodLicense gstNo GstNo GSTNo billToAdd1 tanNo gstType gstDate gstClsDate tcsPercent allowInPurchase drugLicNo drugExpDate creditDays CreditDays creditBill CreditBill creditBills unrecoChq UnrecoChq isLock IsLock isLocked IsLocked isStar IsStar lockDays creditAmt blackListed lastBillDate lastInvoiceDate areaCode AreaCode areaName AreaName distributorId firmId firmName isActive createdAt updatedAt')
+      .sort({ createdAt: -1 });
+
+    // Get all areas for this firm to populate town dropdown
+    const areas = await Area.find({
+      distributorId,
+      firmId,
+      isActive: true,
+    }).select('areaCode areaName').lean();
+
+    res.json({
+      success: true,
+      count: accounts.length,
+      accounts,
+      areas // Send areas data to frontend for dropdown
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: "Failed to fetch accounts",
+      error: error.message,
+    });
+  }
+});
+
+/* =========================================================
+  ACCOUNT MASTER PAGINATED LIST
+
+  Existing:
+  GET /api/accounts
+  remains unchanged.
+
+  New:
+  GET /api/accounts/list
+  is used only by Account Master grid.
+  ========================================================= */
+
+app.get("/api/accounts/lookup", ensureConnection, securityRouter.authorizeRequest("MASTER", "ACCOUNT", "view"), async (req, res) => {
+  try {
+    const distributorId = String(req.query.distributorId || "").trim();
+    const firmId = String(req.query.firmId || "").trim();
+    if (!distributorId || !firmId || distributorId !== req.auth.distributorId || firmId !== req.auth.firmId) {
+      return res.status(403).json({ success: false, message: "Invalid firm selection." });
+    }
+    const q = String(req.query.q || "").trim().slice(0, 100);
+    const limit = Math.min(Math.max(Number.parseInt(req.query.limit, 10) || 30, 1), 50);
+    const filter = { distributorId, firmId, isActive: true };
+    if (q) {
+      const pattern = new RegExp(q.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "i");
+      filter.$or = [{ accountCode: pattern }, { accountName: pattern }, { partyCode: pattern }, { partyName: pattern }];
+    }
+    if (req.query.areaCode) filter.areaCode = String(req.query.areaCode).trim();
+    const accounts = await Account.find(filter)
+      .select("accountCode accountName partyCode partyName areaCode areaName blackListed isLock creditDays creditBills creditAmt")
+      .sort({ accountName: 1, _id: 1 }).limit(limit).lean();
+    return res.json({ success: true, accounts });
+  } catch (error) {
+    console.error("Account lookup error:", error);
+    return res.status(500).json({ success: false, message: "Failed to search accounts." });
+  }
+});
+
+app.get(
+  "/api/accounts/list",
+  ensureConnection,
+  securityRouter.authorizeRequest(
+    "MASTER",
+    "ACCOUNT",
+    "view"
+  ),
+  async (req, res) => {
+    try {
+      const distributorId = String(
+        req.query.distributorId || ""
+      ).trim();
+
+      const firmId = String(
+        req.query.firmId || ""
+      ).trim();
+
+      const search = String(
+        req.query.search || ""
+      ).trim();
+
+      const requestedPage = Number.parseInt(
+        req.query.page,
+        10
+      );
+
+      const requestedLimit = Number.parseInt(
+        req.query.limit,
+        10
+      );
+
+      const page =
+        Number.isFinite(requestedPage) &&
+          requestedPage > 0
+          ? requestedPage
+          : 1;
+
+      const limit =
+        Number.isFinite(requestedLimit) &&
+          requestedLimit > 0
+          ? Math.min(
+            requestedLimit,
+            100
+          )
+          : 20;
+
+      if (!distributorId || !firmId) {
+        return res.status(400).json({
+          success: false,
+          message:
+            "distributorId and firmId are required",
+        });
+      }
+
+      const filter = {
+        distributorId,
+        firmId,
+
+        /*
+        * This includes:
+        * - active accounts
+        * - old accounts where isActive does not exist
+        */
+        isActive: {
+          $ne: false,
+        },
+      };
+
+      /*
+      * Backend search.
+      */
+      if (search) {
+        const escapedSearch =
+          search.replace(
+            /[.*+?^${}()|[\]\\]/g,
+            "\\$&"
+          );
+
+        const searchRegex =
+          new RegExp(
+            escapedSearch,
+            "i"
+          );
+
+        filter.$or = [
+          {
+            accountCode:
+              searchRegex,
+          },
+          {
+            accountName:
+              searchRegex,
+          },
+          {
+            contactPerson:
+              searchRegex,
+          },
+          {
+            mobileNo:
+              searchRegex,
+          },
+          {
+            phoneNo:
+              searchRegex,
+          },
+          {
+            emailId:
+              searchRegex,
+          },
+          {
+            town:
+              searchRegex,
+          },
+          {
+            state:
+              searchRegex,
+          },
+          {
+            pinCode:
+              searchRegex,
+          },
+          {
+            gstNo:
+              searchRegex,
+          },
+          {
+            tinNo:
+              searchRegex,
+          },
+          {
+            panNo:
+              searchRegex,
+          },
+          {
+            areaCode:
+              searchRegex,
+          },
+          {
+            address:
+              searchRegex,
+          },
+        ];
+      }
+
+      /*
+      * Count matching accounts.
+      */
+      const totalRecords =
+        await Account.countDocuments(
+          filter
+        );
+
+      const totalPages = Math.max(
+        1,
+        Math.ceil(
+          totalRecords / limit
+        )
+      );
+
+      /*
+      * Prevent loading a page greater than
+      * the available total pages.
+      */
+      const currentPage = Math.min(
+        page,
+        totalPages
+      );
+
+      const skip =
+        (currentPage - 1) *
+        limit;
+
+      /*
+      * Load only the current Account Master page.
+      *
+      * All fields are returned because the same row
+      * is passed to the Edit Account form.
+      */
+      const accounts =
+        await Account.find(filter)
+          .select(
+            [
+              "accountCode",
+              "accountName",
+              "openingDate",
+              "address",
+              "town",
+              "state",
+              "pinCode",
+              "phoneNo",
+              "mobileNo",
+              "emailId",
+              "tinNo",
+              "openingBal",
+              "openingBalType",
+              "openingTransactions",
+              "contactPerson",
+              "invType",
+              "taxOn",
+              "panNo",
+              "foodLicense",
+              "gstNo",
+              "billToAdd1",
+              "tanNo",
+              "gstType",
+              "gstDate",
+              "gstClsDate",
+              "add2",
+              "tcsPercent",
+              "allowInPurchase",
+              "drugLicNo",
+              "drugExpDate",
+              "creditDays",
+              "creditBills",
+              "lockDays",
+              "creditAmt",
+              "blackListed",
+              "lastBillDate",
+              "lastInvoiceDate",
+              "areaCode",
+              "distributorId",
+              "firmId",
+              "firmName",
+              "isActive",
+              "createdAt",
+              "updatedAt",
+            ].join(" ")
+          )
+          .sort({
+            accountName: 1,
+            accountCode: 1,
+            _id: 1,
+          })
+          .skip(skip)
+          .limit(limit)
+          .lean();
+
+      return res.status(200).json({
+        success: true,
+
+        accounts,
+
+        count: accounts.length,
+
+        pagination: {
+          currentPage,
+          page: currentPage,
+          limit,
+
+          totalRecords,
+          totalPages,
+
+          hasPreviousPage:
+            currentPage > 1,
+
+          hasNextPage:
+            currentPage <
+            totalPages,
+
+          startRecord:
+            totalRecords === 0
+              ? 0
+              : skip + 1,
+
+          endRecord:
+            totalRecords === 0
+              ? 0
+              : Math.min(
+                skip +
+                accounts.length,
+                totalRecords
+              ),
+        },
+      });
+    } catch (error) {
+      console.error(
+        "Account Master pagination error:",
+        error
+      );
+
+      return res.status(500).json({
+        success: false,
+        message:
+          "Failed to load Account Master",
+        error: error.message,
+      });
+    }
+  }
+);
+app.post(
+    "/api/accounts",
+    ensureConnection,
+    securityRouter.authorizeRequest(
+        "MASTER",
+        "ACCOUNT",
+        "add"
+    ), async (req, res) => {
+  try {
+    const distributorId = String(req.body.distributorId || "").trim();
+    const firmId = String(req.body.firmId || "").trim();
+    const firmName = String(req.body.firmName || "").trim();
+
+    const accountCode = String(req.body.accountCode || "").trim();
+    const accountName = String(req.body.accountName || "").trim();
+
+    if (!distributorId || !firmId || !accountCode || !accountName) {
+      return res.status(400).json({
+        success: false,
+        message: "distributorId, firmId, accountCode and accountName are required",
+      });
+    }
+
+    let townValue = req.body.town || "Pune";
+    let areaCodeValue = req.body.areaCode || "";
+
+    if (areaCodeValue) {
+      const area = await Area.findOne({
+        distributorId,
+        firmId,
+        areaCode: areaCodeValue,
+        isActive: true,
+      });
+
+      if (area) {
+        townValue = area.areaName;
+      }
+    }
+
+    if (req.body.openingTransactions !== undefined) {
+      const message = validateOpeningTransactions(req.body.openingTransactions);
+      if (message) return res.status(400).json({ success: false, message });
+    }
+
+    const companyAreaMappings = await validateAccountCompanyMappings(req, accountCode, accountName);
+
+    const account = await saveAccountWithOpenings(req, async session => {
+      const [created] = await Account.create([{
+      ...(req.body.openingTransactions !== undefined ? { openingTransactions: req.body.openingTransactions } : {}),
+      accountCode,
+      accountName,
+
+      openingDate: req.body.openingDate || "",
+      address: req.body.address || "",
+      town: townValue,
+      state: req.body.state || "MAHARASHTRA",
+      pinCode: req.body.pinCode || "",
+      phoneNo: req.body.phoneNo || "",
+      mobileNo: req.body.mobileNo || "",
+      emailId: req.body.emailId || "",
+      tinNo: req.body.tinNo || "",
+      openingBal: Number(req.body.openingBal || 0),
+      openingBalType: req.body.openingBalType || "Dr",
+      contactPerson: req.body.contactPerson || "",
+
+      invType: req.body.invType || "TAXABLE",
+      taxOn: req.body.taxOn || "SRATE",
+
+      panNo: req.body.panNo || "",
+      foodLicense: req.body.foodLicense || "",
+      gstNo: req.body.gstNo || "",
+      billToAdd1: req.body.billToAdd1 || "",
+      tanNo: req.body.tanNo || "",
+      gstType: req.body.gstType || "Unregistered",
+      gstDate: req.body.gstDate || "",
+      gstClsDate: req.body.gstClsDate || "",
+      add2: req.body.add2 || "",
+      tcsPercent: Number(req.body.tcsPercent || 0),
+      allowInPurchase: req.body.allowInPurchase || "N",
+
+      drugLicNo: req.body.drugLicNo || "",
+      drugExpDate: req.body.drugExpDate || "",
+
+      // NEW FIELDS
+      creditDays: Number(req.body.creditDays || 0),
+      creditBills: Number(req.body.creditBills || 0),
+      lockDays: Number(req.body.lockDays || 0),
+      creditAmt: Number(req.body.creditAmt || 0),
+      blackListed: String(req.body.blackListed || "NO").trim().toUpperCase() === "YES" ? "YES" : "NO",
+      lastBillDate: req.body.lastBillDate || "",
+      lastInvoiceDate: req.body.lastInvoiceDate || "",
+      // END NEW FIELDS
+
+      areaCode: areaCodeValue || "",
+      distributorId,
+      firmId,
+      firmName,
+      isActive: true,
+    }], { session });
+      await syncAccountCompanyMappings(req, created, companyAreaMappings, session);
+      return created;
+    });
+
+    res.status(201).json({
+      success: true,
+      message: "Account created successfully",
+      data: account,
+    });
+  } catch (error) {
+    if (error.code === 11000) {
+      return res.status(409).json({
+        success: false,
+        message: "Account code already exists for this firm",
+      });
+    }
+    res.status(error.statusCode || 500).json({
+      success: false,
+      message: error.statusCode ? error.message : "Account creation failed",
+      error: error.message,
+    });
+  }
+});
+app.get(
+  "/api/other-accounts",
+  ensureConnection,
+  securityRouter.authorizeRequest(
+    "master",
+    "OTHER_ACCOUNT",
+    "view"
+  ),
+  async (req, res) => {
+  try {
+    const { distributorId, firmId } = req.query;
+
+    if (!distributorId || !firmId) {
+      return res.status(400).json({
+        success: false,
+        message: "distributorId and firmId are required",
+      });
+    }
+
+    const otherAccounts = await OtherAccount.find({
+      distributorId,
+      firmId,
+      isActive: true,
+    }).sort({ createdAt: -1 });
+
+    res.json({
+      success: true,
+      count: otherAccounts.length,
+      otherAccounts,
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: "Failed to fetch other accounts",
+      error: error.message,
+    });
+  }
+});
+/* =========================================================
+  OTHER ACCOUNT MASTER PAGINATED LIST
+
+  Existing:
+  GET /api/other-accounts
+  remains unchanged.
+
+  New:
+  GET /api/other-accounts/list
+  used only by Other Account Master grid.
+  ========================================================= */
+
+app.get(
+  "/api/other-accounts/list",
+  ensureConnection,
+  securityRouter.authorizeRequest(
+    "master",
+    "OTHER_ACCOUNT",
+    "view"
+  ),
+  async (req, res) => {
+    try {
+      const distributorId = String(
+        req.query.distributorId || ""
+      ).trim();
+
+      const firmId = String(
+        req.query.firmId || ""
+      ).trim();
+
+      const search = String(
+        req.query.search || ""
+      ).trim();
+
+      const requestedPage = Number.parseInt(
+        req.query.page,
+        10
+      );
+
+      const requestedLimit = Number.parseInt(
+        req.query.limit,
+        10
+      );
+
+      const page =
+        Number.isFinite(requestedPage) &&
+          requestedPage > 0
+          ? requestedPage
+          : 1;
+
+      const limit =
+        Number.isFinite(requestedLimit) &&
+          requestedLimit > 0
+          ? Math.min(
+            requestedLimit,
+            100
+          )
+          : 20;
+
+      if (!distributorId || !firmId) {
+        return res.status(400).json({
+          success: false,
+          message:
+            "distributorId and firmId are required",
+        });
+      }
+
+      const filter = {
+        distributorId,
+        firmId,
+
+        /*
+        * Include active records and older records
+        * where isActive may not exist.
+        */
+        isActive: {
+          $ne: false,
+        },
+      };
+
+      if (search) {
+        const escapedSearch =
+          search.replace(
+            /[.*+?^${}()|[\]\\]/g,
+            "\\$&"
+          );
+
+        const searchRegex =
+          new RegExp(
+            escapedSearch,
+            "i"
+          );
+
+        filter.$or = [
+          {
+            accountCode:
+              searchRegex,
+          },
+          {
+            accountName:
+              searchRegex,
+          },
+          {
+            accountGroup:
+              searchRegex,
+          },
+          {
+            mobileNo:
+              searchRegex,
+          },
+          {
+            phoneNo:
+              searchRegex,
+          },
+          {
+            emailId:
+              searchRegex,
+          },
+          {
+            town:
+              searchRegex,
+          },
+          {
+            state:
+              searchRegex,
+          },
+          {
+            pinCode:
+              searchRegex,
+          },
+          {
+            gstNo:
+              searchRegex,
+          },
+          {
+            tinNo:
+              searchRegex,
+          },
+          {
+            panNo:
+              searchRegex,
+          },
+          {
+            bankAccountNo:
+              searchRegex,
+          },
+          {
+            ifscCode:
+              searchRegex,
+          },
+          {
+            branchName:
+              searchRegex,
+          },
+          {
+            remark:
+              searchRegex,
+          },
+        ];
+      }
+
+      const totalRecords =
+        await OtherAccount.countDocuments(
+          filter
+        );
+
+      const totalPages = Math.max(
+        1,
+        Math.ceil(
+          totalRecords / limit
+        )
+      );
+
+      const currentPage = Math.min(
+        page,
+        totalPages
+      );
+
+      const skip =
+        (currentPage - 1) *
+        limit;
+
+      const otherAccounts =
+        await OtherAccount.find(filter)
+          .sort({
+            accountName: 1,
+            accountCode: 1,
+            _id: 1,
+          })
+          .skip(skip)
+          .limit(limit)
+          .lean();
+
+      return res.status(200).json({
+        success: true,
+
+        otherAccounts,
+
+        count:
+          otherAccounts.length,
+
+        pagination: {
+          currentPage,
+          page: currentPage,
+          limit,
+
+          totalRecords,
+          totalPages,
+
+          hasPreviousPage:
+            currentPage > 1,
+
+          hasNextPage:
+            currentPage <
+            totalPages,
+
+          startRecord:
+            totalRecords === 0
+              ? 0
+              : skip + 1,
+
+          endRecord:
+            totalRecords === 0
+              ? 0
+              : Math.min(
+                skip +
+                otherAccounts.length,
+                totalRecords
+              ),
+        },
+      });
+    } catch (error) {
+      console.error(
+        "Other Account Master pagination error:",
+        error
+      );
+
+      return res.status(500).json({
+        success: false,
+        message:
+          "Failed to load Other Account Master",
+        error: error.message,
+      });
+    }
+  }
+);
+
+app.post(
+  "/api/other-accounts",
+  ensureConnection,
+  securityRouter.authorizeRequest(
+    "master",
+    "OTHER_ACCOUNT",
+    "add"
+  ),
+  async (req, res) => {
+  try {
+    const distributorId = String(req.body.distributorId || "").trim();
+    const firmId = String(req.body.firmId || "").trim();
+    const firmName = String(req.body.firmName || "").trim();
+
+    const accountCode = String(req.body.accountCode || "").trim();
+    const accountName = String(req.body.accountName || "").trim();
+
+    if (!distributorId || !firmId || !accountCode || !accountName) {
+      return res.status(400).json({
+        success: false,
+        message: "distributorId, firmId, accountCode and accountName are required",
+      });
+    }
+
+    const otherAccount = await OtherAccount.create({
+      ...req.body,
+      accountCode,
+      accountName,
+      distributorId,
+      firmId,
+      firmName,
+      branch: req.body.branch || req.body.branchName || "",
+      branchName: req.body.branchName || req.body.branch || "",
+      openingBal: Number(req.body.openingBal || 0),
+      tcsPercent: Number(req.body.tcsPercent || 0),
+      isActive: true,
+    });
+
+    res.status(201).json({
+      success: true,
+      message: "Other account created successfully",
+      data: otherAccount,
+    });
+  } catch (error) {
+    if (error.code === 11000) {
+      return res.status(409).json({
+        success: false,
+        message: "Other account code already exists for this firm",
+      });
+    }
+
+    res.status(500).json({
+      success: false,
+      message: "Other account creation failed",
+      error: error.message,
+    });
+  }
+});
+
+app.get("/api/firms", ensureConnection, requireRoles("DISTRIBUTOR_ADMIN"), async (req, res) => {
+  try {
+    const distributorId = String(
+      req.query.distributorId || ""
+    ).trim();
+
+    const search = String(
+      req.query.search || ""
+    ).trim();
+
+    /*
+    * Safe pagination values.
+    *
+    * Existing frontend calls without page and limit
+    * will automatically load page 1 with 10 records.
+    */
+    const requestedPage = Number.parseInt(
+      req.query.page,
+      10
+    );
+
+    const requestedLimit = Number.parseInt(
+      req.query.limit,
+      10
+    );
+
+    const page =
+      Number.isFinite(requestedPage) &&
+        requestedPage > 0
+        ? requestedPage
+        : 1;
+
+    /*
+    * Maximum 100 records per request prevents
+    * accidental very large API responses.
+    */
+    const limit =
+      Number.isFinite(requestedLimit) &&
+        requestedLimit > 0
+        ? Math.min(requestedLimit, 100)
+        : 10;
+
+    if (!distributorId) {
+      return res.status(400).json({
+        success: false,
+        message: "distributorId is required",
+      });
+    }
+
+    /*
+    * Escape special regular-expression characters
+    * entered in the search box.
+    */
+    const escapedSearch = search.replace(
+      /[.*+?^${}()|[\]\\]/g,
+      "\\$&"
+    );
+
+    const filter = {
+      distributorId,
+      isActive: true,
+    };
+
+    /*
+    * Search is applied before count, skip and limit.
+    * This means pagination works on filtered records.
+    */
+    if (escapedSearch) {
+      const searchRegex = new RegExp(
+        escapedSearch,
+        "i"
+      );
+
+      filter.$or = [
+        { firmCode: searchRegex },
+        { firmName: searchRegex },
+        { city: searchRegex },
+        { state: searchRegex },
+        { mobileNo: searchRegex },
+        { phoneNo: searchRegex },
+        { gstNo: searchRegex },
+        { email: searchRegex },
+      ];
+    }
+
+    /*
+    * Count matching records first so frontend
+    * can calculate pagination buttons.
+    */
+    const totalRecords =
+      await Register.countDocuments(filter);
+
+    const totalPages =
+      Math.max(
+        1,
+        Math.ceil(totalRecords / limit)
+      );
+
+    /*
+    * If the requested page is greater than the
+    * available pages, return the last valid page.
+    */
+    const currentPage =
+      Math.min(page, totalPages);
+
+    const skip =
+      (currentPage - 1) * limit;
+
+    const firms = await Register.find(
+      filter,
+      {
+        password: 0,
+      }
+    )
+      .sort({
+        firmName: 1,
+        _id: 1,
+      })
+      .skip(skip)
+      .limit(limit)
+      .lean();
+
+    return res.json({
+      success: true,
+
+      firms,
+
+      pagination: {
+        currentPage,
+        page: currentPage,
+        limit,
+        totalRecords,
+        totalPages,
+
+        hasPreviousPage:
+          currentPage > 1,
+
+        hasNextPage:
+          currentPage < totalPages,
+
+        startRecord:
+          totalRecords === 0
+            ? 0
+            : skip + 1,
+
+        endRecord:
+          totalRecords === 0
+            ? 0
+            : Math.min(
+              skip + firms.length,
+              totalRecords
+            ),
+      },
+    });
+  } catch (error) {
+    console.error(
+      "❌ Firm pagination load error:",
+      error
+    );
+
+    return res.status(500).json({
+      success: false,
+      message: "Failed to fetch firms",
+      error: error.message,
+    });
+  }
+});
+
+app.post("/api/firms", ensureConnection, requireRoles("DISTRIBUTOR_ADMIN"), async (req, res) => {
+  try {
+    const distributorId = String(req.body.distributorId || "").trim();
+
+    if (!distributorId) {
+      return res.status(400).json({
+        success: false,
+        message: "distributorId is required. Please login again.",
+      });
+    }
+
+    const baseUser = await Register.findOne({ distributorId, isActive: true });
+
+    if (!baseUser) {
+      return res.status(404).json({
+        success: false,
+        message: "Distributor not found. Please login again.",
+      });
+    }
+
+    const firmCode = String(req.body.firmCode || "").trim();
+    const firmName = String(req.body.firmName || "").trim();
+
+    if (!firmCode || !firmName) {
+      return res.status(400).json({
+        success: false,
+        message: "Firm Code and Firm Name are required",
+      });
+    }
+
+    const firm = await Register.create({
+      distributorId,
+      firmId: await generateFirmId(),
+
+      firmCode,
+      firmName,
+
+      address1: String(req.body.address1 || "").trim(),
+      address2: String(req.body.address2 || "").trim(),
+      city: String(req.body.city || "").trim(),
+      pinCode: String(req.body.pinCode || "").trim(),
+      state: String(req.body.state || "").trim(),
+      country: String(req.body.country || "India").trim(),
+
+      phoneNo: String(req.body.phoneNo || "").trim(),
+      mobileNo: String(req.body.mobileNo || "").trim(),
+      tinNo: String(req.body.tinNo || "").trim(),
+      regNo: String(req.body.regNo || "").trim(),
+      gstNo: String(req.body.gstNo || "").trim(),
+      drugLicNo: String(req.body.drugLicNo || "").trim(),
+      foodLicenceNo: String(req.body.foodLicenceNo || "").trim(),
+      apiKey: String(req.body.apiKey || "").trim(),
+      email: String(req.body.email || baseUser.email || "").trim(),
+
+      userName: baseUser.userName,
+      password: baseUser.password,
+      role: baseUser.role || "DISTRIBUTOR_ADMIN",
+      isActive: true,
+    });
+
+    const data = firm.toObject();
+    delete data.password;
+
+    res.status(201).json({
+      success: true,
+      message: "Firm created successfully",
+      data,
+    });
+  } catch (error) {
+    console.error("❌ Firm creation error:", error);
+
+    if (error.code === 11000) {
+      return res.status(409).json({
+        success: false,
+        message: `Duplicate key error: ${JSON.stringify(error.keyValue)}`,
+      });
+    }
+
+    res.status(500).json({
+      success: false,
+      message: error.message || "Firm creation failed",
+    });
+  }
+});
+
+
+
+app.get(
+  "/api/gst",
+  ensureConnection,
+  securityRouter.authorizeRequest(
+    "master",
+    "GST",
+    "view"
+  ),
+  async (req, res) => {
+  try {
+    const { distributorId, firmId } = req.query;
+
+    if (!distributorId || !firmId) {
+      return res.status(400).json({
+        success: false,
+        message: "distributorId and firmId are required",
+      });
+    }
+
+    const gstList = await GST.find({
+      distributorId,
+      firmId,
+      isActive: true,
+    }).sort({ createdAt: -1 });
+
+    res.json({
+      success: true,
+      count: gstList.length,
+      gstList,
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: "Failed to fetch GST list",
+      error: error.message,
+    });
+  }
+});
+/* =========================================================
+  GST MASTER PAGINATED LIST
+
+  Existing:
+  GET /api/gst
+  remains unchanged.
+
+  New:
+  GET /api/gst/list
+  used only by GST Master grid.
+  ========================================================= */
+
+app.get(
+  "/api/gst/list",
+  ensureConnection,
+  securityRouter.authorizeRequest(
+    "master",
+    "GST",
+    "view"
+  ),
+  async (req, res) => {
+    try {
+      const distributorId = String(
+        req.query.distributorId || ""
+      ).trim();
+
+      const firmId = String(
+        req.query.firmId || ""
+      ).trim();
+
+      const search = String(
+        req.query.search || ""
+      ).trim();
+
+      const requestedPage =
+        Number.parseInt(
+          req.query.page,
+          10
+        );
+
+      const requestedLimit =
+        Number.parseInt(
+          req.query.limit,
+          10
+        );
+
+      const page =
+        Number.isFinite(
+          requestedPage
+        ) &&
+          requestedPage > 0
+          ? requestedPage
+          : 1;
+
+      const limit =
+        Number.isFinite(
+          requestedLimit
+        ) &&
+          requestedLimit > 0
+          ? Math.min(
+            requestedLimit,
+            100
+          )
+          : 10;
+
+      if (
+        !distributorId ||
+        !firmId
+      ) {
+        return res
+          .status(400)
+          .json({
+            success: false,
+            message:
+              "distributorId and firmId are required",
+          });
+      }
+
+      const filter = {
+        distributorId,
+        firmId,
+
+        /*
+        * Include active GST records and
+        * older records where isActive
+        * may not be present.
+        */
+        isActive: {
+          $ne: false,
+        },
+      };
+
+      if (search) {
+        const escapedSearch =
+          search.replace(
+            /[.*+?^${}()|[\]\\]/g,
+            "\\$&"
+          );
+
+        const searchRegex =
+          new RegExp(
+            escapedSearch,
+            "i"
+          );
+
+        const numericSearch =
+          Number(search);
+
+        filter.$or = [
+          {
+            gstCode:
+              searchRegex,
+          },
+          {
+            purchaseType:
+              searchRegex,
+          },
+          {
+            salesType:
+              searchRegex,
+          },
+        ];
+
+        /*
+        * Allow exact search by GST percentage.
+        * For example: 5, 12, 18 or 28.
+        */
+        if (
+          Number.isFinite(
+            numericSearch
+          )
+        ) {
+          filter.$or.push({
+            vatPercent:
+              numericSearch,
+          });
+        }
+      }
+
+      const totalRecords =
+        await GST.countDocuments(
+          filter
+        );
+
+      const totalPages =
+        Math.max(
+          1,
+          Math.ceil(
+            totalRecords /
+            limit
+          )
+        );
+
+      /*
+      * If requested page becomes invalid
+      * after deletion, return the last
+      * available page.
+      */
+      const currentPage =
+        Math.min(
+          page,
+          totalPages
+        );
+
+      const skip =
+        (currentPage - 1) *
+        limit;
+
+      const gstList =
+        await GST.find(filter)
+          .sort({
+            vatPercent: 1,
+            gstCode: 1,
+            _id: 1,
+          })
+          .skip(skip)
+          .limit(limit)
+          .lean();
+
+      return res
+        .status(200)
+        .json({
+          success: true,
+
+          gstList,
+
+          count:
+            gstList.length,
+
+          pagination: {
+            currentPage,
+            page:
+              currentPage,
+            limit,
+
+            totalRecords,
+            totalPages,
+
+            hasPreviousPage:
+              currentPage > 1,
+
+            hasNextPage:
+              currentPage <
+              totalPages,
+
+            startRecord:
+              totalRecords === 0
+                ? 0
+                : skip + 1,
+
+            endRecord:
+              totalRecords === 0
+                ? 0
+                : Math.min(
+                  skip +
+                  gstList.length,
+                  totalRecords
+                ),
+          },
+        });
+    } catch (error) {
+      console.error(
+        "GST Master pagination error:",
+        error
+      );
+
+      return res
+        .status(500)
+        .json({
+          success: false,
+          message:
+            "Failed to load GST Master",
+          error:
+            error.message,
+        });
+    }
+  }
+);
+
+app.post(
+  "/api/gst",
+  ensureConnection,
+  securityRouter.authorizeRequest(
+    "master",
+    "GST",
+    "add"
+  ),
+  async (req, res) => {
+  try {
+    const distributorId = String(req.body.distributorId || "").trim();
+    const firmId = String(req.body.firmId || "").trim();
+    const firmName = String(req.body.firmName || "").trim();
+
+    const gstCode = String(
+      req.body.gstCode || req.body.code || ""
+    ).trim();
+
+    const vatPercent = Number(
+      req.body.vatPercent ?? req.body.vat ?? 0
+    );
+
+    if (!distributorId || !firmId) {
+      return res.status(400).json({
+        success: false,
+        message: "Distributor/Firm not found. Please login again.",
+      });
+    }
+
+    if (!gstCode || vatPercent === "" || isNaN(vatPercent)) {
+      return res.status(400).json({
+        success: false,
+        message: "GST Code and VAT Percent are required",
+      });
+    }
+
+    const gst = await GST.create({
+      gstCode,
+      vatPercent,
+      purchaseType:
+        req.body.purchaseType || "VAT ON PURCHASE PRICE",
+      salesType:
+        req.body.salesType || "VAT ON SALES PRICE",
+      distributorId,
+      firmId,
+      firmName,
+      isActive: true,
+    });
+
+    res.status(201).json({
+      success: true,
+      message: "GST saved successfully",
+      data: gst,
+    });
+  } catch (error) {
+    if (error.code === 11000) {
+      return res.status(409).json({
+        success: false,
+        message: "This GST Code already exists for this firm",
+      });
+    }
+
+    res.status(500).json({
+      success: false,
+      message: "GST save failed",
+      error: error.message,
+    });
+  }
+});
+app.get("/api/sales/bill", ensureConnection, async (req, res) => {
+  try {
+    const distributorId = String(req.query.distributorId || "").trim();
+    const firmId = String(req.query.firmId || "").trim();
+    const billId = String(req.query.billId || req.query.id || "").trim();
+    const salesEntryType = String(req.query.salesEntryType || "").trim();
+
+    const billSeries = String(
+      req.query.billSeries || req.query.BillSeries || ""
+    ).trim();
+
+    const billNo = Number(
+      req.query.billNo || req.query.BillNo || 0
+    );
+
+    if (!distributorId || !firmId || (!billId && !billNo)) {
+      return res.status(400).json({
+        success: false,
+        message: "Distributor/Firm and Bill ID or Bill No are required",
+      });
+    }
+
+    const billFilter = {
+      distributorId,
+      firmId,
+      // Keep old records (created before isActive was introduced) editable.
+      isActive: { $ne: false },
+    };
+
+    if (billId && mongoose.Types.ObjectId.isValid(billId)) {
+      billFilter._id = billId;
+    } else {
+      billFilter.$and = [
+        {
+          $or: [
+            { BillSeries: billSeries },
+            { billSeries },
+          ],
+        },
+        {
+          $or: [
+            { BillNo: billNo },
+            { billNo },
+          ],
+        },
+      ];
+
+      if (salesEntryType) {
+        const normalizedEntryType = normalizeSalesEntryType(salesEntryType);
+
+        billFilter.$and.push(
+          buildSalesEntryTypeFilter(normalizedEntryType)
+        );
+      }
+    }
+
+    const bill = await SalesHeader.findOne(billFilter).lean();
+
+    if (!bill) {
+      return res.status(404).json({
+        success: false,
+        message: "Sales bill not found",
+      });
+    }
+
+    /*
+     * Legacy sales invoices may not contain a purchase-rate snapshot, or
+     * may contain an empty `purchaseRate` beside a valid `PRate`. Hydrate
+     * only missing rates from the matching stock row so an unchanged old
+     * invoice can still pass the existing S.Rate/P.Rate validation when it
+     * is edited. Existing positive invoice rates always remain untouched.
+     */
+    const billItems = Array.isArray(bill.items)
+      ? bill.items
+      : [];
+
+    const readPositivePurchaseRate = (item) => {
+      const candidates = [
+        item?.purchaseRate,
+        item?.PurchaseRate,
+        item?.purRate,
+        item?.PurRate,
+        item?.pRate,
+        item?.PRate,
+        item?.prate,
+        item?.selectedBatch?.purchaseRate,
+        item?.selectedBatch?.PurchaseRate,
+        item?.selectedBatch?.purRate,
+        item?.selectedBatch?.PurRate,
+        item?.selectedBatch?.pRate,
+        item?.selectedBatch?.PRate,
+      ];
+
+      for (const candidate of candidates) {
+        if (candidate === "" || candidate === null || candidate === undefined) {
+          continue;
+        }
+
+        const rate = Number(candidate);
+
+        if (Number.isFinite(rate) && rate > 0) {
+          return rate;
+        }
+      }
+
+      return 0;
+    };
+
+    const missingRateProductCodes = [
+      ...new Set(
+        billItems
+          .filter((item) => readPositivePurchaseRate(item) <= 0)
+          .map((item) =>
+            String(
+              item.productCode ||
+              item.productId ||
+              item.code ||
+              ""
+            ).trim()
+          )
+          .filter(Boolean)
+      ),
+    ];
+
+    if (missingRateProductCodes.length > 0) {
+      const stockRows = await Stock.find({
+        distributorId,
+        firmId,
+        GDCode: String(bill.GDCode || bill.Godown || "").trim(),
+        ProdCode: { $in: missingRateProductCodes },
+        $or: [
+          { isActive: true },
+          { isActive: { $exists: false } },
+        ],
+      }).lean();
+
+      const normalizeMatchValue = (value) =>
+        String(value ?? "").trim().toUpperCase();
+
+      bill.items = billItems.map((item) => {
+        const savedPurchaseRate = readPositivePurchaseRate(item);
+
+        if (savedPurchaseRate > 0) {
+          return item;
+        }
+
+        const productCode = normalizeMatchValue(
+          item.productCode || item.productId || item.code
+        );
+        const batchNo = normalizeMatchValue(
+          item.batchNo ||
+          item.Batch ||
+          item.batch ||
+          item.selectedBatch?.batchNo ||
+          item.selectedBatch?.Batch ||
+          "."
+        ) || ".";
+        const mrp = Number(
+          item.mrp ??
+          item.MRP ??
+          item.selectedBatch?.mrp ??
+          item.selectedBatch?.MRP ??
+          0
+        );
+
+        const productStockRows = stockRows.filter(
+          (stockRow) =>
+            normalizeMatchValue(stockRow.ProdCode) === productCode
+        );
+
+        const exactStockRow = productStockRows.find((stockRow) =>
+          normalizeMatchValue(stockRow.Batch || ".") === batchNo &&
+          Math.abs(Number(stockRow.MRP || 0) - mrp) < 0.001
+        );
+        const batchStockRow = productStockRows.find(
+          (stockRow) =>
+            normalizeMatchValue(stockRow.Batch || ".") === batchNo
+        );
+        const mrpStockRow = productStockRows.find(
+          (stockRow) =>
+            Math.abs(Number(stockRow.MRP || 0) - mrp) < 0.001
+        );
+        const stockRow =
+          exactStockRow ||
+          (productStockRows.length === 1
+            ? productStockRows[0]
+            : batchNo !== "."
+              ? batchStockRow
+              : mrpStockRow);
+        const stockPurchaseRate = Number(stockRow?.PRate || 0);
+
+        if (!Number.isFinite(stockPurchaseRate) || stockPurchaseRate <= 0) {
+          return item;
+        }
+
+        return {
+          ...item,
+          purchaseRate: stockPurchaseRate,
+          PRate: stockPurchaseRate,
+          selectedBatch: {
+            ...(item.selectedBatch || {}),
+            purchaseRate: stockPurchaseRate,
+            PRate: stockPurchaseRate,
+          },
+        };
+      });
+    }
+
+    return res.json({
+      success: true,
+      bill,
+    });
+  } catch (error) {
+    console.error("❌ Sales bill load error:", error);
+
+    return res.status(500).json({
+      success: false,
+      message: "Failed to load sales bill",
+      error: error.message,
+    });
+  }
+});
+
+
+app.get(
+  "/api/salesmen",
+  ensureConnection,
+  securityRouter.authorizeRequest(
+    "master",
+    "SALESMAN",
+    "view"
+  ),
+  async (req, res) => {
+  try {
+    const { distributorId, firmId } = req.query;
+
+    if (!distributorId || !firmId) {
+      return res.status(400).json({
+        success: false,
+        message: "distributorId and firmId are required",
+      });
+    }
+
+    const salesmen = await Salesman.find({
+      distributorId,
+      firmId,
+      isActive: true,
+    }).sort({ createdAt: -1 });
+
+    res.json({
+      success: true,
+      count: salesmen.length,
+      salesmen,
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: "Failed to fetch salesmen",
+      error: error.message,
+    });
+  }
+});
+/* =========================================================
+  SALESMAN MASTER PAGINATED LIST
+
+  Existing:
+  GET /api/salesmen
+  remains unchanged.
+
+  New:
+  GET /api/salesmen/list
+  used only by Salesman Master grid.
+  ========================================================= */
+
+app.get(
+  "/api/salesmen/list",
+  ensureConnection,
+  securityRouter.authorizeRequest(
+    "master",
+    "SALESMAN",
+    "view"
+  ),
+  async (req, res) => {
+    try {
+      const distributorId = String(
+        req.query.distributorId || ""
+      ).trim();
+
+      const firmId = String(
+        req.query.firmId || ""
+      ).trim();
+
+      const search = String(
+        req.query.search || ""
+      ).trim();
+
+      const requestedPage =
+        Number.parseInt(
+          req.query.page,
+          10
+        );
+
+      const requestedLimit =
+        Number.parseInt(
+          req.query.limit,
+          10
+        );
+
+      const page =
+        Number.isFinite(
+          requestedPage
+        ) &&
+          requestedPage > 0
+          ? requestedPage
+          : 1;
+
+      const limit =
+        Number.isFinite(
+          requestedLimit
+        ) &&
+          requestedLimit > 0
+          ? Math.min(
+            requestedLimit,
+            100
+          )
+          : 20;
+
+      if (
+        !distributorId ||
+        !firmId
+      ) {
+        return res
+          .status(400)
+          .json({
+            success: false,
+            message:
+              "distributorId and firmId are required",
+          });
+      }
+
+      const filter = {
+        distributorId,
+        firmId,
+
+        /*
+        * Include active records and older
+        * records where isActive may not exist.
+        */
+        isActive: {
+          $ne: false,
+        },
+      };
+
+      if (search) {
+        const escapedSearch =
+          search.replace(
+            /[.*+?^${}()|[\]\\]/g,
+            "\\$&"
+          );
+
+        const searchRegex =
+          new RegExp(
+            escapedSearch,
+            "i"
+          );
+
+        filter.$or = [
+          {
+            salesmanCode:
+              searchRegex,
+          },
+          {
+            salesmanName:
+              searchRegex,
+          },
+          {
+            salesmanType:
+              searchRegex,
+          },
+          {
+            mobileNo:
+              searchRegex,
+          },
+          {
+            phoneNo:
+              searchRegex,
+          },
+          {
+            emailId:
+              searchRegex,
+          },
+          {
+            town:
+              searchRegex,
+          },
+          {
+            state:
+              searchRegex,
+          },
+          {
+            pinCode:
+              searchRegex,
+          },
+          {
+            qualification:
+              searchRegex,
+          },
+          {
+            reference:
+              searchRegex,
+          },
+          {
+            imeiNo:
+              searchRegex,
+          },
+          {
+            address:
+              searchRegex,
+          },
+        ];
+      }
+
+      const totalRecords =
+        await Salesman.countDocuments(
+          filter
+        );
+
+      const totalPages =
+        Math.max(
+          1,
+          Math.ceil(
+            totalRecords /
+            limit
+          )
+        );
+
+      /*
+      * If requested page becomes invalid
+      * after deletion, return the last
+      * available page.
+      */
+      const currentPage =
+        Math.min(
+          page,
+          totalPages
+        );
+
+      const skip =
+        (currentPage - 1) *
+        limit;
+
+      const salesmen =
+        await Salesman.find(filter)
+          .sort({
+            salesmanName: 1,
+            salesmanCode: 1,
+            _id: 1,
+          })
+          .skip(skip)
+          .limit(limit)
+          .lean();
+
+      return res
+        .status(200)
+        .json({
+          success: true,
+
+          salesmen,
+
+          count:
+            salesmen.length,
+
+          pagination: {
+            currentPage,
+            page:
+              currentPage,
+            limit,
+
+            totalRecords,
+            totalPages,
+
+            hasPreviousPage:
+              currentPage > 1,
+
+            hasNextPage:
+              currentPage <
+              totalPages,
+
+            startRecord:
+              totalRecords === 0
+                ? 0
+                : skip + 1,
+
+            endRecord:
+              totalRecords === 0
+                ? 0
+                : Math.min(
+                  skip +
+                  salesmen.length,
+                  totalRecords
+                ),
+          },
+        });
+    } catch (error) {
+      console.error(
+        "Salesman Master pagination error:",
+        error
+      );
+
+      return res
+        .status(500)
+        .json({
+          success: false,
+          message:
+            "Failed to load Salesman Master",
+          error:
+            error.message,
+        });
+    }
+  }
+);
+
+app.post(
+  "/api/salesmen",
+  ensureConnection,
+  securityRouter.authorizeRequest(
+    "master",
+    "SALESMAN",
+    "add"
+  ),
+  async (req, res) => {
+  try {
+    const distributorId = String(req.body.distributorId || "").trim();
+    const firmId = String(req.body.firmId || "").trim();
+    const firmName = String(req.body.firmName || "").trim();
+
+    const salesmanCode = String(
+      req.body.salesmanCode || req.body.code || ""
+    ).trim();
+
+    const salesmanName = String(
+      req.body.salesmanName || req.body.name || ""
+    ).trim();
+
+    if (!distributorId || !firmId) {
+      return res.status(400).json({
+        success: false,
+        message: "Distributor/Firm not found. Please login again.",
+      });
+    }
+
+    if (!salesmanCode || !salesmanName) {
+      return res.status(400).json({
+        success: false,
+        message: "Salesman Code and Salesman Name are required",
+      });
+    }
+
+    const salesman = await Salesman.create({
+      salesmanCode,
+      salesmanName,
+      salesmanType: req.body.salesmanType || req.body.type || "SALESMAN",
+
+      dateOfBirth: req.body.dateOfBirth || "",
+      address: req.body.address || "",
+      town: req.body.town || "",
+      pinCode: req.body.pinCode || "",
+      state: req.body.state || "",
+      country: req.body.country || "India",
+
+      phoneNo: req.body.phoneNo || "",
+      mobileNo: req.body.mobileNo || "",
+      emailId: req.body.emailId || "",
+
+      qualification: req.body.qualification || "",
+      reference: req.body.reference || "",
+      imeiNo: req.body.imeiNo || "",
+
+      distributorId,
+      firmId,
+      firmName,
+      isActive: true,
+    });
+
+    res.status(201).json({
+      success: true,
+      message: "Salesman saved successfully",
+      data: salesman,
+    });
+  } catch (error) {
+    if (error.code === 11000) {
+      return res.status(409).json({
+        success: false,
+        message: "This Salesman Code already exists for this firm",
+      });
+    }
+
+    res.status(500).json({
+      success: false,
+      message: "Salesman save failed",
+      error: error.message,
+    });
+  }
+});
+app.put("/api/sales/change-bill-type-f4", ensureConnection, async (req, res) => {
+  try {
+    const distributorId = String(req.body.distributorId || "").trim();
+    const firmId = String(req.body.firmId || "").trim();
+    const bills = Array.isArray(req.body.bills) ? req.body.bills : [];
+
+    const bill = bills[0] || {};
+    const billSeries = String(bill.billSeries || "").trim();
+    const billNoStr = String(bill.billNo || "").trim();
+    const billNoNum = Number(billNoStr);
+    const newBillType = String(bill.newBillType || "").trim();
+
+    if (!distributorId || !firmId || !billNoStr || !newBillType) {
+      return res.status(400).json({
+        success: false,
+        message: "distributorId, firmId, billNo and newBillType are required",
+        received: req.body,
+      });
+    }
+
+    const salesFilter = {
+      distributorId,
+      firmId,
+      isActive: true,
+      BillNo: billNoNum,
+    };
+
+    if (billSeries) {
+      salesFilter.BillSeries = billSeries;
+    }
+
+    console.log("CHANGE BILL TYPE SALES FILTER:", salesFilter);
+
+    const salesBill = await SalesHeader.findOne(salesFilter);
+
+    if (!salesBill) {
+      return res.status(404).json({
+        success: false,
+        message: `Sales bill not found: ${billSeries}/${billNoStr}`,
+        filter: salesFilter,
+      });
+    }
+
+    salesBill.BillType = newBillType;
+    salesBill.billType = newBillType;
+    await salesBill.save();
+
+    // Update LoadHeader also, but without arrayFilters $or
+    await LoadHeader.updateMany(
+      {
+        $or: [
+          { distributorId, firmId },
+          { DistributorId: distributorId, FirmId: firmId },
+        ],
+        Bills: {
+          $elemMatch: {
+            $or: [
+              { BillSeries: billSeries, BillNo: billNoNum },
+              { BillSeries: billSeries, BillNo: billNoStr },
+              { billSeries: billSeries, billNo: billNoStr },
+              { billSeries: billSeries, billNo: billNoNum },
+              { Series: billSeries, BillNo: billNoNum },
+              { Series: billSeries, BillNo: billNoStr },
+            ],
+          },
+        },
+      },
+      {
+        $set: {
+          "Bills.$.BillType": newBillType,
+          "Bills.$.billType": newBillType,
+        },
+      }
+    );
+
+    return res.json({
+      success: true,
+      message: "Bill type changed successfully",
+      billType: newBillType,
+      bill: salesBill,
+    });
+  } catch (error) {
+    console.error("CHANGE BILL TYPE ERROR FULL:", error);
+    return res.status(500).json({
+      success: false,
+      message: error.message || "Change bill type failed",
+      stack: error.stack,
+    });
+  }
+});
+app.get("/api/sales/change-bill-type", ensureConnection, (req, res) => {
+  res.json({
+    success: true,
+    message: "Route exists. This API must be called using PUT from React F4, not browser GET.",
+  });
+});
+app.put(
+  "/api/sales/:id",
+  ensureConnection,
+  securityRouter.authorizeRequest(
+    "SALES",
+    "SALES_BILLING",
+    "edit"
+  ),
+  async (req, res) => {
+  const session = await mongoose.startSession();
+
+  try {
+    session.startTransaction();
+
+    const { id } = req.params;
+    const {
+      distributorId,
+      firmId,
+      firmName,
+      BillDate,
+      Godown,
+      GDCode,
+      CompanyCode,
+      CompanyName,
+      AreaCode,
+      AreaName,
+      PartyCode,
+      PartyName,
+      BillSeries = "",
+      BillNo,
+      BillType,
+      SalesEntryType,
+      DueDate,
+      SalesmanCode,
+      SalesmanName,
+      Narration,
+      items = [],
+    } = req.body;
+
+    if (!distributorId || !firmId) throw new Error("Distributor/Firm not found");
+    if (!BillNo) throw new Error("Bill No is required");
+    if (!PartyName) throw new Error("Party is required");
+    if (!GDCode) throw new Error("Godown code is required");
+    if (!items.length) throw new Error("At least one product is required");
+    if (req.auth.role === "SALESMAN") {
+      if (!req.auth.salesmanCode) throw Object.assign(new Error("This user is not assigned to a salesman master."), { statusCode: 403 });
+      if (String(SalesmanCode || "").trim() !== req.auth.salesmanCode) throw Object.assign(new Error("Salesmen may only post bills assigned to themselves."), { statusCode: 403 });
+    }
+
+    const salesParty = await Account.findOne({ distributorId, firmId, accountCode: PartyCode, isActive: { $ne: false } }).session(session).lean();
+    const salesCompany = await Company.findOne({ distributorId, firmId, companyCode: CompanyCode, isActive: { $ne: false } }).session(session).lean();
+    const salesGodown = await GodownModel.findOne({ distributorId, firmId, godownCode: GDCode, isActive: { $ne: false } }).session(session).lean();
+    const salesPerson = SalesmanCode
+      ? await Salesman.findOne({ distributorId, firmId, salesmanCode: SalesmanCode, isActive: { $ne: false } }).session(session).lean()
+      : null;
+    if (!salesParty) throw Object.assign(new Error("Invalid or inactive customer account."), { statusCode: 400 });
+    if (!salesCompany) throw Object.assign(new Error("Invalid or inactive company."), { statusCode: 400 });
+    if (!salesGodown) throw Object.assign(new Error("Invalid or inactive godown."), { statusCode: 400 });
+    if (SalesmanCode && !salesPerson) throw Object.assign(new Error("Invalid or inactive salesman."), { statusCode: 400 });
+
+    const oldBill = await SalesHeader.findOne({
+      _id: id,
+      distributorId,
+      firmId,
+      isActive: true,
+    }).session(session);
+
+    if (!oldBill) throw new Error("Original sales bill not found");
+    /*
+* Read General Setup for this firm.
+*/
+    const generalSetup = await loadFirmGeneralSetup({
+      distributorId,
+      firmId,
+      session,
+    });
+    await applyProductMasterTaxRates({ items, distributorId, firmId, session });
+    await enforceTrustedSalesRates({ req, items, distributorId, firmId, gdCode: GDCode, generalSetup, session });
+    const canonicalSales = validateFinancialEnvelope(req.body, items, { vatMode: generalSetup?.vatOn });
+    items.splice(0, items.length, ...canonicalSales.items);
+    Object.assign(req.body, canonicalSales);
+
+    const allowEditBillAfterLoad =
+      generalSetup?.allowEditBillAfterLoad === true;
+      const allowNegativeStock =
+  readSetupBoolean(
+    generalSetup?.allowNegativeStock,
+    false
+  );
+      const updateLoadQtyAfterBillEdit =
+  generalSetup?.updateLoadQtyAfterBillEdit === true ||
+  generalSetup?.updateLoadQtyAfterBillEdit === "true" ||
+  generalSetup?.updateLoadQtyAfterBillEdit === "Y" ||
+  generalSetup?.updateLoadQtyAfterBillEdit === "YES" ||
+  generalSetup?.updateLoadQtyAfterBillEdit === 1;
+
+    /*
+     * Consider the bill loaded when IsLoaded is true
+     * or a valid LoadNo is assigned.
+     */
+    const oldBillIsLoaded =
+      oldBill.IsLoaded === true ||
+      oldBill.isLoaded === true ||
+      Number(
+        oldBill.LoadNo ??
+        oldBill.loadNo ??
+        0
+      ) > 0;
+
+    if (
+      oldBillIsLoaded &&
+      !allowEditBillAfterLoad
+    ) {
+      await session.abortTransaction();
+
+      return res.status(403).json({
+        success: false,
+
+        message:
+          "This bill is already assigned to a load. Editing loaded bills is disabled in General Setup.",
+      });
+    }
+
+    // Restore old stock first
+  /* =========================================================
+   RESTORE OLD BILL STOCK
+
+   Example:
+   Current stock = -10
+   Old bill sold 10
+   Restore gives 0 before applying edited bill.
+========================================================= */
+
+await applySalesStockMovement({
+  items:
+    oldBill.items || [],
+
+  distributorId,
+  firmId,
+
+  firmName:
+    oldBill.firmName ||
+    firmName,
+
+  gdCode:
+    oldBill.GDCode,
+
+  direction:
+    1,
+
+  allowNegativeStock:
+    true,
+
+  session,
+});
+
+/* =========================================================
+   APPLY EDITED BILL STOCK
+========================================================= */
+
+await applySalesStockMovement({
+  items,
+
+  distributorId,
+  firmId,
+  firmName,
+
+  gdCode:
+    GDCode,
+
+  direction:
+    -1,
+
+  allowNegativeStock,
+
+  session,
+});
+
+
+    const normalizedItems = items.map((item, index) => {
+      const finalQty = Number(item.qty ?? item.quantity ?? item.Qty ?? 0);
+      const finalFree = Number(item.free ?? item.Free ?? 0);
+
+      return {
+        ...item,
+        sr: item.sr || index + 1,
+
+        productCode:
+          item.productCode ||
+          item.productId ||
+          item.code ||
+          String(item.product || "").split(" - ")[0] ||
+          "",
+        productId:
+          item.productCode ||
+          item.productId ||
+          item.code ||
+          String(item.product || "").split(" - ")[0] ||
+          "",
+
+        batchNo: item.batchNo || item.selectedBatch?.batchNo || ".",
+
+        qty: finalQty,
+        quantity: finalQty,
+        Qty: finalQty,
+
+        free: finalFree,
+        Free: finalFree,
+
+        mrp: Number(item.mrp || item.MRP || 0),
+        MRP: Number(item.mrp || item.MRP || 0),
+
+        rate: Number(item.rate || item.salesRate || item.srate || 0),
+        salesRate: Number(item.rate || item.salesRate || item.srate || 0),
+
+        amount: Number(item.amount || 0),
+      };
+    });
+    const updatedBill = await SalesHeader.findOneAndUpdate(
+      { _id: id, distributorId, firmId, isActive: true },
+      {
+        $set: {
+          firmName,
+          BillDate,
+          Godown,
+          GDCode,
+          CompanyCode: CompanyCode || "",
+          CompanyName: CompanyName || "",
+          AreaCode: AreaCode || "",
+          AreaName: AreaName || "",
+          PartyCode: PartyCode || "",
+          PartyName,
+          BillSeries: String(BillSeries || "").trim(),
+          BillNo: Number(BillNo),
+          BillType: BillType || "Credit",
+          SalesEntryType:
+            SalesEntryType
+              ? normalizeSalesEntryType(SalesEntryType)
+              : normalizeSalesEntryType(oldBill.SalesEntryType),
+          DueDate,
+          SalesmanCode: SalesmanCode || "",
+          SalesmanName: SalesmanName || "",
+          Narration: Narration || "",
+          GrossAmount: Number(
+            req.body.GrossAmount || 0
+          ),
+
+          TPRAmount: Number(
+            req.body.TPRAmount || 0
+          ),
+
+          SchemeAmount: Number(
+            req.body.SchemeAmount || 0
+          ),
+
+          StarDiscountAmount: Number(
+            req.body.StarDiscountAmount || 0
+          ),
+
+          CashDiscountAmount: Number(
+            req.body.CashDiscountAmount || 0
+          ),
+
+          DisplayAmount: Number(
+            req.body.DisplayAmount || 0
+          ),
+
+          CouponAmount: Number(
+            req.body.CouponAmount || 0
+          ),
+
+          AddLessAmount: Number(
+            req.body.AddLessAmount || 0
+          ),
+
+          TaxableValue: Number(
+            req.body.TaxableValue || 0
+          ),
+
+          SGSTAmount: Number(
+            req.body.SGSTAmount || 0
+          ),
+
+          CGSTAmount: Number(
+            req.body.CGSTAmount || 0
+          ),
+
+          IGSTAmount: Number(
+            req.body.IGSTAmount || 0
+          ),
+
+          /*
+            Keep the original invoice amount before Credit Note.
+          */
+          OriginalNetAmount: Number(
+            req.body.OriginalNetAmount ??
+            oldBill.OriginalNetAmount ??
+            req.body.NetAmount ??
+            oldBill.NetAmount ??
+            0
+          ),
+
+          /*
+            Preserve the existing Credit Note amount when editing
+            unless the frontend explicitly sends a new value.
+          */
+          CreditNoteAmount: Number(
+            req.body.CreditNoteAmount ??
+            oldBill.CreditNoteAmount ??
+            0
+          ),
+
+          NetAmount: Number(
+            req.body.NetAmount ?? oldBill.NetAmount ?? 0
+          ),
+          TotalQty: Number(req.body.TotalQty || 0),
+          TotalFreeQty: Number(req.body.TotalFreeQty || 0),
+          TotalItems: items.length,
+          items: normalizedItems,
+        },
+      },
+      { new: true, session }
+    );
+    /*
+---------------------------------------------------------
+Synchronize Load Header Bill Amount
+---------------------------------------------------------
+*/
+
+  /* =========================================================
+   SYNCHRONIZE EDITED SALES BILL WITH LOAD
+
+   Bill amount is always synchronized.
+
+   Bill quantity, free quantity, item count and product rows
+   are synchronized only when:
+   Update Load Qty After Bill Edit = ON
+========================================================= */
+
+if (
+  oldBillIsLoaded &&
+  updateLoadQtyAfterBillEdit
+) {
+  const editedBillSeries = String(
+    BillSeries ||
+    oldBill.BillSeries ||
+    ""
+  ).trim();
+
+  const editedBillNo = Number(
+    BillNo ||
+    oldBill.BillNo ||
+    0
+  );
+
+  const editedNetAmount = Number(
+    req.body.NetAmount ??
+    updatedBill?.NetAmount ??
+    oldBill.NetAmount ??
+    0
+  );
+
+  const editedTotalQty = Number(
+    req.body.TotalQty ??
+    updatedBill?.TotalQty ??
+    0
+  );
+
+  const editedTotalFreeQty = Number(
+    req.body.TotalFreeQty ??
+    updatedBill?.TotalFreeQty ??
+    0
+  );
+
+  const editedTotalItems = Number(
+    updatedBill?.TotalItems ??
+    normalizedItems.length ??
+    0
+  );
+
+  /*
+   * Find all active loads containing this invoice.
+   *
+   * Both old and new distributor/firm field formats
+   * are supported because your LoadHeader uses capitalized
+   * DistributorId/FirmId while some older records may not.
+   */
+  const matchingLoads = await LoadHeader.find({
+    $or: [
+      {
+        DistributorId: String(distributorId),
+        FirmId: String(firmId),
+      },
+      {
+        distributorId: String(distributorId),
+        firmId: String(firmId),
+      },
+    ],
+
+    IsCancelled: {
+      $ne: true,
+    },
+
+    Bills: {
+      $elemMatch: {
+        $or: [
+          {
+            BillSeries: editedBillSeries,
+            BillNo: editedBillNo,
+          },
+          {
+            BillSeries: editedBillSeries,
+            BillNo: String(editedBillNo),
+          },
+          {
+            billSeries: editedBillSeries,
+            billNo: editedBillNo,
+          },
+          {
+            billSeries: editedBillSeries,
+            billNo: String(editedBillNo),
+          },
+          {
+            Series: editedBillSeries,
+            BillNo: editedBillNo,
+          },
+          {
+            Series: editedBillSeries,
+            BillNo: String(editedBillNo),
+          },
+        ],
+      },
+    },
+  }).session(session);
+
+  for (const load of matchingLoads) {
+    const loadBills =
+      Array.isArray(load.Bills)
+        ? load.Bills
+        : [];
+
+    let matchingBillFound = false;
+
+    const synchronizedBills =
+      loadBills.map((loadBill) => {
+        const loadBillSeries = String(
+          loadBill.BillSeries ??
+          loadBill.billSeries ??
+          loadBill.Series ??
+          ""
+        ).trim();
+
+        const loadBillNo = Number(
+          loadBill.BillNo ??
+          loadBill.billNo ??
+          0
+        );
+
+        const isMatchingBill =
+          loadBillSeries === editedBillSeries &&
+          loadBillNo === editedBillNo;
+
+        if (!isMatchingBill) {
+          return loadBill;
+        }
+
+        matchingBillFound = true;
+
+        const synchronizedBill = {
+          ...loadBill,
+
+          BillSeries:
+            editedBillSeries,
+
+          BillNo:
+            editedBillNo,
+
+          BillType:
+            BillType ||
+            updatedBill?.BillType ||
+            "Credit",
+
+          billType:
+            BillType ||
+            updatedBill?.BillType ||
+            "Credit",
+
+          BillAmount:
+            editedNetAmount,
+
+          billAmount:
+            editedNetAmount,
+
+          PendingAmount:
+            editedNetAmount,
+
+          pendingAmount:
+            editedNetAmount,
+
+          NetAmount:
+            editedNetAmount,
+
+          netAmount:
+            editedNetAmount,
+
+          amount:
+            editedNetAmount,
+        };
+
+        /*
+         * Quantity-related values must change only when
+         * Update Load Qty After Bill Edit is ON.
+         */
+       synchronizedBill.TotalQty =
+  editedTotalQty;
+
+synchronizedBill.totalQty =
+  editedTotalQty;
+
+synchronizedBill.Qty =
+  editedTotalQty;
+
+synchronizedBill.qty =
+  editedTotalQty;
+
+synchronizedBill.TotalFreeQty =
+  editedTotalFreeQty;
+
+synchronizedBill.totalFreeQty =
+  editedTotalFreeQty;
+
+synchronizedBill.FreeQty =
+  editedTotalFreeQty;
+
+synchronizedBill.freeQty =
+  editedTotalFreeQty;
+
+synchronizedBill.TotalItems =
+  editedTotalItems;
+
+synchronizedBill.totalItems =
+  editedTotalItems;
+
+synchronizedBill.items =
+  normalizedItems;
+
+synchronizedBill.Items =
+  normalizedItems;
+
+        return synchronizedBill;
+      });
+
+    if (!matchingBillFound) {
+      continue;
+    }
+
+    /*
+     * Recalculate the total load amount from every bill.
+     */
+    const synchronizedTotalAmount =
+      synchronizedBills.reduce(
+        (total, loadBill) =>
+          total +
+          Number(
+            loadBill.NetAmount ??
+            loadBill.netAmount ??
+            loadBill.BillAmount ??
+            loadBill.billAmount ??
+            loadBill.amount ??
+            0
+          ),
+        0
+      );
+
+    load.Bills =
+      synchronizedBills;
+
+    load.TotalAmount =
+      Number(
+        synchronizedTotalAmount.toFixed(2)
+      );
+
+    load.LoadSummary = {
+      ...(load.LoadSummary?.toObject
+        ? load.LoadSummary.toObject()
+        : load.LoadSummary || {}),
+
+      totalAmount:
+        Number(
+          synchronizedTotalAmount.toFixed(2)
+        ),
+    };
+
+    load.UpdatedBy =
+      String(
+        req.body.UpdatedBy ||
+        req.body.updatedBy ||
+        "SALES_BILL_EDIT"
+      );
+
+    load.UpdatedAt =
+      new Date();
+
+    load.markModified("Bills");
+    load.markModified("LoadSummary");
+
+    await load.save({
+      session,
+    });
+  }
+}
+
+    await reverseSourceJournal({ distributorId, firmId, sourceType: "SALES", sourceId: String(id), createdBy: req.auth.userId, documentDate: BillDate, reason: "Sales bill edited" }, session);
+    const editedOutputTax = Number(req.body.CGSTAmount || 0) + Number(req.body.SGSTAmount || 0) + Number(req.body.IGSTAmount || 0);
+    const editedCreditNote = Number(req.body.CreditNoteAmount || 0);
+    // Desktop history includes legitimate zero-value bills. Creation already
+    // omits their journal because accounting requires positive totals; editing
+    // the same bill must follow that rule instead of raising a hidden 500.
+    const isZeroValueSalesEdit = Math.abs(Number(req.body.NetAmount || 0)) <= 0.01
+      && Math.abs(Number(req.body.OriginalNetAmount || 0)) <= 0.01;
+    if (!isZeroValueSalesEdit) {
+      await postBalancedJournal({ distributorId, firmId, sourceType: "SALES", sourceId: String(id), documentNo: `${String(BillSeries || "")}${Number(BillNo)}`, documentDate: String(BillDate || ""), createdBy: req.auth.userId, lines: [
+        { accountCode: String(PartyCode || PartyName), debit: Number(req.body.NetAmount || 0), credit: 0, narration: Narration || "Sales edit" },
+        ...(editedCreditNote > 0 ? [{ accountCode: "CREDIT_NOTE_ALLOWED", debit: editedCreditNote, credit: 0, narration: "Credit note" }] : []),
+        { accountCode: "SALES", debit: 0, credit: Number(req.body.OriginalNetAmount || 0) - editedOutputTax, narration: Narration || "Sales edit" },
+        ...(editedOutputTax > 0 ? [{ accountCode: "OUTPUT_GST", debit: 0, credit: editedOutputTax, narration: Narration || "Output GST" }] : []),
+      ] }, session);
+    }
+    await writeAuditEvent(req, { entityType: "SALES", entityId: String(id), action: "UPDATE", before: oldBill.toObject(), after: updatedBill.toObject() }, session);
+    await recordStockMovements({
+      distributorId, firmId, godown: GDCode, items, movementDate: BillDate,
+      sourceType: "SALES", sourceId: updatedBill._id,
+      documentNo: `${String(BillSeries || "")}${Number(BillNo)}`,
+      direction: -1, userId: req.auth.userId, session,
+      replaceExisting: true,
+    });
+
+    await commitTransactionReliably(session);
+
+    const savedUpdatedBill =
+      updatedBill?.toObject
+        ? updatedBill.toObject()
+        : updatedBill;
+
+    return res.json({
+      success: true,
+     message:
+  oldBillIsLoaded &&
+  updateLoadQtyAfterBillEdit
+    ? "Sales bill and load quantity updated successfully"
+    : oldBillIsLoaded
+      ? "Sales bill updated. Load quantity was not changed because the setting is OFF."
+      : "Sales bill updated successfully",
+      /*
+       * Used by Save and Print after bill update.
+       */
+      loadQuantitySetting:
+  updateLoadQtyAfterBillEdit,
+
+loadedBill:
+  oldBillIsLoaded,
+
+loadQuantityUpdated:
+  oldBillIsLoaded &&
+  updateLoadQtyAfterBillEdit,
+      bill: savedUpdatedBill,
+
+      /*
+       * Preserve the previous response format.
+       */
+      data: {
+        header: savedUpdatedBill,
+      },
+
+      savedBillId:
+        String(
+          savedUpdatedBill?._id || ""
+        ),
+    });
+  } catch (error) {
+    if (session.inTransaction()) await session.abortTransaction();
+
+    const duplicateKeyText = `${JSON.stringify(
+      error.keyPattern || {}
+    )} ${JSON.stringify(error.keyValue || {})} ${error.message || ""}`;
+    const isSalesBillNumberDuplicate =
+      error.code === 11000 &&
+      /BillSeries/i.test(duplicateKeyText) &&
+      /BillNo/i.test(duplicateKeyText);
+
+    if (isSalesBillNumberDuplicate) {
+      return res.status(409).json({
+        success: false,
+        message: "This sales bill number already exists for this series",
+      });
+    }
+
+    console.error("Sales update error:", error);
+
+    res.status(error.statusCode || (error.code === 11000 ? 409 : 500)).json({
+      success: false,
+      message:
+        error.code === 11000
+          ? "A related sales record already exists. Please retry the update."
+          : error.message || "Sales update failed",
+    });
+  } finally {
+    session.endSession();
+  }
+});
+app.get(
+  "/api/areas",
+  ensureConnection,
+  securityRouter.authorizeRequest(
+    "master",
+    "AREA",
+    "view"
+  ),
+  async (req, res) => {
+  try {
+    const distributorId = req.auth.distributorId;
+    const firmId = req.auth.firmId;
+
+    if (!distributorId || !firmId) {
+      return res.status(400).json({
+        success: false,
+        message: "distributorId and firmId are required",
+      });
+    }
+
+    const areas = await Area.find({
+      distributorId,
+      firmId,
+      isActive: true,
+    }).sort({ createdAt: -1 });
+
+    res.json({
+      success: true,
+      count: areas.length,
+      areas,
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: "Failed to fetch areas",
+      error: error.message,
+    });
+  }
+});
+/* =========================================================
+  AREA MASTER - PAGINATED LIST
+  Existing GET /api/areas remains unchanged for dropdowns.
+  This API is used only by the Area Master grid.
+  ========================================================= */
+
+app.get(
+  "/api/areas/list",
+  ensureConnection,
+  securityRouter.authorizeRequest(
+    "master",
+    "AREA",
+    "view"
+  ),
+  async (req, res) => {
+    try {
+      const distributorId = String(
+        req.query.distributorId || ""
+      ).trim();
+
+      const firmId = String(
+        req.query.firmId || ""
+      ).trim();
+
+      const search = String(
+        req.query.search || ""
+      ).trim();
+
+      const requestedPage =
+        Number.parseInt(
+          req.query.page,
+          10
+        );
+
+      const requestedLimit =
+        Number.parseInt(
+          req.query.limit,
+          10
+        );
+
+      const page =
+        Number.isFinite(
+          requestedPage
+        ) &&
+          requestedPage > 0
+          ? requestedPage
+          : 1;
+
+      const limit =
+        Number.isFinite(
+          requestedLimit
+        ) &&
+          requestedLimit > 0
+          ? Math.min(
+            requestedLimit,
+            100
+          )
+          : 10;
+
+      if (
+        !distributorId ||
+        !firmId
+      ) {
+        return res
+          .status(400)
+          .json({
+            success: false,
+            message:
+              "distributorId and firmId are required",
+          });
+      }
+
+      /*
+      * Escape special RegExp characters so that
+      * text such as +, (, ), [, ] does not break search.
+      */
+      const escapedSearch =
+        search.replace(
+          /[.*+?^${}()|[\]\\]/g,
+          "\\$&"
+        );
+
+      const filter = {
+        distributorId,
+        firmId,
+
+        /*
+        * Keep the same active-record logic
+        * used by your existing Area API.
+        */
+        isActive: true,
+      };
+
+      if (escapedSearch) {
+        const searchRegex =
+          new RegExp(
+            escapedSearch,
+            "i"
+          );
+
+        filter.$or = [
+          {
+            areaCode:
+              searchRegex,
+          },
+
+          {
+            areaName:
+              searchRegex,
+          },
+
+          {
+            firmName:
+              searchRegex,
+          },
+        ];
+      }
+
+      const totalRecords =
+        await Area.countDocuments(
+          filter
+        );
+
+      const totalPages =
+        Math.max(
+          1,
+          Math.ceil(
+            totalRecords /
+            limit
+          )
+        );
+
+      /*
+      * Prevent requesting a page number greater
+      * than the available pages after deletion.
+      */
+      const currentPage =
+        Math.min(
+          page,
+          totalPages
+        );
+
+      const skip =
+        (currentPage - 1) *
+        limit;
+
+      const areas =
+        await Area.find(filter)
+          .sort({
+            areaName: 1,
+            areaCode: 1,
+            _id: 1,
+          })
+          .skip(skip)
+          .limit(limit)
+          .lean();
+
+      return res.json({
+        success: true,
+
+        areas,
+
+        count:
+          areas.length,
+
+        pagination: {
+          currentPage,
+
+          page:
+            currentPage,
+
+          limit,
+
+          totalRecords,
+
+          totalPages,
+
+          hasPreviousPage:
+            currentPage > 1,
+
+          hasNextPage:
+            currentPage <
+            totalPages,
+
+          startRecord:
+            totalRecords === 0
+              ? 0
+              : skip + 1,
+
+          endRecord:
+            totalRecords === 0
+              ? 0
+              : Math.min(
+                skip +
+                areas.length,
+                totalRecords
+              ),
+        },
+      });
+    } catch (error) {
+      console.error(
+        "Area Master list pagination error:",
+        error
+      );
+
+      return res
+        .status(500)
+        .json({
+          success: false,
+
+          message:
+            "Failed to fetch Area Master list",
+
+          error:
+            error.message,
+        });
+    }
+  }
+);
+
+app.post(
+  "/api/areas",
+  ensureConnection,
+  securityRouter.authorizeRequest(
+    "master",
+    "AREA",
+    "add"
+  ),
+  async (req, res) => {
+  try {
+    const distributorId = String(req.body.distributorId || "").trim();
+    const firmId = String(req.body.firmId || "").trim();
+    const firmName = String(req.body.firmName || "").trim();
+
+    const areaCode = String(req.body.areaCode || req.body.code || "").trim();
+    const areaName = String(req.body.areaName || req.body.name || "").trim();
+
+    if (!distributorId || !firmId) {
+      return res.status(400).json({
+        success: false,
+        message: "Distributor/Firm not found. Please login again.",
+      });
+    }
+
+    if (!areaCode || !areaName) {
+      return res.status(400).json({
+        success: false,
+        message: "Area Code and Area Name are required",
+      });
+    }
+
+    const area = await Area.create({
+      areaCode,
+      areaName,
+      distributorId,
+      firmId,
+      firmName,
+      isActive: true,
+    });
+
+    res.status(201).json({
+      success: true,
+      message: "Area saved successfully",
+      data: area,
+    });
+  } catch (error) {
+    if (error.code === 11000) {
+      return res.status(409).json({
+        success: false,
+        message: "This Area Code already exists for this firm",
+      });
+    }
+
+    res.status(500).json({
+      success: false,
+      message: "Area save failed",
+      error: error.message,
+    });
+  }
+});
+
+app.get(
+  "/api/godowns",
+  ensureConnection,
+  securityRouter.authorizeRequest(
+    "master",
+    "GODOWN",
+    "view"
+  ),
+  async (req, res) => {
+  try {
+    const { distributorId, firmId } = req.query;
+
+    if (!distributorId || !firmId) {
+      return res.status(400).json({
+        success: false,
+        message: "distributorId and firmId are required",
+      });
+    }
+
+    const godowns = await GodownModel.find({
+      distributorId,
+      firmId,
+      isActive: true,
+    }).sort({ createdAt: -1 });
+
+    res.json({
+      success: true,
+      count: godowns.length,
+      godowns,
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: "Failed to fetch godowns",
+      error: error.message,
+    });
+  }
+});
+/* =========================================================
+  GODOWN MASTER PAGINATED LIST
+
+  Existing:
+  GET /api/godowns
+  remains unchanged for Billing, Purchase, Stock,
+  Credit Note, Debit Note and dropdowns.
+
+  New:
+  GET /api/godowns/list
+  is used only by the GoDown Master grid.
+  ========================================================= */
+
+app.get(
+  "/api/godowns/list",
+  ensureConnection,
+  securityRouter.authorizeRequest(
+    "master",
+    "GODOWN",
+    "view"
+  ),
+  async (req, res) => {
+    try {
+      const distributorId = String(
+        req.query.distributorId || ""
+      ).trim();
+
+      const firmId = String(
+        req.query.firmId || ""
+      ).trim();
+
+      const search = String(
+        req.query.search || ""
+      ).trim();
+
+      const requestedPage = Number.parseInt(
+        req.query.page,
+        10
+      );
+
+      const requestedLimit = Number.parseInt(
+        req.query.limit,
+        10
+      );
+
+      const page =
+        Number.isFinite(requestedPage) &&
+          requestedPage > 0
+          ? requestedPage
+          : 1;
+
+      const limit =
+        Number.isFinite(requestedLimit) &&
+          requestedLimit > 0
+          ? Math.min(
+            requestedLimit,
+            100
+          )
+          : 20;
+
+      if (!distributorId || !firmId) {
+        return res.status(400).json({
+          success: false,
+          message:
+            "distributorId and firmId are required",
+        });
+      }
+
+      const filter = {
+        distributorId,
+        firmId,
+
+        /*
+        * Include active records and older records
+        * where isActive may not exist.
+        */
+        isActive: {
+          $ne: false,
+        },
+      };
+
+      if (search) {
+        const escapedSearch =
+          search.replace(
+            /[.*+?^${}()|[\]\\]/g,
+            "\\$&"
+          );
+
+        const searchRegex =
+          new RegExp(
+            escapedSearch,
+            "i"
+          );
+
+        filter.$or = [
+          {
+            godownCode:
+              searchRegex,
+          },
+          {
+            godownName:
+              searchRegex,
+          },
+          {
+            address:
+              searchRegex,
+          },
+          {
+            location:
+              searchRegex,
+          },
+          {
+            firmName:
+              searchRegex,
+          },
+        ];
+      }
+
+      const totalRecords =
+        await GodownModel.countDocuments(
+          filter
+        );
+
+      const totalPages = Math.max(
+        1,
+        Math.ceil(
+          totalRecords / limit
+        )
+      );
+
+      /*
+      * Keep requested page inside the
+      * currently available page range.
+      */
+      const currentPage = Math.min(
+        page,
+        totalPages
+      );
+
+      const skip =
+        (currentPage - 1) *
+        limit;
+
+      const godowns =
+        await GodownModel.find(filter)
+          .sort({
+            godownName: 1,
+            godownCode: 1,
+            _id: 1,
+          })
+          .skip(skip)
+          .limit(limit)
+          .lean();
+
+      return res.json({
+        success: true,
+
+        godowns,
+
+        count:
+          godowns.length,
+
+        pagination: {
+          currentPage,
+          page: currentPage,
+          limit,
+          totalRecords,
+          totalPages,
+
+          hasPreviousPage:
+            currentPage > 1,
+
+          hasNextPage:
+            currentPage <
+            totalPages,
+
+          startRecord:
+            totalRecords === 0
+              ? 0
+              : skip + 1,
+
+          endRecord:
+            totalRecords === 0
+              ? 0
+              : Math.min(
+                skip +
+                godowns.length,
+                totalRecords
+              ),
+        },
+      });
+    } catch (error) {
+      console.error(
+        "Godown Master pagination error:",
+        error
+      );
+
+      return res.status(500).json({
+        success: false,
+        message:
+          "Failed to load Godown Master",
+        error:
+          error.message,
+      });
+    }
+  }
+);
+app.post(
+  "/api/godowns",
+  ensureConnection,
+  securityRouter.authorizeRequest(
+    "master",
+    "GODOWN",
+    "add"
+  ),
+  async (req, res) => {
+  try {
+    const distributorId = String(req.body.distributorId || "").trim();
+    const firmId = String(req.body.firmId || "").trim();
+    const firmName = String(req.body.firmName || "").trim();
+
+    const godownCode = String(
+      req.body.godownCode || req.body.code || ""
+    ).trim();
+
+    const godownName = String(
+      req.body.godownName || req.body.name || ""
+    ).trim();
+
+    if (!distributorId || !firmId) {
+      return res.status(400).json({
+        success: false,
+        message: "Distributor/Firm not found. Please login again.",
+      });
+    }
+
+    if (!godownCode || !godownName) {
+      return res.status(400).json({
+        success: false,
+        message: "Godown Code and Godown Name are required",
+      });
+    }
+
+    const godown = await GodownModel.create({
+      godownCode,
+      godownName,
+
+      address: req.body.address || "",
+      location: req.body.location || "",
+
+      distributorId,
+      firmId,
+      firmName,
+
+      isActive: true,
+    });
+
+    res.status(201).json({
+      success: true,
+      message: "Godown saved successfully",
+      data: godown,
+    });
+  } catch (error) {
+    if (error.code === 11000) {
+      return res.status(409).json({
+        success: false,
+        message: "This Godown Code already exists for this firm",
+      });
+    }
+
+    res.status(500).json({
+      success: false,
+      message: "Godown save failed",
+      error: error.message,
+    });
+  }
+});
+
+app.get("/api/customer-banks", ensureConnection, securityRouter.authorizeRequest("MASTER", "CUSTOMER_BANK", "view"), async (req, res) => {
+  try {
+    const { distributorId, firmId } = req.query;
+
+    if (!distributorId || !firmId) {
+      return res.status(400).json({
+        success: false,
+        message: "distributorId and firmId are required",
+      });
+    }
+
+    const customerBanks = await CustomerBank.find({
+      distributorId,
+      firmId,
+      isActive: true,
+    }).sort({ createdAt: -1 });
+
+    res.json({
+      success: true,
+      count: customerBanks.length,
+      customerBanks,
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: "Failed to fetch customer banks",
+      error: error.message,
+    });
+  }
+});
+/* =========================================================
+  CUSTOMER BANK MASTER PAGINATED LIST
+
+  Existing:
+  GET /api/customer-banks
+  remains unchanged for complete-list usage.
+
+  New:
+  GET /api/customer-banks/list
+  is used only by Customer Bank Master grid.
+  ========================================================= */
+
+app.get(
+  "/api/customer-banks/list",
+  ensureConnection,
+  async (req, res) => {
+    try {
+      const distributorId = String(
+        req.query.distributorId || ""
+      ).trim();
+
+      const firmId = String(
+        req.query.firmId || ""
+      ).trim();
+
+      const search = String(
+        req.query.search || ""
+      ).trim();
+
+      const requestedPage = Number.parseInt(
+        req.query.page,
+        10
+      );
+
+      const requestedLimit = Number.parseInt(
+        req.query.limit,
+        10
+      );
+
+      const page =
+        Number.isFinite(requestedPage) &&
+          requestedPage > 0
+          ? requestedPage
+          : 1;
+
+      const limit =
+        Number.isFinite(requestedLimit) &&
+          requestedLimit > 0
+          ? Math.min(
+            requestedLimit,
+            100
+          )
+          : 20;
+
+      if (!distributorId || !firmId) {
+        return res.status(400).json({
+          success: false,
+          message:
+            "distributorId and firmId are required",
+        });
+      }
+
+      const filter = {
+        distributorId,
+        firmId,
+
+        /*
+        * Include active records and old records
+        * where isActive may not exist.
+        */
+        isActive: {
+          $ne: false,
+        },
+      };
+
+      if (search) {
+        const escapedSearch =
+          search.replace(
+            /[.*+?^${}()|[\]\\]/g,
+            "\\$&"
+          );
+
+        const searchRegex =
+          new RegExp(
+            escapedSearch,
+            "i"
+          );
+
+        filter.$or = [
+          {
+            bankCode:
+              searchRegex,
+          },
+          {
+            bankName:
+              searchRegex,
+          },
+          {
+            accountNumber:
+              searchRegex,
+          },
+          {
+            ifscCode:
+              searchRegex,
+          },
+          {
+            branchName:
+              searchRegex,
+          },
+          {
+            accountType:
+              searchRegex,
+          },
+          {
+            clearingType:
+              searchRegex,
+          },
+          {
+            customerName:
+              searchRegex,
+          },
+          {
+            customerCode:
+              searchRegex,
+          },
+          {
+            mobileNo:
+              searchRegex,
+          },
+          {
+            emailId:
+              searchRegex,
+          },
+          {
+            upiId:
+              searchRegex,
+          },
+          {
+            beneficiaryName:
+              searchRegex,
+          },
+          {
+            swiftCode:
+              searchRegex,
+          },
+          {
+            micrCode:
+              searchRegex,
+          },
+          {
+            panNumber:
+              searchRegex,
+          },
+          {
+            remarks:
+              searchRegex,
+          },
+        ];
+      }
+
+      const totalRecords =
+        await CustomerBank.countDocuments(
+          filter
+        );
+
+      const totalPages = Math.max(
+        1,
+        Math.ceil(
+          totalRecords / limit
+        )
+      );
+
+      /*
+      * Keep the requested page inside
+      * the currently available page range.
+      */
+      const currentPage = Math.min(
+        page,
+        totalPages
+      );
+
+      const skip =
+        (currentPage - 1) *
+        limit;
+
+      const customerBanks =
+        await CustomerBank.find(filter)
+          .sort({
+            bankName: 1,
+            bankCode: 1,
+            _id: 1,
+          })
+          .skip(skip)
+          .limit(limit)
+          .lean();
+
+      return res.json({
+        success: true,
+
+        customerBanks,
+
+        count:
+          customerBanks.length,
+
+        pagination: {
+          currentPage,
+          page: currentPage,
+          limit,
+          totalRecords,
+          totalPages,
+
+          hasPreviousPage:
+            currentPage > 1,
+
+          hasNextPage:
+            currentPage <
+            totalPages,
+
+          startRecord:
+            totalRecords === 0
+              ? 0
+              : skip + 1,
+
+          endRecord:
+            totalRecords === 0
+              ? 0
+              : Math.min(
+                skip +
+                customerBanks.length,
+                totalRecords
+              ),
+        },
+      });
+    } catch (error) {
+      console.error(
+        "Customer Bank Master pagination error:",
+        error
+      );
+
+      return res.status(500).json({
+        success: false,
+        message:
+          "Failed to load Customer Bank Master",
+        error:
+          error.message,
+      });
+    }
+  }
+);
+app.post("/api/customer-banks", ensureConnection, securityRouter.authorizeRequest("MASTER", "CUSTOMER_BANK", "add"), async (req, res) => {
+  try {
+    const distributorId = String(req.body.distributorId || "").trim();
+    const firmId = String(req.body.firmId || "").trim();
+    const firmName = String(req.body.firmName || "").trim();
+
+    const bankCode = String(req.body.bankCode || "").trim();
+    const bankName = String(req.body.bankName || "").trim();
+
+    if (!distributorId || !firmId) {
+      return res.status(400).json({
+        success: false,
+        message: "Distributor/Firm not found. Please login again.",
+      });
+    }
+
+    if (!bankCode || !bankName) {
+      return res.status(400).json({
+        success: false,
+        message: "Bank Code and Bank Name are required",
+      });
+    }
+
+    const customerBank = await CustomerBank.create({
+      bankCode,
+      bankName,
+
+      accountNumber: req.body.accountNumber || "",
+      ifscCode: req.body.ifscCode || "",
+      branchName: req.body.branchName || "",
+      accountType: req.body.accountType || "Savings",
+      clearingType: String(req.body.clearingType || "LOCAL").trim(),
+
+      customerName: req.body.customerName || "",
+      customerCode: req.body.customerCode || "",
+      mobileNo: req.body.mobileNo || "",
+      emailId: req.body.emailId || "",
+      upiId: req.body.upiId || "",
+      beneficiaryName: req.body.beneficiaryName || "",
+
+      swiftCode: req.body.swiftCode || "",
+      micrCode: req.body.micrCode || "",
+      panNumber: req.body.panNumber || "",
+
+      remarks: req.body.remarks || "",
+
+      distributorId,
+      firmId,
+      firmName,
+
+      isActive: true,
+    });
+
+    res.status(201).json({
+      success: true,
+      message: "Customer Bank saved successfully",
+      data: customerBank,
+    });
+  } catch (error) {
+    if (error.code === 11000) {
+      return res.status(409).json({
+        success: false,
+        message: "This Bank Code already exists for this firm",
+      });
+    }
+
+    res.status(500).json({
+      success: false,
+      message: "Customer Bank save failed",
+      error: error.message,
+    });
+  }
+});
+
+app.get("/api/salesman-area-mappings", ensureConnection, async (req, res) => {
+  try {
+    const { distributorId, firmId, companyCode } = req.query;
+
+    if (!distributorId || !firmId) {
+      return res.status(400).json({
+        success: false,
+        message: "distributorId and firmId are required",
+      });
+    }
+
+    const filter = {
+      distributorId,
+      firmId,
+      isActive: { $ne: false },
+    };
+
+    if (companyCode) {
+      filter.$expr = { $eq: [{ $toString: "$companyCode" }, String(companyCode)] };
+    }
+
+    const mappings = await SalesmanAreaMapping.find(filter).sort({
+      areaName: 1,
+    });
+
+    res.json({
+      success: true,
+      count: mappings.length,
+      mappings,
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: "Failed to fetch salesman area mappings",
+      error: error.message,
+    });
+  }
+});
+
+app.post("/api/salesman-area-mappings", ensureConnection, async (req, res) => {
+  try {
+    const distributorId = String(req.body.distributorId || "").trim();
+    const firmId = String(req.body.firmId || "").trim();
+    const firmName = String(req.body.firmName || "").trim();
+
+    const companyCode = String(req.body.companyCode || "").trim();
+    const companyName = String(req.body.companyName || "").trim();
+
+    const mappings = Array.isArray(req.body.mappings)
+      ? req.body.mappings
+      : [];
+    const unmappedAreaCodes = Array.isArray(req.body.unmappedAreaCodes)
+      ? req.body.unmappedAreaCodes.map((code) => String(code || "").trim()).filter(Boolean)
+      : [];
+
+    if (!distributorId || !firmId) {
+      return res.status(400).json({
+        success: false,
+        message: "Distributor/Firm not found. Please login again.",
+      });
+    }
+
+    if (!companyCode || !companyName) {
+      return res.status(400).json({
+        success: false,
+        message: "Company is required",
+      });
+    }
+
+    if (mappings.length === 0 && unmappedAreaCodes.length === 0) {
+      return res.status(400).json({
+        success: false,
+        message: "At least one mapping is required",
+      });
+    }
+
+    const operations = mappings
+      .filter((m) => m.areaCode && m.areaName && m.salesmanCode && m.salesmanName)
+      .map((m) => ({
+        updateOne: {
+          filter: {
+            distributorId,
+            firmId,
+            companyCode,
+            areaCode: String(m.areaCode).trim(),
+          },
+          update: {
+            $set: {
+              companyCode,
+              companyName,
+
+              areaCode: String(m.areaCode).trim(),
+              areaName: String(m.areaName).trim(),
+
+              salesmanCode: String(m.salesmanCode).trim(),
+              salesmanName: String(m.salesmanName).trim(),
+
+              distributorId,
+              firmId,
+              firmName,
+
+              isActive: true,
+            },
+          },
+          upsert: true,
+        },
+      }));
+
+    if (operations.length === 0 && unmappedAreaCodes.length === 0) {
+      return res.status(400).json({
+        success: false,
+        message: "Valid salesman mapping data not found",
+      });
+    }
+
+    if (operations.length) await SalesmanAreaMapping.bulkWrite(operations);
+    if (unmappedAreaCodes.length) {
+      await SalesmanAreaMapping.updateMany(
+        { distributorId, firmId, companyCode, areaCode: { $in: unmappedAreaCodes }, isActive: true },
+        { $set: { isActive: false } }
+      );
+    }
+
+    res.status(201).json({
+      success: true,
+      message: "Salesman to Area mapping saved successfully",
+      count: operations.length,
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: "Salesman to Area mapping save failed",
+      error: error.message,
+    });
+  }
+});
+
+app.get(
+  "/api/area-to-party-mappings",
+  ensureConnection,
+  async (req, res) => {
+    try {
+      const distributorId = String(
+        req.query.distributorId || ""
+      ).trim();
+
+      const firmId = String(
+        req.query.firmId || ""
+      ).trim();
+
+      const companyCode = String(
+        req.query.companyCode || ""
+      ).trim();
+
+      if (!distributorId || !firmId) {
+        return res.status(400).json({
+          success: false,
+          message: "distributorId and firmId are required",
+        });
+      }
+
+      const mappingFilter = {
+        distributorId,
+        firmId,
+        isActive: { $ne: false },
+      };
+
+      if (companyCode) {
+        // Legacy CSV/Compass imports can store numeric-looking codes as
+        // Mongo numbers.  Normal application saves store them as strings.
+        // Match both forms so imported mappings remain visible in billing.
+        mappingFilter.$expr = {
+          $eq: [{ $toString: "$companyCode" }, companyCode],
+        };
+      }
+
+      /*
+      * Load saved Area-to-Party mappings.
+      */
+      const savedMappings =
+        await AreaToPartyMapping.find(mappingFilter)
+          .lean();
+
+      /*
+      * Collect all mapped account codes.
+      */
+      const mappedAccountCodes = [
+        ...new Set(
+          savedMappings
+            .map((mapping) =>
+              String(mapping.accountCode || "").trim()
+            )
+            .filter(Boolean)
+        ),
+      ];
+
+      /*
+      * Load only accounts that currently exist in
+      * Account Master.
+      */
+      const existingAccounts =
+        mappedAccountCodes.length > 0
+          ? await Account.find({
+            distributorId,
+            firmId,
+            isActive: true,
+            $expr: {
+              $in: [
+                { $toString: "$accountCode" },
+                mappedAccountCodes,
+              ],
+            },
+          })
+            .select({
+              accountCode: 1,
+              accountName: 1,
+              blackListed: 1,
+              areaCode: 1,
+            })
+            .lean()
+          : [];
+
+      /*
+      * Create fast lookup using account code.
+      */
+      const accountMap = new Map(
+        existingAccounts.map((account) => [
+          String(account.accountCode || "").trim(),
+          account,
+        ])
+      );
+
+      /*
+      * Return only mappings whose accounts still
+      * exist in Account Master.
+      */
+      const mappings = savedMappings
+        .map((mapping) => {
+          const accountCode = String(
+            mapping.accountCode || ""
+          ).trim();
+
+          const account = accountMap.get(accountCode);
+
+          if (!account) {
+            return null;
+          }
+
+          return {
+            ...mapping,
+
+            accountCode,
+            accountName:
+              String(account.accountName || "").trim(),
+
+            blackListed:
+              account.blackListed || "NO",
+          };
+        })
+        .filter(Boolean)
+        .sort((first, second) =>
+          String(first.accountName || "").localeCompare(
+            String(second.accountName || "")
+          )
+        );
+
+      return res.json({
+        success: true,
+        count: mappings.length,
+        mappings,
+      });
+    } catch (error) {
+      console.error(
+        "Area To Party mapping load error:",
+        error
+      );
+
+      return res.status(500).json({
+        success: false,
+        message:
+          "Failed to fetch Area To Party mappings",
+        error: error.message,
+      });
+    }
+  }
+);
+
+app.post("/api/area-to-party-mappings", ensureConnection, async (req, res) => {
+  try {
+    const distributorId = String(req.body.distributorId || "").trim();
+    const firmId = String(req.body.firmId || "").trim();
+    const firmName = String(req.body.firmName || "").trim();
+
+    const companyCode = String(req.body.companyCode || "").trim();
+    const companyName = String(req.body.companyName || "").trim();
+
+    const mappings = Array.isArray(req.body.mappings)
+      ? req.body.mappings
+      : [];
+
+    if (!distributorId || !firmId) {
+      return res.status(400).json({
+        success: false,
+        message: "Distributor/Firm not found. Please login again.",
+      });
+    }
+
+    if (!companyCode || !companyName) {
+      return res.status(400).json({
+        success: false,
+        message: "Company is required",
+      });
+    }
+
+    const validMappings = mappings.filter(
+      (m) => m.accountCode && m.accountName && m.areaCode && m.areaName
+    );
+
+    if (validMappings.length === 0) {
+      return res.status(400).json({
+        success: false,
+        message: "Please select at least one area.",
+      });
+    }
+
+    const operations = validMappings.map((m) => ({
+      updateOne: {
+        filter: {
+          distributorId,
+          firmId,
+          companyCode,
+          accountCode: String(m.accountCode).trim(),
+        },
+        update: {
+          $set: {
+            companyCode,
+            companyName,
+            accountCode: String(m.accountCode).trim(),
+            accountName: String(m.accountName).trim(),
+            areaCode: String(m.areaCode).trim(),
+            areaName: String(m.areaName).trim(),
+            distributorId,
+            firmId,
+            firmName,
+            isActive: true,
+          },
+        },
+        upsert: true,
+      },
+    }));
+
+    await AreaToPartyMapping.bulkWrite(operations);
+
+    res.status(201).json({
+      success: true,
+      message: "Area To Party mapping saved successfully",
+      count: operations.length,
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: "Area To Party mapping save failed",
+      error: error.message,
+    });
+  }
+});
+
+
+app.get(
+  "/api/account-company-area-mappings",
+  ensureConnection,
+  securityRouter.authorizeRequest("MASTER", "ACCOUNT", "view"),
+  async (req, res) => {
+    try {
+      const accountCode = String(req.query.accountCode || "").trim();
+      if (!accountCode) return res.status(400).json({ success: false, message: "Account code is required." });
+      const mappings = await AreaToPartyMapping.find({
+        distributorId: req.auth.distributorId,
+        firmId: req.auth.firmId,
+        accountCode,
+        isActive: { $ne: false },
+      }).select("companyCode companyName areaCode areaName compaccode compacname").sort({ companyName: 1 }).lean();
+      return res.json({ success: true, mappings });
+    } catch (error) {
+      return res.status(500).json({ success: false, message: "Failed to load account company mappings.", error: error.message });
+    }
+  }
+);
+
+app.get("/api/purchase/next-vou-no", ensureConnection, async (req, res) => {
+  try {
+    const { distributorId, firmId, vouSer = "" } = req.query;
+
+    if (!distributorId || !firmId) {
+      return res.status(400).json({
+        success: false,
+        message: "distributorId and firmId are required",
+      });
+    }
+
+    const lastPurchase = await PurchaseHeader.findOne({
+      distributorId,
+      firmId,
+      vouSer: String(vouSer || "").trim(), // blank series also allowed
+    }).sort({ vouNo: -1 });
+
+    const nextVouNo = lastPurchase ? Number(lastPurchase.vouNo || 0) + 1 : 1;
+
+    res.json({ success: true, nextVouNo });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: "Failed to generate next voucher no",
+      error: error.message,
+    });
+  }
+});
+
+app.post(
+  "/api/purchase",
+  ensureConnection,
+  securityRouter.authorizeRequest("VOUCHERS", "PURCHASE", "add"),
+  async (req, res) => {
+  const session = await mongoose.startSession();
+
+  try {
+    session.startTransaction();
+
+    let {
+      distributorId,
+      firmId,
+      firmName,
+      invoiceDate,
+      vouSer,
+      vouNo,
+      vno,
+      supplierCode,
+      supplierName,
+      company,
+      gdCode,
+      godownName,
+      isIgst,
+      invoiceNumber,
+      narration,
+      items = [],
+    } = req.body;
+
+    if (!distributorId || !firmId) {
+      throw new Error("Distributor/Firm not found");
+    }
+
+    if (!vouNo) {
+      throw new Error("Vou No is required");
+    }
+
+    if (!supplierName) {
+      throw new Error("Supplier is required");
+    }
+
+    if (!gdCode) {
+      throw new Error("Godown code is required");
+    }
+
+    if (!items.length) {
+      throw new Error("At least one product is required");
+    }
+    await applyProductMasterTaxRates({ items, distributorId, firmId, session });
+    const canonicalPurchase = validateFinancialEnvelope(req.body, items, { type: "purchase" });
+    items.splice(0, items.length, ...canonicalPurchase.items);
+    Object.assign(req.body, canonicalPurchase);
+    const lastPurchaseForCounter = await PurchaseHeader.findOne({ distributorId, firmId, vouSer: String(vouSer || "").trim() }).sort({ vouNo: -1 }).session(session).lean();
+    const assignedVouNo = req.body._desktopImport === true && Number(vouNo) > 0
+      ? Number(vouNo)
+      : await nextDocumentNumber({ distributorId, firmId, documentType: "PURCHASE", series: String(vouSer || "").trim(), documentDate: invoiceDate, session, minimumValue: Number(lastPurchaseForCounter?.vouNo || 0) });
+    const purchaseSupplier = await OtherAccount.findOne(purchaseSupplierFilter(req.body)).session(session).lean();
+    const purchaseCompany = await Company.findOne({ distributorId, firmId, isActive: { $ne: false }, $or: [{ companyCode: company }, { companyName: company }] }).session(session).lean();
+    const purchaseGodown = await GodownModel.findOne({ distributorId, firmId, godownCode: gdCode, isActive: { $ne: false } }).session(session).lean();
+    if (!purchaseSupplier) throw Object.assign(new Error("Invalid or inactive supplier account."), { statusCode: 400 });
+    if (!purchaseCompany) throw Object.assign(new Error("Invalid or inactive company."), { statusCode: 400 });
+    if (!purchaseGodown) throw Object.assign(new Error("Invalid or inactive godown."), { statusCode: 400 });
+    if (req.body.supplierId) {
+      supplierCode = purchaseSupplier.accountCode;
+      supplierName = purchaseSupplier.accountName;
+      if (!String(supplierCode ?? "").trim()) throw Object.assign(new Error("The selected supplier has no account code. Please update Other Account Master."), { statusCode: 400 });
+    }
+    const purchaseSnapshot = { capturedAt: new Date(), supplier: purchaseSupplier ? { code: purchaseSupplier.accountCode, name: purchaseSupplier.accountName, address: purchaseSupplier.address || "", gstin: purchaseSupplier.gstNo || "", state: purchaseSupplier.state || "", pinCode: purchaseSupplier.pinCode || "" } : { code: supplierCode || "", name: supplierName || "" }, company: purchaseCompany ? { code: purchaseCompany.companyCode, name: purchaseCompany.companyName, address: purchaseCompany.companyAddress || "", gstin: purchaseCompany.gstNo || "", state: purchaseCompany.state || "" } : null, products: items.map((item) => ({ code: item.productCode || item.code || "", name: item.productName || "", hsn: item.hsn || "", gstRate: Number(item.gst || 0), mrp: Number(item.mrp || 0), rate: Number(item.purRate ?? item.purchaseRate ?? 0) })) };
+
+    const header = await PurchaseHeader.create(
+      [{
+        distributorId,
+        firmId,
+        firmName,
+        invoiceDate,
+        vouSer: String(vouSer || "").trim(),
+        vouNo: assignedVouNo,
+        vno: vno || "",
+        supplierCode: supplierCode || "",
+        supplierName,
+        company,
+        gdCode,
+        godownName,
+        isIgst: isIgst || "N",
+        invoiceNumber,
+        narration,
+
+        mrpTotal: Number(req.body.mrpTotal || 0),
+        grossAmount: Number(req.body.grossAmount || 0),
+        cgstAmt: Number(req.body.cgstAmt || 0),
+        sgstAmt: Number(req.body.sgstAmt || 0),
+        igstAmt: Number(req.body.igstAmt || 0),
+        qbtAmt: Number(req.body.qbtAmt || 0),
+        rounding: Number(req.body.rounding || 0),
+        netAmt: Number(req.body.netAmt || 0),
+
+        items,
+        historicalSnapshot: purchaseSnapshot,
+        isActive: true,
+      }],
+      { session }
+    );
+    const purchaseTax = Number(req.body.cgstAmt || 0) + Number(req.body.sgstAmt || 0) + Number(req.body.igstAmt || 0);
+    await postBalancedJournal({
+      distributorId, firmId, sourceType: "PURCHASE", sourceId: String(header[0]._id),
+      documentNo: `${String(vouSer || "")}${assignedVouNo}`, documentDate: String(invoiceDate || ""), createdBy: req.auth.userId,
+      lines: [
+        { accountCode: "PURCHASE", debit: Number(req.body.netAmt || 0) - purchaseTax, credit: 0, narration: narration || "Purchase" },
+        ...(purchaseTax > 0 ? [{ accountCode: "INPUT_GST", debit: purchaseTax, credit: 0, narration: "Input GST" }] : []),
+        { accountCode: String(supplierCode || supplierName), debit: 0, credit: Number(req.body.netAmt || 0), narration: narration || "Purchase" },
+      ],
+    }, session);
+    await writeAuditEvent(req, { entityType: "PURCHASE", entityId: String(header[0]._id), action: "CREATE", after: header[0].toObject() }, session);
+
+    for (const item of items) {
+      const prodCode = String(
+        item.productCode ||
+        item.code ||
+        item.productId ||
+        String(item.product || "")
+          .split(" - ")[0] ||
+        ""
+      ).trim();
+
+      const batchNo =
+        String(
+          item.batchNo ||
+          item.batch ||
+          item.selectedBatch?.batchNo ||
+          item.selectedBatch?.Batch ||
+          "."
+        ).trim() || ".";
+
+      const mrp = Number(
+        item.mrp ??
+        item.MRP ??
+        item.selectedBatch?.mrp ??
+        item.selectedBatch?.MRP ??
+        0
+      );
+
+      const qty =
+        Number(
+          item.quantity ??
+          item.qty ??
+          item.Qty ??
+          0
+        ) +
+        Number(
+          item.free ??
+          item.Free ??
+          0
+        );
+
+      const finalPurchaseRate = Number(
+        item.purRate ??
+        item.purchaseRate ??
+        item.PurchaseRate ??
+        item.pRate ??
+        item.PRate ??
+        item.prate ??
+        item.selectedBatch?.purRate ??
+        item.selectedBatch?.purchaseRate ??
+        item.selectedBatch?.PurchaseRate ??
+        item.selectedBatch?.pRate ??
+        item.selectedBatch?.PRate ??
+        0
+      );
+
+      const finalSalesRate = Number(
+        item.salesRate ??
+        item.SalesRate ??
+        item.sRate ??
+        item.SRate ??
+        item.rate ??
+        item.selectedBatch?.salesRate ??
+        item.selectedBatch?.SalesRate ??
+        item.selectedBatch?.sRate ??
+        item.selectedBatch?.SRate ??
+        0
+      );
+
+      if (!prodCode) {
+        throw new Error(
+          "Product code is missing in Purchase item."
+        );
+      }
+
+      if (
+        !Number.isFinite(mrp) ||
+        mrp <= 0
+      ) {
+        throw new Error(
+          `Valid MRP is required for product ${prodCode}.`
+        );
+      }
+
+      if (
+        !Number.isFinite(qty) ||
+        qty <= 0
+      ) {
+        throw new Error(
+          `Quantity is required for product ${prodCode}.`
+        );
+      }
+
+      if (
+        !Number.isFinite(finalPurchaseRate) ||
+        finalPurchaseRate <= 0
+      ) {
+        throw new Error(
+          `Purchase Rate is required for product ${prodCode}, batch ${batchNo}, MRP ${mrp}.`
+        );
+      }
+
+      if (typeof process !== "undefined" && process.env.DEBUG_PURCHASE_STOCK === "true") {
+        console.log(
+          "PURCHASE STOCK SAVE DEBUG:",
+          {
+            prodCode,
+            batchNo,
+            mrp,
+            qty,
+            finalPurchaseRate,
+            finalSalesRate,
+            rawPurRate:
+              item.purRate,
+          }
+        );
+      }
+
+      const updatedStock =
+        await Stock.findOneAndUpdate(
+          {
+            distributorId,
+            firmId,
+            GDCode: gdCode,
+            ProdCode: prodCode,
+            Batch: batchNo,
+            MRP: mrp,
+          },
+          {
+            $setOnInsert: {
+              distributorId,
+              firmId,
+
+              GDCode: gdCode,
+              ProdCode: prodCode,
+              Batch: batchNo,
+              MRP: mrp,
+            },
+
+            $set: {
+              firmName,
+              isActive: true,
+
+              ExpDt:
+                item.expDate ||
+                item.selectedBatch?.expDate ||
+                null,
+
+              MfgDt:
+                item.mfgDate ||
+                item.selectedBatch?.mfgDate ||
+                null,
+
+              PRate:
+                finalPurchaseRate,
+
+              SRate:
+                finalSalesRate,
+
+              IsLocked:
+                item.isLocked ||
+                item.selectedBatch?.isLocked ||
+                "N",
+
+              BoxPack: Number(
+                item.boxPack ??
+                item.BoxPack ??
+                item.selectedBatch?.boxPack ??
+                item.selectedBatch?.BoxPack ??
+                1
+              ),
+
+              InBoxPack: Number(
+                item.inBoxPack ??
+                item.inboxPack ??
+                item.InBoxPack ??
+                item.selectedBatch?.inBoxPack ??
+                item.selectedBatch?.inboxPack ??
+                item.selectedBatch?.InBoxPack ??
+                item.ratePerUnit ??
+                1
+              ),
+            },
+
+            $inc: {
+              Qty: qty,
+            },
+          },
+          {
+            upsert: true,
+            new: true,
+            session,
+            runValidators: true,
+            setDefaultsOnInsert: true,
+          }
+        );
+
+     
+    }
+
+    await commitTransactionReliably(session);
+
+    const nextVouNo = assignedVouNo + 1;
+
+    res.status(201).json({
+      success: true,
+      message: "Purchase saved successfully",
+      data: {
+        header: header[0],
+      },
+      nextVouNo,
+    });
+  } catch (error) {
+    if (session.inTransaction()) await session.abortTransaction();
+
+    console.error("Purchase save error:", error);
+
+    if (error.code === 11000) {
+      return res.status(409).json({
+        success: false,
+        message: "This purchase voucher number already exists for this series",
+      });
+    }
+
+    res.status(error.statusCode === 400 ? 400 : 500).json({
+      success: false,
+      message: error.message || "Purchase save failed",
+    });
+  } finally {
+    session.endSession();
+  }
+});
+
+/* =========================================================
+   APPLY PURCHASE STOCK MOVEMENT
+
+   direction:
+   -1 = reverse a previously-applied purchase (old items,
+        before an edit is saved) — always allowed, even
+        if it pushes Qty negative, since some of that
+        stock may already have been sold elsewhere
+   +1 = apply purchase quantity onto stock (new/edited items)
+
+   Example: Purchased 100, sold 30 -> stock 70
+            Edit purchase to 200
+              reverse old 100 -> stock -30
+              apply new 200   -> stock 170
+========================================================= */
+const applyPurchaseStockMovement = async ({
+  items,
+  distributorId,
+  firmId,
+  firmName = "",
+  gdCode,
+  direction,
+  session,
+}) => {
+  const safeItems = Array.isArray(items) ? items : [];
+
+  for (const item of safeItems) {
+    const prodCode = String(
+      item.productCode ||
+      item.code ||
+      item.productId ||
+      String(item.product || "").split(" - ")[0] ||
+      ""
+    ).trim();
+
+    const batchNo = String(
+      item.batchNo ||
+      item.batch ||
+      item.selectedBatch?.batchNo ||
+      item.selectedBatch?.Batch ||
+      "."
+    ).trim() || ".";
+
+    const mrp = Number(
+      item.mrp ?? item.MRP ??
+      item.selectedBatch?.mrp ?? item.selectedBatch?.MRP ?? 0
+    );
+
+    const qty =
+      Number(item.quantity ?? item.qty ?? item.Qty ?? 0) +
+      Number(item.free ?? item.Free ?? 0);
+
+    if (!prodCode) {
+      throw new Error("Product code is missing in Purchase item.");
+    }
+
+    if (!Number.isFinite(qty) || qty <= 0) {
+      throw new Error(`Quantity is required for product ${prodCode}.`);
+    }
+
+    const { existingStock, effectiveBatchNo, effectiveMrp } =
+      await resolveStockRowContext({
+        distributorId,
+        firmId,
+        gdCode,
+        prodCode,
+        batchNo,
+        mrp,
+        session,
+      });
+
+    const stockFilter = {
+      distributorId: String(distributorId).trim(),
+      firmId: String(firmId).trim(),
+      GDCode: String(gdCode).trim(),
+      ProdCode: prodCode,
+      Batch: effectiveBatchNo,
+      MRP: effectiveMrp,
+    };
+
+    if (direction < 0) {
+      // Reverse an old item — subtract only, no availability gating.
+      await Stock.findOneAndUpdate(
+        stockFilter,
+        {
+          $setOnInsert: {
+            distributorId: String(distributorId).trim(),
+            firmId: String(firmId).trim(),
+            firmName: String(firmName || "").trim(),
+            GDCode: String(gdCode).trim(),
+            ProdCode: prodCode,
+            Batch: batchNo,
+            MRP: Number.isFinite(mrp) ? mrp : 0,
+          },
+          $inc: { Qty: -qty },
+        },
+        { upsert: true, new: true, session, setDefaultsOnInsert: true }
+      );
+      continue;
+    }
+
+    // Apply the (edited) item — purchases always add to stock.
+    if (!Number.isFinite(mrp) || mrp <= 0) {
+      throw new Error(`Valid MRP is required for product ${prodCode}.`);
+    }
+
+    const finalPurchaseRate = Number(
+      item.purRate ?? item.purchaseRate ?? item.PurchaseRate ??
+      item.pRate ?? item.PRate ?? item.prate ??
+      item.selectedBatch?.purRate ?? item.selectedBatch?.purchaseRate ??
+      item.selectedBatch?.PurchaseRate ?? item.selectedBatch?.pRate ??
+      item.selectedBatch?.PRate ?? 0
+    );
+
+    if (!Number.isFinite(finalPurchaseRate) || finalPurchaseRate <= 0) {
+      throw new Error(
+        `Purchase Rate is required for product ${prodCode}, batch ${batchNo}, MRP ${mrp}.`
+      );
+    }
+
+    const finalSalesRate = Number(
+      item.salesRate ?? item.SalesRate ?? item.sRate ?? item.SRate ??
+      item.rate ?? item.selectedBatch?.salesRate ??
+      item.selectedBatch?.SalesRate ?? item.selectedBatch?.sRate ??
+      item.selectedBatch?.SRate ?? 0
+    );
+
+    const boxPack = Number(
+      item.boxPack ?? item.BoxPack ?? item.selectedBatch?.boxPack ??
+      item.selectedBatch?.BoxPack ?? 1
+    ) || 1;
+
+    const inBoxPack = Number(
+      item.inBoxPack ?? item.inboxPack ?? item.InBoxPack ??
+      item.selectedBatch?.inBoxPack ?? item.selectedBatch?.inboxPack ??
+      item.selectedBatch?.InBoxPack ?? item.ratePerUnit ?? 1
+    ) || 1;
+
+    await Stock.findOneAndUpdate(
+      stockFilter,
+      {
+        $setOnInsert: {
+          distributorId: String(distributorId).trim(),
+          firmId: String(firmId).trim(),
+          GDCode: String(gdCode).trim(),
+          ProdCode: prodCode,
+          Batch: batchNo,
+          MRP: Number.isFinite(mrp) ? mrp : 0,
+        },
+        $set: {
+          firmName: String(firmName || "").trim(),
+          isActive: true,
+          ExpDt: item.expDate || item.selectedBatch?.expDate || null,
+          MfgDt: item.mfgDate || item.selectedBatch?.mfgDate || null,
+          ...(finalPurchaseRate > 0
+            ? { PRate: finalPurchaseRate }
+            : Number(existingStock?.PRate || 0) > 0
+              ? { PRate: Number(existingStock.PRate || 0) }
+              : {}),
+          ...(finalSalesRate > 0
+            ? { SRate: finalSalesRate }
+            : Number(existingStock?.SRate || 0) > 0
+              ? { SRate: Number(existingStock.SRate || 0) }
+              : {}),
+          IsLocked: String(
+            item.isLocked ||
+              item.selectedBatch?.isLocked ||
+              existingStock?.IsLocked ||
+              "N"
+          )
+            .trim()
+            .toUpperCase(),
+          ...(boxPack > 0
+            ? { BoxPack: boxPack }
+            : Number(existingStock?.BoxPack || 0) > 0
+              ? { BoxPack: Number(existingStock.BoxPack || 0) }
+              : {}),
+          ...(inBoxPack > 0
+            ? { InBoxPack: inBoxPack }
+            : Number(existingStock?.InBoxPack || 0) > 0
+              ? { InBoxPack: Number(existingStock.InBoxPack || 0) }
+              : {}),
+        },
+        $inc: { Qty: qty },
+      },
+      { upsert: true, new: true, session, runValidators: true, setDefaultsOnInsert: true }
+    );
+  }
+};
+
+/*
+ * A desktop import may encounter a purchase header created by an older import
+ * run which did not create its stock rows. This endpoint is intentionally
+ * conservative: it repairs only an identical voucher, and adds quantity only
+ * when the exact godown/product/batch/MRP stock row does not exist at all.
+ * Re-running it is therefore idempotent and cannot add the purchase twice.
+ */
+app.post(
+  "/api/purchase/reconcile-desktop-import",
+  ensureConnection,
+  securityRouter.authorizeRequest("VOUCHERS", "PURCHASE", "add"),
+  async (req, res) => {
+    const session = await mongoose.startSession();
+    try {
+      session.startTransaction();
+      const distributorId = String(req.body.distributorId || "").trim();
+      const firmId = String(req.body.firmId || "").trim();
+      const vouSer = String(req.body.vouSer || "").trim();
+      const vouNo = Number(req.body.vouNo);
+      const gdCode = String(req.body.gdCode || "").trim();
+      const incomingItems = Array.isArray(req.body.items) ? req.body.items.map((item) => ({ ...item })) : [];
+
+      if (req.body._desktopImport !== true) throw new Error("This repair is available only to the desktop import workflow.");
+      if (!distributorId || !firmId || !vouNo || !gdCode || !incomingItems.length) throw new Error("Desktop purchase repair data is incomplete.");
+
+      // The voucher number index also covers cancelled purchases.  Those rows
+      // cannot be inserted again, so the desktop importer must reactivate the
+      // identical cancelled voucher instead of treating it as a missing active
+      // purchase (or attempting a duplicate insert).
+      const purchase = await PurchaseHeader.findOne({ distributorId, firmId, vouSer, vouNo }).session(session);
+      if (!purchase) throw new Error(`Existing purchase ${vouSer}-${vouNo} was not found.`);
+      const reactivatePurchase = purchase.isActive === false;
+      if (String(purchase.gdCode || "").trim() !== gdCode) {
+        const error = new Error(`Purchase ${vouSer}-${vouNo} exists in a different godown; automatic repair was not applied.`);
+        error.statusCode = 409;
+        throw error;
+      }
+
+      await applyProductMasterTaxRates({ items: incomingItems, distributorId, firmId, session });
+      const itemCode = (item) => String(item.productCode || item.code || item.productId || String(item.product || "").split(" - ")[0] || "").trim();
+      const itemBatch = (item) => String(item.batchNo || item.batch || item.selectedBatch?.batchNo || item.selectedBatch?.Batch || ".").trim() || ".";
+      const itemMrp = (item) => Number(item.mrp ?? item.MRP ?? item.selectedBatch?.mrp ?? item.selectedBatch?.MRP ?? 0);
+      const itemQty = (item) => Number(item.quantity ?? item.qty ?? item.Qty ?? 0) + Number(item.free ?? item.Free ?? 0);
+      const itemRate = (item) => Number(item.purRate ?? item.purchaseRate ?? item.PRate ?? item.pRate ?? 0);
+      const signature = (item) => [itemCode(item), itemBatch(item), itemMrp(item), itemQty(item), itemRate(item)].map(String).join("|");
+      const existingSignatures = (purchase.items || []).map(signature).sort();
+      const incomingSignatures = incomingItems.map(signature).sort();
+      if (JSON.stringify(existingSignatures) !== JSON.stringify(incomingSignatures)) {
+        const error = new Error(`Purchase ${vouSer}-${vouNo} exists but its items were changed; automatic repair was not applied.`);
+        error.statusCode = 409;
+        throw error;
+      }
+
+      const incomingBySignature = new Map();
+      for (const item of incomingItems) {
+        const values = incomingBySignature.get(signature(item)) || [];
+        values.push(item);
+        incomingBySignature.set(signature(item), values);
+      }
+      const repairedItems = (purchase.items || []).map((storedItem) => {
+        const source = incomingBySignature.get(signature(storedItem))?.shift();
+        if (!source) return storedItem;
+        const productCode = itemCode(source);
+        const productName = String(source.productName || storedItem.productName || "").trim();
+        return {
+          ...(typeof storedItem.toObject === "function" ? storedItem.toObject() : storedItem),
+          productCode,
+          productName,
+          product: [productCode, productName].filter(Boolean).join(" - "),
+        };
+      });
+
+      const groupedItems = new Map();
+      for (const item of incomingItems) {
+        const stockKey = `${itemCode(item)}|${itemBatch(item)}|${itemMrp(item)}`;
+        const group = groupedItems.get(stockKey) || [];
+        group.push(item);
+        groupedItems.set(stockKey, group);
+      }
+      const repairedStockKeys = [];
+      for (const [stockKey, group] of groupedItems) {
+        const first = group[0];
+        const filter = { distributorId, firmId, GDCode: gdCode, ProdCode: itemCode(first), Batch: itemBatch(first), MRP: itemMrp(first) };
+        const stock = await Stock.findOne(filter).session(session).lean();
+        // Cancellation reverses the original stock quantity but intentionally
+        // leaves the stock row in place. Reactivation must therefore add the
+        // quantity even when that row still exists. Active-purchase repair keeps
+        // its prior idempotent, missing-row-only behaviour.
+        if (reactivatePurchase || !stock) {
+          await applyPurchaseStockMovement({ items: group, distributorId, firmId, firmName: req.body.firmName || purchase.firmName || "", gdCode, direction: 1, session });
+        } else {
+          const purchaseRate = itemRate(first);
+          const salesRate = Number(first.salesRate ?? first.SRate ?? first.rate ?? 0);
+          await Stock.updateOne(filter, { $set: { isActive: true, ...(purchaseRate > 0 ? { PRate: purchaseRate } : {}), ...(salesRate > 0 ? { SRate: salesRate } : {}) } }, { session });
+        }
+        repairedStockKeys.push(stockKey);
+      }
+
+      purchase.items = repairedItems;
+      if (reactivatePurchase) {
+        purchase.isActive = true;
+
+        const purchaseTax = Number(purchase.cgstAmt || 0) + Number(purchase.sgstAmt || 0) + Number(purchase.igstAmt || 0);
+        await postBalancedJournal({
+          distributorId,
+          firmId,
+          sourceType: "PURCHASE",
+          sourceId: String(purchase._id),
+          documentNo: `${vouSer}${vouNo}`,
+          documentDate: String(purchase.invoiceDate || req.body.invoiceDate || ""),
+          createdBy: req.auth.userId,
+          lines: [
+            { accountCode: "PURCHASE", debit: Number(purchase.netAmt || 0) - purchaseTax, credit: 0, narration: purchase.narration || "Purchase" },
+            ...(purchaseTax > 0 ? [{ accountCode: "INPUT_GST", debit: purchaseTax, credit: 0, narration: "Input GST" }] : []),
+            { accountCode: String(purchase.supplierCode || purchase.supplierName), debit: 0, credit: Number(purchase.netAmt || 0), narration: purchase.narration || "Purchase" },
+          ],
+        }, session);
+        await recordStockMovements({
+          distributorId,
+          firmId,
+          godown: gdCode,
+          items: incomingItems,
+          movementDate: String(purchase.invoiceDate || req.body.invoiceDate || ""),
+          sourceType: "PURCHASE_REACTIVATE",
+          sourceId: purchase._id,
+          documentNo: `${vouSer}${vouNo}`,
+          direction: 1,
+          userId: req.auth.userId,
+          session,
+        });
+      }
+      purchase.desktopImportReconciledAt = new Date();
+      purchase.desktopImportStockKeys = repairedStockKeys;
+      await purchase.save({ session });
+      await writeAuditEvent(req, { entityType: "PURCHASE", entityId: String(purchase._id), action: reactivatePurchase ? "DESKTOP_IMPORT_REACTIVATE" : "DESKTOP_IMPORT_RECONCILE", after: purchase.toObject() }, session);
+      await commitTransactionReliably(session);
+      res.json({ success: true, message: reactivatePurchase
+        ? `Purchase ${vouSer}-${vouNo} was reactivated and its stock was restored.`
+        : `Purchase ${vouSer}-${vouNo} checked and repaired without duplicating it.`, data: { header: purchase } });
+    } catch (error) {
+      if (session.inTransaction()) await session.abortTransaction();
+
+      console.error("Desktop purchase reconciliation error:", error);
+      res.status(error.statusCode || 500).json({ success: false, message: error.message || "Desktop purchase repair failed" });
+    } finally {
+      session.endSession();
+    }
+  }
+);
+
+app.put(
+  "/api/purchase/:id",
+  ensureConnection,
+  securityRouter.authorizeRequest("VOUCHERS", "PURCHASE", "edit"),
+  async (req, res) => {
+    const session = await mongoose.startSession();
+
+    try {
+      session.startTransaction();
+
+      const { id } = req.params;
+      let {
+        distributorId,
+        firmId,
+        firmName,
+        invoiceDate,
+        vouSer,
+        vouNo,
+        vno,
+        supplierCode,
+        supplierName,
+        company,
+        gdCode,
+        godownName,
+        isIgst,
+        invoiceNumber,
+        narration,
+        items = [],
+      } = req.body;
+
+      if (!distributorId || !firmId) throw new Error("Distributor/Firm not found");
+      if (!vouNo) throw new Error("Vou No is required");
+      if (!supplierName) throw new Error("Supplier is required");
+      if (!gdCode) throw new Error("Godown code is required");
+      if (!items.length) throw new Error("At least one product is required");
+      await applyProductMasterTaxRates({ items, distributorId, firmId, session });
+      const canonicalPurchase = validateFinancialEnvelope(req.body, items, { type: "purchase" });
+      items.splice(0, items.length, ...canonicalPurchase.items);
+      Object.assign(req.body, canonicalPurchase);
+      const purchaseSupplier = await OtherAccount.findOne(purchaseSupplierFilter(req.body)).session(session).lean();
+      const purchaseCompany = await Company.findOne({ distributorId, firmId, isActive: { $ne: false }, $or: [{ companyCode: company }, { companyName: company }] }).session(session).lean();
+      const purchaseGodown = await GodownModel.findOne({ distributorId, firmId, godownCode: gdCode, isActive: { $ne: false } }).session(session).lean();
+      if (!purchaseSupplier) throw Object.assign(new Error("Invalid or inactive supplier account."), { statusCode: 400 });
+      if (!purchaseCompany) throw Object.assign(new Error("Invalid or inactive company."), { statusCode: 400 });
+      if (!purchaseGodown) throw Object.assign(new Error("Invalid or inactive godown."), { statusCode: 400 });
+      if (req.body.supplierId) {
+        supplierCode = purchaseSupplier.accountCode;
+        supplierName = purchaseSupplier.accountName;
+        if (!String(supplierCode ?? "").trim()) throw Object.assign(new Error("The selected supplier has no account code. Please update Other Account Master."), { statusCode: 400 });
+      }
+      const purchaseSnapshot = { capturedAt: new Date(), supplier: { code: supplierCode || "", name: supplierName || "" }, company: { name: company || "" }, products: items.map((item) => ({ code: item.productCode || item.code || "", name: item.productName || "", hsn: item.hsn || "", gstRate: Number(item.gst || 0), mrp: Number(item.mrp || 0), rate: Number(item.purRate ?? item.purchaseRate ?? 0) })) };
+
+      const oldPurchase = await PurchaseHeader.findOne({
+        _id: id,
+        distributorId,
+        firmId,
+        isActive: true,
+      }).session(session);
+
+      if (!oldPurchase) throw new Error("Original purchase not found");
+
+      // Reverse old items first (subtract; allowed to go temporarily negative).
+      await applyPurchaseStockMovement({
+        items: oldPurchase.items || [],
+        distributorId,
+        firmId,
+        firmName: oldPurchase.firmName || firmName,
+        gdCode: oldPurchase.gdCode,
+        direction: -1,
+        session,
+      });
+
+      // Apply the edited items.
+      await applyPurchaseStockMovement({
+        items,
+        distributorId,
+        firmId,
+        firmName,
+        gdCode,
+        direction: 1,
+        session,
+      });
+
+      const updatedPurchase = await PurchaseHeader.findOneAndUpdate(
+        { _id: id, distributorId, firmId, isActive: true },
+        {
+          $set: {
+            firmName,
+            invoiceDate,
+            vouSer: String(vouSer || "").trim(),
+            vouNo: Number(vouNo),
+            vno: vno || "",
+            supplierCode: supplierCode || "",
+            supplierName,
+            company,
+            gdCode,
+            godownName,
+            isIgst: isIgst || "N",
+            invoiceNumber,
+            narration,
+
+            mrpTotal: Number(req.body.mrpTotal || 0),
+            grossAmount: Number(req.body.grossAmount || 0),
+            cgstAmt: Number(req.body.cgstAmt || 0),
+            sgstAmt: Number(req.body.sgstAmt || 0),
+            igstAmt: Number(req.body.igstAmt || 0),
+            qbtAmt: Number(req.body.qbtAmt || 0),
+            rounding: Number(req.body.rounding || 0),
+            netAmt: Number(req.body.netAmt || 0),
+
+            items,
+            historicalSnapshot: purchaseSnapshot,
+          },
+        },
+        { new: true, session }
+      );
+
+      if (!updatedPurchase) throw new Error("Purchase not found during update");
+      await reverseSourceJournal({ distributorId, firmId, sourceType: "PURCHASE", sourceId: String(id), createdBy: req.auth.userId, documentDate: invoiceDate, reason: "Purchase edited" }, session);
+      const editedPurchaseTax = Number(req.body.cgstAmt || 0) + Number(req.body.sgstAmt || 0) + Number(req.body.igstAmt || 0);
+      await postBalancedJournal({ distributorId, firmId, sourceType: "PURCHASE", sourceId: String(id), documentNo: `${String(vouSer || "")}${Number(vouNo)}`, documentDate: String(invoiceDate || ""), createdBy: req.auth.userId, lines: [
+        { accountCode: "PURCHASE", debit: Number(req.body.netAmt || 0) - editedPurchaseTax, credit: 0, narration: narration || "Purchase edit" },
+        ...(editedPurchaseTax > 0 ? [{ accountCode: "INPUT_GST", debit: editedPurchaseTax, credit: 0, narration: "Input GST" }] : []),
+        { accountCode: String(supplierCode || supplierName), debit: 0, credit: Number(req.body.netAmt || 0), narration: narration || "Purchase edit" },
+      ] }, session);
+      await writeAuditEvent(req, { entityType: "PURCHASE", entityId: String(id), action: "UPDATE", before: oldPurchase.toObject(), after: updatedPurchase.toObject() }, session);
+      await commitTransactionReliably(session);
+
+      res.json({
+        success: true,
+        message: "Purchase updated successfully",
+        data: { header: updatedPurchase },
+      });
+    } catch (error) {
+      if (session.inTransaction()) await session.abortTransaction();
+
+      console.error("Purchase update error:", error);
+
+      if (error.code === 11000) {
+        return res.status(409).json({
+          success: false,
+          message: "This purchase voucher number already exists for this series",
+        });
+      }
+
+      res.status(error.statusCode === 400 ? 400 : 500).json({
+        success: false,
+        message: error.message || "Purchase update failed",
+      });
+    } finally {
+      session.endSession();
+    }
+  }
+);
+app.get(
+  "/api/purchase",
+  ensureConnection,
+  securityRouter.authorizeRequest("VOUCHERS", "PURCHASE", "view"),
+  async (req, res) => {
+  try {
+    const { distributorId, firmId } = req.query;
+
+    if (!distributorId || !firmId) {
+      return res.status(400).json({
+        success: false,
+        message: "distributorId and firmId are required",
+      });
+    }
+
+    const purchases = await PurchaseHeader.find({
+      distributorId,
+      firmId,
+      isActive: true,
+    })
+      .sort({ invoiceDate: -1, vouNo: -1 })
+      .lean();
+
+    res.json({
+      success: true,
+      count: purchases.length,
+      purchases,
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: "Failed to load purchase bills",
+      error: error.message,
+    });
+  }
+});
+/* =========================================================
+  PURCHASE LIST - BACKEND PAGINATION
+
+  Existing:
+  GET /api/purchase
+  remains unchanged for any existing full-list dependency.
+
+  New:
+  GET /api/purchase/list
+  is used only by Purchase List.
+  ========================================================= */
+
+app.get(
+  "/api/purchase/list",
+  ensureConnection,
+  securityRouter.authorizeRequest("VOUCHERS", "PURCHASE", "view"),
+  async (req, res) => {
+    try {
+      const distributorId = String(
+        req.query.distributorId || ""
+      ).trim();
+
+      const firmId = String(
+        req.query.firmId || ""
+      ).trim();
+
+      const search = String(
+        req.query.search || ""
+      ).trim();
+
+      const fromDate = String(
+        req.query.fromDate || ""
+      ).trim();
+
+      const toDate = String(
+        req.query.toDate || ""
+      ).trim();
+
+      const vouSer = String(
+        req.query.vouSer ||
+        req.query.billSeries ||
+        ""
+      ).trim();
+
+      const supplierCode = String(
+        req.query.supplierCode ||
+        req.query.partyCode ||
+        ""
+      ).trim();
+
+      const supplierName = String(
+        req.query.supplierName ||
+        req.query.partyName ||
+        req.query.party ||
+        ""
+      ).trim();
+
+      const company = String(
+        req.query.company || ""
+      ).trim();
+
+      const gdCode = String(
+        req.query.gdCode ||
+        req.query.godownCode ||
+        ""
+      ).trim();
+
+      const godownName = String(
+        req.query.godownName ||
+        req.query.branchName ||
+        ""
+      ).trim();
+
+      const invoiceNumber = String(
+        req.query.invoiceNumber || ""
+      ).trim();
+
+      const minAmountText = String(
+        req.query.minAmount || ""
+      ).trim();
+
+      const maxAmountText = String(
+        req.query.maxAmount || ""
+      ).trim();
+
+      const requestedPage = Number.parseInt(
+        req.query.page,
+        10
+      );
+
+      const requestedLimit = Number.parseInt(
+        req.query.limit,
+        10
+      );
+
+      const page =
+        Number.isFinite(requestedPage) &&
+          requestedPage > 0
+          ? requestedPage
+          : 1;
+
+      const limit =
+        Number.isFinite(requestedLimit) &&
+          requestedLimit > 0
+          ? Math.min(requestedLimit, 100)
+          : 10;
+
+      if (!distributorId || !firmId) {
+        return res.status(400).json({
+          success: false,
+          message:
+            "distributorId and firmId are required",
+        });
+      }
+
+      /*
+      * Escape user-entered search text before
+      * creating MongoDB regular expressions.
+      */
+      const escapeRegex = (value) =>
+        String(value || "").replace(
+          /[.*+?^${}()|[\]\\]/g,
+          "\\$&"
+        );
+
+      const containsRegex = (value) =>
+        new RegExp(
+          escapeRegex(value),
+          "i"
+        );
+
+      const exactRegex = (value) =>
+        new RegExp(
+          `^${escapeRegex(value)}$`,
+          "i"
+        );
+
+      const filter = {
+        distributorId,
+        firmId,
+
+        /*
+        * This permits old Purchase records where
+        * isActive was not explicitly stored.
+        */
+        isActive: {
+          $ne: false,
+        },
+      };
+
+      /* =====================================================
+        DATE FILTER
+        ===================================================== */
+
+      if (fromDate || toDate) {
+        filter.invoiceDate = {};
+
+        if (fromDate) {
+          filter.invoiceDate.$gte =
+            fromDate;
+        }
+
+        if (toDate) {
+          filter.invoiceDate.$lte =
+            toDate;
+        }
+      }
+
+      /* =====================================================
+        EXACT AND TEXT FILTERS
+        ===================================================== */
+
+      if (vouSer) {
+        filter.vouSer =
+          exactRegex(vouSer);
+      }
+
+      if (supplierCode) {
+        filter.supplierCode =
+          exactRegex(supplierCode);
+      }
+
+      if (supplierName) {
+        filter.supplierName =
+          containsRegex(supplierName);
+      }
+
+      if (company) {
+        const companyRegex =
+          containsRegex(company);
+
+        /*
+        * Purchase records store company in
+        * companyCode and companyName.
+        *
+        * Some old records may contain company,
+        * so that field is also checked.
+        */
+        filter.$and =
+          filter.$and || [];
+
+        filter.$and.push({
+          $or: [
+            {
+              companyCode:
+                companyRegex,
+            },
+            {
+              companyName:
+                companyRegex,
+            },
+            {
+              company:
+                companyRegex,
+            },
+          ],
+        });
+      }
+
+      if (gdCode) {
+        filter.gdCode =
+          exactRegex(gdCode);
+      }
+
+      if (godownName) {
+        filter.godownName =
+          containsRegex(godownName);
+      }
+
+      if (invoiceNumber) {
+        filter.invoiceNumber =
+          containsRegex(invoiceNumber);
+      }
+
+      /* =====================================================
+        AMOUNT RANGE
+        ===================================================== */
+
+      const minAmount =
+        Number(minAmountText);
+
+      const maxAmount =
+        Number(maxAmountText);
+
+      if (
+        (
+          minAmountText &&
+          Number.isFinite(minAmount)
+        ) ||
+        (
+          maxAmountText &&
+          Number.isFinite(maxAmount)
+        )
+      ) {
+        filter.netAmt = {};
+
+        if (
+          minAmountText &&
+          Number.isFinite(minAmount)
+        ) {
+          filter.netAmt.$gte =
+            minAmount;
+        }
+
+        if (
+          maxAmountText &&
+          Number.isFinite(maxAmount)
+        ) {
+          filter.netAmt.$lte =
+            maxAmount;
+        }
+      }
+
+      /* =====================================================
+        GENERAL SEARCH
+        ===================================================== */
+
+      if (search) {
+        const searchRegex =
+          containsRegex(search);
+
+        const numericSearch =
+          Number(search);
+
+        const searchConditions = [
+          {
+            vouSer:
+              searchRegex,
+          },
+          {
+            vno:
+              searchRegex,
+          },
+          {
+            supplierCode:
+              searchRegex,
+          },
+          {
+            supplierName:
+              searchRegex,
+          },
+          {
+            company:
+              searchRegex,
+          },
+          {
+            gdCode:
+              searchRegex,
+          },
+          {
+            godownName:
+              searchRegex,
+          },
+          {
+            invoiceNumber:
+              searchRegex,
+          },
+          {
+            narration:
+              searchRegex,
+          },
+          {
+            firmName:
+              searchRegex,
+          },
+        ];
+
+        /*
+        * Voucher number and amount are numeric fields.
+        * Search them only when entered text is numeric.
+        */
+        if (
+          Number.isFinite(
+            numericSearch
+          )
+        ) {
+          searchConditions.push(
+            {
+              vouNo:
+                numericSearch,
+            },
+            {
+              netAmt:
+                numericSearch,
+            }
+          );
+        }
+
+        filter.$and =
+          filter.$and || [];
+
+        filter.$and.push({
+          $or:
+            searchConditions,
+        });
+      }
+
+      /* =====================================================
+        COUNT ALL MATCHING RECORDS
+        ===================================================== */
+
+      const loadPurchasePage = (pageToLoad) => PurchaseHeader.find(filter)
+        .select({ items: 0, historicalSnapshot: 0, desktopImportStockKeys: 0 })
+        .sort({ invoiceDate: -1, vouNo: -1, _id: -1 })
+        .skip((pageToLoad - 1) * limit)
+        .limit(limit)
+        .lean();
+      const [totalRecords, requestedPurchases] = await Promise.all([
+        PurchaseHeader.countDocuments(filter),
+        loadPurchasePage(page),
+      ]);
+
+      const totalPages =
+        Math.max(
+          1,
+          Math.ceil(
+            totalRecords /
+            limit
+          )
+        );
+
+      /*
+      * Protect against an invalid page after deletion.
+      *
+      * Example:
+      * User deletes the only record on page 4.
+      * The backend safely returns page 3.
+      */
+      const currentPage =
+        Math.min(
+          page,
+          totalPages
+        );
+
+      const skip =
+        (
+          currentPage -
+          1
+        ) *
+        limit;
+
+      /* =====================================================
+        LOAD ONLY THE CURRENT PAGE
+        ===================================================== */
+
+      // A list row excludes line items and snapshots. If deletion reduced the
+      // page count, repeat only the page query for the corrected page.
+      const purchases = currentPage === page
+        ? requestedPurchases
+        : await loadPurchasePage(currentPage);
+
+      /* =====================================================
+        RESPONSE
+        ===================================================== */
+
+      return res.json({
+        success: true,
+
+        purchases,
+
+        count:
+          purchases.length,
+
+        pagination: {
+          currentPage,
+
+          page:
+            currentPage,
+
+          limit,
+
+          totalRecords,
+
+          totalPages,
+
+          hasPreviousPage:
+            currentPage > 1,
+
+          hasNextPage:
+            currentPage <
+            totalPages,
+
+          startRecord:
+            totalRecords === 0
+              ? 0
+              : skip + 1,
+
+          endRecord:
+            totalRecords === 0
+              ? 0
+              : Math.min(
+                skip +
+                purchases.length,
+                totalRecords
+              ),
+        },
+      });
+    } catch (error) {
+      console.error(
+        "Purchase list pagination error:",
+        error
+      );
+
+      return res.status(500).json({
+        success: false,
+
+        message:
+          "Failed to load purchase bills",
+
+        error:
+          error.message,
+      });
+    }
+  }
+);
+
+app.get(
+  "/api/purchase/find-bill",
+  ensureConnection,
+  async (req, res) => {
+    try {
+      const {
+        distributorId,
+        firmId,
+        vouSer = "",
+        vouNo = "",
+      } = req.query;
+
+      if (!distributorId || !firmId) {
+        return res.status(400).json({
+          success: false,
+          message:
+            "distributorId and firmId are required",
+        });
+      }
+
+      if (
+        vouNo === null ||
+        vouNo === undefined ||
+        String(vouNo).trim() === ""
+      ) {
+        return res.status(400).json({
+          success: false,
+          message:
+            "Purchase Bill Number is required",
+        });
+      }
+
+      const numericVouNo =
+        Number(String(vouNo).trim());
+
+      if (!Number.isFinite(numericVouNo)) {
+        return res.status(400).json({
+          success: false,
+          message:
+            "Purchase Bill Number must be numeric",
+        });
+      }
+
+      const purchase = await PurchaseHeader.findOne({
+        distributorId:
+          String(distributorId).trim(),
+
+        firmId:
+          String(firmId).trim(),
+
+        vouSer:
+          String(vouSer || "").trim(),
+
+        vouNo:
+          numericVouNo,
+
+        isActive: true,
+      }).lean();
+
+      if (!purchase) {
+        return res.status(404).json({
+          success: false,
+          message:
+            "Purchase Bill not found for the entered series and number.",
+        });
+      }
+
+      const purchaseItems =
+        Array.isArray(purchase.items)
+          ? purchase.items
+          : [];
+
+      return res.json({
+        success: true,
+
+        purchase,
+        bill: purchase,
+        items: purchaseItems,
+
+        count:
+          purchaseItems.length,
+      });
+    } catch (error) {
+      console.error(
+        "Purchase Bill lookup error:",
+        error
+      );
+
+      return res.status(500).json({
+        success: false,
+        message:
+          "Failed to load Purchase Bill",
+        error:
+          error.message,
+      });
+    }
+  }
+);
+
+app.get("/api/sales/next-bill-no", ensureConnection, async (req, res) => {
+  try {
+    const {
+      distributorId,
+      firmId,
+      BillSeries = "",
+      salesEntryType = "BILLING",
+    } = req.query;
+
+    if (!distributorId || !firmId) {
+      return res.status(400).json({
+        success: false,
+        message: "distributorId and firmId are required",
+      });
+    }
+
+    const normalizedEntryType =
+      normalizeSalesEntryType(salesEntryType);
+
+    const entryTypeFilter =
+      buildSalesEntryTypeFilter(normalizedEntryType);
+
+    const lastBill = await SalesHeader.findOne({
+      distributorId,
+      firmId,
+      BillSeries: String(BillSeries || "").trim(),
+      ...entryTypeFilter,
+    }).sort({ BillNo: -1 });
+
+    res.json({
+      success: true,
+      nextBillNo: lastBill ? Number(lastBill.BillNo || 0) + 1 : 1,
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: "Failed to load next sales bill no",
+      error: error.message,
+    });
+  }
+});
+/* =========================================================
+   READ GENERAL SETUP BOOLEAN
+========================================================= */
+
+const readSetupBoolean = (
+  value,
+  fallback = false
+) => {
+  if (typeof value === "boolean") {
+    return value;
+  }
+
+  if (typeof value === "number") {
+    return value === 1;
+  }
+
+  const normalized = String(
+    value ?? ""
+  )
+    .trim()
+    .toUpperCase();
+
+  if (
+    ["TRUE", "1", "Y", "YES", "ON"].includes(
+      normalized
+    )
+  ) {
+    return true;
+  }
+
+  if (
+    ["FALSE", "0", "N", "NO", "OFF"].includes(
+      normalized
+    )
+  ) {
+    return false;
+  }
+
+  return fallback;
+};
+
+const loadFirmGeneralSetup = async ({
+  distributorId,
+  firmId,
+  session = null,
+}) => {
+  let query = mongoose.connection
+    .collection("Mas_GeneralSetup1")
+    .findOne({
+      distributorId:
+        String(distributorId || "").trim(),
+
+      firmId:
+        String(firmId || "").trim(),
+
+      isActive: {
+        $ne: false,
+      },
+    });
+
+  /*
+   * Native collection findOne accepts session
+   * inside its options.
+   */
+  if (session) {
+    return mongoose.connection
+      .collection("Mas_GeneralSetup1")
+      .findOne(
+        {
+          distributorId:
+            String(distributorId || "").trim(),
+
+          firmId:
+            String(firmId || "").trim(),
+
+          isActive: {
+            $ne: false,
+          },
+        },
+        {
+          session,
+        }
+      );
+  }
+
+  return query;
+};
+
+const resolveStockRowContext = async ({
+  distributorId,
+  firmId,
+  gdCode,
+  prodCode,
+  batchNo,
+  mrp,
+  session,
+}) => {
+  const normalizedDistributorId = String(distributorId || "").trim();
+  const normalizedFirmId = String(firmId || "").trim();
+  const normalizedGdCode = String(gdCode || "").trim();
+  const normalizedProdCode = String(prodCode || "").trim();
+
+  const existingStock = normalizedProdCode
+    ? await Stock.findOne({
+        distributorId: normalizedDistributorId,
+        firmId: normalizedFirmId,
+        GDCode: normalizedGdCode,
+        ProdCode: normalizedProdCode,
+      })
+        .sort({ createdAt: -1 })
+        .session(session)
+        .lean()
+    : null;
+
+  const effectiveBatchNo = String(
+    batchNo || existingStock?.Batch || "."
+  ).trim() || ".";
+
+  const effectiveMrp = Number.isFinite(Number(mrp)) && Number(mrp) > 0
+    ? Number(mrp)
+    : Number(existingStock?.MRP || 0);
+
+  return {
+    existingStock,
+    effectiveBatchNo,
+    effectiveMrp,
+  };
+};
+/* =========================================================
+   APPLY SALES STOCK MOVEMENT
+
+   direction:
+   -1 = deduct stock while saving/editing Sales Bill
+   +1 = restore stock while editing/deleting Sales Bill
+========================================================= */
+
+const applySalesStockMovement = async ({
+  items,
+  distributorId,
+  firmId,
+  firmName = "",
+  gdCode,
+  direction,
+  allowNegativeStock = false,
+  initializeMissingStock = false,
+  skipZeroQuantityItems = false,
+  session,
+}) => {
+  const safeItems =
+    Array.isArray(items)
+      ? items
+      : [];
+
+  for (const item of safeItems) {
+    const prodCode = String(
+      item.productCode ||
+      item.productId ||
+      item.code ||
+      String(item.product || "")
+        .split(" - ")[0] ||
+      ""
+    ).trim();
+
+    const batchNo = String(
+      item.batchNo ||
+      item.Batch ||
+      item.selectedBatch?.batchNo ||
+      item.selectedBatch?.Batch ||
+      "."
+    ).trim() || ".";
+
+    const mrp = Number(
+      item.mrp ??
+      item.MRP ??
+      item.selectedBatch?.mrp ??
+      item.selectedBatch?.MRP ??
+      0
+    );
+
+    const salesQty = Number(
+      item.qty ??
+      item.quantity ??
+      item.Qty ??
+      0
+    );
+
+    const freeQty = Number(
+      item.free ??
+      item.Free ??
+      item.freeQty ??
+      0
+    );
+
+    const totalQty =
+      salesQty + freeQty;
+
+    if (skipZeroQuantityItems && totalQty === 0) {
+      continue;
+    }
+
+    const purchaseRate = Number(
+      item.purchaseRate ??
+      item.purRate ??
+      item.PRate ??
+      item.selectedBatch?.purchaseRate ??
+      item.selectedBatch?.PRate ??
+      0
+    );
+
+    const salesRate = Number(
+      item.rate ??
+      item.salesRate ??
+      item.SRate ??
+      item.selectedBatch?.salesRate ??
+      item.selectedBatch?.SRate ??
+      0
+    );
+
+    const boxPack = Number(
+      item.boxPack ??
+      item.BoxPack ??
+      item.selectedBatch?.boxPack ??
+      item.selectedBatch?.BoxPack ??
+      1
+    ) || 1;
+
+    const inBoxPack = Number(
+      item.inBoxPack ??
+      item.inboxPack ??
+      item.InBoxPack ??
+      item.selectedBatch?.inBoxPack ??
+      item.selectedBatch?.InBoxPack ??
+      1
+    ) || 1;
+
+    if (!prodCode) {
+      throw new Error(
+        "Product code missing in Sales item."
+      );
+    }
+
+    if (
+      !Number.isFinite(totalQty) ||
+      totalQty <= 0
+    ) {
+      throw new Error(
+        `Quantity is required for product ${prodCode}.`
+      );
+    }
+
+    const { existingStock, effectiveBatchNo, effectiveMrp } =
+      await resolveStockRowContext({
+        distributorId,
+        firmId,
+        gdCode,
+        prodCode,
+        batchNo,
+        mrp,
+        session,
+      });
+
+    const stockFilter = {
+      distributorId:
+        String(distributorId).trim(),
+
+      firmId:
+        String(firmId).trim(),
+
+      GDCode:
+        String(gdCode).trim(),
+
+      ProdCode:
+        prodCode,
+
+      Batch:
+        effectiveBatchNo,
+
+      MRP:
+        effectiveMrp,
+    };
+
+    /*
+     * Restoring old Sales stock always increases quantity.
+     */
+    if (direction > 0) {
+      await Stock.findOneAndUpdate(
+        stockFilter,
+        {
+          $setOnInsert: {
+            distributorId:
+              String(distributorId).trim(),
+
+            firmId:
+              String(firmId).trim(),
+
+            firmName:
+              String(firmName || "").trim(),
+
+            GDCode:
+              String(gdCode).trim(),
+
+            ProdCode:
+              prodCode,
+
+            Batch:
+              batchNo,
+
+            MRP:
+              Number.isFinite(mrp)
+                ? mrp
+                : 0,
+          },
+
+          $set: {
+            ...(purchaseRate > 0
+              ? {
+                  PRate: purchaseRate,
+                }
+              : Number(existingStock?.PRate || 0) > 0
+                ? {
+                    PRate: Number(existingStock.PRate || 0),
+                  }
+                : {}),
+
+            ...(salesRate > 0
+              ? {
+                  SRate: salesRate,
+                }
+              : Number(existingStock?.SRate || 0) > 0
+                ? {
+                    SRate: Number(existingStock.SRate || 0),
+                  }
+                : {}),
+
+            ...(boxPack > 0
+              ? {
+                  BoxPack: boxPack,
+                }
+              : Number(existingStock?.BoxPack || 0) > 0
+                ? {
+                    BoxPack: Number(existingStock.BoxPack || 0),
+                  }
+                : {}),
+
+            ...(inBoxPack > 0
+              ? {
+                  InBoxPack: inBoxPack,
+                }
+              : Number(existingStock?.InBoxPack || 0) > 0
+                ? {
+                    InBoxPack: Number(existingStock.InBoxPack || 0),
+                  }
+                : {}),
+
+            IsLocked:
+              String(
+                item.isLocked ||
+                  item.selectedBatch?.isLocked ||
+                  existingStock?.IsLocked ||
+                  "N"
+              )
+                .trim()
+                .toUpperCase(),
+          },
+
+          $inc: {
+            Qty:
+              totalQty,
+          },
+        },
+        {
+          upsert: true,
+          new: true,
+          session,
+          setDefaultsOnInsert: true,
+        }
+      );
+
+      continue;
+    }
+
+    /*
+     * Negative stock ON:
+     *
+     * The stock record is created when it does not exist,
+     * and the Sales quantity is deducted even when Qty is 0.
+     */
+    if (allowNegativeStock) {
+      // During a desktop migration, a missing legacy stock row is initialized
+      // with exactly the quantity required by this sale and consumed by the
+      // same atomic operation. Its resulting balance is therefore zero. This
+      // is deliberately limited to missing rows; existing rows retain the
+      // normal negative-stock behaviour.
+      const exactStockExists = initializeMissingStock
+        ? Boolean(await Stock.exists(stockFilter).session(session))
+        : true;
+
+      await Stock.findOneAndUpdate(
+        stockFilter,
+        {
+         $setOnInsert: {
+  distributorId:
+    String(distributorId).trim(),
+
+  firmId:
+    String(firmId).trim(),
+
+  firmName:
+    String(firmName || "").trim(),
+
+  GDCode:
+    String(gdCode).trim(),
+
+  ProdCode:
+    prodCode,
+
+  Batch:
+    batchNo,
+
+  MRP:
+    Number.isFinite(mrp)
+      ? mrp
+      : 0,
+},
+
+          $set: {
+            /*
+             * Do not overwrite a valid purchase rate with zero.
+             */
+            ...(purchaseRate > 0
+              ? {
+                PRate:
+                  purchaseRate,
+              }
+              : {}),
+
+            ...(salesRate > 0
+              ? {
+                SRate:
+                  salesRate,
+              }
+              : {}),
+
+            BoxPack:
+              boxPack,
+
+            InBoxPack:
+              inBoxPack,
+
+            IsLocked:
+              "N",
+          },
+
+          $inc: {
+            Qty:
+              exactStockExists ? -totalQty : 0,
+          },
+        },
+        {
+          upsert: true,
+          new: true,
+          session,
+          setDefaultsOnInsert: true,
+        }
+      );
+
+      continue;
+    }
+
+    /*
+     * Negative stock OFF:
+     *
+     * Use one atomic update with Qty >= totalQty.
+     * This prevents two simultaneous Sales Bills from
+     * both using the same available stock.
+     */
+    const stockResult =
+      await Stock.updateOne(
+        {
+          ...stockFilter,
+
+          IsLocked: {
+            $ne: "Y",
+          },
+
+          Qty: {
+            $gte:
+              totalQty,
+          },
+        },
+        {
+          $inc: {
+            Qty:
+              -totalQty,
+          },
+        },
+        {
+          session,
+        }
+      );
+
+    if (
+      stockResult.modifiedCount !== 1
+    ) {
+      const currentStock =
+        await Stock.findOne(
+          stockFilter
+        )
+          .session(session)
+          .lean();
+
+      if (!currentStock) {
+        throw new Error(
+          `Stock batch not found for product ${prodCode}, ` +
+          `batch ${batchNo}, MRP ${mrp}. ` +
+          `Enable "Negative Stock" in General Setup to allow billing.`
+        );
+      }
+
+      if (
+        String(
+          currentStock.IsLocked || "N"
+        )
+          .trim()
+          .toUpperCase() === "Y"
+      ) {
+        throw new Error(
+          `Stock batch is locked for product ${prodCode}, batch ${batchNo}.`
+        );
+      }
+
+      throw new Error(
+        `Insufficient stock for product ${prodCode}, ` +
+        `batch ${batchNo}. Available: ${Number(
+          currentStock.Qty || 0
+        )}, Sales Qty: ${totalQty}. ` +
+        `Enable "Negative Stock" in General Setup to allow billing.`
+      );
+    }
+  }
+};
+
+app.post(
+  "/api/sales",
+  ensureConnection,
+  securityRouter.authorizeRequest(
+    "SALES",
+    "SALES_BILLING",
+    "add"
+  ),
+  async (req, res) => {
+    const session =
+      await mongoose.startSession();
+
+    try {
+      session.startTransaction();
+
+      const {
+        distributorId,
+        firmId,
+        firmName,
+
+        BillDate,
+        Godown,
+        GDCode,
+
+        CompanyCode,
+        CompanyName,
+
+        AreaCode,
+        AreaName,
+
+        PartyCode,
+        PartyName,
+
+        BillSeries = "",
+        BillNo,
+        BillType,
+        SalesEntryType,
+        DueDate,
+
+        SalesmanCode,
+        SalesmanName,
+
+        Narration,
+
+        items = [],
+      } = req.body;
+
+      /* =====================================================
+         BASIC VALIDATION
+      ===================================================== */
+
+      if (
+        !distributorId ||
+        !firmId
+      ) {
+        throw new Error(
+          "Distributor/Firm not found"
+        );
+      }
+
+      if (!BillNo) {
+        throw new Error(
+          "Bill No is required"
+        );
+      }
+
+      if (!PartyName) {
+        throw new Error(
+          "Party is required"
+        );
+      }
+
+      if (!GDCode) {
+        throw new Error(
+          "Godown code is required"
+        );
+      }
+
+      if (
+        !Array.isArray(items) ||
+        items.length === 0
+      ) {
+        throw new Error(
+          "At least one product is required"
+        );
+      }
+      if (req.auth.role === "SALESMAN") {
+        if (!req.auth.salesmanCode) throw Object.assign(new Error("This user is not assigned to a salesman master."), { statusCode: 403 });
+        if (String(SalesmanCode || "").trim() !== req.auth.salesmanCode) throw Object.assign(new Error("Salesmen may only post bills assigned to themselves."), { statusCode: 403 });
+      }
+      const salesParty = await Account.findOne({ distributorId, firmId, accountCode: PartyCode, isActive: { $ne: false } }).session(session).lean();
+      const salesCompany = await Company.findOne({ distributorId, firmId, companyCode: CompanyCode, isActive: { $ne: false } }).session(session).lean();
+      const salesGodown = await GodownModel.findOne({ distributorId, firmId, godownCode: GDCode, isActive: { $ne: false } }).session(session).lean();
+      const salesPerson = SalesmanCode
+        ? await Salesman.findOne({ distributorId, firmId, salesmanCode: SalesmanCode, isActive: { $ne: false } }).session(session).lean()
+        : null;
+      if (!salesParty) throw Object.assign(new Error("Invalid or inactive customer account."), { statusCode: 400 });
+      if (!salesCompany) throw Object.assign(new Error("Invalid or inactive company."), { statusCode: 400 });
+      if (!salesGodown) throw Object.assign(new Error("Invalid or inactive godown."), { statusCode: 400 });
+      if (SalesmanCode && !salesPerson) throw Object.assign(new Error("Invalid or inactive salesman."), { statusCode: 400 });
+      let historicalSnapshot;
+
+      /* =====================================================
+         READ NEGATIVE STOCK SETTING
+
+         OFF:
+         Available stock must be enough.
+
+         ON:
+         Bill is allowed even when stock is zero,
+         missing or already negative.
+      ===================================================== */
+
+      const generalSetup =
+        await loadFirmGeneralSetup({
+          distributorId,
+          firmId,
+          session,
+      });
+      await applyProductMasterTaxRates({ items, distributorId, firmId, session });
+      // Historical desktop invoices must retain the rate at which they were
+      // originally posted. Current-rate overrides apply only to new billing.
+      if (req.body._desktopImport !== true) {
+        await enforceTrustedSalesRates({ req, items, distributorId, firmId, gdCode: GDCode, generalSetup, session });
+      }
+      const canonicalSales = validateFinancialEnvelope(req.body, items, {
+        vatMode: generalSetup?.vatOn,
+        allowZeroQuantityItems: req.body._desktopImport === true,
+      });
+      items.splice(0, items.length, ...canonicalSales.items);
+      Object.assign(req.body, canonicalSales);
+      // Credit controls govern new orders. Applying them while reconstructing
+      // historical invoices makes earlier bills block later bills in the same
+      // migration and prevents the outstanding ledger from being restored.
+      const creditControl = req.body._desktopImport === true
+        ? null
+        : await validateCustomerCredit({ req, session });
+      const normalizedEntryType = normalizeSalesEntryType(SalesEntryType);
+      const normalizedBillSeries = String(
+        BillSeries ||
+        (normalizedEntryType === "COUNTER_SALES" ? "CS" : "")
+      ).trim();
+      const entryTypeFilter =
+        buildSalesEntryTypeFilter(normalizedEntryType);
+      const lastSalesForCounter = await SalesHeader.findOne({
+        distributorId,
+        firmId,
+        BillSeries: normalizedBillSeries,
+        ...entryTypeFilter,
+      }).sort({ BillNo: -1 }).session(session).lean();
+      const assignedBillNo = req.body._desktopImport === true && Number(BillNo) > 0 ? Number(BillNo) : await nextDocumentNumber({
+        distributorId,
+        firmId,
+        documentType: normalizedEntryType === "COUNTER_SALES"
+          ? "COUNTER_SALES"
+          : "SALES",
+        series: normalizedBillSeries,
+        documentDate: BillDate,
+        // Reserve the number independently so concurrent bill transactions
+        // cannot contend on the shared counter and fail with a duplicate.
+        minimumValue: Number(lastSalesForCounter?.BillNo || 0),
+      });
+      historicalSnapshot = await buildSalesHistoricalSnapshot({
+        distributorId, firmId, companyCode: CompanyCode, partyCode: PartyCode, items, session,
+      });
+
+      // A historical migration reconstructs documents in their original
+      // order and must not be blocked by today's stock balance. This exception
+      // is restricted to the desktop-import marker; normal sales continue to
+      // follow the firm's negative-stock setting.
+      const allowNegativeStock = readSetupBoolean(
+        generalSetup?.allowNegativeStock,
+        false
+      );
+
+      /* =====================================================
+         APPLY SALES STOCK MOVEMENT
+
+         This must run before creating the bill.
+
+         If any stock validation fails, an error is thrown
+         and the entire MongoDB transaction is cancelled.
+      ===================================================== */
+
+      await applySalesStockMovement({
+        items,
+
+        distributorId,
+        firmId,
+        firmName,
+
+        gdCode:
+          GDCode,
+
+        direction:
+          -1,
+
+        allowNegativeStock,
+
+        initializeMissingStock:
+          req.body._desktopImport === true && allowNegativeStock,
+
+        skipZeroQuantityItems:
+          req.body._desktopImport === true,
+
+        session,
+      });
+
+      /* =====================================================
+         CREATE SALES BILL
+      ===================================================== */
+
+      const header =
+        await SalesHeader.create(
+          [
+            {
+              distributorId,
+              firmId,
+              firmName,
+
+              BillDate,
+              Godown,
+              GDCode,
+
+              CompanyCode:
+                CompanyCode || "",
+
+              CompanyName:
+                CompanyName || "",
+
+              AreaCode:
+                AreaCode || "",
+
+              AreaName:
+                AreaName || "",
+
+              PartyCode:
+                PartyCode || "",
+
+              PartyName,
+
+              BillSeries:
+                normalizedBillSeries,
+
+              BillNo:
+                assignedBillNo,
+
+              BillType:
+                BillType || "Credit",
+
+              SalesEntryType:
+                normalizedEntryType,
+
+              DueDate,
+
+              SalesmanCode:
+                SalesmanCode || "",
+
+              SalesmanName:
+                SalesmanName || "",
+
+              Narration:
+                Narration || "",
+
+              GrossAmount:
+                Number(
+                  req.body
+                    .GrossAmount ||
+                  0
+                ),
+
+              TPRAmount:
+                Number(
+                  req.body
+                    .TPRAmount ||
+                  0
+                ),
+
+              SchemeAmount:
+                Number(
+                  req.body
+                    .SchemeAmount ||
+                  0
+                ),
+
+              StarDiscountAmount:
+                Number(
+                  req.body
+                    .StarDiscountAmount ||
+                  0
+                ),
+
+              CashDiscountAmount:
+                Number(
+                  req.body
+                    .CashDiscountAmount ||
+                  0
+                ),
+
+              DisplayAmount:
+                Number(
+                  req.body
+                    .DisplayAmount ||
+                  0
+                ),
+
+              CouponAmount:
+                Number(
+                  req.body
+                    .CouponAmount ||
+                  0
+                ),
+
+              AddLessAmount:
+                Number(
+                  req.body
+                    .AddLessAmount ||
+                  0
+                ),
+
+              TaxableValue:
+                Number(
+                  req.body
+                    .TaxableValue ||
+                  0
+                ),
+
+              SGSTAmount:
+                Number(
+                  req.body
+                    .SGSTAmount ||
+                  0
+                ),
+
+              CGSTAmount:
+                Number(
+                  req.body
+                    .CGSTAmount ||
+                  0
+                ),
+
+              IGSTAmount:
+                Number(
+                  req.body
+                    .IGSTAmount ||
+                  0
+                ),
+
+              OriginalNetAmount:
+                Number(
+                  req.body
+                    .OriginalNetAmount ??
+                  req.body
+                    .NetAmount ??
+                  0
+                ),
+
+              CreditNoteAmount:
+                Number(
+                  req.body
+                    .CreditNoteAmount ||
+                  0
+                ),
+
+              NetAmount:
+                Number(
+                  req.body
+                    .NetAmount ||
+                  0
+                ),
+
+              TotalQty:
+                Number(
+                  req.body
+                    .TotalQty ||
+                  0
+                ),
+
+              TotalFreeQty:
+                Number(
+                  req.body
+                    .TotalFreeQty ||
+                  0
+                ),
+
+               TotalItems:
+                 items.length,
+
+              historicalSnapshot,
+
+              creditControl,
+
+               items,
+
+              isActive:
+                true,
+            },
+          ],
+          {
+            session,
+          }
+        );
+      const savedHeader = header[0];
+      const outputTax = Number(req.body.CGSTAmount || 0) + Number(req.body.SGSTAmount || 0) + Number(req.body.IGSTAmount || 0);
+      const creditNote = Number(req.body.CreditNoteAmount || 0);
+      const isZeroValueDesktopSale = req.body._desktopImport === true
+        && Math.abs(Number(req.body.NetAmount || 0)) <= 0.01
+        && Math.abs(Number(req.body.OriginalNetAmount || 0)) <= 0.01;
+      if (!isZeroValueDesktopSale) {
+        await postBalancedJournal({
+          distributorId, firmId, sourceType: "SALES", sourceId: String(savedHeader._id),
+          documentNo: `${normalizedBillSeries}${assignedBillNo}`, documentDate: String(BillDate || ""), createdBy: req.auth.userId,
+          lines: [
+            { accountCode: String(PartyCode || PartyName), debit: Number(req.body.NetAmount || 0), credit: 0, narration: Narration || "Sales" },
+            ...(creditNote > 0 ? [{ accountCode: "CREDIT_NOTE_ALLOWED", debit: creditNote, credit: 0, narration: "Credit note" }] : []),
+            { accountCode: "SALES", debit: 0, credit: Number(req.body.OriginalNetAmount || 0) - outputTax, narration: Narration || "Sales" },
+            ...(outputTax > 0 ? [{ accountCode: "OUTPUT_GST", debit: 0, credit: outputTax, narration: "Output GST" }] : []),
+          ],
+        }, session);
+      }
+      await writeAuditEvent(req, { entityType: "SALES", entityId: String(savedHeader._id), action: "CREATE", after: savedHeader.toObject() }, session);
+      if (creditControl?.overridden) {
+        await writeAuditEvent(req, { entityType: "CREDIT_OVERRIDE", entityId: String(savedHeader._id), action: "APPROVE", reason: creditControl.reason, after: creditControl }, session);
+      }
+      await recordStockMovements({
+        distributorId, firmId, godown: GDCode, items, movementDate: BillDate,
+        sourceType: "SALES", sourceId: savedHeader._id,
+        documentNo: `${normalizedBillSeries}${assignedBillNo}`,
+        direction: -1, userId: req.auth.userId, session,
+      });
+
+      /* =====================================================
+         COMMIT BOTH OPERATIONS
+
+         This commits:
+         1. Stock deduction
+         2. Sales Bill creation
+      ===================================================== */
+
+      await commitTransactionReliably(session);
+
+      const savedBill =
+        header[0]?.toObject
+          ? header[0].toObject()
+          : header[0];
+
+      return res
+        .status(201)
+        .json({
+          success:
+            true,
+
+          message:
+            allowNegativeStock
+              ? "Sales saved successfully. Negative stock was allowed according to General Setup."
+              : "Sales saved successfully",
+
+          allowNegativeStock,
+
+          bill:
+            savedBill,
+
+          data: {
+            header:
+              savedBill,
+          },
+
+          savedBillId:
+            String(
+              savedBill?._id ||
+              ""
+            ),
+
+          nextBillNo:
+            assignedBillNo + 1,
+        });
+    } catch (error) {
+      /*
+       * Roll back both stock and Sales Bill changes.
+       */
+      if (
+        session.inTransaction()
+      ) {
+        await session
+          .abortTransaction();
+      }
+
+      console.error(
+        "Sales save error:",
+        error
+      );
+
+      if (
+        error.code === 11000
+      ) {
+        return res
+          .status(409)
+          .json({
+            success:
+              false,
+
+            message:
+              "This sales bill number already exists for this series",
+          });
+      }
+
+      /*
+       * Stock and validation errors are request errors.
+       */
+      const message =
+        error.message ||
+        "Sales save failed";
+
+      const isValidationError =
+        message.includes(
+          "required"
+        ) ||
+        message.includes(
+          "Stock batch"
+        ) ||
+        message.includes(
+          "Insufficient stock"
+        ) ||
+        message.includes(
+          "locked"
+        ) ||
+        message.includes(
+          "Product code"
+        ) || error.code === "CREDIT_CONTROL_BLOCK";
+
+      return res
+        .status(
+          error.statusCode || (isValidationError
+            ? 400
+            : 500
+        ))
+        .json({
+          success:
+            false,
+
+          message,
+          code: error.code || "",
+        });
+    } finally {
+      await session
+        .endSession();
+    }
+  }
+);
+app.get(
+  "/api/sales/einvoice-candidates",
+  ensureConnection,
+  securityRouter.authorizeRequest("SALES", "SALES_BILLING", "view"),
+  async (req, res) => {
+    try {
+      const distributorId = String(req.query.distributorId || "").trim();
+      const firmId = String(req.query.firmId || "").trim();
+      if (!distributorId || !firmId || distributorId !== req.auth.distributorId || firmId !== req.auth.firmId) {
+        return res.status(403).json({ success: false, message: "Invalid firm selection." });
+      }
+      const scope = { distributorId, firmId };
+      const fromDate = String(req.query.fromDate || "").trim();
+      const toDate = String(req.query.toDate || "").trim();
+      if ((fromDate && !/^\d{4}-\d{2}-\d{2}$/.test(fromDate)) || (toDate && !/^\d{4}-\d{2}-\d{2}$/.test(toDate)) || (fromDate && toDate && fromDate > toDate)) {
+        return res.status(400).json({ success: false, message: "Invalid invoice date range." });
+      }
+      const minimumAmount = Number(req.query.minimumAmount || 0);
+      const loadNo = Number(req.query.loadNo || 0);
+      const startNo = Number(req.query.startNo || 0);
+      const endNo = Number(req.query.endNo || 0);
+      if (![minimumAmount, loadNo, startNo, endNo].every(Number.isFinite)) {
+        return res.status(400).json({ success: false, message: "Invalid invoice filter." });
+      }
+      const level = String(req.query.level || "Load Wise");
+      const series = String(req.query.series || "").trim();
+      const salesFilter = { ...scope, isActive: { $ne: false }, IsBillCancelled: { $ne: true }, SalesEntryType: { $ne: "COUNTER_SALES" }, ...(req.auth.role === "SALESMAN" ? { SalesmanCode: req.auth.salesmanCode || "__UNASSIGNED__" } : {}) };
+      if (fromDate || toDate) salesFilter.BillDate = { ...(fromDate ? { $gte: fromDate } : {}), ...(toDate ? { $lte: toDate } : {}) };
+      if (minimumAmount > 0) salesFilter.NetAmount = { $gte: minimumAmount };
+      if (level === "Load Wise") {
+        if (series) salesFilter.LoadSeries = series;
+        if (loadNo) salesFilter.LoadNo = loadNo;
+      } else if (level === "Bill Wise") {
+        if (series) salesFilter.BillSeries = series;
+        if (startNo || endNo) salesFilter.BillNo = { ...(startNo ? { $gte: startNo } : {}), ...(endNo ? { $lte: endNo } : {}) };
+      }
+      const [sales, firm] = await Promise.all([
+        SalesHeader.find(salesFilter)
+          .select("BillDate BillSeries BillNo LoadSeries LoadNo PartyCode PartyName NetAmount IRNNo EwayBillNo AckNo")
+          .sort({ BillDate: 1, BillNo: 1 }).lean(),
+        Register.findOne({ ...scope, isActive: { $ne: false } }).select("firmCode firmName address1 address2 city pinCode state phoneNo mobileNo email gstNo").lean(),
+      ]);
+      const codes = [...new Set(sales.map((bill) => bill.PartyCode).filter(Boolean))];
+      const accounts = await Account.find({ ...scope, accountCode: { $in: codes } }).select("accountCode gstNo").lean();
+      const parties = Object.fromEntries(accounts.map((account) => [account.accountCode, account]));
+      return res.json({ success: true, sales, firm, parties });
+    } catch (error) {
+      console.error("E-Invoice candidates error:", error);
+      return res.status(500).json({ success: false, message: "Could not load E-Invoice records." });
+    }
+  }
+);
+
+app.post(
+  "/api/sales/einvoice-details",
+  ensureConnection,
+  securityRouter.authorizeRequest("SALES", "SALES_BILLING", "view"),
+  async (req, res) => {
+    try {
+      const ids = req.body?.ids;
+      if (!Array.isArray(ids) || !ids.length || ids.length > 500 || ids.some((id) => !mongoose.isValidObjectId(id))) {
+        return res.status(400).json({ success: false, message: "Select valid invoices (maximum 500 at a time)." });
+      }
+      const scope = { distributorId: req.auth.distributorId, firmId: req.auth.firmId };
+      const sales = await SalesHeader.find({ ...scope, _id: { $in: ids }, isActive: { $ne: false }, IsBillCancelled: { $ne: true }, SalesEntryType: { $ne: "COUNTER_SALES" }, ...(req.auth.role === "SALESMAN" ? { SalesmanCode: req.auth.salesmanCode || "__UNASSIGNED__" } : {}) }).lean();
+      if (sales.length !== new Set(ids.map(String)).size) {
+        return res.status(404).json({ success: false, message: "One or more selected invoices are unavailable. Reload the list." });
+      }
+      const codes = [...new Set(sales.map((bill) => bill.PartyCode).filter(Boolean))];
+      const accounts = await Account.find({ ...scope, accountCode: { $in: codes } }).select("accountCode accountName address add2 town state pinCode phoneNo mobileNo emailId gstNo").lean();
+      return res.json({ success: true, sales, parties: Object.fromEntries(accounts.map((account) => [account.accountCode, account])) });
+    } catch (error) {
+      console.error("E-Invoice details error:", error);
+      return res.status(500).json({ success: false, message: "Could not load selected invoices." });
+    }
+  }
+);
+
+app.post(
+  "/api/sales/einvoice-json",
+  securityRouter.authorizeRequest("SALES", "SALES_BILLING", "view"),
+  async (req, res) => {
+    try {
+      if (!req.auth?.firmId || !req.auth?.distributorId) {
+        return res.status(403).json({ success: false, message: "Invalid firm selection." });
+      }
+      const saved = await saveEInvoiceJson({
+        payload: req.body?.invoices,
+        firmId: req.auth.firmId,
+      });
+      return res.status(201).json({ success: true, ...saved });
+    } catch (error) {
+      if (error.message?.startsWith("Select a valid E-Invoice")) {
+        return res.status(400).json({ success: false, message: error.message });
+      }
+      console.error("E-Invoice JSON save error:", error);
+      return res.status(500).json({ success: false, message: "Could not save E-Invoice JSON." });
+    }
+  }
+);
+app.post(
+  "/api/sales/einvoice-upload",
+  securityRouter.authorizeRequest("SALES", "SALES_BILLING", "view"),
+  (req, res) => {
+    return res.status(501).json({
+      success: false,
+      message: "E-Invoice portal API is not configured yet. The JSON remains saved in TsEinvoiceJSon.",
+    });
+  }
+);
+
+app.get(
+  "/api/sales",
+  ensureConnection,
+  securityRouter.authorizeRequest(
+     "SALES",
+    "SALES_BILLING",
+    "view"
+  ),
+  async (req, res) => {
+  try {
+    const { distributorId, firmId } = req.query;
+
+    if (!distributorId || !firmId) {
+      return res.status(400).json({
+        success: false,
+        message: "distributorId and firmId are required",
+      });
+    }
+
+    const sales = await SalesHeader.find({
+      distributorId,
+      firmId,
+      isActive: true,
+      ...(req.auth.role === "SALESMAN" ? { SalesmanCode: req.auth.salesmanCode || "__UNASSIGNED__" } : {}),
+    })
+      .sort({ BillDate: -1, BillNo: -1 })
+      .lean();
+
+    res.json({
+      success: true,
+      count: sales.length,
+      sales,
+    });
+  } catch (error) {
+    console.error("❌ Sales list error:", error.message);
+    res.status(500).json({
+      success: false,
+      message: "Failed to load sales bills",
+      error: error.message,
+    });
+  }
+});
+
+/* =========================================================
+SALES BILLING LIST - BACKEND PAGINATION
+
+Existing:
+GET /api/sales
+remains unchanged for existing full-list dependencies.
+
+New:
+GET /api/sales/list
+is used only by Sales -> Billing list.
+========================================================= */
+
+app.get(
+  "/api/sales/list",
+  ensureConnection,
+  securityRouter.authorizeRequest(
+    "SALES",
+    "SALES_BILLING",
+    "view"
+  ),
+  async (req, res) => {
+    try {
+      /* =====================================================
+        REQUEST PARAMETERS
+        ===================================================== */
+
+      const distributorId = String(
+        req.query.distributorId || ""
+      ).trim();
+
+      const firmId = String(
+        req.query.firmId || ""
+      ).trim();
+
+      const search = String(
+        req.query.search || ""
+      ).trim();
+
+      const fromDate = String(
+        req.query.fromDate || ""
+      ).trim();
+
+      const toDate = String(
+        req.query.toDate || ""
+      ).trim();
+
+      const billSeries = String(
+        req.query.billSeries || ""
+      ).trim();
+
+      const billType = String(
+        req.query.billType || ""
+      ).trim();
+
+      const salesEntryType = String(
+        req.query.salesEntryType || ""
+      ).trim();
+
+      const companyCode = String(
+        req.query.companyCode ||
+        req.query.company ||
+        ""
+      ).trim();
+
+      const partyCode = String(
+        req.query.partyCode || ""
+      ).trim();
+
+      const partyName = String(
+        req.query.partyName ||
+        req.query.party ||
+        ""
+      ).trim();
+
+      const salesmanCode = req.auth.role === "SALESMAN"
+        ? (req.auth.salesmanCode || "__UNASSIGNED__")
+        : String(req.query.salesmanCode || "").trim();
+
+      const salesmanName = String(
+        req.query.salesmanName ||
+        req.query.salesman ||
+        ""
+      ).trim();
+
+      const areaCode = String(
+        req.query.areaCode || ""
+      ).trim();
+
+      const areaName = String(
+        req.query.areaName ||
+        req.query.area ||
+        ""
+      ).trim();
+
+      const godownCode = String(
+        req.query.godownCode ||
+        req.query.gdCode ||
+        ""
+      ).trim();
+
+      /*
+      * Load filters.
+      */
+      const loadSeries = String(
+        req.query.loadSeries || ""
+      ).trim();
+
+      const loadNoText = String(
+        req.query.loadNo ||
+        req.query.loadNumber ||
+        ""
+      ).trim();
+
+      /*
+      * User who added the Sales Bill.
+      */
+      const addUser = String(
+        req.query.addUser ||
+        req.query.createdBy ||
+        ""
+      ).trim();
+
+      const paymentStatus = String(
+        req.query.paymentStatus || ""
+      ).trim();
+
+      const minAmountText = String(
+        req.query.minAmount || ""
+      ).trim();
+
+      const maxAmountText = String(
+        req.query.maxAmount || ""
+      ).trim();
+
+      /* =====================================================
+        PAGINATION PARAMETERS
+        ===================================================== */
+
+      const requestedPage = Number.parseInt(
+        req.query.page,
+        10
+      );
+
+      const requestedLimit = Number.parseInt(
+        req.query.limit,
+        10
+      );
+
+      const page =
+        Number.isFinite(requestedPage) &&
+          requestedPage > 0
+          ? requestedPage
+          : 1;
+
+      const limit =
+        Number.isFinite(requestedLimit) &&
+          requestedLimit > 0
+          ? Math.min(
+            requestedLimit,
+            100
+          )
+          : 20;
+
+      if (!distributorId || !firmId) {
+        return res.status(400).json({
+          success: false,
+          message:
+            "distributorId and firmId are required",
+        });
+      }
+
+      /* =====================================================
+        HELPER FUNCTIONS
+        ===================================================== */
+
+      const escapeRegex = (value) =>
+        String(value || "").replace(
+          /[.*+?^${}()|[\]\\]/g,
+          "\\$&"
+        );
+
+      /*
+      * Creates an exact, case-insensitive
+      * regular expression.
+      *
+      * Example:
+      * CAD will match CAD, cad and Cad,
+      * but it will not match CADBURY.
+      */
+      const createExactRegex = (value) =>
+        new RegExp(
+          `^${escapeRegex(
+            String(value || "").trim()
+          )}$`,
+          "i"
+        );
+
+      /*
+      * All independent field filters are added
+      * to the same $and array.
+      *
+      * This permits:
+      * Company + Area + Salesman + Load Series
+      * + Load No + Party at the same time.
+      */
+      const andConditions = [];
+
+      /* =====================================================
+        BASE FILTER
+        ===================================================== */
+
+      const filter = {
+        distributorId,
+        firmId,
+
+        /*
+        * Include active records and old records
+        * where isActive was never stored.
+        */
+        isActive: {
+          $ne: false,
+        },
+      };
+
+      if (salesEntryType) {
+        const normalizedEntryType =
+          normalizeSalesEntryType(
+            salesEntryType
+          );
+
+        andConditions.push(
+          buildSalesEntryTypeFilter(
+            normalizedEntryType
+          )
+        );
+      }
+
+      /* =====================================================
+        DATE FILTER
+        ===================================================== */
+
+      if (fromDate || toDate) {
+        const billDateFilter = {};
+
+        if (fromDate) {
+          const startDate = new Date(
+            `${fromDate}T00:00:00.000Z`
+          );
+
+          if (
+            !Number.isNaN(
+              startDate.getTime()
+            )
+          ) {
+            billDateFilter.$gte =
+              startDate;
+          }
+        }
+
+        if (toDate) {
+          const endDate = new Date(
+            `${toDate}T23:59:59.999Z`
+          );
+
+          if (
+            !Number.isNaN(
+              endDate.getTime()
+            )
+          ) {
+            billDateFilter.$lte =
+              endDate;
+          }
+        }
+
+        if (
+          Object.keys(
+            billDateFilter
+          ).length > 0
+        ) {
+          andConditions.push({
+            $or: [
+              {
+                BillDate:
+                  billDateFilter,
+              },
+              {
+                billDate:
+                  billDateFilter,
+              },
+            ],
+          });
+        }
+      }
+
+      /* =====================================================
+        BILL SERIES FILTER
+        ===================================================== */
+
+      if (billSeries) {
+        const billSeriesRegex =
+          createExactRegex(
+            billSeries
+          );
+
+        andConditions.push({
+          $or: [
+            {
+              BillSeries:
+                billSeriesRegex,
+            },
+            {
+              billSeries:
+                billSeriesRegex,
+            },
+            {
+              TrnSeries:
+                billSeriesRegex,
+            },
+            {
+              trnSeries:
+                billSeriesRegex,
+            },
+          ],
+        });
+      }
+
+      /* =====================================================
+        BILL TYPE FILTER
+        ===================================================== */
+
+      if (billType) {
+        const billTypeRegex =
+          createExactRegex(
+            billType
+          );
+
+        andConditions.push({
+          $or: [
+            {
+              BillType:
+                billTypeRegex,
+            },
+            {
+              billType:
+                billTypeRegex,
+            },
+            {
+              InvoiceType:
+                billTypeRegex,
+            },
+            {
+              invoiceType:
+                billTypeRegex,
+            },
+          ],
+        });
+      }
+
+      /* =====================================================
+        COMPANY FILTER
+        ===================================================== */
+
+      if (companyCode) {
+        const companyRegex =
+          createExactRegex(
+            companyCode
+          );
+
+        andConditions.push({
+          $or: [
+            /*
+            * Correct code fields.
+            */
+            {
+              CompanyCode:
+                companyRegex,
+            },
+            {
+              companyCode:
+                companyRegex,
+            },
+            {
+              CompCode:
+                companyRegex,
+            },
+            {
+              compCode:
+                companyRegex,
+            },
+
+            /*
+            * Fallback for cases where the frontend
+            * option contains a company name because
+            * an old master has no company code.
+            */
+            {
+              CompanyName:
+                companyRegex,
+            },
+            {
+              companyName:
+                companyRegex,
+            },
+          ],
+        });
+      }
+
+      /* =====================================================
+        PARTY CODE FILTER
+        ===================================================== */
+
+      if (partyCode) {
+        const partyCodeRegex =
+          createExactRegex(
+            partyCode
+          );
+
+        andConditions.push({
+          $or: [
+            {
+              PartyCode:
+                partyCodeRegex,
+            },
+            {
+              partyCode:
+                partyCodeRegex,
+            },
+            {
+              AccountCode:
+                partyCodeRegex,
+            },
+            {
+              accountCode:
+                partyCodeRegex,
+            },
+          ],
+        });
+      }
+
+      /* =====================================================
+        PARTY NAME FILTER
+        ===================================================== */
+
+      if (partyName) {
+        const partyNameRegex =
+          new RegExp(
+            escapeRegex(
+              partyName
+            ),
+            "i"
+          );
+
+        andConditions.push({
+          $or: [
+            {
+              PartyName:
+                partyNameRegex,
+            },
+            {
+              partyName:
+                partyNameRegex,
+            },
+            {
+              party:
+                partyNameRegex,
+            },
+            {
+              AccountName:
+                partyNameRegex,
+            },
+            {
+              accountName:
+                partyNameRegex,
+            },
+          ],
+        });
+      }
+
+      /* =====================================================
+        SALESMAN CODE FILTER
+        ===================================================== */
+
+      if (salesmanCode) {
+        const salesmanCodeRegex =
+          createExactRegex(
+            salesmanCode
+          );
+
+        andConditions.push({
+          $or: [
+            {
+              SalesmanCode:
+                salesmanCodeRegex,
+            },
+            {
+              salesmanCode:
+                salesmanCodeRegex,
+            },
+            {
+              SmanCode:
+                salesmanCodeRegex,
+            },
+            {
+              smanCode:
+                salesmanCodeRegex,
+            },
+
+            /*
+            * Fallback when the dropdown value is
+            * salesman name rather than code.
+            */
+            {
+              SalesmanName:
+                salesmanCodeRegex,
+            },
+            {
+              salesmanName:
+                salesmanCodeRegex,
+            },
+          ],
+        });
+      }
+
+      /* =====================================================
+        SALESMAN NAME FILTER
+        ===================================================== */
+
+      if (salesmanName) {
+        const salesmanNameRegex =
+          new RegExp(
+            escapeRegex(
+              salesmanName
+            ),
+            "i"
+          );
+
+        andConditions.push({
+          $or: [
+            {
+              SalesmanName:
+                salesmanNameRegex,
+            },
+            {
+              salesmanName:
+                salesmanNameRegex,
+            },
+            {
+              salesman:
+                salesmanNameRegex,
+            },
+          ],
+        });
+      }
+
+      /* =====================================================
+        AREA CODE FILTER
+        ===================================================== */
+
+      if (areaCode) {
+        const areaCodeRegex =
+          createExactRegex(
+            areaCode
+          );
+
+        andConditions.push({
+          $or: [
+            {
+              AreaCode:
+                areaCodeRegex,
+            },
+            {
+              areaCode:
+                areaCodeRegex,
+            },
+
+            /*
+            * Fallback for old master records where
+            * the dropdown value may contain the name.
+            */
+            {
+              AreaName:
+                areaCodeRegex,
+            },
+            {
+              areaName:
+                areaCodeRegex,
+            },
+          ],
+        });
+      }
+
+      /* =====================================================
+        AREA NAME FILTER
+        ===================================================== */
+
+      if (areaName) {
+        const areaNameRegex =
+          new RegExp(
+            escapeRegex(
+              areaName
+            ),
+            "i"
+          );
+
+        andConditions.push({
+          $or: [
+            {
+              AreaName:
+                areaNameRegex,
+            },
+            {
+              areaName:
+                areaNameRegex,
+            },
+            {
+              area:
+                areaNameRegex,
+            },
+          ],
+        });
+      }
+
+      /* =====================================================
+        GODOWN FILTER
+        ===================================================== */
+
+      if (godownCode) {
+        const godownCodeRegex =
+          createExactRegex(
+            godownCode
+          );
+
+        andConditions.push({
+          $or: [
+            {
+              GDCode:
+                godownCodeRegex,
+            },
+            {
+              gdCode:
+                godownCodeRegex,
+            },
+            {
+              GodownCode:
+                godownCodeRegex,
+            },
+            {
+              godownCode:
+                godownCodeRegex,
+            },
+          ],
+        });
+      }
+
+      /* =====================================================
+        LOAD SERIES FILTER
+        ===================================================== */
+
+      if (loadSeries) {
+        const loadSeriesRegex =
+          createExactRegex(
+            loadSeries
+          );
+
+        andConditions.push({
+          $or: [
+            {
+              LoadSeries:
+                loadSeriesRegex,
+            },
+            {
+              loadSeries:
+                loadSeriesRegex,
+            },
+            {
+              LoadSer:
+                loadSeriesRegex,
+            },
+            {
+              loadSer:
+                loadSeriesRegex,
+            },
+          ],
+        });
+      }
+
+      /* =====================================================
+        LOAD NUMBER FILTER
+        ===================================================== */
+
+      if (loadNoText) {
+        const numericLoadNo =
+          Number(loadNoText);
+
+        const loadNoConditions = [
+          /*
+          * String representations.
+          */
+          {
+            LoadNo:
+              loadNoText,
+          },
+          {
+            loadNo:
+              loadNoText,
+          },
+          {
+            LoadNumber:
+              loadNoText,
+          },
+          {
+            loadNumber:
+              loadNoText,
+          },
+        ];
+
+        /*
+        * MongoDB documents may store LoadNo as
+        * a numeric value instead of a string.
+        */
+        if (
+          Number.isFinite(
+            numericLoadNo
+          )
+        ) {
+          loadNoConditions.push(
+            {
+              LoadNo:
+                numericLoadNo,
+            },
+            {
+              loadNo:
+                numericLoadNo,
+            },
+            {
+              LoadNumber:
+                numericLoadNo,
+            },
+            {
+              loadNumber:
+                numericLoadNo,
+            }
+          );
+        }
+
+        andConditions.push({
+          $or:
+            loadNoConditions,
+        });
+      }
+
+      /* =====================================================
+        ADD USER FILTER
+        ===================================================== */
+
+      if (addUser) {
+        const addUserRegex =
+          createExactRegex(
+            addUser
+          );
+
+        andConditions.push({
+          $or: [
+            {
+              CreatedBy:
+                addUserRegex,
+            },
+            {
+              createdBy:
+                addUserRegex,
+            },
+            {
+              AddUser:
+                addUserRegex,
+            },
+            {
+              addUser:
+                addUserRegex,
+            },
+            {
+              UserName:
+                addUserRegex,
+            },
+            {
+              userName:
+                addUserRegex,
+            },
+          ],
+        });
+      }
+
+      /* =====================================================
+        AMOUNT RANGE FILTER
+        ===================================================== */
+
+      const minAmount =
+        Number(minAmountText);
+
+      const maxAmount =
+        Number(maxAmountText);
+
+      if (
+        minAmountText !== "" &&
+        Number.isFinite(minAmount)
+      ) {
+        andConditions.push({
+          $or: [
+            {
+              NetAmount: {
+                $gte:
+                  minAmount,
+              },
+            },
+            {
+              netAmount: {
+                $gte:
+                  minAmount,
+              },
+            },
+            {
+              amount: {
+                $gte:
+                  minAmount,
+              },
+            },
+          ],
+        });
+      }
+
+      if (
+        maxAmountText !== "" &&
+        Number.isFinite(maxAmount)
+      ) {
+        andConditions.push({
+          $or: [
+            {
+              NetAmount: {
+                $lte:
+                  maxAmount,
+              },
+            },
+            {
+              netAmount: {
+                $lte:
+                  maxAmount,
+              },
+            },
+            {
+              amount: {
+                $lte:
+                  maxAmount,
+              },
+            },
+          ],
+        });
+      }
+
+      /* =====================================================
+        PAYMENT STATUS FILTER
+        ===================================================== */
+
+      if (
+        paymentStatus &&
+        paymentStatus.toLowerCase() !==
+        "all"
+      ) {
+        const normalizedStatus =
+          paymentStatus.toLowerCase();
+
+        if (
+          normalizedStatus ===
+          "paid"
+        ) {
+          andConditions.push({
+            $or: [
+              {
+                PaymentStatus: {
+                  $regex:
+                    /^paid$/i,
+                },
+              },
+              {
+                paymentStatus: {
+                  $regex:
+                    /^paid$/i,
+                },
+              },
+              {
+                BalanceAmount: {
+                  $lte: 0,
+                },
+              },
+              {
+                balanceAmount: {
+                  $lte: 0,
+                },
+              },
+            ],
+          });
+        } else if (
+          normalizedStatus ===
+          "pending"
+        ) {
+          andConditions.push({
+            $or: [
+              {
+                PaymentStatus: {
+                  $regex:
+                    /pending|unpaid/i,
+                },
+              },
+              {
+                paymentStatus: {
+                  $regex:
+                    /pending|unpaid/i,
+                },
+              },
+              {
+                BalanceAmount: {
+                  $gt: 0,
+                },
+              },
+              {
+                balanceAmount: {
+                  $gt: 0,
+                },
+              },
+            ],
+          });
+        } else if (
+          normalizedStatus ===
+          "partial"
+        ) {
+          andConditions.push({
+            $or: [
+              {
+                PaymentStatus: {
+                  $regex:
+                    /partial/i,
+                },
+              },
+              {
+                paymentStatus: {
+                  $regex:
+                    /partial/i,
+                },
+              },
+            ],
+          });
+        } else {
+          const statusRegex =
+            createExactRegex(
+              paymentStatus
+            );
+
+          andConditions.push({
+            $or: [
+              {
+                PaymentStatus:
+                  statusRegex,
+              },
+              {
+                paymentStatus:
+                  statusRegex,
+              },
+            ],
+          });
+        }
+      }
+
+      /* =====================================================
+        GENERAL SEARCH
+        ===================================================== */
+
+      if (search) {
+        const searchRegex =
+          new RegExp(
+            escapeRegex(
+              search
+            ),
+            "i"
+          );
+
+        const searchConditions = [
+          {
+            BillSeries:
+              searchRegex,
+          },
+          {
+            billSeries:
+              searchRegex,
+          },
+          {
+            PartyCode:
+              searchRegex,
+          },
+          {
+            partyCode:
+              searchRegex,
+          },
+          {
+            PartyName:
+              searchRegex,
+          },
+          {
+            partyName:
+              searchRegex,
+          },
+          {
+            CompanyCode:
+              searchRegex,
+          },
+          {
+            companyCode:
+              searchRegex,
+          },
+          {
+            CompanyName:
+              searchRegex,
+          },
+          {
+            companyName:
+              searchRegex,
+          },
+          {
+            SalesmanCode:
+              searchRegex,
+          },
+          {
+            salesmanCode:
+              searchRegex,
+          },
+          {
+            SalesmanName:
+              searchRegex,
+          },
+          {
+            salesmanName:
+              searchRegex,
+          },
+          {
+            AreaCode:
+              searchRegex,
+          },
+          {
+            areaCode:
+              searchRegex,
+          },
+          {
+            AreaName:
+              searchRegex,
+          },
+          {
+            areaName:
+              searchRegex,
+          },
+          {
+            GDCode:
+              searchRegex,
+          },
+          {
+            gdCode:
+              searchRegex,
+          },
+          {
+            Godown:
+              searchRegex,
+          },
+          {
+            godown:
+              searchRegex,
+          },
+          {
+            BillType:
+              searchRegex,
+          },
+          {
+            billType:
+              searchRegex,
+          },
+          {
+            LoadSeries:
+              searchRegex,
+          },
+          {
+            loadSeries:
+              searchRegex,
+          },
+          {
+            CreatedBy:
+              searchRegex,
+          },
+          {
+            createdBy:
+              searchRegex,
+          },
+          {
+            AddUser:
+              searchRegex,
+          },
+          {
+            addUser:
+              searchRegex,
+          },
+          {
+            Narration:
+              searchRegex,
+          },
+          {
+            narration:
+              searchRegex,
+          },
+        ];
+
+        /*
+        * BillNo and LoadNo may be stored as numbers.
+        */
+        const numericSearch =
+          Number(search);
+
+        if (
+          Number.isFinite(
+            numericSearch
+          )
+        ) {
+          searchConditions.push(
+            {
+              BillNo:
+                numericSearch,
+            },
+            {
+              billNo:
+                numericSearch,
+            },
+            {
+              LoadNo:
+                numericSearch,
+            },
+            {
+              loadNo:
+                numericSearch,
+            }
+          );
+        }
+
+        /*
+        * Also allow string LoadNo searches.
+        */
+        searchConditions.push(
+          {
+            LoadNo:
+              search,
+          },
+          {
+            loadNo:
+              search,
+          }
+        );
+
+        andConditions.push({
+          $or:
+            searchConditions,
+        });
+      }
+
+      /* =====================================================
+        APPLY ALL COMBINED CONDITIONS
+        ===================================================== */
+
+      if (
+        andConditions.length > 0
+      ) {
+        filter.$and =
+          andConditions;
+      }
+
+      /* =====================================================
+        COUNT AND PAGINATION
+        ===================================================== */
+
+      const loadSalesPage = (pageToLoad) => SalesHeader.find(filter)
+        .select({ items: 0, Items: 0 })
+        .sort({ BillDate: -1, BillNo: -1, _id: -1 })
+        .skip((pageToLoad - 1) * limit)
+        .limit(limit)
+        .lean();
+      const [totalRecords, requestedSales] = await Promise.all([
+        SalesHeader.countDocuments(filter),
+        loadSalesPage(page),
+      ]);
+
+      const totalPages = Math.max(
+        1,
+        Math.ceil(
+          totalRecords /
+          limit
+        )
+      );
+
+      /*
+      * If a deletion reduced the number of pages,
+      * move the request to the final available page.
+      */
+      const currentPage = Math.min(
+        page,
+        totalPages
+      );
+
+      const skip =
+        (currentPage - 1) *
+        limit;
+
+      /* =====================================================
+        LOAD SALES LIST
+        ===================================================== */
+
+      // Keep the existing page clamp after a deletion while loading the
+      // normal requested page alongside the count.
+      const sales = currentPage === page
+        ? requestedSales
+        : await loadSalesPage(currentPage);
+
+      /* =====================================================
+        RESPONSE
+        ===================================================== */
+
+      return res.json({
+        success: true,
+
+        sales,
+
+        count:
+          sales.length,
+
+        pagination: {
+          currentPage,
+          page:
+            currentPage,
+          limit,
+          totalRecords,
+          totalPages,
+
+          hasPreviousPage:
+            currentPage > 1,
+
+          hasNextPage:
+            currentPage <
+            totalPages,
+
+          startRecord:
+            totalRecords === 0
+              ? 0
+              : skip + 1,
+
+          endRecord:
+            totalRecords === 0
+              ? 0
+              : Math.min(
+                skip +
+                sales.length,
+                totalRecords
+              ),
+        },
+
+        appliedFilters: {
+          search,
+          fromDate,
+          toDate,
+          billSeries,
+          billType,
+
+          companyCode,
+
+          partyCode,
+          partyName,
+
+          salesmanCode,
+          salesmanName,
+
+          areaCode,
+          areaName,
+
+          godownCode,
+
+          loadSeries,
+          loadNo:
+            loadNoText,
+
+          addUser,
+
+          paymentStatus,
+
+          minAmount:
+            minAmountText,
+
+          maxAmount:
+            maxAmountText,
+        },
+      });
+    } catch (error) {
+      console.error(
+        "Sales Billing paginated list error:",
+        error
+      );
+
+      return res.status(500).json({
+        success: false,
+        message:
+          "Failed to load Sales Billing list",
+        error:
+          error.message,
+      });
+    }
+  }
+);
+//Quotation backend 
+
+
+app.get("/api/stock/batches", ensureConnection, async (req, res) => {
+  try {
+    const { distributorId, firmId, gdCode, prodCode, includeLocked = "N", stockType = "SALEABLE" } = req.query;
+
+    const filter = {
+      distributorId: String(distributorId || "").trim(),
+      firmId: String(firmId || "").trim(),
+      GDCode: String(gdCode || "").trim(),
+      ProdCode: String(prodCode || "").trim(),
+      $or: [{ isActive: true }, { isActive: { $exists: false } }],
+    };
+
+    const allRowsFilter = { ...filter };
+
+    if (includeLocked !== "Y") {
+      filter.IsLocked = { $ne: "Y" };
+    }
+
+    const StockModel = String(stockType).trim().toUpperCase() === "DAMAGE" ? DamStock : Stock;
+    const [rows, totalBatchCount] = await Promise.all([
+      StockModel.find(filter).sort({ ExpDt: 1, Batch: 1 }).lean(),
+      includeLocked !== "Y" ? StockModel.countDocuments(allRowsFilter) : Promise.resolve(0),
+    ]);
+    if (process.env.NODE_ENV !== "production" && process.env.DEBUG_STOCK_BATCHES === "true") {
+      console.log("STOCK BATCH FILTER:", JSON.stringify(filter, null, 2));
+      console.table(rows.map((stockRow) => ({
+        _id: String(stockRow._id || ""), ProdCode: stockRow.ProdCode,
+        GDCode: stockRow.GDCode, Batch: stockRow.Batch, MRP: stockRow.MRP,
+        PRate: stockRow.PRate, SRate: stockRow.SRate, Qty: stockRow.Qty,
+      })));
+    }
+
+    const batches = rows.map((s) => ({
+      batchNo: s.Batch || ".",
+      batch: s.Batch || ".",
+      mrp: Number(s.MRP || 0),
+      salesRate: Number(s.SRate || 0),
+      sRate: Number(s.SRate || 0),
+      purchaseRate: Number(s.PRate || 0),
+      stockQty: Number(s.Qty || 0),
+      qty: Number(s.Qty || 0),
+      gdCode: s.GDCode || "",
+      prodCode: s.ProdCode || "",
+      isLocked: s.IsLocked || "N",
+      boxPack: Number(s.BoxPack || 1),
+      inboxPack: Number(s.InBoxPack || 1),
+      mfgDate: s.MfgDt || "",
+      expDate: s.ExpDt || "",
+    }));
+
+    res.json({
+      success: true,
+      count: batches.length,
+      batches,
+      allBatchesLocked:
+        includeLocked !== "Y" &&
+        totalBatchCount > 0 &&
+        batches.length === 0,
+    });
+  } catch (error) {
+    console.error("❌ Stock batch load error:", error.message);
+    res.status(500).json({
+      success: false,
+      message: "Failed to load stock batches",
+      error: error.message,
+    });
+  }
+});
+
+// ============================================================
+// MANUAL SALEABLE STOCK MANAGEMENT
+// Stock In increases Mas_Stock; Stock Out decreases the same row.
+// The conditional Stock Out update prevents concurrent requests from
+// taking a batch below zero.
+// ============================================================
+app.get(
+  "/api/stock/adjustments",
+  ensureConnection,
+  securityRouter.authorizeRequest("VOUCHERS", "STOCK_ADJUSTMENT", "view"),
+  async (req, res) => {
+  try {
+    const distributorId = String(req.auth.distributorId || "").trim();
+    const firmId = String(req.auth.firmId || "").trim();
+    const adjustmentType = String(req.query.adjustmentType || "").trim().toUpperCase();
+
+    if (!distributorId || !firmId) {
+      return res.status(400).json({ success: false, message: "Firm details are required." });
+    }
+
+    const filter = { distributorId, firmId, Status: "COMPLETED" };
+    if (["IN", "OUT", "DAMAGE_IN", "DAMAGE_OUT"].includes(adjustmentType)) filter.AdjustmentType = adjustmentType;
+
+    const adjustments = await StockAdjustment.find(filter)
+      .sort({ createdAt: -1 })
+      .limit(500)
+      .lean();
+
+    return res.json({ success: true, adjustments });
+  } catch (error) {
+    console.error("Stock adjustment list error:", error);
+    return res.status(500).json({
+      success: false,
+      message: "Failed to load stock adjustments.",
+    });
+  }
+  }
+);
+
+const getStockAdjustmentKey = (adjustment) => ({
+  distributorId: String(adjustment.distributorId || "").trim(),
+  firmId: String(adjustment.firmId || "").trim(),
+  GDCode: String(adjustment.GDCode || "").trim(),
+  ProdCode: String(adjustment.ProdCode || "").trim(),
+  Batch: String(adjustment.Batch || ".").trim() || ".",
+  MRP: Number(adjustment.MRP || 0),
+});
+
+const isStockInAdjustment = (adjustmentType) => ["IN", "DAMAGE_IN"].includes(String(adjustmentType).toUpperCase());
+const isDamageStockAdjustment = (adjustmentType) => String(adjustmentType).toUpperCase().startsWith("DAMAGE_");
+const getAdjustmentStockModel = (adjustmentType) => isDamageStockAdjustment(adjustmentType) ? DamStock : Stock;
+const getStockAdjustmentLabel = (adjustmentType) => ({
+  IN: "Stock In",
+  OUT: "Stock Out",
+  DAMAGE_IN: "Self Damage (Godown Damage)",
+  DAMAGE_OUT: "Damage Stock Out",
+}[String(adjustmentType).toUpperCase()] || "Stock");
+
+const validateStockAdjustmentReferences = async ({ distributorId, firmId, gdCode, prodCode, companyCode, session }) => {
+  const godown = await GodownModel.findOne({ distributorId, firmId, godownCode: gdCode, isActive: { $ne: false } }).session(session).lean();
+  const product = await Product.findOne({ distributorId, firmId, productCode: prodCode, isActive: { $ne: false } }).session(session).lean();
+  const company = companyCode
+    ? await Company.findOne({ distributorId, firmId, companyCode, isActive: { $ne: false } }).session(session).lean()
+    : null;
+  if (!godown) throw Object.assign(new Error("Invalid or inactive godown."), { statusCode: 400 });
+  if (!product) throw Object.assign(new Error("Invalid or inactive product."), { statusCode: 400 });
+  if (companyCode && !company) throw Object.assign(new Error("Invalid or inactive company."), { statusCode: 400 });
+  return { godown, product, company };
+};
+
+/*
+ * Apply (direction = 1) or reverse (direction = -1) one manual stock
+ * adjustment. Negative movements are guarded so an edit/delete can never
+ * take the current batch below zero.
+ */
+const moveStockForAdjustment = async (adjustment, direction = 1, session = null) => {
+  const totalQuantity = Number(adjustment.TotalQty || 0);
+  const typeSign = isStockInAdjustment(adjustment.AdjustmentType) ? 1 : -1;
+  const quantityDelta = direction * typeSign * totalQuantity;
+  const stockKey = getStockAdjustmentKey(adjustment);
+  const StockModel = getAdjustmentStockModel(adjustment.AdjustmentType);
+
+  if (quantityDelta < 0) {
+    const stockRow = await StockModel.findOneAndUpdate(
+      { ...stockKey, Qty: { $gte: Math.abs(quantityDelta) }, IsLocked: { $ne: "Y" } },
+      { $inc: { Qty: quantityDelta } },
+      { new: true, runValidators: true, session }
+    ).lean();
+
+    if (!stockRow) {
+      const currentRow = await StockModel.findOne(stockKey).session(session).lean();
+      const error = new Error(
+        currentRow
+          ? `Only ${Number(currentRow.Qty || 0)} saleable units are available in this batch.`
+          : "The stock batch no longer exists."
+      );
+      error.statusCode = 409;
+      throw error;
+    }
+
+    return stockRow;
+  }
+
+  const setValues = {
+    PRate: Number(adjustment.PRate || 0),
+    SRate: Number(adjustment.SRate || 0),
+    firmName: String(adjustment.firmName || "").trim(),
+  };
+
+  if (isStockInAdjustment(adjustment.AdjustmentType)) {
+    setValues.ExpDt = adjustment.ExpiryDate || null;
+    setValues.MfgDt = adjustment.MfgDate || null;
+    setValues.BoxPack = Number(adjustment.BoxPack || 1);
+    setValues.InBoxPack = Number(adjustment.InBoxPack || 1);
+  }
+
+  return StockModel.findOneAndUpdate(
+    stockKey,
+    {
+      $inc: { Qty: quantityDelta },
+      $set: setValues,
+      $setOnInsert: { ...stockKey, IsLocked: "N" },
+    },
+    { new: true, upsert: true, runValidators: true, session }
+  ).lean();
+};
+
+app.put(
+  "/api/stock/adjustments/:id",
+  ensureConnection,
+  securityRouter.authorizeRequest("VOUCHERS", "STOCK_ADJUSTMENT", "edit"),
+  async (req, res) => {
+  const session = await mongoose.startSession();
+  let originalAdjustment = null;
+  let replacementAdjustment = null;
+
+  try {
+    const distributorId = String(req.auth.distributorId || "").trim();
+    const firmId = String(req.auth.firmId || "").trim();
+    const adjustmentType = String(req.body?.adjustmentType || "").trim().toUpperCase();
+    const quantity = Number(req.body?.quantity || 0);
+    const freeQuantity = Number(req.body?.freeQuantity || 0);
+    const totalQuantity = quantity + freeQuantity;
+
+    if (!mongoose.Types.ObjectId.isValid(req.params.id) || !distributorId || !firmId) {
+      return res.status(400).json({ success: false, message: "A valid stock entry and firm are required." });
+    }
+
+    if (!["IN", "OUT", "DAMAGE_IN", "DAMAGE_OUT"].includes(adjustmentType) || totalQuantity <= 0) {
+      return res.status(400).json({ success: false, message: "Adjustment type and a quantity greater than zero are required." });
+    }
+
+    session.startTransaction();
+    originalAdjustment = await StockAdjustment.findOne({
+      _id: req.params.id,
+      distributorId,
+      firmId,
+      Status: "COMPLETED",
+    }).session(session).lean();
+
+    if (!originalAdjustment) {
+      await session.abortTransaction();
+      return res.status(404).json({ success: false, message: "Stock adjustment was not found." });
+    }
+
+    replacementAdjustment = {
+      ...originalAdjustment,
+      VoucherDate: String(req.body?.voucherDate || "").trim() || originalAdjustment.VoucherDate,
+      AdjustmentType: adjustmentType,
+      GDCode: String(req.body?.gdCode || "").trim(),
+      GodownName: String(req.body?.godownName || "").trim(),
+      CompanyCode: String(req.body?.companyCode || "").trim(),
+      ProdCode: String(req.body?.prodCode || "").trim(),
+      ProductName: String(req.body?.productName || "").trim(),
+      Unit: String(req.body?.unit || "PCS").trim(),
+      Batch: String(req.body?.batch || ".").trim() || ".",
+      MRP: Number(req.body?.mrp || 0),
+      PRate: Number(req.body?.purchaseRate || 0),
+      SRate: Number(req.body?.salesRate || 0),
+      MfgDate: String(req.body?.manufacturingDate || "").trim(),
+      ExpiryDate: String(req.body?.expiryDate || "").trim(),
+      BoxPack: Number(req.body?.boxPack || 1),
+      InBoxPack: Number(req.body?.inBoxPack || 1),
+      Qty: quantity,
+      FreeQty: freeQuantity,
+      TotalQty: totalQuantity,
+      Narration: String(req.body?.narration || "").trim(),
+    };
+
+    if (!replacementAdjustment.GDCode || !replacementAdjustment.ProdCode) {
+      await session.abortTransaction();
+      return res.status(400).json({ success: false, message: "Godown and product are required." });
+    }
+    await validateStockAdjustmentReferences({
+      distributorId, firmId, gdCode: replacementAdjustment.GDCode,
+      prodCode: replacementAdjustment.ProdCode, companyCode: replacementAdjustment.CompanyCode, session,
+    });
+
+    const lockResult = await StockAdjustment.updateOne(
+      { _id: originalAdjustment._id, distributorId, firmId, Status: "COMPLETED" },
+      { $set: { Status: "PENDING" } },
+      { session }
+    );
+    if (lockResult.modifiedCount !== 1) {
+      await session.abortTransaction();
+      return res.status(409).json({ success: false, message: "This stock adjustment is already being changed. Refresh and try again." });
+    }
+
+    await moveStockForAdjustment(originalAdjustment, -1, session);
+    const stockRow = await moveStockForAdjustment(replacementAdjustment, 1, session);
+
+    const updateResult = await StockAdjustment.updateOne(
+      { _id: originalAdjustment._id, distributorId, firmId, Status: "PENDING" },
+      {
+        $set: {
+          VoucherDate: replacementAdjustment.VoucherDate,
+          AdjustmentType: replacementAdjustment.AdjustmentType,
+          GDCode: replacementAdjustment.GDCode,
+          GodownName: replacementAdjustment.GodownName,
+          CompanyCode: replacementAdjustment.CompanyCode,
+          ProdCode: replacementAdjustment.ProdCode,
+          ProductName: replacementAdjustment.ProductName,
+          Unit: replacementAdjustment.Unit,
+          Batch: replacementAdjustment.Batch,
+          MRP: replacementAdjustment.MRP,
+          PRate: replacementAdjustment.PRate,
+          SRate: replacementAdjustment.SRate,
+          MfgDate: replacementAdjustment.MfgDate,
+          ExpiryDate: replacementAdjustment.ExpiryDate,
+          BoxPack: replacementAdjustment.BoxPack,
+          InBoxPack: replacementAdjustment.InBoxPack,
+          Qty: replacementAdjustment.Qty,
+          FreeQty: replacementAdjustment.FreeQty,
+          TotalQty: replacementAdjustment.TotalQty,
+          BalanceAfter: Number(stockRow.Qty || 0),
+          Narration: replacementAdjustment.Narration,
+          Status: "COMPLETED",
+        },
+      },
+      { session }
+    );
+    if (updateResult.modifiedCount !== 1) throw new Error("The stock adjustment changed while it was being updated.");
+    const movementId = new mongoose.Types.ObjectId().toString();
+    const movementItem = (entry) => ({
+      productCode: entry.ProdCode,
+      productName: entry.ProductName,
+      batch: entry.Batch,
+      mrp: entry.MRP,
+      quantity: entry.Qty,
+      free: entry.FreeQty,
+    });
+    await recordStockMovements({
+      distributorId, firmId, godown: originalAdjustment.GDCode,
+      items: [movementItem(originalAdjustment)], movementDate: businessDateIST(),
+      sourceType: "STOCK_ADJUSTMENT_EDIT_REVERSE", sourceId: movementId,
+      documentNo: originalAdjustment.VoucherNo, direction: isStockInAdjustment(originalAdjustment.AdjustmentType) ? -1 : 1,
+      userId: req.auth.userId, session,
+    });
+    await recordStockMovements({
+      distributorId, firmId, godown: replacementAdjustment.GDCode,
+      items: [movementItem(replacementAdjustment)], movementDate: businessDateIST(),
+      sourceType: "STOCK_ADJUSTMENT_EDIT_APPLY", sourceId: movementId,
+      documentNo: replacementAdjustment.VoucherNo, direction: isStockInAdjustment(replacementAdjustment.AdjustmentType) ? 1 : -1,
+      userId: req.auth.userId, session,
+    });
+    await writeAuditEvent(req, {
+      entityType: "STOCK_ADJUSTMENT", entityId: String(originalAdjustment._id), action: "EDIT",
+      reason: replacementAdjustment.Narration || "Stock adjustment corrected",
+      before: originalAdjustment, after: replacementAdjustment,
+    }, session);
+    await commitTransactionReliably(session);
+
+    return res.json({
+      success: true,
+      message: `${getStockAdjustmentLabel(adjustmentType)} entry updated successfully.`,
+      stock: { quantity: Number(stockRow.Qty || 0) },
+    });
+  } catch (error) {
+    if (session.inTransaction()) await session.abortTransaction();
+
+    console.error("Stock adjustment update error:", error);
+    return res.status(error.statusCode || 500).json({
+      success: false,
+      message: error.message || "Failed to update stock adjustment.",
+    });
+  } finally {
+    await session.endSession();
+  }
+});
+
+app.delete(
+  "/api/stock/adjustments/:id",
+  ensureConnection,
+  securityRouter.authorizeRequest("VOUCHERS", "STOCK_ADJUSTMENT", "delete"),
+  async (req, res) => {
+  const session = await mongoose.startSession();
+  let adjustment = null;
+
+  try {
+    const distributorId = String(req.auth.distributorId || "").trim();
+    const firmId = String(req.auth.firmId || "").trim();
+    const cancellationReason = String(req.body?.reason || "Cancelled by user").trim();
+
+    if (!mongoose.Types.ObjectId.isValid(req.params.id) || !distributorId || !firmId) {
+      return res.status(400).json({ success: false, message: "A valid stock entry and firm are required." });
+    }
+
+    session.startTransaction();
+    adjustment = await StockAdjustment.findOne({
+      _id: req.params.id,
+      distributorId,
+      firmId,
+      Status: "COMPLETED",
+    }).session(session).lean();
+
+    if (!adjustment) {
+      await session.abortTransaction();
+      return res.status(404).json({ success: false, message: "Stock adjustment was not found." });
+    }
+
+    const lockResult = await StockAdjustment.updateOne(
+      { _id: adjustment._id, distributorId, firmId, Status: "COMPLETED" },
+      { $set: { Status: "PENDING" } },
+      { session }
+    );
+    if (lockResult.modifiedCount !== 1) {
+      await session.abortTransaction();
+      return res.status(409).json({ success: false, message: "This stock adjustment is already being changed. Refresh and try again." });
+    }
+
+    await moveStockForAdjustment(adjustment, -1, session);
+    const cancelled = await StockAdjustment.findOneAndUpdate(
+      { _id: adjustment._id, distributorId, firmId, Status: "PENDING" },
+      { $set: { Status: "CANCELLED", CancelledAt: new Date(), CancelledBy: req.auth.userId, CancellationReason: cancellationReason } },
+      { new: true, session }
+    );
+    if (!cancelled) throw new Error("The stock adjustment changed while it was being cancelled.");
+    await recordStockMovements({
+      distributorId, firmId, godown: adjustment.GDCode,
+      items: [{ productCode: adjustment.ProdCode, productName: adjustment.ProductName, batch: adjustment.Batch, mrp: adjustment.MRP, quantity: adjustment.Qty, free: adjustment.FreeQty }],
+      movementDate: businessDateIST(), sourceType: "STOCK_ADJUSTMENT_CANCEL", sourceId: String(adjustment._id),
+      documentNo: adjustment.VoucherNo, direction: isStockInAdjustment(adjustment.AdjustmentType) ? -1 : 1,
+      userId: req.auth.userId, session,
+    });
+    await writeAuditEvent(req, {
+      entityType: "STOCK_ADJUSTMENT", entityId: String(adjustment._id), action: "CANCEL",
+      reason: cancellationReason, before: adjustment, after: cancelled.toObject(),
+    }, session);
+    await commitTransactionReliably(session);
+
+    return res.json({ success: true, message: "Stock adjustment cancelled and stock balance restored." });
+  } catch (error) {
+    if (session.inTransaction()) await session.abortTransaction();
+
+    console.error("Stock adjustment delete error:", error);
+    return res.status(error.statusCode || 500).json({
+      success: false,
+      message: error.message || "Failed to cancel stock adjustment.",
+    });
+  } finally {
+    await session.endSession();
+  }
+});
+
+app.post(
+  "/api/stock/adjust",
+  ensureConnection,
+  securityRouter.authorizeRequest("VOUCHERS", "STOCK_ADJUSTMENT", "add"),
+  async (req, res) => {
+  const session = await mongoose.startSession();
+  try {
+    const distributorId = String(req.auth.distributorId || "").trim();
+    const firmId = String(req.auth.firmId || "").trim();
+    const firmName = String(req.body?.firmName || "").trim();
+    const adjustmentType = String(req.body?.adjustmentType || "")
+      .trim()
+      .toUpperCase();
+    const GDCode = String(req.body?.gdCode || "").trim();
+    const ProdCode = String(req.body?.prodCode || "").trim();
+    const Batch = String(req.body?.batch || ".").trim() || ".";
+    const requestId = String(req.body?.requestId || "").trim();
+    const quantity = Number(req.body?.quantity || 0);
+    const freeQuantity = Number(req.body?.freeQuantity || 0);
+    const totalQuantity = quantity + freeQuantity;
+    const MRP = Number(req.body?.mrp || 0);
+    const PRate = Number(req.body?.purchaseRate || 0);
+    const SRate = Number(req.body?.salesRate || 0);
+
+    if (!distributorId || !firmId || !GDCode || !ProdCode || !requestId) {
+      return res.status(400).json({
+        success: false,
+        message: "Firm, godown and product are required.",
+      });
+    }
+
+    if (!["IN", "OUT", "DAMAGE_IN", "DAMAGE_OUT"].includes(adjustmentType)) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid stock adjustment type.",
+      });
+    }
+
+    if (
+      !Number.isFinite(quantity) || quantity < 0 ||
+      !Number.isFinite(freeQuantity) || freeQuantity < 0 ||
+      totalQuantity <= 0
+    ) {
+      return res.status(400).json({
+        success: false,
+        message: "Quantity must be greater than zero.",
+      });
+    }
+
+    const stockKey = {
+      distributorId,
+      firmId,
+      GDCode,
+      ProdCode,
+      Batch,
+      MRP,
+    };
+
+    session.startTransaction();
+    await validateStockAdjustmentReferences({
+      distributorId, firmId, gdCode: GDCode, prodCode: ProdCode,
+      companyCode: String(req.body?.companyCode || "").trim(), session,
+    });
+    const priorRequest = await StockAdjustment.findOne({
+      distributorId,
+      firmId,
+      RequestId: requestId,
+    }).session(session).lean();
+
+    if (priorRequest?.Status === "COMPLETED") {
+      await session.abortTransaction();
+      return res.json({
+        success: true,
+        message: "This stock adjustment was already saved.",
+        stock: { quantity: Number(priorRequest.BalanceAfter || 0) },
+      });
+    }
+
+    if (priorRequest) {
+      await session.abortTransaction();
+      return res.status(409).json({
+        success: false,
+        message: "This stock adjustment is already being processed. Refresh the list before retrying.",
+      });
+    }
+
+    const voucherPrefix = ({ IN: "STI", OUT: "STO", DAMAGE_IN: "DMI", DAMAGE_OUT: "DMO" })[adjustmentType];
+    const [adjustment] = await StockAdjustment.create([{
+      RequestId: requestId,
+      VoucherNo: `${voucherPrefix}-${Date.now()}`,
+      VoucherDate: String(req.body?.voucherDate || "").trim() || new Date().toISOString().slice(0, 10),
+      AdjustmentType: adjustmentType,
+      GDCode,
+      GodownName: String(req.body?.godownName || "").trim(),
+      CompanyCode: String(req.body?.companyCode || "").trim(),
+      ProdCode,
+      ProductName: String(req.body?.productName || "").trim(),
+      Unit: String(req.body?.unit || "PCS").trim(),
+      Batch,
+      MRP,
+      PRate,
+      SRate,
+      MfgDate: String(req.body?.manufacturingDate || "").trim(),
+      ExpiryDate: String(req.body?.expiryDate || "").trim(),
+      BoxPack: Number(req.body?.boxPack || 1),
+      InBoxPack: Number(req.body?.inBoxPack || 1),
+      Qty: quantity,
+      FreeQty: freeQuantity,
+      TotalQty: totalQuantity,
+      Narration: String(req.body?.narration || "").trim(),
+      distributorId,
+      firmId,
+      firmName,
+    }], { session });
+
+    let stockRow;
+
+    const StockModel = getAdjustmentStockModel(adjustmentType);
+
+    if (isStockInAdjustment(adjustmentType)) {
+      stockRow = await StockModel.findOneAndUpdate(
+        stockKey,
+        {
+          $inc: { Qty: totalQuantity },
+          $set: {
+            PRate,
+            SRate,
+            ExpDt: req.body?.expiryDate || null,
+            MfgDt: req.body?.manufacturingDate || null,
+            BoxPack: Number(req.body?.boxPack || 1),
+            InBoxPack: Number(req.body?.inBoxPack || 1),
+            firmName,
+          },
+          $setOnInsert: { ...stockKey, IsLocked: "N" },
+        },
+        { new: true, upsert: true, runValidators: true, session }
+      ).lean();
+    } else {
+      stockRow = await StockModel.findOneAndUpdate(
+        { ...stockKey, Qty: { $gte: totalQuantity }, IsLocked: { $ne: "Y" } },
+        { $inc: { Qty: -totalQuantity } },
+        { new: true, runValidators: true, session }
+      ).lean();
+
+      if (!stockRow) {
+        const currentRow = await StockModel.findOne(stockKey).session(session).lean();
+        const insufficient = new Error(currentRow
+          ? `Only ${Number(currentRow.Qty || 0)} ${isDamageStockAdjustment(adjustmentType) ? "damaged" : "saleable"} units are available in this batch.`
+          : "The selected stock batch no longer exists.");
+        insufficient.statusCode = 409;
+        throw insufficient;
+      }
+    }
+
+    await StockAdjustment.updateOne(
+      { _id: adjustment._id },
+      { $set: { Status: "COMPLETED", BalanceAfter: Number(stockRow.Qty || 0) } },
+      { session }
+    );
+    await recordStockMovements({
+      distributorId, firmId, godown: GDCode,
+      items: [{ productCode: ProdCode, productName: adjustment.ProductName, batch: Batch, mrp: MRP, quantity, free: freeQuantity }],
+      movementDate: adjustment.VoucherDate, sourceType: "STOCK_ADJUSTMENT", sourceId: String(adjustment._id),
+      documentNo: adjustment.VoucherNo, direction: isStockInAdjustment(adjustmentType) ? 1 : -1,
+      userId: req.auth.userId, session,
+    });
+    await writeAuditEvent(req, {
+      entityType: "STOCK_ADJUSTMENT", entityId: String(adjustment._id), action: "CREATE",
+      reason: adjustment.Narration || getStockAdjustmentLabel(adjustmentType), after: adjustment.toObject(),
+    }, session);
+    await commitTransactionReliably(session);
+
+    return res.json({
+      success: true,
+      message: `${getStockAdjustmentLabel(adjustmentType)} saved successfully.`,
+      stock: {
+        id: stockRow._id,
+        gdCode: stockRow.GDCode,
+        prodCode: stockRow.ProdCode,
+        batch: stockRow.Batch,
+        mrp: Number(stockRow.MRP || 0),
+        quantity: Number(stockRow.Qty || 0),
+      },
+    });
+  } catch (error) {
+    if (session.inTransaction()) await session.abortTransaction();
+    console.error("Manual stock adjustment error:", error);
+    return res.status(error.statusCode || (error?.code === 11000 ? 409 : 500)).json({
+      success: false,
+      message: error.statusCode || error?.code === 11000 ? error.message : "Failed to update stock.",
+    });
+  } finally {
+    await session.endSession();
+  }
+});
+// ============================================================
+// CREDIT NOTE BATCHES
+// GDR => Mas_Stock
+// DGR => Mas_DamStock
+// ============================================================
+app.get(
+  "/api/stock/credit-note-batches",
+  ensureConnection,
+  async (req, res) => {
+    try {
+      const distributorId = String(
+        req.query.distributorId || ""
+      ).trim();
+
+      const firmId = String(
+        req.query.firmId || ""
+      ).trim();
+
+      const gdCode = String(
+        req.query.gdCode || ""
+      ).trim();
+
+      const prodCode = String(
+        req.query.prodCode || ""
+      ).trim();
+
+      const trnType = String(
+        req.query.trnType || "GDR"
+      )
+        .trim()
+        .toUpperCase();
+
+      const includeLocked = String(
+        req.query.includeLocked || "N"
+      )
+        .trim()
+        .toUpperCase();
+
+      if (!distributorId || !firmId) {
+        return res.status(400).json({
+          success: false,
+          message:
+            "distributorId and firmId are required",
+        });
+      }
+
+      if (!prodCode) {
+        return res.status(400).json({
+          success: false,
+          message: "Product code is required",
+        });
+      }
+
+      if (!["GDR", "DGR"].includes(trnType)) {
+        return res.status(400).json({
+          success: false,
+          message:
+            "Transaction type must be GDR or DGR",
+        });
+      }
+
+      const StockCollection =
+        trnType === "DGR"
+          ? DamStock
+          : Stock;
+
+      const filter = {
+        distributorId,
+        firmId,
+        ProdCode: prodCode,
+
+        $and: [
+          {
+            $or: [
+              { isActive: true },
+              { isActive: { $exists: false } },
+            ],
+          },
+        ],
+      };
+
+      /*
+      * Apply godown only when it is available.
+      * This also supports old stock records where GDCode
+      * may not have been stored.
+      */
+      if (gdCode) {
+        filter.$and.push({
+          $or: [
+            { GDCode: gdCode },
+            { GDCode: "" },
+            { GDCode: null },
+            { GDCode: { $exists: false } },
+          ],
+        });
+      }
+
+      if (includeLocked !== "Y") {
+        filter.$and.push({
+          $or: [
+            { IsLocked: { $ne: "Y" } },
+            { IsLocked: { $exists: false } },
+          ],
+        });
+      }
+
+      const rows = await StockCollection.find(
+        filter
+      )
+        .sort({
+          ExpDt: 1,
+          Batch: 1,
+          MRP: 1,
+        })
+        .lean();
+
+      const batches = rows.map((stockRow) => ({
+        id: stockRow._id,
+
+        batchNo:
+          stockRow.Batch ||
+          stockRow.batchNo ||
+          ".",
+
+        batch:
+          stockRow.Batch ||
+          stockRow.batchNo ||
+          ".",
+
+        mrp: Number(
+          stockRow.MRP ||
+          stockRow.mrp ||
+          0
+        ),
+
+        salesRate: Number(
+          stockRow.SRate ||
+          stockRow.salesRate ||
+          stockRow.Rate ||
+          stockRow.rate ||
+          0
+        ),
+
+        sRate: Number(
+          stockRow.SRate ||
+          stockRow.salesRate ||
+          stockRow.Rate ||
+          stockRow.rate ||
+          0
+        ),
+
+        purchaseRate: Number(
+          stockRow.PRate ||
+          stockRow.purchaseRate ||
+          0
+        ),
+
+        stockQty: Number(
+          stockRow.Qty ||
+          stockRow.stockQty ||
+          0
+        ),
+
+        qty: Number(
+          stockRow.Qty ||
+          stockRow.stockQty ||
+          0
+        ),
+
+        gdCode:
+          stockRow.GDCode || "",
+
+        prodCode:
+          stockRow.ProdCode || "",
+
+        mfgDate:
+          stockRow.MfgDt ||
+          stockRow.mfgDate ||
+          "",
+
+        expDate:
+          stockRow.ExpDt ||
+          stockRow.expDate ||
+          "",
+
+        boxPack: Number(
+          stockRow.BoxPack || 1
+        ),
+
+        inboxPack: Number(
+          stockRow.InBoxPack || 1
+        ),
+
+        isLocked:
+          stockRow.IsLocked || "N",
+
+        sourceCollection:
+          trnType === "DGR"
+            ? "MAS_DAMSTOCK"
+            : "MAS_STOCK",
+      }));
+
+      res.json({
+        success: true,
+        transactionType: trnType,
+
+        sourceCollection:
+          trnType === "DGR"
+            ? "MAS_DAMSTOCK"
+            : "MAS_STOCK",
+
+        count: batches.length,
+        batches,
+      });
+    } catch (error) {
+      console.error(
+        "Credit Note batch load error:",
+        error
+      );
+
+      res.status(500).json({
+        success: false,
+        message:
+          "Failed to load Credit Note batches",
+        error: error.message,
+      });
+    }
+  }
+);
+app.get("/api/quotation/next-bill-no", ensureConnection, async (req, res) => {
+  try {
+    const { distributorId, firmId, BillSeries = "" } = req.query;
+
+    if (!distributorId || !firmId) {
+      return res.status(400).json({
+        success: false,
+        message: "distributorId and firmId are required",
+      });
+    }
+
+    const lastBill = await QuotationHeader.findOne({
+      distributorId,
+      firmId,
+      BillSeries: String(BillSeries || "").trim(),
+    }).sort({ BillNo: -1 });
+
+    res.json({
+      success: true,
+      nextBillNo: lastBill ? Number(lastBill.BillNo || 0) + 1 : 1,
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: "Failed to load next quotation bill no",
+      error: error.message,
+    });
+  }
+});
+
+app.post(
+  "/api/quotation",
+  ensureConnection,
+  securityRouter.authorizeRequest("SALES", "QUOTATION", "add"),
+  async (req, res) => {
+    try {
+      const {
+        distributorId,
+        firmId,
+        firmName = "",
+
+        BillDate = "",
+        Godown = "",
+        GDCode = "",
+
+        CompanyCode = "",
+        CompanyName = "",
+
+        AreaCode = "",
+        AreaName = "",
+
+        PartyCode = "",
+        PartyName = "",
+
+        BillSeries = "",
+        BillNo,
+        BillType = "Credit",
+        DueDate = "",
+
+        SalesmanCode = "",
+        SalesmanName = "",
+        Narration = "",
+
+        items = [],
+      } = req.body;
+
+      if (!distributorId || !firmId) {
+        return res.status(400).json({
+          success: false,
+          message:
+            "Distributor/Firm not found",
+        });
+      }
+
+      if (!Number(BillNo)) {
+        return res.status(400).json({
+          success: false,
+          message:
+            "Quotation Bill No is required",
+        });
+      }
+
+      if (!Array.isArray(items) || !items.length) {
+        return res.status(400).json({
+          success: false,
+          message:
+            "At least one product is required",
+        });
+      }
+
+      const normalizedItems = items.map(
+        (item, index) => ({
+          ...item,
+
+          sr: item.sr || index + 1,
+
+          productCode: String(
+            item.productCode ||
+            item.productId ||
+            item.code ||
+            String(item.product || "")
+              .split(" - ")[0] ||
+            ""
+          ).trim(),
+
+          productId: String(
+            item.productCode ||
+            item.productId ||
+            item.code ||
+            String(item.product || "")
+              .split(" - ")[0] ||
+            ""
+          ).trim(),
+
+          productName: String(
+            item.productName ||
+            item.name ||
+            ""
+          ).trim(),
+
+          batchNo: String(
+            item.batchNo ||
+            item.batch ||
+            item.selectedBatch?.batchNo ||
+            "."
+          ).trim(),
+
+          qty: Number(
+            item.qty ||
+            item.quantity ||
+            0
+          ),
+
+          quantity: Number(
+            item.qty ||
+            item.quantity ||
+            0
+          ),
+
+          free: Number(item.free || 0),
+          mrp: Number(item.mrp || 0),
+          rate: Number(item.rate || 0),
+          rateGst: Number(item.rateGst || 0),
+          tprAmt: Number(item.tprAmt || 0),
+
+          schemePct: Number(
+            item.schemePct || 0
+          ),
+
+          schemeAmt: Number(
+            item.schemeAmt || 0
+          ),
+
+          cdPct: Number(item.cdPct || 0),
+          cdAmt: Number(item.cdAmt || 0),
+
+          starPct: Number(
+            item.starPct || 0
+          ),
+
+          starAmt: Number(
+            item.starAmt || 0
+          ),
+
+          taxable: Number(
+            item.taxable || 0
+          ),
+
+          gst: Number(item.gst || 0),
+          sgst: Number(item.sgst || 0),
+          cgst: Number(item.cgst || 0),
+          igst: Number(item.igst || 0),
+
+          amount: Number(item.amount || 0),
+        })
+      );
+      await applyProductMasterTaxRates({ items: normalizedItems, distributorId, firmId, session: null });
+      const quotationSetup = await loadFirmGeneralSetup({ distributorId, firmId });
+      const canonicalQuotation = validateFinancialEnvelope(req.body, normalizedItems, { vatMode: quotationSetup?.vatOn });
+      normalizedItems.splice(0, normalizedItems.length, ...canonicalQuotation.items);
+      Object.assign(req.body, canonicalQuotation);
+      const lastQuotation = await QuotationHeader.findOne({ distributorId, firmId, BillSeries: String(BillSeries || "").trim() }).sort({ BillNo: -1 }).lean();
+      const assignedQuotationNo = await nextDocumentNumber({ distributorId, firmId, documentType: "QUOTATION", series: String(BillSeries || "").trim(), documentDate: BillDate, minimumValue: Number(lastQuotation?.BillNo || 0) });
+
+      const quotation =
+        await QuotationHeader.create({
+          distributorId:
+            String(distributorId).trim(),
+
+          firmId:
+            String(firmId).trim(),
+
+          firmName:
+            String(firmName || "").trim(),
+
+          BillDate,
+          Godown,
+          GDCode,
+
+          CompanyCode:
+            String(CompanyCode || "").trim(),
+
+          CompanyName:
+            String(CompanyName || "").trim(),
+
+          AreaCode:
+            String(AreaCode || "").trim(),
+
+          AreaName:
+            String(AreaName || "").trim(),
+
+          PartyCode:
+            String(PartyCode || "").trim(),
+
+          PartyName:
+            String(PartyName || "").trim(),
+
+          BillSeries:
+            String(BillSeries || "").trim(),
+
+          BillNo: assignedQuotationNo,
+
+          BillType:
+            BillType || "Credit",
+
+          DueDate,
+
+          SalesmanCode:
+            String(
+              SalesmanCode || ""
+            ).trim(),
+
+          SalesmanName:
+            String(
+              SalesmanName || ""
+            ).trim(),
+
+          Narration:
+            String(Narration || "").trim(),
+
+          GrossAmount: Number(
+            req.body.GrossAmount || 0
+          ),
+
+          TPRAmount: Number(
+            req.body.TPRAmount || 0
+          ),
+
+          SchemeAmount: Number(
+            req.body.SchemeAmount || 0
+          ),
+
+          StarDiscountAmount: Number(
+            req.body.StarDiscountAmount || 0
+          ),
+
+          CashDiscountAmount: Number(
+            req.body.CashDiscountAmount || 0
+          ),
+
+          DisplayAmount: Number(
+            req.body.DisplayAmount || 0
+          ),
+
+          CouponAmount: Number(
+            req.body.CouponAmount || 0
+          ),
+
+          /*
+            This keeps the sign:
+            Number("-25") = -25
+            Number("+25") = 25
+          */
+          AddLessAmount: Number(
+            req.body.AddLessAmount || 0
+          ),
+
+          TaxableValue: Number(
+            req.body.TaxableValue || 0
+          ),
+
+          SGSTAmount: Number(
+            req.body.SGSTAmount || 0
+          ),
+
+          CGSTAmount: Number(
+            req.body.CGSTAmount || 0
+          ),
+
+          IGSTAmount: Number(
+            req.body.IGSTAmount || 0
+          ),
+
+          OriginalNetAmount: Number(
+            req.body.OriginalNetAmount ??
+            req.body.NetAmount ??
+            0
+          ),
+
+          NetAmount: Number(
+            req.body.NetAmount || 0
+          ),
+
+          TotalQty: Number(
+            req.body.TotalQty || 0
+          ),
+
+          TotalFreeQty: Number(
+            req.body.TotalFreeQty || 0
+          ),
+
+          TotalItems:
+            normalizedItems.length,
+
+          items: normalizedItems,
+          isActive: true,
+        });
+
+      res.status(201).json({
+        success: true,
+        message:
+          "Quotation saved successfully",
+        data: {
+          header: quotation,
+        },
+        nextBillNo:
+          assignedQuotationNo + 1,
+      });
+    } catch (error) {
+      console.error(
+        "Quotation save error:",
+        error
+      );
+
+      if (error.code === 11000) {
+        return res.status(409).json({
+          success: false,
+          message:
+            "This quotation bill number already exists for this series",
+        });
+      }
+
+      res.status(500).json({
+        success: false,
+        message:
+          error.message ||
+          "Quotation save failed",
+      });
+    }
+  }
+);
+
+app.get(
+  "/api/quotation",
+  ensureConnection,
+  securityRouter.authorizeRequest("SALES", "QUOTATION", "view"),
+  async (req, res) => {
+  try {
+    const { distributorId, firmId } = req.query;
+
+    if (!distributorId || !firmId) {
+      return res.status(400).json({
+        success: false,
+        message: "distributorId and firmId are required",
+      });
+    }
+
+    const quotations = await QuotationHeader.find({
+      distributorId,
+      firmId,
+      isActive: true,
+    })
+      .sort({ BillDate: -1, BillNo: -1 })
+      .lean();
+
+    res.json({
+      success: true,
+      count: quotations.length,
+      quotations,
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: "Failed to load quotations",
+      error: error.message,
+    });
+  }
+});
+app.get(
+  "/api/quotation/list",
+  ensureConnection,
+  securityRouter.authorizeRequest("SALES", "QUOTATION", "view"),
+  async (req, res) => {
+    try {
+      /* =====================================================
+        REQUEST PARAMETERS
+        ===================================================== */
+
+      const distributorId = String(
+        req.query.distributorId || ""
+      ).trim();
+
+      const firmId = String(
+        req.query.firmId || ""
+      ).trim();
+
+      const search = String(
+        req.query.search || ""
+      ).trim();
+
+      const fromDate = String(
+        req.query.fromDate || ""
+      ).trim();
+
+      const toDate = String(
+        req.query.toDate || ""
+      ).trim();
+
+      const billSeries = String(
+        req.query.billSeries || ""
+      ).trim();
+
+      const billType = String(
+        req.query.billType || ""
+      ).trim();
+
+      const companyCode = String(
+        req.query.companyCode ||
+        req.query.company ||
+        ""
+      ).trim();
+
+      const partyCode = String(
+        req.query.partyCode || ""
+      ).trim();
+
+      const partyName = String(
+        req.query.partyName ||
+        req.query.party ||
+        ""
+      ).trim();
+
+      const salesmanCode = String(
+        req.query.salesmanCode || ""
+      ).trim();
+
+      const salesmanName = String(
+        req.query.salesmanName ||
+        req.query.salesman ||
+        ""
+      ).trim();
+
+      const areaCode = String(
+        req.query.areaCode || ""
+      ).trim();
+
+      const areaName = String(
+        req.query.areaName ||
+        req.query.area ||
+        ""
+      ).trim();
+
+      const godownCode = String(
+        req.query.godownCode ||
+        req.query.gdCode ||
+        ""
+      ).trim();
+
+      const addUser = String(
+        req.query.addUser ||
+        req.query.createdBy ||
+        ""
+      ).trim();
+
+      const minAmountText = String(
+        req.query.minAmount || ""
+      ).trim();
+
+      const maxAmountText = String(
+        req.query.maxAmount || ""
+      ).trim();
+
+      /* =====================================================
+        PAGINATION
+        ===================================================== */
+
+      const requestedPage =
+        Number.parseInt(
+          req.query.page,
+          10
+        );
+
+      const requestedLimit =
+        Number.parseInt(
+          req.query.limit,
+          10
+        );
+
+      const page =
+        Number.isFinite(requestedPage) &&
+          requestedPage > 0
+          ? requestedPage
+          : 1;
+
+      const limit =
+        Number.isFinite(requestedLimit) &&
+          requestedLimit > 0
+          ? Math.min(
+            requestedLimit,
+            100
+          )
+          : 20;
+
+      if (!distributorId || !firmId) {
+        return res.status(400).json({
+          success: false,
+          message:
+            "distributorId and firmId are required",
+        });
+      }
+
+      /* =====================================================
+        HELPERS
+        ===================================================== */
+
+      const escapeRegex = (value) =>
+        String(value || "").replace(
+          /[.*+?^${}()|[\]\\]/g,
+          "\\$&"
+        );
+
+      const exactRegex = (value) =>
+        new RegExp(
+          `^${escapeRegex(
+            String(value || "").trim()
+          )}$`,
+          "i"
+        );
+
+      const andConditions = [];
+
+      /* =====================================================
+        BASE FILTER
+        ===================================================== */
+
+      const filter = {
+        distributorId,
+        firmId,
+
+        /*
+        * Include active quotations and older records
+        * where isActive is not present.
+        */
+        isActive: {
+          $ne: false,
+        },
+      };
+
+      /* =====================================================
+        DATE FILTER
+        ===================================================== */
+
+      if (fromDate || toDate) {
+        const dateCondition = {};
+
+        if (fromDate) {
+          const startDate = new Date(
+            `${fromDate}T00:00:00.000Z`
+          );
+
+          if (
+            !Number.isNaN(
+              startDate.getTime()
+            )
+          ) {
+            dateCondition.$gte =
+              startDate;
+          }
+        }
+
+        if (toDate) {
+          const endDate = new Date(
+            `${toDate}T23:59:59.999Z`
+          );
+
+          if (
+            !Number.isNaN(
+              endDate.getTime()
+            )
+          ) {
+            dateCondition.$lte =
+              endDate;
+          }
+        }
+
+        if (
+          Object.keys(
+            dateCondition
+          ).length > 0
+        ) {
+          andConditions.push({
+            $or: [
+              {
+                BillDate:
+                  dateCondition,
+              },
+              {
+                billDate:
+                  dateCondition,
+              },
+            ],
+          });
+        }
+      }
+
+      /* =====================================================
+        BILL SERIES
+        ===================================================== */
+
+      if (billSeries) {
+        const regex =
+          exactRegex(
+            billSeries
+          );
+
+        andConditions.push({
+          $or: [
+            {
+              BillSeries:
+                regex,
+            },
+            {
+              billSeries:
+                regex,
+            },
+          ],
+        });
+      }
+
+      /* =====================================================
+        BILL TYPE
+        ===================================================== */
+
+      if (billType) {
+        const regex =
+          exactRegex(
+            billType
+          );
+
+        andConditions.push({
+          $or: [
+            {
+              BillType:
+                regex,
+            },
+            {
+              billType:
+                regex,
+            },
+          ],
+        });
+      }
+
+      /* =====================================================
+        COMPANY
+        ===================================================== */
+
+      if (companyCode) {
+        const regex =
+          exactRegex(
+            companyCode
+          );
+
+        andConditions.push({
+          $or: [
+            {
+              CompanyCode:
+                regex,
+            },
+            {
+              companyCode:
+                regex,
+            },
+            {
+              CompCode:
+                regex,
+            },
+            {
+              compCode:
+                regex,
+            },
+
+            /*
+            * Fallback for old records where a name
+            * may have been saved instead of a code.
+            */
+            {
+              CompanyName:
+                regex,
+            },
+            {
+              companyName:
+                regex,
+            },
+          ],
+        });
+      }
+
+      /* =====================================================
+        PARTY CODE
+        ===================================================== */
+
+      if (partyCode) {
+        const regex =
+          exactRegex(
+            partyCode
+          );
+
+        andConditions.push({
+          $or: [
+            {
+              PartyCode:
+                regex,
+            },
+            {
+              partyCode:
+                regex,
+            },
+            {
+              AccountCode:
+                regex,
+            },
+            {
+              accountCode:
+                regex,
+            },
+          ],
+        });
+      }
+
+      /* =====================================================
+        PARTY NAME
+        ===================================================== */
+
+      if (partyName) {
+        const regex =
+          new RegExp(
+            escapeRegex(
+              partyName
+            ),
+            "i"
+          );
+
+        andConditions.push({
+          $or: [
+            {
+              PartyName:
+                regex,
+            },
+            {
+              partyName:
+                regex,
+            },
+            {
+              party:
+                regex,
+            },
+            {
+              AccountName:
+                regex,
+            },
+            {
+              accountName:
+                regex,
+            },
+          ],
+        });
+      }
+
+      /* =====================================================
+        SALESMAN CODE
+        ===================================================== */
+
+      if (salesmanCode) {
+        const regex =
+          exactRegex(
+            salesmanCode
+          );
+
+        andConditions.push({
+          $or: [
+            {
+              SalesmanCode:
+                regex,
+            },
+            {
+              salesmanCode:
+                regex,
+            },
+            {
+              SmanCode:
+                regex,
+            },
+            {
+              smanCode:
+                regex,
+            },
+            {
+              SalesmanName:
+                regex,
+            },
+            {
+              salesmanName:
+                regex,
+            },
+          ],
+        });
+      }
+
+      /* =====================================================
+        SALESMAN NAME
+        ===================================================== */
+
+      if (salesmanName) {
+        const regex =
+          new RegExp(
+            escapeRegex(
+              salesmanName
+            ),
+            "i"
+          );
+
+        andConditions.push({
+          $or: [
+            {
+              SalesmanName:
+                regex,
+            },
+            {
+              salesmanName:
+                regex,
+            },
+            {
+              salesman:
+                regex,
+            },
+          ],
+        });
+      }
+
+      /* =====================================================
+        AREA CODE
+        ===================================================== */
+
+      if (areaCode) {
+        const regex =
+          exactRegex(
+            areaCode
+          );
+
+        andConditions.push({
+          $or: [
+            {
+              AreaCode:
+                regex,
+            },
+            {
+              areaCode:
+                regex,
+            },
+            {
+              AreaName:
+                regex,
+            },
+            {
+              areaName:
+                regex,
+            },
+          ],
+        });
+      }
+
+      /* =====================================================
+        AREA NAME
+        ===================================================== */
+
+      if (areaName) {
+        const regex =
+          new RegExp(
+            escapeRegex(
+              areaName
+            ),
+            "i"
+          );
+
+        andConditions.push({
+          $or: [
+            {
+              AreaName:
+                regex,
+            },
+            {
+              areaName:
+                regex,
+            },
+            {
+              area:
+                regex,
+            },
+          ],
+        });
+      }
+
+      /* =====================================================
+        GODOWN
+        ===================================================== */
+
+      if (godownCode) {
+        const regex =
+          exactRegex(
+            godownCode
+          );
+
+        andConditions.push({
+          $or: [
+            {
+              GDCode:
+                regex,
+            },
+            {
+              gdCode:
+                regex,
+            },
+            {
+              GodownCode:
+                regex,
+            },
+            {
+              godownCode:
+                regex,
+            },
+          ],
+        });
+      }
+
+      /* =====================================================
+        ADD USER
+        ===================================================== */
+
+      if (addUser) {
+        const regex =
+          exactRegex(
+            addUser
+          );
+
+        andConditions.push({
+          $or: [
+            {
+              CreatedBy:
+                regex,
+            },
+            {
+              createdBy:
+                regex,
+            },
+            {
+              AddUser:
+                regex,
+            },
+            {
+              addUser:
+                regex,
+            },
+            {
+              UserName:
+                regex,
+            },
+            {
+              userName:
+                regex,
+            },
+          ],
+        });
+      }
+
+      /* =====================================================
+        AMOUNT RANGE
+        ===================================================== */
+
+      const minAmount =
+        Number(minAmountText);
+
+      const maxAmount =
+        Number(maxAmountText);
+
+      if (
+        minAmountText !== "" &&
+        Number.isFinite(minAmount)
+      ) {
+        andConditions.push({
+          $or: [
+            {
+              NetAmount: {
+                $gte:
+                  minAmount,
+              },
+            },
+            {
+              netAmount: {
+                $gte:
+                  minAmount,
+              },
+            },
+          ],
+        });
+      }
+
+      if (
+        maxAmountText !== "" &&
+        Number.isFinite(maxAmount)
+      ) {
+        andConditions.push({
+          $or: [
+            {
+              NetAmount: {
+                $lte:
+                  maxAmount,
+              },
+            },
+            {
+              netAmount: {
+                $lte:
+                  maxAmount,
+              },
+            },
+          ],
+        });
+      }
+
+      /* =====================================================
+        GENERAL SEARCH
+        ===================================================== */
+
+      if (search) {
+        const searchRegex =
+          new RegExp(
+            escapeRegex(
+              search
+            ),
+            "i"
+          );
+
+        const searchConditions = [
+          {
+            BillSeries:
+              searchRegex,
+          },
+          {
+            billSeries:
+              searchRegex,
+          },
+          {
+            PartyCode:
+              searchRegex,
+          },
+          {
+            partyCode:
+              searchRegex,
+          },
+          {
+            PartyName:
+              searchRegex,
+          },
+          {
+            partyName:
+              searchRegex,
+          },
+          {
+            CompanyCode:
+              searchRegex,
+          },
+          {
+            companyCode:
+              searchRegex,
+          },
+          {
+            CompanyName:
+              searchRegex,
+          },
+          {
+            companyName:
+              searchRegex,
+          },
+          {
+            SalesmanCode:
+              searchRegex,
+          },
+          {
+            salesmanCode:
+              searchRegex,
+          },
+          {
+            SalesmanName:
+              searchRegex,
+          },
+          {
+            salesmanName:
+              searchRegex,
+          },
+          {
+            AreaCode:
+              searchRegex,
+          },
+          {
+            areaCode:
+              searchRegex,
+          },
+          {
+            AreaName:
+              searchRegex,
+          },
+          {
+            areaName:
+              searchRegex,
+          },
+          {
+            GDCode:
+              searchRegex,
+          },
+          {
+            gdCode:
+              searchRegex,
+          },
+          {
+            Godown:
+              searchRegex,
+          },
+          {
+            godown:
+              searchRegex,
+          },
+          {
+            BillType:
+              searchRegex,
+          },
+          {
+            billType:
+              searchRegex,
+          },
+          {
+            Narration:
+              searchRegex,
+          },
+          {
+            narration:
+              searchRegex,
+          },
+          {
+            CreatedBy:
+              searchRegex,
+          },
+          {
+            createdBy:
+              searchRegex,
+          },
+        ];
+
+        /*
+        * BillNo is usually stored as a number.
+        */
+        const numericSearch =
+          Number(search);
+
+        if (
+          Number.isFinite(
+            numericSearch
+          )
+        ) {
+          searchConditions.push(
+            {
+              BillNo:
+                numericSearch,
+            },
+            {
+              billNo:
+                numericSearch,
+            }
+          );
+        }
+
+        andConditions.push({
+          $or:
+            searchConditions,
+        });
+      }
+
+      /* =====================================================
+        APPLY CONDITIONS
+        ===================================================== */
+
+      if (
+        andConditions.length > 0
+      ) {
+        filter.$and =
+          andConditions;
+      }
+
+      /* =====================================================
+        COUNT RECORDS
+        ===================================================== */
+
+      const totalRecords =
+        await QuotationHeader.countDocuments(
+          filter
+        );
+
+      const totalPages = Math.max(
+        1,
+        Math.ceil(
+          totalRecords /
+          limit
+        )
+      );
+
+      const currentPage = Math.min(
+        page,
+        totalPages
+      );
+
+      const skip =
+        (currentPage - 1) *
+        limit;
+
+      /* =====================================================
+        LOAD CURRENT PAGE
+        ===================================================== */
+
+      const quotations =
+        await QuotationHeader.find(
+          filter
+        )
+          /*
+          * Do not return quotation product items
+          * in the list API.
+          */
+          .select({
+            items: 0,
+            Items: 0,
+          })
+          .sort({
+            BillDate: -1,
+            BillNo: -1,
+            _id: -1,
+          })
+          .skip(skip)
+          .limit(limit)
+          .lean();
+
+      /* =====================================================
+        RESPONSE
+        ===================================================== */
+
+      return res.json({
+        success: true,
+
+        quotations,
+
+        count:
+          quotations.length,
+
+        pagination: {
+          currentPage,
+          page:
+            currentPage,
+          limit,
+          totalRecords,
+          totalPages,
+
+          hasPreviousPage:
+            currentPage > 1,
+
+          hasNextPage:
+            currentPage <
+            totalPages,
+
+          startRecord:
+            totalRecords === 0
+              ? 0
+              : skip + 1,
+
+          endRecord:
+            totalRecords === 0
+              ? 0
+              : Math.min(
+                skip +
+                quotations.length,
+                totalRecords
+              ),
+        },
+
+        appliedFilters: {
+          search,
+          fromDate,
+          toDate,
+          billSeries,
+          billType,
+
+          companyCode,
+
+          partyCode,
+          partyName,
+
+          salesmanCode,
+          salesmanName,
+
+          areaCode,
+          areaName,
+
+          godownCode,
+          addUser,
+
+          minAmount:
+            minAmountText,
+
+          maxAmount:
+            maxAmountText,
+        },
+      });
+    } catch (error) {
+      console.error(
+        "Quotation paginated list error:",
+        error
+      );
+
+      return res.status(500).json({
+        success: false,
+        message:
+          "Failed to load Quotation list",
+        error:
+          error.message,
+      });
+    }
+  }
+);
+
+app.get(
+  "/api/create-load/sales-bills",
+  ensureConnection,
+  async (req, res) => {
+    try {
+      const {
+        distributorId,
+        firmId,
+        company = "",
+        salesmen = "",
+        fromDate = "",
+        toDate = "",
+        editLoadId = "",
+      } = req.query;
+
+      if (!distributorId || !firmId) {
+        return res.status(400).json({
+          success: false,
+          message:
+            "distributorId and firmId are required",
+        });
+      }
+
+      if (
+        !company ||
+        !salesmen ||
+        !fromDate ||
+        !toDate
+      ) {
+        return res.json({
+          success: true,
+          count: 0,
+          bills: [],
+        });
+      }
+
+      const salesmanList =
+        String(salesmen)
+          .split(",")
+          .map((value) =>
+            value.trim()
+          )
+          .filter(Boolean);
+
+      const companyValue =
+        String(company).trim();
+
+      let editingLoad = null;
+
+      if (
+        editLoadId &&
+        mongoose.Types.ObjectId.isValid(
+          editLoadId
+        )
+      ) {
+        editingLoad =
+          await LoadHeader.findOne({
+            _id: editLoadId,
+            DistributorId:
+              distributorId,
+            FirmId: firmId,
+            IsCancelled: {
+              $ne: true,
+            },
+          }).lean();
+      }
+
+      /*
+      * Normal create:
+      * only bills not assigned to any load.
+      *
+      * Edit:
+      * unloaded bills plus bills assigned to
+      * the load currently being edited.
+      */
+      const loadAvailabilityConditions = [
+        {
+          IsLoaded: {
+            $ne: true,
+          },
+        },
+        {
+          LoadNo: null,
+        },
+        {
+          LoadNo: {
+            $exists: false,
+          },
+        },
+        {
+          LoadNo: 0,
+        },
+      ];
+
+      if (editingLoad) {
+        loadAvailabilityConditions.push({
+          LoadSeries:
+            editingLoad.LoadSeries,
+          LoadNo:
+            Number(
+              editingLoad.LoadNo
+            ),
+        });
+      }
+
+      const filter = {
+        distributorId,
+        firmId,
+        isActive: true,
+
+        BillDate: {
+          $gte:
+            String(fromDate).trim(),
+          $lte:
+            String(toDate).trim(),
+        },
+
+        $and: [
+          {
+            $or: [
+              {
+                CompanyName:
+                  companyValue,
+              },
+              {
+                CompanyCode:
+                  companyValue,
+              },
+            ],
+          },
+
+          {
+            $or:
+              loadAvailabilityConditions,
+          },
+        ],
+      };
+
+      if (salesmanList.length > 0) {
+        filter.$and.push({
+          $or: [
+            {
+              SalesmanName: {
+                $in: salesmanList,
+              },
+            },
+            {
+              SalesmanCode: {
+                $in: salesmanList,
+              },
+            },
+          ],
+        });
+      }
+
+      const bills =
+        await SalesHeader.find(filter)
+          .sort({
+            BillDate: 1,
+            BillNo: 1,
+          })
+          .lean();
+
+      res.json({
+        success: true,
+        count: bills.length,
+        bills,
+      });
+    } catch (error) {
+      console.error(
+        "Create Load sales bills error:",
+        error
+      );
+
+      res.status(500).json({
+        success: false,
+        message:
+          "Failed to load sales bills for create load",
+        error: error.message,
+      });
+    }
+  }
+);
+app.put(
+  "/api/create-load/:id",
+  ensureConnection,
+  securityRouter.authorizeRequest("SALES", "CREATE_LOAD", "edit"),
+  async (req, res) => {
+    const session =
+      await mongoose.startSession();
+
+    try {
+      session.startTransaction();
+
+      const { id } = req.params;
+
+      const {
+        LoadSeries = "",
+        LoadNo,
+        LoadDate = "",
+
+        CompanyCode = "",
+        CompanyName = "",
+
+        DeliveryBoyCode = "",
+        DeliveryBoyName = "",
+        DeliveryBy = "",
+
+        VehicleNo = "",
+        DriverMobile = "",
+
+        SalesmanCode = "",
+        SalesmanName = "",
+
+        SelectedSalesmen = [],
+        SelectedAreas = [],
+
+        BillFromDate = "",
+        BillToDate = "",
+
+        Narration = "",
+        Remarks = "",
+
+        Bills = [],
+
+        TotalBills = 0,
+        TotalParties = 0,
+        TotalSalesmen = 0,
+        TotalAreas = 0,
+        TotalAmount = 0,
+
+        LoadSummary = {},
+
+        DistributorId,
+        FirmId,
+        FirmName = "",
+
+        UpdatedBy = "ADMIN",
+      } = req.body;
+
+      if (!DistributorId || !FirmId) {
+        throw new Error(
+          "Distributor/Firm not found"
+        );
+      }
+
+      if (
+        !mongoose.Types.ObjectId.isValid(id)
+      ) {
+        throw new Error(
+          "Invalid Create Load ID"
+        );
+      }
+
+      const existingLoad =
+        await LoadHeader.findOne({
+          _id: id,
+          DistributorId,
+          FirmId,
+          IsCancelled: {
+            $ne: true,
+          },
+        }).session(session);
+
+      if (!existingLoad) {
+        throw new Error(
+          "Create Load not found"
+        );
+      }
+
+      const cleanLoadSeries =
+        String(LoadSeries).trim();
+
+      const cleanLoadNo =
+        Number(LoadNo || 0);
+
+      if (!cleanLoadSeries) {
+        throw new Error(
+          "Load Series is required"
+        );
+      }
+
+      if (!cleanLoadNo) {
+        throw new Error(
+          "Load No is required"
+        );
+      }
+
+      if (
+        !Array.isArray(Bills) ||
+        Bills.length === 0
+      ) {
+        throw new Error(
+          "Select at least one bill"
+        );
+      }
+
+      /*
+      * Prevent duplicate Load Series + Load No,
+      * excluding the current record.
+      */
+      const duplicateLoad =
+        await LoadHeader.findOne({
+          _id: {
+            $ne: id,
+          },
+
+          DistributorId,
+          FirmId,
+
+          LoadSeries:
+            cleanLoadSeries,
+
+          LoadNo:
+            cleanLoadNo,
+
+          IsCancelled: {
+            $ne: true,
+          },
+        }).session(session);
+
+      if (duplicateLoad) {
+        throw new Error(
+          "This Load Series and Load No already exists."
+        );
+      }
+
+      const oldBillConditions = (
+        existingLoad.Bills || []
+      )
+        .map(buildCreateLoadBillCondition)
+        .filter(Boolean);
+
+      /*
+      * First release every bill from the old load.
+      */
+      if (
+        oldBillConditions.length > 0
+      ) {
+        await SalesHeader.updateMany(
+          {
+            distributorId:
+              DistributorId,
+
+            firmId: FirmId,
+
+            isActive: true,
+
+            $or:
+              oldBillConditions,
+          },
+
+          {
+            $set: {
+              IsLoaded: false,
+              LoadSeries: "",
+              LoadNo: null,
+            },
+          },
+
+          {
+            session,
+          }
+        );
+      }
+
+      const cleanBills = Bills.map(
+        (bill, index) => {
+          const salesBillId = String(
+            bill.SalesBillId ||
+            bill.salesBillId ||
+            bill._id ||
+            ""
+          ).trim();
+
+          const billSeries = String(
+            bill.BillSeries ??
+            bill.Series ??
+            bill.billSeries ??
+            ""
+          ).trim();
+
+          return {
+            ...bill,
+
+            Sl: index + 1,
+            Selected: true,
+
+            SalesBillId:
+              salesBillId,
+
+            BillDate:
+              bill.BillDate ||
+              bill.billDate ||
+              "",
+
+            Series: billSeries,
+            BillSeries: billSeries,
+
+            BillNo: Number(
+              bill.BillNo ??
+              bill.billNo ??
+              0
+            ),
+
+            BillType:
+              bill.BillType ||
+              bill.billType ||
+              "Credit",
+
+            PartyCode:
+              bill.PartyCode ||
+              bill.partyCode ||
+              "",
+
+            PartyName:
+              bill.PartyName ||
+              bill.partyName ||
+              "",
+
+            SalesmanCode:
+              bill.SalesmanCode ||
+              bill.salesmanCode ||
+              "",
+
+            SalesmanName:
+              bill.SalesmanName ||
+              bill.salesmanName ||
+              bill.salesman ||
+              "",
+
+            AreaCode:
+              bill.AreaCode ||
+              bill.areaCode ||
+              "",
+
+            AreaName:
+              bill.AreaName ||
+              bill.areaName ||
+              bill.area ||
+              "",
+
+            Amount: Number(
+              bill.Amount ??
+              bill.amount ??
+              bill.billAmount ??
+              0
+            ),
+          };
+        }
+      ).filter((bill) => {
+        const hasMongoId =
+          bill.SalesBillId &&
+          mongoose.Types.ObjectId.isValid(
+            bill.SalesBillId
+          );
+
+        const hasBillNo =
+          Number(bill.BillNo || 0) > 0;
+
+        return hasMongoId || hasBillNo;
+      });
+
+      if (cleanBills.length === 0) {
+        throw new Error(
+          "No valid bill found in the load"
+        );
+      }
+
+      const billConditions = cleanBills
+        .map(buildCreateLoadBillCondition)
+        .filter(Boolean);
+
+      if (billConditions.length === 0) {
+        throw new Error(
+          "Selected bills do not contain a valid Bill No or Sales Bill ID"
+        );
+      }
+      /*
+      * Ensure another active load has not taken
+      * one of these bills.
+      */
+      const conflictingBills =
+        await SalesHeader.find({
+          distributorId:
+            DistributorId,
+
+          firmId: FirmId,
+
+          isActive: true,
+
+          IsLoaded: true,
+
+          $or:
+            billConditions,
+
+          $nor: [
+            {
+              LoadSeries:
+                existingLoad.LoadSeries,
+
+              LoadNo:
+                existingLoad.LoadNo,
+            },
+          ],
+        })
+          .session(session)
+          .lean();
+
+      if (conflictingBills.length > 0) {
+        throw new Error(
+          "One or more selected bills are already assigned to another load."
+        );
+      }
+
+      const uniqueParties =
+        new Set(
+          cleanBills
+            .map(
+              (bill) =>
+                bill.PartyCode ||
+                bill.PartyName
+            )
+            .filter(Boolean)
+        );
+
+      const uniqueSalesmen =
+        new Set(
+          cleanBills
+            .map(
+              (bill) =>
+                bill.SalesmanCode ||
+                bill.SalesmanName
+            )
+            .filter(Boolean)
+        );
+
+      const uniqueAreas =
+        new Set(
+          cleanBills
+            .map(
+              (bill) =>
+                bill.AreaCode ||
+                bill.AreaName
+            )
+            .filter(Boolean)
+        );
+
+      const calculatedTotal =
+        cleanBills.reduce(
+          (total, bill) =>
+            total +
+            Number(
+              bill.Amount || 0
+            ),
+          0
+        );
+
+      const finalSummary = {
+        totalBills:
+          cleanBills.length,
+
+        totalParties:
+          uniqueParties.size,
+
+        totalSalesmen:
+          uniqueSalesmen.size,
+
+        totalAreas:
+          uniqueAreas.size,
+
+        totalAmount:
+          calculatedTotal,
+      };
+
+      const updatedLoad =
+        await LoadHeader.findOneAndUpdate(
+          { _id: id, DistributorId: req.auth.distributorId, FirmId: req.auth.firmId },
+
+          {
+            $set: {
+              LoadSeries:
+                cleanLoadSeries,
+
+              LoadNo:
+                cleanLoadNo,
+
+              LoadDate,
+
+              CompanyCode:
+                String(
+                  CompanyCode || ""
+                ).trim(),
+
+              CompanyName:
+                String(
+                  CompanyName || ""
+                ).trim(),
+
+              DeliveryBoyCode:
+                String(
+                  DeliveryBoyCode || ""
+                ).trim(),
+
+              DeliveryBoyName:
+                String(
+                  DeliveryBoyName || ""
+                ).trim(),
+
+              DeliveryBy:
+                String(
+                  DeliveryBy ||
+                  DeliveryBoyName ||
+                  ""
+                ).trim(),
+
+              VehicleNo:
+                String(
+                  VehicleNo || ""
+                )
+                  .trim()
+                  .toUpperCase(),
+
+              DriverMobile:
+                String(
+                  DriverMobile || ""
+                ).trim(),
+
+              SalesmanCode:
+                String(
+                  SalesmanCode || ""
+                ).trim(),
+
+              SalesmanName:
+                String(
+                  SalesmanName || ""
+                ).trim(),
+
+              SelectedSalesmen:
+                Array.isArray(
+                  SelectedSalesmen
+                )
+                  ? SelectedSalesmen
+                  : [],
+
+              SelectedAreas:
+                Array.isArray(
+                  SelectedAreas
+                )
+                  ? SelectedAreas
+                  : [],
+
+              BillFromDate,
+              BillToDate,
+
+              Narration:
+                String(
+                  Narration || ""
+                ).trim(),
+
+              Remarks:
+                String(
+                  Remarks || ""
+                ).trim(),
+
+              Bills:
+                cleanBills,
+
+              TotalBills:
+                finalSummary.totalBills,
+
+              TotalParties:
+                finalSummary.totalParties,
+
+              TotalSalesmen:
+                finalSummary.totalSalesmen,
+
+              TotalAreas:
+                finalSummary.totalAreas,
+
+              TotalAmount:
+                finalSummary.totalAmount,
+
+              LoadSummary:
+                finalSummary,
+
+              FirmName:
+                FirmName || "",
+
+              Status: "ACTIVE",
+              IsCancelled: false,
+
+              UpdatedBy,
+              UpdatedAt:
+                new Date(),
+            },
+          },
+
+          {
+            new: true,
+            session,
+          }
+        );
+
+      /*
+      * Mark the newly selected bills as loaded.
+      */
+      await SalesHeader.updateMany(
+        {
+          distributorId:
+            DistributorId,
+
+          firmId: FirmId,
+
+          isActive: true,
+
+          $or:
+            billConditions,
+        },
+
+        {
+          $set: {
+            IsLoaded: true,
+            LoadSeries:
+              cleanLoadSeries,
+            LoadNo:
+              cleanLoadNo,
+          },
+        },
+
+        {
+          session,
+        }
+      );
+
+      await commitTransactionReliably(session);
+
+      res.json({
+        success: true,
+        message:
+          "Load updated successfully",
+        data: updatedLoad,
+      });
+    } catch (error) {
+      await session.abortTransaction();
+
+      console.error(
+        "Update Create Load error:",
+        error
+      );
+
+      res.status(500).json({
+        success: false,
+        message:
+          error.message ||
+          "Create Load update failed",
+      });
+    } finally {
+      session.endSession();
+    }
+  }
+);
+app.get(
+  "/api/create-load",
+  ensureConnection,
+  securityRouter.authorizeRequest("SALES", "CREATE_LOAD", "view"),
+  async (req, res) => {
+  try {
+    const { distributorId, firmId } = req.query;
+
+    if (!distributorId || !firmId) {
+      return res.status(400).json({
+        success: false,
+        message: "distributorId and firmId are required",
+      });
+    }
+
+    const loads = await LoadHeader.find({
+      DistributorId: distributorId,
+      FirmId: firmId,
+      IsCancelled: { $ne: true },
+    })
+      .sort({ LoadDate: -1, LoadNo: -1 })
+      .lean();
+
+    res.json({
+      success: true,
+      count: loads.length,
+      loads,
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: "Failed to load create loads",
+      error: error.message,
+    });
+  }
+});
+app.get(
+  "/api/create-load/list",
+  ensureConnection,
+  securityRouter.authorizeRequest("SALES", "CREATE_LOAD", "view"),
+  async (req, res) => {
+    try {
+      /* =====================================================
+        REQUEST VALUES
+        ===================================================== */
+
+      const distributorId = String(
+        req.query.distributorId || ""
+      ).trim();
+
+      const firmId = String(
+        req.query.firmId || ""
+      ).trim();
+
+      const search = String(
+        req.query.search || ""
+      ).trim();
+
+      const fromDate = String(
+        req.query.fromDate || ""
+      ).trim();
+
+      const toDate = String(
+        req.query.toDate || ""
+      ).trim();
+
+      const loadSeries = String(
+        req.query.loadSeries || ""
+      ).trim();
+
+      const loadNoText = String(
+        req.query.loadNo || ""
+      ).trim();
+
+      const companyCode = String(
+        req.query.companyCode ||
+        req.query.company ||
+        ""
+      ).trim();
+
+      const salesmanCode = String(
+        req.query.salesmanCode ||
+        req.query.salesman ||
+        ""
+      ).trim();
+
+      const deliveryBy = String(
+        req.query.deliveryBy ||
+        req.query.deliveryBoy ||
+        ""
+      ).trim();
+
+      const vehicleNo = String(
+        req.query.vehicleNo || ""
+      ).trim();
+
+      const status = String(
+        req.query.status || ""
+      ).trim();
+
+      const createdBy = String(
+        req.query.createdBy ||
+        req.query.addUser ||
+        ""
+      ).trim();
+
+      const minAmountText = String(
+        req.query.minAmount || ""
+      ).trim();
+
+      const maxAmountText = String(
+        req.query.maxAmount || ""
+      ).trim();
+
+      const requestedPage =
+        Number.parseInt(
+          req.query.page,
+          10
+        );
+
+      const requestedLimit =
+        Number.parseInt(
+          req.query.limit,
+          10
+        );
+
+      const page =
+        Number.isFinite(requestedPage) &&
+          requestedPage > 0
+          ? requestedPage
+          : 1;
+
+      const limit =
+        Number.isFinite(requestedLimit) &&
+          requestedLimit > 0
+          ? Math.min(
+            requestedLimit,
+            100
+          )
+          : 10;
+
+      if (
+        !distributorId ||
+        !firmId
+      ) {
+        return res.status(400).json({
+          success: false,
+          message:
+            "distributorId and firmId are required",
+        });
+      }
+
+      /* =====================================================
+        REGEX HELPERS
+        ===================================================== */
+
+      const escapeRegex = (value) =>
+        String(value || "").replace(
+          /[.*+?^${}()|[\]\\]/g,
+          "\\$&"
+        );
+
+      const createExactRegex = (
+        value
+      ) =>
+        new RegExp(
+          `^${escapeRegex(
+            String(value || "").trim()
+          )}$`,
+          "i"
+        );
+
+      const createContainsRegex = (
+        value
+      ) =>
+        new RegExp(
+          escapeRegex(
+            String(value || "").trim()
+          ),
+          "i"
+        );
+
+      /* =====================================================
+        BASE FILTER
+        ===================================================== */
+
+      const filter = {
+        DistributorId:
+          distributorId,
+
+        FirmId:
+          firmId,
+
+        IsCancelled: {
+          $ne: true,
+        },
+      };
+
+      const andConditions = [];
+
+      /* =====================================================
+        LOAD DATE
+        ===================================================== */
+
+      if (fromDate || toDate) {
+        const dateCondition = {};
+
+        if (fromDate) {
+          const startDate =
+            new Date(
+              `${fromDate}T00:00:00.000Z`
+            );
+
+          if (
+            !Number.isNaN(
+              startDate.getTime()
+            )
+          ) {
+            dateCondition.$gte =
+              startDate;
+          }
+        }
+
+        if (toDate) {
+          const endDate =
+            new Date(
+              `${toDate}T23:59:59.999Z`
+            );
+
+          if (
+            !Number.isNaN(
+              endDate.getTime()
+            )
+          ) {
+            dateCondition.$lte =
+              endDate;
+          }
+        }
+
+        if (
+          Object.keys(
+            dateCondition
+          ).length > 0
+        ) {
+          andConditions.push({
+            $or: [
+              {
+                LoadDate:
+                  dateCondition,
+              },
+              {
+                loadDate:
+                  dateCondition,
+              },
+            ],
+          });
+        }
+      }
+
+      /* =====================================================
+        LOAD SERIES
+        ===================================================== */
+
+      if (loadSeries) {
+        const regex =
+          createExactRegex(
+            loadSeries
+          );
+
+        andConditions.push({
+          $or: [
+            {
+              LoadSeries:
+                regex,
+            },
+            {
+              loadSeries:
+                regex,
+            },
+          ],
+        });
+      }
+
+      /* =====================================================
+        LOAD NUMBER
+        ===================================================== */
+
+      if (loadNoText) {
+        const numericLoadNo =
+          Number(loadNoText);
+
+        const conditions = [
+          {
+            LoadNo:
+              createExactRegex(
+                loadNoText
+              ),
+          },
+          {
+            loadNo:
+              createExactRegex(
+                loadNoText
+              ),
+          },
+        ];
+
+        if (
+          Number.isFinite(
+            numericLoadNo
+          )
+        ) {
+          conditions.push(
+            {
+              LoadNo:
+                numericLoadNo,
+            },
+            {
+              loadNo:
+                numericLoadNo,
+            }
+          );
+        }
+
+        andConditions.push({
+          $or:
+            conditions,
+        });
+      }
+
+      /* =====================================================
+        COMPANY
+        ===================================================== */
+
+      if (companyCode) {
+        const regex =
+          createExactRegex(
+            companyCode
+          );
+
+        andConditions.push({
+          $or: [
+            {
+              CompanyCode:
+                regex,
+            },
+            {
+              companyCode:
+                regex,
+            },
+            {
+              CompanyName:
+                regex,
+            },
+            {
+              companyName:
+                regex,
+            },
+          ],
+        });
+      }
+
+      /* =====================================================
+        SALESMAN
+        ===================================================== */
+
+      if (salesmanCode) {
+        const exactRegex =
+          createExactRegex(
+            salesmanCode
+          );
+
+        const containsRegex =
+          createContainsRegex(
+            salesmanCode
+          );
+
+        andConditions.push({
+          $or: [
+            {
+              SalesmanCode:
+                containsRegex,
+            },
+            {
+              salesmanCode:
+                containsRegex,
+            },
+            {
+              SalesmanName:
+                containsRegex,
+            },
+            {
+              salesmanName:
+                containsRegex,
+            },
+            {
+              "SelectedSalesmen.salesmanCode":
+                exactRegex,
+            },
+            {
+              "SelectedSalesmen.salesmanName":
+                exactRegex,
+            },
+          ],
+        });
+      }
+
+      /* =====================================================
+        DELIVERY BY
+        ===================================================== */
+
+      if (deliveryBy) {
+        const regex =
+          createContainsRegex(
+            deliveryBy
+          );
+
+        andConditions.push({
+          $or: [
+            {
+              DeliveryBy:
+                regex,
+            },
+            {
+              deliveryBy:
+                regex,
+            },
+            {
+              DeliveryBoyCode:
+                regex,
+            },
+            {
+              deliveryBoyCode:
+                regex,
+            },
+            {
+              DeliveryBoyName:
+                regex,
+            },
+            {
+              deliveryBoyName:
+                regex,
+            },
+          ],
+        });
+      }
+
+      /* =====================================================
+        VEHICLE
+        ===================================================== */
+
+      if (vehicleNo) {
+        const regex =
+          createContainsRegex(
+            vehicleNo
+          );
+
+        andConditions.push({
+          $or: [
+            {
+              VehicleNo:
+                regex,
+            },
+            {
+              vehicleNo:
+                regex,
+            },
+          ],
+        });
+      }
+
+      /* =====================================================
+        STATUS
+        ===================================================== */
+
+      if (status) {
+        const regex =
+          createExactRegex(
+            status
+          );
+
+        const statusConditions = [
+          {
+            Status:
+              regex,
+          },
+          {
+            status:
+              regex,
+          },
+        ];
+
+        /*
+        * UI displays ACTIVE as Pending.
+        */
+        if (
+          status.toLowerCase() ===
+          "pending"
+        ) {
+          statusConditions.push({
+            Status:
+              createExactRegex(
+                "ACTIVE"
+              ),
+          });
+        }
+
+        andConditions.push({
+          $or:
+            statusConditions,
+        });
+      }
+
+      /* =====================================================
+        CREATED BY
+        ===================================================== */
+
+      if (createdBy) {
+        const regex =
+          createExactRegex(
+            createdBy
+          );
+
+        andConditions.push({
+          $or: [
+            {
+              CreatedBy:
+                regex,
+            },
+            {
+              createdBy:
+                regex,
+            },
+            {
+              UpdatedBy:
+                regex,
+            },
+            {
+              updatedBy:
+                regex,
+            },
+          ],
+        });
+      }
+
+      /* =====================================================
+        AMOUNT RANGE
+        ===================================================== */
+
+      const minAmount =
+        Number(minAmountText);
+
+      const maxAmount =
+        Number(maxAmountText);
+
+      if (
+        minAmountText !== "" &&
+        Number.isFinite(
+          minAmount
+        )
+      ) {
+        andConditions.push({
+          $or: [
+            {
+              TotalAmount: {
+                $gte:
+                  minAmount,
+              },
+            },
+            {
+              totalAmount: {
+                $gte:
+                  minAmount,
+              },
+            },
+          ],
+        });
+      }
+
+      if (
+        maxAmountText !== "" &&
+        Number.isFinite(
+          maxAmount
+        )
+      ) {
+        andConditions.push({
+          $or: [
+            {
+              TotalAmount: {
+                $lte:
+                  maxAmount,
+              },
+            },
+            {
+              totalAmount: {
+                $lte:
+                  maxAmount,
+              },
+            },
+          ],
+        });
+      }
+
+      /* =====================================================
+        GENERAL SEARCH
+        ===================================================== */
+
+      if (search) {
+        const searchRegex =
+          createContainsRegex(
+            search
+          );
+
+        const searchConditions = [
+          {
+            LoadSeries:
+              searchRegex,
+          },
+          {
+            loadSeries:
+              searchRegex,
+          },
+          {
+            CompanyCode:
+              searchRegex,
+          },
+          {
+            companyCode:
+              searchRegex,
+          },
+          {
+            CompanyName:
+              searchRegex,
+          },
+          {
+            companyName:
+              searchRegex,
+          },
+          {
+            DeliveryBy:
+              searchRegex,
+          },
+          {
+            DeliveryBoyName:
+              searchRegex,
+          },
+          {
+            DeliveryBoyCode:
+              searchRegex,
+          },
+          {
+            VehicleNo:
+              searchRegex,
+          },
+          {
+            DriverMobile:
+              searchRegex,
+          },
+          {
+            SalesmanCode:
+              searchRegex,
+          },
+          {
+            SalesmanName:
+              searchRegex,
+          },
+          {
+            Narration:
+              searchRegex,
+          },
+          {
+            Remarks:
+              searchRegex,
+          },
+          {
+            Status:
+              searchRegex,
+          },
+          {
+            CreatedBy:
+              searchRegex,
+          },
+          {
+            UpdatedBy:
+              searchRegex,
+          },
+          {
+            "SelectedSalesmen.salesmanCode":
+              searchRegex,
+          },
+          {
+            "SelectedSalesmen.salesmanName":
+              searchRegex,
+          },
+          {
+            "SelectedAreas.areaCode":
+              searchRegex,
+          },
+          {
+            "SelectedAreas.areaName":
+              searchRegex,
+          },
+        ];
+
+        const numericSearch =
+          Number(search);
+
+        if (
+          Number.isFinite(
+            numericSearch
+          )
+        ) {
+          searchConditions.push(
+            {
+              LoadNo:
+                numericSearch,
+            },
+            {
+              loadNo:
+                numericSearch,
+            }
+          );
+        }
+
+        andConditions.push({
+          $or:
+            searchConditions,
+        });
+      }
+
+      if (
+        andConditions.length > 0
+      ) {
+        filter.$and =
+          andConditions;
+      }
+
+      /* =====================================================
+        PAGINATION COUNT
+        ===================================================== */
+
+      const totalRecords =
+        await LoadHeader.countDocuments(
+          filter
+        );
+
+      const totalPages =
+        Math.max(
+          1,
+          Math.ceil(
+            totalRecords /
+            limit
+          )
+        );
+
+      const currentPage =
+        Math.min(
+          page,
+          totalPages
+        );
+
+      const skip =
+        (
+          currentPage -
+          1
+        ) *
+        limit;
+
+      /* =====================================================
+        LOAD PAGE
+        ===================================================== */
+
+      const loads =
+        await LoadHeader.find(
+          filter
+        )
+          /*
+          * Bills can be very large.
+          * Exclude them from list API.
+          */
+          .select({
+            Bills: 0,
+            bills: 0,
+          })
+          .sort({
+            LoadDate: -1,
+            LoadNo: -1,
+            _id: -1,
+          })
+          .skip(skip)
+          .limit(limit)
+          .lean();
+
+      return res.json({
+        success: true,
+
+        loads,
+
+        count:
+          loads.length,
+
+        pagination: {
+          currentPage,
+          page:
+            currentPage,
+          limit,
+          totalRecords,
+          totalPages,
+
+          hasPreviousPage:
+            currentPage > 1,
+
+          hasNextPage:
+            currentPage <
+            totalPages,
+
+          startRecord:
+            totalRecords === 0
+              ? 0
+              : skip + 1,
+
+          endRecord:
+            totalRecords === 0
+              ? 0
+              : Math.min(
+                skip +
+                loads.length,
+                totalRecords
+              ),
+        },
+
+        appliedFilters: {
+          search,
+          fromDate,
+          toDate,
+          loadSeries,
+          loadNo:
+            loadNoText,
+          companyCode,
+          salesmanCode,
+          deliveryBy,
+          vehicleNo,
+          status,
+          createdBy,
+          minAmount:
+            minAmountText,
+          maxAmount:
+            maxAmountText,
+        },
+      });
+    } catch (error) {
+      console.error(
+        "Create Load paginated list error:",
+        error
+      );
+
+      return res.status(500).json({
+        success: false,
+        message:
+          "Failed to load Create Load list",
+        error:
+          error.message,
+      });
+    }
+  }
+);
+const buildCreateLoadBillCondition = (bill) => {
+  const salesBillId = String(
+    bill.SalesBillId ||
+    bill.salesBillId ||
+    bill._id ||
+    ""
+  ).trim();
+
+  /*
+  * First preference: MongoDB sales bill ID.
+  */
+  if (
+    salesBillId &&
+    mongoose.Types.ObjectId.isValid(salesBillId)
+  ) {
+    return {
+      _id: new mongoose.Types.ObjectId(salesBillId),
+    };
+  }
+
+  const billNo = Number(
+    bill.BillNo ??
+    bill.billNo ??
+    0
+  );
+
+  const billSeries = String(
+    bill.BillSeries ??
+    bill.Series ??
+    bill.billSeries ??
+    ""
+  ).trim();
+
+  if (!billNo) {
+    return null;
+  }
+
+  /*
+  * A series is available: match Series + Bill No.
+  */
+  if (billSeries) {
+    return {
+      BillNo: billNo,
+
+      $or: [
+        { BillSeries: billSeries },
+        { billSeries },
+        { Series: billSeries },
+      ],
+    };
+  }
+
+  /*
+  * Blank series is valid.
+  * Match the bill number where the series is blank,
+  * null, or not stored.
+  */
+  return {
+    BillNo: billNo,
+
+    $or: [
+      { BillSeries: "" },
+      { BillSeries: null },
+      { BillSeries: { $exists: false } },
+
+      { billSeries: "" },
+      { billSeries: null },
+      { billSeries: { $exists: false } },
+
+      { Series: "" },
+      { Series: null },
+      { Series: { $exists: false } },
+    ],
+  };
+};
+
+
+app.post(
+  "/api/create-load",
+  ensureConnection,
+  securityRouter.authorizeRequest("SALES", "CREATE_LOAD", "add"),
+  async (req, res) => {
+    const session = await mongoose.startSession();
+
+    try {
+      session.startTransaction();
+
+      const {
+        LoadSeries = "",
+        LoadNo,
+        LoadDate = "",
+
+        CompanyCode = "",
+        CompanyName = "",
+
+        DeliveryBoyCode = "",
+        DeliveryBoyName = "",
+        DeliveryBy = "",
+
+        VehicleNo = "",
+        DriverMobile = "",
+
+        SalesmanCode = "",
+        SalesmanName = "",
+
+        SelectedSalesmen = [],
+        SelectedAreas = [],
+
+        BillFromDate = "",
+        BillToDate = "",
+
+        Narration = "",
+        Remarks = "",
+
+        Bills = [],
+
+        TotalBills = 0,
+        TotalParties = 0,
+        TotalSalesmen = 0,
+        TotalAreas = 0,
+        TotalAmount = 0,
+
+        LoadSummary = {},
+
+        DistributorId,
+        FirmId,
+        FirmName = "",
+
+        CreatedBy = "ADMIN",
+        UpdatedBy = "ADMIN",
+      } = req.body;
+
+      const cleanLoadSeries = String(
+        LoadSeries || ""
+      ).trim();
+
+      let cleanLoadNo = Number(LoadNo || 0);
+
+      if (!DistributorId || !FirmId) {
+        throw new Error(
+          "Distributor/Firm not found"
+        );
+      }
+
+      if (!cleanLoadSeries) {
+        throw new Error(
+          "Load Series is required"
+        );
+      }
+
+      if (!cleanLoadNo) {
+        throw new Error(
+          "Load No is required"
+        );
+      }
+      const lastLoadForCounter = await LoadHeader.findOne({ DistributorId, FirmId, LoadSeries: cleanLoadSeries }).sort({ LoadNo: -1 }).session(session).lean();
+      if (req.body._desktopImport !== true) {
+        cleanLoadNo = await nextDocumentNumber({ distributorId: DistributorId, firmId: FirmId, documentType: "LOAD", series: cleanLoadSeries, documentDate: LoadDate, session, minimumValue: Number(lastLoadForCounter?.LoadNo || 0) });
+      }
+
+      if (!Array.isArray(Bills) || Bills.length === 0) {
+        throw new Error(
+          "Please select at least one bill"
+        );
+      }
+
+      const duplicateLoad =
+        await LoadHeader.findOne({
+          DistributorId,
+          FirmId,
+          LoadSeries: cleanLoadSeries,
+          LoadNo: cleanLoadNo,
+          IsCancelled: {
+            $ne: true,
+          },
+        }).session(session);
+
+      if (duplicateLoad) {
+        throw new Error(
+          `Load ${cleanLoadSeries}-${cleanLoadNo} already exists`
+        );
+      }
+
+      const cleanBills = Bills.map(
+        (bill, index) => {
+          const salesBillId = String(
+            bill.SalesBillId ||
+            bill.salesBillId ||
+            bill._id ||
+            ""
+          ).trim();
+
+          const billSeries = String(
+            bill.BillSeries ??
+            bill.Series ??
+            bill.billSeries ??
+            ""
+          ).trim();
+
+          return {
+            ...bill,
+
+            Sl: Number(
+              bill.Sl ||
+              bill.sr ||
+              index + 1
+            ),
+
+            Selected:
+              bill.Selected !== false,
+
+            SalesBillId:
+              salesBillId,
+
+            BillDate:
+              bill.BillDate ||
+              bill.billDate ||
+              "",
+
+            /*
+            * An empty series is valid.
+            */
+            Series: billSeries,
+            BillSeries: billSeries,
+
+            BillNo: Number(
+              bill.BillNo ??
+              bill.billNo ??
+              0
+            ),
+
+            BillType: String(
+              bill.BillType ||
+              bill.billType ||
+              "Credit"
+            ).trim(),
+
+            PartyCode: String(
+              bill.PartyCode ||
+              bill.partyCode ||
+              ""
+            ).trim(),
+
+            PartyName: String(
+              bill.PartyName ||
+              bill.partyName ||
+              ""
+            ).trim(),
+
+            SalesmanCode: String(
+              bill.SalesmanCode ||
+              bill.salesmanCode ||
+              ""
+            ).trim(),
+
+            SalesmanName: String(
+              bill.SalesmanName ||
+              bill.salesmanName ||
+              bill.salesman ||
+              ""
+            ).trim(),
+
+            AreaCode: String(
+              bill.AreaCode ||
+              bill.areaCode ||
+              ""
+            ).trim(),
+
+            AreaName: String(
+              bill.AreaName ||
+              bill.areaName ||
+              bill.area ||
+              ""
+            ).trim(),
+
+            Amount: Number(
+              bill.Amount ??
+              bill.amount ??
+              bill.billAmount ??
+              0
+            ),
+          };
+        }
+      ).filter((bill) => {
+        const hasMongoId =
+          bill.SalesBillId &&
+          mongoose.Types.ObjectId.isValid(
+            bill.SalesBillId
+          );
+
+        const hasBillNo =
+          Number(bill.BillNo || 0) > 0;
+
+        /*
+        * Bill Series is not required.
+        */
+        return hasMongoId || hasBillNo;
+      });
+      const billConditions = cleanBills
+        .map(buildCreateLoadBillCondition)
+        .filter(Boolean);
+
+      if (billConditions.length === 0) {
+        throw new Error(
+          "Selected bills do not contain a valid Bill No or Sales Bill ID"
+        );
+      }
+
+      const alreadyLoaded =
+        await SalesHeader.findOne({
+          distributorId: DistributorId,
+          firmId: FirmId,
+          isActive: true,
+          IsLoaded: true,
+
+          $or: billConditions,
+        }).session(session);
+
+      if (alreadyLoaded) {
+        throw new Error(
+          `Bill ${alreadyLoaded.BillSeries}-${alreadyLoaded.BillNo} is already added in Load ${alreadyLoaded.LoadSeries}-${alreadyLoaded.LoadNo}`
+        );
+      }
+
+      /*
+        Recalculate important summary values on the backend.
+        Never depend only on values sent by the browser.
+      */
+      const calculatedTotalAmount =
+        cleanBills.reduce(
+          (sum, bill) =>
+            sum + Number(bill.Amount || 0),
+          0
+        );
+
+      const calculatedTotalParties =
+        new Set(
+          cleanBills
+            .map(
+              (bill) =>
+                bill.PartyCode ||
+                bill.PartyName
+            )
+            .filter(Boolean)
+        ).size;
+
+      const calculatedTotalSalesmen =
+        Array.isArray(SelectedSalesmen) &&
+          SelectedSalesmen.length > 0
+          ? SelectedSalesmen.length
+          : new Set(
+            cleanBills
+              .map(
+                (bill) =>
+                  bill.SalesmanCode ||
+                  bill.SalesmanName
+              )
+              .filter(Boolean)
+          ).size;
+
+      const calculatedTotalAreas =
+        Array.isArray(SelectedAreas) &&
+          SelectedAreas.length > 0
+          ? SelectedAreas.length
+          : new Set(
+            cleanBills
+              .map(
+                (bill) =>
+                  bill.AreaCode ||
+                  bill.AreaName
+              )
+              .filter(Boolean)
+          ).size;
+
+      const finalSummary = {
+        totalBills: cleanBills.length,
+
+        totalParties:
+          calculatedTotalParties ||
+          Number(
+            LoadSummary.totalParties ||
+            TotalParties ||
+            0
+          ),
+
+        totalSalesmen:
+          calculatedTotalSalesmen ||
+          Number(
+            LoadSummary.totalSalesmen ||
+            TotalSalesmen ||
+            0
+          ),
+
+        totalAreas:
+          calculatedTotalAreas ||
+          Number(
+            LoadSummary.totalAreas ||
+            TotalAreas ||
+            0
+          ),
+
+        totalAmount: Number(
+          calculatedTotalAmount.toFixed(2)
+        ),
+      };
+
+      const savedLoad = await LoadHeader.create(
+        [
+          {
+            LoadSeries: cleanLoadSeries,
+            LoadNo: cleanLoadNo,
+            LoadDate,
+
+            CompanyCode: String(
+              CompanyCode || ""
+            ).trim(),
+
+            CompanyName: String(
+              CompanyName || ""
+            ).trim(),
+
+            DeliveryBoyCode: String(
+              DeliveryBoyCode || ""
+            ).trim(),
+
+            DeliveryBoyName: String(
+              DeliveryBoyName || ""
+            ).trim(),
+
+            DeliveryBy: String(
+              DeliveryBy ||
+              DeliveryBoyName ||
+              ""
+            ).trim(),
+
+            VehicleNo: String(
+              VehicleNo || ""
+            )
+              .trim()
+              .toUpperCase(),
+
+            DriverMobile: String(
+              DriverMobile || ""
+            ).trim(),
+
+            SalesmanCode: String(
+              SalesmanCode || ""
+            ).trim(),
+
+            SalesmanName: String(
+              SalesmanName || ""
+            ).trim(),
+
+            SelectedSalesmen:
+              Array.isArray(SelectedSalesmen)
+                ? SelectedSalesmen
+                : [],
+
+            SelectedAreas:
+              Array.isArray(SelectedAreas)
+                ? SelectedAreas
+                : [],
+
+            BillFromDate,
+            BillToDate,
+
+            Narration: String(
+              Narration || ""
+            ).trim(),
+
+            Remarks: String(
+              Remarks || ""
+            ).trim(),
+
+            Bills: cleanBills,
+
+            TotalBills:
+              finalSummary.totalBills,
+
+            TotalParties:
+              finalSummary.totalParties,
+
+            TotalSalesmen:
+              finalSummary.totalSalesmen,
+
+            TotalAreas:
+              finalSummary.totalAreas,
+
+            TotalAmount:
+              finalSummary.totalAmount,
+
+            LoadSummary: finalSummary,
+
+            DistributorId,
+            FirmId,
+            FirmName,
+
+            Status: "ACTIVE",
+            IsCancelled: false,
+            IsLocked: false,
+
+            CreatedBy,
+            UpdatedBy,
+          },
+        ],
+        {
+          session,
+        }
+      );
+
+      await SalesHeader.updateMany(
+        {
+          distributorId: DistributorId,
+          firmId: FirmId,
+          isActive: true,
+          $or: billConditions,
+        },
+        {
+          $set: {
+            IsLoaded: true,
+            LoadSeries: cleanLoadSeries,
+            LoadNo: cleanLoadNo,
+          },
+        },
+        {
+          session,
+        }
+      );
+
+      await commitTransactionReliably(session);
+
+      res.status(201).json({
+        success: true,
+        message:
+          "Load created successfully",
+
+        data: savedLoad[0],
+      });
+    } catch (error) {
+      await session.abortTransaction();
+
+      console.error(
+        "Create Load Error:",
+        error
+      );
+
+      const duplicateError =
+        error?.code === 11000;
+
+      res
+        .status(duplicateError ? 409 : 500)
+        .json({
+          success: false,
+
+          message: duplicateError
+            ? "This Load Series and Load No already exists."
+            : error.message ||
+            "Create Load save failed",
+        });
+    } finally {
+      session.endSession();
+    }
+  }
+);
+app.get(
+  "/api/settle-load",
+  ensureConnection,
+  securityRouter.authorizeRequest("SALES", "SETTLE_LOAD", "view"),
+  async (req, res) => {
+  try {
+    const distributorId = String(req.query.distributorId || "").trim();
+    const firmId = String(req.query.firmId || "").trim();
+    const loadSeries = String(req.query.loadSeries || "").trim();
+    const loadNo = Number(req.query.loadNo || 0);
+
+    if (!distributorId || !firmId) {
+      return res.status(400).json({
+        success: false,
+        message: "Distributor/Firm not found",
+      });
+    }
+
+    if (!loadNo) {
+      return res.status(400).json({
+        success: false,
+        message: "Load No is required",
+      });
+    }
+
+    const filter = {
+      DistributorId: distributorId,
+      FirmId: firmId,
+      LoadNo: loadNo,
+      IsCancelled: { $ne: true },
+    };
+
+    if (loadSeries) {
+      filter.LoadSeries = loadSeries;
+    }
+
+    const load = await LoadHeader.findOne(filter).lean();
+
+    if (!load) {
+      return res.status(404).json({
+        success: false,
+        message: "Load not found for entered Load Series and Load No",
+      });
+    }
+
+    res.json({
+      success: true,
+      load: {
+        id: load._id,
+        loadSeries: load.LoadSeries || "",
+        loadNo: load.LoadNo || "",
+        loadDate: load.LoadDate || "",
+        narration: load.Narration || "",
+        items: load.Bills || [],
+      },
+    });
+  } catch (error) {
+    console.error("Settle Load API error:", error);
+    res.status(500).json({
+      success: false,
+      message: "Failed to load settle load bills",
+      error: error.message,
+    });
+  }
+});
+/* =========================================================
+  LOAD TRANSFER HELPERS
+  ========================================================= */
+
+const escapeLoadTransferRegex = (value = "") =>
+  String(value).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+
+const loadTransferExactRegex = (value = "") =>
+  new RegExp(
+    `^${escapeLoadTransferRegex(String(value).trim())}$`,
+    "i"
+  );
+
+/*
+* Convert a Sales Header document into the same bill object
+* format stored inside T_Load_Header.Bills.
+*/
+const createLoadTransferBillSnapshot = (bill) => {
+  const source = bill?.toObject
+    ? bill.toObject()
+    : bill || {};
+
+  const billSeries = String(
+    source.BillSeries ??
+    source.billSeries ??
+    source.Series ??
+    ""
+  ).trim();
+
+  const billNo = Number(
+    source.BillNo ??
+    source.billNo ??
+    0
+  );
+
+  const netAmount = Number(
+    source.NetAmount ??
+    source.netAmount ??
+    source.OriginalNetAmount ??
+    source.originalNetAmount ??
+    0
+  ) || 0;
+
+  return {
+    /*
+    * Keep MongoDB Sales Bill ID.
+    * This provides reliable future updates.
+    */
+    SalesBillId:
+      source._id
+        ? String(source._id)
+        : String(
+          source.SalesBillId ||
+          source.salesBillId ||
+          ""
+        ),
+
+    id:
+      source._id
+        ? String(source._id)
+        : String(
+          source.id ||
+          source.SalesBillId ||
+          source.salesBillId ||
+          `${billSeries}-${billNo}`
+        ),
+
+    _id:
+      source._id
+        ? String(source._id)
+        : undefined,
+
+    BillDate: String(
+      source.BillDate ??
+      source.billDate ??
+      ""
+    ),
+
+    BillSeries: billSeries,
+    BillNo: billNo,
+
+    PartyCode: String(
+      source.PartyCode ??
+      source.partyCode ??
+      ""
+    ),
+
+    PartyName: String(
+      source.PartyName ??
+      source.partyName ??
+      ""
+    ),
+
+    CompanyCode: String(
+      source.CompanyCode ??
+      source.companyCode ??
+      ""
+    ),
+
+    CompanyName: String(
+      source.CompanyName ??
+      source.companyName ??
+      ""
+    ),
+
+    AreaCode: String(
+      source.AreaCode ??
+      source.areaCode ??
+      ""
+    ),
+
+    AreaName: String(
+      source.AreaName ??
+      source.areaName ??
+      ""
+    ),
+
+    SalesmanCode: String(
+      source.SalesmanCode ??
+      source.salesmanCode ??
+      ""
+    ),
+
+    SalesmanName: String(
+      source.SalesmanName ??
+      source.salesmanName ??
+      ""
+    ),
+
+    BillType: String(
+      source.BillType ??
+      source.billType ??
+      ""
+    ),
+
+    NetAmount: netAmount,
+
+    amount: netAmount,
+    billAmount: netAmount,
+
+    selected: true,
+  };
+};
+
+
+/*
+* Return a stable identifier for a bill stored in LoadHeader.Bills.
+*/
+const getLoadTransferBillKey = (
+  bill = {}
+) => {
+  /*
+  * Only SalesBillId represents the actual
+  * SalesHeader document.
+  *
+  * bill._id may belong to an embedded array row.
+  */
+  const salesBillId =
+    String(
+      bill.SalesBillId ||
+      bill.salesBillId ||
+      ""
+    ).trim();
+
+  if (
+    salesBillId &&
+    mongoose.Types.ObjectId.isValid(
+      salesBillId
+    )
+  ) {
+    return `ID:${salesBillId}`;
+  }
+
+  const billSeries =
+    String(
+      bill.BillSeries ??
+      bill.billSeries ??
+      bill.Series ??
+      ""
+    )
+      .trim()
+      .toUpperCase();
+
+  const billNo =
+    Number(
+      bill.BillNo ??
+      bill.billNo ??
+      0
+    );
+
+  return `BILL:${billSeries}:${billNo}`;
+};
+
+
+/*
+* Calculate all LoadHeader totals after adding/removing bills.
+*/
+const calculateLoadTransferSummary = (bills = []) => {
+  const safeBills = Array.isArray(bills)
+    ? bills
+    : [];
+
+  const uniqueParties = new Set();
+  const uniqueSalesmen = new Set();
+  const uniqueAreas = new Set();
+
+  let totalAmount = 0;
+
+  safeBills.forEach((bill) => {
+    const partyValue = String(
+      bill.PartyCode ||
+      bill.partyCode ||
+      bill.PartyName ||
+      bill.partyName ||
+      ""
+    ).trim();
+
+    const salesmanValue = String(
+      bill.SalesmanCode ||
+      bill.salesmanCode ||
+      bill.SalesmanName ||
+      bill.salesmanName ||
+      ""
+    ).trim();
+
+    const areaValue = String(
+      bill.AreaCode ||
+      bill.areaCode ||
+      bill.AreaName ||
+      bill.areaName ||
+      ""
+    ).trim();
+
+    if (partyValue) {
+      uniqueParties.add(partyValue);
+    }
+
+    if (salesmanValue) {
+      uniqueSalesmen.add(salesmanValue);
+    }
+
+    if (areaValue) {
+      uniqueAreas.add(areaValue);
+    }
+
+    totalAmount += Number(
+      bill.NetAmount ??
+      bill.netAmount ??
+      bill.billAmount ??
+      bill.amount ??
+      0
+    ) || 0;
+  });
+
+  const totalBills = safeBills.length;
+  const totalParties = uniqueParties.size;
+  const totalSalesmen = uniqueSalesmen.size;
+  const totalAreas = uniqueAreas.size;
+
+  return {
+    TotalBills: totalBills,
+    TotalParties: totalParties,
+    TotalSalesmen: totalSalesmen,
+    TotalAreas: totalAreas,
+    TotalAmount: Number(totalAmount.toFixed(2)),
+
+    LoadSummary: {
+      totalBills,
+      totalParties,
+      totalSalesmen,
+      totalAreas,
+      totalAmount: Number(totalAmount.toFixed(2)),
+    },
+  };
+};
+
+
+/*
+* Find one load using firm and Load Series + Load No.
+*/
+const findLoadForTransfer = async ({
+  distributorId,
+  firmId,
+  loadSeries,
+  loadNo,
+  session = null,
+}) => {
+  const filter = {
+    DistributorId: String(distributorId).trim(),
+    FirmId: String(firmId).trim(),
+    LoadNo: Number(loadNo),
+    IsCancelled: {
+      $ne: true,
+    },
+  };
+
+  const cleanSeries = String(
+    loadSeries || ""
+  ).trim();
+
+  if (cleanSeries) {
+    filter.LoadSeries =
+      loadTransferExactRegex(cleanSeries);
+  } else {
+    filter.$or = [
+      { LoadSeries: "" },
+      { LoadSeries: null },
+      { LoadSeries: { $exists: false } },
+    ];
+  }
+
+  let query = LoadHeader.findOne(filter);
+
+  if (session) {
+    query = query.session(session);
+  }
+
+  return query;
+};
+
+
+/* =========================================================
+  GET LOAD TRANSFER SOURCE BILLS
+  LOAD TO LOAD MODE
+  ========================================================= */
+
+/* =========================================================
+  GET LOAD TRANSFER SOURCE BILLS
+  SALES HEADER IS THE AUTHORITATIVE SOURCE
+  ========================================================= */
+
+/* =========================================================
+  GET LOAD TRANSFER SOURCE BILLS
+  SALES HEADER IS THE CURRENT SOURCE
+  ========================================================= */
+
+app.get(
+  "/api/load-transfer/load-bills",
+  ensureConnection,
+  async (req, res) => {
+    try {
+      const distributorId = String(
+        req.query.distributorId || ""
+      ).trim();
+
+      const firmId = String(
+        req.query.firmId || ""
+      ).trim();
+
+      const loadSeries = String(
+        req.query.loadSeries || ""
+      ).trim();
+
+      const loadNo = Number(
+        req.query.loadNo || 0
+      );
+
+      if (!distributorId || !firmId) {
+        return res.status(400).json({
+          success: false,
+          message:
+            "Distributor/Firm not found. Please login again.",
+        });
+      }
+
+      if (!loadNo) {
+        return res.status(400).json({
+          success: false,
+          message:
+            "From Load No is required.",
+        });
+      }
+
+      const sourceLoad =
+        await findLoadForTransfer({
+          distributorId,
+          firmId,
+          loadSeries,
+          loadNo,
+        });
+
+      if (!sourceLoad) {
+        return res.status(404).json({
+          success: false,
+          message:
+            "No load found for the entered Load Series and Load No.",
+        });
+      }
+
+      /*
+      * IMPORTANT:
+      * SalesHeader is the final source for current
+      * load assignment.
+      *
+      * Do not use sourceLoad.Bills to prepare the list,
+      * because it may contain an old transferred row.
+      */
+      const salesFilter = {
+        distributorId,
+        firmId,
+
+        LoadNo: Number(
+          sourceLoad.LoadNo
+        ),
+
+        IsLoaded: true,
+
+        isActive: true,
+
+        IsBillCancelled: {
+          $ne: true,
+        },
+      };
+
+      const actualLoadSeries = String(
+        sourceLoad.LoadSeries || ""
+      ).trim();
+
+      if (actualLoadSeries) {
+        salesFilter.LoadSeries =
+          loadTransferExactRegex(
+            actualLoadSeries
+          );
+      } else {
+        salesFilter.$or = [
+          {
+            LoadSeries: "",
+          },
+          {
+            LoadSeries: null,
+          },
+          {
+            LoadSeries: {
+              $exists: false,
+            },
+          },
+        ];
+      }
+
+      const salesBills =
+        await SalesHeader.find(
+          salesFilter
+        )
+          .sort({
+            BillDate: 1,
+            BillNo: 1,
+            _id: 1,
+          })
+          .lean();
+
+      const bills =
+        salesBills.map(
+          (salesBill) =>
+            createLoadTransferBillSnapshot(
+              salesBill
+            )
+        );
+
+      /*
+      * Repair LoadHeader.Bills automatically.
+      * Once a load is opened, stale embedded rows are removed.
+      */
+      const correctedSummary =
+        calculateLoadTransferSummary(
+          bills
+        );
+
+      sourceLoad.Bills = bills;
+
+      sourceLoad.TotalBills =
+        correctedSummary.TotalBills;
+
+      sourceLoad.TotalParties =
+        correctedSummary.TotalParties;
+
+      sourceLoad.TotalSalesmen =
+        correctedSummary.TotalSalesmen;
+
+      sourceLoad.TotalAreas =
+        correctedSummary.TotalAreas;
+
+      sourceLoad.TotalAmount =
+        correctedSummary.TotalAmount;
+
+      sourceLoad.LoadSummary =
+        correctedSummary.LoadSummary;
+
+      sourceLoad.UpdatedBy =
+        "LOAD_TRANSFER_RECONCILIATION";
+
+      await sourceLoad.save();
+
+      return res.json({
+        success: true,
+
+        sourceLoad: {
+          id:
+            String(sourceLoad._id),
+
+          loadSeries:
+            sourceLoad.LoadSeries || "",
+
+          loadNo:
+            sourceLoad.LoadNo || 0,
+
+          loadDate:
+            sourceLoad.LoadDate || "",
+
+          companyCode:
+            sourceLoad.CompanyCode || "",
+
+          companyName:
+            sourceLoad.CompanyName || "",
+
+          totalBills:
+            correctedSummary.TotalBills,
+
+          totalAmount:
+            correctedSummary.TotalAmount,
+        },
+
+        bills,
+
+        count:
+          bills.length,
+      });
+    } catch (error) {
+      console.error(
+        "Load Transfer load lookup error:",
+        error
+      );
+
+      return res.status(500).json({
+        success: false,
+
+        message:
+          "Failed to load bills from the entered load.",
+
+        error:
+          error.message,
+      });
+    }
+  }
+);
+
+/* =========================================================
+  GET LOAD TRANSFER BILL
+  BILL WISE MODE
+  ========================================================= */
+
+app.get(
+  "/api/load-transfer/bill",
+  ensureConnection,
+  async (req, res) => {
+    try {
+      const distributorId = String(
+        req.query.distributorId || ""
+      ).trim();
+
+      const firmId = String(
+        req.query.firmId || ""
+      ).trim();
+
+      const billSeries = String(
+        req.query.billSeries || ""
+      ).trim();
+
+      const billNo = Number(
+        req.query.billNo || 0
+      );
+
+      if (!distributorId || !firmId) {
+        return res.status(400).json({
+          success: false,
+          message:
+            "Distributor/Firm not found. Please login again.",
+        });
+      }
+
+      if (!billNo) {
+        return res.status(400).json({
+          success: false,
+          message: "Bill No is required.",
+        });
+      }
+
+      const billFilter = {
+        distributorId,
+        firmId,
+        BillNo: billNo,
+
+        isActive: true,
+
+        IsBillCancelled: {
+          $ne: true,
+        },
+      };
+
+      if (billSeries) {
+        billFilter.BillSeries =
+          loadTransferExactRegex(
+            billSeries
+          );
+      } else {
+        billFilter.$or = [
+          { BillSeries: "" },
+          { BillSeries: null },
+          {
+            BillSeries: {
+              $exists: false,
+            },
+          },
+        ];
+      }
+
+      const salesBill =
+        await SalesHeader.findOne(
+          billFilter
+        ).lean();
+
+      if (!salesBill) {
+        return res.status(404).json({
+          success: false,
+          message:
+            "Sales bill not found for the entered Bill Series and Bill No.",
+        });
+      }
+
+      const currentLoadSeries = String(
+        salesBill.LoadSeries || ""
+      ).trim();
+
+      const currentLoadNo = Number(
+        salesBill.LoadNo || 0
+      );
+
+      let sourceLoad = null;
+
+      if (currentLoadNo) {
+        sourceLoad =
+          await findLoadForTransfer({
+            distributorId,
+            firmId,
+            loadSeries:
+              currentLoadSeries,
+            loadNo:
+              currentLoadNo,
+          });
+      }
+
+      return res.json({
+        success: true,
+
+        sourceLoad: sourceLoad
+          ? {
+            id: String(sourceLoad._id),
+
+            loadSeries:
+              sourceLoad.LoadSeries || "",
+
+            loadNo:
+              sourceLoad.LoadNo || 0,
+
+            loadDate:
+              sourceLoad.LoadDate || "",
+          }
+          : null,
+
+        bill:
+          createLoadTransferBillSnapshot(
+            salesBill
+          ),
+      });
+    } catch (error) {
+      console.error(
+        "Load Transfer bill lookup error:",
+        error
+      );
+
+      return res.status(500).json({
+        success: false,
+        message:
+          "Failed to load the entered Sales Bill.",
+        error: error.message,
+      });
+    }
+  }
+);
+
+
+/* =========================================================
+  SAVE LOAD TRANSFER
+  ========================================================= */
+
+app.post(
+  "/api/load-transfer",
+  ensureConnection,
+  async (req, res) => {
+    const session =
+      await mongoose.startSession();
+
+    try {
+      session.startTransaction();
+
+      const distributorId = String(req.auth.distributorId || "").trim();
+
+      const firmId = String(req.auth.firmId || "").trim();
+
+      const transferMode = String(
+        req.body.transferMode ||
+        "LOAD_TO_LOAD"
+      )
+        .trim()
+        .toUpperCase();
+
+      const fromLoadSeries = String(
+        req.body.fromLoadSeries || ""
+      ).trim();
+
+      const fromLoadNo = Number(
+        req.body.fromLoadNo || 0
+      );
+
+      const toLoadSeries = String(
+        req.body.toLoadSeries || ""
+      ).trim();
+
+      const toLoadNo = Number(
+        req.body.toLoadNo || 0
+      );
+
+      const selectedBillIds =
+        Array.isArray(
+          req.body.selectedBillIds
+        )
+          ? req.body.selectedBillIds
+            .map((value) =>
+              String(value || "").trim()
+            )
+            .filter(Boolean)
+          : [];
+
+      const updatedBy = String(
+        req.body.updatedBy ||
+        req.body.userName ||
+        "ADMIN"
+      ).trim();
+
+      if (!distributorId || !firmId) {
+        throw new Error(
+          "Distributor/Firm not found. Please login again."
+        );
+      }
+
+      if (!toLoadNo) {
+        throw new Error(
+          "To Load No is required."
+        );
+      }
+
+      if (selectedBillIds.length === 0) {
+        throw new Error(
+          "Please select at least one bill to transfer."
+        );
+      }
+
+      const validBillObjectIds =
+        selectedBillIds
+          .filter((id) =>
+            mongoose.Types.ObjectId.isValid(
+              id
+            )
+          )
+          .map(
+            (id) =>
+              new mongoose.Types.ObjectId(id)
+          );
+
+      if (
+        validBillObjectIds.length !==
+        selectedBillIds.length
+      ) {
+        throw new Error(
+          "One or more selected Bill IDs are invalid."
+        );
+      }
+
+      const destinationLoad =
+        await findLoadForTransfer({
+          distributorId,
+          firmId,
+          loadSeries:
+            toLoadSeries,
+          loadNo:
+            toLoadNo,
+          session,
+        });
+
+      if (!destinationLoad) {
+        throw new Error(
+          "Destination load was not found. First create the To Load, then transfer bills into it."
+        );
+      }
+
+      if (
+        destinationLoad.IsLocked === true
+      ) {
+        throw new Error(
+          "Destination load is locked and cannot accept transferred bills."
+        );
+      }
+
+      if (
+        String(
+          destinationLoad.Status || ""
+        )
+          .trim()
+          .toUpperCase() === "SETTLED"
+      ) {
+        throw new Error(
+          "Destination load is already settled."
+        );
+      }
+
+      let sourceLoad = null;
+
+      if (fromLoadNo) {
+        sourceLoad =
+          await findLoadForTransfer({
+            distributorId,
+            firmId,
+            loadSeries:
+              fromLoadSeries,
+            loadNo:
+              fromLoadNo,
+            session,
+          });
+      }
+
+      if (
+        transferMode ===
+        "LOAD_TO_LOAD" &&
+        !sourceLoad
+      ) {
+        throw new Error(
+          "Source load was not found."
+        );
+      }
+
+      if (
+        sourceLoad &&
+        String(sourceLoad._id) ===
+        String(destinationLoad._id)
+      ) {
+        throw new Error(
+          "From Load and To Load cannot be the same."
+        );
+      }
+
+      if (
+        sourceLoad?.IsLocked === true
+      ) {
+        throw new Error(
+          "Source load is locked and cannot be changed."
+        );
+      }
+
+      if (
+        sourceLoad &&
+        String(
+          sourceLoad.Status || ""
+        )
+          .trim()
+          .toUpperCase() === "SETTLED"
+      ) {
+        throw new Error(
+          "Source load is already settled."
+        );
+      }
+
+      const selectedSalesBills =
+        await SalesHeader.find({
+          _id: {
+            $in:
+              validBillObjectIds,
+          },
+
+          distributorId,
+          firmId,
+
+          isActive: true,
+
+          IsBillCancelled: {
+            $ne: true,
+          },
+        }).session(session);
+
+      if (
+        selectedSalesBills.length !==
+        validBillObjectIds.length
+      ) {
+        throw new Error(
+          "One or more selected Sales Bills were not found."
+        );
+      }
+
+      /*
+      * In Load To Load mode, every selected bill must
+      * still belong to the entered source load.
+      */
+      if (
+        transferMode ===
+        "LOAD_TO_LOAD"
+      ) {
+        const invalidSourceBill =
+          selectedSalesBills.find(
+            (bill) =>
+              String(
+                bill.LoadSeries || ""
+              )
+                .trim()
+                .toUpperCase() !==
+              String(
+                sourceLoad.LoadSeries ||
+                ""
+              )
+                .trim()
+                .toUpperCase() ||
+              Number(
+                bill.LoadNo || 0
+              ) !==
+              Number(
+                sourceLoad.LoadNo || 0
+              )
+          );
+
+        if (invalidSourceBill) {
+          throw new Error(
+            `Bill ${invalidSourceBill.BillSeries ||
+            ""
+            }-${invalidSourceBill.BillNo ||
+            ""
+            } no longer belongs to the selected source load. Refresh and try again.`
+          );
+        }
+      }
+
+      /*
+      * Bill Wise mode also removes the bill from its
+      * actual current source load, when it has one.
+      */
+      const sourceLoadMap =
+        new Map();
+
+      if (sourceLoad) {
+        sourceLoadMap.set(
+          String(sourceLoad._id),
+          sourceLoad
+        );
+      }
+
+      if (
+        transferMode ===
+        "BILL_WISE"
+      ) {
+        for (
+          const salesBill of
+          selectedSalesBills
+        ) {
+          const billCurrentLoadNo =
+            Number(
+              salesBill.LoadNo || 0
+            );
+
+          if (!billCurrentLoadNo) {
+            continue;
+          }
+
+          const billCurrentLoad =
+            await findLoadForTransfer({
+              distributorId,
+              firmId,
+
+              loadSeries:
+                salesBill.LoadSeries ||
+                "",
+
+              loadNo:
+                billCurrentLoadNo,
+
+              session,
+            });
+
+          if (billCurrentLoad) {
+            if (
+              String(
+                billCurrentLoad._id
+              ) ===
+              String(
+                destinationLoad._id
+              )
+            ) {
+              throw new Error(
+                `Bill ${salesBill.BillSeries ||
+                ""
+                }-${salesBill.BillNo
+                } is already available in the destination load.`
+              );
+            }
+
+            sourceLoadMap.set(
+              String(
+                billCurrentLoad._id
+              ),
+              billCurrentLoad
+            );
+          }
+        }
+      }
+
+      const selectedIdSet =
+        new Set(
+          selectedSalesBills.map(
+            (bill) =>
+              String(bill._id)
+          )
+        );
+      const selectedBillKeySet =
+        new Set(
+          selectedSalesBills.map(
+            (bill) => {
+              const billSeries =
+                String(
+                  bill.BillSeries ||
+                  bill.billSeries ||
+                  bill.Series ||
+                  ""
+                )
+                  .trim()
+                  .toUpperCase();
+
+              const billNo =
+                Number(
+                  bill.BillNo ||
+                  bill.billNo ||
+                  0
+                );
+
+              return `${billSeries}:${billNo}`;
+            }
+          )
+        );
+
+      /*
+      * Remove selected bills from every source load.
+      */
+      for (
+        const currentSourceLoad of
+        sourceLoadMap.values()
+      ) {
+        if (
+          currentSourceLoad.IsLocked ===
+          true
+        ) {
+          throw new Error(
+            `Load ${currentSourceLoad.LoadSeries ||
+            ""
+            }-${currentSourceLoad.LoadNo
+            } is locked.`
+          );
+        }
+
+        const sourceBills =
+          Array.isArray(
+            currentSourceLoad.Bills
+          )
+            ? currentSourceLoad.Bills
+            : [];
+
+        const remainingBills =
+          sourceBills.filter(
+            (bill) => {
+              /*
+              * First try the explicit Sales Bill ID.
+              * Do not trust an embedded subdocument _id.
+              */
+              const salesBillId =
+                String(
+                  bill.SalesBillId ||
+                  bill.salesBillId ||
+                  ""
+                ).trim();
+
+              if (
+                salesBillId &&
+                selectedIdSet.has(
+                  salesBillId
+                )
+              ) {
+                return false;
+              }
+
+              /*
+              * Fallback for older LoadHeader rows:
+              * match using Bill Series + Bill No.
+              */
+              const billSeries =
+                String(
+                  bill.BillSeries ??
+                  bill.billSeries ??
+                  bill.Series ??
+                  ""
+                )
+                  .trim()
+                  .toUpperCase();
+
+              const billNo =
+                Number(
+                  bill.BillNo ??
+                  bill.billNo ??
+                  0
+                );
+
+              const billKey =
+                `${billSeries}:${billNo}`;
+
+              if (
+                selectedBillKeySet.has(
+                  billKey
+                )
+              ) {
+                return false;
+              }
+
+              return true;
+            }
+          );
+
+        const sourceSummary =
+          calculateLoadTransferSummary(
+            remainingBills
+          );
+
+        currentSourceLoad.Bills =
+          remainingBills;
+
+        currentSourceLoad.TotalBills =
+          sourceSummary.TotalBills;
+
+        currentSourceLoad.TotalParties =
+          sourceSummary.TotalParties;
+
+        currentSourceLoad.TotalSalesmen =
+          sourceSummary.TotalSalesmen;
+
+        currentSourceLoad.TotalAreas =
+          sourceSummary.TotalAreas;
+
+        currentSourceLoad.TotalAmount =
+          sourceSummary.TotalAmount;
+
+        currentSourceLoad.LoadSummary =
+          sourceSummary.LoadSummary;
+
+        currentSourceLoad.UpdatedBy =
+          updatedBy;
+
+        await currentSourceLoad.save({
+          session,
+        });
+      }
+
+      /*
+      * Add selected bills to destination load.
+      */
+      const destinationBills =
+        Array.isArray(
+          destinationLoad.Bills
+        )
+          ? [
+            ...destinationLoad.Bills,
+          ]
+          : [];
+
+      const destinationKeys =
+        new Set(
+          destinationBills.map(
+            getLoadTransferBillKey
+          )
+        );
+
+      selectedSalesBills.forEach(
+        (salesBill) => {
+          const snapshot =
+            createLoadTransferBillSnapshot(
+              salesBill
+            );
+
+          const key =
+            getLoadTransferBillKey(
+              snapshot
+            );
+
+          if (
+            destinationKeys.has(key)
+          ) {
+            throw new Error(
+              `Bill ${snapshot.BillSeries ||
+              ""
+              }-${snapshot.BillNo
+              } already exists in destination load.`
+            );
+          }
+
+          destinationKeys.add(key);
+          destinationBills.push(
+            snapshot
+          );
+        }
+      );
+
+      const destinationSummary =
+        calculateLoadTransferSummary(
+          destinationBills
+        );
+
+      destinationLoad.Bills =
+        destinationBills;
+
+      destinationLoad.TotalBills =
+        destinationSummary.TotalBills;
+
+      destinationLoad.TotalParties =
+        destinationSummary.TotalParties;
+
+      destinationLoad.TotalSalesmen =
+        destinationSummary.TotalSalesmen;
+
+      destinationLoad.TotalAreas =
+        destinationSummary.TotalAreas;
+
+      destinationLoad.TotalAmount =
+        destinationSummary.TotalAmount;
+
+      destinationLoad.LoadSummary =
+        destinationSummary.LoadSummary;
+
+      destinationLoad.UpdatedBy =
+        updatedBy;
+
+      await destinationLoad.save({
+        session,
+      });
+
+      /*
+      * Finally update the Sales Header load assignment.
+      */
+      await SalesHeader.updateMany(
+        {
+          _id: {
+            $in:
+              validBillObjectIds,
+          },
+
+          distributorId,
+          firmId,
+
+          isActive: true,
+        },
+
+        {
+          $set: {
+            IsLoaded: true,
+
+            LoadSeries:
+              String(
+                destinationLoad.LoadSeries ||
+                ""
+              ).trim(),
+
+            LoadNo:
+              Number(
+                destinationLoad.LoadNo
+              ),
+          },
+        },
+
+        {
+          session,
+        }
+      );
+
+      await commitTransactionReliably(session);
+
+      return res.json({
+        success: true,
+
+        message:
+          selectedSalesBills.length === 1
+            ? "Bill transferred successfully."
+            : `${selectedSalesBills.length} bills transferred successfully.`,
+
+        transferredBills:
+          selectedSalesBills.length,
+
+        destinationLoad: {
+          id:
+            String(
+              destinationLoad._id
+            ),
+
+          loadSeries:
+            destinationLoad.LoadSeries ||
+            "",
+
+          loadNo:
+            destinationLoad.LoadNo,
+
+          totalBills:
+            destinationSummary.TotalBills,
+
+          totalAmount:
+            destinationSummary.TotalAmount,
+        },
+      });
+    } catch (error) {
+      await session.abortTransaction();
+
+      console.error(
+        "Load Transfer save error:",
+        error
+      );
+
+      return res.status(500).json({
+        success: false,
+        message:
+          error.message ||
+          "Load Transfer failed.",
+      });
+    } finally {
+      session.endSession();
+    }
+  }
+);
+
+app.get("/api/print-load", ensureConnection, async (req, res) => {
+  try {
+    const { distributorId, firmId, loadSeries, loadNo, reportLevel } = req.query;
+
+    const load = await LoadHeader.findOne({
+      DistributorId: distributorId,
+      FirmId: firmId,
+      LoadSeries: String(loadSeries).trim(),
+      LoadNo: Number(loadNo),
+      IsCancelled: false,
+    }).lean();
+
+    if (!load) {
+      return res.status(404).json({ success: false, message: "Load not found" });
+    }
+
+    const loadBills = load.Bills || [];
+    let rows = [];
+
+    if (reportLevel === "party_wise") {
+      rows = loadBills.map((b, index) => ({
+        sr: index + 1,
+        billDate: b.BillDate || b.billDate || "",
+        companyName: b.CompanyName || load.CompanyName || "",
+        billSeries: b.Series || b.BillSeries || b.billSeries || "",
+        billNo: b.BillNo || b.billNo || "",
+        billType: b.BillType || b.billType || "CREDIT",
+        partyCode: b.PartyCode || b.partyCode || "",
+        partyName: b.PartyName || b.partyName || "",
+        amount: Number(b.Amount || b.billAmount || b.NetAmount || 0),
+        cash: Number(b.Cash || b.cash || 0),
+        cheque: Number(b.Cheque || b.cheque || 0),
+        online: Number(b.Online || b.online || 0),
+        upi: Number(b.UPI || b.upi || 0),
+      }));
+    } else {
+      const billConditions = loadBills
+        .map((b) => ({
+          BillSeries: String(b.Series || b.BillSeries || b.billSeries || "").trim(),
+          BillNo: Number(b.BillNo || b.billNo),
+        }))
+        .filter((b) => b.BillSeries && b.BillNo);
+
+      const salesBills = await SalesHeader.find({
+        distributorId,
+        firmId,
+        isActive: true,
+        $or: billConditions,
+      }).lean();
+
+      const productMap = {};
+
+      salesBills.forEach((bill) => {
+        (bill.items || []).forEach((p) => {
+          const prodCode = p.productCode || p.ProdCode || p.code || "";
+          const prodName = p.productName || p.ProdName || p.name || p.product || "";
+          const mrp = Number(p.mrp || p.MRP || 0);
+          const hsnCode = p.hsnCode || p.HSNCode || p.hsn || "";
+
+          const key = `${prodCode}_${prodName}_${mrp}_${hsnCode}`;
+
+          if (!productMap[key]) {
+            productMap[key] = {
+              mrp,
+              prodName,
+              hsnCode,
+              cases: 0,
+              outer: 0,
+              unitQty: 0,
+              totalQty: 0,
+              netAmt: 0,
+            };
+          }
+
+          const qty = Number(p.qty || p.Qty || p.quantity || 0);
+          const boxPack = Number(p.boxPack || p.BoxPack || 0);
+
+          productMap[key].cases += Number(p.cases || p.Cases || (boxPack ? Math.floor(qty / boxPack) : 0));
+          productMap[key].outer += Number(p.outer || p.Outer || 0);
+          productMap[key].unitQty += Number(p.unitQty || p.UnitQty || 0);
+          productMap[key].totalQty += Number(p.totalQty || p.TotalQty || qty);
+          productMap[key].netAmt += Number(p.amount || p.Amount || p.netAmt || p.NetAmount || p.taxable || 0);
+        });
+      });
+
+      rows = Object.values(productMap).map((r, index) => ({
+        sr: index + 1,
+        ...r,
+      }));
+    }
+
+    res.json({
+      success: true,
+      reportLevel,
+      header: {
+        firmName: load.FirmName || "",
+        loadSeries: load.LoadSeries,
+        loadNo: load.LoadNo,
+        loadDate: load.LoadDate,
+        narration: load.Narration || "",
+        totalBills: load.TotalBills || loadBills.length,
+        totalParty: new Set(loadBills.map((b) => b.PartyCode || b.partyCode)).size,
+        totalAmount: Number(load.TotalAmount || 0),
+        areaName: loadBills[0]?.AreaName || "",
+        userName: load.CreatedBy || "ADMIN",
+      },
+      rows,
+    });
+  } catch (error) {
+    console.error("Print Load error:", error);
+    res.status(500).json({ success: false, message: "Failed to load print load", error: error.message });
+  }
+});
+
+const settleLoadBillSchema = new mongoose.Schema(
+  {
+    sr: Number,
+
+    billSeries: String,
+    billNo: String,
+    billDate: String,
+
+    partyCode: String,
+    partyName: String,
+    salesman: String,
+
+    billType: String,
+    billAmount: Number,
+    receiptAmount: Number,
+    pendingAmount: Number,
+
+    receiptSeries: String,
+    receiptNo: String,
+    receiptMode: String,
+    bankCash: String,
+    drawerBank: {
+      type: String,
+      default: "",
+    },
+    bankName: String,
+    chequeNo: String,
+    chequeDate: String,
+    micr: String,
+    upiId: String,
+    transactionNo: String,
+
+    adjust: String,
+    pending: String,
+    cancel: String,
+    status: String,
+    originalBillAmount: {
+      type: Number,
+      default: 0,
+    },
+
+    receiptDate: {
+      type: String,
+      default: "",
+    },
+
+    bankCode: {
+      type: String,
+      default: "",
+    },
+
+    receiptNarration: {
+      type: String,
+      default: "",
+    },
+
+    transferToNextLoad: {
+      type: Boolean,
+      default: false,
+    },
+  },
+  { _id: false }
+);
+
+const settleLoadSchema = new mongoose.Schema(
+  {
+    distributorId: { type: String, required: true },
+    firmId: { type: String, required: true },
+    firmName: { type: String, default: "" },
+
+    loadSeries: { type: String, default: "" },
+    loadNo: { type: String, required: true },
+    loadDate: { type: String, default: "" },
+    settlementDate: { type: String, default: "" },
+    narration: { type: String, default: "" },
+
+    totalBills: { type: Number, default: 0 },
+    totalAmount: { type: Number, default: 0 },
+    totalReceiptAmount: { type: Number, default: 0 },
+    totalPendingAmount: { type: Number, default: 0 },
+    totalCancelBills: { type: Number, default: 0 },
+
+    status: { type: String, default: "SETTLED" },
+    isActive: { type: Boolean, default: true },
+
+    bills: [settleLoadBillSchema],
+  },
+  { timestamps: true, collection: "T_SettleLoad" }
+);
+
+settleLoadSchema.index(
+  { distributorId: 1, firmId: 1, loadSeries: 1, loadNo: 1 },
+  { unique: true }
+);
+
+const SettleLoad =
+  mongoose.models.T_SettleLoad ||
+  mongoose.model("T_SettleLoad", settleLoadSchema);
+
+const receiptSchema = new mongoose.Schema(
+  {
+    distributorId: String,
+    firmId: String,
+    firmName: { type: String, default: "" },
+
+    receiptDate: String,
+    receiptSeries: { type: String, default: "RC" },
+    rno: Number,
+
+    billSeries: String,
+    billNo: String,
+    billDate: String,
+    partyId: { type: String, default: "" },
+    partyName: String,
+
+    salesman: { type: String, default: "" },
+    salesmanId: { type: String, default: "" },
+    salesmanName: { type: String, default: "" },
+    narration: { type: String, default: "" },
+
+    bankCode: { type: String, default: "" },
+    bankCash: { type: String, default: "" },
+    bankCashName: { type: String, default: "" },
+    bankCashGroup: { type: String, default: "" },
+    drawerBankId: { type: String, default: "" },
+    drawerBankName: { type: String, default: "" },
+
+    loadSeries: { type: String, default: "" },
+    loadNo: { type: String, default: "" },
+    rloadNo: { type: String, default: "" },
+
+    docketNo: { type: String, default: "" },
+
+    addUser: { type: String, default: "" },
+    editUser: { type: String, default: "" },
+    editDateTime: { type: String, default: "" },
+
+    receiptAmount: Number,
+    chequeNo: String,
+    chequeDate: String,
+    micr: String,
+
+    receiptSource: {
+      type: String,
+      default: "DIRECT", // DIRECT / SETTLE_LOAD / DOCKET
+    },
+
+    receiptBills: [
+      {
+        trnSeries: String,
+        trnNo: String,
+        trnDate: String,
+        amount: Number,
+        adjustAmt: Number,
+        balanceAmt: Number,
+        nowAdjust: Number,
+        discAmt: Number,
+        appliedAmount: Number,
+        legacyOverAllocation: Boolean,
+        remark: String,
+      },
+    ],
+  },
+  { timestamps: true, collection: "T_Receipt" }
+);
+receiptSchema.index(
+  { distributorId: 1, firmId: 1, billSeries: 1, billNo: 1 },
+  { unique: true }
+);
+productSchema.index({ distributorId: 1, firmId: 1, productCode: 1 }, { unique: true });
+receiptSchema.index(
+  { distributorId: 1, firmId: 1, receiptSeries: 1, rno: 1 },
+  { unique: true }
+);
+
+const Receipt =
+  mongoose.models.T_Receipt || mongoose.model("T_Receipt", receiptSchema);
+
+app.post(
+  "/api/settle-load/save",
+  ensureConnection,
+  securityRouter.authorizeRequest("SALES", "SETTLE_LOAD", "add"),
+  async (req, res) => {
+    const session =
+      await mongoose.startSession();
+
+    try {
+      session.startTransaction();
+
+      const {
+        distributorId,
+        firmId,
+        firmName = "",
+        loadSeries = "",
+        loadNo,
+        loadDate = "",
+        settlementDate = "",
+        narration = "",
+        items = [],
+        summary = {},
+      } = req.body;
+
+      const cleanLoadSeries = String(
+        loadSeries || ""
+      ).trim();
+
+      const cleanLoadNo = String(
+        loadNo || ""
+      ).trim();
+
+      if (!distributorId || !firmId) {
+        throw new Error(
+          "Distributor/Firm not found"
+        );
+      }
+
+      if (!cleanLoadNo) {
+        throw new Error(
+          "Load No is required"
+        );
+      }
+
+      if (
+        !Array.isArray(items) ||
+        items.length === 0
+      ) {
+        throw new Error(
+          "No Settle Load bills found"
+        );
+      }
+
+      const load = await LoadHeader.findOne({
+        DistributorId: distributorId,
+        FirmId: firmId,
+        LoadSeries: cleanLoadSeries,
+        LoadNo: Number(cleanLoadNo),
+        IsCancelled: {
+          $ne: true,
+        },
+      }).session(session);
+
+      if (!load) {
+        throw new Error(
+          "Original Load not found"
+        );
+      }
+
+      const normalizedItems = items.map(
+        (item, index) => {
+          const isCancelled =
+            item.cancel === "Y";
+
+          const isPending =
+            item.pending === "Y" ||
+            item.transferToNextLoad === true;
+
+          const originalBillAmount = Number(
+            item.originalBillAmount ??
+            item.billAmount ??
+            0
+          );
+
+          const billAmount = isCancelled
+            ? 0
+            : originalBillAmount;
+
+          const receiptAmount =
+            isCancelled || isPending
+              ? 0
+              : Number(
+                item.receiptAmount || 0
+              );
+
+          const pendingAmount = isCancelled
+            ? 0
+            : isPending
+              ? originalBillAmount
+              : Math.max(
+                billAmount -
+                receiptAmount,
+                0
+              );
+
+          return {
+            sr: index + 1,
+
+            billSeries: String(
+              item.billSeries || ""
+            ).trim(),
+
+            billNo: String(
+              item.billNo || ""
+            ).trim(),
+
+            billDate:
+              item.billDate || "",
+
+            partyCode:
+              item.partyCode || "",
+
+            partyName:
+              item.partyName || "",
+
+            salesman:
+              item.salesman || "",
+
+            billType:
+              item.billType || "Credit",
+
+            originalBillAmount,
+            billAmount,
+            receiptAmount,
+            pendingAmount,
+
+            receiptDate:
+              item.receiptDate ||
+              settlementDate ||
+              "",
+
+            receiptSeries:
+              item.receiptSeries || "RC",
+
+            receiptNo: String(
+              item.receiptNo || ""
+            ),
+
+            receiptMode:
+              item.receiptMode || "",
+
+            bankCode:
+              item.bankCode || "",
+
+            bankCash:
+              item.bankCash ||
+              item.bankName ||
+              "",
+
+            bankName:
+              item.bankName ||
+              item.bankCash ||
+              "",
+            drawerBank:
+              String(
+                item.drawerBank || ""
+              ).trim(),
+            chequeNo:
+              item.chequeNo || "",
+
+            chequeDate:
+              item.chequeDate || "",
+
+            micr:
+              item.micr || "",
+
+            upiId:
+              item.upiId || "",
+
+            transactionNo:
+              item.transactionNo || "",
+
+            receiptNarration:
+              item.receiptNarration || "",
+
+            adjust:
+              isCancelled || isPending
+                ? "N"
+                : item.adjust || "N",
+
+            pending:
+              isPending ? "Y" : "N",
+
+            cancel:
+              isCancelled ? "Y" : "N",
+
+            transferToNextLoad:
+              isPending,
+
+            status:
+              isCancelled
+                ? "Cancelled"
+                : isPending
+                  ? "Pending"
+                  : pendingAmount <= 0 &&
+                    receiptAmount > 0
+                    ? "Received"
+                    : receiptAmount > 0
+                      ? "Partial"
+                      : item.adjust === "Y"
+                        ? "Adjusted"
+                        : "Pending",
+          };
+        }
+      );
+
+      /*
+      * Save or update T_SettleLoad.
+      */
+      const totalAmount =
+        normalizedItems.reduce(
+          (total, item) =>
+            total +
+            Number(item.billAmount || 0),
+          0
+        );
+
+      const totalReceiptAmount =
+        normalizedItems.reduce(
+          (total, item) =>
+            total +
+            Number(item.receiptAmount || 0),
+          0
+        );
+
+      const totalPendingAmount =
+        normalizedItems.reduce(
+          (total, item) =>
+            total +
+            Number(item.pendingAmount || 0),
+          0
+        );
+
+      const totalCancelBills =
+        normalizedItems.filter(
+          (item) => item.cancel === "Y"
+        ).length;
+
+      const settleLoad =
+        await SettleLoad.findOneAndUpdate(
+          {
+            distributorId,
+            firmId,
+            loadSeries: cleanLoadSeries,
+            loadNo: cleanLoadNo,
+          },
+          {
+            $set: {
+              firmName,
+              loadDate:
+                loadDate ||
+                load.LoadDate ||
+                "",
+
+              settlementDate,
+              narration,
+
+              totalBills:
+                normalizedItems.length,
+
+              totalAmount:
+                Number(
+                  summary.totalAmount ??
+                  totalAmount
+                ),
+
+              totalReceiptAmount:
+                Number(
+                  summary.totalReceiptAmount ??
+                  totalReceiptAmount
+                ),
+
+              totalPendingAmount:
+                Number(
+                  summary.totalPendingAmount ??
+                  totalPendingAmount
+                ),
+
+              totalCancelBills:
+                Number(
+                  summary.totalCancelBills ??
+                  totalCancelBills
+                ),
+
+              status: "SETTLED",
+              isActive: true,
+              bills: normalizedItems,
+            },
+          },
+          {
+            new: true,
+            upsert: true,
+            session,
+            setDefaultsOnInsert: true,
+          }
+        );
+
+      /*
+      * Create or update Receipt records only now.
+      */
+      const receiptItems =
+        normalizedItems.filter(
+          (item) =>
+            item.cancel !== "Y" &&
+            item.pending !== "Y" &&
+            Number(item.receiptAmount || 0) >
+            0
+        );
+
+      for (const item of receiptItems) {
+        let receiptNumber = Number(
+          item.receiptNo || 0
+        );
+
+        if (!receiptNumber) {
+          const lastReceipt =
+            await Receipt.findOne({
+              distributorId,
+              firmId,
+            })
+              .sort({
+                rno: -1,
+              })
+              .session(session)
+              .lean();
+
+          receiptNumber =
+            Number(lastReceipt?.rno || 0) +
+            1;
+        }
+
+        await Receipt.findOneAndUpdate(
+          {
+            distributorId,
+            firmId,
+            billSeries:
+              item.billSeries,
+            billNo:
+              item.billNo,
+          },
+          {
+            $set: {
+              firmName,
+
+              receiptDate:
+                item.receiptDate ||
+                settlementDate,
+
+              receiptSeries:
+                item.receiptSeries ||
+                "RC",
+
+              rno: receiptNumber,
+
+              billSeries:
+                item.billSeries,
+
+              billNo:
+                item.billNo,
+
+              billDate:
+                item.billDate,
+
+              partyName:
+                item.partyName,
+
+              salesman:
+                item.salesman,
+
+              narration:
+                item.receiptNarration ||
+                narration,
+
+              bankCode:
+                item.bankCode || "",
+
+              bankCash:
+                item.bankCash ||
+                item.bankName ||
+                "",
+              drawerBank:
+                item.drawerBank || "",
+              loadSeries:
+                cleanLoadSeries,
+
+              loadNo:
+                cleanLoadNo,
+
+              receiptAmount:
+                Number(
+                  item.receiptAmount || 0
+                ),
+
+              chequeNo:
+                item.chequeNo || "",
+
+              chequeDate:
+                item.chequeDate || "",
+
+              micr:
+                item.micr || "",
+
+              receiptSource:
+                "SETTLE_LOAD",
+
+              addUser:
+                req.body.userName ||
+                "ADMIN",
+
+              receiptBills: [
+                {
+                  trnSeries:
+                    item.billSeries,
+
+                  trnNo:
+                    item.billNo,
+
+                  trnDate:
+                    item.billDate,
+
+                  amount:
+                    item.originalBillAmount,
+
+                  adjustAmt:
+                    Number(
+                      item.receiptAmount ||
+                      0
+                    ),
+
+                  balanceAmt:
+                    Number(
+                      item.pendingAmount ||
+                      0
+                    ),
+
+                  nowAdjust:
+                    Number(
+                      item.receiptAmount ||
+                      0
+                    ),
+
+                  remark:
+                    item.receiptNarration ||
+                    "",
+                },
+              ],
+            },
+          },
+          {
+            upsert: true,
+            new: true,
+            session,
+          }
+        );
+      }
+
+      /*
+      * Remove receipts when user changed a bill to
+      * Pending or Cancel before saving.
+      */
+      const noReceiptItems =
+        normalizedItems.filter(
+          (item) =>
+            item.cancel === "Y" ||
+            item.pending === "Y" ||
+            Number(item.receiptAmount || 0) <=
+            0
+        );
+
+      for (const item of noReceiptItems) {
+        await Receipt.updateMany(
+          {
+            distributorId,
+            firmId,
+            billSeries:
+              item.billSeries,
+            billNo:
+              item.billNo,
+            receiptSource:
+              "SETTLE_LOAD",
+          },
+          { $set: { status: "REVERSED", reversedAt: new Date(), reversedBy: req.auth.userId, reversalReason: "Settlement allocation removed" } },
+          { session }
+        );
+      }
+
+      /*
+      * Pending bills become available in Create Load.
+      */
+      const pendingConditions =
+        normalizedItems
+          .filter(
+            (item) =>
+              item.pending === "Y" ||
+              item.transferToNextLoad ===
+              true
+          )
+          .map((item) => ({
+            BillSeries:
+              item.billSeries,
+
+            BillNo: Number(
+              item.billNo || 0
+            ),
+          }))
+          .filter(
+            (item) =>
+              item.BillNo
+          );
+
+      if (pendingConditions.length > 0) {
+        await SalesHeader.updateMany(
+          {
+            distributorId,
+            firmId,
+            isActive: true,
+            $or: pendingConditions,
+          },
+          {
+            $set: {
+              IsLoaded: false,
+              LoadSeries: "",
+              LoadNo: null,
+            },
+          },
+          {
+            session,
+          }
+        );
+      }
+
+      /*
+      * Receipt, Adjust and Cancel bills remain processed
+      * and must not appear in Create Load.
+      */
+      const completedConditions =
+        normalizedItems
+          .filter(
+            (item) =>
+              item.pending !== "Y" &&
+              item.transferToNextLoad !==
+              true
+          )
+          .map((item) => ({
+            BillSeries:
+              item.billSeries,
+
+            BillNo: Number(
+              item.billNo || 0
+            ),
+          }))
+          .filter(
+            (item) =>
+              item.BillNo
+          );
+
+      if (
+        completedConditions.length > 0
+      ) {
+        await SalesHeader.updateMany(
+          {
+            distributorId,
+            firmId,
+            isActive: true,
+            $or: completedConditions,
+          },
+          {
+            $set: {
+              IsLoaded: true,
+              LoadSeries:
+                cleanLoadSeries,
+              LoadNo:
+                Number(cleanLoadNo),
+            },
+          },
+          {
+            session,
+          }
+        );
+      }
+
+      /*
+      * Save F4 Bill Type changes only now.
+      */
+      for (const item of normalizedItems) {
+        await SalesHeader.updateOne(
+          {
+            distributorId,
+            firmId,
+            isActive: true,
+            BillSeries:
+              item.billSeries,
+            BillNo:
+              Number(item.billNo || 0),
+          },
+          {
+            $set: {
+              BillType:
+                item.billType ||
+                "Credit",
+            },
+          },
+          {
+            session,
+          }
+        );
+      }
+
+      /*
+      * Update original Load only after Save.
+      */
+      load.Bills = normalizedItems
+        .filter(
+          (item) =>
+            item.cancel !== "Y" &&
+            item.pending !== "Y"
+        )
+        .map((item, index) => ({
+          Sl: index + 1,
+          Selected: true,
+
+          BillDate:
+            item.billDate,
+
+          Series:
+            item.billSeries,
+
+          BillSeries:
+            item.billSeries,
+
+          BillNo:
+            Number(item.billNo || 0),
+
+          BillType:
+            item.billType,
+
+          PartyCode:
+            item.partyCode,
+
+          PartyName:
+            item.partyName,
+
+          SalesmanName:
+            item.salesman,
+
+          Amount:
+            Number(
+              item.billAmount || 0
+            ),
+
+          ReceiptAmount:
+            Number(
+              item.receiptAmount || 0
+            ),
+
+          Adjust:
+            item.adjust,
+
+          Pending:
+            item.pending,
+
+          Status:
+            item.status,
+
+          ReceiptSeries:
+            item.receiptSeries,
+
+          ReceiptNo:
+            item.receiptNo,
+
+          ReceiptMode:
+            item.receiptMode,
+
+          ChequeNo:
+            item.chequeNo,
+
+          ChequeDate:
+            item.chequeDate,
+
+          BankName:
+            item.bankName,
+
+          MICR:
+            item.micr,
+        }));
+
+      load.CancelledBills =
+        normalizedItems.filter(
+          (item) =>
+            item.cancel === "Y"
+        );
+
+      load.PendingBills =
+        normalizedItems.filter(
+          (item) =>
+            item.pending === "Y"
+        );
+
+      load.TotalBills =
+        load.Bills.length;
+
+      load.TotalAmount =
+        load.Bills.reduce(
+          (total, bill) =>
+            total +
+            Number(bill.Amount || 0),
+          0
+        );
+
+      load.SettlementDate =
+        settlementDate;
+
+      load.SettlementNarration =
+        narration;
+
+      load.Status = "SETTLED";
+      load.IsSettled = true;
+
+      await load.save({
+        session,
+      });
+
+      await commitTransactionReliably(session);
+
+      return res.json({
+        success: true,
+        message:
+          "Settle Load and all bill changes saved successfully",
+        data: settleLoad,
+      });
+    } catch (error) {
+      await session.abortTransaction();
+
+      console.error(
+        "Settle Load transaction error:",
+        error
+      );
+
+      return res.status(500).json({
+        success: false,
+        message:
+          error.message ||
+          "Settle Load save failed",
+      });
+    } finally {
+      session.endSession();
+    }
+  }
+);
+app.post(
+  "/api/settle-load",
+  ensureConnection,
+  securityRouter.authorizeRequest("SALES", "SETTLE_LOAD", "add"),
+  async (req, res) => {
+  try {
+    const {
+      distributorId,
+      firmId,
+      firmName = "",
+      loadSeries = "",
+      loadNo = "",
+      loadDate = "",
+      settlementDate = "",
+      narration = "",
+      items = [],
+    } = req.body;
+
+    const cleanLoadSeries = String(loadSeries || "").trim();
+    const cleanLoadNo = String(loadNo || "").trim();
+
+    if (!distributorId || !firmId) {
+      return res.status(400).json({
+        success: false,
+        message: "Distributor/Firm not found",
+      });
+    }
+
+    if (!cleanLoadNo) {
+      return res.status(400).json({
+        success: false,
+        message: "Load No is required",
+      });
+    }
+
+    if (!Array.isArray(items) || items.length === 0) {
+      return res.status(400).json({
+        success: false,
+        message: "No settle load bills found",
+      });
+    }
+
+    const exists = await SettleLoad.findOne({
+      distributorId,
+      firmId,
+      loadSeries: cleanLoadSeries,
+      loadNo: cleanLoadNo,
+      isActive: true,
+    });
+
+    if (exists) {
+      return res.status(409).json({
+        success: false,
+        message:
+          "Duplicate load not saved. This Load Series and Load No is already settled.",
+      });
+    }
+
+    const bills = items.map((item, index) => {
+      const billAmount = Number(item.billAmount || 0);
+      const receiptAmount = Number(item.receiptAmount || 0);
+      const pendingAmount = Math.max(billAmount - receiptAmount, 0);
+
+      return {
+        sr: index + 1,
+
+        billSeries: String(item.billSeries || ""),
+        billNo: String(item.billNo || ""),
+        billDate: item.billDate || "",
+
+        partyCode: item.partyCode || "",
+        partyName: item.partyName || "",
+        salesman: item.salesman || "",
+
+        billType: item.billType || "Credit",
+        billAmount,
+        receiptAmount,
+        pendingAmount,
+
+        receiptSeries: item.receiptSeries || "",
+        receiptNo: String(item.receiptNo || ""),
+        receiptMode: item.receiptMode || "",
+        bankCash: item.bankCash || item.bankName || "",
+        bankName: item.bankName || item.bankCash || "",
+        chequeNo: item.chequeNo || "",
+        chequeDate: item.chequeDate || "",
+        micr: item.micr || "",
+        upiId: item.upiId || "",
+        transactionNo: item.transactionNo || "",
+
+        adjust: item.adjust || "N",
+        pending: item.pending || "N",
+        cancel: item.cancel || "N",
+        status:
+          item.cancel === "Y"
+            ? "Cancelled"
+            : pendingAmount <= 0 && billAmount > 0
+              ? "Receipt"
+              : "Pending",
+      };
+    });
+
+    const totalAmount = bills.reduce((sum, x) => sum + Number(x.billAmount || 0), 0);
+    const totalReceiptAmount = bills.reduce((sum, x) => sum + Number(x.receiptAmount || 0), 0);
+    const totalPendingAmount = bills.reduce((sum, x) => sum + Number(x.pendingAmount || 0), 0);
+    const totalCancelBills = bills.filter((x) => x.cancel === "Y").length;
+
+    const saved = await SettleLoad.create({
+      distributorId,
+      firmId,
+      firmName,
+      loadSeries: cleanLoadSeries,
+      loadNo: cleanLoadNo,
+      loadDate,
+      settlementDate,
+      narration,
+      totalBills: bills.length,
+      totalAmount,
+      totalReceiptAmount,
+      totalPendingAmount,
+      totalCancelBills,
+      status: "SETTLED",
+      bills,
+    });
+
+    // ✅ Make Pending bills available again in Create Load
+    const pendingConditions = items
+      .filter((x) => x.pending === "Y" || x.transferToNextLoad === true)
+      .map((x) => ({
+        BillSeries: String(x.billSeries || "").trim(),
+        BillNo: Number(x.billNo || 0),
+      }))
+      .filter((x) => x.BillSeries && x.BillNo);
+
+    if (pendingConditions.length > 0) {
+      await SalesHeader.updateMany(
+        {
+          distributorId,
+          firmId,
+          isActive: true,
+          $or: pendingConditions,
+        },
+        {
+          $set: {
+            IsLoaded: false,
+            LoadSeries: "",
+            LoadNo: null,
+          },
+        }
+      );
+    }
+
+    res.json({
+      success: true,
+      message: "Settle Load saved successfully",
+      data: saved,
+    });
+  } catch (error) {
+    console.error("Settle load save error:", error);
+
+    if (error.code === 11000) {
+      return res.status(409).json({
+        success: false,
+        message:
+          "Duplicate load not saved. This Load Series and Load No is already settled.",
+      });
+    }
+
+    res.status(500).json({
+      success: false,
+      message: "Settle load save failed",
+      error: error.message,
+    });
+  }
+});
+app.get(
+  "/api/settle-load/list",
+  ensureConnection,
+  securityRouter.authorizeRequest("SALES", "SETTLE_LOAD", "view"),
+  async (req, res) => {
+  try {
+    const distributorId = String(req.query.distributorId || "").trim();
+    const firmId = String(req.query.firmId || "").trim();
+
+    if (!distributorId || !firmId) {
+      return res.status(400).json({
+        success: false,
+        message: "Distributor/Firm not found",
+      });
+    }
+
+    const records = await SettleLoad.find({
+      distributorId,
+      firmId,
+      isActive: true,
+    })
+      .sort({ createdAt: -1 })
+      .lean();
+
+    res.json({
+      success: true,
+      records,
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: "Failed to load settle load list",
+      error: error.message,
+    });
+  }
+});
+// app.get(
+//   "/api/settle-load/list",
+//   ensureConnection,
+//   async (req, res) => {
+//     try {
+//       /* =====================================================
+//         REQUEST PARAMETERS
+//         ===================================================== */
+
+//       const distributorId = String(
+//         req.query.distributorId || ""
+//       ).trim();
+
+//       const firmId = String(
+//         req.query.firmId || ""
+//       ).trim();
+
+//       const search = String(
+//         req.query.search || ""
+//       ).trim();
+
+//       const fromDate = String(
+//         req.query.fromDate || ""
+//       ).trim();
+
+//       const toDate = String(
+//         req.query.toDate || ""
+//       ).trim();
+
+//       const settlementFromDate = String(
+//         req.query.settlementFromDate || ""
+//       ).trim();
+
+//       const settlementToDate = String(
+//         req.query.settlementToDate || ""
+//       ).trim();
+
+//       const loadSeries = String(
+//         req.query.loadSeries || ""
+//       ).trim();
+
+//       const loadNoText = String(
+//         req.query.loadNo || ""
+//       ).trim();
+
+//       const status = String(
+//         req.query.status || ""
+//       ).trim();
+
+//       const createdBy = String(
+//         req.query.createdBy ||
+//         req.query.addUser ||
+//         ""
+//       ).trim();
+
+//       const minAmountText = String(
+//         req.query.minAmount || ""
+//       ).trim();
+
+//       const maxAmountText = String(
+//         req.query.maxAmount || ""
+//       ).trim();
+
+//       const minReceiptText = String(
+//         req.query.minReceiptAmount || ""
+//       ).trim();
+
+//       const maxReceiptText = String(
+//         req.query.maxReceiptAmount || ""
+//       ).trim();
+
+//       const minPendingText = String(
+//         req.query.minPendingAmount || ""
+//       ).trim();
+
+//       const maxPendingText = String(
+//         req.query.maxPendingAmount || ""
+//       ).trim();
+
+//       const requestedPage =
+//         Number.parseInt(
+//           req.query.page,
+//           10
+//         );
+
+//       const requestedLimit =
+//         Number.parseInt(
+//           req.query.limit,
+//           10
+//         );
+
+//       const page =
+//         Number.isFinite(requestedPage) &&
+//           requestedPage > 0
+//           ? requestedPage
+//           : 1;
+
+//       const limit =
+//         Number.isFinite(requestedLimit) &&
+//           requestedLimit > 0
+//           ? Math.min(
+//             requestedLimit,
+//             100
+//           )
+//           : 10;
+
+//       if (
+//         !distributorId ||
+//         !firmId
+//       ) {
+//         return res.status(400).json({
+//           success: false,
+//           message:
+//             "Distributor/Firm not found",
+//         });
+//       }
+
+//       /* =====================================================
+//         REGEX HELPERS
+//         ===================================================== */
+
+//       const escapeRegex = (value) =>
+//         String(value || "").replace(
+//           /[.*+?^${}()|[\]\\]/g,
+//           "\\$&"
+//         );
+
+//       const exactRegex = (value) =>
+//         new RegExp(
+//           `^${escapeRegex(
+//             String(value || "").trim()
+//           )}$`,
+//           "i"
+//         );
+
+//       const containsRegex = (value) =>
+//         new RegExp(
+//           escapeRegex(
+//             String(value || "").trim()
+//           ),
+//           "i"
+//         );
+
+//       /* =====================================================
+//         BASE FILTER
+//         ===================================================== */
+
+//       const filter = {
+//         distributorId,
+//         firmId,
+
+//         isActive: {
+//           $ne: false,
+//         },
+//       };
+
+//       const andConditions = [];
+
+//       /* =====================================================
+//         LOAD DATE FILTER
+//         ===================================================== */
+
+//       if (
+//         fromDate ||
+//         toDate
+//       ) {
+//         const dateCondition = {};
+
+//         if (fromDate) {
+//           const startDate =
+//             new Date(
+//               `${fromDate}T00:00:00.000Z`
+//             );
+
+//           if (
+//             !Number.isNaN(
+//               startDate.getTime()
+//             )
+//           ) {
+//             dateCondition.$gte =
+//               startDate;
+//           }
+//         }
+
+//         if (toDate) {
+//           const endDate =
+//             new Date(
+//               `${toDate}T23:59:59.999Z`
+//             );
+
+//           if (
+//             !Number.isNaN(
+//               endDate.getTime()
+//             )
+//           ) {
+//             dateCondition.$lte =
+//               endDate;
+//           }
+//         }
+
+//         if (
+//           Object.keys(
+//             dateCondition
+//           ).length > 0
+//         ) {
+//           andConditions.push({
+//             $or: [
+//               {
+//                 loadDate:
+//                   dateCondition,
+//               },
+//               {
+//                 LoadDate:
+//                   dateCondition,
+//               },
+//             ],
+//           });
+//         }
+//       }
+
+//       /* =====================================================
+//         SETTLEMENT DATE FILTER
+//         ===================================================== */
+
+//       if (
+//         settlementFromDate ||
+//         settlementToDate
+//       ) {
+//         const dateCondition = {};
+
+//         if (settlementFromDate) {
+//           const startDate =
+//             new Date(
+//               `${settlementFromDate}T00:00:00.000Z`
+//             );
+
+//           if (
+//             !Number.isNaN(
+//               startDate.getTime()
+//             )
+//           ) {
+//             dateCondition.$gte =
+//               startDate;
+//           }
+//         }
+
+//         if (settlementToDate) {
+//           const endDate =
+//             new Date(
+//               `${settlementToDate}T23:59:59.999Z`
+//             );
+
+//           if (
+//             !Number.isNaN(
+//               endDate.getTime()
+//             )
+//           ) {
+//             dateCondition.$lte =
+//               endDate;
+//           }
+//         }
+
+//         if (
+//           Object.keys(
+//             dateCondition
+//           ).length > 0
+//         ) {
+//           andConditions.push({
+//             $or: [
+//               {
+//                 settlementDate:
+//                   dateCondition,
+//               },
+//               {
+//                 SettlementDate:
+//                   dateCondition,
+//               },
+//             ],
+//           });
+//         }
+//       }
+
+//       /* =====================================================
+//         LOAD SERIES
+//         ===================================================== */
+
+//       if (loadSeries) {
+//         const regex =
+//           exactRegex(
+//             loadSeries
+//           );
+
+//         andConditions.push({
+//           $or: [
+//             {
+//               loadSeries:
+//                 regex,
+//             },
+//             {
+//               LoadSeries:
+//                 regex,
+//             },
+//           ],
+//         });
+//       }
+
+//       /* =====================================================
+//         LOAD NUMBER
+//         ===================================================== */
+
+//       if (loadNoText) {
+//         const numericLoadNo =
+//           Number(loadNoText);
+
+//         const loadNoConditions = [
+//           {
+//             loadNo:
+//               exactRegex(
+//                 loadNoText
+//               ),
+//           },
+//           {
+//             LoadNo:
+//               exactRegex(
+//                 loadNoText
+//               ),
+//           },
+//         ];
+
+//         if (
+//           Number.isFinite(
+//             numericLoadNo
+//           )
+//         ) {
+//           loadNoConditions.push(
+//             {
+//               loadNo:
+//                 numericLoadNo,
+//             },
+//             {
+//               LoadNo:
+//                 numericLoadNo,
+//             }
+//           );
+//         }
+
+//         andConditions.push({
+//           $or:
+//             loadNoConditions,
+//         });
+//       }
+
+//       /* =====================================================
+//         STATUS
+//         ===================================================== */
+
+//       if (status) {
+//         const regex =
+//           exactRegex(
+//             status
+//           );
+
+//         andConditions.push({
+//           $or: [
+//             {
+//               status:
+//                 regex,
+//             },
+//             {
+//               Status:
+//                 regex,
+//             },
+//           ],
+//         });
+//       }
+
+//       /* =====================================================
+//         CREATED BY
+//         ===================================================== */
+
+//       if (createdBy) {
+//         const regex =
+//           exactRegex(
+//             createdBy
+//           );
+
+//         andConditions.push({
+//           $or: [
+//             {
+//               createdBy:
+//                 regex,
+//             },
+//             {
+//               CreatedBy:
+//                 regex,
+//             },
+//             {
+//               updatedBy:
+//                 regex,
+//             },
+//             {
+//               UpdatedBy:
+//                 regex,
+//             },
+//           ],
+//         });
+//       }
+
+//       /* =====================================================
+//         TOTAL AMOUNT
+//         ===================================================== */
+
+//       const minAmount =
+//         Number(minAmountText);
+
+//       const maxAmount =
+//         Number(maxAmountText);
+
+//       if (
+//         minAmountText !== "" &&
+//         Number.isFinite(
+//           minAmount
+//         )
+//       ) {
+//         andConditions.push({
+//           totalAmount: {
+//             $gte:
+//               minAmount,
+//           },
+//         });
+//       }
+
+//       if (
+//         maxAmountText !== "" &&
+//         Number.isFinite(
+//           maxAmount
+//         )
+//       ) {
+//         andConditions.push({
+//           totalAmount: {
+//             $lte:
+//               maxAmount,
+//           },
+//         });
+//       }
+
+//       /* =====================================================
+//         RECEIPT AMOUNT
+//         ===================================================== */
+
+//       const minReceiptAmount =
+//         Number(minReceiptText);
+
+//       const maxReceiptAmount =
+//         Number(maxReceiptText);
+
+//       if (
+//         minReceiptText !== "" &&
+//         Number.isFinite(
+//           minReceiptAmount
+//         )
+//       ) {
+//         andConditions.push({
+//           totalReceiptAmount: {
+//             $gte:
+//               minReceiptAmount,
+//           },
+//         });
+//       }
+
+//       if (
+//         maxReceiptText !== "" &&
+//         Number.isFinite(
+//           maxReceiptAmount
+//         )
+//       ) {
+//         andConditions.push({
+//           totalReceiptAmount: {
+//             $lte:
+//               maxReceiptAmount,
+//           },
+//         });
+//       }
+
+//       /* =====================================================
+//         PENDING AMOUNT
+//         ===================================================== */
+
+//       const minPendingAmount =
+//         Number(minPendingText);
+
+//       const maxPendingAmount =
+//         Number(maxPendingText);
+
+//       if (
+//         minPendingText !== "" &&
+//         Number.isFinite(
+//           minPendingAmount
+//         )
+//       ) {
+//         andConditions.push({
+//           totalPendingAmount: {
+//             $gte:
+//               minPendingAmount,
+//           },
+//         });
+//       }
+
+//       if (
+//         maxPendingText !== "" &&
+//         Number.isFinite(
+//           maxPendingAmount
+//         )
+//       ) {
+//         andConditions.push({
+//           totalPendingAmount: {
+//             $lte:
+//               maxPendingAmount,
+//           },
+//         });
+//       }
+
+//       /* =====================================================
+//         GENERAL SEARCH
+//         ===================================================== */
+
+//       if (search) {
+//         const regex =
+//           containsRegex(
+//             search
+//           );
+
+//         const searchConditions = [
+//           {
+//             loadSeries:
+//               regex,
+//           },
+//           {
+//             LoadSeries:
+//               regex,
+//           },
+//           {
+//             status:
+//               regex,
+//           },
+//           {
+//             Status:
+//               regex,
+//           },
+//           {
+//             narration:
+//               regex,
+//           },
+//           {
+//             Narration:
+//               regex,
+//           },
+//           {
+//             firmName:
+//               regex,
+//           },
+//           {
+//             FirmName:
+//               regex,
+//           },
+//           {
+//             createdBy:
+//               regex,
+//           },
+//           {
+//             CreatedBy:
+//               regex,
+//           },
+//           {
+//             "bills.partyCode":
+//               regex,
+//           },
+//           {
+//             "bills.partyName":
+//               regex,
+//           },
+//           {
+//             "bills.salesman":
+//               regex,
+//           },
+//           {
+//             "bills.billSeries":
+//               regex,
+//           },
+//           {
+//             "bills.receiptSeries":
+//               regex,
+//           },
+//           {
+//             "bills.receiptNo":
+//               regex,
+//           },
+//           {
+//             "bills.chequeNo":
+//               regex,
+//           },
+//           {
+//             "bills.transactionNo":
+//               regex,
+//           },
+//         ];
+
+//         const numericSearch =
+//           Number(search);
+
+//         if (
+//           Number.isFinite(
+//             numericSearch
+//           )
+//         ) {
+//           searchConditions.push(
+//             {
+//               loadNo:
+//                 numericSearch,
+//             },
+//             {
+//               LoadNo:
+//                 numericSearch,
+//             },
+//             {
+//               "bills.billNo":
+//                 numericSearch,
+//             }
+//           );
+//         }
+
+//         andConditions.push({
+//           $or:
+//             searchConditions,
+//         });
+//       }
+
+//       if (
+//         andConditions.length > 0
+//       ) {
+//         filter.$and =
+//           andConditions;
+//       }
+
+//       /* =====================================================
+//         RECORD COUNT
+//         ===================================================== */
+
+//       const totalRecords =
+//         await SettleLoad.countDocuments(
+//           filter
+//         );
+
+//       const totalPages =
+//         Math.max(
+//           1,
+//           Math.ceil(
+//             totalRecords /
+//             limit
+//           )
+//         );
+
+//       const currentPage =
+//         Math.min(
+//           page,
+//           totalPages
+//         );
+
+//       const skip =
+//         (
+//           currentPage -
+//           1
+//         ) *
+//         limit;
+
+//       /* =====================================================
+//         LOAD CURRENT PAGE
+//         ===================================================== */
+
+//       const records =
+//         await SettleLoad.find(
+//           filter
+//         )
+//           /*
+//           * Edit already loads the complete record using
+//           * GET /api/settle-load/:id.
+//           *
+//           * Do not send all bill details in the list.
+//           */
+//           .select({
+//             bills: 0,
+//             Bills: 0,
+//           })
+//           .sort({
+//             settlementDate: -1,
+//             createdAt: -1,
+//             _id: -1,
+//           })
+//           .skip(skip)
+//           .limit(limit)
+//           .lean();
+
+//       /* =====================================================
+//         RESPONSE
+//         ===================================================== */
+
+//       return res.json({
+//         success: true,
+
+//         records,
+
+//         count:
+//           records.length,
+
+//         pagination: {
+//           currentPage,
+//           page:
+//             currentPage,
+//           limit,
+//           totalRecords,
+//           totalPages,
+
+//           hasPreviousPage:
+//             currentPage > 1,
+
+//           hasNextPage:
+//             currentPage <
+//             totalPages,
+
+//           startRecord:
+//             totalRecords === 0
+//               ? 0
+//               : skip + 1,
+
+//           endRecord:
+//             totalRecords === 0
+//               ? 0
+//               : Math.min(
+//                 skip +
+//                 records.length,
+//                 totalRecords
+//               ),
+//         },
+
+//         appliedFilters: {
+//           search,
+
+//           fromDate,
+//           toDate,
+
+//           settlementFromDate,
+//           settlementToDate,
+
+//           loadSeries,
+//           loadNo:
+//             loadNoText,
+
+//           status,
+//           createdBy,
+
+//           minAmount:
+//             minAmountText,
+
+//           maxAmount:
+//             maxAmountText,
+
+//           minReceiptAmount:
+//             minReceiptText,
+
+//           maxReceiptAmount:
+//             maxReceiptText,
+
+//           minPendingAmount:
+//             minPendingText,
+
+//           maxPendingAmount:
+//             maxPendingText,
+//         },
+//       });
+//     } catch (error) {
+//       console.error(
+//         "Settle Load paginated list error:",
+//         error
+//       );
+
+//       return res.status(500).json({
+//         success: false,
+//         message:
+//           "Failed to load Settle Load list",
+//         error:
+//           error.message,
+//       });
+//     }
+//   }
+// );
+
+app.get(
+  "/api/settle-load/:id",
+  ensureConnection,
+  securityRouter.authorizeRequest("SALES", "SETTLE_LOAD", "view"),
+  async (req, res) => {
+  try {
+    const record = await SettleLoad.findOne({ _id: req.params.id, distributorId: req.auth.distributorId, firmId: req.auth.firmId }).lean();
+
+    if (!record) {
+      return res.status(404).json({
+        success: false,
+        message: "Settle Load record not found",
+      });
+    }
+
+    res.json({
+      success: true,
+      record,
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: "Failed to load settle load record",
+      error: error.message,
+    });
+  }
+});
+
+app.put(
+  "/api/settle-load/:id",
+  ensureConnection,
+  securityRouter.authorizeRequest("SALES", "SETTLE_LOAD", "edit"),
+  async (req, res) => {
+  try {
+    const {
+      settlementDate = "",
+      narration = "",
+      items = [],
+    } = req.body;
+
+    if (!Array.isArray(items) || items.length === 0) {
+      return res.status(400).json({
+        success: false,
+        message: "No bills found",
+      });
+    }
+
+    const bills = items.map((item, index) => {
+      const billAmount = Number(item.billAmount || 0);
+      const receiptAmount = Number(item.receiptAmount || 0);
+
+      return {
+        sr: index + 1,
+        billSeries: String(item.billSeries || ""),
+        billNo: String(item.billNo || ""),
+        billDate: item.billDate || "",
+        partyCode: item.partyCode || "",
+        partyName: item.partyName || "",
+        salesman: item.salesman || "",
+        billType: item.billType || "Credit",
+        billAmount,
+        receiptAmount,
+        pendingAmount: Math.max(billAmount - receiptAmount, 0),
+
+        receiptSeries: item.receiptSeries || "",
+        receiptNo: String(item.receiptNo || ""),
+        receiptMode: item.receiptMode || "",
+        bankCash: item.bankCash || item.bankName || "",
+        bankName: item.bankName || item.bankCash || "",
+        chequeNo: item.chequeNo || "",
+        chequeDate: item.chequeDate || "",
+        micr: item.micr || "",
+        upiId: item.upiId || "",
+        transactionNo: item.transactionNo || "",
+
+        adjust: item.adjust || "N",
+        pending: item.pending || "N",
+        cancel: item.cancel || "N",
+        status: item.status || "Pending",
+      };
+    });
+
+    const totalAmount = bills.reduce((sum, x) => sum + Number(x.billAmount || 0), 0);
+    const totalReceiptAmount = bills.reduce((sum, x) => sum + Number(x.receiptAmount || 0), 0);
+    const totalPendingAmount = bills.reduce((sum, x) => sum + Number(x.pendingAmount || 0), 0);
+    const totalCancelBills = bills.filter((x) => x.cancel === "Y").length;
+
+    const updated = await SettleLoad.findOneAndUpdate(
+      { _id: req.params.id, distributorId: req.auth.distributorId, firmId: req.auth.firmId },
+      {
+        settlementDate,
+        narration,
+        bills,
+        totalBills: bills.length,
+        totalAmount,
+        totalReceiptAmount,
+        totalPendingAmount,
+        totalCancelBills,
+        status: "SETTLED",
+      },
+      { new: true }
+    );
+
+    if (!updated) {
+      return res.status(404).json({
+        success: false,
+        message: "Settle Load record not found",
+      });
+    }
+
+    res.json({
+      success: true,
+      message: "Settle Load updated successfully",
+      data: updated,
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: "Settle Load update failed",
+      error: error.message,
+    });
+  }
+});
+app.post("/api/receipt", ensureConnection, securityRouter.authorizeRequest("TRANSACTIONS", "RECEIPT", "add"), async (req, res) => {
+  const session = await mongoose.startSession();
+  try {
+    session.startTransaction();
+    const distributorId = req.auth.distributorId;
+    const firmId = req.auth.firmId;
+    const billSeries = String(req.body.billSeries || "").trim();
+    const billNo = String(req.body.billNo || "").trim();
+    if (!billSeries || !billNo) throw new Error("Bill Series and Bill No are required");
+
+    const exists = await Receipt.findOne({ distributorId, firmId, billSeries, billNo }).session(session);
+    if (exists) {
+      await session.abortTransaction();
+      return res.status(409).json({ success: false, message: "Receipt already saved for this bill. One bill cannot have multiple receipts." });
+    }
+    const salesBill = await SalesHeader.findOne({ distributorId, firmId, BillSeries: billSeries, BillNo: Number(billNo), isActive: true, IsBillCancelled: { $ne: true } }).session(session);
+    if (!salesBill) {
+      await session.abortTransaction();
+      return res.status(404).json({ success: false, message: "Active sales bill was not found" });
+    }
+    const receiptAmount = Number(req.body.receiptAmount);
+    if (!Number.isFinite(receiptAmount) || receiptAmount <= 0 || receiptAmount > Number(salesBill.NetAmount || 0) + 0.01) {
+      await session.abortTransaction();
+      return res.status(422).json({ success: false, message: "Receipt amount must be positive and cannot exceed the server bill balance" });
+    }
+    const receiptDate = req.body.receiptDate || businessDateIST();
+    const receiptSeries = req.body.receiptSeries || "RC";
+    const rno = await nextDocumentNumber({ distributorId, firmId, documentType: "RECEIPT", series: receiptSeries, documentDate: receiptDate, session });
+    const [receipt] = await Receipt.create([{
+      distributorId, firmId, firmName: req.auth.firmName,
+      receiptDate, receiptSeries, rno, billSeries, billNo,
+      billDate: salesBill.BillDate || "", partyName: salesBill.PartyName || "",
+      salesman: req.body.salesman || salesBill.SalesmanName || "", narration: req.body.narration || "",
+      bankCode: req.body.bankCode || "", bankCash: req.body.bankCash || "",
+      loadSeries: req.body.loadSeries || "", loadNo: req.body.loadNo || "", docketNo: req.body.docketNo || "",
+      addUser: req.auth.userId, receiptSource: req.body.receiptSource || "DIRECT",
+      receiptAmount, chequeNo: req.body.chequeNo || "", chequeDate: req.body.chequeDate || "", micr: req.body.micr || "",
+      receiptBills: [{ trnSeries: billSeries, trnNo: billNo, trnDate: salesBill.BillDate || "", amount: receiptAmount, adjustAmt: 0, balanceAmt: Number(salesBill.NetAmount || 0) - receiptAmount, nowAdjust: receiptAmount, remark: req.body.narration || "" }],
+    }], { session });
+    await writeAuditEvent(req, { entityType: "RECEIPT", entityId: String(receipt._id), action: "CREATE", after: { billSeries, billNo, receiptSeries, rno, receiptAmount } }, session);
+    await commitTransactionReliably(session);
+    res.status(201).json({ success: true, message: "Receipt saved successfully", receipt });
+  } catch (error) {
+    if (session.inTransaction()) await session.abortTransaction();
+    if (error.code === 11000) return res.status(409).json({ success: false, message: "Receipt already exists" });
+    res.status(error.message?.includes("required") ? 400 : 500).json({ success: false, message: error.message || "Receipt save failed" });
+  } finally {
+    await session.endSession();
+  }
+});
+app.get("/api/receipt", ensureConnection, async (req, res) => {
+  try {
+    const distributorId = String(req.query.distributorId || "").trim();
+    const firmId = String(req.query.firmId || "").trim();
+
+    if (!distributorId || !firmId) {
+      return res.status(400).json({
+        success: false,
+        message: "distributorId and firmId are required",
+      });
+    }
+
+    const receipts = await Receipt.find({ distributorId, firmId })
+      .sort({ createdAt: -1 })
+      .lean();
+
+    res.json({
+      success: true,
+      receipts,
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: "Failed to load receipt list",
+      error: error.message,
+    });
+  }
+});
+app.get("/api/receipt/next-no", ensureConnection, async (req, res) => {
+  try {
+    const distributorId = String(req.query.distributorId || "").trim();
+    const firmId = String(req.query.firmId || "").trim();
+
+    if (!distributorId || !firmId) {
+      return res.status(400).json({ success: false, message: "Distributor/Firm required" });
+    }
+
+    const lastReceipt = await Receipt.findOne({ distributorId, firmId })
+      .sort({ rno: -1 })
+      .lean();
+
+    res.json({
+      success: true,
+      nextReceiptNo: Number(lastReceipt?.rno || 0) + 1,
+    });
+  } catch (error) {
+    res.status(500).json({ success: false, message: "Failed to get receipt no", error: error.message });
+  }
+});
+
+app.get("/api/receipt/bill-balance", ensureConnection, async (req, res) => {
+  try {
+    const distributorId = String(req.query.distributorId || "").trim();
+    const firmId = String(req.query.firmId || "").trim();
+    const billSeries = String(req.query.billSeries || "").trim();
+    const billNo = String(req.query.billNo || "").trim();
+    const billAmount = Number(req.query.billAmount || 0);
+
+    const receipts = await Receipt.find({ distributorId, firmId, billSeries, billNo }).lean();
+    const paidAmount = receipts.reduce((sum, r) => sum + Number(r.receiptAmount || 0), 0);
+    const pendingAmount = Math.max(billAmount - paidAmount, 0);
+
+    res.json({ success: true, paidAmount, pendingAmount });
+  } catch (error) {
+    res.status(500).json({ success: false, message: "Balance check failed", error: error.message });
+  }
+});
+
+app.get("/api/create-load/next-no", ensureConnection, async (req, res) => {
+  try {
+    const distributorId = String(req.query.distributorId || "").trim();
+    const firmId = String(req.query.firmId || "").trim();
+    const loadSeries = String(req.query.loadSeries || "").trim();
+
+    if (!distributorId || !firmId) {
+      return res.status(400).json({
+        success: false,
+        message: "distributorId and firmId are required",
+      });
+    }
+
+    const filter = {
+      DistributorId: distributorId,
+      FirmId: firmId,
+      IsCancelled: { $ne: true },
+      LoadSeries: loadSeries,
+    };
+
+    const lastLoad = await LoadHeader.findOne(filter)
+      .sort({ LoadNo: -1 })
+      .lean();
+
+    const nextLoadNo = Number(lastLoad?.LoadNo || 0) + 1;
+
+    res.json({
+      success: true,
+      nextLoadNo,
+    });
+  } catch (error) {
+    console.error("Next Load No error:", error);
+    res.status(500).json({
+      success: false,
+      message: "Failed to get next load no",
+      error: error.message,
+    });
+  }
+});
+const cancelSalesBill = async ({ req, session, bill, reason }) => {
+  const distributorId = req.auth.distributorId;
+  const firmId = req.auth.firmId;
+  const cancelReason = String(reason || "Cancelled by user").trim();
+  if (bill.IsBillCancelled || bill.BillStatus === "CANCELLED" || bill.isActive === false) {
+    throw Object.assign(new Error("Bill is already cancelled"), { statusCode: 409 });
+  }
+  if (bill.IsLoaded || bill.LoadNo) {
+    throw Object.assign(new Error("Loaded bill must be removed from load before cancellation"), { statusCode: 409 });
+  }
+  const linkedReceipt = await Receipt.findOne({ distributorId, firmId, status: { $ne: "REVERSED" }, $or: [
+      { billSeries: bill.BillSeries, billNo: String(bill.BillNo) },
+      { receiptBills: { $elemMatch: { trnSeries: bill.BillSeries, trnNo: String(bill.BillNo) } } },
+    ] }).session(session);
+  const linkedSettlement = await SettleLoad.findOne({ distributorId, firmId, $or: [
+      { "bills.billSeries": bill.BillSeries, "bills.billNo": String(bill.BillNo) },
+      { "bills.BillSeries": bill.BillSeries, "bills.BillNo": bill.BillNo },
+    ] }).session(session);
+  const linkedCollection = await mongoose.connection.collection("T_CollectionVoucher").findOne(
+    { distributorId, firmId, status: { $ne: "REVERSED" }, bills: { $elemMatch: { billSeries: bill.BillSeries, billNo: String(bill.BillNo) } } },
+    { session }
+  );
+  const linkedPdc = await mongoose.connection.collection("T_PDCDocket").findOne(
+    { distributorId, firmId, status: { $ne: "REVERSED" }, $or: [{ billSeries: bill.BillSeries, billNo: String(bill.BillNo) }, { bills: { $elemMatch: { billSeries: bill.BillSeries, billNo: String(bill.BillNo) } } }] },
+    { session }
+  );
+  if (linkedReceipt) throw Object.assign(new Error("Receipt exists for this bill; reverse the receipt first"), { statusCode: 409 });
+  if (linkedSettlement) throw Object.assign(new Error("Settled bill cannot be cancelled directly"), { statusCode: 409 });
+  if (linkedCollection || linkedPdc) throw Object.assign(new Error("Collection/PDC exists for this bill; reverse it before cancellation"), { statusCode: 409 });
+
+  const before = bill.toObject();
+  await applySalesStockMovement({ items: bill.items, distributorId, firmId, firmName: bill.firmName, gdCode: bill.GDCode, direction: 1, session });
+  bill.BillStatus = "CANCELLED";
+  bill.IsBillCancelled = true;
+  bill.isActive = false;
+  bill.CancelledAt = new Date();
+  bill.CancelledBy = req.auth.userId;
+  bill.CancelReason = cancelReason;
+  await bill.save({ session });
+  await reverseSourceJournal({ distributorId, firmId, sourceType: "SALES", sourceId: String(bill._id), createdBy: req.auth.userId, documentDate: businessDateIST(), reason: cancelReason }, session);
+  await recordStockMovements({
+    distributorId, firmId, godown: bill.GDCode, items: bill.items,
+    movementDate: businessDateIST(), sourceType: "SALES_CANCEL", sourceId: bill._id,
+    documentNo: `${bill.BillSeries || ""}${bill.BillNo}`, direction: 1, userId: req.auth.userId, session,
+  });
+  await writeAuditEvent(req, { entityType: "SALES_BILL", entityId: String(bill._id), action: "CANCEL", reason: cancelReason, before, after: bill.toObject() }, session);
+  return bill;
+};
+
+app.put(
+  "/api/sales/cancel-bill",
+  ensureConnection,
+  securityRouter.authorizeRequest("SALES", "SALES_BILLING", "delete"),
+  async (req, res) => {
+  const session = await mongoose.startSession();
+  try {
+    session.startTransaction();
+    const distributorId = req.auth.distributorId;
+    const firmId = req.auth.firmId;
+    const billSeries = String(req.body.billSeries || "").trim();
+    const billNo = Number(req.body.billNo || 0);
+    const cancelReason = String(req.body.cancelReason || req.body.reason || "").trim();
+
+    if (!distributorId || !firmId || !billNo) {
+      return res.status(400).json({
+        success: false,
+        message: "Distributor, Firm and Bill No are required",
+      });
+    }
+
+    if (!cancelReason) {
+      await session.abortTransaction();
+      return res.status(400).json({ success: false, message: "Cancellation reason is required" });
+    }
+    const filter = {
+      distributorId,
+      firmId,
+      BillNo: billNo,
+      isActive: true,
+    };
+
+    if (billSeries) filter.BillSeries = billSeries;
+
+    const bill = await SalesHeader.findOne(filter).session(session);
+    if (!bill) {
+      await session.abortTransaction();
+      return res.status(404).json({
+        success: false,
+        message: "Sales bill not found",
+      });
+    }
+    await cancelSalesBill({ req, session, bill, reason: cancelReason });
+    await commitTransactionReliably(session);
+
+    res.json({
+      success: true,
+      message: "Bill cancelled successfully",
+      bill,
+    });
+  } catch (error) {
+    if (session.inTransaction()) await session.abortTransaction();
+    res.status(error.statusCode || 500).json({
+      success: false,
+      message: error.statusCode ? error.message : "Bill cancel failed",
+    });
+  } finally {
+    await session.endSession();
+  }
+});
+// Credit Note Schema
+const creditNoteSchema = new mongoose.Schema(
+  {
+    distributorId: String,
+    firmId: String,
+    firmName: String,
+
+    VDate: String,
+    VNo: Number,
+
+    CreditNoteSeries: String,
+    CreditNoteNo: Number,
+
+    BillSeries: String,
+    BillNo: Number,
+
+    PartyCode: String,
+    PartyName: String,
+
+    Godown: String,
+    GDCode: String,
+
+    CompanyCode: String,
+    CompanyName: String,
+
+    SalesmanCode: String,
+    SalesmanName: String,
+
+    TinNo: String,
+    Settlement: String,
+    RefBy: String,
+    RefDate: String,
+    Narration: String,
+
+    GrossAmount: Number,
+    SchemeAmount: Number,
+    TPRAmount: Number,
+    CashDiscountAmount: Number,
+    GSTAmount: Number,
+    StarAmount: Number,
+    StarPercent: Number,
+    AddLess: Number,
+    DisplayAmount: Number,
+    CouponAmount: Number,
+    Rounding: Number,
+    CessAmount: Number,
+    TCSPercent: Number,
+    TCSAmount: Number,
+    BillBalanceAmount: Number,
+    NetAmount: Number,
+
+    TotalQty: Number,
+    TotalFreeQty: Number,
+    TotalItems: Number,
+
+    items: Array,
+    amount: Number,
+
+    Status: { type: String, default: "Approved" },
+    isActive: { type: Boolean, default: true },
+    CreatedBy: String,
+    UpdatedBy: String,
+  },
+  { timestamps: true, collection: "T_CreditNote_Header" }
+);
+
+creditNoteSchema.index(
+  { distributorId: 1, firmId: 1, CreditNoteSeries: 1, CreditNoteNo: 1 },
+  { unique: true }
+);
+
+const CreditNote = mongoose.model("T_CreditNote_Header", creditNoteSchema);
+
+// =========================================================
+// DEBIT NOTE SCHEMA
+// Collection: T_DebitNote_Header
+// =========================================================
+
+const debitNoteItemSchema =
+  new mongoose.Schema(
+    {
+      Sr: {
+        type: Number,
+        default: 0,
+      },
+
+      TRN: {
+        type: String,
+        enum: ["GDR", "DGR"],
+        default: "GDR",
+      },
+
+      ProductCode: {
+        type: String,
+        trim: true,
+        default: "",
+      },
+
+      ProductName: {
+        type: String,
+        trim: true,
+        default: "",
+      },
+
+      Batch: {
+        type: String,
+        trim: true,
+        default: ".",
+      },
+
+      MRP: {
+        type: Number,
+        default: 0,
+      },
+
+      Unit: {
+        type: String,
+        default: "PCS",
+      },
+
+      Qty: {
+        type: Number,
+        default: 0,
+      },
+
+      Free: {
+        type: Number,
+        default: 0,
+      },
+
+      Rate: {
+        type: Number,
+        default: 0,
+      },
+
+      SRate: {
+        type: Number,
+        default: 0,
+      },
+
+      PRate: {
+        type: Number,
+        default: 0,
+      },
+
+      BoxPack: {
+        type: Number,
+        default: 1,
+      },
+
+      InBoxPack: {
+        type: Number,
+        default: 1,
+      },
+
+      GrossAmount: {
+        type: Number,
+        default: 0,
+      },
+
+      BVDisc1: {
+        type: Number,
+        default: 0,
+      },
+
+      BVDisc2: {
+        type: Number,
+        default: 0,
+      },
+
+      BVAdd1: {
+        type: Number,
+        default: 0,
+      },
+
+      BVAdd2: {
+        type: Number,
+        default: 0,
+      },
+
+      TaxableValue: {
+        type: Number,
+        default: 0,
+      },
+
+      GSTPercent: {
+        type: Number,
+        default: 0,
+      },
+
+      GSTAmount: {
+        type: Number,
+        default: 0,
+      },
+
+      AVDisc1: {
+        type: Number,
+        default: 0,
+      },
+
+      AVDisc2: {
+        type: Number,
+        default: 0,
+      },
+
+      CGST: {
+        type: Number,
+        default: 0,
+      },
+
+      SGST: {
+        type: Number,
+        default: 0,
+      },
+
+      IGST: {
+        type: Number,
+        default: 0,
+      },
+
+      CessPercent: {
+        type: Number,
+        default: 0,
+      },
+
+      CessAmount: {
+        type: Number,
+        default: 0,
+      },
+
+      CessPerP: {
+        type: Number,
+        default: 0,
+      },
+    },
+    {
+      _id: true,
+    }
+  );
+
+const debitNoteSchema =
+  new mongoose.Schema(
+    {
+      distributorId: {
+        type: String,
+        required: true,
+        index: true,
+      },
+
+      firmId: {
+        type: String,
+        required: true,
+        index: true,
+      },
+
+      firmName: {
+        type: String,
+        default: "",
+      },
+
+      VDate: {
+        type: String,
+        required: true,
+      },
+
+      VNo: {
+        type: Number,
+        required: true,
+      },
+
+      DebitNoteSeries: {
+        type: String,
+        default: "DH",
+      },
+
+      DebitNoteNo: {
+        type: Number,
+        required: true,
+      },
+
+      BillSeries: {
+        type: String,
+        default: "",
+      },
+
+      BillNo: {
+        type: Number,
+        default: 0,
+      },
+
+      SupplierCode: {
+        type: String,
+        default: "",
+      },
+
+      SupplierName: {
+        type: String,
+        default: "",
+      },
+
+      Godown: {
+        type: String,
+        default: "",
+      },
+
+      GDCode: {
+        type: String,
+        required: true,
+      },
+
+      CompanyCode: {
+        type: String,
+        default: "",
+      },
+
+      CompanyName: {
+        type: String,
+        default: "",
+      },
+
+      SalesmanCode: {
+        type: String,
+        default: "",
+      },
+
+      SalesmanName: {
+        type: String,
+        default: "",
+      },
+
+      ReturnType: {
+        type: String,
+        default: "",
+      },
+
+      IGST: {
+        type: String,
+        enum: ["Y", "N"],
+        default: "N",
+      },
+
+      Narration: {
+        type: String,
+        default: "",
+      },
+
+      GrossAmount: {
+        type: Number,
+        default: 0,
+      },
+
+      GSTAmount: {
+        type: Number,
+        default: 0,
+      },
+
+      TCSPercent: {
+        type: Number,
+        default: 0,
+      },
+
+      TCSAmount: {
+        type: Number,
+        default: 0,
+      },
+
+      BeforeVatDiscAmount: {
+        type: Number,
+        default: 0,
+      },
+
+      Surcharge: {
+        type: Number,
+        default: 0,
+      },
+
+      RoundingAmount: {
+        type: Number,
+        default: 0,
+      },
+
+      BeforeVatAddAmount: {
+        type: Number,
+        default: 0,
+      },
+
+      AfterVatDiscAmount: {
+        type: Number,
+        default: 0,
+      },
+
+      NetAmount: {
+        type: Number,
+        default: 0,
+      },
+
+      amount: {
+        type: Number,
+        default: 0,
+      },
+
+      TotalQty: {
+        type: Number,
+        default: 0,
+      },
+
+      TotalFreeQty: {
+        type: Number,
+        default: 0,
+      },
+
+      TotalItems: {
+        type: Number,
+        default: 0,
+      },
+
+      items: {
+        type: [debitNoteItemSchema],
+        default: [],
+      },
+
+      Status: {
+        type: String,
+        default: "Approved",
+      },
+
+      isActive: {
+        type: Boolean,
+        default: true,
+      },
+
+      CreatedBy: {
+        type: String,
+        default: "",
+      },
+
+      UpdatedBy: {
+        type: String,
+        default: "",
+      },
+    },
+    {
+      timestamps: true,
+      collection: "T_DebitNote_Header",
+    }
+  );
+
+debitNoteSchema.index(
+  {
+    distributorId: 1,
+    firmId: 1,
+    DebitNoteSeries: 1,
+    DebitNoteNo: 1,
+  },
+  {
+    unique: true,
+    partialFilterExpression: {
+      isActive: true,
+    },
+  }
+);
+
+const DebitNote =
+  mongoose.models.DebitNote ||
+  mongoose.model(
+    "DebitNote",
+    debitNoteSchema
+  );
+
+app.use(
+  "/api/reports",
+  ensureConnection,
+  securityRouter.authorizeRequest("REPORTS", "GST_REPORTS", "view"),
+  createGstReportsRouter({
+    SalesHeader,
+    PurchaseHeader,
+    CreditNote,
+    DebitNote,
+    Account,
+    OtherAccount,
+  })
+);
+
+const debitNumber = (value) => {
+  const parsed = Number(value ?? 0);
+
+  return Number.isFinite(parsed)
+    ? parsed
+    : 0;
+};
+
+const normalizeDebitNoteItems = (
+  sourceItems = []
+) => {
+  if (!Array.isArray(sourceItems)) {
+    return [];
+  }
+
+  return sourceItems.map(
+    (item, index) => {
+      const productCode = String(
+        item.ProductCode ||
+        item.productCode ||
+        item.itemCode ||
+        ""
+      ).trim();
+
+      const productName = String(
+        item.ProductName ||
+        item.productName ||
+        item.itemName ||
+        ""
+      ).trim();
+
+      const trn = String(
+        item.TRN ||
+        item.trn ||
+        "GDR"
+      )
+        .trim()
+        .toUpperCase();
+
+      const batch =
+        String(
+          item.Batch ||
+          item.batchNo ||
+          item.selectedBatch?.batchNo ||
+          item.selectedBatch?.Batch ||
+          "."
+        ).trim() || ".";
+
+      const mrp = debitNumber(
+        item.MRP ??
+        item.mrp ??
+        item.selectedBatch?.MRP ??
+        item.selectedBatch?.mrp
+      );
+
+      const qty = debitNumber(
+        item.Qty ??
+        item.qty
+      );
+
+      const free = debitNumber(
+        item.Free ??
+        item.free
+      );
+
+      const totalStockQty =
+        qty + free;
+
+      if (!productCode) {
+        throw new Error(
+          `Product code missing in row ${index + 1
+          }.`
+        );
+      }
+
+      if (
+        trn !== "GDR" &&
+        trn !== "DGR"
+      ) {
+        throw new Error(
+          `Invalid TRN in row ${index + 1
+          }.`
+        );
+      }
+
+      if (totalStockQty <= 0) {
+        throw new Error(
+          `Quantity must be greater than zero in row ${index + 1
+          }.`
+        );
+      }
+
+      return {
+        ...item,
+
+        Sr:
+          index + 1,
+
+        TRN:
+          trn,
+
+        ProductCode:
+          productCode,
+
+        ProductName:
+          productName,
+
+        Batch:
+          batch,
+
+        MRP:
+          mrp,
+
+        Unit:
+          item.Unit ||
+          item.unit ||
+          "PCS",
+
+        Qty:
+          qty,
+
+        Free:
+          free,
+
+        Rate:
+          debitNumber(
+            item.Rate ??
+            item.rate ??
+            item.SRate
+          ),
+
+        SRate:
+          debitNumber(
+            item.SRate ??
+            item.salesRate ??
+            item.Rate ??
+            item.rate
+          ),
+
+        PRate:
+          debitNumber(
+            item.PRate ??
+            item.purchaseRate
+          ),
+
+        BoxPack:
+          debitNumber(
+            item.BoxPack ??
+            item.boxPack ??
+            1
+          ) || 1,
+
+        InBoxPack:
+          debitNumber(
+            item.InBoxPack ??
+            item.inboxPack ??
+            1
+          ) || 1,
+
+        GrossAmount:
+          debitNumber(
+            item.GrossAmount ??
+            item.grossAmt
+          ),
+
+        BVDisc1:
+          debitNumber(
+            item.BVDisc1 ??
+            item.bvDisc1
+          ),
+
+        BVDisc2:
+          debitNumber(
+            item.BVDisc2 ??
+            item.bvDisc2
+          ),
+
+        BVAdd1:
+          debitNumber(
+            item.BVAdd1 ??
+            item.bvAdd1
+          ),
+
+        BVAdd2:
+          debitNumber(
+            item.BVAdd2 ??
+            item.bvAdd2
+          ),
+
+        TaxableValue:
+          debitNumber(
+            item.TaxableValue ??
+            item.taxable
+          ),
+
+        GSTPercent:
+          debitNumber(
+            item.GSTPercent ??
+            item.gstPercent
+          ),
+
+        GSTAmount:
+          debitNumber(
+            item.GSTAmount ??
+            item.gstArt ??
+            item.gstAmt
+          ),
+
+        AVDisc1:
+          debitNumber(
+            item.AVDisc1 ??
+            item.avDisc1
+          ),
+
+        AVDisc2:
+          debitNumber(
+            item.AVDisc2 ??
+            item.avDisc2
+          ),
+
+        CGST:
+          debitNumber(
+            item.CGST ??
+            item.cgst
+          ),
+
+        SGST:
+          debitNumber(
+            item.SGST ??
+            item.sgst
+          ),
+
+        IGST:
+          debitNumber(
+            item.IGST ??
+            item.igst
+          ),
+
+        CessPercent:
+          debitNumber(
+            item.CessPercent ??
+            item.cessPercent
+          ),
+
+        CessAmount:
+          debitNumber(
+            item.CessAmount ??
+            item.cessAmt
+          ),
+
+        CessPerP:
+          debitNumber(
+            item.CessPerP ??
+            item.cessPerP
+          ),
+
+        totalStockQty,
+      };
+    }
+  );
+};
+
+const getDebitStockModel = (
+  trn
+) =>
+  String(trn).toUpperCase() ===
+    "DGR"
+    ? DamStock
+    : Stock;
+
+/*
+* direction:
+* -1 = apply Debit Note and deduct stock
+* +1 = reverse Debit Note and restore stock
+*/
+const applyDebitNoteStockMovement =
+  async ({
+    items,
+    distributorId,
+    firmId,
+    firmName,
+    gdCode,
+    direction,
+    session,
+  }) => {
+    for (const item of items) {
+      const stockModel =
+        getDebitStockModel(
+          item.TRN
+        );
+
+      const quantity =
+        debitNumber(
+          item.totalStockQty ??
+          (
+            debitNumber(item.Qty) +
+            debitNumber(item.Free)
+          )
+        );
+
+      const stockFilter = {
+        distributorId,
+        firmId,
+
+        GDCode:
+          gdCode,
+
+        ProdCode:
+          item.ProductCode,
+
+        Batch:
+          item.Batch || ".",
+
+        MRP:
+          debitNumber(item.MRP),
+      };
+
+      /*
+      * Saving Debit Note subtracts stock.
+      */
+      if (direction < 0) {
+        const result =
+          await stockModel.updateOne(
+            {
+              ...stockFilter,
+
+              Qty: {
+                $gte:
+                  quantity,
+              },
+            },
+            {
+              $inc: {
+                Qty:
+                  -quantity,
+              },
+            },
+            {
+              session,
+            }
+          );
+
+        if (
+          result.modifiedCount !== 1
+        ) {
+          const current =
+            await stockModel.findOne(
+              stockFilter
+            )
+              .session(session)
+              .lean();
+
+          const available =
+            debitNumber(
+              current?.Qty
+            );
+
+          throw new Error(
+            `Insufficient stock for ${item.ProductCode
+            }, batch ${item.Batch
+            }. Available: ${available
+            }, required: ${quantity
+            }.`
+          );
+        }
+      } else {
+        /*
+        * Delete/update reversal restores stock.
+        */
+        await stockModel.findOneAndUpdate(
+          stockFilter,
+          {
+            $setOnInsert: {
+              distributorId,
+              firmId,
+              firmName,
+
+              GDCode:
+                gdCode,
+
+              ProdCode:
+                item.ProductCode,
+
+              Batch:
+                item.Batch || ".",
+
+              MRP:
+                debitNumber(
+                  item.MRP
+                ),
+            },
+
+            $set: {
+              PRate:
+                debitNumber(
+                  item.PRate
+                ),
+
+              SRate:
+                debitNumber(
+                  item.Rate
+                ),
+
+              BoxPack:
+                debitNumber(
+                  item.BoxPack
+                ) || 1,
+
+              InBoxPack:
+                debitNumber(
+                  item.InBoxPack
+                ) || 1,
+
+              IsLocked:
+                "N",
+            },
+
+            $inc: {
+              Qty:
+                quantity,
+            },
+          },
+          {
+            upsert:
+              true,
+
+            new:
+              true,
+
+            session,
+          }
+        );
+      }
+    }
+  };
+
+
+app.get(
+  "/api/debit-note/next-no",
+  ensureConnection,
+  async (req, res) => {
+    try {
+      const distributorId = String(
+        req.query.distributorId || ""
+      ).trim();
+
+      const firmId = String(
+        req.query.firmId || ""
+      ).trim();
+
+      const debitNoteSeries =
+        String(
+          req.query.debitNoteSeries ||
+          "DH"
+        )
+          .trim()
+          .toUpperCase();
+
+      if (
+        !distributorId ||
+        !firmId
+      ) {
+        return res.status(400).json({
+          success: false,
+          message:
+            "distributorId and firmId are required.",
+        });
+      }
+
+      if (!debitNoteSeries) {
+        return res.status(400).json({
+          success: false,
+          message:
+            "Debit Note Series is required.",
+        });
+      }
+
+      const lastDebitNote =
+        await DebitNote.findOne({
+          distributorId,
+          firmId,
+
+          DebitNoteSeries:
+            debitNoteSeries,
+
+          isActive: true,
+        })
+          .sort({
+            DebitNoteNo: -1,
+          })
+          .select({
+            DebitNoteNo: 1,
+          })
+          .lean();
+
+      const nextDebitNoteNo =
+        Number(
+          lastDebitNote?.DebitNoteNo ||
+          0
+        ) + 1;
+
+      return res.json({
+        success: true,
+
+        debitNoteSeries,
+
+        nextDebitNoteNo,
+      });
+    } catch (error) {
+      console.error(
+        "Debit Note next number error:",
+        error
+      );
+
+      return res.status(500).json({
+        success: false,
+
+        message:
+          "Unable to generate next Debit Note number.",
+
+        error:
+          error.message,
+      });
+    }
+  }
+);
+
+app.get(
+  "/api/debit-note",
+  ensureConnection,
+    securityRouter.authorizeRequest("VOUCHERS", "DEBIT_NOTE", "view"),   
+  async (req, res) => {
+    try {
+      const distributorId = String(
+        req.query.distributorId || ""
+      ).trim();
+
+      const firmId = String(
+        req.query.firmId || ""
+      ).trim();
+
+      if (
+        !distributorId ||
+        !firmId
+      ) {
+        return res.status(400).json({
+          success: false,
+          message:
+            "distributorId and firmId are required.",
+        });
+      }
+
+      const debitNotes =
+        await DebitNote.find({
+          distributorId,
+          firmId,
+          isActive:
+            true,
+        })
+          .sort({
+            VDate:
+              -1,
+
+            DebitNoteNo:
+              -1,
+          })
+          .lean();
+
+      return res.json({
+        success:
+          true,
+
+        debitNotes,
+      });
+    } catch (error) {
+      return res.status(500).json({
+        success:
+          false,
+
+        message:
+          "Failed to load Debit Notes.",
+
+        error:
+          error.message,
+      });
+    }
+  }
+);
+/* =========================================================
+  DEBIT NOTE LIST - BACKEND PAGINATION
+  ========================================================= */
+
+app.get(
+  "/api/debit-note/list",
+  ensureConnection,
+  securityRouter.authorizeRequest("VOUCHERS", "DEBIT_NOTE", "view"),   // ADD THIS
+  async (req, res) => {
+    try {
+      const distributorId = String(
+        req.query.distributorId || ""
+      ).trim();
+
+      const firmId = String(
+        req.query.firmId || ""
+      ).trim();
+
+      const search = String(
+        req.query.search || ""
+      ).trim();
+
+      const fromDate = String(
+        req.query.fromDate || ""
+      ).trim();
+
+      const toDate = String(
+        req.query.toDate || ""
+      ).trim();
+
+      const debitNoteSeries = String(
+        req.query.debitNoteSeries ||
+        req.query.vouSer ||
+        ""
+      ).trim();
+
+      const supplierCode = String(
+        req.query.supplierCode ||
+        req.query.partyCode ||
+        ""
+      ).trim();
+
+      const supplierName = String(
+        req.query.supplierName ||
+        req.query.partyName ||
+        ""
+      ).trim();
+
+      const company = String(
+        req.query.company || ""
+      ).trim();
+
+      const gdCode = String(
+        req.query.gdCode || ""
+      ).trim();
+
+      const godownName = String(
+        req.query.godownName || ""
+      ).trim();
+
+      const salesmanCode = String(
+        req.query.salesmanCode || ""
+      ).trim();
+
+      const salesmanName = String(
+        req.query.salesmanName || ""
+      ).trim();
+
+      const referenceBillSeries = String(
+        req.query.referenceBillSeries || ""
+      ).trim();
+
+      const referenceBillNo = String(
+        req.query.referenceBillNo || ""
+      ).trim();
+
+      const returnType = String(
+        req.query.returnType || ""
+      ).trim();
+
+      const status = String(
+        req.query.status || ""
+      ).trim();
+
+      const createdBy = String(
+        req.query.createdBy || ""
+      ).trim();
+
+      const minAmountText = String(
+        req.query.minAmount || ""
+      ).trim();
+
+      const maxAmountText = String(
+        req.query.maxAmount || ""
+      ).trim();
+
+      const requestedPage =
+        Number.parseInt(
+          req.query.page,
+          10
+        );
+
+      const requestedLimit =
+        Number.parseInt(
+          req.query.limit,
+          10
+        );
+
+      const page =
+        Number.isFinite(
+          requestedPage
+        ) &&
+          requestedPage > 0
+          ? requestedPage
+          : 1;
+
+      const limit =
+        Number.isFinite(
+          requestedLimit
+        ) &&
+          requestedLimit > 0
+          ? Math.min(
+            requestedLimit,
+            100
+          )
+          : 10;
+
+      if (
+        !distributorId ||
+        !firmId
+      ) {
+        return res.status(400).json({
+          success: false,
+          message:
+            "distributorId and firmId are required.",
+        });
+      }
+
+      const escapeRegex = (
+        value
+      ) =>
+        String(value || "").replace(
+          /[.*+?^${}()|[\]\\]/g,
+          "\\$&"
+        );
+
+      const containsRegex = (
+        value
+      ) =>
+        new RegExp(
+          escapeRegex(value),
+          "i"
+        );
+
+      const exactRegex = (
+        value
+      ) =>
+        new RegExp(
+          `^${escapeRegex(
+            value
+          )}$`,
+          "i"
+        );
+
+      const filter = {
+        distributorId,
+        firmId,
+
+        isActive: {
+          $ne: false,
+        },
+      };
+
+      /*
+      * Every grouped OR condition is pushed
+      * into this array so none overwrite another.
+      */
+      const andConditions = [];
+
+      /* =========================================
+        DATE
+        ========================================= */
+
+      if (
+        fromDate ||
+        toDate
+      ) {
+        filter.VDate = {};
+
+        if (fromDate) {
+          filter.VDate.$gte =
+            fromDate;
+        }
+
+        if (toDate) {
+          filter.VDate.$lte =
+            toDate;
+        }
+      }
+
+      /* =========================================
+        DEBIT NOTE SERIES
+        ========================================= */
+
+      if (debitNoteSeries) {
+        filter.DebitNoteSeries =
+          exactRegex(
+            debitNoteSeries
+          );
+      }
+
+      /* =========================================
+        SUPPLIER
+        ========================================= */
+
+      if (supplierCode) {
+        filter.SupplierCode =
+          exactRegex(
+            supplierCode
+          );
+      }
+
+      if (supplierName) {
+        filter.SupplierName =
+          containsRegex(
+            supplierName
+          );
+      }
+
+      /* =========================================
+        COMPANY
+        ========================================= */
+
+      if (company) {
+        const companyRegex =
+          containsRegex(
+            company
+          );
+
+        andConditions.push({
+          $or: [
+            {
+              CompanyCode:
+                companyRegex,
+            },
+            {
+              CompanyName:
+                companyRegex,
+            },
+            {
+              companyCode:
+                companyRegex,
+            },
+            {
+              companyName:
+                companyRegex,
+            },
+          ],
+        });
+      }
+
+      /* =========================================
+        GODOWN
+        ========================================= */
+
+      if (gdCode) {
+        filter.GDCode =
+          exactRegex(
+            gdCode
+          );
+      }
+
+      if (godownName) {
+        filter.Godown =
+          containsRegex(
+            godownName
+          );
+      }
+
+      /* =========================================
+        SALESMAN
+        ========================================= */
+
+      if (salesmanCode) {
+        filter.SalesmanCode =
+          exactRegex(
+            salesmanCode
+          );
+      }
+
+      if (salesmanName) {
+        filter.SalesmanName =
+          containsRegex(
+            salesmanName
+          );
+      }
+
+      /* =========================================
+        REFERENCED PURCHASE BILL
+        ========================================= */
+
+      if (referenceBillSeries) {
+        filter.BillSeries =
+          exactRegex(
+            referenceBillSeries
+          );
+      }
+
+      if (referenceBillNo) {
+        const numericBillNo =
+          Number(
+            referenceBillNo
+          );
+
+        if (
+          Number.isFinite(
+            numericBillNo
+          )
+        ) {
+          filter.BillNo =
+            numericBillNo;
+        }
+      }
+
+      /* =========================================
+        RETURN TYPE / STATUS / USER
+        ========================================= */
+
+      if (returnType) {
+        filter.ReturnType =
+          exactRegex(
+            returnType
+          );
+      }
+
+      if (status) {
+        filter.Status =
+          exactRegex(status);
+      }
+
+      if (createdBy) {
+        filter.CreatedBy =
+          containsRegex(
+            createdBy
+          );
+      }
+
+      /* =========================================
+        AMOUNT RANGE
+        ========================================= */
+
+      const minAmount =
+        Number(minAmountText);
+
+      const maxAmount =
+        Number(maxAmountText);
+
+      if (
+        (
+          minAmountText &&
+          Number.isFinite(
+            minAmount
+          )
+        ) ||
+        (
+          maxAmountText &&
+          Number.isFinite(
+            maxAmount
+          )
+        )
+      ) {
+        filter.NetAmount = {};
+
+        if (
+          minAmountText &&
+          Number.isFinite(
+            minAmount
+          )
+        ) {
+          filter.NetAmount.$gte =
+            minAmount;
+        }
+
+        if (
+          maxAmountText &&
+          Number.isFinite(
+            maxAmount
+          )
+        ) {
+          filter.NetAmount.$lte =
+            maxAmount;
+        }
+      }
+
+      /* =========================================
+        GENERAL SEARCH
+        ========================================= */
+
+      if (search) {
+        const searchRegex =
+          containsRegex(search);
+
+        const numericSearch =
+          Number(search);
+
+        const searchConditions = [
+          {
+            DebitNoteSeries:
+              searchRegex,
+          },
+          {
+            BillSeries:
+              searchRegex,
+          },
+          {
+            SupplierCode:
+              searchRegex,
+          },
+          {
+            SupplierName:
+              searchRegex,
+          },
+          {
+            CompanyCode:
+              searchRegex,
+          },
+          {
+            CompanyName:
+              searchRegex,
+          },
+          {
+            GDCode:
+              searchRegex,
+          },
+          {
+            Godown:
+              searchRegex,
+          },
+          {
+            SalesmanCode:
+              searchRegex,
+          },
+          {
+            SalesmanName:
+              searchRegex,
+          },
+          {
+            ReturnType:
+              searchRegex,
+          },
+          {
+            Status:
+              searchRegex,
+          },
+          {
+            CreatedBy:
+              searchRegex,
+          },
+          {
+            Narration:
+              searchRegex,
+          },
+        ];
+
+        if (
+          Number.isFinite(
+            numericSearch
+          )
+        ) {
+          searchConditions.push(
+            {
+              DebitNoteNo:
+                numericSearch,
+            },
+            {
+              VNo:
+                numericSearch,
+            },
+            {
+              BillNo:
+                numericSearch,
+            },
+            {
+              NetAmount:
+                numericSearch,
+            }
+          );
+        }
+
+        andConditions.push({
+          $or:
+            searchConditions,
+        });
+      }
+
+      if (
+        andConditions.length > 0
+      ) {
+        filter.$and =
+          andConditions;
+      }
+
+      const totalRecords =
+        await DebitNote
+          .countDocuments(
+            filter
+          );
+
+      const totalPages =
+        Math.max(
+          1,
+          Math.ceil(
+            totalRecords /
+            limit
+          )
+        );
+
+      const currentPage =
+        Math.min(
+          page,
+          totalPages
+        );
+
+      const skip =
+        (
+          currentPage -
+          1
+        ) *
+        limit;
+
+      const debitNotes =
+        await DebitNote.find(
+          filter
+        )
+          .sort({
+            VDate: -1,
+            DebitNoteNo: -1,
+            _id: -1,
+          })
+          .skip(skip)
+          .limit(limit)
+          .lean();
+
+      return res.json({
+        success: true,
+
+        debitNotes,
+
+        count:
+          debitNotes.length,
+
+        pagination: {
+          currentPage,
+
+          page:
+            currentPage,
+
+          limit,
+
+          totalRecords,
+
+          totalPages,
+
+          hasPreviousPage:
+            currentPage > 1,
+
+          hasNextPage:
+            currentPage <
+            totalPages,
+
+          startRecord:
+            totalRecords === 0
+              ? 0
+              : skip + 1,
+
+          endRecord:
+            totalRecords === 0
+              ? 0
+              : Math.min(
+                skip +
+                debitNotes.length,
+                totalRecords
+              ),
+        },
+      });
+    } catch (error) {
+      console.error(
+        "Debit Note pagination error:",
+        error
+      );
+
+      return res.status(500).json({
+        success: false,
+        message:
+          "Failed to load Debit Notes.",
+        error:
+          error.message,
+      });
+    }
+  }
+);
+
+app.post(
+  "/api/debit-note",
+  ensureConnection,
+  securityRouter.authorizeRequest("VOUCHERS", "DEBIT_NOTE", "add"),   // ADD THIS
+  async (req, res) => {
+    const session =
+      await mongoose.startSession();
+
+    try {
+      session.startTransaction();
+
+      const distributorId = String(req.auth.distributorId || "").trim();
+
+      const firmId = String(req.auth.firmId || "").trim();
+
+      const firmName = String(
+        req.body.firmName || ""
+      ).trim();
+
+      const debitNoteSeries =
+        String(
+          req.body.DebitNoteSeries ||
+          req.body.debitNoteSeries ||
+          "DN"
+        ).trim();
+
+      let debitNoteNo =
+        debitNumber(
+          req.body.DebitNoteNo ||
+          req.body.debitNoteNo ||
+          req.body.VNo
+        );
+
+      const gdCode = String(
+        req.body.GDCode ||
+        req.body.gdCode ||
+        ""
+      ).trim();
+
+      if (
+        !distributorId ||
+        !firmId
+      ) {
+        throw new Error(
+          "Distributor/Firm not found."
+        );
+      }
+
+      if (!debitNoteNo) {
+        throw new Error(
+          "Debit Note number is required."
+        );
+      }
+
+      if (!gdCode) {
+        throw new Error(
+          "Godown code is required."
+        );
+      }
+
+      const items =
+        normalizeDebitNoteItems(
+          req.body.items || []
+        );
+
+      if (!items.length) {
+        throw new Error(
+          "At least one product is required."
+        );
+      }
+      const supplierCode = String(req.body.SupplierCode || req.body.supplierCode || "").trim();
+      const companyCode = String(req.body.CompanyCode || req.body.companyCode || "").trim();
+      const noteSupplier = await OtherAccount.findOne({ distributorId, firmId, accountCode: supplierCode, isActive: { $ne: false } }).session(session).lean();
+      const noteGodown = await GodownModel.findOne({ distributorId, firmId, godownCode: gdCode, isActive: { $ne: false } }).session(session).lean();
+      const noteCompany = companyCode
+        ? await Company.findOne({ distributorId, firmId, companyCode, isActive: { $ne: false } }).session(session).lean()
+        : null;
+      if (!noteSupplier) throw Object.assign(new Error("Invalid or inactive supplier account."), { statusCode: 400 });
+      if (!noteGodown) throw Object.assign(new Error("Invalid or inactive godown."), { statusCode: 400 });
+      if (companyCode && !noteCompany) throw Object.assign(new Error("Invalid or inactive company."), { statusCode: 400 });
+      await applyProductMasterTaxRates({ items, distributorId, firmId, session });
+      const calculatedDebit = validateFinancialEnvelope(req.body, items, { type: "purchase" });
+      items.splice(0, items.length, ...calculatedDebit.items.map((item) => ({
+        ...item,
+        GrossAmount: item.grossAmount,
+        TaxableValue: item.taxable,
+        CGST: item.cgst,
+        SGST: item.sgst,
+        IGST: item.igst,
+        GSTAmount: Number(item.cgst || 0) + Number(item.sgst || 0) + Number(item.igst || 0),
+      })));
+      const referenceBillSeries = String(req.body.BillSeries || req.body.billSeries || "").trim();
+      const referenceBillNo = Number(req.body.BillNo || req.body.billNo || 0);
+      if (referenceBillNo > 0) {
+        const originalPurchase = await PurchaseHeader.findOne({
+          distributorId, firmId, vouSer: referenceBillSeries, vouNo: referenceBillNo, isActive: true,
+        }).session(session).lean();
+        if (!originalPurchase) throw Object.assign(new Error("Original purchase bill was not found in this firm."), { statusCode: 404 });
+        if (supplierCode && String(originalPurchase.supplierCode || "") !== supplierCode) {
+          throw Object.assign(new Error("Debit-note supplier does not match the original purchase bill."), { statusCode: 400 });
+        }
+        const keyFor = (item) => [
+          String(item.productCode || item.ProductCode || item.productId || "").trim().toUpperCase(),
+          String(item.batchNo || item.Batch || item.selectedBatch?.Batch || ".").trim().toUpperCase(),
+        ].join("\u0000");
+        const originalQty = new Map();
+        for (const item of originalPurchase.items || []) {
+          const key = keyFor(item);
+          originalQty.set(key, Number(originalQty.get(key) || 0) + Number(item.qty ?? item.quantity ?? item.Qty ?? 0) + Number(item.free ?? item.Free ?? 0));
+        }
+        const priorNotes = await DebitNote.find({
+          distributorId, firmId, BillSeries: referenceBillSeries, BillNo: referenceBillNo, isActive: true,
+        }).session(session).lean();
+        const returnedQty = new Map();
+        for (const note of priorNotes) for (const item of note.items || []) {
+          const key = keyFor(item);
+          returnedQty.set(key, Number(returnedQty.get(key) || 0) + Number(item.Qty ?? item.qty ?? 0) + Number(item.Free ?? item.free ?? 0));
+        }
+        for (const item of items) {
+          const key = keyFor(item);
+          const requested = Number(item.Qty ?? item.qty ?? 0) + Number(item.Free ?? item.free ?? 0);
+          if (requested + Number(returnedQty.get(key) || 0) > Number(originalQty.get(key) || 0) + 0.0001) {
+            throw Object.assign(new Error(`Return quantity exceeds the remaining quantity on the original purchase bill for product ${item.ProductCode || item.productCode}.`), { statusCode: 409 });
+          }
+        }
+      }
+      const lastDebitNote = await DebitNote.findOne({ distributorId, firmId, DebitNoteSeries: debitNoteSeries }).sort({ DebitNoteNo: -1 }).session(session).lean();
+      debitNoteNo = req.body._desktopImport === true && debitNoteNo > 0
+        ? debitNoteNo
+        : await nextDocumentNumber({ distributorId, firmId, documentType: "DEBIT_NOTE", series: debitNoteSeries, documentDate: req.body.VDate, session, minimumValue: Number(lastDebitNote?.DebitNoteNo || 0) });
+
+      const duplicate =
+        await DebitNote.findOne({
+          distributorId,
+          firmId,
+
+          DebitNoteSeries:
+            debitNoteSeries,
+
+          DebitNoteNo:
+            debitNoteNo,
+
+          isActive:
+            true,
+        }).session(session);
+
+      if (duplicate) {
+        throw new Error(
+          "Debit Note already exists."
+        );
+      }
+
+      /*
+      * Deduct stock first.
+      */
+      await applyDebitNoteStockMovement({
+        items,
+
+        distributorId,
+        firmId,
+        firmName,
+
+        gdCode,
+
+        direction:
+          -1,
+
+        session,
+      });
+
+      const created =
+        await DebitNote.create(
+          [
+            {
+              ...req.body,
+
+              distributorId,
+              firmId,
+              firmName,
+
+              VNo:
+                debitNoteNo,
+
+              DebitNoteSeries:
+                debitNoteSeries,
+
+              DebitNoteNo:
+                debitNoteNo,
+
+              debitNoteSeries,
+              debitNoteNo,
+
+              GDCode:
+                gdCode,
+
+              GrossAmount:
+                calculatedDebit.grossAmount,
+
+              GSTAmount:
+                calculatedDebit.cgstAmt + calculatedDebit.sgstAmt + calculatedDebit.igstAmt,
+
+              NetAmount:
+                calculatedDebit.netAmt,
+
+              amount:
+                calculatedDebit.netAmt,
+
+              TotalQty:
+                items.reduce(
+                  (sum, item) =>
+                    sum +
+                    debitNumber(
+                      item.Qty
+                    ),
+                  0
+                ),
+
+              TotalFreeQty:
+                items.reduce(
+                  (sum, item) =>
+                    sum +
+                    debitNumber(
+                      item.Free
+                    ),
+                  0
+                ),
+
+              TotalItems:
+                items.length,
+
+              items,
+
+              Status:
+                req.body.Status ||
+                "Approved",
+
+              isActive:
+                true,
+            },
+          ],
+          {
+            session,
+          }
+        );
+      const debitAmount = Number(created[0].NetAmount || created[0].amount || 0);
+      const debitTax = Number(created[0].GSTAmount || 0);
+      await postBalancedJournal({ distributorId, firmId, sourceType: "DEBIT_NOTE", sourceId: String(created[0]._id), documentNo: `${debitNoteSeries}${debitNoteNo}`, documentDate: String(created[0].VDate || ""), createdBy: req.auth.userId, lines: [
+        { accountCode: String(created[0].SupplierCode || created[0].SupplierName || "SUNDRY_CREDITORS"), debit: debitAmount, credit: 0, narration: "Debit note" },
+        { accountCode: "PURCHASE_RETURN", debit: 0, credit: debitAmount - debitTax, narration: "Purchase return" },
+        ...(debitTax > 0 ? [{ accountCode: "INPUT_GST_REVERSAL", debit: 0, credit: debitTax, narration: "GST reversal" }] : []),
+      ] }, session);
+      await writeAuditEvent(req, { entityType: "DEBIT_NOTE", entityId: String(created[0]._id), action: "CREATE", after: created[0].toObject() }, session);
+
+      await commitTransactionReliably(session);
+
+      return res.status(201).json({
+        success:
+          true,
+
+        message:
+          "Debit Note saved and stock deducted successfully.",
+
+        data:
+          created[0],
+      });
+    } catch (error) {
+      if (
+        session.inTransaction()
+      ) {
+        await session.abortTransaction();
+      }
+
+      console.error(
+        "Debit Note save error:",
+        error
+      );
+
+      return res.status(400).json({
+        success:
+          false,
+
+        message:
+          error.message ||
+          "Debit Note save failed.",
+      });
+    } finally {
+      await session.endSession();
+    }
+  }
+);
+
+app.put(
+  "/api/debit-note/:id",
+  ensureConnection,
+  securityRouter.authorizeRequest("VOUCHERS", "DEBIT_NOTE", "edit"),   // ADD THIS
+  async (req, res) => {
+    const session =
+      await mongoose.startSession();
+
+    try {
+      session.startTransaction();
+
+      const id =
+        String(
+          req.params.id || ""
+        ).trim();
+
+      const distributorId = String(req.auth.distributorId || "").trim();
+
+      const firmId = String(req.auth.firmId || "").trim();
+
+      const firmName = String(
+        req.body.firmName || ""
+      ).trim();
+
+      if (
+        !mongoose.Types.ObjectId
+          .isValid(id)
+      ) {
+        throw new Error(
+          "Invalid Debit Note ID."
+        );
+      }
+
+      const oldDebitNote =
+        await DebitNote.findOne({
+          _id:
+            id,
+
+          distributorId,
+          firmId,
+
+          isActive:
+            true,
+        }).session(session);
+
+      if (!oldDebitNote) {
+        throw new Error(
+          "Debit Note not found."
+        );
+      }
+
+      const oldItems =
+        normalizeDebitNoteItems(
+          oldDebitNote.items || []
+        );
+
+      const oldGdCode = String(
+        oldDebitNote.GDCode || ""
+      ).trim();
+
+      /*
+      * Restore stock deducted by old Debit Note.
+      */
+      await applyDebitNoteStockMovement({
+        items:
+          oldItems,
+
+        distributorId,
+        firmId,
+
+        firmName:
+          oldDebitNote.firmName ||
+          firmName,
+
+        gdCode:
+          oldGdCode,
+
+        direction:
+          1,
+
+        session,
+      });
+
+      const newItems =
+        normalizeDebitNoteItems(
+          req.body.items || []
+        );
+
+      const newGdCode = String(
+        req.body.GDCode ||
+        req.body.gdCode ||
+        ""
+      ).trim();
+
+      if (!newGdCode) {
+        throw new Error(
+          "Godown code is required."
+        );
+      }
+
+      const supplierCode = String(req.body.SupplierCode || req.body.supplierCode || oldDebitNote.SupplierCode || "").trim();
+      const companyCode = String(req.body.CompanyCode || req.body.companyCode || oldDebitNote.CompanyCode || "").trim();
+      const noteSupplier = await OtherAccount.findOne({ distributorId, firmId, accountCode: supplierCode, isActive: { $ne: false } }).session(session).lean();
+      const noteGodown = await GodownModel.findOne({ distributorId, firmId, godownCode: newGdCode, isActive: { $ne: false } }).session(session).lean();
+      const noteCompany = companyCode
+        ? await Company.findOne({ distributorId, firmId, companyCode, isActive: { $ne: false } }).session(session).lean()
+        : null;
+      if (!noteSupplier) throw Object.assign(new Error("Invalid or inactive supplier account."), { statusCode: 400 });
+      if (!noteGodown) throw Object.assign(new Error("Invalid or inactive godown."), { statusCode: 400 });
+      if (companyCode && !noteCompany) throw Object.assign(new Error("Invalid or inactive company."), { statusCode: 400 });
+      await applyProductMasterTaxRates({ items: newItems, distributorId, firmId, session });
+      const calculatedDebit = validateFinancialEnvelope(req.body, newItems, { type: "purchase" });
+      newItems.splice(0, newItems.length, ...calculatedDebit.items.map((item) => ({
+        ...item, GrossAmount: item.grossAmount, TaxableValue: item.taxable,
+        CGST: item.cgst, SGST: item.sgst, IGST: item.igst,
+        GSTAmount: Number(item.cgst || 0) + Number(item.sgst || 0) + Number(item.igst || 0),
+      })));
+
+      /*
+      * Deduct new edited quantities.
+      */
+      await applyDebitNoteStockMovement({
+        items:
+          newItems,
+
+        distributorId,
+        firmId,
+        firmName,
+
+        gdCode:
+          newGdCode,
+
+        direction:
+          -1,
+
+        session,
+      });
+
+      const debitNoteSeries =
+        String(
+          req.body.DebitNoteSeries ||
+          req.body.debitNoteSeries ||
+          oldDebitNote
+            .DebitNoteSeries ||
+          "DN"
+        ).trim();
+
+      const debitNoteNo =
+        debitNumber(
+          req.body.DebitNoteNo ||
+          req.body.debitNoteNo ||
+          req.body.VNo ||
+          oldDebitNote
+            .DebitNoteNo
+        );
+
+      const duplicate =
+        await DebitNote.findOne({
+          _id: {
+            $ne:
+              oldDebitNote._id,
+          },
+
+          distributorId,
+          firmId,
+
+          DebitNoteSeries:
+            debitNoteSeries,
+
+          DebitNoteNo:
+            debitNoteNo,
+
+          isActive:
+            true,
+        }).session(session);
+
+      if (duplicate) {
+        throw new Error(
+          "Another Debit Note exists with this number."
+        );
+      }
+
+      const updated =
+        await DebitNote.findOneAndUpdate(
+          { _id: id, distributorId, firmId },
+          {
+            $set: {
+              ...req.body,
+
+              distributorId,
+              firmId,
+              firmName,
+
+              VNo:
+                debitNoteNo,
+
+              DebitNoteSeries:
+                debitNoteSeries,
+
+              DebitNoteNo:
+                debitNoteNo,
+
+              debitNoteSeries,
+              debitNoteNo,
+
+              GDCode:
+                newGdCode,
+
+              GrossAmount:
+                calculatedDebit.grossAmount,
+
+              GSTAmount:
+                calculatedDebit.cgstAmt + calculatedDebit.sgstAmt + calculatedDebit.igstAmt,
+
+              NetAmount:
+                calculatedDebit.netAmt,
+
+              amount:
+                calculatedDebit.netAmt,
+
+              TotalQty:
+                newItems.reduce(
+                  (sum, item) =>
+                    sum +
+                    debitNumber(
+                      item.Qty
+                    ),
+                  0
+                ),
+
+              TotalFreeQty:
+                newItems.reduce(
+                  (sum, item) =>
+                    sum +
+                    debitNumber(
+                      item.Free
+                    ),
+                  0
+                ),
+
+              TotalItems:
+                newItems.length,
+
+              items:
+                newItems,
+
+              UpdatedBy:
+                req.body.UpdatedBy ||
+                "",
+
+              isActive:
+                true,
+            },
+          },
+          {
+            new:
+              true,
+
+            session,
+
+            runValidators:
+              true,
+          }
+        );
+
+      await reverseSourceJournal({ distributorId, firmId, sourceType: "DEBIT_NOTE", sourceId: String(id), createdBy: req.auth.userId, documentDate: String(updated.VDate || ""), reason: "Debit note edited" }, session);
+      const updatedTax = Number(updated.GSTAmount || 0);
+      await postBalancedJournal({ distributorId, firmId, sourceType: "DEBIT_NOTE", sourceId: String(id), documentNo: `${debitNoteSeries}${debitNoteNo}`, documentDate: String(updated.VDate || ""), createdBy: req.auth.userId, lines: [
+        { accountCode: String(updated.SupplierCode || updated.SupplierName || "SUNDRY_CREDITORS"), debit: Number(updated.NetAmount || 0), credit: 0, narration: "Debit note edit" },
+        { accountCode: "PURCHASE_RETURN", debit: 0, credit: Number(updated.NetAmount || 0) - updatedTax, narration: "Purchase return" },
+        ...(updatedTax > 0 ? [{ accountCode: "INPUT_GST_REVERSAL", debit: 0, credit: updatedTax, narration: "GST reversal" }] : []),
+      ] }, session);
+      await writeAuditEvent(req, { entityType: "DEBIT_NOTE", entityId: String(id), action: "EDIT", before: oldDebitNote.toObject(), after: updated.toObject() }, session);
+
+      await commitTransactionReliably(session);
+
+      return res.json({
+        success:
+          true,
+
+        message:
+          "Debit Note updated and stock corrected successfully.",
+
+        data:
+          updated,
+      });
+    } catch (error) {
+      if (
+        session.inTransaction()
+      ) {
+        await session.abortTransaction();
+      }
+
+      return res.status(400).json({
+        success:
+          false,
+
+        message:
+          error.message ||
+          "Debit Note update failed.",
+      });
+    } finally {
+      await session.endSession();
+    }
+  }
+);
+
+app.delete(
+  "/api/debit-note/:id",
+  ensureConnection,
+  securityRouter.authorizeRequest("VOUCHERS", "DEBIT_NOTE", "delete"),   // ADD THIS
+  async (req, res) => {
+    const session =
+      await mongoose.startSession();
+
+    try {
+      session.startTransaction();
+
+      const id =
+        String(
+          req.params.id || ""
+        ).trim();
+
+      const distributorId =
+        String(
+          req.body.distributorId ||
+          req.query.distributorId ||
+          ""
+        ).trim();
+
+      const firmId =
+        String(
+          req.body.firmId ||
+          req.query.firmId ||
+          ""
+        ).trim();
+
+      const debitNote =
+        await DebitNote.findOne({
+          _id:
+            id,
+
+          distributorId,
+          firmId,
+
+          isActive:
+            true,
+        }).session(session);
+
+      if (!debitNote) {
+        throw new Error(
+          "Debit Note not found."
+        );
+      }
+
+      const items =
+        normalizeDebitNoteItems(
+          debitNote.items || []
+        );
+
+      /*
+      * Restore stock deducted by Debit Note.
+      */
+      await applyDebitNoteStockMovement({
+        items,
+
+        distributorId,
+        firmId,
+
+        firmName:
+          debitNote.firmName ||
+          "",
+
+        gdCode:
+          debitNote.GDCode,
+
+        direction:
+          1,
+
+        session,
+      });
+
+      await DebitNote.findOneAndUpdate({ _id: id, distributorId, firmId }, { $set: { isActive: false, status: "CANCELLED", cancelledAt: new Date(), cancelledBy: req.auth.userId } }, { session });
+      await reverseSourceJournal({ distributorId, firmId, sourceType: "DEBIT_NOTE", sourceId: id, createdBy: req.auth.userId, documentDate: businessDateIST(), reason: "Debit note cancellation" }, session);
+      await writeAuditEvent(req, { entityType: "DEBIT_NOTE", entityId: id, action: "CANCEL", before: debitNote.toObject() }, session);
+
+      await commitTransactionReliably(session);
+
+      return res.json({
+        success:
+          true,
+
+        message:
+          "Debit Note deleted and stock restored successfully.",
+      });
+    } catch (error) {
+      if (
+        session.inTransaction()
+      ) {
+        await session.abortTransaction();
+      }
+
+      return res.status(400).json({
+        success:
+          false,
+
+        message:
+          error.message ||
+          "Debit Note delete failed.",
+      });
+    } finally {
+      await session.endSession();
+    }
+  }
+);
+
+/* =========================================================
+  CREDIT NOTE STOCK AND BILL HELPERS
+  ========================================================= */
+
+const creditNoteNumber = (value) => {
+  const parsed = Number(value ?? 0);
+
+  return Number.isFinite(parsed)
+    ? parsed
+    : 0;
+};
+
+const normalizeCreditNoteItems = (
+  sourceItems = []
+) => {
+  if (!Array.isArray(sourceItems)) {
+    return [];
+  }
+
+  return sourceItems.map(
+    (item, index) => {
+      const productCode = String(
+        item.ProductCode ||
+        item.productCode ||
+        item.itemCode ||
+        ""
+      ).trim();
+
+      const productName = String(
+        item.ProductName ||
+        item.productName ||
+        item.itemName ||
+        ""
+      ).trim();
+
+      const batchNo =
+        String(
+          item.Batch ||
+          item.batchNo ||
+          item.selectedBatch?.batchNo ||
+          item.selectedBatch?.Batch ||
+          "."
+        ).trim() || ".";
+
+      const mrp = creditNoteNumber(
+        item.MRP ??
+        item.mrp ??
+        item.selectedBatch?.MRP ??
+        item.selectedBatch?.mrp
+      );
+
+      const qty = creditNoteNumber(
+        item.Qty ??
+        item.qty
+      );
+
+      const free = creditNoteNumber(
+        item.Free ??
+        item.free
+      );
+
+      const totalStockQty =
+        qty + free;
+
+      const trn = String(
+        item.TRN ||
+        item.trn ||
+        "GDR"
+      )
+        .trim()
+        .toUpperCase();
+
+      if (!productCode) {
+        throw new Error(
+          `Product code is missing in row ${index + 1
+          }.`
+        );
+      }
+
+      if (
+        trn !== "GDR" &&
+        trn !== "DGR"
+      ) {
+        throw new Error(
+          `Invalid TRN in row ${index + 1
+          }. Use GDR or DGR.`
+        );
+      }
+
+      if (
+        !Number.isFinite(totalStockQty) ||
+        totalStockQty <= 0
+      ) {
+        throw new Error(
+          `Quantity must be greater than zero in row ${index + 1
+          }.`
+        );
+      }
+
+      if (
+        !Number.isFinite(mrp) ||
+        mrp < 0
+      ) {
+        throw new Error(
+          `Invalid MRP in row ${index + 1
+          }.`
+        );
+      }
+
+      return {
+        ...item,
+
+        Sr:
+          item.Sr ||
+          item.sr ||
+          index + 1,
+
+        TRN:
+          trn,
+
+        ProductCode:
+          productCode,
+
+        ProductName:
+          productName,
+
+        Batch:
+          batchNo,
+
+        MRP:
+          mrp,
+
+        Qty:
+          qty,
+
+        Free:
+          free,
+
+        Rate: creditNoteNumber(
+          item.Rate ??
+          item.rate ??
+          item.SRate
+        ),
+
+        PRate: creditNoteNumber(
+          item.PRate ??
+          item.purchaseRate
+        ),
+
+        BoxPack:
+          creditNoteNumber(
+            item.BoxPack ??
+            item.boxPack ??
+            1
+          ) || 1,
+
+        InBoxPack:
+          creditNoteNumber(
+            item.InBoxPack ??
+            item.inBoxPack ??
+            item.inboxPack ??
+            1
+          ) || 1,
+
+        totalStockQty,
+      };
+    }
+  );
+};
+
+const getCreditNoteStockModel = (
+  trn
+) => {
+  return String(trn)
+    .trim()
+    .toUpperCase() === "DGR"
+    ? DamStock
+    : Stock;
+};
+
+/*
+* direction:
+* +1 = apply Credit Note stock
+* -1 = reverse Credit Note stock
+*/
+const applyCreditNoteStockMovement =
+  async ({
+    items,
+    distributorId,
+    firmId,
+    firmName,
+    gdCode,
+    direction,
+    session,
+    preventNegative = true,
+  }) => {
+    for (const item of items) {
+      const stockModel =
+        getCreditNoteStockModel(
+          item.TRN
+        );
+
+      const movementQty =
+        creditNoteNumber(
+          item.totalStockQty ??
+          (
+            creditNoteNumber(item.Qty) +
+            creditNoteNumber(item.Free)
+          )
+        ) * direction;
+
+      const stockFilter = {
+        distributorId,
+        firmId,
+
+        GDCode:
+          gdCode,
+
+        ProdCode:
+          item.ProductCode,
+
+        Batch:
+          item.Batch || ".",
+
+        MRP:
+          creditNoteNumber(item.MRP),
+      };
+
+      /*
+      * Reversing a Credit Note subtracts stock.
+      * Do not allow that reversal to make stock negative.
+      */
+      if (
+        direction < 0 &&
+        preventNegative
+      ) {
+        const existingStock =
+          await stockModel.findOne(
+            stockFilter
+          )
+            .session(session)
+            .lean();
+
+        if (!existingStock) {
+          throw new Error(
+            `Stock row not found for ${item.ProductCode
+            }, batch ${item.Batch || "."
+            }, MRP ${item.MRP
+            }.`
+          );
+        }
+
+        const availableQty =
+          creditNoteNumber(
+            existingStock.Qty
+          );
+
+        const requiredQty =
+          Math.abs(
+            movementQty
+          );
+
+        if (
+          availableQty <
+          requiredQty
+        ) {
+          throw new Error(
+            `Cannot reverse Credit Note for ${item.ProductCode
+            }. Available stock is ${availableQty
+            }, but ${requiredQty
+            } is required.`
+          );
+        }
+      }
+
+      if (direction > 0) {
+        await stockModel.findOneAndUpdate(
+          stockFilter,
+          {
+            $setOnInsert: {
+              distributorId,
+              firmId,
+              firmName,
+
+              GDCode:
+                gdCode,
+
+              ProdCode:
+                item.ProductCode,
+
+              Batch:
+                item.Batch || ".",
+
+              MRP:
+                creditNoteNumber(
+                  item.MRP
+                ),
+            },
+
+            $set: {
+              PRate:
+                creditNoteNumber(
+                  item.PRate
+                ),
+
+              SRate:
+                creditNoteNumber(
+                  item.Rate
+                ),
+
+              BoxPack:
+                creditNoteNumber(
+                  item.BoxPack
+                ) || 1,
+
+              InBoxPack:
+                creditNoteNumber(
+                  item.InBoxPack
+                ) || 1,
+
+              IsLocked:
+                "N",
+            },
+
+            $inc: {
+              Qty:
+                movementQty,
+            },
+          },
+          {
+            upsert:
+              true,
+
+            new:
+              true,
+
+            session,
+
+            setDefaultsOnInsert:
+              true,
+          }
+        );
+      } else {
+        const result =
+          await stockModel.updateOne(
+            {
+              ...stockFilter,
+
+              Qty: {
+                $gte:
+                  Math.abs(
+                    movementQty
+                  ),
+              },
+            },
+            {
+              $inc: {
+                Qty:
+                  movementQty,
+              },
+            },
+            {
+              session,
+            }
+          );
+
+        if (
+          result.modifiedCount !== 1
+        ) {
+          throw new Error(
+            `Unable to reverse stock for ${item.ProductCode
+            }, batch ${item.Batch || "."
+            }.`
+          );
+        }
+      }
+    }
+  };
+
+const getCreditNoteAmounts = (
+  source = {}
+) => {
+  return {
+    creditAmount:
+      creditNoteNumber(
+        source.NetAmount ??
+        source.amount
+      ),
+
+    grossAmount:
+      creditNoteNumber(
+        source.GrossAmount
+      ),
+
+    taxableValue:
+      creditNoteNumber(
+        source.TaxableValue ??
+        source.taxableValue
+      ),
+
+    cgstAmount:
+      creditNoteNumber(
+        source.CGSTAmount ??
+        source.cgstAmount
+      ),
+
+    sgstAmount:
+      creditNoteNumber(
+        source.SGSTAmount ??
+        source.sgstAmount
+      ),
+
+    igstAmount:
+      creditNoteNumber(
+        source.IGSTAmount ??
+        source.igstAmount
+      ),
+  };
+};
+
+/*
+* direction:
+* +1 = apply Credit Note to Sales Bill
+* -1 = reverse Credit Note from Sales Bill
+*/
+const adjustSalesBillForCreditNote =
+  async ({
+    salesBill,
+    amounts,
+    direction,
+    creditNoteSeries,
+    creditNoteNo,
+    session,
+  }) => {
+    if (!salesBill) {
+      return;
+    }
+
+    const applyCreditNote =
+      direction > 0;
+
+    const update = {
+      $inc: {
+        CreditNoteAmount:
+          applyCreditNote
+            ? amounts.creditAmount
+            : -amounts.creditAmount,
+
+        NetAmount:
+          applyCreditNote
+            ? -amounts.creditAmount
+            : amounts.creditAmount,
+
+        GrossAmount:
+          applyCreditNote
+            ? -amounts.grossAmount
+            : amounts.grossAmount,
+
+        TaxableValue:
+          applyCreditNote
+            ? -amounts.taxableValue
+            : amounts.taxableValue,
+
+        CGSTAmount:
+          applyCreditNote
+            ? -amounts.cgstAmount
+            : amounts.cgstAmount,
+
+        SGSTAmount:
+          applyCreditNote
+            ? -amounts.sgstAmount
+            : amounts.sgstAmount,
+
+        IGSTAmount:
+          applyCreditNote
+            ? -amounts.igstAmount
+            : amounts.igstAmount,
+      },
+    };
+
+    if (applyCreditNote) {
+      update.$set = {
+        CreditNoteAdjusted:
+          true,
+
+        LastCreditNoteSeries:
+          creditNoteSeries,
+
+        LastCreditNoteNo:
+          creditNoteNo,
+      };
+    }
+
+    await SalesHeader.updateOne(
+      {
+        _id:
+          salesBill._id,
+      },
+      update,
+      {
+        session,
+      }
+    );
+  };
+
+const findReferencedSalesBill =
+  async ({
+    distributorId,
+    firmId,
+    billSeries,
+    billNo,
+    session,
+  }) => {
+    if (!billNo) {
+      return null;
+    }
+
+    const filter = {
+      distributorId,
+      firmId,
+
+      BillNo:
+        Number(billNo),
+
+      isActive:
+        true,
+    };
+
+    if (billSeries) {
+      filter.BillSeries =
+        String(billSeries).trim();
+    }
+
+    return SalesHeader.findOne(
+      filter
+    ).session(session);
+  };
+
+app.get("/api/credit-note/sales-bill", ensureConnection, async (req, res) => {
+  try {
+    const distributorId = String(req.query.distributorId || "").trim();
+    const firmId = String(req.query.firmId || "").trim();
+    const billSeries = String(req.query.billSeries || "").trim();
+    const billNo = Number(req.query.billNo || 0);
+
+    if (!distributorId || !firmId) {
+      return res.status(400).json({
+        success: false,
+        message: "distributorId and firmId are required",
+      });
+    }
+
+    if (!billNo) {
+      return res.status(400).json({
+        success: false,
+        message: "Bill No is required",
+      });
+    }
+
+    const filter = {
+      distributorId,
+      firmId,
+      BillNo: billNo,
+      isActive: true,
+    };
+
+    if (billSeries) filter.BillSeries = billSeries;
+
+    const bill = await SalesHeader.findOne(filter);
+
+    if (!bill) {
+      return res.status(404).json({
+        success: false,
+        message: `Sales bill not found: ${billSeries}/${billNo}`,
+      });
+    }
+
+    res.json({
+      success: true,
+      bill,
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: "Sales bill load failed",
+      error: error.message,
+    });
+  }
+});
+// Get next credit note bill number
+app.get("/api/credit-note/next-bill-no", ensureConnection, async (req, res) => {
+  try {
+    const distributorId = String(req.query.distributorId || "").trim();
+    const firmId = String(req.query.firmId || "").trim();
+    const creditNoteSeries = String(req.query.creditNoteSeries || "CN").trim();
+
+    if (!distributorId || !firmId) {
+      return res.status(400).json({
+        success: false,
+        message: "distributorId and firmId are required",
+      });
+    }
+
+    const lastBill = await CreditNote.findOne({
+      distributorId,
+      firmId,
+      CreditNoteSeries: creditNoteSeries,
+      isActive: true,
+    }).sort({ CreditNoteNo: -1 });
+
+    res.json({
+      success: true,
+      nextCreditNoteNo: Number(lastBill?.CreditNoteNo || 0) + 1,
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: "Failed to generate next credit note number",
+      error: error.message,
+    });
+  }
+});
+// Save Credit Note
+// =========================================================
+// SAVE CREDIT NOTE
+//
+// STOCK MOVEMENT:
+// GDR -> MAS_STOCK     -> ADD Qty + Free
+// DGR -> MAS_DAMSTOCK  -> ADD Qty + Free
+//
+// Supports:
+// 1. Credit Note against a saved Sales Bill
+// 2. Credit Note against an unsaved/reserved Sales Bill
+// 3. Manual Credit Note without Bill Series/Bill No
+// =========================================================
+
+app.post(
+  "/api/credit-note",
+  ensureConnection,
+  securityRouter.authorizeRequest("VOUCHERS", "CREDIT_NOTE", "add"),   // ADD THIS
+  async (req, res) => {
+    const session =
+      await mongoose.startSession();
+
+    try {
+      session.startTransaction();
+
+      const distributorId = String(req.auth.distributorId || "").trim();
+
+      const firmId = String(req.auth.firmId || "").trim();
+
+      const firmName = String(
+        req.body.firmName || ""
+      ).trim();
+
+      const creditNoteSeries = String(
+        req.body.CreditNoteSeries ||
+        req.body.creditNoteSeries ||
+        "CN"
+      ).trim();
+
+      let creditNoteNo = Number(
+        req.body.CreditNoteNo ||
+        req.body.creditNoteNo ||
+        req.body.VNo ||
+        0
+      );
+
+      /*
+      * Bill details are optional because
+      * manual Credit Note entry is allowed.
+      */
+      const billSeries = String(
+        req.body.BillSeries ||
+        req.body.billSeries ||
+        ""
+      ).trim();
+
+      const billNo = Number(
+        req.body.BillNo ||
+        req.body.billNo ||
+        0
+      );
+
+      const gdCode = String(
+        req.body.GDCode ||
+        req.body.gdCode ||
+        ""
+      ).trim();
+
+      const godownName = String(
+        req.body.Godown ||
+        req.body.godown ||
+        ""
+      ).trim();
+
+      const sourceItems =
+        Array.isArray(req.body.items)
+          ? req.body.items
+          : [];
+
+      if (
+        !distributorId ||
+        !firmId
+      ) {
+        return res.status(400).json({
+          success: false,
+          message:
+            "Distributor/Firm not found. Please login again.",
+        });
+      }
+
+      if (!creditNoteNo) {
+        return res.status(400).json({
+          success: false,
+          message:
+            "Credit Note Number is required.",
+        });
+      }
+
+      if (!gdCode) {
+        return res.status(400).json({
+          success: false,
+          message:
+            "Valid Godown Code is required.",
+        });
+      }
+      const lastCreditNote = await CreditNote.findOne({ distributorId, firmId, CreditNoteSeries: creditNoteSeries }).sort({ CreditNoteNo: -1 }).session(session).lean();
+      creditNoteNo = req.body._desktopImport === true && creditNoteNo > 0
+        ? creditNoteNo
+        : await nextDocumentNumber({ distributorId, firmId, documentType: "CREDIT_NOTE", series: creditNoteSeries, documentDate: req.body.VDate, session, minimumValue: Number(lastCreditNote?.CreditNoteNo || 0) });
+
+      /*
+      * Normalize and validate every item.
+      */
+      const normalizedItems =
+        sourceItems.map(
+          (item, index) => {
+            const productCode = String(
+              item.ProductCode ||
+              item.productCode ||
+              item.itemCode ||
+              ""
+            ).trim();
+
+            const productName = String(
+              item.ProductName ||
+              item.productName ||
+              item.itemName ||
+              ""
+            ).trim();
+
+            const batchNo =
+              String(
+                item.Batch ||
+                item.batchNo ||
+                item.selectedBatch
+                  ?.batchNo ||
+                item.selectedBatch
+                  ?.Batch ||
+                "."
+              ).trim() || ".";
+
+            const mrp = Number(
+              item.MRP ??
+              item.mrp ??
+              item.selectedBatch?.MRP ??
+              item.selectedBatch?.mrp ??
+              0
+            );
+
+            const qty = Number(
+              item.Qty ??
+              item.qty ??
+              0
+            );
+
+            const free = Number(
+              item.Free ??
+              item.free ??
+              0
+            );
+
+            const totalStockQty =
+              qty + free;
+
+            const trn = String(
+              item.TRN ||
+              item.trn ||
+              "GDR"
+            )
+              .trim()
+              .toUpperCase();
+
+            if (!productCode) {
+              throw new Error(
+                `Product code is missing in row ${index + 1
+                }.`
+              );
+            }
+
+            if (
+              trn !== "GDR" &&
+              trn !== "DGR"
+            ) {
+              throw new Error(
+                `Invalid transaction type in row ${index + 1
+                }. Use GDR or DGR.`
+              );
+            }
+
+            if (
+              !Number.isFinite(
+                totalStockQty
+              ) ||
+              totalStockQty <= 0
+            ) {
+              throw new Error(
+                `Quantity must be greater than zero in row ${index + 1
+                }.`
+              );
+            }
+
+            if (
+              !Number.isFinite(mrp) ||
+              mrp < 0
+            ) {
+              throw new Error(
+                `Invalid MRP in row ${index + 1
+                }.`
+              );
+            }
+
+            return {
+              ...item,
+
+              Sr:
+                item.Sr ||
+                index + 1,
+
+              TRN: trn,
+
+              ProductCode:
+                productCode,
+
+              ProductName:
+                productName,
+
+              Batch:
+                batchNo,
+
+              MRP:
+                mrp,
+
+              Qty:
+                qty,
+
+              Free:
+                free,
+
+              Rate: Number(
+                item.Rate ??
+                item.rate ??
+                item.SRate ??
+                0
+              ),
+
+              PRate: Number(
+                item.PRate ??
+                item.purchaseRate ??
+                0
+              ),
+
+              BoxPack: Number(
+                item.BoxPack ??
+                item.boxPack ??
+                1
+              ),
+
+              InBoxPack: Number(
+                item.InBoxPack ??
+                item.inBoxPack ??
+                item.inboxPack ??
+                1
+              ),
+
+              totalStockQty,
+            };
+          }
+        );
+
+      if (
+        normalizedItems.length === 0
+      ) {
+        return res.status(400).json({
+          success: false,
+          message:
+            "At least one valid product is required.",
+        });
+      }
+
+      const partyCode = String(req.body.PartyCode || req.body.partyCode || "").trim();
+      const companyCode = String(req.body.CompanyCode || req.body.companyCode || "").trim();
+      const noteParty = await Account.findOne({ distributorId, firmId, accountCode: partyCode, isActive: { $ne: false } }).session(session).lean();
+      const noteGodown = await GodownModel.findOne({ distributorId, firmId, godownCode: gdCode, isActive: { $ne: false } }).session(session).lean();
+      const noteCompany = companyCode
+        ? await Company.findOne({ distributorId, firmId, companyCode, isActive: { $ne: false } }).session(session).lean()
+        : null;
+      if (!noteParty) throw Object.assign(new Error("Invalid or inactive customer account."), { statusCode: 400 });
+      if (!noteGodown) throw Object.assign(new Error("Invalid or inactive godown."), { statusCode: 400 });
+      if (companyCode && !noteCompany) throw Object.assign(new Error("Invalid or inactive company."), { statusCode: 400 });
+      await applyProductMasterTaxRates({ items: normalizedItems, distributorId, firmId, session });
+      const noteSetup = await loadFirmGeneralSetup({ distributorId, firmId, session });
+      const calculatedCredit = validateFinancialEnvelope(req.body, normalizedItems, { vatMode: noteSetup?.vatOn });
+      normalizedItems.splice(0, normalizedItems.length, ...calculatedCredit.items.map((item) => ({
+        ...item,
+        GrossAmount: item.grossAmt,
+        TaxableValue: item.taxable,
+        CGST: item.cgst,
+        SGST: item.sgst,
+        IGST: item.igst,
+        GSTAmount: Number(item.cgst || 0) + Number(item.sgst || 0) + Number(item.igst || 0),
+      })));
+
+      const existingCreditNote =
+        await CreditNote.findOne({
+          distributorId,
+          firmId,
+
+          CreditNoteSeries:
+            creditNoteSeries,
+
+          CreditNoteNo:
+            creditNoteNo,
+
+          isActive: true,
+        }).session(session);
+
+      if (existingCreditNote) {
+        await session.abortTransaction();
+
+        return res.status(409).json({
+          success: false,
+          message:
+            "Credit Note already exists for this series and number.",
+        });
+      }
+
+      /*
+      * Bill may not exist when Credit Note is
+      * created from an unsaved Sales Invoice.
+      */
+      let salesBill = null;
+
+      /*
+      * Historical desktop Credit Notes have already been applied to their
+      * source Sales Bills. Preserve the reference during migration, but do
+      * not revalidate or apply it a second time in the destination ERP.
+      * Normal Credit Note entry keeps the existing validation unchanged.
+      */
+      if (billNo > 0 && req.body._desktopImport !== true) {
+        const salesBillFilter = {
+          distributorId,
+          firmId,
+          BillNo: billNo,
+          isActive: true,
+        };
+
+        if (billSeries) {
+          salesBillFilter.BillSeries =
+            billSeries;
+        }
+
+        salesBill =
+          await SalesHeader.findOne(
+            salesBillFilter
+          ).session(session);
+
+        if (!salesBill) throw Object.assign(new Error("Original sales bill was not found in this firm."), { statusCode: 404 });
+        if (partyCode && String(salesBill.PartyCode || "") !== partyCode) {
+          throw Object.assign(new Error("Credit-note customer does not match the original sales bill."), { statusCode: 400 });
+        }
+
+        const keyFor = (item) => [
+          String(item.productCode || item.ProductCode || item.productId || "").trim().toUpperCase(),
+          String(item.batchNo || item.Batch || item.selectedBatch?.Batch || ".").trim().toUpperCase(),
+        ].join("\u0000");
+        const originalQty = new Map();
+        for (const item of salesBill.items || []) {
+          const key = keyFor(item);
+          originalQty.set(key, Number(originalQty.get(key) || 0) + Number(item.qty ?? item.quantity ?? item.Qty ?? 0) + Number(item.free ?? item.Free ?? 0));
+        }
+        const priorNotes = await CreditNote.find({
+          distributorId, firmId, BillSeries: salesBill.BillSeries, BillNo: salesBill.BillNo, isActive: true,
+        }).session(session).lean();
+        const returnedQty = new Map();
+        for (const note of priorNotes) for (const item of note.items || []) {
+          const key = keyFor(item);
+          returnedQty.set(key, Number(returnedQty.get(key) || 0) + Number(item.qty ?? item.quantity ?? item.Qty ?? 0) + Number(item.free ?? item.Free ?? 0));
+        }
+        for (const item of normalizedItems) {
+          const key = keyFor(item);
+          const requested = Number(item.Qty ?? item.qty ?? 0) + Number(item.Free ?? item.free ?? 0);
+          if (requested + Number(returnedQty.get(key) || 0) > Number(originalQty.get(key) || 0) + 0.0001) {
+            throw Object.assign(new Error(`Return quantity exceeds the remaining quantity on the original sales bill for product ${item.ProductCode || item.productCode}.`), { statusCode: 409 });
+          }
+        }
+      }
+
+      const creditAmount = calculatedCredit.NetAmount;
+      const grossAmount = calculatedCredit.GrossAmount;
+      const taxableValue = calculatedCredit.TaxableValue;
+      const cgstAmount = calculatedCredit.CGSTAmount;
+      const sgstAmount = calculatedCredit.SGSTAmount;
+      const igstAmount = calculatedCredit.IGSTAmount;
+
+      if (
+        !Number.isFinite(
+          creditAmount
+        ) ||
+        creditAmount < 0
+      ) {
+        throw new Error(
+          "Invalid Credit Note amount."
+        );
+      }
+
+      /*
+      * When a saved Sales Bill exists,
+      * do not allow a Credit Note exceeding
+      * the current bill balance.
+      */
+      if (
+        salesBill &&
+        creditAmount >
+        Number(
+          salesBill.NetAmount || 0
+        )
+      ) {
+        throw new Error(
+          `Credit Note amount ₹${creditAmount.toFixed(
+            2
+          )} exceeds Sales Bill balance ₹${Number(
+            salesBill.NetAmount || 0
+          ).toFixed(2)}.`
+        );
+      }
+
+      const createdCreditNotes =
+        await CreditNote.create(
+          [
+            {
+              ...req.body,
+
+              distributorId,
+              firmId,
+              firmName,
+
+              VNo:
+                creditNoteNo,
+
+              CreditNoteSeries:
+                creditNoteSeries,
+
+              CreditNoteNo:
+                creditNoteNo,
+
+              BillSeries:
+                billSeries,
+
+              BillNo:
+                billNo,
+
+              creditNoteSeries:
+                creditNoteSeries,
+
+              creditNoteNo:
+                creditNoteNo,
+
+              billSeries,
+              billNo,
+
+              Godown:
+                godownName,
+
+              GDCode:
+                gdCode,
+
+              GrossAmount:
+                grossAmount,
+
+              TaxableValue:
+                taxableValue,
+
+              CGSTAmount:
+                cgstAmount,
+
+              SGSTAmount:
+                sgstAmount,
+
+              IGSTAmount:
+                igstAmount,
+
+              NetAmount:
+                creditAmount,
+
+              amount:
+                creditAmount,
+
+              items:
+                normalizedItems,
+
+              TotalQty:
+                normalizedItems.reduce(
+                  (total, item) =>
+                    total +
+                    Number(
+                      item.Qty || 0
+                    ),
+                  0
+                ),
+
+              TotalFreeQty:
+                normalizedItems.reduce(
+                  (total, item) =>
+                    total +
+                    Number(
+                      item.Free || 0
+                    ),
+                  0
+                ),
+
+              TotalItems:
+                normalizedItems.length,
+
+              isActive:
+                true,
+
+              Status:
+                req.body.Status ||
+                "Approved",
+            },
+          ],
+          {
+            session,
+          }
+        );
+
+      /*
+      * Credit Note stock movement:
+      *
+      * GDR -> MAS_STOCK    -> increase
+      * DGR -> MAS_DAMSTOCK -> increase
+      */
+      for (
+        const item of
+        normalizedItems
+      ) {
+        const stockModel =
+          item.TRN === "DGR"
+            ? DamStock
+            : Stock;
+
+        const stockFilter = {
+          distributorId,
+          firmId,
+
+          GDCode:
+            gdCode,
+
+          ProdCode:
+            item.ProductCode,
+
+          Batch:
+            item.Batch,
+
+          MRP:
+            item.MRP,
+        };
+
+        const stockUpdate = {
+          $setOnInsert: {
+            distributorId,
+            firmId,
+            firmName,
+
+            GDCode:
+              gdCode,
+
+            ProdCode:
+              item.ProductCode,
+
+            Batch:
+              item.Batch,
+
+            MRP:
+              item.MRP,
+
+
+          },
+
+          $set: {
+            PRate:
+              item.PRate,
+
+            SRate:
+              item.Rate,
+
+            BoxPack:
+              item.BoxPack,
+
+            InBoxPack:
+              item.InBoxPack,
+
+            IsLocked:
+              "N",
+          },
+
+          $inc: {
+            Qty:
+              item.totalStockQty,
+          },
+        };
+
+        await stockModel.findOneAndUpdate(
+          stockFilter,
+          stockUpdate,
+          {
+            upsert: true,
+            new: true,
+            session,
+            setDefaultsOnInsert: true,
+          }
+        );
+      }
+
+      /*
+      * Update Sales Bill only when it already
+      * exists in the database.
+      *
+      * If the Sales Bill is still unsaved,
+      * the frontend will save it later with
+      * CreditNoteAmount and reduced NetAmount.
+      */
+      if (salesBill) {
+        await SalesHeader.updateOne(
+          {
+            _id:
+              salesBill._id,
+          },
+          {
+            $inc: {
+              CreditNoteAmount:
+                creditAmount,
+
+              NetAmount:
+                -creditAmount,
+
+              GrossAmount:
+                -grossAmount,
+
+              TaxableValue:
+                -taxableValue,
+
+              CGSTAmount:
+                -cgstAmount,
+
+              SGSTAmount:
+                -sgstAmount,
+
+              IGSTAmount:
+                -igstAmount,
+            },
+
+            $set: {
+              CreditNoteAdjusted:
+                true,
+
+              LastCreditNoteSeries:
+                creditNoteSeries,
+
+              LastCreditNoteNo:
+                creditNoteNo,
+            },
+          },
+          {
+            session,
+          }
+        );
+      }
+      const creditBase = creditAmount - cgstAmount - sgstAmount - igstAmount;
+      await postBalancedJournal({ distributorId, firmId, sourceType: "CREDIT_NOTE", sourceId: String(createdCreditNotes[0]._id), documentNo: `${creditNoteSeries}${creditNoteNo}`, documentDate: String(createdCreditNotes[0].VDate || ""), createdBy: req.auth.userId, lines: [
+        { accountCode: "SALES_RETURN", debit: creditBase, credit: 0, narration: "Credit note" },
+        ...((cgstAmount + sgstAmount + igstAmount) > 0 ? [{ accountCode: "OUTPUT_GST_REVERSAL", debit: cgstAmount + sgstAmount + igstAmount, credit: 0, narration: "GST reversal" }] : []),
+        { accountCode: String(createdCreditNotes[0].PartyCode || createdCreditNotes[0].PartyName || "SUNDRY_DEBTORS"), debit: 0, credit: creditAmount, narration: "Credit note" },
+      ] }, session);
+      await writeAuditEvent(req, { entityType: "CREDIT_NOTE", entityId: String(createdCreditNotes[0]._id), action: "CREATE", after: createdCreditNotes[0].toObject() }, session);
+
+      await commitTransactionReliably(session);
+
+      return res.status(201).json({
+        success: true,
+
+        message:
+          salesBill
+            ? "Credit Note saved and Sales Bill adjusted successfully."
+            : billNo > 0
+              ? "Credit Note saved. Referenced Sales Bill is not saved yet, so bill adjustment was deferred."
+              : "Manual Credit Note saved successfully.",
+
+        data:
+          createdCreditNotes[0],
+
+        salesBillAdjusted:
+          Boolean(salesBill),
+      });
+    } catch (error) {
+      if (
+        session.inTransaction()
+      ) {
+        await session.abortTransaction();
+      }
+
+      console.error(
+        "Credit Note save error:",
+        error
+      );
+
+      return res.status(400).json({
+        success: false,
+        message:
+          error.message ||
+          "Credit Note save failed.",
+      });
+    } finally {
+      await session.endSession();
+    }
+  }
+);
+// =========================================================
+// UPDATE CREDIT NOTE
+//
+// 1. Reverse old Credit Note stock
+// 2. Restore old Sales Bill amounts
+// 3. Validate edited Credit Note
+// 4. Apply new stock
+// 5. Adjust new Sales Bill
+// 6. Save edited Credit Note
+// =========================================================
+
+app.put(
+  "/api/credit-note/:id",
+  ensureConnection,
+  securityRouter.authorizeRequest("VOUCHERS", "CREDIT_NOTE", "edit"),   // ADD THIS
+  async (req, res) => {
+    const session =
+      await mongoose.startSession();
+
+    try {
+      session.startTransaction();
+
+      const id = String(
+        req.params.id || ""
+      ).trim();
+
+      const distributorId = String(req.auth.distributorId || "").trim();
+
+      const firmId = String(req.auth.firmId || "").trim();
+
+      const firmName = String(
+        req.body.firmName || ""
+      ).trim();
+
+      if (
+        !mongoose.Types.ObjectId.isValid(
+          id
+        )
+      ) {
+        throw new Error(
+          "Invalid Credit Note ID."
+        );
+      }
+
+      if (
+        !distributorId ||
+        !firmId
+      ) {
+        throw new Error(
+          "Distributor/Firm not found."
+        );
+      }
+
+      const oldCreditNote =
+        await CreditNote.findOne({
+          _id:
+            id,
+
+          distributorId,
+          firmId,
+
+          isActive:
+            true,
+        }).session(session);
+
+      if (!oldCreditNote) {
+        await session.abortTransaction();
+
+        return res.status(404).json({
+          success: false,
+          message:
+            "Credit Note not found.",
+        });
+      }
+
+      const oldItems =
+        normalizeCreditNoteItems(
+          oldCreditNote.items || []
+        );
+
+      const oldGdCode = String(
+        oldCreditNote.GDCode ||
+        ""
+      ).trim();
+
+      if (!oldGdCode) {
+        throw new Error(
+          "Old Credit Note does not contain a valid Godown Code."
+        );
+      }
+
+      /*
+      * First reverse stock added by the old Credit Note.
+      */
+      await applyCreditNoteStockMovement({
+        items:
+          oldItems,
+
+        distributorId,
+        firmId,
+
+        firmName:
+          oldCreditNote.firmName ||
+          firmName,
+
+        gdCode:
+          oldGdCode,
+
+        direction:
+          -1,
+
+        session,
+      });
+
+      const oldBillSeries =
+        String(
+          oldCreditNote.BillSeries ||
+          oldCreditNote.billSeries ||
+          ""
+        ).trim();
+
+      const oldBillNo =
+        Number(
+          oldCreditNote.BillNo ||
+          oldCreditNote.billNo ||
+          0
+        );
+
+      const oldSalesBill =
+        await findReferencedSalesBill({
+          distributorId,
+          firmId,
+
+          billSeries:
+            oldBillSeries,
+
+          billNo:
+            oldBillNo,
+
+          session,
+        });
+
+      /*
+      * Restore the original Sales Bill amounts.
+      */
+      if (oldSalesBill) {
+        await adjustSalesBillForCreditNote({
+          salesBill:
+            oldSalesBill,
+
+          amounts:
+            getCreditNoteAmounts(
+              oldCreditNote
+            ),
+
+          direction:
+            -1,
+
+          creditNoteSeries:
+            oldCreditNote.CreditNoteSeries,
+
+          creditNoteNo:
+            oldCreditNote.CreditNoteNo,
+
+          session,
+        });
+      }
+
+      const creditNoteSeries =
+        String(
+          req.body.CreditNoteSeries ||
+          req.body.creditNoteSeries ||
+          oldCreditNote.CreditNoteSeries ||
+          "CN"
+        ).trim();
+
+      const creditNoteNo =
+        Number(
+          req.body.CreditNoteNo ||
+          req.body.creditNoteNo ||
+          req.body.VNo ||
+          oldCreditNote.CreditNoteNo ||
+          0
+        );
+
+      if (!creditNoteNo) {
+        throw new Error(
+          "Credit Note Number is required."
+        );
+      }
+
+      const duplicate =
+        await CreditNote.findOne({
+          _id: {
+            $ne:
+              oldCreditNote._id,
+          },
+
+          distributorId,
+          firmId,
+
+          CreditNoteSeries:
+            creditNoteSeries,
+
+          CreditNoteNo:
+            creditNoteNo,
+
+          isActive:
+            true,
+        }).session(session);
+
+      if (duplicate) {
+        throw new Error(
+          "Another Credit Note already exists with this series and number."
+        );
+      }
+
+      const newBillSeries =
+        String(
+          req.body.BillSeries ||
+          req.body.billSeries ||
+          ""
+        ).trim();
+
+      const newBillNo =
+        Number(
+          req.body.BillNo ||
+          req.body.billNo ||
+          0
+        );
+
+      const newGdCode =
+        String(
+          req.body.GDCode ||
+          req.body.gdCode ||
+          ""
+        ).trim();
+
+      const newGodown =
+        String(
+          req.body.Godown ||
+          req.body.godown ||
+          ""
+        ).trim();
+
+      if (!newGdCode) {
+        throw new Error(
+          "Valid Godown Code is required."
+        );
+      }
+
+      const newItems =
+        normalizeCreditNoteItems(
+          req.body.items || []
+        );
+
+      if (
+        newItems.length === 0
+      ) {
+        throw new Error(
+          "At least one product is required."
+        );
+      }
+      const partyCode = String(req.body.PartyCode || req.body.partyCode || oldCreditNote.PartyCode || "").trim();
+      const companyCode = String(req.body.CompanyCode || req.body.companyCode || oldCreditNote.CompanyCode || "").trim();
+      const noteParty = await Account.findOne({ distributorId, firmId, accountCode: partyCode, isActive: { $ne: false } }).session(session).lean();
+      const noteGodown = await GodownModel.findOne({ distributorId, firmId, godownCode: newGdCode, isActive: { $ne: false } }).session(session).lean();
+      const noteCompany = companyCode
+        ? await Company.findOne({ distributorId, firmId, companyCode, isActive: { $ne: false } }).session(session).lean()
+        : null;
+      if (!noteParty) throw Object.assign(new Error("Invalid or inactive customer account."), { statusCode: 400 });
+      if (!noteGodown) throw Object.assign(new Error("Invalid or inactive godown."), { statusCode: 400 });
+      if (companyCode && !noteCompany) throw Object.assign(new Error("Invalid or inactive company."), { statusCode: 400 });
+      await applyProductMasterTaxRates({ items: newItems, distributorId, firmId, session });
+      const noteSetup = await loadFirmGeneralSetup({ distributorId, firmId, session });
+      const calculatedCredit = validateFinancialEnvelope(req.body, newItems, { vatMode: noteSetup?.vatOn });
+      newItems.splice(0, newItems.length, ...calculatedCredit.items.map((item) => ({
+        ...item, GrossAmount: item.grossAmt, TaxableValue: item.taxable,
+        CGST: item.cgst, SGST: item.sgst, IGST: item.igst,
+        GSTAmount: Number(item.cgst || 0) + Number(item.sgst || 0) + Number(item.igst || 0),
+      })));
+      const newAmounts = {
+        creditAmount: calculatedCredit.NetAmount,
+        grossAmount: calculatedCredit.GrossAmount,
+        taxableValue: calculatedCredit.TaxableValue,
+        cgstAmount: calculatedCredit.CGSTAmount,
+        sgstAmount: calculatedCredit.SGSTAmount,
+        igstAmount: calculatedCredit.IGSTAmount,
+      };
+
+      const newSalesBill =
+        await findReferencedSalesBill({
+          distributorId,
+          firmId,
+
+          billSeries:
+            newBillSeries,
+
+          billNo:
+            newBillNo,
+
+          session,
+        });
+
+      if (newBillNo > 0 && !newSalesBill) throw Object.assign(new Error("Original sales bill was not found in this firm."), { statusCode: 404 });
+      if (newSalesBill && partyCode && String(newSalesBill.PartyCode || "") !== partyCode) {
+        throw Object.assign(new Error("Credit-note customer does not match the original sales bill."), { statusCode: 400 });
+      }
+      if (newSalesBill) {
+        const keyFor = (item) => [
+          String(item.productCode || item.ProductCode || item.productId || "").trim().toUpperCase(),
+          String(item.batchNo || item.Batch || item.selectedBatch?.Batch || ".").trim().toUpperCase(),
+        ].join("\u0000");
+        const originalQty = new Map();
+        for (const item of newSalesBill.items || []) {
+          const key = keyFor(item);
+          originalQty.set(key, Number(originalQty.get(key) || 0) + Number(item.qty ?? item.quantity ?? item.Qty ?? 0) + Number(item.free ?? item.Free ?? 0));
+        }
+        const priorNotes = await CreditNote.find({
+          _id: { $ne: oldCreditNote._id }, distributorId, firmId,
+          BillSeries: newSalesBill.BillSeries, BillNo: newSalesBill.BillNo, isActive: true,
+        }).session(session).lean();
+        const returnedQty = new Map();
+        for (const note of priorNotes) for (const item of note.items || []) {
+          const key = keyFor(item);
+          returnedQty.set(key, Number(returnedQty.get(key) || 0) + Number(item.Qty ?? item.qty ?? 0) + Number(item.Free ?? item.free ?? 0));
+        }
+        for (const item of newItems) {
+          const key = keyFor(item);
+          const requested = Number(item.Qty ?? item.qty ?? 0) + Number(item.Free ?? item.free ?? 0);
+          if (requested + Number(returnedQty.get(key) || 0) > Number(originalQty.get(key) || 0) + 0.0001) {
+            throw Object.assign(new Error(`Return quantity exceeds the remaining quantity on the original sales bill for product ${item.ProductCode || item.productCode}.`), { statusCode: 409 });
+          }
+        }
+      }
+
+      /*
+      * The old adjustment has already been reversed.
+      * The current Sales Bill NetAmount now represents
+      * the available balance before applying the edit.
+      */
+      if (
+        newSalesBill &&
+        newAmounts.creditAmount >
+        creditNoteNumber(
+          newSalesBill.NetAmount
+        )
+      ) {
+        throw new Error(
+          `Credit Note amount ₹${newAmounts.creditAmount.toFixed(
+            2
+          )} exceeds Sales Bill balance ₹${creditNoteNumber(
+            newSalesBill.NetAmount
+          ).toFixed(2)}.`
+        );
+      }
+
+      /*
+      * Apply edited Credit Note stock.
+      */
+      await applyCreditNoteStockMovement({
+        items:
+          newItems,
+
+        distributorId,
+        firmId,
+        firmName,
+
+        gdCode:
+          newGdCode,
+
+        direction:
+          1,
+
+        session,
+      });
+
+      /*
+      * Apply edited Credit Note to the referenced Sales Bill.
+      */
+      if (newSalesBill) {
+        await adjustSalesBillForCreditNote({
+          salesBill:
+            newSalesBill,
+
+          amounts:
+            newAmounts,
+
+          direction:
+            1,
+
+          creditNoteSeries,
+          creditNoteNo,
+
+          session,
+        });
+      }
+
+      const totalQty =
+        newItems.reduce(
+          (total, item) =>
+            total +
+            creditNoteNumber(
+              item.Qty
+            ),
+          0
+        );
+
+      const totalFreeQty =
+        newItems.reduce(
+          (total, item) =>
+            total +
+            creditNoteNumber(
+              item.Free
+            ),
+          0
+        );
+
+      const updatedCreditNote =
+        await CreditNote.findOneAndUpdate(
+          { _id: id, distributorId, firmId },
+          {
+            $set: {
+              ...req.body,
+
+              distributorId,
+              firmId,
+              firmName,
+
+              VNo:
+                creditNoteNo,
+
+              CreditNoteSeries:
+                creditNoteSeries,
+
+              CreditNoteNo:
+                creditNoteNo,
+
+              creditNoteSeries,
+              creditNoteNo,
+
+              BillSeries:
+                newBillSeries,
+
+              BillNo:
+                newBillNo,
+
+              billSeries:
+                newBillSeries,
+
+              billNo:
+                newBillNo,
+
+              Godown:
+                newGodown,
+
+              GDCode:
+                newGdCode,
+
+              NetAmount:
+                newAmounts.creditAmount,
+
+              amount:
+                newAmounts.creditAmount,
+
+              GrossAmount:
+                newAmounts.grossAmount,
+
+              TaxableValue:
+                newAmounts.taxableValue,
+
+              CGSTAmount:
+                newAmounts.cgstAmount,
+
+              SGSTAmount:
+                newAmounts.sgstAmount,
+
+              IGSTAmount:
+                newAmounts.igstAmount,
+
+              items:
+                newItems,
+
+              TotalQty:
+                totalQty,
+
+              TotalFreeQty:
+                totalFreeQty,
+
+              TotalItems:
+                newItems.length,
+
+              UpdatedBy:
+                String(
+                  req.body.UpdatedBy ||
+                  req.body.updatedBy ||
+                  ""
+                ),
+
+              Status:
+                req.body.Status ||
+                oldCreditNote.Status ||
+                "Approved",
+
+              isActive:
+                true,
+            },
+          },
+          {
+            new:
+              true,
+
+            runValidators:
+              true,
+
+            session,
+          }
+        );
+
+      await reverseSourceJournal({ distributorId, firmId, sourceType: "CREDIT_NOTE", sourceId: String(id), createdBy: req.auth.userId, documentDate: String(updatedCreditNote.VDate || ""), reason: "Credit note edited" }, session);
+      const updatedCreditTax = newAmounts.cgstAmount + newAmounts.sgstAmount + newAmounts.igstAmount;
+      await postBalancedJournal({ distributorId, firmId, sourceType: "CREDIT_NOTE", sourceId: String(id), documentNo: `${creditNoteSeries}${creditNoteNo}`, documentDate: String(updatedCreditNote.VDate || ""), createdBy: req.auth.userId, lines: [
+        { accountCode: "SALES_RETURN", debit: newAmounts.creditAmount - updatedCreditTax, credit: 0, narration: "Credit note edit" },
+        ...(updatedCreditTax > 0 ? [{ accountCode: "OUTPUT_GST_REVERSAL", debit: updatedCreditTax, credit: 0, narration: "GST reversal" }] : []),
+        { accountCode: String(updatedCreditNote.PartyCode || updatedCreditNote.PartyName || "SUNDRY_DEBTORS"), debit: 0, credit: newAmounts.creditAmount, narration: "Credit note edit" },
+      ] }, session);
+      await writeAuditEvent(req, { entityType: "CREDIT_NOTE", entityId: String(id), action: "EDIT", before: oldCreditNote.toObject(), after: updatedCreditNote.toObject() }, session);
+
+      await commitTransactionReliably(session);
+
+      return res.json({
+        success:
+          true,
+
+        message:
+          newSalesBill
+            ? "Credit Note updated, stock corrected and Sales Bill adjusted successfully."
+            : "Credit Note updated and stock corrected successfully.",
+
+        data:
+          updatedCreditNote,
+
+        salesBillAdjusted:
+          Boolean(newSalesBill),
+      });
+    } catch (error) {
+      if (
+        session.inTransaction()
+      ) {
+        await session.abortTransaction();
+      }
+
+      console.error(
+        "Credit Note update error:",
+        error
+      );
+
+      return res.status(400).json({
+        success:
+          false,
+
+        message:
+          error.message ||
+          "Credit Note update failed.",
+      });
+    } finally {
+      await session.endSession();
+    }
+  }
+);
+
+// Get Credit Notes list
+app.get(
+  "/api/credit-note/list",
+  ensureConnection,
+  securityRouter.authorizeRequest("VOUCHERS", "CREDIT_NOTE", "view"),   // ADD THIS
+  async (req, res, next) => {
+  if (req.query.page !== undefined || req.query.limit !== undefined) {
+    return next();
+  }
+  try {
+    const { distributorId, firmId } = req.query;
+
+    if (!distributorId || !firmId) {
+      return res.status(400).json({
+        success: false,
+        message: "distributorId and firmId are required",
+      });
+    }
+
+    const creditNotes = await CreditNote.find({
+      distributorId,
+      firmId,
+      isActive: true,
+    })
+      .sort({ vDate: -1, billNo: -1 })
+      .lean();
+
+    res.json({
+      success: true,
+      count: creditNotes.length,
+      creditNotes,
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: "Failed to load credit notes",
+      error: error.message,
+    });
+  }
+});
+/* =========================================================
+  CREDIT NOTE LIST - BACKEND PAGINATION
+  ========================================================= */
+
+app.get(
+  "/api/credit-note/list",
+  ensureConnection,                                                    // 1st
+  securityRouter.authorizeRequest("VOUCHERS", "CREDIT_NOTE", "view"),  // 2nd
+  async (req, res) => {
+    try {
+      const distributorId = String(
+        req.query.distributorId || ""
+      ).trim();
+
+      const firmId = String(
+        req.query.firmId || ""
+      ).trim();
+
+      const search = String(
+        req.query.search || ""
+      ).trim();
+
+      const fromDate = String(
+        req.query.fromDate || ""
+      ).trim();
+
+      const toDate = String(
+        req.query.toDate || ""
+      ).trim();
+
+      const creditNoteSeries = String(
+        req.query.creditNoteSeries ||
+        req.query.vouSer ||
+        ""
+      ).trim();
+
+      const partyCode = String(
+        req.query.partyCode || ""
+      ).trim();
+
+      const partyName = String(
+        req.query.partyName || ""
+      ).trim();
+
+      const company = String(
+        req.query.company || ""
+      ).trim();
+
+      const gdCode = String(
+        req.query.gdCode || ""
+      ).trim();
+
+      const godownName = String(
+        req.query.godownName || ""
+      ).trim();
+
+      const salesmanCode = String(
+        req.query.salesmanCode || ""
+      ).trim();
+
+      const salesmanName = String(
+        req.query.salesmanName || ""
+      ).trim();
+
+      const referenceBillSeries = String(
+        req.query.referenceBillSeries || ""
+      ).trim();
+
+      const referenceBillNo = String(
+        req.query.referenceBillNo || ""
+      ).trim();
+
+      const status = String(
+        req.query.status || ""
+      ).trim();
+
+      const createdBy = String(
+        req.query.createdBy || ""
+      ).trim();
+
+      const minAmountText = String(
+        req.query.minAmount || ""
+      ).trim();
+
+      const maxAmountText = String(
+        req.query.maxAmount || ""
+      ).trim();
+
+      const requestedPage = Number.parseInt(
+        req.query.page,
+        10
+      );
+
+      const requestedLimit = Number.parseInt(
+        req.query.limit,
+        10
+      );
+
+      const page =
+        Number.isFinite(requestedPage) &&
+          requestedPage > 0
+          ? requestedPage
+          : 1;
+
+      const limit =
+        Number.isFinite(requestedLimit) &&
+          requestedLimit > 0
+          ? Math.min(requestedLimit, 100)
+          : 10;
+
+      if (!distributorId || !firmId) {
+        return res.status(400).json({
+          success: false,
+          message:
+            "distributorId and firmId are required",
+        });
+      }
+
+      const escapeRegex = (value) =>
+        String(value || "").replace(
+          /[.*+?^${}()|[\]\\]/g,
+          "\\$&"
+        );
+
+      const containsRegex = (value) =>
+        new RegExp(
+          escapeRegex(value),
+          "i"
+        );
+
+      const exactRegex = (value) =>
+        new RegExp(
+          `^${escapeRegex(value)}$`,
+          "i"
+        );
+
+      const filter = {
+        distributorId,
+        firmId,
+
+        isActive: {
+          $ne: false,
+        },
+      };
+
+      /*
+      * Use $and so multiple groups of $or
+      * conditions do not overwrite one another.
+      */
+      const andConditions = [];
+
+      /* =========================================
+        DATE FILTER
+        ========================================= */
+
+      if (fromDate || toDate) {
+        const dateFilter = {};
+
+        if (fromDate) {
+          dateFilter.$gte =
+            fromDate;
+        }
+
+        if (toDate) {
+          dateFilter.$lte =
+            toDate;
+        }
+
+        filter.VDate =
+          dateFilter;
+      }
+
+      /* =========================================
+        CREDIT NOTE SERIES
+        ========================================= */
+
+      if (creditNoteSeries) {
+        filter.CreditNoteSeries =
+          exactRegex(
+            creditNoteSeries
+          );
+      }
+
+      /* =========================================
+        PARTY FILTERS
+        ========================================= */
+
+      if (partyCode) {
+        filter.PartyCode =
+          exactRegex(
+            partyCode
+          );
+      }
+
+      if (partyName) {
+        filter.PartyName =
+          containsRegex(
+            partyName
+          );
+      }
+
+      /* =========================================
+        COMPANY FILTER
+        ========================================= */
+
+      if (company) {
+        const companyRegex =
+          containsRegex(
+            company
+          );
+
+        andConditions.push({
+          $or: [
+            {
+              CompanyCode:
+                companyRegex,
+            },
+            {
+              CompanyName:
+                companyRegex,
+            },
+            {
+              companyCode:
+                companyRegex,
+            },
+            {
+              companyName:
+                companyRegex,
+            },
+          ],
+        });
+      }
+
+      /* =========================================
+        GODOWN FILTERS
+        ========================================= */
+
+      if (gdCode) {
+        filter.GDCode =
+          exactRegex(
+            gdCode
+          );
+      }
+
+      if (godownName) {
+        filter.Godown =
+          containsRegex(
+            godownName
+          );
+      }
+
+      /* =========================================
+        SALESMAN FILTERS
+        ========================================= */
+
+      if (salesmanCode) {
+        filter.SalesmanCode =
+          exactRegex(
+            salesmanCode
+          );
+      }
+
+      if (salesmanName) {
+        filter.SalesmanName =
+          containsRegex(
+            salesmanName
+          );
+      }
+
+      /* =========================================
+        ORIGINAL SALES BILL REFERENCE
+        ========================================= */
+
+      if (referenceBillSeries) {
+        filter.BillSeries =
+          exactRegex(
+            referenceBillSeries
+          );
+      }
+
+      if (referenceBillNo) {
+        const numericReferenceBillNo =
+          Number(
+            referenceBillNo
+          );
+
+        if (
+          Number.isFinite(
+            numericReferenceBillNo
+          )
+        ) {
+          filter.BillNo =
+            numericReferenceBillNo;
+        }
+      }
+
+      /* =========================================
+        STATUS / CREATED BY
+        ========================================= */
+
+      if (status) {
+        filter.Status =
+          exactRegex(
+            status
+          );
+      }
+
+      if (createdBy) {
+        filter.CreatedBy =
+          containsRegex(
+            createdBy
+          );
+      }
+
+      /* =========================================
+        AMOUNT RANGE
+        ========================================= */
+
+      const minAmount =
+        Number(minAmountText);
+
+      const maxAmount =
+        Number(maxAmountText);
+
+      if (
+        (
+          minAmountText &&
+          Number.isFinite(minAmount)
+        ) ||
+        (
+          maxAmountText &&
+          Number.isFinite(maxAmount)
+        )
+      ) {
+        filter.NetAmount = {};
+
+        if (
+          minAmountText &&
+          Number.isFinite(minAmount)
+        ) {
+          filter.NetAmount.$gte =
+            minAmount;
+        }
+
+        if (
+          maxAmountText &&
+          Number.isFinite(maxAmount)
+        ) {
+          filter.NetAmount.$lte =
+            maxAmount;
+        }
+      }
+
+      /* =========================================
+        GENERAL SEARCH
+        ========================================= */
+
+      if (search) {
+        const searchRegex =
+          containsRegex(search);
+
+        const numericSearch =
+          Number(search);
+
+        const searchConditions = [
+          {
+            CreditNoteSeries:
+              searchRegex,
+          },
+          {
+            PartyCode:
+              searchRegex,
+          },
+          {
+            PartyName:
+              searchRegex,
+          },
+          {
+            BillSeries:
+              searchRegex,
+          },
+          {
+            CompanyCode:
+              searchRegex,
+          },
+          {
+            CompanyName:
+              searchRegex,
+          },
+          {
+            GDCode:
+              searchRegex,
+          },
+          {
+            Godown:
+              searchRegex,
+          },
+          {
+            SalesmanCode:
+              searchRegex,
+          },
+          {
+            SalesmanName:
+              searchRegex,
+          },
+          {
+            Status:
+              searchRegex,
+          },
+          {
+            CreatedBy:
+              searchRegex,
+          },
+          {
+            Narration:
+              searchRegex,
+          },
+        ];
+
+        if (
+          Number.isFinite(
+            numericSearch
+          )
+        ) {
+          searchConditions.push(
+            {
+              CreditNoteNo:
+                numericSearch,
+            },
+            {
+              VNo:
+                numericSearch,
+            },
+            {
+              BillNo:
+                numericSearch,
+            },
+            {
+              NetAmount:
+                numericSearch,
+            }
+          );
+        }
+
+        andConditions.push({
+          $or:
+            searchConditions,
+        });
+      }
+
+      if (
+        andConditions.length > 0
+      ) {
+        filter.$and =
+          andConditions;
+      }
+
+      const totalRecords =
+        await CreditNote.countDocuments(
+          filter
+        );
+
+      const totalPages =
+        Math.max(
+          1,
+          Math.ceil(
+            totalRecords /
+            limit
+          )
+        );
+
+      const currentPage =
+        Math.min(
+          page,
+          totalPages
+        );
+
+      const skip =
+        (
+          currentPage -
+          1
+        ) *
+        limit;
+
+      const creditNotes =
+        await CreditNote.find(
+          filter
+        )
+          .sort({
+            VDate: -1,
+            CreditNoteNo: -1,
+            _id: -1,
+          })
+          .skip(skip)
+          .limit(limit)
+          .lean();
+
+      return res.json({
+        success: true,
+
+        creditNotes,
+
+        count:
+          creditNotes.length,
+
+        pagination: {
+          currentPage,
+
+          page:
+            currentPage,
+
+          limit,
+
+          totalRecords,
+
+          totalPages,
+
+          hasPreviousPage:
+            currentPage > 1,
+
+          hasNextPage:
+            currentPage <
+            totalPages,
+
+          startRecord:
+            totalRecords === 0
+              ? 0
+              : skip + 1,
+
+          endRecord:
+            totalRecords === 0
+              ? 0
+              : Math.min(
+                skip +
+                creditNotes.length,
+                totalRecords
+              ),
+        },
+      });
+    } catch (error) {
+      console.error(
+        "Credit Note pagination error:",
+        error
+      );
+
+      return res.status(500).json({
+        success: false,
+        message:
+          "Failed to load Credit Notes",
+        error:
+          error.message,
+      });
+    }
+  }
+);
+const damStockSchema = new mongoose.Schema(
+  {
+    GDCode: String,
+    ProdCode: String,
+    Batch: { type: String, default: "." },
+    MRP: { type: Number, default: 0 },
+    PRate: { type: Number, default: 0 },
+    SRate: { type: Number, default: 0 },
+    Qty: { type: Number, default: 0 },
+    ExpDt: { type: String, default: null },
+    MfgDt: { type: String, default: null },
+    BoxPack: { type: Number, default: 1 },
+    InBoxPack: { type: Number, default: 1 },
+    IsLocked: { type: String, default: "N" },
+
+    distributorId: { type: String, required: true },
+    firmId: { type: String, required: true },
+    firmName: { type: String, default: "" },
+    isActive: { type: Boolean, default: true },
+  },
+  { timestamps: true, collection: "Mas_DamStock" }
+);
+
+damStockSchema.index(
+  { distributorId: 1, firmId: 1, GDCode: 1, ProdCode: 1, Batch: 1, MRP: 1 },
+  { unique: true }
+);
+
+const DamStock = mongoose.model("Mas_DamStock", damStockSchema);
+
+app.put("/api/firms/:id", ensureConnection, requireRoles("DISTRIBUTOR_ADMIN"), async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    const updatedFirm = await Register.findOneAndUpdate(
+      { _id: id, distributorId: req.auth.distributorId, firmId: req.auth.firmId },
+      {
+        firmCode: String(req.body.firmCode || "").trim(),
+        firmName: String(req.body.firmName || "").trim(),
+        address1: req.body.address1 || "",
+        address2: req.body.address2 || "",
+        city: req.body.city || "",
+        pinCode: req.body.pinCode || "",
+        state: req.body.state || "",
+        country: req.body.country || "India",
+        phoneNo: req.body.phoneNo || "",
+        mobileNo: req.body.mobileNo || "",
+        tinNo: req.body.tinNo || "",
+        regNo: req.body.regNo || "",
+        gstNo: req.body.gstNo || "",
+        drugLicNo: req.body.drugLicNo || "",
+        foodLicenceNo: req.body.foodLicenceNo || "",
+        apiKey: req.body.apiKey || "",
+      },
+      { new: true }
+    ).select("-password");
+
+    if (!updatedFirm) {
+      return res.status(404).json({
+        success: false,
+        message: "Firm not found",
+      });
+    }
+
+    res.json({
+      success: true,
+      message: "Firm updated successfully",
+      data: updatedFirm,
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: "Firm update failed",
+      error: error.message,
+    });
+  }
+});
+
+// ---------- FIRM ----------
+app.delete("/api/firms/:id", ensureConnection, requireRoles("DISTRIBUTOR_ADMIN"), async (req, res) => {
+  try {
+    const deletedFirm = await Register.findOneAndUpdate(
+      { _id: req.params.id, distributorId: req.auth.distributorId, firmId: req.auth.firmId },
+      { $set: { isActive: false }, $inc: { sessionVersion: 1 } }, { new: true }
+    );
+
+    if (!deletedFirm) {
+      return res.status(404).json({ success: false, message: "Firm not found" });
+    }
+
+    res.json({ success: true, message: "Firm deleted successfully" });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: "Firm delete failed",
+      error: error.message
+    });
+  }
+});
+// ==================== MASTER FORMS EDIT & DELETE ENDPOINTS ====================
+
+// ---------- GROUP MASTER ----------
+app.put(
+  "/api/groups/:id",
+  ensureConnection,
+  securityRouter.authorizeRequest(
+    "master",
+    "GROUP",
+    "edit"
+  ),
+  async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { code, name } = req.body;
+
+    if (!code || !name) {
+      return res.status(400).json({
+        success: false,
+        message: "Group Code and Name are required"
+      });
+    }
+
+    const updatedGroup = await Group.findOneAndUpdate(
+      { _id: id, distributorId: req.auth.distributorId, firmId: req.auth.firmId },
+      {
+        groupCode: code.trim(),
+        groupName: name.trim(),
+      },
+      { new: true, runValidators: true }
+    );
+
+    if (!updatedGroup) {
+      return res.status(404).json({ success: false, message: "Group not found" });
+    }
+
+    res.json({
+      success: true,
+      message: "Group updated successfully",
+      data: updatedGroup
+    });
+  } catch (error) {
+    if (error.code === 11000) return res.status(409).json({ success: false, message: "Group code already exists for this firm" });
+    res.status(500).json({
+      success: false,
+      message: "Group update failed",
+      error: error.message
+    });
+  }
+});
+
+// ---------- GROUP MASTER ----------
+app.delete(
+  "/api/groups/:id",
+  ensureConnection,
+  securityRouter.authorizeRequest(
+    "master",
+    "GROUP",
+    "delete"
+  ),
+  async (req, res) => {
+  try {
+    const filter = { _id: req.params.id, distributorId: req.auth.distributorId, firmId: req.auth.firmId };
+    const group = await Group.findOne(filter);
+    if (!group) return res.status(404).json({ success: false, message: "Group not found" });
+    await assertMasterNotUsed({ connection: mongoose.connection, scope: req.auth, type: "group",
+      record: { _id: group._id, code: group.groupCode, name: group.groupName } });
+    const deletedGroup = await Group.findOneAndUpdate(
+      filter,
+      { $set: { isActive: false } }, { new: true }
+    );
+
+    if (!deletedGroup) {
+      return res.status(404).json({ success: false, message: "Group not found" });
+    }
+
+    res.json({ success: true, message: "Group deleted successfully" });
+  } catch (error) {
+    res.status(error.statusCode || 500).json({
+      success: false,
+      message: error.statusCode ? error.message : "Group delete failed",
+      error: error.message
+    });
+  }
+});
+
+// ---------- CATEGORY MASTER ----------
+app.put(
+  "/api/categories/:id",
+  ensureConnection,
+  securityRouter.authorizeRequest(
+    "master",
+    "CATEGORY",
+    "edit"
+  ),
+  async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { code, name } = req.body;
+
+    if (!code || !name) {
+      return res.status(400).json({
+        success: false,
+        message: "Category Code and Name are required"
+      });
+    }
+
+    const updatedCategory = await Category.findOneAndUpdate(
+      { _id: id, distributorId: req.auth.distributorId, firmId: req.auth.firmId },
+      {
+        categoryCode: code.trim(),
+        categoryName: name.trim(),
+      },
+      { new: true, runValidators: true }
+    );
+
+    if (!updatedCategory) {
+      return res.status(404).json({ success: false, message: "Category not found" });
+    }
+
+    res.json({
+      success: true,
+      message: "Category updated successfully",
+      data: updatedCategory
+    });
+  } catch (error) {
+    if (error.code === 11000) return res.status(409).json({ success: false, message: "Category code already exists for this firm" });
+    res.status(500).json({
+      success: false,
+      message: "Category update failed",
+      error: error.message
+    });
+  }
+});
+
+// ---------- CATEGORY MASTER ----------
+app.delete(
+  "/api/categories/:id",
+  ensureConnection,
+  securityRouter.authorizeRequest(
+    "master",
+    "CATEGORY",
+    "delete"
+  ),
+  async (req, res) => {
+  try {
+    const filter = { _id: req.params.id, distributorId: req.auth.distributorId, firmId: req.auth.firmId };
+    const category = await Category.findOne(filter);
+    if (!category) return res.status(404).json({ success: false, message: "Category not found" });
+    await assertMasterNotUsed({ connection: mongoose.connection, scope: req.auth, type: "category",
+      record: { _id: category._id, code: category.categoryCode, name: category.categoryName } });
+    const deletedCategory = await Category.findOneAndUpdate(
+      filter,
+      { $set: { isActive: false } }, { new: true }
+    );
+
+    if (!deletedCategory) {
+      return res.status(404).json({ success: false, message: "Category not found" });
+    }
+
+    res.json({ success: true, message: "Category deleted successfully" });
+  } catch (error) {
+    res.status(error.statusCode || 500).json({
+      success: false,
+      message: error.statusCode ? error.message : "Category delete failed",
+      error: error.message
+    });
+  }
+});
+
+// ---------- PRODUCT ----------
+app.put(
+  "/api/products/:id",
+  ensureConnection,
+  securityRouter.authorizeRequest(
+    "master",
+    "PRODUCT",
+    "edit"
+  ), async (req, res) => {
+  try {
+    const productCode = String(req.body.code || req.body.productCode || "").trim();
+    const productName = String(req.body.name || req.body.productName || "").trim();
+    if (!productCode || !productName) {
+      return res.status(400).json({ success: false, message: "Product Code and Name are required" });
+    }
+    const updateData = {
+      ...req.body,
+      productCode,
+      productName,
+      hsn: String(req.body.hsn || "").trim(),
+    };
+
+    delete updateData._id;
+    delete updateData.distributorId;
+    delete updateData.firmId;
+
+    const updatedProduct = await Product.findOneAndUpdate(
+      { _id: req.params.id, distributorId: req.auth.distributorId, firmId: req.auth.firmId },
+      updateData,
+      { new: true, runValidators: true }
+    );
+
+    if (!updatedProduct) {
+      return res.status(404).json({ success: false, message: "Product not found" });
+    }
+
+    res.json({
+      success: true,
+      message: "Product updated successfully",
+      data: updatedProduct,
+    });
+  } catch (error) {
+    if (error.code === 11000) return res.status(409).json({ success: false, message: "Product code already exists for this firm" });
+    res.status(500).json({
+      success: false,
+      message: "Product update failed",
+      error: error.message,
+    });
+  }
+});
+
+// ---------- PRODUCT ----------
+app.delete(
+  "/api/products/:id",
+  ensureConnection,
+  securityRouter.authorizeRequest(
+    "master",
+    "PRODUCT",
+    "delete"
+  ), async (req, res) => {
+  try {
+    const filter = { _id: req.params.id, distributorId: req.auth.distributorId, firmId: req.auth.firmId };
+    const product = await Product.findOne(filter);
+    if (!product) return res.status(404).json({ success: false, message: "Product not found" });
+    await assertMasterNotUsed({ connection: mongoose.connection, scope: req.auth, type: "product",
+      record: { _id: product._id, code: product.productCode, name: product.productName } });
+    const deletedProduct = await Product.findOneAndUpdate(
+      filter,
+      { $set: { isActive: false } }, { new: true }
+    );
+
+    if (!deletedProduct) {
+      return res.status(404).json({ success: false, message: "Product not found" });
+    }
+
+    res.json({ success: true, message: "Product deleted successfully" });
+  } catch (error) {
+    res.status(error.statusCode || 500).json({
+      success: false,
+      message: error.statusCode ? error.message : "Product delete failed",
+      error: error.message
+    });
+  }
+});
+
+// ---------- ACCOUNT ----------
+app.put(
+    "/api/accounts/:id",
+    ensureConnection,
+    securityRouter.authorizeRequest(
+        "MASTER",
+        "ACCOUNT",
+        "edit"
+    ), async (req, res) => {
+  try {
+    const { id } = req.params;
+    const distributorId = String(req.auth.distributorId || "").trim();
+    const firmId = String(req.auth.firmId || "").trim();
+
+    if (!String(req.body.accountCode || "").trim() || !String(req.body.accountName || "").trim()) {
+      return res.status(400).json({ success: false, message: "Account Code and Name are required" });
+    }
+
+    let townValue = req.body.town || "Pune";
+    const areaCodeValue = req.body.areaCode || "";
+
+    if (areaCodeValue) {
+      const area = await Area.findOne({
+        distributorId,
+        firmId,
+        areaCode: areaCodeValue,
+        isActive: true,
+      });
+
+      if (area) {
+        townValue = area.areaName;
+      }
+    }
+
+    // 🔥 FIX: Properly handle blackListed value
+    const blackListedValue = String(req.body.blackListed || "NO").trim().toUpperCase();
+    const normalizedBlackListed = blackListedValue === "YES" || blackListedValue === "Y" || blackListedValue === "TRUE" || blackListedValue === "1" ? "YES" : "NO";
+
+    console.log("📝 Updating account with blackListed:", normalizedBlackListed);
+
+    if (req.body.openingTransactions !== undefined) {
+      const message = validateOpeningTransactions(req.body.openingTransactions);
+      if (message) return res.status(400).json({ success: false, message });
+    }
+
+    const companyAreaMappings = await validateAccountCompanyMappings(
+      req,
+      String(req.body.accountCode || "").trim(),
+      String(req.body.accountName || "").trim()
+    );
+
+    const updateData = {
+      ...(req.body.openingTransactions !== undefined ? { openingTransactions: req.body.openingTransactions } : {}),
+      accountCode: String(req.body.accountCode || "").trim(),
+      accountName: String(req.body.accountName || "").trim(),
+      openingDate: req.body.openingDate || "",
+      address: req.body.address || "",
+      town: townValue,
+      state: req.body.state || "MAHARASHTRA",
+      pinCode: req.body.pinCode || "",
+      phoneNo: req.body.phoneNo || "",
+      mobileNo: req.body.mobileNo || "",
+      emailId: req.body.emailId || "",
+      tinNo: req.body.tinNo || "",
+      openingBal: Number(req.body.openingBal || 0),
+      openingBalType: req.body.openingBalType || "Dr",
+      contactPerson: req.body.contactPerson || "",
+      invType: req.body.invType || "TAXABLE",
+      taxOn: req.body.taxOn || "SRATE",
+      panNo: req.body.panNo || "",
+      foodLicense: req.body.foodLicense || "",
+      gstNo: req.body.gstNo || "",
+      billToAdd1: req.body.billToAdd1 || "",
+      tanNo: req.body.tanNo || "",
+      gstType: req.body.gstType || "Unregistered",
+      gstDate: req.body.gstDate || "",
+      gstClsDate: req.body.gstClsDate || "",
+      add2: req.body.add2 || "",
+      tcsPercent: Number(req.body.tcsPercent || 0),
+      allowInPurchase: req.body.allowInPurchase || "N",
+      drugLicNo: req.body.drugLicNo || "",
+      drugExpDate: req.body.drugExpDate || "",
+      // 🔥 FIX: Properly handle credit fields
+      creditDays: Number(req.body.creditDays || 0),
+      creditBills: Number(req.body.creditBills || 0),
+      lockDays: Number(req.body.lockDays || 0),
+      creditAmt: Number(req.body.creditAmt || 0),
+      blackListed: normalizedBlackListed,
+      areaCode: areaCodeValue || "",
+    };
+
+    console.log("📝 Final update data:", {
+      blackListed: updateData.blackListed,
+      creditDays: updateData.creditDays,
+      creditBills: updateData.creditBills,
+      lockDays: updateData.lockDays,
+      creditAmt: updateData.creditAmt
+    });
+
+    const updatedAccount = await saveAccountWithOpenings(req, async session => {
+      const account = await Account.findOneAndUpdate(
+        { _id: id, distributorId: req.auth.distributorId, firmId: req.auth.firmId },
+        updateData,
+        { new: true, runValidators: true, session }
+      );
+      if (account) await syncAccountCompanyMappings(req, account, companyAreaMappings, session);
+      return account;
+    });
+
+    if (!updatedAccount) {
+      return res.status(404).json({
+        success: false,
+        message: "Account not found"
+      });
+    }
+
+    res.json({
+      success: true,
+      message: "Account updated successfully",
+      data: updatedAccount
+    });
+  } catch (error) {
+    if (error.code === 11000) {
+      return res.status(409).json({
+        success: false,
+        message: "Account code already exists for this firm"
+      });
+    }
+    res.status(error.statusCode || 500).json({
+      success: false,
+      message: error.statusCode ? error.message : "Account update failed",
+      error: error.message
+    });
+  }
+});
+
+// Inline Account Master updates used only by the Area-to-Party grid.
+// The allow-list prevents this compact editor from changing unrelated fields.
+app.patch(
+  "/api/accounts/:id/mapping-details",
+  ensureConnection,
+  securityRouter.authorizeRequest("MASTER", "ACCOUNT", "edit"),
+  async (req, res) => {
+    try {
+      if (!mongoose.isValidObjectId(req.params.id)) {
+        return res.status(400).json({ success: false, message: "Invalid account id" });
+      }
+
+      const existing = await Account.findOne({
+        _id: req.params.id,
+        distributorId: req.auth.distributorId,
+        firmId: req.auth.firmId,
+        isActive: { $ne: false },
+      });
+
+      if (!existing) {
+        return res.status(404).json({ success: false, message: "Account not found" });
+      }
+
+      const updates = req.body?.updates && typeof req.body.updates === "object"
+        ? req.body.updates
+        : {};
+      const text = (value) => String(value ?? "").trim();
+      const yesNo = (value) => ["YES", "Y", "TRUE", "1"].includes(text(value).toUpperCase()) ? "YES" : "NO";
+      const updateData = {};
+      const assignText = (requestField, accountField = requestField) => {
+        if (Object.hasOwn(updates, requestField)) updateData[accountField] = text(updates[requestField]);
+      };
+
+      assignText("partyCode");
+      assignText("partyName");
+      assignText("areaName");
+      assignText("areaCode");
+      if (Object.hasOwn(updates, "closingDate")) {
+        updateData.closingDate = text(updates.closingDate);
+        updateData.gstClsDate = text(updates.closingDate);
+      }
+      assignText("accountCode");
+      assignText("accountName");
+      assignText("address1", "address");
+      assignText("address2", "add2");
+      assignText("town");
+      assignText("phone", "phoneNo");
+      assignText("mobileNo");
+      assignText("gstNo");
+      assignText("unrecoChq");
+
+      if (Object.hasOwn(updates, "isLock")) updateData.isLock = yesNo(updates.isLock);
+      if (Object.hasOwn(updates, "isStar")) updateData.isStar = yesNo(updates.isStar);
+      if (Object.hasOwn(updates, "creditBill")) updateData.creditBills = Math.max(0, Number(updates.creditBill) || 0);
+      if (Object.hasOwn(updates, "creditDays")) updateData.creditDays = Math.max(0, Number(updates.creditDays) || 0);
+
+      if (Object.hasOwn(updateData, "accountCode") && !updateData.accountCode) {
+        return res.status(400).json({ success: false, message: "Account Code is required" });
+      }
+      if (Object.hasOwn(updateData, "accountName") && !updateData.accountName) {
+        return res.status(400).json({ success: false, message: "Account Name is required" });
+      }
+      if (!Object.keys(updateData).length) {
+        return res.status(400).json({ success: false, message: "No editable account fields were provided" });
+      }
+
+      const previousAccountCode = existing.accountCode;
+      const updatedAccount = await Account.findOneAndUpdate(
+        {
+          _id: existing._id,
+          distributorId: req.auth.distributorId,
+          firmId: req.auth.firmId,
+        },
+        { $set: updateData },
+        { new: true, runValidators: true }
+      );
+
+      const mappingUpdates = {};
+      if (Object.hasOwn(updateData, "accountCode")) mappingUpdates.accountCode = updatedAccount.accountCode;
+      if (Object.hasOwn(updateData, "accountName")) mappingUpdates.accountName = updatedAccount.accountName;
+      if (Object.keys(mappingUpdates).length) {
+        await AreaToPartyMapping.updateMany(
+          {
+            distributorId: req.auth.distributorId,
+            firmId: req.auth.firmId,
+            accountCode: previousAccountCode,
+          },
+          { $set: mappingUpdates }
+        );
+      }
+
+      return res.json({
+        success: true,
+        message: "Account details updated successfully",
+        data: updatedAccount,
+      });
+    } catch (error) {
+      if (error.code === 11000) {
+        return res.status(409).json({ success: false, message: "Account code already exists for this firm" });
+      }
+      return res.status(500).json({
+        success: false,
+        message: "Account details update failed",
+        error: error.message,
+      });
+    }
+  }
+);
+// ==================== GET AREAS FOR DROPDOWN ====================
+app.get("/api/areas-for-account", ensureConnection, async (req, res) => {
+  try {
+    const { distributorId, firmId } = req.query;
+
+    console.log("📡 /api/areas-for-account called with:", { distributorId, firmId });
+
+    if (!distributorId || !firmId) {
+      return res.status(400).json({
+        success: false,
+        message: "distributorId and firmId are required",
+        received: { distributorId, firmId }
+      });
+    }
+
+    const areas = await Area.find({
+      distributorId,
+      firmId,
+      isActive: true,
+    }).select('areaCode areaName').sort({ areaName: 1 });
+
+    console.log(`✅ Found ${areas.length} areas for firm ${firmId}`);
+
+    // Return consistent response format
+    res.json({
+      success: true,
+      areas: areas.map(area => ({
+        value: area.areaCode,
+        label: area.areaName
+      }))
+    });
+  } catch (error) {
+    console.error("❌ Areas fetch error:", error);
+    res.status(500).json({
+      success: false,
+      message: "Failed to fetch areas",
+      error: error.message,
+    });
+  }
+});
+// ---------- ACCOUNT ----------
+app.delete(
+    "/api/accounts/:id",
+    ensureConnection,
+    securityRouter.authorizeRequest(
+        "MASTER",
+        "ACCOUNT",
+        "delete"
+    ), async (req, res) => {
+  try {
+    const filter = { _id: req.params.id, distributorId: req.auth.distributorId, firmId: req.auth.firmId };
+    const account = await Account.findOne(filter);
+    if (!account) return res.status(404).json({ success: false, message: "Account not found" });
+    await assertMasterNotUsed({ connection: mongoose.connection, scope: req.auth, type: "account",
+      record: { _id: account._id, code: account.accountCode, name: account.accountName } });
+    const deletedAccount = await Account.findOneAndUpdate(
+      filter,
+      { $set: { isActive: false } }, { new: true }
+    );
+
+    if (!deletedAccount) {
+      return res.status(404).json({ success: false, message: "Account not found" });
+    }
+
+    res.json({ success: true, message: "Account deleted successfully" });
+  } catch (error) {
+    res.status(error.statusCode || 500).json({
+      success: false,
+      message: error.statusCode ? error.message : "Account delete failed",
+      error: error.message
+    });
+  }
+});
+
+// ---------- OTHER ACCOUNT ----------
+app.put(
+  "/api/other-accounts/:id",
+  ensureConnection,
+  securityRouter.authorizeRequest(
+    "master",
+    "OTHER_ACCOUNT",
+    "edit"
+  ),
+  async (req, res) => {
+  try {
+    const { id } = req.params;
+    const accountCode = String(req.body.accountCode || "").trim();
+    const accountName = String(req.body.accountName || "").trim();
+    if (!accountCode || !accountName) {
+      return res.status(400).json({ success: false, message: "Account Code and Name are required" });
+    }
+    const updateData = {
+      ...req.body,
+      accountCode,
+      accountName,
+      branch: req.body.branch || req.body.branchName || "",
+      branchName: req.body.branchName || req.body.branch || "",
+      openingBal: Number(req.body.openingBal || 0),
+      tcsPercent: Number(req.body.tcsPercent || 0),
+    };
+
+    delete updateData._id;
+    delete updateData.distributorId;
+    delete updateData.firmId;
+
+    const updatedOtherAccount = await OtherAccount.findOneAndUpdate(
+      { _id: id, distributorId: req.auth.distributorId, firmId: req.auth.firmId },
+      updateData,
+      { new: true, runValidators: true }
+    );
+
+    if (!updatedOtherAccount) {
+      return res.status(404).json({ success: false, message: "Other Account not found" });
+    }
+
+    res.json({
+      success: true,
+      message: "Other Account updated successfully",
+      data: updatedOtherAccount
+    });
+  } catch (error) {
+    if (error.code === 11000) return res.status(409).json({ success: false, message: "Other account code already exists for this firm" });
+    res.status(500).json({
+      success: false,
+      message: "Other Account update failed",
+      error: error.message
+    });
+  }
+});
+
+// ---------- OTHER ACCOUNT ----------
+app.delete(
+  "/api/other-accounts/:id",
+  ensureConnection,
+  securityRouter.authorizeRequest(
+    "master",
+    "OTHER_ACCOUNT",
+    "delete"
+  ),
+  async (req, res) => {
+  try {
+    const filter = { _id: req.params.id, distributorId: req.auth.distributorId, firmId: req.auth.firmId };
+    const account = await OtherAccount.findOne(filter);
+    if (!account) return res.status(404).json({ success: false, message: "Other Account not found" });
+    await assertMasterNotUsed({ connection: mongoose.connection, scope: req.auth, type: "otherAccount",
+      record: { _id: account._id, code: account.accountCode, name: account.accountName } });
+    const deletedOtherAccount = await OtherAccount.findOneAndUpdate(
+      filter,
+      { $set: { isActive: false } }, { new: true }
+    );
+
+    if (!deletedOtherAccount) {
+      return res.status(404).json({ success: false, message: "Other Account not found" });
+    }
+
+    res.json({ success: true, message: "Other Account deleted successfully" });
+  } catch (error) {
+    res.status(error.statusCode || 500).json({
+      success: false,
+      message: error.statusCode ? error.message : "Other Account delete failed",
+      error: error.message
+    });
+  }
+});
+
+// ---------- GST MASTER ----------
+app.put(
+  "/api/gst/:id",
+  ensureConnection,
+  securityRouter.authorizeRequest(
+    "master",
+    "GST",
+    "edit"
+  ),
+  async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { gstCode, vatPercent, purchaseType, salesType } = req.body;
+
+    if (!gstCode || vatPercent === undefined || vatPercent === null) {
+      return res.status(400).json({
+        success: false,
+        message: "GST Code and VAT Percent are required"
+      });
+    }
+    if (!Number.isFinite(Number(vatPercent))) {
+      return res.status(400).json({ success: false, message: "VAT Percent must be a valid number" });
+    }
+
+    const updatedGst = await GST.findOneAndUpdate(
+      { _id: id, distributorId: req.auth.distributorId, firmId: req.auth.firmId },
+      {
+        gstCode: gstCode.trim(),
+        vatPercent: Number(vatPercent),
+        purchaseType: purchaseType || "VAT ON PURCHASE PRICE",
+        salesType: salesType || "VAT ON SALES PRICE",
+      },
+      { new: true, runValidators: true }
+    );
+
+    if (!updatedGst) {
+      return res.status(404).json({ success: false, message: "GST not found" });
+    }
+
+    res.json({
+      success: true,
+      message: "GST updated successfully",
+      data: updatedGst
+    });
+  } catch (error) {
+    if (error.code === 11000) {
+      return res.status(409).json({
+        success: false,
+        message: "This GST Code already exists for this firm"
+      });
+    }
+    res.status(500).json({
+      success: false,
+      message: "GST update failed",
+      error: error.message
+    });
+  }
+});
+
+// ---------- GST MASTER ----------
+app.delete(
+  "/api/gst/:id",
+  ensureConnection,
+  securityRouter.authorizeRequest(
+    "master",
+    "GST",
+    "delete"
+  ),
+  async (req, res) => {
+  try {
+    const filter = { _id: req.params.id, distributorId: req.auth.distributorId, firmId: req.auth.firmId };
+    const gst = await GST.findOne(filter);
+    if (!gst) return res.status(404).json({ success: false, message: "GST not found" });
+    await assertMasterNotUsed({ connection: mongoose.connection, scope: req.auth, type: "gst",
+      record: { _id: gst._id, code: gst.gstCode, name: gst.gstCode } });
+    const deletedGst = await GST.findOneAndUpdate(
+      filter,
+      { $set: { isActive: false } }, { new: true }
+    );
+
+    if (!deletedGst) {
+      return res.status(404).json({ success: false, message: "GST not found" });
+    }
+
+    res.json({ success: true, message: "GST deleted successfully" });
+  } catch (error) {
+    res.status(error.statusCode || 500).json({
+      success: false,
+      message: error.statusCode ? error.message : "GST delete failed",
+      error: error.message
+    });
+  }
+});
+
+// ---------- SALESMAN ----------
+app.put(
+  "/api/salesmen/:id",
+  ensureConnection,
+  securityRouter.authorizeRequest(
+    "master",
+    "SALESMAN",
+    "edit"
+  ),
+  async (req, res) => {
+  try {
+    const { id } = req.params;
+    const salesmanCode = String(req.body.salesmanCode || req.body.code || "").trim();
+    const salesmanName = String(req.body.salesmanName || req.body.name || "").trim();
+    if (!salesmanCode || !salesmanName) {
+      return res.status(400).json({ success: false, message: "Salesman Code and Name are required" });
+    }
+    const updateData = {
+      ...req.body,
+      salesmanCode,
+      salesmanName,
+      salesmanType: req.body.salesmanType || req.body.type || "SALESMAN",
+    };
+
+    delete updateData._id;
+    delete updateData.distributorId;
+    delete updateData.firmId;
+
+    const updatedSalesman = await Salesman.findOneAndUpdate(
+      { _id: id, distributorId: req.auth.distributorId, firmId: req.auth.firmId },
+      updateData,
+      { new: true, runValidators: true }
+    );
+
+    if (!updatedSalesman) {
+      return res.status(404).json({ success: false, message: "Salesman not found" });
+    }
+
+    res.json({
+      success: true,
+      message: "Salesman updated successfully",
+      data: updatedSalesman
+    });
+  } catch (error) {
+    if (error.code === 11000) {
+      return res.status(409).json({
+        success: false,
+        message: "This Salesman Code already exists for this firm"
+      });
+    }
+    res.status(500).json({
+      success: false,
+      message: "Salesman update failed",
+      error: error.message
+    });
+  }
+});
+
+// ---------- SALESMAN ----------
+app.delete(
+  "/api/salesmen/:id",
+  ensureConnection,
+  securityRouter.authorizeRequest(
+    "master",
+    "SALESMAN",
+    "delete"
+  ),
+  async (req, res) => {
+  try {
+    const filter = { _id: req.params.id, distributorId: req.auth.distributorId, firmId: req.auth.firmId };
+    const salesman = await Salesman.findOne(filter);
+    if (!salesman) return res.status(404).json({ success: false, message: "Salesman not found" });
+    await assertMasterNotUsed({ connection: mongoose.connection, scope: req.auth, type: "salesman",
+      record: { _id: salesman._id, code: salesman.salesmanCode, name: salesman.salesmanName } });
+    const deletedSalesman = await Salesman.findOneAndUpdate(
+      filter,
+      { $set: { isActive: false } }, { new: true }
+    );
+
+    if (!deletedSalesman) {
+      return res.status(404).json({ success: false, message: "Salesman not found" });
+    }
+
+    res.json({ success: true, message: "Salesman deleted successfully" });
+  } catch (error) {
+    res.status(error.statusCode || 500).json({
+      success: false,
+      message: error.statusCode ? error.message : "Salesman delete failed",
+      error: error.message
+    });
+  }
+});
+
+// ---------- AREA ----------
+app.put(
+  "/api/areas/:id",
+  ensureConnection,
+  securityRouter.authorizeRequest(
+    "master",
+    "AREA",
+    "edit"
+  ),
+  async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { areaCode, areaName } = req.body;
+
+    if (!areaCode || !areaName) {
+      return res.status(400).json({
+        success: false,
+        message: "Area Code and Area Name are required"
+      });
+    }
+
+    const updatedArea = await Area.findOneAndUpdate(
+      { _id: id, distributorId: req.auth.distributorId, firmId: req.auth.firmId },
+      {
+        areaCode: areaCode.trim(),
+        areaName: areaName.trim(),
+      },
+      { new: true, runValidators: true }
+    );
+
+    if (!updatedArea) {
+      return res.status(404).json({ success: false, message: "Area not found" });
+    }
+
+    res.json({
+      success: true,
+      message: "Area updated successfully",
+      data: updatedArea
+    });
+  } catch (error) {
+    if (error.code === 11000) {
+      return res.status(409).json({
+        success: false,
+        message: "This Area Code already exists for this firm"
+      });
+    }
+    res.status(500).json({
+      success: false,
+      message: "Area update failed",
+      error: error.message
+    });
+  }
+});
+
+// ---------- AREA ----------
+app.delete(
+  "/api/areas/:id",
+  ensureConnection,
+  securityRouter.authorizeRequest(
+    "master",
+    "AREA",
+    "delete"
+  ),
+  async (req, res) => {
+  try {
+    const filter = { _id: req.params.id, distributorId: req.auth.distributorId, firmId: req.auth.firmId };
+    const area = await Area.findOne(filter);
+    if (!area) return res.status(404).json({ success: false, message: "Area not found" });
+    await assertMasterNotUsed({ connection: mongoose.connection, scope: req.auth, type: "area",
+      record: { _id: area._id, code: area.areaCode, name: area.areaName } });
+    const deletedArea = await Area.findOneAndUpdate(
+      filter,
+      { $set: { isActive: false } }, { new: true }
+    );
+
+    if (!deletedArea) {
+      return res.status(404).json({ success: false, message: "Area not found" });
+    }
+
+    res.json({ success: true, message: "Area deleted successfully" });
+  } catch (error) {
+    res.status(error.statusCode || 500).json({
+      success: false,
+      message: error.statusCode ? error.message : "Area delete failed",
+      error: error.message
+    });
+  }
+});
+
+// ---------- GODOWN MASTER ----------
+app.put(
+  "/api/godowns/:id",
+  ensureConnection,
+  securityRouter.authorizeRequest(
+    "master",
+    "GODOWN",
+    "edit"
+  ),
+  async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { godownCode, godownName, address, location } = req.body;
+
+    if (!godownCode || !godownName) {
+      return res.status(400).json({
+        success: false,
+        message: "Godown Code and Godown Name are required"
+      });
+    }
+
+    const updatedGodown = await GodownModel.findOneAndUpdate(
+      { _id: id, distributorId: req.auth.distributorId, firmId: req.auth.firmId },
+      {
+        godownCode: godownCode.trim(),
+        godownName: godownName.trim(),
+        address: address || "",
+        location: location || "",
+      },
+      { new: true, runValidators: true }
+    );
+
+    if (!updatedGodown) {
+      return res.status(404).json({ success: false, message: "Godown not found" });
+    }
+
+    res.json({
+      success: true,
+      message: "Godown updated successfully",
+      data: updatedGodown
+    });
+  } catch (error) {
+    if (error.code === 11000) {
+      return res.status(409).json({
+        success: false,
+        message: "This Godown Code already exists for this firm"
+      });
+    }
+    res.status(500).json({
+      success: false,
+      message: "Godown update failed",
+      error: error.message
+    });
+  }
+});
+// ---------- GODOWN MASTER ----------
+app.delete(
+  "/api/godowns/:id",
+  ensureConnection,
+  securityRouter.authorizeRequest(
+    "master",
+    "GODOWN",
+    "delete"
+  ),
+  async (req, res) => {
+  try {
+    const filter = { _id: req.params.id, distributorId: req.auth.distributorId, firmId: req.auth.firmId };
+    const godown = await GodownModel.findOne(filter);
+    if (!godown) return res.status(404).json({ success: false, message: "Godown not found" });
+    await assertMasterNotUsed({ connection: mongoose.connection, scope: req.auth, type: "godown",
+      record: { _id: godown._id, code: godown.godownCode, name: godown.godownName } });
+    const deletedGodown = await GodownModel.findOneAndUpdate(
+      filter,
+      { $set: { isActive: false } }, { new: true }
+    );
+
+    if (!deletedGodown) {
+      return res.status(404).json({ success: false, message: "Godown not found" });
+    }
+
+    res.json({ success: true, message: "Godown deleted successfully" });
+  } catch (error) {
+    res.status(error.statusCode || 500).json({
+      success: false,
+      message: error.statusCode ? error.message : "Godown delete failed",
+      error: error.message
+    });
+  }
+});
+
+app.put("/api/customer-banks/:id", ensureConnection, securityRouter.authorizeRequest("MASTER", "CUSTOMER_BANK", "edit"), async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    if (!String(req.body.bankCode || "").trim() || !String(req.body.bankName || "").trim()) {
+      return res.status(400).json({ success: false, message: "Bank Code and Bank Name are required" });
+    }
+
+    const updateData = {
+      bankCode: String(req.body.bankCode || "").trim(),
+      bankName: String(req.body.bankName || "").trim(),
+      accountNumber: req.body.accountNumber || "",
+      ifscCode: req.body.ifscCode || "",
+      branchName: req.body.branchName || "",
+      accountType: req.body.accountType || "Savings",
+      clearingType: String(req.body.clearingType || "LOCAL").trim(), // ✅ FIX
+
+      customerName: req.body.customerName || "",
+      customerCode: req.body.customerCode || "",
+      mobileNo: req.body.mobileNo || "",
+      emailId: req.body.emailId || "",
+      upiId: req.body.upiId || "",
+      swiftCode: req.body.swiftCode || "",
+      micrCode: req.body.micrCode || "",
+      panNumber: req.body.panNumber || "",
+      beneficiaryName: req.body.beneficiaryName || "",
+      remarks: req.body.remarks || "",
+    };
+
+    const updatedBank = await CustomerBank.findOneAndUpdate(
+      { _id: id, distributorId: req.auth.distributorId, firmId: req.auth.firmId },
+      { $set: updateData },
+      { new: true, runValidators: true }
+    );
+
+    if (!updatedBank) {
+      return res.status(404).json({
+        success: false,
+        message: "Customer Bank not found",
+      });
+    }
+
+    res.json({
+      success: true,
+      message: "Customer Bank updated successfully",
+      data: updatedBank,
+    });
+  } catch (error) {
+    if (error.code === 11000) return res.status(409).json({ success: false, message: "This Bank Code already exists for this firm" });
+    res.status(500).json({
+      success: false,
+      message: "Customer Bank update failed",
+      error: error.message,
+    });
+  }
+});
+
+// ---------- CUSTOMER BANK MASTER ----------
+app.delete("/api/customer-banks/:id", ensureConnection, securityRouter.authorizeRequest("MASTER", "CUSTOMER_BANK", "delete"), async (req, res) => {
+  try {
+    const filter = { _id: req.params.id, distributorId: req.auth.distributorId, firmId: req.auth.firmId };
+    const bank = await CustomerBank.findOne(filter);
+    if (!bank) return res.status(404).json({ success: false, message: "Customer Bank not found" });
+    await assertMasterNotUsed({ connection: mongoose.connection, scope: req.auth, type: "customerBank",
+      record: { _id: bank._id, code: bank.bankCode, name: bank.bankName } });
+    const deletedBank = await CustomerBank.findOneAndUpdate(
+      filter,
+      { $set: { isActive: false } }, { new: true }
+    );
+
+    if (!deletedBank) {
+      return res.status(404).json({ success: false, message: "Customer Bank not found" });
+    }
+
+    res.json({ success: true, message: "Customer Bank deleted successfully" });
+  } catch (error) {
+    res.status(error.statusCode || 500).json({
+      success: false,
+      message: error.statusCode ? error.message : "Customer Bank delete failed",
+      error: error.message
+    });
+  }
+});
+// Product mapping routes are provided by createProductMappingRouter above.
+// Compatibility endpoint: posted sales are cancelled through the canonical reversal service.
+app.delete(
+  "/api/sales/:id",
+  ensureConnection,
+  securityRouter.authorizeRequest(
+     "SALES",
+    "SALES_BILLING",
+    "delete"
+  ),
+  async (req, res) => {
+  const session = await mongoose.startSession();
+
+  try {
+    session.startTransaction();
+
+    const { id } = req.params;
+    const distributorId = req.auth.distributorId;
+    const firmId = req.auth.firmId;
+
+    // Find the sales bill first
+    const salesBill = await SalesHeader.findOne({
+      _id: id,
+      distributorId,
+      firmId,
+      isActive: true
+    }).session(session);
+
+    if (!salesBill) throw Object.assign(new Error("Sales bill not found"), { statusCode: 404 });
+    const cancelled = await cancelSalesBill({ req, session, bill: salesBill, reason: req.body.reason || "Cancelled from sales list" });
+
+    await commitTransactionReliably(session);
+
+    res.json({
+      success: true,
+      message: `Sales bill ${salesBill.BillSeries}-${salesBill.BillNo} cancelled and reversed`,
+      data: cancelled
+    });
+  } catch (error) {
+    if (session.inTransaction()) await session.abortTransaction();
+    console.error("Delete sales bill error:", error);
+    res.status(error.statusCode || 500).json({
+      success: false,
+      message: error.message || "Sales bill delete failed"
+    });
+  } finally {
+    session.endSession();
+  }
+});
+/* =========================================================
+  GET ONE QUOTATION FOR EDIT
+  ========================================================= */
+
+app.get(
+  "/api/quotation/:id",
+  ensureConnection,
+  securityRouter.authorizeRequest("SALES", "QUOTATION", "view"),
+  async (req, res) => {
+    try {
+      const quotationId = String(
+        req.params.id || ""
+      ).trim();
+
+      const distributorId = String(
+        req.query.distributorId || ""
+      ).trim();
+
+      const firmId = String(
+        req.query.firmId || ""
+      ).trim();
+
+      if (!distributorId || !firmId) {
+        return res.status(400).json({
+          success: false,
+          message:
+            "distributorId and firmId are required",
+        });
+      }
+
+      if (
+        !quotationId ||
+        !mongoose.Types.ObjectId.isValid(
+          quotationId
+        )
+      ) {
+        return res.status(400).json({
+          success: false,
+          message:
+            "Invalid quotation ID",
+        });
+      }
+
+      /*
+      * IMPORTANT:
+      * Your actual model is QuotationHeader,
+      * not Quotation.
+      */
+      const quotation =
+        await QuotationHeader.findOne({
+          _id: quotationId,
+          distributorId,
+          firmId,
+          isActive: true,
+        }).lean();
+
+      if (!quotation) {
+        return res.status(404).json({
+          success: false,
+          message:
+            "Quotation not found for this firm",
+        });
+      }
+
+      return res.json({
+        success: true,
+        quotation,
+      });
+    } catch (error) {
+      console.error(
+        "GET QUOTATION FOR EDIT ERROR:",
+        error
+      );
+
+      return res.status(500).json({
+        success: false,
+        message:
+          error.message ||
+          "Failed to load quotation",
+      });
+    }
+  }
+);
+
+/* =========================================================
+  UPDATE QUOTATION
+  ========================================================= */
+
+app.put(
+  "/api/quotation/:id",
+  ensureConnection,
+  securityRouter.authorizeRequest("SALES", "QUOTATION", "edit"),
+  async (req, res) => {
+    try {
+      const quotationId = String(
+        req.params.id || ""
+      ).trim();
+
+      const {
+        distributorId,
+        firmId,
+        firmName = "",
+
+        BillDate = "",
+        Godown = "",
+        GDCode = "",
+
+        CompanyCode = "",
+        CompanyName = "",
+
+        AreaCode = "",
+        AreaName = "",
+
+        PartyCode = "",
+        PartyName = "",
+
+        BillSeries = "",
+        BillNo,
+        BillType = "Credit",
+        DueDate = "",
+
+        SalesmanCode = "",
+        SalesmanName = "",
+        Narration = "",
+
+        items = [],
+      } = req.body;
+
+      if (!distributorId || !firmId) {
+        return res.status(400).json({
+          success: false,
+          message:
+            "Distributor/Firm not found",
+        });
+      }
+
+      if (
+        !quotationId ||
+        !mongoose.Types.ObjectId.isValid(
+          quotationId
+        )
+      ) {
+        return res.status(400).json({
+          success: false,
+          message:
+            "Invalid quotation ID",
+        });
+      }
+
+      if (!Number(BillNo)) {
+        return res.status(400).json({
+          success: false,
+          message:
+            "Quotation Bill No is required",
+        });
+      }
+
+      if (
+        !Array.isArray(items) ||
+        items.length === 0
+      ) {
+        return res.status(400).json({
+          success: false,
+          message:
+            "At least one product is required",
+        });
+      }
+
+      const existingQuotation =
+        await QuotationHeader.findOne({
+          _id: quotationId,
+          distributorId:
+            String(distributorId).trim(),
+          firmId:
+            String(firmId).trim(),
+          isActive: true,
+        });
+
+      if (!existingQuotation) {
+        return res.status(404).json({
+          success: false,
+          message:
+            "Quotation not found",
+        });
+      }
+
+      /*
+      * Prevent another quotation from using
+      * the same Series + Bill No.
+      */
+      const duplicateQuotation =
+        await QuotationHeader.findOne({
+          _id: {
+            $ne: quotationId,
+          },
+
+          distributorId:
+            String(distributorId).trim(),
+
+          firmId:
+            String(firmId).trim(),
+
+          BillSeries:
+            String(
+              BillSeries || ""
+            ).trim(),
+
+          BillNo:
+            Number(BillNo),
+
+          isActive: true,
+        });
+
+      if (duplicateQuotation) {
+        return res.status(409).json({
+          success: false,
+          message:
+            `Quotation ${BillSeries}-${BillNo} already exists`,
+        });
+      }
+
+      const normalizedItems =
+        items.map(
+          (item, index) => {
+            const combinedProduct =
+              String(
+                item.product || ""
+              ).trim();
+
+            const separatedProduct =
+              combinedProduct.split(
+                " - "
+              );
+
+            const productCode =
+              String(
+                item.productCode ||
+                item.productId ||
+                item.code ||
+                separatedProduct[0] ||
+                ""
+              ).trim();
+
+            const productName =
+              String(
+                item.productName ||
+                item.name ||
+                separatedProduct
+                  .slice(1)
+                  .join(" - ") ||
+                ""
+              ).trim();
+
+            return {
+              ...item,
+
+              sr:
+                Number(
+                  item.sr ||
+                  index + 1
+                ),
+
+              product:
+                combinedProduct ||
+                (
+                  productCode ||
+                    productName
+                    ? `${productCode}${productCode &&
+                      productName
+                      ? " - "
+                      : ""
+                    }${productName}`
+                    : ""
+                ),
+
+              productCode,
+              productId:
+                productCode,
+              productName,
+
+              batchNo:
+                String(
+                  item.batchNo ||
+                  item.batch ||
+                  item.selectedBatch
+                    ?.batchNo ||
+                  "."
+                ).trim(),
+
+              units:
+                item.units ||
+                item.unit ||
+                "PCS",
+
+              qty:
+                Number(
+                  item.qty ||
+                  item.quantity ||
+                  0
+                ),
+
+              quantity:
+                Number(
+                  item.qty ||
+                  item.quantity ||
+                  0
+                ),
+
+              free:
+                Number(
+                  item.free || 0
+                ),
+
+              mrp:
+                Number(
+                  item.mrp || 0
+                ),
+
+              rate:
+                Number(
+                  item.rate || 0
+                ),
+
+              rateGst:
+                Number(
+                  item.rateGst || 0
+                ),
+
+              tprAmt:
+                Number(
+                  item.tprAmt || 0
+                ),
+
+              schemePct:
+                Number(
+                  item.schemePct || 0
+                ),
+
+              schemeAmt:
+                Number(
+                  item.schemeAmt || 0
+                ),
+
+              cdPct:
+                Number(
+                  item.cdPct || 0
+                ),
+
+              cdAmt:
+                Number(
+                  item.cdAmt || 0
+                ),
+
+              starPct:
+                Number(
+                  item.starPct || 0
+                ),
+
+              starAmt:
+                Number(
+                  item.starAmt || 0
+                ),
+
+              taxable:
+                Number(
+                  item.taxable || 0
+                ),
+
+              gst:
+                Number(
+                  item.gst || 0
+                ),
+
+              sgst:
+                Number(
+                  item.sgst || 0
+                ),
+
+              cgst:
+                Number(
+                  item.cgst || 0
+                ),
+
+              igst:
+                Number(
+                  item.igst || 0
+                ),
+
+              amount:
+                Number(
+                  item.amount || 0
+                ),
+            };
+          }
+        );
+
+      const updateData = {
+        firmName:
+          String(
+            firmName || ""
+          ).trim(),
+
+        BillDate,
+        Godown,
+        GDCode,
+
+        CompanyCode:
+          String(
+            CompanyCode || ""
+          ).trim(),
+
+        CompanyName:
+          String(
+            CompanyName || ""
+          ).trim(),
+
+        AreaCode:
+          String(
+            AreaCode || ""
+          ).trim(),
+
+        AreaName:
+          String(
+            AreaName || ""
+          ).trim(),
+
+        PartyCode:
+          String(
+            PartyCode || ""
+          ).trim(),
+
+        PartyName:
+          String(
+            PartyName || ""
+          ).trim(),
+
+        BillSeries:
+          String(
+            BillSeries || ""
+          ).trim(),
+
+        BillNo:
+          Number(BillNo),
+
+        BillType:
+          BillType || "Credit",
+
+        DueDate,
+
+        SalesmanCode:
+          String(
+            SalesmanCode || ""
+          ).trim(),
+
+        SalesmanName:
+          String(
+            SalesmanName || ""
+          ).trim(),
+
+        Narration:
+          String(
+            Narration || ""
+          ).trim(),
+
+        GrossAmount:
+          Number(
+            req.body.GrossAmount || 0
+          ),
+
+        TPRAmount:
+          Number(
+            req.body.TPRAmount || 0
+          ),
+
+        SchemeAmount:
+          Number(
+            req.body.SchemeAmount || 0
+          ),
+
+        StarDiscountAmount:
+          Number(
+            req.body
+              .StarDiscountAmount ||
+            0
+          ),
+
+        CashDiscountAmount:
+          Number(
+            req.body
+              .CashDiscountAmount ||
+            0
+          ),
+
+        DisplayAmount:
+          Number(
+            req.body.DisplayAmount || 0
+          ),
+
+        CouponAmount:
+          Number(
+            req.body.CouponAmount || 0
+          ),
+
+        AddLessAmount:
+          Number(
+            req.body.AddLessAmount || 0
+          ),
+
+        TaxableValue:
+          Number(
+            req.body.TaxableValue || 0
+          ),
+
+        SGSTAmount:
+          Number(
+            req.body.SGSTAmount || 0
+          ),
+
+        CGSTAmount:
+          Number(
+            req.body.CGSTAmount || 0
+          ),
+
+        IGSTAmount:
+          Number(
+            req.body.IGSTAmount || 0
+          ),
+
+        OriginalNetAmount:
+          Number(
+            req.body
+              .OriginalNetAmount ??
+            req.body.NetAmount ??
+            0
+          ),
+
+        NetAmount:
+          Number(
+            req.body.NetAmount || 0
+          ),
+
+        TotalQty:
+          Number(
+            req.body.TotalQty ||
+            normalizedItems.reduce(
+              (
+                total,
+                item
+              ) =>
+                total +
+                Number(
+                  item.qty || 0
+                ),
+              0
+            )
+          ),
+
+        TotalFreeQty:
+          Number(
+            req.body.TotalFreeQty ||
+            normalizedItems.reduce(
+              (
+                total,
+                item
+              ) =>
+                total +
+                Number(
+                  item.free || 0
+                ),
+              0
+            )
+          ),
+
+        TotalItems:
+          normalizedItems.length,
+
+        items:
+          normalizedItems,
+
+        isActive: true,
+      };
+
+      const updatedQuotation =
+        await QuotationHeader.findOneAndUpdate(
+          {
+            _id: quotationId,
+            distributorId:
+              String(
+                distributorId
+              ).trim(),
+            firmId:
+              String(
+                firmId
+              ).trim(),
+          },
+          {
+            $set: updateData,
+          },
+          {
+            new: true,
+            runValidators: true,
+          }
+        ).lean();
+
+      if (!updatedQuotation) {
+        return res.status(404).json({
+          success: false,
+          message:
+            "Quotation not found during update",
+        });
+      }
+
+      return res.json({
+        success: true,
+        message:
+          "Quotation updated successfully",
+
+        quotation:
+          updatedQuotation,
+
+        data: {
+          header:
+            updatedQuotation,
+        },
+      });
+    } catch (error) {
+      console.error(
+        "UPDATE QUOTATION ERROR:",
+        error
+      );
+
+      if (error?.code === 11000) {
+        return res.status(409).json({
+          success: false,
+          message:
+            "Quotation Series and Bill No already exist",
+        });
+      }
+
+      return res.status(500).json({
+        success: false,
+        message:
+          error.message ||
+          "Quotation update failed",
+      });
+    }
+  }
+);
+// ---------- PERMANENT DELETE QUOTATION ----------
+app.delete(
+  "/api/quotation/:id",
+  ensureConnection,
+  securityRouter.authorizeRequest("SALES", "QUOTATION", "delete"),
+  async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { distributorId, firmId } = req.body;
+
+    if (!distributorId || !firmId) {
+      return res.status(400).json({
+        success: false,
+        message: "distributorId and firmId are required"
+      });
+    }
+
+    const quotation = await QuotationHeader.findOne({
+      _id: id,
+      distributorId,
+      firmId,
+      isActive: true
+    });
+
+    if (!quotation) {
+      return res.status(404).json({
+        success: false,
+        message: "Quotation not found"
+      });
+    }
+
+    await QuotationHeader.findOneAndUpdate({ _id: id, distributorId, firmId }, { $set: { isActive: false, status: "CANCELLED", cancelledAt: new Date(), cancelledBy: req.auth.userId } });
+    await writeAuditEvent(req, { entityType: "QUOTATION", entityId: String(id), action: "CANCEL", before: quotation.toObject() });
+
+    res.json({
+      success: true,
+      message: `Quotation ${quotation.BillSeries}-${quotation.BillNo} cancelled`
+    });
+  } catch (error) {
+    console.error("Delete quotation error:", error);
+    res.status(500).json({
+      success: false,
+      message: "Quotation delete failed",
+      error: error.message
+    });
+  }
+});
+// ---------- PERMANENT DELETE PURCHASE ----------
+app.delete(
+  "/api/purchase/:id",
+  ensureConnection,
+  securityRouter.authorizeRequest("VOUCHERS", "PURCHASE", "delete"),
+  async (req, res) => {
+  const session = await mongoose.startSession();
+
+  try {
+    session.startTransaction();
+
+    const { id } = req.params;
+    const { distributorId, firmId } = req.body;
+
+    if (!distributorId || !firmId) {
+      return res.status(400).json({
+        success: false,
+        message: "distributorId and firmId are required"
+      });
+    }
+
+    const purchase = await PurchaseHeader.findOne({
+      _id: id,
+      distributorId,
+      firmId,
+      isActive: true
+    }).session(session);
+
+    if (!purchase) {
+      return res.status(404).json({
+        success: false,
+        message: "Purchase bill not found"
+      });
+    }
+
+    // Restore stock for each item (remove the added stock)
+ // Restore stock for each item (remove the added stock)
+    for (const item of purchase.items || []) {
+      const prodCode = String(
+        item.productCode || item.code || item.productId ||
+        String(item.product || "").split(" - ")[0] || ""
+      ).trim();
+
+      const batchNo = String(
+        item.batchNo || item.batch || item.selectedBatch?.batchNo ||
+        item.selectedBatch?.Batch || "."
+      ).trim() || ".";
+
+      const mrp = Number(
+        item.mrp ?? item.MRP ??
+        item.selectedBatch?.mrp ?? item.selectedBatch?.MRP ?? 0
+      );
+
+      const qty =
+        Number(item.quantity ?? item.qty ?? item.Qty ?? 0) +
+        Number(item.free ?? item.Free ?? 0);
+
+      if (prodCode && qty > 0) {
+        await Stock.updateOne(
+          {
+            distributorId,
+            firmId,
+            GDCode: purchase.gdCode,
+            ProdCode: prodCode,
+            Batch: batchNo,
+            MRP: Number.isFinite(mrp) ? mrp : 0,
+          },
+          { $inc: { Qty: -qty } }
+        ).session(session);
+      }
+    }
+
+    const cancelledPurchase = await PurchaseHeader.findOneAndUpdate(
+      { _id: id, distributorId, firmId },
+      { $set: { isActive: false, status: "CANCELLED", cancelledAt: new Date(), cancelledBy: req.auth.userId, cancellationReason: String(req.body.reason || "Deleted by user") } },
+      { new: true, session }
+    );
+    await reverseSourceJournal({ distributorId, firmId, sourceType: "PURCHASE", sourceId: String(id), createdBy: req.auth.userId, documentDate: businessDateIST(), reason: req.body.reason || "Purchase cancellation" }, session);
+    await recordStockMovements({
+      distributorId, firmId, godown: purchase.gdCode, items: purchase.items,
+      movementDate: businessDateIST(), sourceType: "PURCHASE_CANCEL", sourceId: id,
+      documentNo: `${purchase.vouSer || ""}${purchase.vouNo}`,
+      direction: -1, userId: req.auth.userId, session,
+    });
+    await writeAuditEvent(req, { entityType: "PURCHASE", entityId: String(id), action: "CANCEL", reason: req.body.reason || "Deleted by user", before: purchase.toObject(), after: cancelledPurchase.toObject() }, session);
+
+    await commitTransactionReliably(session);
+
+    res.json({
+      success: true,
+      message: `Purchase bill ${purchase.vouSer}-${purchase.vouNo} cancelled and reversed`
+    });
+  } catch (error) {
+    await session.abortTransaction();
+    console.error("Delete purchase error:", error);
+    res.status(500).json({
+      success: false,
+      message: error.message || "Purchase bill delete failed"
+    });
+  } finally {
+    session.endSession();
+  }
+});
+// ---------- PERMANENT DELETE CREDIT NOTE ----------
+// =========================================================
+// PERMANENT DELETE CREDIT NOTE
+//
+// 1. Reverse Credit Note stock
+// 2. Restore Sales Bill totals
+// 3. Delete Credit Note
+// =========================================================
+
+app.delete(
+  "/api/credit-note/:id",
+  ensureConnection,
+  securityRouter.authorizeRequest("VOUCHERS", "CREDIT_NOTE", "delete"),   // ADD THIS
+  async (req, res) => {
+    const session =
+      await mongoose.startSession();
+
+    try {
+      session.startTransaction();
+
+      const id = String(
+        req.params.id || ""
+      ).trim();
+
+      const distributorId =
+        String(
+          req.body.distributorId ||
+          req.query.distributorId ||
+          ""
+        ).trim();
+
+      const firmId =
+        String(
+          req.body.firmId ||
+          req.query.firmId ||
+          ""
+        ).trim();
+
+      if (
+        !mongoose.Types.ObjectId.isValid(
+          id
+        )
+      ) {
+        throw new Error(
+          "Invalid Credit Note ID."
+        );
+      }
+
+      if (
+        !distributorId ||
+        !firmId
+      ) {
+        throw new Error(
+          "distributorId and firmId are required."
+        );
+      }
+
+      const creditNote =
+        await CreditNote.findOne({
+          _id:
+            id,
+
+          distributorId,
+          firmId,
+
+          isActive:
+            true,
+        }).session(session);
+
+      if (!creditNote) {
+        await session.abortTransaction();
+
+        return res.status(404).json({
+          success:
+            false,
+
+          message:
+            "Credit Note not found.",
+        });
+      }
+
+      const gdCode = String(
+        creditNote.GDCode ||
+        ""
+      ).trim();
+
+      if (!gdCode) {
+        throw new Error(
+          "Credit Note does not contain a valid Godown Code."
+        );
+      }
+
+      const items =
+        normalizeCreditNoteItems(
+          creditNote.items || []
+        );
+
+      /*
+      * Reverse stock added by Credit Note.
+      *
+      * GDR -> subtract from MAS_STOCK
+      * DGR -> subtract from MAS_DAMSTOCK
+      */
+      await applyCreditNoteStockMovement({
+        items,
+
+        distributorId,
+        firmId,
+
+        firmName:
+          creditNote.firmName ||
+          "",
+
+        gdCode,
+
+        direction:
+          -1,
+
+        session,
+      });
+
+      const billSeries =
+        String(
+          creditNote.BillSeries ||
+          creditNote.billSeries ||
+          ""
+        ).trim();
+
+      const billNo =
+        Number(
+          creditNote.BillNo ||
+          creditNote.billNo ||
+          0
+        );
+
+      const salesBill =
+        await findReferencedSalesBill({
+          distributorId,
+          firmId,
+
+          billSeries,
+          billNo,
+
+          session,
+        });
+
+      /*
+      * Restore Sales Bill only when the Credit Note
+      * was linked to a saved Sales Bill.
+      */
+      if (salesBill) {
+        await adjustSalesBillForCreditNote({
+          salesBill,
+
+          amounts:
+            getCreditNoteAmounts(
+              creditNote
+            ),
+
+          direction:
+            -1,
+
+          creditNoteSeries:
+            creditNote.CreditNoteSeries,
+
+          creditNoteNo:
+            creditNote.CreditNoteNo,
+
+          session,
+        });
+      }
+
+      await CreditNote.findOneAndUpdate({ _id: id, distributorId, firmId }, { $set: { isActive: false, status: "CANCELLED", cancelledAt: new Date(), cancelledBy: req.auth.userId } }, { session });
+      await reverseSourceJournal({ distributorId, firmId, sourceType: "CREDIT_NOTE", sourceId: id, createdBy: req.auth.userId, documentDate: businessDateIST(), reason: "Credit note cancellation" }, session);
+      await writeAuditEvent(req, { entityType: "CREDIT_NOTE", entityId: id, action: "CANCEL", before: creditNote.toObject() }, session);
+
+      /*
+      * Update adjustment marker after deleting.
+      */
+      if (salesBill) {
+        const remainingCreditNote =
+          await CreditNote.findOne({
+            distributorId,
+            firmId,
+
+            BillSeries:
+              billSeries,
+
+            BillNo:
+              billNo,
+
+            isActive:
+              true,
+          })
+            .sort({
+              createdAt:
+                -1,
+            })
+            .session(session);
+
+        await SalesHeader.updateOne(
+          {
+            _id:
+              salesBill._id,
+          },
+          {
+            $set: {
+              CreditNoteAdjusted:
+                Boolean(
+                  remainingCreditNote
+                ),
+
+              LastCreditNoteSeries:
+                remainingCreditNote
+                  ?.CreditNoteSeries ||
+                "",
+
+              LastCreditNoteNo:
+                remainingCreditNote
+                  ?.CreditNoteNo ||
+                0,
+            },
+          },
+          {
+            session,
+          }
+        );
+      }
+
+      await commitTransactionReliably(session);
+
+      return res.json({
+        success:
+          true,
+
+        message:
+          salesBill
+            ? `Credit Note ${creditNote.CreditNoteSeries}-${creditNote.CreditNoteNo} deleted. Stock and Sales Bill were restored.`
+            : `Credit Note ${creditNote.CreditNoteSeries}-${creditNote.CreditNoteNo} deleted. Stock was restored.`,
+
+        deletedId:
+          id,
+
+        salesBillRestored:
+          Boolean(salesBill),
+      });
+    } catch (error) {
+      if (
+        session.inTransaction()
+      ) {
+        await session.abortTransaction();
+      }
+
+      console.error(
+        "Credit Note delete error:",
+        error
+      );
+
+      return res.status(400).json({
+        success:
+          false,
+
+        message:
+          error.message ||
+          "Credit Note delete failed.",
+      });
+    } finally {
+      await session.endSession();
+    }
+  }
+);
+// ---------- PERMANENT DELETE CREATE LOAD ----------
+app.delete(
+  "/api/create-load/:id",
+  ensureConnection,
+  securityRouter.authorizeRequest("SALES", "CREATE_LOAD", "delete"),
+  async (req, res) => {
+  const session = await mongoose.startSession();
+
+  try {
+    session.startTransaction();
+
+    const { id } = req.params;
+    const { distributorId, firmId } = req.body;
+
+    if (!distributorId || !firmId) {
+      return res.status(400).json({
+        success: false,
+        message: "distributorId and firmId are required"
+      });
+    }
+
+    const load = await LoadHeader.findOne({
+      _id: id,
+      DistributorId: distributorId,
+      FirmId: firmId,
+      IsCancelled: { $ne: true }
+    }).session(session);
+
+    if (!load) {
+      return res.status(404).json({
+        success: false,
+        message: "Load not found"
+      });
+    }
+
+    // Check if load is already settled
+    const settledLoad = await SettleLoad.findOne({
+      distributorId,
+      firmId,
+      loadSeries: load.LoadSeries,
+      loadNo: load.LoadNo,
+      isActive: true
+    }).session(session);
+
+    if (settledLoad) {
+      return res.status(400).json({
+        success: false,
+        message: `Cannot delete load ${load.LoadSeries}-${load.LoadNo}. It is already settled. Please delete the settlement first.`
+      });
+    }
+
+    // Reset IsLoaded status for all bills in this load
+    const billConditions = (load.Bills || [])
+      .map(b => ({
+        BillSeries: String(b.Series || b.BillSeries || b.billSeries || "").trim(),
+        BillNo: Number(b.BillNo || b.billNo || 0)
+      }))
+      .filter(b => b.BillSeries && b.BillNo);
+
+    if (billConditions.length > 0) {
+      await SalesHeader.updateMany(
+        {
+          distributorId,
+          firmId,
+          isActive: true,
+          $or: billConditions
+        },
+        {
+          $set: {
+            IsLoaded: false,
+            LoadSeries: "",
+            LoadNo: null
+          }
+        },
+        { session }
+      );
+    }
+
+    await LoadHeader.findOneAndUpdate({ _id: id, DistributorId: distributorId, FirmId: firmId }, { $set: { IsCancelled: true, CancelledAt: new Date(), CancelledBy: req.auth.userId } }, { session });
+    await writeAuditEvent(req, { entityType: "LOAD", entityId: String(id), action: "CANCEL", before: load.toObject() }, session);
+
+    await commitTransactionReliably(session);
+
+    res.json({
+      success: true,
+      message: `Load ${load.LoadSeries}-${load.LoadNo} cancelled and bills are unloaded`
+    });
+  } catch (error) {
+    await session.abortTransaction();
+    console.error("Delete load error:", error);
+    res.status(500).json({
+      success: false,
+      message: error.message || "Load delete failed"
+    });
+  } finally {
+    session.endSession();
+  }
+});
+// ---------- PERMANENT DELETE SETTLE LOAD ----------
+app.delete(
+  "/api/settle-load/:id",
+  ensureConnection,
+  securityRouter.authorizeRequest("SALES", "SETTLE_LOAD", "delete"),
+  async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { distributorId, firmId } = req.body;
+
+    if (!distributorId || !firmId) {
+      return res.status(400).json({
+        success: false,
+        message: "distributorId and firmId are required"
+      });
+    }
+
+    const settleLoad = await SettleLoad.findOne({
+      _id: id,
+      distributorId,
+      firmId,
+      isActive: true
+    });
+
+    if (!settleLoad) {
+      return res.status(404).json({
+        success: false,
+        message: "Settle Load not found"
+      });
+    }
+
+    // Get all bills from this settle load
+    const billConditions = (settleLoad.bills || [])
+      .map(b => ({
+        BillSeries: String(b.billSeries || "").trim(),
+        BillNo: Number(b.billNo || 0)
+      }))
+      .filter(b => b.BillSeries && b.BillNo);
+
+    // Unload bills back to pending state
+    if (billConditions.length > 0) {
+      await SalesHeader.updateMany(
+        {
+          distributorId,
+          firmId,
+          isActive: true,
+          $or: billConditions
+        },
+        {
+          $set: {
+            IsLoaded: false,
+            LoadSeries: "",
+            LoadNo: null
+          }
+        }
+      );
+    }
+
+    await SettleLoad.findOneAndUpdate({ _id: id, distributorId, firmId }, { $set: { isActive: false, status: "CANCELLED", cancelledAt: new Date(), cancelledBy: req.auth.userId } });
+    await writeAuditEvent(req, { entityType: "SETTLEMENT", entityId: String(id), action: "CANCEL", before: settleLoad.toObject() });
+
+    res.json({
+      success: true,
+      message: `Settle Load ${settleLoad.loadSeries}-${settleLoad.loadNo} cancelled and bills are unloaded`
+    });
+  } catch (error) {
+    console.error("Delete settle load error:", error);
+    res.status(500).json({
+      success: false,
+      message: "Settle Load delete failed",
+      error: error.message
+    });
+  }
+});
+/* =========================================================
+  BILL PRINT SETTINGS SCHEMA
+  ========================================================= */
+
+const billPrintSettingsSchema = new mongoose.Schema(
+  {
+    distributorId: {
+      type: String,
+      required: true,
+      trim: true,
+    },
+
+    firmId: {
+      type: String,
+      required: true,
+      trim: true,
+    },
+
+    NoOfCopies: {
+      type: Number,
+      default: 1,
+      min: 1,
+      max: 10,
+    },
+
+    GoodsReturn: {
+      type: String,
+      enum: ["Y", "N"],
+      default: "N",
+    },
+
+    DamageReturn: {
+      type: String,
+      enum: ["Y", "N"],
+      default: "N",
+    },
+
+    SchemeSummary: {
+      type: String,
+      enum: ["Y", "N"],
+      default: "Y",
+    },
+
+    VatSummary: {
+      type: String,
+      enum: ["Y", "N"],
+      default: "Y",
+    },
+
+    HSNSummary: {
+      type: String,
+      enum: ["Y", "N"],
+      default: "Y",
+    },
+  },
+  {
+    collection: "T_Bill_Print_Settings",
+    timestamps: true,
+  }
+);
+
+billPrintSettingsSchema.index(
+  {
+    distributorId: 1,
+    firmId: 1,
+  },
+  {
+    unique: true,
+    name: "unique_bill_print_settings",
+  }
+);
+
+const BillPrintSettings =
+  mongoose.models.BillPrintSettings ||
+  mongoose.model(
+    "BillPrintSettings",
+    billPrintSettingsSchema
+  );
+
+/* =========================================================
+  BILL PRINT HEALTH
+  ========================================================= */
+
+app.get("/api/bill-print/health", (req, res) => {
+  res.json({
+    success: true,
+    message: "Bill Print API is working",
+  });
+});
+
+/* =========================================================
+  GET BILL PRINT SETTINGS
+  ========================================================= */
+
+app.get(
+  "/api/bill-print/settings",
+  ensureConnection,
+  async (req, res) => {
+    try {
+      const distributorId = String(
+        req.query.distributorId || ""
+      ).trim();
+
+      const firmId = String(
+        req.query.firmId || ""
+      ).trim();
+
+      if (!distributorId || !firmId) {
+        return res.status(400).json({
+          success: false,
+          message:
+            "distributorId and firmId are required.",
+        });
+      }
+
+      const settings =
+        await BillPrintSettings.findOne({
+          distributorId,
+          firmId,
+        }).lean();
+
+      return res.json({
+        success: true,
+
+        settings:
+          settings || {
+            NoOfCopies: 1,
+            GoodsReturn: "N",
+            DamageReturn: "N",
+            SchemeSummary: "Y",
+            VatSummary: "Y",
+            HSNSummary: "Y",
+          },
+      });
+    } catch (error) {
+      console.error(
+        "Bill Print settings GET error:",
+        error
+      );
+
+      return res.status(500).json({
+        success: false,
+        message:
+          "Failed to load Bill Print settings.",
+        error: error.message,
+      });
+    }
+  }
+);
+
+/* =========================================================
+  SAVE BILL PRINT SETTINGS
+  ========================================================= */
+
+app.put(
+  "/api/bill-print/settings",
+  ensureConnection,
+  async (req, res) => {
+    try {
+      const distributorId = String(
+        req.body.distributorId || ""
+      ).trim();
+
+      const firmId = String(
+        req.body.firmId || ""
+      ).trim();
+
+      if (!distributorId || !firmId) {
+        return res.status(400).json({
+          success: false,
+          message:
+            "distributorId and firmId are required.",
+        });
+      }
+
+      const normalizeYesNo = (
+        value,
+        defaultValue
+      ) => {
+        return String(value || defaultValue)
+          .trim()
+          .toUpperCase() === "Y"
+          ? "Y"
+          : "N";
+      };
+
+      const updateData = {
+        NoOfCopies: Math.min(
+          10,
+          Math.max(
+            1,
+            Number(req.body.NoOfCopies || 1)
+          )
+        ),
+
+        GoodsReturn: normalizeYesNo(
+          req.body.GoodsReturn,
+          "N"
+        ),
+
+        DamageReturn: normalizeYesNo(
+          req.body.DamageReturn,
+          "N"
+        ),
+
+        SchemeSummary: normalizeYesNo(
+          req.body.SchemeSummary,
+          "Y"
+        ),
+
+        VatSummary: normalizeYesNo(
+          req.body.VatSummary,
+          "Y"
+        ),
+
+        HSNSummary: normalizeYesNo(
+          req.body.HSNSummary,
+          "Y"
+        ),
+      };
+
+      const settings =
+        await BillPrintSettings.findOneAndUpdate(
+          {
+            distributorId,
+            firmId,
+          },
+          {
+            $set: updateData,
+            $setOnInsert: {
+              distributorId,
+              firmId,
+            },
+          },
+          {
+            new: true,
+            upsert: true,
+            runValidators: true,
+          }
+        ).lean();
+
+      return res.json({
+        success: true,
+        message:
+          "Bill Print settings saved successfully.",
+        settings,
+      });
+    } catch (error) {
+      console.error(
+        "Bill Print settings PUT error:",
+        error
+      );
+
+      return res.status(500).json({
+        success: false,
+        message:
+          "Failed to save Bill Print settings.",
+        error: error.message,
+      });
+    }
+  }
+);
+
+/* =========================================================
+  LOAD REAL BILL PRINT DATA
+  GET /api/bill-print/load-details
+  ========================================================= */
+
+app.get(
+  "/api/bill-print/load-details",
+  ensureConnection,
+  async (req, res) => {
+    try {
+      const distributorId = String(
+        req.query.distributorId || ""
+      ).trim();
+
+      const firmId = String(
+        req.query.firmId || ""
+      ).trim();
+
+      const loadSeries = String(
+        req.query.loadSeries || ""
+      )
+        .trim()
+        .toUpperCase();
+
+      const loadNo = String(
+        req.query.loadNo || ""
+      ).trim();
+
+      if (
+        !distributorId ||
+        !firmId ||
+        !loadSeries ||
+        !loadNo
+      ) {
+        return res.status(400).json({
+          success: false,
+          message:
+            "Distributor, Firm, Load Series and Load No are required.",
+        });
+      }
+
+      /*
+      * Your LoadHeader schema uses:
+      * DistributorId
+      * FirmId
+      * LoadSeries
+      * LoadNo
+      */
+      const load = await LoadHeader.findOne({
+        DistributorId: distributorId,
+        FirmId: firmId,
+        LoadSeries: loadSeries,
+        LoadNo: Number(loadNo),
+        IsCancelled: {
+          $ne: true,
+        },
+      }).lean();
+
+      if (!load) {
+        return res.status(404).json({
+          success: false,
+          message: `Load ${loadSeries}-${loadNo} not found.`,
+        });
+      }
+
+      const loadBills = Array.isArray(load.Bills)
+        ? load.Bills
+        : [];
+
+      if (loadBills.length === 0) {
+        return res.status(404).json({
+          success: false,
+          message:
+            "No bills are available in the selected load.",
+        });
+      }
+
+      const salesBillIds = loadBills
+        .map((bill) =>
+          String(
+            bill.SalesBillId ||
+            bill.salesBillId ||
+            ""
+          ).trim()
+        )
+        .filter((id) =>
+          mongoose.Types.ObjectId.isValid(id)
+        );
+
+      const billConditions = loadBills
+        .map((bill) => {
+          const BillSeries = String(
+            bill.BillSeries ||
+            bill.Series ||
+            bill.billSeries ||
+            ""
+          ).trim();
+
+          const BillNo = Number(
+            bill.BillNo ||
+            bill.billNo ||
+            0
+          );
+
+          if (!BillNo) {
+            return null;
+          }
+
+          return {
+            BillSeries,
+            BillNo,
+          };
+        })
+        .filter(Boolean);
+
+      const salesQueryConditions = [];
+
+      if (salesBillIds.length > 0) {
+        salesQueryConditions.push({
+          _id: {
+            $in: salesBillIds,
+          },
+        });
+      }
+
+      if (billConditions.length > 0) {
+        salesQueryConditions.push({
+          $or: billConditions,
+        });
+      }
+
+      let bills = [];
+
+      if (salesQueryConditions.length > 0) {
+        bills = await SalesHeader.find({
+          distributorId,
+          firmId,
+          isActive: {
+            $ne: false,
+          },
+          $or: salesQueryConditions,
+        })
+          .sort({
+            BillSeries: 1,
+            BillNo: 1,
+          })
+          .lean();
+      }
+
+      /*
+      * Use the bills stored inside the load if older
+      * loads do not contain SalesBillId references.
+      */
+      if (bills.length === 0) {
+        bills = loadBills.map((bill) => ({
+          ...bill,
+
+          BillSeries:
+            bill.BillSeries ||
+            bill.Series ||
+            bill.billSeries ||
+            "",
+
+          BillNo:
+            bill.BillNo ||
+            bill.billNo ||
+            "",
+
+          BillDate:
+            bill.BillDate ||
+            bill.billDate ||
+            "",
+
+          PartyCode:
+            bill.PartyCode ||
+            bill.partyCode ||
+            "",
+
+          PartyName:
+            bill.PartyName ||
+            bill.partyName ||
+            "",
+
+          NetAmount: Number(
+            bill.Amount ||
+            bill.billAmount ||
+            bill.NetAmount ||
+            0
+          ),
+
+          items:
+            bill.items ||
+            bill.Items ||
+            bill.products ||
+            [],
+        }));
+      }
+
+      const sortedBillNumbers = bills
+        .map((bill) =>
+          Number(
+            bill.BillNo ||
+            bill.billNo ||
+            0
+          )
+        )
+        .filter((number) => number > 0)
+        .sort((a, b) => a - b);
+
+      const transactionSeries =
+        String(
+          bills[0]?.BillSeries ||
+          bills[0]?.billSeries ||
+          loadBills[0]?.BillSeries ||
+          loadBills[0]?.Series ||
+          ""
+        ).trim();
+
+      const totalAmount = bills.reduce(
+        (sum, bill) =>
+          sum +
+          Number(
+            bill.NetAmount ||
+            bill.netAmount ||
+            bill.Amount ||
+            bill.billAmount ||
+            0
+          ),
+        0
+      );
+
+      const uniqueParties = new Set(
+        bills
+          .map(
+            (bill) =>
+              bill.PartyCode ||
+              bill.partyCode ||
+              bill.PartyName ||
+              bill.partyName
+          )
+          .filter(Boolean)
+      );
+
+      const firm = await Register.findOne({
+        distributorId,
+        firmId,
+        isActive: true,
+      })
+        .select(
+          "firmName address1 address2 city pinCode state phoneNo mobileNo gstNo email"
+        )
+        .lean();
+
+      return res.json({
+        success: true,
+
+        header: {
+          LoadSeries:
+            load.LoadSeries || loadSeries,
+
+          LoadNo:
+            load.LoadNo || Number(loadNo),
+
+          LoadDate:
+            load.LoadDate || "",
+
+          TrnSeries: transactionSeries,
+
+          FromTrnNo:
+            sortedBillNumbers.length > 0
+              ? sortedBillNumbers[0]
+              : "",
+
+          ToTrnNo:
+            sortedBillNumbers.length > 0
+              ? sortedBillNumbers[
+              sortedBillNumbers.length - 1
+              ]
+              : "",
+
+          TotalBills: bills.length,
+
+          TotalParties: uniqueParties.size,
+
+          TotalAmount: totalAmount,
+
+          Narration:
+            load.Narration || "",
+        },
+
+        firm: {
+          firmName:
+            firm?.firmName ||
+            load.FirmName ||
+            "",
+
+          address1: firm?.address1 || "",
+          address2: firm?.address2 || "",
+          city: firm?.city || "",
+          pinCode: firm?.pinCode || "",
+          state: firm?.state || "",
+          phoneNo:
+            firm?.phoneNo ||
+            firm?.mobileNo ||
+            "",
+          gstNo: firm?.gstNo || "",
+          email: firm?.email || "",
+        },
+
+        bills,
+      });
+    } catch (error) {
+      console.error(
+        "Bill Print load-details error:",
+        error
+      );
+
+      return res.status(500).json({
+        success: false,
+        message:
+          error.message ||
+          "Failed to load Bill Print data.",
+      });
+    }
+  }
+);
+/* =========================================================
+  GET ONE SALES BILL FOR PRINT / PREVIEW
+  ========================================================= */
+
+app.get(
+  "/api/sales/:id/print-details",
+  ensureConnection,
+  async (req, res) => {
+    try {
+      res.setHeader(
+        "Cache-Control",
+        "no-store"
+      );
+
+      const distributorId = String(
+        req.query.distributorId || ""
+      ).trim();
+
+      const firmId = String(
+        req.query.firmId || ""
+      ).trim();
+
+      const salesId = String(req.params.id || "").trim();
+
+      if (!distributorId || !firmId) {
+        return res.status(400).json({
+          success: false,
+          message:
+            "distributorId and firmId are required.",
+        });
+      }
+
+      if (!mongoose.Types.ObjectId.isValid(salesId)) {
+        return res.status(400).json({
+          success: false,
+          message: "Invalid Sales Bill ID.",
+        });
+      }
+
+      const bill = await SalesHeader.findOne({
+        _id: salesId,
+        distributorId,
+        firmId,
+        isActive: true,
+      }).lean();
+
+      if (!bill) {
+        return res.status(404).json({
+          success: false,
+          message: "Sales bill not found.",
+        });
+      }
+
+      const [firm, party, salesman, area] =
+        await Promise.all([
+          Register.findOne({
+            distributorId,
+            firmId,
+            isActive: true,
+          }).lean(),
+
+          Account.findOne({
+            distributorId,
+            firmId,
+            $or: [
+              {
+                accountCode: String(
+                  bill.PartyCode || ""
+                ).trim(),
+              },
+              {
+                accountName: String(
+                  bill.PartyName || ""
+                ).trim(),
+              },
+            ],
+            // Account Master also treats legacy records without isActive as active.
+            isActive: { $ne: false },
+          }).lean(),
+
+          Salesman.findOne({
+            distributorId,
+            firmId,
+            $or: [
+              {
+                salesmanCode: String(
+                  bill.SalesmanCode || ""
+                ).trim(),
+              },
+              {
+                salesmanName: String(
+                  bill.SalesmanName || ""
+                ).trim(),
+              },
+            ],
+            isActive: true,
+          }).lean(),
+
+          Area.findOne({
+            distributorId,
+            firmId,
+            $or: [
+              {
+                areaCode: String(
+                  bill.AreaCode || ""
+                ).trim(),
+              },
+              {
+                areaName: String(
+                  bill.AreaName || ""
+                ).trim(),
+              },
+            ],
+            isActive: true,
+          }).lean(),
+        ]);
+
+      /*
+      * Get bank details from Other Account.
+      * Change accountGroup values here if your bank group
+      * uses another name.
+      */
+      const bank = await OtherAccount.findOne({
+        distributorId,
+        firmId,
+        isActive: true,
+        $or: [
+          {
+            accountGroup: {
+              $regex: /bank/i,
+            },
+          },
+          {
+            bankAccountNo: {
+              $nin: ["", null],
+            },
+          },
+        ],
+      })
+        .sort({ createdAt: 1 })
+        .lean();
+
+      const normalizedItems = (
+        Array.isArray(bill.items)
+          ? bill.items
+          : []
+      ).map((item, index) => {
+        const qty = Number(
+          item.qty ??
+          item.Qty ??
+          item.quantity ??
+          0
+        );
+
+        const free = Number(
+          item.free ??
+          item.Free ??
+          0
+        );
+
+        const rate = Number(
+          item.rate ??
+          item.Rate ??
+          item.salesRate ??
+          0
+        );
+
+        const grossAmount = Number(
+          item.grossAmount ??
+          item.GrossAmount ??
+          item.gross ??
+          qty * rate
+        );
+
+        const schemePercent = Number(
+          item.schemePct ??
+          item.schemePercent ??
+          item.SchemePercent ??
+          0
+        );
+
+        const schemeAmount = Number(
+          item.schemeAmt ??
+          item.schemeAmount ??
+          item.SchemeAmount ??
+          0
+        );
+
+        const cashDiscountPercent = Number(
+          item.cdPct ??
+          item.cashDiscountPercent ??
+          item.CashDiscountPercent ??
+          0
+        );
+
+        const cashDiscountAmount = Number(
+          item.cdAmt ??
+          item.cashDiscountAmount ??
+          item.CashDiscountAmount ??
+          0
+        );
+
+        const taxableAmount = Number(
+          item.taxable ??
+          item.taxableAmount ??
+          item.TaxableAmount ??
+          grossAmount -
+          schemeAmount -
+          cashDiscountAmount
+        );
+
+        const gstPercent = Number(
+          item.gst ??
+          item.gstPercent ??
+          item.GSTPercent ??
+          0
+        );
+
+        const cgstPercent = Number(
+          item.cgstPercent ??
+          item.CGSTPercent ??
+          gstPercent / 2
+        );
+
+        const sgstPercent = Number(
+          item.sgstPercent ??
+          item.SGSTPercent ??
+          gstPercent / 2
+        );
+
+        const igstPercent = Number(
+          item.igstPercent ??
+          item.IGSTPercent ??
+          0
+        );
+
+        const cgstAmount = Number(
+          item.cgst ??
+          item.cgstAmount ??
+          item.CGSTAmount ??
+          0
+        );
+
+        const sgstAmount = Number(
+          item.sgst ??
+          item.sgstAmount ??
+          item.SGSTAmount ??
+          0
+        );
+
+        const igstAmount = Number(
+          item.igst ??
+          item.igstAmount ??
+          item.IGSTAmount ??
+          0
+        );
+
+        const netAmount = Number(
+          item.amount ??
+          item.netAmount ??
+          item.NetAmount ??
+          taxableAmount +
+          cgstAmount +
+          sgstAmount +
+          igstAmount
+        );
+
+        return {
+          srNo: index + 1,
+
+          productCode:
+            item.productCode ||
+            item.ProdCode ||
+            item.productId ||
+            "",
+
+          productName:
+            item.productName ||
+            item.ProdName ||
+            item.name ||
+            item.product ||
+            "",
+
+          hsn:
+            item.hsn ||
+            item.hsnCode ||
+            item.HSN ||
+            item.HSNCode ||
+            "",
+
+          batchNo:
+            item.batchNo ||
+            item.batch ||
+            item.Batch ||
+            item.selectedBatch?.batchNo ||
+            "",
+
+          mrp: Number(
+            item.mrp ??
+            item.MRP ??
+            0
+          ),
+
+          unit:
+            item.units ||
+            item.unit ||
+            item.basicUnit ||
+            item.Unit ||
+            "PCS",
+
+          pack:
+            item.pack ??
+            item.Pack ??
+            item.packing ??
+            item.Packing ??
+            item.packSize ??
+            item.PackSize ??
+            item.boxPack ??
+            item.BoxPack ??
+            item.unitQty ??
+            item.UnitQty ??
+            "",
+
+          qty,
+          free,
+          rate,
+          grossAmount,
+          taxableAmount,
+
+          schemePercent,
+          schemeAmount,
+
+          cashDiscountPercent,
+          cashDiscountAmount,
+
+          cgstPercent,
+          cgstAmount,
+
+          sgstPercent,
+          sgstAmount,
+
+          igstPercent,
+          igstAmount,
+
+          netAmount,
+        };
+      });
+
+      return res.json({
+        success: true,
+
+        bill: {
+          ...bill,
+          items: normalizedItems,
+        },
+
+        firm: {
+          firmName:
+            firm?.firmName ||
+            bill.firmName ||
+            "",
+
+          address1: firm?.address1 || "",
+          address2: firm?.address2 || "",
+          city: firm?.city || "",
+          pinCode: firm?.pinCode || "",
+          state: firm?.state || "",
+          stateCode:
+            firm?.stateCode ||
+            "",
+
+          phoneNo: firm?.phoneNo || "",
+          mobileNo: firm?.mobileNo || "",
+          email:
+            firm?.email ||
+            firm?.emailId ||
+            "",
+
+          gstNo: firm?.gstNo || "",
+          panNo:
+            firm?.panNo ||
+            "",
+        },
+
+        party: {
+          partyCode:
+            party?.accountCode ||
+            bill.PartyCode ||
+            "",
+
+          partyName:
+            party?.accountName ||
+            bill.PartyName ||
+            "",
+
+          address:
+            party?.address ||
+            "",
+
+          address2:
+            party?.add2 ||
+            party?.billToAdd1 ||
+            "",
+
+          town:
+            party?.town ||
+            "",
+
+          pinCode:
+            party?.pinCode ||
+            "",
+
+          state:
+            party?.state ||
+            "",
+
+          stateCode:
+            party?.stateCode ||
+            "",
+
+          phoneNo:
+            party?.phoneNo ||
+            "",
+
+          mobileNo:
+            party?.mobileNo ||
+            "",
+
+          email:
+            party?.emailId ||
+            "",
+
+          gstNo:
+            party?.gstNo ||
+            "",
+
+          panNo:
+            party?.panNo ||
+            "",
+        },
+
+        salesman: {
+          salesmanCode:
+            salesman?.salesmanCode ||
+            bill.SalesmanCode ||
+            "",
+
+          salesmanName:
+            salesman?.salesmanName ||
+            bill.SalesmanName ||
+            "",
+
+          mobileNo:
+            salesman?.mobileNo ||
+            salesman?.phoneNo ||
+            "",
+        },
+
+        area: {
+          areaCode:
+            area?.areaCode ||
+            bill.AreaCode ||
+            "",
+
+          areaName:
+            area?.areaName ||
+            bill.AreaName ||
+            "",
+        },
+
+        bank: {
+          bankName:
+            bank?.accountName ||
+            "",
+
+          accountName:
+            firm?.firmName ||
+            bill.firmName ||
+            "",
+
+          accountNo:
+            bank?.bankAccountNo ||
+            "",
+
+          ifscCode:
+            bank?.ifscCode ||
+            "",
+
+          branch:
+            bank?.branchName ||
+            bank?.branch ||
+            "",
+
+          accountType:
+            bank?.accountType ||
+            "",
+        },
+      });
+    } catch (error) {
+      console.error(
+        "Sales print-details error:",
+        error
+      );
+
+      return res.status(500).json({
+        success: false,
+        message:
+          error.message ||
+          "Failed to load Sales Bill print data.",
+      });
+    }
+  }
+);
+app.get(
+  "/api/sales/find-bill",
+  ensureConnection,
+  async (req, res) => {
+    try {
+      const distributorId = String(
+        req.query.distributorId || ""
+      ).trim();
+
+      const firmId = String(
+        req.query.firmId || ""
+      ).trim();
+
+      const billSeries = String(
+        req.query.billSeries || ""
+      ).trim();
+
+      const billNo = Number(
+        req.query.billNo || 0
+      );
+
+      const companyCode = String(
+        req.query.companyCode || ""
+      ).trim();
+
+      if (!distributorId || !firmId) {
+        return res.status(400).json({
+          success: false,
+          message:
+            "distributorId and firmId are required",
+        });
+      }
+
+      if (!billNo) {
+        return res.status(400).json({
+          success: false,
+          message: "Bill number is required",
+        });
+      }
+
+      const filter = {
+        distributorId,
+        firmId,
+        BillNo: billNo,
+        isActive: true,
+      };
+
+      /*
+      * Bill Series is optional because old bills
+      * can contain blank series.
+      */
+      if (billSeries) {
+        filter.$and = [
+          {
+            $or: [
+              { BillSeries: billSeries },
+              { billSeries },
+              { Series: billSeries },
+            ],
+          },
+        ];
+      } else {
+        filter.$and = [
+          {
+            $or: [
+              { BillSeries: "" },
+              { BillSeries: null },
+              {
+                BillSeries: {
+                  $exists: false,
+                },
+              },
+
+              { billSeries: "" },
+              { billSeries: null },
+              {
+                billSeries: {
+                  $exists: false,
+                },
+              },
+
+              { Series: "" },
+              { Series: null },
+              {
+                Series: {
+                  $exists: false,
+                },
+              },
+            ],
+          },
+        ];
+      }
+
+      /*
+      * Company is checked when selected.
+      */
+      if (companyCode) {
+        filter.$and.push({
+          $or: [
+            { CompanyCode: companyCode },
+            { companyCode },
+            { Company: companyCode },
+            { company: companyCode },
+          ],
+        });
+      }
+
+      const bill =
+        await SalesHeader.findOne(filter)
+          .lean();
+
+      if (!bill) {
+        return res.status(404).json({
+          success: false,
+          message:
+            `Sales bill not found for ` +
+            `${companyCode || "selected company"}, ` +
+            `${billSeries || "blank series"}-${billNo}`,
+        });
+      }
+
+      res.json({
+        success: true,
+        bill,
+      });
+
+    } catch (error) {
+      console.error(
+        "Sales bill lookup error:",
+        error
+      );
+
+      res.status(500).json({
+        success: false,
+        message:
+          "Sales bill load failed",
+        error: error.message,
+      });
+    }
+  }
+);
+/* =========================================================
+  ALL PARTY WISE SALES REPORT - NEW API
+  ========================================================= */
+
+app.get(
+  "/api/reports/all-party-sales",
+  ensureConnection,
+  securityRouter.authorizeRequest("REPORTS", "PARTY_WISE_SALES", "view"),
+  async (req, res) => {
+    try {
+      const distributorId = String(
+        req.query.distributorId || ""
+      ).trim();
+
+      const firmId = String(
+        req.query.firmId || ""
+      ).trim();
+
+      const companyCode = String(
+        req.query.companyCode || ""
+      ).trim();
+
+      const reportLevel = String(
+        req.query.reportLevel ||
+        "salesSummary"
+      ).trim();
+
+      const productWise =
+        String(
+          req.query.productWise ||
+          "no"
+        ).toLowerCase() === "yes";
+
+      const withCreditNote =
+        String(
+          req.query.withCreditNote ||
+          "no"
+        ).toLowerCase() === "yes";
+
+      const fromDate = String(
+        req.query.fromDate || ""
+      ).trim();
+
+      const toDate = String(
+        req.query.toDate || ""
+      ).trim();
+
+      const orderBy = String(
+        req.query.orderBy ||
+        "partyName"
+      ).trim();
+
+      const billWiseSalesman =
+        String(
+          req.query.billWiseSalesman ||
+          "no"
+        ).toLowerCase() === "yes";
+
+      const freeValueOn = String(
+        req.query.freeValueOn ||
+        "PRate"
+      ).trim();
+
+      /*
+      * Convert comma-separated query parameters
+      * into cleaned arrays.
+      */
+      const parseCsv = (value) =>
+        String(value || "")
+          .split(",")
+          .map((item) =>
+            item.trim()
+          )
+          .filter(Boolean);
+
+      const selectedAreaCodes =
+        parseCsv(
+          req.query.selectedAreaCodes
+        );
+
+      const selectedSalesmanCodes =
+        parseCsv(
+          req.query
+            .selectedSalesmanCodes
+        );
+
+      /*
+      * Basic validation.
+      */
+      if (
+        !distributorId ||
+        !firmId
+      ) {
+        return res
+          .status(400)
+          .json({
+            success: false,
+            message:
+              "distributorId and firmId are required.",
+          });
+      }
+
+      if (
+        !fromDate ||
+        !toDate
+      ) {
+        return res
+          .status(400)
+          .json({
+            success: false,
+            message:
+              "From Date and To Date are required.",
+          });
+      }
+
+      if (fromDate > toDate) {
+        return res
+          .status(400)
+          .json({
+            success: false,
+            message:
+              "From Date cannot be greater than To Date.",
+          });
+      }
+
+      /*
+      * Prepare sales bill filter.
+      */
+      const match = {
+        distributorId,
+        firmId,
+        isActive: true,
+
+        IsBillCancelled: {
+          $ne: true,
+        },
+
+        BillStatus: {
+          $ne: "CANCELLED",
+        },
+
+        BillDate: {
+          $gte: fromDate,
+          $lte: toDate,
+        },
+      };
+
+      // Company filter - can be empty for "All Companies"
+      if (companyCode) {
+        match.CompanyCode = companyCode;
+      }
+
+      // Area filter
+      if (selectedAreaCodes.length > 0) {
+        match.AreaCode = {
+          $in: selectedAreaCodes,
+        };
+      }
+
+      // Salesman filter
+      if (selectedSalesmanCodes.length > 0) {
+        match.SalesmanCode = {
+          $in: selectedSalesmanCodes,
+        };
+      }
+
+      /*
+      * Load all matching sales bills.
+      */
+      const bills = await SalesHeader.find(match)
+        .sort({
+          BillDate: 1,
+          BillSeries: 1,
+          BillNo: 1,
+        })
+        .lean();
+
+      /*
+      * Return empty report cleanly.
+      */
+      if (bills.length === 0) {
+        return res.json({
+          success: true,
+          count: 0,
+          reportLevel,
+          productWise,
+          rows: [],
+          columns: getAllPartyColumns(productWise, reportLevel),
+        });
+      }
+
+      /*
+      * Safely convert to number.
+      */
+      const toNumber = (...values) => {
+        for (const value of values) {
+          if (value !== undefined && value !== null && value !== "") {
+            const number = Number(value);
+            if (!Number.isNaN(number)) {
+              return number;
+            }
+          }
+        }
+        return 0;
+      };
+
+      /*
+      * Read the first available property from an invoice item.
+      */
+      const getItemValue = (item, ...keys) => {
+        for (const key of keys) {
+          if (item?.[key] !== undefined && item?.[key] !== null) {
+            return item[key];
+          }
+        }
+        return "";
+      };
+
+      /*
+      * Get product details from item.
+      */
+      const getProductCode = (item) => {
+        return String(
+          getItemValue(
+            item,
+            "productCode",
+            "ProductCode",
+            "prodCode",
+            "ProdCode",
+            "productId",
+            "ProductId",
+            "code"
+          ) || ""
+        ).trim();
+      };
+
+      const getProductName = (item) => {
+        return String(
+          getItemValue(
+            item,
+            "productName",
+            "ProductName",
+            "prodName",
+            "ProdName",
+            "name"
+          ) || ""
+        ).trim();
+      };
+
+      const getBatch = (item) => {
+        return String(
+          getItemValue(
+            item,
+            "batchNo",
+            "BatchNo",
+            "batch",
+            "Batch"
+          ) || ""
+        ).trim();
+      };
+
+      /*
+      * Build report rows.
+      */
+      const detailRows = [];
+
+      bills.forEach((bill) => {
+        const items = Array.isArray(bill.items) ? bill.items : [];
+        const reportItems = items.length > 0 ? items : [{}];
+
+        reportItems.forEach((item, itemIndex) => {
+          const productCode = getProductCode(item);
+          const productName = getProductName(item);
+          const batch = getBatch(item);
+
+          const qty = toNumber(
+            getItemValue(item, "qty", "Qty", "quantity", "Quantity", "saleQty", "SaleQty")
+          );
+
+          const freeQty = toNumber(
+            getItemValue(item, "freeQty", "FreeQty", "freeQuantity")
+          );
+
+          const salesRate = toNumber(
+            getItemValue(item, "salesRate", "SalesRate", "saleRate", "SaleRate", "sRate", "SRate", "rate", "Rate")
+          );
+
+          const grossAmount = toNumber(
+            getItemValue(item, "grossAmount", "GrossAmount", "grossAmt", "GrossAmt"),
+            qty * salesRate
+          );
+
+          const discountAmount = toNumber(
+            getItemValue(item, "discount", "Discount", "discountAmount", "DiscountAmount")
+          );
+
+          const cashDiscountAmount = toNumber(
+            getItemValue(item, "cashDiscountAmount", "CashDiscountAmount", "cashDiscountAmt", "cdAmount", "cdAmt", "CDAmount")
+          );
+
+          const vatAmount = toNumber(
+            getItemValue(item, "vatAmount", "VatAmount", "gstAmount", "GSTAmount", "gst")
+          );
+
+          const lessOther = toNumber(
+            getItemValue(item, "lessOther", "LessOther", "otherDiscount", "OtherDiscount")
+          );
+
+          const addOther = toNumber(
+            getItemValue(item, "addOther", "AddOther", "otherAdd", "OtherAdd")
+          );
+
+          const btmAmount = toNumber(
+            getItemValue(item, "btmAmount", "BtmAmount", "billingAmount", "BillingAmount")
+          );
+
+          const weight = toNumber(
+            getItemValue(item, "weight", "Weight")
+          );
+
+          const couponAmount = toNumber(
+            getItemValue(item, "couponAmount", "CouponAmount")
+          );
+
+          const displayAmount = toNumber(
+            getItemValue(item, "displayAmount", "DisplayAmount")
+          );
+
+          const starAmount = toNumber(
+            getItemValue(item, "starAmount", "StarAmount", "starAmt")
+          );
+
+          const surChargeAmount = toNumber(
+            getItemValue(item, "surChargeAmount", "SurChargeAmount", "surcharge")
+          );
+
+          const retAmount = toNumber(
+            getItemValue(item, "retAmount", "RetAmount", "retailAmount")
+          );
+
+          const retVatAmount = toNumber(
+            getItemValue(item, "retVatAmount", "RetVatAmount")
+          );
+
+          const addLessAmount = toNumber(
+            getItemValue(item, "addLessAmount", "AddLessAmount", "addLess")
+          );
+
+          const netAmount = toNumber(
+            getItemValue(item, "netAmount", "NetAmount", "netAmt", "amount", "Amount")
+          );
+
+          // Get Salesman details
+          const billSalesmanName = String(
+            bill.SalesmanName || bill.salesmanName || ""
+          ).trim();
+
+          const masterSalesmanName = String(
+            bill.MasterSalesmanName || bill.masterSalesmanName || bill.SalesmanName || bill.salesmanName || ""
+          ).trim();
+
+          detailRows.push({
+            rowId: `${String(bill._id)}-${itemIndex}`,
+            srNo: detailRows.length + 1,
+            trn: "SALES",
+            partyCode: bill.PartyCode || "",
+            partyName: bill.PartyName || "",
+            grossAmount,
+            discountAmount,
+            cashDiscountAmount,
+            vatAmount,
+            lessOther,
+            addOther,
+            btmAmount,
+            weight,
+            couponAmount,
+            displayAmount,
+            starAmount,
+            surChargeAmount,
+            retAmount,
+            retVatAmount,
+            addLessAmount,
+            netAmount,
+            totalLines: 1,
+            areaName: bill.AreaName || "",
+            masterSalesmanName,
+            billSalesmanName,
+            // Additional fields for product-wise
+            productCode,
+            productName,
+            batch,
+            qty,
+            freeQty,
+            salesRate,
+          });
+        });
+      });
+
+      let rows = detailRows;
+
+      /*
+      * Sales Summary is grouped by party.
+      */
+      if (reportLevel === "salesSummary") {
+        const groupedRows = new Map();
+
+        detailRows.forEach((row) => {
+          const groupKey = productWise
+            ? `${row.partyCode}__${row.productCode}`
+            : row.partyCode || row.partyName;
+
+          if (!groupedRows.has(groupKey)) {
+            groupedRows.set(groupKey, {
+              rowId: groupKey,
+              srNo: 0,
+              trn: "SALES",
+              partyCode: row.partyCode,
+              partyName: row.partyName,
+              grossAmount: 0,
+              discountAmount: 0,
+              cashDiscountAmount: 0,
+              vatAmount: 0,
+              lessOther: 0,
+              addOther: 0,
+              btmAmount: 0,
+              weight: 0,
+              couponAmount: 0,
+              displayAmount: 0,
+              starAmount: 0,
+              surChargeAmount: 0,
+              retAmount: 0,
+              retVatAmount: 0,
+              addLessAmount: 0,
+              netAmount: 0,
+              totalLines: 0,
+              areaName: row.areaName,
+              masterSalesmanName: row.masterSalesmanName,
+              billSalesmanName: row.billSalesmanName,
+              ...(productWise ? {
+                productCode: row.productCode,
+                productName: row.productName,
+                qty: 0,
+                freeQty: 0,
+                salesRate: 0,
+                batch: "",
+              } : {}),
+            });
+          }
+
+          const group = groupedRows.get(groupKey);
+
+          group.grossAmount += toNumber(row.grossAmount);
+          group.discountAmount += toNumber(row.discountAmount);
+          group.cashDiscountAmount += toNumber(row.cashDiscountAmount);
+          group.vatAmount += toNumber(row.vatAmount);
+          group.lessOther += toNumber(row.lessOther);
+          group.addOther += toNumber(row.addOther);
+          group.btmAmount += toNumber(row.btmAmount);
+          group.weight += toNumber(row.weight);
+          group.couponAmount += toNumber(row.couponAmount);
+          group.displayAmount += toNumber(row.displayAmount);
+          group.starAmount += toNumber(row.starAmount);
+          group.surChargeAmount += toNumber(row.surChargeAmount);
+          group.retAmount += toNumber(row.retAmount);
+          group.retVatAmount += toNumber(row.retVatAmount);
+          group.addLessAmount += toNumber(row.addLessAmount);
+          group.netAmount += toNumber(row.netAmount);
+          group.totalLines += toNumber(row.totalLines || 0);
+
+          if (productWise) {
+            group.qty += toNumber(row.qty);
+            group.freeQty += toNumber(row.freeQty);
+            group.salesRate = toNumber(row.salesRate);
+          }
+        });
+
+        rows = Array.from(groupedRows.values());
+      }
+
+      /*
+      * Sort final report rows.
+      */
+      const sortText = (value) =>
+        String(value || "").trim().toLowerCase();
+
+      rows.sort((first, second) => {
+        if (orderBy === "partyCode") {
+          return sortText(first.partyCode).localeCompare(sortText(second.partyCode));
+        }
+        if (orderBy === "trn") {
+          return sortText(first.trn).localeCompare(sortText(second.trn));
+        }
+        if (orderBy === "areaName") {
+          return sortText(first.areaName).localeCompare(sortText(second.areaName));
+        }
+        if (orderBy === "salesmanName") {
+          return sortText(first.masterSalesmanName || first.billSalesmanName)
+            .localeCompare(sortText(second.masterSalesmanName || second.billSalesmanName));
+        }
+        if (orderBy === "netAmountDesc") {
+          return (Number(second.netAmount || 0) - Number(first.netAmount || 0));
+        }
+        if (orderBy === "productName") {
+          return sortText(first.productName).localeCompare(sortText(second.productName));
+        }
+        if (orderBy === "billDate") {
+          return sortText(first.billDate).localeCompare(sortText(second.billDate));
+        }
+
+        const partyResult = sortText(first.partyName).localeCompare(sortText(second.partyName));
+        if (partyResult !== 0) {
+          return partyResult;
+        }
+        return 0;
+      });
+
+      rows = rows.map((row, index) => ({
+        ...row,
+        srNo: index + 1,
+      }));
+
+      function getAllPartyColumns(showProductWise, reportLevelValue) {
+        const columns = [
+          { key: "srNo", label: "SrNo", type: "number" },
+          { key: "trn", label: "Trn", type: "text" },
+          { key: "partyCode", label: "Party Code", type: "text" },
+          { key: "partyName", label: "Party Name", type: "text" },
+        ];
+
+        // Insert product columns if product wise or sales details
+        if (showProductWise || reportLevelValue === "salesDetails") {
+          columns.push({ key: "productCode", label: "Product Code", type: "text" });
+          columns.push({ key: "productName", label: "Product Name", type: "text" });
+          columns.push({ key: "qty", label: "Qty", type: "number" });
+          columns.push({ key: "freeQty", label: "FreeQty", type: "number" });
+          columns.push({ key: "salesRate", label: "Rate", type: "number" });
+          columns.push({ key: "batch", label: "Batch", type: "text" });
+        }
+
+        // Financial columns
+        columns.push(
+          { key: "grossAmount", label: "GrossAmt", type: "number" },
+          { key: "discountAmount", label: "Discount", type: "number" },
+          { key: "cashDiscountAmount", label: "CDAmt", type: "number" },
+          { key: "vatAmount", label: "VatAmt", type: "number" },
+          { key: "lessOther", label: "LessOther", type: "number" },
+          { key: "addOther", label: "AddOther", type: "number" },
+          { key: "btmAmount", label: "BtmAmt", type: "number" },
+          { key: "weight", label: "Weight", type: "number" },
+          { key: "couponAmount", label: "CouponAmt", type: "number" },
+          { key: "displayAmount", label: "DisplayAmt", type: "number" },
+          { key: "starAmount", label: "StarAmt", type: "number" },
+          { key: "surChargeAmount", label: "SurChargeAmt", type: "number" },
+          { key: "retAmount", label: "RetAmt", type: "number" },
+          { key: "retVatAmount", label: "RetVatAmt", type: "number" },
+          { key: "addLessAmount", label: "AddLessAmt", type: "number" },
+          { key: "netAmount", label: "NetAmt", type: "number" },
+          { key: "totalLines", label: "TotalLines", type: "number" },
+          { key: "areaName", label: "AreaName", type: "text" },
+          { key: "masterSalesmanName", label: "Master Salesman Name", type: "text" },
+          { key: "billSalesmanName", label: "Bill Salesman Name", type: "text" }
+        );
+
+        return columns;
+      }
+
+      return res.json({
+        success: true,
+        count: rows.length,
+        reportLevel,
+        productWise,
+        rows,
+        columns: getAllPartyColumns(productWise, reportLevel),
+      });
+    } catch (error) {
+      console.error("All party sales report error:", error);
+
+      return res.status(500).json({
+        success: false,
+        message: "Failed to generate all party sales report.",
+        error: error.message,
+      });
+    }
+  }
+);
+app.get("/api/connection-status", (req, res) => {
+  const ready = mongoose.connection.readyState === 1;
+  res.status(ready ? 200 : 503).json({ success: ready, status: ready ? "ok" : "unavailable" });
+});
+
+// =========================================================
+// PRODUCT SALES REPORT CRITERIA - NEW ENDPOINT
+// GET /api/reports/product-sales/criteria
+// =========================================================
+app.get(
+  "/api/reports/product-sales/criteria",
+  ensureConnection,
+  securityRouter.authorizeRequest("REPORTS", "PRODUCT_WISE_SALES", "view"),
+  async (req, res) => {
+    try {
+      const distributorId = String(
+        req.query.distributorId || ""
+      ).trim();
+
+      const firmId = String(
+        req.query.firmId || ""
+      ).trim();
+
+      const companyCode = String(
+        req.query.companyCode || ""
+      ).trim();
+
+      if (!distributorId || !firmId) {
+        return res.status(400).json({
+          success: false,
+          message: "distributorId and firmId are required.",
+        });
+      }
+
+      const baseFilter = {
+        distributorId,
+        firmId,
+        isActive: true,
+      };
+
+      // Get companies
+      const companies = await Company.find(baseFilter)
+        .select({
+          _id: 1,
+          companyCode: 1,
+          companyName: 1,
+        })
+        .sort({
+          companyName: 1,
+          companyCode: 1,
+        })
+        .lean();
+
+      // Get products - filter by company if provided
+      const productFilter = {
+        ...baseFilter,
+      };
+
+      if (companyCode) {
+        productFilter.$or = [
+          { companyCode: companyCode },
+          { companyId: companyCode },
+        ];
+      }
+
+      const products = await Product.find(productFilter)
+        .select({
+          _id: 1,
+          productCode: 1,
+          productName: 1,
+          group: 1,
+          category: 1,
+          brand: 1,
+        })
+        .sort({
+          productName: 1,
+          productCode: 1,
+        })
+        .lean();
+
+      return res.json({
+        success: true,
+        companies,
+        products,
+      });
+    } catch (error) {
+      console.error("Product sales criteria error:", error);
+      return res.status(500).json({
+        success: false,
+        message: "Failed to load product sales criteria.",
+        error: error.message,
+      });
+    }
+  }
+);
+// =========================================================
+// PRODUCT WISE SALES REPORT - NEW API ENDPOINT
+// GET /api/reports/product-wise-sales
+// =========================================================
+
+app.get(
+  "/api/reports/product-wise-sales",
+  ensureConnection,
+  securityRouter.authorizeRequest("REPORTS", "PRODUCT_WISE_SALES", "view"),
+  async (req, res) => {
+    try {
+      const distributorId = String(
+        req.query.distributorId || ""
+      ).trim();
+
+      const firmId = String(
+        req.query.firmId || ""
+      ).trim();
+
+      const companyCode = String(
+        req.query.companyCode || ""
+      ).trim();
+
+      const fromDate = String(
+        req.query.fromDate || ""
+      ).trim();
+
+      const toDate = String(
+        req.query.toDate || ""
+      ).trim();
+
+      const orderBy = String(
+        req.query.orderBy || "productName"
+      ).trim();
+
+      const showZeroSales = String(
+        req.query.showZeroSales || "no"
+      ).toLowerCase();
+
+      const withCreditNote = String(
+        req.query.withCreditNote || "no"
+      ).toLowerCase();
+
+      // Parse product codes from comma-separated string
+      const productCodes = String(req.query.productCodes || "")
+        .split(",")
+        .map((code) => code.trim())
+        .filter(Boolean);
+      const selectedProductCodes = new Set(productCodes);
+
+      // Parse area codes
+      const selectedAreaCodes = String(req.query.selectedAreaCodes || "")
+        .split(",")
+        .map((code) => code.trim())
+        .filter(Boolean);
+
+      // Parse salesman codes
+      const selectedSalesmanCodes = String(req.query.selectedSalesmanCodes || "")
+        .split(",")
+        .map((code) => code.trim())
+        .filter(Boolean);
+
+      if (!distributorId || !firmId) {
+        return res.status(400).json({
+          success: false,
+          message: "distributorId and firmId are required.",
+        });
+      }
+
+      if (!fromDate || !toDate) {
+        return res.status(400).json({
+          success: false,
+          message: "From Date and To Date are required.",
+        });
+      }
+
+      if (fromDate > toDate) {
+        return res.status(400).json({
+          success: false,
+          message: "From Date cannot be greater than To Date.",
+        });
+      }
+
+      // Build the filter for sales bills
+      const match = {
+        distributorId,
+        firmId,
+        isActive: true,
+        IsBillCancelled: { $ne: true },
+        BillStatus: { $ne: "CANCELLED" },
+        BillDate: { $gte: fromDate, $lte: toDate },
+      };
+
+      if (companyCode) {
+        match.CompanyCode = companyCode;
+      }
+
+      if (selectedAreaCodes.length > 0) {
+        match.AreaCode = { $in: selectedAreaCodes };
+      }
+
+      if (selectedSalesmanCodes.length > 0) {
+        match.SalesmanCode = { $in: selectedSalesmanCodes };
+      }
+
+      // Load all matching sales bills
+      const bills = await SalesHeader.find(match)
+        .select({ _id: 1, BillDate: 1, BillSeries: 1, BillNo: 1, PartyCode: 1, PartyName: 1, CompanyName: 1, Narration: 1, items: 1 })
+        .sort({ BillDate: 1, BillSeries: 1, BillNo: 1 })
+        .lean();
+
+      // If no bills found, return empty result
+      if (bills.length === 0) {
+        return res.json({
+          success: true,
+          count: 0,
+          data: [],
+        });
+      }
+
+      const toNumber = (...values) => {
+        for (const value of values) {
+          if (value !== undefined && value !== null && value !== "") {
+            const number = Number(value);
+            if (!Number.isNaN(number)) {
+              return number;
+            }
+          }
+        }
+        return 0;
+      };
+
+      const getItemValue = (item, ...keys) => {
+        for (const key of keys) {
+          if (item?.[key] !== undefined && item?.[key] !== null) {
+            return item[key];
+          }
+        }
+        return "";
+      };
+
+      // Process each bill and extract product-wise data
+      const resultData = [];
+      let srNo = 0;
+
+      for (const bill of bills) {
+        const items = Array.isArray(bill.items) ? bill.items : [];
+
+        for (const item of items) {
+          const productCode = String(
+            getItemValue(
+              item,
+              "productCode",
+              "ProductCode",
+              "prodCode",
+              "ProdCode",
+              "productId",
+              "ProductId",
+              "code"
+            ) || ""
+          ).trim();
+
+          const productName = String(
+            getItemValue(
+              item,
+              "productName",
+              "ProductName",
+              "prodName",
+              "ProdName",
+              "name"
+            ) || ""
+          ).trim();
+
+          // Skip if product codes are specified and this product is not in the list
+          if (selectedProductCodes.size > 0 && !selectedProductCodes.has(productCode)) {
+            continue;
+          }
+
+          const qty = toNumber(
+            getItemValue(item, "qty", "Qty", "quantity", "Quantity")
+          );
+
+          const freeQty = toNumber(
+            getItemValue(item, "free", "Free", "freeQty", "FreeQty")
+          );
+
+          const rate = toNumber(
+            getItemValue(item, "rate", "Rate", "salesRate", "SalesRate", "sRate", "SRate")
+          );
+
+          const mrp = toNumber(
+            getItemValue(item, "mrp", "MRP")
+          );
+
+          const grossAmount = toNumber(
+            getItemValue(item, "grossAmount", "GrossAmount", "grossAmt", "GrossAmt", "AMT"),
+            qty * rate
+          );
+
+          const weight = toNumber(
+            getItemValue(item, "weight", "Weight")
+          );
+
+          const tprAmount = toNumber(
+            getItemValue(item, "tprAmount", "TPRAmount", "tprAmt", "TPRAmt")
+          );
+
+          const discount = toNumber(
+            getItemValue(item, "discount", "Discount", "discountAmount", "DiscountAmount")
+          );
+
+          const cashDiscountAmount = toNumber(
+            getItemValue(item, "cashDiscountAmount", "CashDiscountAmount", "cdAmt", "CDAMT")
+          );
+
+          const cdPercent = toNumber(
+            getItemValue(item, "cdPercent", "CDPercent", "cashDiscountPercent")
+          );
+
+          srNo += 1;
+
+          resultData.push({
+            _id: `${bill._id}-${srNo}`,
+            SrNo: srNo,
+            BillDate: bill.BillDate || "",
+            BillSeries: bill.BillSeries || "",
+            BillNo: bill.BillNo ?? "",
+            PartyCode: bill.PartyCode || "",
+            PartyName: bill.PartyName || "",
+            productCode,
+            productName,
+            Rate: rate,
+            MRP: mrp,
+            Qty: qty,
+            FreeQty: freeQty,
+            AMT: grossAmount,
+            Weight: weight,
+            TPRAMT: tprAmount,
+            Disc: discount,
+            CDAMT: cashDiscountAmount,
+            CDPercent: cdPercent,
+            BranchName: bill.CompanyName || "",
+            Address: bill.Narration || "",
+          });
+        }
+      }
+
+      // If showing zero sales is "no", filter out products with zero qty
+      let filteredData = resultData;
+      if (showZeroSales === "no") {
+        filteredData = resultData.filter((row) => Number(row.Qty || 0) > 0);
+      }
+
+      // Sort the data
+      if (orderBy === "productCode") {
+        filteredData.sort((a, b) => String(a.productCode).localeCompare(String(b.productCode)));
+      } else if (orderBy === "grossAmount") {
+        filteredData.sort((a, b) => Number(b.AMT || 0) - Number(a.AMT || 0));
+      } else if (orderBy === "netAmount") {
+        // Use AMT as net amount for sorting
+        filteredData.sort((a, b) => Number(b.AMT || 0) - Number(a.AMT || 0));
+      } else {
+        // Default: sort by product name
+        filteredData.sort((a, b) => String(a.productName).localeCompare(String(b.productName)));
+      }
+
+      // Re-assign SrNo after sorting
+      filteredData.forEach((row, index) => {
+        row.SrNo = index + 1;
+      });
+
+      return res.json({
+        success: true,
+        count: filteredData.length,
+        data: filteredData,
+      });
+    } catch (error) {
+      console.error("Product wise sales report error:", error);
+      return res.status(500).json({
+        success: false,
+        message: "Failed to generate product wise sales report.",
+        error: error.message,
+      });
+    }
+  }
+);
+
+// =========================================================
+// PRODUCT SALES REPORT CRITERIA
+// GET /api/reports/product-sales/criteria
+// =========================================================
+
+app.get(
+  "/api/reports/product-sales/criteria",
+  ensureConnection,
+  async (req, res) => {
+    try {
+      const distributorId = String(
+        req.query.distributorId || ""
+      ).trim();
+
+      const firmId = String(
+        req.query.firmId || ""
+      ).trim();
+
+      const companyCode = String(
+        req.query.companyCode || ""
+      ).trim();
+
+      if (!distributorId || !firmId) {
+        return res.status(400).json({
+          success: false,
+          message: "distributorId and firmId are required.",
+        });
+      }
+
+      const baseFilter = {
+        distributorId,
+        firmId,
+        isActive: true,
+      };
+
+      // Get companies
+      const companies = await Company.find(baseFilter)
+        .select({
+          _id: 1,
+          companyCode: 1,
+          companyName: 1,
+        })
+        .sort({
+          companyName: 1,
+          companyCode: 1,
+        })
+        .lean();
+
+      // Get products - filter by company if provided
+      const productFilter = {
+        ...baseFilter,
+      };
+
+      if (companyCode) {
+        productFilter.$or = [
+          { companyCode: companyCode },
+          { companyId: companyCode },
+        ];
+      }
+
+      const products = await Product.find(productFilter)
+        .select({
+          _id: 1,
+          productCode: 1,
+          productName: 1,
+          group: 1,
+          category: 1,
+          brand: 1,
+        })
+        .sort({
+          productName: 1,
+          productCode: 1,
+        })
+        .lean();
+
+      return res.json({
+        success: true,
+        companies,
+        products,
+      });
+    } catch (error) {
+      console.error("Product sales criteria error:", error);
+      return res.status(500).json({
+        success: false,
+        message: "Failed to load product sales criteria.",
+        error: error.message,
+      });
+    }
+  }
+);
+// =========================================================
+// ALL PRODUCT WISE SALES REPORT
+// GET /api/reports/all-product-wise-sales
+// =========================================================
+
+app.get(
+  "/api/reports/all-product-wise-sales",
+  ensureConnection,
+  securityRouter.authorizeRequest("REPORTS", "PRODUCT_WISE_SALES", "view"),
+  async (req, res) => {
+    try {
+      const distributorId = String(
+        req.query.distributorId || ""
+      ).trim();
+
+      const firmId = String(
+        req.query.firmId || ""
+      ).trim();
+
+      const companyCode = String(
+        req.query.companyCode || ""
+      ).trim();
+
+      const fromDate = String(
+        req.query.fromDate || ""
+      ).trim();
+
+      const toDate = String(
+        req.query.toDate || ""
+      ).trim();
+
+      const orderBy = String(
+        req.query.orderBy || "productName"
+      ).trim();
+
+      const showZeroSales = String(
+        req.query.showZeroSales || "no"
+      ).toLowerCase();
+
+      const reportLevel = String(
+        req.query.reportLevel || "units"
+      ).trim();
+
+      const valuationBy = String(
+        req.query.valuationBy || "basicRate"
+      ).trim();
+
+      const salesType = String(
+        req.query.salesType || "onlySales"
+      ).trim();
+
+      const productGroup = String(
+        req.query.productGroup || ""
+      ).trim();
+
+      const category = String(
+        req.query.category || ""
+      ).trim();
+
+      const brand = String(
+        req.query.brand || ""
+      ).trim();
+
+      const selectedAreaCodes = String(req.query.selectedAreaCodes || "")
+        .split(",")
+        .map((code) => code.trim())
+        .filter(Boolean);
+
+      const selectedSalesmanCodes = String(req.query.selectedSalesmanCodes || "")
+        .split(",")
+        .map((code) => code.trim())
+        .filter(Boolean);
+
+      const withCreditNote = String(
+        req.query.withCreditNote || "no"
+      ).toLowerCase();
+
+      const billWiseSalesman = String(
+        req.query.billWiseSalesman || "no"
+      ).toLowerCase();
+
+      if (!distributorId || !firmId) {
+        return res.status(400).json({
+          success: false,
+          message: "distributorId and firmId are required.",
+        });
+      }
+
+      if (!fromDate || !toDate) {
+        return res.status(400).json({
+          success: false,
+          message: "From Date and To Date are required.",
+        });
+      }
+
+      if (fromDate > toDate) {
+        return res.status(400).json({
+          success: false,
+          message: "From Date cannot be greater than To Date.",
+        });
+      }
+
+      // Build the filter for sales bills
+      const match = {
+        distributorId,
+        firmId,
+        isActive: true,
+        IsBillCancelled: { $ne: true },
+        BillStatus: { $ne: "CANCELLED" },
+        BillDate: { $gte: fromDate, $lte: toDate },
+      };
+
+      if (companyCode) {
+        match.CompanyCode = companyCode;
+      }
+
+      if (selectedAreaCodes.length > 0) {
+        match.AreaCode = { $in: selectedAreaCodes };
+      }
+
+      if (selectedSalesmanCodes.length > 0) {
+        match.SalesmanCode = { $in: selectedSalesmanCodes };
+      }
+
+      // Load all matching sales bills
+      const bills = await SalesHeader.find(match)
+        .sort({ BillDate: 1, BillSeries: 1, BillNo: 1 })
+        .lean();
+
+      if (bills.length === 0) {
+        return res.json({
+          success: true,
+          count: 0,
+          data: [],
+        });
+      }
+
+      const toNumber = (...values) => {
+        for (const value of values) {
+          if (value !== undefined && value !== null && value !== "") {
+            const number = Number(value);
+            if (!Number.isNaN(number)) {
+              return number;
+            }
+          }
+        }
+        return 0;
+      };
+
+      const getItemValue = (item, ...keys) => {
+        for (const key of keys) {
+          if (item?.[key] !== undefined && item?.[key] !== null) {
+            return item[key];
+          }
+        }
+        return "";
+      };
+
+      // Collect all product codes from bills
+      const allProductCodes = new Set();
+      bills.forEach((bill) => {
+        const items = Array.isArray(bill.items) ? bill.items : [];
+        items.forEach((item) => {
+          const productCode = String(
+            getItemValue(
+              item,
+              "productCode",
+              "ProductCode",
+              "prodCode",
+              "ProdCode",
+              "productId",
+              "ProductId",
+              "code"
+            ) || ""
+          ).trim();
+          if (productCode) allProductCodes.add(productCode);
+        });
+      });
+
+      // Load product masters
+      const productMasters = await Product.find({
+        distributorId,
+        firmId,
+        productCode: { $in: Array.from(allProductCodes) },
+        isActive: { $ne: false },
+      }).lean();
+
+      const productMap = {};
+      productMasters.forEach((product) => {
+        const code = String(product.productCode || "").trim();
+        if (code) {
+          productMap[code] = product;
+        }
+      });
+
+      // Process each bill and extract product-wise data
+      const resultData = [];
+      let srNo = 0;
+
+      for (const bill of bills) {
+        const items = Array.isArray(bill.items) ? bill.items : [];
+        const billSalesmanName = String(
+          bill.SalesmanName || bill.salesmanName || ""
+        ).trim();
+
+        for (const item of items) {
+          const productCode = String(
+            getItemValue(
+              item,
+              "productCode",
+              "ProductCode",
+              "prodCode",
+              "ProdCode",
+              "productId",
+              "ProductId",
+              "code"
+            ) || ""
+          ).trim();
+
+          const productMaster = productMap[productCode] || {};
+
+          // Apply filters
+          if (productGroup) {
+            const group = String(
+              productMaster.group || productMaster.Group || ""
+            ).trim().toLowerCase();
+            if (group !== productGroup.toLowerCase()) continue;
+          }
+
+          if (category) {
+            const cat = String(
+              productMaster.category || productMaster.Category || ""
+            ).trim().toLowerCase();
+            if (cat !== category.toLowerCase()) continue;
+          }
+
+          if (brand) {
+            const br = String(
+              productMaster.brand || productMaster.Brand || ""
+            ).trim().toLowerCase();
+            if (br !== brand.toLowerCase()) continue;
+          }
+
+          const productName = String(
+            productMaster.productName ||
+            productMaster.ProdName ||
+            getItemValue(item, "productName", "ProductName", "prodName", "ProdName", "name") ||
+            ""
+          ).trim();
+
+          const batch = String(
+            getItemValue(
+              item,
+              "batchNo",
+              "BatchNo",
+              "batch",
+              "Batch",
+              "selectedBatch"
+            ) || ""
+          ).trim();
+
+          const mrp = toNumber(
+            getItemValue(item, "mrp", "MRP", "productMrp", "ProductMRP"),
+            item.selectedBatch?.mrp,
+            item.selectedBatch?.MRP
+          );
+
+          const rate = toNumber(
+            getItemValue(
+              item,
+              "rate",
+              "Rate",
+              "salesRate",
+              "SalesRate",
+              "sRate",
+              "SRate"
+            ),
+            item.selectedBatch?.salesRate,
+            item.selectedBatch?.SRate
+          );
+
+          const qty = toNumber(
+            getItemValue(item, "qty", "Qty", "quantity", "Quantity")
+          );
+
+          const freeQty = toNumber(
+            getItemValue(item, "free", "Free", "freeQty", "FreeQty")
+          );
+
+          const grossAmount = toNumber(
+            getItemValue(item, "grossAmount", "GrossAmount", "grossAmt", "GrossAmt", "AMT"),
+            qty * rate
+          );
+
+          const discount = toNumber(
+            getItemValue(item, "discount", "Discount", "discountAmount", "DiscountAmount", "Disc")
+          );
+
+          const otherDiscount = toNumber(
+            getItemValue(
+              item,
+              "otherDiscount",
+              "OtherDiscount",
+              "lessOther",
+              "LessOther",
+              "avDisc1",
+              "AVDisc1"
+            )
+          );
+
+          const valuation = toNumber(
+            getItemValue(
+              item,
+              "valuation",
+              "Valuation",
+              "taxableValue",
+              "TaxableValue",
+              "taxable"
+            )
+          );
+
+          const weight = toNumber(
+            getItemValue(item, "weight", "Weight", "kg", "Kg")
+          );
+
+          const billCuts = toNumber(
+            getItemValue(item, "billCuts", "BillCuts", "starDiscount", "StarDiscount")
+          );
+
+          const outlets = toNumber(
+            getItemValue(item, "outlets", "Outlets", "displayAmount", "DisplayAmount")
+          );
+
+          const vatAmount = toNumber(
+            getItemValue(item, "vatAmount", "VatAmount", "gstAmount", "GSTAmount", "gst")
+          );
+
+          const cess1 = toNumber(
+            getItemValue(item, "cess1", "Cess1", "cess", "Cess")
+          );
+
+          const cess2 = toNumber(
+            getItemValue(item, "cess2", "Cess2", "cessAmount", "CessAmount")
+          );
+
+          const basicRate = toNumber(
+            getItemValue(
+              item,
+              "basicRate",
+              "BasicRate",
+              "purchaseRate",
+              "PurchaseRate",
+              "pRate",
+              "PRate"
+            ),
+            item.selectedBatch?.purchaseRate,
+            item.selectedBatch?.PRate,
+            productMaster.purchaseRate,
+            productMaster.PRate
+          );
+
+          // Calculate difference (Sales Rate - Basic Rate)
+          const difference = rate - basicRate;
+
+          // Skip if showing zero sales is "no" and qty is 0
+          if (showZeroSales === "no" && qty === 0 && freeQty === 0) {
+            continue;
+          }
+
+          srNo += 1;
+
+          resultData.push({
+            _id: `${bill._id}-${srNo}`,
+            SrNo: srNo,
+            ProductName: productName,
+            ProductCode: productCode,
+            LocalProduct: productMaster.localProduct || productMaster.LocalProduct || "",
+            Batch: batch || ".",
+            MRP: mrp,
+            Rate: rate,
+            Qty: qty,
+            FreeQty: freeQty,
+            Amount: grossAmount,
+            Disc: discount,
+            OtherDisc: otherDiscount,
+            Valuation: valuation,
+            Weight: weight,
+            BillCuts: billCuts,
+            Outlets: outlets,
+            VatAmt: vatAmount,
+            Cess1: cess1,
+            Cess2: cess2,
+            BasicRate: basicRate,
+            Difference: difference,
+            BillDate: bill.BillDate || "",
+            BillSeries: bill.BillSeries || "",
+            BillNo: bill.BillNo ?? "",
+            PartyCode: bill.PartyCode || "",
+            PartyName: bill.PartyName || "",
+            CompanyCode: bill.CompanyCode || "",
+            CompanyName: bill.CompanyName || "",
+            SalesmanName: billSalesmanName,
+            AreaName: bill.AreaName || "",
+            Godown: bill.Godown || "",
+            GDCode: bill.GDCode || "",
+          });
+        }
+      }
+
+      // Sort the data
+      if (orderBy === "productCode") {
+        resultData.sort((a, b) => String(a.ProductCode).localeCompare(String(b.ProductCode)));
+      } else if (orderBy === "amount") {
+        resultData.sort((a, b) => Number(b.Amount || 0) - Number(a.Amount || 0));
+      } else if (orderBy === "qty") {
+        resultData.sort((a, b) => Number(b.Qty || 0) - Number(a.Qty || 0));
+      } else if (orderBy === "rate") {
+        resultData.sort((a, b) => Number(b.Rate || 0) - Number(a.Rate || 0));
+      } else {
+        // Default: sort by product name
+        resultData.sort((a, b) => String(a.ProductName).localeCompare(String(b.ProductName)));
+      }
+
+      // Re-assign SrNo after sorting
+      resultData.forEach((row, index) => {
+        row.SrNo = index + 1;
+      });
+
+      return res.json({
+        success: true,
+        count: resultData.length,
+        data: resultData,
+      });
+    } catch (error) {
+      console.error("All product wise sales report error:", error);
+      return res.status(500).json({
+        success: false,
+        message: "Failed to generate all product wise sales report.",
+        error: error.message,
+      });
+    }
+  }
+);
+// =========================================================
+// COMPANY WISE PURCHASE REPORT API
+// =========================================================
+
+// =========================================================
+// STOCK REPORT APIS
+// These reports intentionally read the stock/transaction collections directly.
+// The field aliases keep older imported documents usable without changing the
+// schemas or any stock posting logic.
+// =========================================================
+const stockReportNumber = (...values) => {
+  for (const value of values) {
+    if (value !== undefined && value !== null && value !== "") {
+      const parsed = Number(value);
+      if (Number.isFinite(parsed)) return parsed;
+    }
+  }
+  return 0;
+};
+
+const stockReportPick = (source, ...keys) => {
+  for (const key of keys) {
+    if (source?.[key] !== undefined && source?.[key] !== null) return source[key];
+  }
+  return "";
+};
+
+const stockReportItemCode = (item) => String(stockReportPick(
+  item, "productCode", "ProductCode", "ProdCode", "prodCode", "code", "productId"
+) || String(item?.product || "").split(" - ")[0] || "").trim();
+
+const stockReportItemQty = (item) => stockReportNumber(
+  stockReportPick(item, "quantity", "qty", "Qty", "totalQty", "TotalQty")
+);
+
+const stockReportTenant = (req) => {
+  const distributorId = String(req.query.distributorId || req.auth?.distributorId || "").trim();
+  const firmId = String(req.query.firmId || req.auth?.firmId || "").trim();
+  return distributorId && firmId ? { distributorId, firmId } : null;
+};
+
+const loadStockReportMasters = async (tenantFilter, productSearch = "", companyCode = "") => {
+  const companyRows = await Company.find({ ...tenantFilter, isActive: { $ne: false } }).lean();
+  const selectedCompany = companyRows.find((row) => [row._id, row.companyCode, row.companyName].some((value) => String(value || "") === String(companyCode || "")));
+  const acceptedCompanyKeys = [companyCode, selectedCompany?._id, selectedCompany?.companyCode, selectedCompany?.companyName]
+    .filter(Boolean).map((value) => new RegExp(`^${String(value).replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}$`, "i"));
+  const escapedSearch = String(productSearch || "").replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const productFilter = {
+    ...tenantFilter,
+    isActive: { $ne: false },
+    ...(productSearch ? { $or: [{ productCode: new RegExp(escapedSearch, "i") }, { productName: new RegExp(escapedSearch, "i") }] } : {}),
+    ...(companyCode ? { $and: [{ $or: ["companyId", "companyCode", "companyName"].map((field) => ({ [field]: { $in: acceptedCompanyKeys } })) }] } : {}),
+  };
+  const productRows = await Product.find(productFilter).lean();
+  const productsByCode = new Map(productRows.map((row) => [String(row.productCode || "").trim(), row]));
+  const companiesByKey = new Map();
+  companyRows.forEach((row) => {
+    [row._id, row.companyCode, row.companyName].filter(Boolean).forEach((key) => companiesByKey.set(String(key), row));
+  });
+  return { productsByCode, companiesByKey };
+};
+
+const stockReportMatchesCompany = (product, companyCode, masters) => {
+  const requested = String(companyCode || "").trim();
+  if (!requested) return true;
+  const selectedCompany = masters.companiesByKey.get(requested);
+  const accepted = new Set([
+    requested,
+    selectedCompany?._id,
+    selectedCompany?.companyCode,
+    selectedCompany?.companyName,
+  ].filter(Boolean).map((value) => String(value).trim().toLowerCase()));
+  return [product?.companyId, product?.companyCode, product?.companyName]
+    .filter(Boolean)
+    .some((value) => accepted.has(String(value).trim().toLowerCase()));
+};
+
+const sortStockReportRows = (rows, orderBy = "productName") => {
+  const keys = orderBy === "productCode"
+    ? ["ProdCode", "ProductCode"]
+    : orderBy === "date"
+      ? ["TrnDate", "Date"]
+      : ["ProdName", "ProductName", "CompName"];
+  return rows.sort((left, right) => {
+    const leftValue = keys.map((key) => left[key]).find((value) => value !== undefined) || "";
+    const rightValue = keys.map((key) => right[key]).find((value) => value !== undefined) || "";
+    return String(leftValue).localeCompare(String(rightValue), undefined, { numeric: true });
+  });
+};
+
+const lastPurchaseByProduct = async (tenantFilter) => {
+  const purchases = await PurchaseHeader.find({ ...tenantFilter, isActive: { $ne: false } })
+    .select("invoiceDate items")
+    .sort({ invoiceDate: -1, createdAt: -1 })
+    .lean();
+  const result = new Map();
+  purchases.forEach((purchase) => {
+    (Array.isArray(purchase.items) ? purchase.items : []).forEach((item) => {
+      const code = stockReportItemCode(item);
+      if (!code || result.has(code)) return;
+      result.set(code, {
+        date: purchase.invoiceDate || "",
+        rate: stockReportNumber(stockReportPick(item, "purRate", "purchaseRate", "PRate", "pRate", "rate", "Rate")),
+        qty: stockReportItemQty(item),
+      });
+    });
+  });
+  return result;
+};
+
+const stockStatusRows = async (tenantFilter, { godownCode = "", asOnDate = "", companyCode = "" } = {}) => {
+  const filter = { ...tenantFilter };
+  if (godownCode) filter.GDCode = godownCode;
+  const [stocks, masters, lastPurchases] = await Promise.all([
+    Stock.find(filter).sort({ ProdCode: 1, Batch: 1 }).lean(),
+    loadStockReportMasters(tenantFilter),
+    lastPurchaseByProduct(tenantFilter),
+  ]);
+
+  let quantities = new Map(stocks.map((stock) => [String(stock._id), stockReportNumber(stock.Qty)]));
+  if (asOnDate) {
+    const Movement = mongoose.models.Inv_StockMovement;
+    const [laterMovements, laterAdjustments] = await Promise.all([
+      Movement ? Movement.find({ ...tenantFilter, movementDate: { $gt: asOnDate } }).lean() : [],
+      StockAdjustment.find({ ...tenantFilter, Status: "COMPLETED", VoucherDate: { $gt: asOnDate } }).lean(),
+    ]);
+    const movementDelta = new Map();
+    laterMovements.forEach((row) => {
+      const key = [row.godown, row.productCode, row.batch || ".", stockReportNumber(row.mrp)].join("\u0000");
+      movementDelta.set(key, (movementDelta.get(key) || 0) + stockReportNumber(row.quantityIn) - stockReportNumber(row.quantityOut));
+    });
+    laterAdjustments.filter((row) => ["IN", "OUT"].includes(String(row.AdjustmentType))).forEach((row) => {
+      const key = [row.GDCode, row.ProdCode, row.Batch || ".", stockReportNumber(row.MRP)].join("\u0000");
+      const sign = row.AdjustmentType === "IN" ? 1 : -1;
+      movementDelta.set(key, (movementDelta.get(key) || 0) + sign * stockReportNumber(row.TotalQty, row.Qty));
+    });
+    quantities = new Map(stocks.map((stock) => {
+      const key = [stock.GDCode, stock.ProdCode, stock.Batch || ".", stockReportNumber(stock.MRP)].join("\u0000");
+      return [String(stock._id), stockReportNumber(stock.Qty) - (movementDelta.get(key) || 0)];
+    }));
+  }
+
+  return stocks.map((stock) => {
+    const product = masters.productsByCode.get(String(stock.ProdCode || "").trim()) || {};
+    if (!stockReportMatchesCompany(product, companyCode, masters)) return null;
+    const company = masters.companiesByKey.get(String(product.companyId || product.companyCode || product.companyName || "")) || {};
+    const qty = quantities.get(String(stock._id)) || 0;
+    const boxPack = stockReportNumber(stock.BoxPack, product.boxPack, 1) || 1;
+    const inBoxPack = stockReportNumber(stock.InBoxPack, product.inboxPack, 1) || 1;
+    const boxQty = Math.trunc(qty / boxPack);
+    const afterBoxes = qty - boxQty * boxPack;
+    const inBox = Math.trunc(afterBoxes / inBoxPack);
+    const unitQty = afterBoxes - inBox * inBoxPack;
+    const weight = stockReportNumber(product.weight);
+    const lastPurchase = lastPurchases.get(String(stock.ProdCode || "")) || {};
+    return {
+      SysProdCode: String(stockReportPick(product, "sysProdCode", "SysProdCode", "systemProductCode") || product._id || ""),
+      HSNCode: String(stockReportPick(product, "hsn", "HSNCode", "hsnCode") || ""),
+      ProdCode: stock.ProdCode || "",
+      ProdName: product.productName || "",
+      LocalProduct: String(stockReportPick(product, "localProduct", "LocalProduct", "description") || ""),
+      ShortCode: String(stockReportPick(product, "shortCode", "ShortCode", "eanCode") || ""),
+      Batch: stock.Batch || ".",
+      MfgDate: stock.MfgDt || "",
+      ExpDate: stock.ExpDt || "",
+      BatchLock: stock.IsLocked || "N",
+      MRP: stockReportNumber(stock.MRP),
+      BoxQty: boxQty,
+      InBox: inBox,
+      UnitQty: Number(unitQty.toFixed(3)),
+      TotalQty: Number(qty.toFixed(3)),
+      ValueRs: Number((qty * stockReportNumber(stock.PRate)).toFixed(2)),
+      ValueKg: Number((qty * weight).toFixed(3)),
+      CatName: String(stockReportPick(product, "categoryName", "category", "Category") || ""),
+      CompName: company.companyName || product.companyName || "",
+      VatPer: stockReportNumber(product.gst, product.VatPer),
+      Weight: weight,
+      BoxPack: boxPack,
+      InBoxPack: inBoxPack,
+      LastPurchaseDate: lastPurchase.date || "",
+      LastPurchase: stockReportNumber(lastPurchase.rate),
+      LastQty: stockReportNumber(lastPurchase.qty),
+    };
+  }).filter(Boolean);
+};
+
+app.get("/api/reports/current-stock", ensureConnection, securityRouter.authorizeRequest("REPORTS", "STOCK_REPORT", "view"), async (req, res) => {
+  try {
+    const tenantFilter = stockReportTenant(req);
+    if (!tenantFilter) return res.status(400).json({ success: false, message: "Distributor and firm are required." });
+    let rows = await stockStatusRows(tenantFilter, {
+      godownCode: String(req.query.godownCode || "").trim(),
+      companyCode: String(req.query.companyCode || "").trim(),
+    });
+    const reportFilter = String(req.query.reportFilter || "all").toLowerCase();
+    if (reportFilter === "positive") rows = rows.filter((row) => row.TotalQty > 0);
+    else if (reportFilter === "negative") rows = rows.filter((row) => row.TotalQty < 0);
+    else if (reportFilter === "zero") rows = rows.filter((row) => row.TotalQty === 0);
+    else {
+      if (String(req.query.includeNegative || "N").toUpperCase() !== "Y") rows = rows.filter((row) => row.TotalQty >= 0);
+      if (String(req.query.includeZero || "N").toUpperCase() !== "Y") rows = rows.filter((row) => row.TotalQty !== 0);
+    }
+    if (String(req.query.nearExpiry || "N").toUpperCase() === "Y") {
+      const days = Math.max(1, stockReportNumber(req.query.expiryDays, 30));
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      const limit = new Date(today);
+      limit.setDate(limit.getDate() + days);
+      rows = rows.filter((row) => {
+        const expiry = new Date(row.ExpDate);
+        return !Number.isNaN(expiry.getTime()) && expiry >= today && expiry <= limit;
+      });
+    }
+    rows = sortStockReportRows(rows, req.query.orderBy).map((row, index) => ({ SrNo: index + 1, ...row }));
+    return res.json({ success: true, rows });
+  } catch (error) {
+    console.error("Current stock report error:", error);
+    return res.status(500).json({ success: false, message: error.message || "Failed to load current stock report." });
+  }
+});
+
+app.get("/api/reports/as-on-date-stock", ensureConnection, securityRouter.authorizeRequest("REPORTS", "STOCK_REPORT", "view"), async (req, res) => {
+  try {
+    const tenantFilter = stockReportTenant(req);
+    const asOnDate = String(req.query.asOnDate || req.query.toDate || "").trim();
+    if (!tenantFilter || !asOnDate) return res.status(400).json({ success: false, message: "Distributor, firm and As On Date are required." });
+    const rows = sortStockReportRows((await stockStatusRows(tenantFilter, {
+      godownCode: String(req.query.godownCode || "").trim(),
+      asOnDate,
+      companyCode: String(req.query.companyCode || "").trim(),
+    })).filter((row) => row.TotalQty !== 0), req.query.orderBy).map((row, index) => ({ SrNo: index + 1, ...row }));
+    return res.json({ success: true, rows });
+  } catch (error) {
+    console.error("As-on-date stock report error:", error);
+    return res.status(500).json({ success: false, message: error.message || "Failed to load as-on-date stock report." });
+  }
+});
+
+app.get("/api/reports/damage-stock", ensureConnection, securityRouter.authorizeRequest("REPORTS", "STOCK_REPORT", "view"), async (req, res) => {
+  try {
+    const tenantFilter = stockReportTenant(req);
+    if (!tenantFilter) return res.status(400).json({ success: false, message: "Distributor and firm are required." });
+    const filter = { ...tenantFilter, isActive: { $ne: false } };
+    if (req.query.godownCode) filter.GDCode = String(req.query.godownCode);
+    const fromDate = String(req.query.fromDate || "").trim();
+    const toDate = String(req.query.toDate || "").trim();
+    const [stocks, masters, adjustments] = await Promise.all([
+      DamStock.find(filter).sort({ ProdCode: 1, Batch: 1 }).lean(),
+      loadStockReportMasters(tenantFilter),
+      StockAdjustment.find({ ...tenantFilter, Status: "COMPLETED", AdjustmentType: { $in: ["DAMAGE_IN", "DAMAGE_OUT"] }, ...(fromDate || toDate ? { VoucherDate: { ...(fromDate ? { $gte: fromDate } : {}), ...(toDate ? { $lte: toDate } : {}) } } : {}) }).sort({ VoucherDate: -1, createdAt: -1 }).lean(),
+    ]);
+    const latestAdjustment = new Map();
+    adjustments.forEach((row) => {
+      const key = [row.GDCode, row.ProdCode, row.Batch || ".", stockReportNumber(row.MRP)].join("\u0000");
+      if (!latestAdjustment.has(key)) latestAdjustment.set(key, row);
+    });
+    let rows = stocks.filter((stock) => stockReportNumber(stock.Qty) !== 0).map((stock) => {
+      const product = masters.productsByCode.get(String(stock.ProdCode || "")) || {};
+      if (!stockReportMatchesCompany(product, req.query.companyCode, masters)) return null;
+      const qty = stockReportNumber(stock.Qty);
+      const boxPack = stockReportNumber(stock.BoxPack, product.boxPack, 1) || 1;
+      const inBoxPack = stockReportNumber(stock.InBoxPack, product.inboxPack, 1) || 1;
+      const boxQty = Math.trunc(qty / boxPack);
+      const remainder = qty - boxQty * boxPack;
+      const inBoxQty = Math.trunc(remainder / inBoxPack);
+      const unitQty = remainder - inBoxQty * inBoxPack;
+      const adjustment = latestAdjustment.get([stock.GDCode, stock.ProdCode, stock.Batch || ".", stockReportNumber(stock.MRP)].join("\u0000")) || {};
+      const trnParts = String(adjustment.VoucherNo || "").split("-");
+      const rate = stockReportNumber(stock.PRate);
+      return {
+        TrnDate: adjustment.VoucherDate || "", TrnSeries: trnParts.length > 1 ? trnParts[0] : "",
+        TrnNo: trnParts.length > 1 ? trnParts.slice(1).join("-") : adjustment.VoucherNo || "",
+        SysProdCode: String(stockReportPick(product, "sysProdCode", "SysProdCode", "systemProductCode") || product._id || ""),
+        ProductCode: stock.ProdCode || "", ProductName: product.productName || adjustment.ProductName || "",
+        LocalProduct: String(stockReportPick(product, "localProduct", "LocalProduct", "description") || ""), MRP: stockReportNumber(stock.MRP),
+        BoxQty: boxQty, InBoxQty: inBoxQty, UnitQty: Number(unitQty.toFixed(3)), Qty: qty,
+        FreeQty: stockReportNumber(adjustment.FreeQty), Amount: Number((qty * rate).toFixed(2)),
+        Weight: Number((qty * stockReportNumber(product.weight)).toFixed(3)), VatPer: stockReportNumber(product.gst, product.VatPer),
+        Value: Number((qty * rate).toFixed(2)),
+      };
+    }).filter(Boolean);
+    if (fromDate || toDate) rows = rows.filter((row) => row.TrnDate);
+    rows = sortStockReportRows(rows, req.query.orderBy).map((row, index) => ({ SrNo: index + 1, ...row }));
+    return res.json({ success: true, rows });
+  } catch (error) {
+    console.error("Damage stock report error:", error);
+    return res.status(500).json({ success: false, message: error.message || "Failed to load damage stock report." });
+  }
+});
+
+app.get("/api/reports/product-ledger", ensureConnection, securityRouter.authorizeRequest("REPORTS", "STOCK_REPORT", "view"), async (req, res) => {
+  try {
+    const tenantFilter = stockReportTenant(req);
+    if (!tenantFilter) return res.status(400).json({ success: false, message: "Distributor and firm are required." });
+    const fromDate = String(req.query.fromDate || "").trim();
+    const toDate = String(req.query.toDate || "").trim();
+    const productSearch = String(req.query.product || "").trim().toLowerCase();
+    const batchSearch = String(req.query.batch || "").trim().toLowerCase();
+    const companyCode = String(req.query.companyCode || "").trim();
+    const godownCode = String(req.query.godownCode || "").trim();
+    const dateAllowed = (value) => (!fromDate || String(value) >= fromDate) && (!toDate || String(value) <= toDate);
+    const masters = await loadStockReportMasters(tenantFilter, companyCode ? "" : productSearch, companyCode);
+    const matchingCodes = [...masters.productsByCode.entries()]
+      .filter(([code, product]) => (!productSearch || `${code} ${product.productName || ""}`.toLowerCase().includes(productSearch)) && stockReportMatchesCompany(product, companyCode, masters))
+      .map(([code]) => code);
+    const narrowProducts = Boolean(productSearch || companyCode);
+    const escapedProductSearch = productSearch.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    const productPattern = productSearch ? new RegExp(escapedProductSearch, "i") : null;
+    const itemFields = ["productCode", "ProductCode", "ProdCode", "prodCode", "code", "productId"];
+    const itemConditions = narrowProducts ? itemFields.map((field) => ({ [field]: { $in: matchingCodes } })) : [];
+    if (productPattern && !companyCode) {
+      itemConditions.push(...itemFields.map((field) => ({ [field]: productPattern })));
+      itemConditions.push({ productName: productPattern }, { ProductName: productPattern }, { product: productPattern });
+    }
+    if (companyCode && matchingCodes.length) {
+      itemConditions.push({ product: { $in: matchingCodes.map((code) => new RegExp(`^${String(code).replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}(?: - |$)`, "i")) } });
+    }
+    const itemFilter = narrowProducts ? { items: { $elemMatch: { $or: itemConditions.length ? itemConditions : [{ productCode: "__NO_MATCH__" }] } } } : {};
+    const adjustmentProductFilter = narrowProducts
+      ? { ...(productPattern && !companyCode ? { $or: [{ ProdCode: { $in: matchingCodes } }, { ProdCode: productPattern }, { ProductName: productPattern }] } : { ProdCode: { $in: matchingCodes } }) }
+      : {};
+    const throughDate = (filter, field) => toDate
+      ? { $and: [filter, { $or: [{ [field]: { $lte: toDate } }, { [field]: null }] }] }
+      : filter;
+    const purchaseFilter = throughDate({ ...tenantFilter, isActive: { $ne: false }, ...(godownCode ? { gdCode: godownCode } : {}), ...itemFilter }, "invoiceDate");
+    const salesFilter = throughDate({ ...tenantFilter, isActive: { $ne: false }, IsBillCancelled: { $ne: true }, ...(godownCode ? { GDCode: godownCode } : {}), ...itemFilter }, "BillDate");
+    const adjustmentFilter = throughDate({ ...tenantFilter, Status: "COMPLETED", AdjustmentType: { $in: ["IN", "OUT"] }, ...(godownCode ? { GDCode: godownCode } : {}), ...adjustmentProductFilter }, "VoucherDate");
+    const stockProductFilter = companyCode ? { ProdCode: { $in: matchingCodes } } : {};
+    const stockFilter = { ...tenantFilter, ...(godownCode ? { GDCode: godownCode } : {}), ...stockProductFilter, ...(batchSearch ? { Batch: new RegExp(`^${batchSearch.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}$`, "i") } : {}) };
+    const [purchases, sales, adjustments, currentStocks, futurePurchases, futureSales, futureAdjustments] = await Promise.all([
+      PurchaseHeader.find(purchaseFilter).lean(),
+      SalesHeader.find(salesFilter).lean(),
+      StockAdjustment.find(adjustmentFilter).lean(),
+      Stock.find(stockFilter).select("ProdCode Qty").lean(),
+      toDate ? PurchaseHeader.find({ ...tenantFilter, isActive: { $ne: false }, ...(godownCode ? { gdCode: godownCode } : {}), ...itemFilter, invoiceDate: { $gt: toDate } }).select("items").lean() : [],
+      toDate ? SalesHeader.find({ ...tenantFilter, isActive: { $ne: false }, IsBillCancelled: { $ne: true }, ...(godownCode ? { GDCode: godownCode } : {}), ...itemFilter, BillDate: { $gt: toDate } }).select("items").lean() : [],
+      toDate ? StockAdjustment.find({ ...tenantFilter, Status: "COMPLETED", AdjustmentType: { $in: ["IN", "OUT"] }, ...(godownCode ? { GDCode: godownCode } : {}), ...adjustmentProductFilter, VoucherDate: { $gt: toDate } }).select("ProdCode ProductName Batch AdjustmentType TotalQty Qty").lean() : [],
+    ]);
+    const entries = [];
+    const pushEntry = ({ date, series, no, invDate = "", invNo = "", trn, partyCode = "", partyName = "", item, addQty = 0, lessQty = 0, mrp = 0, batch = ".", sRate = 0, pRate = 0, qty = 0, freeQty = 0, boxPack = 1, inBoxPack = 1 }) => {
+      const code = stockReportItemCode(item) || String(item?.ProdCode || "");
+      const product = masters.productsByCode.get(code) || {};
+      if (productSearch && !`${code} ${product.productName || stockReportPick(item, "productName", "ProductName")}`.toLowerCase().includes(productSearch)) return;
+      if (batchSearch && String(batch || ".").trim().toLowerCase() !== batchSearch) return;
+      if (!stockReportMatchesCompany(product, companyCode, masters)) return;
+      const total = stockReportNumber(qty) + stockReportNumber(freeQty);
+      const boxes = Math.trunc(total / (boxPack || 1));
+      const remainder = total - boxes * (boxPack || 1);
+      const inBoxes = Math.trunc(remainder / (inBoxPack || 1));
+      entries.push({ Visible: dateAllowed(date), Date: date || "", TrnSeries: series || "", TrnNo: no ?? "", InvDate: invDate || "", InvNo: invNo || "", Trn: trn,
+        PartyCode: partyCode, PartyName: partyName, ProductCode: code, ProductName: product.productName || stockReportPick(item, "productName", "ProductName") || "",
+        AddQty: addQty, LessQty: lessQty, Mrp: mrp, Batch: batch || ".", SRate: sRate, PRate: pRate, Qty: qty, FreeQty: freeQty,
+        BoxPack: boxPack || 1, InBoxPack: inBoxPack || 1, BoxQty: boxes, InBoxQty: inBoxes, UnitQty: Number((remainder - inBoxes * (inBoxPack || 1)).toFixed(3)) });
+    };
+    purchases.forEach((bill) => (bill.items || []).forEach((item) => {
+      const qty = stockReportItemQty(item), free = stockReportNumber(stockReportPick(item, "free", "Free", "freeQty", "FreeQty"));
+      pushEntry({ date: bill.invoiceDate, series: bill.vouSer, no: bill.vouNo, invDate: bill.actualInvoiceDate || bill.invDate || bill.invoiceDate, invNo: bill.invoiceNumber, trn: "PURCHASE", partyCode: bill.supplierCode, partyName: bill.supplierName, item,
+        addQty: qty + free, mrp: stockReportNumber(stockReportPick(item, "mrp", "MRP"), item.selectedBatch?.MRP), batch: stockReportPick(item, "batchNo", "batch", "Batch") || item.selectedBatch?.Batch,
+        sRate: stockReportNumber(stockReportPick(item, "salesRate", "SRate", "rate")), pRate: stockReportNumber(stockReportPick(item, "purRate", "purchaseRate", "PRate", "rate", "Rate")), qty, freeQty: free,
+        boxPack: stockReportNumber(stockReportPick(item, "boxPack", "BoxPack"), item.selectedBatch?.BoxPack, 1), inBoxPack: stockReportNumber(stockReportPick(item, "inBoxPack", "InBoxPack"), item.selectedBatch?.InBoxPack, 1) });
+    }));
+    sales.forEach((bill) => (bill.items || []).forEach((item) => {
+      const qty = stockReportItemQty(item), free = stockReportNumber(stockReportPick(item, "free", "Free", "freeQty", "FreeQty"));
+      pushEntry({ date: bill.BillDate, series: bill.BillSeries, no: bill.BillNo, invDate: bill.BillDate, invNo: `${bill.BillSeries || ""}${bill.BillNo || ""}`, trn: "SALE", partyCode: bill.PartyCode, partyName: bill.PartyName, item,
+        lessQty: qty + free, mrp: stockReportNumber(stockReportPick(item, "mrp", "MRP"), item.selectedBatch?.MRP), batch: stockReportPick(item, "batchNo", "batch", "Batch") || item.selectedBatch?.Batch,
+        sRate: stockReportNumber(stockReportPick(item, "rate", "Rate", "salesRate", "SRate")), pRate: stockReportNumber(stockReportPick(item, "purchaseRate", "PRate")), qty, freeQty: free,
+        boxPack: stockReportNumber(stockReportPick(item, "boxPack", "BoxPack"), item.selectedBatch?.BoxPack, 1), inBoxPack: stockReportNumber(stockReportPick(item, "inBoxPack", "InBoxPack"), item.selectedBatch?.InBoxPack, 1) });
+    }));
+    adjustments.forEach((row) => {
+      const isIn = row.AdjustmentType === "IN";
+      const total = stockReportNumber(row.TotalQty, row.Qty);
+      const parts = String(row.VoucherNo || "").split("-");
+      pushEntry({ date: row.VoucherDate, series: parts[0] || row.AdjustmentType, no: parts.slice(1).join("-") || row.VoucherNo, trn: row.AdjustmentType, item: row,
+        addQty: isIn ? total : 0, lessQty: isIn ? 0 : total, mrp: row.MRP, batch: row.Batch, sRate: row.SRate, pRate: row.PRate,
+        qty: row.Qty, freeQty: row.FreeQty, boxPack: row.BoxPack, inBoxPack: row.InBoxPack });
+    });
+    entries.sort((a, b) => String(a.Date).localeCompare(String(b.Date)) || String(a.TrnSeries).localeCompare(String(b.TrnSeries)) || String(a.TrnNo).localeCompare(String(b.TrnNo)));
+    // Current stock is today's balance. Remove later movements before calculating
+    // the opening balance for a report whose end date is in the past.
+    const futureByProduct = new Map();
+    const addFutureMovement = (item, delta, batch) => {
+      const code = stockReportItemCode(item) || String(item?.ProdCode || "");
+      const product = masters.productsByCode.get(code) || {};
+      if (productSearch && !`${code} ${product.productName || stockReportPick(item, "productName", "ProductName")}`.toLowerCase().includes(productSearch)) return;
+      if (batchSearch && String(batch || ".").trim().toLowerCase() !== batchSearch) return;
+      if (!stockReportMatchesCompany(product, companyCode, masters)) return;
+      futureByProduct.set(code, (futureByProduct.get(code) || 0) + delta);
+    };
+    futurePurchases.forEach((bill) => (bill.items || []).forEach((item) => addFutureMovement(item,
+      stockReportItemQty(item) + stockReportNumber(stockReportPick(item, "free", "Free", "freeQty", "FreeQty")),
+      stockReportPick(item, "batchNo", "batch", "Batch") || item.selectedBatch?.Batch)));
+    futureSales.forEach((bill) => (bill.items || []).forEach((item) => addFutureMovement(item,
+      -stockReportItemQty(item) - stockReportNumber(stockReportPick(item, "free", "Free", "freeQty", "FreeQty")),
+      stockReportPick(item, "batchNo", "batch", "Batch") || item.selectedBatch?.Batch)));
+    futureAdjustments.forEach((row) => addFutureMovement(row,
+      (row.AdjustmentType === "IN" ? 1 : -1) * stockReportNumber(row.TotalQty, row.Qty), row.Batch));
+    const currentByProduct = new Map();
+    currentStocks.forEach((row) => currentByProduct.set(row.ProdCode, (currentByProduct.get(row.ProdCode) || 0) + stockReportNumber(row.Qty)));
+    futureByProduct.forEach((delta, code) => currentByProduct.set(code, (currentByProduct.get(code) || 0) - delta));
+    const netByProduct = new Map();
+    entries.forEach((row) => netByProduct.set(row.ProductCode, (netByProduct.get(row.ProductCode) || 0) + stockReportNumber(row.AddQty) - stockReportNumber(row.LessQty)));
+    const balances = new Map([...netByProduct.keys()].map((code) => [code, (currentByProduct.get(code) || 0) - (netByProduct.get(code) || 0)]));
+    const rows = entries.map((row) => {
+      const key = row.ProductCode;
+      const balance = (balances.get(key) || 0) + stockReportNumber(row.AddQty) - stockReportNumber(row.LessQty);
+      balances.set(key, balance);
+      return { ...row, Date: row.Date, TrnSeries: row.TrnSeries, TrnNo: row.TrnNo, InvDate: row.InvDate, InvNo: row.InvNo, Trn: row.Trn,
+        PartyCode: row.PartyCode, PartyName: row.PartyName, AddQty: row.AddQty, LessQty: row.LessQty, BalanceQty: Number(balance.toFixed(3)), Mrp: row.Mrp, Batch: row.Batch,
+        SRate: row.SRate, PRate: row.PRate, Qty: row.Qty, FreeQty: row.FreeQty, BoxPack: row.BoxPack, InBoxPack: row.InBoxPack, BoxQty: row.BoxQty, InBoxQty: row.InBoxQty, UnitQty: row.UnitQty };
+    }).filter((row) => row.Visible).map((row, index) => {
+      const output = { ...row };
+      delete output.Visible;
+      delete output.ProductCode;
+      delete output.ProductName;
+      return { SrNo: index + 1, ...output };
+    });
+    return res.json({ success: true, rows });
+  } catch (error) {
+    console.error("Product ledger report error:", error);
+    return res.status(500).json({ success: false, message: error.message || "Failed to load product ledger." });
+  }
+});
+
+
+// GET /api/reports/company-wise-purchase
+// Query Parameters:
+//   - distributorId: string (required)
+//   - firmId: string (required)
+//   - companyCode: string (optional - empty for all companies)
+//   - fromDate: string (YYYY-MM-DD)
+//   - toDate: string (YYYY-MM-DD)
+//   - selectedSupplierCodes: string (comma separated)
+//   - selectedGodownCodes: string (comma separated)
+//   - productWise: 'yes' | 'no'
+//   - withCreditNote: 'yes' | 'no'
+//   - orderBy: string
+//   - reportLevel: 'summary' | 'details'
+//   - includeTax: 'yes' | 'no'
+//   - includeDiscount: 'yes' | 'no'
+app.get('/api/reports/company-wise-purchase', securityRouter.authorizeRequest("REPORTS", "PURCHASE_REPORT", "view"), async (req, res) => {
+  try {
+    const {
+      distributorId,
+      firmId,
+      companyCode,
+      fromDate,
+      toDate,
+      selectedSupplierCodes,
+      selectedGodownCodes,
+      productWise = 'no',
+      withCreditNote = 'no',
+      orderBy = 'companyName',
+      reportLevel = 'summary',
+      includeTax = 'yes',
+      includeDiscount = 'yes',
+    } = req.query;
+
+    // Validate required parameters
+    if (!distributorId || !firmId) {
+      return res.status(400).json({
+        success: false,
+        message: 'distributorId and firmId are required'
+      });
+    }
+
+    if (!fromDate || !toDate) {
+      return res.status(400).json({
+        success: false,
+        message: 'fromDate and toDate are required'
+      });
+    }
+
+    // Build query conditions
+    const conditions = {
+      distributorId,
+      firmId,
+      billDate: {
+        $gte: new Date(fromDate),
+        $lte: new Date(toDate)
+      }
+    };
+
+    // Company filter
+    if (companyCode && companyCode !== '') {
+      conditions.companyCode = companyCode;
+    }
+
+    // Supplier filter
+    if (selectedSupplierCodes && selectedSupplierCodes.length > 0) {
+      const supplierCodes = selectedSupplierCodes.split(',');
+      conditions.supplierCode = { $in: supplierCodes };
+    }
+
+    // Godown filter
+    if (selectedGodownCodes && selectedGodownCodes.length > 0) {
+      const godownCodes = selectedGodownCodes.split(',');
+      conditions.godownCode = { $in: godownCodes };
+    }
+
+    // Credit Note filter
+    if (withCreditNote === 'no') {
+      conditions.trn = { $ne: 'CRN' };
+    }
+
+    // Fetch purchase data from database
+    // This is a sample query - adjust according to your database schema
+    let purchaseData = await PurchaseBill.find(conditions)
+      .populate('supplierId', 'accountCode accountName town mobileNo')
+      .populate('companyId', 'companyName companyCode')
+      .populate('godownId', 'godownName godownCode')
+      .sort({ billDate: -1 });
+
+    // Process data based on report level
+    let rows = [];
+
+    if (reportLevel === 'summary') {
+      // Summary report - aggregate by company/supplier
+      const summaryMap = {};
+      
+      purchaseData.forEach(bill => {
+        const key = `${bill.companyCode}-${bill.supplierCode}`;
+        if (!summaryMap[key]) {
+          summaryMap[key] = {
+            SrNo: Object.keys(summaryMap).length + 1,
+            CompanyCode: bill.companyCode || '',
+            CompanyName: bill.companyId?.companyName || '',
+            SupplierCode: bill.supplierCode || '',
+            SupplierName: bill.supplierId?.accountName || '',
+            TotalBills: 0,
+            TotalQty: 0,
+            TotalFreeQty: 0,
+            TotalGrossAmount: 0,
+            TotalDiscount: 0,
+            TotalTaxableAmount: 0,
+            TotalTaxAmount: 0,
+            TotalNetAmount: 0,
+          };
+        }
+        
+        summaryMap[key].TotalBills += 1;
+        summaryMap[key].TotalQty += bill.totalQty || 0;
+        summaryMap[key].TotalFreeQty += bill.totalFreeQty || 0;
+        summaryMap[key].TotalGrossAmount += bill.grossAmount || 0;
+        summaryMap[key].TotalDiscount += bill.discount || 0;
+        summaryMap[key].TotalTaxableAmount += bill.taxableAmount || 0;
+        summaryMap[key].TotalTaxAmount += bill.taxAmount || 0;
+        summaryMap[key].TotalNetAmount += bill.netAmount || 0;
+      });
+      
+      rows = Object.values(summaryMap);
+    } else {
+      // Details report - show individual bill lines
+      let index = 0;
+      purchaseData.forEach(bill => {
+        const lines = bill.lines || [{}];
+        lines.forEach((line, lineIndex) => {
+          index++;
+          rows.push({
+            SrNo: index,
+            BillDate: bill.billDate,
+            BillSeries: bill.billSeries || '',
+            BillNo: bill.billNo || '',
+            SupplierCode: bill.supplierCode || '',
+            SupplierName: bill.supplierId?.accountName || '',
+            ProductCode: line.productCode || '',
+            ProductName: line.productName || '',
+            Batch: line.batch || '',
+            MRP: line.mrp || 0,
+            PurchaseRate: line.purchaseRate || line.rate || 0,
+            Qty: line.qty || 0,
+            FreeQty: line.freeQty || 0,
+            GrossAmount: line.grossAmount || 0,
+            Discount: line.discount || 0,
+            DiscountPercent: line.discountPercent || 0,
+            TaxableAmount: line.taxableAmount || 0,
+            TaxAmount: line.taxAmount || 0,
+            TaxPercent: line.taxPercent || 0,
+            NetAmount: line.netAmount || 0,
+            GodownName: bill.godownId?.godownName || '',
+            PurchaseOrderNo: bill.purchaseOrderNo || '',
+            ChallanNo: bill.challanNo || '',
+            EwayBillNo: bill.ewayBillNo || '',
+            TransportMode: bill.transportMode || '',
+            Remarks: bill.remarks || '',
+          });
+        });
+      });
+    }
+
+    // Sort results
+    if (orderBy === 'companyName') {
+      rows.sort((a, b) => (a.CompanyName || '').localeCompare(b.CompanyName || ''));
+    } else if (orderBy === 'supplierName') {
+      rows.sort((a, b) => (a.SupplierName || '').localeCompare(b.SupplierName || ''));
+    } else if (orderBy === 'billDate') {
+      rows.sort((a, b) => new Date(b.BillDate) - new Date(a.BillDate));
+    } else if (orderBy === 'productName') {
+      rows.sort((a, b) => (a.ProductName || '').localeCompare(b.ProductName || ''));
+    } else if (orderBy === 'netAmount') {
+      rows.sort((a, b) => (b.NetAmount || 0) - (a.NetAmount || 0));
+    }
+
+    res.json({
+      success: true,
+      data: rows,
+      total: rows.length
+    });
+  } catch (error) {
+    console.error('Company Purchase Report Error:', error);
+    res.status(500).json({
+      success: false,
+      message: error.message || 'Failed to generate company purchase report'
+    });
+  }
+});
+
+// GET /api/reports/company-purchase/criteria
+app.get('/api/reports/company-purchase/criteria', securityRouter.authorizeRequest("REPORTS", "PURCHASE_REPORT", "view"), async (req, res) => {
+  try {
+    const { distributorId, firmId, companyCode } = req.query;
+
+    if (!distributorId || !firmId) {
+      return res.status(400).json({
+        success: false,
+        message: 'distributorId and firmId are required'
+      });
+    }
+
+    // Fetch companies
+    const companies = await Company.find({ distributorId, firmId })
+      .select('companyCode companyName')
+      .sort('companyName');
+
+   // ============================================================
+// FETCH SUPPLIERS
+// ============================================================
+// Supplier accounts can be stored with different accountType
+// values depending on the existing ERP master.
+// ============================================================
+const supplierQuery = {
+  distributorId,
+  firmId,
+  ...(companyCode && companyCode !== '' ? { companyCode } : {})
+};
+
+// First try the standard Supplier account type.
+// If no records are found, fall back to accounts that are
+// actually used in purchase transactions.
+let suppliers = await Account.find({
+  ...supplierQuery,
+  accountType: {
+    $in: [
+      'Supplier',
+      'supplier',
+      'SUPPLIER',
+      'S',
+      's',
+      'Creditors',
+      'CREDITORS',
+      'creditors'
+    ]
+  }
+})
+  .select('accountCode accountName accountCode name town mobileNo')
+  .sort({ accountName: 1, name: 1 });
+
+// ============================================================
+// FALLBACK
+// If your Account master doesn't have accountType='Supplier',
+// return accounts from the company rather than showing an
+// empty supplier dropdown.
+// ============================================================
+if (suppliers.length === 0) {
+  suppliers = await Account.find(supplierQuery)
+    .select('accountCode accountName accountCode name town mobileNo')
+    .sort({ accountName: 1, name: 1 });
+}
+
+// Normalize supplier response for frontend
+suppliers = suppliers.map((supplier) => ({
+  _id: supplier._id,
+  accountCode: supplier.accountCode || '',
+  accountName:
+    supplier.accountName ||
+    supplier.name ||
+    '',
+  name:
+    supplier.accountName ||
+    supplier.name ||
+    '',
+  town: supplier.town || '',
+  mobileNo: supplier.mobileNo || ''
+}));
+
+    // Fetch products
+    const products = await Product.find({
+      distributorId,
+      firmId,
+      ...(companyCode && companyCode !== '' ? { companyCode } : {})
+    })
+      .select('productCode productName productGroup category brand')
+      .sort('productName');
+
+    // Fetch godowns
+    const godowns = await GodownModel.find({
+      distributorId,
+      firmId,
+      ...(companyCode && companyCode !== '' ? { companyCode } : {})
+    })
+      .select('godownCode godownName')
+      .sort('godownName');
+
+    res.json({
+  success: true,
+  companies,
+  suppliers,
+  products,
+  godowns
+});
+  } catch (error) {
+    console.error('Company Purchase Criteria Error:', error);
+    res.status(500).json({
+      success: false,
+      message: error.message || 'Failed to load company purchase criteria'
+    });
+  }
+});
+// Stock And Sales Report criteria. Values come directly from the current firm's masters.
+app.get(
+  "/api/reports/stock-and-sales/criteria",
+  ensureConnection,
+  securityRouter.authorizeRequest("REPORTS", "PRODUCT_WISE_SALES", "view"),
+  async (req, res) => {
+    try {
+      const distributorId = String(req.query.distributorId || "").trim();
+      const firmId = String(req.query.firmId || "").trim();
+      if (!distributorId || !firmId) {
+        return res.status(400).json({ success: false, message: "distributorId and firmId are required." });
+      }
+
+      const masterFilter = { distributorId, firmId, isActive: true };
+      const [companies, godowns] = await Promise.all([
+        Company.find(masterFilter)
+          .select("companyCode companyName")
+          .sort({ companyName: 1, companyCode: 1 })
+          .lean(),
+        GodownModel.find(masterFilter)
+          .select("godownCode godownName")
+          .sort({ godownName: 1, godownCode: 1 })
+          .lean(),
+      ]);
+
+      return res.json({ success: true, companies, godowns });
+    } catch (error) {
+      console.error("Stock and sales criteria error:", error);
+      return res.status(500).json({ success: false, message: "Failed to load Stock And Sales criteria." });
+    }
+  }
+);
+
+// Compares the live stock balance with sales posted during the requested period.
+app.get(
+  "/api/reports/stock-and-sales",
+  ensureConnection,
+  securityRouter.authorizeRequest("REPORTS", "PRODUCT_WISE_SALES", "view"),
+  async (req, res) => {
+    try {
+      const distributorId = String(req.query.distributorId || "").trim();
+      const firmId = String(req.query.firmId || "").trim();
+      const companyCode = String(req.query.companyCode || "").trim();
+      const godownCode = String(req.query.godownCode || "").trim();
+      const fromDate = String(req.query.fromDate || "").trim();
+      const toDate = String(req.query.toDate || "").trim();
+      const reportLevel = String(req.query.reportLevel || "unit").trim();
+      const reportWith = String(req.query.reportWith || "summary").trim();
+      const rowFilter = String(req.query.filter || "all").trim();
+      const orderBy = String(req.query.orderBy || "productName").trim();
+      const includeFreeQty = String(req.query.stockWithFreeQty || "no").toLowerCase() === "yes";
+
+      if (!distributorId || !firmId || !fromDate || !toDate) {
+        return res.status(400).json({
+          success: false,
+          message: "distributorId, firmId, From Date and To Date are required.",
+        });
+      }
+      if (fromDate > toDate) {
+        return res.status(400).json({ success: false, message: "From Date cannot be greater than To Date." });
+      }
+
+      const baseFilter = { distributorId, firmId };
+      const [companies, godowns, products] = await Promise.all([
+        Company.find({ ...baseFilter, isActive: true }).select("companyCode companyName").lean(),
+        GodownModel.find({ ...baseFilter, isActive: true }).select("godownCode godownName").lean(),
+        Product.find({ ...baseFilter, isActive: true }).lean(),
+      ]);
+
+      const companyNames = new Map(companies.map((row) => [String(row.companyCode || ""), String(row.companyName || row.companyCode || "")]));
+      const companyCodesById = new Map(companies.map((row) => [String(row._id || ""), String(row.companyCode || "")]));
+      const godownNames = new Map(godowns.map((row) => [String(row.godownCode || ""), String(row.godownName || row.godownCode || "")]));
+      const productByCode = new Map(products.map((row) => [String(row.productCode || ""), row]));
+      const resolveProductCompanyCode = (product = {}) => {
+        const storedValue = String(product.companyCode || product.CompanyCode || product.companyId || "").trim();
+        return companyCodesById.get(storedValue) || storedValue;
+      };
+
+      const stockFilter = { ...baseFilter };
+      if (godownCode) stockFilter.GDCode = godownCode;
+
+      const salesFilter = {
+        ...baseFilter,
+        isActive: true,
+        IsBillCancelled: { $ne: true },
+        BillStatus: { $ne: "CANCELLED" },
+        BillDate: { $gte: fromDate, $lte: toDate },
+      };
+      if (companyCode) salesFilter.CompanyCode = companyCode;
+      if (godownCode) salesFilter.$or = [{ GDCode: godownCode }, { Godown: godownCode }];
+
+      const [stockRows, salesBills, purchaseBills, stockAdjustments, creditNotes, debitNotes] = await Promise.all([
+        Stock.find(stockFilter).lean(),
+        SalesHeader.find(salesFilter).select("CompanyCode CompanyName GDCode Godown items").lean(),
+        PurchaseHeader.find({
+          ...baseFilter,
+          isActive: { $ne: false },
+          invoiceDate: { $lte: toDate },
+        }).select("invoiceDate company companyCode companyName gdCode items").sort({ invoiceDate: -1, createdAt: -1 }).lean(),
+        StockAdjustment.find({
+          ...baseFilter,
+          Status: "COMPLETED",
+          VoucherDate: { $gte: fromDate, $lte: toDate },
+        }).lean(),
+        CreditNote.find({
+          ...baseFilter,
+          isActive: { $ne: false },
+          Status: { $ne: "CANCELLED" },
+          VDate: { $gte: fromDate, $lte: toDate },
+          ...(companyCode ? { CompanyCode: companyCode } : {}),
+          ...(godownCode ? { GDCode: godownCode } : {}),
+        }).select("CompanyCode CompanyName GDCode Godown items").lean(),
+        DebitNote.find({
+          ...baseFilter,
+          isActive: { $ne: false },
+          Status: { $ne: "CANCELLED" },
+          VDate: { $gte: fromDate, $lte: toDate },
+          ...(companyCode ? { CompanyCode: companyCode } : {}),
+          ...(godownCode ? { GDCode: godownCode } : {}),
+        }).select("CompanyCode CompanyName GDCode Godown items").lean(),
+      ]);
+
+      const numberFrom = (...values) => {
+        for (const value of values) {
+          if (value !== undefined && value !== null && value !== "") {
+            const parsed = Number(value);
+            if (Number.isFinite(parsed)) return parsed;
+          }
+        }
+        return 0;
+      };
+      const itemValue = (item, ...keys) => {
+        for (const key of keys) {
+          if (item?.[key] !== undefined && item?.[key] !== null) return item[key];
+        }
+        return "";
+      };
+      const movementQty = (item = {}) => {
+        const explicitTotal = itemValue(item, "totalQty", "TotalQty");
+        if (explicitTotal !== "") return numberFrom(explicitTotal);
+        return numberFrom(itemValue(item, "qty", "Qty", "quantity", "Quantity")) +
+          numberFrom(itemValue(item, "free", "Free", "freeQty", "FreeQty"));
+      };
+      const lastPurchaseByProduct = new Map();
+      for (const purchase of purchaseBills) {
+        for (const item of Array.isArray(purchase.items) ? purchase.items : []) {
+          const code = String(itemValue(item, "productCode", "ProductCode", "ProdCode", "prodCode", "code") || "").trim();
+          if (!code || lastPurchaseByProduct.has(code)) continue;
+          lastPurchaseByProduct.set(code, {
+            date: String(purchase.invoiceDate || ""),
+            rate: numberFrom(itemValue(item, "purRate", "purchaseRate", "PRate", "rate", "Rate")),
+            qty: numberFrom(itemValue(item, "qty", "Qty", "quantity", "Quantity", "totalQty", "TotalQty")),
+            mrp: numberFrom(itemValue(item, "mrp", "MRP"), item.selectedBatch?.mrp, item.selectedBatch?.MRP),
+            boxPack: numberFrom(itemValue(item, "boxPack", "BoxPack"), item.selectedBatch?.boxPack, item.selectedBatch?.BoxPack),
+          });
+        }
+      }
+      const aggregates = new Map();
+      const rowKey = ({ rowCompanyCode, productCode, unit, rowGodownCode }) => {
+        const levelKey = reportLevel === "company"
+          ? rowCompanyCode
+          : reportLevel === "product"
+            ? `${rowCompanyCode}|${productCode}`
+            : `${rowCompanyCode}|${productCode}|${unit}`;
+        return reportWith === "details" ? `${levelKey}|${rowGodownCode}` : levelKey;
+      };
+      const ensureRow = ({ rowCompanyCode, rowCompanyName, productCode, productName, unit, rowGodownCode, product = {} }) => {
+        const key = rowKey({ rowCompanyCode, productCode, unit, rowGodownCode });
+        if (!aggregates.has(key)) {
+          const lastPurchase = lastPurchaseByProduct.get(productCode) || {};
+          const isCompanyLevel = reportLevel === "company";
+          aggregates.set(key, {
+            CompanyCode: rowCompanyCode,
+            CompanyName: rowCompanyName || companyNames.get(rowCompanyCode) || rowCompanyCode || "Unassigned",
+            ProductCode: isCompanyLevel ? "" : productCode,
+            ProductName: isCompanyLevel ? "All Products" : productName || productCode,
+            ShortCode: isCompanyLevel ? "" : String(product.shortCode || product.ShortCode || product.productShortCode || product.ProductShortCode || ""),
+            LocalProduct: isCompanyLevel ? "" : String(product.localProduct || product.LocalProduct || product.localProductName || product.LocalProductName || ""),
+            SysProdCode: isCompanyLevel ? "" : String(product.sysProdCode || product.SysProdCode || product.systemProductCode || product.companyProductCode || product.CompanyProductCode || ""),
+            Unit: isCompanyLevel ? "" : unit || "PCS",
+            MRP: isCompanyLevel ? 0 : numberFrom(product.MRP, product.mrp, lastPurchase.mrp),
+            BoxPack: isCompanyLevel ? 0 : numberFrom(product.boxPack, product.BoxPack, lastPurchase.boxPack, 1),
+            LastPurchaseDate: isCompanyLevel ? "" : String(lastPurchase.date || ""),
+            LastPurchase: isCompanyLevel ? 0 : numberFrom(lastPurchase.rate),
+            LastQty: isCompanyLevel ? 0 : numberFrom(lastPurchase.qty),
+            Category: isCompanyLevel ? "" : String(product.category || product.Category || product.categoryName || ""),
+            SubCategory: isCompanyLevel ? "" : String(product.subCategory || product.SubCategory || product.subCategoryName || ""),
+            Group: isCompanyLevel ? "" : String(product.group || product.Group || product.productGroup || ""),
+            SubGroup: isCompanyLevel ? "" : String(product.subGroup || product.SubGroup || product.productSubGroup || ""),
+            Brand: isCompanyLevel ? "" : String(product.brand || product.Brand || ""),
+            SubBrand: isCompanyLevel ? "" : String(product.subBrand || product.SubBrand || ""),
+            GodownCode: reportWith === "details" ? rowGodownCode : "",
+            GodownName: reportWith === "details" ? (godownNames.get(rowGodownCode) || rowGodownCode || "Unassigned") : "All Godowns",
+            StockQty: 0,
+            Purchase: 0,
+            CreditNote: 0,
+            Increase: 0,
+            MFI: 0,
+            ToGDTransfer: 0,
+            SalesQty: 0,
+            DebitNote: 0,
+            Decrease: 0,
+            Damage: 0,
+            MFO: 0,
+            FreeQty: 0,
+            SalesAmount: 0,
+            FromGDTransfer: 0,
+          });
+        }
+        return aggregates.get(key);
+      };
+
+      for (const stock of stockRows) {
+        const productCode = String(stock.ProdCode || stock.productCode || "").trim();
+        const product = productByCode.get(productCode) || {};
+        const rowCompanyCode = resolveProductCompanyCode(product);
+        if (companyCode && rowCompanyCode !== companyCode) continue;
+        const row = ensureRow({
+          rowCompanyCode,
+          rowCompanyName: product.companyName,
+          productCode,
+          productName: product.productName,
+          unit: product.basicUnit,
+          rowGodownCode: String(stock.GDCode || "").trim(),
+          product,
+        });
+        row.StockQty += numberFrom(stock.Qty, stock.quantity);
+        row.MRP = Math.max(row.MRP, numberFrom(stock.MRP));
+        row.BoxPack = Math.max(row.BoxPack, numberFrom(stock.BoxPack, 1));
+      }
+
+      for (const bill of salesBills) {
+        for (const item of Array.isArray(bill.items) ? bill.items : []) {
+          const productCode = String(itemValue(item, "productCode", "ProductCode", "ProdCode", "prodCode", "code") || "").trim();
+          const product = productByCode.get(productCode) || {};
+          const rowCompanyCode = String(bill.CompanyCode || resolveProductCompanyCode(product)).trim();
+          if (companyCode && rowCompanyCode !== companyCode) continue;
+          const qty = numberFrom(itemValue(item, "qty", "Qty", "quantity", "Quantity"));
+          const freeQty = numberFrom(itemValue(item, "free", "Free", "freeQty", "FreeQty"));
+          const rate = numberFrom(itemValue(item, "rate", "Rate", "salesRate", "SalesRate", "sRate", "SRate"));
+          const amount = numberFrom(
+            itemValue(item, "netAmount", "NetAmount", "amount", "Amount", "AMT", "grossAmount", "GrossAmount"),
+            qty * rate
+          );
+          const row = ensureRow({
+            rowCompanyCode,
+            rowCompanyName: bill.CompanyName || product.companyName,
+            productCode,
+            productName: itemValue(item, "productName", "ProductName", "ProdName", "name") || product.productName,
+            unit: itemValue(item, "unit", "Unit", "basicUnit") || product.basicUnit,
+            rowGodownCode: String(bill.GDCode || bill.Godown || "").trim(),
+            product,
+          });
+          row.SalesQty += qty;
+          row.FreeQty += freeQty;
+          row.SalesAmount += amount;
+        }
+      }
+
+      for (const purchase of purchaseBills) {
+        if (String(purchase.invoiceDate || "") < fromDate) continue;
+        for (const item of Array.isArray(purchase.items) ? purchase.items : []) {
+          const productCode = String(itemValue(item, "productCode", "ProductCode", "ProdCode", "prodCode", "code") || "").trim();
+          const product = productByCode.get(productCode) || {};
+          const rowCompanyCode = resolveProductCompanyCode(product);
+          if (companyCode && rowCompanyCode !== companyCode) continue;
+          const rowGodownCode = String(purchase.gdCode || item.GDCode || "").trim();
+          if (godownCode && rowGodownCode !== godownCode) continue;
+          const row = ensureRow({
+            rowCompanyCode,
+            rowCompanyName: purchase.companyName || product.companyName,
+            productCode,
+            productName: itemValue(item, "productName", "ProductName", "ProdName", "name") || product.productName,
+            unit: itemValue(item, "unit", "Unit", "basicUnit") || product.basicUnit,
+            rowGodownCode,
+            product,
+          });
+          row.Purchase += movementQty(item);
+        }
+      }
+
+      const addNoteMovements = (notes, fieldName) => {
+        for (const note of notes) {
+          for (const item of Array.isArray(note.items) ? note.items : []) {
+            if (String(item.TRN || item.trn || "GDR").toUpperCase() !== "GDR") continue;
+            const productCode = String(itemValue(item, "ProductCode", "productCode", "ProdCode", "code") || "").trim();
+            const product = productByCode.get(productCode) || {};
+            const rowCompanyCode = String(note.CompanyCode || resolveProductCompanyCode(product)).trim();
+            if (companyCode && rowCompanyCode !== companyCode) continue;
+            const rowGodownCode = String(note.GDCode || note.Godown || "").trim();
+            if (godownCode && rowGodownCode !== godownCode) continue;
+            const row = ensureRow({
+              rowCompanyCode,
+              rowCompanyName: note.CompanyName || product.companyName,
+              productCode,
+              productName: itemValue(item, "ProductName", "productName", "ProdName", "name") || product.productName,
+              unit: itemValue(item, "Unit", "unit", "basicUnit") || product.basicUnit,
+              rowGodownCode,
+              product,
+            });
+            row[fieldName] += movementQty(item);
+          }
+        }
+      };
+      addNoteMovements(creditNotes, "CreditNote");
+      addNoteMovements(debitNotes, "DebitNote");
+
+      for (const adjustment of stockAdjustments) {
+        const transferMarker = String(
+          adjustment.TransferType || adjustment.transferType || adjustment.FromGDCode || adjustment.fromGDCode || adjustment.Narration || ""
+        );
+        const productCode = String(adjustment.ProdCode || adjustment.productCode || "").trim();
+        const product = productByCode.get(productCode) || {};
+        const rowCompanyCode = String(adjustment.CompanyCode || resolveProductCompanyCode(product)).trim();
+        if (companyCode && rowCompanyCode !== companyCode) continue;
+        const targetGodown = String(adjustment.GDCode || adjustment.ToGDCode || adjustment.toGDCode || "").trim();
+        if (godownCode && targetGodown !== godownCode) continue;
+        const row = ensureRow({
+          rowCompanyCode,
+          rowCompanyName: product.companyName,
+          productCode,
+          productName: adjustment.ProductName || product.productName,
+          unit: adjustment.Unit || product.basicUnit,
+          rowGodownCode: targetGodown,
+          product,
+        });
+        const quantity = numberFrom(adjustment.TotalQty, adjustment.Qty);
+        const adjustmentType = String(adjustment.AdjustmentType || "").toUpperCase();
+        const isTransfer = /transfer/i.test(transferMarker) || Boolean(adjustment.FromGDCode || adjustment.fromGDCode || adjustment.ToGDCode || adjustment.toGDCode);
+        const isMfi = /\bMFI\b|manufactur.*in/i.test(transferMarker);
+        const isMfo = /\bMFO\b|manufactur.*out/i.test(transferMarker);
+        if (adjustmentType === "DAMAGE_IN") row.Damage += quantity;
+        else if (adjustmentType === "IN" && isTransfer) row.FromGDTransfer += quantity;
+        else if (adjustmentType === "OUT" && isTransfer) row.ToGDTransfer += quantity;
+        else if (adjustmentType === "IN" && isMfi) row.MFI += quantity;
+        else if (adjustmentType === "OUT" && isMfo) row.MFO += quantity;
+        else if (adjustmentType === "IN") row.Increase += quantity;
+        else if (adjustmentType === "OUT") row.Decrease += quantity;
+      }
+
+      let rows = Array.from(aggregates.values()).map((row) => ({
+        ...row,
+        StockQty: Number(row.StockQty.toFixed(3)),
+        SalesQty: Number(row.SalesQty.toFixed(3)),
+        FreeQty: Number(row.FreeQty.toFixed(3)),
+        TotalSalesQty: Number((row.SalesQty + (includeFreeQty ? row.FreeQty : 0)).toFixed(3)),
+        SalesAmount: Number(row.SalesAmount.toFixed(2)),
+        Sales: Number((row.SalesQty + (includeFreeQty ? row.FreeQty : 0)).toFixed(3)),
+        Purchase: Number(row.Purchase.toFixed(3)),
+        CreditNote: Number(row.CreditNote.toFixed(3)),
+        Increase: Number(row.Increase.toFixed(3)),
+        MFI: Number(row.MFI.toFixed(3)),
+        ToGDTransfer: Number(row.ToGDTransfer.toFixed(3)),
+        DebitNote: Number(row.DebitNote.toFixed(3)),
+        Decrease: Number(row.Decrease.toFixed(3)),
+        Damage: Number(row.Damage.toFixed(3)),
+        MFO: Number(row.MFO.toFixed(3)),
+        FromGDTransfer: Number(row.FromGDTransfer.toFixed(3)),
+        Closing: Number(row.StockQty.toFixed(3)),
+        Opening: Number((
+          row.StockQty - row.Purchase - row.CreditNote - row.Increase - row.MFI - row.FromGDTransfer +
+          row.SalesQty + row.FreeQty + row.DebitNote + row.Decrease + row.Damage + row.MFO + row.ToGDTransfer
+        ).toFixed(3)),
+      }));
+
+      if (rowFilter === "stock") rows = rows.filter((row) => row.StockQty !== 0);
+      if (rowFilter === "sales") rows = rows.filter((row) => row.TotalSalesQty !== 0);
+      if (rowFilter === "zeroStock") rows = rows.filter((row) => row.StockQty === 0);
+      if (rowFilter === "noSales") rows = rows.filter((row) => row.TotalSalesQty === 0);
+
+      const comparators = {
+        productCode: (a, b) => a.ProductCode.localeCompare(b.ProductCode),
+        companyName: (a, b) => a.CompanyName.localeCompare(b.CompanyName),
+        stockQty: (a, b) => b.StockQty - a.StockQty,
+        salesQty: (a, b) => b.TotalSalesQty - a.TotalSalesQty,
+        productName: (a, b) => a.ProductName.localeCompare(b.ProductName),
+      };
+      rows.sort(comparators[orderBy] || comparators.productName);
+      rows = rows.map((row, index) => ({ SrNo: index + 1, ...row }));
+
+      const summary = rows.reduce(
+        (total, row) => ({
+          records: total.records + 1,
+          stockQty: total.stockQty + row.StockQty,
+          salesQty: total.salesQty + row.SalesQty,
+          freeQty: total.freeQty + row.FreeQty,
+          totalSalesQty: total.totalSalesQty + row.TotalSalesQty,
+          salesAmount: total.salesAmount + row.SalesAmount,
+        }),
+        { records: 0, stockQty: 0, salesQty: 0, freeQty: 0, totalSalesQty: 0, salesAmount: 0 }
+      );
+
+      return res.json({ success: true, data: rows, summary });
+    } catch (error) {
+      console.error("Stock and sales report error:", error);
+      return res.status(500).json({
+        success: false,
+        message: error.message || "Failed to generate Stock And Sales Report.",
+      });
+    }
+  }
+);
+
+app.get(
+  "/api/reports/purchase-analysis/criteria",
+  ensureConnection,
+  securityRouter.authorizeRequest("REPORTS", "PURCHASE_REPORT", "view"),
+  async (req, res) => {
+    try {
+      const distributorId = String(req.query.distributorId || "").trim();
+      const firmId = String(req.query.firmId || "").trim();
+      if (!distributorId || !firmId) {
+        return res.status(400).json({ success: false, message: "distributorId and firmId are required." });
+      }
+      const filter = { distributorId, firmId, isActive: true };
+      const [companies, godowns] = await Promise.all([
+        Company.find(filter).select("companyCode companyName").sort({ companyName: 1 }).lean(),
+        GodownModel.find(filter).select("godownCode godownName").sort({ godownName: 1 }).lean(),
+      ]);
+      return res.json({ success: true, companies, godowns });
+    } catch (error) {
+      console.error("Purchase analysis criteria error:", error);
+      return res.status(500).json({ success: false, message: "Failed to load purchase report criteria." });
+    }
+  }
+);
+
+app.get(
+  "/api/reports/purchase-analysis",
+  ensureConnection,
+  securityRouter.authorizeRequest("REPORTS", "PURCHASE_REPORT", "view"),
+  async (req, res) => {
+    try {
+      const distributorId = String(req.query.distributorId || "").trim();
+      const firmId = String(req.query.firmId || "").trim();
+      const companyCode = String(req.query.companyCode || "").trim();
+      const godownCode = String(req.query.godownCode || "").trim();
+      const fromDate = String(req.query.fromDate || "").trim();
+      const toDate = String(req.query.toDate || "").trim();
+      const actualInvoice = String(req.query.actualInvoice || "no").toLowerCase();
+      const orderBy = String(req.query.orderBy || "productName").trim();
+
+      if (!distributorId || !firmId || !fromDate || !toDate) {
+        return res.status(400).json({ success: false, message: "Distributor, firm and date range are required." });
+      }
+      if (fromDate > toDate) {
+        return res.status(400).json({ success: false, message: "From Date cannot be greater than To Date." });
+      }
+
+      const baseFilter = { distributorId, firmId };
+      const selectedCompany = companyCode
+        ? await Company.findOne({ ...baseFilter, companyCode }).select("companyCode companyName").lean()
+        : null;
+      const billFilter = {
+        ...baseFilter,
+        isActive: { $ne: false },
+        invoiceDate: { $gte: fromDate, $lte: toDate },
+      };
+      if (companyCode) {
+        billFilter.$or = [
+          { company: companyCode },
+          { company: selectedCompany?.companyName || companyCode },
+          { companyCode },
+        ];
+      }
+      if (godownCode) billFilter.gdCode = godownCode;
+      if (actualInvoice === "yes") {
+        billFilter.invoiceNumber = { $exists: true, $nin: ["", null] };
+      }
+
+      const bills = await PurchaseHeader.find(billFilter)
+        .sort({ invoiceDate: 1, vouSer: 1, vouNo: 1 })
+        .lean();
+      const productCodes = [...new Set(bills.flatMap((bill) =>
+        (Array.isArray(bill.items) ? bill.items : []).map((item) => String(
+          item.productCode || item.ProductCode || item.ProdCode || item.code || ""
+        ).trim()).filter(Boolean)
+      ))];
+      const productMasters = productCodes.length
+        ? await Product.find({ ...baseFilter, productCode: { $in: productCodes } }).lean()
+        : [];
+      const productByCode = new Map(productMasters.map((product) => [String(product.productCode || ""), product]));
+
+      const num = (...values) => {
+        for (const value of values) {
+          if (value !== undefined && value !== null && value !== "") {
+            const parsed = Number(value);
+            if (Number.isFinite(parsed)) return parsed;
+          }
+        }
+        return 0;
+      };
+      const pick = (source, ...keys) => {
+        for (const key of keys) {
+          if (source?.[key] !== undefined && source?.[key] !== null) return source[key];
+        }
+        return "";
+      };
+
+      const rows = [];
+      for (const bill of bills) {
+        for (const item of Array.isArray(bill.items) ? bill.items : []) {
+          const productCode = String(pick(item, "productCode", "ProductCode", "ProdCode", "code") || "").trim();
+          const product = productByCode.get(productCode) || {};
+          const qty = num(pick(item, "quantity", "qty", "Qty"));
+          const freeQty = num(pick(item, "free", "Free", "freeQty", "FreeQty"));
+          const rate = num(pick(item, "purRate", "purchaseRate", "PRate", "pRate", "rate", "Rate"));
+          const salesRate = num(
+            pick(item, "salesRate", "SalesRate", "sRate", "SRate"),
+            pick(item.selectedBatch, "salesRate", "SalesRate", "sRate", "SRate", "rate", "Rate"),
+            pick(item, "rate", "Rate"),
+            pick(product, "salesRate", "SalesRate", "sRate", "SRate", "Rate_Per_Unit")
+          );
+          const gross = num(pick(item, "grossAmount", "GrossAmount", "grossAmt"), qty * rate);
+          const taxable = num(pick(item, "taxable", "Taxable", "taxableValue", "TaxableValue"), gross);
+          const vatPer = num(pick(item, "gst", "tax", "gstPercent", "GSTPercent", "VatPer"));
+          const cgst = num(pick(item, "cgst", "CGST"));
+          const sgst = num(pick(item, "sgst", "SGST"));
+          const igst = num(pick(item, "igst", "IGST"));
+          const vatAmt = num(pick(item, "gstAmount", "GSTAmount", "vatAmt", "VatAmt"), cgst + sgst + igst);
+          const boxPack = num(pick(item, "boxPack", "BoxPack"), item.selectedBatch?.boxPack, item.selectedBatch?.BoxPack, 1) || 1;
+          const inBoxPack = num(pick(item, "inBoxPack", "inboxPack", "InBoxPack"), item.selectedBatch?.inBoxPack, item.selectedBatch?.InBoxPack, 1) || 1;
+          const bvDiscAmt = num(pick(item, "bvDiscAmt", "BVDiscAmt", "beforeVatDiscountAmount"), pick(item, "BVDisc1", "bvDisc1")) + num(pick(item, "BVDisc2", "bvDisc2"));
+          const bvAddAmt = num(pick(item, "bvAddAmt", "BVAddAmt", "beforeVatAddAmount"), pick(item, "BVAdd1", "bvAdd1")) + num(pick(item, "BVAdd2", "bvAdd2"));
+          const avDiscAmt = num(pick(item, "avDiscAmt", "AVDiscAmt", "afterVatDiscountAmount"), pick(item, "AVDisc1", "avDisc1")) + num(pick(item, "AVDisc2", "avDisc2"));
+          const avAddAmt = num(pick(item, "avAddAmt", "AVAddAmt", "afterVatAddAmount"), pick(item, "AVAdd1", "avAdd1")) + num(pick(item, "AVAdd2", "avAdd2"));
+          const amount = num(pick(item, "amount", "Amount", "netAmount", "NetAmount"), taxable + vatAmt - avDiscAmt + avAddAmt);
+
+          rows.push({
+            SrNo: rows.length + 1,
+            VouDate: bill.invoiceDate || "",
+            VouSeries: bill.vouSer || "",
+            VouNo: bill.vouNo ?? "",
+            InvDate: bill.actualInvoiceDate || bill.invDate || bill.invoiceDate || "",
+            InvNo: bill.invoiceNumber || "",
+            Company: bill.company || selectedCompany?.companyName || "",
+            ProductCode: productCode,
+            ProductName: String(pick(item, "productName", "ProductName", "ProdName", "name") || product.productName || ""),
+            HSNCode: String(pick(item, "hsn", "hsnCode", "HSNCode") || product.hsn || ""),
+            MRP: num(pick(item, "mrp", "MRP"), item.selectedBatch?.mrp, item.selectedBatch?.MRP),
+            Batch: String(pick(item, "batchNo", "batch", "Batch") || item.selectedBatch?.Batch || "."),
+            Unit: String(pick(item, "unit", "Unit", "basicUnit") || product.basicUnit || "PCS"),
+            Qty: qty,
+            FreeQty: freeQty,
+            BoxQty: num(pick(item, "boxQty", "BoxQty", "cases", "Cases"), boxPack > 0 ? qty / boxPack : 0),
+            Rate: rate,
+            SalesRate: salesRate,
+            Gross: gross,
+            Amount: amount,
+            Weight: num(pick(item, "weight", "Weight"), product.weight) * qty,
+            Taxable: taxable,
+            BVDiscAmt: bvDiscAmt,
+            BVAddAmt: bvAddAmt,
+            AVDiscAmt: avDiscAmt,
+            AVAddAmt: avAddAmt,
+            VatPer: vatPer,
+            VatAmt: vatAmt,
+            GSTPercent: vatPer,
+            GSTAmt: vatAmt,
+            CGST: cgst,
+            SGST: sgst,
+            IGST: igst,
+            Cess1: num(pick(item, "cess1", "Cess1", "cess")),
+            Cess2: num(pick(item, "cess2", "Cess2", "cessAmount", "CessAmount")),
+            NetAmt: amount,
+            BoxPack: boxPack,
+            INBoxPack: inBoxPack,
+          });
+        }
+      }
+
+      const sorters = {
+        productName: (a, b) => a.ProductName.localeCompare(b.ProductName),
+        productCode: (a, b) => a.ProductCode.localeCompare(b.ProductCode),
+        company: (a, b) => a.Company.localeCompare(b.Company),
+        voucher: (a, b) => a.VouDate.localeCompare(b.VouDate) || String(a.VouSeries).localeCompare(String(b.VouSeries)) || Number(a.VouNo) - Number(b.VouNo),
+        amount: (a, b) => b.NetAmt - a.NetAmt,
+      };
+      rows.sort(sorters[orderBy] || sorters.productName);
+      rows.forEach((row, index) => { row.SrNo = index + 1; });
+      return res.json({ success: true, data: rows, count: rows.length });
+    } catch (error) {
+      console.error("Purchase analysis report error:", error);
+      return res.status(500).json({ success: false, message: error.message || "Failed to generate purchase report." });
+    }
+  }
+);
+
+app.use("/api/opening-transactions", ensureConnection, createOpeningBalancesRouter(securityRouter));
+app.use("/api/p0", ensureConnection, createP0FeaturesRouter(securityRouter));
+
+app.use((req, res) => {
+  res.status(404).json({
+    success: false,
+    message: `Route not found: ${req.method} ${req.originalUrl}`,
+  });
+});
+app.use(apiErrorHandler);

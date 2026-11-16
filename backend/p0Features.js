@@ -1,9 +1,10 @@
 import express from "express";
 import mongoose from "mongoose";
-import { Journal, postBalancedJournal, reverseSourceJournal } from "./accounting.js";
+import { Journal, postBalancedJournal, reverseSourceJournal, validateJournalEntryLines } from "./accounting.js";
 import { AuditEvent, writeAuditEvent } from "./audit.js";
 import { nextDocumentNumber } from "./counters.js";
 import { openingOutstanding } from './openingBalances.js';
+import { ChartAccount, listChartAccounts, validateChartAccountMapping } from "./chartOfAccounts.js";
 
 const stockMovementSchema = new mongoose.Schema({
   distributorId: { type: String, required: true }, firmId: { type: String, required: true },
@@ -30,6 +31,8 @@ const JournalVoucher = mongoose.models.T_JournalVoucher || mongoose.model("T_Jou
 
 const tenant = (req, extra = {}) => ({ ...extra, distributorId: req.auth.distributorId, firmId: req.auth.firmId });
 const number = (value) => Number.isFinite(Number(value)) ? Number(value) : 0;
+export const isCreditDaysOverdue = (creditDays, overdue) =>
+  number(creditDays) > 0 && overdue;
 const itemCode = (item) => String(item.productCode || item.ProductCode || item.code || item.productId || String(item.product || "").split(" - ")[0] || "").trim();
 const itemName = (item) => String(item.productName || item.ProductName || item.name || "").trim();
 const itemBatch = (item) => String(item.batchNo || item.Batch || item.batch || item.selectedBatch?.Batch || ".").trim() || ".";
@@ -141,7 +144,7 @@ export const validateCustomerCredit = async ({ req, session }) => {
   if (String(account.blackListed || "NO").toUpperCase() === "YES") violations.push("Customer is blacklisted");
   if (number(account.creditAmt) > 0 && exposure > number(account.creditAmt) + 0.01) violations.push(`Credit limit exceeded (${exposure.toFixed(2)} > ${number(account.creditAmt).toFixed(2)})`);
   if (number(account.creditBills) > 0 && pendingBillCount >= number(account.creditBills)) violations.push("Maximum pending bills limit reached");
-  if (overdue) violations.push("Customer has overdue bills");
+  if (isCreditDaysOverdue(account.creditDays, overdue)) violations.push("Customer has overdue bills");
   if (!violations.length) return { outstanding, exposure, violations: [] };
   const override = body.creditOverride || {};
   const role = String(req.auth.role || "").toUpperCase();
@@ -151,17 +154,18 @@ export const validateCustomerCredit = async ({ req, session }) => {
   throw Object.assign(new Error(`Credit control blocked sale: ${violations.join("; ")}`), { statusCode: 409, code: "CREDIT_CONTROL_BLOCK" });
 };
 
-export const normalizeJournalLines = (body) => (body.lines || body.items || []).map((line) => ({
-  accountCode: String(line.accountCode || line.code || line.accountName || "").trim(),
-  accountName: String(line.accountName || "").trim(), debit: number(line.debit ?? line.drAmount), credit: number(line.credit ?? line.crAmount),
-  narration: String(line.narration || body.narration || body.narr || ""),
-})).filter((line) => line.accountCode && (line.debit > 0 || line.credit > 0));
+export const normalizeJournalLines = (body) => (body.lines || body.items || []).map((line) => {
+  if (!line || typeof line !== "object") return { accountCode: "", debit: Number.NaN, credit: Number.NaN, narration: "" };
+  return {
+    accountCode: String(line.accountCode || line.code || line.accountName || "").trim(),
+    accountName: String(line.accountName || "").trim(),
+    debit: line.debit === undefined && line.drAmount === undefined ? 0 : Number(line.debit ?? line.drAmount),
+    credit: line.credit === undefined && line.crAmount === undefined ? 0 : Number(line.credit ?? line.crAmount),
+    narration: String(line.narration || body.narration || body.narr || ""),
+  };
+}).filter((line) => line.accountCode || line.debit !== 0 || line.credit !== 0);
 
-export const validateJournalLines = (lines) => {
-  if (lines.length < 2) throw Object.assign(new Error("Journal Voucher requires at least two lines."), { statusCode: 400 });
-  const debit = lines.reduce((sum, line) => sum + line.debit, 0), credit = lines.reduce((sum, line) => sum + line.credit, 0);
-  if (debit <= 0 || Math.abs(debit - credit) > 0.01) throw Object.assign(new Error("Journal Voucher debit and credit totals must be equal."), { statusCode: 400 });
-};
+export const validateJournalLines = validateJournalEntryLines;
 
 const dateMatch = (req, field = "documentDate") => {
   const condition = {};
@@ -171,16 +175,26 @@ const dateMatch = (req, field = "documentDate") => {
 };
 
 export const financialRows = async (req, includeOpening = false) => {
-  // Ledger openings include prior posted activity, including receipts/payments.
+  // Reversed transaction postings remain effective on their original dates.
+  // OPENING_BALANCE is different: legacy edits supersede rows without emitting
+  // reversal events. Retain its POSTED-only selection until that path is migrated.
+  // OpeningTransaction is never itself read as a financial movement.
   // OpeningTransaction is a reference/summary, not a second ledger posting.
   const filter = includeOpening && req.query.fromDate
     ? (req.query.toDate ? { documentDate: { $lte: String(req.query.toDate) } } : {})
     : dateMatch(req);
-  const journals = await Journal.find(tenant(req, { status: "POSTED", ...filter })).sort({ documentDate: 1, createdAt: 1 }).lean();
+  const account = String(req.query.account || "").trim();
+  const accountPattern = account ? new RegExp(account.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "i") : null;
+  const journals = await Journal.find(tenant(req, { $or: [
+    { status: "POSTED" },
+    { status: "REVERSED", sourceType: { $ne: "OPENING_BALANCE" } },
+  ], ...filter, ...(accountPattern ? { "lines.accountCode": accountPattern } : {}) }),
+  { documentDate: 1, documentNo: 1, sourceType: 1, lines: 1, createdAt: 1 })
+    .sort({ documentDate: 1, createdAt: 1 }).lean();
   const rows = journals.flatMap((entry) => entry.lines.map((line) => ({
     date: entry.documentDate, documentNo: entry.documentNo || "", source: entry.sourceType,
     accountCode: line.accountCode, narration: line.narration || "", debit: number(line.debit), credit: number(line.credit),
-  })));
+  }))).filter((row) => !accountPattern || accountPattern.test(row.accountCode));
   if (!includeOpening || !req.query.fromDate) return rows;
   const fromDate = String(req.query.fromDate), balances = new Map(), movements = [];
   for (const row of rows) {
@@ -195,14 +209,43 @@ export const financialRows = async (req, includeOpening = false) => {
   return [...openings, ...movements];
 };
 
+export const summarizeClassifiedRows = (rows, report) => {
+  const grouped = new Map();
+  for (const row of rows) {
+    const value = grouped.get(row.accountCode) || {
+      accountCode: row.accountCode,
+      accountName: row.accountName,
+      accountType: row.accountType,
+      normalSide: row.normalSide,
+      debit: 0,
+      credit: 0,
+    };
+    value.debit += row.debit;
+    value.credit += row.credit;
+    grouped.set(row.accountCode, value);
+  }
+  const summarized = [...grouped.values()].map((row) => ({ ...row, closing: row.debit - row.credit }));
+  if (report === "profit-loss") return summarized.filter((row) => ["INCOME", "EXPENSE"].includes(row.accountType));
+  if (report === "balance-sheet") return summarized.filter((row) => ["ASSET", "LIABILITY", "EQUITY"].includes(row.accountType));
+  return summarized;
+};
+
 export default function createP0FeaturesRouter(securityRouter) {
   const router = express.Router();
 
   router.get('/reports/party-outstanding', securityRouter.authorizeRequest('REPORTS', 'OUTSTANDING_REPORT', 'view'), async (req, res) => {
+    const account = String(req.query.account || '').trim();
+    const accountPattern = account ? new RegExp(account.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), 'i') : null;
+    const accountFilter = (codeField, nameField) => accountPattern
+      ? { $expr: { $regexMatch: {
+        input: { $concat: [{ $ifNull: [`$${codeField}`, ""] }, " ", { $ifNull: [`$${nameField}`, ""] }] },
+        regex: accountPattern,
+      } } }
+      : {};
     const [sales, purchases, openings] = await Promise.all([
-      mongoose.models.T_Sal_Header.find(tenant(req, { isActive: { $ne: false }, IsBillCancelled: { $ne: true } }))
+      mongoose.models.T_Sal_Header.find(tenant(req, { isActive: { $ne: false }, IsBillCancelled: { $ne: true }, ...accountFilter('PartyCode', 'PartyName') }))
         .select("PartyCode PartyName BillSeries BillNo BillDate NetAmount receiptAllocated").lean(),
-      mongoose.models.T_Pur_Header.find(tenant(req, { isActive: { $ne: false } }))
+      mongoose.models.T_Pur_Header.find(tenant(req, { isActive: { $ne: false }, ...accountFilter('supplierCode', 'supplierName') }))
         .select("supplierCode supplierName vouSer vouNo invoiceDate netAmt paymentAllocated").lean(),
       openingOutstanding(req),
     ]);
@@ -211,8 +254,8 @@ export default function createP0FeaturesRouter(securityRouter) {
       ...purchases.map(row => ({ accountCode: row.supplierCode, accountName: row.supplierName, source: 'Purchase', type: 'PUR', series: row.vouSer, number: row.vouNo, date: row.invoiceDate, originalAmount: number(row.netAmt), broughtForward: '', allocated: number(row.paymentAllocated), debit: 0, credit: Math.max(0, number(row.netAmt) - number(row.paymentAllocated)) })),
       ...openings.map(row => ({ accountCode: row.accountCode, accountName: row.accountName, source: 'Opening', type: row.transactionType, series: row.transactionSeries, number: row.transactionNo, date: row.date, originalAmount: row.originalAmount, broughtForward: row.balanceAmount, allocated: row.allocatedAmount, debit: row.balanceType === 'Dr' ? row.balanceAmount - row.allocatedAmount : 0, credit: row.balanceType === 'Cr' ? row.balanceAmount - row.allocatedAmount : 0 })),
     ].filter(row => row.debit > 0 || row.credit > 0);
-    const account = String(req.query.account || '').trim().toLowerCase();
-    if (account) rows = rows.filter(row => `${row.accountCode} ${row.accountName}`.toLowerCase().includes(account));
+    const accountSearch = account.toLowerCase();
+    if (accountSearch) rows = rows.filter(row => `${row.accountCode} ${row.accountName}`.toLowerCase().includes(accountSearch));
     rows.sort((a, b) => String(a.accountName).localeCompare(String(b.accountName)) || String(a.date).localeCompare(String(b.date)));
     res.json({ success: true, rows, summary: { debit: rows.reduce((sum, row) => sum + row.debit, 0), credit: rows.reduce((sum, row) => sum + row.credit, 0) } });
   });
@@ -283,21 +326,88 @@ export default function createP0FeaturesRouter(securityRouter) {
     finally { await session.endSession(); }
   });
 
-  router.get("/reports/financial/:report", securityRouter.authorizeRequest("REPORTS", "FINANCIAL_REPORT", "view"), async (req, res) => {
-    const report = String(req.params.report || "general-ledger");
-    let rows = await financialRows(req, ["general-ledger", "party-ledger"].includes(report));
-    const account = String(req.query.account || "").trim().toLowerCase();
-    if (account) rows = rows.filter((row) => row.accountCode.toLowerCase().includes(account));
-    if (report === "cash-book") rows = rows.filter((row) => /cash/i.test(row.accountCode));
-    if (report === "bank-book") rows = rows.filter((row) => /bank/i.test(row.accountCode));
-    if (["trial-balance", "profit-loss", "balance-sheet"].includes(report)) {
-      const grouped = new Map();
-      for (const row of rows) { const value = grouped.get(row.accountCode) || { accountCode: row.accountCode, debit: 0, credit: 0 }; value.debit += row.debit; value.credit += row.credit; grouped.set(row.accountCode, value); }
-      rows = [...grouped.values()].map((row) => ({ ...row, closing: row.debit - row.credit }));
-      if (report === "profit-loss") rows = rows.filter((row) => /sales|purchase|income|expense|discount|profit|loss|gst/i.test(row.accountCode));
-      if (report === "balance-sheet") rows = rows.filter((row) => !/sales|purchase|income|expense|discount/i.test(row.accountCode));
+  router.get("/chart-of-accounts", securityRouter.authorizeRequest("REPORTS", "FINANCIAL_REPORT", "view"), async (req, res) => {
+    try {
+      res.json({ success: true, accounts: await listChartAccounts(req) });
+    } catch (error) {
+      res.status(error.statusCode || 500).json({ success: false, message: error.message || "Chart of accounts could not be loaded." });
     }
-    res.json({ success: true, report, rows, summary: { debit: rows.reduce((s, r) => s + number(r.debit), 0), credit: rows.reduce((s, r) => s + number(r.credit), 0) } });
+  });
+
+  router.patch("/chart-of-accounts/:accountCode", securityRouter.authorizeRequest("REPORTS", "FINANCIAL_REPORT", "edit"), async (req, res) => {
+    try {
+      const accountCode = String(req.params.accountCode || "").trim();
+      if (!accountCode || accountCode.length > 100) {
+        return res.status(400).json({ success: false, message: "A valid account code is required." });
+      }
+      const mapping = validateChartAccountMapping(req.body);
+      if (mapping.postingRole) {
+        const duplicateRole = await ChartAccount.findOne(tenant(req, {
+          postingRole: mapping.postingRole,
+          accountCode: { $ne: accountCode },
+        })).select("accountCode").lean();
+        if (duplicateRole) {
+          return res.status(409).json({ success: false, message: `The ${mapping.postingRole.replaceAll("_", " ").toLowerCase()} role is already assigned to ${duplicateRole.accountCode}.` });
+        }
+      }
+      const saved = await ChartAccount.findOneAndUpdate(
+        tenant(req, { accountCode }),
+        { $set: { ...mapping, accountName: String(req.body.accountName || "").trim() } },
+        { new: true, upsert: true, runValidators: true, setDefaultsOnInsert: true }
+      ).lean();
+      res.json({ success: true, account: saved });
+    } catch (error) {
+      const status = error.statusCode || (error.code === 11000 ? 409 : 500);
+      res.status(status).json({ success: false, message: error.message || "Chart account could not be saved." });
+    }
+  });
+
+  router.get("/reports/financial/:report", securityRouter.authorizeRequest("REPORTS", "FINANCIAL_REPORT", "view"), async (req, res) => {
+    try {
+      const report = String(req.params.report || "general-ledger");
+      const classifiedReports = ["trial-balance", "profit-loss", "balance-sheet", "cash-book", "bank-book"];
+      const statementReports = ["trial-balance", "profit-loss", "balance-sheet"];
+      let rows;
+      if (["trial-balance", "balance-sheet"].includes(report)) {
+        const query = { ...req.query, fromDate: "" };
+        rows = await financialRows({ auth: req.auth, query });
+      } else {
+        rows = await financialRows(req, ["general-ledger", "party-ledger"].includes(report));
+      }
+      const account = String(req.query.account || "").trim().toLowerCase();
+      if (account) rows = rows.filter((row) => String(row.accountCode || "").toLowerCase().includes(account));
+
+      let accountMappings = new Map();
+      if (classifiedReports.includes(report)) {
+        const codes = [...new Set(rows.map((row) => row.accountCode))];
+        const mappings = await ChartAccount.find(tenant(req, { accountCode: { $in: codes } })).lean();
+        accountMappings = new Map(mappings.map((mapping) => [mapping.accountCode, mapping]));
+        const unmappedAccounts = codes.filter((code) => !accountMappings.has(code));
+        if (unmappedAccounts.length) {
+          return res.status(409).json({
+            success: false,
+            message: "Classify every account used by this report in Chart of Accounts Setup.",
+            unmappedAccounts,
+          });
+        }
+        rows = rows.map((row) => ({
+          ...row,
+          accountName: accountMappings.get(row.accountCode).accountName || row.accountCode,
+          accountType: accountMappings.get(row.accountCode).accountType,
+          normalSide: accountMappings.get(row.accountCode).normalSide,
+          cashBankType: accountMappings.get(row.accountCode).cashBankType,
+        }));
+        if (report === "cash-book") rows = rows.filter((row) => row.cashBankType === "CASH");
+        if (report === "bank-book") rows = rows.filter((row) => row.cashBankType === "BANK");
+      }
+
+      if (statementReports.includes(report)) {
+        rows = summarizeClassifiedRows(rows, report);
+      }
+      res.json({ success: true, report, rows, summary: { debit: rows.reduce((s, r) => s + number(r.debit), 0), credit: rows.reduce((s, r) => s + number(r.credit), 0) } });
+    } catch (error) {
+      res.status(error.statusCode || 500).json({ success: false, message: error.message || "Financial report could not be generated." });
+    }
   });
   router.get("/reports/stock-movement", securityRouter.authorizeRequest("REPORTS", "STOCK_REPORT", "view"), async (req, res) => {
     const StockAdjustment = mongoose.models.T_Stock_Adjustment;
@@ -396,6 +506,15 @@ export default function createP0FeaturesRouter(securityRouter) {
     const selectedDate = /^\d{4}-\d{2}-\d{2}$/.test(String(req.query.date || "")) ? String(req.query.date) : today;
     const requestedStart = String(req.query.fromDate || "");
     const selectedStart = /^\d{4}-\d{2}-\d{2}$/.test(requestedStart) && requestedStart <= selectedDate ? requestedStart : selectedDate;
+    const requestedCollectionStart = String(req.query.collectionFromDate || "");
+    const requestedCollectionEnd = String(req.query.collectionToDate || "");
+    const collectionRangeValid = /^\d{4}-\d{2}-\d{2}$/.test(requestedCollectionStart)
+      && /^\d{4}-\d{2}-\d{2}$/.test(requestedCollectionEnd)
+      && requestedCollectionStart <= requestedCollectionEnd
+      && requestedCollectionEnd <= selectedDate;
+    const collectionDateFilter = collectionRangeValid
+      ? { $gte: requestedCollectionStart, $lte: requestedCollectionEnd }
+      : { $lte: selectedDate };
     const selectedMonth = selectedDate.slice(0, 7);
     const previousMonth = new Date(`${selectedMonth}-01T00:00:00Z`);
     previousMonth.setUTCMonth(previousMonth.getUTCMonth() - 1);
@@ -409,11 +528,17 @@ export default function createP0FeaturesRouter(securityRouter) {
       $expr: { $eq: [{ $trim: { input: { $ifNull: ["$IRNNo", ""] } } }, ""] },
     };
 
-    const [salesFacets, purchaseTotals, receiptTotals, stockFacets, openingBills, flashSales, flashPurchase, flashCredit, flashDamage, flashDebit, flashPayment, purchaseTrend, accountCount, productCount, collectionRows, loadRows] = await Promise.all([
+    const [salesFacets, purchaseFacets, receiptFacets, stockFacets, openingBills, flashCredit, flashDamage, flashDebit, flashPayment, accountCount, productCount, loadRows] = await Promise.all([
       Sales ? Sales.aggregate([
         { $match: salesMatch },
         { $facet: {
           totals: [{ $group: { _id: null, totalSales: { $sum: numeric("$NetAmount") }, outstanding: { $sum: pending }, totalInvoices: { $sum: 1 }, overdue: { $sum: { $cond: [{ $lt: [{ $ifNull: ["$DueDate", ""] }, today] }, pending, 0] } } } }],
+          flash: [{ $group: { _id: null,
+            today: { $sum: { $cond: [{ $eq: ["$BillDate", selectedDate] }, numeric("$NetAmount"), 0] } },
+            period: { $sum: { $cond: [{ $and: [{ $gte: ["$BillDate", selectedStart] }, { $lte: ["$BillDate", selectedDate] }] }, numeric("$NetAmount"), 0] } },
+            month: { $sum: { $cond: [{ $eq: [{ $substrBytes: [{ $ifNull: ["$BillDate", ""] }, 0, 7] }, selectedMonth] }, numeric("$NetAmount"), 0] } },
+            previousMonth: { $sum: { $cond: [{ $eq: [{ $substrBytes: [{ $ifNull: ["$BillDate", ""] }, 0, 7] }, previousMonthKey] }, numeric("$NetAmount"), 0] } },
+          } } ],
           recentInvoices: [{ $sort: { BillDate: -1, BillNo: -1, _id: -1 } }, { $limit: 10 }, { $project: { _id: 0, billNo: { $concat: [{ $ifNull: ["$BillSeries", ""] }, { $convert: { input: "$BillNo", to: "string", onError: "", onNull: "" } }] }, date: "$BillDate", party: "$PartyName", amount: "$NetAmount", pending } }],
           pendingEInvoices: [{ $match: { BillDate: { $lte: selectedDate }, SalesEntryType: { $ne: "COUNTER_SALES" } } }, { $sort: { BillDate: -1, BillNo: -1, _id: -1 } }, { $limit: 12 }, { $project: { billNo: { $concat: [{ $ifNull: ["$BillSeries", ""] }, { $convert: { input: "$BillNo", to: "string", onError: "", onNull: "" } }] }, date: "$BillDate", party: "$PartyName", amount: "$NetAmount", irnNo: "$IRNNo" } }],
           generateEInvoices: [{ $match: pendingEInvoiceMatch }, { $sort: { BillDate: -1, BillNo: -1, _id: -1 } }, { $limit: 12 }, { $project: { billNo: { $concat: [{ $ifNull: ["$BillSeries", ""] }, { $convert: { input: "$BillNo", to: "string", onError: "", onNull: "" } }] }, date: "$BillDate", party: "$PartyName", amount: "$NetAmount", irnNo: "$IRNNo" } }],
@@ -436,9 +561,35 @@ export default function createP0FeaturesRouter(securityRouter) {
             { $project: { _id: 0, code: "$_id", name: { $cond: [{ $eq: ["$name", ""] }, "$_id", "$name"] }, quantity: 1, amount: 1 } },
           ],
         } },
-      ]) : Promise.resolve([{ totals: [], recentInvoices: [], topCustomers: [], topProducts: [], salesTrend: [] }]),
-      Purchase ? Purchase.aggregate([{ $match: { ...scope, isActive: { $ne: false } } }, { $group: { _id: null, total: { $sum: numeric("$netAmt") } } }]) : [],
-      Receipt ? Receipt.aggregate([{ $match: { ...scope, status: { $ne: "REVERSED" } } }, { $group: { _id: null, total: { $sum: numeric("$receiptAmount") } } }]) : [],
+      ]) : Promise.resolve([{ totals: [], flash: [], recentInvoices: [], topCustomers: [], topProducts: [], salesTrend: [] }]),
+      Purchase ? Purchase.aggregate([
+        { $match: { ...scope, isActive: { $ne: false } } },
+        { $facet: {
+          totals: [{ $group: { _id: null, total: { $sum: numeric("$netAmt") } } }],
+          flash: [{ $group: { _id: null,
+            today: { $sum: { $cond: [{ $eq: ["$invoiceDate", selectedDate] }, numeric("$netAmt"), 0] } },
+            period: { $sum: { $cond: [{ $and: [{ $gte: ["$invoiceDate", selectedStart] }, { $lte: ["$invoiceDate", selectedDate] }] }, numeric("$netAmt"), 0] } },
+            month: { $sum: { $cond: [{ $eq: [{ $substrBytes: [{ $ifNull: ["$invoiceDate", ""] }, 0, 7] }, selectedMonth] }, numeric("$netAmt"), 0] } },
+            previousMonth: { $sum: { $cond: [{ $eq: [{ $substrBytes: [{ $ifNull: ["$invoiceDate", ""] }, 0, 7] }, previousMonthKey] }, numeric("$netAmt"), 0] } },
+          } } ],
+          trend: [
+            { $match: { invoiceDate: { $type: "string", $ne: "" } } },
+            { $group: { _id: "$invoiceDate", purchase: { $sum: numeric("$netAmt") } } },
+            { $sort: { _id: -1 } }, { $limit: 30 }, { $sort: { _id: 1 } },
+            { $project: { _id: 0, label: "$_id", purchase: 1 } },
+          ],
+        } },
+      ]) : Promise.resolve([{ totals: [], flash: [], trend: [] }]),
+      Receipt ? Receipt.aggregate([
+        { $match: { ...scope, status: { $ne: "REVERSED" } } },
+        { $facet: {
+          totals: [{ $group: { _id: null, total: { $sum: numeric("$receiptAmount") } } }],
+          rows: [
+            { $match: { receiptDate: collectionDateFilter } },
+            { $project: { receiptDate: 1, receiptAmount: 1, bankCash: 1, bankCashName: 1, bankCashGroup: 1, chequeNo: 1 } },
+          ],
+        } },
+      ]) : Promise.resolve([{ totals: [], rows: [] }]),
       Stock ? Stock.aggregate([
         { $match: scope },
         { $facet: {
@@ -447,18 +598,6 @@ export default function createP0FeaturesRouter(securityRouter) {
         } },
       ]) : Promise.resolve([{ totals: [], lowStockItems: [] }]),
       openingOutstanding(req, 'Dr'),
-      Sales ? Sales.aggregate([{ $match: salesMatch }, { $group: { _id: null,
-        today: { $sum: { $cond: [{ $eq: ["$BillDate", selectedDate] }, numeric("$NetAmount"), 0] } },
-        period: { $sum: { $cond: [{ $and: [{ $gte: ["$BillDate", selectedStart] }, { $lte: ["$BillDate", selectedDate] }] }, numeric("$NetAmount"), 0] } },
-        month: { $sum: { $cond: [{ $eq: [{ $substrBytes: [{ $ifNull: ["$BillDate", ""] }, 0, 7] }, selectedMonth] }, numeric("$NetAmount"), 0] } },
-        previousMonth: { $sum: { $cond: [{ $eq: [{ $substrBytes: [{ $ifNull: ["$BillDate", ""] }, 0, 7] }, previousMonthKey] }, numeric("$NetAmount"), 0] } },
-      } }]) : [],
-      Purchase ? Purchase.aggregate([{ $match: { ...scope, isActive: { $ne: false } } }, { $group: { _id: null,
-        today: { $sum: { $cond: [{ $eq: ["$invoiceDate", selectedDate] }, numeric("$netAmt"), 0] } },
-        period: { $sum: { $cond: [{ $and: [{ $gte: ["$invoiceDate", selectedStart] }, { $lte: ["$invoiceDate", selectedDate] }] }, numeric("$netAmt"), 0] } },
-        month: { $sum: { $cond: [{ $eq: [{ $substrBytes: [{ $ifNull: ["$invoiceDate", ""] }, 0, 7] }, selectedMonth] }, numeric("$netAmt"), 0] } },
-        previousMonth: { $sum: { $cond: [{ $eq: [{ $substrBytes: [{ $ifNull: ["$invoiceDate", ""] }, 0, 7] }, previousMonthKey] }, numeric("$netAmt"), 0] } },
-      } }]) : [],
       CreditNote ? CreditNote.aggregate([{ $match: { ...scope, isActive: { $ne: false }, Status: { $ne: "Cancelled" } } }, { $group: { _id: null,
         today: { $sum: { $cond: [{ $eq: ["$VDate", selectedDate] }, numeric("$NetAmount"), 0] } },
         month: { $sum: { $cond: [{ $eq: [{ $substrBytes: [{ $ifNull: ["$VDate", ""] }, 0, 7] }, selectedMonth] }, numeric("$NetAmount"), 0] } },
@@ -468,23 +607,37 @@ export default function createP0FeaturesRouter(securityRouter) {
         month: { $sum: { $cond: [{ $eq: [{ $substrBytes: [{ $ifNull: ["$VDate", ""] }, 0, 7] }, selectedMonth] }, numeric("$NetAmount"), 0] } },
       } }]) : [],
       Payment ? Payment.aggregate([{ $match: { ...scope, status: { $ne: "REVERSED" } } }, { $group: { _id: null, total: { $sum: numeric("$amount") } } }]) : [],
-      Purchase ? Purchase.aggregate([
-        { $match: { ...scope, isActive: { $ne: false }, invoiceDate: { $type: "string", $ne: "" } } },
-        { $group: { _id: "$invoiceDate", purchase: { $sum: numeric("$netAmt") } } },
-        { $sort: { _id: -1 } }, { $limit: 30 }, { $sort: { _id: 1 } },
-        { $project: { _id: 0, label: "$_id", purchase: 1 } },
-      ]) : [],
       Account ? Account.countDocuments({ ...scope, isActive: true }) : 0,
       Product ? Product.countDocuments({ ...scope, isActive: true }) : 0,
-      Receipt ? Receipt.find({ ...scope, status: { $ne: "REVERSED" }, receiptDate: { $lte: selectedDate } }).select({ receiptDate: 1, receiptAmount: 1, bankCash: 1, bankCashName: 1, bankCashGroup: 1, chequeNo: 1 }).lean() : [],
-      Load ? Load.find({ DistributorId: req.auth.distributorId, FirmId: req.auth.firmId, IsCancelled: { $ne: true } }).select({ LoadSeries: 1, LoadNo: 1, LoadDate: 1, Status: 1, IsSettled: 1, TotalBills: 1, TotalAmount: 1 }).sort({ LoadDate: -1, LoadNo: -1 }).lean() : [],
+      Load ? Load.aggregate([
+        { $match: { DistributorId: req.auth.distributorId, FirmId: req.auth.firmId, IsCancelled: { $ne: true } } },
+        { $sort: { LoadDate: -1, LoadNo: -1 } },
+        { $facet: {
+          rows: [
+            { $limit: 10 },
+            { $project: { LoadSeries: 1, LoadNo: 1, LoadDate: 1, Status: 1, IsSettled: 1, TotalBills: 1, TotalAmount: 1 } },
+          ],
+          pendingCount: [
+            { $match: {
+              IsSettled: { $ne: true },
+              $expr: { $ne: [{ $toUpper: { $convert: { input: { $ifNull: ["$Status", "ACTIVE"] }, to: "string", onError: "", onNull: "" } } }, "SETTLED"] },
+            } },
+            { $count: "total" },
+          ],
+        } },
+      ]) : [],
     ]);
 
     const salesData = salesFacets[0] || {}, salesTotals = salesData.totals?.[0] || {};
+    const purchaseData = purchaseFacets[0] || {}, receiptData = receiptFacets[0] || {};
+    const purchaseTotals = purchaseData.totals || [], receiptTotals = receiptData.totals || [];
+    const flashSales = salesData.flash || [], flashPurchase = purchaseData.flash || [];
+    const purchaseTrend = purchaseData.trend || [], collectionRows = receiptData.rows || [];
     const stockData = stockFacets[0] || {}, stockTotals = stockData.totals?.[0] || {};
     const openingOutstandingAmount = openingBills.reduce((sum, row) => sum + number(row.balanceAmount) - number(row.allocatedAmount), 0);
     const openingOverdue = openingBills.filter(row => row.postingDate < today).reduce((sum, row) => sum + number(row.balanceAmount) - number(row.allocatedAmount), 0);
     const recentInvoices = (salesData.recentInvoices || []).map(row => ({ ...row, status: number(row.pending) > 0 ? "Pending" : "Paid", pending: undefined }));
+    const loadData = loadRows[0] || {};
     res.json({ success: true, data: {
       accountCount, productCount,
       totalSales: number(salesTotals.totalSales), totalPurchase: number(purchaseTotals[0]?.total), collection: number(receiptTotals[0]?.total),
@@ -494,7 +647,8 @@ export default function createP0FeaturesRouter(securityRouter) {
       pendingEInvoices: salesData.pendingEInvoices || [],
       generateEInvoices: salesData.generateEInvoices || [], generateEInvoiceCount: number(salesData.generateEInvoiceCount?.[0]?.total),
       collectionRows: collectionRows.map(row => ({ date: row.receiptDate, amount: number(row.receiptAmount), bankCash: row.bankCash || "", bankCashName: row.bankCashName || "", bankCashGroup: row.bankCashGroup || "", chequeNo: row.chequeNo || "" })),
-      loads: loadRows.map(row => ({ id: row._id, number: `${row.LoadSeries || ""}${row.LoadNo ?? ""}`, date: row.LoadDate || "", status: row.Status || "ACTIVE", delivered: row.IsSettled === true || String(row.Status || "").toUpperCase() === "SETTLED", bills: number(row.TotalBills), amount: number(row.TotalAmount) })),
+      loads: (loadData.rows || []).map(row => ({ id: row._id, number: `${row.LoadSeries || ""}${row.LoadNo ?? ""}`, date: row.LoadDate || "", status: row.Status || "ACTIVE", delivered: row.IsSettled === true || String(row.Status || "").toUpperCase() === "SETTLED", bills: number(row.TotalBills), amount: number(row.TotalAmount) })),
+      pendingLoadCount: number(loadData.pendingCount?.[0]?.total),
       topCustomers: salesData.topCustomers || [], topProducts: salesData.topProducts || [], salesTrend: salesData.salesTrend || [], purchaseTrend,
       flashCard: { date: selectedDate, todaySales: number(flashSales[0]?.today), periodSales: number(flashSales[0]?.period), monthlySales: number(flashSales[0]?.month),
         previousMonthSales: number(flashSales[0]?.previousMonth),

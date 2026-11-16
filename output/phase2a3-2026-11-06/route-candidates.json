@@ -1,0 +1,2618 @@
+[
+  {
+    "file": "backend/batchLock.js",
+    "line": 156,
+    "method": "PUT",
+    "path": "/stock",
+    "permissionEvidence": [],
+    "transactionEvidence": [
+      "startSession",
+      "startTransaction",
+      "commitTransaction"
+    ],
+    "dateTokens": [
+      "update",
+      "Date"
+    ],
+    "mutationCandidates": [
+      "Stock.bulkWrite(",
+      "BatchRateAudit.insertMany("
+    ],
+    "posting": false,
+    "guarded": false
+  },
+  {
+    "file": "backend/companyWiseSeries.js",
+    "line": 100,
+    "method": "PUT",
+    "path": "/",
+    "permissionEvidence": [],
+    "transactionEvidence": [],
+    "dateTokens": [
+      "update"
+    ],
+    "mutationCandidates": [
+      "CompanyWiseSeries.bulkWrite("
+    ],
+    "posting": false,
+    "guarded": false
+  },
+  {
+    "file": "backend/companyWiseSeries.js",
+    "line": 171,
+    "method": "DELETE",
+    "path": "/:id",
+    "permissionEvidence": [],
+    "transactionEvidence": [],
+    "dateTokens": [],
+    "mutationCandidates": [],
+    "posting": false,
+    "guarded": false
+  },
+  {
+    "file": "backend/desktopImportRoutes.js",
+    "line": 544,
+    "method": "POST",
+    "path": "/desktop-import/generate",
+    "permissionEvidence": [],
+    "transactionEvidence": [],
+    "dateTokens": [
+      "Date"
+    ],
+    "mutationCandidates": [],
+    "posting": false,
+    "guarded": false
+  },
+  {
+    "file": "backend/desktopImportRoutes.js",
+    "line": 580,
+    "method": "POST",
+    "path": "/desktop-import/upload-excel",
+    "permissionEvidence": [],
+    "transactionEvidence": [],
+    "dateTokens": [
+      "Date"
+    ],
+    "mutationCandidates": [],
+    "posting": false,
+    "guarded": false
+  },
+  {
+    "file": "backend/desktopImportRoutes.js",
+    "line": 631,
+    "method": "POST",
+    "path": "/desktop-import/jobs/:jobId/preflight",
+    "permissionEvidence": [],
+    "transactionEvidence": [],
+    "dateTokens": [],
+    "mutationCandidates": [],
+    "posting": false,
+    "guarded": false
+  },
+  {
+    "file": "backend/desktopImportRoutes.js",
+    "line": 649,
+    "method": "POST",
+    "path": "/desktop-import/jobs/:jobId/import",
+    "permissionEvidence": [],
+    "transactionEvidence": [],
+    "dateTokens": [
+      "Date"
+    ],
+    "mutationCandidates": [],
+    "posting": false,
+    "guarded": false
+  },
+  {
+    "file": "backend/desktopImportRoutes.js",
+    "line": 677,
+    "method": "POST",
+    "path": "/desktop-import/jobs/:jobId/import/pause",
+    "permissionEvidence": [],
+    "transactionEvidence": [],
+    "dateTokens": [
+      "Date"
+    ],
+    "mutationCandidates": [],
+    "posting": false,
+    "guarded": false
+  },
+  {
+    "file": "backend/desktopImportRoutes.js",
+    "line": 684,
+    "method": "POST",
+    "path": "/desktop-import/jobs/:jobId/import/resume",
+    "permissionEvidence": [],
+    "transactionEvidence": [],
+    "dateTokens": [
+      "Date"
+    ],
+    "mutationCandidates": [],
+    "posting": false,
+    "guarded": false
+  },
+  {
+    "file": "backend/desktopImportRoutes.js",
+    "line": 691,
+    "method": "POST",
+    "path": "/desktop-import/jobs/:jobId/import/retry",
+    "permissionEvidence": [],
+    "transactionEvidence": [],
+    "dateTokens": [],
+    "mutationCandidates": [],
+    "posting": false,
+    "guarded": false
+  },
+  {
+    "file": "backend/desktopImportRoutes.js",
+    "line": 702,
+    "method": "POST",
+    "path": "/desktop-import/jobs/:jobId/import/rollback",
+    "permissionEvidence": [],
+    "transactionEvidence": [],
+    "dateTokens": [],
+    "mutationCandidates": [],
+    "posting": false,
+    "guarded": false
+  },
+  {
+    "file": "backend/financialPeriods.js",
+    "line": 155,
+    "method": "POST",
+    "path": "/${action.toLowerCase()}",
+    "permissionEvidence": [],
+    "transactionEvidence": [
+      "startSession",
+      "withTransaction"
+    ],
+    "dateTokens": [],
+    "mutationCandidates": [],
+    "posting": false,
+    "guarded": false
+  },
+  {
+    "file": "backend/generalSetup.js",
+    "line": 781,
+    "method": "GET",
+    "path": "/",
+    "permissionEvidence": [],
+    "transactionEvidence": [],
+    "dateTokens": [],
+    "mutationCandidates": [
+      "GeneralSetup.create("
+    ],
+    "posting": false,
+    "guarded": false
+  },
+  {
+    "file": "backend/generalSetup.js",
+    "line": 853,
+    "method": "PUT",
+    "path": "/",
+    "permissionEvidence": [],
+    "transactionEvidence": [
+      "startSession",
+      "withTransaction"
+    ],
+    "dateTokens": [
+      "buildSetupUpdate",
+      "findOneAndUpdate"
+    ],
+    "mutationCandidates": [
+      "GeneralSetup.findOneAndUpdate("
+    ],
+    "posting": false,
+    "guarded": false
+  },
+  {
+    "file": "backend/importRoutes.js",
+    "line": 242,
+    "method": "POST",
+    "path": "/import/validate",
+    "permissionEvidence": [],
+    "transactionEvidence": [],
+    "dateTokens": [
+      "validate"
+    ],
+    "mutationCandidates": [],
+    "posting": false,
+    "guarded": false
+  },
+  {
+    "file": "backend/importRoutes.js",
+    "line": 247,
+    "method": "POST",
+    "path": "/import/save",
+    "permissionEvidence": [],
+    "transactionEvidence": [
+      "startSession",
+      "startTransaction",
+      "commitTransaction"
+    ],
+    "dateTokens": [
+      "validate",
+      "update",
+      "Date"
+    ],
+    "mutationCandidates": [
+      "ImportBatch.create(",
+      "productCollection.bulkWrite("
+    ],
+    "posting": false,
+    "guarded": false
+  },
+  {
+    "file": "backend/p0Features.js",
+    "line": 233,
+    "method": "POST",
+    "path": "/journal-voucher",
+    "permissionEvidence": [
+      "authorizeRequest(\"TRANSACTIONS\", \"JOURNAL_VOUCHER\", \"add\"), async (req, res) => {\r"
+    ],
+    "transactionEvidence": [
+      "startSession",
+      "withTransaction"
+    ],
+    "dateTokens": [
+      "documentDate",
+      "vDate"
+    ],
+    "mutationCandidates": [
+      "JournalVoucher.create("
+    ],
+    "posting": true,
+    "guarded": false
+  },
+  {
+    "file": "backend/p0Features.js",
+    "line": 257,
+    "method": "PUT",
+    "path": "/journal-voucher/:id",
+    "permissionEvidence": [
+      "authorizeRequest(\"TRANSACTIONS\", \"JOURNAL_VOUCHER\", \"edit\"), async (req, res) => {\r"
+    ],
+    "transactionEvidence": [
+      "startSession",
+      "withTransaction"
+    ],
+    "dateTokens": [
+      "documentDate",
+      "vDate",
+      "Date"
+    ],
+    "mutationCandidates": [
+      "voucher.save("
+    ],
+    "posting": true,
+    "guarded": false
+  },
+  {
+    "file": "backend/p0Features.js",
+    "line": 276,
+    "method": "DELETE",
+    "path": "/journal-voucher/:id",
+    "permissionEvidence": [
+      "authorizeRequest(\"TRANSACTIONS\", \"JOURNAL_VOUCHER\", \"delete\"), async (req, res) => {\r"
+    ],
+    "transactionEvidence": [
+      "startSession",
+      "withTransaction"
+    ],
+    "dateTokens": [
+      "documentDate",
+      "vDate",
+      "Date"
+    ],
+    "mutationCandidates": [
+      "voucher.save("
+    ],
+    "posting": true,
+    "guarded": false
+  },
+  {
+    "file": "backend/printAccountDetails.js",
+    "line": 72,
+    "method": "PUT",
+    "path": "/",
+    "permissionEvidence": [],
+    "transactionEvidence": [],
+    "dateTokens": [
+      "update",
+      "findOneAndUpdate"
+    ],
+    "mutationCandidates": [
+      "PrintAccountDetails.findOneAndUpdate("
+    ],
+    "posting": false,
+    "guarded": false
+  },
+  {
+    "file": "backend/productMapping.js",
+    "line": 70,
+    "method": "POST",
+    "path": "/",
+    "permissionEvidence": [],
+    "transactionEvidence": [],
+    "dateTokens": [
+      "update",
+      "findOneAndUpdate"
+    ],
+    "mutationCandidates": [
+      "ProductMapping.findOneAndUpdate(",
+      "ProductMapping.create("
+    ],
+    "posting": false,
+    "guarded": false
+  },
+  {
+    "file": "backend/productMapping.js",
+    "line": 119,
+    "method": "DELETE",
+    "path": "/:id",
+    "permissionEvidence": [],
+    "transactionEvidence": [],
+    "dateTokens": [
+      "findOneAndUpdate"
+    ],
+    "mutationCandidates": [
+      "ProductMapping.findOneAndUpdate("
+    ],
+    "posting": false,
+    "guarded": false
+  },
+  {
+    "file": "backend/securitySetup.js",
+    "line": 740,
+    "method": "GET",
+    "path": "/",
+    "permissionEvidence": [],
+    "transactionEvidence": [],
+    "dateTokens": [],
+    "mutationCandidates": [
+      "SecuritySetup.create("
+    ],
+    "posting": false,
+    "guarded": false
+  },
+  {
+    "file": "backend/securitySetup.js",
+    "line": 878,
+    "method": "PUT",
+    "path": "/",
+    "permissionEvidence": [],
+    "transactionEvidence": [
+      "startSession",
+      "withTransaction"
+    ],
+    "dateTokens": [
+      "findOneAndUpdate"
+    ],
+    "mutationCandidates": [
+      "SecuritySetup.findOneAndUpdate("
+    ],
+    "posting": false,
+    "guarded": false
+  },
+  {
+    "file": "backend/server.js",
+    "line": 352,
+    "method": "POST",
+    "path": "/api/register",
+    "permissionEvidence": [],
+    "transactionEvidence": [],
+    "dateTokens": [],
+    "mutationCandidates": [
+      "Register.create("
+    ],
+    "posting": false,
+    "guarded": false
+  },
+  {
+    "file": "backend/server.js",
+    "line": 476,
+    "method": "POST",
+    "path": "/api/login/firms",
+    "permissionEvidence": [],
+    "transactionEvidence": [],
+    "dateTokens": [
+      "candidate"
+    ],
+    "mutationCandidates": [],
+    "posting": false,
+    "guarded": false
+  },
+  {
+    "file": "backend/server.js",
+    "line": 632,
+    "method": "POST",
+    "path": "/api/login",
+    "permissionEvidence": [],
+    "transactionEvidence": [],
+    "dateTokens": [],
+    "mutationCandidates": [],
+    "posting": false,
+    "guarded": false
+  },
+  {
+    "file": "backend/server.js",
+    "line": 960,
+    "method": "POST",
+    "path": "/api/users",
+    "permissionEvidence": [
+      "requireRoles(\"DISTRIBUTOR_ADMIN\"), async (req, res) => {\r"
+    ],
+    "transactionEvidence": [],
+    "dateTokens": [
+      "Date"
+    ],
+    "mutationCandidates": [
+      "User.create("
+    ],
+    "posting": false,
+    "guarded": false
+  },
+  {
+    "file": "backend/server.js",
+    "line": 1060,
+    "method": "PUT",
+    "path": "/api/users/:id",
+    "permissionEvidence": [
+      "requireRoles(\"DISTRIBUTOR_ADMIN\"), async (req, res) => {\r"
+    ],
+    "transactionEvidence": [],
+    "dateTokens": [
+      "update",
+      "findOneAndUpdate"
+    ],
+    "mutationCandidates": [
+      "User.findOneAndUpdate("
+    ],
+    "posting": false,
+    "guarded": false
+  },
+  {
+    "file": "backend/server.js",
+    "line": 1110,
+    "method": "DELETE",
+    "path": "/api/users/:id",
+    "permissionEvidence": [
+      "requireRoles(\"DISTRIBUTOR_ADMIN\"), async (req, res) => {\r"
+    ],
+    "transactionEvidence": [],
+    "dateTokens": [
+      "findOneAndUpdate",
+      "Update",
+      "date",
+      "openingDate",
+      "gstDate",
+      "gstClsDate",
+      "closingDate",
+      "drugExpDate",
+      "lastBillDate",
+      "lastInvoiceDate"
+    ],
+    "mutationCandidates": [
+      "User.findOneAndUpdate("
+    ],
+    "posting": false,
+    "guarded": false
+  },
+  {
+    "file": "backend/server.js",
+    "line": 1598,
+    "method": "GET",
+    "path": "/api/reports/party-sales/criteria",
+    "permissionEvidence": [],
+    "transactionEvidence": [],
+    "dateTokens": [
+      "update",
+      "invoiceDate",
+      "Date",
+      "date",
+      "VoucherDate",
+      "MfgDate",
+      "ExpiryDate",
+      "BillDate",
+      "DueDate"
+    ],
+    "mutationCandidates": [
+      "AreaToPartyMapping.updateMany(",
+      "AreaToPartyMapping.bulkWrite("
+    ],
+    "posting": false,
+    "guarded": false
+  },
+  {
+    "file": "backend/server.js",
+    "line": 5068,
+    "method": "POST",
+    "path": "/api/companies",
+    "permissionEvidence": [
+      "authorizeRequest(\r"
+    ],
+    "transactionEvidence": [],
+    "dateTokens": [],
+    "mutationCandidates": [
+      "Company.create("
+    ],
+    "posting": false,
+    "guarded": false
+  },
+  {
+    "file": "backend/server.js",
+    "line": 5125,
+    "method": "PUT",
+    "path": "/api/companies/:id",
+    "permissionEvidence": [
+      "authorizeRequest(\r"
+    ],
+    "transactionEvidence": [],
+    "dateTokens": [
+      "findOneAndUpdate",
+      "update"
+    ],
+    "mutationCandidates": [
+      "Company.findOneAndUpdate("
+    ],
+    "posting": false,
+    "guarded": false
+  },
+  {
+    "file": "backend/server.js",
+    "line": 5179,
+    "method": "DELETE",
+    "path": "/api/companies/:id",
+    "permissionEvidence": [
+      "authorizeRequest(\r"
+    ],
+    "transactionEvidence": [],
+    "dateTokens": [
+      "findOneAndUpdate"
+    ],
+    "mutationCandidates": [
+      "Company.findOneAndUpdate("
+    ],
+    "posting": false,
+    "guarded": false
+  },
+  {
+    "file": "backend/server.js",
+    "line": 5459,
+    "method": "POST",
+    "path": "/api/groups",
+    "permissionEvidence": [
+      "authorizeRequest(\r"
+    ],
+    "transactionEvidence": [],
+    "dateTokens": [],
+    "mutationCandidates": [
+      "Group.create("
+    ],
+    "posting": false,
+    "guarded": false
+  },
+  {
+    "file": "backend/server.js",
+    "line": 5693,
+    "method": "POST",
+    "path": "/api/categories",
+    "permissionEvidence": [
+      "authorizeRequest(\r"
+    ],
+    "transactionEvidence": [],
+    "dateTokens": [],
+    "mutationCandidates": [
+      "Category.create("
+    ],
+    "posting": false,
+    "guarded": false
+  },
+  {
+    "file": "backend/server.js",
+    "line": 6146,
+    "method": "POST",
+    "path": "/api/products",
+    "permissionEvidence": [
+      "authorizeRequest(\r"
+    ],
+    "transactionEvidence": [],
+    "dateTokens": [],
+    "mutationCandidates": [
+      "Product.create("
+    ],
+    "posting": false,
+    "guarded": false
+  },
+  {
+    "file": "backend/server.js",
+    "line": 6565,
+    "method": "POST",
+    "path": "/api/accounts",
+    "permissionEvidence": [
+      "authorizeRequest(\r"
+    ],
+    "transactionEvidence": [],
+    "dateTokens": [
+      "openingDate",
+      "gstDate",
+      "gstClsDate",
+      "drugExpDate",
+      "lastBillDate",
+      "lastInvoiceDate"
+    ],
+    "mutationCandidates": [
+      "Account.create("
+    ],
+    "posting": false,
+    "guarded": false
+  },
+  {
+    "file": "backend/server.js",
+    "line": 6972,
+    "method": "POST",
+    "path": "/api/other-accounts",
+    "permissionEvidence": [
+      "authorizeRequest(\r"
+    ],
+    "transactionEvidence": [],
+    "dateTokens": [],
+    "mutationCandidates": [
+      "OtherAccount.create("
+    ],
+    "posting": false,
+    "guarded": false
+  },
+  {
+    "file": "backend/server.js",
+    "line": 7199,
+    "method": "POST",
+    "path": "/api/firms",
+    "permissionEvidence": [
+      "requireRoles(\"DISTRIBUTOR_ADMIN\"), async (req, res) => {\r"
+    ],
+    "transactionEvidence": [],
+    "dateTokens": [],
+    "mutationCandidates": [
+      "Register.create("
+    ],
+    "posting": false,
+    "guarded": false
+  },
+  {
+    "file": "backend/server.js",
+    "line": 7563,
+    "method": "POST",
+    "path": "/api/gst",
+    "permissionEvidence": [
+      "authorizeRequest(\r"
+    ],
+    "transactionEvidence": [],
+    "dateTokens": [],
+    "mutationCandidates": [
+      "GST.create("
+    ],
+    "posting": false,
+    "guarded": false
+  },
+  {
+    "file": "backend/server.js",
+    "line": 8154,
+    "method": "POST",
+    "path": "/api/salesmen",
+    "permissionEvidence": [
+      "authorizeRequest(\r"
+    ],
+    "transactionEvidence": [],
+    "dateTokens": [],
+    "mutationCandidates": [
+      "Salesman.create("
+    ],
+    "posting": false,
+    "guarded": false
+  },
+  {
+    "file": "backend/server.js",
+    "line": 8236,
+    "method": "PUT",
+    "path": "/api/sales/change-bill-type-f4",
+    "permissionEvidence": [],
+    "transactionEvidence": [],
+    "dateTokens": [
+      "Update"
+    ],
+    "mutationCandidates": [
+      "salesBill.save(",
+      "LoadHeader.updateMany("
+    ],
+    "posting": false,
+    "guarded": false
+  },
+  {
+    "file": "backend/server.js",
+    "line": 8332,
+    "method": "PUT",
+    "path": "/api/sales/:id",
+    "permissionEvidence": [
+      "authorizeRequest(\r"
+    ],
+    "transactionEvidence": [
+      "startSession",
+      "startTransaction"
+    ],
+    "dateTokens": [
+      "BillDate",
+      "DueDate",
+      "findOneAndUpdate",
+      "Update",
+      "Date",
+      "documentDate",
+      "movementDate",
+      "update"
+    ],
+    "mutationCandidates": [
+      "SalesHeader.findOneAndUpdate(",
+      "load.save("
+    ],
+    "posting": true,
+    "guarded": false
+  },
+  {
+    "file": "backend/server.js",
+    "line": 9301,
+    "method": "POST",
+    "path": "/api/areas",
+    "permissionEvidence": [
+      "authorizeRequest(\r"
+    ],
+    "transactionEvidence": [],
+    "dateTokens": [],
+    "mutationCandidates": [
+      "Area.create("
+    ],
+    "posting": false,
+    "guarded": false
+  },
+  {
+    "file": "backend/server.js",
+    "line": 9607,
+    "method": "POST",
+    "path": "/api/godowns",
+    "permissionEvidence": [
+      "authorizeRequest(\r"
+    ],
+    "transactionEvidence": [],
+    "dateTokens": [],
+    "mutationCandidates": [
+      "GodownModel.create("
+    ],
+    "posting": false,
+    "guarded": false
+  },
+  {
+    "file": "backend/server.js",
+    "line": 9957,
+    "method": "POST",
+    "path": "/api/customer-banks",
+    "permissionEvidence": [
+      "authorizeRequest(\"MASTER\", \"CUSTOMER_BANK\", \"add\"), async (req, res) => {\r"
+    ],
+    "transactionEvidence": [],
+    "dateTokens": [],
+    "mutationCandidates": [
+      "CustomerBank.create("
+    ],
+    "posting": false,
+    "guarded": false
+  },
+  {
+    "file": "backend/server.js",
+    "line": 10070,
+    "method": "POST",
+    "path": "/api/salesman-area-mappings",
+    "permissionEvidence": [],
+    "transactionEvidence": [],
+    "dateTokens": [
+      "update"
+    ],
+    "mutationCandidates": [
+      "SalesmanAreaMapping.bulkWrite(",
+      "SalesmanAreaMapping.updateMany("
+    ],
+    "posting": false,
+    "guarded": false
+  },
+  {
+    "file": "backend/server.js",
+    "line": 10318,
+    "method": "POST",
+    "path": "/api/area-to-party-mappings",
+    "permissionEvidence": [],
+    "transactionEvidence": [],
+    "dateTokens": [
+      "update"
+    ],
+    "mutationCandidates": [
+      "AreaToPartyMapping.bulkWrite("
+    ],
+    "posting": false,
+    "guarded": false
+  },
+  {
+    "file": "backend/server.js",
+    "line": 10449,
+    "method": "POST",
+    "path": "/api/purchase",
+    "permissionEvidence": [
+      "authorizeRequest(\"VOUCHERS\", \"PURCHASE\", \"add\"),\r"
+    ],
+    "transactionEvidence": [
+      "startSession",
+      "startTransaction"
+    ],
+    "dateTokens": [
+      "invoiceDate",
+      "documentDate",
+      "update",
+      "Date",
+      "findOneAndUpdate",
+      "expDate",
+      "mfgDate"
+    ],
+    "mutationCandidates": [
+      "PurchaseHeader.create(",
+      "Stock.findOneAndUpdate("
+    ],
+    "posting": true,
+    "guarded": false
+  },
+  {
+    "file": "backend/server.js",
+    "line": 10992,
+    "method": "POST",
+    "path": "/api/purchase/reconcile-desktop-import",
+    "permissionEvidence": [
+      "authorizeRequest(\"VOUCHERS\", \"PURCHASE\", \"add\"),\r"
+    ],
+    "transactionEvidence": [
+      "startSession",
+      "startTransaction"
+    ],
+    "dateTokens": [
+      "documentDate",
+      "invoiceDate",
+      "movementDate",
+      "Date"
+    ],
+    "mutationCandidates": [
+      "Stock.updateOne(",
+      "purchase.save("
+    ],
+    "posting": true,
+    "guarded": false
+  },
+  {
+    "file": "backend/server.js",
+    "line": 11135,
+    "method": "PUT",
+    "path": "/api/purchase/:id",
+    "permissionEvidence": [
+      "authorizeRequest(\"VOUCHERS\", \"PURCHASE\", \"edit\"),\r"
+    ],
+    "transactionEvidence": [
+      "startSession",
+      "startTransaction"
+    ],
+    "dateTokens": [
+      "invoiceDate",
+      "update",
+      "Date",
+      "findOneAndUpdate",
+      "documentDate"
+    ],
+    "mutationCandidates": [
+      "PurchaseHeader.findOneAndUpdate("
+    ],
+    "posting": true,
+    "guarded": false
+  },
+  {
+    "file": "backend/server.js",
+    "line": 11900,
+    "method": "GET",
+    "path": "/api/sales/next-bill-no",
+    "permissionEvidence": [],
+    "transactionEvidence": [],
+    "dateTokens": [
+      "findOneAndUpdate",
+      "update"
+    ],
+    "mutationCandidates": [
+      "Stock.findOneAndUpdate(",
+      "Stock.updateOne("
+    ],
+    "posting": false,
+    "guarded": false
+  },
+  {
+    "file": "backend/server.js",
+    "line": 12483,
+    "method": "POST",
+    "path": "/api/sales",
+    "permissionEvidence": [
+      "authorizeRequest(\r"
+    ],
+    "transactionEvidence": [
+      "startSession",
+      "startTransaction"
+    ],
+    "dateTokens": [
+      "BillDate",
+      "DueDate",
+      "documentDate",
+      "movementDate"
+    ],
+    "mutationCandidates": [
+      "SalesHeader.create("
+    ],
+    "posting": true,
+    "guarded": false
+  },
+  {
+    "file": "backend/server.js",
+    "line": 13085,
+    "method": "POST",
+    "path": "/api/sales/einvoice-details",
+    "permissionEvidence": [
+      "authorizeRequest(\"SALES\", \"SALES_BILLING\", \"view\"),"
+    ],
+    "transactionEvidence": [],
+    "dateTokens": [],
+    "mutationCandidates": [],
+    "posting": false,
+    "guarded": false
+  },
+  {
+    "file": "backend/server.js",
+    "line": 13110,
+    "method": "POST",
+    "path": "/api/sales/einvoice-json",
+    "permissionEvidence": [
+      "authorizeRequest(\"SALES\", \"SALES_BILLING\", \"view\"),"
+    ],
+    "transactionEvidence": [],
+    "dateTokens": [],
+    "mutationCandidates": [],
+    "posting": false,
+    "guarded": false
+  },
+  {
+    "file": "backend/server.js",
+    "line": 13132,
+    "method": "POST",
+    "path": "/api/sales/einvoice-upload",
+    "permissionEvidence": [
+      "authorizeRequest(\"SALES\", \"SALES_BILLING\", \"view\"),"
+    ],
+    "transactionEvidence": [],
+    "dateTokens": [],
+    "mutationCandidates": [],
+    "posting": false,
+    "guarded": false
+  },
+  {
+    "file": "backend/server.js",
+    "line": 14579,
+    "method": "GET",
+    "path": "/api/stock/adjustments",
+    "permissionEvidence": [
+      "authorizeRequest(\"VOUCHERS\", \"STOCK_ADJUSTMENT\", \"view\"),\r"
+    ],
+    "transactionEvidence": [],
+    "dateTokens": [
+      "findOneAndUpdate",
+      "ExpiryDate",
+      "MfgDate"
+    ],
+    "mutationCandidates": [
+      "StockModel.findOneAndUpdate("
+    ],
+    "posting": false,
+    "guarded": false
+  },
+  {
+    "file": "backend/server.js",
+    "line": 14700,
+    "method": "PUT",
+    "path": "/api/stock/adjustments/:id",
+    "permissionEvidence": [
+      "authorizeRequest(\"VOUCHERS\", \"STOCK_ADJUSTMENT\", \"edit\"),\r"
+    ],
+    "transactionEvidence": [
+      "startSession",
+      "startTransaction"
+    ],
+    "dateTokens": [
+      "VoucherDate",
+      "voucherDate",
+      "MfgDate",
+      "manufacturingDate",
+      "ExpiryDate",
+      "expiryDate",
+      "movementDate",
+      "update"
+    ],
+    "mutationCandidates": [
+      "StockAdjustment.updateOne("
+    ],
+    "posting": false,
+    "guarded": false
+  },
+  {
+    "file": "backend/server.js",
+    "line": 14863,
+    "method": "DELETE",
+    "path": "/api/stock/adjustments/:id",
+    "permissionEvidence": [
+      "authorizeRequest(\"VOUCHERS\", \"STOCK_ADJUSTMENT\", \"delete\"),\r"
+    ],
+    "transactionEvidence": [
+      "startSession",
+      "startTransaction"
+    ],
+    "dateTokens": [
+      "findOneAndUpdate",
+      "Date",
+      "movementDate"
+    ],
+    "mutationCandidates": [
+      "StockAdjustment.updateOne(",
+      "StockAdjustment.findOneAndUpdate("
+    ],
+    "posting": false,
+    "guarded": false
+  },
+  {
+    "file": "backend/server.js",
+    "line": 14937,
+    "method": "POST",
+    "path": "/api/stock/adjust",
+    "permissionEvidence": [
+      "authorizeRequest(\"VOUCHERS\", \"STOCK_ADJUSTMENT\", \"add\"),\r"
+    ],
+    "transactionEvidence": [
+      "startSession",
+      "startTransaction"
+    ],
+    "dateTokens": [
+      "Date",
+      "VoucherDate",
+      "voucherDate",
+      "MfgDate",
+      "manufacturingDate",
+      "ExpiryDate",
+      "expiryDate",
+      "findOneAndUpdate",
+      "movementDate",
+      "update"
+    ],
+    "mutationCandidates": [
+      "StockAdjustment.create(",
+      "StockModel.findOneAndUpdate(",
+      "StockAdjustment.updateOne("
+    ],
+    "posting": false,
+    "guarded": false
+  },
+  {
+    "file": "backend/server.js",
+    "line": 15391,
+    "method": "POST",
+    "path": "/api/quotation",
+    "permissionEvidence": [
+      "authorizeRequest(\"SALES\", \"QUOTATION\", \"add\"),\r"
+    ],
+    "transactionEvidence": [],
+    "dateTokens": [
+      "BillDate",
+      "DueDate",
+      "documentDate"
+    ],
+    "mutationCandidates": [
+      "QuotationHeader.create("
+    ],
+    "posting": false,
+    "guarded": false
+  },
+  {
+    "file": "backend/server.js",
+    "line": 16889,
+    "method": "PUT",
+    "path": "/api/create-load/:id",
+    "permissionEvidence": [
+      "authorizeRequest(\"SALES\", \"CREATE_LOAD\", \"edit\"),\r"
+    ],
+    "transactionEvidence": [
+      "startSession",
+      "startTransaction"
+    ],
+    "dateTokens": [
+      "LoadDate",
+      "BillFromDate",
+      "BillToDate",
+      "BillDate",
+      "billDate",
+      "findOneAndUpdate",
+      "Date",
+      "Update",
+      "update"
+    ],
+    "mutationCandidates": [
+      "SalesHeader.updateMany(",
+      "LoadHeader.findOneAndUpdate("
+    ],
+    "posting": false,
+    "guarded": false
+  },
+  {
+    "file": "backend/server.js",
+    "line": 18410,
+    "method": "POST",
+    "path": "/api/create-load",
+    "permissionEvidence": [
+      "authorizeRequest(\"SALES\", \"CREATE_LOAD\", \"add\"),\r"
+    ],
+    "transactionEvidence": [
+      "startSession",
+      "startTransaction"
+    ],
+    "dateTokens": [
+      "LoadDate",
+      "BillFromDate",
+      "BillToDate",
+      "documentDate",
+      "BillDate",
+      "billDate"
+    ],
+    "mutationCandidates": [
+      "LoadHeader.create(",
+      "SalesHeader.updateMany("
+    ],
+    "posting": false,
+    "guarded": false
+  },
+  {
+    "file": "backend/server.js",
+    "line": 19298,
+    "method": "GET",
+    "path": "/api/load-transfer/load-bills",
+    "permissionEvidence": [],
+    "transactionEvidence": [],
+    "dateTokens": [
+      "BillDate",
+      "loadDate",
+      "LoadDate"
+    ],
+    "mutationCandidates": [
+      "sourceLoad.save("
+    ],
+    "posting": false,
+    "guarded": false
+  },
+  {
+    "file": "backend/server.js",
+    "line": 19656,
+    "method": "POST",
+    "path": "/api/load-transfer",
+    "permissionEvidence": [],
+    "transactionEvidence": [
+      "startSession",
+      "startTransaction"
+    ],
+    "dateTokens": [
+      "update"
+    ],
+    "mutationCandidates": [
+      "currentSourceLoad.save(",
+      "destinationLoad.save(",
+      "SalesHeader.updateMany("
+    ],
+    "posting": false,
+    "guarded": false
+  },
+  {
+    "file": "backend/server.js",
+    "line": 20599,
+    "method": "POST",
+    "path": "/api/settle-load/save",
+    "permissionEvidence": [
+      "authorizeRequest(\"SALES\", \"SETTLE_LOAD\", \"add\"),\r"
+    ],
+    "transactionEvidence": [
+      "startSession",
+      "startTransaction"
+    ],
+    "dateTokens": [
+      "loadDate",
+      "settlementDate",
+      "billDate",
+      "receiptDate",
+      "chequeDate",
+      "update",
+      "findOneAndUpdate",
+      "LoadDate",
+      "trnDate",
+      "Date",
+      "Update",
+      "BillDate",
+      "ChequeDate",
+      "SettlementDate"
+    ],
+    "mutationCandidates": [
+      "SettleLoad.findOneAndUpdate(",
+      "Receipt.findOneAndUpdate(",
+      "Receipt.updateMany(",
+      "SalesHeader.updateMany(",
+      "SalesHeader.updateOne(",
+      "load.save("
+    ],
+    "posting": false,
+    "guarded": false
+  },
+  {
+    "file": "backend/server.js",
+    "line": 21358,
+    "method": "POST",
+    "path": "/api/settle-load",
+    "permissionEvidence": [
+      "authorizeRequest(\"SALES\", \"SETTLE_LOAD\", \"add\"),\r"
+    ],
+    "transactionEvidence": [],
+    "dateTokens": [
+      "loadDate",
+      "settlementDate",
+      "billDate",
+      "chequeDate"
+    ],
+    "mutationCandidates": [
+      "SettleLoad.create(",
+      "SalesHeader.updateMany("
+    ],
+    "posting": false,
+    "guarded": false
+  },
+  {
+    "file": "backend/server.js",
+    "line": 22393,
+    "method": "PUT",
+    "path": "/api/settle-load/:id",
+    "permissionEvidence": [
+      "authorizeRequest(\"SALES\", \"SETTLE_LOAD\", \"edit\"),\r"
+    ],
+    "transactionEvidence": [],
+    "dateTokens": [
+      "settlementDate",
+      "billDate",
+      "chequeDate",
+      "findOneAndUpdate",
+      "update"
+    ],
+    "mutationCandidates": [
+      "SettleLoad.findOneAndUpdate("
+    ],
+    "posting": false,
+    "guarded": false
+  },
+  {
+    "file": "backend/server.js",
+    "line": 22488,
+    "method": "POST",
+    "path": "/api/receipt",
+    "permissionEvidence": [
+      "authorizeRequest(\"TRANSACTIONS\", \"RECEIPT\", \"add\"), async (req, res) => {\r"
+    ],
+    "transactionEvidence": [
+      "startSession",
+      "startTransaction"
+    ],
+    "dateTokens": [
+      "receiptDate",
+      "documentDate",
+      "billDate",
+      "BillDate",
+      "chequeDate",
+      "trnDate"
+    ],
+    "mutationCandidates": [
+      "Receipt.create("
+    ],
+    "posting": false,
+    "guarded": false
+  },
+  {
+    "file": "backend/server.js",
+    "line": 22606,
+    "method": "GET",
+    "path": "/api/create-load/next-no",
+    "permissionEvidence": [],
+    "transactionEvidence": [],
+    "dateTokens": [
+      "Date",
+      "documentDate",
+      "movementDate"
+    ],
+    "mutationCandidates": [
+      "bill.save("
+    ],
+    "posting": true,
+    "guarded": false
+  },
+  {
+    "file": "backend/server.js",
+    "line": 22694,
+    "method": "PUT",
+    "path": "/api/sales/cancel-bill",
+    "permissionEvidence": [
+      "authorizeRequest(\"SALES\", \"SALES_BILLING\", \"delete\"),\r",
+      "authorizeRequest(\"REPORTS\", \"GST_REPORTS\", \"view\"),\r"
+    ],
+    "transactionEvidence": [
+      "startSession",
+      "startTransaction"
+    ],
+    "dateTokens": [
+      "VDate",
+      "RefDate",
+      "update",
+      "findOneAndUpdate"
+    ],
+    "mutationCandidates": [
+      "stockModel.updateOne(",
+      "stockModel.findOneAndUpdate("
+    ],
+    "posting": false,
+    "guarded": false
+  },
+  {
+    "file": "backend/server.js",
+    "line": 24427,
+    "method": "POST",
+    "path": "/api/debit-note",
+    "permissionEvidence": [
+      "authorizeRequest(\"VOUCHERS\", \"DEBIT_NOTE\", \"add\"),   // ADD THIS\r"
+    ],
+    "transactionEvidence": [
+      "startSession",
+      "startTransaction"
+    ],
+    "dateTokens": [
+      "documentDate",
+      "VDate"
+    ],
+    "mutationCandidates": [
+      "DebitNote.create("
+    ],
+    "posting": true,
+    "guarded": false
+  },
+  {
+    "file": "backend/server.js",
+    "line": 24718,
+    "method": "PUT",
+    "path": "/api/debit-note/:id",
+    "permissionEvidence": [
+      "authorizeRequest(\"VOUCHERS\", \"DEBIT_NOTE\", \"edit\"),   // ADD THIS\r"
+    ],
+    "transactionEvidence": [
+      "startSession",
+      "startTransaction"
+    ],
+    "dateTokens": [
+      "findOneAndUpdate",
+      "documentDate",
+      "VDate",
+      "update"
+    ],
+    "mutationCandidates": [
+      "DebitNote.findOneAndUpdate("
+    ],
+    "posting": true,
+    "guarded": false
+  },
+  {
+    "file": "backend/server.js",
+    "line": 25025,
+    "method": "DELETE",
+    "path": "/api/debit-note/:id",
+    "permissionEvidence": [
+      "authorizeRequest(\"VOUCHERS\", \"DEBIT_NOTE\", \"delete\"),   // ADD THIS\r"
+    ],
+    "transactionEvidence": [
+      "startSession",
+      "startTransaction"
+    ],
+    "dateTokens": [
+      "findOneAndUpdate",
+      "Date",
+      "documentDate",
+      "update"
+    ],
+    "mutationCandidates": [
+      "DebitNote.findOneAndUpdate(",
+      "stockModel.findOneAndUpdate(",
+      "stockModel.updateOne(",
+      "SalesHeader.updateOne("
+    ],
+    "posting": true,
+    "guarded": false
+  },
+  {
+    "file": "backend/server.js",
+    "line": 25770,
+    "method": "POST",
+    "path": "/api/credit-note",
+    "permissionEvidence": [
+      "authorizeRequest(\"VOUCHERS\", \"CREDIT_NOTE\", \"add\"),   // ADD THIS\r"
+    ],
+    "transactionEvidence": [
+      "startSession",
+      "startTransaction"
+    ],
+    "dateTokens": [
+      "documentDate",
+      "VDate",
+      "validate",
+      "revalidate",
+      "stockUpdate",
+      "findOneAndUpdate",
+      "Update",
+      "Validate"
+    ],
+    "mutationCandidates": [
+      "CreditNote.create(",
+      "stockModel.findOneAndUpdate(",
+      "SalesHeader.updateOne("
+    ],
+    "posting": true,
+    "guarded": false
+  },
+  {
+    "file": "backend/server.js",
+    "line": 26484,
+    "method": "PUT",
+    "path": "/api/credit-note/:id",
+    "permissionEvidence": [
+      "authorizeRequest(\"VOUCHERS\", \"CREDIT_NOTE\", \"edit\"),   // ADD THIS\r"
+    ],
+    "transactionEvidence": [
+      "startSession",
+      "startTransaction"
+    ],
+    "dateTokens": [
+      "findOneAndUpdate",
+      "documentDate",
+      "VDate",
+      "update"
+    ],
+    "mutationCandidates": [
+      "CreditNote.findOneAndUpdate("
+    ],
+    "posting": true,
+    "guarded": false
+  },
+  {
+    "file": "backend/server.js",
+    "line": 27669,
+    "method": "PUT",
+    "path": "/api/firms/:id",
+    "permissionEvidence": [
+      "requireRoles(\"DISTRIBUTOR_ADMIN\"), async (req, res) => {\r"
+    ],
+    "transactionEvidence": [],
+    "dateTokens": [
+      "findOneAndUpdate",
+      "update"
+    ],
+    "mutationCandidates": [
+      "Register.findOneAndUpdate("
+    ],
+    "posting": false,
+    "guarded": false
+  },
+  {
+    "file": "backend/server.js",
+    "line": 27718,
+    "method": "DELETE",
+    "path": "/api/firms/:id",
+    "permissionEvidence": [
+      "requireRoles(\"DISTRIBUTOR_ADMIN\"), async (req, res) => {\r"
+    ],
+    "transactionEvidence": [],
+    "dateTokens": [
+      "findOneAndUpdate"
+    ],
+    "mutationCandidates": [
+      "Register.findOneAndUpdate("
+    ],
+    "posting": false,
+    "guarded": false
+  },
+  {
+    "file": "backend/server.js",
+    "line": 27741,
+    "method": "PUT",
+    "path": "/api/groups/:id",
+    "permissionEvidence": [
+      "authorizeRequest(\r"
+    ],
+    "transactionEvidence": [],
+    "dateTokens": [
+      "findOneAndUpdate",
+      "update"
+    ],
+    "mutationCandidates": [
+      "Group.findOneAndUpdate("
+    ],
+    "posting": false,
+    "guarded": false
+  },
+  {
+    "file": "backend/server.js",
+    "line": 27790,
+    "method": "DELETE",
+    "path": "/api/groups/:id",
+    "permissionEvidence": [
+      "authorizeRequest(\r"
+    ],
+    "transactionEvidence": [],
+    "dateTokens": [
+      "findOneAndUpdate"
+    ],
+    "mutationCandidates": [
+      "Group.findOneAndUpdate("
+    ],
+    "posting": false,
+    "guarded": false
+  },
+  {
+    "file": "backend/server.js",
+    "line": 27825,
+    "method": "PUT",
+    "path": "/api/categories/:id",
+    "permissionEvidence": [
+      "authorizeRequest(\r"
+    ],
+    "transactionEvidence": [],
+    "dateTokens": [
+      "findOneAndUpdate",
+      "update"
+    ],
+    "mutationCandidates": [
+      "Category.findOneAndUpdate("
+    ],
+    "posting": false,
+    "guarded": false
+  },
+  {
+    "file": "backend/server.js",
+    "line": 27874,
+    "method": "DELETE",
+    "path": "/api/categories/:id",
+    "permissionEvidence": [
+      "authorizeRequest(\r"
+    ],
+    "transactionEvidence": [],
+    "dateTokens": [
+      "findOneAndUpdate"
+    ],
+    "mutationCandidates": [
+      "Category.findOneAndUpdate("
+    ],
+    "posting": false,
+    "guarded": false
+  },
+  {
+    "file": "backend/server.js",
+    "line": 27909,
+    "method": "PUT",
+    "path": "/api/products/:id",
+    "permissionEvidence": [
+      "authorizeRequest(\r"
+    ],
+    "transactionEvidence": [],
+    "dateTokens": [
+      "findOneAndUpdate",
+      "update"
+    ],
+    "mutationCandidates": [
+      "Product.findOneAndUpdate("
+    ],
+    "posting": false,
+    "guarded": false
+  },
+  {
+    "file": "backend/server.js",
+    "line": 27960,
+    "method": "DELETE",
+    "path": "/api/products/:id",
+    "permissionEvidence": [
+      "authorizeRequest(\r"
+    ],
+    "transactionEvidence": [],
+    "dateTokens": [
+      "findOneAndUpdate"
+    ],
+    "mutationCandidates": [
+      "Product.findOneAndUpdate("
+    ],
+    "posting": false,
+    "guarded": false
+  },
+  {
+    "file": "backend/server.js",
+    "line": 27994,
+    "method": "PUT",
+    "path": "/api/accounts/:id",
+    "permissionEvidence": [
+      "authorizeRequest(\r"
+    ],
+    "transactionEvidence": [],
+    "dateTokens": [
+      "openingDate",
+      "gstDate",
+      "gstClsDate",
+      "drugExpDate",
+      "update",
+      "findOneAndUpdate"
+    ],
+    "mutationCandidates": [
+      "Account.findOneAndUpdate("
+    ],
+    "posting": false,
+    "guarded": false
+  },
+  {
+    "file": "backend/server.js",
+    "line": 28131,
+    "method": "PATCH",
+    "path": "/api/accounts/:id/mapping-details",
+    "permissionEvidence": [
+      "authorizeRequest(\"MASTER\", \"ACCOUNT\", \"edit\"),\r"
+    ],
+    "transactionEvidence": [],
+    "dateTokens": [
+      "closingDate",
+      "gstClsDate",
+      "findOneAndUpdate",
+      "update"
+    ],
+    "mutationCandidates": [
+      "Account.findOneAndUpdate(",
+      "AreaToPartyMapping.updateMany("
+    ],
+    "posting": false,
+    "guarded": false
+  },
+  {
+    "file": "backend/server.js",
+    "line": 28278,
+    "method": "DELETE",
+    "path": "/api/accounts/:id",
+    "permissionEvidence": [
+      "authorizeRequest(\r"
+    ],
+    "transactionEvidence": [],
+    "dateTokens": [
+      "findOneAndUpdate"
+    ],
+    "mutationCandidates": [
+      "Account.findOneAndUpdate("
+    ],
+    "posting": false,
+    "guarded": false
+  },
+  {
+    "file": "backend/server.js",
+    "line": 28312,
+    "method": "PUT",
+    "path": "/api/other-accounts/:id",
+    "permissionEvidence": [
+      "authorizeRequest(\r"
+    ],
+    "transactionEvidence": [],
+    "dateTokens": [
+      "findOneAndUpdate",
+      "update"
+    ],
+    "mutationCandidates": [
+      "OtherAccount.findOneAndUpdate("
+    ],
+    "posting": false,
+    "guarded": false
+  },
+  {
+    "file": "backend/server.js",
+    "line": 28368,
+    "method": "DELETE",
+    "path": "/api/other-accounts/:id",
+    "permissionEvidence": [
+      "authorizeRequest(\r"
+    ],
+    "transactionEvidence": [],
+    "dateTokens": [
+      "findOneAndUpdate"
+    ],
+    "mutationCandidates": [
+      "OtherAccount.findOneAndUpdate("
+    ],
+    "posting": false,
+    "guarded": false
+  },
+  {
+    "file": "backend/server.js",
+    "line": 28403,
+    "method": "PUT",
+    "path": "/api/gst/:id",
+    "permissionEvidence": [
+      "authorizeRequest(\r"
+    ],
+    "transactionEvidence": [],
+    "dateTokens": [
+      "findOneAndUpdate",
+      "update"
+    ],
+    "mutationCandidates": [
+      "GST.findOneAndUpdate("
+    ],
+    "posting": false,
+    "guarded": false
+  },
+  {
+    "file": "backend/server.js",
+    "line": 28462,
+    "method": "DELETE",
+    "path": "/api/gst/:id",
+    "permissionEvidence": [
+      "authorizeRequest(\r"
+    ],
+    "transactionEvidence": [],
+    "dateTokens": [
+      "findOneAndUpdate"
+    ],
+    "mutationCandidates": [
+      "GST.findOneAndUpdate("
+    ],
+    "posting": false,
+    "guarded": false
+  },
+  {
+    "file": "backend/server.js",
+    "line": 28497,
+    "method": "PUT",
+    "path": "/api/salesmen/:id",
+    "permissionEvidence": [
+      "authorizeRequest(\r"
+    ],
+    "transactionEvidence": [],
+    "dateTokens": [
+      "findOneAndUpdate",
+      "update"
+    ],
+    "mutationCandidates": [
+      "Salesman.findOneAndUpdate("
+    ],
+    "posting": false,
+    "guarded": false
+  },
+  {
+    "file": "backend/server.js",
+    "line": 28555,
+    "method": "DELETE",
+    "path": "/api/salesmen/:id",
+    "permissionEvidence": [
+      "authorizeRequest(\r"
+    ],
+    "transactionEvidence": [],
+    "dateTokens": [
+      "findOneAndUpdate"
+    ],
+    "mutationCandidates": [
+      "Salesman.findOneAndUpdate("
+    ],
+    "posting": false,
+    "guarded": false
+  },
+  {
+    "file": "backend/server.js",
+    "line": 28590,
+    "method": "PUT",
+    "path": "/api/areas/:id",
+    "permissionEvidence": [
+      "authorizeRequest(\r"
+    ],
+    "transactionEvidence": [],
+    "dateTokens": [
+      "findOneAndUpdate",
+      "update"
+    ],
+    "mutationCandidates": [
+      "Area.findOneAndUpdate("
+    ],
+    "posting": false,
+    "guarded": false
+  },
+  {
+    "file": "backend/server.js",
+    "line": 28644,
+    "method": "DELETE",
+    "path": "/api/areas/:id",
+    "permissionEvidence": [
+      "authorizeRequest(\r"
+    ],
+    "transactionEvidence": [],
+    "dateTokens": [
+      "findOneAndUpdate"
+    ],
+    "mutationCandidates": [
+      "Area.findOneAndUpdate("
+    ],
+    "posting": false,
+    "guarded": false
+  },
+  {
+    "file": "backend/server.js",
+    "line": 28679,
+    "method": "PUT",
+    "path": "/api/godowns/:id",
+    "permissionEvidence": [
+      "authorizeRequest(\r"
+    ],
+    "transactionEvidence": [],
+    "dateTokens": [
+      "findOneAndUpdate",
+      "update"
+    ],
+    "mutationCandidates": [
+      "GodownModel.findOneAndUpdate("
+    ],
+    "posting": false,
+    "guarded": false
+  },
+  {
+    "file": "backend/server.js",
+    "line": 28734,
+    "method": "DELETE",
+    "path": "/api/godowns/:id",
+    "permissionEvidence": [
+      "authorizeRequest(\r"
+    ],
+    "transactionEvidence": [],
+    "dateTokens": [
+      "findOneAndUpdate"
+    ],
+    "mutationCandidates": [
+      "GodownModel.findOneAndUpdate("
+    ],
+    "posting": false,
+    "guarded": false
+  },
+  {
+    "file": "backend/server.js",
+    "line": 28768,
+    "method": "PUT",
+    "path": "/api/customer-banks/:id",
+    "permissionEvidence": [
+      "authorizeRequest(\"MASTER\", \"CUSTOMER_BANK\", \"edit\"), async (req, res) => {\r"
+    ],
+    "transactionEvidence": [],
+    "dateTokens": [
+      "findOneAndUpdate",
+      "update"
+    ],
+    "mutationCandidates": [
+      "CustomerBank.findOneAndUpdate("
+    ],
+    "posting": false,
+    "guarded": false
+  },
+  {
+    "file": "backend/server.js",
+    "line": 28826,
+    "method": "DELETE",
+    "path": "/api/customer-banks/:id",
+    "permissionEvidence": [
+      "authorizeRequest(\"MASTER\", \"CUSTOMER_BANK\", \"delete\"), async (req, res) => {\r"
+    ],
+    "transactionEvidence": [],
+    "dateTokens": [
+      "findOneAndUpdate"
+    ],
+    "mutationCandidates": [
+      "CustomerBank.findOneAndUpdate("
+    ],
+    "posting": false,
+    "guarded": false
+  },
+  {
+    "file": "backend/server.js",
+    "line": 28853,
+    "method": "DELETE",
+    "path": "/api/sales/:id",
+    "permissionEvidence": [
+      "authorizeRequest(\r"
+    ],
+    "transactionEvidence": [
+      "startSession",
+      "startTransaction"
+    ],
+    "dateTokens": [],
+    "mutationCandidates": [],
+    "posting": false,
+    "guarded": false
+  },
+  {
+    "file": "backend/server.js",
+    "line": 28988,
+    "method": "PUT",
+    "path": "/api/quotation/:id",
+    "permissionEvidence": [
+      "authorizeRequest(\"SALES\", \"QUOTATION\", \"edit\"),\r"
+    ],
+    "transactionEvidence": [],
+    "dateTokens": [
+      "BillDate",
+      "DueDate",
+      "findOneAndUpdate",
+      "update"
+    ],
+    "mutationCandidates": [
+      "QuotationHeader.findOneAndUpdate("
+    ],
+    "posting": false,
+    "guarded": false
+  },
+  {
+    "file": "backend/server.js",
+    "line": 29549,
+    "method": "DELETE",
+    "path": "/api/quotation/:id",
+    "permissionEvidence": [
+      "authorizeRequest(\"SALES\", \"QUOTATION\", \"delete\"),\r"
+    ],
+    "transactionEvidence": [],
+    "dateTokens": [
+      "findOneAndUpdate",
+      "Date"
+    ],
+    "mutationCandidates": [
+      "QuotationHeader.findOneAndUpdate("
+    ],
+    "posting": false,
+    "guarded": false
+  },
+  {
+    "file": "backend/server.js",
+    "line": 29596,
+    "method": "DELETE",
+    "path": "/api/purchase/:id",
+    "permissionEvidence": [
+      "authorizeRequest(\"VOUCHERS\", \"PURCHASE\", \"delete\"),\r"
+    ],
+    "transactionEvidence": [
+      "startSession",
+      "startTransaction"
+    ],
+    "dateTokens": [
+      "findOneAndUpdate",
+      "Date",
+      "documentDate",
+      "movementDate"
+    ],
+    "mutationCandidates": [
+      "Stock.updateOne(",
+      "PurchaseHeader.findOneAndUpdate("
+    ],
+    "posting": true,
+    "guarded": false
+  },
+  {
+    "file": "backend/server.js",
+    "line": 29707,
+    "method": "DELETE",
+    "path": "/api/credit-note/:id",
+    "permissionEvidence": [
+      "authorizeRequest(\"VOUCHERS\", \"CREDIT_NOTE\", \"delete\"),   // ADD THIS\r"
+    ],
+    "transactionEvidence": [
+      "startSession",
+      "startTransaction"
+    ],
+    "dateTokens": [
+      "findOneAndUpdate",
+      "Date",
+      "documentDate",
+      "Update"
+    ],
+    "mutationCandidates": [
+      "CreditNote.findOneAndUpdate(",
+      "SalesHeader.updateOne("
+    ],
+    "posting": true,
+    "guarded": false
+  },
+  {
+    "file": "backend/server.js",
+    "line": 29970,
+    "method": "DELETE",
+    "path": "/api/create-load/:id",
+    "permissionEvidence": [
+      "authorizeRequest(\"SALES\", \"CREATE_LOAD\", \"delete\"),\r"
+    ],
+    "transactionEvidence": [
+      "startSession",
+      "startTransaction"
+    ],
+    "dateTokens": [
+      "findOneAndUpdate",
+      "Date"
+    ],
+    "mutationCandidates": [
+      "SalesHeader.updateMany(",
+      "LoadHeader.findOneAndUpdate("
+    ],
+    "posting": false,
+    "guarded": false
+  },
+  {
+    "file": "backend/server.js",
+    "line": 30068,
+    "method": "DELETE",
+    "path": "/api/settle-load/:id",
+    "permissionEvidence": [
+      "authorizeRequest(\"SALES\", \"SETTLE_LOAD\", \"delete\"),\r"
+    ],
+    "transactionEvidence": [],
+    "dateTokens": [
+      "findOneAndUpdate",
+      "Date"
+    ],
+    "mutationCandidates": [
+      "SalesHeader.updateMany(",
+      "SettleLoad.findOneAndUpdate("
+    ],
+    "posting": false,
+    "guarded": false
+  },
+  {
+    "file": "backend/server.js",
+    "line": 30295,
+    "method": "PUT",
+    "path": "/api/bill-print/settings",
+    "permissionEvidence": [],
+    "transactionEvidence": [],
+    "dateTokens": [
+      "findOneAndUpdate"
+    ],
+    "mutationCandidates": [
+      "BillPrintSettings.findOneAndUpdate("
+    ],
+    "posting": false,
+    "guarded": false
+  },
+  {
+    "file": "backend/service.js",
+    "line": 164,
+    "method": "POST",
+    "path": "/services",
+    "permissionEvidence": [],
+    "transactionEvidence": [],
+    "dateTokens": [],
+    "mutationCandidates": [
+      "Service.create("
+    ],
+    "posting": false,
+    "guarded": false
+  },
+  {
+    "file": "backend/service.js",
+    "line": 172,
+    "method": "PUT",
+    "path": "/services/:id",
+    "permissionEvidence": [],
+    "transactionEvidence": [],
+    "dateTokens": [
+      "findOneAndUpdate"
+    ],
+    "mutationCandidates": [
+      "Service.findOneAndUpdate("
+    ],
+    "posting": false,
+    "guarded": false
+  },
+  {
+    "file": "backend/service.js",
+    "line": 183,
+    "method": "DELETE",
+    "path": "/services/:id",
+    "permissionEvidence": [],
+    "transactionEvidence": [],
+    "dateTokens": [
+      "findOneAndUpdate"
+    ],
+    "mutationCandidates": [
+      "Service.findOneAndUpdate("
+    ],
+    "posting": false,
+    "guarded": false
+  },
+  {
+    "file": "backend/service.js",
+    "line": 225,
+    "method": "POST",
+    "path": "/sales-services",
+    "permissionEvidence": [],
+    "transactionEvidence": [],
+    "dateTokens": [
+      "voucherDate",
+      "Date",
+      "documentDate"
+    ],
+    "mutationCandidates": [
+      "SalesService.create("
+    ],
+    "posting": false,
+    "guarded": false
+  },
+  {
+    "file": "backend/service.js",
+    "line": 241,
+    "method": "PUT",
+    "path": "/sales-services/:id",
+    "permissionEvidence": [],
+    "transactionEvidence": [],
+    "dateTokens": [
+      "update"
+    ],
+    "mutationCandidates": [
+      "voucher.save("
+    ],
+    "posting": false,
+    "guarded": false
+  },
+  {
+    "file": "backend/service.js",
+    "line": 253,
+    "method": "DELETE",
+    "path": "/sales-services/:id",
+    "permissionEvidence": [],
+    "transactionEvidence": [],
+    "dateTokens": [
+      "findOneAndUpdate"
+    ],
+    "mutationCandidates": [
+      "SalesService.findOneAndUpdate("
+    ],
+    "posting": false,
+    "guarded": false
+  },
+  {
+    "file": "backend/transaction.js",
+    "line": 358,
+    "method": "GET",
+    "path": "/find-cheque-details",
+    "permissionEvidence": [
+      "authorizeRequest(\"REPORTS\", \"PARTY_WISE_SALES\", \"view\"),\r"
+    ],
+    "transactionEvidence": [],
+    "dateTokens": [
+      "receiptDate",
+      "chqBounceDate",
+      "depositDate",
+      "clearingDate",
+      "chequeDate",
+      "vDate",
+      "Date",
+      "transactionDate",
+      "collectionDate",
+      "billDate"
+    ],
+    "mutationCandidates": [
+      "purchase.constructor.updateOne(",
+      "Purchase.updateOne("
+    ],
+    "posting": false,
+    "guarded": false
+  },
+  {
+    "file": "backend/transaction.js",
+    "line": 902,
+    "method": "POST",
+    "path": "/payment",
+    "permissionEvidence": [
+      "authorizeRequest(\"TRANSACTIONS\", \"PAYMENT\", \"add\"),\r"
+    ],
+    "transactionEvidence": [
+      "startSession",
+      "withTransaction"
+    ],
+    "dateTokens": [
+      "vDate",
+      "date",
+      "documentDate",
+      "chequeDate",
+      "chqDate",
+      "clearingDate"
+    ],
+    "mutationCandidates": [
+      "Payment.create("
+    ],
+    "posting": true,
+    "guarded": false
+  },
+  {
+    "file": "backend/transaction.js",
+    "line": 968,
+    "method": "PUT",
+    "path": "/payment/:id",
+    "permissionEvidence": [
+      "authorizeRequest(\"TRANSACTIONS\", \"PAYMENT\", \"edit\"),\r"
+    ],
+    "transactionEvidence": [
+      "startSession",
+      "withTransaction"
+    ],
+    "dateTokens": [
+      "documentDate",
+      "vDate",
+      "chequeDate",
+      "chqDate",
+      "clearingDate",
+      "Date"
+    ],
+    "mutationCandidates": [
+      "payment.save("
+    ],
+    "posting": true,
+    "guarded": false
+  },
+  {
+    "file": "backend/transaction.js",
+    "line": 1017,
+    "method": "DELETE",
+    "path": "/payment/:id",
+    "permissionEvidence": [
+      "authorizeRequest(\"TRANSACTIONS\", \"PAYMENT\", \"delete\"),\r"
+    ],
+    "transactionEvidence": [
+      "startSession",
+      "withTransaction"
+    ],
+    "dateTokens": [
+      "documentDate",
+      "vDate",
+      "Date"
+    ],
+    "mutationCandidates": [
+      "payment.save("
+    ],
+    "posting": true,
+    "guarded": false
+  },
+  {
+    "file": "backend/transaction.js",
+    "line": 1051,
+    "method": "POST",
+    "path": "/receipt",
+    "permissionEvidence": [
+      "authorizeRequest(\"TRANSACTIONS\", \"RECEIPT\", \"add\"),\r"
+    ],
+    "transactionEvidence": [
+      "startSession",
+      "withTransaction"
+    ],
+    "dateTokens": [
+      "trnDate",
+      "billDate",
+      "BillDate",
+      "receiptDate",
+      "date",
+      "documentDate"
+    ],
+    "mutationCandidates": [
+      "sales.updateOne(",
+      "Receipt.create("
+    ],
+    "posting": true,
+    "guarded": false
+  },
+  {
+    "file": "backend/transaction.js",
+    "line": 1270,
+    "method": "POST",
+    "path": "/receipt",
+    "permissionEvidence": [
+      "authorizeRequest(\"TRANSACTIONS\", \"RECEIPT\", \"add\"),\r"
+    ],
+    "transactionEvidence": [],
+    "dateTokens": [
+      "trnDate",
+      "billDate",
+      "Validate",
+      "receiptDate",
+      "chequeDate"
+    ],
+    "mutationCandidates": [
+      "Receipt.create("
+    ],
+    "posting": false,
+    "guarded": false
+  },
+  {
+    "file": "backend/transaction.js",
+    "line": 1981,
+    "method": "PUT",
+    "path": "/receipt/:id",
+    "permissionEvidence": [
+      "authorizeRequest(\"TRANSACTIONS\", \"RECEIPT\", \"edit\"),\r"
+    ],
+    "transactionEvidence": [],
+    "dateTokens": [
+      "trnDate",
+      "billDate",
+      "receiptDate",
+      "chequeDate",
+      "findOneAndUpdate",
+      "update"
+    ],
+    "mutationCandidates": [
+      "Receipt.findOneAndUpdate("
+    ],
+    "posting": false,
+    "guarded": false
+  },
+  {
+    "file": "backend/transaction.js",
+    "line": 2354,
+    "method": "DELETE",
+    "path": "/receipt/:id",
+    "permissionEvidence": [
+      "authorizeRequest(\"TRANSACTIONS\", \"RECEIPT\", \"delete\"),\r"
+    ],
+    "transactionEvidence": [
+      "startSession",
+      "withTransaction"
+    ],
+    "dateTokens": [
+      "documentDate",
+      "receiptDate",
+      "Date"
+    ],
+    "mutationCandidates": [
+      "sales.updateOne(",
+      "receipt.save("
+    ],
+    "posting": true,
+    "guarded": false
+  },
+  {
+    "file": "backend/transaction.js",
+    "line": 2498,
+    "method": "POST",
+    "path": "/cheque-bounce",
+    "permissionEvidence": [
+      "authorizeRequest(\"TRANSACTIONS\", \"CHEQUE_BOUNCE\", \"add\"),\r"
+    ],
+    "transactionEvidence": [],
+    "dateTokens": [
+      "documentDate",
+      "chqBounceDate"
+    ],
+    "mutationCandidates": [
+      "ChequeBounce.create("
+    ],
+    "posting": false,
+    "guarded": false
+  },
+  {
+    "file": "backend/transaction.js",
+    "line": 2595,
+    "method": "PUT",
+    "path": "/cheque-bounce/:id",
+    "permissionEvidence": [
+      "authorizeRequest(\"TRANSACTIONS\", \"CHEQUE_BOUNCE\", \"edit\"),\r"
+    ],
+    "transactionEvidence": [],
+    "dateTokens": [
+      "findOneAndUpdate",
+      "Update"
+    ],
+    "mutationCandidates": [
+      "ChequeBounce.findOneAndUpdate("
+    ],
+    "posting": false,
+    "guarded": false
+  },
+  {
+    "file": "backend/transaction.js",
+    "line": 3193,
+    "method": "DELETE",
+    "path": "/cheque-bounce/:id",
+    "permissionEvidence": [
+      "authorizeRequest(\"TRANSACTIONS\", \"CHEQUE_BOUNCE\", \"delete\"),\r"
+    ],
+    "transactionEvidence": [],
+    "dateTokens": [
+      "findOneAndUpdate"
+    ],
+    "mutationCandidates": [
+      "ChequeBounce.findOneAndUpdate("
+    ],
+    "posting": false,
+    "guarded": false
+  },
+  {
+    "file": "backend/transaction.js",
+    "line": 3212,
+    "method": "POST",
+    "path": "/pdc-docket",
+    "permissionEvidence": [
+      "authorizeRequest(\"TRANSACTIONS\", \"PDC_DOCKET\", \"add\"),\r"
+    ],
+    "transactionEvidence": [],
+    "dateTokens": [
+      "documentDate",
+      "pdcDate",
+      "docDate"
+    ],
+    "mutationCandidates": [
+      "PDCDocket.create("
+    ],
+    "posting": false,
+    "guarded": false
+  },
+  {
+    "file": "backend/transaction.js",
+    "line": 3243,
+    "method": "PUT",
+    "path": "/pdc-docket/:id",
+    "permissionEvidence": [
+      "authorizeRequest(\r"
+    ],
+    "transactionEvidence": [],
+    "dateTokens": [
+      "findOneAndUpdate"
+    ],
+    "mutationCandidates": [
+      "PDCDocket.findOneAndUpdate("
+    ],
+    "posting": false,
+    "guarded": false
+  },
+  {
+    "file": "backend/transaction.js",
+    "line": 3915,
+    "method": "DELETE",
+    "path": "/pdc-docket/:id",
+    "permissionEvidence": [
+      "authorizeRequest(\"TRANSACTIONS\", \"PDC_DOCKET\", \"delete\"),\r"
+    ],
+    "transactionEvidence": [],
+    "dateTokens": [
+      "findOneAndUpdate"
+    ],
+    "mutationCandidates": [
+      "PDCDocket.findOneAndUpdate("
+    ],
+    "posting": false,
+    "guarded": false
+  },
+  {
+    "file": "backend/transaction.js",
+    "line": 3937,
+    "method": "POST",
+    "path": "/contra",
+    "permissionEvidence": [
+      "authorizeRequest(\"TRANSACTIONS\", \"CONTRA\", \"add\"),\r"
+    ],
+    "transactionEvidence": [],
+    "dateTokens": [
+      "documentDate",
+      "transactionDate"
+    ],
+    "mutationCandidates": [
+      "Contra.create("
+    ],
+    "posting": false,
+    "guarded": false
+  },
+  {
+    "file": "backend/transaction.js",
+    "line": 3965,
+    "method": "PUT",
+    "path": "/contra/:id",
+    "permissionEvidence": [
+      "authorizeRequest(\r"
+    ],
+    "transactionEvidence": [],
+    "dateTokens": [
+      "findOneAndUpdate"
+    ],
+    "mutationCandidates": [
+      "Contra.findOneAndUpdate("
+    ],
+    "posting": false,
+    "guarded": false
+  },
+  {
+    "file": "backend/transaction.js",
+    "line": 4527,
+    "method": "DELETE",
+    "path": "/contra/:id",
+    "permissionEvidence": [
+      "authorizeRequest(\"TRANSACTIONS\", \"CONTRA\", \"delete\"),\r"
+    ],
+    "transactionEvidence": [],
+    "dateTokens": [
+      "findOneAndUpdate"
+    ],
+    "mutationCandidates": [
+      "Contra.findOneAndUpdate("
+    ],
+    "posting": false,
+    "guarded": false
+  },
+  {
+    "file": "backend/transaction.js",
+    "line": 4613,
+    "method": "POST",
+    "path": "/collection-voucher",
+    "permissionEvidence": [
+      "authorizeRequest(\"TRANSACTIONS\", \"COLLECTION_VOUCHER\", \"add\"),\r"
+    ],
+    "transactionEvidence": [],
+    "dateTokens": [
+      "documentDate",
+      "collectionDate"
+    ],
+    "mutationCandidates": [
+      "CollectionVoucher.create("
+    ],
+    "posting": false,
+    "guarded": false
+  },
+  {
+    "file": "backend/transaction.js",
+    "line": 4640,
+    "method": "PUT",
+    "path": "/collection-voucher/:id",
+    "permissionEvidence": [
+      "authorizeRequest(\r"
+    ],
+    "transactionEvidence": [],
+    "dateTokens": [
+      "findOneAndUpdate"
+    ],
+    "mutationCandidates": [
+      "CollectionVoucher.findOneAndUpdate("
+    ],
+    "posting": false,
+    "guarded": false
+  },
+  {
+    "file": "backend/transaction.js",
+    "line": 5250,
+    "method": "DELETE",
+    "path": "/collection-voucher/:id",
+    "permissionEvidence": [
+      "authorizeRequest(\"TRANSACTIONS\", \"COLLECTION_VOUCHER\", \"delete\"),\r"
+    ],
+    "transactionEvidence": [],
+    "dateTokens": [
+      "findOneAndUpdate"
+    ],
+    "mutationCandidates": [
+      "CollectionVoucher.findOneAndUpdate("
+    ],
+    "posting": false,
+    "guarded": false
+  }
+]

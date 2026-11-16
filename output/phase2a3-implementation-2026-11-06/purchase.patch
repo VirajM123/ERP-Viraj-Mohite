@@ -1,0 +1,234 @@
+diff --git "a/D:\\ERP-Viraj-Mohite\\output\\phase2a3-implementation-2026-11-06\\server.purchase-baseline.js" "b/D:\\ERP-Viraj-Mohite\\output\\phase2a3-implementation-2026-11-06\\checkout\\backend\\server.js"
+index e8b1bf9..d14bff2 100644
+--- "a/D:\\ERP-Viraj-Mohite\\output\\phase2a3-implementation-2026-11-06\\server.purchase-baseline.js"
++++ "b/D:\\ERP-Viraj-Mohite\\output\\phase2a3-implementation-2026-11-06\\checkout\\backend\\server.js"
+@@ -10,7 +10,7 @@ import companyWiseSeriesRoutes from "./companyWiseSeries.js";
+ import createBatchLockRouter from "./batchLock.js";
+ import printAccountDetailsRoutes from "./printAccountDetails.js";
+ import createSecuritySetupRouter from "./securitySetup.js";
+-import createFinancialPeriodsRouter from "./financialPeriods.js";
++import createFinancialPeriodsRouter, { validateFinancialOperation } from "./financialPeriods.js";
+ import createImportRouter from "./importRoutes.js";
+ import createDesktopImportRouter from "./desktopImportRoutes.js";
+ import createProductSalesReportRouter from "./productSalesReport.js";
+@@ -27,7 +27,7 @@ import {
+   verifyPassword,
+ } from "./auth.js";
+ import { writeAuditEvent } from "./audit.js";
+-import { postBalancedJournal, reverseSourceJournal } from "./accounting.js";
++import { Journal, postBalancedJournal, reverseSourceJournal } from "./accounting.js";
+ import { nextDocumentNumber } from "./counters.js";
+ import { businessDateIST } from "./businessDate.js";
+ import { validateFinancialEnvelope } from "./financialValidation.js";
+@@ -10446,14 +10446,26 @@ app.get("/api/purchase/next-vou-no", ensureConnection, async (req, res) => {
+   }
+ });
+ 
++// Match reverseSourceJournal's latest-event selection in the caller transaction.
++const validatePurchasePeriods = async (req, purchase, dates, session) => {
++  const { distributorId, firmId } = req.body;
++  if (purchase) {
++    const latest = await Journal.findOne({ distributorId, firmId, sourceType: "PURCHASE", sourceId: String(purchase._id) })
++      .sort({ postingVersion: -1 }).session(session).lean();
++    if (latest && !latest.reversalOf && latest.status === "POSTED") dates = [...dates, latest.documentDate];
++  }
++  await validateFinancialOperation(req, { distributorId, firmId, dates }, session);
++};
++
+ app.post(
+   "/api/purchase",
+   ensureConnection,
+   securityRouter.authorizeRequest("VOUCHERS", "PURCHASE", "add"),
+   async (req, res) => {
+-  const session = await mongoose.startSession();
++  let session;
+ 
+   try {
++    session = await mongoose.startSession();
+     session.startTransaction();
+ 
+     let {
+@@ -10498,6 +10510,7 @@ app.post(
+     const canonicalPurchase = validateFinancialEnvelope(req.body, items, { type: "purchase" });
+     items.splice(0, items.length, ...canonicalPurchase.items);
+     Object.assign(req.body, canonicalPurchase);
++    await validatePurchasePeriods(req, null, [invoiceDate], session);
+     const lastPurchaseForCounter = await PurchaseHeader.findOne({ distributorId, firmId, vouSer: String(vouSer || "").trim() }).sort({ vouNo: -1 }).session(session).lean();
+     const assignedVouNo = req.body._desktopImport === true && Number(vouNo) > 0
+       ? Number(vouNo)
+@@ -10772,7 +10785,7 @@ app.post(
+       nextVouNo,
+     });
+   } catch (error) {
+-    if (session.inTransaction()) await session.abortTransaction();
++    if (session?.inTransaction()) await session.abortTransaction();
+ 
+     console.error("Purchase save error:", error);
+ 
+@@ -10783,12 +10796,12 @@ app.post(
+       });
+     }
+ 
+-    res.status(error.statusCode === 400 ? 400 : 500).json({
++    res.status(error.status || error.statusCode || 500).json({
+       success: false,
+       message: error.message || "Purchase save failed",
+     });
+   } finally {
+-    session.endSession();
++    if (session) await session.endSession();
+   }
+ });
+ 
+@@ -10994,9 +11007,10 @@ app.post(
+   ensureConnection,
+   securityRouter.authorizeRequest("VOUCHERS", "PURCHASE", "add"),
+   async (req, res) => {
+-    const session = await mongoose.startSession();
++    let session;
+     try {
+-      session.startTransaction();
++    session = await mongoose.startSession();
++    session.startTransaction();
+       const distributorId = String(req.body.distributorId || "").trim();
+       const firmId = String(req.body.firmId || "").trim();
+       const vouSer = String(req.body.vouSer || "").trim();
+@@ -11035,6 +11049,8 @@ app.post(
+         throw error;
+       }
+ 
++      await validatePurchasePeriods(req, null, [purchase.invoiceDate, ...(reactivatePurchase ? [String(purchase.invoiceDate || req.body.invoiceDate || "")] : [])], session);
++
+       const incomingBySignature = new Map();
+       for (const item of incomingItems) {
+         const values = incomingBySignature.get(signature(item)) || [];
+@@ -11122,12 +11138,12 @@ app.post(
+         ? `Purchase ${vouSer}-${vouNo} was reactivated and its stock was restored.`
+         : `Purchase ${vouSer}-${vouNo} checked and repaired without duplicating it.`, data: { header: purchase } });
+     } catch (error) {
+-      if (session.inTransaction()) await session.abortTransaction();
++      if (session?.inTransaction()) await session.abortTransaction();
+ 
+       console.error("Desktop purchase reconciliation error:", error);
+-      res.status(error.statusCode || 500).json({ success: false, message: error.message || "Desktop purchase repair failed" });
++      res.status(error.status || error.statusCode || 500).json({ success: false, message: error.message || "Desktop purchase repair failed" });
+     } finally {
+-      session.endSession();
++      if (session) await session.endSession();
+     }
+   }
+ );
+@@ -11137,10 +11153,11 @@ app.put(
+   ensureConnection,
+   securityRouter.authorizeRequest("VOUCHERS", "PURCHASE", "edit"),
+   async (req, res) => {
+-    const session = await mongoose.startSession();
++    let session;
+ 
+     try {
+-      session.startTransaction();
++    session = await mongoose.startSession();
++    session.startTransaction();
+ 
+       const { id } = req.params;
+       let {
+@@ -11193,6 +11210,8 @@ app.put(
+ 
+       if (!oldPurchase) throw new Error("Original purchase not found");
+ 
++      await validatePurchasePeriods(req, oldPurchase, [oldPurchase.invoiceDate, invoiceDate], session);
++
+       // Reverse old items first (subtract; allowed to go temporarily negative).
+       await applyPurchaseStockMovement({
+         items: oldPurchase.items || [],
+@@ -11266,7 +11285,7 @@ app.put(
+         data: { header: updatedPurchase },
+       });
+     } catch (error) {
+-      if (session.inTransaction()) await session.abortTransaction();
++      if (session?.inTransaction()) await session.abortTransaction();
+ 
+       console.error("Purchase update error:", error);
+ 
+@@ -11277,12 +11296,12 @@ app.put(
+         });
+       }
+ 
+-      res.status(error.statusCode === 400 ? 400 : 500).json({
++      res.status(error.status || error.statusCode || 500).json({
+         success: false,
+         message: error.message || "Purchase update failed",
+       });
+     } finally {
+-      session.endSession();
++      if (session) await session.endSession();
+     }
+   }
+ );
+@@ -29598,15 +29617,17 @@ app.delete(
+   ensureConnection,
+   securityRouter.authorizeRequest("VOUCHERS", "PURCHASE", "delete"),
+   async (req, res) => {
+-  const session = await mongoose.startSession();
++  let session;
+ 
+   try {
++    session = await mongoose.startSession();
+     session.startTransaction();
+ 
+     const { id } = req.params;
+     const { distributorId, firmId } = req.body;
+ 
+     if (!distributorId || !firmId) {
++      await session.abortTransaction();
+       return res.status(400).json({
+         success: false,
+         message: "distributorId and firmId are required"
+@@ -29621,12 +29642,16 @@ app.delete(
+     }).session(session);
+ 
+     if (!purchase) {
++      await session.abortTransaction();
+       return res.status(404).json({
+         success: false,
+         message: "Purchase bill not found"
+       });
+     }
+ 
++    const cancellationDate = businessDateIST();
++    await validatePurchasePeriods(req, purchase, [purchase.invoiceDate, cancellationDate], session);
++
+     // Restore stock for each item (remove the added stock)
+  // Restore stock for each item (remove the added stock)
+     for (const item of purchase.items || []) {
+@@ -29669,10 +29694,10 @@ app.delete(
+       { $set: { isActive: false, status: "CANCELLED", cancelledAt: new Date(), cancelledBy: req.auth.userId, cancellationReason: String(req.body.reason || "Deleted by user") } },
+       { new: true, session }
+     );
+-    await reverseSourceJournal({ distributorId, firmId, sourceType: "PURCHASE", sourceId: String(id), createdBy: req.auth.userId, documentDate: businessDateIST(), reason: req.body.reason || "Purchase cancellation" }, session);
++    await reverseSourceJournal({ distributorId, firmId, sourceType: "PURCHASE", sourceId: String(id), createdBy: req.auth.userId, documentDate: cancellationDate, reason: req.body.reason || "Purchase cancellation" }, session);
+     await recordStockMovements({
+       distributorId, firmId, godown: purchase.gdCode, items: purchase.items,
+-      movementDate: businessDateIST(), sourceType: "PURCHASE_CANCEL", sourceId: id,
++      movementDate: cancellationDate, sourceType: "PURCHASE_CANCEL", sourceId: id,
+       documentNo: `${purchase.vouSer || ""}${purchase.vouNo}`,
+       direction: -1, userId: req.auth.userId, session,
+     });
+@@ -29685,14 +29710,14 @@ app.delete(
+       message: `Purchase bill ${purchase.vouSer}-${purchase.vouNo} cancelled and reversed`
+     });
+   } catch (error) {
+-    await session.abortTransaction();
++    if (session?.inTransaction()) await session.abortTransaction();
+     console.error("Delete purchase error:", error);
+-    res.status(500).json({
++    res.status(error.status || error.statusCode || 500).json({
+       success: false,
+       message: error.message || "Purchase bill delete failed"
+     });
+   } finally {
+-    session.endSession();
++    if (session) await session.endSession();
+   }
+ });
+ // ---------- PERMANENT DELETE CREDIT NOTE ----------

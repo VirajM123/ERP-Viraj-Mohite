@@ -1,0 +1,123 @@
+diff --git a/backend/accounting.js b/backend/accounting.js
+index f2bcf0b..e4d5bae 100644
+--- a/backend/accounting.js
++++ b/backend/accounting.js
+@@ -1,4 +1,5 @@
+ import mongoose from "mongoose";
++import { businessDateIST, validateBusinessDate } from "./businessDate.js";
+ 
+ const journalLineSchema = new mongoose.Schema({
+   accountCode: { type: String, required: true }, debit: { type: Number, default: 0 },
+@@ -34,11 +35,17 @@ export const postBalancedJournal = async (entry, session) => {
+ };
+ 
+ export const reverseSourceJournal = async ({ distributorId, firmId, sourceType, sourceId, createdBy, documentDate, reason = "Reversal" }, session) => {
+-  const original = await Journal.findOne({ distributorId, firmId, sourceType, sourceId, status: "POSTED" }).sort({ postingVersion: -1 }).session(session);
+-  if (!original) return null;
++  // The latest event is either the current posting or its reversal. Never
++  // reverse a reversal (including retries after a successful cancellation).
++  const original = await Journal.findOne({ distributorId, firmId, sourceType, sourceId }).sort({ postingVersion: -1 }).session(session);
++  if (!original || original.reversalOf || original.status !== "POSTED") return null;
++  const effectiveDate = validateBusinessDate(documentDate || businessDateIST());
++  if (original.documentDate && effectiveDate < original.documentDate) {
++    throw Object.assign(new Error("Reversal date cannot precede the posting being reversed."), { statusCode: 400 });
++  }
+   const reversal = await postBalancedJournal({
+     distributorId, firmId, sourceType, sourceId, documentNo: original.documentNo,
+-    documentDate: documentDate || original.documentDate, createdBy, reversalOf: original._id,
++    documentDate: effectiveDate, createdBy, reversalOf: original._id,
+     lines: original.lines.map((line) => ({ accountCode: line.accountCode, debit: Number(line.credit || 0), credit: Number(line.debit || 0), narration: reason })),
+   }, session);
+   original.status = "REVERSED";
+diff --git a/backend/p0Features.js b/backend/p0Features.js
+index 7aac625..bbe03f6 100644
+--- a/backend/p0Features.js
++++ b/backend/p0Features.js
+@@ -171,12 +171,18 @@ const dateMatch = (req, field = "documentDate") => {
+ };
+ 
+ export const financialRows = async (req, includeOpening = false) => {
+-  // Ledger openings include prior posted activity, including receipts/payments.
++  // Reversed transaction postings remain effective on their original dates.
++  // OPENING_BALANCE is different: legacy edits supersede rows without emitting
++  // reversal events. Retain its POSTED-only selection until that path is migrated.
++  // OpeningTransaction is never itself read as a financial movement.
+   // OpeningTransaction is a reference/summary, not a second ledger posting.
+   const filter = includeOpening && req.query.fromDate
+     ? (req.query.toDate ? { documentDate: { $lte: String(req.query.toDate) } } : {})
+     : dateMatch(req);
+-  const journals = await Journal.find(tenant(req, { status: "POSTED", ...filter })).sort({ documentDate: 1, createdAt: 1 }).lean();
++  const journals = await Journal.find(tenant(req, { $or: [
++    { status: "POSTED" },
++    { status: "REVERSED", sourceType: { $ne: "OPENING_BALANCE" } },
++  ], ...filter })).sort({ documentDate: 1, createdAt: 1 }).lean();
+   const rows = journals.flatMap((entry) => entry.lines.map((line) => ({
+     date: entry.documentDate, documentNo: entry.documentNo || "", source: entry.sourceType,
+     accountCode: line.accountCode, narration: line.narration || "", debit: number(line.debit), credit: number(line.credit),
+diff --git a/backend/securitySetup.js b/backend/securitySetup.js
+index 4541b48..96525cd 100644
+--- a/backend/securitySetup.js
++++ b/backend/securitySetup.js
+@@ -49,6 +49,14 @@ export default function createSecuritySetupRouter(User) {
+   */
+ 
+   const DEFAULT_OPERATION_GROUPS = [
++    {
++      id: "accounting", name: "Accounting", operations: [
++        { id: "financial-period-view", name: "Financial period view", module: "ACCOUNTING", operation: "FINANCIAL_PERIOD_VIEW" },
++        { id: "financial-period-configure", name: "Financial period configure", module: "ACCOUNTING", operation: "FINANCIAL_PERIOD_CONFIGURE" },
++        { id: "financial-period-close", name: "Financial period close", module: "ACCOUNTING", operation: "FINANCIAL_PERIOD_CLOSE" },
++        { id: "financial-period-reopen", name: "Financial period reopen", module: "ACCOUNTING", operation: "FINANCIAL_PERIOD_REOPEN" },
++      ],
++    },
+     {
+       id: "master",
+       name: "Master",
+diff --git a/backend/server.js b/backend/server.js
+index 9a57a0b..e8b1bf9 100644
+--- a/backend/server.js
++++ b/backend/server.js
+@@ -10,6 +10,7 @@ import companyWiseSeriesRoutes from "./companyWiseSeries.js";
+ import createBatchLockRouter from "./batchLock.js";
+ import printAccountDetailsRoutes from "./printAccountDetails.js";
+ import createSecuritySetupRouter from "./securitySetup.js";
++import createFinancialPeriodsRouter from "./financialPeriods.js";
+ import createImportRouter from "./importRoutes.js";
+ import createDesktopImportRouter from "./desktopImportRoutes.js";
+ import createProductSalesReportRouter from "./productSalesReport.js";
+@@ -226,6 +227,8 @@ const Company = mongoose.model("Mas_Company", companySchema);
+ const securityRouter =
+     createSecuritySetupRouter(User);
+ 
++app.use("/api/financial-periods", ensureConnection, createFinancialPeriodsRouter(securityRouter));
++
+ const authorizeFeatureMethods = (moduleCode, operationCode, actions) => (req, res, next) => {
+   const action = actions[req.method];
+   if (!action) return res.status(405).json({ success: false, message: "Method not allowed." });
+diff --git a/backend/test/ledger-opening.test.js b/backend/test/ledger-opening.test.js
+index 09ad16e..9f20e6d 100644
+--- a/backend/test/ledger-opening.test.js
++++ b/backend/test/ledger-opening.test.js
+@@ -11,7 +11,7 @@ test('ledger carries prior invoices less receipts and opening-date openings with
+     entry('2026-04-01', 'OPENING_BALANCE', 200), entry('2026-04-01', 'SALES', 50), entry('2026-04-02', 'RECEIPT', 0, 100),
+   ] }; });
+   const rows = await financialRows({ auth: { distributorId: 'D1', firmId: 'F1' }, query: { fromDate: '2026-04-01', toDate: '2026-04-30' } }, true);
+-  assert.deepEqual(filter, { distributorId: 'D1', firmId: 'F1', status: 'POSTED', documentDate: { $lte: '2026-04-30' } });
++  assert.deepEqual(filter, { distributorId: 'D1', firmId: 'F1', $or: [{ status: 'POSTED' }, { status: 'REVERSED', sourceType: { $ne: 'OPENING_BALANCE' } }], documentDate: { $lte: '2026-04-30' } });
+   assert.equal(rows.length, 3);
+   assert.equal(rows[0].narration, 'Opening Balance');
+   assert.equal(rows[0].debit, 800);
+diff --git a/src/api/config.js b/src/api/config.js
+index f7a13aa..0886ef0 100644
+--- a/src/api/config.js
++++ b/src/api/config.js
+@@ -1,7 +1,7 @@
+ const configuredRoot = String(import.meta.env.VITE_API_ROOT || "").trim();
+ 
+- const defaultRoot = "https://total-solution-backend.onrender.com";
+-//const defaultRoot = "http://localhost:5000";
++// const defaultRoot = "https://total-solution-backend.onrender.com";
++const defaultRoot = "http://localhost:5000";
+ 
+ let parsedRoot;
+ try {
