@@ -1942,8 +1942,6 @@ const Report = ({
     orderBy: "productName",
     showZeroSales: "no",
     reportLevel: "units",
-    valuationBy: "basicRate",
-    salesType: "onlySales",
     reportOn: "productName",
   }));
 
@@ -2357,6 +2355,7 @@ const Report = ({
     { key: "DebitNote", label: "Debit Note" },
     { key: "Decrease", label: "Decrease" },
     { key: "Damage", label: "Damage" },
+    { key: "DamageOut", label: "Damage Out" },
     { key: "MFO", label: "MFO" },
     { key: "FromGDTransfer", label: "From GDTransfer" },
     { key: "Closing", label: "Closing" },
@@ -3297,8 +3296,11 @@ const Report = ({
     return filteredPartySalesRows.reduce(
       (total, row) => ({
         qty: total.qty + Number(row.qty || 0),
+        reportQty: total.reportQty + Number(row.reportQty || 0),
+        billQty: total.billQty + Number(row.billQty || 0),
         freeQty: total.freeQty + Number(row.freeQty || 0),
         grossAmount: total.grossAmount + Number(row.grossAmount || 0),
+        discountAmount: total.discountAmount + Number(row.discountAmount || 0),
         tprAmount: total.tprAmount + Number(row.tprAmount || 0),
         schemeAmount: total.schemeAmount + Number(row.schemeAmount || 0),
         cashDiscountAmount: total.cashDiscountAmount + Number(row.cashDiscountAmount || 0),
@@ -3309,8 +3311,11 @@ const Report = ({
       }),
       {
         qty: 0,
+        reportQty: 0,
+        billQty: 0,
         freeQty: 0,
         grossAmount: 0,
+        discountAmount: 0,
         tprAmount: 0,
         schemeAmount: 0,
         cashDiscountAmount: 0,
@@ -3456,8 +3461,11 @@ const Report = ({
     if (columnIndex === 0) return "TOTAL";
     const totalFieldMap = {
       qty: "qty",
+      reportQty: "reportQty",
+      billQty: "billQty",
       freeQty: "freeQty",
       grossAmount: "grossAmount",
+      discountAmount: "discountAmount",
       tprAmount: "tprAmount",
       schemeAmount: "schemeAmount",
       cashDiscountAmount: "cashDiscountAmount",
@@ -3622,6 +3630,9 @@ const Report = ({
         filteredPartySalesRows.length,
       ]);
       worksheetData.push([]);
+      if (partySalesFilters.reportLevel === "selectedParty") {
+        worksheetData.push([]);
+      }
 
       const tableHeaderRowIndex = worksheetData.length;
       worksheetData.push(partyReportColumns.map((column) => column.label || column.key));
@@ -5111,28 +5122,29 @@ const Report = ({
   const clearAllProductSalesFilters = () => {
     setAllProductReportFilters({
       company: "",
-      productCode: "",
       productGroup: "",
       category: "",
-      subCategory: "",
       brand: "",
       fromDate: getFinancialYearStart(),
       toDate: getTodayDate(),
-      salesman: "",
-      area: "",
-      party: "",
-      billType: "",
-      reportLevel: "summary",
-      scope: "all",
-      crnStatus: "all",
+      selectedArea: "no",
+      selectedAreaCodes: [],
+      selectedSalesman: "no",
+      selectedSalesmanCodes: [],
+      billWiseSalesman: "no",
+      withCreditNote: "no",
       orderBy: "productName",
       showZeroSales: "no",
+      reportLevel: "units",
+      reportOn: "productName",
     });
     setAllProductReportRows([]);
     setAllProductReportColumns([]);
     setAllProductReportSearch("");
     setIsAllProductReportGenerated(false);
     setAllProductReportError("");
+    setShowAllAreaSelector(false);
+    setShowAllSalesmanSelector(false);
   };
 
   const buildProductReportColumns = () => [
@@ -5279,6 +5291,9 @@ const Report = ({
         BillNo: row.BillNo ?? "",
         PartyCode: row.PartyCode || "",
         PartyName: row.PartyName || "",
+        Trn: row.Trn || "SALES",
+        NetAmount: Number(row.NetAmount || 0),
+        CreditNoteAmount: Number(row.CreditNoteAmount || 0),
         Rate: Number(row.Rate || 0),
         MRP: Number(row.MRP || 0),
         Qty: Number(row.Qty || 0),
@@ -5286,6 +5301,8 @@ const Report = ({
         AMT: Number(row.AMT || 0),
         Weight: Number(row.Weight || 0),
         TPRAMT: Number(row.TPRAMT || 0),
+        SchemeAmount: Number(row.SchemeAmount || 0),
+        StarAmount: Number(row.StarAmount || 0),
         Disc: Number(row.Disc || 0),
         CDAMT: Number(row.CDAMT || 0),
         CDPercent: Number(row.CDPercent || 0),
@@ -5300,6 +5317,8 @@ const Report = ({
         grossAmount: row.AMT || 0,
         weight: row.Weight || 0,
         tprAmount: row.TPRAMT || 0,
+        schemeAmount: row.SchemeAmount || 0,
+        starAmount: row.StarAmount || 0,
         discount: row.Disc || 0,
         cashDiscountAmount: row.CDAMT || 0,
         cdPercent: row.CDPercent || 0,
@@ -5316,13 +5335,18 @@ const Report = ({
         { key: "BillNo", label: "Bill No", type: "string" },
         { key: "PartyCode", label: "Party Code", type: "string" },
         { key: "PartyName", label: "Party Name", type: "string" },
+        { key: "Trn", label: "Trn", type: "string" },
         { key: "Rate", label: "Rate", type: "number" },
         { key: "MRP", label: "MRP", type: "number" },
         { key: "Qty", label: "Qty", type: "number" },
         { key: "FreeQty", label: "Free Qty", type: "number" },
         { key: "AMT", label: "AMT", type: "number" },
+        { key: "NetAmount", label: "Net Amount", type: "number" },
+        { key: "CreditNoteAmount", label: "Credit Note", type: "number" },
         { key: "Weight", label: "Weight", type: "number" },
         { key: "TPRAMT", label: "TPR AMT", type: "number" },
+        { key: "SchemeAmount", label: "Scheme Amount", type: "number" },
+        { key: "StarAmount", label: "Star Amount", type: "number" },
         { key: "Disc", label: "Disc", type: "number" },
         { key: "CDAMT", label: "CD AMT", type: "number" },
         { key: "CDPercent", label: "CD %", type: "number" },
@@ -6656,13 +6680,13 @@ const Report = ({
     const stockSalesColumns = getStockSalesExportColumns();
     const stockSalesQuantityKeys = new Set([
       "Opening", "Purchase", "CreditNote", "Increase", "MFI", "ToGDTransfer",
-      "Sales", "DebitNote", "Decrease", "Damage", "MFO", "FromGDTransfer",
+      "Sales", "DebitNote", "Decrease", "Damage", "DamageOut", "MFO", "FromGDTransfer",
       "Closing", "BoxPack", "LastQty",
     ]);
     const stockSalesMoneyKeys = new Set(["MRP", "LastPurchase"]);
     const stockSalesTotalKeys = new Set([
       "Opening", "Purchase", "CreditNote", "Increase", "MFI", "ToGDTransfer",
-      "Sales", "DebitNote", "Decrease", "Damage", "MFO", "FromGDTransfer",
+      "Sales", "DebitNote", "Decrease", "Damage", "DamageOut", "MFO", "FromGDTransfer",
       "Closing", "LastQty",
     ]);
     const visibleStockSalesTotals = filteredStockSalesRows.reduce((totals, row) => {
@@ -6688,7 +6712,7 @@ const Report = ({
             <div>
               <span className="report-category">Sales Report</span>
               <h1>Stock And Sales Report</h1>
-              <p>Compare live stock with sales posted during the selected period.</p>
+              <p>Compare closing stock as of the selected To Date with sales posted during the selected period.</p>
             </div>
           </div>
         </div>
@@ -6847,7 +6871,7 @@ const Report = ({
                   <th className="party-report-number">Increase</th><th className="party-report-number">MFI</th>
                   <th className="party-report-number">To GDTransfer</th><th className="party-report-number">Sales</th>
                   <th className="party-report-number">Debit Note</th><th className="party-report-number">Decrease</th>
-                  <th className="party-report-number">Damage</th><th className="party-report-number">MFO</th>
+                  <th className="party-report-number">Damage</th><th className="party-report-number">Damage Out</th><th className="party-report-number">MFO</th>
                   <th className="party-report-number">From GDTransfer</th><th className="party-report-number">Closing</th>
                   <th className="party-report-number">BoxPack</th><th>Last Purchase Date</th>
                   <th className="party-report-number">Last Purchase</th><th className="party-report-number">Last Qty</th>
@@ -6870,6 +6894,7 @@ const Report = ({
                   <td className="party-report-number">{numberText(row.DebitNote, 3)}</td>
                   <td className="party-report-number">{numberText(row.Decrease, 3)}</td>
                   <td className="party-report-number">{numberText(row.Damage, 3)}</td>
+                  <td className="party-report-number">{numberText(row.DamageOut, 3)}</td>
                   <td className="party-report-number">{numberText(row.MFO, 3)}</td>
                   <td className="party-report-number">{numberText(row.FromGDTransfer, 3)}</td>
                   <td className="party-report-number">{numberText(row.Closing, 3)}</td>
@@ -7702,7 +7727,7 @@ const Report = ({
                           setShowSalesmanSelector(false);
                         }}
                       >
-                        <option value="ALL">
+                        <option value="">
                           All Companies
                         </option>
                         {reportCompanies.map((company, index) => {
@@ -8381,18 +8406,11 @@ const Report = ({
                           <tfoot>
                             <tr>
                               {partyReportColumns.map((column, index) => {
-                                let value = "";
-                                if (index === 0) value = "TOTAL";
-                                if (column.key === "qty") value = formatReportNumber(partySalesTotals.qty);
-                                if (column.key === "freeQty") value = formatReportNumber(partySalesTotals.freeQty);
-                                if (column.key === "grossAmount") value = formatReportNumber(partySalesTotals.grossAmount);
-                                if (column.key === "tprAmount") value = formatReportNumber(partySalesTotals.tprAmount);
-                                if (column.key === "schemeAmount") value = formatReportNumber(partySalesTotals.schemeAmount);
-                                if (column.key === "cashDiscountAmount") value = formatReportNumber(partySalesTotals.cashDiscountAmount);
-                                if (column.key === "taxableAmount") value = formatReportNumber(partySalesTotals.taxableAmount);
-                                if (column.key === "gstAmount") value = formatReportNumber(partySalesTotals.gstAmount);
-                                if (column.key === "creditNoteAmount") value = formatReportNumber(partySalesTotals.creditNoteAmount);
-                                if (column.key === "netAmount") value = formatReportNumber(partySalesTotals.netAmount);
+                                const total = getPartyReportTotalValue(column, index, partySalesTotals);
+                                const value =
+                                  column.type === "number" && total !== ""
+                                    ? formatReportNumber(total)
+                                    : total;
 
                                 return (
                                   <td
@@ -9283,6 +9301,15 @@ const Report = ({
   if (selectedReport === "All Product Wise Sales Report") {
     const productOptionSource =
       reportProductList.length > 0 ? reportProductList : productOptionList;
+    const allProductGroups = [...new Set(productOptionSource
+      .map((product) => String(product.group || product.Group || product.productGroup || "").trim())
+      .filter(Boolean))].sort((a, b) => a.localeCompare(b));
+    const allProductCategories = [...new Set(productOptionSource
+      .map((product) => String(product.category || product.Category || "").trim())
+      .filter(Boolean))].sort((a, b) => a.localeCompare(b));
+    const allProductBrands = [...new Set(productOptionSource
+      .map((product) => String(product.brand || product.Brand || "").trim())
+      .filter(Boolean))].sort((a, b) => a.localeCompare(b));
 
     const generateAllProductWiseSalesReport = async () => {
       try {
@@ -9312,13 +9339,16 @@ const Report = ({
           companyCode: allProductReportFilters.company || "",
           fromDate: allProductReportFilters.fromDate,
           toDate: allProductReportFilters.toDate,
-          orderBy: allProductReportFilters.orderBy || "productName",
+          orderBy: allProductReportFilters.reportLevel === "amount" && allProductReportFilters.orderBy === "rate"
+            ? "productName"
+            : allProductReportFilters.orderBy || "productName",
           showZeroSales: allProductReportFilters.showZeroSales || "no",
           reportLevel: allProductReportFilters.reportLevel || "units",
-          valuationBy: allProductReportFilters.valuationBy || "basicRate",
-          salesType: allProductReportFilters.salesType || "onlySales",
           billWiseSalesman: allProductReportFilters.billWiseSalesman || "no",
           withCreditNote: allProductReportFilters.withCreditNote || "no",
+          productGroup: allProductReportFilters.productGroup || "",
+          category: allProductReportFilters.category || "",
+          brand: allProductReportFilters.brand || "",
         });
 
         if (allProductReportFilters.selectedArea === "yes" && allProductReportFilters.selectedAreaCodes.length > 0) {
@@ -9352,6 +9382,7 @@ const Report = ({
           SrNo: row.SrNo || index + 1,
           ProductName: row.ProductName || "",
           ProductCode: row.ProductCode || "",
+          Unit: row.Unit || "",
           LocalProduct: row.LocalProduct || "",
           Batch: row.Batch || "",
           MRP: Number(row.MRP || 0),
@@ -9359,7 +9390,10 @@ const Report = ({
           Qty: Number(row.Qty || 0),
           FreeQty: Number(row.FreeQty || 0),
           Amount: Number(row.Amount || 0),
+          CreditNoteAmount: Number(row.CreditNoteAmount || 0),
           Disc: Number(row.Disc || 0),
+          TPRAmt: Number(row.TPRAmt || 0),
+          SchemeAmt: Number(row.SchemeAmt || 0),
           OtherDisc: Number(row.OtherDisc || 0),
           Valuation: Number(row.Valuation || 0),
           Weight: Number(row.Weight || 0),
@@ -9375,23 +9409,37 @@ const Report = ({
           BillNo: row.BillNo ?? "",
           PartyCode: row.PartyCode || "",
           PartyName: row.PartyName || "",
+          Trn: row.Trn || "SALES",
           CompanyName: row.CompanyName || "",
           SalesmanName: row.SalesmanName || "",
           AreaName: row.AreaName || "",
           Godown: row.Godown || "",
         }));
 
+        const showBatchRates = allProductReportFilters.reportLevel !== "amount";
         const columns = [
           { key: "SrNo", label: "SRNo", type: "number" },
+          { key: "Trn", label: "Trn", type: "string" },
+          ...(allProductReportFilters.billWiseSalesman === "yes"
+            ? [{ key: "SalesmanName", label: "Salesman", type: "string" }]
+            : []),
           { key: "ProductName", label: "Product Name", type: "string" },
           { key: "LocalProduct", label: "Local Product", type: "string" },
-          { key: "Batch", label: "Batch", type: "string" },
-          { key: "MRP", label: "MRP", type: "number" },
-          { key: "Rate", label: "Rate", type: "number" },
+          { key: "Unit", label: "Unit", type: "string" },
+          ...(showBatchRates
+            ? [
+                { key: "Batch", label: "Batch", type: "string" },
+                { key: "MRP", label: "MRP", type: "number" },
+                { key: "Rate", label: "Rate", type: "number" },
+              ]
+            : []),
           { key: "Qty", label: "Qty", type: "number" },
           { key: "FreeQty", label: "Free Qty", type: "number" },
           { key: "Amount", label: "Amount", type: "number" },
+          { key: "CreditNoteAmount", label: "Credit Note", type: "number" },
           { key: "Disc", label: "Disc", type: "number" },
+          { key: "TPRAmt", label: "TPR Amount", type: "number" },
+          { key: "SchemeAmt", label: "Scheme Amount", type: "number" },
           { key: "OtherDisc", label: "OtherDisc", type: "number" },
           { key: "Valuation", label: "Valuation", type: "number" },
           { key: "Weight", label: "Kg", type: "number" },
@@ -9400,8 +9448,12 @@ const Report = ({
           { key: "VatAmt", label: "VatAmt", type: "number" },
           { key: "Cess1", label: "Cess1", type: "number" },
           { key: "Cess2", label: "Cess2", type: "number" },
-          { key: "BasicRate", label: "Basic Rate", type: "number" },
-          { key: "Difference", label: "Difference", type: "number" },
+          ...(showBatchRates
+            ? [
+                { key: "BasicRate", label: "Basic Rate", type: "number" },
+                { key: "Difference", label: "Difference", type: "number" },
+              ]
+            : []),
         ];
 
         setAllProductReportRows(rows);
@@ -9504,6 +9556,39 @@ const Report = ({
                       </div>
 
                       <div className="party-report-field">
+                        <label>Product Group</label>
+                        <select
+                          value={allProductReportFilters.productGroup}
+                          onChange={(event) => updateAllProductReportFilter("productGroup", event.target.value)}
+                        >
+                          <option value="">All Groups</option>
+                          {allProductGroups.map((group) => <option key={group} value={group}>{group}</option>)}
+                        </select>
+                      </div>
+
+                      <div className="party-report-field">
+                        <label>Category</label>
+                        <select
+                          value={allProductReportFilters.category}
+                          onChange={(event) => updateAllProductReportFilter("category", event.target.value)}
+                        >
+                          <option value="">All Categories</option>
+                          {allProductCategories.map((category) => <option key={category} value={category}>{category}</option>)}
+                        </select>
+                      </div>
+
+                      <div className="party-report-field">
+                        <label>Brand</label>
+                        <select
+                          value={allProductReportFilters.brand}
+                          onChange={(event) => updateAllProductReportFilter("brand", event.target.value)}
+                        >
+                          <option value="">All Brands</option>
+                          {allProductBrands.map((brand) => <option key={brand} value={brand}>{brand}</option>)}
+                        </select>
+                      </div>
+
+                      <div className="party-report-field">
                         <label>Selected Area</label>
                         <select
                           value={allProductReportFilters.selectedArea}
@@ -9565,6 +9650,19 @@ const Report = ({
                           <option value="yes">Yes</option>
                         </select>
                       </div>
+
+                      <div className="party-report-field">
+                        <label>With Credit Note</label>
+                        <select
+                          value={allProductReportFilters.withCreditNote}
+                          onChange={(event) =>
+                            updateAllProductReportFilter("withCreditNote", event.target.value)
+                          }
+                        >
+                          <option value="no">No</option>
+                          <option value="yes">Yes</option>
+                        </select>
+                      </div>
                     </div>
 
                     <div className="party-report-form-row">
@@ -9598,16 +9696,21 @@ const Report = ({
                             updateAllProductReportFilter("reportLevel", event.target.value)
                           }
                         >
-                          <option value="units">Units</option>
-                          <option value="amount">Amount</option>
-                          <option value="details">Details</option>
+                          <option value="units">Units (product, batch, and rate)</option>
+                          <option value="amount">Amount (product and unit)</option>
+                          <option value="details">Details (invoice lines)</option>
                         </select>
                       </div>
 
                       <div className="party-report-field">
                         <label>Order By</label>
                         <select
-                          value={allProductReportFilters.orderBy}
+                          value={
+                            allProductReportFilters.reportLevel === "amount" &&
+                            allProductReportFilters.orderBy === "rate"
+                              ? "productName"
+                              : allProductReportFilters.orderBy
+                          }
                           onChange={(event) =>
                             updateAllProductReportFilter("orderBy", event.target.value)
                           }
@@ -9616,7 +9719,12 @@ const Report = ({
                           <option value="productCode">Code Wise</option>
                           <option value="amount">Amount Wise</option>
                           <option value="qty">Qty Wise</option>
-                          <option value="rate">Rate Wise</option>
+                          <option
+                            value="rate"
+                            disabled={allProductReportFilters.reportLevel === "amount"}
+                          >
+                            Rate Wise
+                          </option>
                         </select>
                       </div>
 

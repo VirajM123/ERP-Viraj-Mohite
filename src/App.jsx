@@ -1,5 +1,6 @@
 import React, { lazy, Suspense, useState } from "react";
 import Login from "./Login";
+import SmartLoadingOverlay from "./components/SmartLoadingOverlay";
 import { useSortableListTables } from "./hooks/useSortableListTables";
 
 const Dashboard = lazy(() => import("./Dashboard"));
@@ -23,6 +24,7 @@ function App() {
 
   return (
     <>
+      <SmartLoadingOverlay />
       {isLoggedIn ? (
         <Suspense fallback={<div role="status">Loading ERP...</div>}>
           <Dashboard onLogout={handleLogout} />

@@ -1,0 +1,256 @@
+SALES REPORT AUDIT
+==================
+
+Scope
+-----
+Reviewed the five reports currently listed under the Sales report category:
+1. Party Wise Sales Report
+2. All Party Wise Sales Report
+3. Product Wise Sales Report
+4. All Product Wise Sales Report
+5. Stock And Sales Report
+
+This is a source-code review, not a certification that every result is correct.
+I did not reconcile these reports against a live tenant's invoices, credit
+notes, stock ledger, or the user's source export. Therefore, the reports cannot
+be declared 100% correct based on this review alone.
+
+Executive summary
+-----------------
+Several report defects are visible in the current code:
+- All Party Wise does not use its credit-note option and maps several persisted
+  sales financial fields incorrectly or not at all.
+- Product Wise does not apply its credit-note option, cannot include products
+  with no invoice lines when "Show Zero Sales" is enabled, and sorts "Net
+  Amount" by the gross amount.
+- All Product Wise reads several report options without applying them. Its
+  VAT amount mapping can use a GST percentage as an amount, and several saved
+  discount/tax fields are omitted.
+- Stock And Sales labels live stock as the selected period's closing stock,
+  even though the query does not load a historical stock snapshot.
+- Party Wise uses the saved header totals for summaries and persisted item
+  values for details, but its detail-level credit-note allocation assigns a
+  bill-level credit note to the first product line.
+
+Report-by-report findings
+-------------------------
+
+1. PARTY WISE SALES REPORT
+   Overall: The summary/detail data-source approach is substantially better
+   grounded in persisted values than the other reviewed reports, but a detail
+   allocation issue remains and reconciliation is still required.
+
+   MEDIUM - Bill-level credit note is assigned to the first product line.
+   The "with credit note" detail handling subtracts the entire header
+   CreditNoteAmount from the first item row's net amount. This avoids
+   subtracting it once per item, but it does not establish that the credit note
+   belongs to that product. It can make the first line's net amount wrong or
+   negative while other product lines remain unchanged.
+   Fix needed: Keep item net values tied to the saved item lines. Present the
+   header credit-note adjustment as a separate bill-level amount/row, or use
+   item-level credit-note allocations if the database stores them.
+
+   VALIDATION REQUIRED - Totals and legacy fallback calculations.
+   The report uses saved header amounts for party summaries and saved item
+   values for details. Focused helper tests cover persisted GST fields, a
+   credit-note header, and selected-party grouping. Still reconcile both
+   report levels against actual invoices and the supplied legacy export,
+   including legacy records without the newer saved fields and bills with
+   multiple products.
+
+2. ALL PARTY WISE SALES REPORT
+   Overall: Not correct for all supported financial and report options.
+
+   HIGH - Credit-note option is parsed but has no effect.
+   The handler reads withCreditNote, but queries and processes sales headers
+   only; it does not use the option to include or deduct credit notes. The
+   returned columns do not provide a credit-note amount.
+   Fix needed: Define whether the option means include credit-note transactions
+   or deduct header credit notes, then implement that behavior from persisted
+   credit-note data and expose it in the returned totals/columns.
+
+   HIGH - Saved financial fields are not mapped consistently.
+   The persisted sales items use fields such as tprAmt, schemeAmt, starAmt,
+   taxable, cgst, sgst, igst, and amount. This handler's discount mapping does
+   not include the saved TPR/scheme/star fields, and its VAT mapping does not
+   include the saved lower-case CGST/SGST/IGST values. As a result, discount
+   and GST columns can be zero or incomplete even when the bill has those
+   values. Summary rows are formed by adding item values rather than using the
+   saved header totals.
+   Fix needed: Map the canonical persisted line fields and use saved header
+   totals for party-level summaries; verify that detail lines and summaries
+   reconcile without double counting.
+
+   MEDIUM - Two options do not affect grouping or output.
+   billWiseSalesman and freeValueOn are parsed but are not used in the report
+   row construction or returned columns.
+   Fix needed: Implement their documented meaning, or remove/disable the
+   controls until they are supported.
+
+   MEDIUM - Product-wise summary can combine unlike lines.
+   Product-wise salesSummary groups by party and product code only. It drops
+   batch distinctions, leaves the batch blank, and retains one sales rate from
+   the grouped lines. If the same product was sold at multiple rates or
+   batches, the displayed row is not representative of the underlying lines.
+   Fix needed: Define and use the legacy grouping dimensions (including batch,
+   unit, and/or rate where required), or label the output as a product
+   aggregate and omit misleading single-line values.
+
+3. PRODUCT WISE SALES REPORT
+   Overall: Transaction rows load from sales bills, but some visible options
+   and the net-amount sort do not represent the requested result.
+
+   HIGH - Credit-note option is passed by the UI but ignored by the API.
+   The endpoint reads withCreditNote but does not use it or query credit-note
+   records/header adjustments.
+   Fix needed: Implement the intended credit-note behavior and test it with
+   sales and credit-note documents for the same product.
+
+   HIGH - "Show Zero Sales" cannot return unsold products.
+   The endpoint only iterates items from matching sales bills. Setting
+   showZeroSales to yes can retain zero-quantity invoice lines, but cannot add
+   product-master records with no matching invoice line.
+   Fix needed: When enabled, seed/join the result with the applicable product
+   master list and define the company/date/filter scope for products with no
+   sales.
+
+   MEDIUM - "Net Amount" ordering sorts by AMT.
+   The netAmount sort branch compares AMT, which is grossAmount; the response
+   does not provide a net-amount field for sorting.
+   Fix needed: Sort by a persisted net amount (with a documented source), or
+   rename/remove the option if this report is intentionally gross-only.
+
+   VALIDATION REQUIRED - Financial meaning of displayed AMT and Disc.
+   AMT is populated from gross-amount aliases or quantity times rate. Discount
+   mapping does not cover all persisted discount components, and this report
+   does not return taxable/GST/net fields. Confirm that these columns match the
+   supplied report definition before treating the amount as a final sales
+   value.
+
+4. ALL PRODUCT WISE SALES REPORT
+   Overall: Several request options are accepted but not applied, and some
+   financial fields can be materially incorrect.
+
+   HIGH - VAT amount may be populated with a GST rate.
+   The VAT amount lookup accepts item.gst as a fallback. In the canonical sales
+   financial model, gst is a percentage input while cgst, sgst, and igst are
+   persisted tax amounts. The endpoint does not read those lower-case saved
+   tax amounts. For such rows, VatAmt can show a percentage as currency instead
+   of the actual tax amount.
+   Fix needed: Read saved GST amount fields (CGST + SGST + IGST, or the
+   persisted total tax amount); never use a percentage field as an amount.
+
+   HIGH - Report options are read but do not change the result.
+   reportLevel, valuationBy, salesType, withCreditNote, and billWiseSalesman
+   are read from the request but are not applied to row selection, grouping,
+   valuation, or credit-note handling in this endpoint. The active UI request
+   sends these options. Product group/category/brand are also not included in
+   the active UI request, even though the endpoint can read them.
+   Fix needed: Implement each supported option end to end, or remove controls
+   and request parameters that are not supported.
+
+   HIGH - Saved discount components are omitted.
+   The discount mappings do not include canonical tprAmt, schemeAmt, and
+   starAmt fields. A displayed discount/discount-related column can therefore
+   understate the saved discount or be zero.
+   Fix needed: Map each persisted component to the intended export column and
+   verify that totals reconcile with the bill header.
+
+   MEDIUM - "Show Zero Sales" does not include unsold products.
+   As in Product Wise, rows are created only from sales invoice items. Turning
+   on the option does not load product masters with no sales in the range.
+   Fix needed: Seed results from the in-scope product list when zero-sales
+   products are intended.
+
+   VALIDATION REQUIRED - Product-master lookup is keyed only by product code.
+   Product masters are loaded by tenant and product code, then selected through
+   a code-only map. If product codes are not unique across companies, product
+   attributes such as group, category, brand, and basic rate may be taken from
+   the wrong company.
+   Fix needed: Confirm the product-code uniqueness constraint; otherwise scope
+   and key the lookup by company as well as product code.
+
+5. STOCK AND SALES REPORT
+   Overall: Historical stock figures and movement reconciliation require
+   correction or a clearly narrower report definition.
+
+   HIGH - Closing stock is live stock, not stock as of To Date.
+   The endpoint reads current Stock rows and directly sets Closing to that
+   current quantity for any requested date range. It then derives Opening by
+   reversing selected period movements. For a past To Date, the displayed
+   closing balance is therefore not a historical as-of balance.
+   Fix needed: Compute the as-of-To-Date balance from a verified opening
+   snapshot/complete stock ledger, or clearly label the current stock column
+   as live and do not present it as the period closing balance.
+
+   HIGH - Opening/closing depends on a partial movement reconstruction.
+   Opening is calculated from current stock plus/minus sales, purchases,
+   credit/debit notes, and selected stock adjustments. The report must include
+   every stock-affecting transaction type with the correct sign and scope for
+   the result to reconcile. The code review cannot establish that the listed
+   collections cover every posting path.
+   Fix needed: Reconcile the formula to the authoritative stock ledger and
+   test Opening + period inflows - period outflows = Closing by product,
+   batch, company, and godown.
+
+   MEDIUM - Last purchase details are not scoped by company/godown.
+   The last-purchase lookup is keyed only by product code and loads tenant
+   purchases without company or godown restrictions. A company- or
+   godown-specific report can display a last purchase rate/date from a
+   different company or godown when the same product has purchases in both.
+   Fix needed: Include the relevant company/godown dimension in the lookup and
+   its key, if those dimensions are intended to scope the displayed value.
+
+Tests and evidence gaps
+----------------------
+- The Party Wise helper tests cover selected line mappings, header totals, and
+  grouping, but do not exercise the complete authenticated API against a
+  database.
+- The product-sales test reads and checks a pipeline in
+  backend/productSalesReport.js. The active Product Wise and All Product Wise
+  HTTP handlers reviewed here are separate handlers in backend/server.js; the
+  existing test does not establish their correctness.
+- No focused integration coverage was found for All Party Wise, the active
+  product endpoints, or Stock And Sales.
+- No live tenant dataset was available for independent reconciliation during
+  this source review.
+
+Recommended validation before declaring reports correct
+--------------------------------------------------------
+1. For each bill, compare report gross, discounts, taxable, component GST,
+   credit note, and net against the persisted SalesHeader and item records.
+2. Test same-product sales across different batches, units, and rates, and
+   verify every report's grouping and displayed rate.
+3. Test each UI filter independently and confirm that changing it changes the
+   response as documented, including credit notes and zero-sales products.
+4. For Stock And Sales, reconcile the requested range against stock ledger
+   transactions and an independently known balance as of To Date, segmented
+   by company, product, batch, and godown.
+5. Compare the resulting exports column by column with the user's reference
+   workbooks and document any intentional differences.
+
+Final conclusion
+----------------
+The Sales reports are not 100% verified. Static review found concrete issues
+in All Party Wise, Product Wise, All Product Wise, and Stock And Sales, plus a
+bill-level credit-note allocation issue in Party Wise details. Correct the
+listed items and complete database/export reconciliation before certifying
+the reports as accurate.
+
+Remediation status
+------------------
+The active sales-report routes now use credit-note documents dated by their
+own VDate, include product-level credit-note lines, and add an explicit
+adjustment row when saved document totals differ from the sum of its item
+lines. Party summaries use persisted invoice item totals where available so
+credit-note adjustments to header totals do not reduce the original bill
+values a second time. Product Wise net amounts use persisted line net values
+or the existing financial-field fallback.
+
+Focused sales-report tests and ESLint pass. The full backend test run with its
+required isolation import reports 175 passing and 8 failing tests in financial
+period/accounting suites outside the sales-report changes. No live tenant
+database, invoice/credit-note export, or independent stock ledger was available
+for reconciliation. This is not a 100% accuracy certification; compare the
+generated reports to source records before relying on them as financially
+certified.

@@ -66,13 +66,14 @@ test("purchase and CRN register totals use stored split taxes", () => {
   }], accounts, { fromDate: "2026-04-01", toDate: "2026-09-05" });
   const crn = buildCrnGSTRows([{
     isActive: true, VDate: "2026-05-03", CreditNoteSeries: "CN", CreditNoteNo: 3,
-    PartyCode: "A1", TaxableValue: 200, GSTAmount: 10, NetAmount: 210,
+    PartyCode: "A1", TaxableValue: 200, GSTAmount: 10, NetAmt: 1498.35,
     items: [{ taxable: 200, gstPercent: 5, gstAmt: 10 }],
   }], accounts, { fromDate: "2026-04-01", toDate: "2026-09-05" });
   assert.equal(purchase[0].GST5, 25);
   assert.equal(purchase[0].BillAmt, 525);
   assert.equal(crn[0].CRN5, 200);
   assert.equal(crn[0].TotalTax, 10);
+  assert.equal(crn[0].BillAmt, 1498.35);
 });
 
 test("GST summary keeps sales, purchase and return sections separate", () => {
@@ -99,12 +100,13 @@ test("GSTR1 report creates every reference workbook section", () => {
     items: [{ productName: "Item", hsn: "1001", unit: "PCS-PIECES", qty: 10, taxable: 1000, gstPercent: 18, cgst: 90, sgst: 90 }],
   }], [{
     isActive: true, VDate: "2026-08-03", CreditNoteNo: 4, PartyCode: "A1", PartyName: "Registered Party",
-    NetAmount: 118, items: [{ productName: "Item", hsn: "1001", unit: "PCS-PIECES", qty: 1, taxable: 100, gstPercent: 18, cgst: 9, sgst: 9 }],
+    NetAmt: 1498.35, items: [{ productName: "Item", hsn: "1001", unit: "PCS-PIECES", qty: 1, taxable: 100, gstPercent: 18, cgst: 9, sgst: 9 }],
   }], accounts, { fromDate: "2026-08-01", toDate: "2026-08-31", withDamage: "Y" });
 
   assert.deepEqual(sections.map((section) => section.name), ["B2B", "B2CL", "B2CS", "Cdnr", "Cdnur", "HSN", "Docs", "HSNR", "HSNU"]);
   assert.equal(sections.find((section) => section.name === "B2B").rows[0].GSTNo, "27ABCDE1234F1Z5");
   assert.equal(sections.find((section) => section.name === "Cdnr").rows[0].CreditNoteNo, "4");
+  assert.equal(sections.find((section) => section.name === "Cdnr").rows[0].CreditNoteValue, 1498.35);
   assert.equal(sections.find((section) => section.name === "HSN").rows[0].Taxable, 900);
   assert.equal(sections.find((section) => section.name === "HSNU").rows.filter((row) => row.RowType !== "total").length, 0);
 });
@@ -115,7 +117,7 @@ test("optimized route preserves legacy invoice results with projected documents 
     { BillDate: "2026-08-03", BillSeries: "S", BillNo: 22, PartyCode: "A1", isActive: false, IsBillCancelled: true, Status: "CANCELLED", items: [] },
   ];
   const purchases = [{ invoiceDate: "2026-08-04", vouSer: "P", vouNo: 5, supplierCode: "V1", supplierName: "Vendor", isActive: true, groBsAmt: 80, cgstAmt: 2, sgstAmt: 2, netAmt: 84, items: [{ taxable: 80, gstPercent: 5, cgst: 2, sgst: 2 }] }];
-  const credits = [{ VDate: "2026-08-05", CreditNoteSeries: "CN", CreditNoteNo: 3, PartyCode: "A1", PartyName: "Buyer", isActive: true, NetAmount: 10.5, items: [{ hsn: "1001", taxable: 10, gstPercent: 5, cgst: 0.25, sgst: 0.25 }] }];
+  const credits = [{ VDate: "2026-08-05", CreditNoteSeries: "CN", CreditNoteNo: 3, PartyCode: "A1", PartyName: "Buyer", isActive: true, NetAmt: 10.5, items: [{ hsn: "1001", taxable: 10, gstPercent: 5, cgst: 0.25, sgst: 0.25 }] }];
   const debits = [{ VDate: "2026-08-06", DebitNoteSeries: "DN", DebitNoteNo: 2, SupplierCode: "V1", SupplierName: "Vendor", isActive: true, NetAmount: 10.5, items: [{ taxable: 10, gstPercent: 5, CGST: 0.25, SGST: 0.25 }] }];
   const customers = [{ accountCode: "A1", accountName: "Buyer", gstNo: "27ABCDE1234F1Z5", gstType: "Registered", state: "Maharashtra", address: "Pune" }];
   const suppliers = [{ accountCode: "V1", accountName: "Vendor", gstNo: "27ABCDE1234F1Z5", gstType: "Registered", state: "Maharashtra" }];

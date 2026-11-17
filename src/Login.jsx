@@ -21,6 +21,7 @@ import loginLogo from "../assets/img/Login.ico";
 import loginOfficeHero from "./assets/images/login-office-hero.png";
 import { API_URL } from "./api/config";
 import { businessDateIST } from "./utils/businessDate";
+import { notifyLoadingEnd, notifyLoadingStart } from "./api/client";
 
 
 const getTodayDate = () => {
@@ -120,6 +121,7 @@ const Login = ({ onLoginSuccess }) => {
   const [isLoggingIn, setIsLoggingIn] = useState(false);
 
   const loadRequestId = useRef(0);
+  const loginLoaderRequestId = useRef(0);
 
   const [formData, setFormData] = useState({
     ...emptyForm,
@@ -288,6 +290,7 @@ const Login = ({ onLoginSuccess }) => {
     if (isLoggingIn) return;
     if (mode === "login") setIsLoggingIn(true);
 
+    let loadingRequestId = null;
     try {
       if (mode === "register") {
         const distributorData = {
@@ -359,6 +362,9 @@ const Login = ({ onLoginSuccess }) => {
         alert("Please enter username and password");
         return;
       }
+
+      loadingRequestId = `login-submit-${++loginLoaderRequestId.current}`;
+      notifyLoadingStart(loadingRequestId, "login");
 
       let firms = registeredFirms;
 
@@ -492,6 +498,7 @@ await loadMyPermissions(
       alert("Server not connected. Please check backend is running.");
       console.error(error);
     } finally {
+      if (loadingRequestId !== null) notifyLoadingEnd(loadingRequestId);
       setIsLoggingIn(false);
     }
   };
@@ -825,8 +832,10 @@ await loadMyPermissions(
                     name="password"
                     value={formData.password}
                     onChange={handleChange}
-                    onBlur={() => {
-                      if (mode === "login") loadUserFirms(false);
+                    onBlur={(event) => {
+                      if (mode === "login" && !event.relatedTarget?.closest?.(".auth-btn")) {
+                        loadUserFirms(false);
+                      }
                     }}
                     placeholder="Enter password"
                     required
@@ -914,7 +923,7 @@ await loadMyPermissions(
                 type="submit"
                 className={`auth-btn ${isLoggingIn ? "is-launching" : ""}`}
                 aria-busy={isLoggingIn}
-                disabled={mode === "login" && (loadingFirms || isLoggingIn)}
+                disabled={mode === "login" && isLoggingIn}
               >
                 <span>
                   {mode === "login"

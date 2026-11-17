@@ -41,6 +41,15 @@ import { commitTransactionReliably } from "./transactionCommit.js";
 import { purchaseSupplierFilter } from "./purchaseSupplier.js";
 import { saveEInvoiceJson } from "./einvoiceJsonFiles.js";
 import { observeRequest } from "./observability.js";
+import {
+  getCreditNoteReportValues,
+  getPartySalesBillTotals,
+  getPartySalesDetailValues,
+  getPartySalesHeaderTotals,
+  groupPartySalesDetailRows,
+} from "./partySalesReportData.js";
+import { aggregateAllProductSalesRows } from "./allProductSalesReportData.js";
+import { reverseLaterStockMovement } from "./stockAndSalesReportData.js";
 dotenv.config();
 
 assertSecurityConfiguration();
@@ -1174,11 +1183,20 @@ const productSchema = new mongoose.Schema(
   {
     productCode: String,
     productName: String,
+    shortCode: String,
+    ShortCode: String,
+    productShortCode: String,
+    ProductShortCode: String,
     companyId: String,
     companyName: String,
     group: String,
     category: String,
     description: String,
+    localProduct: String,
+    LocalProduct: String,
+    localProductName: String,
+    LocalProductName: String,
+    LocalProdName: String,
     gst: Number,
     basicUnit: String,
     boxPack: Number,
@@ -1622,9 +1640,13 @@ app.get(
         req.query.firmId || ""
       ).trim();
 
-      const companyCode = String(
+      const requestedCompanyCode = String(
         req.query.companyCode || ""
       ).trim();
+      const companyCode =
+        requestedCompanyCode.toUpperCase() === "ALL"
+          ? ""
+          : requestedCompanyCode;
 
       if (!distributorId || !firmId) {
         return res.status(400).json({
@@ -2556,9 +2578,13 @@ app.get(
         req.query.firmId || ""
       ).trim();
 
-      const companyCode = String(
+      const requestedCompanyCode = String(
         req.query.companyCode || ""
       ).trim();
+      const companyCode =
+        requestedCompanyCode.toUpperCase() === "ALL"
+          ? ""
+          : requestedCompanyCode;
 
       const reportLevel = String(
         req.query.reportLevel ||
@@ -2741,10 +2767,23 @@ app.get(
           })
           .lean();
 
+      const creditNotes = withCreditNote
+        ? await loadSalesReportCreditNotes({
+            distributorId,
+            firmId,
+            fromDate,
+            toDate,
+            companyCode,
+            partyCodes: selectedPartyCodes,
+            areaCodes: selectedAreaCodes,
+            salesmanCodes: selectedSalesmanCodes,
+          })
+        : [];
+
       /*
       * Return an empty report cleanly.
       */
-      if (bills.length === 0) {
+      if (bills.length === 0 && creditNotes.length === 0) {
         return res.json({
           success: true,
           count: 0,
@@ -2944,6 +2983,18 @@ app.get(
             .select({
               productCode: 1,
               productName: 1,
+              shortCode: 1,
+              ShortCode: 1,
+              productShortCode: 1,
+              ProductShortCode: 1,
+              localProduct: 1,
+              LocalProduct: 1,
+              localProductName: 1,
+              LocalProductName: 1,
+              LocalProdName: 1,
+              description: 1,
+              basicUnit: 1,
+              boxPack: 1,
               companyId: 1,
               companyName: 1,
             })
@@ -3207,25 +3258,11 @@ app.get(
             ? bill.items
             : [];
 
-        /*
-        * Sales Details and Selected Party
-        * Product Wise require actual items.
-        *
-        * For older header-only invoices,
-        * keep one blank product row only
-        * when products were not requested.
-        */
-        const productsRequired =
-          reportLevel ===
-          "salesDetails" ||
-          productWise;
-
         const reportItems =
           items.length > 0
             ? items
-            : productsRequired
-              ? []
-              : [{}];
+            : [{}];
+        const headerTotals = getPartySalesBillTotals(bill);
 
         reportItems.forEach(
           (
@@ -3266,6 +3303,12 @@ app.get(
                 item,
                 productCode
               );
+            const salesDetailValues =
+              getPartySalesDetailValues(
+                item,
+                productMaster || {},
+                stockRow || {}
+              );
 
             const qty = toNumber(
               getItemValue(
@@ -3285,7 +3328,9 @@ app.get(
                   item,
                   "freeQty",
                   "FreeQty",
-                  "freeQuantity"
+                  "freeQuantity",
+                  "FrQty",
+                  "frQty"
                 )
               );
 
@@ -3429,16 +3474,7 @@ app.get(
               );
 
             const grossAmount =
-              toNumber(
-                getItemValue(
-                  item,
-                  "grossAmount",
-                  "GrossAmount",
-                  "grossAmt",
-                  "GrossAmt"
-                ),
-                qty * salesRate
-              );
+              salesDetailValues.grossAmount;
 
             const schemePercent =
               toNumber(
@@ -3457,17 +3493,7 @@ app.get(
               );
 
             const schemeAmount =
-              toNumber(
-                getItemValue(
-                  item,
-                  "schemeAmount",
-                  "SchemeAmount",
-                  "schemeAmt",
-                  "schAmount",
-                  "schAmt",
-                  "SchAmount"
-                )
-              );
+              salesDetailValues.schemeAmount;
 
             const cashDiscountPercent =
               toNumber(
@@ -3484,17 +3510,7 @@ app.get(
               );
 
             const cashDiscountAmount =
-              toNumber(
-                getItemValue(
-                  item,
-                  "cashDiscountAmount",
-                  "CashDiscountAmount",
-                  "cashDiscountAmt",
-                  "cdAmount",
-                  "cdAmt",
-                  "CDAmount"
-                )
-              );
+              salesDetailValues.cashDiscountAmount;
 
             const tprPercent =
               toNumber(
@@ -3508,15 +3524,7 @@ app.get(
               );
 
             const tprAmount =
-              toNumber(
-                getItemValue(
-                  item,
-                  "tprAmount",
-                  "TPRAmount",
-                  "tprAmt",
-                  "TPRAmt"
-                )
-              );
+              salesDetailValues.tprAmount;
 
             const cgstPercent =
               toNumber(
@@ -3562,93 +3570,51 @@ app.get(
                 )
               );
 
-            const cgstAmount =
-              toNumber(
-                getItemValue(
-                  item,
-                  "cgstAmount",
-                  "CGSTAmount",
-                  "cgstAmt"
-                )
-              );
-
-            const sgstAmount =
-              toNumber(
-                getItemValue(
-                  item,
-                  "sgstAmount",
-                  "SGSTAmount",
-                  "sgstAmt"
-                )
-              );
-
-            const igstAmount =
-              toNumber(
-                getItemValue(
-                  item,
-                  "igstAmount",
-                  "IGSTAmount",
-                  "igstAmt"
-                )
-              );
-
-            const gstAmount =
-              cgstAmount +
-              sgstAmount +
-              igstAmount;
-
-            const taxableAmount =
-              toNumber(
-                getItemValue(
-                  item,
-                  "taxableAmount",
-                  "TaxableAmount",
-                  "taxableValue",
-                  "TaxableValue"
-                ),
-                grossAmount -
-                schemeAmount -
-                cashDiscountAmount -
-                tprAmount
-              );
-
-            const calculatedNet =
-              taxableAmount +
-              gstAmount;
-
-            const originalItemNet =
-              toNumber(
-                getItemValue(
-                  item,
-                  "netAmount",
-                  "NetAmount",
-                  "netAmt",
-                  "amount",
-                  "Amount"
-                ),
-                calculatedNet
-              );
-
-            /*
-            * CreditNoteAmount is stored at
-            * bill-header level.
-            *
-            * Apply it only to the first item
-            * row so it is not deducted once
-            * for every product.
-            */
-            const creditNoteAmount =
-              withCreditNote &&
+            const cgstAmount = salesDetailValues.cgstAmount;
+            const sgstAmount = salesDetailValues.sgstAmount;
+            const igstAmount = salesDetailValues.igstAmount;
+            const gstAmount = salesDetailValues.gstAmount;
+            const taxableAmount = salesDetailValues.taxableAmount;
+            const originalItemNet = salesDetailValues.netAmount;
+            const useHeaderAmounts =
+              items.length === 0 ||
+              (
+                reportLevel === "salesSummary" &&
+                !productWise &&
                 itemIndex === 0
-                ? toNumber(
-                  bill
-                    .CreditNoteAmount
-                )
-                : 0;
+              );
+            const omitExtraSummaryLineAmounts =
+              reportLevel === "salesSummary" &&
+              !productWise &&
+              itemIndex > 0;
+            const reportAmounts = useHeaderAmounts
+              ? headerTotals
+              : omitExtraSummaryLineAmounts
+                ? {
+                    grossAmount: 0,
+                    tprAmount: 0,
+                    schemeAmount: 0,
+                    discountAmount: 0,
+                    cashDiscountAmount: 0,
+                    taxableAmount: 0,
+                    gstAmount: 0,
+                    creditNoteAmount: 0,
+                    netAmount: 0,
+                  }
+                : {
+                    grossAmount,
+                    tprAmount,
+                    schemeAmount,
+                    discountAmount: salesDetailValues.discountAmount,
+                    cashDiscountAmount,
+                    taxableAmount,
+                    gstAmount,
+                    creditNoteAmount: 0,
+                    netAmount: originalItemNet,
+                  };
 
-            const netAmount =
-              originalItemNet -
-              creditNoteAmount;
+            const creditNoteAmount =
+              reportAmounts.creditNoteAmount;
 
             detailRows.push({
               rowId: `${String(
@@ -3707,14 +3673,43 @@ app.get(
 
               productCode,
               productName,
+              shortCode:
+                salesDetailValues.shortCode ||
+                productMaster?.shortCode ||
+                productMaster?.ShortCode ||
+                "",
+              localProduct:
+                salesDetailValues.localProduct,
 
               batch,
               mrp,
-              qty,
-              freeQty,
+              qty:
+                items.length === 0
+                  ? toNumber(bill.TotalQty)
+                  : qty,
+              freeQty:
+                items.length === 0
+                  ? toNumber(bill.TotalFreeQty)
+                  : freeQty,
 
               salesRate,
               purchaseRate,
+              reportQty:
+                items.length === 0
+                  ? 0
+                  : salesDetailValues.reportQty,
+              billQty:
+                items.length === 0
+                  ? ""
+                  : salesDetailValues.billQty,
+              reportRate: salesDetailValues.reportRate,
+              billRate: salesDetailValues.billRate,
+              reportBoxPack: salesDetailValues.boxPack,
+              caseQty:
+                items.length === 0
+                  ? ""
+                  : salesDetailValues.caseQty,
+              unit: salesDetailValues.unit,
 
               godownCode,
               godownName,
@@ -3723,18 +3718,25 @@ app.get(
               mfgDate,
               expiryDate,
 
-              grossAmount,
+              grossAmount:
+                reportAmounts.grossAmount,
 
               tprPercent,
-              tprAmount,
+              tprAmount:
+                reportAmounts.tprAmount,
 
               schemePercent,
-              schemeAmount,
+              schemeAmount:
+                reportAmounts.schemeAmount,
 
               cashDiscountPercent,
-              cashDiscountAmount,
+              cashDiscountAmount:
+                reportAmounts.cashDiscountAmount,
+              discountAmount:
+                reportAmounts.discountAmount,
 
-              taxableAmount,
+              taxableAmount:
+                reportAmounts.taxableAmount,
 
               gstPercent,
               cgstPercent,
@@ -3743,10 +3745,12 @@ app.get(
               sgstAmount,
               igstPercent,
               igstAmount,
-              gstAmount,
+              gstAmount:
+                reportAmounts.gstAmount,
 
               creditNoteAmount,
-              netAmount,
+              netAmount:
+                reportAmounts.netAmount,
 
               areaCode:
                 bill.AreaCode ||
@@ -3766,6 +3770,98 @@ app.get(
             });
           }
         );
+
+      });
+
+      creditNotes.forEach((creditNote) => {
+        const creditNoteValues = getCreditNoteReportValues(creditNote);
+        const creditNoteDate = creditNote.VDate || "";
+        const creditNoteSeries = creditNote.CreditNoteSeries || "";
+        const creditNoteNo = creditNote.CreditNoteNo ?? creditNote.VNo ?? "";
+        const addCreditNoteRow = (values, item, rowIndex, netAmount) => {
+          const itemCode = String(getItemValue(item, "productCode", "ProductCode", "prodCode", "ProdCode", "productId", "ProductId", "code") || "").trim();
+          const itemName = String(getItemValue(item, "productName", "ProductName", "prodName", "ProdName", "name") || values.localProduct || "").trim();
+          const quantity = toNumber(getItemValue(item, "qty", "Qty", "quantity", "Quantity"));
+          const freeQuantity = toNumber(getItemValue(item, "free", "Free", "freeQty", "FreeQty"));
+          const noteAmount = netAmount;
+          detailRows.push({
+            rowId: `${String(creditNote._id)}-credit-${rowIndex}`,
+            srNo: detailRows.length + 1,
+            trn: "CRN",
+            billDate: creditNoteDate,
+            billSeries: creditNoteSeries,
+            billNo: creditNoteNo,
+            billReference: [creditNoteSeries, creditNoteNo].filter(Boolean).join("-"),
+            billType: "Credit Note",
+            companyCode: creditNote._reportCompanyCode,
+            companyName: creditNote._reportCompanyName,
+            partyCode: creditNote._reportPartyCode,
+            partyName: creditNote._reportPartyName,
+            productCode: itemCode,
+            productName: itemName,
+            shortCode: values.shortCode,
+            localProduct: values.localProduct,
+            batch: String(getItemValue(item, "batchNo", "BatchNo", "batch", "Batch") || "").trim(),
+            mrp: toNumber(getItemValue(item, "mrp", "MRP"), item?.selectedBatch?.mrp, item?.selectedBatch?.MRP),
+            qty: -quantity,
+            freeQty: -freeQuantity,
+            salesRate: values.billRate,
+            purchaseRate: 0,
+            reportQty: -values.reportQty,
+            billQty: -values.billQty,
+            reportRate: values.reportRate,
+            billRate: values.billRate,
+            reportBoxPack: values.boxPack,
+            caseQty: values.caseQty,
+            unit: values.unit,
+            godownCode: creditNote.GDCode || "",
+            godownName: creditNote.Godown || "",
+            stockQty: 0,
+            mfgDate: "",
+            expiryDate: "",
+            grossAmount: -values.grossAmount,
+            tprPercent: 0,
+            tprAmount: -values.tprAmount,
+            schemePercent: 0,
+            schemeAmount: -values.schemeAmount,
+            cashDiscountPercent: 0,
+            cashDiscountAmount: -values.cashDiscountAmount,
+            discountAmount: -values.discountAmount,
+            taxableAmount: -values.taxableAmount,
+            gstPercent: 0,
+            cgstPercent: 0,
+            cgstAmount: -values.cgstAmount,
+            sgstPercent: 0,
+            sgstAmount: -values.sgstAmount,
+            igstPercent: 0,
+            igstAmount: -values.igstAmount,
+            gstAmount: -values.gstAmount,
+            creditNoteAmount: noteAmount,
+            netAmount: -noteAmount,
+            areaCode: creditNote._reportAreaCode,
+            areaName: creditNote._reportAreaName,
+            salesmanCode: creditNote._reportSalesmanCode,
+            salesmanName: creditNote._reportSalesmanName,
+          });
+        };
+
+        creditNoteValues.lines.forEach((values, index) => {
+          addCreditNoteRow(values, creditNote.items[index], index, values.netAmount);
+        });
+
+        const hasRemainder = Object.values(creditNoteValues.remainder).some((amount) => amount !== 0);
+        if (hasRemainder || creditNoteValues.lines.length === 0) {
+          const remainderValues = {
+            ...getPartySalesDetailValues({}),
+            ...creditNoteValues.remainder,
+          };
+          addCreditNoteRow(
+            remainderValues,
+            null,
+            "adjustment",
+            creditNoteValues.remainderNetAmount
+          );
+        }
       });
 
       let rows = detailRows;
@@ -3900,6 +3996,8 @@ app.get(
         rows = Array.from(
           groupedRows.values()
         );
+      } else if (reportLevel === "selectedParty") {
+        rows = groupPartySalesDetailRows(detailRows);
       }
 
       /*
@@ -4349,6 +4447,30 @@ app.get(
         }
       );
 
+      const selectedPartyColumns = [
+        { key: "srNo", label: "SrNo", type: "number" },
+        { key: "billDate", label: "Bill Date", type: "text" },
+        { key: "billSeries", label: "Bill Series", type: "text" },
+        { key: "billNo", label: "Bill No", type: "text" },
+        { key: "shortCode", label: "ShortCode", type: "text" },
+        { key: "productCode", label: "ProdCode", type: "text" },
+        { key: "productName", label: "ProdName", type: "text" },
+        { key: "localProduct", label: "Local Product", type: "text" },
+        { key: "mrp", label: "MRP", type: "number" },
+        { key: "reportQty", label: "Qty", type: "number" },
+        { key: "freeQty", label: "Free", type: "number" },
+        { key: "reportRate", label: "Rate", type: "number" },
+        { key: "grossAmount", label: "GrossAmt", type: "number" },
+        { key: "discountAmount", label: "DiscAmt", type: "number" },
+        { key: "cashDiscountAmount", label: "CDAmt", type: "number" },
+        { key: "gstAmount", label: "VatAmt", type: "number" },
+        { key: "netAmount", label: "NetAmt", type: "number" },
+        { key: "unit", label: "Unit", type: "text" },
+        { key: "billQty", label: "BillQty", type: "number" },
+        { key: "billRate", label: "BillRate", type: "number" },
+        { key: "caseQty", label: "CaseQty", type: "text" },
+      ];
+
       return res.json({
         success: true,
         count: rows.length,
@@ -4357,10 +4479,11 @@ app.get(
         rows,
 
         columns:
-          reportLevel ===
-            "salesSummary"
+          reportLevel === "salesSummary"
             ? summaryColumns
-            : detailColumns,
+            : reportLevel === "selectedParty"
+              ? selectedPartyColumns
+              : detailColumns,
       });
     } catch (error) {
       console.error(
@@ -22858,6 +22981,75 @@ creditNoteSchema.index(
 
 const CreditNote = mongoose.model("T_CreditNote_Header", creditNoteSchema);
 
+const loadSalesReportCreditNotes = async ({
+  distributorId,
+  firmId,
+  fromDate,
+  toDate,
+  companyCode = "",
+  partyCodes = [],
+  areaCodes = [],
+  salesmanCodes = [],
+}) => {
+  const creditNotes = await CreditNote.find({
+    distributorId,
+    firmId,
+    isActive: { $ne: false },
+    Status: { $ne: "CANCELLED" },
+    VDate: { $gte: fromDate, $lte: toDate },
+  })
+    .sort({ VDate: 1, CreditNoteSeries: 1, CreditNoteNo: 1 })
+    .lean();
+
+  const billSeries = [...new Set(
+    creditNotes.map((note) => String(note.BillSeries || note.billSeries || "").trim()).filter(Boolean)
+  )];
+  const billNumbers = [...new Set(
+    creditNotes.map((note) => Number(note.BillNo ?? note.billNo ?? 0)).filter((number) => number > 0)
+  )];
+  const relatedBills = billSeries.length && billNumbers.length
+    ? await SalesHeader.find({
+        distributorId,
+        firmId,
+        BillSeries: { $in: billSeries },
+        BillNo: { $in: billNumbers },
+      })
+        .select("BillSeries BillNo CompanyCode CompanyName PartyCode PartyName AreaCode AreaName SalesmanCode SalesmanName")
+        .lean()
+    : [];
+  const relatedBillMap = new Map(
+    relatedBills.map((bill) => [
+      `${String(bill.BillSeries || "")}|${String(bill.BillNo ?? "")}`,
+      bill,
+    ])
+  );
+  const selectedParties = new Set(partyCodes.map(String));
+  const selectedAreas = new Set(areaCodes.map(String));
+  const selectedSalesmen = new Set(salesmanCodes.map(String));
+
+  return creditNotes
+    .map((note) => {
+      const relatedBill = relatedBillMap.get(
+        `${String(note.BillSeries || note.billSeries || "")}|${String(note.BillNo ?? note.billNo ?? "")}`
+      ) || {};
+      return {
+        ...note,
+        _reportCompanyCode: String(note.CompanyCode || relatedBill.CompanyCode || "").trim(),
+        _reportCompanyName: String(note.CompanyName || relatedBill.CompanyName || "").trim(),
+        _reportPartyCode: String(note.PartyCode || relatedBill.PartyCode || "").trim(),
+        _reportPartyName: String(note.PartyName || relatedBill.PartyName || "").trim(),
+        _reportAreaCode: String(note.AreaCode || relatedBill.AreaCode || "").trim(),
+        _reportAreaName: String(note.AreaName || relatedBill.AreaName || "").trim(),
+        _reportSalesmanCode: String(note.SalesmanCode || relatedBill.SalesmanCode || "").trim(),
+        _reportSalesmanName: String(note.SalesmanName || relatedBill.SalesmanName || "").trim(),
+      };
+    })
+    .filter((note) => !companyCode || note._reportCompanyCode === companyCode)
+    .filter((note) => !selectedParties.size || selectedParties.has(note._reportPartyCode))
+    .filter((note) => !selectedAreas.size || selectedAreas.has(note._reportAreaCode))
+    .filter((note) => !selectedSalesmen.size || selectedSalesmen.has(note._reportSalesmanCode));
+};
+
 // =========================================================
 // DEBIT NOTE SCHEMA
 // Collection: T_DebitNote_Header
@@ -31592,10 +31784,22 @@ app.get(
         })
         .lean();
 
+      const creditNotes = withCreditNote
+        ? await loadSalesReportCreditNotes({
+            distributorId,
+            firmId,
+            fromDate,
+            toDate,
+            companyCode,
+            areaCodes: selectedAreaCodes,
+            salesmanCodes: selectedSalesmanCodes,
+          })
+        : [];
+
       /*
       * Return empty report cleanly.
       */
-      if (bills.length === 0) {
+      if (bills.length === 0 && creditNotes.length === 0) {
         return res.json({
           success: true,
           count: 0,
@@ -31695,29 +31899,27 @@ app.get(
           );
 
           const freeQty = toNumber(
-            getItemValue(item, "freeQty", "FreeQty", "freeQuantity")
+            getItemValue(item, "freeQty", "FreeQty", "freeQuantity", "free", "Free", "FrQty", "frQty")
           );
 
           const salesRate = toNumber(
             getItemValue(item, "salesRate", "SalesRate", "saleRate", "SaleRate", "sRate", "SRate", "rate", "Rate")
           );
 
-          const grossAmount = toNumber(
-            getItemValue(item, "grossAmount", "GrossAmount", "grossAmt", "GrossAmt"),
-            qty * salesRate
-          );
-
-          const discountAmount = toNumber(
-            getItemValue(item, "discount", "Discount", "discountAmount", "DiscountAmount")
-          );
-
-          const cashDiscountAmount = toNumber(
-            getItemValue(item, "cashDiscountAmount", "CashDiscountAmount", "cashDiscountAmt", "cdAmount", "cdAmt", "CDAmount")
-          );
-
-          const vatAmount = toNumber(
-            getItemValue(item, "vatAmount", "VatAmount", "gstAmount", "GSTAmount", "gst")
-          );
+          const financialValues = getPartySalesDetailValues(item);
+          const grossAmount = financialValues.grossAmount || qty * salesRate;
+          const discountAmount = financialValues.discountAmount;
+          const cashDiscountAmount = financialValues.cashDiscountAmount;
+          const vatAmount = financialValues.gstAmount;
+          const lineNetAmount = financialValues.netAmount;
+          const unit = String(getItemValue(item, "unit", "Unit", "basicUnit") || "").trim();
+          const freeValueRate = freeValueOn.toUpperCase() === "MRP"
+            ? toNumber(getItemValue(item, "mrp", "MRP", "productMrp"), item.selectedBatch?.mrp, item.selectedBatch?.MRP)
+            : freeValueOn.toUpperCase() === "SRATE"
+              ? salesRate
+              : toNumber(getItemValue(item, "pRate", "PRate", "purchaseRate", "PurchaseRate"), item.selectedBatch?.purchaseRate, item.selectedBatch?.PRate);
+          const useHeaderAmounts = reportLevel === "salesSummary" && !productWise && itemIndex === 0;
+          const headerTotals = getPartySalesBillTotals(bill);
 
           const lessOther = toNumber(
             getItemValue(item, "lessOther", "LessOther", "otherDiscount", "OtherDiscount")
@@ -31763,10 +31965,6 @@ app.get(
             getItemValue(item, "addLessAmount", "AddLessAmount", "addLess")
           );
 
-          const netAmount = toNumber(
-            getItemValue(item, "netAmount", "NetAmount", "netAmt", "amount", "Amount")
-          );
-
           // Get Salesman details
           const billSalesmanName = String(
             bill.SalesmanName || bill.salesmanName || ""
@@ -31782,10 +31980,12 @@ app.get(
             trn: "SALES",
             partyCode: bill.PartyCode || "",
             partyName: bill.PartyName || "",
-            grossAmount,
-            discountAmount,
-            cashDiscountAmount,
-            vatAmount,
+            grossAmount: useHeaderAmounts ? headerTotals.grossAmount : reportLevel === "salesSummary" && !productWise ? 0 : grossAmount,
+            discountAmount: useHeaderAmounts ? headerTotals.discountAmount : reportLevel === "salesSummary" && !productWise ? 0 : discountAmount,
+            cashDiscountAmount: useHeaderAmounts ? headerTotals.cashDiscountAmount : reportLevel === "salesSummary" && !productWise ? 0 : cashDiscountAmount,
+            vatAmount: useHeaderAmounts ? headerTotals.gstAmount : reportLevel === "salesSummary" && !productWise ? 0 : vatAmount,
+            creditNoteAmount: 0,
+            freeValueAmount: Math.round(freeQty * freeValueRate * 100) / 100,
             lessOther,
             addOther,
             btmAmount,
@@ -31797,7 +31997,7 @@ app.get(
             retAmount,
             retVatAmount,
             addLessAmount,
-            netAmount,
+            netAmount: useHeaderAmounts ? headerTotals.netAmount : reportLevel === "salesSummary" && !productWise ? 0 : lineNetAmount,
             totalLines: 1,
             areaName: bill.AreaName || "",
             masterSalesmanName,
@@ -31809,8 +32009,79 @@ app.get(
             qty,
             freeQty,
             salesRate,
+            unit,
           });
         });
+
+      });
+
+      creditNotes.forEach((creditNote) => {
+        const creditNoteValues = getCreditNoteReportValues(creditNote);
+        const creditNoteSeries = creditNote.CreditNoteSeries || "";
+        const creditNoteNo = creditNote.CreditNoteNo ?? creditNote.VNo ?? "";
+        const addCreditNoteRow = (values, item, rowIndex, netAmount) => {
+          const qty = toNumber(getItemValue(item, "qty", "Qty", "quantity", "Quantity"));
+          const freeQty = toNumber(getItemValue(item, "free", "Free", "freeQty", "FreeQty"));
+          const salesRate = values.billRate;
+          const freeValueRate = freeValueOn.toUpperCase() === "MRP"
+            ? toNumber(getItemValue(item, "mrp", "MRP"), item?.selectedBatch?.mrp, item?.selectedBatch?.MRP)
+            : freeValueOn.toUpperCase() === "SRATE"
+              ? salesRate
+              : toNumber(getItemValue(item, "pRate", "PRate", "purchaseRate", "PurchaseRate"), item?.selectedBatch?.purchaseRate, item?.selectedBatch?.PRate);
+          detailRows.push({
+            rowId: `${String(creditNote._id)}-credit-${rowIndex}`,
+            srNo: detailRows.length + 1,
+            trn: "CRN",
+            partyCode: creditNote._reportPartyCode,
+            partyName: creditNote._reportPartyName,
+            grossAmount: -values.grossAmount,
+            discountAmount: -values.discountAmount,
+            cashDiscountAmount: -values.cashDiscountAmount,
+            vatAmount: -values.gstAmount,
+            creditNoteAmount: netAmount,
+            freeValueAmount: -Math.round(freeQty * freeValueRate * 100) / 100,
+            lessOther: 0,
+            addOther: 0,
+            btmAmount: 0,
+            weight: -toNumber(getItemValue(item, "weight", "Weight")),
+            couponAmount: 0,
+            displayAmount: 0,
+            starAmount: -toNumber(getItemValue(item, "starAmount", "StarAmount", "starAmt", "StarAmt")),
+            surChargeAmount: 0,
+            retAmount: 0,
+            retVatAmount: 0,
+            addLessAmount: 0,
+            netAmount: -netAmount,
+            totalLines: item ? 1 : 0,
+            areaName: creditNote._reportAreaName,
+            masterSalesmanName: creditNote._reportSalesmanName,
+            billSalesmanName: creditNote._reportSalesmanName,
+            productCode: String(getItemValue(item, "productCode", "ProductCode", "prodCode", "ProdCode", "productId", "ProductId", "code") || "").trim(),
+            productName: String(getItemValue(item, "productName", "ProductName", "prodName", "ProdName", "name") || values.localProduct || "").trim(),
+            batch: String(getItemValue(item, "batchNo", "BatchNo", "batch", "Batch") || "").trim(),
+            qty: -qty,
+            freeQty: -freeQty,
+            salesRate,
+            unit: values.unit,
+          });
+        };
+
+        creditNoteValues.lines.forEach((values, index) => {
+          addCreditNoteRow(values, creditNote.items[index], index, values.netAmount);
+        });
+        const hasRemainder = Object.values(creditNoteValues.remainder).some((amount) => amount !== 0);
+        if (hasRemainder || creditNoteValues.lines.length === 0) {
+          const remainderValues = {
+            ...getPartySalesDetailValues({}),
+            ...creditNoteValues.remainder,
+          };
+          addCreditNoteRow(
+            remainderValues,
+            null,
+            "adjustment",
+            creditNoteValues.remainderNetAmount
+          );
+        }
       });
 
       let rows = detailRows;
@@ -31822,9 +32093,14 @@ app.get(
         const groupedRows = new Map();
 
         detailRows.forEach((row) => {
-          const groupKey = productWise
-            ? `${row.partyCode}__${row.productCode}`
-            : row.partyCode || row.partyName;
+          const groupKey = [
+            row.partyCode || row.partyName,
+            productWise ? row.productCode : "",
+            productWise ? row.batch : "",
+            productWise ? row.unit : "",
+            productWise ? row.salesRate : "",
+            billWiseSalesman ? row.billSalesmanName : "",
+          ].join("__");
 
           if (!groupedRows.has(groupKey)) {
             groupedRows.set(groupKey, {
@@ -31837,6 +32113,8 @@ app.get(
               discountAmount: 0,
               cashDiscountAmount: 0,
               vatAmount: 0,
+              creditNoteAmount: 0,
+              freeValueAmount: 0,
               lessOther: 0,
               addOther: 0,
               btmAmount: 0,
@@ -31858,8 +32136,9 @@ app.get(
                 productName: row.productName,
                 qty: 0,
                 freeQty: 0,
-                salesRate: 0,
-                batch: "",
+                salesRate: toNumber(row.salesRate),
+                batch: row.batch,
+                unit: row.unit,
               } : {}),
             });
           }
@@ -31870,6 +32149,8 @@ app.get(
           group.discountAmount += toNumber(row.discountAmount);
           group.cashDiscountAmount += toNumber(row.cashDiscountAmount);
           group.vatAmount += toNumber(row.vatAmount);
+          group.creditNoteAmount += toNumber(row.creditNoteAmount);
+          group.freeValueAmount += toNumber(row.freeValueAmount);
           group.lessOther += toNumber(row.lessOther);
           group.addOther += toNumber(row.addOther);
           group.btmAmount += toNumber(row.btmAmount);
@@ -31952,6 +32233,7 @@ app.get(
           columns.push({ key: "freeQty", label: "FreeQty", type: "number" });
           columns.push({ key: "salesRate", label: "Rate", type: "number" });
           columns.push({ key: "batch", label: "Batch", type: "text" });
+          columns.push({ key: "unit", label: "Unit", type: "text" });
         }
 
         // Financial columns
@@ -31960,6 +32242,8 @@ app.get(
           { key: "discountAmount", label: "Discount", type: "number" },
           { key: "cashDiscountAmount", label: "CDAmt", type: "number" },
           { key: "vatAmount", label: "VatAmt", type: "number" },
+          { key: "creditNoteAmount", label: "Credit Note", type: "number" },
+          { key: "freeValueAmount", label: "Free Value", type: "number" },
           { key: "lessOther", label: "LessOther", type: "number" },
           { key: "addOther", label: "AddOther", type: "number" },
           { key: "btmAmount", label: "BtmAmt", type: "number" },
@@ -32136,7 +32420,7 @@ app.get(
 
       const withCreditNote = String(
         req.query.withCreditNote || "no"
-      ).toLowerCase();
+      ).toLowerCase() === "yes";
 
       // Parse product codes from comma-separated string
       const productCodes = String(req.query.productCodes || "")
@@ -32202,18 +32486,21 @@ app.get(
 
       // Load all matching sales bills
       const bills = await SalesHeader.find(match)
-        .select({ _id: 1, BillDate: 1, BillSeries: 1, BillNo: 1, PartyCode: 1, PartyName: 1, CompanyName: 1, Narration: 1, items: 1 })
+        .select({ _id: 1, BillDate: 1, BillSeries: 1, BillNo: 1, PartyCode: 1, PartyName: 1, CompanyName: 1, CompanyCode: 1, CreditNoteAmount: 1, Narration: 1, items: 1 })
         .sort({ BillDate: 1, BillSeries: 1, BillNo: 1 })
         .lean();
 
-      // If no bills found, return empty result
-      if (bills.length === 0) {
-        return res.json({
-          success: true,
-          count: 0,
-          data: [],
-        });
-      }
+      const creditNotes = withCreditNote
+        ? await loadSalesReportCreditNotes({
+            distributorId,
+            firmId,
+            fromDate,
+            toDate,
+            companyCode,
+            areaCodes: selectedAreaCodes,
+            salesmanCodes: selectedSalesmanCodes,
+          })
+        : [];
 
       const toNumber = (...values) => {
         for (const value of values) {
@@ -32289,26 +32576,27 @@ app.get(
             getItemValue(item, "mrp", "MRP")
           );
 
-          const grossAmount = toNumber(
-            getItemValue(item, "grossAmount", "GrossAmount", "grossAmt", "GrossAmt", "AMT"),
-            qty * rate
-          );
+          const financialValues = getPartySalesDetailValues(item);
+          const grossAmount = financialValues.grossAmount || qty * rate;
+          const netAmount = financialValues.netAmount;
 
           const weight = toNumber(
             getItemValue(item, "weight", "Weight")
           );
 
-          const tprAmount = toNumber(
-            getItemValue(item, "tprAmount", "TPRAmount", "tprAmt", "TPRAmt")
+          const tprAmount = financialValues.tprAmount;
+
+          const schemeAmount = financialValues.schemeAmount;
+
+          const starAmount = toNumber(
+            getItemValue(item, "starAmt", "StarAmt", "starAmount", "StarAmount", "StarProdLevel")
           );
 
           const discount = toNumber(
-            getItemValue(item, "discount", "Discount", "discountAmount", "DiscountAmount")
+            getItemValue(item, "discount", "Discount", "discountAmount", "DiscountAmount", "discAmount", "DiscAmount", "discAmt", "DiscAmt")
           );
 
-          const cashDiscountAmount = toNumber(
-            getItemValue(item, "cashDiscountAmount", "CashDiscountAmount", "cdAmt", "CDAMT")
-          );
+          const cashDiscountAmount = financialValues.cashDiscountAmount;
 
           const cdPercent = toNumber(
             getItemValue(item, "cdPercent", "CDPercent", "cashDiscountPercent")
@@ -32331,21 +32619,173 @@ app.get(
             Qty: qty,
             FreeQty: freeQty,
             AMT: grossAmount,
+            NetAmount: netAmount,
             Weight: weight,
             TPRAMT: tprAmount,
+            SchemeAmount: schemeAmount,
+            StarAmount: starAmount,
             Disc: discount,
             CDAMT: cashDiscountAmount,
             CDPercent: cdPercent,
             BranchName: bill.CompanyName || "",
+            CompanyCode: bill.CompanyCode || "",
             Address: bill.Narration || "",
+            Trn: "SALES",
           });
         }
+
       }
+
+      creditNotes.forEach((creditNote) => {
+        const values = getCreditNoteReportValues(creditNote);
+        const matchingItems = (creditNote.items || [])
+          .map((item, index) => ({ item, values: values.lines[index] }))
+          .filter(({ item }) => {
+            const productCode = String(getItemValue(item, "productCode", "ProductCode", "prodCode", "ProdCode", "productId", "ProductId", "code") || "").trim();
+            return !selectedProductCodes.size || selectedProductCodes.has(productCode);
+          });
+        if (!matchingItems.length && selectedProductCodes.size) return;
+
+        matchingItems.forEach(({ item, values: lineValues }, index) => {
+          const quantity = toNumber(getItemValue(item, "qty", "Qty", "quantity", "Quantity"));
+          const freeQuantity = toNumber(getItemValue(item, "free", "Free", "freeQty", "FreeQty"));
+          resultData.push({
+            _id: `${String(creditNote._id)}-credit-${index}`,
+            SrNo: 0,
+            BillDate: creditNote.VDate || "",
+            BillSeries: creditNote.CreditNoteSeries || "",
+            BillNo: creditNote.CreditNoteNo ?? creditNote.VNo ?? "",
+            PartyCode: creditNote._reportPartyCode,
+            PartyName: creditNote._reportPartyName,
+            productCode: String(getItemValue(item, "productCode", "ProductCode", "prodCode", "ProdCode", "productId", "ProductId", "code") || "").trim(),
+            productName: String(getItemValue(item, "productName", "ProductName", "prodName", "ProdName", "name") || lineValues.localProduct || "").trim(),
+            Rate: lineValues.billRate,
+            MRP: toNumber(getItemValue(item, "mrp", "MRP"), item?.selectedBatch?.mrp, item?.selectedBatch?.MRP),
+            Qty: -quantity,
+            FreeQty: -freeQuantity,
+            AMT: -lineValues.grossAmount,
+            NetAmount: -lineValues.netAmount,
+            CreditNoteAmount: lineValues.netAmount,
+            Weight: -toNumber(getItemValue(item, "weight", "Weight")),
+            TPRAMT: -lineValues.tprAmount,
+            SchemeAmount: -lineValues.schemeAmount,
+            StarAmount: -toNumber(getItemValue(item, "starAmt", "StarAmt", "starAmount", "StarAmount", "StarProdLevel")),
+            Disc: -toNumber(getItemValue(item, "discount", "Discount", "discountAmount", "DiscountAmount", "discAmount", "DiscAmount", "discAmt", "DiscAmt")),
+            CDAMT: -lineValues.cashDiscountAmount,
+            CDPercent: 0,
+            BranchName: creditNote._reportCompanyName,
+            CompanyCode: creditNote._reportCompanyCode,
+            Address: creditNote.Narration || "",
+            Trn: "CRN",
+          });
+        });
+
+        const allItemsMatched = matchingItems.length === (creditNote.items || []).length;
+        const hasRemainder = Object.values(values.remainder).some((amount) => amount !== 0);
+        if (allItemsMatched && hasRemainder) {
+          resultData.push({
+            _id: `${String(creditNote._id)}-credit-adjustment`,
+            SrNo: 0,
+            BillDate: creditNote.VDate || "",
+            BillSeries: creditNote.CreditNoteSeries || "",
+            BillNo: creditNote.CreditNoteNo ?? creditNote.VNo ?? "",
+            PartyCode: creditNote._reportPartyCode,
+            PartyName: creditNote._reportPartyName,
+            productCode: "",
+            productName: "Credit Note Adjustment",
+            Rate: 0,
+            MRP: 0,
+            Qty: 0,
+            FreeQty: 0,
+            AMT: -values.remainder.grossAmount,
+            NetAmount: -values.remainderNetAmount,
+            CreditNoteAmount: values.remainderNetAmount,
+            Weight: 0,
+            TPRAMT: -values.remainder.tprAmount,
+            SchemeAmount: -values.remainder.schemeAmount,
+            StarAmount: -values.remainder.starAmount,
+            Disc: 0,
+            CDAMT: -values.remainder.cashDiscountAmount,
+            CDPercent: 0,
+            BranchName: creditNote._reportCompanyName,
+            CompanyCode: creditNote._reportCompanyCode,
+            Address: creditNote.Narration || "",
+            Trn: "CRN",
+          });
+        }
+      });
 
       // If showing zero sales is "no", filter out products with zero qty
       let filteredData = resultData;
       if (showZeroSales === "no") {
-        filteredData = resultData.filter((row) => Number(row.Qty || 0) > 0);
+        filteredData = resultData.filter((row) => row.Trn === "CRN" || Number(row.Qty || 0) > 0);
+      } else {
+        const companies = await Company.find({ distributorId, firmId })
+          .select("_id companyCode companyName")
+          .lean();
+        const selectedCompany = companies.find((company) => String(company.companyCode || "") === companyCode);
+        const companyCodeById = new Map(companies.map((company) => [String(company._id), String(company.companyCode || "")]));
+        const companyCodeByName = new Map(companies.map((company) => [String(company.companyName || "").trim().toLowerCase(), String(company.companyCode || "")]));
+        const productFilter = {
+          distributorId,
+          firmId,
+          isActive: { $ne: false },
+        };
+        if (companyCode) {
+          productFilter.$or = [
+            { companyCode },
+            { companyId: companyCode },
+            ...(selectedCompany ? [{ companyId: String(selectedCompany._id) }] : []),
+          ];
+        }
+        if (selectedProductCodes.size > 0) {
+          productFilter.productCode = { $in: Array.from(selectedProductCodes) };
+        }
+        const productMasters = await Product.find(productFilter)
+          .select("productCode productName basicUnit")
+          .sort({ productName: 1, productCode: 1 })
+          .lean();
+        const resolveProductCompanyCode = (product = {}) => {
+          const stored = String(product.companyCode || product.CompanyCode || product.companyId || "").trim();
+          return companyCodeById.get(stored) || companyCodeByName.get(stored.toLowerCase()) || stored;
+        };
+        const soldCodes = new Set(filteredData.map((row) =>
+          `${String(row.CompanyCode || "")}|${String(row.productCode || "").trim()}`
+        ));
+        for (const product of productMasters) {
+          const code = String(product.productCode || "").trim();
+          const productCompanyCode = resolveProductCompanyCode(product);
+          if (!code || soldCodes.has(`${productCompanyCode}|${code}`)) continue;
+          filteredData.push({
+            _id: `zero-${product._id}`,
+            SrNo: 0,
+            Trn: "SALES",
+            BillDate: "",
+            BillSeries: "",
+            BillNo: "",
+            PartyCode: "",
+            PartyName: "",
+            productCode: code,
+            productName: product.productName || "",
+            CompanyCode: productCompanyCode,
+            Rate: 0,
+            MRP: 0,
+            Qty: 0,
+            FreeQty: 0,
+            AMT: 0,
+            NetAmount: 0,
+            CreditNoteAmount: 0,
+            Weight: 0,
+            TPRAMT: 0,
+            SchemeAmount: 0,
+            StarAmount: 0,
+            Disc: 0,
+            CDAMT: 0,
+            CDPercent: 0,
+            BranchName: "",
+            Address: "",
+          });
+        }
       }
 
       // Sort the data
@@ -32354,8 +32794,7 @@ app.get(
       } else if (orderBy === "grossAmount") {
         filteredData.sort((a, b) => Number(b.AMT || 0) - Number(a.AMT || 0));
       } else if (orderBy === "netAmount") {
-        // Use AMT as net amount for sorting
-        filteredData.sort((a, b) => Number(b.AMT || 0) - Number(a.AMT || 0));
+        filteredData.sort((a, b) => Number(b.NetAmount || 0) - Number(a.NetAmount || 0));
       } else {
         // Default: sort by product name
         filteredData.sort((a, b) => String(a.productName).localeCompare(String(b.productName)));
@@ -32514,14 +32953,12 @@ app.get(
       const reportLevel = String(
         req.query.reportLevel || "units"
       ).trim();
-
-      const valuationBy = String(
-        req.query.valuationBy || "basicRate"
-      ).trim();
-
-      const salesType = String(
-        req.query.salesType || "onlySales"
-      ).trim();
+      if (!["units", "amount", "details"].includes(reportLevel)) {
+        return res.status(400).json({
+          success: false,
+          message: "reportLevel must be units, amount, or details.",
+        });
+      }
 
       const productGroup = String(
         req.query.productGroup || ""
@@ -32547,7 +32984,7 @@ app.get(
 
       const withCreditNote = String(
         req.query.withCreditNote || "no"
-      ).toLowerCase();
+      ).toLowerCase() === "yes";
 
       const billWiseSalesman = String(
         req.query.billWiseSalesman || "no"
@@ -32601,13 +33038,17 @@ app.get(
         .sort({ BillDate: 1, BillSeries: 1, BillNo: 1 })
         .lean();
 
-      if (bills.length === 0) {
-        return res.json({
-          success: true,
-          count: 0,
-          data: [],
-        });
-      }
+      const creditNotes = withCreditNote
+        ? await CreditNote.find({
+            distributorId,
+            firmId,
+            isActive: { $ne: false },
+            Status: { $ne: "CANCELLED" },
+            VDate: { $gte: fromDate, $lte: toDate },
+          })
+            .sort({ VDate: 1, CreditNoteSeries: 1, CreditNoteNo: 1 })
+            .lean()
+        : [];
 
       const toNumber = (...values) => {
         for (const value of values) {
@@ -32650,20 +33091,53 @@ app.get(
           if (productCode) allProductCodes.add(productCode);
         });
       });
+      creditNotes.forEach((creditNote) => {
+        (Array.isArray(creditNote.items) ? creditNote.items : []).forEach((item) => {
+          const productCode = String(
+            getItemValue(item, "productCode", "ProductCode", "prodCode", "ProdCode", "productId", "ProductId", "code") || ""
+          ).trim();
+          if (productCode) allProductCodes.add(productCode);
+        });
+      });
 
       // Load product masters
-      const productMasters = await Product.find({
+      const productFilter = {
         distributorId,
         firmId,
         productCode: { $in: Array.from(allProductCodes) },
         isActive: { $ne: false },
-      }).lean();
-
-      const productMap = {};
+      };
+      const reportCompanies = await Company.find({ distributorId, firmId })
+        .select("_id companyCode companyName")
+        .lean();
+      const companyCodeById = new Map(
+        reportCompanies.map((company) => [String(company._id), String(company.companyCode || "")])
+      );
+      const companyCodeByName = new Map(
+        reportCompanies.map((company) => [String(company.companyName || "").trim().toLowerCase(), String(company.companyCode || "")])
+      );
+      const selectedCompany = reportCompanies.find(
+        (company) => String(company.companyCode || "") === companyCode
+      );
+      if (companyCode) {
+        productFilter.$or = [
+          { companyCode },
+          { companyId: companyCode },
+          ...(selectedCompany ? [{ companyId: String(selectedCompany._id) }] : []),
+        ];
+      }
+      const productMasters = await Product.find(productFilter).lean();
+      const resolveProductCompanyCode = (product = {}) => {
+        const stored = String(product.companyCode || product.CompanyCode || product.companyId || "").trim();
+        return companyCodeById.get(stored) || companyCodeByName.get(stored.toLowerCase()) || stored;
+      };
+      const productMap = new Map();
       productMasters.forEach((product) => {
         const code = String(product.productCode || "").trim();
         if (code) {
-          productMap[code] = product;
+          const matches = productMap.get(code) || [];
+          matches.push(product);
+          productMap.set(code, matches);
         }
       });
 
@@ -32691,7 +33165,13 @@ app.get(
             ) || ""
           ).trim();
 
-          const productMaster = productMap[productCode] || {};
+          const productCandidates = productMap.get(productCode) || [];
+          const billCompanyCode = String(bill.CompanyCode || "").trim();
+          const productMaster =
+            productCandidates.find((candidate) =>
+              resolveProductCompanyCode(candidate) === billCompanyCode
+            ) ||
+            (productCandidates.length === 1 ? productCandidates[0] : {});
 
           // Apply filters
           if (productGroup) {
@@ -32723,14 +33203,10 @@ app.get(
           ).trim();
 
           const batch = String(
-            getItemValue(
-              item,
-              "batchNo",
-              "BatchNo",
-              "batch",
-              "Batch",
-              "selectedBatch"
-            ) || ""
+            getItemValue(item, "batchNo", "BatchNo", "batch", "Batch") ||
+            item.selectedBatch?.batchNo ||
+            item.selectedBatch?.Batch ||
+            ""
           ).trim();
 
           const mrp = toNumber(
@@ -32766,6 +33242,8 @@ app.get(
             qty * rate
           );
 
+          const tprDiscount = toNumber(getItemValue(item, "tprAmt", "TPRAmt", "tprAmount", "TPRAmount"));
+          const schemeDiscount = toNumber(getItemValue(item, "schemeAmt", "SchAmt", "schemeAmount", "SchemeAmount"));
           const discount = toNumber(
             getItemValue(item, "discount", "Discount", "discountAmount", "DiscountAmount", "Disc")
           );
@@ -32805,9 +33283,11 @@ app.get(
             getItemValue(item, "outlets", "Outlets", "displayAmount", "DisplayAmount")
           );
 
-          const vatAmount = toNumber(
-            getItemValue(item, "vatAmount", "VatAmount", "gstAmount", "GSTAmount", "gst")
-          );
+          const cgstAmount = toNumber(getItemValue(item, "cgst", "CGST", "cgstAmount", "CGSTAmount", "cgstAmt", "CGSTAmt"));
+          const sgstAmount = toNumber(getItemValue(item, "sgst", "SGST", "sgstAmount", "SGSTAmount", "sgstAmt", "SGSTAmt"));
+          const igstAmount = toNumber(getItemValue(item, "igst", "IGST", "igstAmount", "IGSTAmount", "igstAmt", "IGSTAmt"));
+          const vatAmount = cgstAmount + sgstAmount + igstAmount ||
+            toNumber(getItemValue(item, "vatAmount", "VatAmount", "gstAmount", "GSTAmount", "vatAmt", "VatAmt"));
 
           const cess1 = toNumber(
             getItemValue(item, "cess1", "Cess1", "cess", "Cess")
@@ -32848,6 +33328,7 @@ app.get(
             SrNo: srNo,
             ProductName: productName,
             ProductCode: productCode,
+            Unit: String(getItemValue(item, "unit", "Unit", "basicUnit") || productMaster.basicUnit || ""),
             LocalProduct: productMaster.localProduct || productMaster.LocalProduct || "",
             Batch: batch || ".",
             MRP: mrp,
@@ -32856,10 +33337,12 @@ app.get(
             FreeQty: freeQty,
             Amount: grossAmount,
             Disc: discount,
+            TPRAmt: tprDiscount,
+            SchemeAmt: schemeDiscount,
             OtherDisc: otherDiscount,
             Valuation: valuation,
             Weight: weight,
-            BillCuts: billCuts,
+            BillCuts: billCuts || toNumber(getItemValue(item, "starAmt", "StarAmt", "starAmount", "StarAmount", "StarProdLevel")),
             Outlets: outlets,
             VatAmt: vatAmount,
             Cess1: cess1,
@@ -32877,33 +33360,263 @@ app.get(
             AreaName: bill.AreaName || "",
             Godown: bill.Godown || "",
             GDCode: bill.GDCode || "",
+            Trn: "SALES",
+          });
+        }
+
+      }
+
+      if (showZeroSales === "yes") {
+        const zeroProductFilter = {
+          distributorId,
+          firmId,
+          isActive: { $ne: false },
+        };
+        if (companyCode) {
+          zeroProductFilter.$or = [
+            { companyCode },
+            { companyId: companyCode },
+            ...(selectedCompany ? [{ companyId: String(selectedCompany._id) }] : []),
+          ];
+        }
+        if (productGroup) zeroProductFilter.group = productGroup;
+        if (category) zeroProductFilter.category = category;
+        if (brand) zeroProductFilter.brand = brand;
+        const zeroProducts = await Product.find(zeroProductFilter)
+          .sort({ productName: 1, productCode: 1 })
+          .lean();
+        const soldProductKeys = new Set(
+          resultData
+            .filter((row) => row.Trn !== "CRN")
+            .map((row) => `${String(row.CompanyCode || "")}|${String(row.ProductCode || "")}`)
+        );
+        for (const product of zeroProducts) {
+          const productCode = String(product.productCode || "").trim();
+          const productCompanyCode = resolveProductCompanyCode(product);
+          const key = `${productCompanyCode}|${productCode}`;
+          if (!productCode || soldProductKeys.has(key)) continue;
+          resultData.push({
+            _id: `zero-${product._id}`,
+            SrNo: 0,
+            ProductName: product.productName || "",
+            ProductCode: productCode,
+            Unit: product.basicUnit || "",
+            LocalProduct: product.localProduct || product.LocalProduct || "",
+            Batch: "",
+            MRP: 0,
+            Rate: 0,
+            Qty: 0,
+            FreeQty: 0,
+            Amount: 0,
+            Disc: 0,
+            TPRAmt: 0,
+            SchemeAmt: 0,
+            OtherDisc: 0,
+            Valuation: 0,
+            Weight: 0,
+            BillCuts: 0,
+            Outlets: 0,
+            VatAmt: 0,
+            Cess1: 0,
+            Cess2: 0,
+            BasicRate: 0,
+            Difference: 0,
+            BillDate: "",
+            BillSeries: "",
+            BillNo: "",
+            PartyCode: "",
+            PartyName: "",
+            CompanyCode: productCompanyCode,
+            CompanyName: product.companyName || "",
+            SalesmanName: "",
+            AreaName: "",
+            Godown: "",
+            GDCode: "",
+            Trn: "SALES",
           });
         }
       }
 
+      if (withCreditNote) {
+        const billSeries = [...new Set(creditNotes.map((note) => String(note.BillSeries || note.billSeries || "").trim()).filter(Boolean))];
+        const billNumbers = [...new Set(creditNotes.map((note) => toNumber(note.BillNo, note.billNo)).filter((number) => number > 0))];
+        const relatedBills = billSeries.length && billNumbers.length
+          ? await SalesHeader.find({
+              distributorId,
+              firmId,
+              BillSeries: { $in: billSeries },
+              BillNo: { $in: billNumbers },
+            })
+              .select("CompanyCode BillSeries BillNo AreaCode AreaName SalesmanCode SalesmanName")
+              .lean()
+          : [];
+        const relatedBillMap = new Map();
+        relatedBills.forEach((bill) => {
+          const billKey = `${String(bill.CompanyCode || "").trim()}|${String(bill.BillSeries || "")}|${String(bill.BillNo ?? "")}`;
+          relatedBillMap.set(billKey, bill);
+          relatedBillMap.set(`|${String(bill.BillSeries || "")}|${String(bill.BillNo ?? "")}`, bill);
+        });
+
+        creditNotes.forEach((note) => {
+          const noteCompanyCode = String(note.CompanyCode || "").trim();
+          const billReference = `${String(note.BillSeries || note.billSeries || "")}|${String(toNumber(note.BillNo, note.billNo))}`;
+          const relatedBill = relatedBillMap.get(`${noteCompanyCode}|${billReference}`) ||
+            relatedBillMap.get(`|${billReference}`) ||
+            {};
+          const resolvedCompanyCode = noteCompanyCode || String(relatedBill.CompanyCode || "").trim();
+          const noteSalesmanCode = String(note.SalesmanCode || relatedBill.SalesmanCode || "").trim();
+          const noteAreaCode = String(note.AreaCode || relatedBill.AreaCode || "").trim();
+          if (companyCode && resolvedCompanyCode !== companyCode) return;
+          if (selectedSalesmanCodes.length && !selectedSalesmanCodes.includes(noteSalesmanCode)) return;
+          if (selectedAreaCodes.length && !selectedAreaCodes.includes(noteAreaCode)) return;
+
+          const noteValues = getCreditNoteReportValues(note);
+          const matchingLines = noteValues.lines
+            .map((values, index) => ({ values, item: note.items[index] }))
+            .filter(({ item }) => {
+              const productCode = String(getItemValue(item, "productCode", "ProductCode", "ProdCode", "prodCode", "code") || "").trim();
+              const productCandidates = productMap.get(productCode) || [];
+              const productMaster =
+                productCandidates.find((candidate) =>
+                  resolveProductCompanyCode(candidate) === resolvedCompanyCode
+                ) ||
+                (productCandidates.length === 1 ? productCandidates[0] : {});
+              if (productGroup && String(productMaster.group || productMaster.Group || "").trim().toLowerCase() !== productGroup.toLowerCase()) return false;
+              if (category && String(productMaster.category || productMaster.Category || "").trim().toLowerCase() !== category.toLowerCase()) return false;
+              if (brand && String(productMaster.brand || productMaster.Brand || "").trim().toLowerCase() !== brand.toLowerCase()) return false;
+              return true;
+            });
+          if (!matchingLines.length && noteValues.lines.length) return;
+
+          matchingLines.forEach(({ values, item }, index) => {
+            const productCode = String(getItemValue(item, "productCode", "ProductCode", "ProdCode", "prodCode", "code") || "").trim();
+            const productCandidates = productMap.get(productCode) || [];
+            const productMaster =
+              productCandidates.find((candidate) =>
+                resolveProductCompanyCode(candidate) === resolvedCompanyCode
+              ) ||
+              (productCandidates.length === 1 ? productCandidates[0] : {});
+            const qty = toNumber(getItemValue(item, "qty", "Qty", "quantity", "Quantity"));
+            const freeQty = toNumber(getItemValue(item, "free", "Free", "freeQty", "FreeQty"));
+            const starAmount = toNumber(getItemValue(item, "starAmt", "StarAmt", "starAmount", "StarAmount", "StarProdLevel"));
+            const discount = toNumber(getItemValue(item, "discount", "Discount", "discountAmount", "DiscountAmount", "discAmount", "DiscAmount", "discAmt", "DiscAmt"));
+            resultData.push({
+              _id: `credit-note-${note._id}-${index}`,
+              SrNo: 0,
+              ProductName: String(getItemValue(item, "productName", "ProductName", "ProdName", "name") || productMaster.productName || ""),
+              ProductCode: productCode,
+              Unit: String(getItemValue(item, "unit", "Unit", "basicUnit") || productMaster.basicUnit || ""),
+              LocalProduct: productMaster.localProduct || productMaster.LocalProduct || "",
+              Batch: String(getItemValue(item, "batchNo", "BatchNo", "batch", "Batch") || item.selectedBatch?.batchNo || item.selectedBatch?.Batch || ""),
+              MRP: toNumber(getItemValue(item, "mrp", "MRP"), item.selectedBatch?.mrp, item.selectedBatch?.MRP),
+              Rate: values.billRate,
+              Qty: -qty,
+              FreeQty: -freeQty,
+              Amount: -values.grossAmount,
+              CreditNoteAmount: values.netAmount,
+              Disc: -discount,
+              TPRAmt: -values.tprAmount,
+              SchemeAmt: -values.schemeAmount,
+              OtherDisc: -toNumber(getItemValue(item, "otherDiscount", "OtherDiscount", "lessOther", "LessOther", "avDisc1", "AVDisc1")),
+              Valuation: -values.taxableAmount,
+              Weight: -toNumber(getItemValue(item, "weight", "Weight", "kg", "Kg")),
+              BillCuts: -starAmount,
+              Outlets: -toNumber(getItemValue(item, "outlets", "Outlets", "displayAmount", "DisplayAmount")),
+              VatAmt: -values.gstAmount,
+              Cess1: -toNumber(getItemValue(item, "cess1", "Cess1", "cess", "Cess")),
+              Cess2: -toNumber(getItemValue(item, "cess2", "Cess2", "cessAmount", "CessAmount")),
+              BasicRate: 0,
+              Difference: 0,
+              BillDate: note.VDate || "",
+              BillSeries: note.CreditNoteSeries || "",
+              BillNo: note.CreditNoteNo ?? note.VNo ?? "",
+              PartyCode: note.PartyCode || "",
+              PartyName: note.PartyName || "",
+              CompanyCode: resolvedCompanyCode,
+              CompanyName: note.CompanyName || relatedBill.CompanyName || "",
+              SalesmanName: note.SalesmanName || relatedBill.SalesmanName || "",
+              AreaName: relatedBill.AreaName || "",
+              Godown: note.Godown || "",
+              GDCode: note.GDCode || "",
+              Trn: "CRN",
+            });
+          });
+
+          const hasRemainder = Object.values(noteValues.remainder).some((amount) => amount !== 0);
+          if (matchingLines.length === noteValues.lines.length && hasRemainder) {
+            resultData.push({
+              _id: `credit-note-${note._id}-adjustment`,
+              SrNo: 0,
+              ProductName: "Credit Note Adjustment",
+              ProductCode: "",
+              Unit: "",
+              LocalProduct: "",
+              Batch: "",
+              MRP: 0,
+              Rate: 0,
+              Qty: 0,
+              FreeQty: 0,
+              Amount: -noteValues.remainder.grossAmount,
+              CreditNoteAmount: noteValues.remainderNetAmount,
+              Disc: 0,
+              TPRAmt: -noteValues.remainder.tprAmount,
+              SchemeAmt: -noteValues.remainder.schemeAmount,
+              OtherDisc: 0,
+              Valuation: -noteValues.remainder.taxableAmount,
+              Weight: 0,
+              BillCuts: -noteValues.remainder.starAmount,
+              Outlets: 0,
+              VatAmt: -noteValues.remainder.gstAmount,
+              Cess1: 0,
+              Cess2: 0,
+              BasicRate: 0,
+              Difference: 0,
+              BillDate: note.VDate || "",
+              BillSeries: note.CreditNoteSeries || "",
+              BillNo: note.CreditNoteNo ?? note.VNo ?? "",
+              PartyCode: note.PartyCode || "",
+              PartyName: note.PartyName || "",
+              CompanyCode: resolvedCompanyCode,
+              CompanyName: note.CompanyName || relatedBill.CompanyName || "",
+              SalesmanName: note.SalesmanName || relatedBill.SalesmanName || "",
+              AreaName: relatedBill.AreaName || "",
+              Godown: note.Godown || "",
+              GDCode: note.GDCode || "",
+              Trn: "CRN",
+            });
+          }
+        });
+      }
+
+      const reportRows = aggregateAllProductSalesRows(
+        resultData,
+        reportLevel,
+        billWiseSalesman === "yes"
+      );
+
       // Sort the data
       if (orderBy === "productCode") {
-        resultData.sort((a, b) => String(a.ProductCode).localeCompare(String(b.ProductCode)));
+        reportRows.sort((a, b) => String(a.ProductCode).localeCompare(String(b.ProductCode)));
       } else if (orderBy === "amount") {
-        resultData.sort((a, b) => Number(b.Amount || 0) - Number(a.Amount || 0));
+        reportRows.sort((a, b) => Number(b.Amount || 0) - Number(a.Amount || 0));
       } else if (orderBy === "qty") {
-        resultData.sort((a, b) => Number(b.Qty || 0) - Number(a.Qty || 0));
+        reportRows.sort((a, b) => Number(b.Qty || 0) - Number(a.Qty || 0));
       } else if (orderBy === "rate") {
-        resultData.sort((a, b) => Number(b.Rate || 0) - Number(a.Rate || 0));
+        reportRows.sort((a, b) => Number(b.Rate || 0) - Number(a.Rate || 0));
       } else {
         // Default: sort by product name
-        resultData.sort((a, b) => String(a.ProductName).localeCompare(String(b.ProductName)));
+        reportRows.sort((a, b) => String(a.ProductName).localeCompare(String(b.ProductName)));
       }
 
       // Re-assign SrNo after sorting
-      resultData.forEach((row, index) => {
+      reportRows.forEach((row, index) => {
         row.SrNo = index + 1;
       });
 
       return res.json({
         success: true,
-        count: resultData.length,
-        data: resultData,
+        count: reportRows.length,
+        data: reportRows,
       });
     } catch (error) {
       console.error("All product wise sales report error:", error);
@@ -33675,7 +34388,7 @@ app.get(
   }
 );
 
-// Compares the live stock balance with sales posted during the requested period.
+// Reconstructs closing stock at To Date from current balances and later movements.
 app.get(
   "/api/reports/stock-and-sales",
   ensureConnection,
@@ -33713,11 +34426,26 @@ app.get(
 
       const companyNames = new Map(companies.map((row) => [String(row.companyCode || ""), String(row.companyName || row.companyCode || "")]));
       const companyCodesById = new Map(companies.map((row) => [String(row._id || ""), String(row.companyCode || "")]));
+      const companyCodesByName = new Map(companies.map((row) => [String(row.companyName || "").trim().toLowerCase(), String(row.companyCode || "")]));
       const godownNames = new Map(godowns.map((row) => [String(row.godownCode || ""), String(row.godownName || row.godownCode || "")]));
-      const productByCode = new Map(products.map((row) => [String(row.productCode || ""), row]));
+      const productsByCode = new Map();
+      products.forEach((product) => {
+        const code = String(product.productCode || "");
+        const matches = productsByCode.get(code) || [];
+        matches.push(product);
+        productsByCode.set(code, matches);
+      });
       const resolveProductCompanyCode = (product = {}) => {
         const storedValue = String(product.companyCode || product.CompanyCode || product.companyId || "").trim();
-        return companyCodesById.get(storedValue) || storedValue;
+        return companyCodesById.get(storedValue) ||
+          companyCodesByName.get(storedValue.toLowerCase()) ||
+          storedValue;
+      };
+      const resolveProductByCode = (productCode, requestedCompanyCode = "") => {
+        const candidates = productsByCode.get(String(productCode || "")) || [];
+        return candidates.find((product) =>
+          resolveProductCompanyCode(product) === String(requestedCompanyCode || "")
+        ) || (candidates.length === 1 ? candidates[0] : {});
       };
 
       const stockFilter = { ...baseFilter };
@@ -33732,8 +34460,12 @@ app.get(
       };
       if (companyCode) salesFilter.CompanyCode = companyCode;
       if (godownCode) salesFilter.$or = [{ GDCode: godownCode }, { Godown: godownCode }];
+      const laterSalesFilter = {
+        ...salesFilter,
+        BillDate: { $gt: toDate },
+      };
 
-      const [stockRows, salesBills, purchaseBills, stockAdjustments, creditNotes, debitNotes] = await Promise.all([
+      const [stockRows, salesBills, purchaseBills, stockAdjustments, creditNotes, debitNotes, laterSalesBills, laterPurchaseBills, laterStockAdjustments, laterCreditNotes, laterDebitNotes] = await Promise.all([
         Stock.find(stockFilter).lean(),
         SalesHeader.find(salesFilter).select("CompanyCode CompanyName GDCode Godown items").lean(),
         PurchaseHeader.find({
@@ -33759,6 +34491,33 @@ app.get(
           isActive: { $ne: false },
           Status: { $ne: "CANCELLED" },
           VDate: { $gte: fromDate, $lte: toDate },
+          ...(companyCode ? { CompanyCode: companyCode } : {}),
+          ...(godownCode ? { GDCode: godownCode } : {}),
+        }).select("CompanyCode CompanyName GDCode Godown items").lean(),
+        SalesHeader.find(laterSalesFilter).select("CompanyCode CompanyName GDCode Godown items").lean(),
+        PurchaseHeader.find({
+          ...baseFilter,
+          isActive: { $ne: false },
+          invoiceDate: { $gt: toDate },
+        }).select("invoiceDate company companyCode companyName gdCode items").lean(),
+        StockAdjustment.find({
+          ...baseFilter,
+          Status: "COMPLETED",
+          VoucherDate: { $gt: toDate },
+        }).lean(),
+        CreditNote.find({
+          ...baseFilter,
+          isActive: { $ne: false },
+          Status: { $ne: "CANCELLED" },
+          VDate: { $gt: toDate },
+          ...(companyCode ? { CompanyCode: companyCode } : {}),
+          ...(godownCode ? { GDCode: godownCode } : {}),
+        }).select("CompanyCode CompanyName GDCode Godown items").lean(),
+        DebitNote.find({
+          ...baseFilter,
+          isActive: { $ne: false },
+          Status: { $ne: "CANCELLED" },
+          VDate: { $gt: toDate },
           ...(companyCode ? { CompanyCode: companyCode } : {}),
           ...(godownCode ? { GDCode: godownCode } : {}),
         }).select("CompanyCode CompanyName GDCode Godown items").lean(),
@@ -33789,14 +34548,24 @@ app.get(
       for (const purchase of purchaseBills) {
         for (const item of Array.isArray(purchase.items) ? purchase.items : []) {
           const code = String(itemValue(item, "productCode", "ProductCode", "ProdCode", "prodCode", "code") || "").trim();
-          if (!code || lastPurchaseByProduct.has(code)) continue;
-          lastPurchaseByProduct.set(code, {
+          if (!code) continue;
+          const purchaseCompanyCode = String(
+            purchase.companyCode ||
+            companyCodesByName.get(String(purchase.company || purchase.companyName || "").trim().toLowerCase()) ||
+            resolveProductCompanyCode(resolveProductByCode(code))
+          );
+          const purchaseGodownCode = String(purchase.gdCode || item.GDCode || "").trim();
+          const purchaseValue = {
             date: String(purchase.invoiceDate || ""),
             rate: numberFrom(itemValue(item, "purRate", "purchaseRate", "PRate", "rate", "Rate")),
             qty: numberFrom(itemValue(item, "qty", "Qty", "quantity", "Quantity", "totalQty", "TotalQty")),
             mrp: numberFrom(itemValue(item, "mrp", "MRP"), item.selectedBatch?.mrp, item.selectedBatch?.MRP),
             boxPack: numberFrom(itemValue(item, "boxPack", "BoxPack"), item.selectedBatch?.boxPack, item.selectedBatch?.BoxPack),
-          });
+          };
+          const scopedKey = `${purchaseCompanyCode}|${purchaseGodownCode}|${code}`;
+          const companyKey = `${purchaseCompanyCode}||${code}`;
+          if (!lastPurchaseByProduct.has(scopedKey)) lastPurchaseByProduct.set(scopedKey, purchaseValue);
+          if (!lastPurchaseByProduct.has(companyKey)) lastPurchaseByProduct.set(companyKey, purchaseValue);
         }
       }
       const aggregates = new Map();
@@ -33811,7 +34580,9 @@ app.get(
       const ensureRow = ({ rowCompanyCode, rowCompanyName, productCode, productName, unit, rowGodownCode, product = {} }) => {
         const key = rowKey({ rowCompanyCode, productCode, unit, rowGodownCode });
         if (!aggregates.has(key)) {
-          const lastPurchase = lastPurchaseByProduct.get(productCode) || {};
+          const lastPurchase = lastPurchaseByProduct.get(
+            `${rowCompanyCode}|${godownCode || ""}|${productCode}`
+          ) || lastPurchaseByProduct.get(`${rowCompanyCode}||${productCode}`) || {};
           const isCompanyLevel = reportLevel === "company";
           aggregates.set(key, {
             CompanyCode: rowCompanyCode,
@@ -33845,6 +34616,7 @@ app.get(
             DebitNote: 0,
             Decrease: 0,
             Damage: 0,
+            DamageOut: 0,
             MFO: 0,
             FreeQty: 0,
             SalesAmount: 0,
@@ -33856,7 +34628,7 @@ app.get(
 
       for (const stock of stockRows) {
         const productCode = String(stock.ProdCode || stock.productCode || "").trim();
-        const product = productByCode.get(productCode) || {};
+        const product = resolveProductByCode(productCode, companyCode);
         const rowCompanyCode = resolveProductCompanyCode(product);
         if (companyCode && rowCompanyCode !== companyCode) continue;
         const row = ensureRow({
@@ -33876,9 +34648,10 @@ app.get(
       for (const bill of salesBills) {
         for (const item of Array.isArray(bill.items) ? bill.items : []) {
           const productCode = String(itemValue(item, "productCode", "ProductCode", "ProdCode", "prodCode", "code") || "").trim();
-          const product = productByCode.get(productCode) || {};
-          const rowCompanyCode = String(bill.CompanyCode || resolveProductCompanyCode(product)).trim();
-          if (companyCode && rowCompanyCode !== companyCode) continue;
+          const rowCompanyCode = String(bill.CompanyCode || "").trim();
+          const product = resolveProductByCode(productCode, rowCompanyCode);
+          const resolvedCompanyCode = rowCompanyCode || resolveProductCompanyCode(product);
+          if (companyCode && resolvedCompanyCode !== companyCode) continue;
           const qty = numberFrom(itemValue(item, "qty", "Qty", "quantity", "Quantity"));
           const freeQty = numberFrom(itemValue(item, "free", "Free", "freeQty", "FreeQty"));
           const rate = numberFrom(itemValue(item, "rate", "Rate", "salesRate", "SalesRate", "sRate", "SRate"));
@@ -33887,7 +34660,7 @@ app.get(
             qty * rate
           );
           const row = ensureRow({
-            rowCompanyCode,
+            rowCompanyCode: resolvedCompanyCode,
             rowCompanyName: bill.CompanyName || product.companyName,
             productCode,
             productName: itemValue(item, "productName", "ProductName", "ProdName", "name") || product.productName,
@@ -33905,8 +34678,13 @@ app.get(
         if (String(purchase.invoiceDate || "") < fromDate) continue;
         for (const item of Array.isArray(purchase.items) ? purchase.items : []) {
           const productCode = String(itemValue(item, "productCode", "ProductCode", "ProdCode", "prodCode", "code") || "").trim();
-          const product = productByCode.get(productCode) || {};
-          const rowCompanyCode = resolveProductCompanyCode(product);
+          const purchaseCompanyCode = String(
+            purchase.companyCode ||
+            companyCodesByName.get(String(purchase.company || purchase.companyName || "").trim().toLowerCase()) ||
+            ""
+          );
+          const product = resolveProductByCode(productCode, purchaseCompanyCode);
+          const rowCompanyCode = purchaseCompanyCode || resolveProductCompanyCode(product);
           if (companyCode && rowCompanyCode !== companyCode) continue;
           const rowGodownCode = String(purchase.gdCode || item.GDCode || "").trim();
           if (godownCode && rowGodownCode !== godownCode) continue;
@@ -33928,13 +34706,14 @@ app.get(
           for (const item of Array.isArray(note.items) ? note.items : []) {
             if (String(item.TRN || item.trn || "GDR").toUpperCase() !== "GDR") continue;
             const productCode = String(itemValue(item, "ProductCode", "productCode", "ProdCode", "code") || "").trim();
-            const product = productByCode.get(productCode) || {};
-            const rowCompanyCode = String(note.CompanyCode || resolveProductCompanyCode(product)).trim();
-            if (companyCode && rowCompanyCode !== companyCode) continue;
+            const rowCompanyCode = String(note.CompanyCode || "").trim();
+            const product = resolveProductByCode(productCode, rowCompanyCode);
+            const resolvedCompanyCode = rowCompanyCode || resolveProductCompanyCode(product);
+            if (companyCode && resolvedCompanyCode !== companyCode) continue;
             const rowGodownCode = String(note.GDCode || note.Godown || "").trim();
             if (godownCode && rowGodownCode !== godownCode) continue;
             const row = ensureRow({
-              rowCompanyCode,
+              rowCompanyCode: resolvedCompanyCode,
               rowCompanyName: note.CompanyName || product.companyName,
               productCode,
               productName: itemValue(item, "ProductName", "productName", "ProdName", "name") || product.productName,
@@ -33954,13 +34733,14 @@ app.get(
           adjustment.TransferType || adjustment.transferType || adjustment.FromGDCode || adjustment.fromGDCode || adjustment.Narration || ""
         );
         const productCode = String(adjustment.ProdCode || adjustment.productCode || "").trim();
-        const product = productByCode.get(productCode) || {};
-        const rowCompanyCode = String(adjustment.CompanyCode || resolveProductCompanyCode(product)).trim();
-        if (companyCode && rowCompanyCode !== companyCode) continue;
+        const rowCompanyCode = String(adjustment.CompanyCode || "").trim();
+        const product = resolveProductByCode(productCode, rowCompanyCode);
+        const resolvedCompanyCode = rowCompanyCode || resolveProductCompanyCode(product);
+        if (companyCode && resolvedCompanyCode !== companyCode) continue;
         const targetGodown = String(adjustment.GDCode || adjustment.ToGDCode || adjustment.toGDCode || "").trim();
         if (godownCode && targetGodown !== godownCode) continue;
         const row = ensureRow({
-          rowCompanyCode,
+          rowCompanyCode: resolvedCompanyCode,
           rowCompanyName: product.companyName,
           productCode,
           productName: adjustment.ProductName || product.productName,
@@ -33974,12 +34754,122 @@ app.get(
         const isMfi = /\bMFI\b|manufactur.*in/i.test(transferMarker);
         const isMfo = /\bMFO\b|manufactur.*out/i.test(transferMarker);
         if (adjustmentType === "DAMAGE_IN") row.Damage += quantity;
+        else if (adjustmentType === "DAMAGE_OUT") row.DamageOut += quantity;
         else if (adjustmentType === "IN" && isTransfer) row.FromGDTransfer += quantity;
         else if (adjustmentType === "OUT" && isTransfer) row.ToGDTransfer += quantity;
         else if (adjustmentType === "IN" && isMfi) row.MFI += quantity;
         else if (adjustmentType === "OUT" && isMfo) row.MFO += quantity;
         else if (adjustmentType === "IN") row.Increase += quantity;
         else if (adjustmentType === "OUT") row.Decrease += quantity;
+      }
+
+      const ensureHistoricalMovementRow = ({ company: movementCompany, godown: movementGodown, productCode, productName, unit, product }) =>
+        ensureRow({
+          rowCompanyCode: movementCompany,
+          rowCompanyName: companyNames.get(movementCompany) || product?.companyName,
+          productCode,
+          productName: productName || product?.productName,
+          unit: unit || product?.basicUnit,
+          rowGodownCode: movementGodown,
+          product: product || {},
+        });
+
+      for (const bill of laterSalesBills) {
+        const rowGodownCode = String(bill.GDCode || bill.Godown || "").trim();
+        if (godownCode && rowGodownCode !== godownCode) continue;
+        const rowCompanyCode = String(bill.CompanyCode || "").trim();
+        for (const item of Array.isArray(bill.items) ? bill.items : []) {
+          const productCode = String(itemValue(item, "productCode", "ProductCode", "ProdCode", "prodCode", "code") || "").trim();
+          const product = resolveProductByCode(productCode, rowCompanyCode);
+          const resolvedCompanyCode = rowCompanyCode || resolveProductCompanyCode(product);
+          if (companyCode && resolvedCompanyCode !== companyCode) continue;
+          const row = ensureHistoricalMovementRow({
+            company: resolvedCompanyCode,
+            godown: rowGodownCode,
+            productCode,
+            productName: itemValue(item, "productName", "ProductName", "ProdName", "name"),
+            unit: itemValue(item, "unit", "Unit", "basicUnit"),
+            product,
+          });
+          row.StockQty = reverseLaterStockMovement(row.StockQty, "SALE", movementQty(item));
+        }
+      }
+
+      for (const purchase of laterPurchaseBills) {
+        const rowGodownCode = String(purchase.gdCode || "").trim();
+        if (godownCode && rowGodownCode !== godownCode) continue;
+        for (const item of Array.isArray(purchase.items) ? purchase.items : []) {
+          const productCode = String(itemValue(item, "productCode", "ProductCode", "ProdCode", "prodCode", "code") || "").trim();
+          const rowCompanyCode = String(
+            purchase.companyCode ||
+            companyCodesByName.get(String(purchase.company || purchase.companyName || "").trim().toLowerCase()) ||
+            ""
+          );
+          const product = resolveProductByCode(productCode, rowCompanyCode);
+          const resolvedCompanyCode = rowCompanyCode || resolveProductCompanyCode(product);
+          if (companyCode && resolvedCompanyCode !== companyCode) continue;
+          const row = ensureHistoricalMovementRow({
+            company: resolvedCompanyCode,
+            godown: rowGodownCode,
+            productCode,
+            productName: itemValue(item, "productName", "ProductName", "ProdName", "name"),
+            unit: itemValue(item, "unit", "Unit", "basicUnit"),
+            product,
+          });
+          row.StockQty = reverseLaterStockMovement(row.StockQty, "PURCHASE", movementQty(item));
+        }
+      }
+
+      const reverseLaterNotes = (notes, direction) => {
+        for (const note of notes) {
+          const rowGodownCode = String(note.GDCode || note.Godown || "").trim();
+          if (godownCode && rowGodownCode !== godownCode) continue;
+          const rowCompanyCode = String(note.CompanyCode || "").trim();
+          for (const item of Array.isArray(note.items) ? note.items : []) {
+            if (String(item.TRN || item.trn || "GDR").toUpperCase() !== "GDR") continue;
+            const productCode = String(itemValue(item, "ProductCode", "productCode", "ProdCode", "code") || "").trim();
+            const product = resolveProductByCode(productCode, rowCompanyCode);
+            const resolvedCompanyCode = rowCompanyCode || resolveProductCompanyCode(product);
+            if (companyCode && resolvedCompanyCode !== companyCode) continue;
+            const row = ensureHistoricalMovementRow({
+              company: resolvedCompanyCode,
+              godown: rowGodownCode,
+              productCode,
+              productName: itemValue(item, "ProductName", "productName", "ProdName", "name"),
+              unit: itemValue(item, "Unit", "unit", "basicUnit"),
+              product,
+            });
+            row.StockQty = reverseLaterStockMovement(
+              row.StockQty,
+              direction < 0 ? "CREDIT_NOTE" : "DEBIT_NOTE",
+              movementQty(item)
+            );
+          }
+        }
+      };
+      reverseLaterNotes(laterCreditNotes, -1);
+      reverseLaterNotes(laterDebitNotes, 1);
+
+      for (const adjustment of laterStockAdjustments) {
+        const adjustmentType = String(adjustment.AdjustmentType || "").toUpperCase();
+        if (!["IN", "OUT", "DAMAGE_IN", "DAMAGE_OUT"].includes(adjustmentType)) continue;
+        const rowGodownCode = String(adjustment.GDCode || adjustment.ToGDCode || adjustment.toGDCode || "").trim();
+        if (godownCode && rowGodownCode !== godownCode) continue;
+        const productCode = String(adjustment.ProdCode || adjustment.productCode || "").trim();
+        const rowCompanyCode = String(adjustment.CompanyCode || "").trim();
+        const product = resolveProductByCode(productCode, rowCompanyCode);
+        const resolvedCompanyCode = rowCompanyCode || resolveProductCompanyCode(product);
+        if (companyCode && resolvedCompanyCode !== companyCode) continue;
+        const row = ensureHistoricalMovementRow({
+          company: resolvedCompanyCode,
+          godown: rowGodownCode,
+          productCode,
+          productName: adjustment.ProductName,
+          unit: adjustment.Unit,
+          product,
+        });
+        const quantity = numberFrom(adjustment.TotalQty, adjustment.Qty);
+        row.StockQty = reverseLaterStockMovement(row.StockQty, adjustmentType, quantity);
       }
 
       let rows = Array.from(aggregates.values()).map((row) => ({
@@ -33998,12 +34888,14 @@ app.get(
         DebitNote: Number(row.DebitNote.toFixed(3)),
         Decrease: Number(row.Decrease.toFixed(3)),
         Damage: Number(row.Damage.toFixed(3)),
+        DamageOut: Number(row.DamageOut.toFixed(3)),
         MFO: Number(row.MFO.toFixed(3)),
         FromGDTransfer: Number(row.FromGDTransfer.toFixed(3)),
         Closing: Number(row.StockQty.toFixed(3)),
         Opening: Number((
           row.StockQty - row.Purchase - row.CreditNote - row.Increase - row.MFI - row.FromGDTransfer +
-          row.SalesQty + row.FreeQty + row.DebitNote + row.Decrease + row.Damage + row.MFO + row.ToGDTransfer
+          row.SalesQty + row.FreeQty + row.DebitNote + row.Decrease + row.Damage + row.MFO + row.ToGDTransfer -
+          row.DamageOut
         ).toFixed(3)),
       }));
 

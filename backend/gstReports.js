@@ -1,4 +1,5 @@
 import express from "express";
+import { getCreditNoteReportValues } from "./partySalesReportData.js";
 
 export const GST_RATES = [0, 5, 12, 18, 28];
 
@@ -306,11 +307,12 @@ export const buildGstr1Sections = (bills, creditNotes, accountMap, filters = {})
   const unregisteredCredits = [];
   creditDocuments.filter(active).forEach((note) => {
     const account = accountMap.get(text(note.PartyCode)) || {};
+    const creditNoteValue = getCreditNoteReportValues(note).netAmount;
     groupedInvoiceRates(note).forEach((group) => {
       const common = {
         GSTNo: text(account.gstNo), PartyName: text(note.PartyName, account.accountName), CreditNoteNo: text(note.CreditNoteNo, note.VNo),
         CreditNoteDate: formatGstrDate(note.VDate), DocumentType: "C", PlaceOfSupply: placeOfSupply(account, note), ReverseCharge: "N",
-        SupplyType: "Regular", CreditNoteValue: round(number(note.NetAmount, note.amount)), ApplicableTaxRate: "", Rate: group.rate,
+        SupplyType: "Regular", CreditNoteValue: creditNoteValue, ApplicableTaxRate: "", Rate: group.rate,
         Taxable: group.taxable, CessAmt: group.cess, PreGST: "N", SalesType: text(...group.items.map((item) => item.TaxOn || item.taxOn), "GST ON SALES PRICE"),
         DeemedTaxableValue: group.taxable, Narration: text(note.Narration), RefNo: text(note.RefBy, note.BillNo), RefDate: formatGstrDate(note.RefDate),
         PartyCode: text(note.PartyCode), ReceiptNo: text(note.BillNo, note.RefBy), ReceiptDate: formatGstrDate(note.RefDate), Reason: "",
@@ -375,7 +377,7 @@ export const buildPurchaseGSTRows = (bills, accountMap, filters = {}) => bills.f
 export const buildCrnGSTRows = (notes, accountMap, filters = {}) => notes.filter(active).filter((note) => inDateRange(note.VDate, filters.fromDate, filters.toDate)).filter((note) => matchesCommonFilters(note, accountMap.get(text(note.PartyCode)), filters, "credit")).map((note, index) => {
   const items = invoiceItems(note); const account = accountMap.get(text(note.PartyCode)) || {};
   const totalTax = number(note.GSTAmount) || sum(items, itemTax);
-  return { SrNo: index + 1, TrnSeries: text(note.CreditNoteSeries), Date: text(note.VDate), TrnNo: number(note.CreditNoteNo, note.VNo), PartyName: text(note.PartyName, account.accountName), GSTNo: text(account.gstNo), GSTType: registrationType(account), Address: addressOf(account), Taxable: round(number(note.TaxableValue) || sum(items, itemTaxable)), ...rateFields(items, "CRN"), TotalTax: round(totalTax), CessAMT: round(number(note.CessAmount)), Rounding: round(number(note.Rounding, note.AddLess)), BillAmt: round(number(note.NetAmount, note.amount)), _IGST: sum(items, (item) => itemValue(item, "IGST", "igst")), _CGST: sum(items, (item) => itemValue(item, "CGST", "cgst")), _SGST: sum(items, (item) => itemValue(item, "SGST", "sgst")) };
+  return { SrNo: index + 1, TrnSeries: text(note.CreditNoteSeries), Date: text(note.VDate), TrnNo: number(note.CreditNoteNo, note.VNo), PartyName: text(note.PartyName, account.accountName), GSTNo: text(account.gstNo), GSTType: registrationType(account), Address: addressOf(account), Taxable: round(number(note.TaxableValue) || sum(items, itemTaxable)), ...rateFields(items, "CRN"), TotalTax: round(totalTax), CessAMT: round(number(note.CessAmount)), Rounding: round(number(note.Rounding, note.AddLess)), BillAmt: getCreditNoteReportValues(note).netAmount, _IGST: sum(items, (item) => itemValue(item, "IGST", "igst")), _CGST: sum(items, (item) => itemValue(item, "CGST", "cgst")), _SGST: sum(items, (item) => itemValue(item, "SGST", "sgst")) };
 });
 
 const aggregateSection = (section, sourceRows, itemPrefix, grossKey) => GST_RATES.map((rate, index) => {
@@ -443,7 +445,7 @@ const GST_REPORT_SOURCES = {
 const project = (fields) => ({ _id: 0, ...Object.fromEntries(fields.split(/\s+/).filter(Boolean).map((field) => [field, 1])) });
 const SALES_FIELDS = project("BillDate BillSeries vouSer CreditNoteSeries DebitNoteSeries BillNo VNo PartyCode PartyName GSTNo gstNo BillType BillStatus Status isActive IsBillCancelled TaxOn taxOn TaxableValue CGSTAmount SGSTAmount IGSTAmount OriginalNetAmount NetAmount GrossAmount Rounding RoundingAmount AddLessAmount CreditNoteAmount Surcharge CessAmount IRNNo irnNo IrnNo historicalSnapshot.irnNo PlaceOfSupply placeOfSupply items Items");
 const PURCHASE_FIELDS = project("invoiceDate vouSer vouNo supplierCode supplierName invoiceNumber mrpTotal groBsAmt TaxableValue ceBsAmt cgstAmt sgstAmt igstAmt tcbAmount tdsAmount diBc3 rounding netAmt grossAmount surcharge isActive IsBillCancelled BillStatus Status items Items");
-const CREDIT_FIELDS = project("VDate CreditNoteSeries DebitNoteSeries vouSer CreditNoteNo VNo PartyCode PartyName GSTNo gstNo BillSeries BillNo RefBy RefDate Narration NetAmount amount TaxableValue GSTAmount CessAmount Rounding AddLess IRNNo irnNo IrnNo historicalSnapshot.irnNo PlaceOfSupply placeOfSupply TaxOn taxOn isActive IsBillCancelled BillStatus Status items Items");
+const CREDIT_FIELDS = project("VDate CreditNoteSeries DebitNoteSeries vouSer CreditNoteNo VNo PartyCode PartyName GSTNo gstNo BillSeries BillNo RefBy RefDate Narration NetAmount netAmount NetAmt netAmt amount Amount TaxableValue GSTAmount CessAmount Rounding AddLess IRNNo irnNo IrnNo historicalSnapshot.irnNo PlaceOfSupply placeOfSupply TaxOn taxOn isActive IsBillCancelled BillStatus Status items Items");
 const DEBIT_FIELDS = project("VDate DebitNoteSeries DebitNoteNo SupplierCode SupplierName NetAmount GrossAmount RoundingAmount mrpTotal groBsAmt TaxableValue ceBsAmt tcbAmount tdsAmount diBc3 surcharge invoiceNumber isActive IsBillCancelled BillStatus Status items Items");
 const ACCOUNT_FIELDS = project("accountCode code accountName gstNo gstType gstDate gstClsDate tinNo address billToAdd1 add2 town state");
 
