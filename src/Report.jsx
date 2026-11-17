@@ -42,6 +42,7 @@ import { API_ROOT } from "./api/config";
 import { secureFetch } from "./SecuritySetup";
 import ChartOfAccountsSetup from "./ChartOfAccountsSetup";
 import { csvCell } from "../shared/spreadsheetSafety.js";
+import CatalogReport, { CATALOG_REPORTS } from "./CatalogReport";
 
 const EXCEL_HEADER_COLOR = "1F4E79";
 const EXCEL_TOTAL_COLOR = "D9EAF7";
@@ -877,7 +878,7 @@ const Report = ({
         query.set("companyCode", companyCode);
       }
 
-      const response = await fetch(
+      const response = await secureFetch(
         `${API_BASE_URL}/api/reports/company-purchase/criteria?${query.toString()}`
       );
 
@@ -1115,7 +1116,7 @@ const Report = ({
         query.set("selectedGodownCodes", companyPurchaseFilters.selectedGodownCodes.join(","));
       }
 
-      const response = await fetch(
+      const response = await secureFetch(
         `${API_BASE_URL}/api/reports/company-wise-purchase?${query.toString()}`
       );
 
@@ -2624,7 +2625,7 @@ const Report = ({
         query.set("companyCode", companyCode);
       }
 
-      const response = await fetch(
+      const response = await secureFetch(
         `${API_BASE_URL}/api/reports/party-sales/criteria?${query.toString()}`
       );
 
@@ -2678,7 +2679,7 @@ const Report = ({
         query.set("companyCode", companyCode);
       }
 
-      const response = await fetch(
+      const response = await secureFetch(
         `${API_BASE_URL}/api/reports/product-sales/criteria?${query.toString()}`
       );
 
@@ -2697,7 +2698,7 @@ const Report = ({
       setReportCompanies(Array.isArray(result.companies) ? result.companies : []);
       setReportProductList(Array.isArray(result.products) ? result.products : []);
 
-      const areaResponse = await fetch(
+      const areaResponse = await secureFetch(
         `${API_BASE_URL}/api/reports/party-sales/criteria?${query.toString()}`
       );
 
@@ -3082,7 +3083,7 @@ const Report = ({
         orderBy: partySalesFilters.orderBy,
       });
 
-      const response = await fetch(
+      const response = await secureFetch(
         `${API_BASE_URL}/api/reports/party-sales?${query.toString()}`
       );
 
@@ -3205,7 +3206,7 @@ const Report = ({
         freeValueOn: allPartySalesFilters.freeValueOn,
       });
 
-      const response = await fetch(
+      const response = await secureFetch(
         `${API_BASE_URL}/api/reports/all-party-sales?${query.toString()}`
       );
 
@@ -5265,7 +5266,7 @@ const Report = ({
         query.set("selectedSalesmanCodes", productReportFilters.selectedSalesmanCodes.join(","));
       }
 
-      const response = await fetch(
+      const response = await secureFetch(
         `${API_BASE_URL}/api/reports/product-wise-sales?${query.toString()}`
       );
 
@@ -9359,7 +9360,7 @@ const Report = ({
           query.set("selectedSalesmanCodes", allProductReportFilters.selectedSalesmanCodes.join(","));
         }
 
-        const response = await fetch(
+        const response = await secureFetch(
           `${API_BASE_URL}/api/reports/all-product-wise-sales?${query.toString()}`
         );
 
@@ -10943,6 +10944,18 @@ const Report = ({
   // =========================================================
   // OTHER REPORTS (Product, Purchase, Stock, etc.)
   // =========================================================
+  if (CATALOG_REPORTS.some((report) => report.title === selectedReport)) {
+    return (
+      <CatalogReport
+        selectedReport={selectedReport}
+        companies={companies}
+        products={products}
+        godowns={godowns}
+        onBack={onBack}
+      />
+    );
+  }
+
   return (
     <div className="report-page">
       <div className="report-page-header">

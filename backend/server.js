@@ -31907,7 +31907,7 @@ app.get(
           );
 
           const financialValues = getPartySalesDetailValues(item);
-          const grossAmount = financialValues.grossAmount || qty * salesRate;
+          const grossAmount = financialValues.grossAmount;
           const discountAmount = financialValues.discountAmount;
           const cashDiscountAmount = financialValues.cashDiscountAmount;
           const vatAmount = financialValues.gstAmount;

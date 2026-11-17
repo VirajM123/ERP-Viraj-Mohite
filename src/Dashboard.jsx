@@ -226,6 +226,12 @@ const allReportItems = [
     icon: ShoppingCart,
   },
   {
+    name: "Company Wise Purchase Report",
+    category: "Purchase",
+    description: "Company-wise purchase details with supplier and product-wise options.",
+    icon: Building2,
+  },
+  {
     name: "Product Wise Purchase Report",
     category: "Purchase",
     description: "Product-wise purchase quantity, tax and discount analysis.",
@@ -278,19 +284,71 @@ const allReportItems = [
   { name: "Permission Audit Report", category: "Control", description: "Review effective user permissions.", icon: ShieldCheck },
   { name: "Audit Trail Report", category: "Control", description: "Search transaction and administrative audit events.", icon: History },
   { name: "Dashboard Reconciliation", category: "Control", description: "Compare dashboard totals with live transaction data.", icon: LayoutDashboard },
+  { name: "Sales Register / Invoice Register", category: "Sales", description: "Invoice-wise sales with saved taxable value, tax, total and status.", icon: FileBarChart },
+  { name: "Sales Summary Report", category: "Sales", description: "Sales totals calculated from posted sales invoices.", icon: FileBarChart },
+  { name: "Daily Sales Report", category: "Sales", description: "Sales totals grouped by invoice date.", icon: CalendarDays },
+  { name: "Monthly Sales Comparison Report", category: "Sales", description: "Monthly sales totals grouped from invoice dates.", icon: TrendingUp },
+  { name: "Salesman Wise Sales Report", category: "Sales", description: "Invoice totals grouped by saved salesman.", icon: Users },
+  { name: "Area / Route Wise Sales Report", category: "Sales", description: "Invoice totals grouped by saved area.", icon: MapPin },
+  { name: "Company Wise Sales Report", category: "Sales", description: "Sales totals grouped by saved company.", icon: Building2 },
+  { name: "Counter Sales Summary", category: "Sales", description: "Counter-sale invoice totals grouped by date.", icon: ShoppingCart },
+  { name: "Sales Return / Credit Note Register", category: "Sales", description: "Saved credit-note transactions and their invoice references.", icon: FileText },
+  { name: "Sales Return Analysis by Product and Customer", category: "Sales", description: "Credit-note quantities, taxable values and tax grouped by product and customer.", icon: FileText },
+  { name: "Top Selling Products Report", category: "Sales", description: "Product quantities from saved sales invoice lines.", icon: TrendingUp },
+  { name: "Purchase Register / Supplier Invoice Register", category: "Purchase", description: "Purchase voucher and supplier invoice totals.", icon: ShoppingCart },
+  { name: "Purchase Summary Report", category: "Purchase", description: "Purchase totals calculated from saved purchase vouchers.", icon: FileBarChart },
+  { name: "Supplier Wise Purchase Report", category: "Purchase", description: "Purchase totals grouped by saved supplier.", icon: Users },
+  { name: "Purchase by Company and Supplier Report", category: "Purchase", description: "Purchase totals grouped by company and supplier.", icon: Building2 },
+  { name: "Purchase Rate / Last Purchase Rate Report", category: "Purchase", description: "Latest saved invoice purchase rate by product and batch.", icon: IndianRupee },
+  { name: "Purchase Return / Debit Note Register", category: "Purchase", description: "Supplier debit notes and linked purchase bill details.", icon: FileText },
+  { name: "Purchase Return Analysis by Product and Supplier", category: "Purchase", description: "Saved debit-note quantities, taxable values and tax grouped by product and supplier.", icon: FileText },
+  { name: "Stock Valuation Report", category: "Stock", description: "Current stock valued at its recorded purchase rate.", icon: IndianRupee },
+  { name: "Godown Wise Stock Report", category: "Stock", description: "Current quantity and purchase-rate value grouped by godown and product.", icon: Warehouse },
+  { name: "Batch Wise Stock Report", category: "Stock", description: "Current stock balances by product batch.", icon: Package },
+  { name: "Near-Expiry Stock Report", category: "Stock", description: "Current stock expiring within the selected number of days.", icon: CalendarDays },
+  { name: "Expired Stock Report", category: "Stock", description: "Current stock whose saved expiry date is before today.", icon: AlertTriangle },
+  { name: "Reorder / Minimum Stock Report", category: "Stock", description: "Current stock compared with the product reorder level.", icon: PackageSearch },
+  { name: "Stock Adjustment Register", category: "Stock", description: "Completed stock adjustments from the stock-adjustment register.", icon: ClipboardList },
+  { name: "Batch and Expiry Master List", category: "Stock", description: "Saved product batch, manufacturing and expiry details by godown.", icon: CalendarDays },
+  { name: "Customer Ageing Report", category: "Customer", description: "Open sales invoices aged by saved due date, falling back to invoice date.", icon: Users },
+  { name: "Bill Wise Outstanding Report", category: "Customer", description: "Open customer invoices and brought-forward bill balances.", icon: FileText },
+  { name: "Customer Statement of Account", category: "Customer", description: "Customer account postings and running balance from the accounting ledger.", icon: BookOpen },
+  { name: "Collection by Salesman Report", category: "Customer", description: "Receipt totals grouped by saved salesman.", icon: Users },
+  { name: "Receipt Allocation and Unallocated Receipt Report", category: "Customer", description: "Receipt-to-bill allocations and unallocated receipt balances.", icon: IndianRupee },
+  { name: "Supplier Outstanding Report", category: "Supplier", description: "Unpaid purchase bills after saved payment allocations.", icon: Users },
+  { name: "Bill Wise Payables Report", category: "Supplier", description: "Unpaid supplier bills and brought-forward balances.", icon: FileText },
+  { name: "Supplier Debit Note Register", category: "Supplier", description: "Supplier debit notes and linked purchase bill details.", icon: FileText },
+  { name: "Supplier Statement of Account", category: "Supplier", description: "Supplier account postings and running balance from the accounting ledger.", icon: BookOpen },
+  { name: "Collection Register", category: "Customer", description: "Receipts with saved party, amount, payment mode and cheque details.", icon: IndianRupee },
+  { name: "E-Invoice Register and IRN Status", category: "GST", description: "Sales invoices with stored IRN and acknowledgement values.", icon: FileSpreadsheet },
+  { name: "E-Way Bill Register and Status", category: "GST", description: "Sales invoices with their stored e-way bill number.", icon: FileSpreadsheet },
+  { name: "Journal Voucher Register", category: "Financial", description: "Saved journal vouchers with posted debit and credit totals.", icon: BookOpen },
+  { name: "Load / Dispatch Register", category: "Distribution", description: "Saved dispatch loads, vehicle, assigned delivery person and recorded totals.", icon: Truck },
+  { name: "Load Settlement Summary", category: "Distribution", description: "Saved load settlement totals and collections.", icon: BadgeIndianRupee },
+  { name: "Load Settlement and Collection Summary", category: "Distribution", description: "Saved load settlement totals and collections.", icon: BadgeIndianRupee },
+  { name: "Product / Item List", category: "Master", description: "Product master records.", icon: Package },
+  { name: "Product Price List", category: "Master", description: "Current batch prices from stock records and product master.", icon: IndianRupee },
+  { name: "Inactive / Blocked Master Records", category: "Master", description: "Inactive or blocked product and customer master records.", icon: CircleX },
+  { name: "Customer / Party List", category: "Master", description: "Customer account master records.", icon: Users },
+  { name: "Supplier List", category: "Master", description: "Supplier account master records.", icon: Users },
+  { name: "Company List", category: "Master", description: "Company master records.", icon: Building2 },
+  { name: "Area List", category: "Master", description: "Area master records.", icon: MapPin },
+  { name: "Salesman List", category: "Master", description: "Salesman master records.", icon: Users },
+  { name: "Godown List", category: "Master", description: "Godown master records.", icon: Warehouse },
 ];
 
 const reportCatalogCategories = [
-  { id: "sales", name: "Sales Reports", description: "Order, Billing, Return & Analysis", icon: FileBarChart },
-  { id: "purchase", name: "Purchase Reports", description: "Purchase, GRN & Analysis", icon: ShoppingCart },
-  { id: "price", name: "Price & Discount", description: "Price, Discount & Rate", icon: BadgeIndianRupee },
-  { id: "scheme", name: "Scheme & Claims", description: "Schemes, Offers & Claims", icon: ClipboardList },
-  { id: "stock", name: "Stock Reports", description: "Stock, Movement & Valuation", icon: Box },
-  { id: "customer", name: "Customer Reports", description: "Customer, Outstanding & Ageing", icon: UserRound },
-  { id: "salesman", name: "Salesman Reports", description: "Salesman, Target & Performance", icon: Users },
-  { id: "gst", name: "GST Reports", description: "GST, E-Invoice & E-Way Bill", icon: FileText },
-  { id: "print", name: "Print / Documents", description: "Bill Print, Labels & Documents", icon: Printer },
-  { id: "other", name: "Other Reports", description: "Financial, Control, MIS & More", icon: MoreVertical },
+  { id: "sales", name: "Sales Reports", description: "Invoices, returns and analysis", icon: FileBarChart },
+  { id: "purchase", name: "Purchase Reports", description: "Purchases and supplier analysis", icon: ShoppingCart },
+  { id: "stock", name: "Inventory and Stock", description: "Stock, movement and valuation", icon: Box },
+  { id: "customer", name: "Customers and Receivables", description: "Customer and outstanding reports", icon: UserRound },
+  { id: "supplier", name: "Suppliers and Payables", description: "Supplier and payable reports", icon: Truck },
+  { id: "gst", name: "GST and Tax", description: "GST and tax reports", icon: FileText },
+  { id: "financial", name: "Financial and Accounting", description: "Accounting reports", icon: BookOpen },
+  { id: "banking", name: "Banking and Cheques", description: "Banking reports", icon: Landmark },
+  { id: "delivery", name: "Distribution and Delivery", description: "Load and delivery reports", icon: Truck },
+  { id: "master", name: "Product and Master Data", description: "Product, party and master lists", icon: Package },
+  { id: "other", name: "Administration", description: "Administrative and control reports", icon: MoreVertical },
 ];
 
 const getReportCatalogCategory = (report) => {
@@ -299,13 +357,11 @@ const getReportCatalogCategory = (report) => {
   if (report.category === "Stock") return "stock";
   if (report.category === "GST") return "gst";
   if (report.category === "Customer") return "customer";
-
-  if (
-    report.name === "Party Ledger" ||
-    report.name === "Credit Control Report"
-  ) {
-    return "customer";
-  }
+  if (report.category === "Supplier") return "supplier";
+  if (report.category === "Distribution") return "delivery";
+  if (report.category === "Master") return "master";
+  if (report.name === "Party Ledger" || report.name === "Credit Control Report") return "customer";
+  if (report.category === "Financial") return report.name === "Find Cheque Details" ? "banking" : "financial";
 
   return "other";
 };

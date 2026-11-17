@@ -1,0 +1,276 @@
+CUSTOMER-FACING ERP REPORT CATALOGUE
+Updated: 17 November 2026
+
+Purpose
+This is a practical report menu for customers using the ERP day to day. It lists
+the reports that should be available under each main report section. Status is
+based on report names found in src/Dashboard.jsx and src/Report.jsx; a listed
+report is not proof that its data, calculations, filters, or export have been
+fully validated.
+
+Status key
+[EXISTS]  Listed in the current report catalogue or report definitions.
+[CHECK]   Defined in report metadata, but dashboard catalogue visibility needs
+          confirmation.
+[ADD]     Recommended customer-facing report not found in the current catalogue.
+
+1. SALES REPORTS
+   1.1 Sales Summary Report [EXISTS]
+       Sales totals by date, company, branch, series, and payment type.
+   1.2 Sales Register / Invoice Register [EXISTS]
+       Invoice list with date, invoice number, customer, taxable value, tax,
+       total, and status.
+   1.3 Party Wise Sales Report [EXISTS]
+   1.4 All Party Wise Sales Report [EXISTS]
+   1.5 Product Wise Sales Report [EXISTS]
+   1.6 All Product Wise Sales Report [EXISTS]
+   1.7 Sales Return / Credit Note Register [EXISTS]
+   1.8 Sales Return Analysis by Product and Customer [EXISTS]
+   1.9 Salesman Wise Sales Report [EXISTS]
+   1.10 Area / Route Wise Sales Report [EXISTS]
+   1.11 Company Wise Sales Report [EXISTS]
+   1.12 Daily Sales Report [EXISTS]
+   1.13 Monthly Sales Comparison Report [EXISTS]
+   1.14 Top Selling Products Report [EXISTS]
+   1.15 Slow-Moving / Non-Moving Products Report [ADD]
+   1.16 Sales Margin / Gross Profit by Product Report [ADD]
+   1.17 Quotation Register and Pending Quotation Report [ADD]
+   1.18 Counter Sales Summary [EXISTS]
+   1.19 Stock And Sales Report [EXISTS]
+
+2. PURCHASE REPORTS
+   2.1 Purchase Summary Report [EXISTS]
+       Purchase totals by period, supplier, company, and tax rate.
+   2.2 Purchase Register / Supplier Invoice Register [EXISTS]
+   2.3 Company Wise Purchase Report [EXISTS]
+   2.4 Company/Bill Wise Purchase Report [EXISTS]
+   2.5 Product Wise Purchase Report [EXISTS]
+   2.6 Purchase Return / Debit Note Register [EXISTS]
+   2.7 Purchase Return Analysis by Product and Supplier [EXISTS]
+   2.8 Supplier Wise Purchase Report [EXISTS]
+   2.9 Purchase by Company and Supplier Report [EXISTS]
+   2.10 Purchase Rate / Last Purchase Rate Report [EXISTS]
+   2.11 Purchase Discount and Tax Analysis [ADD]
+   2.12 Purchase Order Register [ADD, if purchase orders are used]
+   2.13 Pending Purchase Order Report [ADD, if purchase orders are used]
+   2.14 Goods Receipt Register [ADD, if goods receipts are used]
+
+3. INVENTORY AND STOCK REPORTS
+   3.1 Current Stock Report [EXISTS]
+   3.2 As On Date Stock Report [EXISTS]
+   3.3 Product Ledger [EXISTS]
+   3.4 Stock Movement Ledger [EXISTS]
+   3.5 Stock And Sales Report [EXISTS]
+   3.6 Damage Stock Report [EXISTS]
+   3.7 Stock Valuation Report [EXISTS]
+       Quantity and value by product, batch, company, and godown, with the
+       valuation method stated.
+   3.8 Godown Wise Stock Report [EXISTS]
+   3.9 Batch Wise Stock Report [EXISTS]
+   3.10 Near-Expiry Stock Report [EXISTS]
+   3.11 Expired Stock Report [EXISTS]
+   3.12 Reorder / Minimum Stock Report [EXISTS]
+   3.13 Overstock Report [ADD]
+   3.14 Physical Stock Count / Stock Variance Report [ADD]
+   3.15 Stock Adjustment Register [EXISTS]
+   3.16 Godown Transfer Register [ADD]
+   3.17 Batch Traceability / Batch Movement Report [ADD]
+   3.18 Reserved / Committed Stock Report [ADD, if reservations are used]
+   3.19 Opening Stock Register [ADD]
+
+4. CUSTOMER, RECEIVABLES, AND COLLECTION REPORTS
+   4.1 Party Outstanding Report [EXISTS]
+   4.2 Customer Ageing Report [EXISTS]
+       Outstanding invoices grouped into ageing periods, such as current,
+       1-30, 31-60, 61-90, and over 90 days.
+   4.3 Customer Statement of Account [EXISTS]
+   4.4 Bill Wise Outstanding Report [EXISTS]
+   4.5 Customer Advance / Unadjusted Receipt Report [ADD]
+   4.6 Collection Register [EXISTS]
+   4.7 Collection by Salesman Report [EXISTS]
+   4.8 Receipt Allocation and Unallocated Receipt Report [EXISTS]
+   4.9 Credit Control Report [EXISTS]
+   4.10 Customer Credit Limit Utilization Report [ADD, if separate detail is needed]
+
+5. SUPPLIER AND PAYABLE REPORTS
+   5.1 Supplier Outstanding Report [EXISTS]
+   5.2 Supplier Ageing Report [ADD]
+   5.3 Supplier Statement of Account [EXISTS]
+   5.4 Bill Wise Payables Report [EXISTS]
+   5.5 Supplier Advance / Unadjusted Payment Report [ADD]
+   5.6 Payment Allocation and Unallocated Payment Report [ADD]
+   5.7 Supplier Debit Note Register [EXISTS]
+
+6. GST AND TAX REPORTS
+   6.1 Sales GST Register [EXISTS]
+   6.2 Purchase GST Register [EXISTS]
+   6.3 CRN GST Register [EXISTS]
+   6.4 GST Summary [EXISTS]
+   6.5 GSTR1 Report [EXISTS]
+   6.6 HSN / SAC Summary Report [ADD]
+   6.7 GSTR-2A / GSTR-2B Reconciliation [ADD]
+   6.8 Input Tax Credit (ITC) Summary and Reconciliation [ADD]
+   6.9 Tax Rate Wise Sales and Purchase Summary [ADD]
+   6.10 E-Invoice Register and IRN Status [EXISTS]
+   6.11 E-Way Bill Register and Status [EXISTS]
+   6.12 GST Credit Note and Debit Note Reconciliation [ADD]
+
+7. FINANCIAL AND ACCOUNTING REPORTS
+   7.1 General Ledger [EXISTS]
+   7.2 Party Ledger [EXISTS]
+   7.3 Trial Balance [EXISTS]
+   7.4 Day Book [EXISTS]
+   7.5 Cash Book [EXISTS]
+   7.6 Bank Book [EXISTS]
+   7.7 Profit & Loss [EXISTS]
+   7.8 Balance Sheet [EXISTS]
+   7.9 Cash Flow Statement [ADD]
+   7.10 Journal Voucher Register [EXISTS]
+   7.11 Contra Voucher Register [ADD]
+   7.12 Expense Summary / Expense Ledger Report [ADD]
+   7.13 Cost Centre / Department Report [ADD, if cost centres are used]
+   7.14 Budget vs Actual Report [ADD, if budgets are used]
+   7.15 Fixed Asset Register and Depreciation Report [ADD, if fixed assets are tracked]
+
+8. BANKING AND CHEQUE REPORTS
+   8.1 Find Cheque Details [EXISTS]
+   8.2 Cheque Issue / Receipt Register [ADD]
+   8.3 PDC (Post-Dated Cheque) Pending / Due / Cleared Report [ADD]
+   8.4 Cheque Bounce Register [ADD]
+   8.5 Bank Reconciliation / Unreconciled Entries Report [ADD]
+   8.6 Bank Deposit Register [ADD]
+
+9. DISTRIBUTION AND DELIVERY REPORTS
+   9.1 Load / Dispatch Register [EXISTS]
+   9.2 Load Wise Invoice and Product Details [ADD]
+   9.3 Pending Delivery / Undelivered Invoice Report [ADD]
+   9.4 Load Settlement and Collection Summary [EXISTS]
+   9.5 Shortage, Damage, and Return During Delivery Report [ADD]
+   9.6 Load Transfer Register [ADD]
+   9.7 Delivery Performance by Route / Salesman [ADD]
+
+10. PRODUCT AND MASTER DATA REPORTS
+   10.1 Product / Item List [EXISTS]
+   10.2 Product Price List (MRP, purchase rate, and sales rate) [EXISTS]
+   10.3 Batch and Expiry Master List [EXISTS]
+   10.4 Customer / Party List [EXISTS]
+   10.5 Supplier List [EXISTS]
+   10.6 Company List, Area List, Salesman List, and Godown List [EXISTS]
+   10.7 Inactive / Blocked Master Records [EXISTS]
+
+11. ADMINISTRATIVE REPORTS (SEPARATE FROM ROUTINE CUSTOMER REPORTS)
+   11.1 Permission Audit Report [EXISTS]
+   11.2 Audit Trail Report [EXISTS]
+   11.3 Dashboard Reconciliation [EXISTS]
+   11.4 Data Import Results / Rejected Rows Report [ADD]
+
+REPORTS TO REVIEW FOR OVERLAP
+- Product Ledger and Stock Movement Ledger both show stock movements. Keep both
+  if Product Ledger focuses on a selected product's running balance and Stock
+  Movement Ledger is the full source-document audit history.
+- Current Stock and As On Date Stock share similar columns. Keep both if the
+  latter reconstructs stock accurately as of a historical date.
+- Party Wise Sales and All Party Wise Sales, and Product Wise Sales and All
+  Product Wise Sales, are useful detail and consolidated versions when their
+  selection and totals differ clearly.
+- Company Wise Purchase and Company/Bill Wise Purchase can coexist as summary
+  and bill-detail reports. Company Wise Purchase is now reachable from the
+  Dashboard report catalogue.
+- Stock And Sales Report belongs under both Sales and Inventory in the customer
+  report menu because it combines sales and stock information.
+- Credit Control Report is customer-facing and should be under Customer /
+  Receivables. It may also be cross-listed under Control.
+- Dashboard Reconciliation is an administrative diagnostic, not a routine
+  customer accounting report. Keep it in the separate Administration section.
+
+CUSTOMER REPORT MENU RECOMMENDATION
+Show the main headings in this order:
+Sales | Purchase | Inventory and Stock | Customers and Receivables |
+Suppliers and Payables | GST and Tax | Financial and Accounting |
+Banking and Cheques | Distribution and Delivery | Product and Master Data
+
+Within each heading, display the [EXISTS] reports and any [ADD] reports that the
+business has implemented and validated. Keep [CHECK] entries hidden until their
+catalogue access is confirmed. Do not display a report as ready merely because
+its name exists in source code; verify its filters, totals, permissions, export,
+and date behavior before enabling it for customers.
+
+IMPLEMENTATION STATUS
+The lists below describe application code paths, not verified results from a
+customer's live database. "Implemented" means a catalogue entry and report
+generation path exist. Live database values, permissions, filters, and exports
+have not been end-to-end checked; do not treat these reports as reconciled
+accounting outputs until they are tested against the target firm.
+
+IMPLEMENTED REPORT GENERATION PATHS
+Sales:
+- Party Wise Sales; All Party Wise Sales; Product Wise Sales; All Product Wise
+  Sales; Stock And Sales.
+- Sales Summary; Sales Register / Invoice Register; Sales Return / Credit Note
+  Register; Sales Return Analysis by Product and Customer; Salesman Wise Sales;
+  Area / Route Wise Sales; Company Wise Sales; Daily Sales; Monthly Sales
+  Comparison; Top Selling Products; Counter Sales Summary.
+
+Purchase:
+- Company Wise Purchase; Company/Bill Wise Purchase; Product Wise Purchase.
+- Purchase Summary; Purchase Register / Supplier Invoice Register; Purchase
+  Return / Debit Note Register; Purchase Return Analysis by Product and
+  Supplier; Supplier Wise Purchase; Purchase by Company and Supplier; Purchase
+  Rate / Last Purchase Rate.
+
+Inventory and stock:
+- Current Stock; As On Date Stock; Product Ledger; Stock Movement Ledger;
+  Stock And Sales; Damage Stock.
+- Stock Valuation; Godown Wise Stock; Batch Wise Stock; Near-Expiry Stock;
+  Expired Stock; Reorder / Minimum Stock; Stock Adjustment Register; Batch and
+  Expiry Master List.
+
+Customers and receivables:
+- Party Outstanding; Customer Ageing; Customer Statement of Account; Bill Wise
+  Outstanding; Collection Register; Collection by Salesman; Receipt Allocation
+  and Unallocated Receipt; Credit Control.
+- Customer Advance / Unadjusted Receipt is only represented by the unallocated
+  entries in Receipt Allocation; it is not a separate report.
+
+Suppliers and payables:
+- Supplier Outstanding; Bill Wise Payables; Supplier Statement of Account;
+  Supplier Debit Note Register.
+
+GST, finance, banking, distribution, masters, and administration:
+- Sales GST Register; Purchase GST Register; CRN GST Register; GST Summary;
+  GSTR1; E-Invoice Register and IRN Status; E-Way Bill Register and Status.
+- General Ledger; Party Ledger; Trial Balance; Day Book; Cash Book; Bank Book;
+  Profit & Loss; Balance Sheet; Journal Voucher Register.
+- Find Cheque Details; Load / Dispatch Register; Load Settlement Summary.
+- Product / Item List; Product Price List; Batch and Expiry Master List;
+  Customer / Party List; Supplier List; Company List; Area List; Salesman List;
+  Godown List; Inactive / Blocked Master Records.
+- Permission Audit Report; Audit Trail Report; Dashboard Reconciliation.
+
+NOT IMPLEMENTED AS SEPARATE REPORTS
+- Sales: Slow-Moving / Non-Moving Products; Sales Margin / Gross Profit by
+  Product; Quotation Register and Pending Quotation.
+- Purchase: Purchase Discount and Tax Analysis; Purchase Order Register;
+  Pending Purchase Order; Goods Receipt Register.
+- Inventory: Overstock; Physical Stock Count / Stock Variance; Godown Transfer;
+  Batch Traceability / Batch Movement; Reserved / Committed Stock; Opening
+  Stock Register.
+- Receivables/payables: Customer Credit Limit Utilization as a separate report;
+  Supplier Ageing; Supplier Advance / Unadjusted Payment; Payment Allocation
+  and Unallocated Payment. Credit limits appear in Credit Control, but that is
+  not a separate utilization report.
+- GST/tax: HSN / SAC Summary; GSTR-2A / GSTR-2B Reconciliation; ITC Summary and
+  Reconciliation; Tax Rate Wise Sales and Purchase Summary; GST Credit Note and
+  Debit Note Reconciliation.
+- Accounting: Cash Flow Statement; Contra Voucher Register; Expense Summary /
+  Expense Ledger; Cost Centre / Department; Budget vs Actual; Fixed Asset
+  Register and Depreciation.
+- Banking: Cheque Issue / Receipt Register; PDC Pending / Due / Cleared; Cheque
+  Bounce; Bank Reconciliation / Unreconciled Entries; Bank Deposit Register.
+- Distribution: Load Wise Invoice and Product Details; Pending Delivery /
+  Undelivered Invoice; Shortage, Damage, and Return During Delivery; Load
+  Transfer; Delivery Performance by Route / Salesman.
+- Administration: Data Import Results / Rejected Rows.
+
+The unimplemented reports require additional data models/workflows or a distinct
+calculation path. No report is marked live-verified by this status list.

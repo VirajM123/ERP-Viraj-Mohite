@@ -2,9 +2,13 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import {
   consolidateStockMovementRows,
+  buildStockMovementReportRows,
+  ageingBucketAmounts,
   financialRows,
   isCreditDaysOverdue,
   normalizeJournalLines,
+  outstandingAfterAllocation,
+  stockAdjustmentQuantity,
   validateJournalLines,
 } from "../p0Features.js";
 import { Journal } from "../accounting.js";
@@ -14,6 +18,23 @@ test("overdue bills do not block customers without a configured credit-days limi
   assert.equal(isCreditDaysOverdue(undefined, true), false);
   assert.equal(isCreditDaysOverdue(30, true), true);
   assert.equal(isCreditDaysOverdue(30, false), false);
+});
+
+test("customer ageing assigns each open balance to one correct boundary bucket", () => {
+  for (const [days, bucket] of [
+    [0, "Current"], [1, "Days1To30"], [30, "Days1To30"],
+    [31, "Days31To60"], [60, "Days31To60"], [61, "Days61To90"],
+    [90, "Days61To90"], [91, "Over90Days"],
+  ]) {
+    const buckets = ageingBucketAmounts(days, 125);
+    assert.equal(buckets[bucket], 125);
+    assert.equal(Object.values(buckets).reduce((sum, value) => sum + value, 0), 125);
+  }
+});
+
+test("outstanding balances exclude allocations and never become negative", () => {
+  assert.equal(outstandingAfterAllocation(500, 125), 375);
+  assert.equal(outstandingAfterAllocation(500, 700), 0);
 });
 
 test("Journal Voucher accepts multiple balanced debit and credit lines", () => {
@@ -97,4 +118,22 @@ test("Sales stock movements consolidate repeated product and batch rows", () => 
   assert.equal(movements.length, 1);
   assert.equal(movements[0].quantityOut, 10);
   assert.equal(movements[0].mrp, 90);
+});
+
+test("Stock Movement Ledger includes prior balance while filtering displayed dates and direction", () => {
+  const rows = buildStockMovementReportRows([
+    { movementDate: "2026-04-01", productCode: "P1", godown: "G1", batch: "B1", quantityIn: 10, sourceType: "PURCHASE" },
+    { movementDate: "2026-04-02", productCode: "P1", godown: "G1", batch: "B1", quantityOut: 3, sourceType: "SALES" },
+    { movementDate: "2026-04-03", productCode: "P1", godown: "G1", batch: "B1", quantityIn: 5, sourceType: "PURCHASE" },
+  ], { fromDate: "2026-04-02", toDate: "2026-04-03", entryType: "OUT" });
+
+  assert.equal(rows.length, 1);
+  assert.equal(rows[0].Date, "2026-04-02");
+  assert.equal(rows[0].BalanceQty, 7);
+  assert.equal(rows[0].StockOut, 3);
+});
+
+test("stock adjustment quantity does not count the saved free quantity twice", () => {
+  assert.equal(stockAdjustmentQuantity({ TotalQty: 4, Qty: 3, FreeQty: 1 }), 4);
+  assert.equal(stockAdjustmentQuantity({ Qty: 3, FreeQty: 1 }), 4);
 });

@@ -71,6 +71,16 @@ test("maps persisted invoice line values to the Party Wise Sales export fields",
   );
 });
 
+test("preserves a saved zero gross amount instead of recalculating it from quantity and rate", () => {
+  const values = getPartySalesDetailValues({
+    qty: 2,
+    rate: 10,
+    grossAmount: 0,
+  });
+
+  assert.equal(values.grossAmount, 0);
+});
+
 test("uses saved bill-header totals and switches net amount for credit notes", () => {
   const bill = {
     GrossAmount: 100,
