@@ -218,9 +218,9 @@ export const mapDesktopRows = ({ entryType, rows, distributorId, firmId, referen
 const quoteSqlName = (value) => `[${String(value).replaceAll("]", "]]" )}]`;
 const quoteSqlText = (value) => `N'${String(value).replaceAll("'", "''")}'`;
 
-const sqlcmdArgs = (query, database = "master", server = "(localdb)\\MSSQLLocalDB") => {
+export const sqlcmdArgs = (query, database = "master", server = "(localdb)\\MSSQLLocalDB") => {
   const args = ["-S", server, "-d", database, "-b", "-r", "1", "-y", "0", "-s", "|", "-Q", query];
-  if (process.env.DESKTOP_IMPORT_SQL_USER) args.push("-U", process.env.DESKTOP_IMPORT_SQL_USER, "-P", process.env.DESKTOP_IMPORT_SQL_PASSWORD || "");
+  if (process.env.DESKTOP_IMPORT_SQL_USER) args.push("-U", process.env.DESKTOP_IMPORT_SQL_USER);
   else args.push("-E");
   if (process.env.DESKTOP_IMPORT_SQL_TRUST_CERTIFICATE !== "false") args.push("-C");
   return args;
@@ -229,6 +229,9 @@ const sqlcmdArgs = (query, database = "master", server = "(localdb)\\MSSQLLocalD
 const executeSql = async (query, database, server) => {
   const { stdout } = await execFileAsync(process.env.DESKTOP_IMPORT_SQLCMD || "sqlcmd", sqlcmdArgs(query, database, server), {
     windowsHide: true, maxBuffer: 256 * 1024 * 1024, timeout: SQL_TIMEOUT_MS,
+    env: process.env.DESKTOP_IMPORT_SQL_USER
+      ? { ...process.env, SQLCMDPASSWORD: process.env.DESKTOP_IMPORT_SQL_PASSWORD || "" }
+      : process.env,
   });
   return stdout;
 };

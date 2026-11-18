@@ -1,0 +1,188 @@
+ERP REPORTS - IMPLEMENTATION AND DATA-SOURCE AUDIT
+Generated: 2026-11-18
+Scope: src/Report.jsx, src/CatalogReport.jsx, src/EInvoiceReport.jsx, backend/server.js,
+backend/p0Features.js, backend/gstReports.js, backend/partySalesReportData.js,
+backend/productSalesReport.js, backend/allProductSalesReportData.js,
+backend/stockAndSalesReportData.js, backend/reportSources.js, and backend/transaction.js
+
+METHOD
+- Audited report registration, report UI, API endpoints, filters, and database queries.
+- "Working" means a real API/data path is implemented; it does not mean live runtime testing succeeded.
+- "Dummy data" means report rows are deliberately hard-coded or generated with random/sample values.
+- No report-specific dummy/mock/sample row generator was found in the report UI or report backend.
+- Live database records are used when reports are reached through the MongoDB-backed endpoints below.
+
+OVERALL RESULT
+- Catalog reports: Database-backed, with report-specific server-side filters.
+- P0 stock, financial, control and reconciliation reports: Database-backed, with server-side endpoints.
+- GST reports: Database-backed.
+- Legacy sales, stock and purchase reports: Database-backed endpoints.
+- No report identified as running exclusively on dummy data.
+- The dedicated E-Invoice management screen uses live sales invoices, but JSON/portal actions depend on stored
+  firm/party master data and currently mark portal generation/download actions unavailable.
+
+SHEET LEGEND
+LIVE = reads persistent ERP/MongoDB records.
+FILTERED = sends at least one server-side or report criteria filter.
+RESULT SEARCH = an in-grid search/sort/filter may exist after generation, but is not a database filter.
+REVIEW = implementation exists, but a runtime test or additional data validation is still required.
+
+1. DEDICATED SALES / PURCHASE / STOCK REPORTS
+Report | Status | Filters / data source | Audit result
+Party Wise Sales Report | LIVE; FILTERED | Party, company, date range, bill type, salesman/area/product options as implemented; /api/reports/party-sales | Persistent transactions
+All Party Wise Sales Report | LIVE; FILTERED | Company, date range, bill type and report options; /api/reports/all-party-sales | Persistent transactions
+Product Wise Sales Report | LIVE; FILTERED | Product, company, date range and report level; /api/reports/product-sales | Persistent transactions
+All Product Wise Sales Report | LIVE; FILTERED | Company, date range and report level; /api/reports/all-product-wise-sales | Persistent transactions
+Stock And Sales Report | LIVE; FILTERED | Date range, company, product, godown/report options; /api/reports/stock-and-sales | Persistent stock and sales
+Company Wise Purchase Report | LIVE; FILTERED | Company, supplier, godown, date range, report level and tax/discount options; /api/reports/company-wise-purchase | Persistent purchases
+Company/Bill Wise Purchase Report | LIVE; FILTERED | Company, supplier, godown, date range, bill/voucher and ordering options; /api/reports/purchase-analysis | Persistent purchases
+Product Wise Purchase Report | LIVE; FILTERED | Company, supplier, godown, date range and product-wise options; /api/reports/purchase-analysis | Persistent purchases
+Current Stock Report | LIVE; FILTERED | Company, godown, positive/negative/zero, expiry, negative/zero inclusion and order; /api/reports/current-stock | Persistent stock
+As On Date Stock Report | LIVE; FILTERED | As-of date, company, godown and order; /api/reports/as-on-date-stock | Persistent stock with historical movement handling
+Damage Stock Report | LIVE; FILTERED | Company, godown, date range and order; /api/reports/damage-stock | Persistent damaged stock and completed adjustments
+Product Ledger | LIVE; FILTERED | Date range, company, product, batch, godown and order; /api/reports/product-ledger | Persistent purchase/sales/adjustment movements
+Stock And Sales Report | LIVE; FILTERED | Separate live criteria and result endpoints | REVIEW: validate totals against live transaction fixtures
+
+2. GST AND TAX REPORTS
+Report | Status | Filters / data source | Audit result
+Sales GST Register | LIVE; FILTERED | Date range and bill/invoice/series/GST/report filters; /api/reports/gst/sales-register | Live sales
+Purchase GST Register | LIVE; FILTERED | Date range and purchase/series/GST/report filters; /api/reports/gst/purchase-register | Live purchases
+CRN GST Register | LIVE; FILTERED | Date range and credit-note/series/report filters; /api/reports/gst/crn-register | Live credit notes
+GST Summary | LIVE; FILTERED | Date range and source/bill/series filters; /api/reports/gst/summary | Live sales, purchases, credit notes and debit notes
+GSTR1 Report | LIVE; FILTERED | Date range, damage/invoice/series and GSTR-1 source filters; /api/reports/gst/gstr1 | Live sales/credit-note data grouped into portal sections
+
+3. P0 FINANCIAL, STOCK, CONTROL AND RECONCILIATION REPORTS
+Report | Status | Filters / data source | Audit result
+General Ledger | LIVE; FILTERED | Date range, account and company where supported; /api/p0/reports/financial/general-ledger | Posted journal data
+Party Ledger | LIVE; FILTERED | Date range and account; /api/p0/reports/financial/party-ledger | Posted journal data
+Party Outstanding Report | LIVE; FILTERED | Account and outstanding criteria; /api/p0/reports/party-outstanding | Open sales invoices/opening balances after allocations
+Trial Balance | LIVE; AS-OF/FILTERED | As-of date and optional account filters; /api/p0/reports/financial/trial-balance | Posted journals
+Cash Book | LIVE; FILTERED | Date range and account selection; /api/p0/reports/financial/cash-book | Posted cash-account journals
+Bank Book | LIVE; FILTERED | Date range and account selection; /api/p0/reports/financial/bank-book | Posted bank-account journals
+Day Book | LIVE; FILTERED | Date range; /api/p0/reports/financial/day-book | Posted journal entries
+Profit & Loss | LIVE; AS-OF/FILTERED | Date range/as-of and account classification; /api/p0/reports/financial/profit-loss | Posted income/expense journals
+Balance Sheet | LIVE; AS-OF/FILTERED | As-of date and account classification; /api/p0/reports/financial/balance-sheet | Posted asset/liability/equity journals
+Stock Movement Ledger | LIVE; FILTERED | Date range, entry type, product, batch and godown where supported; /api/p0/reports/stock-movement | Persistent stock movements plus completed adjustments
+Credit Control Report | LIVE; FILTERED | Optional account code/name search; /api/p0/reports/credit-control | Persistent account/customer exposure
+Permission Audit Report | LIVE; FILTERED | Optional user and module search; /api/p0/reports/permission-audit | Effective permissions for current users
+Audit Trail Report | LIVE; FILTERED | Date range; /api/p0/reports/audit-trail | Persistent audit events
+Dashboard Reconciliation | LIVE; FILTERED | As-of date and collection date range; /api/p0/dashboard/summary | Live dashboard source totals
+
+4. CATALOG REPORTS - SALES
+Report | Filters | Backend result
+Sales Register / Invoice Register | fromDate, toDate, companyCode, account | Live T_Sal_Header invoice rows
+Sales Summary Report | fromDate, toDate, companyCode | Live grouped invoice totals
+Daily Sales Report | fromDate, toDate | Live grouped invoice totals
+Monthly Sales Comparison Report | fromDate, toDate | Live monthly grouped totals
+Salesman Wise Sales Report | fromDate, toDate, companyCode | Live invoice totals grouped by salesman
+Area / Route Wise Sales Report | fromDate, toDate, companyCode | Live invoice totals grouped by area
+Company Wise Sales Report | fromDate, toDate | Live invoice totals grouped by company
+Counter Sales Summary | fromDate, toDate | Live counter-sale totals
+Sales Return / Credit Note Register | fromDate, toDate, companyCode | Live credit notes
+Sales Return Analysis by Product and Customer | fromDate, toDate, companyCode, account, product | Live credit-note analysis
+Top Selling Products Report | fromDate, toDate, companyCode, product | Live sales item quantities
+E-Invoice Register and IRN Status | fromDate, toDate, companyCode | Live stored IRN/acknowledgement fields
+E-Way Bill Register and Status | fromDate, toDate, companyCode | Live stored e-way bill fields
+
+5. CATALOG REPORTS - PURCHASE
+Report | Filters | Backend result
+Purchase Register / Supplier Invoice Register | fromDate, toDate, companyCode, account | Live purchase vouchers
+Purchase Summary Report | fromDate, toDate | Live grouped purchase totals
+Supplier Wise Purchase Report | fromDate, toDate, companyCode | Live purchase totals grouped by supplier
+Purchase by Company and Supplier Report | fromDate, toDate | Live grouped purchase totals
+Purchase Rate / Last Purchase Rate Report | toDate, product | Live latest saved purchase rate
+Purchase Return / Debit Note Register | fromDate, toDate, companyCode, account | Live debit notes
+Purchase Return Analysis by Product and Supplier | fromDate, toDate, companyCode, account, product | Live debit-note analysis
+
+6. CATALOG REPORTS - STOCK
+Report | Filters | Backend result
+Stock Valuation Report | godownCode, product | Live stock valued with purchase rates
+Godown Wise Stock Report | godownCode, product | Live stock grouped by godown/product
+Batch Wise Stock Report | godownCode, product | Live stock grouped by batch
+Near-Expiry Stock Report | godownCode, product, expiryDays | Live stock near expiry
+Expired Stock Report | godownCode, product | Live stock before today's date
+Reorder / Minimum Stock Report | godownCode, product | Live stock against reorder level
+Stock Adjustment Register | fromDate, toDate, godownCode, product | Live completed adjustments
+Batch and Expiry Master List | search | Live batch/expiry master data
+
+7. CATALOG REPORTS - CUSTOMER / RECEIVABLES
+Report | Filters | Backend result
+Customer Ageing Report | account | Live open sales/opening balances with due-date aging
+Bill Wise Outstanding Report | account | Live open customer invoices/opening balances
+Customer Statement of Account | fromDate, toDate, account | Live accounting ledger
+Collection by Salesman Report | fromDate, toDate | Live receipt totals grouped by salesman
+Receipt Allocation and Unallocated Receipt Report | fromDate, toDate, account | Live allocated/unallocated receipt rows
+Collection Register | fromDate, toDate, account | Live receipts and cheque details
+
+8. CATALOG REPORTS - SUPPLIER / PAYABLES
+Report | Filters | Backend result
+Supplier Outstanding Report | account | Live unpaid purchases after payments/allocations
+Bill Wise Payables Report | account | Live unpaid supplier bills/opening balances
+Supplier Debit Note Register | fromDate, toDate, companyCode, account | Live supplier debit notes
+Supplier Statement of Account | fromDate, toDate, account | Live supplier accounting ledger
+
+9. CATALOG REPORTS - DISTRIBUTION / FINANCIAL / MASTER
+Report | Filters | Backend result
+Journal Voucher Register | fromDate, toDate | Live saved journal vouchers
+Load / Dispatch Register | fromDate, toDate | Live dispatch loads
+Load Settlement Summary | fromDate, toDate | Live settlement totals
+Load Settlement and Collection Summary | fromDate, toDate | Live settlement and collection totals
+Product / Item List | search, active | Live product master
+Product Price List | search | Live stock/batch prices
+Inactive / Blocked Master Records | search | Live inactive/blocked products, accounts and suppliers
+Customer / Party List | search, active | Live customer account master
+Supplier List | search, active | Live supplier account master
+Company List | search, active | Live company master
+Area List | search, active | Live area master
+Salesman List | search, active | Live salesman master
+Godown List | search, active | Live godown master
+
+10. FIND CHEQUE DETAILS
+Status: LIVE; FILTERED
+Endpoint: /api/transaction/find-cheque-details (backend/transaction.js)
+Filters: Cheque number and tenant identity.
+Data source: Live receipt records plus related bounce and PDC docket records.
+Audit result: Persistent data implementation exists; no hard-coded report rows found.
+
+11. E-INVOICE MANAGEMENT (SEPARATE REPORT SCREEN)
+Status: LIVE; FILTERED
+Filters: Date range, Load Wise/Bill Wise/Date Wise report level, load/series/bill numbers and minimum amount.
+Data source: Live sales bills and live firm/party masters.
+Data validation: Excludes invoices that already have IRN in the candidate query; rebuild validates required GST
+and master fields before creating JSON.
+Limitations: Portal generate E-Invoice and generate E-Way Bill controls are disabled; Download JSON is disabled.
+
+12. FILTER / NO-FILTER FINDINGS
+- Reports with strong filters: Most catalog, stock, sales, purchase, GST and financial reports.
+- P0 financial, catalog, stock-movement and audit-trail endpoints now reject malformed/impossible dates and reversed ranges instead of silently returning misleading or empty results.
+- Reports with limited/no filter UI:
+  Permission Audit Report - optional user and module searches; blank searches show all permission rows.
+  Credit Control Report - optional account code/name search; blank search shows all accounts.
+  Current Stock Report - deliberately current balance, but includes company/godown/status/expiry/order filters.
+  Current master-list reports - use search and active-record status instead of date filters.
+- There are no reports in the audited report-specific code that are exclusively fed by a static array or Math.random().
+- CommonReportGrid has local column visibility and column filters after data generation; these are result filtering,
+  not fake report data.
+- CatalogReport also has local search, column sorting and pagination after generation; the generated rows come from
+  /api/p0/reports/catalog/:report.
+
+13. ITEMS THAT REQUIRE REVIEW / LIVE TESTING
+- Run each report for an empty firm, one firm with transactions, and a firm with multiple companies/godowns.
+- Verify opening balances and allocations for outstanding, ageing, receivable and payable reports.
+- Verify historical stock for As On Date and Product Ledger against known purchase/sales/adjustment transactions.
+- Verify GST Summary and GSTR1 totals with manually reconciled invoices and credit/debit notes.
+- Verify dedicated party/product sales reports and all-party/all-product aggregate totals with the same known invoices.
+- Verify permission/audit trail reports against actual logged actions.
+- Verify E-Invoice JSON after entering valid firm GSTIN/PIN and party GSTIN/PIN master records.
+- Verify purchase, stock and GST reports against a fixed test dataset before production sign-off.
+
+FINAL ASSESSMENT
+- No report is identified as running on dummy data.
+- Report backend code reads ERP persistent data; the implementation is substantially database-backed.
+- There are real filter controls for the majority of reports.
+- Invalid report date criteria are validated consistently on the affected P0 API routes.
+- Credit Control Report exposes and applies an optional account code/name filter.
+- Permission Audit Report exposes and applies optional user and module filters.
+- Some reports legitimately have no date range (permission audit, stock/master lists) or only current/as-of criteria.
+- Completion status is "IMPLEMENTED / REVIEW REQUIRED", not "runtime-verified", because this audit did not execute
+  live API calls or inspect real MongoDB records.

@@ -86,11 +86,12 @@ const CatalogReport = ({ selectedReport, onBack, companies = [], products = [], 
   const [columns, setColumns] = useState([]);
   const [loading, setLoading] = useState(false);
   const [generated, setGenerated] = useState(false);
+  const [criteriaOpen, setCriteriaOpen] = useState(true);
   const [error, setError] = useState("");
   const [search, setSearch] = useState("");
   const [page, setPage] = useState(1);
   const [sort, setSort] = useState({ key: "", direction: 1 });
-  const pageSize = 100;
+  const [pageSize, setPageSize] = useState(10);
   const shownRows = useMemo(() => {
     const query = search.trim().toLowerCase();
     const filtered = query ? rows.filter((row) => Object.values(row).some((value) => String(value ?? "").toLowerCase().includes(query))) : rows;
@@ -105,7 +106,7 @@ const CatalogReport = ({ selectedReport, onBack, companies = [], products = [], 
     });
   }, [rows, search, sort]);
   const pageCount = Math.max(1, Math.ceil(shownRows.length / pageSize));
-  const pageRows = shownRows.slice((page - 1) * pageSize, page * pageSize);
+  const pageRows = shownRows.slice((Math.min(page, pageCount) - 1) * pageSize, Math.min(page, pageCount) * pageSize);
 
   if (!definition) return null;
   const updateFilter = (key, value) => setFilters((current) => ({ ...current, [key]: value }));
@@ -128,11 +129,10 @@ const CatalogReport = ({ selectedReport, onBack, companies = [], products = [], 
       setRows(Array.isArray(result.rows) ? result.rows : []);
       setColumns(Array.isArray(result.columns) ? result.columns : []);
       setGenerated(true);
+      setCriteriaOpen(false);
       setPage(1);
     } catch (requestError) {
-      setRows([]);
-      setColumns([]);
-      setGenerated(false);
+      setCriteriaOpen(true);
       setError(requestError.message || "Report could not be generated.");
     } finally {
       setLoading(false);
@@ -173,7 +173,8 @@ const CatalogReport = ({ selectedReport, onBack, companies = [], products = [], 
           <div><span className="report-category">{definition.category} Report</span><h1>{definition.title}</h1><p>{definition.description}</p></div>
         </div>
       </header>
-      <section className="report-filter-card">
+      {generated && <button type="button" className="report-filters-toggle catalog-show-filters" onClick={() => setCriteriaOpen((open) => !open)} aria-expanded={criteriaOpen}>{criteriaOpen ? "Hide Filters" : "Show Filters"}</button>}
+      {criteriaOpen && <section className="report-filter-card">
         <div className="report-filter-grid catalog-report-filters">
           {definition.filters.map((key) => (
             <div className="report-field" key={key}>
@@ -201,11 +202,12 @@ const CatalogReport = ({ selectedReport, onBack, companies = [], products = [], 
           <button type="button" className="report-generate-button" onClick={generate} disabled={loading}><FileBarChart size={15} />{loading ? "Generating..." : "Generate report"}</button>
           <button type="button" className="report-clear-button" onClick={() => { setFilters({ fromDate: financialYearStart(), toDate: today(), expiryDays: "90", active: "all" }); setGenerated(false); setRows([]); setError(""); }}>Clear</button>
         </div>
-      </section>
+      </section>}
       {error && <div className="catalog-report-error" role="alert">{error}</div>}
       {generated && (
         <section className="party-report-results">
           <div className="party-report-toolbar">
+            <div className="party-grid-heading"><span className="report-title-icon"><FileBarChart size={17} /></span><div><strong>{definition.title}</strong><span>{shownRows.length.toLocaleString("en-IN")} records found</span></div></div>
             <label className="party-report-search"><Search size={14} /><input value={search} onChange={(event) => { setSearch(event.target.value); setPage(1); }} placeholder="Search report rows" /></label>
             <div className="catalog-report-actions">
               <button type="button" onClick={generate} disabled={loading}><RefreshCw size={14} /> Refresh</button>
@@ -214,7 +216,6 @@ const CatalogReport = ({ selectedReport, onBack, companies = [], products = [], 
               <button type="button" onClick={() => window.print()}><Printer size={14} /> Print</button>
             </div>
           </div>
-          {shownRows.length ? (
             <div className="party-report-grid-container">
               <table className="party-report-table">
                 <thead><tr>{columns.map((column) => <th key={column.key}>
@@ -229,18 +230,10 @@ const CatalogReport = ({ selectedReport, onBack, companies = [], products = [], 
                     const value = row[column.key];
                     return <td key={column.key} className={typeof value === "number" ? "party-report-number" : ""}>{typeof value === "number" ? value.toLocaleString("en-IN", { maximumFractionDigits: 2 }) : value ?? ""}</td>;
                   })}</tr>
-                ))}</tbody>
+                ))}{!pageRows.length && <tr><td colSpan={Math.max(columns.length, 1)} className="catalog-report-empty">No records match the selected filters.</td></tr>}</tbody>
               </table>
             </div>
-          ) : <div className="catalog-report-empty">No records match the selected filters.</div>}
-          <footer className="party-report-statusbar">
-            <span>Records: {shownRows.length}</span><span>{definition.title}</span>
-            <span className="catalog-report-pagination">
-              <button type="button" onClick={() => setPage((current) => Math.max(1, current - 1))} disabled={page <= 1}>Previous</button>
-              <span>Page {page} of {pageCount}</span>
-              <button type="button" onClick={() => setPage((current) => Math.min(pageCount, current + 1))} disabled={page >= pageCount}>Next</button>
-            </span>
-          </footer>
+          <footer className="party-report-statusbar"><span>Showing {shownRows.length ? (Math.min(page, pageCount) - 1) * pageSize + 1 : 0} to {Math.min(Math.min(page, pageCount) * pageSize, shownRows.length)} of {shownRows.length} entries</span><div className="party-report-pagination" aria-label="Report pagination"><button type="button" onClick={() => setPage(1)} disabled={page <= 1}>First</button><button type="button" onClick={() => setPage((current) => Math.max(1, current - 1))} disabled={page <= 1}>Previous</button><span>Page {Math.min(page, pageCount)} of {pageCount}</span><button type="button" onClick={() => setPage((current) => Math.min(pageCount, current + 1))} disabled={page >= pageCount}>Next</button><button type="button" onClick={() => setPage(pageCount)} disabled={page >= pageCount}>Last</button><label><span className="sr-only">Rows per page</span><select value={pageSize} onChange={(event) => { setPageSize(Number(event.target.value)); setPage(1); }}>{[10, 25, 50, 100].map((size) => <option key={size} value={size}>{size} / page</option>)}</select></label></div></footer>
         </section>
       )}
     </div>

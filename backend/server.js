@@ -13193,6 +13193,7 @@ app.get(
       const level = String(req.query.level || "Load Wise");
       const series = String(req.query.series || "").trim();
       const salesFilter = { ...scope, isActive: { $ne: false }, IsBillCancelled: { $ne: true }, SalesEntryType: { $ne: "COUNTER_SALES" }, ...(req.auth.role === "SALESMAN" ? { SalesmanCode: req.auth.salesmanCode || "__UNASSIGNED__" } : {}) };
+      salesFilter.$expr = { $eq: [{ $trim: { input: { $ifNull: ["$IRNNo", ""] } } }, ""] };
       if (fromDate || toDate) salesFilter.BillDate = { ...(fromDate ? { $gte: fromDate } : {}), ...(toDate ? { $lte: toDate } : {}) };
       if (minimumAmount > 0) salesFilter.NetAmount = { $gte: minimumAmount };
       if (level === "Load Wise") {
@@ -14647,9 +14648,12 @@ app.get(
       const { gdCode, prodCode, includeLocked = "N", stockType = "SALEABLE" } = req.query;
       const godownCode = String(gdCode || "").trim();
       const productCode = String(prodCode || "").trim();
+      const bulkCodes = Array.isArray(req.query.prodCodes) ? req.query.prodCodes : (req.query.prodCodes ? [req.query.prodCodes] : []);
+      const productCodes = [...new Set(bulkCodes.map((code) => String(code).trim()).filter(Boolean))];
+      const isBulk = bulkCodes.length > 0;
       const normalizedStockType = String(stockType).trim().toUpperCase();
-      if (!godownCode || !productCode) {
-        return res.status(400).json({ success: false, message: "Godown and product are required." });
+      if (!godownCode || (isBulk ? !productCodes.length || productCodes.length > 40 : !productCode)) {
+        return res.status(400).json({ success: false, message: "Godown and product are required (maximum 40 products)." });
       }
       if (!["SALEABLE", "DAMAGE"].includes(normalizedStockType)) {
         return res.status(400).json({ success: false, message: "Invalid stock type." });
@@ -14659,7 +14663,7 @@ app.get(
         distributorId: String(req.auth.distributorId || "").trim(),
         firmId: String(req.auth.firmId || "").trim(),
         GDCode: godownCode,
-        ProdCode: productCode,
+        ProdCode: isBulk ? { $in: productCodes } : productCode,
         $or: [{ isActive: true }, { isActive: { $exists: false } }],
       };
 
@@ -14674,7 +14678,7 @@ app.get(
         .select("Batch MRP SRate PRate Qty GDCode ProdCode IsLocked BoxPack InBoxPack MfgDt ExpDt -_id")
         .sort({ ExpDt: 1, Batch: 1 })
         .lean();
-      const totalBatchCount = includeLocked !== "Y" && rows.length === 0
+      const totalBatchCount = !isBulk && includeLocked !== "Y" && rows.length === 0
         ? await StockModel.countDocuments(allRowsFilter)
         : 0;
       if (process.env.NODE_ENV !== "production" && process.env.DEBUG_STOCK_BATCHES === "true") {
@@ -14707,6 +14711,14 @@ app.get(
         mfgDate: s.MfgDt || "",
         expDate: s.ExpDt || "",
       }));
+
+      if (isBulk) {
+        const batchesByProduct = Object.fromEntries(productCodes.map((code) => [code, []]));
+        for (const batch of batches) {
+          if (Object.hasOwn(batchesByProduct, batch.prodCode)) batchesByProduct[batch.prodCode].push(batch);
+        }
+        return res.json({ success: true, batchesByProduct });
+      }
 
       res.json({
         success: true,

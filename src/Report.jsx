@@ -43,6 +43,7 @@ import { secureFetch } from "./SecuritySetup";
 import ChartOfAccountsSetup from "./ChartOfAccountsSetup";
 import { csvCell } from "../shared/spreadsheetSafety.js";
 import CatalogReport, { CATALOG_REPORTS } from "./CatalogReport";
+import CommonReportGrid from "./CommonReportGrid";
 
 const EXCEL_HEADER_COLOR = "1F4E79";
 const EXCEL_TOTAL_COLOR = "D9EAF7";
@@ -68,7 +69,7 @@ const styleExcelHeaderAndTotal = (sheet, columnCount, headerRowIndex, totalRowIn
   }
 };
 
-const ReportExportActions = ({ generate, exportCsv, exportExcel, ready, loading, disabled = false, showFilterToggle = true }) => {
+const ReportExportActions = ({ generate, exportCsv, exportExcel, ready, loading, generationVersion, disabled = false, showFilterToggle = true }) => {
   const [pendingFormat, setPendingFormat] = useState(null);
   const [menuOpen, setMenuOpen] = useState(false);
   const [filtersCollapsed, setFiltersCollapsed] = useState(false);
@@ -85,6 +86,10 @@ const ReportExportActions = ({ generate, exportCsv, exportExcel, ready, loading,
   useEffect(() => {
     setFiltersCollapsed(ready);
   }, [ready]);
+
+  useEffect(() => {
+    if (generationVersion && ready && showFilterToggle) setFiltersCollapsed(true);
+  }, [generationVersion, ready, showFilterToggle]);
 
   const exportReport = async (format) => {
     setMenuOpen(false);
@@ -244,20 +249,20 @@ const P0_REPORT_ENDPOINTS = {
   "As On Date Stock Report": "/api/reports/as-on-date-stock",
   "Damage Stock Report": "/api/reports/damage-stock",
   "Product Ledger": "/api/reports/product-ledger",
-  "General Ledger": "/p0/reports/financial/general-ledger",
-  "Party Ledger": "/p0/reports/financial/party-ledger",
-  "Party Outstanding Report": "/p0/reports/party-outstanding",
-  "Trial Balance": "/p0/reports/financial/trial-balance",
-  "Cash Book": "/p0/reports/financial/cash-book",
-  "Bank Book": "/p0/reports/financial/bank-book",
-  "Day Book": "/p0/reports/financial/day-book",
-  "Profit & Loss": "/p0/reports/financial/profit-loss",
-  "Balance Sheet": "/p0/reports/financial/balance-sheet",
+  "General Ledger": "/api/p0/reports/financial/general-ledger",
+  "Party Ledger": "/api/p0/reports/financial/party-ledger",
+  "Party Outstanding Report": "/api/p0/reports/party-outstanding",
+  "Trial Balance": "/api/p0/reports/financial/trial-balance",
+  "Cash Book": "/api/p0/reports/financial/cash-book",
+  "Bank Book": "/api/p0/reports/financial/bank-book",
+  "Day Book": "/api/p0/reports/financial/day-book",
+  "Profit & Loss": "/api/p0/reports/financial/profit-loss",
+  "Balance Sheet": "/api/p0/reports/financial/balance-sheet",
   "Stock Movement Ledger": "/api/p0/reports/stock-movement",
-  "Credit Control Report": "/p0/reports/credit-control",
-  "Permission Audit Report": "/p0/reports/permission-audit",
-  "Audit Trail Report": "/p0/reports/audit-trail",
-  "Dashboard Reconciliation": "/p0/dashboard/summary",
+  "Credit Control Report": "/api/p0/reports/credit-control",
+  "Permission Audit Report": "/api/p0/reports/permission-audit",
+  "Audit Trail Report": "/api/p0/reports/audit-trail",
+  "Dashboard Reconciliation": "/api/p0/dashboard/summary",
 };
 
 const GST_REPORT_ENDPOINTS = {
@@ -342,6 +347,14 @@ const getFinancialYearStart = () => {
   return `${financialYear}-04-01`;
 };
 
+const ReportPagination = ({ count, page, setPage, size, setSize }) => {
+  const pages = Math.max(1, Math.ceil(count / size));
+  const current = Math.min(page, pages);
+  return <div className="party-report-statusbar"><span>Showing {count ? (current - 1) * size + 1 : 0} to {Math.min(current * size, count)} of {count} entries</span><div className="party-report-pagination" aria-label="Report pagination">
+    <button type="button" onClick={() => setPage(1)} disabled={current === 1}>First</button><button type="button" onClick={() => setPage(Math.max(1, current - 1))} disabled={current === 1}>Previous</button><span>Page {current} of {pages}</span><button type="button" onClick={() => setPage(Math.min(pages, current + 1))} disabled={current === pages}>Next</button><button type="button" onClick={() => setPage(pages)} disabled={current === pages}>Last</button><label><span className="sr-only">Rows per page</span><select value={size} onChange={(event) => { setSize(Number(event.target.value)); setPage(1); }}>{[10, 25, 50, 100].map((value) => <option key={value} value={value}>{value} / page</option>)}</select></label>
+  </div></div>;
+};
+
 const Report = ({
   selectedReport,
   companies = [],
@@ -352,6 +365,14 @@ const Report = ({
   salesmen = [],
   onBack,
 }) => {
+  const [resultPage, setResultPage] = useState(1);
+  const [resultPageSize, setResultPageSize] = useState(10);
+  useEffect(() => { setResultPage(1); }, [selectedReport]);
+  const resultRows = (rows) => {
+    const page = Math.min(resultPage, Math.max(1, Math.ceil(rows.length / resultPageSize)));
+    return rows.slice((page - 1) * resultPageSize, page * resultPageSize);
+  };
+  const [reportGenerationVersion, setReportGenerationVersion] = useState(0);
   const API_BASE_URL = API_ROOT;
   const defaultP0Filters = () => ({
     companyCode: "",
@@ -363,15 +384,14 @@ const Report = ({
     batch: "",
     godownCode: "",
     entryType: "",
-    reportType: "details",
-    reportLevel: "productBatch",
     reportFilter: "all",
     nearExpiry: "N",
     expiryDays: "",
-    currentStock: "Y",
     includeNegative: "N",
     includeZero: "N",
     orderBy: "productName",
+    permissionUser: "",
+    permissionModule: "",
   });
   const [p0Filters, setP0Filters] = useState(defaultP0Filters);
   const [p0Rows, setP0Rows] = useState([]);
@@ -384,9 +404,8 @@ const Report = ({
   const isGstReport = Boolean(GST_REPORT_ENDPOINTS[selectedReport]);
   const defaultGstFilters = () => ({
     fromDate: getFinancialYearStart(), toDate: getTodayDate(), billType: "all", invoiceType: "all",
-    taxOnType: "all", specificSeries: "N", series: "", outputFormat: "party", gstNo: "all",
-    cessSeparate: "N", gstBifurcation: "N", companyWise: "N", withDetails: "N",
-    discountBifurcation: "N", reportWith: "gst", withDamage: "Y",
+    taxOnType: "all", specificSeries: "N", series: "", gstNo: "all",
+    reportWith: "gst", withDamage: "Y",
   });
   const [gstFilters, setGstFilters] = useState(defaultGstFilters);
   const [gstRows, setGstRows] = useState([]);
@@ -557,6 +576,7 @@ const Report = ({
         (data.unmatchedBounces?.length || 0) +
         (data.unmatchedDockets?.length || 0) > 0;
       setChequeResult(data);
+      if (hasDetails) setReportGenerationVersion((version) => version + 1);
       if (!hasDetails) setChequeError(`No information was found for cheque ${chequeNo}.`);
     } catch (error) {
       setChequeResult(null);
@@ -681,6 +701,9 @@ const Report = ({
       if (distributorId) query.set("distributorId", distributorId);
       if (firmId) query.set("firmId", firmId);
       Object.entries(p0Filters).forEach(([key, value]) => { if (String(value || "").trim()) query.set(key, value); });
+      if (["Credit Control Report", "Permission Audit Report", "Damage Stock Report"].includes(selectedReport)) { query.delete("fromDate"); query.delete("toDate"); }
+      if (selectedReport === "Dashboard Reconciliation" && (!p0Filters.fromDate || !p0Filters.toDate || p0Filters.fromDate > p0Filters.toDate)) throw new Error("Select a valid reconciliation date range.");
+      if (selectedReport === "Dashboard Reconciliation") { query.set("date", p0Filters.toDate); query.set("collectionFromDate", p0Filters.fromDate); query.set("collectionToDate", p0Filters.toDate); }
       const response = await secureFetch(`${API_BASE_URL}${P0_REPORT_ENDPOINTS[selectedReport]}?${query}`);
       const result = await response.json();
       if (!response.ok || result.success === false) {
@@ -695,7 +718,7 @@ const Report = ({
           ? value.map((item) => ({ metric: key, ...(typeof item === "object" ? item : { value: item }) }))
           : [{ metric: key, value: typeof value === "object" ? JSON.stringify(value) : value }]);
       setP0Rows(rows); setP0Summary(result.summary || null);
-      setP0Generated(true);
+      setP0Generated(true); setReportGenerationVersion((version) => version + 1);
     } catch (error) { setP0Rows([]); setP0Summary(null); setP0Generated(false); setP0Error(error.message || "Report could not be generated."); }
     finally { setP0Loading(false); }
   };
@@ -1196,7 +1219,7 @@ const Report = ({
       setCompanyPurchaseRows(rows);
       setCompanyPurchaseColumns(columns);
       setCompanyPurchaseCurrentPage(1);
-      setIsCompanyPurchaseGenerated(true);
+      setIsCompanyPurchaseGenerated(true); setReportGenerationVersion((version) => version + 1);
 
       if (rows.length === 0) {
         setCompanyPurchaseError("No purchase records were found for the selected criteria.");
@@ -1872,6 +1895,7 @@ const Report = ({
   const [isPartyReportLoading, setIsPartyReportLoading] = useState(false);
   const [partyReportError, setPartyReportError] = useState("");
   const [partyReportSearch, setPartyReportSearch] = useState("");
+  const [partyReportColumnFilters, setPartyReportColumnFilters] = useState({});
   const [partyReportZoom, setPartyReportZoom] = useState("100");
   const [partyCurrentPage, setPartyCurrentPage] = useState(1);
   const [partyRowsPerPage, setPartyRowsPerPage] = useState(10);
@@ -2122,7 +2146,7 @@ const Report = ({
       const sections = Array.isArray(result.sections) ? result.sections : [];
       setGstSections(sections);
       setActiveGstrSheet(sections[0]?.name || "B2B");
-      setGstTotals(result.totals || {}); setGstSummary(result.summary || null); setGstGenerated(true);
+      setGstTotals(result.totals || {}); setGstSummary(result.summary || null); setGstGenerated(true); setReportGenerationVersion((version) => version + 1);
     } catch (error) {
       setGstRows([]); setGstColumns([]); setGstSections([]); setGstTotals({}); setGstSummary(null); setGstGenerated(false);
       setGstError(error.message || "GST report could not be generated.");
@@ -2306,7 +2330,7 @@ const Report = ({
 
       setStockSalesRows(Array.isArray(result.data) ? result.data : []);
       setStockSalesSummary(result.summary || null);
-      setStockSalesGenerated(true);
+      setStockSalesGenerated(true); setReportGenerationVersion((version) => version + 1);
     } catch (error) {
       setStockSalesRows([]);
       setStockSalesSummary(null);
@@ -2524,7 +2548,7 @@ const Report = ({
       const result = await response.json();
       if (!response.ok || !result.success) throw new Error(result.message || "Failed to generate purchase report.");
       setPurchaseAnalysisRows(Array.isArray(result.data) ? result.data : []);
-      setPurchaseAnalysisGenerated(true);
+      setPurchaseAnalysisGenerated(true); setReportGenerationVersion((version) => version + 1);
       setPurchaseAnalysisSearch("");
     } catch (error) {
       setPurchaseAnalysisRows([]);
@@ -2835,6 +2859,7 @@ const Report = ({
     setPartyReportRows([]);
     setPartyReportColumns([]);
     setPartyReportSearch("");
+    setPartyReportColumnFilters({});
     setPartyCurrentPage(1);
     setIsPartyReportGenerated(false);
     setPartyReportError("");
@@ -3134,6 +3159,7 @@ const Report = ({
       setPartyReportColumns(columns);
       setPartyCurrentPage(1);
       setIsPartyReportGenerated(true);
+      setShowAdvancedPartyFilters(false);
 
       if (rows.length === 0) {
         setPartyReportError("No sales records were found for the selected criteria.");
@@ -3264,7 +3290,7 @@ const Report = ({
       setAllPartyReportRows(rows);
       setAllPartyReportColumns(columns);
       setAllPartyCurrentPage(1);
-      setIsAllPartyReportGenerated(true);
+      setIsAllPartyReportGenerated(true); setReportGenerationVersion((version) => version + 1);
 
       if (rows.length === 0) {
         setAllPartyReportError("No sales records were found for the selected criteria.");
@@ -3285,13 +3311,35 @@ const Report = ({
   // =========================================================
   const filteredPartySalesRows = useMemo(() => {
     const search = normalizeText(partyReportSearch);
-    if (!search) return partyReportRows;
-    return partyReportRows.filter((row) =>
-      Object.values(row).some((value) =>
+    const activeColumnFilters = Object.entries(partyReportColumnFilters)
+      .filter(([, value]) => String(value || "").trim() !== "")
+      .map(([key, value]) => [key, normalizeText(value)]);
+    return partyReportRows.filter((row) => {
+      const matchesSearch = !search || Object.values(row).some((value) =>
         normalizeText(value).includes(search)
-      )
-    );
-  }, [partyReportRows, partyReportSearch]);
+      );
+      return matchesSearch && activeColumnFilters.every(([key, value]) =>
+        normalizeText(row[key]).includes(value)
+      );
+    });
+  }, [partyReportRows, partyReportSearch, partyReportColumnFilters]);
+
+  const partyGridColumns = useMemo(
+    () => partyReportColumns.map((column) => {
+      const key = String(column.key || "").toLowerCase();
+      const group = /amount|rate|percent|tax|gst|discount|net|gross|tpr|scheme|credit/.test(key)
+        ? "Amounts"
+        : /bill|date|series|trn|voucher/.test(key)
+          ? "Transaction"
+          : /product|batch|unit|qty|mrp/.test(key)
+            ? "Product"
+            : /party|account/.test(key)
+              ? "Party"
+              : "Details";
+      return { ...column, group };
+    }),
+    [partyReportColumns]
+  );
 
   const partySalesTotals = useMemo(() => {
     return filteredPartySalesRows.reduce(
@@ -4711,39 +4759,6 @@ const Report = ({
     allPartyPageStart + allPartyRowsPerPage
   );
 
-  const partyQuickSummary = useMemo(() => {
-    const partyCodes = new Set();
-    const invoices = new Set();
-    let totalSales = 0;
-    let totalCreditNotes = 0;
-    let totalNetSales = 0;
-    let totalQuantity = 0;
-
-    partyReportRows.forEach((row) => {
-      const partyCode = String(
-        row.partyCode || row.accountCode || row.acCode || row.partyName || ""
-      ).trim();
-      if (partyCode) partyCodes.add(partyCode);
-      const invoiceKey = [row.billSeries, row.billNo]
-        .filter((value) => value !== undefined && value !== null && value !== "")
-        .join("-");
-      if (invoiceKey) invoices.add(invoiceKey);
-      totalSales += Number(row.grossAmount || row.billAmount || row.amount || 0);
-      totalCreditNotes += Number(row.creditNoteAmount || 0);
-      totalNetSales += Number(row.netAmount || row.billAmount || row.amount || 0);
-      totalQuantity += Number(row.qty || row.quantity || row.totalQty || 0);
-    });
-
-    return {
-      totalParties: partyCodes.size,
-      totalInvoices: invoices.size,
-      totalSales,
-      totalCreditNotes,
-      totalNetSales,
-      totalQuantity,
-    };
-  }, [partyReportRows]);
-
   const setPartyQuickDateRange = (rangeType) => {
     const today = new Date();
     let fromDate = new Date(today);
@@ -4868,6 +4883,7 @@ const Report = ({
     setPartyReportRows([]);
     setPartyReportColumns([]);
     setPartyReportSearch("");
+    setPartyReportColumnFilters({});
     setPartySelectorSearch("");
     setAreaSelectorSearch("");
     setSalesmanSelectorSearch("");
@@ -4907,33 +4923,6 @@ const Report = ({
     setIsAllPartyReportGenerated(false);
   };
 
-  // =========================================================
-  // PRODUCT SALES REPORT STATE (existing)
-  // =========================================================
-  const [productSalesFilters, setProductSalesFilters] = useState(() => ({
-    company: "",
-    productCode: "",
-    productGroup: "",
-    category: "",
-    subCategory: "",
-    brand: "",
-    fromDate: getFinancialYearStart(),
-    toDate: getTodayDate(),
-    salesman: "",
-    area: "",
-    party: "",
-    billType: "",
-    reportLevel: "summary",
-    scope: "all",
-    crnStatus: "all",
-    orderBy: "productName",
-    showZeroSales: "no",
-  }));
-
-  const [reportSearch, setReportSearch] = useState("");
-  const [reportZoom, setReportZoom] = useState("100");
-  const [currentPage, setCurrentPage] = useState(1);
-
   const reportInformation =
     REPORT_INFORMATION[selectedReport] || {
       title: selectedReport || "Reports",
@@ -4951,115 +4940,7 @@ const Report = ({
     selectedReport === "Product Ledger";
   const isDateStockReport = selectedReport === "As On Date Stock Report";
 
-  // =========================================================
-  // PRODUCT SALES REPORT (existing mock data)
-  // =========================================================
-  const productSalesReportRows = useMemo(
-    () => [
-      {
-        srNo: 1,
-        productCode: "P001",
-        productName: "Fortune Sunlite Oil 1L",
-        category: "Edible Oil",
-        unit: "PCS",
-        openingStock: 150,
-        basicQty: 250,
-        altQty: 0,
-        totalQty: 250,
-        grossAmount: 25000,
-        discount: 1000,
-        netAmount: 24000,
-        cgst: 1080,
-        sgst: 1080,
-        igst: 0,
-        totalTax: 2160,
-        netSales: 26160,
-        crnAmount: 500,
-        balanceAmount: 25660,
-      },
-    ],
-    []
-  );
-
-  const filteredProductSalesRows = useMemo(() => {
-    const searchText = reportSearch.trim().toLowerCase();
-    if (!searchText) return productSalesReportRows;
-    return productSalesReportRows.filter((row) =>
-      [
-        row.productCode,
-        row.productName,
-        row.category,
-        row.unit,
-      ].some((value) =>
-        String(value || "")
-          .toLowerCase()
-          .includes(searchText)
-      )
-    );
-  }, [productSalesReportRows, reportSearch]);
-
-  const productSalesTotals = useMemo(() => {
-    return filteredProductSalesRows.reduce(
-      (totals, row) => ({
-        openingStock: totals.openingStock + Number(row.openingStock || 0),
-        basicQty: totals.basicQty + Number(row.basicQty || 0),
-        altQty: totals.altQty + Number(row.altQty || 0),
-        totalQty: totals.totalQty + Number(row.totalQty || 0),
-        grossAmount: totals.grossAmount + Number(row.grossAmount || 0),
-        discount: totals.discount + Number(row.discount || 0),
-        netAmount: totals.netAmount + Number(row.netAmount || 0),
-        cgst: totals.cgst + Number(row.cgst || 0),
-        sgst: totals.sgst + Number(row.sgst || 0),
-        igst: totals.igst + Number(row.igst || 0),
-        totalTax: totals.totalTax + Number(row.totalTax || 0),
-        netSales: totals.netSales + Number(row.netSales || 0),
-        crnAmount: totals.crnAmount + Number(row.crnAmount || 0),
-        balanceAmount: totals.balanceAmount + Number(row.balanceAmount || 0),
-      }),
-      {
-        openingStock: 0,
-        basicQty: 0,
-        altQty: 0,
-        totalQty: 0,
-        grossAmount: 0,
-        discount: 0,
-        netAmount: 0,
-        cgst: 0,
-        sgst: 0,
-        igst: 0,
-        totalTax: 0,
-        netSales: 0,
-        crnAmount: 0,
-        balanceAmount: 0,
-      }
-    );
-  }, [filteredProductSalesRows]);
-
-  // =========================================================
-  // PRODUCT SALES REPORT - MOCK DATASET
-  // =========================================================
-  const productSalesMockData = useMemo(
-    () => [
-      { productCode: "P001", productName: "Fortune Sunlite Oil 1L", group: "Edible Oil", category: "Oil", subCategory: "Cooking Oil", brand: "Fortune", unit: "PCS", openingStock: 150, basicQty: 250, altQty: 0, totalQty: 250, freeQty: 12, grossAmount: 25000, discount: 1000, netAmount: 24000, cgst: 1080, sgst: 1080, igst: 0, totalTax: 2160, netSales: 26160, crnAmount: 500, balanceAmount: 25660 },
-      { productCode: "P002", productName: "Parle G Biscuit 250g", group: "Biscuits", category: "Snacks", subCategory: "Biscuit", brand: "Parle", unit: "PCS", openingStock: 500, basicQty: 800, altQty: 0, totalQty: 800, freeQty: 30, grossAmount: 16000, discount: 400, netAmount: 15600, cgst: 702, sgst: 702, igst: 0, totalTax: 1404, netSales: 17004, crnAmount: 200, balanceAmount: 16804 },
-      { productCode: "P003", productName: "Lays Classic Salted 70g", group: "Snacks", category: "Snacks", subCategory: "Chips", brand: "Lays", unit: "PCS", openingStock: 400, basicQty: 600, altQty: 0, totalQty: 600, freeQty: 20, grossAmount: 12000, discount: 300, netAmount: 11700, cgst: 526.5, sgst: 526.5, igst: 0, totalTax: 1053, netSales: 12753, crnAmount: 0, balanceAmount: 12753 },
-      { productCode: "P004", productName: "Coca Cola 2L", group: "Beverages", category: "Cold Drinks", subCategory: "Soft Drink", brand: "Coca Cola", unit: "LTR", openingStock: 200, basicQty: 350, altQty: 0, totalQty: 350, freeQty: 10, grossAmount: 29750, discount: 500, netAmount: 29250, cgst: 1316.25, sgst: 1316.25, igst: 0, totalTax: 2632.5, netSales: 31882.5, crnAmount: 150, balanceAmount: 31732.5 },
-      { productCode: "P005", productName: "Tata Tea 1kg", group: "Beverages", category: "Tea", subCategory: "Tea Leaf", brand: "Tata", unit: "KG", openingStock: 120, basicQty: 180, altQty: 0, totalQty: 180, freeQty: 8, grossAmount: 39600, discount: 800, netAmount: 38800, cgst: 970, sgst: 970, igst: 0, totalTax: 1940, netSales: 40740, crnAmount: 300, balanceAmount: 40440 },
-      { productCode: "P006", productName: "Surf Excel 2kg", group: "Detergent", category: "Household", subCategory: "Washing Powder", brand: "Surf", unit: "KG", openingStock: 180, basicQty: 260, altQty: 0, totalQty: 260, freeQty: 15, grossAmount: 117000, discount: 2000, netAmount: 115000, cgst: 10350, sgst: 10350, igst: 0, totalTax: 20700, netSales: 135700, crnAmount: 500, balanceAmount: 135200 },
-      { productCode: "P007", productName: "Amul Butter 500g", group: "Dairy", category: "Dairy", subCategory: "Butter", brand: "Amul", unit: "PCS", openingStock: 90, basicQty: 140, altQty: 0, totalQty: 140, freeQty: 5, grossAmount: 35000, discount: 700, netAmount: 34300, cgst: 1543.5, sgst: 1543.5, igst: 0, totalTax: 3087, netSales: 37387, crnAmount: 100, balanceAmount: 37287 },
-      { productCode: "P008", productName: "Maggi Noodles 70g", group: "Noodles", category: "Snacks", subCategory: "Instant Noodles", brand: "Maggi", unit: "PCS", openingStock: 600, basicQty: 900, altQty: 0, totalQty: 900, freeQty: 40, grossAmount: 12600, discount: 300, netAmount: 12300, cgst: 553.5, sgst: 553.5, igst: 0, totalTax: 1107, netSales: 13407, crnAmount: 0, balanceAmount: 13407 },
-      { productCode: "P009", productName: "Colgate Toothpaste 150g", group: "Personal Care", category: "Oral Care", subCategory: "Toothpaste", brand: "Colgate", unit: "PCS", openingStock: 300, basicQty: 450, altQty: 0, totalQty: 450, freeQty: 18, grossAmount: 58500, discount: 1200, netAmount: 57300, cgst: 2578.5, sgst: 2578.5, igst: 0, totalTax: 5157, netSales: 62457, crnAmount: 250, balanceAmount: 62207 },
-      { productCode: "P010", productName: "Dove Soap 100g", group: "Personal Care", category: "Bath", subCategory: "Soap", brand: "Dove", unit: "PCS", openingStock: 250, basicQty: 380, altQty: 0, totalQty: 380, freeQty: 16, grossAmount: 19000, discount: 400, netAmount: 18600, cgst: 837, sgst: 837, igst: 0, totalTax: 1674, netSales: 20274, crnAmount: 0, balanceAmount: 20274 },
-    ],
-    []
-  );
-
-  const productOptionList = useMemo(() => {
-    if (Array.isArray(products) && products.length > 0) {
-      return products;
-    }
-    return productSalesMockData;
-  }, [products, productSalesMockData]);
+  const productOptionList = Array.isArray(products) ? products : [];
 
   const productOptionSource =
     reportProductList.length > 0 ? reportProductList : productOptionList;
@@ -5083,7 +4964,7 @@ const Report = ({
     setIsProductReportGenerated(false);
     setProductReportRows([]);
     setProductReportError("");
-    setCurrentPage(1);
+    setResultPage(1);
   };
 
   const updateAllProductReportFilter = (field, value) => {
@@ -5117,7 +4998,7 @@ const Report = ({
     setShowProductSelector(false);
     setIsProductReportGenerated(false);
     setProductReportError("");
-    setCurrentPage(1);
+    setResultPage(1);
   };
 
   const clearAllProductSalesFilters = () => {
@@ -5355,7 +5236,7 @@ const Report = ({
         { key: "Address", label: "Address", type: "string" },
       ];
       setProductReportColumns(columns);
-      setIsProductReportGenerated(true);
+      setIsProductReportGenerated(true); setReportGenerationVersion((version) => version + 1);
 
       if (rows.length === 0) {
         setProductReportError("No product sales records were found for the selected criteria.");
@@ -5368,47 +5249,6 @@ const Report = ({
       setProductReportError(error.message || "Failed to generate product sales report.");
     } finally {
       setIsProductReportLoading(false);
-    }
-  };
-
-  const generateAllProductSalesReport = () => {
-    try {
-      setAllProductReportError("");
-      setAllProductReportRows([]);
-      setAllProductReportColumns([]);
-
-      if (!allProductReportFilters.fromDate || !allProductReportFilters.toDate) {
-        throw new Error("From Date and To Date are required.");
-      }
-      if (allProductReportFilters.fromDate > allProductReportFilters.toDate) {
-        throw new Error("From Date cannot be greater than To Date.");
-      }
-
-      setIsAllProductReportLoading(true);
-
-      const rows = applyProductReportFilters(
-        productSalesMockData,
-        allProductReportFilters,
-        true
-      );
-
-      const columns = buildProductReportColumns();
-
-      setAllProductReportRows(rows);
-      setAllProductReportColumns(columns);
-      setIsAllProductReportGenerated(true);
-
-      if (rows.length === 0) {
-        setAllProductReportError("No product sales records were found for the selected criteria.");
-      }
-    } catch (error) {
-      console.error("All product sales report generation error:", error);
-      setAllProductReportRows([]);
-      setAllProductReportColumns([]);
-      setIsAllProductReportGenerated(false);
-      setAllProductReportError(error.message || "Failed to generate all product sales report.");
-    } finally {
-      setIsAllProductReportLoading(false);
     }
   };
 
@@ -6233,7 +6073,6 @@ const Report = ({
               <div className="report-field"><label>Bill Type</label><select value={gstFilters.billType} onChange={(event) => updateGstFilter("billType", event.target.value)}><option value="all">All</option><option value="Cash">Cash</option><option value="Credit">Credit</option></select></div>
               <div className="report-field"><label>Invoice Type</label><select value={gstFilters.invoiceType} onChange={(event) => updateGstFilter("invoiceType", event.target.value)}><option value="all">All</option><option value="Registered">Registered</option><option value="Unregistered">Unregistered</option></select></div>
               <div className="report-field"><label>Tax On Type</label><select value={gstFilters.taxOnType} onChange={(event) => updateGstFilter("taxOnType", event.target.value)}><option value="all">All</option><option value="GST ON SALES PRICE">GST on Sales Price</option><option value="GST IN MRP">GST in MRP</option></select></div>
-              <div className="report-field"><label>Output Format</label><select value={gstFilters.outputFormat} onChange={(event) => updateGstFilter("outputFormat", event.target.value)}><option value="party">With Party Detail</option><option value="summary">Summary</option></select></div>
             </>}
 
             {(isSales || isCrn) && <>
@@ -6245,19 +6084,14 @@ const Report = ({
             <div className="report-field"><label>From Date</label><input type="date" value={gstFilters.fromDate} onChange={(event) => updateGstFilter("fromDate", event.target.value)} /></div>
             <div className="report-field"><label>To Date</label><input type="date" value={gstFilters.toDate} onChange={(event) => updateGstFilter("toDate", event.target.value)} /></div>
 
-            {(isSales || isPurchase) && <div className="report-field"><label>Cess Separate</label><select value={gstFilters.cessSeparate} onChange={(event) => updateGstFilter("cessSeparate", event.target.value)}><option value="N">No</option><option value="Y">Yes</option></select></div>}
             {isPurchase && <div className="report-field"><label>Report With</label><select value={gstFilters.reportWith} onChange={(event) => updateGstFilter("reportWith", event.target.value)}><option value="gst">With GST</option><option value="all">All Purchases</option></select></div>}
-            {(isSales || isPurchase || isCrn) && <div className="report-field"><label>GST Bifurcation</label><select value={gstFilters.gstBifurcation} onChange={(event) => updateGstFilter("gstBifurcation", event.target.value)}><option value="N">No</option><option value="Y">Yes</option></select></div>}
             {isSummary && <>
-              <div className="report-field"><label>Company Wise</label><select value={gstFilters.companyWise} onChange={(event) => updateGstFilter("companyWise", event.target.value)}><option value="N">No</option><option value="Y">Yes</option></select></div>
-              <div className="report-field"><label>With Details</label><select value={gstFilters.withDetails} onChange={(event) => updateGstFilter("withDetails", event.target.value)}><option value="N">No</option><option value="Y">Yes</option></select></div>
-              <div className="report-field"><label>Discount Bifurcation</label><select value={gstFilters.discountBifurcation} onChange={(event) => updateGstFilter("discountBifurcation", event.target.value)}><option value="N">No</option><option value="Y">Yes</option></select></div>
             </>}
             {isGstr1 && <div className="report-field"><label>With Damage</label><select value={gstFilters.withDamage} onChange={(event) => updateGstFilter("withDamage", event.target.value)}><option value="Y">Yes</option><option value="N">No</option></select></div>}
           </div>
           <div className="report-filter-actions gst-filter-actions">
             <button type="button" className="report-clear-button" onClick={resetGstReport}>Clear</button>
-            <ReportExportActions generate={generateGstReport} exportCsv={exportGstCsv} exportExcel={exportGstExcel} ready={gstGenerated} loading={gstLoading} />
+            <ReportExportActions generationVersion={reportGenerationVersion} generate={generateGstReport} exportCsv={exportGstCsv} exportExcel={exportGstExcel} ready={gstGenerated} loading={gstLoading} />
           </div>
         </div>
 
@@ -6286,12 +6120,12 @@ const Report = ({
             <table className="party-report-table gst-result-table">
               <thead><tr>{visibleGstColumns.map((column) => <th key={column.key}>{column.label}</th>)}</tr></thead>
               <tbody>
-                {filteredGstRows.length ? filteredGstRows.map((row, rowIndex) => <tr className={(isSummary || isGstr1) && row.RowType ? `gst-summary-${row.RowType}` : ""} key={`${row.TrnSeries || row.Section || row.AccountName || activeGstrSheet || "gst"}-${row.TrnNo || row.SrNo || rowIndex}-${rowIndex}`}>{visibleGstColumns.map((column) => <td key={column.key} className={numericKeys.has(column.key) ? "party-report-number" : ""}>{formatCell(column, row[column.key])}</td>)}</tr>) : <tr><td colSpan={Math.max(visibleGstColumns.length, 1)} className="gst-empty-cell">No GST records match the selected criteria.</td></tr>}
+                {filteredGstRows.length ? resultRows(filteredGstRows).map((row, rowIndex) => <tr className={(isSummary || isGstr1) && row.RowType ? `gst-summary-${row.RowType}` : ""} key={`${row.TrnSeries || row.Section || row.AccountName || activeGstrSheet || "gst"}-${row.TrnNo || row.SrNo || rowIndex}-${rowIndex}`}>{visibleGstColumns.map((column) => <td key={column.key} className={numericKeys.has(column.key) ? "party-report-number" : ""}>{formatCell(column, row[column.key])}</td>)}</tr>) : <tr><td colSpan={Math.max(visibleGstColumns.length, 1)} className="gst-empty-cell">No GST records match the selected criteria.</td></tr>}
               </tbody>
               {!isSummary && !isGstr1 && !!filteredGstRows.length && <tfoot><tr>{visibleGstColumns.map((column, index) => <td key={column.key} className={numericKeys.has(column.key) ? "party-report-number" : ""}>{index === 0 ? "TOTAL" : Object.prototype.hasOwnProperty.call(filteredGstTotals, column.key) ? formatCell(column, filteredGstTotals[column.key]) : ""}</td>)}</tr></tfoot>}
             </table>
           </div></div>
-          <div className="party-report-statusbar"><span>Records: {filteredGstSummary?.records || 0}</span><span>Taxable: ₹ {formatReportNumber(filteredGstSummary?.taxable || 0)} · GST: ₹ {formatReportNumber(filteredGstSummary?.gst || 0)} · Bill Value: ₹ {formatReportNumber(filteredGstSummary?.billValue || 0)}</span><span>Period: {gstFilters.fromDate} to {gstFilters.toDate}</span></div>
+          <ReportPagination count={filteredGstRows.length} page={resultPage} setPage={setResultPage} size={resultPageSize} setSize={setResultPageSize} />
         </div>}
 
         {!gstGenerated && !gstError && <div className="report-result-card"><FileBarChart size={38} /><h3>No report generated</h3><p>Select the criteria from the supplied GST report design and click Generate Report.</p></div>}
@@ -6384,7 +6218,7 @@ const Report = ({
                     <button type="submit" className="cheque-generate-button" disabled={chequeLoading}>
                       <Search size={15} /> {chequeLoading ? "Generating..." : "Generate"}
                     </button>
-                    <ReportExportActions generate={findChequeDetails} exportCsv={exportChequeCsv} exportExcel={exportChequeExcel} ready={hasResult} loading={chequeLoading} />
+                    <ReportExportActions generationVersion={reportGenerationVersion} generate={findChequeDetails} exportCsv={exportChequeCsv} exportExcel={exportChequeExcel} ready={hasResult} loading={chequeLoading} />
                   </div>
                 </fieldset>
               </form>
@@ -6530,15 +6364,16 @@ const Report = ({
   }
 
   if (isP0Report) {
-    const showAccount = ["General Ledger", "Party Ledger", "Party Outstanding Report"].includes(selectedReport);
+    const showAccount = ["General Ledger", "Party Ledger", "Party Outstanding Report", "Credit Control Report"].includes(selectedReport);
     const isFinancialStatement = ["Trial Balance", "Profit & Loss", "Balance Sheet", "Cash Book", "Bank Book"].includes(selectedReport);
     const isAsOfFinancialReport = ["Trial Balance", "Balance Sheet"].includes(selectedReport);
     const showProduct = ["Product Ledger", "Stock Movement Ledger"].includes(selectedReport);
     const isStockDataReport = ["Current Stock Report", "As On Date Stock Report", "Damage Stock Report", "Product Ledger", "Stock Movement Ledger"].includes(selectedReport);
-    const showDateRange = !["Current Stock Report", "As On Date Stock Report", "Party Outstanding Report", "Trial Balance", "Balance Sheet"].includes(selectedReport);
+    const showDateRange = !["Current Stock Report", "As On Date Stock Report", "Party Outstanding Report", "Trial Balance", "Balance Sheet", "Damage Stock Report", "Credit Control Report", "Permission Audit Report"].includes(selectedReport);
     const isCurrentStock = selectedReport === "Current Stock Report";
     const isAsOnDateStock = selectedReport === "As On Date Stock Report";
     const isDamageStock = selectedReport === "Damage Stock Report";
+    const isPermissionAudit = selectedReport === "Permission Audit Report";
     const isProductLedger = selectedReport === "Product Ledger";
     const isStockMovement = selectedReport === "Stock Movement Ledger";
     const updateP0Filter = (field, value) => setP0Filters((old) => ({ ...old, [field]: value }));
@@ -6556,16 +6391,14 @@ const Report = ({
         {isFinancialStatement && chartSetupOpen && <ChartOfAccountsSetup onClose={() => setChartSetupOpen(false)} />}
 
           <div className="report-filter-card">
-          <div className="report-filter-heading"><div><h2>Report Criteria</h2><p>Figures are loaded from the current firm's persistent transactions.</p></div></div>
+          <div className="report-filter-heading"><div><h2>Report Criteria</h2><p>{isDamageStock ? "Current damage balances; transaction details show the latest matching adjustment." : selectedReport === "Dashboard Reconciliation" ? "The date range controls period and collection figures; some dashboard totals are current balances." : "Figures are loaded from the current firm?s persistent transactions."}</p></div></div>
           <div className="report-filter-grid">
             {isStockDataReport && <div className="report-field"><label>Company</label><select value={p0Filters.companyCode} onChange={(e) => updateP0Filter("companyCode", e.target.value)}><option value="">All Companies</option>{companies.map((company, index) => { const value = getCompanyCode(company, index); return <option key={company._id || value} value={value}>{getCompanyName(company) || value}</option>; })}</select></div>}
-            {isCurrentStock && <div className="report-field"><label>Report Type</label><select value={p0Filters.reportType} onChange={(e) => updateP0Filter("reportType", e.target.value)}><option value="details">Details</option><option value="summary">Summary</option></select></div>}
-            {(isCurrentStock || isAsOnDateStock || isDamageStock) && <div className="report-field"><label>Report Level</label><select value={p0Filters.reportLevel} onChange={(e) => updateP0Filter("reportLevel", e.target.value)}><option value="productBatch">Product / Batch</option><option value="product">Product</option><option value="company">Company</option></select></div>}
             {showDateRange && <div className="report-field"><label>From Date</label><input type="date" value={p0Filters.fromDate} onChange={(e) => updateP0Filter("fromDate", e.target.value)} /></div>}
-            {showDateRange && <div className="report-field"><label>To Date</label><input type="date" value={p0Filters.toDate} onChange={(e) => updateP0Filter("toDate", e.target.value)} /></div>}
+            {showDateRange && <div className="report-field"><label>{selectedReport === "Dashboard Reconciliation" ? "As Of / Collection To Date" : "To Date"}</label><input type="date" value={p0Filters.toDate} onChange={(e) => updateP0Filter("toDate", e.target.value)} /></div>}
             {isAsOfFinancialReport && <div className="report-field"><label>As On Date</label><input type="date" value={p0Filters.toDate} onChange={(e) => updateP0Filter("toDate", e.target.value)} /></div>}
             {isAsOnDateStock && <div className="report-field"><label>As On Date</label><input type="date" value={p0Filters.asOnDate} onChange={(e) => updateP0Filter("asOnDate", e.target.value)} /></div>}
-            {showAccount && <div className="report-field report-field-wide"><label>Account / Party</label><input value={p0Filters.account} placeholder="Account code or name" onChange={(e) => updateP0Filter("account", e.target.value)} /></div>}
+            {showAccount && <div className="report-field report-field-wide"><label>{selectedReport === "Credit Control Report" ? "Account" : "Account / Party"}</label><input value={p0Filters.account} placeholder="Account code or name" onChange={(e) => updateP0Filter("account", e.target.value)} /></div>}
             {showProduct && <div className="report-field report-field-wide"><label>Product</label><select value={p0Filters.product} onChange={(e) => updateP0Filter("product", e.target.value)}><option value="">All Products</option>{products.map((product, index) => { const code = product.productCode || product.code || product._id || index; const name = product.productName || product.name || code; return <option key={product._id || code} value={code}>{name}</option>; })}</select></div>}
             {isProductLedger && <div className="report-field"><label>Batch</label><input value={p0Filters.batch} placeholder="All batches" onChange={(e) => updateP0Filter("batch", e.target.value)} /></div>}
             {isStockDataReport && <div className="report-field"><label>Godown</label><select value={p0Filters.godownCode} onChange={(e) => updateP0Filter("godownCode", e.target.value)}><option value="">All Godowns</option>{godowns.map((godown, index) => { const value = godown.godownCode || godown.code || godown._id || index; return <option key={value} value={value}>{godown.godownName || godown.name || value}</option>; })}</select></div>}
@@ -6573,14 +6406,15 @@ const Report = ({
             {isCurrentStock && <div className="report-field"><label>Report Filter</label><select value={p0Filters.reportFilter} onChange={(e) => updateP0Filter("reportFilter", e.target.value)}><option value="all">All Stock</option><option value="positive">Positive Stock</option><option value="negative">Negative Stock</option><option value="zero">Zero Stock</option></select></div>}
             {isCurrentStock && <div className="report-field"><label>Near Expiry</label><select value={p0Filters.nearExpiry} onChange={(e) => updateP0Filter("nearExpiry", e.target.value)}><option value="N">No</option><option value="Y">Yes</option></select></div>}
             {isCurrentStock && <div className="report-field"><label>Days</label><input type="number" min="1" disabled={p0Filters.nearExpiry !== "Y"} value={p0Filters.expiryDays} onChange={(e) => updateP0Filter("expiryDays", e.target.value)} placeholder="Expiry days" /></div>}
-            {isCurrentStock && <div className="report-field"><label>Current Stock</label><select value={p0Filters.currentStock} onChange={(e) => updateP0Filter("currentStock", e.target.value)}><option value="Y">Yes</option><option value="N">No</option></select></div>}
             {isCurrentStock && <div className="report-field"><label>Negative</label><select value={p0Filters.includeNegative} onChange={(e) => updateP0Filter("includeNegative", e.target.value)}><option value="N">No</option><option value="Y">Yes</option></select></div>}
             {isCurrentStock && <div className="report-field"><label>With Zero</label><select value={p0Filters.includeZero} onChange={(e) => updateP0Filter("includeZero", e.target.value)}><option value="N">No</option><option value="Y">Yes</option></select></div>}
+            {isPermissionAudit && <div className="report-field"><label>User</label><input value={p0Filters.permissionUser} onChange={(e) => updateP0Filter("permissionUser", e.target.value)} placeholder="User ID or name" /></div>}
+            {isPermissionAudit && <div className="report-field"><label>Module</label><input value={p0Filters.permissionModule} onChange={(e) => updateP0Filter("permissionModule", e.target.value)} placeholder="Module name" /></div>}
             {(isAsOnDateStock || isDamageStock) && <div className="report-field"><label>Order By</label><select value={p0Filters.orderBy} onChange={(e) => updateP0Filter("orderBy", e.target.value)}><option value="productName">Product Name</option><option value="productCode">Product Code</option><option value="date">Date</option></select></div>}
           </div>
           <div className="report-filter-actions">
             <button type="button" className="report-clear-button" onClick={() => { setP0Filters(defaultP0Filters()); setP0Rows([]); setP0Summary(null); setP0Generated(false); setP0Error(""); }}>Clear</button>
-            <ReportExportActions generate={generateP0Report} exportCsv={exportP0Csv} exportExcel={exportP0Excel} ready={p0Generated} loading={p0Loading} />
+            <ReportExportActions generationVersion={reportGenerationVersion} generate={generateP0Report} exportCsv={exportP0Csv} exportExcel={exportP0Excel} ready={p0Generated} loading={p0Loading} />
           </div>
         </div>
 
@@ -6600,9 +6434,9 @@ const Report = ({
             {p0Summary && <div style={{ display: "flex", gap: 24, padding: "10px 4px" }}><strong>Total Debit: ₹{Number(p0Summary.debit || 0).toLocaleString("en-IN")}</strong><strong>Total Credit: ₹{Number(p0Summary.credit || 0).toLocaleString("en-IN")}</strong></div>}
             <div className="party-report-grid-container p0-report-table-wrap"><table className="party-report-table" style={{ width: "100%", minWidth: Math.max(900, p0Columns.length * 130) }}>
               <thead><tr>{p0ColumnDefinitions.map((column) => <th key={column.key}>{column.label}</th>)}</tr></thead>
-              <tbody>{p0Rows.map((row, index) => <tr key={row._id || index}>{p0Columns.map((column) => <td key={column}>{typeof row[column] === "object" ? JSON.stringify(row[column]) : String(row[column] ?? "")}</td>)}</tr>)}</tbody>
+              <tbody>{resultRows(p0Rows).map((row, index) => <tr key={row._id || index}>{p0Columns.map((column) => <td key={column}>{typeof row[column] === "object" ? JSON.stringify(row[column]) : String(row[column] ?? "")}</td>)}</tr>)}</tbody>
             </table></div>
-            <div className="party-report-statusbar"><span>Records: {p0Rows.length}</span><span>{selectedReport}</span><span>{showDateRange ? `Period: ${p0Filters.fromDate} to ${p0Filters.toDate}` : isAsOnDateStock ? `As on: ${p0Filters.asOnDate}` : "Current data"}</span></div>
+            <ReportPagination count={p0Rows.length} page={resultPage} setPage={setResultPage} size={resultPageSize} setSize={setResultPageSize} />
           </div>
         )}
       </div>
@@ -6649,7 +6483,7 @@ const Report = ({
             <div className="report-field"><label>Discount Details</label><select value={purchaseAnalysisFilters.discountDetails} onChange={(event) => setPurchaseAnalysisFilters((old) => ({ ...old, discountDetails: event.target.value }))}><option value="no">No</option><option value="yes">Yes</option></select></div>
             {!isBillWise && <><div className="report-field"><label>Report With</label><select value={purchaseAnalysisFilters.reportWith} onChange={(event) => setPurchaseAnalysisFilters((old) => ({ ...old, reportWith: event.target.value }))}><option value="category">Category</option><option value="company">Company</option><option value="godown">Godown</option></select></div><div className="report-field"><label>Order By</label><select value={purchaseAnalysisFilters.orderBy} onChange={(event) => setPurchaseAnalysisFilters((old) => ({ ...old, orderBy: event.target.value }))}><option value="productName">Product Name</option><option value="productCode">Product Code</option><option value="company">Company</option><option value="voucher">Voucher</option><option value="amount">Net Amount</option></select></div></>}
           </div>
-          <div className="report-filter-actions"><ReportExportActions generate={generatePurchaseAnalysisReport} exportCsv={exportPurchaseAnalysisCsv} exportExcel={exportPurchaseAnalysisExcel} ready={purchaseAnalysisGenerated} loading={purchaseAnalysisLoading} /><button type="button" className="report-clear-button" onClick={clearPurchaseAnalysisReport}><RefreshCw size={14} /> Reset Filter</button></div>
+          <div className="report-filter-actions"><ReportExportActions generationVersion={reportGenerationVersion} generate={generatePurchaseAnalysisReport} exportCsv={exportPurchaseAnalysisCsv} exportExcel={exportPurchaseAnalysisExcel} ready={purchaseAnalysisGenerated} loading={purchaseAnalysisLoading} /><button type="button" className="report-clear-button" onClick={clearPurchaseAnalysisReport}><RefreshCw size={14} /> Reset Filter</button></div>
         </div>
 
         {purchaseAnalysisError && <div className="party-report-error" role="alert">{purchaseAnalysisError}</div>}
@@ -6664,9 +6498,9 @@ const Report = ({
             </div>
           </div>
           <div className="party-report-grid-container purchase-analysis-table-wrap">
-            {!purchaseAnalysisGenerated ? <div className="party-empty-report"><ShoppingCart size={40} /><strong>No report generated</strong><span>Select filters and click Generate Report.</span></div> : filteredPurchaseAnalysisRows.length === 0 ? <div className="party-empty-report"><PackageSearch size={38} /><strong>No matching purchases</strong><span>Change the search or report filters.</span></div> : <div className="party-report-zoom" style={{ zoom: Number(purchaseAnalysisZoom) / 100 }}><table className="party-report-table purchase-analysis-table"><thead><tr>{purchaseAnalysisColumns.map((column) => <th key={column.key} className={purchaseNumericKeys.has(column.key) ? "party-report-number" : ""}>{column.label}</th>)}</tr></thead><tbody>{filteredPurchaseAnalysisRows.map((row) => <tr key={`${row.VouSeries}-${row.VouNo}-${row.SrNo}`}>{purchaseAnalysisColumns.map((column) => <td key={column.key} className={purchaseNumericKeys.has(column.key) ? "party-report-number" : ""} title={String(row[column.key] ?? "")}>{formatValue(column, row[column.key])}</td>)}</tr>)}</tbody><tfoot><tr>{purchaseAnalysisColumns.map((column, index) => <td key={column.key} className={totalKeys.has(column.key) ? "party-report-number" : ""}>{index === 0 ? "TOTAL" : totalKeys.has(column.key) ? Number(totals[column.key] || 0).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : ""}</td>)}</tr></tfoot></table></div>}
+            {!purchaseAnalysisGenerated ? <div className="party-empty-report"><ShoppingCart size={40} /><strong>No report generated</strong><span>Select filters and click Generate Report.</span></div> : filteredPurchaseAnalysisRows.length === 0 ? <div className="party-empty-report"><PackageSearch size={38} /><strong>No matching purchases</strong><span>Change the search or report filters.</span></div> : <div className="party-report-zoom" style={{ zoom: Number(purchaseAnalysisZoom) / 100 }}><table className="party-report-table purchase-analysis-table"><thead><tr>{purchaseAnalysisColumns.map((column) => <th key={column.key} className={purchaseNumericKeys.has(column.key) ? "party-report-number" : ""}>{column.label}</th>)}</tr></thead><tbody>{resultRows(filteredPurchaseAnalysisRows).map((row) => <tr key={`${row.VouSeries}-${row.VouNo}-${row.SrNo}`}>{purchaseAnalysisColumns.map((column) => <td key={column.key} className={purchaseNumericKeys.has(column.key) ? "party-report-number" : ""} title={String(row[column.key] ?? "")}>{formatValue(column, row[column.key])}</td>)}</tr>)}</tbody><tfoot><tr>{purchaseAnalysisColumns.map((column, index) => <td key={column.key} className={totalKeys.has(column.key) ? "party-report-number" : ""}>{index === 0 ? "TOTAL" : totalKeys.has(column.key) ? Number(totals[column.key] || 0).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : ""}</td>)}</tr></tfoot></table></div>}
           </div>
-          <div className="party-report-statusbar"><span>Records: {purchaseAnalysisGenerated ? filteredPurchaseAnalysisRows.length : 0}</span><span>{isBillWise ? "Level: Company / Bill Wise" : "Level: Product Wise"}</span><span>Period: {purchaseAnalysisFilters.fromDate} to {purchaseAnalysisFilters.toDate}</span></div>
+          <ReportPagination count={purchaseAnalysisGenerated ? filteredPurchaseAnalysisRows.length : 0} page={resultPage} setPage={setResultPage} size={resultPageSize} setSize={setResultPageSize} />
         </div>
       </div>
     );
@@ -6810,7 +6644,7 @@ const Report = ({
           </div>
 
           <div className="report-filter-actions">
-            <ReportExportActions generate={generateStockSalesReport} exportCsv={exportStockSalesCsv} exportExcel={exportStockSalesExcel} ready={stockSalesGenerated} loading={stockSalesLoading} />
+            <ReportExportActions generationVersion={reportGenerationVersion} generate={generateStockSalesReport} exportCsv={exportStockSalesCsv} exportExcel={exportStockSalesExcel} ready={stockSalesGenerated} loading={stockSalesLoading} />
             <button type="button" className="report-clear-button" onClick={clearStockSalesReport}>
               <RefreshCw size={14} /> Reset Filter
             </button>
@@ -6879,7 +6713,7 @@ const Report = ({
                   <th>Category</th><th>SubCategory</th><th>Group</th><th>SubGroup</th><th>Brand</th><th>SubBrand</th>
                   {stockSalesFilters.reportWith === "details" && <th>Godown</th>}
                 </tr></thead>
-                <tbody>{filteredStockSalesRows.map((row) => <tr key={`${row.CompanyCode}-${row.ProductCode}-${row.GodownCode}-${row.SrNo}`}>
+                <tbody>{resultRows(filteredStockSalesRows).map((row) => <tr key={`${row.CompanyCode}-${row.ProductCode}-${row.GodownCode}-${row.SrNo}`}>
                   <td>{row.SrNo}</td>
                   {!stockSalesFilters.companyCode && <td>{row.CompanyName}</td>}
                   <td>{row.ShortCode || "-"}</td><td>{row.ProductCode}</td><td>{row.ProductName}</td>
@@ -6917,11 +6751,7 @@ const Report = ({
               </div>
               )}
             </div>
-            <div className="party-report-statusbar">
-              <span>Records: {filteredStockSalesRows.length}</span>
-              <span>Level: {stockSalesFilters.reportLevel === "company" ? "Company Wise" : stockSalesFilters.reportLevel === "product" ? "Product Wise" : "Unit Wise"}</span>
-              <span>Period: {stockSalesFilters.fromDate || "--"} to {stockSalesFilters.toDate || "--"}</span>
-            </div>
+            <ReportPagination count={filteredStockSalesRows.length} page={resultPage} setPage={setResultPage} size={resultPageSize} setSize={setResultPageSize} />
           </div>
         )}
       </div>
@@ -7206,7 +7036,7 @@ const Report = ({
                       Reset Filter
                     </button>
 
-                    <ReportExportActions generate={generateAllPartySalesReport} exportCsv={exportAllPartyReportToCsv} exportExcel={exportAllPartyReportToExcel} ready={isAllPartyReportGenerated} loading={isAllPartyReportLoading} disabled={isCriteriaLoading} />
+                    <ReportExportActions generationVersion={reportGenerationVersion} generate={generateAllPartySalesReport} exportCsv={exportAllPartyReportToCsv} exportExcel={exportAllPartyReportToExcel} ready={isAllPartyReportGenerated} loading={isAllPartyReportLoading} disabled={isCriteriaLoading} />
                   </div>
                 </fieldset>
 
@@ -7602,17 +7432,7 @@ const Report = ({
                   )}
                 </div>
 
-                <div className="party-report-statusbar">
-                  <span>
-                    Records: {isAllPartyReportGenerated ? filteredAllPartySalesRows.length : 0}
-                  </span>
-                  <span>
-                    Level: {allPartySalesFilters.reportLevel === "salesSummary" ? "Sales Summary" : "Sales Details"}
-                  </span>
-                  <span>
-                    Period: {allPartySalesFilters.fromDate || "--"} to {allPartySalesFilters.toDate || "--"}
-                  </span>
-                </div>
+                <ReportPagination count={isAllPartyReportGenerated ? filteredAllPartySalesRows.length : 0} page={allPartyCurrentPage} setPage={setAllPartyCurrentPage} size={allPartyRowsPerPage} setSize={setAllPartyRowsPerPage} />
               </div>
             </main>
 
@@ -7696,7 +7516,7 @@ const Report = ({
 
           <div className="party-report-content-layout">
             <main className="party-report-main-column">
-              <div className="party-report-filter-panel">
+              <div className={`party-report-filter-panel${showAdvancedPartyFilters ? "" : " party-criteria-collapsed"}`}>
                 <fieldset className="party-filter-group" aria-label="Report filters">
                   <div className="party-report-filter-heading">
                     <div><SlidersHorizontal size={16} /><strong>Report Criteria</strong></div>
@@ -7759,6 +7579,7 @@ const Report = ({
                           setPartyReportRows([]);
                           setPartyReportColumns([]);
                           setPartyReportSearch("");
+                          setPartyReportColumnFilters({});
                           setPartyCurrentPage(1);
                           setIsPartyReportGenerated(false);
                           setPartyReportError("");
@@ -7869,6 +7690,7 @@ const Report = ({
                           setPartyReportRows([]);
                           setPartyReportColumns([]);
                           setPartyReportSearch("");
+                          setPartyReportColumnFilters({});
                           setPartyCurrentPage(1);
                           setIsPartyReportGenerated(false);
                           setPartyReportError("");
@@ -7952,7 +7774,7 @@ const Report = ({
                     >
                       <RefreshCw size={14} /> Reset
                     </button>
-                    <ReportExportActions generate={generatePartySalesReport} exportCsv={exportPartyReportToCsv} exportExcel={exportPartyReportToExcel} ready={isPartyReportGenerated} loading={isPartyReportLoading} disabled={isCriteriaLoading} showFilterToggle={false} />
+                    <ReportExportActions generationVersion={reportGenerationVersion} generate={generatePartySalesReport} exportCsv={exportPartyReportToCsv} exportExcel={exportPartyReportToExcel} ready={isPartyReportGenerated} loading={isPartyReportLoading} disabled={isCriteriaLoading} showFilterToggle={false} />
                   </div>
                 </fieldset>
 
@@ -8339,16 +8161,6 @@ const Report = ({
                   </div>
                 </div>
 
-                {isPartyReportGenerated && (
-                  <div className="party-report-metrics" aria-label="Report summary">
-                    <article><span className="party-metric-icon parties"><Users size={18} /></span><div><small>Total Parties</small><strong>{partyQuickSummary.totalParties.toLocaleString("en-IN")}</strong></div></article>
-                    <article><span className="party-metric-icon sales"><IndianRupee size={18} /></span><div><small>Total Sales</small><strong>₹ {formatReportNumber(partyQuickSummary.totalSales)}</strong></div></article>
-                    <article><span className="party-metric-icon credit"><FileText size={18} /></span><div><small>Total Credit Note</small><strong>₹ {formatReportNumber(partyQuickSummary.totalCreditNotes)}</strong></div></article>
-                    <article><span className="party-metric-icon net"><BadgeCheck size={18} /></span><div><small>Net Sales</small><strong>₹ {formatReportNumber(partyQuickSummary.totalNetSales)}</strong></div></article>
-                    <article><span className="party-metric-icon orders"><ShoppingCart size={18} /></span><div><small>Total Orders</small><strong>{partyQuickSummary.totalInvoices.toLocaleString("en-IN")}</strong></div></article>
-                  </div>
-                )}
-
                 <div className="party-report-grid-container">
                   {!isPartyReportGenerated ? (
                     <div className="party-empty-report">
@@ -8361,76 +8173,28 @@ const Report = ({
                       className="party-report-zoom"
                       style={{ zoom: Number(partyReportZoom) / 100 }}
                     >
-                      <table className="party-report-table" style={{ width: '100%', minWidth: '1200px' }}>
-                        <thead>
-                          <tr>
-                            {partyReportColumns.map((column) => (
-                              <th
-                                key={column.key}
-                                className={column.type === "number" ? "party-report-number" : ""}
-                                style={{
-                                  minWidth: column.key === 'partyName' || column.key === 'productName' ? '180px' :
-                                    column.type === 'number' ? '90px' : '100px',
-                                  whiteSpace: 'nowrap'
-                                }}
-                              >
-                                {column.label}
-                              </th>
-                            ))}
-                          </tr>
-                        </thead>
-
-                        <tbody>
-                          {partyPageRows.map((row, rowIndex) => (
-                            <tr key={row.rowId || `${row.billSeries}-${row.billNo}-${row.productCode}-${row.batch}-${rowIndex}`}>
-                              {partyReportColumns.map((column) => (
-                                <td
-                                  key={`${rowIndex}-${column.key}`}
-                                  className={column.type === "number" ? "party-report-number" : ""}
-                                  style={{
-                                    minWidth: column.key === 'partyName' || column.key === 'productName' ? '180px' :
-                                      column.type === 'number' ? '90px' : '100px',
-                                    whiteSpace: 'nowrap',
-                                    overflow: 'hidden',
-                                    textOverflow: 'ellipsis'
-                                  }}
-                                  title={String(formatPartyReportValue(column, row[column.key]))}
-                                >
-                                  {formatPartyReportValue(column, row[column.key])}
-                                </td>
-                              ))}
-                            </tr>
-                          ))}
-                        </tbody>
-
-                        {filteredPartySalesRows.length > 0 && (
-                          <tfoot>
-                            <tr>
-                              {partyReportColumns.map((column, index) => {
-                                const total = getPartyReportTotalValue(column, index, partySalesTotals);
-                                const value =
-                                  column.type === "number" && total !== ""
-                                    ? formatReportNumber(total)
-                                    : total;
-
-                                return (
-                                  <td
-                                    key={column.key}
-                                    className={column.type === "number" ? "party-report-number" : ""}
-                                    style={{
-                                      fontWeight: 'bold',
-                                      minWidth: column.key === 'partyName' || column.key === 'productName' ? '180px' :
-                                        column.type === 'number' ? '90px' : '100px'
-                                    }}
-                                  >
-                                    {value}
-                                  </td>
-                                );
-                              })}
-                            </tr>
-                          </tfoot>
-                        )}
-                      </table>
+                      <CommonReportGrid
+                        columns={partyGridColumns}
+                        rows={partyPageRows}
+                        rowKey={(row, rowIndex) =>
+                          row.rowId || `${row.billSeries}-${row.billNo}-${row.productCode}-${row.batch}-${rowIndex}`
+                        }
+                        renderValue={formatPartyReportValue}
+                        getTotal={(column, index) => {
+                          const total = getPartyReportTotalValue(column, index, partySalesTotals);
+                          return column.type === "number" && total !== ""
+                            ? formatReportNumber(total)
+                            : total;
+                        }}
+                        columnFilters={partyReportColumnFilters}
+                        onColumnFilterChange={(key, value) => {
+                          setPartyReportColumnFilters((previous) => ({
+                            ...previous,
+                            [key]: value,
+                          }));
+                          setPartyCurrentPage(1);
+                        }}
+                      />
                     </div>
                   )}
                 </div>
@@ -9015,7 +8779,7 @@ const Report = ({
                     <button type="button" className="party-title-secondary-button" title="Clear current filters" onClick={clearProductSalesFilters}>
                       <RefreshCw size={15} /> Reset Filter
                     </button>
-                    <ReportExportActions generate={generateProductSalesReport} exportCsv={exportProductReportToCsv} exportExcel={exportProductReportToExcel} ready={isProductReportGenerated} loading={isProductReportLoading} disabled={false} />
+                    <ReportExportActions generationVersion={reportGenerationVersion} generate={generateProductSalesReport} exportCsv={exportProductReportToCsv} exportExcel={exportProductReportToExcel} ready={isProductReportGenerated} loading={isProductReportLoading} disabled={false} />
                   </div>
                 </fieldset>
               </div>
@@ -9052,7 +8816,7 @@ const Report = ({
                         value={productReportSearch}
                         onChange={(event) => {
                           setProductReportSearch(event.target.value);
-                          setCurrentPage(1);
+                          setResultPage(1);
                         }}
                         placeholder="Search in results..."
                       />
@@ -9062,7 +8826,7 @@ const Report = ({
                           className="party-grid-search-clear"
                           onClick={() => {
                             setProductReportSearch("");
-                            setCurrentPage(1);
+                            setResultPage(1);
                           }}
                           title="Clear search"
                           aria-label="Clear search"
@@ -9172,7 +8936,7 @@ const Report = ({
                         </thead>
 
                         <tbody>
-                          {filteredProductReportRows.map((row, rowIndex) => (
+                          {resultRows(filteredProductReportRows).map((row, rowIndex) => (
                             <tr key={row.rowId || rowIndex}>
                               <td style={{ textAlign: 'center' }}>{row.SrNo || rowIndex + 1}</td>
                               <td>{formatPartyReportValue({ key: 'BillDate' }, row.BillDate || row.billDate)}</td>
@@ -9233,14 +8997,7 @@ const Report = ({
                   )}
                 </div>
 
-                <div className="party-report-statusbar">
-                  <span>
-                    Records: {isProductReportGenerated ? filteredProductReportRows.length : 0}
-                  </span>
-                  <span>
-                    Period: {productReportFilters.fromDate || "--"} to {productReportFilters.toDate || "--"}
-                  </span>
-                </div>
+                <ReportPagination count={isProductReportGenerated ? filteredProductReportRows.length : 0} page={resultPage} setPage={setResultPage} size={resultPageSize} setSize={setResultPageSize} />
               </div>
             </main>
 
@@ -9459,7 +9216,7 @@ const Report = ({
 
         setAllProductReportRows(rows);
         setAllProductReportColumns(columns);
-        setIsAllProductReportGenerated(true);
+        setIsAllProductReportGenerated(true); setReportGenerationVersion((version) => version + 1);
 
         if (rows.length === 0) {
           setAllProductReportError("No product sales records were found for the selected criteria.");
@@ -9747,7 +9504,7 @@ const Report = ({
                     <button type="button" className="party-title-secondary-button" title="Clear current filters" onClick={clearAllProductSalesFilters}>
                       <RefreshCw size={15} /> Reset Filter
                     </button>
-                    <ReportExportActions generate={generateAllProductWiseSalesReport} exportCsv={exportAllProductReportToCsv} exportExcel={exportAllProductReportToExcel} ready={isAllProductReportGenerated} loading={isAllProductReportLoading} disabled={false} />
+                    <ReportExportActions generationVersion={reportGenerationVersion} generate={generateAllProductWiseSalesReport} exportCsv={exportAllProductReportToCsv} exportExcel={exportAllProductReportToExcel} ready={isAllProductReportGenerated} loading={isAllProductReportLoading} disabled={false} />
                   </div>
                 </fieldset>
 
@@ -10183,18 +9940,7 @@ const Report = ({
                   )}
                 </div>
 
-                <div className="party-report-statusbar">
-                  <span>
-                    Records: {isAllProductReportGenerated ? filteredAllProductReportRows.length : 0}
-                  </span>
-                  <span>
-                    Level: {allProductReportFilters.reportLevel === "details" ? "Details" : 
-                      allProductReportFilters.reportLevel === "amount" ? "Amount" : "Units"}
-                  </span>
-                  <span>
-                    Period: {allProductReportFilters.fromDate || "--"} to {allProductReportFilters.toDate || "--"}
-                  </span>
-                </div>
+                <ReportPagination count={isAllProductReportGenerated ? filteredAllProductReportRows.length : 0} page={allPartyCurrentPage} setPage={setAllPartyCurrentPage} size={allPartyRowsPerPage} setSize={setAllPartyRowsPerPage} />
               </div>
             </main>
 
@@ -10650,7 +10396,7 @@ const Report = ({
                     <button type="button" className="party-title-secondary-button" title="Clear current filters" onClick={clearCompanyPurchaseFilters}>
                       <RefreshCw size={15} /> Reset Filter
                     </button>
-                    <ReportExportActions generate={generateCompanyPurchaseReport} exportCsv={exportCompanyPurchaseToCsv} exportExcel={exportCompanyPurchaseToExcel} ready={isCompanyPurchaseGenerated} loading={isCompanyPurchaseLoading} disabled={isPurchaseCriteriaLoading} />
+                    <ReportExportActions generationVersion={reportGenerationVersion} generate={generateCompanyPurchaseReport} exportCsv={exportCompanyPurchaseToCsv} exportExcel={exportCompanyPurchaseToExcel} ready={isCompanyPurchaseGenerated} loading={isCompanyPurchaseLoading} disabled={isPurchaseCriteriaLoading} />
                   </div>
                 </fieldset>
               </div>
@@ -10873,17 +10619,7 @@ const Report = ({
                   )}
                 </div>
 
-                <div className="party-report-statusbar">
-                  <span>
-                    Records: {isCompanyPurchaseGenerated ? filteredCompanyPurchaseRows.length : 0}
-                  </span>
-                  <span>
-                    Level: {companyPurchaseFilters.reportLevel === "details" ? "Details" : "Summary"}
-                  </span>
-                  <span>
-                    Period: {companyPurchaseFilters.fromDate || "--"} to {companyPurchaseFilters.toDate || "--"}
-                  </span>
-                </div>
+                <ReportPagination count={isCompanyPurchaseGenerated ? filteredCompanyPurchaseRows.length : 0} page={companyPurchaseCurrentPage} setPage={setCompanyPurchaseCurrentPage} size={companyPurchaseRowsPerPage} setSize={setCompanyPurchaseRowsPerPage} />
               </div>
             </main>
 

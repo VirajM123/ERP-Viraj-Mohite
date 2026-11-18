@@ -1,0 +1,115 @@
+ERP SECURITY, PERFORMANCE AND SERVER REVIEW
+Date: 18 November 2026
+
+SCOPE AND LIMITS
+Targeted static review of representative frontend, backend, authentication, report, import, configuration and build artifacts, plus existing audit context. This is not an exhaustive line-by-line audit, penetration test, production configuration review, load test or database inspection. No application code or production data was changed. Existing dist may not match current source. Severity is a prioritization, not proof of exploitation.
+
+IS A WEAK SERVER RESPONSIBLE?
+Possible, but not established. We lack the current server specifications, deployment location, MongoDB tier, concurrent users, workload, latency and utilization. Upgrading a saturated CPU, memory, storage or database can help. It will not automatically fix large browser bundles, inefficient queries, excessive results, long network round trips or security problems. Bandwidth is transfer capacity, not latency; upgrade it when utilization and measurements demonstrate saturation. Do not promise a particular speedup or equivalence to another vendor without comparable testing.
+
+EXISTING CONTROLS
+Authentication, JWT configuration checks, bcrypt for new passwords, rate limits, CORS allow-list, request size limits, security headers and slow-request logging are present in backend/server.js and backend/auth.js. Numerous schema indexes are declared. Frontend modules already use lazy loading. These controls have not been verified in production.
+
+PRIORITIZED FINDINGS
+
+S1 | High | Security | Access token in localStorage
+Evidence: src/api/client.js:47; src/App.jsx:12
+Impact: Browser JavaScript can read bearer token if an XSS occurs; XSS itself was not demonstrated.
+Action: Assess HttpOnly Secure SameSite cookies, CSRF protection and strong frontend CSP; test session revocation.
+Status: Code observed; exploit not tested
+
+S2 | High | Security | Legacy plaintext password compatibility
+Evidence: backend/auth.js:31-44
+Impact: Non-hash stored credentials are compared as plaintext and only upgraded after successful login. Existence of legacy records is unknown.
+Action: Inventory affected records securely; force reset/migrate, then remove fallback; never export passwords.
+Status: Code observed; records not inspected
+
+S3 | Medium | Security | SQL password passed as process argument
+Evidence: backend/desktopImportRoutes.js:223,230
+Impact: When SQL authentication is configured, password is supplied to sqlcmd via -P and may be visible to privileged process observers.
+Action: Use supported secure credential mechanism or integrated authentication; restrict import host and rights.
+Status: Conditional code path; deployment unknown
+
+S4 | High | Security | Production security and tenant isolation verification
+Evidence: backend/server.js:65-115; backend/auth.js
+Impact: Authentication, CORS, headers and rate limiting exist; their production settings and authorization across all endpoints are not verified.
+Action: Test role/object/tenant access with two firms, login abuse, upload validation, TLS, backup access, logging and secrets management.
+Status: Verification required; no bypass established
+
+S5 | Medium | Security | Browser stores business data
+Evidence: src/context/ERPContext.jsx:20-62
+Impact: Transaction-related data may persist in browser storage; active usage and sensitivity depend on workflow.
+Action: Map active use, avoid storing sensitive records, clear on logout and apply workstation controls.
+Status: Code observed; workflow needs validation
+
+P1 | High | Performance | Large dashboard bundle
+Evidence: dist/assets/Dashboard-Y14LITaR.js; src/Dashboard.jsx
+Impact: Existing dist dashboard JS is 1,358,618 bytes before transfer compression; generated CSS is 848,204 bytes. Dist may be stale.
+Action: Rebuild and profile real waterfall; split dashboard by feature, remove unused CSS and optimize images. Existing lazy loading is present.
+Status: Size observed; latency impact unmeasured
+
+P2 | High | Performance | Unbounded master-list report queries
+Evidence: backend/p0Features.js:1114-1137
+Impact: Several catalog branches retrieve all matching tenant records before returning rows; growth can increase database, network and browser work.
+Action: Add server pagination and projection; stream large exports; validate counts and tenant indexes.
+Status: Code observed; runtime impact unmeasured
+
+P3 | High | Performance | Index effectiveness unknown
+Evidence: backend/server.js:1228-1231, 2221, 2501
+Impact: Numerous indexes are declared; actual production indexes, query selectivity and scan costs are unknown.
+Action: Capture slow operations and explain executionStats; add or adjust compound tenant/filter/sort indexes after testing write costs.
+Status: Needs production measurement
+
+P4 | Medium | Performance | Large imports compete with normal operations
+Evidence: backend/desktopImportRoutes.js:546-712; backend/desktopImportBatch.js:260-267
+Impact: Import processing and master/stock reads can consume shared database and server resources.
+Action: Measure import impact; schedule and throttle jobs or move work to isolated workers; preserve transaction correctness.
+Status: Potential bottleneck, not measured
+
+P5 | Medium | Performance | Application and database location/capacity unknown
+Evidence: backend/server.js:135-142
+Impact: Database connection exists but host, plan, geographic distance, connection pressure and IOPS are unavailable.
+Action: Measure database latency, CPU, RAM, IOPS, connections and region; place application and database close together.
+Status: Deployment not inspected
+
+P6 | Medium | Performance | Network and endpoint latency not measured
+Evidence: backend/server.js:84-90; backend/observability.js
+Impact: Slow-request logging exists with 1000 ms default; no live p95 or network trace was provided.
+Action: Measure browser DNS/TLS/TTFB/download/render and API p50/p95/p99; distinguish bandwidth from round-trip latency.
+Status: Needs production measurement
+
+P7 | Medium | Performance | Single Node process may limit CPU-bound work
+Evidence: backend/package.json start script; backend/server.js:151
+Impact: Startup runs one Node process; actual deployed process count is unknown. CPU-heavy exports or transforms may block requests.
+Action: Profile event loop and CPU; use workers or multiple instances only after testing shared state and database capacity.
+Status: Conditional; deployment unknown
+
+R1 | High | Reliability | Backup and disaster recovery unverified
+Evidence: Deployment configuration not supplied
+Impact: Source review cannot confirm backups, restores, recovery objectives or high availability.
+Action: Use encrypted offsite backups, restoration drills, monitoring and documented RPO/RTO; avoid assuming a single VM is highly available.
+Status: Not verified
+
+MEASUREMENT AND DECISION PLAN
+1. Record current VM/host, CPU/RAM, disk and IOPS, DB provider/tier/region, users, traffic and invoice volume.
+2. Measure representative login, invoice save, stock search and report runs at busy time; capture browser waterfall, API p50/p95/p99, errors, response size and DB time. Existing slow request threshold defaults to 1000 ms. Do not log secrets or personal data.
+3. Correlate CPU, memory, swapping, disk latency, event-loop lag, DB cache/IOPS/connections and slow-query explain plans with those requests. Measure branch-to-app and app-to-database RTT, loss and link utilization.
+4. In isolated staging replay the same sanitized data and workload on current and upgraded configurations. Compare p95, throughput, correctness and cost. Make the purchase decision based on the bottleneck.
+5. Validate security with authorized tenant/role tests, secure configuration and dependency audit, then restore-test backups.
+
+SERVER BUDGET INDICATIONS — PUBLIC LIST PRICES, NOT A VENDOR QUOTATION
+Prices checked 18 November 2026; USD/month, subject to region, availability and change. No INR conversion is assumed. The first three entries are app VMs only and do not include MongoDB, backups, network overage, tax, support, labour or migration. 5,000/6,000 GiB are monthly transfer allowances, not guaranteed bandwidth speeds. Ask the provider for actual Mumbai availability, bandwidth and complete commercial quotation.
+
+Economy baseline: DigitalOcean Basic shared CPU | 4 vCPU | 8 GiB RAM | 160 GiB disk | 5000 GiB/month transfer | USD 48/month. Application VM only; variable shared CPU; DB, backup, tax, traffic overage, operations extra. Source: https://www.digitalocean.com/pricing/droplets
+
+Balanced production starting point: DigitalOcean General Purpose dedicated CPU | 4 vCPU | 16 GiB RAM | 50 GiB disk | 5000 GiB/month transfer | USD 126/month. Application VM only; managed database separately; availability in target region must be confirmed. Source: https://www.digitalocean.com/pricing/droplets
+
+Higher capacity starting point: DigitalOcean General Purpose dedicated CPU | 8 vCPU | 32 GiB RAM | 100 GiB disk | 6000 GiB/month transfer | USD 252/month. Application VM only; managed database separately; sizing subject to load test. Source: https://www.digitalocean.com/pricing/droplets
+
+Database illustrative example: MongoDB Atlas M30 example | not specified vCPU | not specified GiB RAM | not specified GiB disk | not specified GiB/month transfer | USD 388/month. Provider example: AWS default settings, 24h x 30 days; region/configuration may differ; storage, backup and transfer can change total. Not a Mumbai quote. Source: https://www.mongodb.com/docs/atlas/billing/invoice-breakdown/
+
+Indicative combined compute plus illustrative Atlas M30 example: balanced $126 + $388 = $514/month; higher capacity $252 + $388 = $640/month. These are arithmetic examples only, not deployable regional quotes; exclude all other costs and do not establish matching regions or equivalent HA. Production choices need a real regional database quote and verified requirements. A single app VM is a single point of failure. For high availability, obtain a separate quote for multiple app instances, load balancer, resilient DB, backups and monitoring.
+
+Recommended starting candidate, subject to testing: 4 dedicated vCPU / 16 GiB RAM app server plus separately sized managed MongoDB in the same or nearby Indian region; obtain quotes for 8 vCPU / 32 GiB as a comparison. Actual storage must cover operating system, logs and growth; 50 GiB may be insufficient.
+
+No production changes or live runtime tests were performed.

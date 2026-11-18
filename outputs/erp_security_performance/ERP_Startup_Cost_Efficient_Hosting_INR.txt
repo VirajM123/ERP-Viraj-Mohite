@@ -1,0 +1,58 @@
+﻿STARTUP ERP AND DMS HOSTING - COST-EFFICIENT OPTIONS
+Prepared: 18 November 2026
+
+RECOMMENDATION
+Start by evaluating Cloudflare Pages Free for the React frontend, a DigitalOcean Basic 2 vCPU / 4 GiB server for the Node.js ERP API, and a small MongoDB Atlas M10 dedicated cluster for the database. This is an initial sizing candidate, not a guarantee: test the actual reports, imports, transactions and expected concurrent usage before accepting customers. M30 is not automatically required; the earlier M30 example was illustrative and was not a measurement of your workload.
+
+Illustrative base total: USD 80.94/month, approximately INR 7,566.27/month and INR 2,72,385.76 over 36 months. This adds a USD 24/month application VM to Atlas dedicated starting price of USD 56.94/month and a USD 0 static frontend. It is not a complete quotation: regional M10 pricing, backup, tax, domain, operations and other costs must be checked. M10 starting price is an advertised starting figure, not a fixed Mumbai quote. Atlas charges hourly, so actual monthly bills vary with hours and configuration. The 36-month figure assumes USD 80.94 every month solely for comparison.
+
+WHAT YOUR CURRENT CODE NEEDS
+- Frontend: React and Vite. The root package.json has npm run build; Cloudflare's React guide specifies dist as output. It can be deployed as static files, without a separate frontend VM.
+- Backend: Node.js / Express; backend/package.json starts it with node server.js. It handles ERP logic and needs an always-running server. The 4 GiB VM is a starting candidate, not a measured requirement; spreadsheet exports and imports may require more.
+- Database: Mongoose / MongoDB. backend/server.js and backend/transaction.js use transactions, so a standalone MongoDB installation is not a drop-in substitute; verify the required replica-set transaction support and test business workflows.
+- Critical Flex limitation: backend/productSalesReport.js calls allowDiskUse(true) at lines 353 and 404. Atlas Flex does not support allowDiskUse for aggregation. Consequently Flex is not a drop-in database for this ERP; reports must be redesigned and tested before considering it. No code has been changed.
+- Desktop import: backend/desktopImportRoutes.js invokes sqlcmd and defaults to SQL Server LocalDB. Confirm whether that feature is needed, where its SQL Server runs, connectivity, operating-system compatibility and memory/disk needs. A Linux VM and Atlas do not automatically provide Windows LocalDB.
+- Production frontend: src/api/config.js reads VITE_API_ROOT; without a configured value it falls back to localhost. Set it at build time to the public HTTPS API origin, configure the backend's permitted frontend origin, and verify login and routes. Do not put database credentials or server secrets in VITE variables.
+- DMS requirements are unknown. This estimate assumes no new DMS servers, storage or extra traffic. Document uploads, images, offline sync and additional customers may need object storage and more resources.
+
+COMPONENTS AND PURPOSE
+1. Cloudflare Pages Free: hosts the built frontend and deploys it from a connected Git repository. Users download the interface in a browser. Static requests are free under the plan; the free plan has 500 builds per month and other limits. Verify commercial terms, build limits, domain and SPA routing for your account. It does not run the Express API or MongoDB.
+2. DigitalOcean Basic VM: 2 shared vCPU, 4 GiB RAM, 80 GiB SSD and 4,000 GiB monthly transfer; published USD 24/month. Runs your Express backend. CPU is shared; performance can vary. One VM is a single point of failure. Confirm availability in Mumbai and actual inbound/outbound transfer terms. The transfer allowance is not a bandwidth speed.
+3. MongoDB Atlas M10: managed database that stores ERP records. Atlas dedicated pricing starts at USD 56.94/month on the public pricing page; actual region, storage and backup choices determine the bill. It provides a more appropriate compatibility candidate for the existing reporting than Flex, but verify version, transaction support, data size, report performance, backup and recovery with a realistic staging test. Do not assume the M10 is automatically sufficient.
+4. Domain and HTTPS: use an owned domain and HTTPS for frontend and API; domain registration and any related services are not included. Configure access controls, secrets, CORS, backups and monitoring before production.
+
+INDICATIVE PRICES IN INDIAN RUPEES
+Exchange-rate assumption: USD 1 = INR 93.48, the 18 November 2026 SBICAPS market snapshot figure used in the prior budget. It is not a guaranteed payment rate. Constant prices and rate, 12 months per year and 36 months total are assumed. All prices exclude tax, FX fees and unpriced items. Values rounded to two decimals after calculation.
+
+Item                           USD/month     INR/month       INR/year        INR/3 years
+Cloudflare Pages static              0.00          0.00            0.00              0.00
+DigitalOcean Basic VM               24.00      2,243.52       26,922.24         80,766.72
+Atlas M10 starting example          56.94      5,322.75       63,873.01      1,91,619.04
+Combined base example               80.94      7,566.27       90,795.25      2,72,385.76
+
+Calculations are based on unrounded INR amounts: 56.94 x 93.48 = 5,322.7512/month; 80.94 x 93.48 = 7,566.2712/month. Year and three-year figures multiply those unrounded amounts. Each year has the same calculated base under the fixed assumptions. Actual billing can be higher or lower.
+
+LOWER-COST DEVELOPMENT AND FUTURE ALTERNATIVES
+- Development: run the frontend and backend locally; use a separate small test database with sanitized data. Atlas M0 is listed as free with 512 MB; its limitations and compatibility must be tested, and it is not a substitute for production backup. A development environment is separate from the production example above and its charges are not included.
+- Flex: Atlas advertises up to USD 30/month, but this code's allowDiskUse usage blocks a direct move. Flex also has a 5 GB data-and-index limit, shared resources, limited regions and daily snapshots without point-in-time recovery. MongoDB positions Flex for development and testing. Consider it only after changing and testing all affected reports and accepting its recovery limits; do not count it as a proven production option.
+- Self-managed MongoDB can reduce vendor charges but adds administration, patching, backup, restoration and downtime responsibility. This code uses transactions, so do not deploy standalone MongoDB and assume compatibility. A single-node replica set is still a single point of failure and needs independently stored, restore-tested backups. No reliable total or sizing has been established for this option.
+- If the 4 GiB VM is too small, compare DigitalOcean Basic 4 shared vCPU / 8 GiB at USD 48/month. With the same M10 starting example the arithmetic is USD 104.94/month, INR 9,809.79/month and INR 3,53,152.48 over 36 months, with the same exclusions and regional uncertainties.
+
+BEFORE PURCHASING
+1. Measure database data plus index size, growth, peak simultaneous users, CPU and memory, import/export sizes and expected DMS workload. Ask your provider for Mumbai or nearby region pricing and latency.
+2. Obtain an actual M10 quote covering compute, storage, backup retention, data transfer and tax; obtain VM and frontend/domain quotes. Confirm backup recovery objectives and run a restore test. Flex's daily snapshots are retained for eight days; it does not provide point-in-time restore.
+3. Test representative invoices, stock, payments, transactions, reports, imports, deployment and recovery in staging using sanitized data. Confirm whether sqlcmd/LocalDB-dependent features work in the chosen architecture.
+4. Plan offsite backups, monitoring, patching, secure access and a restore owner. Add their actual costs. One app VM remains a single point of failure; high availability requires more infrastructure and cost.
+
+SOURCES, CHECKED 18 NOVEMBER 2026
+DigitalOcean VM prices: https://www.digitalocean.com/pricing/droplets
+MongoDB pricing: https://www.mongodb.com/pricing
+MongoDB Flex restrictions: https://www.mongodb.com/docs/atlas/reference/flex-limitations/
+MongoDB Flex backups: https://www.mongodb.com/docs/atlas/backup/cloud-backup/flex-cluster-backup/
+Cloudflare React deployment: https://developers.cloudflare.com/pages/framework-guides/deploy-a-react-site/
+Cloudflare Pages limits: https://developers.cloudflare.com/pages/platform/limits/
+Cloudflare static pricing: https://developers.cloudflare.com/pages/functions/pricing/
+Exchange-rate reference: https://www.sbicaps.com/wp-content/uploads/2026/11/SBICAPS-Daily_November-18-2026.pdf
+
+No production changes, deployments or live runtime tests were performed. Availability, regional pricing and suitability remain to be verified.
+

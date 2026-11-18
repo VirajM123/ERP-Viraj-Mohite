@@ -4,7 +4,7 @@ import os from "node:os";
 import path from "node:path";
 import { createRequire } from "node:module";
 import test from "node:test";
-import { canReuseDesktopImportPlan, createSourceWorkbook, localSqlServiceAccount, mapDesktopRows, parseInstalledSqlInstances, parseSqlXmlRows } from "../desktopImportRoutes.js";
+import { canReuseDesktopImportPlan, createSourceWorkbook, localSqlServiceAccount, mapDesktopRows, parseInstalledSqlInstances, parseSqlXmlRows, sqlcmdArgs } from "../desktopImportRoutes.js";
 import { loadExistingProductCodes, matchingImportDocuments } from "../importRoutes.js";
 import { getImportConfig } from "../importConfig.js";
 import { buildDesktopTransactionRows } from "../desktopTransactionMapper.js";
@@ -13,6 +13,20 @@ import { calculatePurchaseFinancials, calculateSalesFinancials } from "../financ
 
 const require = createRequire(import.meta.url);
 const XLSX = require("xlsx");
+test("SQL import never puts its configured password in command arguments", (t) => {
+  const user = process.env.DESKTOP_IMPORT_SQL_USER;
+  const password = process.env.DESKTOP_IMPORT_SQL_PASSWORD;
+  t.after(() => {
+    if (user === undefined) delete process.env.DESKTOP_IMPORT_SQL_USER; else process.env.DESKTOP_IMPORT_SQL_USER = user;
+    if (password === undefined) delete process.env.DESKTOP_IMPORT_SQL_PASSWORD; else process.env.DESKTOP_IMPORT_SQL_PASSWORD = password;
+  });
+  process.env.DESKTOP_IMPORT_SQL_USER = "sql-user";
+  process.env.DESKTOP_IMPORT_SQL_PASSWORD = "test-secret";
+  const args = sqlcmdArgs("SELECT 1");
+  assert.ok(args.includes("-U"));
+  assert.ok(!args.includes("-P"));
+  assert.ok(!args.includes("test-secret"));
+});
 test("desktop account rows map to the existing ERP Excel structure", () => {
   const [row] = mapDesktopRows({
     entryType: "Account",

@@ -1,0 +1,102 @@
+ERP SECURITY, PERFORMANCE AND RELIABILITY — SOLUTION PLAN
+Prepared: 18 November 2026
+Based on: ERP_Security_Performance_Server_Review.txt
+Purpose: A practical handoff for a later implementation. This document proposes work; it does not mean any fix has been made or verified.
+
+IMPORTANT OPERATING RULES
+- Recheck the current code and deployment before implementing: paths, line numbers, dependencies and prior fixes may change.
+- Work in small, independently testable phases. Preserve financial totals, stock, tenant boundaries, permissions and existing user workflows. Never silently remove records, truncate report results or change transaction semantics.
+- Baseline current behaviour and performance with a representative, sanitized dataset. Do not run destructive tests or load tests against production.
+- Make database migrations resumable and auditable; take and restore-test a backup before production migrations. Agree the rollout and rollback plan with the operator.
+- Some work requires hosting, database, DNS or operational access. No speedup, security or permanent immunity can be guaranteed: continue patching, monitoring and periodic review.
+- Status for every item below: PROPOSED / NOT IMPLEMENTED. Acceptance criteria define evidence needed to close it.
+
+PHASE 0 — ESTABLISH A SAFE BASELINE
+1. Record the deployed commit/build, environment and Node version, actual app host and region, DB tier/region, existing process count, backup policy, approximate data size and growth, active concurrent users, peak invoices/hour and branch locations. Never place passwords or connection strings in the plan or logs.
+2. In a staging environment with sanitized, representative data, record invoice save, login, stock lookup, key reports and imports. Measure p50/p95/p99 latency, errors, throughput, payload sizes, frontend load/render, CPU/memory, event-loop delay, DB slow queries/scan counts and disk latency. Record dataset and concurrency with every result.
+3. Run applicable existing backend tests and frontend build/lint, documenting pre-existing failures. Capture report totals and transaction/stock reconciliation fixtures for regression testing.
+4. Define user-agreed targets after the baseline, then compare the same dataset, concurrency, network and workflow before and after. Record backups and rollback ownership.
+Acceptance: repeatable baseline and documented configuration, known test status, and business correctness fixtures exist. Unknown production settings remain marked unknown.
+
+S1 — TOKEN IN LOCAL STORAGE
+Evidence: src/api/client.js:47; src/App.jsx:12; login responses in backend/server.js. Confirm all token consumers before changing.
+Solution:
+1. Design the session around the real frontend/API domains and deployment: use short-lived server-issued HttpOnly, Secure cookies with an appropriate SameSite policy, narrow scope, expiry and server-side revocation/versioning. Choose a cross-site policy only if deployment needs it. Enable credentialed requests and explicit trusted CORS origins where required.
+2. Add CSRF defenses for cookie-authenticated state-changing requests, including an appropriate token or origin validation strategy. Set and test frontend CSP at the actual frontend host; the API's current CSP does not automatically protect the frontend.
+3. Replace token reads/writes with a session bootstrap endpoint; update login, firm selection, authentication errors, refresh/expiry, logout and all HTTP clients. Invalidate old sessions and remove legacy token storage during a controlled transition. Audit direct fetch calls, downloads and multiple-tab behaviour.
+4. Review injection sinks, escaping and third-party scripts; an HttpOnly cookie reduces token theft by scripts but does not stop an XSS from issuing authenticated requests.
+Acceptance: login, logout, expiry, refresh, firm selection and multiple tabs work; protected routes reject unauthenticated/revoked sessions; cross-origin and CSRF negative tests pass; no bearer token is accessible in localStorage; production HTTPS and frontend CSP are verified. Plan a rollback that does not restore insecure tokens indefinitely.
+Dependency: hosting origins, browser requirements, session lifetime and a safe transition for existing users.
+
+S2 — LEGACY PLAINTEXT PASSWORD SUPPORT
+Evidence: backend/auth.js:31-44; login paths in backend/server.js. Legacy records have not been inspected.
+Solution:
+1. Securely inventory counts of hashed and legacy credentials for both user sources without displaying, logging or exporting values. Identify accounts that cannot log in to self-migrate.
+2. Design a controlled migration: verified reset flow or a carefully authorized, server-side hashing migration that never exposes plaintext; preserve identity and access controls. Hash with the existing approved policy or a compatible stronger policy, invalidate old sessions and clear obsolete fields. Protect backup access because historical backups may contain plaintext.
+3. Verify counts and login/reset scenarios, then remove plaintext comparison and migration fallback only after all affected users have a recovery path. Disallow future plaintext writes at every creation/update/import path.
+Acceptance: zero active plaintext records in the verified scope; valid hashed login and reset work; plaintext authentication and plaintext writes fail; existing legitimate users can recover access. Migration is idempotent and tested on a restored staging copy.
+Dependency: authorized database access, user recovery process, backups and rollout timing.
+
+S3 — SQL PASSWORD IN PROCESS ARGUMENTS
+Evidence: backend/desktopImportRoutes.js:223,230, conditional SQL authentication path.
+Solution: Prefer Windows integrated authentication with a dedicated least-privilege service identity when supported. If SQL authentication is required, evaluate a supported credential/secret mechanism for the installed sqlcmd version and platform; do not substitute another command-line secret. Restrict process and filesystem access and redact command output. Test trusted certificate/TLS settings explicitly rather than assuming them secure.
+Acceptance: no SQL password appears in command arguments or application logs; import works with the selected auth method; unauthorized users cannot invoke import; error handling and timeout work. Confirm actual deployment path before rollout.
+
+S4 — TENANT, ROLE AND DEPLOYMENT SECURITY
+Solution:
+1. Inventory routes, public endpoints and authorization requirements. Verify that server-side identity establishes firm/distributor scope; client-supplied tenant identifiers never grant extra access.
+2. Add automated two-tenant, two-role tests for reads, creates, edits, deletes, ID substitution, reports, export and import. Cover representative direct database operations and every high-risk route; deny by default where an authorization gap is demonstrated.
+3. Verify actual CORS origins, TLS, proxy trust, secure headers on frontend and API, login/rate limits across instances, uploads and file validation, least-privilege database credentials, secret storage, audit logging and dependency vulnerabilities. Rotate exposed secrets if evidence warrants it.
+Acceptance: documented endpoint/permission matrix and negative tests; tenant A cannot access tenant B by changing IDs; role restrictions hold on the server; deployment checks and any remaining exceptions are recorded. A static review alone cannot certify security.
+Dependency: staging tenants, role definitions, production configuration access and an authorized security test window.
+
+S5 — BUSINESS DATA IN BROWSER STORAGE
+Evidence: src/context/ERPContext.jsx:20-62. Actual use must be traced before removal.
+Solution: Map keys, screens and active use; classify data and determine whether offline or draft behaviour depends on them. Replace sensitive persisted records with authorized server storage or session-only state as appropriate. Migrate or warn about unsaved local drafts before removing old keys. Scope data to the right user/firm, clear on logout/account switch, and avoid logging data.
+Acceptance: tested workflows retain required drafts and save behaviour; sensitive keys are absent after migration and logout; switching accounts/tenants does not expose prior data. Document any intentionally retained offline data and its risk.
+
+P1 — DASHBOARD LOAD AND BUNDLE SIZE
+Evidence: src/Dashboard.jsx and existing dist assets; old dist can be stale and existing lazy loading is already present.
+Solution: Generate a fresh production build and bundle analysis. Measure compressed bytes, requests, parse/execute and rendering on representative devices/networks. Split independently used dashboard features and heavy export libraries along real navigation boundaries; remove unused CSS/assets and optimize image format/size where useful. Preserve routing and existing lazy fallbacks; configure caching and compression at the real host.
+Acceptance: production build succeeds; key workflows, print/export and navigation work; bundle and p95 load/render improve against the same baseline without visual or functional regressions. Record exact before/after sizes and measurements rather than claiming a fixed multiplier.
+
+P2 — UNBOUNDED CATALOG/MASTER REPORTS
+Evidence: backend/p0Features.js:1114-1137; inspect catalog UI and export callers before changing the response contract.
+Solution: Add validated bounded server-side pagination, deterministic sorting including a unique tie-breaker, projection, and tenant-scoped filtering to applicable reports. Update UI to fetch pages and indicate totals/has-more. Implement a separate controlled, complete export using cursor/streaming or a background job; do not export only the visible page. Preserve report filters, ordering, permissions, and totals across pages; design stable pagination for changing records.
+Acceptance: large fixtures return bounded page sizes; no omissions/duplicates across page boundaries on a stable dataset; full exports and totals match the original complete dataset; tenant isolation and filters hold; memory, response sizes and latency are measured. Existing API consumers have a planned migration.
+
+P3 — INDEX EFFECTIVENESS
+Solution: Inventory actual production indexes read-only and capture representative slow query shapes and executionStats for real tenant/date/sort filters. Compare documents/keys examined to results, elapsed time, index size and write cost. In staging propose only evidence-based compound indexes; account for cardinality, sort and tenant scope. Check existing indexes and disk headroom, plan online rollout and rollback with the database operator, then monitor write latency and storage.
+Acceptance: before/after query plans and workloads show the intended index is used and materially reduce measured work without unacceptable write regressions. No production index is dropped or built blindly; duplicate and unused indexes are removed only after independent verification.
+Dependency: representative DB, index inventory, slow-query access and operational change window.
+
+P4 — IMPORTS COMPETING WITH DAILY WORK
+Solution: Profile import size, memory, event-loop delay, database operations and concurrent invoice latency. Bound batch size and concurrency and add backpressure; schedule or isolate heavy jobs in a worker only if measurement justifies it. Preserve tenant isolation, progress, pause/resume, retry, idempotency, rollback and financial transaction integrity; avoid duplicate imports.
+Acceptance: import reconciles to source counts/totals; retries and failures do not duplicate records; cancellation/resumption work; normal workflow p95 under a representative import meets agreed target. Document job limits and recovery.
+
+P5 — APP/DATABASE CAPACITY AND DISTANCE
+Solution: Record app and DB regions, compute, RAM, DB tier, IOPS/throughput, connection counts and costs. Measure app-to-DB RTT, saturation, cache and query plans during slow periods. Compare a suitably sized same/near-region staging setup with the same data and load. Change capacity or region only after bottleneck evidence and a migration/rollback plan; ensure data residency, backups and application compatibility.
+Acceptance: results identify whether DB, network or compute is the limiting factor and demonstrate the measured effect of any proposed upgrade. An infrastructure purchase requires a current itemized provider quote.
+
+P6 — END-TO-END OBSERVABILITY AND NETWORK
+Solution: Add or configure request correlation and privacy-safe structured metrics, including API p50/p95/p99, status/errors, event-loop lag, payload size and DB time where practical; avoid credentials and personal data. Measure browser DNS/TLS, TTFB, download and rendering and branch-to-app/app-to-DB RTT, loss and actual throughput. Set meaningful alerts and retention based on operational requirements.
+Acceptance: an operator can trace a slow representative request to browser, API, database or network evidence without exposing secrets; dashboards/alerts are tested. A bandwidth increase is recommended only when saturation or throughput evidence supports it.
+
+P7 — CPU-BOUND WORK AND PROCESS SCALING
+Solution: Measure event-loop delay, CPU profiles and existing deployment process count before adding instances. Move demonstrated CPU-heavy export/transform work to bounded workers or jobs, and scale API instances only when appropriate. Audit shared state, session/revocation, rate limits, scheduled tasks, job ownership, temporary files and MongoDB pool sizes before multi-instance deployment.
+Acceptance: controlled concurrent tests show improvement without duplicate jobs, inconsistent sessions, authorization regressions or DB connection exhaustion. Shutdown drains requests/jobs safely and errors remain observable.
+
+R1 — BACKUP AND DISASTER RECOVERY
+Solution: Establish business-approved recovery point/time objectives (RPO/RTO), ownership and data inventory covering database and required files/configuration. Configure encrypted, access-controlled, appropriately retained offsite backups and monitor failures. Test restore into an isolated environment, reconcile key transaction/stock totals, document restoration and periodically repeat. Consider multiple app instances and resilient DB separately from backup.
+Acceptance: a recent restore drill meets agreed RPO/RTO and reconciles business data; alerting and access controls are tested; incident and rollback procedures name owners. A single VM is not high availability.
+Dependency: provider access, backup policy and approved recovery objectives.
+
+IMPLEMENTATION ORDER AND HANDOFF
+1. Phase 0 baseline and restore readiness; begin S4 access tests in staging.
+2. Resolve S1/S2 with an explicit login and credential migration plan; address S3 and S5 after checking deployment and user workflows.
+3. Deliver P2/P3 based on measured expensive queries; P1 based on measured frontend load; reconcile reports and transaction results after every change.
+4. Implement P4/P7 only to the extent supported by profiling. Use P5/P6 measurements to decide on infrastructure; complete R1 operationally.
+5. For each change record: commit/version, affected files, migration, security impact, tests and results, before/after measurements, unresolved risk, rollout and rollback. Mark as COMPLETE only when relevant acceptance criteria have passed; mark production-only checks as pending until actually performed.
+
+WHEN PROVIDING THIS PLAN FOR IMPLEMENTATION
+Specify the phase or authorize the full phased implementation. Supply deployment details and sanitized test access when available; do not paste passwords or secrets into chat. Code-only preparation can proceed without production access, but production changes, live validation and server sizing cannot be declared complete without the relevant environment and measurements.

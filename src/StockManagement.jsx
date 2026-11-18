@@ -160,25 +160,23 @@ export default function StockManagement({ mode, view = "list", products = [], go
       setBatchLoadError("");
       const loaded = [];
       const failures = [];
-      for (let index = 0; index < missing.length; index += 4) {
-        if (controller.signal.aborted) return;
-        const batch = await Promise.all(missing.slice(index, index + 4).map(async (product) => {
+      try {
+        const query = new URLSearchParams({ distributorId: tenantDistributorId, firmId: tenantFirmId, gdCode: form.godownCode, stockType });
+        missing.forEach((product) => query.append("prodCodes", productCode(product)));
+        const response = await secureFetch(`${API_URL}/stock/batches?${query}`, { signal: controller.signal });
+        const result = await response.json();
+        if (!response.ok || !result.success || !result.batchesByProduct || typeof result.batchesByProduct !== "object") {
+          throw new Error(result.message || "Unable to load stock batches.");
+        }
+        missing.forEach((product) => {
           const code = productCode(product);
-          try {
-            const query = new URLSearchParams({ distributorId: tenantDistributorId, firmId: tenantFirmId, gdCode: form.godownCode, prodCode: code, stockType });
-            const response = await secureFetch(`${API_URL}/stock/batches?${query}`, { signal: controller.signal });
-            const result = await response.json();
-            if (!response.ok || !result.success || !Array.isArray(result.batches)) {
-              throw new Error(result.message || "Unable to load stock batches.");
-            }
-            return [batchCacheKey(tenantDistributorId, tenantFirmId, form.godownCode, code, stockType), result.batches];
-          } catch (error) {
-            if (error.name === "AbortError") return null;
-            failures.push(`${productName(product)}: ${error.message || "Unable to load stock batches."}`);
-            return [batchCacheKey(tenantDistributorId, tenantFirmId, form.godownCode, code, stockType), []];
-          }
-        }));
-        loaded.push(...batch.filter(Boolean));
+          if (!Array.isArray(result.batchesByProduct[code])) throw new Error("Invalid stock batch response.");
+          loaded.push([batchCacheKey(tenantDistributorId, tenantFirmId, form.godownCode, code, stockType), result.batchesByProduct[code]]);
+        });
+      } catch (error) {
+        if (error.name === "AbortError") return;
+        failures.push(error.message || "Unable to load stock batches.");
+        missing.forEach((product) => loaded.push([batchCacheKey(tenantDistributorId, tenantFirmId, form.godownCode, productCode(product), stockType), []]));
       }
       if (!controller.signal.aborted) {
         setBatchCache((previous) => ({ ...previous, ...Object.fromEntries(loaded) }));

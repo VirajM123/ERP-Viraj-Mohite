@@ -1,0 +1,724 @@
+REPORT-WISE DATA AND MODIFICATION AUDIT
+=======================================
+Review date: 18 November 2026
+Scope: active src/ and backend/ source, using REPORT_DATA_FILTER_AUDIT.txt as the detailed evidence base; archived checkouts excluded.
+
+STATUS KEY
+DB / VERIFY: API/database-backed source path; accuracy against the actual firm's database has not been proven. No report is certified correct without live reconciliation.
+DB / FIX: database-backed path with a confirmed source-code defect below.
+DEMO FILTER: report output is API-backed but demo values can appear in filters.
+
+No active generated report was found to intentionally use fixed sample result rows. All Product Wise Sales retains a dormant demo generator and demo filter fallback. Hardcoded titles and column definitions are UI metadata, not transaction data. Some missing backend models can yield a successful empty result; change these to explicit source-unavailable errors.
+
+Columns and filters below are recommendations, not a claim that each is missing or exists in the data model. Add only relevant fields after checking existing output and availability; do not fabricate values. As-of filters require historical calculations, not merely filtering current balances.
+
+SALES REPORTS
+----------------------------------------
+
+Sales Register / Invoice Register
+  Status: DB / VERIFY
+  Source/behavior: Invoice-wise sales with saved taxable value, tax, total and status. (catalog endpoint: sales-register).
+  Current declared filters: ["fromDate", "toDate", "companyCode", "account"].
+  Modify: No specific defect established by this source review; reconcile results and test filters before treating as correct.
+  Review/add columns: invoice date and number, customer, company, quantity, taxable value, tax, net amount, status, where applicable.
+  Review/add filters: date range, company, customer, product, salesman, status, where applicable.
+
+Sales Summary Report
+  Status: DB / VERIFY
+  Source/behavior: Sales totals grouped by invoice date, company, series and saved bill type. (catalog endpoint: sales-summary).
+  Current declared filters: ["fromDate", "toDate", "companyCode"].
+  Modify: No specific defect established by this source review; reconcile results and test filters before treating as correct.
+  Review/add columns: invoice date and number, customer, company, quantity, taxable value, tax, net amount, status, where applicable.
+  Review/add filters: date range, company, customer, product, salesman, status, where applicable.
+
+Daily Sales Report
+  Status: DB / VERIFY
+  Source/behavior: Sales totals grouped by invoice date. (catalog endpoint: daily-sales).
+  Current declared filters: dateFilters.
+  Modify: No specific defect established by this source review; reconcile results and test filters before treating as correct.
+  Review/add columns: invoice date and number, customer, company, quantity, taxable value, tax, net amount, status, where applicable.
+  Review/add filters: date range, company, customer, product, salesman, status, where applicable.
+
+Monthly Sales Comparison Report
+  Status: DB / VERIFY
+  Source/behavior: Monthly sales totals grouped from invoice dates. (catalog endpoint: monthly-sales).
+  Current declared filters: dateFilters.
+  Modify: No specific defect established by this source review; reconcile results and test filters before treating as correct.
+  Review/add columns: invoice date and number, customer, company, quantity, taxable value, tax, net amount, status, where applicable.
+  Review/add filters: date range, company, customer, product, salesman, status, where applicable.
+
+Salesman Wise Sales Report
+  Status: DB / VERIFY
+  Source/behavior: Invoice totals grouped by saved salesman. (catalog endpoint: salesman-sales).
+  Current declared filters: ["fromDate", "toDate", "companyCode"].
+  Modify: No specific defect established by this source review; reconcile results and test filters before treating as correct.
+  Review/add columns: invoice date and number, customer, company, quantity, taxable value, tax, net amount, status, where applicable.
+  Review/add filters: date range, company, customer, product, salesman, status, where applicable.
+
+Area / Route Wise Sales Report
+  Status: DB / VERIFY
+  Source/behavior: Invoice totals grouped by saved area. (catalog endpoint: area-sales).
+  Current declared filters: ["fromDate", "toDate", "companyCode"].
+  Modify: No specific defect established by this source review; reconcile results and test filters before treating as correct.
+  Review/add columns: invoice date and number, customer, company, quantity, taxable value, tax, net amount, status, where applicable.
+  Review/add filters: date range, company, customer, product, salesman, status, where applicable.
+
+Company Wise Sales Report
+  Status: DB / VERIFY
+  Source/behavior: Sales totals grouped by saved company. (catalog endpoint: company-sales).
+  Current declared filters: dateFilters.
+  Modify: No specific defect established by this source review; reconcile results and test filters before treating as correct.
+  Review/add columns: invoice date and number, customer, company, quantity, taxable value, tax, net amount, status, where applicable.
+  Review/add filters: date range, company, customer, product, salesman, status, where applicable.
+
+Counter Sales Summary
+  Status: DB / VERIFY
+  Source/behavior: Counter-sale invoice totals grouped by date. (catalog endpoint: counter-sales-summary).
+  Current declared filters: dateFilters.
+  Modify: No specific defect established by this source review; reconcile results and test filters before treating as correct.
+  Review/add columns: invoice date and number, customer, company, quantity, taxable value, tax, net amount, status, where applicable.
+  Review/add filters: date range, company, customer, product, salesman, status, where applicable.
+
+Sales Return / Credit Note Register
+  Status: DB / VERIFY
+  Source/behavior: Saved credit-note transactions and their invoice references. (catalog endpoint: sales-return-register).
+  Current declared filters: ["fromDate", "toDate", "companyCode"].
+  Modify: No specific defect established by this source review; reconcile results and test filters before treating as correct.
+  Review/add columns: invoice date and number, customer, company, quantity, taxable value, tax, net amount, status, where applicable.
+  Review/add filters: date range, company, customer, product, salesman, status, where applicable.
+
+Sales Return Analysis by Product and Customer
+  Status: DB / VERIFY
+  Source/behavior: Credit-note quantities, taxable values and tax grouped by product and customer. (catalog endpoint: sales-return-analysis).
+  Current declared filters: ["fromDate", "toDate", "companyCode", "account", "product"].
+  Modify: No specific defect established by this source review; reconcile results and test filters before treating as correct.
+  Review/add columns: invoice date and number, customer, company, quantity, taxable value, tax, net amount, status, where applicable.
+  Review/add filters: date range, company, customer, product, salesman, status, where applicable.
+
+Top Selling Products Report
+  Status: DB / VERIFY
+  Source/behavior: Product quantities from saved sales invoice lines. (catalog endpoint: top-selling-products).
+  Current declared filters: ["fromDate", "toDate", "companyCode", "product"].
+  Modify: No specific defect established by this source review; reconcile results and test filters before treating as correct.
+  Review/add columns: invoice date and number, customer, company, quantity, taxable value, tax, net amount, status, where applicable.
+  Review/add filters: date range, company, customer, product, salesman, status, where applicable.
+
+Party Wise Sales
+  Status: DB / VERIFY
+  Source/behavior: Active report API / saved records; see detailed audit for source evidence.
+  Current declared filters: See existing report controls.
+  Modify: No specific defect established by this source review; reconcile results and test filters before treating as correct.
+  Review/add columns: invoice date and number, customer, company, quantity, taxable value, tax, net amount, status, where applicable.
+  Review/add filters: date range, company, customer, product, salesman, status, where applicable.
+
+All Party Wise Sales
+  Status: DB / VERIFY
+  Source/behavior: Active report API / saved records; see detailed audit for source evidence.
+  Current declared filters: See existing report controls.
+  Modify: No specific defect established by this source review; reconcile results and test filters before treating as correct.
+  Review/add columns: invoice date and number, customer, company, quantity, taxable value, tax, net amount, status, where applicable.
+  Review/add filters: date range, company, customer, product, salesman, status, where applicable.
+
+Product Wise Sales
+  Status: DB / VERIFY
+  Source/behavior: Active report API / saved records; see detailed audit for source evidence.
+  Current declared filters: See existing report controls.
+  Modify: No specific defect established by this source review; reconcile results and test filters before treating as correct.
+  Review/add columns: invoice date and number, customer, company, quantity, taxable value, tax, net amount, status, where applicable.
+  Review/add filters: date range, company, customer, product, salesman, status, where applicable.
+
+All Product Wise Sales
+  Status: DEMO FILTER
+  Source/behavior: Active report API / saved records; see detailed audit for source evidence.
+  Current declared filters: See existing report controls.
+  Modify: MEDIUM: active output uses the API, but filter options can fall back to demo products. Remove mock fallback and dormant mock generator.
+  Review/add columns: invoice date and number, customer, company, quantity, taxable value, tax, net amount, status, where applicable.
+  Review/add filters: date range, company, customer, product, salesman, status, where applicable.
+
+Stock And Sales
+  Status: DB / VERIFY
+  Source/behavior: Active report API / saved records; see detailed audit for source evidence.
+  Current declared filters: See existing report controls.
+  Modify: Reconcile reconstructed closing stock with the complete stock ledger, including later transactions.
+  Review/add columns: invoice date and number, customer, company, quantity, taxable value, tax, net amount, status, where applicable.
+  Review/add filters: date range, company, customer, product, salesman, status, where applicable.
+
+PURCHASE REPORTS
+----------------------------------------
+
+Purchase Register / Supplier Invoice Register
+  Status: DB / VERIFY
+  Source/behavior: Purchase voucher and supplier invoice totals. (catalog endpoint: purchase-register).
+  Current declared filters: ["fromDate", "toDate", "companyCode", "account"].
+  Modify: No specific defect established by this source review; reconcile results and test filters before treating as correct.
+  Review/add columns: voucher and supplier invoice number/date, supplier, product, quantity, taxable value, tax, net amount, status, where applicable.
+  Review/add filters: date range, company, supplier, product, status, where applicable.
+
+Purchase Summary Report
+  Status: DB / VERIFY
+  Source/behavior: Purchase totals calculated from saved purchase vouchers. (catalog endpoint: purchase-summary).
+  Current declared filters: dateFilters.
+  Modify: No specific defect established by this source review; reconcile results and test filters before treating as correct.
+  Review/add columns: voucher and supplier invoice number/date, supplier, product, quantity, taxable value, tax, net amount, status, where applicable.
+  Review/add filters: date range, company, supplier, product, status, where applicable.
+
+Supplier Wise Purchase Report
+  Status: DB / VERIFY
+  Source/behavior: Purchase totals grouped by saved supplier. (catalog endpoint: supplier-purchase).
+  Current declared filters: ["fromDate", "toDate", "companyCode"].
+  Modify: No specific defect established by this source review; reconcile results and test filters before treating as correct.
+  Review/add columns: voucher and supplier invoice number/date, supplier, product, quantity, taxable value, tax, net amount, status, where applicable.
+  Review/add filters: date range, company, supplier, product, status, where applicable.
+
+Purchase by Company and Supplier Report
+  Status: DB / VERIFY
+  Source/behavior: Purchase totals grouped by company and supplier. (catalog endpoint: company-supplier-purchase).
+  Current declared filters: dateFilters.
+  Modify: No specific defect established by this source review; reconcile results and test filters before treating as correct.
+  Review/add columns: voucher and supplier invoice number/date, supplier, product, quantity, taxable value, tax, net amount, status, where applicable.
+  Review/add filters: date range, company, supplier, product, status, where applicable.
+
+Purchase Rate / Last Purchase Rate Report
+  Status: DB / VERIFY
+  Source/behavior: Latest saved invoice purchase rate by product and batch as of the selected date. (catalog endpoint: purchase-rate).
+  Current declared filters: ["toDate", "product"].
+  Modify: No specific defect established by this source review; reconcile results and test filters before treating as correct.
+  Review/add columns: voucher and supplier invoice number/date, supplier, product, quantity, taxable value, tax, net amount, status, where applicable.
+  Review/add filters: date range, company, supplier, product, status, where applicable.
+
+Purchase Return / Debit Note Register
+  Status: DB / VERIFY
+  Source/behavior: Supplier debit notes and their linked purchase bill details. (catalog endpoint: purchase-return-register).
+  Current declared filters: ["fromDate", "toDate", "companyCode", "account"].
+  Modify: No specific defect established by this source review; reconcile results and test filters before treating as correct.
+  Review/add columns: voucher and supplier invoice number/date, supplier, product, quantity, taxable value, tax, net amount, status, where applicable.
+  Review/add filters: date range, company, supplier, product, status, where applicable.
+
+Purchase Return Analysis by Product and Supplier
+  Status: DB / VERIFY
+  Source/behavior: Saved debit-note quantities, taxable values and tax grouped by product and supplier. (catalog endpoint: purchase-return-analysis).
+  Current declared filters: ["fromDate", "toDate", "companyCode", "account", "product"].
+  Modify: No specific defect established by this source review; reconcile results and test filters before treating as correct.
+  Review/add columns: voucher and supplier invoice number/date, supplier, product, quantity, taxable value, tax, net amount, status, where applicable.
+  Review/add filters: date range, company, supplier, product, status, where applicable.
+
+Company Wise Purchase
+  Status: DB / VERIFY
+  Source/behavior: Active report API / saved records; see detailed audit for source evidence.
+  Current declared filters: See existing report controls.
+  Modify: No specific defect established by this source review; reconcile results and test filters before treating as correct.
+  Review/add columns: voucher and supplier invoice number/date, supplier, product, quantity, taxable value, tax, net amount, status, where applicable.
+  Review/add filters: date range, company, supplier, product, status, where applicable.
+
+Company/Bill Wise Purchase
+  Status: DB / VERIFY
+  Source/behavior: Active report API / saved records; see detailed audit for source evidence.
+  Current declared filters: See existing report controls.
+  Modify: No specific defect established by this source review; reconcile results and test filters before treating as correct.
+  Review/add columns: voucher and supplier invoice number/date, supplier, product, quantity, taxable value, tax, net amount, status, where applicable.
+  Review/add filters: date range, company, supplier, product, status, where applicable.
+
+Product Wise Purchase
+  Status: DB / VERIFY
+  Source/behavior: Active report API / saved records; see detailed audit for source evidence.
+  Current declared filters: See existing report controls.
+  Modify: No specific defect established by this source review; reconcile results and test filters before treating as correct.
+  Review/add columns: voucher and supplier invoice number/date, supplier, product, quantity, taxable value, tax, net amount, status, where applicable.
+  Review/add filters: date range, company, supplier, product, status, where applicable.
+
+STOCK REPORTS
+----------------------------------------
+
+Stock Valuation Report
+  Status: DB / VERIFY
+  Source/behavior: Current stock valued at its recorded purchase rate. (catalog endpoint: stock-valuation).
+  Current declared filters: ["godownCode", "product"].
+  Modify: Current stock uses recorded purchase rate. Show valuation method and reconcile rates; do not imply historical valuation.
+  Review/add columns: product code/name, company, godown, batch, expiry, quantity, rate, value, where applicable.
+  Review/add filters: company, product, godown, batch, as-of date, where applicable.
+
+Godown Wise Stock Report
+  Status: DB / VERIFY
+  Source/behavior: Current quantity and purchase-rate value grouped by godown and product. (catalog endpoint: godown-stock).
+  Current declared filters: ["godownCode", "product"].
+  Modify: No specific defect established by this source review; reconcile results and test filters before treating as correct.
+  Review/add columns: product code/name, company, godown, batch, expiry, quantity, rate, value, where applicable.
+  Review/add filters: company, product, godown, batch, as-of date, where applicable.
+
+Batch Wise Stock Report
+  Status: DB / VERIFY
+  Source/behavior: Current stock balances by product batch. (catalog endpoint: batch-stock).
+  Current declared filters: ["godownCode", "product"].
+  Modify: No specific defect established by this source review; reconcile results and test filters before treating as correct.
+  Review/add columns: product code/name, company, godown, batch, expiry, quantity, rate, value, where applicable.
+  Review/add filters: company, product, godown, batch, as-of date, where applicable.
+
+Near-Expiry Stock Report
+  Status: DB / VERIFY
+  Source/behavior: Current stock expiring within the selected number of days. (catalog endpoint: near-expiry-stock).
+  Current declared filters: ["godownCode", "product", "expiryDays"].
+  Modify: No specific defect established by this source review; reconcile results and test filters before treating as correct.
+  Review/add columns: product code/name, company, godown, batch, expiry, quantity, rate, value, where applicable.
+  Review/add filters: company, product, godown, batch, as-of date, where applicable.
+
+Expired Stock Report
+  Status: DB / VERIFY
+  Source/behavior: Current stock whose saved expiry date is before today. (catalog endpoint: expired-stock).
+  Current declared filters: ["godownCode", "product"].
+  Modify: No specific defect established by this source review; reconcile results and test filters before treating as correct.
+  Review/add columns: product code/name, company, godown, batch, expiry, quantity, rate, value, where applicable.
+  Review/add filters: company, product, godown, batch, as-of date, where applicable.
+
+Reorder / Minimum Stock Report
+  Status: DB / VERIFY
+  Source/behavior: Current stock compared with the product reorder level. (catalog endpoint: reorder-stock).
+  Current declared filters: ["godownCode", "product"].
+  Modify: No specific defect established by this source review; reconcile results and test filters before treating as correct.
+  Review/add columns: product code/name, company, godown, batch, expiry, quantity, rate, value, where applicable.
+  Review/add filters: company, product, godown, batch, as-of date, where applicable.
+
+Stock Adjustment Register
+  Status: DB / VERIFY
+  Source/behavior: Completed stock adjustments from the stock-adjustment register. (catalog endpoint: stock-adjustments).
+  Current declared filters: ["fromDate", "toDate", "godownCode", "product"].
+  Modify: No specific defect established by this source review; reconcile results and test filters before treating as correct.
+  Review/add columns: product code/name, company, godown, batch, expiry, quantity, rate, value, where applicable.
+  Review/add filters: company, product, godown, batch, as-of date, where applicable.
+
+Batch and Expiry Master List
+  Status: DB / VERIFY
+  Source/behavior: Saved product batch, manufacturing and expiry details by godown. (catalog endpoint: batch-expiry-list).
+  Current declared filters: ["search"].
+  Modify: No specific defect established by this source review; reconcile results and test filters before treating as correct.
+  Review/add columns: product code/name, company, godown, batch, expiry, quantity, rate, value, where applicable.
+  Review/add filters: company, product, godown, batch, as-of date, where applicable.
+
+Current Stock
+  Status: DB / FIX
+  Source/behavior: Active report API / saved records; see detailed audit for source evidence.
+  Current declared filters: See existing report controls.
+  Modify: HIGH: Report Type, Report Level and Current Stock Yes/No are ignored. Implement them or remove the controls.
+  Review/add columns: product code/name, company, godown, batch, expiry, quantity, rate, value, where applicable.
+  Review/add filters: company, product, godown, batch, as-of date, where applicable.
+
+As On Date Stock
+  Status: DB / FIX
+  Source/behavior: Active report API / saved records; see detailed audit for source evidence.
+  Current declared filters: See existing report controls.
+  Modify: HIGH: Report Level is ignored. Implement grouping or remove it; reconcile historical stock reconstruction.
+  Review/add columns: product code/name, company, godown, batch, expiry, quantity, rate, value, where applicable.
+  Review/add filters: company, product, godown, batch, as-of date, where applicable.
+
+Damage Stock
+  Status: DB / FIX
+  Source/behavior: Active report API / saved records; see detailed audit for source evidence.
+  Current declared filters: See existing report controls.
+  Modify: HIGH: quantities are current balances while dates select the latest matching adjustment. Define current balance or period movement and align dates and quantities; Report Level is ignored.
+  Review/add columns: product code/name, company, godown, batch, expiry, quantity, rate, value, where applicable.
+  Review/add filters: company, product, godown, batch, as-of date, where applicable.
+
+Product Ledger
+  Status: DB / VERIFY
+  Source/behavior: Active report API / saved records; see detailed audit for source evidence.
+  Current declared filters: See existing report controls.
+  Modify: No specific defect established by this source review; reconcile results and test filters before treating as correct.
+  Review/add columns: product code/name, company, godown, batch, expiry, quantity, rate, value, where applicable.
+  Review/add filters: company, product, godown, batch, as-of date, where applicable.
+
+Stock Movement Ledger
+  Status: DB / VERIFY
+  Source/behavior: Active report API / saved records; see detailed audit for source evidence.
+  Current declared filters: See existing report controls.
+  Modify: No specific defect established by this source review; reconcile results and test filters before treating as correct.
+  Review/add columns: product code/name, company, godown, batch, expiry, quantity, rate, value, where applicable.
+  Review/add filters: company, product, godown, batch, as-of date, where applicable.
+
+CUSTOMER REPORTS
+----------------------------------------
+
+Customer Ageing Report
+  Status: DB / VERIFY
+  Source/behavior: Open sales invoices aged by saved due date, falling back to invoice date. (catalog endpoint: customer-ageing).
+  Current declared filters: ["account"].
+  Modify: Define due-date fallback and ageing buckets; reconcile allocations and brought-forward balances.
+  Review/add columns: party, document number/date, due date, original amount, allocation, outstanding, ageing, where applicable.
+  Review/add filters: party, as-of date, salesman, outstanding status, where applicable.
+
+Bill Wise Outstanding Report
+  Status: DB / VERIFY
+  Source/behavior: Open customer invoices and brought-forward bill balances. (catalog endpoint: customer-ageing).
+  Current declared filters: ["account"].
+  Modify: Shares the customer-ageing endpoint; verify bill-wise layout and opening balances.
+  Review/add columns: party, document number/date, due date, original amount, allocation, outstanding, ageing, where applicable.
+  Review/add filters: party, as-of date, salesman, outstanding status, where applicable.
+
+Customer Statement of Account
+  Status: DB / VERIFY
+  Source/behavior: Customer account postings and running balance from the accounting ledger. (catalog endpoint: customer-statement).
+  Current declared filters: ["fromDate", "toDate", "account"].
+  Modify: No specific defect established by this source review; reconcile results and test filters before treating as correct.
+  Review/add columns: party, document number/date, due date, original amount, allocation, outstanding, ageing, where applicable.
+  Review/add filters: party, as-of date, salesman, outstanding status, where applicable.
+
+Collection by Salesman Report
+  Status: DB / VERIFY
+  Source/behavior: Receipt totals grouped by saved salesman. (catalog endpoint: collection-by-salesman).
+  Current declared filters: dateFilters.
+  Modify: No specific defect established by this source review; reconcile results and test filters before treating as correct.
+  Review/add columns: party, document number/date, due date, original amount, allocation, outstanding, ageing, where applicable.
+  Review/add filters: party, as-of date, salesman, outstanding status, where applicable.
+
+Receipt Allocation and Unallocated Receipt Report
+  Status: DB / VERIFY
+  Source/behavior: Receipt-to-bill allocations and unallocated receipt balances. (catalog endpoint: receipt-allocation).
+  Current declared filters: ["fromDate", "toDate", "account"].
+  Modify: No specific defect established by this source review; reconcile results and test filters before treating as correct.
+  Review/add columns: party, document number/date, due date, original amount, allocation, outstanding, ageing, where applicable.
+  Review/add filters: party, as-of date, salesman, outstanding status, where applicable.
+
+Collection Register
+  Status: DB / VERIFY
+  Source/behavior: Receipts with saved party, amount, payment mode and cheque details. (catalog endpoint: collection-register).
+  Current declared filters: ["fromDate", "toDate", "account"].
+  Modify: No specific defect established by this source review; reconcile results and test filters before treating as correct.
+  Review/add columns: party, document number/date, due date, original amount, allocation, outstanding, ageing, where applicable.
+  Review/add filters: party, as-of date, salesman, outstanding status, where applicable.
+
+Party Outstanding
+  Status: DB / VERIFY
+  Source/behavior: Active report API / saved records; see detailed audit for source evidence.
+  Current declared filters: See existing report controls.
+  Modify: No specific defect established by this source review; reconcile results and test filters before treating as correct.
+  Review/add columns: party, document number/date, due date, original amount, allocation, outstanding, ageing, where applicable.
+  Review/add filters: party, as-of date, salesman, outstanding status, where applicable.
+
+Credit Control
+  Status: DB / FIX
+  Source/behavior: Active report API / saved records; see detailed audit for source evidence.
+  Current declared filters: See existing report controls.
+  Modify: HIGH: date range is ignored; calculation uses current exposure. Remove dates or implement an as-of calculation.
+  Review/add columns: party, document number/date, due date, original amount, allocation, outstanding, ageing, where applicable.
+  Review/add filters: party, as-of date, salesman, outstanding status, where applicable.
+
+SUPPLIER REPORTS
+----------------------------------------
+
+Supplier Outstanding Report
+  Status: DB / VERIFY
+  Source/behavior: Unpaid purchase bills after saved payment allocations. (catalog endpoint: supplier-outstanding).
+  Current declared filters: ["account"].
+  Modify: Reconcile payment allocations and brought-forward balances with supplier ledger.
+  Review/add columns: supplier, document number/date, due date, original amount, allocation, balance, where applicable.
+  Review/add filters: supplier, as-of date, outstanding status, where applicable.
+
+Bill Wise Payables Report
+  Status: DB / VERIFY
+  Source/behavior: Unpaid supplier bills and brought-forward balances. (catalog endpoint: supplier-outstanding).
+  Current declared filters: ["account"].
+  Modify: Shares supplier-outstanding endpoint; verify bill-wise layout and opening balances.
+  Review/add columns: supplier, document number/date, due date, original amount, allocation, balance, where applicable.
+  Review/add filters: supplier, as-of date, outstanding status, where applicable.
+
+Supplier Debit Note Register
+  Status: DB / VERIFY
+  Source/behavior: Supplier debit notes and their linked purchase bill details. (catalog endpoint: purchase-return-register).
+  Current declared filters: ["fromDate", "toDate", "companyCode", "account"].
+  Modify: Shares Purchase Return / Debit Note Register endpoint; verify supplier-specific presentation.
+  Review/add columns: supplier, document number/date, due date, original amount, allocation, balance, where applicable.
+  Review/add filters: supplier, as-of date, outstanding status, where applicable.
+
+Supplier Statement of Account
+  Status: DB / VERIFY
+  Source/behavior: Supplier account postings and running balance from the accounting ledger. (catalog endpoint: supplier-statement).
+  Current declared filters: ["fromDate", "toDate", "account"].
+  Modify: No specific defect established by this source review; reconcile results and test filters before treating as correct.
+  Review/add columns: supplier, document number/date, due date, original amount, allocation, balance, where applicable.
+  Review/add filters: supplier, as-of date, outstanding status, where applicable.
+
+GST REPORTS
+----------------------------------------
+
+E-Invoice Register and IRN Status
+  Status: DB / VERIFY
+  Source/behavior: Sales invoices with their stored IRN and acknowledgement values. (catalog endpoint: e-invoice-register).
+  Current declared filters: ["fromDate", "toDate", "companyCode"].
+  Modify: No specific defect established by this source review; reconcile results and test filters before treating as correct.
+  Review/add columns: document number/date, party GSTIN, taxable value, CGST, SGST, IGST, cess, status, where applicable.
+  Review/add filters: date range, company, GSTIN, document status, tax type, where applicable.
+
+E-Way Bill Register and Status
+  Status: DB / VERIFY
+  Source/behavior: Sales invoices with their stored e-way bill number. (catalog endpoint: eway-bill-register).
+  Current declared filters: ["fromDate", "toDate", "companyCode"].
+  Modify: No specific defect established by this source review; reconcile results and test filters before treating as correct.
+  Review/add columns: document number/date, party GSTIN, taxable value, CGST, SGST, IGST, cess, status, where applicable.
+  Review/add filters: date range, company, GSTIN, document status, tax type, where applicable.
+
+Sales GST Register
+  Status: DB / FIX
+  Source/behavior: Active report API / saved records; see detailed audit for source evidence.
+  Current declared filters: See existing report controls.
+  Modify: HIGH: Output Format, Cess Separate and GST Bifurcation are ignored. Implement or remove them.
+  Review/add columns: document number/date, party GSTIN, taxable value, CGST, SGST, IGST, cess, status, where applicable.
+  Review/add filters: date range, company, GSTIN, document status, tax type, where applicable.
+
+Purchase GST Register
+  Status: DB / FIX
+  Source/behavior: Active report API / saved records; see detailed audit for source evidence.
+  Current declared filters: See existing report controls.
+  Modify: HIGH: Cess Separate and GST Bifurcation are ignored. Implement or remove them.
+  Review/add columns: document number/date, party GSTIN, taxable value, CGST, SGST, IGST, cess, status, where applicable.
+  Review/add filters: date range, company, GSTIN, document status, tax type, where applicable.
+
+CRN GST Register
+  Status: DB / FIX
+  Source/behavior: Active report API / saved records; see detailed audit for source evidence.
+  Current declared filters: See existing report controls.
+  Modify: HIGH: GST Bifurcation is ignored. Implement or remove it.
+  Review/add columns: document number/date, party GSTIN, taxable value, CGST, SGST, IGST, cess, status, where applicable.
+  Review/add filters: date range, company, GSTIN, document status, tax type, where applicable.
+
+GST Summary
+  Status: DB / FIX
+  Source/behavior: Active report API / saved records; see detailed audit for source evidence.
+  Current declared filters: See existing report controls.
+  Modify: HIGH: Company Wise, With Details and Discount Bifurcation are ignored. Implement or remove them.
+  Review/add columns: document number/date, party GSTIN, taxable value, CGST, SGST, IGST, cess, status, where applicable.
+  Review/add filters: date range, company, GSTIN, document status, tax type, where applicable.
+
+GSTR1
+  Status: DB / VERIFY
+  Source/behavior: Active report API / saved records; see detailed audit for source evidence.
+  Current declared filters: See existing report controls.
+  Modify: Reconcile document classification, taxable values and tax totals with saved returns and filing period.
+  Review/add columns: document number/date, party GSTIN, taxable value, CGST, SGST, IGST, cess, status, where applicable.
+  Review/add filters: date range, company, GSTIN, document status, tax type, where applicable.
+
+E-Invoice Management
+  Status: DB / FIX
+  Source/behavior: Active report API / saved records; see detailed audit for source evidence.
+  Current declared filters: See existing report controls.
+  Modify: HIGH: rows are labelled Pending even when an IRN exists; QR path and tax/product criteria do not affect results. Derive status from IRN, implement pending filtering, remove or implement inert controls, and expose a bill range if needed.
+  Review/add columns: document number/date, party GSTIN, taxable value, CGST, SGST, IGST, cess, status, where applicable.
+  Review/add filters: date range, company, GSTIN, document status, tax type, where applicable.
+
+FINANCIAL REPORTS
+----------------------------------------
+
+Journal Voucher Register
+  Status: DB / VERIFY
+  Source/behavior: Saved journal vouchers with posted debit and credit totals. (catalog endpoint: journal-voucher-register).
+  Current declared filters: dateFilters.
+  Modify: No specific defect established by this source review; reconcile results and test filters before treating as correct.
+  Review/add columns: posting date, voucher number/type, account, narration, debit, credit, running balance, where applicable.
+  Review/add filters: date range/as-of date, account, voucher type, where applicable.
+
+General Ledger
+  Status: DB / VERIFY
+  Source/behavior: Active report API / saved records; see detailed audit for source evidence.
+  Current declared filters: See existing report controls.
+  Modify: No specific defect established by this source review; reconcile results and test filters before treating as correct.
+  Review/add columns: posting date, voucher number/type, account, narration, debit, credit, running balance, where applicable.
+  Review/add filters: date range/as-of date, account, voucher type, where applicable.
+
+Party Ledger
+  Status: DB / VERIFY
+  Source/behavior: Active report API / saved records; see detailed audit for source evidence.
+  Current declared filters: See existing report controls.
+  Modify: No specific defect established by this source review; reconcile results and test filters before treating as correct.
+  Review/add columns: posting date, voucher number/type, account, narration, debit, credit, running balance, where applicable.
+  Review/add filters: date range/as-of date, account, voucher type, where applicable.
+
+Trial Balance
+  Status: DB / VERIFY
+  Source/behavior: Active report API / saved records; see detailed audit for source evidence.
+  Current declared filters: See existing report controls.
+  Modify: No specific defect established by this source review; reconcile results and test filters before treating as correct.
+  Review/add columns: posting date, voucher number/type, account, narration, debit, credit, running balance, where applicable.
+  Review/add filters: date range/as-of date, account, voucher type, where applicable.
+
+Cash Book
+  Status: DB / VERIFY
+  Source/behavior: Active report API / saved records; see detailed audit for source evidence.
+  Current declared filters: See existing report controls.
+  Modify: No specific defect established by this source review; reconcile results and test filters before treating as correct.
+  Review/add columns: posting date, voucher number/type, account, narration, debit, credit, running balance, where applicable.
+  Review/add filters: date range/as-of date, account, voucher type, where applicable.
+
+Bank Book
+  Status: DB / VERIFY
+  Source/behavior: Active report API / saved records; see detailed audit for source evidence.
+  Current declared filters: See existing report controls.
+  Modify: No specific defect established by this source review; reconcile results and test filters before treating as correct.
+  Review/add columns: posting date, voucher number/type, account, narration, debit, credit, running balance, where applicable.
+  Review/add filters: date range/as-of date, account, voucher type, where applicable.
+
+Day Book
+  Status: DB / VERIFY
+  Source/behavior: Active report API / saved records; see detailed audit for source evidence.
+  Current declared filters: See existing report controls.
+  Modify: No specific defect established by this source review; reconcile results and test filters before treating as correct.
+  Review/add columns: posting date, voucher number/type, account, narration, debit, credit, running balance, where applicable.
+  Review/add filters: date range/as-of date, account, voucher type, where applicable.
+
+Profit & Loss
+  Status: DB / VERIFY
+  Source/behavior: Active report API / saved records; see detailed audit for source evidence.
+  Current declared filters: See existing report controls.
+  Modify: No specific defect established by this source review; reconcile results and test filters before treating as correct.
+  Review/add columns: posting date, voucher number/type, account, narration, debit, credit, running balance, where applicable.
+  Review/add filters: date range/as-of date, account, voucher type, where applicable.
+
+Balance Sheet
+  Status: DB / VERIFY
+  Source/behavior: Active report API / saved records; see detailed audit for source evidence.
+  Current declared filters: See existing report controls.
+  Modify: No specific defect established by this source review; reconcile results and test filters before treating as correct.
+  Review/add columns: posting date, voucher number/type, account, narration, debit, credit, running balance, where applicable.
+  Review/add filters: date range/as-of date, account, voucher type, where applicable.
+
+Find Cheque Details
+  Status: DB / VERIFY
+  Source/behavior: Active report API / saved records; see detailed audit for source evidence.
+  Current declared filters: See existing report controls.
+  Modify: No specific defect established by this source review; reconcile results and test filters before treating as correct.
+  Review/add columns: posting date, voucher number/type, account, narration, debit, credit, running balance, where applicable.
+  Review/add filters: date range/as-of date, account, voucher type, where applicable.
+
+DISTRIBUTION REPORTS
+----------------------------------------
+
+Load / Dispatch Register
+  Status: DB / VERIFY
+  Source/behavior: Saved dispatch loads, vehicle, assigned delivery person and recorded totals. (catalog endpoint: load-dispatch-register).
+  Current declared filters: dateFilters.
+  Modify: No specific defect established by this source review; reconcile results and test filters before treating as correct.
+  Review/add columns: load number/date, vehicle, delivery person, invoice count, dispatched amount, collection, settlement status, where applicable.
+  Review/add filters: date range, vehicle, delivery person, status, where applicable.
+
+Load Settlement Summary
+  Status: DB / VERIFY
+  Source/behavior: Saved load settlement totals and collections. (catalog endpoint: load-settlement-summary).
+  Current declared filters: dateFilters.
+  Modify: No specific defect established by this source review; reconcile results and test filters before treating as correct.
+  Review/add columns: load number/date, vehicle, delivery person, invoice count, dispatched amount, collection, settlement status, where applicable.
+  Review/add filters: date range, vehicle, delivery person, status, where applicable.
+
+Load Settlement and Collection Summary
+  Status: DB / VERIFY
+  Source/behavior: Saved load settlement totals and collections. (catalog endpoint: load-settlement-summary).
+  Current declared filters: dateFilters.
+  Modify: Shares Load Settlement Summary endpoint; confirm collection detail meets the name.
+  Review/add columns: load number/date, vehicle, delivery person, invoice count, dispatched amount, collection, settlement status, where applicable.
+  Review/add filters: date range, vehicle, delivery person, status, where applicable.
+
+MASTER REPORTS
+----------------------------------------
+
+Product / Item List
+  Status: DB / VERIFY
+  Source/behavior: Product master records. (catalog endpoint: product-list).
+  Current declared filters: ["search", "active"].
+  Modify: No specific defect established by this source review; reconcile results and test filters before treating as correct.
+  Review/add columns: record code/name, relevant contact or classification, active/blocked status, last updated, where applicable.
+  Review/add filters: search, active/blocked status, relevant classification, where applicable.
+
+Product Price List
+  Status: DB / VERIFY
+  Source/behavior: Current batch prices from stock records and product master. (catalog endpoint: product-price-list).
+  Current declared filters: ["search"].
+  Modify: No specific defect established by this source review; reconcile results and test filters before treating as correct.
+  Review/add columns: record code/name, relevant contact or classification, active/blocked status, last updated, where applicable.
+  Review/add filters: search, active/blocked status, relevant classification, where applicable.
+
+Inactive / Blocked Master Records
+  Status: DB / VERIFY
+  Source/behavior: Inactive or blocked product and customer master records. (catalog endpoint: inactive-masters).
+  Current declared filters: ["search"].
+  Modify: No specific defect established by this source review; reconcile results and test filters before treating as correct.
+  Review/add columns: record code/name, relevant contact or classification, active/blocked status, last updated, where applicable.
+  Review/add filters: search, active/blocked status, relevant classification, where applicable.
+
+Customer / Party List
+  Status: DB / VERIFY
+  Source/behavior: Customer account master records. (catalog endpoint: customer-list).
+  Current declared filters: ["search", "active"].
+  Modify: No specific defect established by this source review; reconcile results and test filters before treating as correct.
+  Review/add columns: record code/name, relevant contact or classification, active/blocked status, last updated, where applicable.
+  Review/add filters: search, active/blocked status, relevant classification, where applicable.
+
+Supplier List
+  Status: DB / VERIFY
+  Source/behavior: Supplier account master records. (catalog endpoint: supplier-list).
+  Current declared filters: ["search", "active"].
+  Modify: No specific defect established by this source review; reconcile results and test filters before treating as correct.
+  Review/add columns: record code/name, relevant contact or classification, active/blocked status, last updated, where applicable.
+  Review/add filters: search, active/blocked status, relevant classification, where applicable.
+
+Company List
+  Status: DB / VERIFY
+  Source/behavior: Company master records. (catalog endpoint: company-list).
+  Current declared filters: ["search", "active"].
+  Modify: No specific defect established by this source review; reconcile results and test filters before treating as correct.
+  Review/add columns: record code/name, relevant contact or classification, active/blocked status, last updated, where applicable.
+  Review/add filters: search, active/blocked status, relevant classification, where applicable.
+
+Area List
+  Status: DB / VERIFY
+  Source/behavior: Area master records. (catalog endpoint: area-list).
+  Current declared filters: ["search", "active"].
+  Modify: No specific defect established by this source review; reconcile results and test filters before treating as correct.
+  Review/add columns: record code/name, relevant contact or classification, active/blocked status, last updated, where applicable.
+  Review/add filters: search, active/blocked status, relevant classification, where applicable.
+
+Salesman List
+  Status: DB / VERIFY
+  Source/behavior: Salesman master records. (catalog endpoint: salesman-list).
+  Current declared filters: ["search", "active"].
+  Modify: No specific defect established by this source review; reconcile results and test filters before treating as correct.
+  Review/add columns: record code/name, relevant contact or classification, active/blocked status, last updated, where applicable.
+  Review/add filters: search, active/blocked status, relevant classification, where applicable.
+
+Godown List
+  Status: DB / VERIFY
+  Source/behavior: Godown master records. (catalog endpoint: godown-list).
+  Current declared filters: ["search", "active"].
+  Modify: No specific defect established by this source review; reconcile results and test filters before treating as correct.
+  Review/add columns: record code/name, relevant contact or classification, active/blocked status, last updated, where applicable.
+  Review/add filters: search, active/blocked status, relevant classification, where applicable.
+
+ADMINISTRATION REPORTS
+----------------------------------------
+
+Permission Audit
+  Status: DB / FIX
+  Source/behavior: Active report API / saved records; see detailed audit for source evidence.
+  Current declared filters: See existing report controls.
+  Modify: HIGH: date range is ignored. Remove it or filter a timestamped audit source.
+  Review/add columns: event date, user, action, affected record, status, where applicable.
+  Review/add filters: date range, user, action, status, where applicable.
+
+Audit Trail
+  Status: DB / VERIFY
+  Source/behavior: Active report API / saved records; see detailed audit for source evidence.
+  Current declared filters: See existing report controls.
+  Modify: No specific defect established by this source review; reconcile results and test filters before treating as correct.
+  Review/add columns: event date, user, action, affected record, status, where applicable.
+  Review/add filters: date range, user, action, status, where applicable.
+
+Dashboard Reconciliation
+  Status: DB / FIX
+  Source/behavior: Active report API / saved records; see detailed audit for source evidence.
+  Current declared filters: See existing report controls.
+  Modify: HIGH: To Date does not set the endpoint cutoff. Expose As Of Date and collection range or map controls to endpoint parameters.
+  Review/add columns: event date, user, action, affected record, status, where applicable.
+  Review/add filters: date range, user, action, status, where applicable.
+
+PRIORITY AND ACCEPTANCE
+-----------------------
+1. Fix HIGH findings first, especially misleading stock, GST, date and e-invoice controls.
+2. Remove demo filter fallback and dormant generator. Return explicit errors when required models are unavailable.
+3. With an authorized firm database, compare representative rows and totals to source transactions and ledgers, including opening balances, returns, cancellations and date boundaries. Record firm, date range and differences.
+4. Confirm each proposed column exists or has a defined calculation; implement and test each required filter on UI and backend. Check screen and exports agree.
+
+Detailed evidence and source references: REPORT_DATA_FILTER_AUDIT.txt. Recommendations are a review checklist, not a verified list of missing fields.

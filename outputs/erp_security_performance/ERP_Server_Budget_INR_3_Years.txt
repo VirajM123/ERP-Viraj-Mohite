@@ -1,0 +1,64 @@
+﻿ERP SERVER BUDGET IN INDIAN RUPEES - THREE YEAR ESTIMATE
+Prepared: 18 November 2026
+
+PURPOSE AND BASIS
+These are indicative public list-price calculations, not a vendor quotation or a guarantee of capacity. The cloud servers are rented services, not physical machines purchased outright. Choose ONE application server size; the three VM options below are alternatives, not three required purchases. Add a separately sized database service if the ERP needs MongoDB hosting.
+
+Conversion assumption: USD 1 = INR 93.48, the USD/INR figure in the SBICAPS daily market snapshot dated 18 November 2026. This is a reference figure for budgeting, not a promised payment rate. Actual bank/card rates, foreign exchange charges, USD prices and usage may change. Estimates assume the same rate and list price for all 36 months, continuous use, no discounts and no annual increase. Figures are rounded to two decimal places. One year = 12 months; three years = 36 months. INR figures exclude tax and other unpriced costs listed below.
+
+Source for reference rate: https://www.sbicaps.com/wp-content/uploads/2026/11/SBICAPS-Daily_November-18-2026.pdf
+Source for VM prices and configurations: https://www.digitalocean.com/pricing/droplets
+Source for illustrative database price: https://www.mongodb.com/docs/atlas/billing/invoice-breakdown/
+
+PRICE COMPARISON (INR)
+Item                                      USD/month    INR/month       1 year        3 years
+Economy application VM                         48       4,487.04     53,844.48     1,61,533.44
+Balanced application VM                       126      11,778.48   1,41,341.76     4,24,025.28
+Higher-capacity application VM                252      23,556.96   2,82,683.52     8,48,050.56
+Illustrative MongoDB Atlas M30                388      36,270.24   4,35,242.88    13,05,728.64
+Balanced VM + illustrative M30               514      48,048.72   5,76,584.64    17,29,753.92
+Higher-capacity VM + illustrative M30        640      59,827.20   7,17,926.40    21,53,779.20
+
+Each year in the three-year calculation is the same as the one-year amount above under the stated fixed-price and fixed-rate assumption. For example, balanced VM plus M30 is INR 5,76,584.64 per year for years 1, 2 and 3. The totals are recurring costs over 36 months, not advance payment requirements. Atlas M30 is a provider example and has not been sized for this ERP; its price and configuration are not a Mumbai quote. Combined totals are arithmetic illustrations only, and do not establish matching regions or equivalent availability.
+
+WHAT EACH ITEM DOES AND WHY TO CONSIDER IT
+
+1. ECONOMY APPLICATION SERVER - DigitalOcean Basic, USD 48/month
+   4 shared vCPU, 8 GiB RAM, 160 GiB disk, 5,000 GiB/month transfer allowance.
+   Work: Runs the ERP application and its API, handling user requests and communicating with the database. Disk holds the operating system, application, logs and other local files. RAM holds active processes and data; vCPUs perform computations.
+   Why consider: Lowest listed application-server cost; useful as a baseline or for a small workload after testing. CPU resources are shared, so performance can vary. Do not assume it can handle the real peak load or run the database as well. Database and other services are additional.
+   Cost: INR 4,487.04/month; INR 53,844.48/year; INR 1,61,533.44 for three years.
+
+2. BALANCED APPLICATION SERVER - DigitalOcean General Purpose, USD 126/month
+   4 dedicated vCPU, 16 GiB RAM, 50 GiB disk, 5,000 GiB/month transfer allowance.
+   Work: Runs the same ERP application and API, with dedicated CPU capacity and more memory than the economy option. It connects to a separately hosted database.
+   Why consider: A production starting candidate where steadier CPU resources and additional memory may help. Select only after measuring the ERP workload. The 50 GiB disk must cover the OS, logs, application and growth; it may be insufficient and additional storage may cost more.
+   Cost: INR 11,778.48/month; INR 1,41,341.76/year; INR 4,24,025.28 for three years.
+
+3. HIGHER-CAPACITY APPLICATION SERVER - DigitalOcean General Purpose, USD 252/month
+   8 dedicated vCPU, 32 GiB RAM, 100 GiB disk, 6,000 GiB/month transfer allowance.
+   Work: Runs the same application and API, with twice the listed CPU and memory of the balanced option. It also requires a separately hosted database.
+   Why consider: Obtain as a comparison if load tests show the balanced VM is constrained or expected growth requires more resources. More capacity alone does not fix inefficient code, slow queries or database bottlenecks; it is not a guaranteed performance improvement.
+   Cost: INR 23,556.96/month; INR 2,82,683.52/year; INR 8,48,050.56 for three years.
+
+4. MANAGED DATABASE - MongoDB Atlas M30 illustration, USD 388/month
+   Work: Hosts MongoDB, where the ERP stores its business records. The application connects to it to read and write data. A managed service handles selected database infrastructure and operational tasks under the provider's service terms; configuration, access control, monitoring and backup/restore responsibilities still need to be agreed.
+   Why consider: A separately managed database can reduce some infrastructure administration and lets its resources be sized independently from the application. M30 is only an example, not a recommendation or proof that this tier is sufficient or necessary. MongoDB's example assumes AWS default settings and 24 hours x 30 days; its example does not specify vCPU, RAM, disk or transfer allowance here. Regional configuration, storage, backups and transfer may change the price.
+   Cost of the example: INR 36,270.24/month; INR 4,35,242.88/year; INR 13,05,728.64 for three years.
+
+HOW THE COMBINED EXAMPLES WORK
+Balanced: one balanced application VM + illustrative M30 = INR 11,778.48 + INR 36,270.24 = INR 48,048.72/month, or INR 17,29,753.92 for 36 months.
+Higher capacity: one higher-capacity application VM + illustrative M30 = INR 23,556.96 + INR 36,270.24 = INR 59,827.20/month, or INR 21,53,779.20 for 36 months.
+These totals are not complete deployment budgets or regional quotes. The application VM and database do different jobs and are both included only in these combined examples. Do not add the economy, balanced and higher-capacity VMs together unless intentionally deploying multiple VMs.
+
+ADDITIONAL ITEMS TO QUOTE
+- Database tier, region, storage, growth, backup retention, restore testing and network transfer; M30 may not be the right tier.
+- Additional storage, snapshots, backup services, monitoring and alerts, network overage, public IPs and any cross-provider or cross-region transfer.
+- Applicable GST or other taxes, foreign exchange/card fees, paid support, setup, security, maintenance, labour and migration.
+- For high availability: multiple application VMs, load balancer, resilient database configuration, backups and monitoring. A single application VM is a single point of failure. These items are not priced in the examples.
+- Confirm actual Mumbai or nearby Indian region availability, provider connectivity, latency and commercial terms. The 5,000/6,000 GiB figures are monthly transfer allowances, not guaranteed bandwidth speeds. Check the provider's transfer rules and overage charges.
+
+RECOMMENDED NEXT STEP
+Use the balanced 4 dedicated vCPU / 16 GiB application VM as a starting candidate, with a separately sized managed MongoDB in the same or a nearby Indian region. Ask for the 8 vCPU / 32 GiB option as a comparison. Before committing, measure concurrent users, peak transactions, database size and growth, storage needs, response times, CPU and memory; run representative tests in staging. Obtain a complete written regional quotation covering all items above and confirm service responsibilities and recovery objectives.
+
+No production changes or live runtime tests were performed for this budget.

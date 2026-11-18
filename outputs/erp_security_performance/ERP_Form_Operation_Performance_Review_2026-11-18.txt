@@ -1,0 +1,71 @@
+﻿ERP FORM AND OPERATION PERFORMANCE REVIEW
+18 November 2026
+
+PURPOSE AND LIMITS
+This is a source-code performance review of the available ERP, covering the main dashboard, sales and purchase workflows, stock, reports, accounting and imports. The priorities below identify likely scaling bottlenecks; they do not prove that a particular form is currently slow. No production timings, representative database, query execution plans, network traces or concurrent-user tests were available. Source locations are provided for verification. No application behavior was changed. The existing 18 November security and server review was also considered; this document focuses on user operations.
+
+PRIORITY 1 - FIX OR MEASURE FIRST
+
+1. STOCK MANAGEMENT: product search and batch selection
+Evidence: src/StockManagement.jsx:71-78, 148-184. Matching is performed against the loaded product list, and for every uncached matching product the screen calls /stock/batches separately. Requests run four at a time; the visible match list is capped at 40. Cache and cancellation already exist.
+Why it can feel slow: A cold search can require up to 40 requests in ten sequential groups, making network latency and database work visible before batches are ready. Repeated searches and large product masters also increase browser work.
+Recommended fix: Add one tenant- and godown-scoped batch lookup for the displayed product codes, with appropriate projection and limits; retain cancellation and cache invalidation after stock changes. Move large product searches to a paginated server lookup. Compare cold and warm search times and request counts, including a high-latency connection.
+
+2. REPORTS: catalog, stock, sales and purchase reports
+Evidence: backend/p0Features.js:609, 894, 954-958, 1089-1137; src/CatalogReport.jsx:97-99; src/Report.jsx:432, 498, 536. Several report branches load matching records without an explicit page limit; the catalog then filters and sorts returned rows in the browser. Some branches also load related products and godowns. This observation applies to these paths, not every report.
+Why it can feel slow: Larger date ranges and masters increase MongoDB work, response size, memory and browser sorting. A visually paginated grid alone does not reduce initial transfer if the API returns all rows.
+Recommended fix: Add server-side filters, field projection, stable sort and pagination for interactive grids. Compute totals on the server with the same filters and keep a separate streaming or background full-export path. Preserve tenant scoping and report totals. Test 1 month versus 1 year, large masters, search, sorting, totals and export completeness.
+
+3. STOCK MOVEMENT / PRODUCT LEDGER AND AS-ON-DATE STOCK
+Evidence: backend/p0Features.js:1147-1201; backend/server.js:33818-33870, 33922. The stock-movement route retrieves matching movements and adjustments sorted by date; the size depends on selected filters and history. Related stock report routes warrant profiling individually.
+Why it can feel slow: Historical movement reconstruction and large date ranges can grow with transaction history; date sorting and returning many rows add cost.
+Recommended fix: Record explain executionStats for actual tenant, product, godown and date filters; tune compound indexes from real plans. Page detailed movements and consider validated opening balance snapshots for historical calculations. Reconcile reconstructed balances against current stock and backdated transactions before release.
+
+4. PARTY OUTSTANDING AND CREDIT CONTROL
+Evidence: backend/p0Features.js:319-331, 1248-1253. Outstanding reads matching sales and purchases, and credit control reads active accounts and sales. Some projections and parallel requests already exist.
+Why it can feel slow: Work can rise with historical bill and account volume even when a user wants a smaller subset.
+Recommended fix: Apply required account/date/status filters early, aggregate and paginate on the server, and evaluate indexed balance summaries or materialized balances only with a reliable update/reconciliation strategy. Validate receipts, allocations, cancellations and opening balances against existing totals.
+
+5. DASHBOARD HOME / FLASH SUMMARY
+Evidence: backend/p0Features.js:1260, 1305-1386; src/DashboardHome.jsx:76-83, 170. Dashboard summary starts many aggregation/count operations concurrently and the UI filters returned collection rows. Parallelism is already used; it does not eliminate database load.
+Why it can feel slow: Opening dashboards for several users may trigger many simultaneous scans or aggregations. Performance depends on selected date ranges, indexes and collection size.
+Recommended fix: Profile each summary component independently; restrict time windows and fields, aggregate collection details server-side, and load less-important panels separately. Consider short tenant-scoped caches or precomputed summaries with explicit freshness and invalidation rules. Test simultaneous logins, data freshness and financial totals.
+
+6. PAYMENT / RECEIPT AND BILL ALLOCATION
+Evidence: backend/transaction.js:898; src/Transaction.jsx:2692, 2714, 2890-2954; backend/transaction.js:1882-1891. One payment list reads all non-reversed payments sorted without a visible limit at that location. Some receipt workflows repeatedly filter or deduplicate bill arrays; other transaction paths already use pagination.
+Why it can feel slow: Long payment histories and large pending-bill lists increase transfer and client processing; deduplication patterns should be profiled with realistic data.
+Recommended fix: Add server-side date, party, status and search filters with stable pagination to the affected payment list, and use keyed maps for large bill matching where profiling confirms repeated scans. Check allocation balances, reversals, filtering and page boundaries.
+
+PRIORITY 2 - TARGET AFTER MEASUREMENT
+
+7. PRODUCT SALES REPORT
+Evidence: backend/productSalesReport.js:351, 404, 421. This report uses MongoDB aggregation; its detail path permits disk use and loads product master information. Disk use is a safeguard, not evidence that spilling occurs.
+Risk and action: Profile summary and detail separately over representative date ranges. Inspect aggregation execution plans, documents examined and spills; project only needed fields and page detail rows. Maintain grouping and rounding accuracy.
+
+8. DESKTOP / SPREADSHEET IMPORT
+Evidence: backend/desktopImportRoutes.js:445-476, 546-712; backend/desktopImportBatch.js:260-267. Imports load reference data and process batches. Large imports may compete with routine billing for database and Node resources.
+Action: Measure import throughput, event-loop delay, memory and normal billing latency during imports. Use bounded batches, progress reporting, retry/idempotency and throttling; consider isolated workers if measurements justify them. Test partial failures and avoid duplicate posting.
+
+9. FIRST OPEN OF DASHBOARD, SALES, PURCHASE AND REPORT FORMS
+Evidence: src/Dashboard.jsx (~2.60 MB source), src/Transaction.jsx (~525 KB), src/Report.jsx (~502 KB); existing dist/assets/Dashboard-Y14LITaR.js (~1.36 MB uncompressed) and corresponding CSS (~848 KB). Existing dist may not match current source; modules already use lazy loading.
+Risk and action: Source size alone does not prove load or typing latency. Build the current revision, measure compressed transfer, parse/evaluation and render on a typical workstation. Split heavy features and unused CSS where the trace shows benefit; lazy-load export/print libraries and secondary forms where appropriate. Retest both cold and cached loads.
+
+10. SALES AND PURCHASE ENTRY / SAVE
+Evidence: src/Transaction.jsx contains large form workflows; backend/server.js and backend/transaction.js implement transaction and stock operations. The review did not establish a specific save-time bottleneck.
+Action: Trace open, party/product lookup, line entry, save and print separately for invoices with 1, 20 and 100 lines. Measure API count, database queries and transaction duration. Batch repeated lookups where confirmed, debounce searches, and keep stock, accounting and numbering operations atomic. Do not remove correctness checks merely to improve speed.
+
+11. GST AND FINANCIAL REPORTS / EXPORTS
+Evidence: backend/gstReports.js, backend/p0Features.js:448 and src/Report.jsx:6047-6117. Report generation and browser-side processing depend on report size and selected filters; no runtime bottleneck was established.
+Action: Profile generation separately from rendering and XLSX/PDF export. Page or virtualize interactive rows, stream or background large exports, and keep complete report totals and tax calculations. Check browser memory and tax reconciliation.
+
+12. MASTER SEARCH AND MAPPINGS
+Evidence: src/StockManagement.jsx:71-78; backend/server.js:5916 (/api/products/lookup); backend/p0Features.js:1124-1137. A product lookup endpoint exists, while some paths load or search full sets.
+Action: Reuse or extend tenant-scoped paginated lookups where suitable, debounce input, project required fields and cap results. Confirm exact code searches, inactive items and permissions work correctly.
+
+MEASUREMENT PLAN AND ACCEPTANCE
+1. Pick representative small and large firms, safe test data volumes and a normal client PC/network. Record record counts, concurrency, date ranges and current server/database specifications. Do not run heavy tests against production without an agreed safe window.
+2. Measure cold and warm form open, product/party search, invoice save, stock lookup, dashboard load, report generate, page/filter, export and import. Record browser network waterfall, request count and response sizes, API p50/p95/p99, MongoDB executionStats, CPU, memory, disk, connections and Node event-loop delay. Existing slow-request logging is in backend/observability.js and backend/server.js:84-90; its default threshold may miss moderately slow calls.
+3. Fix the highest measured user impact first. Compare before/after on identical data and concurrency. Proposed targets must be agreed with users after baselining; do not assume a particular speedup.
+4. Verify totals, tenant isolation, stock balances, backdated entries, permissions, exports and concurrent saves for each change. Review index write overhead and avoid introducing stale financial or stock data.
+
+Suggested order: batch stock lookup; paginate and project high-volume report/payment paths; profile dashboard and outstanding calculations; then address measured import, bundle, invoice and export bottlenecks. These are priorities for investigation and implementation, not a claim that all listed forms are currently slow.

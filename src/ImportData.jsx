@@ -17,7 +17,7 @@ const desktopTransactionImports = {
   DesktopReceipt: { label: "Desktop Receipt", endpoint: "/transaction/receipt", nested: "receiptBills", identity: ["billSeries", "rno"], required: ["billSeries", "rno", "partyId", "receiptBills"] },
   DesktopContra: { label: "Desktop Contra", endpoint: "/transaction/contra", required: ["transactionDate", "tranVNo"] },
   DesktopPDC: { label: "Desktop PDC", endpoint: "/transaction/pdc-docket", nested: "cheques", identity: ["docSeries", "docVNo"], required: ["docSeries", "docVNo"] },
-  DesktopJournalVoucher: { label: "Desktop Journal Voucher", endpoint: "/p0/journal-voucher", nested: "lines", identity: ["vDate", "vNo"], required: ["vDate", "vNo", "lines"] },
+  DesktopJournalVoucher: { label: "Desktop Journal Voucher", endpoint: "/api/p0/journal-voucher", nested: "lines", identity: ["vDate", "vNo"], required: ["vDate", "vNo", "lines"] },
   DesktopCollectionVoucher: { label: "Desktop Collection Voucher", endpoint: "/transaction/collection-voucher", nested: "bills", identity: ["collectionDate", "colVNo"], required: ["collectionDate", "colVNo", "bills"] },
 };
 const transactionColumns = ["Entry Type", "Document Date", "Series", "Number", "Party", "Amount", "ERP Payload JSON", "Distributor ID", "Firm ID"];

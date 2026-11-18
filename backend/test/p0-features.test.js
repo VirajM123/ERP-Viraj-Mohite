@@ -1,13 +1,16 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import {
-  consolidateStockMovementRows,
-  buildStockMovementReportRows,
+import createP0FeaturesRouter, {
   ageingBucketAmounts,
+  buildStockMovementReportRows,
+  consolidateStockMovementRows,
+  filterCreditControlRows,
+  filterPermissionAuditRows,
   financialRows,
   isCreditDaysOverdue,
   normalizeJournalLines,
   outstandingAfterAllocation,
+  reportDateRangeError,
   stockAdjustmentQuantity,
   validateJournalLines,
 } from "../p0Features.js";
@@ -35,6 +38,60 @@ test("customer ageing assigns each open balance to one correct boundary bucket",
 test("outstanding balances exclude allocations and never become negative", () => {
   assert.equal(outstandingAfterAllocation(500, 125), 375);
   assert.equal(outstandingAfterAllocation(500, 700), 0);
+});
+
+test("report date filters reject malformed, impossible and reversed dates", () => {
+  assert.equal(reportDateRangeError("", ""), "");
+  assert.equal(reportDateRangeError("2024-02-29", "2024-03-01"), "");
+  assert.equal(reportDateRangeError("2024-02-30", "2024-03-01"), "Enter a valid date range.");
+  assert.equal(reportDateRangeError("04/01/2026", "2026-04-30"), "Enter a valid date range.");
+  assert.equal(reportDateRangeError("2026-05-01", "2026-04-30"), "From Date cannot be greater than To Date.");
+});
+
+test("credit control filters by account code or name and preserves all rows when blank", () => {
+  const rows = [
+    { accountCode: "C001", accountName: "North Traders" },
+    { accountCode: "C002", accountName: "South Stores" },
+  ];
+  assert.equal(filterCreditControlRows(rows).length, 2);
+  assert.deepEqual(filterCreditControlRows(rows, " c001 "), [rows[0]]);
+  assert.deepEqual(filterCreditControlRows(rows, "south"), [rows[1]]);
+});
+
+test("permission audit filters independently by user and module", () => {
+  const rows = [
+    { userId: "U1", userName: "Asha", module: "SALES", operation: "CREATE" },
+    { userId: "U2", userName: "Ravi", module: "STOCK", operation: "VIEW" },
+  ];
+  assert.deepEqual(filterPermissionAuditRows(rows), rows);
+  assert.deepEqual(filterPermissionAuditRows(rows, { user: "asha" }), [rows[0]]);
+  assert.deepEqual(filterPermissionAuditRows(rows, { module: "stock" }), [rows[1]]);
+  assert.deepEqual(filterPermissionAuditRows(rows, { user: "u2", module: "stock" }), [rows[1]]);
+});
+
+test("date-filtered report routes reject invalid ranges before reading data", async () => {
+  const router = createP0FeaturesRouter({ authorizeRequest: () => (_req, _res, next) => next() });
+  for (const [path, params] of [
+    ["/reports/financial/:report", { report: "general-ledger" }],
+    ["/reports/catalog/:report", { report: "daily-sales" }],
+    ["/reports/stock-movement", {}],
+    ["/reports/audit-trail", {}],
+  ]) {
+    const route = router.stack.find((layer) => layer.route?.path === path)?.route;
+    assert.ok(route, `expected route ${path}`);
+    const response = {
+      statusCode: 200,
+      status(code) { this.statusCode = code; return this; },
+      json(body) { this.body = body; return this; },
+    };
+    await route.stack[route.stack.length - 1].handle({
+      auth: { distributorId: "D1", firmId: "F1" },
+      params,
+      query: { fromDate: "2026-02-30", toDate: "2026-03-01" },
+    }, response);
+    assert.equal(response.statusCode, 400, path);
+    assert.equal(response.body.success, false, path);
+  }
 });
 
 test("Journal Voucher accepts multiple balanced debit and credit lines", () => {

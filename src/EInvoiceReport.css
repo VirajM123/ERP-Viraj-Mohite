@@ -184,3 +184,97 @@
     padding: 6px 10px 12px;
   }
 }
+/* Match the report grids while retaining the invoice actions and selections. */
+.einvoice-table-wrap th { background: #255a83; color: #fff; }
+.einvoice-table-wrap tbody tr:nth-child(even) { background: #f4f6f8; }
+.einvoice-result-heading, .einvoice-result-heading-actions { flex-wrap: wrap; gap: 10px; }
+.einvoice-table-wrap { min-height: 320px; }
+
+/* Use the same result workspace as the other generated reports. */
+.einvoice-result {
+  min-width: 0;
+  width: 100%;
+  border: 1px solid #dfe4ea !important;
+  border-radius: 5px !important;
+  background: #fff !important;
+  box-shadow: none !important;
+}
+.einvoice-result-heading {
+  min-height: 54px;
+  padding: 8px 12px !important;
+  border-bottom: 1px solid #dfe4ea;
+}
+.einvoice-table-wrap {
+  height: max(320px, calc(100vh - 350px));
+  overflow: auto;
+}
+.einvoice-table-wrap table {
+  width: max-content;
+  min-width: 100%;
+  border-collapse: separate;
+  border-spacing: 0;
+}
+.einvoice-table-wrap th,
+.einvoice-table-wrap td {
+  box-sizing: border-box;
+  height: 38px;
+  padding: 7px 12px !important;
+  border-right: 1px solid #dfe4e9;
+  border-bottom: 1px solid #dfe4e9;
+  font-size: 13px;
+  white-space: nowrap;
+}
+.einvoice-table-wrap thead th {
+  position: sticky;
+  top: 0;
+  z-index: 3;
+  background: #255a83 !important;
+  color: #fff !important;
+  border-right-color: #50799b;
+}
+.einvoice-table-wrap tbody tr:nth-child(even) td { background: #f0f1f3; }
+.einvoice-table-wrap tbody tr:hover td { background: #e8eef4; }
+@media (max-width: 800px) {
+  .einvoice-table-wrap { height: 60vh; min-height: 260px; }
+}
+
+.einvoice-table-wrap {
+  height: auto;
+  min-height: 0;
+  max-height: calc(100vh - 280px);
+}
+.einvoice-table-wrap th,
+.einvoice-table-wrap td {
+  height: 28px;
+  padding: 4px 7px !important;
+  font-size: 11px;
+  line-height: 1.2;
+}
+.einvoice-result-heading {
+  min-height: 40px;
+  padding: 4px 8px !important;
+}
+@media (max-width: 800px) {
+  .einvoice-table-wrap { height: auto; min-height: 0; max-height: 60vh; }
+}
+.einvoice-table-wrap {
+  height: clamp(280px, 48vh, 700px);
+  min-height: 280px;
+  max-height: none;
+  overflow: auto;
+}
+@media (max-width: 800px) {
+  .einvoice-table-wrap { height: 50vh; min-height: 220px; }
+}
+
+/* Use the same compact report shell and grid palette as Party Wise Sales. */
+.einvoice-page { box-sizing: border-box; padding: 8px 10px !important; background: #f5f6f8 !important; color: #233247; }
+.einvoice-page-heading { min-height: 52px !important; margin-bottom: 7px !important; padding: 6px 12px !important; border: 1px solid #dce4ed !important; border-radius: 6px !important; background: #f3f7fc !important; box-shadow: none !important; }
+.einvoice-heading-icon { width: 28px !important; height: 28px !important; border-radius: 5px !important; background: #eef3fb !important; color: #21558a !important; }
+.einvoice-heading-copy h1 { color: #152b49 !important; font-size: 16px !important; line-height: 1.2 !important; }
+.einvoice-heading-copy p { display: none; }
+.einvoice-panel, .einvoice-result { border: 1px solid #dfe4ea !important; border-radius: 5px !important; background: #fff !important; box-shadow: none !important; }
+.einvoice-section-heading, .einvoice-result-heading { min-height: 40px !important; padding: 4px 8px !important; border-bottom: 1px solid #e3e7ec !important; }
+.einvoice-section-heading h2, .einvoice-result-heading h2 { color: #253b54 !important; font-size: 12px !important; }
+.einvoice-table-wrap thead th { background: #255a83 !important; color: #fff !important; border-color: #50799b !important; }
+.einvoice-bottom-bar { border-color: #dfe4ea !important; background: #f7f9fb !important; }

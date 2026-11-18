@@ -1,0 +1,305 @@
+REPORT DATA AND FILTER AUDIT
+============================
+
+Review date: 18 November 2026
+Scope: Active report screens and their API routes in the repository's main
+src/ and backend/ folders. Archived output/checkout snapshots and design
+mockups are excluded. This is a source-code review; no live customer database
+was available.
+
+
+EXECUTIVE SUMMARY
+-----------------
+
+1. No active report result path was found that intentionally displays a fixed
+   sample report as its generated output. The catalog reports, legacy reports,
+   GST reports, financial reports, stock reports, cheque lookup, and E-Invoice
+   candidate list request records from the API/database.
+
+2. There is hardcoded sales demo data in src/Report.jsx. Its old
+   generateAllProductSalesReport function builds report rows from
+   productSalesMockData, but the currently rendered "All Product Wise Sales
+   Report" uses a different function that calls /api/reports/all-product-wise-sales.
+   The mock data is still used as a fallback source for product/group/category/
+   brand filter options when real product lists are empty. Therefore:
+   - It is not the active generated report result.
+   - It can nevertheless present sample choices in the filter controls.
+   - The dormant mock generator should be removed to avoid future accidental
+     reactivation.
+
+   Static report titles, descriptions, columns, and empty initial React state
+   are metadata/UI scaffolding, not report records. Dashboard home widgets
+   with sample initial values are outside the report-generation screens
+   reviewed here.
+
+3. Confirmed filter/control defects:
+   - Stock report grouping controls are displayed but ignored by their APIs.
+   - Credit Control and Permission Audit display date filters their APIs ignore.
+   - Dashboard Reconciliation's From/To UI does not match the endpoint's date
+     parameters; To Date is ignored.
+   - Several GST options are sent but unused by GST report generation.
+   - The standalone E-Invoice screen exposes inactive/ignored criteria, and
+     labels every result "Pending" even when an IRN already exists.
+   - Damage Stock combines current damaged stock balances with a date-filtered
+     latest adjustment, so it is not a historical-period quantity report.
+
+4. Some report handlers return success with an empty/zero result if a required
+   Mongoose model is not registered. That is not hardcoded sample data, but it
+   can make a missing data source look like a valid report with no records.
+
+5. Database-backed code does not by itself prove accounting correctness.
+   Totals, date behavior, tenant data, and legacy field mappings still require
+   reconciliation against the live firm's source transactions.
+
+
+REPORT INVENTORY REVIEWED
+-------------------------
+
+The following active report families are registered in the report menu.
+Several similarly named entries are aliases that call the same endpoint.
+
+Sales:
+  Party Wise Sales; All Party Wise Sales; Product Wise Sales; All Product Wise
+  Sales; Stock And Sales; Sales Register / Invoice Register; Sales Summary;
+  Daily Sales; Monthly Sales Comparison; Salesman Wise Sales; Area / Route
+  Wise Sales; Company Wise Sales; Counter Sales Summary; Sales Return /
+  Credit Note Register; Sales Return Analysis by Product and Customer; Top
+  Selling Products.
+
+Purchase:
+  Company Wise Purchase; Company/Bill Wise Purchase; Product Wise Purchase;
+  Purchase Register / Supplier Invoice Register; Purchase Summary; Supplier
+  Wise Purchase; Purchase by Company and Supplier; Purchase Rate / Last
+  Purchase Rate; Purchase Return / Debit Note Register; Purchase Return
+  Analysis by Product and Supplier.
+
+Stock:
+  Current Stock; As On Date Stock; Damage Stock; Product Ledger; Stock
+  Movement Ledger; Stock Valuation; Godown Wise Stock; Batch Wise Stock;
+  Near-Expiry Stock; Expired Stock; Reorder / Minimum Stock; Stock Adjustment
+  Register; Batch and Expiry Master List.
+
+Customer / supplier / collections:
+  Party Outstanding; Credit Control; Customer Ageing; Bill Wise Outstanding;
+  Customer Statement; Collection by Salesman; Receipt Allocation and
+  Unallocated Receipt; Collection Register; Supplier Outstanding; Bill Wise
+  Payables; Supplier Debit Note Register; Supplier Statement.
+
+GST and e-documents:
+  Sales GST Register; Purchase GST Register; CRN GST Register; GST Summary;
+  GSTR1; E-Invoice Register and IRN Status; E-Way Bill Register and Status;
+  standalone E-Invoice Management.
+
+Financial / administration / distribution / masters:
+  General Ledger; Party Ledger; Trial Balance; Cash Book; Bank Book; Day Book;
+  Profit & Loss; Balance Sheet; Journal Voucher Register; Find Cheque Details;
+  Load / Dispatch Register; Load Settlement Summary; Load Settlement and
+  Collection Summary; Product / Item List; Product Price List; Inactive /
+  Blocked Master Records; Customer / Party List; Supplier List; Company List;
+  Area List; Salesman List; Godown List; Permission Audit; Audit Trail;
+  Dashboard Reconciliation.
+
+The catalog aliases Customer Ageing / Bill Wise Outstanding,
+Supplier Outstanding / Bill Wise Payables, Load Settlement Summary / Load
+Settlement and Collection Summary, and Purchase Return Register / Supplier
+Debit Note Register to shared report slugs. They do not have independent
+calculation/filter behavior today.
+
+
+HARDCODED DATA FINDINGS
+-----------------------
+
+FINDING H1 - Demo product rows remain in the report component (MEDIUM)
+  Location: src/Report.jsx, around productSalesReportRows and
+  productSalesMockData (approximately lines 4955-5062), plus the dormant
+  generateAllProductSalesReport function (approximately lines 5374-5410).
+  Evidence: The old generator applies filters to the fixed P001-P010 demo
+  records. Current "All Product Wise Sales Report" rendering defines and calls
+  a separate API-backed generator later in the file; repository references
+  show the old mock generator is not called by the active render path.
+  Impact: No confirmed active report output uses those fixed rows, but filter
+  pickers fall back to the mock rows when report product lists and product
+  props are empty. Remove the unused mock path and use an explicit empty/error
+  state for missing master data.
+
+FINDING H2 - Static catalog metadata is not hardcoded report data (INFO)
+  Locations: src/Dashboard.jsx and src/CatalogReport.jsx.
+  Evidence: These files contain static names/descriptions/filter definitions.
+  Generated rows are requested from /api/p0/reports/catalog/:report.
+
+FINDING H3 - No active hardcoded result dataset identified (SOURCE REVIEW)
+  Evidence: Active report generation calls API endpoints; backend handlers read
+  Mongoose models, aggregations, or accounting/stock ledgers. This is not a
+  live-data guarantee: source mappings and actual tenant values have not been
+  tested end-to-end.
+
+
+FILTER AND OUTPUT DEFECTS
+-------------------------
+
+FINDING F1 - Stock grouping/report-type criteria are ignored (HIGH)
+  Reports: Current Stock, As On Date Stock, Damage Stock.
+  UI: src/Report.jsx, approximately lines 6532-6570.
+  Backend: backend/server.js, approximately lines 33817-33920.
+  Evidence:
+    - Current Stock displays Report Type (Details/Summary) and Report Level
+      (Product/Batch, Product, Company), and sends these values.
+    - As On Date Stock and Damage Stock display Report Level.
+    - The corresponding handlers call stockStatusRows or map damage rows but
+      do not read reportType or reportLevel; the stockStatusRows helper also
+      accepts no grouping/report-level option.
+    - Current Stock's Current Stock Yes/No control is likewise not used by
+      its handler.
+  Impact: Changing these selections does not change grouping/output. Hide
+  unsupported controls or implement and test the requested grouping.
+
+FINDING F2 - Damage Stock's date range does not produce historical quantities
+(HIGH)
+  Report: Damage Stock.
+  Backend: backend/server.js, approximately lines 33869-33919.
+  Evidence: The report starts from current Mas_DamStock balances. From/To
+  filters select damage adjustments and associate the latest matching
+  adjustment; the returned Qty/Amount are calculated from the current stock
+  row, not from all damage movements in the selected period or a reconstructed
+  as-of balance.
+  Impact: The displayed date fields can imply a historical-period report while
+  quantities remain current. Define whether this is a current damage balance
+  or a period movement register, then align the query and labels.
+
+FINDING F3 - Date filters shown but not applied (HIGH)
+  Reports: Credit Control Report and Permission Audit Report.
+  UI: src/Report.jsx, approximately lines 6532-6570; the generic P0 report
+  panel shows From Date / To Date for these reports.
+  Backend: backend/p0Features.js, approximately lines 1208-1224.
+  Evidence: Permission Audit queries security setup records without date
+  conditions. Credit Control calculates current exposure using today's date
+  and does not read fromDate/toDate.
+  Impact: Changing the displayed dates has no effect. Remove the date inputs
+  or add an actual as-of/date-range contract.
+
+FINDING F4 - Dashboard Reconciliation date controls are mismatched (HIGH)
+  UI/API mapping: src/Report.jsx P0_REPORT_ENDPOINTS and generateP0Report,
+  approximately lines 242-260 and 675-685.
+  Backend: backend/p0Features.js, approximately lines 1225 onward.
+  Evidence: UI shows From Date and To Date and sends fromDate/toDate. The
+  endpoint chooses its report cutoff from query.date (defaults to today), uses
+  fromDate as a period start, and uses collectionFromDate/collectionToDate for
+  a bounded collection window. It does not use the UI's toDate as the report
+  cutoff/collectionToDate.
+  Impact: The displayed date range does not mean what the endpoint computes;
+  To Date can be ignored. Provide explicit As Of Date and collection range
+  controls or translate the UI parameters to the endpoint's supported names.
+
+FINDING F5 - GST report options are partly inert (HIGH)
+  UI: src/Report.jsx, approximately lines 6200-6265; generateGstReport sends
+  all gstFilters.
+  Backend: backend/gstReports.js, especially matchesCommonFilters,
+  documentQuery, and buildPurchaseGSTRows.
+  Evidence:
+    - Sales GST Register's Output Format is sent but no backend code reads
+      outputFormat; party/detail versus summary does not change the result.
+    - Cess Separate is shown for Sales and Purchase GST; GST Bifurcation is
+      shown for Sales, Purchase, and CRN GST. Neither option is consumed by
+      the backend report builders.
+    - GST Summary exposes Company Wise, With Details, and Discount
+      Bifurcation, but the GST backend does not read these controls.
+  Impact: Users can change visible options without changing output, and a
+  report may not honor its selected output format, tax breakdown, or
+  aggregation level. Implement the options or remove/disable them; add
+  per-control response tests. Sales GST and CRN GST's visible GST-number and
+  series criteria are applied by the corresponding builders.
+
+FINDING F6 - Standalone E-Invoice criteria/status are inaccurate (HIGH)
+  UI: src/EInvoiceReport.jsx, approximately lines 92-124 and 194-207.
+  Backend: backend/server.js, approximately lines 13170-13210.
+  Evidence:
+    - QR Path is displayed but is not included in the request or used in the
+      client-side filter.
+    - Tax Type and product/HSN criteria do not affect the candidates. The
+      non-sales and HSN choices are disabled, but their labels still suggest
+      report dimensions that are not available.
+    - Status is fixed to Pending; Generated is disabled. The candidate API
+      does not filter out bills with an existing IRN, and the table labels each
+      row "Pending" even when IRNNo exists.
+    - Bill Wise exposes one Bill No and sets both startNo and endNo to that
+      value, so the UI cannot select a bill-number range although the endpoint
+      accepts one.
+  Impact: Generated invoices can appear in the pending list with a false
+  status, and some criteria cannot affect the result. Filter pending candidates
+  on the server and derive status from IRN/E-Way Bill fields; remove or
+  implement the unused criteria and expose a range if required.
+
+FINDING F7 - Missing models can appear as valid empty reports (MEDIUM)
+  Backend: backend/p0Features.js catalog report handler and
+  /dashboard/summary handler.
+  Evidence: Several report branches use conditional model queries such as
+  Model ? await Model.find(...) : [], and dashboard aggregation has empty
+  success-shaped fallback results when a model is unavailable.
+  Impact: Missing model registration may return HTTP success with zero rows or
+  totals, indistinguishable from a genuine no-data report. Required source
+  models should produce an explicit unavailable-source error rather than a
+  successful empty result.
+
+
+FILTERS THAT APPEAR WIRED TO DATA
+---------------------------------
+
+This list reflects code paths, not live-data validation:
+
+- Catalog reports request the declared filters and their backend branches
+  apply date/company/account/product/godown/search/status criteria where
+  applicable. Sales/purchase registers and summaries, returns/return analysis,
+  top products, stock reports, adjustment register, statements, outstanding,
+  collections, load reports, journal voucher register, and master lists all
+  query their corresponding saved records.
+- Party Wise Sales, All Party Wise Sales, Product Wise Sales, and All Product
+  Wise Sales call report APIs. Current backend code reads the date, company,
+  party/product, area/salesman, credit-note, grouping/order, and zero-sales
+  options supported by those endpoints; no active mock-output path was found
+  for these report buttons.
+- Stock And Sales sends date, company, godown, report level, detail/summary,
+  row filter, ordering, and free-quantity criteria. The endpoint reconstructs
+  the closing stock from current stock and later transactions. Reconcile this
+  reconstruction against the firm's complete stock ledger before treating it
+  as certified.
+- General Ledger, Party Ledger, Trial Balance, Cash Book, Bank Book, Day Book,
+  Profit & Loss, and Balance Sheet use saved posted journal rows and apply
+  account/date cutoffs as supported by each report.
+- Stock Movement Ledger applies date, product/company/godown, and movement
+  type criteria; Audit Trail applies a created-at date range.
+- GST date criteria are validated and applied. Sales/CRN common filters and
+  GSTR1 damage handling are applied where their builders support them; see F5
+  for gaps.
+- Find Cheque Details uses the entered cheque number as the lookup criterion.
+- E-Invoice candidates use date, minimum amount, load/bill level, series, and
+  number criteria where implemented; see F6 for inaccurate status and unused
+  controls.
+
+
+RECOMMENDED NEXT STEPS
+----------------------
+
+1. Fix or remove every inert/misleading UI criterion in F1-F6. For each
+   criterion, test that a changed value changes the server response in an
+   expected way.
+2. Remove the dormant mock All Product Wise generator and do not fall back to
+   demo product records for report filters.
+3. Make missing required report models return explicit errors, not successful
+   empty results.
+4. Reconcile each report's totals against real Sales, Purchase, Credit Note,
+   Debit Note, Stock, Receipt, Payment, and Journal records in the target firm.
+5. Test boundary dates, cancelled/reversed documents, duplicate product codes
+   across companies, empty filter selections, and every enabled filter.
+6. Validate downloaded CSV/Excel/PDF output against the on-screen filtered
+   rows and expected totals.
+
+CONCLUSION
+----------
+
+Active report results are predominantly database/API-backed, not fixed sample
+datasets. The clearest hardcoded-data concern is residual demo product data in
+the product-sales component, including a dormant mock generator and filter
+fallback. The most important correctness blockers are ignored stock criteria,
+misleading date controls, inert GST options, and E-Invoice status/filter
+behavior. Resolve these and complete live-tenant reconciliation before
+describing every report as accurate.

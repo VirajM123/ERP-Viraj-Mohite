@@ -1,3 +1,4 @@
+import { missingCatalogSources, missingDashboardSources, missingStockMovementSources } from "./reportSources.js";
 import express from "express";
 import mongoose from "mongoose";
 import { Journal, postBalancedJournal, reverseSourceJournal, validateJournalEntryLines } from "./accounting.js";
@@ -32,6 +33,31 @@ const JournalVoucher = mongoose.models.T_JournalVoucher || mongoose.model("T_Jou
 
 const tenant = (req, extra = {}) => ({ ...extra, distributorId: req.auth.distributorId, firmId: req.auth.firmId });
 const number = (value) => Number.isFinite(Number(value)) ? Number(value) : 0;
+const isValidReportDate = (value) => {
+  if (!value) return true;
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
+  const parsed = new Date(`${value}T00:00:00.000Z`);
+  return !Number.isNaN(parsed.getTime()) && parsed.toISOString().slice(0, 10) === value;
+};
+export const reportDateRangeError = (fromDate = "", toDate = "") => {
+  if (!isValidReportDate(fromDate) || !isValidReportDate(toDate)) return "Enter a valid date range.";
+  if (fromDate && toDate && fromDate > toDate) return "From Date cannot be greater than To Date.";
+  return "";
+};
+export const filterCreditControlRows = (rows, account = "") => {
+  const search = String(account || "").trim().toLowerCase();
+  return search
+    ? rows.filter((row) => `${row.accountCode || ""} ${row.accountName || ""}`.toLowerCase().includes(search))
+    : rows;
+};
+export const filterPermissionAuditRows = (rows, { user = "", module = "" } = {}) => {
+  const userSearch = String(user || "").trim().toLowerCase();
+  const moduleSearch = String(module || "").trim().toLowerCase();
+  return rows.filter((row) =>
+    (!userSearch || `${row.userId || ""} ${row.userName || ""}`.toLowerCase().includes(userSearch)) &&
+    (!moduleSearch || String(row.module || "").toLowerCase().includes(moduleSearch))
+  );
+};
 export const stockAdjustmentQuantity = (row) =>
   number(row.TotalQty) || number(row.Qty) + number(row.FreeQty);
 export const outstandingAfterAllocation = (amount, allocated) => Math.max(0, number(amount) - number(allocated));
@@ -424,6 +450,9 @@ export default function createP0FeaturesRouter(securityRouter) {
       const report = String(req.params.report || "general-ledger");
       const classifiedReports = ["trial-balance", "profit-loss", "balance-sheet", "cash-book", "bank-book"];
       const statementReports = ["trial-balance", "profit-loss", "balance-sheet"];
+      const reportFromDate = ["trial-balance", "balance-sheet"].includes(report) ? "" : String(req.query.fromDate || "");
+      const dateError = reportDateRangeError(reportFromDate, String(req.query.toDate || ""));
+      if (dateError) return res.status(400).json({ success: false, message: dateError });
       let rows;
       if (["trial-balance", "balance-sheet"].includes(report)) {
         const query = { ...req.query, fromDate: "" };
@@ -530,11 +559,8 @@ export default function createP0FeaturesRouter(securityRouter) {
     const report = String(req.params.report || "");
     const fromDate = String(req.query.fromDate || "").trim();
     const toDate = String(req.query.toDate || "").trim();
-    const datePattern = /^\d{4}-\d{2}-\d{2}$/;
-    if ((fromDate && !datePattern.test(fromDate)) || (toDate && !datePattern.test(toDate)) ||
-        (fromDate && toDate && fromDate > toDate)) {
-      return res.status(400).json({ success: false, message: "Enter a valid date range." });
-    }
+    const dateError = reportDateRangeError(fromDate, toDate);
+    if (dateError) return res.status(400).json({ success: false, message: dateError });
 
     const scope = tenant(req);
     const inRange = () => ({
@@ -555,6 +581,8 @@ export default function createP0FeaturesRouter(securityRouter) {
     });
 
     try {
+      const missingSources = missingCatalogSources(report, mongoose.models, { companyCode: req.query.companyCode });
+      if (missingSources.length) return res.status(503).json({ success: false, message: `Report data source unavailable: ${missingSources.join(", ")}.` });
       const Sales = mongoose.models.T_Sal_Header;
       const Purchase = mongoose.models.T_Pur_Header;
       const CreditNote = mongoose.models.T_CreditNote_Header;
@@ -1117,9 +1145,12 @@ export default function createP0FeaturesRouter(securityRouter) {
     }
   });
   router.get("/reports/stock-movement", securityRouter.authorizeRequest("REPORTS", "STOCK_REPORT", "view"), async (req, res) => {
+    const dateError = reportDateRangeError(String(req.query.fromDate || ""), String(req.query.toDate || ""));
+    if (dateError) return res.status(400).json({ success: false, message: dateError });
     const StockMovementModel = mongoose.models.Inv_StockMovement;
     const StockAdjustment = mongoose.models.T_Stock_Adjustment;
-    if (!StockMovementModel && !StockAdjustment) return res.json({ success: true, rows: [] });
+    const missingSources = missingStockMovementSources(mongoose.models, { companyCode: req.query.companyCode });
+    if (missingSources.length) return res.status(503).json({ success: false, message: `Stock movement data source unavailable: ${missingSources.join(", ")}.` });
     const entryType = String(req.query.entryType || "").trim().toUpperCase();
     const movementFilter = tenant(req);
     const adjustmentFilter = tenant(req, { Status: "COMPLETED" });
@@ -1202,17 +1233,21 @@ export default function createP0FeaturesRouter(securityRouter) {
     res.json({ success: true, rows });
   });
   router.get("/reports/audit-trail", securityRouter.authorizeRequest("REPORTS", "AUDIT_TRAIL", "view"), async (req, res) => {
+    const dateError = reportDateRangeError(String(req.query.fromDate || ""), String(req.query.toDate || ""));
+    if (dateError) return res.status(400).json({ success: false, message: dateError });
     const filter = tenant(req); if (req.query.fromDate || req.query.toDate) { filter.createdAt = {}; if (req.query.fromDate) filter.createdAt.$gte = new Date(`${req.query.fromDate}T00:00:00.000Z`); if (req.query.toDate) filter.createdAt.$lte = new Date(`${req.query.toDate}T23:59:59.999Z`); }
     res.json({ success: true, rows: await AuditEvent.find(filter).sort({ createdAt: -1 }).limit(1000).lean() });
   });
   router.get("/reports/permission-audit", securityRouter.authorizeRequest("REPORTS", "PERMISSION_AUDIT", "view"), async (req, res) => {
     const Security = mongoose.models.Mas_SecuritySetup;
-    const docs = Security ? await Security.find(tenant(req)).lean() : [];
+    if (!Security) return res.status(503).json({ success: false, message: "Permission data source is unavailable." });
+    const docs = await Security.find(tenant(req)).lean();
     const rows = docs.flatMap((doc) => Object.entries(doc.permissions || {}).flatMap(([module, operations]) => Object.entries(operations || {}).map(([operation, permission]) => ({ userId: doc.userId || doc.userName || "", userName: doc.userName || "", module: module.toUpperCase(), operation, view: !!permission.view, add: !!permission.add, edit: !!permission.edit, delete: !!permission.delete, print: !!permission.print, export: !!permission.export }))));
-    res.json({ success: true, rows });
+    res.json({ success: true, rows: filterPermissionAuditRows(rows, { user: req.query.user, module: req.query.module }) });
   });
   router.get("/reports/credit-control", securityRouter.authorizeRequest("REPORTS", "CREDIT_CONTROL", "view"), async (req, res) => {
     const Account = mongoose.models.Mas_Account, Sales = mongoose.models.T_Sal_Header;
+    if (!Account || !Sales) return res.status(503).json({ success: false, message: "Credit control data source is unavailable." });
     const accounts = Account ? await Account.find(tenant(req, { isActive: { $ne: false } }))
       .select("accountCode accountName blackListed creditAmt creditDays creditBills").lean() : [];
     const sales = Sales ? await Sales.find(tenant(req, { isActive: { $ne: false }, IsBillCancelled: { $ne: true } })).select({ PartyCode: 1, NetAmount: 1, receiptAllocated: 1, DueDate: 1 }).lean() : [];
@@ -1220,7 +1255,7 @@ export default function createP0FeaturesRouter(securityRouter) {
     sales.push(...openingBills.map(row => ({ PartyCode: row.accountCode, NetAmount: row.balanceAmount, receiptAllocated: row.allocatedAmount, DueDate: row.postingDate })));
     const today = new Date().toISOString().slice(0, 10);
     const rows = accounts.map((account) => { const bills = sales.filter((bill) => bill.PartyCode === account.accountCode); const outstanding = bills.reduce((sum, bill) => sum + Math.max(0, number(bill.NetAmount) - number(bill.receiptAllocated)), 0); return { accountCode: account.accountCode, accountName: account.accountName, blackListed: account.blackListed, creditLimit: number(account.creditAmt), creditDays: number(account.creditDays), maximumBills: number(account.creditBills), pendingBills: bills.filter((bill) => number(bill.NetAmount) - number(bill.receiptAllocated) > 0).length, outstanding, overdue: bills.some((bill) => number(bill.NetAmount) - number(bill.receiptAllocated) > 0 && String(bill.DueDate || "") < today) ? "YES" : "NO" }; });
-    res.json({ success: true, rows });
+    res.json({ success: true, rows: filterCreditControlRows(rows, req.query.account) });
   });
   router.get("/dashboard/summary", async (req, res) => {
     const Sales = mongoose.models.T_Sal_Header, Purchase = mongoose.models.T_Pur_Header, Receipt = mongoose.models.T_Receipt, Stock = mongoose.models.Mas_Stock;
@@ -1228,18 +1263,30 @@ export default function createP0FeaturesRouter(securityRouter) {
     const Account = mongoose.models.Mas_Account, Product = mongoose.models.Mas_Product;
     const CreditNote = mongoose.models.T_CreditNote_Header, DebitNote = mongoose.models.DebitNote;
     const DamageStock = mongoose.models.Mas_DamStock, Payment = mongoose.models.T_Payment;
+    const missingSources = missingDashboardSources(mongoose.models);
+    if (missingSources.length) return res.status(503).json({ success: false, message: `Dashboard data source unavailable: ${missingSources.join(", ")}.` });
     const scope = tenant(req);
     const today = new Date().toISOString().slice(0, 10);
-    const selectedDate = /^\d{4}-\d{2}-\d{2}$/.test(String(req.query.date || "")) ? String(req.query.date) : today;
+    const requestedDate = String(req.query.date || "");
+    const dateError = reportDateRangeError("", requestedDate);
+    if (dateError) return res.status(400).json({ success: false, message: dateError });
+    const selectedDate = requestedDate || today;
     const requestedStart = String(req.query.fromDate || "");
-    const selectedStart = /^\d{4}-\d{2}-\d{2}$/.test(requestedStart) && requestedStart <= selectedDate ? requestedStart : selectedDate;
+    const startDateError = reportDateRangeError(requestedStart, selectedDate);
+    if (startDateError) return res.status(400).json({ success: false, message: startDateError });
+    const selectedStart = requestedStart || selectedDate;
     const requestedCollectionStart = String(req.query.collectionFromDate || "");
     const requestedCollectionEnd = String(req.query.collectionToDate || "");
-    const collectionRangeValid = /^\d{4}-\d{2}-\d{2}$/.test(requestedCollectionStart)
-      && /^\d{4}-\d{2}-\d{2}$/.test(requestedCollectionEnd)
-      && requestedCollectionStart <= requestedCollectionEnd
-      && requestedCollectionEnd <= selectedDate;
-    const collectionDateFilter = collectionRangeValid
+    const hasCollectionRange = requestedCollectionStart || requestedCollectionEnd;
+    const collectionDateError = hasCollectionRange && (!requestedCollectionStart || !requestedCollectionEnd)
+      ? "Enter a valid collection date range."
+      : hasCollectionRange
+      ? reportDateRangeError(requestedCollectionStart, requestedCollectionEnd)
+      : "";
+    if (collectionDateError || (requestedCollectionEnd && requestedCollectionEnd > selectedDate)) {
+      return res.status(400).json({ success: false, message: collectionDateError || "Collection date range cannot be later than the report date." });
+    }
+    const collectionDateFilter = hasCollectionRange
       ? { $gte: requestedCollectionStart, $lte: requestedCollectionEnd }
       : { $lte: selectedDate };
     const selectedMonth = selectedDate.slice(0, 7);
