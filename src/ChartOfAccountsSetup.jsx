@@ -108,7 +108,7 @@ export default function ChartOfAccountsSetup({ onClose }) {
       </header>
       {error && <div className="party-report-error" role="alert">{error}</div>}
       {message && <div className="chart-setup-success" role="status">{message}</div>}
-      {loading ? <p className="chart-setup-empty">Loading account codes...</p> : accounts.length === 0 ? (
+      {loading ? <p className="chart-setup-empty"><span className="erp-loading-bar erp-loading-bar--inline" aria-hidden="true" /> Loading account codes...</p> : accounts.length === 0 ? (
         <p className="chart-setup-empty">No journal or master account codes were found for this firm.</p>
       ) : (
         <div className="chart-setup-table-wrap">
@@ -166,7 +166,7 @@ export default function ChartOfAccountsSetup({ onClose }) {
                   <td>{account.mapped ? "Mapped" : "Needs mapping"}</td>
                   <td>
                     <button type="button" className="report-clear-button" onClick={() => saveAccount(account)} disabled={savingCode === account.accountCode || loading}>
-                      <Check size={14} /> {savingCode === account.accountCode ? "Saving..." : "Save"}
+                      <Check size={14} /> {savingCode === account.accountCode ? <><span className="erp-loading-bar erp-loading-bar--inline" aria-hidden="true" /> Saving...</> : "Save"}
                     </button>
                   </td>
                 </tr>

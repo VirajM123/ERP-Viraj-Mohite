@@ -5,6 +5,7 @@ import vm from "node:vm";
 import { findPurchaseSupplier, purchaseSupplierValue } from "../../src/utils/purchaseSupplier.js";
 import { purchaseSupplierFilter } from "../purchaseSupplier.js";
 import { validateFinancialEnvelope } from "../financialValidation.js";
+import { assertSalesDateAllowed } from "../generalSetupDatePolicy.js";
 
 const supplier = { _id: "aaaaaaaaaaaaaaaaaaaaaaaa", accountCode: "SUP-1", accountName: "Supplier & Co.", isActive: true };
 const duplicateName = { ...supplier, _id: "bbbbbbbbbbbbbbbbbbbbbbbb", accountCode: "SUP-2" };
@@ -85,6 +86,7 @@ for (const method of ["post", "put"]) {
       ensureConnection() {}, securityRouter: { authorizeRequest() {} },
       mongoose: { startSession: async () => session }, purchaseSupplierFilter, validateFinancialEnvelope,
       applyProductMasterTaxRates: async () => {}, nextDocumentNumber: async () => 1,
+      loadFirmGeneralSetup: async () => ({}), assertSalesDateAllowed,
       OtherAccount: { findOne(filter) { supplierQuery = filter; return query(duplicateName); } },
       Company: { findOne: () => query({ companyCode: "C1", companyName: "Company" }) },
       GodownModel: { findOne: () => query({ godownCode: "G1" }) },

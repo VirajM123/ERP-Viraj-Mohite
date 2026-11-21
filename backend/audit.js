@@ -24,11 +24,11 @@ export const redactAuditValue = (value) => {
     return null;
   }
 
-  const secretKeys = new Set(["password", "oldpassword", "token", "apikey", "authorization", "secret"]);
+  const secretKeys = new Set(["password", "oldpassword", "newpassword", "confirmpassword", "token", "accesstoken", "refreshtoken", "apikey", "authorization", "secret", "clientsecret", "jwtsecret", "connectionstring", "mongodburi", "otp", "aadhaar", "aadhaarnumber", "aadhaarno", "aadhar", "aadharnumber", "aadharno"]);
   const visit = (input) => {
     if (Array.isArray(input)) return input.map(visit);
     if (!input || typeof input !== "object") return input;
-    return Object.fromEntries(Object.entries(input).map(([key, nested]) => [key, secretKeys.has(key.toLowerCase()) ? "[REDACTED]" : visit(nested)]));
+    return Object.fromEntries(Object.entries(input).map(([key, nested]) => [key, secretKeys.has(key.toLowerCase().replace(/[^a-z0-9]/g, "")) ? "[REDACTED]" : visit(nested)]));
   };
   const serializedValue = JSON.stringify(value);
   return serializedValue === undefined

@@ -1,0 +1,190 @@
+﻿GENERAL SETUP: REQUIRED SETTINGS AND USES
+Prepared: 20 November 2026
+Project: Total Solution ERP
+
+PURPOSE AND SCOPE
+This document recommends settings for the firm's General Setup, based on the current General Setup source, the desktop screenshots and business rules shared in this conversation, the sales/purchase/stock/security code, and the two existing ERP analysis files. "Priority" means recommended implementation order, not proof that a setting is legally required or appropriate for every firm. Confirm business rules and accounting treatment with the owner and accountant before implementation.
+
+This is a source review and design proposal, not a live-system audit or proof that any option works correctly. No application or database setting was changed for this document. Existing audit findings are historical and require retesting against the current working tree. Suggestions labeled NEW are candidates, not confirmed absent throughout the whole ERP. Suggested defaults apply to new installations only after approval; preserve existing firms' saved behavior during upgrades.
+
+A. FIRST PRIORITY: COMPLETE EXISTING SETTINGS BEFORE ADDING MORE
+
+These controls already exist in General Setup. Do not create another setting with the same purpose.
+
+1. Date Locking | Existing; partially connected
+   Use: block creation, editing, direct cancellation and deletion of documents dated on or before the chosen date. The selected day itself is locked. For example, 31 October locked means 1 November is the first eligible date.
+   Current evidence: sales create, standard edit, bill-type edit and sales cancellation call the new date-policy helper. Coverage of other entry types and alternate mutation paths is not established.
+   Complete: apply server-side to relevant purchase, vouchers, returns, notes and other posting paths; validate both original and new dates on edits, and preserve existing financial-period and authorization controls. Agree the allowed exception process separately and test direct API requests.
+
+2. Auto Bill Lock Days | Existing; partially connected
+   Use: limit edits, direct cancellations and deletion of older bills, without blocking new bills by itself. A 7-day window on 20 November includes 14-20 November; 13 November and earlier are locked.
+   Current evidence: sales edit, sales bill-type change and cancellation use the date-policy helper. Other bill types and alternate paths are not verified. The present helper uses the application's IST business-date function; confirm company business date if firms can operate in different time zones or use a configurable business date.
+   Complete: agree which documents count as bills, then apply consistently and test calendar boundaries, leap days, historical data and permissions.
+
+3. Show Entry Days | Existing; not connected in the reviewed flows
+   Use: default the date range of entry lists, not a restriction on creating or editing. An authorized user can widen the dates or search older records.
+   Choice: nonnegative whole number of days; agree what 0 means and whether the current day counts. Apply to relevant lists while retaining explicit filters, reports and permissions.
+
+4. Reverse Scheme | Existing; not connected in the reviewed flows
+   Use: when an operator enters a manual scheme amount, ON displays amount / eligible paid-item base x 100; OFF leaves the derived percentage blank. Entering a percentage still calculates the amount. Keep a manually entered amount fixed when the base changes; configured schemes keep their own rules.
+   Example: amount 100 on paid-item base 1,000 gives 10%; when base becomes 2,000 the amount remains 100 and the displayed percentage is 5%.
+   Complete: preserve amount-entry mode through save/reopen; define precision, zero-base and invalid-amount behavior; use the agreed paid quantity and tax base consistently in UI and server.
+
+5. Allow Cess in Sale and Allow Cess in Purchase | Existing; not connected in the reviewed flows
+   Use: allow applicable product cess in sales or purchase calculations. The supplied business rule is taxable value x cess % plus fixed cess per notified unit where applicable; either component can be zero.
+   Complete: first define product cess mode and notified-unit conversion; apply only the applicable components, validate on the server, persist rate/base/amount, update totals, prints, tax and accounting postings and reports, and verify edit/cancel/reopen. OFF behavior for historical bills must be explicitly specified so a later setting change does not rewrite past transactions.
+
+6. Import Negative | Existing; not connected as a separate import setting
+   Use: during stock-out import, OFF applies the normal sufficient-stock check; ON permits a stock-out that would leave negative available stock in the relevant godown and batch scope. Example: stock 5, issue 8 => OFF rejects/flags, ON allows -3.
+   Complete: isolate trusted import requests from ordinary billing, define missing/locked batch behavior and partial-batch processing, and ensure an import flag cannot be forged to bypass ordinary sales controls. Do not conflate with the existing Allow Negative Stock setting for regular billing.
+
+7. Import With Zero | Existing; not connected as specified
+   Use: OFF flags/rejects zero-quantity item rows with source row and reason; ON skips them and reports the count. If every item is skipped, do not create the bill. Free-quantity and zero-rate items follow their existing rules.
+   Complete: confirm whether zero means paid quantity alone or total paid plus free quantity, and apply consistently to relevant import types. Preserve source row references, failure and retry behavior and summary counts.
+
+8. Settle Load Negative | Existing; not connected in reviewed paths
+   Use: calculate remaining item quantity per load after sales, returns and approved adjustments. OFF blocks settlement with a negative remaining item; ON permits only an authorized discrepancy workflow recording shortage, reason, user and settlement reference.
+   Example: loaded 100, sold 95, returned 8 => -3. OFF blocks; ON records an authorized 3-unit discrepancy.
+   Complete: confirm desktop settlement behavior, unit conversion and stock/posting effect; enforce atomically and protect against duplicate settlement.
+
+9. Sale Series by GST | Existing; rule not yet established
+   Use: potentially choose a sales series according to an agreed GST-related mapping. Do not infer the selection from the option name. Confirm registration/tax type, party, location or other condition, mapping ownership, manual override and fallback. Keep separate from Company Wise Series Setup until precedence is specified.
+
+10. Allow GST Rate | Existing; rule not yet established
+    Use: potentially allow editing a product's GST rate on a transaction. Confirm whether it controls editing, visibility or calculation and test an 18% product edited to 12% with ON and OFF. Existing backend master-rate validation must be reconciled with any approved override, permissions, reason, audit, saved historical rate and tax reporting. Never silently change a posted bill's rate.
+
+11. QR Code Folder Name | Existing; rule not yet established
+    Use: unknown until desktop behavior is verified. Confirm whether the folder is read or written, QR type (e-invoice, payment or other), filename/key, format, path, access restrictions and missing-file behavior. The web app currently has a separate payment QR upload/print flow; do not assume the same purpose or accept arbitrary server paths.
+
+12. Save Invoice After Load | Removed as a misleading duplicate
+    Owner clarified the desired behavior is whether a bill already assigned to a vehicle/load can be edited. Existing Allow Edit Bill After Load and Edit Product After Load cover that subject. Do not add a second auto-save setting under the old name. Verify both existing controls in UI and server, including changes to non-product fields.
+
+B. PROPOSED NEW GENERAL SETUP OPTIONS
+
+P1 = recommended core operational controls after Section A; P2 = useful where relevant; P3 = optional. These are firm-level behavior choices. For per-user authority use Security Setup; for per-product values use Product Master; for per-party limits use Account Master. Suggested values are starting points for owner review, not claims about current defaults.
+
+P1-01. Expired Batch Billing Policy
+   Control: Block / Warn and require authorized override / Allow. Suggested: Block.
+   Use: decide what happens when an expired batch is selected or saved on a sales invoice. Check the batch expiry date against the document/business date according to agreed expiry-month handling.
+   Touches: sales selection, save and edit, stock API, returns and override audit. Keep warnings separate from server enforcement. Clarify treatment of credit notes and sales returns.
+
+P1-02. Near-Expiry Warning Days
+   Control: nonnegative whole number, with 0 meaning disabled if approved. Suggested: 90 days, subject to business policy.
+   Use: warn before billing stock that will expire within the selected window; show product, batch and expiry. It is a warning, not permission to sell an already expired batch.
+   Touches: sales batch selection, product/stock lookup and purchase receiving if the business wants it. Confirm day-based versus end-of-month expiry.
+
+P1-03. Duplicate Supplier Invoice Policy
+   Control: Block / Warn with authorized override / Allow. Suggested: Block after historical data review.
+   Use: identify a repeated supplier invoice before purchase posting, reducing accidental double entry.
+   Touches: purchase create/edit, import and server validation. Match by firm, supplier, normalized supplier invoice number and agreed financial-year/date scope; exclude the current record on edit. Specify cancellation, supplier credit notes, legitimate duplicates, concurrency and audit.
+
+P1-04. Bill Rounding Method
+   Control: None / nearest rupee / another explicitly defined increment. Suggested: None until accounting confirms.
+   Use: determine whether and how the final amount is rounded and expose the round-off amount.
+   Touches: sales/purchase totals, server calculation, stored amount, print, ledger, reports and credit notes. Specify rounding stage, tie rule, negative values and posting account. Existing rounding fields are not proof of a configurable automatic policy.
+
+P1-05. Low Stock Warning
+   Control: On / Off. Suggested: On if product thresholds are maintained.
+   Use: warn when a product's available quantity is at or below its reorder/minimum level. Keep this separate from Allow Negative Stock, which determines whether insufficient stock may be posted.
+   Touches: sales selection, stock view and relevant godown. Define on-hand vs available quantity, reserved stock and unit conversion. Store thresholds in Product Master, not as one firm-wide quantity.
+
+P1-06. Allow Change Unit on Sales Bill
+   Control: On / Off. Suggested: preserve current behavior for existing firms.
+   Use: determine whether the operator can change the selected product unit after it is added. This option appears on the supplied desktop General Setup screen.
+   Touches: sales entry and server validation; valid unit conversions, stock quantities, rates, discounts, free quantity and audit. Clarify whether different permissions are needed for purchases and returns.
+
+P1-07. Allow Change Free Quantity on Sales Bill
+   Control: On / Off. Suggested: preserve current behavior until scheme policy is approved.
+   Use: control manual editing of free quantity, distinct from quantities automatically generated by a scheme. The option appears on the desktop reference.
+   Touches: sales entry, configured-scheme ownership, stock movement, save/edit, return handling and audit. Confirm whether OFF locks all free quantities or only manually added ones.
+
+P1-08. Continue Last Bill Narration
+   Control: On / Off. Suggested: Off.
+   Use: prefill the next new bill's narration from the last completed bill when the operator wants recurring narration. This option appears on the desktop reference.
+   Touches: new sales-bill initialization. Define scope (user, firm, branch and bill type), which completed bill is considered last, and whether narration from a cancelled bill may be used. The user must still be able to edit it.
+
+P1-09. Duplicate Item/Batch in Sales Bill
+   Control: Allow / Warn / Block / Merge, only after agreeing merge rules. Suggested: Warn.
+   Use: prevent accidental repeated entry of the same product and batch, while allowing legitimate separate lines for different rates, schemes or tax treatment.
+   Touches: sales product grid, import and backend checks. Define duplicate key and comparison rules before permitting automatic merge; do not silently merge differently priced or discounted lines.
+
+P1-10. Quantity and Rate Decimal Precision
+   Control: quantity decimal places and rate decimal places as separate bounded numbers. Suggested: preserve existing precision until reviewed.
+   Use: make entry and display precision consistent with the product unit and business practice.
+   Touches: sales/purchase entry, stock movement, persistence, calculations, imports, printing and reports. Specify per-unit exceptions and rounding. Changing display precision must not silently alter historical stored quantities or amounts.
+
+P2-01. Warn on Missing Batch Expiry
+   Control: Block / Warn / Allow. Suggested: Warn, with product-specific policy.
+   Use: prompt when a product requiring batch expiry is entered without a valid expiry. Do not require expiry for every product indiscriminately.
+   Touches: product policy, purchase receiving, stock records, import and sales selection. Confirm product classes and handling of existing unrecorded stock.
+
+P2-02. Batch Selection Order
+   Control: Manual / earliest expiry first / first received first. Suggested: Manual until warehouse rules are confirmed.
+   Use: suggest stock batches in a predictable order for sales. This selects or ranks available batches; it must not bypass expiry, locked batch or stock controls.
+   Touches: batch lookup, allocation, unit conversion and overrides. Confirm tie-breakers, partially allocated lines and treatment of unknown expiry.
+
+P2-03. Allow Backdated Entry
+   Control: Allow / warn / require authorized override, with optional maximum age. Suggested: preserve existing behavior and permissions until agreed.
+   Use: control backdated new documents separately from Date Locking and Auto Bill Lock Days. Date locking and a closed financial period remain authoritative.
+   Touches: create APIs for affected document types, business date, permission checks and audit. Specify dates, timezone, import treatment and interaction with future dates. Show Entry Days remains a list filter only.
+
+P2-04. Future-Dated Entry Policy
+   Control: Block / Warn / Allow by document type. Suggested: Warn until workflow needs are confirmed.
+   Use: prevent accidental future-dated transactions without blocking legitimate scheduled or post-dated workflows.
+   Touches: sales/purchase/voucher create and edit, company business date and date controls. Do not apply a blanket rule to post-dated cheques or explicitly scheduled documents.
+
+P2-05. Default Bill Type
+   Control: Cash / Credit; consider series/company-specific default if the business needs it. Suggested: preserve current default.
+   Use: preselect a bill type for new sales invoices. This differs from existing Allow Change Bill Type, which governs whether the user can change it.
+   Touches: sales initialization, company series selection and counter sales. Avoid changing saved bills or weakening party credit controls.
+
+P2-06. Receipt Discount Policy
+   Control: On / Off only if the business confirms it, plus independently controlled authority and limits. Suggested: Off until approved.
+   Use: permit an operator to record an agreed discount when receiving a payment. The desktop reference shows Allow Receipt Discount.
+   Touches: receipt entry, allocation, discount ledger, approvals, reversal, audit and reports. Define percentage/base, maximum, tax treatment and posting with accounting before enabling.
+
+P2-07. Require Reason for Sensitive Override
+   Control: firm policy for which supported overrides require a reason; user authority remains in Security Setup. Suggested: require a reason for authorized price and date overrides.
+   Use: capture why an exceptional rate, duplicate or other permitted override was used, with user, time and document reference.
+   Touches: UI, server authorization, audit trail and reports. A switch must never itself grant permission. Existing trusted sales-rate enforcement already refers to an override reason; extend only after tracing it.
+
+P2-08. Print Copy Defaults
+   Control: default number of copies and approved print format by document type. Suggested: one copy, subject to business needs.
+   Use: prefill print choices following a save or manual print. This complements existing Save and Print and bill-print options, rather than replacing them.
+   Touches: existing print settings, sales/purchase print workflow and browser printing. Do not invent a firm-level option if the existing Print Settings screen already owns it; define precedence.
+
+P2-09. Duplicate Return Against Original Bill
+   Control: Block excess cumulative returned quantity; optional warning for repeated return documents. Suggested: enforce the agreed maximum.
+   Use: reduce duplicate or excessive returns against an original sales bill.
+   Touches: credit notes, return quantities by product/batch, prior returns, cancellation and concurrency. Verify existing checks first. Commercial, tax and accounting rules need approval; this may be an invariant rather than a setting.
+
+P3-01. Default Search and Navigation Preferences
+   Control: user-level preferences where possible, with optional firm defaults.
+   Use: remember list search mode, visible columns or navigation style. Existing Product Selection On and Default Selection already provide firm-wide behavior; extend rather than duplicate.
+   Touches: user profile/local preferences and accessible defaults. Never change security or financial rules based on a browser-only preference.
+
+C. KEEP THESE IN THEIR EXISTING HOMES
+
+- User access, edit/delete rights and override authority: Security Setup; a General Setup switch must not grant a user permission.
+- Credit limit, credit days and party-specific blocking: Account/Party Master and existing credit validation. A firm-level behavior policy may be considered only after tracing precedence; do not add a competing limit.
+- Product GST, cess attributes, unit conversions and reorder quantities: Product Master, with transaction snapshots. General Setup determines approved behavior, not the product's data.
+- Company-specific document series: Company Wise Series Setup. Add GST-based selection only when exact mapping and precedence are agreed.
+- Print format, bank details and payment QR: existing Print Settings unless the owner confirms a separate firm-wide default is necessary.
+- Financial period close, reopening and approvals: existing period/accounting and security workflows. A date-lock setting must not reopen a closed period or bypass audit.
+- Backup schedules, restore drills and monitoring: operations/administration, not a simple General Setup On/Off switch.
+
+D. DELIVERY AND ACCEPTANCE ORDER
+
+1. Inventory saved setting values and existing firm behavior; resolve historical audit findings and obtain a disposable test database.
+2. Complete Section A in small, independently tested changes. Finish period locking for every agreed transaction and mutation path. Validate existing 26-or-so code-connected settings rather than assuming references guarantee correct behavior.
+3. Agree P1 behaviors and any required overrides with users and accountant. Implement firm-scoped persistence with migration-safe defaults and save/reload behavior. Existing user settings must not be reset.
+4. For each setting test ON and OFF (or each policy choice), new/save/reopen/edit/cancel, dates and boundary cases, permissions, direct API, multi-firm isolation, imports where applicable, and concurrency. Check relevant stock, tax, print, reports, accounting and reversal outputs against independently calculated expectations.
+5. Add a setting to the screen only when the affected behavior is implemented and verified. Use explicit Block/Warn/Allow choices where a switch cannot express the rule. Keep the compact screen searchable and avoid categories if the owner prefers one screen.
+
+SOURCE NOTES
+- General Setup screen, defaults, save/load: src/GeneralSetup1.jsx and backend/generalSetup.js.
+- Date-policy work: backend/generalSetupDatePolicy.js and its calls in backend/server.js; focused tests exist, but complete workflow coverage is pending.
+- Sales/purchase entry, print, stock and credit examples: src/Dashboard.jsx and backend/server.js; financial calculations: backend/financialValidation.js.
+- Existing user permissions and separate tools: src/SecuritySetup.jsx; company series: src/CompanyWiseSeriesSetup.jsx.
+- Historical analysis: ERP_Audit_Analysis_2026-11-20.txt and ERP_Deep_Analysis_2026-11-19.txt. These reports include unverified and historical findings; rerun tests before treating any finding as current.
+- Desktop labels and the agreed business rules for date locks, import, reverse scheme, settlement and cess were supplied in this conversation. Settings marked "confirm" are not fully specified.

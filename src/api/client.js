@@ -1,7 +1,21 @@
 import { API_ORIGIN } from "./config";
+import { startVisualLoading } from "../components/loadingTracker";
 
 const originalFetch = window.fetch.bind(window);
 let nextLoadingRequestId = 0;
+let csrfToken = "";
+export const setCsrfToken = (value) => { csrfToken = String(value || ""); };
+
+// XMLHttpRequest is used for upload progress and does not pass through fetch.
+export const authenticateUpload = (request, destination) => {
+  if (!isTrustedApiDestination(destination)) throw new Error("Untrusted upload destination");
+  if (requestUrl(destination).pathname.toLowerCase().includes("desktop-import")) {
+    const finish = startVisualLoading({ title: "Importing your file...", message: "Please keep this page open.", variant: "dashboard" });
+    request.addEventListener("loadend", finish, { once: true });
+  }
+  request.withCredentials = true;
+  if (csrfToken) request.setRequestHeader("X-CSRF-Token", csrfToken);
+};
 
 const getLoadingType = (input, init) => {
   if (!isTrustedApiDestination(input)) return null;
@@ -44,22 +58,27 @@ export const isTrustedApiDestination = (input) => {
 
 export const authenticatedFetch = (input, init = {}) => {
   const headers = new Headers(init.headers || (input instanceof Request ? input.headers : undefined));
-  const token = localStorage.getItem("token");
-  if (token && isTrustedApiDestination(input) && !headers.has("Authorization")) {
-    headers.set("Authorization", `Bearer ${token}`);
-  }
+  const trusted = isTrustedApiDestination(input);
+  const method = String(init.method || (input instanceof Request ? input.method : "GET")).toUpperCase();
+  if (trusted && !["GET", "HEAD", "OPTIONS"].includes(method) && csrfToken) headers.set("X-CSRF-Token", csrfToken);
 
+  const path = trusted ? requestUrl(input).pathname.toLowerCase() : "";
+  const isSave = trusted && ["POST", "PUT", "PATCH"].includes(method) && !/\/(login|logout|session|report|search|lookup|preflight)(\/|$)/.test(path);
+  const finishVisual = isSave && path.includes("import") && !path.includes("/validate")
+    ? startVisualLoading({ title: "Importing your data...", message: "Please keep this page open.", variant: "dashboard" })
+    : null;
   const type = getLoadingType(input, init);
   const requestId = ++nextLoadingRequestId;
   if (type) notifyLoadingStart(requestId, type);
 
   const finishLoading = () => {
+    if (finishVisual) finishVisual();
     if (type) notifyLoadingEnd(requestId);
   };
 
   let request;
   try {
-    request = originalFetch(input, { ...init, headers });
+    request = originalFetch(input, { ...init, headers, ...(trusted ? { credentials: "include" } : {}) });
   } catch (error) {
     finishLoading();
     throw error;
@@ -68,6 +87,9 @@ export const authenticatedFetch = (input, init = {}) => {
   return request.then(
     (response) => {
       finishLoading();
+      if (response.status === 401 && csrfToken && trusted && !requestUrl(input).pathname.startsWith("/api/login")) {
+        window.dispatchEvent(new Event("erp:session-expired"));
+      }
       return response;
     },
     (error) => {

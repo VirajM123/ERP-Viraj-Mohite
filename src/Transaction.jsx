@@ -9569,7 +9569,7 @@ setTransactionFormMode((prev) => ({
                     colSpan={18}
                     className="receipt-premium-empty-row"
                   >
-                    Loading Receipt records...
+                    <span className="erp-loading-bar erp-loading-bar--inline" aria-hidden="true" /> Loading Receipt records...
                   </td>
                 </tr>
               ) : paginatedReceiptList.length === 0 ? (
@@ -14073,7 +14073,7 @@ setTransactionFormMode((prev) => ({
                       colSpan={13}
                       className="cheque-bounce-empty-row"
                     >
-                      Loading Cheque Bounce records...
+                      <span className="erp-loading-bar erp-loading-bar--inline" aria-hidden="true" /> Loading Cheque Bounce records...
                     </td>
                   </tr>
                 ) : paginatedChequeBounceList.length === 0 ? (
@@ -15550,7 +15550,7 @@ setTransactionFormMode((prev) => ({
                       colSpan={11}
                       className="pdc-docket-empty-row"
                     >
-                      Loading PDC Docket records...
+                      <span className="erp-loading-bar erp-loading-bar--inline" aria-hidden="true" /> Loading PDC Docket records...
                     </td>
                   </tr>
                 ) : paginatedPDCDocketList.length === 0 ? (
@@ -16882,7 +16882,7 @@ setTransactionFormMode((prev) => ({
                       className="contra-empty-cell"
                     >
                       <strong>
-                        Loading Contra transactions...
+                        <span className="erp-loading-bar erp-loading-bar--inline" aria-hidden="true" /> Loading Contra transactions...
                       </strong>
 
                       <span>
@@ -18007,7 +18007,7 @@ setTransactionFormMode((prev) => ({
 
                       <strong>
 
-                        Loading Collection Vouchers...
+                        <span className="erp-loading-bar erp-loading-bar--inline" aria-hidden="true" /> Loading Collection Vouchers...
 
                       </strong>
 

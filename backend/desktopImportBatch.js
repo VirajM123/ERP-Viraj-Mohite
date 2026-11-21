@@ -7,6 +7,8 @@ import { importConfig } from "./importConfig.js";
 
 const require = createRequire(import.meta.url);
 const XLSX = require("xlsx");
+const unzipper = require("unzipper");
+const iterateExcelStream = require("exceljs/lib/utils/iterate-stream");
 const DESKTOP_TRANSACTION_CONCURRENCY = Math.max(1, Math.min(16, Number.parseInt(process.env.DESKTOP_IMPORT_TRANSACTION_CONCURRENCY || "8", 10) || 8));
 const DESKTOP_TRANSACTION_BATCH_SIZE = Math.max(25, Math.min(500, Number.parseInt(process.env.DESKTOP_IMPORT_TRANSACTION_BATCH_SIZE || "100", 10) || 100));
 const DESKTOP_PRODUCT_BATCH_SIZE = Math.max(25, Math.min(250, Number.parseInt(process.env.DESKTOP_IMPORT_PRODUCT_BATCH_SIZE || "100", 10) || 100));
@@ -191,7 +193,25 @@ export const readDesktopWorkbookStreaming = async (filePath, entryType) => {
     // becomes { sharedString: n } and the importer cannot recognize columns.
     sharedStrings: "cache", hyperlinks: "ignore", styles: "ignore", worksheets: "emit",
   });
-  for await (const worksheet of reader) {
+  // Load metadata before worksheets: valid XLSX ZIP entries can appear in any
+  // order, but ExcelJS's streaming reader may otherwise parse a sheet before
+  // its workbook model exists. Worksheet data is still streamed individually.
+  const archive = await unzipper.Open.file(filePath);
+  const workbookEntry = archive.files.find((entry) => entry.path === "xl/workbook.xml");
+  const relsEntry = archive.files.find((entry) => entry.path === "xl/_rels/workbook.xml.rels");
+  if (!workbookEntry || !relsEntry) throw Object.assign(new Error("Workbook metadata is missing."), { status: 422 });
+  await reader._parseWorkbook(workbookEntry.stream());
+  await reader._parseRels(relsEntry.stream());
+  const stringsEntry = archive.files.find((entry) => entry.path === "xl/sharedStrings.xml");
+  if (stringsEntry) for await (const unused of reader._parseSharedStrings(stringsEntry.stream())) { void unused; }
+  const worksheets = async function* () {
+    for (const entry of archive.files) {
+      const match = /^xl\/worksheets\/sheet(\d+)\.xml$/.exec(entry.path);
+      if (!match) continue;
+      for (const item of reader._parseWorksheet(iterateExcelStream(entry.stream()), match[1])) yield item.value;
+    }
+  };
+  for await (const worksheet of worksheets()) {
     worksheetIndex += 1;
     const normalizedSheetName = normalize(worksheet.name);
     // ExcelJS emits worksheets in ZIP-entry order, which is not guaranteed to

@@ -262,7 +262,7 @@ const SalesmanToAreaMapping = ({ companies = [], areas = [], salesmen = [] }) =>
               onClick={handleSave}
               disabled={saving || loading}
             >
-              <Plus size={14} />{saving ? "Saving..." : "Save Mapping"}
+              <Plus size={14} />{saving ? <><span className="erp-loading-bar erp-loading-bar--inline" aria-hidden="true" /> Saving...</> : "Save Mapping"}
             </button>
             <button type="button" className="mapping-button mapping-export-button"><FileSpreadsheet size={14} />Export Excel</button>
             <button type="button" className="mapping-button mapping-export-button"><FileText size={14} />Export PDF</button>
@@ -308,7 +308,7 @@ const SalesmanToAreaMapping = ({ companies = [], areas = [], salesmen = [] }) =>
               {loading ? (
                 <tr>
                   <td colSpan="7" className="mapping-empty-cell">
-                    Loading mapping...
+                    <span className="erp-loading-bar erp-loading-bar--inline" aria-hidden="true" /> Loading mapping...
                   </td>
                 </tr>
               ) : mappingRows.length === 0 ? (

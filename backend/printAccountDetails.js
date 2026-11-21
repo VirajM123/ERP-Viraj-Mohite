@@ -1,5 +1,6 @@
 import express from "express";
 import mongoose from "mongoose";
+import { writeAuditEvent } from "./audit.js";
 
 const router = express.Router();
 const DEFAULT_INVOICE_TERMS = "1. Goods once sold will not be taken back or exchanged.\n2. Interest will be charged on overdue payments.\n3. Subject to local jurisdiction only.";
@@ -26,10 +27,11 @@ const printAccountDetailsSchema = new mongoose.Schema(
       showTaxSummary: { type: Boolean, default: true },
     },
     outputSettings: {
-      reportNumber: { type: String, default: "1", enum: ["1", "2"] },
+      reportNumber: { type: String, default: "1", enum: ["1", "2", "3"] },
       paperSize: { type: String, default: "A4", enum: ["A4", "A5"] },
       orientation: { type: String, default: "portrait", enum: ["portrait", "landscape"] },
       fontSizePercent: { type: Number, default: 150, min: 80, max: 150 },
+      copies: { type: Number, default: 1, min: 1, max: 10 },
     },
     isActive: { type: Boolean, default: true },
   },
@@ -69,7 +71,14 @@ router.get("/", async (req, res) => {
   }
 });
 
-router.put("/", async (req, res) => {
+export const requirePrintAdministrator = (req, res, next) => {
+  if (String(req.auth?.role || "").trim().toUpperCase() !== "DISTRIBUTOR_ADMIN") {
+    return res.status(403).json({ success: false, message: "Only a distributor administrator can change invoice print and bank settings." });
+  }
+  return next();
+};
+
+router.put("/", requirePrintAdministrator, async (req, res) => {
   try {
     const scope = tenant(req);
     const current = await PrintAccountDetails.findOne(scope).lean();
@@ -96,7 +105,7 @@ router.put("/", async (req, res) => {
     const paperSize = ["A4", "A5"].includes(outputSettings.paperSize)
       ? outputSettings.paperSize
       : current?.outputSettings?.paperSize || "A4";
-    const reportNumber = ["1", "2"].includes(String(outputSettings.reportNumber))
+    const reportNumber = ["1", "2", "3"].includes(String(outputSettings.reportNumber))
       ? String(outputSettings.reportNumber)
       : current?.outputSettings?.reportNumber || "1";
     const requestedFontSize = Number(outputSettings.fontSizePercent);
@@ -124,15 +133,35 @@ router.put("/", async (req, res) => {
         paperSize,
         orientation: paperSize === "A5" ? "landscape" : "portrait",
         fontSizePercent,
+        copies: Number.isInteger(Number(outputSettings.copies)) && Number(outputSettings.copies) >= 1 && Number(outputSettings.copies) <= 10 ? Number(outputSettings.copies) : current?.outputSettings?.copies || 1,
       },
       isActive: true,
     };
 
-    const details = await PrintAccountDetails.findOneAndUpdate(
-      scope,
-      { $set: update },
-      { new: true, upsert: true, runValidators: true, setDefaultsOnInsert: true }
-    ).lean();
+    let details;
+    const session = await mongoose.startSession();
+    try {
+      await session.withTransaction(async () => {
+        details = await PrintAccountDetails.findOneAndUpdate(
+          scope,
+          { $set: update },
+          { new: true, upsert: true, runValidators: true, setDefaultsOnInsert: true, session }
+        ).lean();
+        await writeAuditEvent(req, {
+          entityType: "INVOICE_PRINT_SETTINGS",
+          entityId: String(details._id),
+          action: current ? "UPDATE" : "CREATE",
+          after: {
+            bankDetailsChanged: ["bankName", "accountName", "accountNumber", "ifscCode"].some((key) => clean(current?.[key]) !== update[key]),
+            paymentQrChanged: clean(current?.qrCode?.dataUrl) !== qrCode.dataUrl,
+            printContentChanged: JSON.stringify(current?.printContent || {}) !== JSON.stringify(update.printContent),
+            outputSettingsChanged: JSON.stringify(current?.outputSettings || {}) !== JSON.stringify(update.outputSettings),
+          },
+        }, session);
+      });
+    } finally {
+      await session.endSession();
+    }
 
     return res.json({
       success: true,

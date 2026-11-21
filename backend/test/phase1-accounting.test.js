@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import net from 'node:net';
 import mongoose from 'mongoose';
 import { Journal, postBalancedJournal, reverseSourceJournal } from '../accounting.js';
+import { ChartAccount } from '../chartOfAccounts.js';
 import createRouter, { financialRows } from '../p0Features.js';
 import { calculateSalesFinancials as sales, calculatePurchaseFinancials as purchase } from '../financialValidation.js';
 
@@ -13,6 +14,8 @@ const req = { auth: tenant, query: {} };
 function memory(t) {
   const entries = [];
   const matches = (entry, filter) => Object.entries(filter).every(([key, value]) => {
+    if (key === '$or') return value.some(part => matches(entry, part));
+    if (value && typeof value === 'object' && '$ne' in value) return entry[key] !== value.$ne;
     if (key === 'documentDate' && typeof value === 'object') return (!value.$gte || entry[key] >= value.$gte) && (!value.$lte || entry[key] <= value.$lte);
     return entry[key] === value;
   });
@@ -40,12 +43,12 @@ test('baseline: balanced sale posts 100 and nonfinite/unbalanced totals reject',
   await assert.rejects(postBalancedJournal({ ...tenant, lines: [{ debit: Infinity }, { credit: 100 }] }));
   await assert.rejects(postBalancedJournal({ ...tenant, lines: [{ debit: 100 }, { credit: 90 }] }));
 });
-test('characterization: cancellation currently leaves credit 100 in POSTED-only reports', async t => {
+test('same-date cancellation retains both events and leaves zero party balance', async t => {
   const entries = memory(t);
   await postBalancedJournal({ ...tenant, lines: lines(100) });
   await reverseSourceJournal(tenant);
   assert.deepEqual(entries.map(e => e.status), ['REVERSED', 'POSTED']);
-  assert.equal(await balance(), -100);
+  assert.equal(await balance(), 0);
 });
 test('correctness: cancellation must leave zero party balance', async t => {
   memory(t); await postBalancedJournal({ ...tenant, lines: lines(100) }); await reverseSourceJournal(tenant);
@@ -63,10 +66,16 @@ test('correctness: repeated edit to 140 must report 140', async t => {
   }
   assert.equal(await balance(), 140);
 });
-test('characterization: free quantity is charged and combined discounts/excess credit are clamped', () => {
-  assert.equal(sales({}, [{ qty: 10, free: 2, rate: 100 }]).GrossAmount, 1200);
-  assert.equal(sales({}, [{ qty: 1, rate: 100, schemeAmt: 80, starAmt: 80, gst: 18 }]).NetAmount, 18);
-  assert.equal(sales({ CreditNoteAmount: 150 }, [{ qty: 1, rate: 100 }]).NetAmount, 0);
+test('approved paid quantity excludes free stock units from billed gross', () => {
+  const result = sales({}, [{ qty: 10, free: 2, rate: 100, schemeAmt: 100, cdAmt: 45, gst: 18 }], { vatMode: 'NET_AMOUNT' });
+  assert.equal(result.GrossAmount, 1000);
+  assert.equal(result.TotalQty, 12);
+  assert.equal(result.TotalFreeQty, 2);
+  assert.equal(result.SchemeAmount, 100);
+  assert.equal(result.CashDiscountAmount, 45);
+  assert.equal(result.TaxableValue, 855);
+  assert.equal(result.CGSTAmount + result.SGSTAmount, 153.9);
+  assert.equal(result.NetAmount, 1008.9);
 });
 test('policy candidate: uncharged free units must not increase billed gross', () => {
   assert.equal(sales({}, [{ qty: 10, free: 2, rate: 100 }]).GrossAmount, 1000);
@@ -93,10 +102,17 @@ for (const [label, invalid] of [
 });
 async function report(t, name, fixture, query = {}) {
   t.mock.method(Journal, 'find', filter => ({ sort() { return this; }, lean: async () => fixture.filter(e => !filter.documentDate?.$gte || e.documentDate >= filter.documentDate.$gte) }));
+  t.mock.method(ChartAccount, 'find', () => ({ lean: async () => fixture.flatMap(entry => entry.lines.map(line => ({
+    accountCode: line.accountCode, accountName: line.accountCode,
+    accountType: line.accountCode === 'OUTPUT_GST' ? 'LIABILITY' : 'ASSET',
+    normalSide: line.accountCode === 'OUTPUT_GST' ? 'CREDIT' : 'DEBIT',
+    cashBankType: line.accountCode === '100201' ? 'BANK' : 'NONE',
+  }))) }));
   const router = createRouter({ authorizeRequest: () => (_req, _res, next) => next() });
   const layer = router.stack.find(l => l.route?.path === '/reports/financial/:report');
   let result;
-  await layer.route.stack.at(-1).handle({ ...req, params: { report: name }, query }, { json(value) { result = value; } });
+  const response = { status(code) { this.statusCode = code; return this; }, json(value) { result = value; } };
+  await layer.route.stack.at(-1).handle({ ...req, params: { report: name }, query }, response);
   return result;
 }
 test('correctness: numeric bank account remains visible in bank book', async t => {

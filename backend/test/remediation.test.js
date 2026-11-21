@@ -17,6 +17,8 @@ test("new passwords must meet the strong-password policy", () => {
   assert.equal(validatePasswordStrength("short"), false);
   assert.equal(validatePasswordStrength("alllowercase123!"), false);
   assert.equal(validatePasswordStrength("Correct-Horse-42!"), true);
+  assert.equal(validatePasswordStrength("Aa1!" + "x".repeat(69)), false);
+  assert.equal(validatePasswordStrength("Aa1!" + "é".repeat(35)), false);
 });
 
 test("nested and top-level client tenant conflicts are rejected", () => {
@@ -95,6 +97,18 @@ test("audit snapshots accept missing before or after values", () => {
     redactAuditValue({ status: "CREATED", password: "secret" }),
     { status: "CREATED", password: "[REDACTED]" }
   );
+});
+
+test("audit snapshots redact nested secret field variants", () => {
+  assert.deepEqual(redactAuditValue({ nested: [{ access_token: "value", "connection-string": "value", OTP: "123456", status: "ok" }] }), {
+    nested: [{ access_token: "[REDACTED]", "connection-string": "[REDACTED]", OTP: "[REDACTED]", status: "ok" }],
+  });
+});
+
+test("audit snapshots redact identity document number variants", () => {
+  assert.deepEqual(redactAuditValue({ AadhaarNumber: "1234", nested: { aadhar_no: "5678" } }), {
+    AadhaarNumber: "[REDACTED]", nested: { aadhar_no: "[REDACTED]" },
+  });
 });
 
 const authResponse = () => {

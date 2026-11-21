@@ -15,11 +15,6 @@ export const buildAllowedOrigins = (configuredOrigins = "") => {
     if (!origin) continue;
     allowed.add(origin);
 
-    const parsed = new URL(origin);
-    if (parsed.hostname.toLowerCase().startsWith("www.")) {
-      parsed.hostname = parsed.hostname.slice(4);
-      allowed.add(parsed.origin);
-    }
   }
 
   return allowed;

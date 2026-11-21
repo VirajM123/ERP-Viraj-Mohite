@@ -4,6 +4,7 @@ import os from "node:os";
 import path from "node:path";
 import { createRequire } from "node:module";
 import test from "node:test";
+import { isSupportedExcelHeader } from "../desktopImportRoutes.js";
 import { canReuseDesktopImportPlan, createSourceWorkbook, localSqlServiceAccount, mapDesktopRows, parseInstalledSqlInstances, parseSqlXmlRows, sqlcmdArgs } from "../desktopImportRoutes.js";
 import { loadExistingProductCodes, matchingImportDocuments } from "../importRoutes.js";
 import { getImportConfig } from "../importConfig.js";
@@ -504,4 +505,29 @@ test("streaming receipt reader keeps receiptBills separate when the nested sheet
     assert.equal(records[0].payload.receiptBills.length, 1);
     assert.equal(records[0].payload.receiptBills[0].nowAdjust, 786);
   } finally { fs.rmSync(directory, { recursive: true, force: true }); }
+});
+
+for (const nestedFirst of [true, false]) {
+  test(`streaming receipt reader preserves two allocations with receiptBills ${nestedFirst ? "first" : "last"}`, async () => {
+    const directory = fs.mkdtempSync(path.join(os.tmpdir(), "erp-receipt-order-"));
+    try {
+      const payload = { receiptDate: "2026-07-08", billSeries: "", rno: 915, partyId: "2925", receiptAmount: 10000,
+        receiptBills: [{ trnNo: "25", nowAdjust: 6000 }, { trnNo: "26", nowAdjust: 4000 }] };
+      const generated = createSourceWorkbook({ id: "order", directory }, { entryType: "DesktopReceipt" }, [],
+        [{ "ERP Payload JSON": JSON.stringify(payload) }]);
+      const workbook = XLSX.readFile(generated.filePath);
+      workbook.SheetNames = nestedFirst ? ["receiptBills", "Data"] : ["Data", "receiptBills"];
+      XLSX.writeFileXLSX(workbook, generated.filePath, { compression: true });
+      const records = await readDesktopWorkbookStreaming(generated.filePath, "DesktopReceipt");
+      assert.equal(records.length, 1);
+      assert.equal(Number(records[0].payload.receiptAmount), 10000);
+      assert.deepEqual(records[0].payload.receiptBills.map(row => Number(row.nowAdjust)), [6000, 4000]);
+    } finally { fs.rmSync(directory, { recursive: true, force: true }); }
+  });
+}
+test("Excel uploads require the expected workbook signature", () => {
+  assert.equal(isSupportedExcelHeader(Buffer.from([0x50, 0x4b, 0x03, 0x04]), ".xlsx"), true);
+  assert.equal(isSupportedExcelHeader(Buffer.from([0xd0, 0xcf, 0x11, 0xe0, 0xa1, 0xb1, 0x1a, 0xe1]), ".xls"), true);
+  assert.equal(isSupportedExcelHeader(Buffer.from("not an Excel file"), ".xlsx"), false);
+  assert.equal(isSupportedExcelHeader(Buffer.from([0x50, 0x4b, 0x03, 0x04]), ".xls"), false);
 });

@@ -322,6 +322,19 @@ const ownedJob = (req) => {
   return job && job.distributorId === req.security.distributorId && job.firmId === req.security.firmId ? job : null;
 };
 const internalApiUrl = () => String(process.env.DESKTOP_IMPORT_INTERNAL_API_URL || `http://127.0.0.1:${process.env.PORT || 5000}/api`).replace(/\/$/, "");
+
+// XLSX files are ZIP archives; legacy XLS workbooks use the OLE container.
+// Check the bytes as well as the extension before handing files to a parser.
+export const isSupportedExcelHeader = (header, extension) => {
+  const bytes = Buffer.from(header || []);
+  if (String(extension).toLowerCase() === ".xlsx") {
+    return bytes.length >= 4 && bytes[0] === 0x50 && bytes[1] === 0x4b && bytes[2] === 0x03 && bytes[3] === 0x04;
+  }
+  if (String(extension).toLowerCase() === ".xls") {
+    return bytes.length >= 8 && bytes.subarray(0, 8).equals(Buffer.from([0xd0, 0xcf, 0x11, 0xe0, 0xa1, 0xb1, 0x1a, 0xe1]));
+  }
+  return false;
+};
 const sameImportSelection = (previous = {}, fileIds = [], companyCode = "") => {
   const previousIds = [...(previous.fileIds || [])].sort();
   const requestedIds = [...fileIds].sort();
@@ -594,6 +607,14 @@ export default function createDesktopImportRouter({ authorizeRequest }) {
       const seenTypes = new Set();
       const importedFiles = [];
       for (const file of req.files) {
+        const handle = fs.openSync(file.path, "r");
+        const header = Buffer.alloc(8);
+        let bytesRead;
+        try { bytesRead = fs.readSync(handle, header, 0, header.length, 0); }
+        finally { fs.closeSync(handle); }
+        if (!isSupportedExcelHeader(header.subarray(0, bytesRead), path.extname(file.originalname))) {
+          throw Object.assign(new Error("The selected file is not a supported Excel workbook."), { status: 415 });
+        }
         const entryType = desktopExcelEntryType(file.originalname);
         if (!entryType) throw Object.assign(new Error(`${file.originalname} is not a recognized ERP desktop export file.`), { status: 415 });
         if (seenTypes.has(entryType)) throw Object.assign(new Error(`Select only one ${desktopExcelLabel(entryType)} file.`), { status: 400 });
@@ -674,7 +695,7 @@ export default function createDesktopImportRouter({ authorizeRequest }) {
         failures: [], rollback: [], createdAt: new Date().toISOString(),
       };
       job.import = state;
-      runDesktopImport({ job, plan, state, companyCode, authorization: req.get("authorization") || "", baseUrl: internalApiUrl() });
+      runDesktopImport({ job, plan, state, companyCode, authorization: req.browserSession ? `Bearer ${req.browserSession.token}` : (req.get("authorization") || ""), baseUrl: internalApiUrl() });
       return res.status(202).json({ success: true, message: "Desktop batch import started.", import: publicImportState(state) });
     } catch (error) { next(error); }
   });
@@ -700,7 +721,7 @@ export default function createDesktopImportRouter({ authorizeRequest }) {
     const retryTotal = job.import.failures.length;
     job.import.total = retryTotal; job.import.processed = 0; job.import.imported = 0; job.import.failed = 0; job.import.startedAt = null; job.import.finishedAt = null;
     job.import.files.forEach((file) => { file.total = job.import.failures.filter((failure) => failure.fileId === file.id).length; file.processed = 0; file.imported = 0; file.failed = 0; file.status = file.total ? "queued" : "skipped"; file.startedAt = null; file.updatedAt = null; file.finishedAt = null; });
-    runDesktopImport({ job, plan: job.importPlan, state: job.import, companyCode: job.importOptions.companyCode, authorization: req.get("authorization") || "", baseUrl: internalApiUrl(), retryOnly: true });
+    runDesktopImport({ job, plan: job.importPlan, state: job.import, companyCode: job.importOptions.companyCode, authorization: req.browserSession ? `Bearer ${req.browserSession.token}` : (req.get("authorization") || ""), baseUrl: internalApiUrl(), retryOnly: true });
     return res.status(202).json({ success: true, message: "Retry started.", import: publicImportState(job.import) });
   });
 
@@ -708,7 +729,7 @@ export default function createDesktopImportRouter({ authorizeRequest }) {
     const job = ownedJob(req);
     if (!job?.import?.rollback?.length) return res.status(409).json({ success: false, message: "No imported records are available to roll back." });
     if (["running", "paused", "rolling_back"].includes(job.import.status)) return res.status(409).json({ success: false, message: "Wait for the current operation to finish." });
-    rollbackDesktopImport({ state: job.import, authorization: req.get("authorization") || "", baseUrl: internalApiUrl() });
+    rollbackDesktopImport({ state: job.import, authorization: req.browserSession ? `Bearer ${req.browserSession.token}` : (req.get("authorization") || ""), baseUrl: internalApiUrl() });
     return res.status(202).json({ success: true, message: "Rollback started.", import: publicImportState(job.import) });
   });
 

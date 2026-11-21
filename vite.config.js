@@ -24,7 +24,8 @@ export default defineConfig({
   // Server configuration for local development
   server: {
     port: 5173,
-    open: true
+    open: true,
+    watch: { ignored: ['**/.local-security-mongo/**'] }
   },
   
   // Preview configuration for testing production build

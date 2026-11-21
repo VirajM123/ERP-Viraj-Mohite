@@ -1307,3 +1307,185 @@ select.gs-control {
     transition: none !important;
   }
 }
+/* Single, searchable setup screen */
+.gs-flat-page .gs-page-tabs, .gs-flat-page .gs-category-navigation,
+.gs-flat-page .gs-selected-category-header, .gs-flat-page .gs-section-header,
+.gs-flat-page .gs-compact-section-header, .gs-flat-page .gs-back-overview-button { display: none !important; }
+.gs-flat-page .gs-selected-category, .gs-flat-page .gs-section,
+.gs-flat-page .gs-compact-settings-section { background: transparent; border: 0; box-shadow: none; padding: 0; margin: 0; }
+.gs-flat-page .gs-section-body, .gs-flat-page .gs-compact-toggle-grid,
+.gs-flat-page .gs-compact-field-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 0 20px; padding: 0; }
+.gs-flat-page .gs-setting-row, .gs-flat-page .gs-compact-toggle-card,
+.gs-flat-page .gs-compact-field { min-width: 0; min-height: 52px; margin: 0; padding: 8px 6px; border: 0; border-bottom: 1px solid #e2e8f0; border-radius: 0; box-shadow: none; background: transparent; display: flex; flex-direction: row; align-items: center; justify-content: space-between; gap: 12px; }
+.gs-flat-page .gs-compact-toggle-card { position: relative; flex-direction: row-reverse; }
+.gs-flat-page .gs-compact-toggle-top { display: flex; flex-direction: row-reverse; align-items: center; gap: 8px; flex-shrink: 0; }
+.gs-flat-page .gs-compact-toggle-description, .gs-flat-page .gs-compact-field-help,
+.gs-flat-page .gs-setting-description, .gs-flat-page .gs-info-icon { display: none; }
+.gs-flat-page .gs-compact-toggle-label, .gs-flat-page .gs-compact-field-label,
+.gs-flat-page .gs-setting-label { font-size: 13px; font-weight: 600; color: #172033; }
+.gs-flat-page .gs-compact-toggle-status { font-size: 12px; }
+.gs-flat-page .gs-compact-field .gs-control, .gs-flat-page .gs-setting-control .gs-control { width: 170px; max-width: 100%; }
+.gs-flat-page [hidden] { display: none !important; }
+.gs-flat-search { height: 36px; width: 230px; max-width: 100%; padding: 0 12px; border: 1px solid #cbd5e1; border-radius: 7px; font: inherit; }
+@media (max-width: 1000px) { .gs-flat-page .gs-section-body, .gs-flat-page .gs-compact-toggle-grid, .gs-flat-page .gs-compact-field-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } .general-setup-toolbar, .general-setup-toolbar-actions { flex-wrap: wrap; } }
+@media (max-width: 600px) { .gs-flat-page .gs-section-body, .gs-flat-page .gs-compact-toggle-grid, .gs-flat-page .gs-compact-field-grid { grid-template-columns: 1fr; } }
+
+/* Compact General Setup layout */
+.general-setup-container.gs-single { background: #fff; padding: 16px 20px; color: #101b30; }
+.gs-single-toolbar { display: flex; align-items: center; justify-content: space-between; gap: 20px; padding-bottom: 14px; border-bottom: 1px solid #dce3ed; }
+.gs-single-toolbar h1 { margin: 0; color: #101c39; font-size: 25px; line-height: 1.2; }
+.gs-single-actions { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; }
+.gs-single-search { width: 260px; height: 36px; padding: 0 12px; border: 1px solid #cbd5e1; border-radius: 6px; font: inherit; font-size: 13px; }
+.gs-single-actions .gs-button { min-width: 84px; }
+.gs-single-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); column-gap: 32px; padding-top: 10px; }
+.gs-single-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; min-width: 0; min-height: 43px; padding: 5px 4px; border-bottom: 1px solid #e7ebf0; }
+.gs-single-label { min-width: 0; font-size: 13px; font-weight: 600; line-height: 1.25; }
+.gs-single-label small { display: block; margin-top: 3px; color: #64748b; font-size: 10px; font-weight: 400; }
+.gs-single-toggle { display: flex; align-items: center; justify-content: flex-end; gap: 8px; flex: 0 0 72px; font-size: 12px; }
+.gs-single-toggle > span { width: 25px; }
+.gs-single-control { box-sizing: border-box; width: 170px; max-width: 48%; height: 31px; flex-shrink: 0; padding: 0 8px; color: #142039; background: #fff; border: 1px solid #cbd5e1; border-radius: 5px; font: inherit; font-size: 12px; }
+.gs-single-control:focus, .gs-single-search:focus { outline: 2px solid #93b4fa; outline-offset: 1px; }
+.gs-single .general-setup-footer { margin-top: 14px; }
+@media (max-width: 1050px) { .gs-single-toolbar { align-items: flex-start; flex-wrap: wrap; } .gs-single-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0 24px; } }
+@media (max-width: 650px) { .general-setup-container.gs-single { padding: 12px; } .gs-single-grid { grid-template-columns: minmax(0, 1fr); } .gs-single-search { width: 100%; } }
+
+/* Dense desktop layout: switches alone indicate state. */
+.general-setup-container.gs-single { padding: 10px 16px 12px; }
+.gs-single-toolbar { padding-bottom: 8px; }
+.gs-single-toolbar h1 { font-size: 22px; }
+.gs-single-search, .gs-single-actions .gs-button { height: 32px; }
+.gs-single-grid { padding-top: 8px; column-gap: 28px; }
+.gs-single-row { box-sizing: border-box; min-height: 32px; padding: 2px 4px; border: 0; gap: 8px; }
+.gs-single-label { font-size: 12px; line-height: 1.2; }
+.gs-single-label label { display: block; margin: 0; padding: 0; line-height: inherit; }
+.gs-single-toggle { flex: 0 0 34px; gap: 0; }
+.gs-single-toggle .gs-toggle { display: inline-flex; position: relative; width: 34px; height: 20px; margin: 0; padding: 0; vertical-align: middle; }
+.gs-single-toggle .gs-toggle-track { margin: 0; }
+.gs-single-control { width: 140px; height: 27px; padding: 0 7px; font-size: 12px; }
+.gs-single .general-setup-footer { margin-top: 8px; padding: 6px 10px; font-size: 11px; }
+
+/* Isolate compact setup controls from the dashboard's global form styles. */
+.gs-single .gs-single-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 140px;
+  align-items: center;
+  column-gap: 8px;
+  height: 32px;
+  min-height: 32px;
+  box-sizing: border-box;
+  padding: 2px 4px;
+}
+.gs-single .gs-single-label { min-width: 0; }
+.gs-single .gs-single-label > label { margin: 0; padding: 0; line-height: 1.2; }
+.gs-single .gs-single-control {
+  box-sizing: border-box;
+  justify-self: end;
+  align-self: center;
+  display: block;
+  width: 140px;
+  max-width: 100%;
+  height: 27px;
+  min-height: 0;
+  margin: 0;
+  padding: 0 7px;
+}
+.gs-single .gs-single-switch {
+  box-sizing: border-box;
+  display: block;
+  position: relative;
+  justify-self: end;
+  align-self: center;
+  width: 34px;
+  min-width: 34px;
+  height: 20px;
+  min-height: 0;
+  margin: 0;
+  padding: 0;
+  border: 1px solid #c7d1df;
+  border-radius: 999px;
+  background: #e2e8f0;
+  box-shadow: none;
+  cursor: pointer;
+}
+.gs-single .gs-single-switch.is-on { border-color: #4163ed; background: linear-gradient(90deg, #2563eb, #7c3aed); }
+.gs-single .gs-single-switch-thumb {
+  position: absolute;
+  display: block;
+  left: 2px;
+  top: 2px;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 1px 3px #0003;
+  transition: transform .15s ease;
+}
+.gs-single .gs-single-switch.is-on .gs-single-switch-thumb { transform: translateX(14px); }
+.gs-single .gs-single-switch:focus-visible { outline: 2px solid #648eff; outline-offset: 2px; }
+.gs-single .gs-single-switch:disabled { opacity: .55; cursor: not-allowed; }
+
+/* Keep the setup grid independent of global form-control sizing. */
+.main-content .general-setup-container.gs-single .gs-single-grid {
+  grid-auto-rows: minmax(36px, auto);
+  align-items: stretch;
+}
+.main-content .general-setup-container.gs-single .gs-single-row {
+  height: auto;
+  min-height: 36px;
+  padding-block: 2px;
+  align-items: center;
+}
+.main-content .general-setup-container.gs-single .gs-single-row > .gs-single-control {
+  box-sizing: border-box !important;
+  height: 30px !important;
+  min-height: 30px !important;
+  max-height: 30px !important;
+  margin: 0 !important;
+  padding: 2px 7px !important;
+  line-height: normal !important;
+  align-self: center !important;
+}
+.main-content .general-setup-container.gs-single .gs-single-row > .gs-single-switch {
+  appearance: none;
+  box-sizing: border-box !important;
+  display: block !important;
+  position: relative !important;
+  align-self: center !important;
+  justify-self: end !important;
+  width: 34px !important;
+  min-width: 34px !important;
+  max-width: 34px !important;
+  height: 20px !important;
+  min-height: 20px !important;
+  max-height: 20px !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  border-radius: 999px !important;
+  transform: none !important;
+}
+/* Soft background limited to the General Setup panel. */
+.main-content .general-setup-container.gs-single {
+  background: #f3f7fd !important;
+  border: 1px solid #e2eaf5;
+  border-radius: 8px;
+}
+/* Invoice setup: switches and output fields in two vertical columns. */
+.invoice-print-setup .gs-single-grid {
+  max-width: 880px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-rows: repeat(4, minmax(42px, auto));
+  grid-auto-flow: column;
+  column-gap: 48px;
+  padding: 14px 4px 6px;
+}
+.invoice-print-setup .gs-single-row {
+  min-width: 0;
+}
+@media (max-width: 700px) {
+  .invoice-print-setup .gs-single-grid {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: none;
+    grid-auto-flow: row;
+    gap: 0;
+  }
+}

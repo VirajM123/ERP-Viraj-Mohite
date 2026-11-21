@@ -5,6 +5,7 @@ import { API_ROOT } from "./api/config";
 import { secureFetch } from "./SecuritySetup";
 import { businessDateIST } from "./utils/businessDate";
 import { csvCell } from "../shared/spreadsheetSafety.js";
+import ReportLoading from "./components/ReportLoading";
 
 const today = () => businessDateIST();
 const financialYearStart = () => {
@@ -166,6 +167,7 @@ const CatalogReport = ({ selectedReport, onBack, companies = [], products = [], 
 
   return (
     <div className="report-page catalog-report-page">
+      <ReportLoading loading={loading} />
       <header className="report-page-header">
         <div className="report-title-section">
           <button type="button" className="report-back-button" onClick={onBack} aria-label="Back to reports"><ArrowLeft size={16} /></button>

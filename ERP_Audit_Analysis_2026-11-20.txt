@@ -1,0 +1,95 @@
+﻿ERP AUDIT ANALYSIS
+
+The ERP is NOT READY FOR RELEASE SIGN-OFF based on this audit. The current source still contains a sales cash-discount calculation error, and the isolated backend test run has unresolved failures. Financial posting, stock movements, report totals, role access, and recovery have not been verified against a running application and disposable database.
+
+No application source was changed. The test suite briefly created and removed disposable test files, including an e-invoice JSON file in the application's output directory. The pre-existing working-tree changes remained visible after testing.
+
+AUDIT ENVIRONMENT AND LIMITS
+
+- Branch and commit: main, 0a2cedcf70910f8b34e2bf50372cf85b5e0095ec.
+- Working tree: src/api/config.js was already modified, the earlier analysis file was untracked, and the nested checkout was already modified. Therefore, the reviewed working tree was not identical to the commit.
+- Build: No fresh application build or deployed build was verified.
+- Database and roles: No database was connected; database version and application user roles exercised are unavailable.
+- Tests: Backend tests ran with the repository's isolation preload, which blocks network and database connections. 189 passed and 9 failed out of 198. These are unit and mocked tests, not end-to-end acceptance tests.
+- Prior audit: Findings from ERP_Deep_Analysis_2026-11-19.txt were used as a regression checklist. The findings below identify what was rechecked.
+
+WHAT TO PRESERVE
+
+The following passed the isolated tests and are useful foundations, subject to real-database verification:
+
+- Financial validation tests distinguish billed quantity from free stock quantity and check discount and tax calculations.
+- Accounting event tests cover sale edits, cancellation, reversal dates and repeated reversal requests using mocked data.
+- Permission tests check explicit permission requirements, tenant conflicts, revoked sessions and restricted user administration.
+- Import tests cover several desktop mappings, repeated-import preflight and spreadsheet formula neutralization.
+- Report helper tests cover examples of GST grouping, aging buckets, stock movement and prior ledger balances.
+
+These results support preserving the existing controls and test cases; they do not establish that complete business workflows work in the deployed ERP.
+
+FINDINGS REGISTER
+
+F-01 — Sales invoice, item-wise cash discount
+Classification: Defect — High
+Evidence and impact: Code inspection: src/Dashboard.jsx:21137 returns rowCdAmount, while the local calculation uses cdAmount; the other declaration is in a separate later branch. Selecting either item-wise cash-discount mode and recalculating populated rows can raise a ReferenceError. Browser reproduction is pending. The expected behavior is that the calculated discount and invoice totals remain usable.
+Action and closure test: Correct the scoped value after reproducing. Test both item-wise modes with percentage and amount entry, multiple rows, GST, save and reopen; check console, stored totals and postings.
+
+F-02 — Desktop receipt import
+Classification: Defect — High for the tested workbook case; operational frequency unknown
+Evidence and impact: Executed isolated test: backend/test/desktop-import.test.js:490 failed when the nested receipt-bills sheet was emitted first. exceljs raised a TypeError while backend/desktopImportBatch.js:194 read the workbook. The expected result was to retain receipt bills separately. A real user-supplied workbook was not tested.
+Action and closure test: Investigate workbook ordering and reader compatibility. Repeat the fixture and representative exported workbooks, then reconcile imported receipts and allocations in an isolated database.
+
+F-03 — Automated accounting regression
+Classification: Improvement — release validation blocker
+Evidence and impact: Executed isolated tests: eight tests in backend/test/phase1-accounting.test.js:36 failed: four reported balance mismatches, one retained an older free-quantity expectation, and three failed because the response mock lacked status. These failures do not by themselves prove production accounting defects. The later phase accounting tests passed their mocked edit and reversal cases. The normal test script also lacks the isolation preload required by these suites, as documented in the prior audit; that normal command was not rerun here.
+Action and closure test: Repair the harness and distinguish obsolete characterization expectations from current acceptance rules. Investigate remaining balance mismatches using independently calculated, database-backed cases. Require the supported test command to pass.
+
+F-04 — Sales service vouchers and ledger
+Classification: Unverified — potentially critical if services must post to accounts
+Evidence and impact: Code inspection: create, edit and delete handlers in backend/service.js:225 save or deactivate the voucher; no journal posting appears in those reviewed handlers. Another integration may exist. Expected accounting treatment requires owner/accountant confirmation.
+Action and closure test: Trace all service integrations and reconcile a service sale, edit and cancellation to receivables, revenue and tax. If posting is required and absent, implement and verify atomic posting and reversal.
+
+F-05 — Scheme and item-wise cash-discount entry
+Classification: Decision needed
+Evidence and impact: Code inspection: direct scheme amount entry clears the percentage, and direct item-wise cash-discount amount entry clears its percentage in src/Dashboard.jsx:21753. This is confirmed behavior; whether reverse calculation is required is not yet an agreed rule.
+Action and closure test: Owner to specify discount bases, rounding and behavior when the base changes. Test agreed amount-to-percentage and percentage-to-amount rules across modes and save/reopen.
+
+F-06 — Financial statements and report cutoffs
+Classification: Unverified
+Evidence and impact: Code inspection: backend/p0Features.js:448 deliberately removes fromDate for trial balance and balance sheet. Whether the resulting opening and as-of balances are correct has not been established from live source transactions. Three older financial-report tests also fail in their mocks.
+Action and closure test: Reconcile prior-period balances, opening entries, edits and reversals at historical cutoffs against an independent ledger. Confirm account classifications with accounts staff.
+
+F-07 — Period close, permissions, recovery and sync
+Classification: Unverified
+Evidence and impact: Isolated tests exercise portions of these controls, but no live roles, locked periods, concurrent saves, restore or incremental sync were tested. The repository contains period controls and desktop import/retry/rollback routes; their presence does not establish end-to-end operation.
+Action and closure test: Test each transaction and direct API operation under relevant roles and branch scopes, including locked-period edits and reversals. Restore a backup to an isolated database and run the requested 3,000-plus-three incremental-sync scenario if supported.
+
+No additional feature is classified as a confirmed missing requirement: the repository and business scope were not examined sufficiently to prove absence or establish the owner's requirement. Bank reconciliation, controlled inventory counts, approvals and backup monitoring are candidates for requirements review, not confirmed gaps.
+
+COVERAGE AND RECONCILIATION
+
+Counts below refer to end-to-end workflow acceptance, not individual unit tests. No workflow was fully exercised, so no module is marked passed or failed end-to-end.
+
+Masters and pricing — 0 pass / 0 fail / unverified. Source inventory and selected mocked supplier/import checks; duplicate handling and role behavior pending.
+
+Sales, returns and service — 0 pass / 0 fail / unverified. Discount code inspected; service posting and complete invoice-to-return flow pending. F-01 is a source-confirmed defect, not a completed browser test.
+
+Purchase and debit notes — 0 pass / 0 fail / unverified. Selected mocked purchase posting and stock tests passed; actual stock and ledger effects pending.
+
+Inventory — 0 pass / 0 fail / unverified. Stock and batch functionality and movement helpers identified; opening, transfers, negative stock, IMEI and restoration pending.
+
+Accounts and close — 0 pass / 0 fail / unverified. Mocked accounting and period tests executed; eight older accounting tests failed. Database posting and closing remain pending.
+
+Reports, print and export — 0 pass / 0 fail / unverified. Sales, purchase, stock, GST, ledger, financial, control and master report definitions identified in src/Report.jsx:136 and src/CatalogReport.jsx:17. Each report still needs individual acceptance.
+
+Access, imports and recovery — 0 pass / 0 fail / unverified. Selected security/import tests executed; one import fixture failed. Live role, branch, concurrency, sync and restore tests pending.
+
+A report-by-report reconciliation cannot be populated honestly without source transactions and report output. For every report, the test period, source records, expected total, actual total and difference are not measured; the verdict is unverified. In particular, trial balance, party ledger, outstanding and aging, GST registers, stock valuation and sales/purchase reports require independent reconciliation before use for sign-off.
+
+PRIORITIZED ACTION AND SIGN-OFF
+
+Before release: reproduce and fix F-01; investigate F-02; restore a trustworthy test command and resolve or explain F-03; reconcile service vouchers and all financial and stock posting paths. These depend on agreed discount and accounting rules and an isolated database.
+
+Next release: complete report-by-report reconciliation, direct API authorization tests, locked-period tests, import retries and duplicate handling, concurrent numbering, and backup restoration. Close each item only with recorded source records, expected and actual results, role, branch and environment.
+
+Later improvements: assess reverse discount entry, workflow usability, performance and operational capabilities against owner-approved requirements. Measure performance with a recorded dataset and environment.
+
+For sign-off, provide an isolated build and disposable database, representative roles and branch scopes, documented accounting and discount rules, sample import files and integrations, and a backup suitable for a restore drill. Then execute creation, edit, cancellation, retrieval and downstream reconciliation for each business-critical workflow, including the invoice → partial payment → item return scenario. Until that evidence exists, the release verdict remains NOT VERIFIED FOR RELEASE.

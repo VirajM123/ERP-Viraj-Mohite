@@ -1,8 +1,10 @@
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
 import mongoose from "mongoose";
+import { readBrowserSession, validBrowserCsrf } from "./browserSessions.js";
 
 const BCRYPT_ROUNDS = 12;
+const SESSION_MAX_AGE_SECONDS = 8 * 60 * 60;
 const PUBLIC_API_PATHS = new Set([
   "/login",
   "/login/firms",
@@ -20,19 +22,24 @@ const TENANT_KEYS = new Map([
 
 export const validatePasswordStrength = (value) => {
   const password = String(value || "");
-  if (password.length < 12 || password.length > 128) return false;
+  // bcrypt silently ignores bytes after 72; reject new passwords that would
+  // otherwise be indistinguishable from another password with the same prefix.
+  if (password.length < 12 || Buffer.byteLength(password, "utf8") > 72) return false;
   return /[a-z]/.test(password) && /[A-Z]/.test(password) && /\d/.test(password) && /[^A-Za-z0-9]/.test(password);
 };
 
-export const isPasswordHash = (value = "") => /^\$2[aby]\$\d{2}\$/.test(String(value));
+export const isPasswordHash = (value = "") => /^\$2[aby]\$(?:0[4-9]|[12]\d|3[01])\$[./A-Za-z0-9]{53}$/.test(String(value));
 
 export const hashPassword = (value) => bcrypt.hash(String(value), BCRYPT_ROUNDS);
 
 export const verifyPassword = async (candidate, stored) => {
   if (!stored) return false;
-  return isPasswordHash(stored)
-    ? bcrypt.compare(String(candidate), String(stored))
-    : String(candidate) === String(stored);
+  // bcrypt ignores bytes after 72. Reject a longer candidate so appending
+  // arbitrary characters cannot authenticate as the same password.
+  if (isPasswordHash(stored) && Buffer.byteLength(String(candidate), "utf8") > 72) return false;
+  if (isPasswordHash(stored)) return bcrypt.compare(String(candidate), String(stored));
+  if (process.env.BCRYPT_ONLY === "true" || /^\$2/i.test(String(stored))) return false;
+  return String(candidate) === String(stored);
 };
 
 // Legacy plaintext credentials are upgraded only after a successful login.
@@ -87,7 +94,7 @@ export const issueAccessToken = (user, source) =>
       ver: Number(user.sessionVersion || 0),
     },
     jwtSecret(),
-    { issuer: "fmcg-erp", audience: "fmcg-erp-web" }
+    { issuer: "fmcg-erp", audience: "fmcg-erp-web", expiresIn: SESSION_MAX_AGE_SECONDS }
   );
 
 const resolvePrincipal = async (payload) => {
@@ -136,9 +143,14 @@ const rejectTenantMismatch = (req, principal) =>
 export const authenticateApi = async (req, res, next) => {
   if (req.method === "OPTIONS" || PUBLIC_API_PATHS.has(req.path)) return next();
   try {
+    const session = await readBrowserSession(req);
     const match = String(req.headers.authorization || "").match(/^Bearer\s+(.+)$/i);
-    if (!match) return res.status(401).json({ success: false, message: "Authentication required." });
-    const payload = jwt.verify(match[1], jwtSecret(), {
+    if (!session && !match) return res.status(401).json({ success: false, message: "Authentication required." });
+    if (!session && match && req.headers.origin && process.env.REJECT_BROWSER_BEARER === "true") return res.status(401).json({ success: false, message: "Browser session required." });
+    if (session && !["GET", "HEAD", "OPTIONS"].includes(req.method) && !validBrowserCsrf(req, session)) return res.status(403).json({ success: false, message: "Invalid request origin or CSRF token." });
+    const payload = jwt.verify(session ? session.token : match[1], jwtSecret(), {
+      algorithms: ["HS256"],
+      maxAge: SESSION_MAX_AGE_SECONDS,
       issuer: "fmcg-erp",
       audience: "fmcg-erp-web",
     });
@@ -148,6 +160,7 @@ export const authenticateApi = async (req, res, next) => {
       return res.status(403).json({ success: false, message: "Cross-firm access is not allowed." });
     }
     req.auth = principal;
+    req.browserSession = session;
     req.security = principal;
     if (req.body && typeof req.body === "object") {
       req.body.distributorId ||= principal.distributorId;
@@ -170,6 +183,9 @@ export const createRateLimiter = ({ windowMs, max, paths = null }) => {
     if (paths && !paths.has(req.path)) return next();
     const now = Date.now();
     const key = `${req.ip}:${req.path}`;
+    if (paths && process.env.NODE_ENV === "production" && mongoose.connection.readyState !== 1) {
+      return res.status(503).json({ success: false, message: "Authentication protection is temporarily unavailable." });
+    }
     if (process.env.NODE_ENV === "production" && mongoose.connection.readyState === 1) {
       try {
         const collection = mongoose.connection.collection("Sys_RateLimit");

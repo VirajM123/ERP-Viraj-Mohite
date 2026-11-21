@@ -1,0 +1,2 @@
+[slow-request] POST /api/register 202 1988.0ms
+[slow-request] POST /api/login 200 1741.0ms

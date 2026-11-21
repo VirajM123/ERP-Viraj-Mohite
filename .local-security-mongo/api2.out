@@ -1,0 +1,22 @@
+◇ injected env (1) from .env // tip: ⌘ suppress logs { quiet: true }
+✅ ENV loaded
+🔄 Connecting to MongoDB Atlas...
+✅ MongoDB connected successfully
+📊 Connected to Database: erp_security_disposable
+🚀 Server running on port 5102
+{"event":"http_request","requestId":"0cd6d1d5-d916-4ec6-b375-b82c2097dfb7","method":"POST","route":"/api/register","status":202,"latencyMs":507.4}
+{"event":"http_request","requestId":"7d42f77e-466b-433c-b227-f7bf01b6568f","method":"POST","route":"/api/register","status":202,"latencyMs":748.5}
+{"event":"http_request","requestId":"618cf07e-3650-4f79-ba78-628b83affddf","method":"POST","route":"/api/register","status":202,"latencyMs":817.6}
+{"event":"http_request","requestId":"95cd589d-c48b-478d-92f8-25092c4afe84","method":"POST","route":"/api/register","status":202,"latencyMs":800.9}
+{"event":"http_request","requestId":"5d9affa0-fcd5-43e9-a47b-30eec5112df2","method":"POST","route":"/api/register","status":202,"latencyMs":2072.5}
+{"event":"http_request","requestId":"45381a1b-e834-420a-b6cf-2b52a471db0c","method":"POST","route":"/api/register","status":202,"latencyMs":737}
+{"event":"http_request","requestId":"7284b72e-b63b-4f27-9f0f-baaf3fe527bc","method":"POST","route":"/api/register","status":202,"latencyMs":800.5}
+{"event":"http_request","requestId":"ec3ce834-17cd-4d77-81c5-8a56c12787be","method":"POST","route":"/api/firms","status":201,"latencyMs":14.4}
+{"event":"http_request","requestId":"3874814b-7afc-4509-940a-3f169cd53846","method":"POST","route":"/api/firms","status":201,"latencyMs":10.1}
+{"event":"http_request","requestId":"685e606f-1372-4d74-b348-3842553f8585","method":"POST","route":"/api/login","status":200,"latencyMs":367.3}
+{"event":"http_request","requestId":"5e865deb-b653-449b-a61a-edf4ae1c4abb","method":"POST","route":"/api/register","status":202,"latencyMs":605.6}
+{"event":"http_request","requestId":"5ceaca12-161a-4870-9843-879a88e93905","method":"POST","route":"/api/register","status":202,"latencyMs":406.6}
+{"event":"http_request","requestId":"446241cc-7022-46b0-8d5a-149ce5220355","method":"POST","route":"/api/register","status":202,"latencyMs":570.4}
+{"event":"http_request","requestId":"bc89e0cd-c5b3-4c13-99ed-584147c32e5c","method":"POST","route":"/api/register","status":202,"latencyMs":627.7}
+{"event":"http_request","requestId":"fe0a925c-918a-44eb-90b6-d3dcfc58678c","method":"POST","route":"/api/register","status":202,"latencyMs":498.2}
+{"event":"process_metrics","periodMs":60002,"requests":15,"errors":0,"p50Ms":605.6,"p95Ms":2072.5,"p99Ms":2072.5,"cpuMs":5609,"rssBytes":105340928,"heapUsedBytes":51522632,"eventLoopLagP95Ms":75.4}

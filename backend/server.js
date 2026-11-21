@@ -1,4 +1,5 @@
 import express from "express";
+import crypto from "node:crypto";
 import { validateOpeningTransactions } from "../shared/openingTransactions.js";
 import createOpeningBalancesRouter, { saveAccountWithOpenings } from "./openingBalances.js";
 import mongoose from "mongoose";
@@ -10,6 +11,8 @@ import companyWiseSeriesRoutes from "./companyWiseSeries.js";
 import createBatchLockRouter from "./batchLock.js";
 import printAccountDetailsRoutes from "./printAccountDetails.js";
 import createSecuritySetupRouter from "./securitySetup.js";
+import { authorizeAny } from "./authorizeAny.js";
+import { allowedBrowserOrigin, browserLoginRequested, createBrowserSession, revokeBrowserSession } from "./browserSessions.js";
 import createFinancialPeriodsRouter from "./financialPeriods.js";
 import createImportRouter from "./importRoutes.js";
 import createDesktopImportRouter from "./desktopImportRoutes.js";
@@ -30,6 +33,7 @@ import { writeAuditEvent } from "./audit.js";
 import { postBalancedJournal, reverseSourceJournal } from "./accounting.js";
 import { nextDocumentNumber } from "./counters.js";
 import { businessDateIST } from "./businessDate.js";
+import { assertSalesDateAllowed } from "./generalSetupDatePolicy.js";
 import { validateFinancialEnvelope } from "./financialValidation.js";
 import createP0FeaturesRouter, { recordStockMovements, validateCustomerCredit } from "./p0Features.js";
 import createServiceRouter from "./service.js";
@@ -75,7 +79,7 @@ app.use(cors({
     error.code = "CORS_ORIGIN_DENIED";
     return callback(error);
   },
-  credentials: false,
+  credentials: true,
 }));
 app.use(express.json({ limit: process.env.JSON_BODY_LIMIT || "2mb" }));
 app.use(express.urlencoded({ extended: true, limit: process.env.FORM_BODY_LIMIT || "512kb" }));
@@ -114,6 +118,25 @@ app.use("/api", createRateLimiter({
   paths: new Set(["/login", "/login/firms", "/register"]),
 }));
 app.use("/api", authenticateApi);
+app.post("/api/logout", async (req, res, next) => {
+  try {
+    if (req.browserSession) await revokeBrowserSession(req, res);
+    else {
+      const collection = req.auth.source === "REGISTER" ? "Mas_Register" : "Mas_User";
+      await mongoose.connection.collection(collection).updateOne(
+        { _id: new mongoose.Types.ObjectId(req.auth.id), isActive: true }, { $inc: { sessionVersion: 1 } }
+      );
+    }
+    res.json({ success: true });
+  } catch (error) {
+    next(error);
+  }
+});
+app.get("/api/session", (req, res) => {
+  if (!req.browserSession) return res.status(401).json({ success: false, message: "Browser session required." });
+  res.setHeader("Cache-Control", "no-store");
+  return res.json({ success: true, user: req.auth, csrf: req.browserSession.csrf });
+});
 // Feature routers that require operation-level authorization are mounted after
 // the security policy router is created below.
 
@@ -144,7 +167,7 @@ const connectDB = async () => {
     console.log("✅ MongoDB connected successfully");
     console.log("📊 Connected to Database:", mongoose.connection.name);
   } catch (error) {
-    console.error("❌ MongoDB Connection Failed:", error.message);
+    console.error("MongoDB connection failed.");
     process.exit(1);
   }
 };
@@ -215,6 +238,7 @@ const userSchema = new mongoose.Schema(
     firmId: { type: String, required: true },
     firmName: { type: String, default: "" },
     userName: { type: String, required: true, trim: true },
+
     oldPassword: { type: String, default: "" },
     password: { type: String, required: true },
     role: { type: String, default: "USER" },
@@ -250,6 +274,8 @@ const Company = mongoose.model("Mas_Company", companySchema);
 const securityRouter =
     createSecuritySetupRouter(User);
 
+const authorizeReadFor = (...permissions) => authorizeAny(securityRouter.authorize, permissions);
+
 app.use("/api/financial-periods", ensureConnection, createFinancialPeriodsRouter(securityRouter));
 
 const authorizeFeatureMethods = (moduleCode, operationCode, actions) => (req, res, next) => {
@@ -279,7 +305,16 @@ app.use(
 app.use(
   "/api/print-account-details",
   ensureConnection,
-  authorizeFeatureMethods("TOOLS", "PRINT_SETTINGS", { GET: "view", PUT: "edit" }),
+  async (req, res, next) => {
+    if (req.method !== "GET") return authorizeFeatureMethods("TOOLS", "PRINT_SETTINGS", { PUT: "edit" })(req, res, next);
+    try {
+      const { distributorId, firmId, userId, role } = req.auth || {};
+      if (!distributorId || !firmId || !userId) return res.status(401).json({ success: false, message: "User session not found." });
+      const allowed = await securityRouter.authorize(distributorId, firmId, userId, role, "TOOLS", "PRINT_SETTINGS", "view") ||
+        await securityRouter.authorize(distributorId, firmId, userId, role, "SALES", "SALES_BILLING", "print");
+      return allowed ? next() : res.status(403).json({ success: false, message: "You do not have permission." });
+    } catch (error) { return res.status(500).json({ success: false, message: "Authorization failed." }); }
+  },
   printAccountDetailsRoutes
 );
 app.use("/api/transaction", transactionRoutes);         
@@ -310,6 +345,9 @@ const registerSchema = new mongoose.Schema(
 
     email: { type: String, default: "", trim: true, lowercase: true },
     userName: { type: String, required: true, trim: true },
+    // Linked firms share a username and do not carry public-registration keys.
+    publicRegistrationUserKey: { type: String },
+    publicRegistrationFirmKey: { type: String },
 
     password: { type: String, required: true },
 
@@ -343,36 +381,40 @@ registerSchema.index({ distributorId: 1 });
 
 const Register = mongoose.model("Mas_Register", registerSchema);
 
-const generateDistributorId = async () => {
-  const last = await Register.findOne({
-    distributorId: { $regex: /^DIST-\d+$/ },
-  }).sort({ createdAt: -1 });
-
-  if (!last?.distributorId) return "DIST-1001";
-
-  const num = Number(last.distributorId.split("-")[1]);
-  return `DIST-${num + 1}`;
+// Build and confirm the constraints before accepting public registrations. The
+// sparse indexes leave legacy and linked records untouched; an index failure
+// must prevent a write rather than silently reverting to lease-only safety.
+let publicRegistrationIndexes;
+const ensurePublicRegistrationIndexes = () => {
+  if (!publicRegistrationIndexes) {
+    const collection = mongoose.connection.collection("Mas_Register");
+    publicRegistrationIndexes = Promise.all([
+      collection.createIndex({ publicRegistrationUserKey: 1 }, { unique: true, sparse: true, name: "public_registration_user_unique" }),
+      collection.createIndex({ publicRegistrationFirmKey: 1 }, { unique: true, sparse: true, name: "public_registration_firm_unique" }),
+    ]).catch((error) => { publicRegistrationIndexes = undefined; throw error; });
+  }
+  return publicRegistrationIndexes;
 };
 
-const generateFirmId = async () => {
-  const firms = await Register.find(
-    { firmId: { $regex: /^FIRM-\d+$/ } },
-    { firmId: 1 }
-  );
-
-  let maxNo = 2000;
-
-  firms.forEach((firm) => {
-    const no = Number(String(firm.firmId).split("-")[1]);
-    if (!isNaN(no) && no > maxNo) {
-      maxNo = no;
+const allocateRegistrationId = async (field, prefix, floor) => {
+  const records = await Register.find({ [field]: { $regex: `^${prefix}-\\d+$` } }, { [field]: 1 }).lean();
+  const maximum = records.reduce((n, row) => Math.max(n, Number(String(row[field]).slice(prefix.length + 1)) || 0), floor);
+  const counters = mongoose.connection.collection("Sys_RegistrationCounter");
+  const update = [{ $set: { value: { $add: [{ $max: [{ $ifNull: ["$value", floor] }, maximum] }, 1] } } }];
+  for (;;) {
+    try {
+      const counter = await counters.findOneAndUpdate({ _id: prefix }, update, { upsert: true, returnDocument: "after" });
+      return `${prefix}-${counter.value}`;
+    } catch (error) {
+      if (error.code !== 11000) throw error;
     }
-  });
-
-  return `FIRM-${maxNo + 1}`;
+  }
 };
+const generateDistributorId = () => allocateRegistrationId("distributorId", "DIST", 1000);
+const generateFirmId = () => allocateRegistrationId("firmId", "FIRM", 2000);
 
 app.post("/api/register", ensureConnection, async (req, res) => {
+  let registrationLockOwner = "";
   try {
     const {
       firmCode,
@@ -406,46 +448,52 @@ app.post("/api/register", ensureConnection, async (req, res) => {
     if (!validatePasswordStrength(password)) {
       return res.status(400).json({
         success: false,
-        message: "Password must be 12-128 characters and include uppercase, lowercase, number, and symbol characters.",
+        message: "Password must be at least 12 characters, at most 72 UTF-8 bytes, and include uppercase, lowercase, number, and symbol characters.",
       });
     }
+
+    const accepted = () => res.status(202).json({ success: true, message: "If registration can be completed, sign in with the supplied credentials." });
+    // Spend the same password-hashing work for existing and new identities.
+    const passwordHash = await hashPassword(password);
+    await ensurePublicRegistrationIndexes();
+
+    // Serialize the check and creation across API processes. The expiring lease
+    // permits recovery if a process dies; only its owner can release it.
+    const locks = mongoose.connection.collection("Sys_RegistrationLock");
+    const owner = crypto.randomUUID();
+    const deadline = Date.now() + 30000;
+    while (!registrationLockOwner && Date.now() < deadline) {
+      try {
+        const now = new Date();
+        const lock = await locks.findOneAndUpdate(
+          { _id: "public-registration", $or: [{ expiresAt: { $lte: now } }, { expiresAt: { $exists: false } }] },
+          { $set: { owner, expiresAt: new Date(now.getTime() + 120000) } },
+          { upsert: true, returnDocument: "after" }
+        );
+        if (lock?.owner === owner) registrationLockOwner = owner;
+      } catch (error) {
+        if (error.code !== 11000) throw error;
+      }
+      if (!registrationLockOwner) await new Promise((resolve) => setTimeout(resolve, 50));
+    }
+    if (!registrationLockOwner) return res.status(503).json({ success: false, message: "Registration is temporarily unavailable." });
 
     const existingFirm = await Register.findOne({
       firmCode: firmCode.trim(),
       firmName: firmName.trim(),
     });
 
-    if (existingFirm) {
-      return res.status(409).json({
-        success: false,
-        message: "Firm already exists with this firm code and name",
-      });
-    }
-
     const existingUser = await Register.findOne({
       userName: userName.trim(),
       isActive: true,
     });
 
-    let distributorId;
-
-    if (existingUser) {
-      if (!(await verifyPassword(password, existingUser.password))) {
-        return res.status(401).json({
-          success: false,
-          message:
-            "This username already exists. Enter correct old password to add another firm.",
-        });
-      }
-
-      distributorId = existingUser.distributorId;
-    } else {
-      distributorId = await generateDistributorId();
-    }
+    if (existingFirm || existingUser) return accepted();
+    const distributorId = await generateDistributorId();
 
     const firmId = await generateFirmId();
 
-    const savedUser = await Register.create({
+    await Register.create({
       distributorId,
       firmId,
       firmCode: firmCode.trim(),
@@ -466,33 +514,28 @@ app.post("/api/register", ensureConnection, async (req, res) => {
       apiKey: apiKey || "",
       email: email || "",
       userName: userName.trim(),
+      publicRegistrationUserKey: userName.trim(),
+      publicRegistrationFirmKey: JSON.stringify([firmCode.trim(), firmName.trim()]),
       role: "DISTRIBUTOR_ADMIN",
-      password: await hashPassword(password),
+      password: passwordHash,
     });
 
-    const data = savedUser.toObject();
-    delete data.password;
-
-    res.status(201).json({
-      success: true,
-      message: "Registration completed successfully",
-      data,
-    });
+    return accepted();
   } catch (error) {
-    console.error("❌ Register error:", error.message);
+    console.error("Registration failed.");
 
     if (error.code === 11000) {
-      return res.status(409).json({
-        success: false,
-        message: "Duplicate entry. Firm code, firm name, or username already exists.",
-      });
+      return res.status(202).json({ success: true, message: "If registration can be completed, sign in with the supplied credentials." });
     }
 
     res.status(500).json({
       success: false,
       message: "Registration failed. Please try again later.",
-      error: error.message,
     });
+  } finally {
+    if (registrationLockOwner) {
+      await mongoose.connection.collection("Sys_RegistrationLock").deleteOne({ _id: "public-registration", owner: registrationLockOwner }).catch(() => {});
+    }
   }
 });
 
@@ -638,16 +681,12 @@ app.post(
         firms,
       });
     } catch (error) {
-      console.error(
-        "Login firms error:",
-        error
-      );
+      console.error("Login firms failed.");
 
       return res.status(500).json({
         success: false,
         message:
           "Failed to load firms",
-        error: error.message,
       });
     }
   }
@@ -657,6 +696,12 @@ app.post(
   ensureConnection,
   async (req, res) => {
     try {
+      const browserLogin = browserLoginRequested(req);
+      if (browserLogin && !allowedBrowserOrigin(req)) return res.status(403).json({ success: false, message: "Invalid request origin." });
+      const loginCredential = async (user, source) => {
+        const token = issueAccessToken(user, source);
+        return browserLogin ? { csrf: await createBrowserSession(res, token) } : { token };
+      };
       const userName = String(
         req.body.userName || ""
       ).trim();
@@ -710,7 +755,7 @@ app.post(
         return res.json({
           success: true,
           message: "Login successful",
-          token: issueAccessToken(registerUser, "REGISTER"),
+          ...await loginCredential(registerUser, "REGISTER"),
 
          user: {
     id: registerUser._id,
@@ -759,7 +804,7 @@ app.post(
       return res.json({
         success: true,
         message: "Login successful",
-        token: issueAccessToken(normalUser, "USER"),
+        ...await loginCredential(normalUser, "USER"),
 
         user: {
           id: normalUser._id,
@@ -788,16 +833,12 @@ app.post(
         },
       });
     } catch (error) {
-      console.error(
-        "Login error:",
-        error
-      );
+      console.error("Login failed.");
 
       return res.status(500).json({
         success: false,
         message:
           "Login failed. Please try again later.",
-        error: error.message,
       });
     }
   }
@@ -1003,7 +1044,7 @@ app.post("/api/users", ensureConnection, requireRoles("DISTRIBUTOR_ADMIN"), asyn
       });
     }
     if (!validatePasswordStrength(password)) {
-      return res.status(400).json({ success: false, message: "Password must be 12-128 characters and include uppercase, lowercase, number, and symbol characters." });
+      return res.status(400).json({ success: false, message: "Password must be at least 12 characters, at most 72 UTF-8 bytes, and include uppercase, lowercase, number, and symbol characters." });
     }
 
     const existingUser = await User.findOne({
@@ -1101,7 +1142,7 @@ app.put("/api/users/:id", ensureConnection, requireRoles("DISTRIBUTOR_ADMIN"), a
     }
     if (req.body.password) {
       if (!validatePasswordStrength(req.body.password)) {
-        return res.status(400).json({ success: false, message: "Password must be 12-128 characters and include uppercase, lowercase, number, and symbol characters." });
+        return res.status(400).json({ success: false, message: "Password must be at least 12 characters, at most 72 UTF-8 bytes, and include uppercase, lowercase, number, and symbol characters." });
       }
       update.password = await hashPassword(req.body.password);
     }
@@ -7335,7 +7376,7 @@ app.get("/api/firms", ensureConnection, requireRoles("DISTRIBUTOR_ADMIN"), async
 
 app.post("/api/firms", ensureConnection, requireRoles("DISTRIBUTOR_ADMIN"), async (req, res) => {
   try {
-    const distributorId = String(req.body.distributorId || "").trim();
+    const distributorId = req.auth.distributorId;
 
     if (!distributorId) {
       return res.status(400).json({
@@ -7344,7 +7385,7 @@ app.post("/api/firms", ensureConnection, requireRoles("DISTRIBUTOR_ADMIN"), asyn
       });
     }
 
-    const baseUser = await Register.findOne({ distributorId, isActive: true });
+    const baseUser = await Register.findOne({ _id: req.auth.id, distributorId, isActive: true });
 
     if (!baseUser) {
       return res.status(404).json({
@@ -7766,10 +7807,13 @@ app.post(
     });
   }
 });
-app.get("/api/sales/bill", ensureConnection, async (req, res) => {
+app.get("/api/sales/bill", ensureConnection, authorizeReadFor(
+  ["SALES", "SALES_BILLING", "view"],
+  ["SALES", "SETTLE_LOAD", "add"],
+  ["SALES", "SETTLE_LOAD", "edit"]
+), async (req, res) => {
   try {
-    const distributorId = String(req.query.distributorId || "").trim();
-    const firmId = String(req.query.firmId || "").trim();
+    const { distributorId, firmId } = req.auth;
     const billId = String(req.query.billId || req.query.id || "").trim();
     const salesEntryType = String(req.query.salesEntryType || "").trim();
 
@@ -8415,6 +8459,9 @@ app.put("/api/sales/change-bill-type-f4", ensureConnection,
       });
     }
 
+    const generalSetup = await loadFirmGeneralSetup({ distributorId, firmId });
+    assertSalesDateAllowed({ setup: generalSetup, existingDate: salesBill.BillDate, action: "edit" });
+
     salesBill.BillType = newBillType;
     salesBill.billType = newBillType;
     await salesBill.save();
@@ -8455,7 +8502,7 @@ app.put("/api/sales/change-bill-type-f4", ensureConnection,
     });
   } catch (error) {
     console.error("CHANGE BILL TYPE ERROR FULL:", error);
-    return res.status(500).json({
+    return res.status(error.statusCode || 500).json({
       success: false,
       message: error.message || "Change bill type failed",
       stack: error.stack,
@@ -8544,6 +8591,7 @@ app.put(
       firmId,
       session,
     });
+    assertSalesDateAllowed({ setup: generalSetup, existingDate: oldBill.BillDate, documentDate: BillDate, action: "edit" });
     await applyProductMasterTaxRates({ items, distributorId, firmId, session });
     await enforceTrustedSalesRates({ req, items, distributorId, firmId, gdCode: GDCode, generalSetup, session });
     const canonicalSales = validateFinancialEnvelope(req.body, items, { vatMode: generalSetup?.vatOn });
@@ -10631,6 +10679,8 @@ app.post(
     if (!items.length) {
       throw new Error("At least one product is required");
     }
+    const purchaseSetup = await loadFirmGeneralSetup({ distributorId, firmId, session });
+    assertSalesDateAllowed({ setup: purchaseSetup, documentDate: invoiceDate, action: "create" });
     await applyProductMasterTaxRates({ items, distributorId, firmId, session });
     const canonicalPurchase = validateFinancialEnvelope(req.body, items, { type: "purchase" });
     items.splice(0, items.length, ...canonicalPurchase.items);
@@ -10920,7 +10970,7 @@ app.post(
       });
     }
 
-    res.status(error.statusCode === 400 ? 400 : 500).json({
+    res.status(error.statusCode || 500).json({
       success: false,
       message: error.message || "Purchase save failed",
     });
@@ -11150,6 +11200,8 @@ app.post(
       // purchase (or attempting a duplicate insert).
       const purchase = await PurchaseHeader.findOne({ distributorId, firmId, vouSer, vouNo }).session(session);
       if (!purchase) throw new Error(`Existing purchase ${vouSer}-${vouNo} was not found.`);
+      const purchaseSetup = await loadFirmGeneralSetup({ distributorId, firmId, session });
+      assertSalesDateAllowed({ setup: purchaseSetup, existingDate: purchase.invoiceDate, action: "edit" });
       const reactivatePurchase = purchase.isActive === false;
       if (String(purchase.gdCode || "").trim() !== gdCode) {
         const error = new Error(`Purchase ${vouSer}-${vouNo} exists in a different godown; automatic repair was not applied.`);
@@ -11329,6 +11381,8 @@ app.put(
       }).session(session);
 
       if (!oldPurchase) throw new Error("Original purchase not found");
+      const purchaseSetup = await loadFirmGeneralSetup({ distributorId, firmId, session });
+      assertSalesDateAllowed({ setup: purchaseSetup, existingDate: oldPurchase.invoiceDate, documentDate: invoiceDate, action: "edit" });
 
       // Reverse old items first (subtract; allowed to go temporarily negative).
       await applyPurchaseStockMovement({
@@ -11414,7 +11468,7 @@ app.put(
         });
       }
 
-      res.status(error.statusCode === 400 ? 400 : 500).json({
+      res.status(error.statusCode || 500).json({
         success: false,
         message: error.message || "Purchase update failed",
       });
@@ -12736,6 +12790,7 @@ app.post(
           firmId,
           session,
       });
+      assertSalesDateAllowed({ setup: generalSetup, documentDate: BillDate, action: "create" });
       await applyProductMasterTaxRates({ items, distributorId, firmId, session });
       // Historical desktop invoices must retain the rate at which they were
       // originally posted. Current-rate overrides apply only to new billing.
@@ -19069,8 +19124,7 @@ app.get(
   securityRouter.authorizeRequest("SALES", "SETTLE_LOAD", "view"),
   async (req, res) => {
   try {
-    const distributorId = String(req.query.distributorId || "").trim();
-    const firmId = String(req.query.firmId || "").trim();
+    const { distributorId, firmId } = req.auth;
     const loadSeries = String(req.query.loadSeries || "").trim();
     const loadNo = Number(req.query.loadNo || 0);
 
@@ -19116,7 +19170,18 @@ app.get(
         loadNo: load.LoadNo || "",
         loadDate: load.LoadDate || "",
         narration: load.Narration || "",
-        items: load.Bills || [],
+        items: (load.Bills || []).map((b) => ({
+          _id: b._id,
+          BillType: b.BillType || b.billType,
+          BillDate: b.BillDate || b.billDate,
+          Series: b.Series || b.BillSeries || b.billSeries,
+          BillNo: b.BillNo || b.billNo,
+          PartyCode: b.PartyCode || b.partyCode,
+          PartyName: b.PartyName || b.partyName,
+          SalesmanName: b.SalesmanName || b.SalesmanCode || b.salesman,
+          AreaName: b.AreaName || b.area,
+          Amount: b.Amount || b.billAmount || b.NetAmount || b.netAmount || 0,
+        })),
       },
     });
   } catch (error) {
@@ -20473,9 +20538,10 @@ app.post(
   }
 );
 
-app.get("/api/print-load", ensureConnection, async (req, res) => {
+app.get("/api/print-load", ensureConnection, securityRouter.authorizeRequest("SALES", "CREATE_LOAD", "print"), async (req, res) => {
   try {
-    const { distributorId, firmId, loadSeries, loadNo, reportLevel } = req.query;
+    const { distributorId, firmId } = req.auth;
+    const { loadSeries, loadNo, reportLevel } = req.query;
 
     const load = await LoadHeader.findOne({
       DistributorId: distributorId,
@@ -22704,10 +22770,9 @@ app.post("/api/receipt", ensureConnection, securityRouter.authorizeRequest("TRAN
     await session.endSession();
   }
 });
-app.get("/api/receipt", ensureConnection, async (req, res) => {
+app.get("/api/receipt", ensureConnection, securityRouter.authorizeRequest("TRANSACTIONS", "RECEIPT", "view"), async (req, res) => {
   try {
-    const distributorId = String(req.query.distributorId || "").trim();
-    const firmId = String(req.query.firmId || "").trim();
+    const { distributorId, firmId } = req.auth;
 
     if (!distributorId || !firmId) {
       return res.status(400).json({
@@ -22732,10 +22797,13 @@ app.get("/api/receipt", ensureConnection, async (req, res) => {
     });
   }
 });
-app.get("/api/receipt/next-no", ensureConnection, async (req, res) => {
+app.get("/api/receipt/next-no", ensureConnection, authorizeReadFor(
+  ["TRANSACTIONS", "RECEIPT", "add"],
+  ["SALES", "SETTLE_LOAD", "add"],
+  ["SALES", "SETTLE_LOAD", "edit"]
+), async (req, res) => {
   try {
-    const distributorId = String(req.query.distributorId || "").trim();
-    const firmId = String(req.query.firmId || "").trim();
+    const { distributorId, firmId } = req.auth;
 
     if (!distributorId || !firmId) {
       return res.status(400).json({ success: false, message: "Distributor/Firm required" });
@@ -22754,10 +22822,14 @@ app.get("/api/receipt/next-no", ensureConnection, async (req, res) => {
   }
 });
 
-app.get("/api/receipt/bill-balance", ensureConnection, async (req, res) => {
+app.get("/api/receipt/bill-balance", ensureConnection, authorizeReadFor(
+  ["TRANSACTIONS", "RECEIPT", "view"],
+  ["TRANSACTIONS", "RECEIPT", "add"],
+  ["SALES", "SETTLE_LOAD", "add"],
+  ["SALES", "SETTLE_LOAD", "edit"]
+), async (req, res) => {
   try {
-    const distributorId = String(req.query.distributorId || "").trim();
-    const firmId = String(req.query.firmId || "").trim();
+    const { distributorId, firmId } = req.auth;
     const billSeries = String(req.query.billSeries || "").trim();
     const billNo = String(req.query.billNo || "").trim();
     const billAmount = Number(req.query.billAmount || 0);
@@ -22815,6 +22887,8 @@ const cancelSalesBill = async ({ req, session, bill, reason }) => {
   const distributorId = req.auth.distributorId;
   const firmId = req.auth.firmId;
   const cancelReason = String(reason || "Cancelled by user").trim();
+  const generalSetup = await loadFirmGeneralSetup({ distributorId, firmId, session });
+  assertSalesDateAllowed({ setup: generalSetup, existingDate: bill.BillDate, action: "cancel" });
   if (bill.IsBillCancelled || bill.BillStatus === "CANCELLED" || bill.isActive === false) {
     throw Object.assign(new Error("Bill is already cancelled"), { statusCode: 409 });
   }
@@ -29865,6 +29939,9 @@ app.delete(
       });
     }
 
+    const purchaseSetup = await loadFirmGeneralSetup({ distributorId, firmId, session });
+    assertSalesDateAllowed({ setup: purchaseSetup, existingDate: purchase.invoiceDate, action: "cancel" });
+
     // Restore stock for each item (remove the added stock)
  // Restore stock for each item (remove the added stock)
     for (const item of purchase.items || []) {
@@ -29925,7 +30002,7 @@ app.delete(
   } catch (error) {
     await session.abortTransaction();
     console.error("Delete purchase error:", error);
-    res.status(500).json({
+    res.status(error.statusCode || 500).json({
       success: false,
       message: error.message || "Purchase bill delete failed"
     });

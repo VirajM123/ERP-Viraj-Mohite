@@ -1,8 +1,9 @@
 import React, { useEffect, useRef, useState } from "react";
-import { AlertTriangle, CheckCircle2, DatabaseBackup, Download, FileSpreadsheet, LoaderCircle, Pause, Play, RotateCcw, ShieldCheck, Undo2, Upload, X } from "lucide-react";
+import { AlertTriangle, CheckCircle2, DatabaseBackup, Download, FileSpreadsheet, Pause, Play, RotateCcw, ShieldCheck, Undo2, Upload, X } from "lucide-react";
 import { API_URL } from "./api/config";
+import { authenticateUpload } from "./api/client";
 
-const authHeaders = () => ({ Authorization: `Bearer ${localStorage.getItem("token") || ""}` });
+const authHeaders = () => ({});
 const formatDuration = (seconds) => {
   if (!Number.isFinite(seconds) || seconds < 0) return "Calculating...";
   const rounded = Math.max(0, Math.round(seconds));
@@ -95,7 +96,7 @@ export default function ImportDataFromDesktop({ onClose }) {
     form.append("exportFirmId", exportFirmId.trim());
     const request = new XMLHttpRequest();
     request.open("POST", `${API_URL}/desktop-import/generate`);
-    request.setRequestHeader("Authorization", authHeaders().Authorization);
+    authenticateUpload(request, `${API_URL}/desktop-import/generate`);
     request.upload.onprogress = (event) => {
       if (event.lengthComputable) setProgress(Math.max(1, Math.round((event.loaded / event.total) * 12)));
     };
@@ -119,7 +120,7 @@ export default function ImportDataFromDesktop({ onClose }) {
     const form = new FormData(); excelFiles.forEach((file) => form.append("excel", file));
     const request = new XMLHttpRequest();
     request.open("POST", `${API_URL}/desktop-import/upload-excel`);
-    request.setRequestHeader("Authorization", authHeaders().Authorization);
+    authenticateUpload(request, `${API_URL}/desktop-import/upload-excel`);
     request.upload.onprogress = (event) => {
       if (event.lengthComputable) setProgress(Math.max(1, Math.round((event.loaded / event.total) * 100)));
     };
@@ -244,7 +245,7 @@ export default function ImportDataFromDesktop({ onClose }) {
         <button type="button" className="desktop-import-browse" disabled={processing} onClick={() => inputRef.current?.click()}><Upload size={14}/>Browse</button>
         <div className="desktop-import-file-name"><strong>{backups.length ? (backups.length === 1 ? backups[0].name : `${backups.length} backup parts selected`) : "No file selected"}</strong><small>{backups.length ? `${(backups.reduce((total, file) => total + file.size, 0) / 1024 / 1024).toFixed(1)} MB total` : "SQL Server .bak file (select all parts if it is a striped backup)"}</small></div>
         {!!backups.length && !processing && <button type="button" className="desktop-import-remove" onClick={() => { chooseBackups([]); if (inputRef.current) inputRef.current.value = ""; }}><X size={14}/>Clear</button>}
-        <button type="button" className="desktop-import-generate" disabled={!backups.length || processing} onClick={generate}>{processing ? <><LoaderCircle className="desktop-import-spin" size={15}/>Generating...</> : <><FileSpreadsheet size={15}/>Generate Excel</>}</button>
+        <button type="button" className="desktop-import-generate" disabled={!backups.length || processing} onClick={generate}>{processing ? <><span className="erp-loading-bar erp-loading-bar--inline" aria-hidden="true" />Generating...</> : <><FileSpreadsheet size={15}/>Generate Excel</>}</button>
       </div>
     </section>
 
@@ -255,13 +256,14 @@ export default function ImportDataFromDesktop({ onClose }) {
         <button type="button" className="desktop-import-browse" disabled={processing || !!actionBusy} onClick={() => excelInputRef.current?.click()}><Upload size={14}/>Select Excels</button>
         <div className="desktop-import-file-name"><strong>{excelFiles.length ? `${excelFiles.length} Excel file${excelFiles.length === 1 ? "" : "s"} selected` : "No Excel files selected"}</strong><small>{excelFiles.length ? `${(excelFiles.reduce((total, file) => total + file.size, 0) / 1024 / 1024).toFixed(1)} MB total` : "Select multiple .xlsx files downloaded after local backup extraction"}</small></div>
         {!!excelFiles.length && !actionBusy && <button type="button" className="desktop-import-remove" onClick={() => { chooseExcels([]); if (excelInputRef.current) excelInputRef.current.value = ""; }}><X size={14}/>Clear</button>}
-        <button type="button" className="desktop-import-generate" disabled={!excelFiles.length || processing || !!actionBusy} onClick={uploadExcels}>{actionBusy === "excel-upload" ? <><LoaderCircle className="desktop-import-spin" size={15}/>Uploading...</> : <><FileSpreadsheet size={15}/>Upload for Import</>}</button>
+        <button type="button" className="desktop-import-generate" disabled={!excelFiles.length || processing || !!actionBusy} onClick={uploadExcels}>{actionBusy === "excel-upload" ? <><span className="erp-loading-bar erp-loading-bar--inline" aria-hidden="true" />Uploading...</> : <><FileSpreadsheet size={15}/>Upload for Import</>}</button>
       </div>
     </section>
 
     {(progress > 0 || processing) && <section className="desktop-import-card desktop-import-progress-card">
-      <div className="desktop-import-progress-copy"><span>{stage}</span><strong>{Math.round(progress)}%</strong></div>
-      <div className="desktop-import-progress-track" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow={progress}><span style={{ width: `${Math.max(0, Math.min(100, progress))}%` }}/></div>
+      <div className="desktop-import-progress-copy"><span><Upload className={processing || actionBusy === "excel-upload" ? "erp-upload-icon" : "erp-upload-icon is-idle"} size={15} aria-hidden="true" /> {stage}</span><strong>{Math.round(progress)}%</strong></div>
+      <div className="desktop-import-progress-track" role="progressbar" aria-label={stage || "File progress"} aria-valuemin="0" aria-valuemax="100" aria-valuenow={progress}><span style={{ width: `${Math.max(0, Math.min(100, progress))}%` }}/></div>
+      {(processing || actionBusy === "excel-upload") && <p className="erp-progress-hint">Please keep this page open.</p>}
     </section>}
 
     {error && <div className="desktop-import-error"><X size={15}/><span>{error}</span></div>}
@@ -282,8 +284,8 @@ export default function ImportDataFromDesktop({ onClose }) {
         <select value={companyCode} onChange={(event) => { setCompanyCode(event.target.value); setJob((current) => current ? ({ ...current, preflight: null }) : current); }} disabled={batchActive}><option value="">All companies (automatic mapping)</option>{companies.map((company) => <option key={company._id || company.companyCode} value={company.companyCode}>{company.companyCode} - {company.companyName}</option>)}</select>
       </div>
       <div className="desktop-import-batch-actions">
-        <button type="button" onClick={runPreflight} disabled={batchActive || !!actionBusy || !selected.size}>{actionBusy === "preflight" ? <LoaderCircle className="desktop-import-spin" size={14}/> : <ShieldCheck size={14}/>}Dry-run Preview</button>
-        <button type="button" className="primary" onClick={startImport} disabled={batchActive || !!actionBusy || !selected.size || job.preflight?.totals?.errors > 0}>{actionBusy === "import" ? <LoaderCircle className="desktop-import-spin" size={14}/> : <Play size={14}/>}Import Selected</button>
+        <button type="button" onClick={runPreflight} disabled={batchActive || !!actionBusy || !selected.size}>{actionBusy === "preflight" ? <span className="erp-loading-bar erp-loading-bar--inline" aria-hidden="true" /> : <ShieldCheck size={14}/>}Dry-run Preview</button>
+        <button type="button" className="primary" onClick={startImport} disabled={batchActive || !!actionBusy || !selected.size || job.preflight?.totals?.errors > 0}>{actionBusy === "import" ? <span className="erp-loading-bar erp-loading-bar--inline" aria-hidden="true" /> : <Play size={14}/>}Import Selected</button>
         {job.import?.status === "running" && <button type="button" onClick={() => controlImport("pause")} disabled={!!actionBusy}><Pause size={14}/>Pause</button>}
         {job.import?.status === "paused" && <button type="button" onClick={() => controlImport("resume")} disabled={!!actionBusy}><Play size={14}/>Resume</button>}
         {!!job.import?.failed && !batchActive && <button type="button" onClick={() => controlImport("retry")} disabled={!!actionBusy}><RotateCcw size={14}/>Retry Failed</button>}

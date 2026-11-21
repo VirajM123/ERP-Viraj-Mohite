@@ -5,6 +5,7 @@ import { installAuthenticatedFetch } from "./api/client";
 
 import { ERPProvider } from "./context/ERPContext";
 import "./ERPTheme.css";
+import "./components/Loading.css";
 
 installAuthenticatedFetch();
 

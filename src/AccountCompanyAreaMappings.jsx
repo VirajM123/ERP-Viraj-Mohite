@@ -91,7 +91,7 @@ export default function AccountCompanyAreaMappings({ account, accountId, compani
       </header>
       <div className="account-area-body">
         <p className="account-area-help">Map this customer to an area and to the account code/name used by each company.</p>
-        {loading ? <p role="status">Loading mappings...</p> : (
+        {loading ? <p role="status"><span className="erp-loading-bar erp-loading-bar--inline" aria-hidden="true" /> Loading mappings...</p> : (
           <div className="account-area-table-wrap">
             <table>
               <thead><tr><th>Company Name</th><th>Area Name</th><th>Account Code (compaccode)</th><th>Account Name (compacname)</th><th /></tr></thead>

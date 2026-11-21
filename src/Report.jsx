@@ -44,6 +44,7 @@ import ChartOfAccountsSetup from "./ChartOfAccountsSetup";
 import { csvCell } from "../shared/spreadsheetSafety.js";
 import CatalogReport, { CATALOG_REPORTS } from "./CatalogReport";
 import CommonReportGrid from "./CommonReportGrid";
+import ReportLoading from "./components/ReportLoading";
 
 const EXCEL_HEADER_COLOR = "1F4E79";
 const EXCEL_TOTAL_COLOR = "D9EAF7";
@@ -108,6 +109,7 @@ const ReportExportActions = ({ generate, exportCsv, exportExcel, ready, loading,
     }} onKeyDown={(event) => {
       if (event.key === "Escape") setMenuOpen(false);
     }}>
+      <ReportLoading loading={loading} />
       {ready && showFilterToggle && (
         <button
           type="button"

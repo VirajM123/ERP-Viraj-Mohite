@@ -1779,7 +1779,7 @@ const SecuritySetup = ({
         return (
             <div className="security-setup-page">
                 <div className="security-loading">
-                    <div className="security-loading-spinner" />
+                    <div className="erp-loading-bar" aria-hidden="true" />
 
                     <strong>
                         Loading Security Setup...

@@ -1,0 +1,10 @@
+.erp-success-overlay { position: fixed; inset: 0; z-index: 20001; display: flex; align-items: center; justify-content: center; padding: 24px; background: rgba(239, 244, 248, .88); pointer-events: none; }
+.erp-success-card { width: min(420px, 100%); padding: 40px 28px; display: flex; flex-direction: column; align-items: center; gap: 18px; text-align: center; color: #123b37; background: white; border-radius: 16px; box-shadow: 0 14px 42px rgba(15, 42, 68, .16); animation: erp-success-enter 220ms ease-out both; }
+.erp-success-check { display: grid; place-items: center; width: 58px; height: 58px; border-radius: 50%; background: #d8f5e8; color: #16885d; font-size: 34px; font-weight: 700; }
+.erp-success-card strong { font-size: 18px; }
+@keyframes erp-success-enter { from { opacity: 0; transform: translateY(8px) scale(.97); } to { opacity: 1; transform: translateY(0) scale(1); } }
+@media (prefers-reduced-motion: reduce) { .erp-success-card { animation: none; } }
+
+.erp-success-check { box-shadow: 0 0 0 8px rgba(22, 136, 93, .08); animation: erp-check-appear 360ms ease-out both; }
+@keyframes erp-check-appear { from { opacity: 0; transform: scale(.75); } to { opacity: 1; transform: scale(1); } }
+@media (prefers-reduced-motion: reduce) { .erp-success-check { animation: none; } }

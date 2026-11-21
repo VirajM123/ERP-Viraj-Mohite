@@ -11,5 +11,5 @@ export const getSessionExpiresAt = () => {
 };
 
 export const hasActiveSession = () => {
-  return Boolean(localStorage.getItem("token"));
+  return false; // Authentication must be restored from the server.
 };

@@ -5221,3 +5221,248 @@
     z-index: 2;
   }
 }
+
+/* Firm Master list, scoped to the firm screen. */
+@media screen {
+  .firm-master-list-design.erp-master-list-page {
+    padding: 16px !important;
+    border: 1px solid #d5e1f3;
+    border-radius: 12px;
+    background: #fff;
+    box-shadow: 0 5px 20px rgba(38, 77, 140, .08);
+  }
+  .firm-master-list-design .erp-list-page-header > .firm-list-title {
+    display: flex; align-items: center; gap: 12px;
+    min-height: 62px; margin-bottom: 12px; padding: 10px 180px 10px 14px;
+    border-radius: 8px; background: #e4edfc;
+  }
+  .firm-master-list-design .firm-list-title-icon {
+    display: flex; flex: 0 0 38px; width: 38px; height: 38px;
+    align-items: center; justify-content: center;
+    border-radius: 8px; color: #164af0; background: #d4e3fc;
+  }
+  .firm-master-list-design .erp-list-page-header h1 { color: #0b1e50; font-size: 19px; }
+  .firm-master-list-design .erp-list-page-header p { margin-top: 2px; color: #526991; font-size: 11px; }
+  .firm-master-list-design .erp-list-toolbar {
+    min-height: 38px; height: auto; margin-bottom: 12px; padding: 0;
+    border: 0; background: transparent; gap: 8px;
+  }
+  .firm-master-list-design .erp-list-search { height: 34px; border-color: #c8d6eb; }
+  .firm-master-list-design .erp-list-toolbar > .firm-ui-btn-primary {
+    top: 14px; right: 14px; background: #174bea; border-color: #174bea;
+  }
+  .firm-master-list-design .erp-list-card {
+    border: 1px solid #cad9ee; border-radius: 8px; box-shadow: none;
+  }
+  .firm-master-list-design .erp-list-table { min-width: 800px; }
+  .firm-master-list-design .erp-list-table th {
+    height: 34px; color: #fff; background: #2865d5;
+    border-right: 1px solid rgba(255,255,255,.2); border-bottom: 0;
+    font-size: 11px; font-weight: 700;
+  }
+  .firm-master-list-design .erp-list-table td {
+    border-right: 1px solid #dbe6f5; border-bottom: 1px solid #dbe6f5;
+    color: #162c59; font-size: 11px;
+  }
+  .firm-master-list-design .erp-list-table tbody tr:nth-child(odd) td { background: #f1f6fd; }
+  .firm-master-list-design .erp-list-table tbody tr:hover td { background: #e9f1fc; }
+  .firm-master-list-design .erp-list-table th:last-child,
+  .firm-master-list-design .erp-list-table td:last-child { border-right: 0; }
+  .firm-master-list-design .erp-list-footer { background: #fff; color: #536a91; }
+  @media (max-width: 900px) {
+    .firm-master-list-design .erp-list-page-header > .firm-list-title { padding-right: 14px; }
+    .firm-master-list-design .erp-list-toolbar > .firm-ui-btn-primary { position: static; }
+    .firm-master-list-design .erp-list-toolbar { gap: 8px; }
+  }
+}
+
+/* Consistent compact presentation for master lists. */
+@media screen {
+  .erp-master-list-page {
+    padding: 14px !important;
+    border: 1px solid #d5e1f3;
+    border-radius: 12px;
+    background: #fff;
+    box-shadow: 0 5px 20px rgba(38, 77, 140, .08);
+  }
+  .erp-master-list-page .erp-list-page-header > div:first-child {
+    position: relative;
+    min-height: 62px;
+    margin-bottom: 12px;
+    padding: 10px 190px 10px 14px;
+    border-radius: 8px;
+    background: #e4edfc;
+  }
+  .erp-master-list-page .erp-list-page-header h1 { margin: 0; color: #0b1e50; font-size: 19px; line-height: 1.2; }
+  .erp-master-list-page .erp-list-page-header p { margin: 3px 0 0; color: #526991; font-size: 11px; }
+  .erp-master-list-page .erp-list-toolbar {
+    height: auto; min-height: 34px; margin-bottom: 12px; padding: 0;
+    gap: 8px; border: 0; background: transparent;
+  }
+  .erp-master-list-page .erp-list-toolbar > :is(.firm-ui-btn-primary, .user-ui-btn-primary) {
+    top: 14px; right: 14px; color: #fff; border-color: #174bea; background: #174bea;
+  }
+  .erp-master-list-page .erp-list-search { height: 34px; border-color: #c8d6eb; }
+  .erp-master-list-page .erp-list-card {
+    border: 1px solid #cad9ee !important; border-radius: 8px !important; box-shadow: none;
+  }
+  .erp-master-list-page .erp-list-table th {
+    height: 34px; color: #fff !important; background: #2865d5 !important;
+    border-right: 1px solid rgba(255,255,255,.2); border-bottom: 0; font-size: 11px;
+  }
+  .erp-master-list-page .erp-list-table td {
+    color: #162c59; border-right: 1px solid #dbe6f5; border-bottom: 1px solid #dbe6f5; font-size: 11px;
+  }
+  .erp-master-list-page .erp-list-table tbody tr:nth-child(odd) td { background: #f1f6fd; }
+  .erp-master-list-page .erp-list-table tbody tr:hover td { background: #e9f1fc; }
+  .erp-master-list-page .erp-list-table th:last-child,
+  .erp-master-list-page .erp-list-table td:last-child { border-right: 0; }
+  .erp-master-list-page .erp-list-footer { color: #536a91; background: #fff; }
+  @media (max-width: 900px) {
+    .erp-master-list-page .erp-list-page-header > div:first-child { padding-right: 14px; }
+    .erp-master-list-page .erp-list-toolbar { height: auto; flex-wrap: wrap; }
+    .erp-master-list-page .erp-list-toolbar > :is(.firm-ui-btn-primary, .user-ui-btn-primary) { position: static; }
+  }
+}
+
+/* Compact master lists: distinct scroll area, footer and export icons. */
+@media screen {
+  .erp-master-list-page { padding: 12px !important; }
+  .erp-master-list-page .erp-list-page-header > div:first-child { min-height: 54px; margin-bottom: 8px; padding-top: 8px; padding-bottom: 8px; }
+  .erp-master-list-page .erp-list-page-header h1 { font-size: 17px; }
+  .erp-master-list-page .erp-list-toolbar { margin-bottom: 8px; }
+  .erp-master-list-page .erp-list-card { display: flex; flex-direction: column; }
+  .erp-master-list-page .erp-list-table-scroll {
+    flex: 0 1 auto; max-height: clamp(180px, calc(100vh - 380px), 610px);
+    overflow: auto; overscroll-behavior: contain;
+  }
+  .erp-master-list-page .erp-list-table { border-collapse: separate; border-spacing: 0; }
+  .erp-master-list-page .erp-list-table thead th {
+    position: sticky; top: 0; z-index: 3; background: #2865d5 !important;
+  }
+  .erp-master-list-page .erp-list-table :is(th, td) { height: 34px; padding: 4px 10px; font-size: 11px; }
+  .erp-master-list-page .erp-list-footer {
+    flex: 0 0 auto; min-height: 46px; gap: 12px; padding: 6px 10px;
+    border-top: 1px solid #cbdcf2; font-size: 11px;
+  }
+  .erp-master-list-page .erp-list-footer > div:first-child { display: flex; align-items: center; flex-wrap: wrap; gap: 12px; }
+  .erp-master-list-page :is(.firm-ui-page-size, .user-ui-page-size) { display: inline-flex; align-items: center; gap: 6px; }
+  .erp-master-list-page :is(.firm-ui-export-btn, .user-ui-export-btn):is(.excel, .pdf) { gap: 7px; }
+  .erp-master-list-page :is(.firm-ui-export-btn, .user-ui-export-btn):is(.excel, .pdf) > svg { display: none; }
+  .erp-master-list-page :is(.firm-ui-export-btn, .user-ui-export-btn):is(.excel, .pdf)::before {
+    display: inline-flex; width: 18px; height: 20px; flex: 0 0 18px;
+    align-items: center; justify-content: center; border-radius: 3px;
+    color: #fff; font-family: Arial, sans-serif; font-weight: 800; line-height: 1;
+  }
+  .erp-master-list-page :is(.firm-ui-export-btn, .user-ui-export-btn).excel::before { content: 'X'; background: #168044; font-size: 13px; }
+  .erp-master-list-page :is(.firm-ui-export-btn, .user-ui-export-btn).pdf::before { content: 'PDF'; background: #dc2626; font-size: 7px; }
+  @media (max-width: 700px) {
+    .erp-master-list-page .erp-list-footer { flex-wrap: wrap; }
+    .erp-master-list-page .erp-list-footer > div:first-child { gap: 8px; }
+  }
+}
+
+/* Compact, separated pagination bar for all master lists. */
+@media screen {
+  .erp-master-list-page { padding: 10px !important; }
+  .erp-master-list-page .erp-list-page-header > div:first-child { min-height: 48px; margin-bottom: 7px; padding-top: 6px; padding-bottom: 6px; }
+  .erp-master-list-page .erp-list-page-header h1 { font-size: 16px; }
+  .erp-master-list-page .erp-list-page-header p { font-size: 10px; }
+  .erp-master-list-page .erp-list-toolbar { min-height: 30px; margin-bottom: 7px; }
+  .erp-master-list-page .erp-list-card { overflow: visible; border: 0 !important; background: transparent; }
+  .erp-master-list-page .erp-list-table-scroll { border: 1px solid #cad9ee; border-radius: 7px; }
+  .erp-master-list-page .erp-list-table :is(th, td) { height: 31px; padding: 3px 9px; font-size: 11px; }
+  .erp-master-list-page .erp-list-footer {
+    width: auto; min-height: 40px; margin-top: 8px; padding: 5px 9px;
+    border: 1px solid #c5d9f5 !important; border-radius: 7px;
+    background: #edf5ff !important; color: #18345e; font-size: 11px;
+  }
+  .erp-master-list-page .erp-list-footer > div:first-child { gap: 12px; }
+  .erp-master-list-page :is(.firm-ui-page-size, .user-ui-page-size) {
+    padding-left: 12px; border-left: 1px solid #bfd0e9;
+  }
+  .erp-master-list-page :is(.firm-ui-page-size, .user-ui-page-size) select {
+    height: 28px; min-height: 28px; padding: 0 24px 0 8px;
+    border: 1px solid #bfd0e9; border-radius: 5px; background-color: #fff; font-size: 11px;
+  }
+  .erp-master-list-page :is(.firm-ui-pagination, .user-ui-pagination) { display: flex; align-items: center; gap: 4px; }
+  .erp-master-list-page :is(.firm-ui-pagination, .user-ui-pagination) button {
+    width: 28px; min-width: 28px; height: 28px; min-height: 28px; padding: 0;
+    border: 1px solid #c5d6ed; border-radius: 5px; background: #fff; color: #193861; font-size: 11px;
+  }
+  .erp-master-list-page :is(.firm-ui-pagination, .user-ui-pagination) button.active {
+    border-color: #174bea; background: #174bea; color: #fff;
+  }
+  .erp-master-list-page :is(.firm-ui-pagination, .user-ui-pagination) button:disabled { color: #a8b8cc; background: #f7f9fc; }
+  @media (max-width: 700px) {
+    .erp-master-list-page .erp-list-footer { flex-wrap: wrap; gap: 7px; }
+    .erp-master-list-page :is(.firm-ui-pagination, .user-ui-pagination) { margin-left: auto; }
+  }
+}
+
+/* Dense master lists with a persistent actions column. */
+@media screen {
+  .erp-master-list-page { min-height: 0 !important; height: auto !important; padding: 8px !important; }
+  .erp-master-list-page .erp-list-page-header > div:first-child {
+    min-height: 42px !important; margin-bottom: 6px; padding: 5px 180px 5px 10px;
+  }
+  .erp-master-list-page .erp-list-page-header h1 { font-size: 15px !important; line-height: 1.2; }
+  .erp-master-list-page .erp-list-page-header p { margin-top: 2px; font-size: 10px !important; line-height: 1.2; }
+  .erp-master-list-page .erp-list-toolbar { min-height: 28px !important; margin-bottom: 6px; gap: 6px; }
+  .erp-master-list-page .erp-list-search,
+  .erp-master-list-page .erp-list-search > input[type="text"] { height: 28px !important; min-height: 28px !important; font-size: 11px; }
+  .erp-master-list-page .erp-list-toolbar :is(.firm-ui-export-btn, .user-ui-export-btn, .firm-ui-btn-primary, .user-ui-btn-primary) {
+    height: 28px !important; min-height: 28px !important; padding: 0 9px !important; font-size: 11px !important;
+  }
+  .erp-master-list-page .erp-list-toolbar > :is(.firm-ui-btn-primary, .user-ui-btn-primary) { top: 7px; right: 8px; }
+  .erp-master-list-page .erp-list-table-scroll { max-height: min(290px, 40vh); }
+  .erp-master-list-page .erp-list-table :is(th, td) {
+    height: 30px !important; min-height: 30px; padding: 3px 8px !important; font-size: 11px !important; line-height: 1.2;
+  }
+  .erp-master-list-page .erp-list-table :is(th, td):is(.firm-ui-action-column, .user-ui-action-column) {
+    position: sticky; right: 0; z-index: 2; box-shadow: -3px 0 6px rgba(30, 62, 110, .08);
+  }
+  .erp-master-list-page .erp-list-table thead th:is(.firm-ui-action-column, .user-ui-action-column) {
+    top: 0; z-index: 5; background: #2865d5 !important;
+  }
+  .erp-master-list-page .erp-list-table tbody td:is(.firm-ui-action-column, .user-ui-action-column) { background: #fff !important; }
+  .erp-master-list-page .erp-list-table tbody tr:nth-child(odd) td:is(.firm-ui-action-column, .user-ui-action-column) { background: #f1f6fd !important; }
+  .erp-master-list-page .erp-list-table tbody tr:hover td:is(.firm-ui-action-column, .user-ui-action-column) { background: #e9f1fc !important; }
+  .erp-master-list-page .erp-list-footer { min-height: 34px !important; margin-top: 6px; padding: 4px 8px; }
+  .erp-master-list-page :is(.firm-ui-page-size, .user-ui-page-size) select {
+    width: 54px !important; min-width: 54px !important; max-width: 54px;
+    height: 25px !important; min-height: 25px !important; padding: 0 15px 0 6px !important;
+    font-size: 11px !important; line-height: 1;
+  }
+  .erp-master-list-page :is(.firm-ui-pagination, .user-ui-pagination) button {
+    width: 25px !important; min-width: 25px !important; height: 25px !important; min-height: 25px !important;
+  }
+  .erp-master-list-page :is(.firm-ui-action-btn, .user-ui-action-btn) {
+    width: 24px !important; min-width: 24px !important; height: 24px !important; min-height: 24px !important;
+  }
+  @media (max-width: 900px) {
+    .erp-master-list-page .erp-list-page-header > div:first-child { padding-right: 10px; }
+    .erp-master-list-page .erp-list-toolbar > :is(.firm-ui-btn-primary, .user-ui-btn-primary) { position: static; }
+  }
+}
+
+/* Keep the full page-size value visible beside the native select arrow. */
+@media screen {
+  .erp-master-list-page :is(.firm-ui-page-size, .user-ui-page-size) select {
+    box-sizing: border-box;
+    width: 68px !important; min-width: 68px !important; max-width: none;
+    height: 27px !important; min-height: 27px !important;
+    padding: 0 22px 0 8px !important;
+    appearance: auto; text-align: left; line-height: normal;
+  }
+}
+
+/* Separate master table grids from their pagination controls. */
+@media screen {
+  .erp-master-list-page .erp-list-card { gap: 10px; }
+  .erp-master-list-page .erp-list-footer { margin-top: 0 !important; }
+  .erp-master-list-page :is(.firm-ui-page-size, .user-ui-page-size) select {
+    background-image: none !important;
+    appearance: auto !important;
+  }
+}

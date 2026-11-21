@@ -7,9 +7,15 @@ import './DashboardHorizontalNav.css';
 import './SalesInvoiceListModern.css';
 import landscapeLogo from "./assets/images/total-solution-landscape.svg";
 import DashboardHome from "./DashboardHome";
+import "./GeneralSetup1.css";
 import SearchablePartySelect from "./components/SearchablePartySelect";
 import UserProfileModal from "./components/UserProfileModal";
+import ScreenLoading from "./components/ScreenLoading";
+import VisualActivity from "./components/VisualActivity";
+import { showSuccessNotice } from "./components/SuccessNotice";
 import { businessDateIST } from "./utils/businessDate";
+import { entryDaysDateRange } from "./utils/entryDaysDateRange";
+import { escapeHtml } from "./utils/escapeHtml";
 import { resolveInvoiceItemHsn } from "./utils/invoiceHsn";
 import { findPurchaseSupplier, purchaseSupplierValue } from "./utils/purchaseSupplier";
 import {
@@ -28,7 +34,7 @@ const lazyWithFallback = (importer) => {
   const Component = lazy(importer);
   return function DeferredComponent(props) {
     return (
-      <Suspense fallback={<div role="status">Loading module...</div>}>
+      <Suspense fallback={<ScreenLoading title="Loading module..." message="Please wait while we prepare this page." />}>
         <Component {...props} />
       </Suspense>
     );
@@ -575,6 +581,10 @@ const Dashboard = ({ onLogout }) => {
   });
   const [showPrintAccountDetailsModal, setShowPrintAccountDetailsModal] = useState(false);
   const [printAccountDetailsSaving, setPrintAccountDetailsSaving] = useState(false);
+  const [invoiceSetupLoading, setInvoiceSetupLoading] = useState(false);
+  const [invoiceSetupReady, setInvoiceSetupReady] = useState(false);
+  const [invoiceSetupMessage, setInvoiceSetupMessage] = useState("");
+  const [showPrintBankFields, setShowPrintBankFields] = useState(false);
   useEffect(() => {
     if (showSalesPrintFormatModal) {
       return;
@@ -852,22 +862,7 @@ const debitNotePermission = usePermission("VOUCHERS", "DEBIT_NOTE");
       }
 
       const details = result?.details || null;
-      const outputStorageKey = `salesInvoiceOutputSettings:${localStorage.getItem("distributorId") || ""}:${localStorage.getItem("firmId") || ""}`;
-      let cachedOutputSettings = null;
-      try {
-        cachedOutputSettings = JSON.parse(localStorage.getItem(outputStorageKey) || "null");
-      } catch {
-        cachedOutputSettings = null;
-      }
-      const resolvedDetails = details
-        ? {
-            ...details,
-            outputSettings: {
-              ...(details.outputSettings || {}),
-              ...(cachedOutputSettings || {}),
-            },
-          }
-        : details;
+      const resolvedDetails = details;
       const savedQrCode = details?.qrCode || { fileName: "", mimeType: "", dataUrl: "" };
       let printableQrCode = savedQrCode;
       if (savedQrCode.dataUrl) {
@@ -889,14 +884,30 @@ const debitNotePermission = usePermission("VOUCHERS", "DEBIT_NOTE");
         termsAndConditions: details?.termsAndConditions || DEFAULT_INVOICE_TERMS,
         qrCode: printableQrCode,
       });
-      return resolvedDetails ? { ...resolvedDetails, qrCode: printableQrCode } : resolvedDetails;
+      return { ...(resolvedDetails || {}), qrCode: printableQrCode };
     } catch (error) {
       console.error("Print account details load error:", error);
       return null;
     }
   };
 
-  const savePrintAccountDetails = async ({ requireBankDetails = false, outputSettingsOverride = null } = {}) => {
+  const loadInvoicePrintSetup = async () => {
+    setInvoiceSetupReady(false);
+    setInvoiceSetupLoading(true);
+    setInvoiceSetupMessage("");
+    try {
+      const details = await loadPrintAccountDetails();
+      if (!details) throw new Error("Unable to load invoice print settings.");
+      setSalesPrintOptions((previous) => ({ ...previous, ...createDefaultSalesPrintOptions(runtimeGeneralSetup), ...(details.printContent || {}), ...(details.outputSettings || {}) }));
+      setInvoiceSetupReady(true);
+    } catch (error) {
+      setInvoiceSetupMessage(error.message || "Unable to load invoice print settings.");
+    } finally {
+      setInvoiceSetupLoading(false);
+    }
+  };
+
+  const savePrintAccountDetails = async ({ requireBankDetails = false, outputSettingsOverride = null, mode = "print" } = {}) => {
     const bankName = String(printAccountDetails.bankName || "").trim();
     const accountName = String(printAccountDetails.accountName || "").trim();
     const accountNumber = String(printAccountDetails.accountNumber || "").trim();
@@ -913,6 +924,7 @@ const debitNotePermission = usePermission("VOUCHERS", "DEBIT_NOTE");
       paperSize: String(outputSettingsOverride?.paperSize ?? salesPrintOptions.paperSize ?? "A4"),
       orientation: String(outputSettingsOverride?.orientation ?? salesPrintOptions.orientation ?? "portrait"),
       fontSizePercent: Math.min(150, Math.max(80, Number(outputSettingsOverride?.fontSizePercent ?? salesPrintOptions.fontSizePercent) || 150)),
+      copies: Math.min(10, Math.max(1, Number(outputSettingsOverride?.copies ?? salesPrintOptions.copies) || 1)),
     };
 
     setPrintAccountDetailsSaving(true);
@@ -920,40 +932,29 @@ const debitNotePermission = usePermission("VOUCHERS", "DEBIT_NOTE");
       const response = await secureFetch(`${API_URL}/print-account-details`, {
         method: "PUT",
         headers: { "Content-Type": "application/json", Accept: "application/json" },
-        body: JSON.stringify({
-          bankName,
-          accountName,
-          accountNumber,
-          ifscCode,
-          termsAndConditions,
+        body: JSON.stringify(mode === "bank" ? {
+          bankName, accountName, accountNumber, ifscCode, termsAndConditions,
           qrCode: printAccountDetails.qrCode,
+        } : {
           printContent: {
             goodsReturn: salesPrintOptions.goodsReturn,
             damageReturn: salesPrintOptions.damageReturn,
             showScheme: salesPrintOptions.showScheme,
             showTaxSummary: salesPrintOptions.showTaxSummary,
           },
-          outputSettings: {
-            ...requestedOutputSettings,
-          },
+          outputSettings: requestedOutputSettings,
         }),
       });
       const result = await response.json();
       if (!response.ok || result?.success === false) {
         throw new Error(result?.message || "Unable to save print details.");
       }
-      const savedOutputSettings = {
-        ...(result.details?.outputSettings || {}),
-        ...requestedOutputSettings,
-      };
-      localStorage.setItem(
-        `salesInvoiceOutputSettings:${localStorage.getItem("distributorId") || ""}:${localStorage.getItem("firmId") || ""}`,
-        JSON.stringify(savedOutputSettings)
-      );
-      setSalesPrintOptions((previous) => ({
-        ...previous,
-        ...savedOutputSettings,
-      }));
+      if (mode !== "bank") {
+        setSalesPrintOptions((previous) => ({
+          ...previous,
+          ...(result.details?.outputSettings || requestedOutputSettings),
+        }));
+      }
       setPrintAccountDetails({
         bankName: result.details?.bankName || "",
         accountName: result.details?.accountName || "",
@@ -1131,7 +1132,7 @@ const debitNotePermission = usePermission("VOUCHERS", "DEBIT_NOTE");
         actualSalesRow
       );
 
-      setSalesPrintOptions({
+      const nextPrintOptions = {
         ...createDefaultSalesPrintOptions(
           latestSetup
         ),
@@ -1151,7 +1152,12 @@ const debitNotePermission = usePermission("VOUCHERS", "DEBIT_NOTE");
 
         loadSeries,
         loadNo,
-      });
+      };
+      setSalesPrintOptions(nextPrintOptions);
+      if (defaultAction === "print") {
+        await openSelectedSalesInvoiceFormat({ action: "print", options: { ...nextPrintOptions, loadNo: "", loadSeries: "" }, row: actualSalesRow });
+        return;
+      }
 
       setShowSalesPrintFormatModal(
         true
@@ -1997,6 +2003,8 @@ const debitNotePermission = usePermission("VOUCHERS", "DEBIT_NOTE");
 
   const [salesAppliedFilters, setSalesAppliedFilters] =
     useState(() => createDefaultSalesListFilters());
+
+  const initialEntryDaysApplied = useRef(false);
 
   /*
   * false = filter fields hidden
@@ -3072,32 +3080,34 @@ const debitNotePermission = usePermission("VOUCHERS", "DEBIT_NOTE");
 
   const openSelectedSalesInvoiceFormat = async ({
     action = "preview",
+    options = salesPrintOptions,
+    row = selectedSalesPrintRow,
   } = {}) => {
     const enteredLoadNo = String(
-      salesPrintOptions.loadNo || ""
+      options.loadNo || ""
     ).trim();
 
     /*
     * When Load No exists, print the whole load.
     * Otherwise print only the selected invoice.
     */
-    if (!enteredLoadNo && !selectedSalesPrintRow) {
+    if (!enteredLoadNo && !row) {
       alert(
         "Please select a Sales Bill or enter Load Series and Load No."
       );
       return;
     }
 
-    const selectedReportNumber = String(
-      salesPrintOptions.reportNumber || "1"
+    let selectedReportNumber = String(
+      options.reportNumber || "1"
     );
 
-    const selectedPaper =
+    let selectedPaper =
       SALES_BILL_PAPER_SIZES.find(
         (paper) =>
           paper.value ===
           String(
-            salesPrintOptions.paperSize || "A4"
+            options.paperSize || "A4"
           )
       ) || SALES_BILL_PAPER_SIZES[0];
 
@@ -3145,23 +3155,14 @@ const debitNotePermission = usePermission("VOUCHERS", "DEBIT_NOTE");
               border: 1px solid #dbe3ee;
               background: #ffffff;
               text-align: center;
+              border-radius: 16px;
+              box-shadow: 0 14px 42px rgba(15, 42, 68, .14);
             }
+            .loading-box p { margin: 10px 0 0; color: #526579; }
 
-            .spinner {
-              width: 34px;
-              height: 34px;
-              margin: 0 auto 14px;
-              border: 4px solid #dbeafe;
-              border-top-color: #2563eb;
-              border-radius: 50%;
-              animation: invoiceSpin 0.8s linear infinite;
-            }
-
-            @keyframes invoiceSpin {
-              to {
-                transform: rotate(360deg);
-              }
-            }
+            .spinner { box-sizing: content-box; width: 50px; padding: 8px; aspect-ratio: 1; margin: 0 auto 14px; border-radius: 50%; background: #25b09b; --_m: conic-gradient(#0000 10%, #000), linear-gradient(#000 0 0) content-box; -webkit-mask: var(--_m); mask: var(--_m); -webkit-mask-composite: source-out; mask-composite: subtract; animation: invoiceSpin 1s infinite linear; }
+            @keyframes invoiceSpin { to { transform: rotate(1turn); } }
+            @media (prefers-reduced-motion: reduce) { .spinner { animation: none; } }
           </style>
         </head>
 
@@ -3175,6 +3176,7 @@ const debitNotePermission = usePermission("VOUCHERS", "DEBIT_NOTE");
         : "Preparing Sales Invoice..."
       }
             </strong>
+            <p>Please wait while we prepare your document.</p>
           </div>
         </body>
       </html>
@@ -3186,17 +3188,12 @@ const debitNotePermission = usePermission("VOUCHERS", "DEBIT_NOTE");
     try {
       setSalesPrintPreparing(true);
 
-      const savedPrintDetails = await savePrintAccountDetails({
-        outputSettingsOverride: {
-          reportNumber: selectedReportNumber,
-          paperSize: selectedPaper.value,
-          orientation: selectedPaper.orientation,
-          fontSizePercent: Math.min(150, Math.max(80, Number(salesPrintOptions.fontSizePercent) || 150)),
-        },
-      });
-      if (!savedPrintDetails) {
-        throw new Error("Print settings could not be saved.");
-      }
+      // Printing reads saved settings and never writes bank or payment QR data.
+      const savedPrintDetails = await loadPrintAccountDetails();
+      if (!savedPrintDetails) throw new Error("Invoice print settings are unavailable. Ask an administrator to configure them.");
+      const printConfig = { ...options, ...(savedPrintDetails.printContent || {}), ...(savedPrintDetails.outputSettings || {}) };
+      selectedReportNumber = String(printConfig.reportNumber || "1");
+      selectedPaper = SALES_BILL_PAPER_SIZES.find((paper) => paper.value === String(printConfig.paperSize || "A4")) || SALES_BILL_PAPER_SIZES[0];
 
       const commonPrintOptions = {
         reportNumber:
@@ -3212,7 +3209,7 @@ const debitNotePermission = usePermission("VOUCHERS", "DEBIT_NOTE");
           selectedPaper.orientation,
 
         fontSizePercent:
-          salesPrintOptions.fontSizePercent,
+          printConfig.fontSizePercent,
 
         includeButtons:
           action === "preview",
@@ -3220,32 +3217,32 @@ const debitNotePermission = usePermission("VOUCHERS", "DEBIT_NOTE");
         copies: Math.max(
           1,
           Number(
-            salesPrintOptions.copies
+            printConfig.copies
           ) || 1
         ),
 
         showScheme:
-          salesPrintOptions.showScheme,
+          printConfig.showScheme,
 
         showHsn:
-          salesPrintOptions.showHsn,
+          printConfig.showHsn,
         showTaxSummary:
-          salesPrintOptions.showTaxSummary,
+          printConfig.showTaxSummary,
 
         showSerialNo:
-          salesPrintOptions.showSerialNo,
+          printConfig.showSerialNo,
 
         goodsReturn:
-          salesPrintOptions.goodsReturn,
+          printConfig.goodsReturn,
 
         damageReturn:
-          salesPrintOptions.damageReturn,
+          printConfig.damageReturn,
 
         showBankDetails:
-          salesPrintOptions.showBankDetails,
+          printConfig.showBankDetails,
 
         showDeclaration:
-          salesPrintOptions.showDeclaration,
+          printConfig.showDeclaration,
 
         printAccountDetails:
           savedPrintDetails,
@@ -3271,7 +3268,7 @@ const debitNotePermission = usePermission("VOUCHERS", "DEBIT_NOTE");
         */
         const result =
           await loadSalesInvoicePrintData(
-            selectedSalesPrintRow
+            row
           );
 
         if (!result) {
@@ -3289,8 +3286,8 @@ const debitNotePermission = usePermission("VOUCHERS", "DEBIT_NOTE");
       if (action === "pdf") {
         const { downloadSalesInvoicePdf } = await import("./utils/invoiceOutput");
         const invoiceName = enteredLoadNo
-          ? `Load_${salesPrintOptions.loadSeries || ""}_${enteredLoadNo}`
-          : `Invoice_${salesPrintOptions.trnSeries || "INV"}_${salesPrintOptions.fromTrnNo || ""}`;
+          ? `Load_${options.loadSeries || ""}_${enteredLoadNo}`
+          : `Invoice_${options.trnSeries || "INV"}_${options.fromTrnNo || ""}`;
         await downloadSalesInvoicePdf(
           invoiceHtml,
           selectedPaper.value,
@@ -4429,11 +4426,12 @@ const debitNotePermission = usePermission("VOUCHERS", "DEBIT_NOTE");
         </section>
         <section class="r2-registrations"><div><b>GSTIN:</b> ${text(firmGstNo)} &nbsp;&nbsp; PAN : ${text(firmPanNo)}<br><span>FSSAI NO: ${text(firmFoodLicence)}</span></div><div><b>GSTIN :</b> ${text(partyGstNo)} &nbsp;&nbsp; IRN<br><span>RT Name : &nbsp; ${text(areaName)}</span></div></section>
         <section class="r2-items"><table><colgroup><col style="width:4%"><col style="width:26%"><col style="width:9%"><col style="width:8%"><col style="width:5%"><col style="width:5%"><col style="width:8%"><col style="width:10%"><col style="width:6%"><col style="width:9%"><col style="width:10%"></colgroup><thead><tr><th>Sr No</th><th>Product Name</th><th>HSN<br>Code</th><th>MRP</th><th>Qty</th><th>Free</th><th>Rate</th><th>Taxable</th><th>GST<br>%</th><th>GST<br>Amt</th><th>Net<br>Amount</th></tr></thead><tbody>${reportTwoItemRows}</tbody></table></section>
-        <section class="r2-bottom"><div class="r2-tax"><table><thead><tr><th colspan="2">** CGST **</th><th colspan="2">** SGST **</th><th></th></tr><tr><th>TAX %</th><th>TAX Amt</th><th>TAX%</th><th>Tax Amt</th><th>Taxable Amt</th></tr></thead><tbody>${reportTwoTaxRows}</tbody></table></div>
-          <div class="r2-adjustments"><div>Spl Disc <b>:</b><span>${money(starDiscountAmount)}</span></div><div>Sch <b>:</b><span>${money(schemeAmount)}</span></div><div>Sec Sch / Display <b>:</b><span>${money(displayAmount)}</span></div><div>Other Disc <b>:</b><span>${money(couponAmount)}</span></div><div>CD <b>:</b><span>${money(cashDiscountAmount)}</span></div><div>Total Units (pcs) <b>:</b><span>${qty(totalItemQuantity)}</span></div><div>Round Off <b>:</b><span>${money(roundingAmount)}</span></div></div>
+        <section class="r2-bottom">${showTaxSummary ? `<div class="r2-tax"><table><thead><tr><th colspan="2">** CGST **</th><th colspan="2">** SGST **</th><th></th></tr><tr><th>TAX %</th><th>TAX Amt</th><th>TAX%</th><th>Tax Amt</th><th>Taxable Amt</th></tr></thead><tbody>${reportTwoTaxRows}</tbody></table></div>` : ""}
+          <div class="r2-adjustments">${goodsReturn ? `<div>Goods Return <b>:</b><span>${money(goodsReturnAmount)}</span></div>` : ""}${damageReturn ? `<div>Damage Return <b>:</b><span>${money(damageReturnAmount)}</span></div>` : ""}<div>Spl Disc <b>:</b><span>${money(starDiscountAmount)}</span></div>${showScheme ? `<div>Sch <b>:</b><span>${money(schemeAmount)}</span></div>` : ""}<div>Sec Sch / Display <b>:</b><span>${money(displayAmount)}</span></div><div>Other Disc <b>:</b><span>${money(couponAmount)}</span></div><div>CD <b>:</b><span>${money(cashDiscountAmount)}</span></div><div>Total Units (pcs) <b>:</b><span>${qty(totalItemQuantity)}</span></div><div>Round Off <b>:</b><span>${money(roundingAmount)}</span></div></div>
           <div class="r2-totals"><div>Gross Amt <b>:</b><strong>${money(grossAmount)}</strong></div><div>Discount Amt <b>:</b><span>${money(totalSchemeCash + totalCnStarDis)}</span></div><div>Total Tax <b>:</b><span>${money(cgstAmount + sgstAmount + igstAmount)}</span></div><div>Credit Note Amt <b>:</b><span>${money(creditNoteAmount)}</span></div><div><strong>Net Amt</strong> <b>:</b><strong>${money(netAmount)}</strong></div><div>Program Payout <b>:</b><span>0.00</span></div><div>TCS Amt <b>:</b><span>${money(tcsAmount)}</span></div><div><strong>Receivable Amt</strong> <b>:</b><strong>${money(netAmount - creditNoteAmount)}</strong></div></div></section>
         <footer class="r2-footer">
           <div>Amt in Words : &nbsp;&nbsp; ${text(amountInWords, "Zero Only")}</div>
+          ${showBankDetails && (bankName || bankAccountName || bankAccountNo || bankIfsc || bankQrCode) ? `<div class="r2-bank"><b>Bank:</b> ${text(bankName)} &nbsp; <b>A/C:</b> ${text(bankAccountNo)} &nbsp; <b>IFSC:</b> ${text(bankIfsc)} ${bankQrCode ? `<img src="${escapeInvoiceHtml(bankQrCode)}" alt="Payment QR code" style="width:18mm;height:18mm;object-fit:contain;vertical-align:middle">` : ""}</div>` : ""}
           <strong>For ${text(firmName)}</strong>
           ${showDeclaration && termsAndConditions
             ? `<div class="r2-terms"><b>Terms &amp; Conditions:</b> ${text(termsAndConditions).replace(/\r?\n/g, " &nbsp; | &nbsp; ")}</div>`
@@ -4495,11 +4493,13 @@ const debitNotePermission = usePermission("VOUCHERS", "DEBIT_NOTE");
           <div class="r3-qr">${showBankDetails && bankQrCode ? `<img src="${escapeInvoiceHtml(bankQrCode)}" alt="Payment QR code">` : ""}</div>
           <div class="r3-notes">
             <div class="r3-adjustments">
-              <div><span>Scheme Amt</span><b>${money(schemeAmount)}</b></div>
-              <div><span>Sales Return</span><b>${money(goodsReturnAmount)}</b></div>
+              ${showScheme ? `<div><span>Scheme Amt</span><b>${money(schemeAmount)}</b></div>` : ""}
+              ${goodsReturn ? `<div><span>Goods Return</span><b>${money(goodsReturnAmount)}</b></div>` : ""}
+              ${damageReturn ? `<div><span>Damage Return</span><b>${money(damageReturnAmount)}</b></div>` : ""}
               <div><span>Cash Disc</span><b>${money(cashDiscountAmount)}</b></div>
               <div><span>Display</span><b>${money(displayAmount)}</b></div>
             </div>
+            ${showTaxSummary ? `<div class="footer-section-heading">Tax Summary</div><table class="tax-summary-table"><thead><tr><th>GST%</th><th>Taxable</th><th>CGST</th><th>SGST</th><th>IGST</th><th>Tax</th></tr></thead><tbody>${taxSummaryRows}</tbody></table>` : ""}
             ${showBankDetails ? `<div class="r3-bank"><strong>Bank Details</strong><span>${text(bankName)}</span><br><strong>A/C No.</strong><span>${text(bankAccountNo)}</span><strong>IFSC</strong><span>${text(bankIfsc)}</span></div>` : ""}
             ${showDeclaration ? `<div class="r3-terms">${termsAndConditionsHtml}</div>` : ""}
           </div>
@@ -13621,6 +13621,7 @@ const debitNotePermission = usePermission("VOUCHERS", "DEBIT_NOTE");
       icon: "⚙️",
       items: [
         "General Setup",
+        "Invoice Print Setup",
         "Company Wise Series Setup",
         "Batch Lock and Change Sales Rate",
         "Security Setup",
@@ -15388,11 +15389,12 @@ const debitNotePermission = usePermission("VOUCHERS", "DEBIT_NOTE");
     if (!billPrintData) return '';
 
     const data = billPrintData;
+    const escapeInvoiceHtml = escapeHtml;
 
     return `<!DOCTYPE html>
         <html>
         <head>
-          <title>Invoice - ${data.invoice.number}</title>
+          <title>Invoice - ${escapeInvoiceHtml(data.invoice.number)}</title>
           <style>
             /* Use !important and specific selectors to prevent style leakage */
             .bill-print-wrapper * {
@@ -15637,39 +15639,39 @@ const debitNotePermission = usePermission("VOUCHERS", "DEBIT_NOTE");
               <div class="invoice">
                 <!-- Company Header -->
                 <div class="company-header">
-                  <div class="company-name">${data.company.name}</div>
-                  <div class="company-details">${data.company.address}</div>
-                  <div class="company-details">📞 ${data.company.phone} | ✉ ${data.company.email}</div>
+                  <div class="company-name">${escapeInvoiceHtml(data.company.name)}</div>
+                  <div class="company-details">${escapeInvoiceHtml(data.company.address)}</div>
+                  <div class="company-details">📞 ${escapeInvoiceHtml(data.company.phone)} | ✉ ${escapeInvoiceHtml(data.company.email)}</div>
                   <div class="gst-fssai">
-                    <span>GSTIN: ${data.company.gstin}</span>
-                    <span>FSSAI: ${data.company.fssai}</span>
+                    <span>GSTIN: ${escapeInvoiceHtml(data.company.gstin)}</span>
+                    <span>FSSAI: ${escapeInvoiceHtml(data.company.fssai)}</span>
                   </div>
                 </div>
                 
-                <div class="invoice-title">${data.company.invoiceTitle} - ${billPrintFormData.printType.toUpperCase()}</div>
+                <div class="invoice-title">${escapeInvoiceHtml(data.company.invoiceTitle)} - ${escapeInvoiceHtml(billPrintFormData.printType.toUpperCase())}</div>
                 
                 <!-- Invoice & Customer Info -->
                 <div class="info-grid">
                   <div class="info-box">
                     <div class="info-title">📄 INVOICE INFORMATION</div>
-                    <div class="info-row"><span class="info-label">Invoice No:</span><span>${data.invoice.number}</span></div>
-                    <div class="info-row"><span class="info-label">Invoice Date:</span><span>${data.invoice.date}</span></div>
-                    <div class="info-row"><span class="info-label">Order No:</span><span>${data.invoice.orderNumber}</span></div>
-                    <div class="info-row"><span class="info-label">Delivery Date:</span><span>${data.invoice.deliveryDate}</span></div>
-                    <div class="info-row"><span class="info-label">Route:</span><span>${data.invoice.route}</span></div>
-                    <div class="info-row"><span class="info-label">Salesman:</span><span>${data.invoice.salesman}</span></div>
-                    <div class="info-row"><span class="info-label">Vehicle No:</span><span>${data.invoice.vehicleNumber}</span></div>
-                    <div class="info-row"><span class="info-label">Beat/Area:</span><span>${data.invoice.beat}</span></div>
+                    <div class="info-row"><span class="info-label">Invoice No:</span><span>${escapeInvoiceHtml(data.invoice.number)}</span></div>
+                    <div class="info-row"><span class="info-label">Invoice Date:</span><span>${escapeInvoiceHtml(data.invoice.date)}</span></div>
+                    <div class="info-row"><span class="info-label">Order No:</span><span>${escapeInvoiceHtml(data.invoice.orderNumber)}</span></div>
+                    <div class="info-row"><span class="info-label">Delivery Date:</span><span>${escapeInvoiceHtml(data.invoice.deliveryDate)}</span></div>
+                    <div class="info-row"><span class="info-label">Route:</span><span>${escapeInvoiceHtml(data.invoice.route)}</span></div>
+                    <div class="info-row"><span class="info-label">Salesman:</span><span>${escapeInvoiceHtml(data.invoice.salesman)}</span></div>
+                    <div class="info-row"><span class="info-label">Vehicle No:</span><span>${escapeInvoiceHtml(data.invoice.vehicleNumber)}</span></div>
+                    <div class="info-row"><span class="info-label">Beat/Area:</span><span>${escapeInvoiceHtml(data.invoice.beat)}</span></div>
                   </div>
                   
                   <div class="info-box">
                     <div class="info-title">👤 CUSTOMER INFORMATION</div>
-                    <div class="info-row"><span class="info-label">Customer Code:</span><span>${data.customer.code}</span></div>
-                    <div class="info-row"><span class="info-label">Customer Name:</span><span>${data.customer.name}</span></div>
-                    <div class="info-row"><span class="info-label">Billing Address:</span><span>${data.customer.billingAddress}</span></div>
-                    <div class="info-row"><span class="info-label">Shipping Address:</span><span>${data.customer.shippingAddress}</span></div>
-                    <div class="info-row"><span class="info-label">Mobile No:</span><span>${data.customer.mobile}</span></div>
-                    <div class="info-row"><span class="info-label">GSTIN:</span><span>${data.customer.gstin}</span></div>
+                    <div class="info-row"><span class="info-label">Customer Code:</span><span>${escapeInvoiceHtml(data.customer.code)}</span></div>
+                    <div class="info-row"><span class="info-label">Customer Name:</span><span>${escapeInvoiceHtml(data.customer.name)}</span></div>
+                    <div class="info-row"><span class="info-label">Billing Address:</span><span>${escapeInvoiceHtml(data.customer.billingAddress)}</span></div>
+                    <div class="info-row"><span class="info-label">Shipping Address:</span><span>${escapeInvoiceHtml(data.customer.shippingAddress)}</span></div>
+                    <div class="info-row"><span class="info-label">Mobile No:</span><span>${escapeInvoiceHtml(data.customer.mobile)}</span></div>
+                    <div class="info-row"><span class="info-label">GSTIN:</span><span>${escapeInvoiceHtml(data.customer.gstin)}</span></div>
                   </div>
                 </div>
                 
@@ -15695,17 +15697,17 @@ const debitNotePermission = usePermission("VOUCHERS", "DEBIT_NOTE");
                   <tbody>
                     ${data.products.map(p => `
                       <tr>
-                        <td class="col-sr">${p.sr}</td>
-                        <td class="col-code">${p.code}</td>
-                        <td class="col-name" style="text-align:left">${p.name}</td>
-                        <td class="col-batch">${p.batch}</td>
-                        <td class="col-expiry">${p.expiry}</td>
-                        <td class="col-qty">${p.qty}</td>
-                        <td class="col-free">${p.free}</td>
-                        <td class="col-rate">₹${p.rate}</td>
-                        <td class="col-mrp">₹${p.mrp}</td>
-                        <td class="col-disc">${p.disc}%</td>
-                        <td class="col-gst">${p.gst}%</td>
+                        <td class="col-sr">${escapeInvoiceHtml(p.sr)}</td>
+                        <td class="col-code">${escapeInvoiceHtml(p.code)}</td>
+                        <td class="col-name" style="text-align:left">${escapeInvoiceHtml(p.name)}</td>
+                        <td class="col-batch">${escapeInvoiceHtml(p.batch)}</td>
+                        <td class="col-expiry">${escapeInvoiceHtml(p.expiry)}</td>
+                        <td class="col-qty">${escapeInvoiceHtml(p.qty)}</td>
+                        <td class="col-free">${escapeInvoiceHtml(p.free)}</td>
+                        <td class="col-rate">₹${escapeInvoiceHtml(p.rate)}</td>
+                        <td class="col-mrp">₹${escapeInvoiceHtml(p.mrp)}</td>
+                        <td class="col-disc">${escapeInvoiceHtml(p.disc)}%</td>
+                        <td class="col-gst">${escapeInvoiceHtml(p.gst)}%</td>
                         <td class="col-taxable">₹${p.taxable.toFixed(2)}</td>
                         <td class="col-total">₹${p.total.toFixed(2)}</td>
                       </tr>
@@ -15717,7 +15719,7 @@ const debitNotePermission = usePermission("VOUCHERS", "DEBIT_NOTE");
                 <div class="scheme-section">
                   <div class="scheme-title">🎯 SCHEME / OFFER DETAILS</div>
                   ${data.schemes.map(s => `
-                    <div>• ${s.name} | Discount: ${s.discount > 0 ? s.discount + '%' : 'N/A'} | Free: ${s.freeItem}</div>
+                    <div>• ${escapeInvoiceHtml(s.name)} | Discount: ${escapeInvoiceHtml(s.discount > 0 ? s.discount + '%' : 'N/A')} | Free: ${escapeInvoiceHtml(s.freeItem)}</div>
                   `).join('')}
                 </div>
                 
@@ -15725,8 +15727,8 @@ const debitNotePermission = usePermission("VOUCHERS", "DEBIT_NOTE");
                 <div class="summary-grid">
                   <div class="summary-box">
                     <div class="info-title">💰 BILL SUMMARY</div>
-                    <div class="summary-row"><span>Total Quantity:</span><span>${data.summary.totalQty} Pcs</span></div>
-                    <div class="summary-row"><span>Free Quantity:</span><span>${data.summary.totalFree} Pcs</span></div>
+                    <div class="summary-row"><span>Total Quantity:</span><span>${escapeInvoiceHtml(data.summary.totalQty)} Pcs</span></div>
+                    <div class="summary-row"><span>Free Quantity:</span><span>${escapeInvoiceHtml(data.summary.totalFree)} Pcs</span></div>
                     <div class="summary-row"><span>Gross Amount:</span><span>₹${data.summary.grossAmount.toFixed(2)}</span></div>
                     <div class="summary-row"><span>Discount Amount:</span><span>-₹${data.summary.discountAmount.toFixed(2)}</span></div>
                     <div class="summary-row"><span>Taxable Amount:</span><span>₹${data.summary.taxableAmount.toFixed(2)}</span></div>
@@ -15738,9 +15740,9 @@ const debitNotePermission = usePermission("VOUCHERS", "DEBIT_NOTE");
                   
                   <div class="summary-box">
                     <div class="info-title">💳 PAYMENT INFORMATION</div>
-                    <div class="summary-row"><span>Payment Mode:</span><span>${data.payment.mode}</span></div>
-                    <div class="summary-row"><span>Credit Days:</span><span>${data.payment.creditDays} Days</span></div>
-                    <div class="summary-row"><span>Due Date:</span><span>${data.payment.dueDate}</span></div>
+                    <div class="summary-row"><span>Payment Mode:</span><span>${escapeInvoiceHtml(data.payment.mode)}</span></div>
+                    <div class="summary-row"><span>Credit Days:</span><span>${escapeInvoiceHtml(data.payment.creditDays)} Days</span></div>
+                    <div class="summary-row"><span>Due Date:</span><span>${escapeInvoiceHtml(data.payment.dueDate)}</span></div>
                     <div class="summary-row"><span>Outstanding Balance:</span><span>₹${data.payment.outstandingBalance.toFixed(2)}</span></div>
                   </div>
                 </div>
@@ -15749,11 +15751,11 @@ const debitNotePermission = usePermission("VOUCHERS", "DEBIT_NOTE");
                 <div class="info-box" style="margin-bottom: 12px;">
                   <div class="info-title">🚚 LOGISTICS / DELIVERY DETAILS</div>
                   <div style="display: flex; justify-content: space-between; flex-wrap: wrap;">
-                    <span>Transport: ${data.logistics.transport}</span>
-                    <span>LR No: ${data.logistics.lrNumber}</span>
-                    <span>Delivered By: ${data.logistics.deliveredBy}</span>
-                    <span>Vehicle No: ${data.logistics.vehicleNumber}</span>
-                    <span>Received By: ${data.logistics.receivedBy}</span>
+                    <span>Transport: ${escapeInvoiceHtml(data.logistics.transport)}</span>
+                    <span>LR No: ${escapeInvoiceHtml(data.logistics.lrNumber)}</span>
+                    <span>Delivered By: ${escapeInvoiceHtml(data.logistics.deliveredBy)}</span>
+                    <span>Vehicle No: ${escapeInvoiceHtml(data.logistics.vehicleNumber)}</span>
+                    <span>Received By: ${escapeInvoiceHtml(data.logistics.receivedBy)}</span>
                   </div>
                 </div>
                 
@@ -15771,11 +15773,11 @@ const debitNotePermission = usePermission("VOUCHERS", "DEBIT_NOTE");
                 <div class="footer">
                   <div class="terms">
                     <strong>Terms & Conditions:</strong><br>
-                    ${data.footer.terms.replace(/\n/g, '<br>')}
+                    ${escapeInvoiceHtml(data.footer.terms).replace(/\n/g, '<br>')}
                   </div>
                   <div style="margin-top: 8px;">
-                    ${data.footer.thankYou}<br>
-                    ${data.footer.software} | Page ${data.footer.pageNumber}
+                    ${escapeInvoiceHtml(data.footer.thankYou)}<br>
+                    ${escapeInvoiceHtml(data.footer.software)} | Page ${escapeInvoiceHtml(data.footer.pageNumber)}
                   </div>
                 </div>
               </div>
@@ -21134,7 +21136,7 @@ const debitNotePermission = usePermission("VOUCHERS", "DEBIT_NOTE");
             (1 + Number(row.gst || row.gstPercent || 0) / 100)
           ).toFixed(2),
 
-          cdAmt: rowCdAmount.toFixed(2),
+          cdAmt: cdAmount.toFixed(2),
 
           taxable: tax.taxable.toFixed(2),
 
@@ -22752,6 +22754,27 @@ const debitNotePermission = usePermission("VOUCHERS", "DEBIT_NOTE");
           result?.data ||
           result ||
           {};
+
+        // Apply the firm default once, without replacing a filter the user already entered.
+        if (!initialEntryDaysApplied.current) {
+          initialEntryDaysApplied.current = true;
+          const defaultRange = entryDaysDateRange(setup.showEntryDays, businessDateIST());
+          const applyIfUntouched = (previous) => Object.values(previous).every((value) => value === "")
+            ? { ...previous, ...defaultRange }
+            : previous;
+          setSalesAdvancedFilters(applyIfUntouched);
+          setSalesAppliedFilters(applyIfUntouched);
+          setQuotationAdvancedFilters(applyIfUntouched);
+          setQuotationAppliedFilters(applyIfUntouched);
+          setPurchaseAdvancedFilters(applyIfUntouched);
+          setPurchaseAppliedFilters(applyIfUntouched);
+          setCreditNoteAdvancedFilters(applyIfUntouched);
+          setCreditNoteAppliedFilters(applyIfUntouched);
+          setDebitNoteAdvancedFilters(applyIfUntouched);
+          setDebitNoteAppliedFilters(applyIfUntouched);
+          setLoadListFilters(applyIfUntouched);
+          setLoadAppliedFilters(applyIfUntouched);
+        }
 
         setRuntimeGeneralSetup({
           billAllowBlacklistParty:
@@ -25114,7 +25137,7 @@ ALLOW CHANGE STAR AMOUNT — FINAL SAVE PROTECTION
         return;
       }
 
-      alert(
+      showSuccessNotice(
         isEditMode
           ? "Sales bill updated successfully!"
           : "Sales saved successfully!"
@@ -42659,6 +42682,14 @@ ALLOW CHANGE STAR AMOUNT — FINAL SAVE PROTECTION
       return;
     }
 
+    if (item === "Invoice Print Setup") {
+      setActiveMenu("tools");
+      setActiveSubMenu(item);
+      setOpenFormFor(item);
+      if (loggedInRole === "DISTRIBUTOR_ADMIN") await loadInvoicePrintSetup();
+      return;
+    }
+
     if (item === "Company Wise Series Setup") {
       setToolNavigationRequest((current) => ({
         target: item,
@@ -43122,6 +43153,11 @@ if (item === "Import Data") {
     e?.preventDefault();
     e?.stopPropagation();
     setIsFormReadOnly(false);
+
+    if (item === "Invoice Print Setup") {
+      handleSubMenuClick(item);
+      return;
+    }
 
     if (item === "E-Invoice") {
       handleSubMenuClick(item);
@@ -48844,10 +48880,7 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
             >
               {loadTransferSaving ? (
                 <>
-                  <RefreshCw
-                    size={16}
-                    className="load-transfer-spin"
-                  />
+                  <span className="erp-loading-bar erp-loading-bar--inline" aria-hidden="true" />
                   Transferring...
                 </>
               ) : (
@@ -49037,10 +49070,7 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
             >
               {loadTransferLoading ? (
                 <>
-                  <RefreshCw
-                    size={15}
-                    className="load-transfer-spin"
-                  />
+                  <span className="erp-loading-bar erp-loading-bar--inline" aria-hidden="true" />
                   Loading
                 </>
               ) : (
@@ -49201,10 +49231,7 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                       colSpan="11"
                       className="ltf-table-state"
                     >
-                      <RefreshCw
-                        size={23}
-                        className="load-transfer-spin"
-                      />
+                      <span className="erp-loading-bar erp-loading-bar--inline" aria-hidden="true" />
 
                       <strong>
                         Loading bills...
@@ -60097,8 +60124,8 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
         <div className="print-account-details-modal" role="dialog" aria-modal="true" aria-labelledby="print-account-details-title">
           <div className="print-account-details-header">
             <div>
-              <strong id="print-account-details-title">Bank, QR &amp; Print Settings</strong>
-              <small>Update all invoice print details in one place</small>
+              <strong id="print-account-details-title">Bank Details</strong>
+              <small>Only the distributor administrator can change these settings</small>
             </div>
             <button type="button" aria-label="Close bank details" disabled={printAccountDetailsSaving} onClick={() => setShowPrintAccountDetailsModal(false)}>
               <X size={16} />
@@ -60106,6 +60133,8 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
           </div>
 
           <div className="print-account-details-body">
+
+            {showPrintBankFields && <>
             <div className="print-account-section-title">Bank Account Details</div>
             <label>
               <span>Bank Name <b>*</b></span>
@@ -60162,84 +60191,20 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
               />
             </label>
 
-            <div className="print-account-section-title">Print Content</div>
-            <label>
-              <span>Goods Return</span>
-              <select value={salesPrintOptions.goodsReturn ? "Y" : "N"} disabled={printAccountDetailsSaving}
-                onChange={(event) => setSalesPrintOptions((previous) => ({ ...previous, goodsReturn: event.target.value === "Y" }))}>
-                <option value="Y">Yes</option><option value="N">No</option>
-              </select>
-            </label>
-            <label>
-              <span>Damage Return</span>
-              <select value={salesPrintOptions.damageReturn ? "Y" : "N"} disabled={printAccountDetailsSaving}
-                onChange={(event) => setSalesPrintOptions((previous) => ({ ...previous, damageReturn: event.target.value === "Y" }))}>
-                <option value="Y">Yes</option><option value="N">No</option>
-              </select>
-            </label>
-            <label>
-              <span>Scheme Summary</span>
-              <select value={salesPrintOptions.showScheme ? "Y" : "N"} disabled={printAccountDetailsSaving}
-                onChange={(event) => setSalesPrintOptions((previous) => ({ ...previous, showScheme: event.target.value === "Y" }))}>
-                <option value="Y">Yes</option><option value="N">No</option>
-              </select>
-            </label>
-            <label>
-              <span>VAT Summary</span>
-              <select value={salesPrintOptions.showTaxSummary ? "Y" : "N"} disabled={printAccountDetailsSaving}
-                onChange={(event) => setSalesPrintOptions((previous) => ({ ...previous, showTaxSummary: event.target.value === "Y" }))}>
-                <option value="Y">Yes</option><option value="N">No</option>
-              </select>
-            </label>
+            </>}
 
-            <div className="print-account-section-title">Output Settings</div>
-            <label>
-              <span>Report Number</span>
-              <select value={salesPrintOptions.reportNumber || "1"} disabled={printAccountDetailsSaving}
-                onChange={(event) => setSalesPrintOptions((previous) => ({ ...previous, reportNumber: event.target.value }))}>
-                {SALES_BILL_REPORT_NUMBERS.map((report) => <option key={report.value} value={report.value}>{report.label}</option>)}
-              </select>
-            </label>
-            <label>
-              <span>Paper Size</span>
-              <select value={salesPrintOptions.paperSize || "A4"} disabled={printAccountDetailsSaving} onChange={(event) => {
-                const selectedPaper = SALES_BILL_PAPER_SIZES.find((paper) => paper.value === event.target.value) || SALES_BILL_PAPER_SIZES[0];
-                setSalesPrintOptions((previous) => ({
-                  ...previous,
-                  paperSize: selectedPaper.value,
-                  orientation: selectedPaper.orientation,
-                }));
-              }}>
-                {SALES_BILL_PAPER_SIZES.map((paper) => <option key={paper.value} value={paper.value}>{paper.label}</option>)}
-              </select>
-            </label>
-            <label>
-              <span>Invoice Font Size (%)</span>
-              <input
-                type="number"
-                min="80"
-                max="150"
-                step="5"
-                value={salesPrintOptions.fontSizePercent || 150}
-                disabled={printAccountDetailsSaving}
-                onChange={(event) => setSalesPrintOptions((previous) => ({
-                  ...previous,
-                  fontSizePercent: Math.min(150, Math.max(80, Number(event.target.value) || 150)),
-                }))}
-              />
-            </label>
           </div>
 
           <div className="print-account-details-actions">
             <button type="button" className="secondary" disabled={printAccountDetailsSaving} onClick={() => setShowPrintAccountDetailsModal(false)}>Cancel</button>
             <button type="button" className="primary" disabled={printAccountDetailsSaving} onClick={async () => {
-              const saved = await savePrintAccountDetails({ requireBankDetails: true });
+              const saved = await savePrintAccountDetails({ requireBankDetails: true, mode: "bank" });
               if (saved) {
                 setShowPrintAccountDetailsModal(false);
-                alert("Bank account and print settings saved successfully.");
+                alert("Bank details saved successfully.");
               }
             }}>
-              {printAccountDetailsSaving ? <RefreshCw size={15} className="sales-print-format-spin" /> : <CreditCard size={15} />}
+              {printAccountDetailsSaving ? <span className="erp-loading-bar erp-loading-bar--inline" aria-hidden="true" /> : <CreditCard size={15} />}
               Save Details
             </button>
           </div>
@@ -60563,6 +60528,8 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                 type="number"
                 min="1"
                 max="10"
+                readOnly
+                title="Change in Invoice Print Setup"
                 value={salesPrintOptions.copies}
                 onChange={(event) => {
                   const value = Math.max(
@@ -60590,206 +60557,9 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
               </div>
             </section>
 
-            <section className="sales-print-section">
-              <div className="sales-print-section-heading">
-                <div>
-                  <ClipboardList size={17} />
-                  <span>Print Content</span>
-                </div>
-              </div>
-
-            <div className="sales-print-classic-options-grid">
-              <div className="sales-print-classic-option">
-                <label>Goods Return :</label>
-
-                <select
-                  value={
-                    salesPrintOptions.goodsReturn
-                      ? "Y"
-                      : "N"
-                  }
-                  onChange={(event) => {
-                    setSalesPrintOptions(
-                      (previous) => ({
-                        ...previous,
-                        goodsReturn:
-                          event.target.value ===
-                          "Y",
-                      })
-                    );
-                  }}
-                >
-                  <option value="Y">Yes</option>
-                  <option value="N">No</option>
-                </select>
-              </div>
-
-              <div className="sales-print-classic-option">
-                <label>Damage Return :</label>
-
-                <select
-                  value={
-                    salesPrintOptions.damageReturn
-                      ? "Y"
-                      : "N"
-                  }
-                  onChange={(event) => {
-                    setSalesPrintOptions(
-                      (previous) => ({
-                        ...previous,
-                        damageReturn:
-                          event.target.value ===
-                          "Y",
-                      })
-                    );
-                  }}
-                >
-                  <option value="Y">Yes</option>
-                  <option value="N">No</option>
-                </select>
-              </div>
-
-              <div className="sales-print-classic-option">
-                <label>Scheme Summary :</label>
-
-                <select
-                  value={
-                    salesPrintOptions.showScheme
-                      ? "Y"
-                      : "N"
-                  }
-                  onChange={(event) => {
-                    setSalesPrintOptions(
-                      (previous) => ({
-                        ...previous,
-                        showScheme:
-                          event.target.value ===
-                          "Y",
-                      })
-                    );
-                  }}
-                >
-                  <option value="Y">Yes</option>
-                  <option value="N">No</option>
-                </select>
-              </div>
-
-              <div className="sales-print-classic-option">
-                <label>Vat Summary :</label>
-
-                <select
-                  value={
-                    salesPrintOptions.showTaxSummary
-                      ? "Y"
-                      : "N"
-                  }
-                  onChange={(event) => {
-                    setSalesPrintOptions(
-                      (previous) => ({
-                        ...previous,
-                        showTaxSummary:
-                          event.target.value ===
-                          "Y",
-                      })
-                    );
-                  }}
-                >
-                  <option value="Y">Yes</option>
-                  <option value="N">No</option>
-                </select>
-              </div>
-            </div>
-            </section>
-
-            <section className="sales-print-section sales-print-output-section">
-              <div className="sales-print-section-heading">
-                <div>
-                  <Settings size={17} />
-                  <span>Output Settings</span>
-                </div>
-              </div>
-
-            <div className="sales-print-layout-fields">
-              {/* REPORT NUMBER */}
-              <div className="sales-print-layout-selection">
-                <label>Report No. :</label>
-
-                <select
-                  value={
-                    salesPrintOptions.reportNumber || "1"
-                  }
-                  onChange={(event) => {
-                    setSalesPrintOptions(
-                      (previous) => ({
-                        ...previous,
-                        reportNumber: event.target.value,
-                      })
-                    );
-                  }}
-                >
-                  {SALES_BILL_REPORT_NUMBERS.map(
-                    (report) => (
-                      <option
-                        key={report.value}
-                        value={report.value}
-                      >
-                        {report.value}
-                      </option>
-                    )
-                  )}
-                </select>
-              </div>
-
-              {/* PAPER SIZE */}
-              <div className="sales-print-layout-selection">
-                <label>Paper Size :</label>
-
-                <select
-                  value={
-                    salesPrintOptions.paperSize || "A4"
-                  }
-                  onChange={(event) => {
-                    const selectedPaper =
-                      SALES_BILL_PAPER_SIZES.find(
-                        (paper) =>
-                          paper.value === event.target.value
-                      ) || SALES_BILL_PAPER_SIZES[0];
-
-                    setSalesPrintOptions(
-                      (previous) => ({
-                        ...previous,
-                        paperSize: selectedPaper.value,
-                        orientation:
-                          selectedPaper.orientation,
-                      })
-                    );
-                  }}
-                >
-                  {SALES_BILL_PAPER_SIZES.map(
-                    (paper) => (
-                      <option
-                        key={paper.value}
-                        value={paper.value}
-                      >
-                        {paper.label}
-                      </option>
-                    )
-                  )}
-                </select>
-              </div>
-            </div>
-            </section>
+            <p className="sales-print-default-note">Invoice content and format are controlled by Invoice Print Setup under Tools.</p>
 
             <div className="sales-print-classic-actions">
-              <button
-                type="button"
-                className="sales-print-classic-button account-details"
-                disabled={salesPrintPreparing}
-                onClick={() => setShowPrintAccountDetailsModal(true)}
-              >
-                <CreditCard size={16} />
-                Account / Print Settings
-              </button>
               <button
                 type="button"
                 className="sales-print-classic-button print"
@@ -60801,10 +60571,7 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                 }}
               >
                 {salesPrintPreparing ? (
-                  <RefreshCw
-                    size={16}
-                    className="sales-print-format-spin"
-                  />
+                  <span className="erp-loading-bar erp-loading-bar--inline" aria-hidden="true" />
                 ) : (
                   <Printer size={16} />
                 )}
@@ -60823,10 +60590,7 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                 }}
               >
                 {salesPrintPreparing ? (
-                  <RefreshCw
-                    size={16}
-                    className="sales-print-format-spin"
-                  />
+                  <span className="erp-loading-bar erp-loading-bar--inline" aria-hidden="true" />
                 ) : (
                   <Eye size={16} />
                 )}
@@ -62210,14 +61974,14 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
               )}
 
             {activeSubMenu === 'GoDown Master' && openFormFor === 'GoDown Master' && (
-              <div className="compact-master-page">
+              <div className="compact-master-page other-master-design">
                 <div className="compact-master-heading">
                   <div className="compact-master-title">
                     <div className="compact-master-title-icon">
                       <Warehouse size={21} />
                     </div>
                     <div>
-                      <h1></h1>
+                      <h1>Godown Master</h1>
                       <p>{editGodownId ? 'Edit godown details' : ''}</p>
                     </div>
                   </div>
@@ -62234,6 +61998,7 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
 
                 <form id="compact-godown-master-form" className="compact-master-form" onSubmit={saveGodown}>
                   <div className="compact-form-grid compact-form-grid-4">
+                    <div className="other-master-section"><Warehouse size={16} /> Godown Details</div>
                     <div className="compact-field">
                       <label>Godown Code <span>*</span></label>
                       <input
@@ -62278,33 +62043,15 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                       />
                     </div>
 
-                    <div className="compact-field">
-                      <label>Status</label>
-                      <select name="status" value={godownForm.status || 'Active'} onChange={handleGodownInput}>
-                        <option value="Active">Active</option>
-                        <option value="Inactive">Inactive</option>
-                      </select>
-                    </div>
 
-                    <div className="compact-firm-status" style={{ gridColumn: '1 / -1' }}>
-                      <div className="compact-status-icon">
-                        <CheckCircle2 size={17} />
-                      </div>
-                      <div>
-                        <strong>Godown Status</strong>
-                        <span>{editGodownId ? 'Update existing godown details' : 'Godown will be saved as active'}</span>
-                      </div>
-                      <div className="compact-status-switch">
-                        <span />
-                      </div>
-                    </div>
+
                   </div>
                 </form>
               </div>
             )}
 
             {activeSubMenu === 'GoDown Master' && openFormFor !== 'GoDown Master' && (
-              <div className="firm-ui-page firm-ui-list-page erp-master-list-page">
+              <div className="firm-ui-page firm-ui-list-page erp-master-list-page firm-master-list-design">
                 <div className="firm-ui-page-heading firm-ui-list-heading erp-list-page-header">
                   <div>
                     <h1>Godown Master</h1>
@@ -64676,10 +64423,7 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
 
                       {billPrintLoading && (
                         <div className="bill-print-status loading">
-                          <RefreshCw
-                            size={16}
-                            className="bill-print-spin"
-                          />
+                          <span className="erp-loading-bar erp-loading-bar--inline" aria-hidden="true" />
 
                           Loading bills for selected load...
                         </div>
@@ -64730,10 +64474,7 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                         disabled={billPrintLoading}
                       >
                         {billPrintLoading ? (
-                          <RefreshCw
-                            size={17}
-                            className="bill-print-spin"
-                          />
+                          <span className="erp-loading-bar erp-loading-bar--inline" aria-hidden="true" />
                         ) : (
                           <Eye size={17} />
                         )}
@@ -64784,6 +64525,7 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
               openFormFor === "Bill Print" &&
               showBillPrintPreview && (
                 <div className="bill-print-preview-page">
+                  <VisualActivity active={billPrintLoading} variant="preview" title="Preparing preview..." message="Getting your document ready." />
                   {/* =====================================================
               PREVIEW TOOLBAR
             ===================================================== */}
@@ -64804,7 +64546,7 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                       </button>
 
                       <div>
-                        <h3>Bill Print Preview</h3>
+                        <h3>Bill Print Preview {!billPrintLoading && !billPrintError && billPrintData && <span className="erp-print-ready" aria-label="Print preview ready"><Printer size={16} aria-hidden="true" /> Ready</span>}</h3>
 
                         <p>
                           Load{" "}
@@ -64863,10 +64605,7 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                   <div className="bill-print-preview-scroll">
                     {billPrintLoading ? (
                       <div className="bill-print-status loading">
-                        <RefreshCw
-                          size={18}
-                          className="bill-print-spin"
-                        />
+                        <span className="erp-loading-bar erp-loading-bar--inline" aria-hidden="true" />
 
                         Preparing Bill Print preview...
                       </div>
@@ -68416,10 +68155,7 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                 ===================================================== */}
                     {printLoadLoading && (
                       <div className="print-load-message loading">
-                        <RefreshCw
-                          size={16}
-                          className="print-load-spin"
-                        />
+                        <span className="erp-loading-bar erp-loading-bar--inline" aria-hidden="true" />
 
                         Loading Print Load information...
                       </div>
@@ -68948,7 +68684,7 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
     ========================================================= */}
             {activeSubMenu === "Firm Master" &&
               openFormFor === "Firm Master" && (
-                <div className="compact-master-page">
+                <div className="compact-master-page firm-master-page">
                   <div className="compact-master-heading">
                     <div className="compact-master-title">
                       <div className="compact-master-title-icon">
@@ -68988,7 +68724,7 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                     onSubmit={saveFirm}
                   >
                     <div className="compact-form-grid compact-form-grid-4">
-                      {/* Firm and contact details */}
+                      <div className="firm-section-title"><Building2 size={19} /> Firm Details</div>
                       <div className="compact-field">
                         <label>
                           Firm Code <span>*</span>
@@ -69041,6 +68777,8 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                           <KeyRound size={15} />
                         </div>
                       </div>
+
+                      <div className="firm-section-title"><MapPin size={19} /> Contact &amp; Address</div>
 
                       <div className="compact-field">
                         <label>Mobile Number</label>
@@ -69138,7 +68876,7 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                         />
                       </div>
 
-                      {/* Tax and licence details */}
+                      <div className="firm-section-title"><FileText size={19} /> Regulatory &amp; Business Details</div>
                       <div className="compact-field">
                         <label>GST Number</label>
                         <input
@@ -69194,20 +68932,6 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                         />
                       </div>
 
-                      <div className="compact-firm-status">
-                        <div className="compact-status-icon">
-                          <CheckCircle2 size={17} />
-                        </div>
-
-                        <div>
-                          <strong>Firm Status</strong>
-                          <span>Firm will be saved as active</span>
-                        </div>
-
-                        <div className="compact-status-switch">
-                          <span />
-                        </div>
-                      </div>
                     </div>
                   </form>
                 </div>
@@ -69218,9 +68942,12 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
             {activeSubMenu === "Firm Master" && openFormFor !== "Firm Master" && (
               <div className="firm-ui-page firm-ui-list-page erp-master-list-page">
                 <div className="firm-ui-page-heading firm-ui-list-heading erp-list-page-header">
-                  <div>
-                    <h1>Firm Master</h1>
-                    <p>Manage firm profiles and business registration details.</p>
+                  <div className="firm-list-title">
+                    <span className="firm-list-title-icon"><Building2 size={22} /></span>
+                    <div>
+                      <h1>Firm Master</h1>
+                      <p>Manage firm profiles and business registration details.</p>
+                    </div>
                   </div>
 
                   <div className="firm-ui-list-toolbar erp-list-toolbar">
@@ -69622,6 +69349,7 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                     onSubmit={saveUser}
                   >
                     <div className="compact-form-grid compact-user-grid">
+                      <div className="user-form-section-title"><Users size={16} /> User Details</div>
                       <div className="compact-field">
                         <label>
                           User Name <span>*</span>
@@ -70150,6 +69878,32 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                   </div>
                 </div>
               )}
+            {activeSubMenu === "Invoice Print Setup" && openFormFor === "Invoice Print Setup" && (
+              <div className="general-setup-container gs-single invoice-print-setup">
+                {loggedInRole !== "DISTRIBUTOR_ADMIN" ? (
+                  <div className="gs-access-denied"><h2>Access Restricted</h2><p>Only the distributor administrator can change invoice print settings.</p></div>
+                ) : <>
+                  <div className="gs-single-toolbar">
+                    <h1>Invoice Print Setup</h1>
+                    <div className="gs-single-actions">
+                      <button type="button" className="gs-button gs-button-secondary" disabled={invoiceSetupLoading || printAccountDetailsSaving || !invoiceSetupReady} onClick={async () => { const details = await loadPrintAccountDetails(); if (!details) { setInvoiceSetupMessage("Unable to load bank details."); return; } setShowPrintBankFields(true); setShowPrintAccountDetailsModal(true); }}>Bank Details</button>
+                      <button type="button" className="gs-button gs-button-secondary" disabled={invoiceSetupLoading || printAccountDetailsSaving} onClick={() => { setSalesPrintOptions(createDefaultSalesPrintOptions(runtimeGeneralSetup)); setInvoiceSetupMessage(""); setInvoiceSetupReady(false); handleSubMenuClick("General Setup"); }}>Cancel</button>
+                      <button type="button" className="gs-button gs-button-primary" disabled={invoiceSetupLoading || printAccountDetailsSaving || !invoiceSetupReady} onClick={async () => { const saved = await savePrintAccountDetails(); if (saved) setInvoiceSetupMessage("Invoice print settings saved successfully."); }}>Save Changes</button>
+                    </div>
+                  </div>
+                  {invoiceSetupLoading ? <p>Loading invoice print settings...</p> : !invoiceSetupReady ? <p>Settings could not be loaded. <button type="button" onClick={loadInvoicePrintSetup}>Retry</button></p> : <div className="gs-single-grid">
+                    {[["goodsReturn", "Goods Return"], ["damageReturn", "Damage Return"], ["showScheme", "Scheme Summary"], ["showTaxSummary", "VAT Summary"]].map(([key, label]) => (
+                      <div className="gs-single-row" key={key}><div className="gs-single-label"><label>{label}</label></div><button type="button" role="switch" aria-label={label} aria-checked={Boolean(salesPrintOptions[key])} className={`gs-single-switch ${salesPrintOptions[key] ? "is-on" : "is-off"}`} disabled={printAccountDetailsSaving} onClick={() => { setInvoiceSetupMessage(""); setSalesPrintOptions((previous) => ({ ...previous, [key]: !previous[key] })); }}><span className="gs-single-switch-thumb" /></button></div>
+                    ))}
+                    <div className="gs-single-row"><div className="gs-single-label"><label htmlFor="invoice-setup-report">Report No.</label></div><select id="invoice-setup-report" className="gs-single-control" value={salesPrintOptions.reportNumber || "1"} disabled={printAccountDetailsSaving} onChange={(event) => { setInvoiceSetupMessage(""); setSalesPrintOptions((previous) => ({ ...previous, reportNumber: event.target.value })); }}>{SALES_BILL_REPORT_NUMBERS.map((report) => <option key={report.value} value={report.value}>{report.label}</option>)}</select></div>
+                    <div className="gs-single-row"><div className="gs-single-label"><label htmlFor="invoice-setup-paper">Paper Size</label></div><select id="invoice-setup-paper" className="gs-single-control" value={salesPrintOptions.paperSize || "A4"} disabled={printAccountDetailsSaving} onChange={(event) => { const paper = SALES_BILL_PAPER_SIZES.find((item) => item.value === event.target.value) || SALES_BILL_PAPER_SIZES[0]; setInvoiceSetupMessage(""); setSalesPrintOptions((previous) => ({ ...previous, paperSize: paper.value, orientation: paper.orientation })); }}>{SALES_BILL_PAPER_SIZES.map((paper) => <option key={paper.value} value={paper.value}>{paper.label}</option>)}</select></div>
+                    <div className="gs-single-row"><div className="gs-single-label"><label htmlFor="invoice-setup-copies">No. of Copies</label></div><input id="invoice-setup-copies" className="gs-single-control" type="number" min="1" max="10" step="1" value={salesPrintOptions.copies || 1} disabled={printAccountDetailsSaving} onChange={(event) => { setInvoiceSetupMessage(""); setSalesPrintOptions((previous) => ({ ...previous, copies: event.target.value })); }} /></div>
+                    <div className="gs-single-row"><div className="gs-single-label"><label htmlFor="invoice-setup-font">Invoice Font Size (%)</label></div><input id="invoice-setup-font" className="gs-single-control" type="number" min="80" max="150" step="5" value={salesPrintOptions.fontSizePercent || 150} disabled={printAccountDetailsSaving} onChange={(event) => { setInvoiceSetupMessage(""); setSalesPrintOptions((previous) => ({ ...previous, fontSizePercent: Math.min(150, Math.max(80, Number(event.target.value) || 150)) })); }} /></div>
+                  </div>}
+                  <div className="general-setup-footer" role="status">{invoiceSetupMessage || "Changes apply to invoice printing after saving."}</div>
+                </>}
+              </div>
+            )}
             {activeSubMenu === "General Setup" &&
               openFormFor === "General Setup" && (
                 <GeneralSetup1
@@ -70584,15 +70338,15 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
               </div>
             )}
             {activeSubMenu === 'Company Master' && openFormFor === 'Company Master' && (
-              <div className="compact-master-page">
+              <div className="compact-master-page compact-company-page">
                 <div className="compact-master-heading">
                   <div className="compact-master-title">
                     <div className="compact-master-title-icon">
                       <Building2 size={21} />
                     </div>
                     <div>
-                      <h1></h1>
-                      <p></p>
+                      <h1>Company Master</h1>
+                      <p>Create and maintain company details for the organization.</p>
                     </div>
                   </div>
                   <div className="compact-master-actions">
@@ -70617,6 +70371,7 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
 
                 <form id="compact-company-master-form" className="compact-master-form" onSubmit={saveCompany}>
                   <div className="compact-form-grid compact-form-grid-4">
+                    <div className="company-form-section-title"><Building2 size={16} /> Company Details</div>
                     <div className="compact-field">
                       <label>Company Code <span>*</span></label>
                       <input
@@ -70641,7 +70396,7 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                         required
                       />
                     </div>
-                    <div className="compact-field" style={{ gridColumn: 'span 2' }}>
+                    <div className="compact-field">
                       <label>Address</label>
                       <input
                         type="text"
@@ -70668,25 +70423,6 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                         {otherAccounts.filter(acc => acc.accountGroup === 'SUNDRY CREDITORS' && acc.isActive !== false)
                           .map(acc => <option key={acc.id || acc._id} value={purchaseSupplierValue(acc)}>{acc.accountName}</option>)}
                       </select>
-                    </div>
-                    <div className="compact-field">
-                      <label>Status</label>
-                      <select name="status" value={companyForm.status || 'Active'} onChange={handleCompanyInput}>
-                        <option value="Active">Active</option>
-                        <option value="Inactive">Inactive</option>
-                      </select>
-                    </div>
-                    <div className="compact-firm-status">
-                      <div className="compact-status-icon">
-                        <CheckCircle2 size={17} />
-                      </div>
-                      <div>
-                        <strong>Company Status</strong>
-                        <span>Company will be saved as active</span>
-                      </div>
-                      <div className="compact-status-switch">
-                        <span />
-                      </div>
                     </div>
                   </div>
                 </form>
@@ -71032,14 +70768,14 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
             )}
 
             {activeSubMenu === 'Group Master' && openFormFor === 'Group Master' && (
-              <div className="compact-master-page">
+              <div className="compact-master-page compact-group-page">
                 <div className="compact-master-heading">
                   <div className="compact-master-title">
                     <div className="compact-master-title-icon">
                       <Package size={21} />
                     </div>
                     <div>
-                      <h1></h1>
+                      <h1>Group Master</h1>
                       <p></p>
                     </div>
                   </div>
@@ -71065,6 +70801,7 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
 
                 <form id="compact-group-master-form" className="compact-master-form" onSubmit={saveGroup}>
                   <div className="compact-form-grid compact-form-grid-4">
+                    <div className="classification-form-section"><Package size={16} /> Group Details</div>
                     <div className="compact-field">
                       <label>Group Code <span>*</span></label>
                       <input
@@ -71096,25 +70833,6 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                         onChange={handleGroupInput}
                         placeholder="Enter description"
                       />
-                    </div>
-                    <div className="compact-field">
-                      <label>Status</label>
-                      <select name="status" value={groupForm.status || 'Active'} onChange={handleGroupInput}>
-                        <option value="Active">Active</option>
-                        <option value="Inactive">Inactive</option>
-                      </select>
-                    </div>
-                    <div className="compact-firm-status">
-                      <div className="compact-status-icon">
-                        <CheckCircle2 size={17} />
-                      </div>
-                      <div>
-                        <strong>Group Status</strong>
-                        <span>Group will be saved as active</span>
-                      </div>
-                      <div className="compact-status-switch">
-                        <span />
-                      </div>
                     </div>
                   </div>
                 </form>
@@ -71421,14 +71139,14 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
             )}
 
             {activeSubMenu === 'Category Master' && openFormFor === 'Category Master' && (
-              <div className="compact-master-page">
+              <div className="compact-master-page compact-category-page">
                 <div className="compact-master-heading">
                   <div className="compact-master-title">
                     <div className="compact-master-title-icon">
                       <FolderOpen size={21} />
                     </div>
                     <div>
-                      <h1></h1>
+                      <h1>Category Master</h1>
                       <p></p>
                     </div>
                   </div>
@@ -71454,6 +71172,7 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
 
                 <form id="compact-category-master-form" className="compact-master-form" onSubmit={saveCategory}>
                   <div className="compact-form-grid compact-form-grid-4">
+                    <div className="classification-form-section"><FolderOpen size={16} /> Category Details</div>
                     <div className="compact-field">
                       <label>Category Code <span>*</span></label>
                       <input
@@ -71486,25 +71205,6 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                           </option>
                         ))}
                       </select>
-                    </div>
-                    <div className="compact-field">
-                      <label>Status</label>
-                      <select name="status" value={categoryForm.status || 'Active'} onChange={handleCategoryInput}>
-                        <option value="Active">Active</option>
-                        <option value="Inactive">Inactive</option>
-                      </select>
-                    </div>
-                    <div className="compact-firm-status">
-                      <div className="compact-status-icon">
-                        <CheckCircle2 size={17} />
-                      </div>
-                      <div>
-                        <strong>Category Status</strong>
-                        <span>Category will be saved as active</span>
-                      </div>
-                      <div className="compact-status-switch">
-                        <span />
-                      </div>
                     </div>
                   </div>
                 </form>
@@ -71856,14 +71556,14 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
 
 
             {activeSubMenu === 'Product' && openFormFor === 'Product' && (
-              <div className="compact-master-page">
+              <div className="compact-master-page compact-product-page">
                 <div className="compact-master-heading">
                   <div className="compact-master-title">
                     <div className="compact-master-title-icon">
                       <Package size={21} />
                     </div>
                     <div>
-                      <h1></h1>
+                      <h1>Product Master</h1>
                       <p>{editProductId ? 'Edit product details' : ''}</p>
                     </div>
                   </div>
@@ -71889,6 +71589,7 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
 
                 <form id="compact-product-master-form" className="compact-master-form" onSubmit={saveProduct}>
                   <div className="compact-form-grid compact-form-grid-4">
+                    <div className="product-form-section"><Package size={16} /> Product Details</div>
                     <div className="compact-field">
                       <label>Product Code <span>*</span></label>
                       <input
@@ -72003,6 +71704,7 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                       />
                     </div>
 
+                    <div className="product-form-section"><FileText size={16} /> Pricing &amp; Tax</div>
                     <div className="compact-field">
                       <label>Box Pack</label>
                       <input
@@ -72092,6 +71794,7 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                     </div>
 
                     {/* Other product options */}
+                    <div className="product-form-section"><Package size={16} /> Stock &amp; Settings</div>
                     <div className="compact-field">
                       <label>SRate Based On</label>
                       <select
@@ -72212,18 +71915,6 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                       </div>
                     </div>
 
-                    <div className="compact-firm-status" style={{ gridColumn: '1 / -1' }}>
-                      <div className="compact-status-icon">
-                        <CheckCircle2 size={17} />
-                      </div>
-                      <div>
-                        <strong>Product Status</strong>
-                        <span>{editProductId ? 'Update existing product details' : 'Product will be saved as active'}</span>
-                      </div>
-                      <div className="compact-status-switch">
-                        <span />
-                      </div>
-                    </div>
                   </div>
                 </form>
               </div>
@@ -72655,14 +72346,14 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
             )}
 
             {activeSubMenu === 'Account' && openFormFor === 'Account' && (
-              <div className="compact-master-page">
+              <div className="compact-master-page compact-account-page">
                 <div className="compact-master-heading">
                   <div className="compact-master-title">
                     <div className="compact-master-title-icon">
                       <Users size={21} />
                     </div>
                     <div>
-                      <h1></h1>
+                      <h1>Account Master</h1>
                       <p>{editAccountId ? 'Edit account details' : ''}</p>
                     </div>
                   </div>
@@ -72706,6 +72397,7 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
 
                 <form id="compact-account-master-form" className="compact-master-form" onSubmit={saveAccount}>
                   <div className="compact-form-grid compact-form-grid-4">
+                    <div className="account-form-section"><Users size={16} /> Account Details</div>
                     <div className="compact-field">
                       <label>Opening Date</label>
                       <input
@@ -72740,6 +72432,7 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                       />
                     </div>
 
+                    <div className="account-form-section"><MapPin size={16} /> Contact &amp; Address</div>
                     <div className="compact-field">
                       <label>Bill To Address 1</label>
                       <input
@@ -72854,6 +72547,7 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                       />
                     </div>
 
+                    <div className="account-form-section"><FileText size={16} /> Financial &amp; Tax Details</div>
                     <div className="compact-field">
                       <label>Opening Balance</label>
                       <div style={{ display: 'flex', gap: '8px' }}>
@@ -72997,6 +72691,7 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                     </div>
 
                     {/* Other account details */}
+                    <div className="account-form-section"><FileText size={16} /> Billing &amp; Credit</div>
                     <div className="compact-field">
                       <label>Address (Ship To)</label>
                       <input
@@ -73089,18 +72784,6 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                       )}
                     </div>
 
-                    <div className="compact-firm-status" style={{ gridColumn: '1 / -1' }}>
-                      <div className="compact-status-icon">
-                        <CheckCircle2 size={17} />
-                      </div>
-                      <div>
-                        <strong>Account Status</strong>
-                        <span>{editAccountId ? 'Update existing account details' : 'Account will be saved as active'}</span>
-                      </div>
-                      <div className="compact-status-switch">
-                        <span />
-                      </div>
-                    </div>
                   </div>
                 </form>
               </div>
@@ -73496,7 +73179,7 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
             )}
 
             {activeSubMenu === 'Other Account' && openFormFor === 'Other Account' && (
-              <div className="compact-master-page">
+              <div className="compact-master-page other-master-design">
                 <div className="compact-master-heading">
                   <div className="compact-master-title">
                     <div className="compact-master-title-icon">
@@ -73525,6 +73208,7 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
 
                 <form id="compact-other-account-master-form" className="compact-master-form" onSubmit={saveOtherAccount}>
                   <div className="compact-form-grid compact-form-grid-4">
+                    <div className="other-master-section"><Users size={16} /> Account Details</div>
                     <div className="compact-field">
                       <label>Opening Date</label>
                       <input
@@ -73559,6 +73243,7 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                       />
                     </div>
 
+                    <div className="other-master-section"><MapPin size={16} /> Contact &amp; Address</div>
                     <div className="compact-field">
                       <label>Address</label>
                       <input
@@ -73643,6 +73328,7 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                       />
                     </div>
 
+                    <div className="other-master-section"><FileText size={16} /> Financial &amp; Tax Details</div>
                     <div className="compact-field">
                       <label>Opening Balance</label>
                       <div style={{ display: 'flex', gap: '8px' }}>
@@ -73757,6 +73443,7 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                     </div>
 
                     {/* Other account details */}
+                    <div className="other-master-section"><FileText size={16} /> Account &amp; Billing</div>
                     <div className="compact-field">
                       <label>Account Group</label>
                       <select name="accountGroup" value={otherAccountForm.accountGroup} onChange={handleOtherAccountInput}>
@@ -73848,18 +73535,6 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                       />
                     </div>
 
-                    <div className="compact-firm-status" style={{ gridColumn: '1 / -1' }}>
-                      <div className="compact-status-icon">
-                        <CheckCircle2 size={17} />
-                      </div>
-                      <div>
-                        <strong>Account Status</strong>
-                        <span>{editOtherAccountId ? 'Update existing account details' : 'Account will be saved as active'}</span>
-                      </div>
-                      <div className="compact-status-switch">
-                        <span />
-                      </div>
-                    </div>
                   </div>
                 </form>
               </div>
@@ -74310,14 +73985,14 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
               </div>
             )}
             {activeSubMenu === 'GST Master' && openFormFor === 'GST Master' && (
-              <div className="compact-master-page">
+              <div className="compact-master-page other-master-design">
                 <div className="compact-master-heading">
                   <div className="compact-master-title">
                     <div className="compact-master-title-icon">
                       <ReceiptText size={21} />
                     </div>
                     <div>
-                      <h1></h1>
+                      <h1>GST Master</h1>
                       <p>{editGstId ? 'Edit GST details' : ''}</p>
                     </div>
                   </div>
@@ -74334,6 +74009,7 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
 
                 <form id="compact-gst-master-form" className="compact-master-form" onSubmit={saveGst}>
                   <div className="compact-form-grid compact-form-grid-4">
+                    <div className="other-master-section"><FileText size={16} /> GST Details</div>
                     <div className="compact-field">
                       <label>GST Code <span>*</span></label>
                       <input
@@ -74382,18 +74058,6 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                       </select>
                     </div>
 
-                    <div className="compact-firm-status" style={{ gridColumn: '1 / -1' }}>
-                      <div className="compact-status-icon">
-                        <CheckCircle2 size={17} />
-                      </div>
-                      <div>
-                        <strong>GST Status</strong>
-                        <span>{editGstId ? 'Update existing GST rate' : 'GST rate will be saved as active'}</span>
-                      </div>
-                      <div className="compact-status-switch">
-                        <span />
-                      </div>
-                    </div>
                   </div>
                 </form>
               </div>
@@ -74815,14 +74479,14 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
             )}
 
             {activeSubMenu === 'Area' && openFormFor === 'Area' && (
-              <div className="compact-master-page">
+              <div className="compact-master-page other-master-design">
                 <div className="compact-master-heading">
                   <div className="compact-master-title">
                     <div className="compact-master-title-icon">
                       <MapPin size={21} />
                     </div>
                     <div>
-                      <h1></h1>
+                      <h1>Area Master</h1>
                       <p>{editAreaId ? 'Edit area details' : ''}</p>
                     </div>
                   </div>
@@ -74839,6 +74503,7 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
 
                 <form id="compact-area-master-form" className="compact-master-form" onSubmit={saveArea}>
                   <div className="compact-form-grid compact-form-grid-4">
+                    <div className="other-master-section"><MapPin size={16} /> Area Details</div>
                     <div className="compact-field">
                       <label>Area Code <span>*</span></label>
                       <input
@@ -74873,26 +74538,8 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                       />
                     </div>
 
-                    <div className="compact-field">
-                      <label>Status</label>
-                      <select name="status" value={areaForm.status || 'Active'} onChange={handleAreaInput}>
-                        <option value="Active">Active</option>
-                        <option value="Inactive">Inactive</option>
-                      </select>
-                    </div>
 
-                    <div className="compact-firm-status" style={{ gridColumn: '1 / -1' }}>
-                      <div className="compact-status-icon">
-                        <CheckCircle2 size={17} />
-                      </div>
-                      <div>
-                        <strong>Area Status</strong>
-                        <span>{editAreaId ? 'Update existing area details' : 'Area will be saved as active'}</span>
-                      </div>
-                      <div className="compact-status-switch">
-                        <span />
-                      </div>
-                    </div>
+
                   </div>
                 </form>
               </div>
@@ -75306,14 +74953,14 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
             )}
 
             {activeSubMenu === 'Salesman' && openFormFor === 'Salesman' && (
-              <div className="compact-master-page">
+              <div className="compact-master-page other-master-design">
                 <div className="compact-master-heading">
                   <div className="compact-master-title">
                     <div className="compact-master-title-icon">
                       <UserRound size={21} />
                     </div>
                     <div>
-                      <h1></h1>
+                      <h1>Salesman Master</h1>
                       <p>{editSalesmanId ? 'Edit salesman details' : ''}</p>
                     </div>
                   </div>
@@ -75330,6 +74977,7 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
 
                 <form id="compact-salesman-master-form" className="compact-master-form" onSubmit={saveSalesman}>
                   <div className="compact-form-grid compact-form-grid-4">
+                    <div className="other-master-section"><Users size={16} /> Salesman Details</div>
                     {/* Salesman details */}
                     <div className="compact-field">
                       <label>Salesman Code <span>*</span></label>
@@ -75375,6 +75023,7 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                     </div>
 
                     {/* Address details */}
+                    <div className="other-master-section"><MapPin size={16} /> Contact &amp; Address</div>
                     <div className="compact-field" style={{ gridColumn: 'span 2' }}>
                       <label>Address</label>
                       <input
@@ -75460,6 +75109,7 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                       />
                     </div>
 
+                    <div className="other-master-section"><FileText size={16} /> Additional Details</div>
                     <div className="compact-field">
                       <label>Qualification</label>
                       <input
@@ -75490,18 +75140,6 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                       />
                     </div>
 
-                    <div className="compact-firm-status" style={{ gridColumn: '1 / -1' }}>
-                      <div className="compact-status-icon">
-                        <CheckCircle2 size={17} />
-                      </div>
-                      <div>
-                        <strong>Salesman Status</strong>
-                        <span>{editSalesmanId ? 'Update existing salesman details' : 'Salesman will be saved as active'}</span>
-                      </div>
-                      <div className="compact-status-switch">
-                        <span />
-                      </div>
-                    </div>
                   </div>
                 </form>
               </div>
@@ -78090,18 +77728,6 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                         </div>
                       </div>
 
-                      <div className="billing-summary-bottom-row">
-                        <input
-                          type="text"
-                          name="narration"
-                          className="billing-summary-narration"
-                          placeholder="Enter narration"
-                          value={
-                            invoiceFormData.narration || ""
-                          }
-                          onChange={handleInvoiceInputChange}
-                        />
-                      </div>
                     </section>
                     {/* MOBILE ACTIONS */}
 

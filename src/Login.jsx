@@ -1,4 +1,5 @@
 import React, { useRef, useState } from "react";
+import { setCsrfToken } from "./api/client";
 import {
   ArrowRight,
   Building2,
@@ -11,12 +12,12 @@ import {
   Mail,
   Monitor,
   Phone,
-  Rocket,
   Settings,
   Smartphone,
   UserRound,
 } from "lucide-react";
 import "./Login.css";
+import ScreenLoading from "./components/ScreenLoading";
 import loginLogo from "../assets/img/Login.ico";
 import loginOfficeHero from "./assets/images/login-office-hero.png";
 import { API_URL } from "./api/config";
@@ -331,24 +332,16 @@ const Login = ({ onLoginSuccess }) => {
           return;
         }
 
-        const savedFirm = result.data;
+        alert(result.message);
 
-        alert(
-          `Distributor registered successfully.\nDistributor ID: ${savedFirm.distributorId}\nFirm ID: ${savedFirm.firmId}`
-        );
-
-        setRegisteredFirms([savedFirm]);
-        setFirmsLoaded(true);
+        setRegisteredFirms([]);
+        setFirmsLoaded(false);
         setMode("login");
         setShowPassword(false);
 
         setFormData({
           ...emptyForm,
-          firmCode: savedFirm.firmCode || "",
-          firmName: savedFirm.firmName || "",
-          firmId: savedFirm.firmId || "",
-          distributorId: savedFirm.distributorId || "",
-          userName: savedFirm.userName || "",
+          userName: distributorData.userName,
           password: distributorData.password,
           workingDate: getTodayDate(),
         });
@@ -387,6 +380,7 @@ const Login = ({ onLoginSuccess }) => {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
+          "X-ERP-Browser": "1",
         },
         body: JSON.stringify({
           userName,
@@ -396,22 +390,12 @@ const Login = ({ onLoginSuccess }) => {
       });
 
       const result = await response.json();
-      console.log(
-  "Login API response:",
-  result
-);
-
-console.log(
-  "Login role received:",
-  result?.user?.role
-);
-
       if (!response.ok) {
         alert(result.message || "Login failed");
         return;
       }
 
-      localStorage.setItem("token", result.token);
+      setCsrfToken(result.csrf);
       localStorage.setItem("distributorId", result.user.distributorId);
       localStorage.setItem("firmId", result.user.firmId);
       localStorage.setItem("firmCode", result.user.firmCode);
@@ -517,6 +501,7 @@ await loadMyPermissions(
 
   return (
     <div className={`auth-page ${mode === "register" ? "register-page" : ""}`}>
+      {isLoggingIn && <ScreenLoading variant="dashboard" title="Signing in..." message="Please wait while we prepare your workspace." />}
       <div className={`auth-card ${mode === "register" ? "register-card" : ""}`}>
         <div className="auth-left">
           <div className={`auth-form-box ${mode === "register" ? "register-form" : ""}`}>
@@ -928,7 +913,7 @@ await loadMyPermissions(
                 <span>
                   {mode === "login"
                     ? isLoggingIn
-                      ? <><Rocket className="login-rocket" aria-hidden="true" /> Signing in...</>
+                      ? "Signing in..."
                       : loadingFirms
                       ? "Loading Firms..."
                       : (

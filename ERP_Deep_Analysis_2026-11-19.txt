@@ -1,0 +1,83 @@
+﻿ERP FEATURE, CALCULATION AND DEFECT ANALYSIS
+19 November 2026 | Source review of D:\ERP-Viraj-Mohite
+
+PURPOSE AND SCOPE
+This is a development roadmap for the existing distribution/billing ERP. It is based on current source inspection and the automated checks described below, not a live walkthrough of every option. No production records, server, browser workflow, bank statement or GST filing were checked. A feature described as a gap means not found or not demonstrated in the reviewed paths, not proof that it is absent everywhere. Confirm workflows and accounting/tax policy with the business and its accountant before implementation. Existing historical reports in the repository contain findings for earlier versions; some have since changed and must not be treated as current without rechecking.
+
+WHAT ALREADY EXISTS
+The code contains sales and purchase bills, returns/credit and debit notes, receipts, payments, journal/contra/PDC/cheque-bounce forms, stock management and batch rates, customer/product/area masters, service sales, GST/e-invoice output, reports, user permissions, financial period controls, imports and audit infrastructure. Presence of a screen or endpoint does not establish that all downstream accounting and reports are integrated.
+
+PRIORITY 0: CURRENT ISSUES TO INVESTIGATE AND FIX
+
+1. Sales billing: Scheme amount does not calculate Scheme % (confirmed code behavior).
+Source: src/Dashboard.jsx around 21753-21806 and 66253. When schemePct changes, amount is calculated from gross; when schemeAmt changes, schemePct is explicitly cleared. This matches the reported problem. Reproduce: enter quantity and rate, enter scheme amount, inspect scheme %. Expected: derived % using the same gross base as the forward formula. See calculation specification below.
+
+2. Sales billing: Item-wise CD amount does not calculate CD % (confirmed code behavior).
+Source: src/Dashboard.jsx around 21813-21848 and 21065-21140. Direct cdAmt clears cdPct for ITEM_WISE_GROSS and ITEM_WISE_GROSS_SCHEME. Bill-wise modes have a different shared percentage/allocation design, so do not simply treat each row as an independent CD. Confirm the selected General Setup mode and test each mode separately.
+
+3. Item-wise sales CD calculation can throw a ReferenceError (confirmed source defect, runtime impact needs reproduction).
+Source: src/Dashboard.jsx around 21137. The item-wise map computes cdAmount but returns cdAmt: rowCdAmount.toFixed(2); rowCdAmount is declared separately inside a later bill-wise branch around 21418, outside this scope. Entering an item-wise calculation path can therefore fail before a row is returned. Correct the variable and add regression tests for both item-wise modes, empty rows, amount entry and percentage entry. Check browser errors and save flow in staging.
+
+4. Sales billing: Star discount amount clears its percentage (confirmed where manual amount changes are enabled).
+Source: src/Dashboard.jsx around 21854-21910. When allowChangeStarAmount is true, entering starAmt clears starPct. Consider the same reverse calculation as scheme, using its actual gross base. Respect the existing setup permission. Do not assume TPR has an editable paired percentage: inspect its actual form and business rules before changing it.
+
+5. Sales service voucher is saved independently of the general ledger (confirmed for reviewed service router).
+Source: backend/service.js around 225-257. POST creates the service record, PUT saves it and DELETE deactivates it; no journal posting/reversal is performed in these paths. Verify whether another integration is responsible, and reconcile service revenue, customer balances and tax reports. If not, implement atomic voucher, receivable, revenue, tax, audit and cancellation effects; handle existing records through a reviewed reconciliation, not a blind backfill.
+
+6. Contra and cheque bounce require accounting integration review (confirmed limited behavior).
+Source: backend/transaction.js around 2563 and 3925. The reviewed cheque-bounce and contra create paths save their own documents; the contra create shown does not post a balanced journal. Verify all downstream processing and edit/cancel paths before calling either flow complete. For contra, select source and destination cash/bank accounts and post both sides atomically. For bounced receipts, link the original cheque, reopen appropriate allocations and record bank/charges as policy requires, including reversal and duplicate protection.
+
+7. Financial reports and openings: needs acceptance testing, not a blanket claim of failure.
+Source: backend/p0Features.js around 260-280 and 459-461. The current financialRows explicitly includes reversed non-opening journals, unlike an older audit which claimed POSTED-only behavior. Trial balance/balance sheet calls still need review for opening/as-of semantics when fromDate is supplied. Test a prior-period bank balance with no current activity, opening entries, cancellation and repeated edits at historical cutoffs against an independently calculated ledger. Confirm chart classification using current mappings and actual report output.
+
+8. Automated test command is broken for three suites (confirmed).
+backend/package.json runs node --test test/*.test.js without the isolation import required by financial-periods.test.js, phase1-accounting.test.js and phase2a-accounting.test.js. Normal npm.cmd test: 158 passed, 3 suite failures due to missing globalThis.phase1Isolation. Running those with the required import runs additional tests but several fail, including stale characterization expectations and mock errors such as res.status is not a function; there are also mismatched expected balances. These failures are not all proof of live defects. Repair the harness/mocks, separate historical characterization from current acceptance expectations, and investigate real assertion mismatches. A green test command must run the intended full suite safely.
+
+REVERSE CALCULATION: DEVELOPMENT SPECIFICATION
+
+A. Sales invoice row Scheme:
+Gross base G = the exact base used by the forward calculation (currently getSalesItemTotalQty(row) * rate in the UI; verify that quantity/free-unit treatment matches server financialValidation and agreed policy before changing either). Scheme amount S = round_money(G * scheme% / 100). On amount entry, scheme% = S / G * 100. Example: G 1,000, S 50 => 5%. Avoid assuming that free units are billable: compare UI and server definitions and agree the commercial policy first.
+
+B. Sales invoice item-wise CD:
+ITEM_WISE_GROSS: CD base B = gross. ITEM_WISE_GROSS_SCHEME: B = max(0, gross - scheme amount), as the current code specifies. CD% = CD amount / B * 100. Example: gross 1,000, scheme 50, CD 19 on gross-after-scheme => 2%; the same 19 on gross => 1.9%. Recalculate CD whenever gross or scheme changes, according to the last-edited field. Test General Setup modes, GST modes, changed row and save/reopen.
+
+C. Bill-wise CD:
+Define whether user edits a bill-level amount or an allocated row amount and agree the base, rounding and allocation rule first. The existing bill-wise mode uses a common percentage and allocation; a single row amount alone may not uniquely represent the intended bill-level percentage. Derive bill% from total CD / eligible bill base; distribute paise deterministically among rows, with the last eligible row receiving the residual. Ensure the row sum equals the bill amount. Do not enable misleading independent row percentages in this mode.
+
+D. Star: where manual star amount is permitted, derive star% using the existing star forward base. Example: gross 1,000, star 25 => 2.5%. Preserve the setup restriction and test tax interactions.
+
+E. Credit note: current scheme, TPR, CD and star amounts are read-only, derived from percentages (src/Dashboard.jsx around 33370-33451 and 79945-80079). Reverse entry is an enhancement, not a currently broken editable option. For invoice-linked returns first define whether original invoice terms are immutable, proportional or overrideable, and cap cumulative returns. Only make these amounts editable if policy permits; use the original-document rules and correct discount bases.
+
+F. Purchase invoice: code shows sequential Disc 1/2/3 percentage inputs and after-discount amounts around src/Dashboard.jsx 78769-78976. Consider reverse amounts only after confirming whether users need an amount for each stage. For sequential discounts, stage 2 base is after stage 1, stage 3 base is after stage 2. A final net alone cannot uniquely determine all three percentages. Preserve GST and purchase-rate logic. Confirm which fields are editable in the live form before designing changes.
+
+G. Other candidates, conditional on workflow: sales return/debit note, settlement/receipt discount, tax-inclusive rate versus taxable rate and line total versus rate. Inventory every pair, its permissions and dependencies first. Do not allow GST/tax amounts to be freely reversed without validated tax policy; do not infer a rate from a zero quantity. Existing calculated/read-only fields are not automatically defects.
+
+Implementation rules: track the last edited field (amount or percentage) per row, not just two numeric values; preserve exact entered amount as the authoritative value in amount mode, and derive displayed percentage at sufficient precision (e.g. 4-6 decimal places), without recomputing the amount from a rounded display percentage. On base change apply the agreed policy consistently: keep entered amount fixed in amount mode and update %, or keep % fixed in percentage mode and update amount. Store mode/precision if it must survive save/reopen. Define behavior for blank, zero base, negative, excessive discount and partial typing; never silently divide by zero or clamp invalid financial input. Avoid recalculation loops. Use shared decimal/paise rules in UI and server and server-side validation; validate cumulative discounts against the appropriate base. Check saved row totals, GST, invoice totals, print, reports and accounting. Add cases for 0, 100%, decimals, repeating percentages, multiple rows, intra/interstate tax, free quantity, edit/reload, mode switch, negative and over-base values, rounding residuals and concurrent saves.
+
+FEATURE GAPS / HIGH-VALUE IMPROVEMENTS
+Ranked for a distributor; assess existing configuration and external integrations before building.
+
+P0 - Reliable financial core: complete journal and subledger integration across service/contra/bounce; reconciliation of customer/supplier outstanding against GL; reliable dated allocations, advances, returns, cheque clearing, cancellation and audit history. Standardize tax and rounding; identify exceptions rather than silently correcting. This is more urgent than adding new dashboards.
+P0 - Financial close and controls: period controls exist in source; validate that every transaction, edit, cancellation, backdate, import and posting path enforces the same locked-period rules. Add close checklist, authorized reopen with reason, reconciliation blockers and audit evidence wherever missing.
+P0 - Operational resilience: scheduled encrypted backups, isolated restore drills, monitoring, recovery objectives and alerting. Infrastructure status cannot be determined from this workspace. Verify tenant/role access and server-side enforcement for every financial/report endpoint; add negative tests and audit sensitive overrides.
+P1 - Bank reconciliation: import statement lines, matching rules, unmatched items, fees, transfers, reversals and bank balance reconciliation. Verify whether an existing deployed integration already provides this.
+P1 - Inventory controls: expiry/near-expiry and batch aging alerts, FEFO picking, stock count workflow with approval and variance reasons, negative stock policy, transfer in-transit status, batch traceability and inventory valuation reconciliation. Batch/stock screens already exist; the gap is controlled end-to-end capability, not the existence of stock records.
+P1 - Receivables and credit control: dated aging, credit limits and overdue holds/overrides, salesperson collection views, on-account advances, statements and dispute tracking. Reconcile opening, notes, returns and subsequent allocations as of report date.
+P1 - Purchase planning: reorder points, lead times, suggested purchase orders, supplier quotations, PO to receipt to invoice matching and short/excess receipts. Verify the current PO/receipt workflow before defining missing pieces.
+P1 - Returns and supplier claims: source-invoice linking, quantity and value ceilings across multiple returns, expired/damaged goods reason codes, claim and settlement tracking, immutable correction history.
+P1 - Price and promotion governance: dated customer/product price lists, scheme eligibility, approval for overrides, minimum margin, stacking rules and a full promotion audit trail. Existing batch rate locks and discount fields should be reused.
+P1 - Reports and exports: opening/movement/closing ledger, aging as of cutoff, GST reconciliation to invoice and GL, stock-to-GL, margin by item/customer and report drill-down to source. Include cancellation and historical cutoffs, access controls and spreadsheet formula safety.
+P2 - Workflow and usability: approval inbox for exceptional prices/credits/stock changes, saved filters, reliable keyboard entry, bulk import validation preview, duplicates review, in-app actionable alerts and searchable audit trail.
+P2 - Distribution operations if relevant: route planning, delivery proof, order capture, salesperson targets, claims and mobile/offline sync with conflict handling. Integrations such as payments, e-invoice and e-way bill depend on business scope and regulatory applicability; validate current official requirements at implementation time.
+
+IMPLEMENTATION ORDER AND ACCEPTANCE
+1. Repair item-wise CD ReferenceError and test the existing billing modes. Confirm base and free-quantity policy with business owners.
+2. Implement scheme/CD/star reverse entry with shared deterministic calculations, then expand to other forms only after approving their bases and permissions.
+3. Fix test runner and failing meaningful acceptance tests; use isolated database-backed integration tests for posting, stock, tax, edit/cancel and rollback.
+4. Reconcile service, contra, bounced cheques and party outstanding to the ledger; address verified gaps and review existing data.
+5. Validate period locks, access controls, backup/restore and reporting as-of dates. Then prioritize inventory, bank reconciliation and purchasing workflows.
+
+Minimum release evidence: create, save, reopen, edit and cancel representative sales and purchase documents; compare line, GST and total values across UI, backend, print and ledger; check multi-row rounding and both CD item-wise modes; confirm no console error; verify correct stock and GL reversal; exercise multiple roles and a locked period. A local code review or a passing unit suite alone does not certify the deployed ERP or tax compliance.
+
+VERIFICATION NOTES
+Reviewed source directly, including src/Dashboard.jsx, backend/service.js, backend/transaction.js, backend/accounting.js, backend/p0Features.js, backend tests and package scripts. The standard backend test run completed 161 results: 158 pass and 3 suite failures from missing isolation setup. Running the three suites with the required import exposed additional failing assertions/mock incompatibilities. No live database, application server or external integrations were accessed. Existing code and data were not modified by this analysis.

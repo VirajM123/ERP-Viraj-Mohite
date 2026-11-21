@@ -103,7 +103,7 @@ export default function AccountOpeningTransactions({ account, accountId, onApply
         <div className="account-opening-content">
           <p className="account-opening-hint">Enter Trn, Series and No, then press Tab or Load to fetch an existing document for this account. Existing bills are saved as opening references without posting twice. Bills before the ledger From Date contribute to its opening balance. Unmatched references are brought-forward balances posted on the account Opening Date: <strong>{account.openingDate || 'not set'}</strong>.</p>
           <p className="account-opening-hint">Apply, then Save / Update Account to post. Opening entries update the ledger and outstanding; they do not create sales, purchase, GST or stock movements.</p>
-          {loading && <p role="status">Loading saved opening transactions...</p>}
+          {loading && <p role="status"><span className="erp-loading-bar erp-loading-bar--inline" aria-hidden="true" /> Loading saved opening transactions...</p>}
           <fieldset disabled={loading || loadFailed} className="account-opening-fields">
           <div className="account-opening-table-scroll">
             <table><thead><tr>{fields.map(([field, label]) => <th key={field}>{label}</th>)}<th>Document / Status</th><th>Remove</th></tr></thead>

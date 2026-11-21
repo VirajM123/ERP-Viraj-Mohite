@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import mongoose from "mongoose";
 import jwt from "jsonwebtoken";
 import createSecuritySetupRouter from "../securitySetup.js";
-import { authenticateApi, hasTenantMismatch } from "../auth.js";
+import { authenticateApi, createRateLimiter, hasTenantMismatch, issueAccessToken } from "../auth.js";
 import { financialYearFor, istBusinessDateRange, validateBusinessDate } from "../businessDate.js";
 import { AuditEvent } from "../audit.js";
 import { apiErrorHandler } from "../apiError.js";
@@ -11,6 +11,28 @@ import createProductMappingRouter, { ProductMapping } from "../productMapping.js
 
 const router = createSecuritySetupRouter({});
 const response = () => ({ statusCode: 200, status(code) { this.statusCode = code; return this; }, json(body) { this.body = body; return this; } });
+
+test("issued sessions expire and older legacy tokens cannot live indefinitely", async (t) => {
+  const secret = "test-only-secret-that-is-longer-than-32-characters";
+  const previous = process.env.JWT_SECRET;
+  process.env.JWT_SECRET = secret;
+  t.after(() => { if (previous === undefined) delete process.env.JWT_SECRET; else process.env.JWT_SECRET = previous; });
+  const issued = jwt.decode(issueAccessToken({ _id: "507f1f77bcf86cd799439011" }, "USER"));
+  assert.equal(issued.exp - issued.iat, 8 * 60 * 60);
+  const token = jwt.sign({ sub: "507f1f77bcf86cd799439011", iat: Math.floor(Date.now() / 1000) - 9 * 60 * 60 }, secret, { issuer: "fmcg-erp", audience: "fmcg-erp-web" });
+  const res = response();
+  await authenticateApi({ method: "GET", path: "/users", headers: { authorization: `Bearer ${token}` } }, res, () => assert.fail("Old session proceeded"));
+  assert.equal(res.statusCode, 401);
+});
+
+test("production authentication throttling fails closed when its database is unavailable", async (t) => {
+  const previous = process.env.NODE_ENV;
+  process.env.NODE_ENV = "production";
+  t.after(() => { if (previous === undefined) delete process.env.NODE_ENV; else process.env.NODE_ENV = previous; });
+  const res = response();
+  await createRateLimiter({ windowMs: 1000, max: 2, paths: new Set(["/login"]) })({ path: "/login", ip: "127.0.0.1" }, res, () => assert.fail("Unprotected login proceeded"));
+  assert.equal(res.statusCode, 503);
+});
 
 test("permissions require explicit true and deny unknown operations even to admins", () => {
   for (const value of [false, "false", "true", 1, {}, undefined]) {

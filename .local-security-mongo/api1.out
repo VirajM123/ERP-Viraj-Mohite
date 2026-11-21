@@ -1,0 +1,69 @@
+◇ injected env (1) from .env // tip: ⌁ auth for agents [www.vestauth.com]
+✅ ENV loaded
+🔄 Connecting to MongoDB Atlas...
+✅ MongoDB connected successfully
+📊 Connected to Database: erp_security_disposable
+🚀 Server running on port 5101
+{"event":"http_request","requestId":"1944d923-6517-45ae-9926-16da6fe9e17e","method":"POST","route":"/api/register","status":202,"latencyMs":886.5}
+{"event":"http_request","requestId":"9b152668-a735-403c-8245-0bb82e3a9e40","method":"POST","route":"/api/register","status":202,"latencyMs":756.9}
+{"event":"http_request","requestId":"0e6636ac-0919-4938-8d46-347137188509","method":"POST","route":"/api/register","status":202,"latencyMs":727.6}
+{"event":"http_request","requestId":"3642df78-02f7-42a0-8be8-feef1706be7f","method":"POST","route":"/api/register","status":202,"latencyMs":734.9}
+{"event":"http_request","requestId":"acd2a3ef-cc3c-41b5-8582-36c2826b31b4","method":"POST","route":"/api/register","status":202,"latencyMs":691.1}
+{"event":"http_request","requestId":"0036ded6-504d-4c68-93db-ac9b61f675aa","method":"POST","route":"/api/register","status":202,"latencyMs":730.5}
+{"event":"http_request","requestId":"bed71070-0540-41a4-8893-f719a59a8583","method":"POST","route":"/api/register","status":202,"latencyMs":824}
+{"event":"http_request","requestId":"536f2bea-852b-49f0-94ab-e7ff2c1ba281","method":"POST","route":"/api/login","status":200,"latencyMs":400.5}
+{"event":"http_request","requestId":"01f42ecf-45d4-4846-8054-3577fdffa5c9","method":"POST","route":"/api/firms","status":201,"latencyMs":18.8}
+{"event":"http_request","requestId":"88157251-4710-402a-a613-8f0c8c3fb247","method":"POST","route":"/api/firms","status":201,"latencyMs":16.7}
+{"event":"http_request","requestId":"edad29e7-e307-4efa-a84d-42a2c45be16c","method":"POST","route":"/api/firms","status":403,"latencyMs":2.4}
+{"event":"http_request","requestId":"3d5f56e9-4bad-4ec8-b6f0-b4e1883e919d","method":"POST","route":"/api/register","status":202,"latencyMs":454.6}
+{"event":"http_request","requestId":"e2eaff68-d2dd-4789-acb4-d6d4e2f5c4a0","method":"POST","route":"/api/register","status":202,"latencyMs":531.1}
+{"event":"http_request","requestId":"077b71e5-7a4b-42eb-b2d9-0ec2c56f5d83","method":"POST","route":"/api/register","status":202,"latencyMs":544.8}
+{"event":"http_request","requestId":"49ea009a-c7c0-4a68-a525-fb9794d993c2","method":"POST","route":"/api/register","status":202,"latencyMs":424.6}
+{"event":"http_request","requestId":"a4db014c-18e1-4659-b59b-e22fd0fc3a46","method":"POST","route":"/api/register","status":202,"latencyMs":582.7}
+{"event":"http_request","requestId":"63c2a27a-ea4e-4fe8-815e-c4bbabe8b333","method":"POST","route":"/api/login","status":200,"latencyMs":509.8}
+{"event":"http_request","requestId":"5a51ec58-6cc6-4ab7-bbe9-d34c2e611044","method":"POST","route":"/api/login","status":200,"latencyMs":397}
+{"event":"http_request","requestId":"180e66d9-47bf-405c-b7a8-3e6545b7bd36","method":"GET","route":"/api/sales/bill","status":200,"latencyMs":6.6}
+{"event":"http_request","requestId":"d36ba9eb-bdf4-41f4-af54-d16e256b0175","method":"GET","route":"/api/sales/bill","status":404,"latencyMs":21.1}
+{"event":"http_request","requestId":"1d9eaa10-5cc0-4fd4-93f5-18be86f0fb52","method":"GET","route":"/api/receipt","status":200,"latencyMs":14.4}
+{"event":"http_request","requestId":"3cab8fa6-57cc-45ae-86e6-5c821582caf3","method":"GET","route":"/api/receipt/bill-balance","status":200,"latencyMs":11.3}
+{"event":"http_request","requestId":"7b509d3e-1448-4b63-a508-0029b8557a42","method":"GET","route":"/api/settle-load","status":200,"latencyMs":13.9}
+{"event":"http_request","requestId":"62b1e36b-af33-4fae-a8c7-c82f02a9ab78","method":"GET","route":"/api/settle-load","status":404,"latencyMs":5.7}
+{"event":"http_request","requestId":"8bf5246a-fd74-47d4-b12e-8c524d2e178a","method":"GET","route":"/api/print-load","status":200,"latencyMs":13.2}
+{"event":"http_request","requestId":"eb0e19ae-f063-4ae6-82c2-8496e868b4b3","method":"GET","route":"/api/sales/bill","status":403,"latencyMs":18.9}
+{"event":"http_request","requestId":"f5bdb2e8-1aed-45b0-8907-de833c72c22c","method":"GET","route":"/api/receipt","status":403,"latencyMs":20.9}
+{"event":"http_request","requestId":"2fd3cccb-f9d5-44d2-b743-71139764ef80","method":"GET","route":"/api/receipt/bill-balance","status":403,"latencyMs":13.9}
+{"event":"http_request","requestId":"e8f808ef-e3f9-46cb-b6a1-ec4ed979ac6c","method":"GET","route":"/api/settle-load","status":403,"latencyMs":4.4}
+{"event":"http_request","requestId":"b8a7623f-915a-4286-8dc5-da3d37023145","method":"GET","route":"/api/print-load","status":403,"latencyMs":3.9}
+{"event":"http_request","requestId":"9b2ef49b-6e28-40d3-87a5-890b2e4313ad","method":"GET","route":"/api/sales/bill","status":200,"latencyMs":5.7}
+{"event":"http_request","requestId":"a0af462b-3ed4-44e7-a536-cf267bc5fdec","method":"GET","route":"/api/receipt","status":200,"latencyMs":11.1}
+{"event":"http_request","requestId":"6e4c9a6b-a300-4bce-9168-a4944153df22","method":"GET","route":"/api/receipt/bill-balance","status":200,"latencyMs":6.6}
+{"event":"http_request","requestId":"5214d90b-a944-46fd-9b10-8de9bf290a9f","method":"GET","route":"/api/settle-load","status":200,"latencyMs":14.6}
+{"event":"http_request","requestId":"0017350a-485f-4012-afac-b4f0a05e7d11","method":"GET","route":"/api/print-load","status":200,"latencyMs":12.4}
+{"event":"http_request","requestId":"968f6d43-e568-4af6-9cc1-65d501687a43","method":"GET","route":"/session","status":401,"latencyMs":0.7}
+{"event":"http_request","requestId":"71e3e2c7-1590-4a29-b8d3-5bb36c8c7510","method":"GET","route":"/session","status":401,"latencyMs":0.7}
+{"event":"http_request","requestId":"71cfb66a-681f-4113-86fa-b9c18b5d9819","method":"GET","route":"/session","status":401,"latencyMs":0.6}
+{"event":"http_request","requestId":"f6e59b1b-c6b5-4936-bb27-15997d9e06ab","method":"GET","route":"/session","status":401,"latencyMs":0.5}
+{"event":"http_request","requestId":"78391142-dd12-40c6-8190-b434effa596d","method":"OPTIONS","route":"/api/login/firms","status":204,"latencyMs":0.8}
+{"event":"http_request","requestId":"73c547ef-4637-42b8-808e-6e212c4ef47c","method":"POST","route":"/api/login/firms","status":200,"latencyMs":568.6}
+{"event":"http_request","requestId":"2a3e5d6c-b254-4bdc-9b2f-0db83b890adb","method":"OPTIONS","route":"/api/login","status":204,"latencyMs":0.6}
+{"event":"http_request","requestId":"7898a83b-4aa8-49f0-9c47-8c840c17810b","method":"POST","route":"/api/login","status":200,"latencyMs":1740.3}
+{"event":"http_request","requestId":"364de44f-7fdd-406b-a57e-2384a876fc4e","method":"GET","route":"/my-permissions","status":200,"latencyMs":8.6}
+{"event":"http_request","requestId":"fc23cc87-8a85-4573-ae83-87d02839675e","method":"GET","route":"/api/session","status":200,"latencyMs":12.7}
+{"event":"http_request","requestId":"a696aab8-ddb2-486f-a5bb-8a8478b81dad","method":"OPTIONS","route":"/api/logout","status":204,"latencyMs":0.3}
+{"event":"http_request","requestId":"5d2cf87f-7c0f-4f33-a158-6eb5825f1178","method":"GET","route":"/api/session","status":200,"latencyMs":10}
+{"event":"http_request","requestId":"39c66a8a-63f4-4e79-988a-6614e8a53c0e","method":"POST","route":"/logout","status":403,"latencyMs":2.9}
+{"event":"http_request","requestId":"7c743239-cd97-4ed5-b9b0-347ba8882673","method":"POST","route":"/api/firms","status":403,"latencyMs":2.9}
+{"event":"http_request","requestId":"d715959e-8579-48ab-80a8-101af8912938","method":"OPTIONS","route":"/api/firms","status":204,"latencyMs":0.3}
+{"event":"http_request","requestId":"7d9358f4-9742-4f0d-a86b-c405d31a1c76","method":"POST","route":"/api/firms","status":201,"latencyMs":27.1}
+{"event":"http_request","requestId":"b84aa2b8-ef12-4d42-b52e-641e6c3e2085","method":"GET","route":"/api/session","status":200,"latencyMs":121.6}
+{"event":"http_request","requestId":"dc178b11-12ec-4068-b04b-23e73a771f9f","method":"POST","route":"/api/login","status":200,"latencyMs":645.4}
+{"event":"http_request","requestId":"aef12f42-8d1c-4b1e-94c2-bae4ec70a950","method":"OPTIONS","route":"/api/logout","status":204,"latencyMs":0.3}
+{"event":"http_request","requestId":"c8e4ba34-fb52-4961-9e72-b8287894512c","method":"GET","route":"/api/session","status":200,"latencyMs":8.2}
+{"event":"http_request","requestId":"98741892-ebf3-42ba-8890-691c89121634","method":"POST","route":"/api/logout","status":200,"latencyMs":443.9}
+{"event":"http_request","requestId":"c0782121-df4c-47bd-a89f-87a18d614c21","method":"GET","route":"/session","status":401,"latencyMs":0.9}
+{"event":"http_request","requestId":"f7787b6b-6dd2-44cf-982e-119e8df5b030","method":"GET","route":"/session","status":401,"latencyMs":2}
+{"event":"http_request","requestId":"c06a3f2c-d23d-4ae7-8f41-d673c985bcdc","method":"GET","route":"/api/session","status":200,"latencyMs":33.8}
+{"event":"http_request","requestId":"83714f00-c8f0-47ef-91b3-20781f1e0750","method":"GET","route":"/session","status":401,"latencyMs":1.5}
+{"event":"process_metrics","periodMs":60002,"requests":60,"errors":0,"p50Ms":13.9,"p95Ms":756.9,"p99Ms":1740.3,"cpuMs":7437,"rssBytes":108109824,"heapUsedBytes":52318240,"eventLoopLagP95Ms":101.1}
+{"event":"http_request","requestId":"43d58360-f395-4692-80e5-601ba7da6b5f","method":"POST","route":"/api/login","status":200,"latencyMs":376.6}
+{"event":"http_request","requestId":"1eacccca-9084-4072-a7e4-5ec4c9a46909","method":"POST","route":"/api/login","status":401,"latencyMs":2.6}
