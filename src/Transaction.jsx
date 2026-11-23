@@ -172,6 +172,8 @@ const { state, dispatch } = useERP();
   ]);
   const [pendingBillsApi, setPendingBillsApi] =
     useState([]);
+  const [receiptSalesBills, setReceiptSalesBills] = useState([]);
+  const [receiptBillsStatus, setReceiptBillsStatus] = useState("loading");
   // const [salesmanBills, setSalesmanBills] = useState([]);
   //  const [areaBills, setAreaBills] = useState([]);
   const openTransactionEntry = (menu) => {
@@ -339,8 +341,26 @@ if (menu === "PDC Docket") {
       activeTransaction === "PDC Docket" &&
       transactionFormMode?.["PDC Docket"] === true;
 
-    if (receiptFormIsOpen || chequeBounceFormIsOpen) {
+    if (chequeBounceFormIsOpen) {
       loadReceipts(() => !cancelled);
+    }
+
+    if (receiptFormIsOpen) {
+      setReceiptBillsStatus("loading");
+      Promise.all([
+        secureFetch(`${API_URL}/transaction/receipt/sales-bills`).then(async response => {
+          const result = await response.json();
+          if (!response.ok || !result.success) throw new Error(result.message || "Unable to load invoices.");
+          return result.data || [];
+        }),
+        loadReceipts(() => !cancelled),
+      ]).then(([invoices, receiptsLoaded]) => {
+        if (!receiptsLoaded) throw new Error("Unable to load saved receipts.");
+        if (!cancelled) { setReceiptSalesBills(invoices); setReceiptBillsStatus("ready"); }
+      }).catch(error => {
+        console.error("Receipt outstanding bills load error:", error);
+        if (!cancelled) setReceiptBillsStatus("error");
+      });
     }
 
     if (pdcDocketFormIsOpen) {
@@ -2436,15 +2456,14 @@ if (menu === "PDC Docket") {
       );
 
       const adjustedSum = matchedItems.reduce((s, i) => {
-        const nowAdjust = Number(i.nowAdjust || 0);
-        const discAmount = Number(i.discAmount || 0);
-        return s + nowAdjust + discAmount;
+        if (i.legacyOverAllocation === true) return s + Number(i.appliedAmount || 0);
+        return s + Number(i.nowAdjust || 0) + Number(i.discAmt ?? i.discAmount ?? 0);
       }, 0);
 
       return sum + adjustedSum;
     }, 0);
   };
-  const regularPendingBills = (salesInvoices || [])
+  const regularPendingBills = (receiptSalesBills || [])
     .map((invoice, index) => {
       const header = invoice.header || {};
       const summary = invoice.summary || {};
@@ -2456,8 +2475,7 @@ if (menu === "PDC Docket") {
         header.billSeries,
         header.BillSeries,
         header.trnSeries,
-        header.series,
-        "INV"
+        header.series
       );
 
       const billNo = pickValue(
@@ -2475,6 +2493,8 @@ if (menu === "PDC Docket") {
         Number(
           pickValue(
             invoice.amount,
+            invoice.NetAmount,
+            invoice.BillAmount,
             invoice.netAmount,
             invoice.billAmount,
             invoice.grandTotal,
@@ -2495,6 +2515,7 @@ if (menu === "PDC Docket") {
         trnNo: billNo,
         trnDate: pickValue(
           invoice.billDate,
+          invoice.BillDate,
           invoice.date,
           invoice.trnDate,
           header.billDate,
@@ -2531,6 +2552,8 @@ if (menu === "PDC Docket") {
 
         salesman: pickValue(
           invoice.salesman,
+          invoice.SalesmanName,
+          invoice.SalesmanCode,
           invoice.salesmanName,
           invoice.salesmanCode,
           header.salesman,
@@ -2539,6 +2562,7 @@ if (menu === "PDC Docket") {
         ),
 
         areaCode: pickValue(
+          invoice.AreaCode,
           invoice.areaCode,
           invoice.area,
           invoice.areaName,
@@ -2548,6 +2572,7 @@ if (menu === "PDC Docket") {
         ),
 
         areaName: pickValue(
+          invoice.AreaName,
           invoice.areaName,
           invoice.area,
           invoice.areaCode,
@@ -2557,6 +2582,7 @@ if (menu === "PDC Docket") {
         ),
 
         salesmanCode: pickValue(
+          invoice.SalesmanCode,
           invoice.salesmanCode,
           invoice.salesman,
           invoice.salesmanName,
@@ -2566,6 +2592,7 @@ if (menu === "PDC Docket") {
         ),
 
         salesmanName: pickValue(
+          invoice.SalesmanName,
           invoice.salesmanName,
           invoice.salesman,
           invoice.salesmanCode,
@@ -2876,6 +2903,10 @@ if (menu === "PDC Docket") {
   billSeries,
   billNo
 ) => {
+    if (receiptBillsStatus !== "ready") {
+      alert(receiptBillsStatus === "error" ? "Outstanding bills could not be loaded. Reopen the receipt form and try again." : "Outstanding bills are still loading. Please wait.");
+      return false;
+    }
     const enteredSeries = String(billSeries || "").trim();
     const enteredBillNo = String(billNo || "").trim();
 
@@ -3106,6 +3137,12 @@ const handlePartyTyping = (event) => {
       partyName: value,
     })
   );
+
+  if (receiptBillsStatus !== "ready") {
+    setPartySuggestions([]);
+    setPartyNotFound(false);
+    return;
+  }
 
   if (!searchText) {
     setPartySuggestions([]);
@@ -8204,7 +8241,7 @@ setTransactionFormMode((prev) => ({
       const result = await response.json();
 
       if (!result.success) {
-        return;
+        return false;
       }
 
       const receipts = (result.data || []).map((r) => ({
@@ -8246,9 +8283,11 @@ setTransactionFormMode((prev) => ({
           payload: receipts,
         });
       }
+      return true;
 
     } catch (err) {
       console.error("LOAD RECEIPTS ERROR =", err);
+      return false;
     }
   };
   /* =========================================================
@@ -10562,14 +10601,6 @@ setTransactionFormMode((prev) => ({
             }}
           >
             👁 Preview
-          </button>
-
-          <button
-            type="button"
-            className="receipt-save-draft-btn"
-            onClick={saveReceipt}
-          >
-            💾 Save
           </button>
 
           <button
@@ -15934,6 +15965,7 @@ setTransactionFormMode((prev) => ({
         {/* ================= PDC HEADER DETAILS ================= */}
 
         <section className="pdc-entry-section">
+          <div className="pdc-compact-heading"><span aria-hidden="true" /> <h3>PDC Docket Details</h3></div>
           <div className="pdc-header-two-rows">
 
             {/* ================= FIRST ROW ================= */}
@@ -16129,6 +16161,7 @@ setTransactionFormMode((prev) => ({
         <section className="pdc-cheque-section">
           <div className="pdc-grid-heading">
             <div className="pdc-grid-heading-actions">
+              <div className="pdc-compact-heading-title"><span aria-hidden="true" /> <h3>Cheque Details</h3></div>
               <div className="pdc-grid-count">
                 <span>Total Cheques: <strong>{pdcDocketFormData.totalCheques || 0}</strong></span>
                 <span>Total Amount: <strong>₹{Number(pdcDocketFormData.totalAmount || 0).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</strong></span>
@@ -16275,6 +16308,7 @@ setTransactionFormMode((prev) => ({
 
           {/* ================= SUMMARY ================= */}
 
+          <div className="pdc-compact-heading pdc-summary-heading"><span aria-hidden="true" /> <h3>PDC Summary</h3></div>
           <div className="pdc-summary-section">
             <div className="pdc-summary-card">
               <span className="pdc-summary-icon"><FileText size={25} /></span>
@@ -17225,7 +17259,16 @@ setTransactionFormMode((prev) => ({
 
         <header className="voucher-form-header">
           <div className="voucher-breadcrumb">Transactions <span>/</span> Contra Voucher</div>
-          <div className="voucher-title-row"><h2>Contra Voucher</h2><span className="voucher-new-badge">{editContraId ? "Edit" : "New"}</span></div>
+          <div className="voucher-title-row"><h2>Contra Voucher</h2><span className="voucher-new-badge">{editContraId ? "Edit Voucher" : "New Voucher"}</span></div>
+          <div className="contra-header-actions">
+            <button type="button" className="contra-save-header-btn" onClick={saveContra}>
+              ? {editContraId ? "Update Contra" : "Save Contra"}
+            </button>
+            <button type="button" className="contra-close-header-btn" aria-label="Close Contra form" onClick={() => {
+              resetContraForm();
+              openTransactionList("Contra");
+            }}>?</button>
+          </div>
           <p>Record cash deposits, withdrawals and bank transfers.</p>
         </header>
 
@@ -17237,7 +17280,7 @@ setTransactionFormMode((prev) => ({
             <div className="contra-heading-left">
               <span className="contra-section-dot" />
 
-              <h3>Transaction details</h3>
+              <h3>Voucher Header</h3>
             </div>
 
             <div className="contra-header-meta">
@@ -17382,7 +17425,7 @@ setTransactionFormMode((prev) => ({
             <div className="contra-heading-left">
               <span className="contra-section-dot" />
 
-              <h3>Voucher summary</h3>
+              <h3>Voucher Summary</h3>
             </div>
 
             <span
@@ -17446,27 +17489,7 @@ setTransactionFormMode((prev) => ({
           </div>
         </section>
         </div>
-        <footer className="voucher-form-footer">
-          <small>Required fields marked <span>*</span></small>
-          <div className="voucher-footer-actions"><button
-              type="button"
-              className="voucher-secondary-button"
-              aria-label="Close Contra form"
-              onClick={() => {
-                resetContraForm();
-                openTransactionList("Contra");
-              }}
-            >
-              Cancel
-            </button>
-<button
-              type="button"
-              className="voucher-primary-button"
-              onClick={saveContra}
-            >
-              {editContraId ? "Update Contra" : "Save Contra"}
-            </button></div>
-        </footer>
+
       </div>
     </div>
   );

@@ -6,7 +6,10 @@ const cookieName = "erp_session";
 const lifetimeMs = 8 * 60 * 60 * 1000;
 const digest = (value) => crypto.createHash("sha256").update(value).digest("hex");
 const csrfFor = (value) => crypto.createHmac("sha256", process.env.JWT_SECRET).update(`csrf:${value}`).digest("hex");
-const cookieOptions = () => ({ httpOnly: true, secure: process.env.NODE_ENV === "production", sameSite: "lax", path: "/api" });
+const cookieOptions = () => {
+  const production = process.env.NODE_ENV === "production";
+  return { httpOnly: true, secure: production, sameSite: production ? "none" : "lax", path: "/api" };
+};
 const getCookie = (req) => {
   const values = String(req.headers.cookie || "").split(";").map((part) => part.trim()).filter((part) => part.startsWith(`${cookieName}=`));
   if (values.length !== 1) return "";

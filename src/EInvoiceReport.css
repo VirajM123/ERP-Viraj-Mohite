@@ -278,3 +278,21 @@
 .einvoice-section-heading h2, .einvoice-result-heading h2 { color: #253b54 !important; font-size: 12px !important; }
 .einvoice-table-wrap thead th { background: #255a83 !important; color: #fff !important; border-color: #50799b !important; }
 .einvoice-bottom-bar { border-color: #dfe4ea !important; background: #f7f9fb !important; }
+
+/* Compact Sales Billing-style spacing and consistent action sizing. */
+.einvoice-page { gap: 6px; padding: 8px 10px !important; background: #f2f6fd !important; }
+.einvoice-page .einvoice-page-heading { min-height: 42px !important; margin-bottom: 0 !important; padding: 6px 10px !important; border-color: #d4e1f2 !important; background: #fff !important; }
+.einvoice-page .einvoice-workspace { gap: 6px; }
+.einvoice-page .einvoice-panel, .einvoice-page .einvoice-result { padding: 6px 8px; border-color: #d4e1f2 !important; border-radius: 7px !important; }
+.einvoice-page .einvoice-section-heading, .einvoice-page .einvoice-result-heading { min-height: 25px !important; margin: 0 0 6px; padding: 3px 8px !important; border: 0 !important; border-radius: 5px; background: #dce9fc; }
+.einvoice-page .einvoice-fields, .einvoice-page .einvoice-extra-fields { gap: 6px 10px; }
+.einvoice-page .einvoice-panel input, .einvoice-page .einvoice-panel select { height: 28px !important; min-height: 28px !important; margin-top: 2px; }
+.einvoice-page .einvoice-actions { gap: 6px; padding-top: 6px; }
+.einvoice-page button, .einvoice-page .einvoice-actions button, .einvoice-page .einvoice-result-heading-actions button, .einvoice-page .einvoice-bottom-bar button { width: auto; min-width: 0; height: 30px; min-height: 30px !important; padding: 0 10px !important; gap: 6px; border-radius: 5px !important; font-size: 11px !important; }
+.einvoice-page button svg { width: 15px; height: 15px; flex-shrink: 0; }
+.einvoice-page .einvoice-close { width: 30px; padding: 0 !important; }
+.einvoice-page .einvoice-bottom-bar { min-height: 0; padding: 6px 8px; gap: 6px; border-radius: 7px; box-shadow: none; }
+.einvoice-page .einvoice-select-all { min-width: 0; gap: 6px; font-size: 11px; }
+.einvoice-page .einvoice-divider { height: 22px; margin: 0 4px; }
+.einvoice-page .einvoice-table-wrap { height: clamp(220px, 48vh, 700px); min-height: 220px; }
+@media (max-width: 760px) { .einvoice-page .einvoice-bottom-bar { flex-wrap: wrap; } .einvoice-page .einvoice-spacer { display: none; } }

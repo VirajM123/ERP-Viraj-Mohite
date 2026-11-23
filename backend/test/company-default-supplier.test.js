@@ -41,6 +41,7 @@ test('company selection applies the default while manual supplier changes and co
   const context = {
     companies: [{ code: 'C1', defaultSupplierId: supplierId }, { code: 'C2' }],
     otherAccounts: [{ _id: supplierId, accountGroup: 'SUNDRY CREDITORS', isActive: true }],
+    purchaseFormData: form, pendingPurchaseDefaultSupplier: { current: null },
     findPurchaseSupplier, purchaseSupplierValue, regexInputValue: (_, value) => value,
     getConfiguredCompanySeries: () => ({ configured: true, value: 'PUR' }),
     setPurchaseFormData: update => { form = update(form); }, setTimeout() {},
@@ -52,4 +53,21 @@ test('company selection applies the default while manual supplier changes and co
   assert.equal(form.supplier, supplierId); assert.equal(form.vouSer, 'PUR'); assert.equal(form.vouNo, ''); assert.equal(form.isIgst, 'Y');
   context.change({ target: { name: 'supplier', value: 'manual' } }); assert.equal(form.supplier, 'manual');
   context.change({ target: { name: 'company', value: 'C2' } }); assert.equal(form.supplier, 'manual');
+});
+test('a late account lookup applies the pending default only while the supplier is unchanged', () => {
+  const start = dashboard.indexOf('  useEffect(() => {\n    const pending = pendingPurchaseDefaultSupplier.current;');
+  const end = dashboard.indexOf('  const handlePurchaseInputChange =', start);
+  assert.ok(start >= 0 && end > start);
+  let effect, form = { company: 'C1', supplier: 'original' };
+  const pendingPurchaseDefaultSupplier = { current: { company: 'C1', supplierId, previousSupplier: 'original' } };
+  const context = { useEffect: fn => { effect = fn; }, pendingPurchaseDefaultSupplier,
+    otherAccounts: [{ _id: supplierId, accountGroup: 'SUNDRY CREDITORS' }], findPurchaseSupplier, purchaseSupplierValue,
+    setPurchaseFormData: update => { form = update(form); } };
+  vm.runInNewContext(dashboard.slice(start, end), context);
+  effect();
+  assert.equal(form.supplier, supplierId);
+  form = { company: 'C1', supplier: 'manual' };
+  pendingPurchaseDefaultSupplier.current = { company: 'C1', supplierId, previousSupplier: 'original' };
+  effect();
+  assert.equal(form.supplier, 'manual');
 });

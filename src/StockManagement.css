@@ -411,3 +411,518 @@
 }
 .stock-row-batch { display: block; color: #64748b; font-size: 10px; }
 .stock-adjustment-page .billing-product-table.stock-entry-table :is(input, select) { width: 100% !important; min-width: 0 !important; box-sizing: border-box; }
+
+/* Stock In entry: compact sales-billing layout without changing other stock modes. */
+.sales-billing-page.stock-in-entry-page .sales-billing-card {
+  min-height: 0;
+  overflow: hidden;
+  border: 1px solid #dbe6f5;
+  border-radius: 10px;
+  background: #fff;
+}
+.sales-billing-page.stock-in-entry-page .sales-billing-page-header {
+  padding: 8px 14px !important;
+  border-bottom: 1px solid #e4ebf5;
+}
+.sales-billing-page.stock-in-entry-page .billing-header-section {
+  padding: 9px 14px 7px !important;
+}
+.sales-billing-page.stock-in-entry-page .stock-header-fields {
+  grid-template-columns: repeat(4, minmax(0, 1fr)) !important;
+  gap: 7px 10px !important;
+}
+.sales-billing-page.stock-in-entry-page .stock-narration-field {
+  grid-column: 1 / -1;
+}
+.sales-billing-page.stock-in-entry-page .billing-product-section {
+  padding: 7px 14px 8px !important;
+}
+.sales-billing-page.stock-in-entry-page .billing-product-heading {
+  margin-bottom: 6px !important;
+}
+.sales-billing-page.stock-in-entry-page .billing-product-heading .billing-section-title {
+  display: flex !important;
+}
+.sales-billing-page.stock-in-entry-page .billing-product-table-scroll {
+  height: clamp(125px, 20vh, 190px) !important;
+  min-height: 0 !important;
+  max-height: 190px !important;
+}
+.sales-billing-page.stock-in-entry-page .billing-product-table.stock-entry-table {
+  min-width: 900px !important;
+}
+.sales-billing-page.stock-in-entry-page .billing-product-table.stock-entry-table :is(th, td):nth-child(2) {
+  width: 150px !important;
+  min-width: 150px !important;
+  max-width: none !important;
+}
+.sales-billing-page.stock-in-entry-page .billing-product-table.stock-entry-table :is(th, td):nth-child(3) {
+  width: 240px !important;
+  min-width: 240px !important;
+  max-width: none !important;
+}
+.sales-billing-page.stock-in-entry-page .billing-grid-footer {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 12px;
+  padding: 7px 8px !important;
+  background: #f8fbff;
+}
+.sales-billing-page.stock-in-entry-page .stock-selected-batch {
+  flex: 1 1 300px;
+  flex-wrap: wrap;
+  gap: 6px 18px;
+  padding: 0;
+  color: #526580;
+  font-size: 11px;
+}
+.sales-billing-page.stock-in-entry-page .billing-grid-totals {
+  padding: 6px 12px;
+  border-radius: 6px;
+  background: #e6f0ff;
+  color: #102b58;
+}
+.sales-billing-page.stock-in-entry-page .stock-value-footer {
+  gap: 8px;
+  padding: 8px 14px 12px;
+  border-top: 0;
+  background: #fff;
+}
+.sales-billing-page.stock-in-entry-page .stock-value-footer > div {
+  min-height: 54px;
+  padding: 7px 10px;
+  border-color: #cfe0fa;
+  border-radius: 7px;
+  background: #edf5ff;
+  text-align: left;
+}
+.sales-billing-page.stock-in-entry-page .stock-value-footer span {
+  color: #17345e;
+  font-size: 11px;
+}
+.sales-billing-page.stock-in-entry-page .stock-value-footer strong {
+  color: #0755e9;
+  font-size: 15px;
+  white-space: nowrap;
+}
+@media (max-width: 900px) {
+  .sales-billing-page.stock-in-entry-page .stock-header-fields {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  }
+}
+@media (max-width: 760px) {
+  .sales-billing-page.stock-in-entry-page .stock-value-footer {
+    grid-template-columns: 1fr !important;
+  }
+}
+@media (max-width: 480px) {
+  .sales-billing-page.stock-in-entry-page .stock-header-fields {
+    grid-template-columns: 1fr !important;
+  }
+}
+
+/* Match the compact section strips used by Sales Billing. */
+.sales-billing-page.stock-in-entry-page .billing-header-section .billing-section-heading {
+  display: flex !important;
+}
+.sales-billing-page.stock-in-entry-page .billing-header-section .billing-section-heading,
+.sales-billing-page.stock-in-entry-page .billing-product-heading,
+.sales-billing-page.stock-in-entry-page .stock-summary-heading {
+  min-height: 23px;
+  margin: 0 0 5px !important;
+  padding: 3px 8px !important;
+  border-radius: 5px;
+  background: #dce9fc;
+  color: #102a54;
+  box-sizing: border-box;
+}
+.sales-billing-page.stock-in-entry-page .billing-section-title h3,
+.sales-billing-page.stock-in-entry-page .stock-summary-heading {
+  font-size: 12px !important;
+  font-weight: 700;
+  line-height: 17px;
+}
+.sales-billing-page.stock-in-entry-page .billing-section-title::before,
+.sales-billing-page.stock-in-entry-page .stock-summary-heading::before {
+  content: '';
+  display: inline-block;
+  width: 14px;
+  height: 14px;
+  margin-right: 7px;
+  border-radius: 50%;
+  background: #3980f6;
+  vertical-align: -2px;
+}
+.sales-billing-page.stock-in-entry-page .billing-header-information {
+  font-size: 10px;
+}
+.sales-billing-page.stock-in-entry-page .stock-header-fields {
+  grid-template-columns: repeat(5, minmax(0, 1fr)) !important;
+}
+.sales-billing-page.stock-in-entry-page .stock-narration-field {
+  grid-column: auto;
+}
+.sales-billing-page.stock-in-entry-page .stock-summary-heading {
+  grid-column: 1 / -1;
+}
+.sales-billing-page.stock-in-entry-page .stock-value-footer > div {
+  min-height: 34px;
+  border: 0;
+  border-right: 1px solid #dbe5f2;
+  border-radius: 0;
+  background: #fff;
+}
+.sales-billing-page.stock-in-entry-page .stock-value-footer > div:last-child {
+  border-right: 0;
+}
+.sales-billing-page.stock-in-entry-page .billing-save-button {
+  background: #159447 !important;
+  border-color: #159447 !important;
+  color: #fff !important;
+}
+@media (max-width: 900px) {
+  .sales-billing-page.stock-in-entry-page .stock-header-fields {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  }
+  .sales-billing-page.stock-in-entry-page .stock-narration-field { grid-column: 1 / -1; }
+}
+@media (max-width: 480px) {
+  .sales-billing-page.stock-in-entry-page .stock-header-fields { grid-template-columns: 1fr !important; }
+}
+
+/* Override the shared billing rules that hide Stock In's only save action. */
+.sales-billing-page.stock-in-entry-page .sales-billing-header-actions > .billing-save-button {
+  display: inline-flex !important;
+  align-items: center;
+  justify-content: center;
+  min-width: 88px;
+  min-height: 34px;
+  gap: 7px;
+}
+.sales-billing-page.stock-in-entry-page .billing-close-button {
+  display: inline-flex !important;
+  align-items: center;
+  justify-content: center;
+  width: auto !important;
+  min-width: 82px;
+  height: 34px !important;
+  gap: 6px;
+  padding: 0 12px;
+  border: 1px solid #4380ff;
+  border-radius: 6px;
+  background: #fff;
+  color: #0759eb;
+  font-size: 12px;
+  font-weight: 700;
+}
+.sales-billing-page.stock-in-entry-page .billing-header-section .billing-section-heading {
+  justify-content: space-between !important;
+  align-items: center;
+}
+.sales-billing-page.stock-in-entry-page .billing-header-section .billing-section-title {
+  display: flex !important;
+  align-items: center;
+}
+.sales-billing-page.stock-in-entry-page .billing-product-heading .billing-section-title {
+  align-items: center;
+}
+.sales-billing-page.stock-in-entry-page .billing-product-heading .billing-section-number {
+  display: none;
+}
+.sales-billing-page.stock-in-entry-page .billing-section-title h3 {
+  margin: 0;
+}
+.sales-billing-page.stock-in-entry-page .billing-product-table.stock-entry-table thead th {
+  background: #0759eb !important;
+  color: #fff !important;
+  border-color: #3075ee !important;
+}
+.sales-billing-page.stock-in-entry-page .billing-product-table-scroll {
+  height: clamp(155px, 24vh, 220px) !important;
+  max-height: 220px !important;
+}
+.sales-billing-page.stock-in-entry-page .stock-selected-batch span {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: #102a54;
+}
+.sales-billing-page.stock-in-entry-page .stock-selected-batch strong {
+  min-width: 66px;
+  margin: 0;
+  padding: 5px 8px;
+  border: 1px solid #d4e0ef;
+  border-radius: 5px;
+  background: #fff;
+  font-weight: 600;
+}
+
+/* Keep both header actions the same compact size despite global button rules. */
+.sales-billing-page.stock-in-entry-page .sales-billing-header-actions {
+  display: flex !important;
+  align-items: center !important;
+  gap: 7px !important;
+}
+.sales-billing-page.stock-in-entry-page .sales-billing-header-actions > :is(.billing-save-button, .billing-close-button) {
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  width: 94px !important;
+  min-width: 94px !important;
+  max-width: 94px !important;
+  height: 34px !important;
+  min-height: 34px !important;
+  max-height: 34px !important;
+  padding: 0 9px !important;
+  gap: 5px !important;
+  font-size: 12px !important;
+  line-height: 1 !important;
+  font-weight: 700 !important;
+  white-space: nowrap;
+  box-sizing: border-box;
+}
+.sales-billing-page.stock-in-entry-page .sales-billing-header-actions > :is(.billing-save-button, .billing-close-button) svg {
+  width: 14px !important;
+  height: 14px !important;
+  flex: 0 0 14px;
+}
+.sales-billing-page.stock-in-entry-page .stock-in-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0 0 6px;
+}
+.sales-billing-page.stock-in-entry-page .stock-in-toolbar button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  height: 28px;
+  padding: 0 10px;
+  border: 1px solid #cbdcf5;
+  border-radius: 5px;
+  background: #fff;
+  color: #0759eb;
+  font-size: 11px;
+  font-weight: 700;
+  cursor: pointer;
+}
+.sales-billing-page.stock-in-entry-page .stock-in-toolbar .stock-in-batch-button {
+  margin-left: auto;
+  border-color: #f5bd5a;
+  color: #b96a00;
+}
+.sales-billing-page.stock-in-entry-page .stock-in-toolbar button:disabled {
+  opacity: .55;
+  cursor: default;
+}
+.sales-billing-page.stock-in-entry-page .sales-billing-title {
+  font-size: 18px !important;
+}
+.sales-billing-page.stock-in-entry-page .billing-field label,
+.sales-billing-page.stock-in-entry-page .billing-product-table th,
+.sales-billing-page.stock-in-entry-page .billing-product-table td,
+.sales-billing-page.stock-in-entry-page .billing-table-control,
+.sales-billing-page.stock-in-entry-page .billing-control,
+.sales-billing-page.stock-in-entry-page .stock-selected-batch,
+.sales-billing-page.stock-in-entry-page .stock-value-footer span {
+  font-size: 12px !important;
+}
+.sales-billing-page.stock-in-entry-page .billing-product-table th {
+  height: 29px !important;
+}
+.sales-billing-page.stock-in-entry-page .billing-section-title h3,
+.sales-billing-page.stock-in-entry-page .stock-summary-heading {
+  font-size: 13px !important;
+}
+
+/* Compact Stock In new-batch dialog; existing-batch and other modes keep their styles. */
+.stock-in-batch-modal {
+  width: min(680px, calc(100vw - 32px));
+  max-height: calc(100vh - 32px);
+  overflow-y: auto;
+  border: 1px solid #a9c8f7;
+  border-radius: 8px;
+  box-shadow: 0 14px 38px rgba(15, 35, 70, .24);
+}
+.stock-in-batch-modal .stock-batch-modal-header {
+  min-height: 54px;
+  padding: 8px 14px;
+  box-sizing: border-box;
+}
+.stock-in-batch-modal .stock-batch-modal-header h2 {
+  margin: 0;
+  color: #10285a;
+  font-size: 16px;
+  line-height: 19px;
+}
+.stock-in-batch-modal .stock-batch-modal-header p {
+  margin: 2px 0 0;
+  color: #425a80;
+  font-size: 11px;
+}
+.stock-in-batch-modal .stock-batch-modal-header button {
+  width: 30px;
+  height: 30px;
+  flex: 0 0 30px;
+}
+.stock-in-batch-modal .stock-batch-tabs {
+  gap: 5px;
+  padding: 7px 14px;
+  border-color: #cbdcf5;
+  background: #e4efff;
+}
+.stock-in-batch-modal .stock-batch-tabs button {
+  height: 29px;
+  padding: 0 13px;
+  border-color: #c7d7ed;
+  color: #193359;
+  font-size: 11px;
+}
+.stock-in-batch-modal .stock-batch-tabs button.active {
+  border-color: #0759eb;
+  background: #0759eb;
+  color: #fff;
+}
+.stock-in-batch-modal .stock-modal-new-batch {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 9px 12px;
+  padding: 12px 14px;
+}
+.stock-in-batch-modal .billing-field {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+}
+.stock-in-batch-modal .billing-field label {
+  margin: 0;
+  color: #10285a;
+  font-size: 11px;
+  font-weight: 700;
+}
+.stock-in-batch-modal .billing-field label span { color: #dc2626; }
+.stock-in-batch-modal .billing-field .billing-control {
+  width: 100%;
+  min-width: 0;
+  height: 30px;
+  min-height: 30px;
+  padding: 0 8px;
+  border: 1px solid #cbd7e7;
+  border-radius: 5px;
+  background: #fff;
+  color: #10285a;
+  font-size: 12px;
+  box-sizing: border-box;
+}
+.stock-in-batch-modal .stock-batch-modal-footer {
+  min-height: 44px;
+  gap: 7px;
+  padding: 7px 14px;
+  border-color: #cbdcf5;
+  background: #e4efff;
+  box-sizing: border-box;
+}
+.stock-in-batch-modal .stock-batch-modal-footer > span {
+  color: #526784;
+  font-size: 11px;
+}
+.stock-in-batch-modal .stock-batch-modal-footer > button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 72px;
+  min-width: 72px;
+  height: 29px;
+  min-height: 29px;
+  padding: 0 8px;
+  border: 1px solid #0759eb;
+  border-radius: 5px;
+  background: #fff;
+  color: #0759eb;
+  font-size: 11px;
+  font-weight: 700;
+}
+.stock-in-batch-modal .stock-batch-modal-footer > .billing-save-button {
+  background: #0759eb;
+  color: #fff;
+}
+@media (max-width: 520px) {
+  .stock-in-batch-modal .stock-modal-new-batch { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .stock-in-batch-modal .stock-batch-modal-footer { flex-wrap: wrap; }
+  .stock-in-batch-modal .stock-batch-modal-footer > span { flex: 1 1 100%; }
+}
+
+/* Existing Stock In batches use the same compact dialog and a selectable grid. */
+.stock-in-existing-batch-modal {
+  width: min(760px, calc(100vw - 32px));
+}
+.stock-in-existing-batch-modal .stock-batch-table-wrap {
+  max-height: min(280px, 45vh);
+  overflow: auto;
+  margin: 12px 14px;
+  border: 1px solid #c9dbf4;
+  border-radius: 6px;
+}
+.stock-in-existing-batch-modal .stock-batch-table {
+  min-width: 630px;
+  color: #142958;
+  font-size: 12px;
+}
+.stock-in-existing-batch-modal .stock-batch-table th,
+.stock-in-existing-batch-modal .stock-batch-table td {
+  height: 31px;
+  padding: 5px 9px;
+  border-color: #dce7f7;
+  box-sizing: border-box;
+  white-space: nowrap;
+}
+.stock-in-existing-batch-modal .stock-batch-table th {
+  background: #d0e2fc;
+  color: #10285a;
+  font-size: 11px;
+  font-weight: 700;
+}
+.stock-in-existing-batch-modal .stock-batch-table tbody tr:hover td,
+.stock-in-existing-batch-modal .stock-batch-table tbody tr:focus-within td {
+  background: #d4e6ff;
+}
+.stock-in-existing-batch-modal .stock-batch-select {
+  color: #10285a;
+  font-weight: 600;
+}
+.stock-in-existing-batch-modal .stock-batch-modal-footer > span {
+  color: #10285a;
+}
+
+/* Keep stock-specific columns compact within the shared Sales list design. */
+@media screen {
+  .stock-adjustment-list-page.sales-invoice-modern .stock-list-search {
+    height: 28px;
+    min-height: 28px;
+  }
+
+  .stock-adjustment-list-page.sales-invoice-modern .stock-list-table {
+    min-width: 1050px;
+  }
+
+  .stock-adjustment-list-page.sales-invoice-modern .stock-list-table :is(th, td) {
+    min-width: 60px;
+  }
+
+  .stock-adjustment-list-page.sales-invoice-modern .stock-list-table .ts-sr-column {
+    width: 48px;
+    min-width: 48px;
+  }
+
+  .stock-adjustment-list-page.sales-invoice-modern .stock-list-table :is(.stock-item-name-column, .stock-narration-column) {
+    min-width: 140px !important;
+  }
+
+  .stock-adjustment-list-page.sales-invoice-modern .stock-list-table :is(th, td).actions-col {
+    width: 95px !important;
+    min-width: 95px !important;
+    max-width: 95px !important;
+  }
+}

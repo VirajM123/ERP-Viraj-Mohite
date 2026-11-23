@@ -30744,53 +30744,32 @@ app.get(
         req.query.loadNo || ""
       ).trim();
 
-      if (
-        !distributorId ||
-        !firmId ||
-        !loadSeries ||
-        !loadNo
-      ) {
-        return res.status(400).json({
-          success: false,
-          message:
-            "Distributor, Firm, Load Series and Load No are required.",
-        });
+      const trnSeries = String(req.query.trnSeries || "").trim().toUpperCase();
+      const fromTrnNo = String(req.query.fromTrnNo || "").trim();
+      const toTrnNo = String(req.query.toTrnNo || "").trim();
+      const byLoad = Boolean(loadSeries && loadNo);
+      if (!distributorId || !firmId || ((loadSeries || loadNo) && !byLoad) ||
+          (!byLoad && (!trnSeries || !fromTrnNo))) {
+        return res.status(400).json({ success: false, message: "Enter Load Series and Load No, or Transaction Series and From Transaction No." });
       }
-
-      /*
-      * Your LoadHeader schema uses:
-      * DistributorId
-      * FirmId
-      * LoadSeries
-      * LoadNo
-      */
-      const load = await LoadHeader.findOne({
-        DistributorId: distributorId,
-        FirmId: firmId,
-        LoadSeries: loadSeries,
-        LoadNo: Number(loadNo),
-        IsCancelled: {
-          $ne: true,
-        },
-      }).lean();
-
-      if (!load) {
-        return res.status(404).json({
-          success: false,
-          message: `Load ${loadSeries}-${loadNo} not found.`,
-        });
+      if ((fromTrnNo && !/^\d+$/.test(fromTrnNo)) || (toTrnNo && !/^\d+$/.test(toTrnNo)) ||
+          (fromTrnNo && toTrnNo && Number(fromTrnNo) > Number(toTrnNo))) {
+        return res.status(400).json({ success: false, message: "Invalid transaction number range." });
       }
-
-      const loadBills = Array.isArray(load.Bills)
-        ? load.Bills
-        : [];
-
-      if (loadBills.length === 0) {
-        return res.status(404).json({
-          success: false,
-          message:
-            "No bills are available in the selected load.",
-        });
+      let load;
+      let loadBills;
+      if (byLoad) {
+        load = await LoadHeader.findOne({ DistributorId: distributorId, FirmId: firmId,
+          LoadSeries: loadSeries, LoadNo: Number(loadNo), IsCancelled: { $ne: true } }).lean();
+        if (!load) return res.status(404).json({ success: false, message: "Load " + loadSeries + "-" + loadNo + " not found." });
+        loadBills = Array.isArray(load.Bills) ? load.Bills : [];
+        if (!loadBills.length) return res.status(404).json({ success: false, message: "No bills are available in the selected load." });
+      } else {
+        const matchingBills = await SalesHeader.find({ distributorId, firmId, isActive: { $ne: false },
+          BillSeries: trnSeries, BillNo: { $gte: Number(fromTrnNo), $lte: Number(toTrnNo || fromTrnNo) } }).select("_id").lean();
+        if (!matchingBills.length) return res.status(404).json({ success: false, message: "No bills found for the selected transaction range." });
+        load = {};
+        loadBills = matchingBills.map(bill => ({ SalesBillId: bill._id }));
       }
 
       const salesBillIds = loadBills

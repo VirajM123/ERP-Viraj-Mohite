@@ -322,3 +322,159 @@
   border-radius: 5px !important;
   padding: 6px 9px !important;
 }
+
+/* Journal entry only: compact billing-style layout. */
+.transaction-page .voucher-journal .journal-billing-card { position: relative; }
+.transaction-page .voucher-journal .voucher-form-header {
+  min-height: 48px;
+  padding: 10px 14px !important;
+  padding-right: 220px !important;
+}
+.transaction-page .voucher-journal .journal-entry-header-section,
+.transaction-page .voucher-journal .journal-grid-section {
+  margin: 0 !important;
+  padding: 7px 12px !important;
+  border: 0 !important;
+}
+.transaction-page .voucher-journal :is(.journal-section-heading, .journal-grid-heading) {
+  min-height: 26px !important;
+  margin: 0 0 7px !important;
+  padding: 3px 8px !important;
+  border: 0 !important;
+  border-radius: 4px !important;
+  background: #dce9fc !important;
+}
+.transaction-page .voucher-journal .journal-header-two-rows { gap: 10px !important; }
+.transaction-page .voucher-journal .journal-add-row-top-btn {
+  min-height: 24px !important;
+  height: 24px !important;
+  padding: 0 9px !important;
+}
+.transaction-page .voucher-journal .journal-grid-scroll {
+  max-height: 340px !important;
+  border-radius: 5px !important;
+}
+.transaction-page .voucher-journal .journal-entry-grid th {
+  height: 29px !important;
+  padding: 4px 8px !important;
+  color: #fff !important;
+  background: #2055e7 !important;
+  border-color: #4675eb !important;
+  font-size: 10px !important;
+}
+.transaction-page .voucher-journal .journal-entry-grid td {
+  height: 34px !important;
+  padding: 3px 7px !important;
+  font-size: 11px !important;
+}
+.transaction-page .voucher-journal .journal-entry-grid tbody::after {
+  content: "";
+  display: table-row;
+  height: 110px;
+}
+.transaction-page .voucher-journal .journal-entry-grid tfoot td { background: #dce9fc !important; }
+.transaction-page .voucher-journal .voucher-journal-bottom {
+  display: flex !important;
+  flex-direction: column-reverse !important;
+  align-items: stretch !important;
+  gap: 7px !important;
+  margin: 0 !important;
+  padding: 0 12px 8px !important;
+  border: 0 !important;
+}
+.transaction-page .voucher-journal .journal-summary-section {
+  display: grid !important;
+  grid-template-columns: minmax(0, 1fr) auto !important;
+  gap: 0 !important;
+  padding: 0 !important;
+  border: 0 !important;
+  background: #fff !important;
+}
+.transaction-page .voucher-journal .journal-summary-heading { display: contents !important; }
+.transaction-page .voucher-journal .journal-summary-heading .journal-heading-left {
+  display: flex !important;
+  grid-column: 1 / -1;
+  min-height: 25px;
+  margin-bottom: 6px;
+  padding: 3px 8px;
+  border-radius: 4px;
+  background: #dce9fc;
+}
+.transaction-page .voucher-journal .journal-summary-heading .journal-heading-left h3 { margin: 0; font-size: 11px; }
+.transaction-page .voucher-journal .journal-balance-status {
+  grid-column: 2;
+  grid-row: 2;
+  align-self: center;
+  margin: 0 14px;
+}
+.transaction-page .voucher-journal .journal-summary-grid {
+  grid-column: 1;
+  grid-row: 2;
+  grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
+}
+.transaction-page .voucher-journal .journal-summary-card {
+  height: 38px !important;
+  min-height: 38px !important;
+  padding: 3px 8px !important;
+  text-align: center;
+  border: 0 !important;
+  border-right: 1px solid #d7e1ee !important;
+  border-radius: 0 !important;
+  background: #fff !important;
+}
+.transaction-page .voucher-journal .journal-summary-card strong { font-size: 13px !important; }
+.transaction-page .voucher-journal .journal-narration-inline input { height: 29px !important; }
+.transaction-page .voucher-journal .voucher-form-footer { margin: 0; padding: 4px 14px 10px; }
+.transaction-page .voucher-journal .voucher-footer-actions {
+  position: absolute;
+  top: 8px;
+  right: 12px;
+}
+.transaction-page .voucher-journal .voucher-footer-actions button {
+  min-height: 30px !important;
+  height: 30px !important;
+  padding: 0 10px !important;
+  font-size: 10px !important;
+}
+@media (max-width: 600px) {
+  .transaction-page .voucher-journal .voucher-form-header { padding-right: 14px !important; }
+  .transaction-page .voucher-journal .voucher-footer-actions { position: static; }
+  .transaction-page .voucher-journal .journal-header-two-rows { grid-template-columns: 1fr !important; }
+  .transaction-page .voucher-journal .journal-summary-section { grid-template-columns: 1fr !important; }
+  .transaction-page .voucher-journal .journal-balance-status { grid-column: 1; grid-row: 3; justify-self: end; margin: 6px; }
+}
+
+/* Compact contra entry, scoped to this voucher only. */
+.transaction-page .voucher-contra .voucher-form-header { display: flex !important; align-items: center !important; justify-content: space-between !important; gap: 12px !important; padding: 8px 14px !important; }
+.transaction-page .voucher-contra .contra-header-actions { display: flex; align-items: center; gap: 8px; margin-left: auto; }
+.transaction-page .voucher-contra .voucher-contra-body { display: block !important; padding: 10px 14px 14px !important; }
+.transaction-page .voucher-contra :is(.contra-entry-section, .contra-summary-section) { padding: 0 !important; border: 0 !important; }
+.transaction-page .voucher-contra .contra-summary-section { margin-top: 16px !important; }
+.transaction-page .voucher-contra :is(.contra-section-heading, .contra-summary-heading) { min-height: 24px !important; margin: 0 !important; padding: 3px 8px !important; background: #dce9fc !important; border-radius: 5px !important; }
+.transaction-page .voucher-contra :is(.contra-header-meta, .contra-type-status) { display: none !important; }
+.transaction-page .voucher-contra .contra-header-grid { grid-template-columns: 1fr 1fr 2fr !important; gap: 10px 14px !important; padding: 8px 10px 10px !important; border: 1px solid #d7e1ee; border-radius: 0 0 5px 5px; }
+.transaction-page .voucher-contra .contra-header-grid > .contra-field:nth-child(n) { grid-column: auto !important; }
+.transaction-page .voucher-contra .contra-header-grid > .contra-narration-field { grid-column: 2 / 4 !important; }
+.transaction-page .voucher-contra .contra-field { gap: 3px !important; }
+.transaction-page .voucher-contra .contra-field > label { font-size: 10px !important; }
+.transaction-page .voucher-contra .contra-field > input, .transaction-page .voucher-contra .contra-narration-field input { height: 30px !important; min-height: 30px !important; }
+.transaction-page .voucher-contra .voucher-type-options { height: 30px; }
+.transaction-page .voucher-contra .voucher-type-option > span { min-height: 28px; padding: 3px 5px; font-size: 10px !important; }
+.transaction-page .voucher-contra .contra-amount-wrap { height: 30px !important; min-height: 30px !important; }
+.transaction-page .voucher-contra .contra-amount-wrap input { height: 28px !important; min-height: 28px !important; text-align: left !important; }
+.transaction-page .voucher-contra .contra-summary-grid { display: grid !important; grid-template-columns: repeat(4, minmax(0, 1fr)) !important; gap: 0 !important; border: 1px solid #d7e1ee; border-radius: 0 0 5px 5px; }
+.transaction-page .voucher-contra .contra-summary-card, .transaction-page .voucher-contra .contra-summary-card.amount { display: flex !important; flex-direction: column !important; align-items: flex-start !important; justify-content: center !important; min-height: 48px !important; margin: 0 !important; padding: 6px 12px !important; gap: 3px !important; border: 0 !important; border-radius: 0 !important; background: #fff !important; }
+.transaction-page .voucher-contra .contra-summary-card + .contra-summary-card { border-left: 1px solid #d7e1ee !important; }
+.transaction-page .voucher-contra .contra-summary-card span { font-size: 9px !important; }
+.transaction-page .voucher-contra .contra-summary-card strong, .transaction-page .voucher-contra .contra-summary-card.amount strong { color: #172554 !important; font-size: 12px !important; text-align: left !important; }
+@media (max-width: 800px) {
+  .transaction-page .voucher-contra .contra-header-grid { grid-template-columns: repeat(2, minmax(0, 1fr)) !important; }
+  .transaction-page .voucher-contra .contra-header-grid > .contra-field:nth-child(3), .transaction-page .voucher-contra .contra-header-grid > .contra-narration-field { grid-column: 1 / -1 !important; }
+  .transaction-page .voucher-contra .contra-summary-grid { grid-template-columns: repeat(2, minmax(0, 1fr)) !important; }
+}
+@media (max-width: 480px) {
+  .transaction-page .voucher-contra .voucher-form-header { flex-wrap: wrap; }
+  .transaction-page .voucher-contra .contra-header-grid { grid-template-columns: minmax(0, 1fr) !important; }
+  .transaction-page .voucher-contra .voucher-type-options { height: auto; flex-direction: row; }
+  .transaction-page .voucher-contra .voucher-type-option > span { height: 100%; }
+}

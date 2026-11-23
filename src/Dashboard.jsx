@@ -1,10 +1,11 @@
-// Dashboard.jsx
+﻿// Dashboard.jsx
 import React, { lazy, Suspense, useState, useRef, useEffect, useCallback } from 'react';
 import { createPortal } from "react-dom";
 import './Dashboard.css';
 import './DashboardMockup.css';
 import './DashboardHorizontalNav.css';
 import './SalesInvoiceListModern.css';
+import './CompactTransactionLists.css';
 import landscapeLogo from "./assets/images/total-solution-landscape.svg";
 import DashboardHome from "./DashboardHome";
 import "./GeneralSetup1.css";
@@ -1211,7 +1212,7 @@ const debitNotePermission = usePermission("VOUCHERS", "DEBIT_NOTE");
         true
       );
     };
-  /* 2. REPORT STATES â€” add inside Dashboard component */
+  /* 2. REPORT STATES — add inside Dashboard component */
 
 
 
@@ -4905,11 +4906,11 @@ const debitNotePermission = usePermission("VOUCHERS", "DEBIT_NOTE");
 
   /*
   * Full A4 portrait printable area.
-  * 210mm Ã— 297mm paper minus print margins.
+  * 210mm × 297mm paper minus print margins.
   */
   /*
   * A4 Portrait:
-  * Paper size 210mm Ã— 297mm.
+  * Paper size 210mm × 297mm.
   */
   .invoice-a4 {
     width: 196mm;
@@ -4920,7 +4921,7 @@ const debitNotePermission = usePermission("VOUCHERS", "DEBIT_NOTE");
 
   /*
   * A5 Landscape:
-  * Paper size 210mm Ã— 148mm.
+  * Paper size 210mm × 148mm.
   * The same report design is fitted to the complete A5 landscape page.
   */
   .invoice-a5 {
@@ -6743,7 +6744,7 @@ const debitNotePermission = usePermission("VOUCHERS", "DEBIT_NOTE");
 
     /*
     * Account Master opened normally from:
-    * Master â†’ Account
+    * Master → Account
     */
     setEditAccountId(null);
     setAccountActiveTab("basic");
@@ -8191,6 +8192,7 @@ const debitNotePermission = usePermission("VOUCHERS", "DEBIT_NOTE");
 
   const [showPrintPreview, setShowPrintPreview] =
     useState(false);
+  const [printLoadDirectPrint, setPrintLoadDirectPrint] = useState(false);
 
   const [
     showPrintLoadColumnModal,
@@ -13158,7 +13160,7 @@ const debitNotePermission = usePermission("VOUCHERS", "DEBIT_NOTE");
       ["categories", screen === "Product", loadCategories],
       ["products", transactionForm, loadProducts],
       ["accounts", accountPermission.view && (transactionForm || openFormFor === "Account" || screen === "Area To Party"), loadAccounts],
-      ["otherAccounts", screen === "Other Account", loadOtherAccounts],
+      ["otherAccounts", ["Other Account", "Company Master", "Purchase", "Receipt"].includes(screen), loadOtherAccounts],
       ["gst", screen === "GST Master", loadGst],
       ["salesmen", transactionForm || screen === "Salesman" || screen === "Salesman To Area", loadSalesmen],
       ["areas", ["Area", "Account", "Salesman To Area", "Area To Party"].includes(screen), loadAreas],
@@ -15083,20 +15085,7 @@ const debitNotePermission = usePermission("VOUCHERS", "DEBIT_NOTE");
 
   const handleBillPrintDirectPrint = (event) => {
     if (event) event.preventDefault();
-
-    setBillPrintAction("print");
-
-    if (!billPrintData) {
-      generateBillPrint(event);
-
-      window.setTimeout(() => {
-        handlePrintBill();
-      }, 250);
-
-      return;
-    }
-
-    handlePrintBill();
+    handleBillPrint();
   };
 
   const handleResetBillPrint = () => {
@@ -16209,11 +16198,8 @@ const debitNotePermission = usePermission("VOUCHERS", "DEBIT_NOTE");
       return null;
     }
 
-    if (!loadSeries || !loadNo) {
-      setBillPrintError(
-        "Please enter Load Series and Load No."
-      );
-
+    if ((loadSeries || loadNo) ? (!loadSeries || !loadNo) : (!trnSeries || !fromTrnNo)) {
+      setBillPrintError("Enter Load Series and Load No, or Transaction Series and From Transaction No.");
       return null;
     }
 
@@ -27770,6 +27756,21 @@ ALLOW CHANGE STAR AMOUNT — FINAL SAVE PROTECTION
   }, [activeSubMenu]);
 
 
+  const pendingPurchaseDefaultSupplier = useRef(null);
+
+  useEffect(() => {
+    const pending = pendingPurchaseDefaultSupplier.current;
+    if (!pending) return;
+    const supplier = findPurchaseSupplier(otherAccounts, pending.supplierId);
+    if (!supplier || supplier.accountGroup !== "SUNDRY CREDITORS") return;
+    pendingPurchaseDefaultSupplier.current = null;
+    setPurchaseFormData(previous =>
+      previous.company === pending.company && previous.supplier === pending.previousSupplier
+        ? { ...previous, supplier: purchaseSupplierValue(supplier) }
+        : previous
+    );
+  }, [otherAccounts]);
+
   const handlePurchaseInputChange = (e) => {
     const { name, value } = e.target;
     const cleanValue = regexInputValue(name, value);
@@ -27791,6 +27792,9 @@ ALLOW CHANGE STAR AMOUNT — FINAL SAVE PROTECTION
     if (name === "company") {
       const selectedCompany = companies.find(c => String(c.companyCode || c.code || c.id || c._id) === cleanValue);
       const defaultSupplier = findPurchaseSupplier(otherAccounts, selectedCompany?.defaultSupplierId);
+      pendingPurchaseDefaultSupplier.current = selectedCompany?.defaultSupplierId && !defaultSupplier
+        ? { company: cleanValue, supplierId: selectedCompany.defaultSupplierId, previousSupplier: purchaseFormData.supplier }
+        : null;
       const purchaseSeries = getConfiguredCompanySeries(
         cleanValue,
         "purchase"
@@ -27813,6 +27817,8 @@ ALLOW CHANGE STAR AMOUNT — FINAL SAVE PROTECTION
       }
       return;
     }
+
+    if (name === "supplier") pendingPurchaseDefaultSupplier.current = null;
 
     if (name === "isIgst") {
       const isIgstPurchase = cleanValue === "Y" || cleanValue === "Yes";
@@ -28756,7 +28762,7 @@ ALLOW CHANGE STAR AMOUNT — FINAL SAVE PROTECTION
         return;
       }
 
-      alert(result.message || (isEditMode ? "Purchase updated successfully" : "Purchase saved successfully"));
+      showSuccessNotice(isEditMode ? "Purchase updated successfully!" : "Purchase saved successfully!");
       /*
   * A new Purchase is sorted at the top,
   * so return to page 1 before reloading.
@@ -28783,7 +28789,6 @@ ALLOW CHANGE STAR AMOUNT — FINAL SAVE PROTECTION
 
       setPurchaseItems([]);
        setEditingPurchaseId(null);
-      setTimeout(() => addPurchaseItem(), 100);
 
       setPurchaseFormData((prev) => ({
         ...prev,
@@ -28806,7 +28811,8 @@ ALLOW CHANGE STAR AMOUNT — FINAL SAVE PROTECTION
         netAmt: 0,
       }));
 
-      closeForm();
+      handlePlusClick("Purchase");
+      setPurchaseFormData((previous) => ({ ...previous, vouNo: result.nextVouNo || "" }));
     } catch (error) {
       console.error(error);
       alert("Server not connected. Purchase not saved.");
@@ -36773,7 +36779,7 @@ ALLOW CHANGE STAR AMOUNT — FINAL SAVE PROTECTION
       if (
         creditNoteReturnToBilling
       ) {
-        alert(
+        showSuccessNotice(
           isEditing
             ? "Credit Note updated successfully!"
             : "Credit Note saved successfully!"
@@ -36840,11 +36846,12 @@ ALLOW CHANGE STAR AMOUNT — FINAL SAVE PROTECTION
 
       setShowDashboard(false);
 
-      alert(
+      showSuccessNotice(
         isEditing
           ? "Credit Note updated successfully!"
           : "Credit Note saved successfully!"
       );
+      handlePlusClick("Credit Note");
 
       /*
       * Do not call closeForm() here.
@@ -38706,7 +38713,7 @@ ALLOW CHANGE STAR AMOUNT — FINAL SAVE PROTECTION
         );
       }
 
-      alert(
+      showSuccessNotice(
         isEditing
           ? "Debit Note updated successfully."
           : "Debit Note saved successfully."
@@ -38859,6 +38866,7 @@ ALLOW CHANGE STAR AMOUNT — FINAL SAVE PROTECTION
       setActiveMenu("vouchers");
       setActiveSubMenu("Debit Note");
       setShowDashboard(false);
+      handlePlusClick("Debit Note");
 
       return;
     } catch (error) {
@@ -41083,6 +41091,7 @@ ALLOW CHANGE STAR AMOUNT — FINAL SAVE PROTECTION
       if (openPreview) {
         setShowPrintPreview(true);
       }
+      return true;
     } catch (error) {
       console.error("Print Load error:", error);
 
@@ -41099,6 +41108,7 @@ ALLOW CHANGE STAR AMOUNT — FINAL SAVE PROTECTION
       setPrintLoadData(null);
       setPrintLoadItems([]);
       setShowPrintPreview(false);
+      return false;
     } finally {
       setPrintLoadLoading(false);
     }
@@ -41229,7 +41239,9 @@ ALLOW CHANGE STAR AMOUNT — FINAL SAVE PROTECTION
 
   const handlePrintLoadSubmit = async (e) => {
     e.preventDefault();
-    await loadPrintLoadData(printLoadFormData, true);
+    if (await loadPrintLoadData(printLoadFormData, false)) {
+      setPrintLoadDirectPrint(true);
+    }
   };
 
   const generatePrintLayout = () => {
@@ -41921,31 +41933,42 @@ ALLOW CHANGE STAR AMOUNT — FINAL SAVE PROTECTION
     const printContent = document.getElementById("print-load-content");
     if (!printContent) return;
 
-    const printWindow = window.open("", "_blank", "width=1100,height=700");
+    const printFrame = document.createElement("iframe");
+    printFrame.style.cssText = "position:fixed;left:-10000px;top:0;width:1px;height:1px;border:0";
+    document.body.appendChild(printFrame);
+    const printWindow = printFrame.contentWindow;
 
     printWindow.document.write(`
         <html>
           <head>
             <title>Print Load</title>
             <style>
-              body {
-                margin: 0;
-                padding: 20px;
-                background: #e2e8f0;
-                font-family: 'Courier New', Arial, sans-serif;
-              }
+              @page { size: A4 landscape; margin: 6mm; }
+              * { box-sizing: border-box; }
+              body { margin: 0; color: #000; font: 8px Arial, sans-serif; }
+              .print-load-document-page { width: 100%; break-after: page; }
+              .print-load-document-page:last-child { break-after: auto; }
+              .print-load-document-header h1 { font-size: 12px; margin: 0 0 4px; }
+              .print-load-document-details { line-height: 1.25; margin-bottom: 5px; }
+              .print-load-header-gap { margin-left: 8px; }
+              .print-load-document-table-wrap { width: 100%; }
               table {
                 width: 100%;
+                table-layout: fixed;
                 border-collapse: collapse;
               }
               th, td {
-                border: 1px solid #d1d5db;
-                padding: 5px;
+                border: 1px solid #555;
+                padding: 2px 1px;
+                font-size: 7px;
+                line-height: 1.1;
+                overflow-wrap: anywhere;
+                word-break: break-word;
+                vertical-align: top;
               }
-              th {
-                background: #1e3a8a !important;
-                color: white !important;
-              }
+              th { background: #eee; color: #000; text-align: left; }
+              .number-cell, .print-load-document-total-label { text-align: right; }
+              tr { break-inside: avoid; }
               @media print {
                 body {
                   background: white;
@@ -41964,10 +41987,14 @@ ALLOW CHANGE STAR AMOUNT — FINAL SAVE PROTECTION
     printWindow.document.close();
     printWindow.focus();
 
-    setTimeout(() => {
-      printWindow.print();
-    }, 300);
+    printWindow.onafterprint = () => printFrame.remove();
+    setTimeout(() => printWindow.print(), 100);
   };
+  useEffect(() => {
+    if (!printLoadDirectPrint) return;
+    handlePrint();
+    setPrintLoadDirectPrint(false);
+  }, [printLoadDirectPrint]);
   const handleExportToExcel = async () => {
     /*
     * Print Load API already returns the final rows
@@ -43102,7 +43129,7 @@ if (item === "Import Data") {
 
       return;
     }
-    // âœ… ADD THIS: When Account submenu is clicked, load areas
+    // ✅ ADD THIS: When Account submenu is clicked, load areas
     if (item === "Account") {
       loadAreasForAccount();
     }
@@ -43599,7 +43626,7 @@ else if (item === 'Import Data From Desktop') {
       setShowDashboard(false);
       setShowSettleLoadList(false);
       setShowCreateLoadList(false);
-      setShowSettleLoad(true); // âœ… IMPORTANT FIX
+      setShowSettleLoad(true); // ✅ IMPORTANT FIX
 
       setSettleLoadData(null);
       setSettleLoadFormData({
@@ -44723,7 +44750,7 @@ else if (item === 'Import Data From Desktop') {
           : "GST saved successfully!"
       );
 
-      // âœ… RESET FORM FIELDS
+      // ✅ RESET FORM FIELDS
       setEditGstId(null);
       setGstForm({
         code: "",
@@ -44732,7 +44759,7 @@ else if (item === 'Import Data From Desktop') {
         salesType: "VAT ON SALES PRICE",
       });
 
-      // âœ… CLOSE FORM
+      // ✅ CLOSE FORM
       closeForm();
     } catch (error) {
       console.error(error);
@@ -45540,11 +45567,11 @@ else if (item === 'Import Data From Desktop') {
         search: companyBackendSearch,
       });
 
-      // âœ… RESET FORM FIELDS
+      // ✅ RESET FORM FIELDS
       setEditCompanyId(null);
       setCompanyForm({ code: "", name: "", address: "", branchAddress: "", defaultSupplierId: "" });
 
-      // âœ… CLOSE FORM AND SHOW GRID VIEW
+      // ✅ CLOSE FORM AND SHOW GRID VIEW
       closeForm();
 
       alert(
@@ -45643,7 +45670,7 @@ else if (item === 'Import Data From Desktop') {
       openReadOnlyForm(() => editAccount(account));
       return;
     }
-    // ðŸ”¥ FIX: Properly normalize blackListed for display
+    // 🔥 FIX: Properly normalize blackListed for display
     const blackListedDisplay = String(account.blackListed || "NO").trim().toUpperCase() === "YES" ? "YES" : "NO";
 
     setViewData({
@@ -45654,7 +45681,7 @@ else if (item === 'Import Data From Desktop') {
       gstType: account.gstType || "-",
       invType: account.invType || "-",
       openingBal: account.openingBal || "0",
-      // ðŸ”¥ FIX: Display credit fields
+      // 🔥 FIX: Display credit fields
       creditDays: account.creditDays || "0",
       creditBills: account.creditBills || "0",
       lockDays: account.lockDays || "0",
@@ -45828,8 +45855,8 @@ else if (item === 'Import Data From Desktop') {
 
     setEditAccountId(id);
 
-    // ðŸ”¥ FIX: Debug - Log the account data being loaded
-    console.log("ðŸ“¥ EDIT ACCOUNT - Raw data:", {
+    // 🔥 FIX: Debug - Log the account data being loaded
+    console.log("📥 EDIT ACCOUNT - Raw data:", {
       creditDays: account.creditDays,
       creditBills: account.creditBills,
       lockDays: account.lockDays,
@@ -45852,11 +45879,11 @@ else if (item === 'Import Data From Desktop') {
       }
     }
 
-    // ðŸ”¥ FIX: Properly normalize blackListed value - THIS IS THE CRITICAL FIX
+    // 🔥 FIX: Properly normalize blackListed value - THIS IS THE CRITICAL FIX
     const blackListedValue = String(account.blackListed || "NO").trim().toUpperCase();
     const normalizedBlackListed = blackListedValue === "YES" || blackListedValue === "Y" || blackListedValue === "TRUE" || blackListedValue === "1" ? "YES" : "NO";
 
-    console.log("ðŸ“¥ EDIT ACCOUNT - Normalized blackListed:", normalizedBlackListed);
+    console.log("📥 EDIT ACCOUNT - Normalized blackListed:", normalizedBlackListed);
 
     setAccountForm({
       accountCode: account.accountCode || "",
@@ -45889,17 +45916,17 @@ else if (item === 'Import Data From Desktop') {
       allowInPurchase: account.allowInPurchase || "N",
       drugLicNo: account.drugLicNo || "",
       drugExpDate: account.drugExpDate || "",
-      // ðŸ”¥ FIX: Load credit fields properly
+      // 🔥 FIX: Load credit fields properly
       creditDays: account.creditDays !== undefined && account.creditDays !== null ? String(account.creditDays) : "0",
       creditBills: account.creditBills !== undefined && account.creditBills !== null ? String(account.creditBills) : "0",
       lockDays: account.lockDays !== undefined && account.lockDays !== null ? String(account.lockDays) : "0",
       creditAmt: account.creditAmt !== undefined && account.creditAmt !== null ? String(account.creditAmt) : "0.00",
-      // ðŸ”¥ CRITICAL FIX: Set blackListed to the normalized value
+      // 🔥 CRITICAL FIX: Set blackListed to the normalized value
       blackListed: normalizedBlackListed,
       openingTransactions: account.openingTransactions || [],
     });
 
-    console.log("ðŸ“¥ EDIT ACCOUNT - Form state after set:", {
+    console.log("📥 EDIT ACCOUNT - Form state after set:", {
       blackListed: normalizedBlackListed,
       creditDays: account.creditDays !== undefined && account.creditDays !== null ? String(account.creditDays) : "0",
     });
@@ -46662,37 +46689,37 @@ else if (item === 'Import Data From Desktop') {
   const saveProduct = async (e) => {
     e.preventDefault();
 
-    // âœ… CHECK: Product Code
+    // ✅ CHECK: Product Code
     if (!productForm.code || productForm.code.trim() === "") {
       alert("Product Code is required");
       return;
     }
 
-    // âœ… CHECK: Product Name
+    // ✅ CHECK: Product Name
     if (!productForm.name || productForm.name.trim() === "") {
       alert("Product Name is required");
       return;
     }
 
-    // âœ… CHECK: Company
+    // ✅ CHECK: Company
     if (!productForm.companyId) {
       alert("Please select a Company");
       return;
     }
 
-    // âœ… CHECK: Group
+    // ✅ CHECK: Group
     if (!productForm.group) {
       alert("Please select a Group");
       return;
     }
 
-    // âœ… CHECK: Category
+    // ✅ CHECK: Category
     if (!productForm.category) {
       alert("Please select a Category");
       return;
     }
 
-    // âœ… CHECK: GST
+    // ✅ CHECK: GST
     if (productForm.gst === "" || productForm.gst === null || productForm.gst === undefined) {
       alert("Please select GST %");
       return;
@@ -46839,7 +46866,7 @@ else if (item === 'Import Data From Desktop') {
   const handleAccountInput = (e) => {
     const { name, value } = e.target;
 
-    // ðŸ”¥ FIX: Handle blackListed separately with normalization
+    // 🔥 FIX: Handle blackListed separately with normalization
     if (name === "blackListed") {
       setAccountForm((prev) => ({
         ...prev,
@@ -46848,7 +46875,7 @@ else if (item === 'Import Data From Desktop') {
       return;
     }
 
-    // ðŸ”¥ FIX: For credit fields, allow proper input
+    // 🔥 FIX: For credit fields, allow proper input
     const creditFields = ['creditDays', 'creditBills', 'lockDays', 'creditAmt'];
 
     if (creditFields.includes(name)) {
@@ -46882,7 +46909,7 @@ else if (item === 'Import Data From Desktop') {
       return;
     }
 
-    // ðŸ”¥ FIX: Handle GST No field - Auto-format and validate
+    // 🔥 FIX: Handle GST No field - Auto-format and validate
     if (name === 'gstNo') {
       // Remove all spaces and special characters, keep only alphanumeric
       let gstValue = cleanValue.replace(/[^A-Za-z0-9]/g, '').toUpperCase();
@@ -46924,7 +46951,7 @@ else if (item === 'Import Data From Desktop') {
       return;
     }
 
-    // ðŸ”¥ FIX: Handle PAN No field - Auto-format
+    // 🔥 FIX: Handle PAN No field - Auto-format
     if (name === 'panNo') {
       // Remove spaces and special characters, keep only alphanumeric
       let panValue = cleanValue.replace(/[^A-Za-z0-9]/g, '').toUpperCase();
@@ -47224,8 +47251,8 @@ else if (item === 'Import Data From Desktop') {
       return alert("Distributor/Firm not found. Please login again.");
     }
 
-    // ðŸ”¥ FIX: Debug logging for save
-    console.log("ðŸ“¤ Saving account with values:", {
+    // 🔥 FIX: Debug logging for save
+    console.log("📤 Saving account with values:", {
       creditDays: accountForm.creditDays,
       creditBills: accountForm.creditBills,
       lockDays: accountForm.lockDays,
@@ -47245,8 +47272,8 @@ else if (item === 'Import Data From Desktop') {
         : `${API_URL}/accounts`;
       const method = editAccountId ? "PUT" : "POST";
 
-      // ðŸ”¥ FIX: Ensure numeric fields are sent as numbers, not strings
-      // ðŸ”¥ FIX: Ensure blackListed is properly normalized to "YES" or "NO"
+      // 🔥 FIX: Ensure numeric fields are sent as numbers, not strings
+      // 🔥 FIX: Ensure blackListed is properly normalized to "YES" or "NO"
       const payload = {
         ...accountForm,
         gstType: finalGstType,
@@ -47254,16 +47281,16 @@ else if (item === 'Import Data From Desktop') {
         distributorId,
         firmId,
         firmName,
-        // ðŸ”¥ FIX: Convert to numbers and handle empty strings
+        // 🔥 FIX: Convert to numbers and handle empty strings
         creditDays: Number(accountForm.creditDays || 0),
         creditBills: Number(accountForm.creditBills || 0),
         lockDays: Number(accountForm.lockDays || 0),
         creditAmt: Number(accountForm.creditAmt || 0),
-        // ðŸ”¥ FIX: Normalize blackListed
+        // 🔥 FIX: Normalize blackListed
         blackListed: normalizeYesNo(accountForm.blackListed),
       };
 
-      console.log("ðŸ“¤ Final payload:", {
+      console.log("📤 Final payload:", {
         blackListed: payload.blackListed,
         creditDays: payload.creditDays,
         creditBills: payload.creditBills,
@@ -47917,7 +47944,7 @@ else if (item === 'Import Data From Desktop') {
           : "Other account created successfully!"
       );
 
-      // âœ… RESET FORM FIELDS
+      // ✅ RESET FORM FIELDS
       setEditOtherAccountId(null);
       setOtherAccountActiveTab("basic");
       setOtherAccountForm({
@@ -47953,7 +47980,7 @@ else if (item === 'Import Data From Desktop') {
         gstClsDate: "",
       });
 
-      // âœ… CLOSE FORM AND SHOW GRID VIEW
+      // ✅ CLOSE FORM AND SHOW GRID VIEW
       setOpenFormFor(null);
       closeForm();
     } catch (error) {
@@ -48031,7 +48058,7 @@ else if (item === 'Import Data From Desktop') {
       });
       alert(editGroupId ? "Group updated successfully!" : "Group created successfully!");
 
-      // âœ… RESET FORM AND CLOSE
+      // ✅ RESET FORM AND CLOSE
       setGroupForm({ code: "", name: "" });
       setEditGroupId(null);
       closeForm();
@@ -48902,6 +48929,7 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
               ================================================= */}
 
         <section className="ltf-card ltf-criteria-card">
+          <h2 className="ltf-criteria-heading">Transfer Details</h2>
           <div className="ltf-mode-field">
             <label>
               Load Transfer By
@@ -53884,7 +53912,7 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
 
       return (
         <div
-          className={`erp-transaction-list-page ts-sales-list-page ${title === "Sales" ? "sales-invoice-modern" : ""} ${isCreditNoteList
+          className={`erp-transaction-list-page ts-sales-list-page ${title === "Sales" || isQuotationList || isPurchaseList || isCreditNoteList || isDebitNoteList ? "sales-invoice-modern" : ""} ${isCreditNoteList
             ? "is-credit-note"
             : isPurchaseList
               ? "is-purchase"
@@ -53895,6 +53923,7 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
         >
           <div className="ts-sales-page-header">
             <div>
+              {(title === "Sales" || isQuotationList || isPurchaseList || isCreditNoteList || isDebitNoteList) && <span className="sales-invoice-heading-icon" aria-hidden="true"><FileText size={18} /></span>}
               <h1>{pageTitle}</h1>
               <p>{pageSubtitle}</p>
             </div>
@@ -57481,12 +57510,12 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
     ];
 
     return (
-      <div className="erp-transaction-list-page ts-load-list-page">
+      <div className="erp-transaction-list-page sales-invoice-modern ts-load-list-page">
         {/* =====================================================
               PAGE HEADER
               ===================================================== */}
         <div className="ts-load-page-header">
-          <div className="ts-load-page-title">
+          <div className="ts-load-page-title"><span className="sales-invoice-heading-icon" aria-hidden="true"><FileText size={18} /></span>
             <h2>Create Load List</h2>
 
             <p>
@@ -57799,9 +57828,9 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
         {/* =====================================================
               DATA GRID
               ===================================================== */}
-        <div className="ts-load-grid-card">
-          <div className="ts-load-table-scroll">
-            <table className="ts-load-table">
+        <div className="ts-load-grid-card ts-grid-card">
+          <div className="ts-load-table-scroll ts-grid-scroll">
+            <table className="ts-load-table ts-sales-grid">
               <thead>
                 <tr>
                   <th className="ts-load-sr-column">
@@ -57947,7 +57976,7 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                         </td>
 
                         <td className="ts-load-actions-column">
-                          <div className="ts-load-action-buttons">
+                          <div className="ts-load-action-buttons ts-row-actions">
                             <button
                               type="button"
                               className="view"
@@ -58040,7 +58069,7 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
           {/* ===================================================
                 GRID FOOTER
                 =================================================== */}
-          <div className="ts-load-grid-footer">
+          <div className="ts-load-grid-footer ts-grid-footer">
             <div className="ts-load-entry-info">
               Showing{" "}
               <strong>
@@ -59844,14 +59873,14 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
 
       alert(`✅ ${type} permanently deleted from database!`);
 
-      // âœ… CRITICAL FIX: Reset ALL print/preview states FIRST
+      // ✅ CRITICAL FIX: Reset ALL print/preview states FIRST
       setShowBillPrintPreview(false);
       setBillPrintData(null);
       setShowPrintPreview(false);
       setOpenFormFor(null);
       setEditingInvoiceId(null);
 
-      // âœ… FIXED: Only show the appropriate list view
+      // ✅ FIXED: Only show the appropriate list view
       if (
         type === "Sales" ||
         type === "Billing"
@@ -62683,9 +62712,9 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                 };
 
                 return (
-                  <div className="erp-transaction-list-page premium-list-page settle-list-page">
+                  <div className="erp-transaction-list-page sales-invoice-modern premium-list-page settle-list-page">
                     <div className="premium-list-heading-row">
-                      <div>
+                      <div className="settle-list-title"><span className="sales-invoice-heading-icon" aria-hidden="true"><FileText size={18} /></span>
                         <h2>Settle Load List</h2>
                         <p>
                           Review, edit and manage settled delivery
@@ -62839,8 +62868,8 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                         </div>
                       </div>
 
-                      <div className="premium-list-grid-scroll">
-                        <table className="premium-list-grid settle-list-grid">
+                      <div className="premium-list-grid-scroll ts-grid-scroll">
+                        <table className="premium-list-grid settle-list-grid ts-sales-grid">
                           <thead>
                             <tr>
                               <th>Sr No</th>
@@ -62966,7 +62995,7 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                                     </td>
 
                                     <td className="premium-list-actions-column">
-                                      <div className="premium-list-actions">
+                                      <div className="premium-list-actions ts-row-actions">
                                         <button
                                           type="button"
                                           className="premium-list-icon-button view"
@@ -63018,7 +63047,7 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                         </table>
                       </div>
 
-                      <div className="premium-list-footer">
+                      <div className="premium-list-footer ts-grid-footer">
                         <div>
                           Showing{" "}
                           <strong>
@@ -63266,7 +63295,7 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
 
                 <div className="settle-premium-card">
                   {/* =====================================================
-              LOAD INFORMATION â€” SINGLE ROW
+              LOAD INFORMATION — SINGLE ROW
               ===================================================== */}
                   <div className="settle-premium-header-fields">
                     <div className="settle-premium-field settle-field-series">
@@ -63374,7 +63403,7 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
               BILLS TABLE
               ===================================================== */}
                   {/* =====================================================
-        BILLS TABLE â€” EXACT COLUMNS AS DESIGN
+        BILLS TABLE — EXACT COLUMNS AS DESIGN
         ===================================================== */}
                   <div className="settle-premium-grid-shell">
                     <table className="settle-premium-table">
@@ -64273,11 +64302,11 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                           <input
                             type="text"
                             name="TrnSeries"
-                            placeholder="Auto loaded"
+                            placeholder="Enter or auto load"
                             value={
                               billPrintFormData.TrnSeries || ""
                             }
-                            readOnly
+                            onChange={handleBillPrintInputChange}
                           />
                         </div>
 
@@ -64289,11 +64318,11 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                           <input
                             type="text"
                             name="FromTrnNo"
-                            placeholder="Auto loaded"
+                            placeholder="Enter or auto load"
                             value={
                               billPrintFormData.FromTrnNo || ""
                             }
-                            readOnly
+                            onChange={handleBillPrintInputChange}
                           />
                         </div>
 
@@ -64305,14 +64334,20 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                           <input
                             type="text"
                             name="ToTrnNo"
-                            placeholder="Auto loaded"
+                            placeholder="Enter or auto load"
                             value={
                               billPrintFormData.ToTrnNo || ""
                             }
-                            readOnly
+                            onChange={handleBillPrintInputChange}
                           />
                         </div>
 
+                      </div>
+                    </section>
+                    <div className="bill-print-option-groups">
+                      <section className="bill-print-form-card bill-print-option-group">
+                        <div className="bill-print-section-title"><span><Printer size={16} /></span><h3>Print Settings</h3></div>
+                        <div className="bill-print-group-fields">
                         {/* 6. NO OF COPIES */}
 
                         <div className="bill-print-field">
@@ -64330,6 +64365,11 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                           />
                         </div>
 
+                        </div>
+                      </section>
+                      <section className="bill-print-form-card bill-print-option-group">
+                        <div className="bill-print-section-title"><span><RotateCcw size={16} /></span><h3>Return Options</h3></div>
+                        <div className="bill-print-group-fields">
                         {/* 7. GOODS RETURN */}
 
                         <div className="bill-print-field">
@@ -64364,6 +64404,11 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                           </select>
                         </div>
 
+                        </div>
+                      </section>
+                      <section className="bill-print-form-card bill-print-option-group">
+                        <div className="bill-print-section-title"><span><FileText size={16} /></span><h3>Summary Options</h3></div>
+                        <div className="bill-print-group-fields">
                         {/* 9. SCHEME SUMMARY */}
 
                         <div className="bill-print-field">
@@ -64417,6 +64462,9 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                         </div>
                       </div>
 
+                      </section>
+                    </div>
+                    <div className="bill-print-messages">
                       {/* =================================================
                   LOADING MESSAGE
                 ================================================= */}
@@ -64439,7 +64487,7 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                           <span>{billPrintError}</span>
                         </div>
                       )}
-                    </section>
+                    </div>
 
                     {/* =====================================================
                 ACTION FOOTER
@@ -64489,8 +64537,7 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                         className="bill-print-footer-button pdf"
                         disabled={
                           billPrintLoading ||
-                          !billPrintFormData.LoadSeries ||
-                          !billPrintFormData.loadNo
+                          !((billPrintFormData.LoadSeries && billPrintFormData.loadNo) || (!billPrintFormData.LoadSeries && !billPrintFormData.loadNo && billPrintFormData.TrnSeries && billPrintFormData.FromTrnNo))
                         }
                         onClick={handleBillPrintPdf}
                       >
@@ -64503,8 +64550,7 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                         className="bill-print-footer-button print"
                         disabled={
                           billPrintLoading ||
-                          !billPrintFormData.LoadSeries ||
-                          !billPrintFormData.loadNo
+                          !((billPrintFormData.LoadSeries && billPrintFormData.loadNo) || (!billPrintFormData.LoadSeries && !billPrintFormData.loadNo && billPrintFormData.TrnSeries && billPrintFormData.FromTrnNo))
                         }
                         onClick={handleBillPrintDirectPrint}
                       >
@@ -64641,7 +64687,7 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
 
             {activeSubMenu === "Quotation" &&
               openFormFor === "Quotation" && (
-                <div className="sales-billing-page">
+                <div className="sales-billing-page quotation-entry-page">
                   <div className="sales-billing-card">
                     {/* =====================================================
                 PAGE HEADER
@@ -65205,7 +65251,7 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                             className="billing-toolbar-button"
                             onClick={handleAddInvoiceRow}
                           >
-                            <span>＋</span>
+                            <span>ï¼‹</span>
                             Add Product
                           </button>
 
@@ -66257,7 +66303,7 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                               className="billing-grid-small-button"
                               onClick={handleAddInvoiceRow}
                             >
-                              ＋ Add Row
+                              ï¼‹ Add Row
                             </button>
 
                             <button
@@ -66848,47 +66894,45 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                         </div>
                       </div>
 
-                      <div className="premium-load-page-actions">
-                        <button
-                          type="button"
-                          className="premium-load-header-button"
-                        >
-                          <FileText size={15} />
-                          Load Templates
-                        </button>
+                    <div className="premium-load-bottom-actions">
+                      <button
+                        type="button"
+                        className="premium-load-header-button"
+                        onClick={() => {
+                          setCreateLoadItems([]);
+                          setSelectedCreateLoadAreas([]);
+                          setCreateLoadBillSearch("");
+                          setCreateLoadRemarks("");
+                          setShowCreateLoadSalesmanBox(false);
+                          setShowCreateLoadAreaBox(false);
+                        }}
+                      >
+                        <RotateCcw size={15} />
+                        Clear All
+                      </button>
+                      <button
+                        type="button"
+                        className="premium-load-cancel-button"
+                        onClick={closeForm}
+                      >
+                        Cancel
+                      </button>
 
-                        <button
-                          type="button"
-                          className="premium-load-header-button"
-                        >
-                          <Save size={15} />
-                          Save as Draft
-                        </button>
+                      <button
+                        type="submit"
+                        className="premium-load-create-button"
+                      >
+                        {editingCreateLoadId ? (
+                          <Save size={16} />
+                        ) : (
+                          <Truck size={16} />
+                        )}
 
-                        <button
-                          type="button"
-                          className="premium-load-header-button"
-                          onClick={() => {
-                            setCreateLoadItems([]);
-                            setSelectedCreateLoadAreas([]);
-                            setCreateLoadBillSearch("");
-                            setCreateLoadRemarks("");
-                            setShowCreateLoadSalesmanBox(false);
-                            setShowCreateLoadAreaBox(false);
-                          }}
-                        >
-                          <RotateCcw size={15} />
-                          Clear All
-                        </button>
-
-                        <button
-                          type="button"
-                          className="premium-load-header-button primary"
-                        >
-                          <Eye size={15} />
-                          Preview Load
-                        </button>
-                      </div>
+                        {editingCreateLoadId
+                          ? "Edit Load"
+                          : "Create Load"}
+                      </button>
+                    </div>
                     </div>
 
                     <div className="premium-load-layout">
@@ -67746,32 +67790,6 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                           </div>
                         </section>
 
-                        <section className="premium-load-side-card">
-                          <h3>Quick Actions</h3>
-
-                          <div className="premium-load-quick-actions">
-                            <button type="button">
-                              <CreditCard size={14} />
-                              Check Party Credit
-                            </button>
-
-                            <button type="button">
-                              <Package size={14} />
-                              Check Stock Availability
-                            </button>
-
-                            <button type="button">
-                              <FileText size={14} />
-                              View Party Outstanding
-                            </button>
-
-                            <button type="button">
-                              <Printer size={14} />
-                              Print Load Preview
-                            </button>
-                          </div>
-                        </section>
-
                         <section className="premium-load-side-card premium-load-remarks-card">
                           <h3>Load Remarks</h3>
 
@@ -67796,30 +67814,7 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                     {/* =================================================
                 BOTTOM ACTIONS
               ================================================= */}
-                    <div className="premium-load-bottom-actions">
-                      <button
-                        type="button"
-                        className="premium-load-cancel-button"
-                        onClick={closeForm}
-                      >
-                        Cancel
-                      </button>
 
-                      <button
-                        type="submit"
-                        className="premium-load-create-button"
-                      >
-                        {editingCreateLoadId ? (
-                          <Save size={16} />
-                        ) : (
-                          <Truck size={16} />
-                        )}
-
-                        {editingCreateLoadId
-                          ? "Edit Load"
-                          : "Create Load"}
-                      </button>
-                    </div>
                   </form>
                 </div>
               )}
@@ -67864,6 +67859,45 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                       >
                         <X size={23} />
                       </button>
+                    <div className="print-load-bottom-bar">
+                      <button
+                        type="button"
+                        className="print-load-clear-button"
+                        onClick={() => {
+                          setShowPrintPreview(false);
+                          setShowPrintLoadColumnModal(false);
+                          handleClearPrintLoad();
+                        }}
+                      >
+                        <RotateCcw size={15} />
+                        Clear All
+                      </button>
+
+                      <div className="print-load-bottom-actions">
+                        <button
+                          type="button"
+                          className="print-load-preview-button"
+                          onClick={handlePrintLoadPreview}
+                          disabled={printLoadLoading}
+                        >
+                          <Eye size={16} />
+                          Preview
+                        </button>
+
+                        <button
+                          type="submit"
+                          className="print-load-print-button"
+                          form="print-load-form"
+                          disabled={printLoadLoading}
+                        >
+                          <Printer size={16} />
+
+                          {printLoadLoading
+                            ? "Loading..."
+                            : "Print Report"}
+                        </button>
+                      </div>
+                    </div>
                     </div>
                   </div>
 
@@ -67871,6 +67905,7 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
               PRINT LOAD FORM
               ===================================================== */}
                   <form
+                    id="print-load-form"
                     className="print-load-form"
                     onSubmit={handlePrintLoadSubmit}
                   >
@@ -68112,6 +68147,7 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                 ONLY ONE COLUMN SELECTION BUTTON
                 ===================================================== */}
                     <section className="print-load-current-layout-card">
+                      <h3 className="print-load-layout-heading">Current Layout</h3>
                       <div className="print-load-current-layout-icon">
                         {printLoadFormData.reportLevel ===
                           "party_wise" ? (
@@ -68171,44 +68207,7 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                     {/* =====================================================
                 BOTTOM BUTTONS
                 ===================================================== */}
-                    <div className="print-load-bottom-bar">
-                      <button
-                        type="button"
-                        className="print-load-clear-button"
-                        onClick={() => {
-                          setShowPrintPreview(false);
-                          setShowPrintLoadColumnModal(false);
-                          handleClearPrintLoad();
-                        }}
-                      >
-                        <RotateCcw size={15} />
-                        Clear All
-                      </button>
 
-                      <div className="print-load-bottom-actions">
-                        <button
-                          type="button"
-                          className="print-load-preview-button"
-                          onClick={handlePrintLoadPreview}
-                          disabled={printLoadLoading}
-                        >
-                          <Eye size={16} />
-                          Preview
-                        </button>
-
-                        <button
-                          type="submit"
-                          className="print-load-print-button"
-                          disabled={printLoadLoading}
-                        >
-                          <Printer size={16} />
-
-                          {printLoadLoading
-                            ? "Loading..."
-                            : "Print Report"}
-                        </button>
-                      </div>
-                    </div>
                   </form>
 
                   {/* =====================================================
@@ -68362,9 +68361,9 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                   {/* =====================================================
               PRINT PREVIEW MODAL
               ===================================================== */}
-                  {showPrintPreview &&
+                  {(showPrintPreview || printLoadDirectPrint) &&
                     createPortal(
-                      <div className="print-load-preview-modal-overlay">
+                      <div className="print-load-preview-modal-overlay" style={printLoadDirectPrint ? { display: "none" } : undefined}>
                         <div
                           className="print-load-preview-modal-dialog"
                           role="dialog"
@@ -77764,7 +77763,7 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
               activeSubMenu === "Load Transfer" &&
               renderLoadTransfer()}
             {activeSubMenu === 'Purchase' && openFormFor === 'Purchase' && (
-              <div className="purchase-billing-page">
+              <div className="purchase-billing-page purchase-invoice-compact">
                 <div className="purchase-billing-card">
                   <header className="purchase-billing-header">
                     <div className="purchase-billing-title-wrap">
@@ -77773,15 +77772,6 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                     </div>
 
                     <div className="purchase-billing-header-actions">
-                      <button
-                        type="button"
-                        className="purchase-header-btn purchase-header-save"
-                        onClick={savePurchase}
-                      >
-                        <Save size={14} />
-                        Save
-                      </button>
-
                       <button
                         type="button"
                         className="purchase-header-btn purchase-header-save-invoice"
@@ -77941,14 +77931,6 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                           Add Product
                         </button>
 
-                        <button
-                          type="button"
-                          className="billing-toolbar-button"
-                          onClick={addPurchaseItem}
-                        >
-                          <Plus size={14} />
-                          Add Row
-                        </button>
                       </div>
                     </div>
                     <div className="product-entry-container purchase-product-scroll">
@@ -78617,6 +78599,12 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                         </table>
                       </div>
                     </div>
+                    <div className="purchase-grid-footer">
+                      <button type="button" className="billing-toolbar-button" onClick={addPurchaseItem}>
+                        <Plus size={14} /> Add Row
+                      </button>
+                      <span className="purchase-grid-hint">Purchase item entry</span>
+                    </div>
                   </section>
 
                   {/* Purchase Summary Section */}
@@ -78624,8 +78612,9 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                     <div className="purchase-summary-heading">
                       <div className="purchase-section-title">
                         <span className="purchase-section-dot" />
-                        <h3>Invoice Summary</h3>
+                        <h3>Purchase Summary</h3>
                       </div>
+                      <span className="entry-summary-net">Net Amount: <strong>₹{purchaseFormData.netAmt || '0.00'}</strong></span>
                     </div>
 
                     <div className="summary-bar purchase-summary-grid">
@@ -78679,15 +78668,6 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                       </div>
 
                       <div className="purchase-billing-header-actions">
-                        <button
-                          type="button"
-                          className="purchase-header-btn purchase-header-save"
-                          onClick={saveCreditNote}
-                        >
-                          <Save size={14} />
-                          Save
-                        </button>
-
                         <button
                           type="button"
                           className="purchase-header-btn purchase-header-save-invoice"
@@ -79919,7 +79899,8 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                     ===================================================== */}
                     <section className="purchase-summary-section credit-note-summary-section">
                       <div className="purchase-summary-title">
-                        Summary
+                        <span className="entry-summary-label"><span className="purchase-section-dot" />Credit Note Summary</span>
+                        <span className="entry-summary-net">Net Amount: <strong>₹{Number(creditNoteSummary.netAmt || 0).toFixed(2)}</strong></span>
                       </div>
 
                       <div className="purchase-summary-grid">
@@ -80662,15 +80643,6 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                     </div>
 
                     <div className="debit-credit-header-actions">
-                      <button
-                        type="button"
-                        className="debit-credit-save-btn"
-                        onClick={saveDebitNote}
-                      >
-                        <Save size={14} />
-                        Save
-                      </button>
-
                       <button
                         type="button"
                         className="debit-credit-save-note-btn"
@@ -81841,21 +81813,23 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                       )}
                   </div>
 
-                  <div className="form-section debit-credit-summary-section">
-                    <div className="debit-credit-summary-heading">
-                      <h3>Summary</h3>
+                  <div className="form-section debit-credit-summary-section billing-compact-summary">
+                    <div className="debit-credit-summary-heading billing-compact-summary-header">
+                      <span className="billing-section-title"><span className="billing-section-number" /><h3>Debit Note Summary</h3></span>
+                      <span className="entry-summary-net">Net Amount: <strong>₹{debitNoteSummary.netAmt || '0.00'}</strong></span>
                     </div>
 
-                    <div className="summary-bar debit-credit-summary-grid">
-                      <div>Gross Amt: <span className="amount">₹{debitNoteSummary.grossAmt.toFixed(2)}</span></div>
-                      <div>GST Amt: <span className="amount">+₹{debitNoteSummary.gstAmt.toFixed(2)}</span></div>
-                      <div className="tcs-field">TCS %: <input className="erp-input small" placeholder="0" value={debitNoteSummary.tcsPercent} onChange={(e) => setDebitNoteSummary({ ...debitNoteSummary, tcsPercent: e.target.value })} /> TCS Amt: ₹{debitNoteSummary.tcsAmt}</div>
-                      <div>Before Vat Disc Amt: <span className="amount">₹{debitNoteSummary.beforeVatDiscAmt.toFixed(2)}</span></div>
-                      <div>Surcharge: <span className="amount">₹{debitNoteSummary.surcharge}</span></div>
-                      <div>Rounding: <span className="amount">₹{debitNoteSummary.rounding}</span></div>
-                      <div>Before Vat Add Amt: <span className="amount">₹{debitNoteSummary.beforeVatAddAmt}</span></div>
-                      <div>After Vat Disc Amt: <span className="amount">₹{debitNoteSummary.afterVatDiscAmt.toFixed(2)}</span></div>
-                      <div className="net-amount">Net Amt: <strong>₹{debitNoteSummary.netAmt}</strong></div>
+                    <div className="billing-summary-values debit-summary-values">
+                      <div className="billing-summary-item"><span>Gross Amt</span><strong>₹{debitNoteSummary.grossAmt.toFixed(2)}</strong></div>
+                      <div className="billing-summary-item"><span>GST Amt</span><strong>+₹{debitNoteSummary.gstAmt.toFixed(2)}</strong></div>
+                      <div className="billing-summary-item billing-summary-editable"><span>TCS %</span><div className="billing-summary-input-wrap"><input aria-label="TCS percent" className="erp-input small" placeholder="0" value={debitNoteSummary.tcsPercent} onChange={(e) => setDebitNoteSummary({ ...debitNoteSummary, tcsPercent: e.target.value })} /></div></div>
+                      <div className="billing-summary-item"><span>TCS Amt</span><strong>₹{debitNoteSummary.tcsAmt}</strong></div>
+                      <div className="billing-summary-item"><span>Before VAT Disc</span><strong>₹{debitNoteSummary.beforeVatDiscAmt.toFixed(2)}</strong></div>
+                      <div className="billing-summary-item"><span>Surcharge</span><strong>₹{debitNoteSummary.surcharge}</strong></div>
+                      <div className="billing-summary-item"><span>Rounding</span><strong>₹{debitNoteSummary.rounding}</strong></div>
+                      <div className="billing-summary-item"><span>Before VAT Add</span><strong>₹{debitNoteSummary.beforeVatAddAmt}</strong></div>
+                      <div className="billing-summary-item"><span>After VAT Disc</span><strong>₹{debitNoteSummary.afterVatDiscAmt.toFixed(2)}</strong></div>
+                      <div className="billing-summary-item billing-summary-net"><span>Net Amt</span><strong>₹{debitNoteSummary.netAmt}</strong></div>
                     </div>
                   </div>
 
@@ -83040,7 +83014,7 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                     <div><strong>TCS %:</strong> {viewData.tcsPercent || "0.00"}</div>
                     <div><strong>Allow In Purchase:</strong> {viewData.allowInPurchase || "N"}</div>
 
-                    {/* ðŸ”¥ FIX: Display credit fields in view modal */}
+                    {/* 🔥 FIX: Display credit fields in view modal */}
                     <div><strong>Credit Days:</strong> {viewData.creditDays || "0"}</div>
                     <div><strong>Credit Bills:</strong> {viewData.creditBills || "0"}</div>
                     <div><strong>Lock Days:</strong> {viewData.lockDays || "0"}</div>

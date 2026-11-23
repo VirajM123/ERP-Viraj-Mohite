@@ -1,5 +1,5 @@
  const configuredRoot = String(import.meta.env.VITE_API_ROOT || "").trim();
-  const defaultRoot = "https://total-solution-backend.onrender.com";
+ const defaultRoot = "https://total-solution-backend.onrender.com";
  //const defaultRoot = "http://localhost:5000";
 
 let parsedRoot;

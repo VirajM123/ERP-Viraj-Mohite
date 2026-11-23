@@ -50214,6 +50214,106 @@ td {
   display: none !important;
 }
 
+/* Purchase invoice only: compact layout matching the sales entry workspace. */
+.purchase-invoice-compact .purchase-billing-header {
+  min-height: 46px !important;
+  padding: 6px 12px !important;
+}
+.purchase-invoice-compact .purchase-billing-header-actions > .purchase-header-save {
+  display: inline-flex !important;
+}
+.purchase-invoice-compact .purchase-header-section,
+.purchase-invoice-compact .purchase-product-section,
+.purchase-invoice-compact .purchase-summary-section {
+  padding: 6px 12px 8px !important;
+  margin-top: 0 !important;
+}
+.purchase-invoice-compact :is(.purchase-section-heading, .purchase-summary-heading) {
+  min-height: 22px !important;
+  margin: 0 0 5px !important;
+  padding: 2px 7px !important;
+  border-radius: 5px !important;
+  background: #dce8fb !important;
+}
+.purchase-invoice-compact .purchase-header-grid {
+  grid-template-columns: repeat(6, minmax(0, 1fr)) !important;
+  gap: 5px 10px !important;
+}
+.purchase-invoice-compact .purchase-header-grid .labeled-input {
+  gap: 2px !important;
+}
+.purchase-invoice-compact .purchase-header-grid :is(input, select, textarea) {
+  height: 29px !important;
+  min-height: 29px !important;
+  font-size: 11px !important;
+}
+.purchase-invoice-compact .billing-product-heading {
+  display: block !important;
+  margin: 0 0 5px !important;
+}
+.purchase-invoice-compact .billing-product-toolbar {
+  display: flex !important;
+  flex-wrap: wrap !important;
+  gap: 5px !important;
+}
+.purchase-invoice-compact .billing-product-toolbar .billing-section-title {
+  display: flex !important;
+  align-items: center !important;
+  flex: 0 0 100% !important;
+  min-height: 22px !important;
+  padding: 2px 7px !important;
+  border-radius: 5px !important;
+  background: #dce8fb !important;
+}
+.purchase-invoice-compact .purchase-product-scroll {
+  height: clamp(190px, 31vh, 285px) !important;
+  min-height: 190px !important;
+  max-height: 285px !important;
+  overflow: auto !important;
+}
+.purchase-invoice-compact .purchase-product-table thead th {
+  height: 28px !important;
+  padding: 3px 5px !important;
+  background: #2059df !important;
+  color: #fff !important;
+  font-size: 10px !important;
+  letter-spacing: 0 !important;
+  text-transform: none !important;
+}
+.purchase-invoice-compact .purchase-product-table tbody td {
+  padding: 3px !important;
+}
+.purchase-invoice-compact .purchase-product-table :is(input, select) {
+  height: 28px !important;
+  min-height: 28px !important;
+  font-size: 11px !important;
+}
+.purchase-invoice-compact .purchase-summary-grid {
+  display: flex !important;
+  overflow-x: auto !important;
+}
+.purchase-invoice-compact .purchase-summary-grid > div {
+  flex: 1 0 85px !important;
+  min-height: 38px !important;
+  padding: 3px 7px !important;
+}
+.purchase-invoice-compact .purchase-summary-grid > .net-amount {
+  background: #eaf2ff !important;
+}
+@media (max-width: 1100px) {
+  .purchase-invoice-compact .purchase-header-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
+  }
+}
+@media (max-width: 650px) {
+  .purchase-invoice-compact .purchase-header-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  }
+  .purchase-invoice-compact .purchase-billing-header {
+    flex-wrap: wrap !important;
+  }
+}
+
 /* Quotation and Sales Service have no separate mobile save bar. */
 @media (max-width: 900px) {
   .sales-billing-page:not(.sales-invoice-entry-page)
@@ -50926,6 +51026,11 @@ td {
 }
 .sales-invoice-entry-page .billing-product-toolbar { min-width: 0; flex: 1 1 100%; gap: 6px; }
 .sales-invoice-entry-page .billing-product-table-scroll { height: clamp(135px, 19vh, 190px) !important; max-height: clamp(135px, 19vh, 190px) !important; }
+.sales-invoice-entry-page .billing-product-table thead th {
+  background: #0759eb;
+  color: #fff;
+  border-color: #3075ee;
+}
 .sales-invoice-entry-page .billing-compact-summary { border: 1px solid #d4e1f2; border-radius: 8px; background: #fff; }
 .sales-invoice-entry-page .billing-compact-summary-header {
   display: flex !important; align-items: center; justify-content: space-between !important;
@@ -50978,4 +51083,814 @@ td {
     min-height: 0 !important;
     overflow: auto !important;
   }
+}
+
+
+/* Quotation: match compact Sales Billing presentation. */
+.sales-billing-page.quotation-entry-page {
+  padding: 10px 14px !important;
+  background: #f2f6fd;
+  color: #0b1e50;
+}
+.quotation-entry-page .sales-billing-card {
+  border: 1px solid #d4e1f2; border-radius: 10px; background: #fff;
+  box-shadow: 0 3px 12px rgba(30, 70, 130, .06);
+}
+.quotation-entry-page .sales-billing-page-header {
+  padding: 8px 14px !important; border-bottom: 1px solid #dce7f5;
+}
+.quotation-entry-page .sales-billing-title { color: #071b52; font-size: 17px !important; }
+.quotation-entry-page .sales-billing-subtitle { font-size: 10px !important; }
+.quotation-entry-page .billing-header-section .billing-section-heading {
+  display: flex !important; align-items: center !important; justify-content: space-between !important;
+  min-height: 25px !important; margin: 0 0 7px !important; padding: 3px 10px !important;
+  border: 0 !important; border-radius: 6px; background: #dce9fc;
+}
+.quotation-entry-page .billing-header-section .billing-section-title,
+.quotation-entry-page .billing-product-heading .billing-section-title,
+.quotation-entry-page .billing-compact-summary-header .billing-section-title { display: flex !important; }
+.quotation-entry-page .billing-section-title h3 { margin: 0; color: #071b52; font-size: 12px !important; line-height: 1.3; }
+.quotation-entry-page .billing-header-information { font-size: 10px; }
+.quotation-entry-page .billing-header-fields { gap: 6px 10px !important; }
+.quotation-entry-page .billing-product-heading { display: flex !important; flex-wrap: wrap; gap: 6px; margin-bottom: 6px !important; }
+.quotation-entry-page .billing-product-heading .billing-section-title {
+  flex: 0 0 100%; min-height: 25px; align-items: center; padding: 3px 10px;
+  border-radius: 6px; background: #dce9fc;
+}
+.quotation-entry-page .billing-product-toolbar { min-width: 0; flex: 1 1 100%; gap: 6px; }
+.quotation-entry-page .billing-product-table-scroll { height: clamp(135px, 19vh, 190px) !important; max-height: clamp(135px, 19vh, 190px) !important; }
+.quotation-entry-page .billing-product-table thead th {
+  background: #0759eb;
+  color: #fff;
+  border-color: #3075ee;
+}
+.quotation-entry-page .billing-compact-summary { border: 1px solid #d4e1f2; border-radius: 8px; background: #fff; }
+.quotation-entry-page .billing-compact-summary-header {
+  display: flex !important; align-items: center; justify-content: space-between !important;
+  min-height: 25px !important; margin-bottom: 5px !important; padding: 3px 10px;
+  border-radius: 6px; background: #dce9fc;
+}
+.quotation-entry-page .billing-summary-words { font-size: 10px; }
+@media (max-width: 760px) {
+  .quotation-entry-page .billing-product-toolbar { flex-wrap: wrap; }
+  .quotation-entry-page .billing-header-section .billing-section-heading,
+  .quotation-entry-page .billing-compact-summary-header { flex-direction: row !important; flex-wrap: wrap; }
+}
+
+/* Fit the sales invoice entry comfortably within desktop viewports. */
+@media (min-width: 1000px) {
+  .sales-billing-page.quotation-entry-page { padding: 5px 10px !important; }
+  .quotation-entry-page .sales-billing-page-header { padding: 5px 10px !important; }
+  .quotation-entry-page .sales-billing-title { font-size: 15px !important; }
+  .quotation-entry-page .billing-header-section { padding: 4px 10px 5px !important; }
+  .quotation-entry-page .billing-header-section .billing-section-heading { min-height: 21px !important; margin-bottom: 4px !important; padding: 2px 8px !important; }
+  .quotation-entry-page .billing-header-fields { row-gap: 4px !important; }
+  .quotation-entry-page .billing-field { gap: 2px !important; }
+  .quotation-entry-page .billing-control,
+  .quotation-entry-page .billing-party-add-button { height: 26px !important; min-height: 26px !important; }
+  .quotation-entry-page .billing-product-section { padding: 4px 10px 5px !important; }
+  .quotation-entry-page .billing-product-heading { gap: 3px; margin-bottom: 3px !important; }
+  .quotation-entry-page .billing-product-heading .billing-section-title { min-height: 21px; padding: 2px 8px; }
+  .quotation-entry-page .billing-toolbar-button { height: 24px !important; min-height: 24px !important; }
+  .quotation-entry-page .billing-product-table-scroll { height: clamp(100px, 15vh, 140px) !important; max-height: clamp(100px, 15vh, 140px) !important; }
+  .quotation-entry-page .billing-compact-summary { padding: 4px 10px 5px !important; }
+  .quotation-entry-page .billing-compact-summary-header { min-height: 21px !important; margin-bottom: 3px !important; padding: 2px 8px; }
+  .quotation-entry-page .billing-summary-bottom-row { margin-top: 3px !important; }
+}
+
+/* Keep invoice rows inside their own scroll area so totals stay visible. */
+@media (min-width: 1000px) {
+  .sales-billing-page.quotation-entry-page .billing-product-table-scroll {
+    height: clamp(100px, 15vh, 140px) !important;
+    min-height: 0 !important;
+    max-height: clamp(100px, 15vh, 140px) !important;
+    overflow: auto !important;
+  }
+}
+
+/* Show five product rows before scrolling in the desktop invoice grid. */
+@media (min-width: 1000px) {
+  .sales-billing-page.quotation-entry-page .billing-product-table-scroll {
+    height: 230px !important;
+    max-height: 230px !important;
+    min-height: 0 !important;
+    overflow: auto !important;
+  }
+}
+
+
+/* Create Load: compact Sales Billing-style layout. */
+.premium-create-load-page { padding: 5px 10px !important; background: #f2f6fd; }
+.premium-create-load-page .premium-create-load-form { padding: 8px 10px; border: 1px solid #d4e1f2; border-radius: 10px; background: #fff; box-shadow: 0 3px 12px rgba(30,70,130,.06); }
+.premium-create-load-page .premium-load-page-header { min-height: 34px; margin: 0 0 6px; gap: 8px; flex-wrap: wrap; }
+.premium-create-load-page .premium-load-title-wrap { flex: 1 1 auto; }
+.premium-create-load-page .premium-load-title-wrap h2 { font-size: 16px; color: #071b52; }
+.premium-create-load-page .premium-load-title-icon,
+.premium-create-load-page .premium-load-title-wrap p { display: none; }
+.premium-create-load-page .premium-load-page-actions { gap: 6px; flex-wrap: wrap; }
+.premium-create-load-page .premium-load-header-button,
+.premium-create-load-page .premium-load-cancel-button,
+.premium-create-load-page .premium-load-create-button { min-width: 0; height: 30px; min-height: 30px; padding: 0 10px; box-shadow: none; }
+.premium-create-load-page .premium-load-bottom-actions { margin: 0; padding: 0; border: 0; gap: 6px; }
+.premium-create-load-page .premium-load-layout { display: flex; flex-direction: column; gap: 6px; }
+.premium-create-load-page .premium-load-main,
+.premium-create-load-page .premium-load-sidebar { display: contents; }
+.premium-create-load-page .premium-load-info-card { order: 1; }
+.premium-create-load-page .premium-load-bills-card { order: 2; }
+.premium-create-load-page .premium-load-summary-side-card { order: 3; }
+.premium-create-load-page .premium-load-remarks-card { order: 4; }
+.premium-create-load-page .premium-load-sidebar > .premium-load-side-card:not(.premium-load-summary-side-card):not(.premium-load-remarks-card) { order: 5; }
+.premium-create-load-page .premium-load-card,
+.premium-create-load-page .premium-load-side-card { padding: 5px 8px; border: 1px solid #d4e1f2; border-radius: 7px; box-shadow: none; }
+.premium-create-load-page .premium-load-card-heading,
+.premium-create-load-page .premium-load-bills-heading { min-height: 25px; margin: 0 0 5px; padding: 3px 8px; align-items: center; border-radius: 5px; background: #dce9fc; }
+.premium-create-load-page .premium-load-card h3,
+.premium-create-load-page .premium-load-side-card h3 { margin: 0; color: #071b52; font-size: 12px; }
+.premium-create-load-page .premium-load-card-heading p,
+.premium-create-load-page .premium-load-bills-heading p,
+.premium-create-load-page .premium-load-summary-side-card > p { display: none; }
+.premium-create-load-page .premium-load-information-grid { gap: 4px 10px !important; }
+.premium-create-load-page .premium-load-information-grid .premium-load-field label { margin-bottom: 2px !important; font-size: 10px !important; }
+.premium-create-load-page .premium-load-information-grid :is(.erp-input,.erp-select,.premium-load-multi-select-button) { height: 27px !important; min-height: 27px !important; font-size: 11px !important; }
+.premium-create-load-page .premium-load-bill-search { width: 230px; height: 27px; }
+.premium-create-load-page .premium-load-bill-search input { width: 100% !important; min-width: 0 !important; height: auto !important; padding: 0 !important; border: 0 !important; outline: 0 !important; background: transparent !important; box-shadow: none !important; }
+
+/* Compact Print Load form, scoped to this screen. */
+.print-load-page { padding: 8px 10px !important; background: #f2f6fd !important; }
+.print-load-page .print-load-page-header { align-items: center !important; flex-wrap: wrap; gap: 8px !important; margin: 0 0 8px !important; padding: 8px 10px; border: 1px solid #d4e1f2; border-radius: 7px; background: #fff; }
+.print-load-page .print-load-page-header h2 { color: #071b52 !important; font-size: 16px !important; }
+.print-load-page .print-load-page-header p { display: none; }
+.print-load-page .print-load-header-actions { gap: 6px !important; }
+.print-load-page .print-load-bottom-bar { display: contents !important; }
+.print-load-page .print-load-bottom-actions { display: contents !important; }
+.print-load-page .print-load-header-actions button { min-height: 30px !important; height: 30px; padding: 0 10px !important; border: 1px solid #cbdaf0 !important; border-radius: 5px !important; background: #fff !important; color: #183661 !important; box-shadow: none !important; font-size: 11px !important; }
+.print-load-page .print-load-header-actions .print-load-print-button { border-color: #0759eb !important; background: #0759eb !important; color: #fff !important; }
+.print-load-page .print-load-close-button { order: 4; }
+.print-load-page .print-load-bottom-bar { order: 2; }
+.print-load-page .print-load-settings-card { margin: 0 0 8px !important; padding: 6px 8px !important; border: 1px solid #d4e1f2 !important; border-radius: 7px !important; box-shadow: none !important; }
+.print-load-page .print-load-section + .print-load-section { margin-top: 8px; }
+.print-load-page .print-load-section > h3, .print-load-page .print-load-layout-heading { display: block; margin: 0 0 6px !important; padding: 5px 8px !important; border: 0 !important; border-radius: 4px; background: #dce9fc; color: #071b52 !important; font-size: 12px !important; line-height: 1.3; }
+.print-load-page .print-load-section > h3::after { display: none; }
+.print-load-page .print-load-grid { gap: 6px 10px !important; }
+.print-load-page .print-load-field { gap: 3px !important; }
+.print-load-page .print-load-field label { font-size: 10px !important; color: #243b65 !important; }
+.print-load-page .print-load-field :is(input, select) { height: 28px !important; min-height: 28px !important; padding: 3px 8px !important; border: 1px solid #cbdaf0 !important; border-radius: 4px !important; font-size: 11px !important; }
+.print-load-page .print-load-current-layout-card { display: flex; flex-wrap: wrap; gap: 6px 10px; margin: 0 !important; padding: 6px 8px !important; border: 1px solid #d4e1f2 !important; border-radius: 7px !important; background: #fff !important; box-shadow: none !important; }
+.print-load-page .print-load-layout-heading { flex: 0 0 100%; }
+.print-load-page .print-load-current-layout-icon { width: 30px; height: 30px; flex-basis: 30px; }
+.print-load-page .print-load-current-layout-text strong { font-size: 12px; }
+.print-load-page .print-load-current-layout-text span { font-size: 10px; }
+.print-load-page .print-load-single-column-button { min-height: 30px !important; padding: 4px 10px !important; }
+@media (max-width: 760px) { .print-load-page .print-load-page-header { align-items: stretch !important; } .print-load-page .print-load-header-actions { justify-content: flex-start; } }
+.premium-create-load-page .premium-load-table-shell { max-height: 155px; overflow: auto; }
+.premium-create-load-page .premium-load-table thead th { height: 27px; padding: 4px 7px; background: #0759eb; color: #fff; border-color: #3075ee; }
+.premium-create-load-page .premium-load-table tbody td { height: 28px; padding: 4px 7px; }
+.premium-create-load-page .premium-load-table-footer { min-height: 30px; padding: 3px 8px; }
+.premium-create-load-page .premium-load-summary-side-card > h3 { padding: 4px 8px; border-radius: 5px; background: #dce9fc; }
+.premium-create-load-page .premium-load-side-summary-list { display: grid; grid-template-columns: repeat(4,minmax(0,1fr)) minmax(180px,1.5fr); gap: 6px; margin-top: 5px; }
+.premium-create-load-page .premium-load-side-summary-list > div:not(.premium-load-side-divider) { min-width: 0; margin: 0; padding: 6px 8px !important; border: 1px solid #dce6f5; border-radius: 5px; }
+.premium-create-load-page .premium-load-side-divider { display: none; }
+.premium-create-load-page .premium-load-total-amount-row { background: #e0ebff; border-color: #c9dbf8 !important; }
+.premium-create-load-page .premium-load-total-amount-row span,
+.premium-create-load-page .premium-load-total-amount-value { color: #0759eb !important; }
+.premium-create-load-page .premium-load-remarks-card { display: flex; align-items: center; gap: 10px; }
+.premium-create-load-page .premium-load-remarks-card h3 { flex: 0 0 auto; }
+.premium-create-load-page .premium-load-remarks-card textarea { flex: 1; min-height: 30px; height: 30px; margin: 0; padding: 6px 8px; resize: vertical; }
+.premium-create-load-page .premium-load-remarks-card > span { flex: 0 0 auto; }
+.premium-create-load-page .premium-load-quick-actions { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 5px; }
+.premium-create-load-page .premium-load-quick-actions button { width: auto; min-height: 27px; padding: 3px 9px; }
+@media (max-width: 900px) {
+  .premium-create-load-page .premium-load-side-summary-list { grid-template-columns: repeat(2,minmax(0,1fr)); }
+  .premium-create-load-page .premium-load-bills-heading { flex-wrap: wrap; }
+}
+@media (max-width: 600px) {
+  .premium-create-load-page .premium-load-page-header { align-items: flex-start; }
+  .premium-create-load-page .premium-load-title-wrap { flex-basis: 100%; }
+  .premium-create-load-page .premium-load-remarks-card { flex-wrap: wrap; }
+  .premium-create-load-page .premium-load-remarks-card textarea { min-width: 100%; }
+}
+
+/* Override older Create Load !important rules for the compact layout. */
+.premium-create-load-page .premium-load-side-card { padding: 5px 8px !important; border-radius: 7px !important; box-shadow: none !important; }
+.premium-create-load-page .premium-load-side-card h3 { color: #071b52 !important; font-size: 12px !important; }
+.premium-create-load-page .premium-load-side-summary-list { display: grid !important; grid-template-columns: repeat(4,minmax(0,1fr)) minmax(180px,1.5fr) !important; gap: 6px !important; margin-top: 5px !important; }
+.premium-create-load-page .premium-load-side-summary-list > div:not(.premium-load-side-divider) { min-height: 34px !important; padding: 5px 8px !important; border: 1px solid #dce6f5 !important; border-radius: 5px !important; }
+.premium-create-load-page .premium-load-side-summary-list > .premium-load-side-divider { display: none !important; }
+.premium-create-load-page .premium-load-side-summary-list span { color: #243b65 !important; font-size: 10px !important; }
+.premium-create-load-page .premium-load-side-summary-list strong { color: #071b52 !important; font-size: 12px !important; }
+.premium-create-load-page .premium-load-side-summary-list > .premium-load-total-amount-row { background: #e0ebff !important; border-color: #c9dbf8 !important; }
+.premium-create-load-page .premium-load-side-summary-list > .premium-load-total-amount-row strong { color: #0759eb !important; font-size: 16px !important; }
+.premium-create-load-page .premium-load-table thead th { height: 27px !important; padding: 4px 7px !important; background: #0759eb !important; color: #fff !important; border-color: #3075ee !important; font-size: 10px !important; }
+.premium-create-load-page .premium-load-table tbody td { height: 28px !important; padding: 4px 7px !important; font-size: 11px !important; }
+.premium-create-load-page .premium-load-remarks-card textarea { min-height: 30px !important; height: 30px !important; padding: 6px 8px !important; }
+@media (max-width: 900px) {
+  .premium-create-load-page .premium-load-side-summary-list { grid-template-columns: repeat(2,minmax(0,1fr)) !important; }
+}
+
+/* Settle Load: compact Sales Billing-style presentation. */
+.settle-premium-page { padding: 5px 10px !important; background: #f2f6fd; }
+.settle-premium-page .settle-premium-topbar { min-height: 34px; margin-bottom: 6px; gap: 8px; flex-wrap: wrap; }
+.settle-premium-page .settle-premium-title { color: #071b52; font-size: 16px; }
+.settle-premium-page .settle-premium-subtitle { display: none; }
+.settle-premium-page .settle-premium-main-actions { gap: 6px; flex-wrap: wrap; }
+.settle-premium-page .settle-top-button { min-width: 0; height: 30px; padding: 0 10px; border-radius: 5px; box-shadow: none; font-size: 11px; }
+.settle-premium-page .settle-premium-card { height: calc(100% - 40px); border-color: #d4e1f2; border-radius: 7px; }
+.settle-premium-page .settle-premium-header-fields { padding: 6px 8px; gap: 6px 10px; }
+.settle-premium-page .settle-premium-field label { margin-bottom: 2px; color: #243b65; font-size: 10px; }
+.settle-premium-page .settle-premium-field :is(input, select) { height: 28px; padding: 3px 8px; border-color: #cbdaf0; border-radius: 4px; font-size: 11px; }
+.settle-premium-page .settle-premium-table-toolbar { min-height: 34px; margin: 6px 8px; padding: 3px 8px; border: 0; border-radius: 5px; background: #dce9fc; gap: 8px; flex-wrap: wrap; }
+.settle-premium-page .settle-premium-table-heading h3 { color: #071b52; font-size: 12px; }
+.settle-premium-page .settle-premium-table-tools { gap: 6px; }
+.settle-premium-page .settle-premium-search, .settle-premium-page .settle-tool-button { height: 27px; min-height: 27px; }
+.settle-premium-page .settle-premium-grid-shell { width: calc(100% - 16px); min-height: 120px; margin: 0 8px; border-radius: 5px; }
+.settle-premium-page .settle-premium-table th { height: 27px; padding: 4px 7px; border-color: #3075ee; background: #0759eb; color: #fff; }
+.settle-premium-page .settle-premium-table td { height: 28px; padding: 3px 7px; }
+.settle-premium-page .settle-premium-table thead th { height: 32px; padding: 6px 10px; border-radius: 0; line-height: 1.3; }
+.settle-premium-page .settle-premium-table thead .settle-col-status { display: table-cell; min-width: 90px; border-radius: 0; }
+.settle-premium-page .settle-premium-table tbody td { height: 34px; padding: 5px 10px; }
+.settle-premium-page .settle-premium-table :is(.settle-col-bill-type, .settle-col-bill-date, .settle-col-series, .settle-col-bill-no, .settle-col-party-code) { min-width: 75px; }
+.settle-premium-page .settle-premium-table thead .settle-col-sr, .settle-premium-page .settle-premium-table thead .settle-col-actions { background: #0759eb; color: #fff; }
+.settle-premium-page .settle-grid-footer { min-height: 27px; margin: 0 8px; padding: 3px 8px; }
+.settle-premium-page .settle-premium-summary { padding: 5px 8px 6px !important; }
+.settle-premium-page .settle-summary-heading { min-height: 25px; padding: 4px 8px; border: 0; border-radius: 5px; background: #dce9fc; }
+.settle-premium-page .settle-summary-heading h3 { padding: 0; color: #071b52; font-size: 12px; }
+.settle-premium-page .settle-summary-heading h3::after { display: none; }
+.settle-premium-page .settle-summary-cards { grid-template-columns: repeat(8, minmax(110px, 1fr)) !important; gap: 6px !important; padding-top: 5px !important; }
+.settle-premium-page .settle-summary-card { min-width: 110px !important; min-height: 44px !important; padding: 5px 7px !important; border-radius: 5px !important; }
+.settle-premium-page .settle-summary-card span { margin-bottom: 3px !important; }
+.settle-premium-page .settle-summary-icon { width: 24px !important; height: 24px !important; flex-basis: 24px !important; }
+.settle-premium-page .settle-amount-words { min-height: 22px !important; padding-top: 4px !important; }
+@media (max-width: 760px) {
+  .settle-premium-page { height: auto; min-height: calc(100vh - 76px); overflow: visible; }
+  .settle-premium-page .settle-premium-card { height: auto; }
+  .settle-premium-page .settle-premium-grid-shell { max-height: 350px; }
+}
+
+/* Bill Print: compact Sales Billing form sizing. */
+.bill-print-page { min-height: calc(100vh - 68px); padding: 8px 10px !important; background: #f2f6fd; }
+.bill-print-page .bill-print-page-heading { min-height: 42px; padding: 6px 10px; gap: 8px; border-color: #d4e1f2; border-radius: 7px; box-shadow: none; }
+.bill-print-page .bill-print-heading-left { gap: 8px; }
+.bill-print-page .bill-print-heading-icon { width: 28px; height: 28px; flex-basis: 28px; border-radius: 5px; }
+.bill-print-page .bill-print-heading-icon svg { width: 17px; height: 17px; }
+.bill-print-page .bill-print-heading-left h2 { font-size: 16px; color: #071b52; }
+.bill-print-page .bill-print-heading-left p, .bill-print-page .bill-print-settings-button small { display: none; }
+.bill-print-page .bill-print-settings-button { min-width: 0; min-height: 30px; padding: 0 10px; gap: 6px; border-radius: 5px; }
+.bill-print-page .bill-print-settings-icon { width: 18px; height: 18px; background: transparent; }
+.bill-print-page .bill-print-settings-icon svg { width: 15px; height: 15px; }
+.bill-print-page .bill-print-content { gap: 6px; margin-top: 6px; }
+.bill-print-page .bill-print-form-card { padding: 6px 8px; border-color: #d4e1f2; border-radius: 7px; box-shadow: none; }
+.bill-print-page .bill-print-section-title { height: auto; min-height: 25px; margin: 0 0 6px; padding: 3px 8px; gap: 6px; border: 0; border-radius: 5px; background: #dce9fc; }
+.bill-print-page .bill-print-section-title::after { display: none; }
+.bill-print-page .bill-print-section-title h3 { color: #071b52; font-size: 12px; }
+.bill-print-page .bill-print-section-title svg { width: 15px; height: 15px; }
+.bill-print-page .bill-print-fields-grid { gap: 6px 10px !important; }
+.bill-print-page .bill-print-field label { margin-bottom: 2px; color: #243b65; font-size: 10px; }
+.bill-print-page .bill-print-field :is(input, select) { height: 28px !important; min-height: 28px !important; padding: 3px 8px !important; border-color: #cbdaf0; border-radius: 4px; font-size: 11px; }
+.bill-print-page .bill-print-action-footer { min-height: 0; padding: 6px 8px; gap: 6px; border-color: #d4e1f2; border-radius: 7px; box-shadow: none; }
+.bill-print-page .bill-print-footer-button { min-width: 0; height: 30px; min-height: 30px; padding: 0 10px; gap: 6px; border-radius: 5px; font-size: 11px; }
+.bill-print-page .bill-print-footer-button svg { width: 15px; height: 15px; }
+@media (max-width: 650px) { .bill-print-page .bill-print-page-heading, .bill-print-page .bill-print-action-footer { flex-wrap: wrap; } }
+
+/* Group Bill Print options in the compact form layout. */
+.bill-print-page .bill-print-fields-grid { grid-template-columns: repeat(5, minmax(0, 1fr)) !important; }
+.bill-print-page .bill-print-option-groups { display: grid; grid-template-columns: 1fr 1.7fr 2.4fr; gap: 6px; }
+.bill-print-page .bill-print-option-group { min-width: 0; }
+.bill-print-page .bill-print-group-fields { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px 10px; }
+.bill-print-page .bill-print-option-group:first-child .bill-print-group-fields { grid-template-columns: 1fr; }
+.bill-print-page .bill-print-option-group:last-child .bill-print-group-fields { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.bill-print-page .bill-print-messages:empty { display: none; }
+.bill-print-page .bill-print-status { min-height: 30px; margin-top: 0; padding: 5px 8px; }
+@media (max-width: 1050px) {
+  .bill-print-page .bill-print-fields-grid { grid-template-columns: repeat(3, minmax(0, 1fr)) !important; }
+  .bill-print-page .bill-print-option-groups { grid-template-columns: 1fr 2fr; }
+  .bill-print-page .bill-print-option-group:last-child { grid-column: 1 / -1; }
+}
+@media (max-width: 650px) {
+  .bill-print-page .bill-print-fields-grid { grid-template-columns: repeat(2, minmax(0, 1fr)) !important; }
+  .bill-print-page .bill-print-option-groups { grid-template-columns: 1fr; }
+  .bill-print-page .bill-print-option-group:last-child { grid-column: auto; }
+  .bill-print-page .bill-print-option-group:last-child .bill-print-group-fields { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+
+/* Keep each Bill Print label directly above its own input. */
+.bill-print-page .bill-print-field { display: flex; flex-direction: column; align-items: stretch; gap: 2px; min-width: 0; }
+.bill-print-page .bill-print-field label { margin: 0; line-height: 1.25; }
+.bill-print-page .bill-print-field :is(input, select) { width: 100%; min-width: 0; }
+
+/* Load Transfer: compact Sales Billing-style presentation. */
+.ltf-page { padding: 6px 10px 10px; background: #f2f6fd; }
+.ltf-page .ltf-page-header { min-height: 34px; margin: 0 0 6px; gap: 8px; flex-wrap: wrap; }
+.ltf-page .ltf-page-heading { gap: 7px; }
+.ltf-page .ltf-page-icon { width: 28px; height: 28px; flex-basis: 28px; border-radius: 5px; }
+.ltf-page .ltf-page-icon svg { width: 16px; height: 16px; }
+.ltf-page .ltf-page-heading h1 { color: #071b52; font-size: 16px; }
+.ltf-page .ltf-page-heading p { display: none; }
+.ltf-page .ltf-header-actions, .ltf-page .ltf-list-actions { gap: 6px; flex-wrap: wrap; }
+.ltf-page :is(.ltf-clear-button, .ltf-transfer-button, .ltf-go-button, .ltf-select-all-button) { width: auto; min-width: 0; height: 30px; min-height: 30px; padding: 0 10px; gap: 6px; border-radius: 5px; box-shadow: none; font-size: 11px; }
+.ltf-page .ltf-card { box-sizing: border-box; border-color: #d4e1f2; border-radius: 7px; box-shadow: none; }
+.ltf-page .ltf-criteria-card { display: flex; align-items: end; flex-wrap: wrap; gap: 6px 10px; margin-bottom: 6px; padding: 6px 8px; }
+.ltf-page .ltf-mode-field { flex: 1 1 160px; width: auto; min-width: 140px; max-width: 240px; margin: 0; }
+.ltf-page .ltf-criteria-grid { flex: 3 1 460px; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto; gap: 10px; }
+.ltf-page :is(.ltf-mode-field label, .ltf-load-field-group > label) { margin: 0 0 2px; color: #243b65; font-size: 10px; line-height: 1.3; }
+.ltf-page .ltf-series-number-fields { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px; }
+.ltf-page :is(.ltf-mode-field select, .ltf-series-number-fields input) { box-sizing: border-box; width: 100%; min-width: 0; height: 28px; min-height: 28px; padding: 3px 8px; border-color: #cbdaf0; border-radius: 4px; font-size: 11px; }
+.ltf-page .ltf-error { flex-basis: 100%; margin: 0; padding: 6px 8px; }
+.ltf-page .ltf-list-header { min-height: 34px; margin: 6px 8px; padding: 3px 8px; gap: 8px; flex-wrap: wrap; border: 0; border-radius: 5px; background: #dce9fc; }
+.ltf-page .ltf-list-header h2 { color: #071b52; font-size: 12px; }
+.ltf-page .ltf-list-header p { display: none; }
+.ltf-page .ltf-search-box { box-sizing: border-box; width: 200px; height: 28px; }
+.ltf-page .ltf-search-box input { height: auto; min-height: 0; padding: 0; border: 0; font-size: 11px; }
+.ltf-page .ltf-table-wrapper { min-height: 150px; max-height: 40vh; margin: 0 8px; border: 1px solid #d4e1f2; border-radius: 5px; }
+.ltf-page .ltf-table th { height: 27px; padding: 4px 7px; border-color: #3075ee; background: #0759eb; color: #fff; font-size: 10px; }
+.ltf-page .ltf-table td { height: 28px; padding: 4px 7px; font-size: 11px; }
+.ltf-page .ltf-table .ltf-table-state { height: 130px !important; }
+.ltf-page .ltf-table-state > svg, .ltf-page .ltf-table-state > strong, .ltf-page .ltf-table-state > span { margin: 3px auto; }
+.ltf-page .ltf-empty-icon { width: 30px; height: 30px; margin-bottom: 3px; }
+.ltf-page .ltf-list-footer { min-height: 27px; margin: 0 8px; padding: 3px 8px; font-size: 10px; }
+.ltf-page .ltf-summary-bar { margin-top: 6px; border-color: #d4e1f2; border-radius: 7px; box-shadow: none; }
+.ltf-page .ltf-summary-heading { min-width: 145px; padding: 5px 8px; gap: 6px; background: #dce9fc; }
+.ltf-page .ltf-summary-heading strong { color: #071b52; font-size: 11px; }
+.ltf-page .ltf-summary-heading span { display: none; }
+.ltf-page .ltf-summary-icon { width: 25px; height: 25px; flex-basis: 25px; }
+.ltf-page .ltf-summary-item, .ltf-page .ltf-selected-summary { min-width: 0; padding: 5px 8px; }
+.ltf-page :is(.ltf-summary-item span, .ltf-selected-summary span) { font-size: 9px; }
+.ltf-page :is(.ltf-summary-item strong, .ltf-selected-summary strong) { margin-top: 2px; font-size: 11px; }
+.ltf-page .ltf-summary-divider { margin: 5px 0; }
+@media (max-width: 760px) {
+  .ltf-page .ltf-mode-field { max-width: none; }
+  .ltf-page .ltf-criteria-grid { flex-basis: 100%; grid-template-columns: repeat(2, minmax(0, 1fr)) auto; }
+  .ltf-page .ltf-summary-bar { flex-direction: column; }
+  .ltf-page .ltf-summary-heading { min-width: 0; }
+  .ltf-page .ltf-summary-items { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .ltf-page .ltf-summary-divider { display: none; }
+}
+@media (max-width: 480px) {
+  .ltf-page .ltf-criteria-grid { grid-template-columns: 1fr; }
+  .ltf-page .ltf-go-button { justify-self: start; }
+  .ltf-page .ltf-header-actions, .ltf-page .ltf-list-actions { flex-direction: row; }
+  .ltf-page .ltf-search-box { width: min(200px, 100%); }
+  .ltf-page .ltf-summary-items { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+
+/* Transfer Details heading follows the compact list heading. */
+.ltf-page .ltf-criteria-heading { flex: 0 0 100%; box-sizing: border-box; min-height: 25px; margin: 0; padding: 5px 8px; border-radius: 5px; background: #dce9fc; color: #071b52; font-size: 12px; line-height: 15px; font-weight: 700; }
+
+/* Keep the search field inside its single outer border and match table headings. */
+.ltf-page .ltf-search-box input { width: 100% !important; min-width: 0 !important; height: auto !important; min-height: 0 !important; margin: 0 !important; padding: 0 !important; border: 0 !important; border-radius: 0 !important; outline: 0 !important; background: transparent !important; box-shadow: none !important; }
+.ltf-page .ltf-table thead th.ltf-amount-column { color: #fff !important; }
+
+/* Purchase invoice: restore the section bars and keep all totals on one row. */
+.purchase-invoice-compact.purchase-billing-page .purchase-header-section > .purchase-section-heading,
+.purchase-invoice-compact.purchase-billing-page .purchase-summary-section > .purchase-summary-heading {
+  display: flex !important;
+  visibility: visible !important;
+  min-height: 24px !important;
+  margin: 0 0 5px !important;
+  padding: 2px 8px !important;
+  background: #dce8fb !important;
+  border-radius: 5px !important;
+}
+.purchase-invoice-compact.purchase-billing-page :is(.purchase-section-dot, .billing-section-dot) {
+  display: inline-block !important;
+  visibility: visible !important;
+  width: 16px !important;
+  min-width: 16px !important;
+  height: 16px !important;
+  margin-right: 5px !important;
+  border-radius: 50% !important;
+  background: #3b82f6 !important;
+}
+.purchase-invoice-compact.purchase-billing-page .purchase-product-table thead th,
+.purchase-invoice-compact.purchase-billing-page .purchase-product-table thead th:first-child,
+.purchase-invoice-compact.purchase-billing-page .purchase-product-table thead th:last-child {
+  background: #0759eb !important;
+  color: #fff !important;
+}
+.purchase-invoice-compact.purchase-billing-page .purchase-summary-grid {
+  display: flex !important;
+  flex-wrap: nowrap !important;
+  overflow-x: auto !important;
+}
+.purchase-invoice-compact.purchase-billing-page .purchase-summary-grid > div {
+  flex: 0 0 auto !important;
+  min-width: 95px !important;
+}
+.purchase-invoice-compact.purchase-billing-page .purchase-grid-footer {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 38px;
+  padding: 4px 6px;
+  border: 1px solid #d4e1f2;
+  border-top: 0;
+  border-radius: 0 0 6px 6px;
+  background: #f7faff;
+}
+.purchase-invoice-compact.purchase-billing-page .purchase-grid-hint {
+  flex: 1;
+  padding: 5px;
+  border: 1px dashed #c3d2e9;
+  border-radius: 4px;
+  color: #7184a4;
+  font-size: 10px;
+  text-align: center;
+}
+
+/* Compact transaction headings and a net amount that stays visible. */
+.purchase-invoice-compact .purchase-summary-heading,
+.credit-note-purchase-layout .credit-note-summary-section > .purchase-summary-title,
+.debit-note-credit-style .debit-credit-summary-section > .debit-credit-summary-heading,
+.credit-note-purchase-layout .purchase-header-section > .purchase-section-heading,
+.debit-note-credit-style .debit-credit-header-section > .debit-credit-section-heading {
+  display: flex !important;
+  align-items: center !important;
+  justify-content: space-between !important;
+  gap: 8px !important;
+  min-height: 24px !important;
+  padding: 3px 8px !important;
+  margin: 0 0 5px !important;
+  border: 0 !important;
+  border-radius: 5px !important;
+  background: #dce8fb !important;
+  color: #071b52 !important;
+  font-size: 11px !important;
+}
+.entry-summary-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-weight: 700;
+}
+.entry-summary-net {
+  margin-left: auto;
+  flex-shrink: 0;
+  color: #243b65;
+  font-size: 11px;
+  white-space: nowrap;
+}
+.entry-summary-net strong {
+  margin-left: 4px;
+  color: #0759eb;
+  font-size: 12px;
+}
+.credit-note-purchase-layout .purchase-section-dot,
+.debit-note-credit-style .debit-credit-section-dot {
+  display: inline-block !important;
+  flex: 0 0 16px !important;
+  width: 16px !important;
+  height: 16px !important;
+  border-radius: 50% !important;
+  background: #3b82f6 !important;
+}
+.credit-note-purchase-layout :is(.purchase-header-section, .credit-product-section, .credit-note-summary-section),
+.debit-note-credit-style :is(.debit-credit-header-section, .debit-credit-product-section, .debit-credit-summary-section) {
+  padding: 6px 12px 8px !important;
+  margin-top: 0 !important;
+}
+.credit-note-purchase-layout .purchase-header-grid,
+.debit-note-credit-style .invoice-header-grid {
+  gap: 5px 10px !important;
+}
+.credit-note-purchase-layout .purchase-header-grid :is(input, select),
+.debit-note-credit-style .invoice-header-grid :is(input, select) {
+  height: 29px !important;
+  min-height: 29px !important;
+  font-size: 11px !important;
+}
+.credit-note-purchase-layout .billing-product-heading-left,
+.debit-note-credit-style .debit-credit-product-heading {
+  display: flex !important;
+  align-items: center !important;
+  flex-wrap: wrap !important;
+  gap: 5px !important;
+}
+.credit-note-purchase-layout .billing-product-heading-left > h3,
+.debit-note-credit-style .debit-credit-product-heading > h3 {
+  flex: 0 0 100% !important;
+  box-sizing: border-box !important;
+  margin: 0 !important;
+  padding: 5px 8px !important;
+  border-radius: 5px !important;
+  background: #dce8fb !important;
+  color: #071b52 !important;
+  font-size: 11px !important;
+}
+.credit-note-purchase-layout .billing-product-heading-left > h3::before,
+.debit-note-credit-style .debit-credit-product-heading > h3::before {
+  content: '';
+  display: inline-block;
+  width: 14px;
+  height: 14px;
+  margin-right: 6px;
+  vertical-align: middle;
+  border-radius: 50%;
+  background: #3b82f6;
+}
+.credit-note-purchase-layout .credit-product-table thead th,
+.debit-note-credit-style .debit-credit-product-section .product-entry-table thead th {
+  background: #0759eb !important;
+  color: #fff !important;
+}
+.credit-note-purchase-layout .credit-note-summary-section .purchase-summary-grid,
+.debit-note-credit-style .debit-credit-summary-grid {
+  display: flex !important;
+  flex-wrap: nowrap !important;
+  overflow-x: auto !important;
+}
+.credit-note-purchase-layout .credit-note-summary-section .purchase-summary-grid > div,
+.debit-note-credit-style .debit-credit-summary-grid > div {
+  flex: 0 0 auto !important;
+  min-width: 95px !important;
+}
+
+/* Show entry headings and give debit-note columns practical widths. */
+.credit-note-purchase-layout .credit-product-section .billing-product-heading-left > h3,
+.debit-note-credit-style .debit-credit-product-heading > h3 {
+  display: block !important;
+}
+.debit-note-credit-style .debit-credit-product-section .erp-table-container {
+  min-width: 0 !important;
+  width: max-content !important;
+}
+.debit-note-credit-style .debit-credit-product-section .product-entry-table {
+  width: max-content !important;
+  min-width: 100% !important;
+}
+.debit-note-credit-style .debit-credit-product-section .product-entry-table th {
+  min-width: 72px !important;
+  padding: 4px 5px !important;
+}
+.debit-note-credit-style .debit-credit-product-section .product-entry-table th:first-child {
+  min-width: 40px !important;
+}
+.debit-note-credit-style .debit-credit-product-section .product-entry-table th:nth-child(2) {
+  min-width: 52px !important;
+}
+.debit-note-credit-style .debit-credit-product-section .product-entry-table th:nth-child(3) {
+  min-width: 90px !important;
+}
+.debit-note-credit-style .debit-credit-product-section .product-entry-table th:nth-child(4) {
+  min-width: 155px !important;
+}
+
+/* Debit note uses the same compact canvas and section rhythm as purchase. */
+.debit-note-credit-style {
+  box-sizing: border-box !important;
+  width: calc(100% - 16px) !important;
+  max-width: none !important;
+  margin: 8px !important;
+  padding: 0 !important;
+  overflow: hidden !important;
+  border: 1px solid #dce5f2 !important;
+  border-radius: 9px !important;
+  background: #fff !important;
+  box-shadow: 0 1px 3px #12264a14 !important;
+  font-family: Inter, "Segoe UI", Roboto, Arial, sans-serif !important;
+}
+.debit-note-credit-style .debit-credit-top-header {
+  display: flex !important;
+  align-items: center !important;
+  justify-content: space-between !important;
+  gap: 10px !important;
+  min-height: 46px !important;
+  padding: 6px 12px !important;
+  border-bottom: 1px solid #dce5f2 !important;
+  background: #fff !important;
+}
+.debit-note-credit-style .debit-credit-title-wrap,
+.debit-note-credit-style .debit-credit-header-actions {
+  display: flex !important;
+  align-items: center !important;
+  gap: 6px !important;
+}
+.debit-note-credit-style .debit-credit-title-wrap h2 {
+  margin: 0 !important;
+  color: #172554 !important;
+  font-size: 16px !important;
+  line-height: 1.2 !important;
+}
+.debit-note-credit-style .debit-credit-header-section,
+.debit-note-credit-style .debit-credit-product-section,
+.debit-note-credit-style .debit-credit-summary-section {
+  box-sizing: border-box !important;
+  width: 100% !important;
+  margin: 0 !important;
+  padding: 6px 12px 8px !important;
+  border-bottom: 1px solid #dce5f2 !important;
+  background: #fff !important;
+}
+.debit-note-credit-style .debit-credit-section-heading,
+.debit-note-credit-style .debit-credit-summary-heading {
+  box-sizing: border-box !important;
+  min-height: 24px !important;
+  padding: 3px 8px !important;
+  margin: 0 0 5px !important;
+  border-radius: 5px !important;
+  background: #dce8fb !important;
+}
+.debit-note-credit-style .debit-credit-product-heading {
+  justify-content: flex-start !important;
+  margin: 0 0 5px !important;
+}
+.debit-note-credit-style .debit-credit-product-heading > h3 {
+  display: block !important;
+  min-height: 24px !important;
+  line-height: 14px !important;
+}
+.debit-note-credit-style .debit-credit-product-section .product-entry-container {
+  box-sizing: border-box !important;
+  width: 100% !important;
+  height: clamp(190px, 31vh, 285px) !important;
+  min-height: 190px !important;
+  max-height: 285px !important;
+  overflow: auto !important;
+  border: 1px solid #dce5f2 !important;
+  border-radius: 7px !important;
+  background: #fff !important;
+}
+.debit-note-credit-style .debit-credit-product-section .product-entry-table {
+  table-layout: auto !important;
+  border-collapse: separate !important;
+  border-spacing: 0 !important;
+}
+.debit-note-credit-style .debit-credit-product-section .product-entry-table th {
+  height: 28px !important;
+  background: #0759eb !important;
+  color: #fff !important;
+  font-size: 10px !important;
+  text-transform: none !important;
+}
+.debit-note-credit-style .debit-credit-product-section .product-entry-table td {
+  height: 35px !important;
+  padding: 3px !important;
+}
+.debit-note-credit-style .debit-credit-product-section .product-entry-table :is(input, select) {
+  box-sizing: border-box !important;
+  height: 28px !important;
+  min-height: 28px !important;
+  font-size: 10px !important;
+}
+.debit-note-credit-style .debit-credit-summary-grid {
+  gap: 0 !important;
+  padding: 0 !important;
+  background: #fff !important;
+}
+.debit-note-credit-style .debit-credit-summary-grid > div {
+  min-height: 38px !important;
+  margin: 0 !important;
+  padding: 3px 7px !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  border-right: 1px solid #d7e1ee !important;
+  background: #fff !important;
+  box-shadow: none !important;
+  text-align: left !important;
+  font-size: 9px !important;
+}
+.debit-note-credit-style .debit-credit-summary-grid > .net-amount {
+  background: #eaf2ff !important;
+}
+.debit-note-credit-style .debit-credit-bottom-actions {
+  display: flex !important;
+  align-items: center !important;
+  gap: 6px !important;
+  padding: 6px 12px !important;
+  background: #f7faff !important;
+}
+@media (max-width: 650px) {
+  .debit-note-credit-style .debit-credit-top-header { flex-wrap: wrap !important; }
+  .debit-note-credit-style .debit-credit-header-actions { flex-wrap: wrap !important; }
+}
+
+/* Debit summary uses the same compact summary primitives as Sales Billing. */
+.debit-note-credit-style .debit-credit-summary-section.billing-compact-summary {
+  box-sizing: border-box !important;
+  padding: 4px 10px 5px !important;
+  border: 1px solid #d4e1f2 !important;
+  border-radius: 8px !important;
+  background: #fff !important;
+}
+.debit-note-credit-style .debit-credit-summary-heading.billing-compact-summary-header {
+  display: flex !important;
+  align-items: center !important;
+  justify-content: space-between !important;
+  min-height: 21px !important;
+  margin: 0 0 3px !important;
+  padding: 2px 8px !important;
+  border: 0 !important;
+  border-radius: 5px !important;
+  background: #dce8fb !important;
+}
+.debit-note-credit-style .debit-credit-summary-heading .billing-section-title {
+  display: flex !important;
+  align-items: center !important;
+  gap: 6px !important;
+}
+.debit-note-credit-style .debit-credit-summary-heading .billing-section-number {
+  display: inline-block !important;
+  width: 16px !important;
+  height: 16px !important;
+  border-radius: 50% !important;
+  background: #3b82f6 !important;
+}
+.debit-note-credit-style .billing-compact-summary .debit-summary-values {
+  display: flex !important;
+  flex-wrap: nowrap !important;
+  gap: 0 !important;
+  overflow-x: auto !important;
+}
+.debit-note-credit-style .billing-compact-summary .debit-summary-values > .billing-summary-item {
+  display: grid !important;
+  flex: 1 0 85px !important;
+  min-width: 85px !important;
+  min-height: 32px !important;
+  padding: 2px 7px !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  text-align: left !important;
+}
+.debit-note-credit-style .billing-compact-summary .debit-summary-values > .billing-summary-item + .billing-summary-item {
+  border-left: 1px solid #d7e1ee !important;
+}
+.debit-note-credit-style .billing-compact-summary .debit-summary-values .billing-summary-input-wrap input {
+  height: 17px !important;
+  min-height: 17px !important;
+  padding: 0 3px !important;
+  font-size: 11px !important;
+}
+
+/* Credit note product heading spans the same width as its section. */
+.credit-note-purchase-layout .credit-product-section .billing-product-heading,
+.credit-note-purchase-layout .credit-product-section .billing-product-heading-left {
+  display: flex !important;
+  width: 100% !important;
+  min-width: 0 !important;
+}
+.credit-note-purchase-layout .credit-product-section .billing-product-heading-left {
+  flex-wrap: wrap !important;
+}
+.credit-note-purchase-layout .credit-product-section .billing-product-heading-left > h3 {
+  box-sizing: border-box !important;
+  display: block !important;
+  flex: 0 0 100% !important;
+  width: 100% !important;
+  max-width: none !important;
+}
+
+/* Keep debit item columns compact; horizontal scrolling retains every field. */
+.debit-note-credit-style .debit-credit-product-section .product-entry-table {
+  width: 1810px !important;
+  min-width: 1810px !important;
+  table-layout: fixed !important;
+}
+.debit-note-credit-style .debit-credit-product-section .product-entry-table :is(th, td) {
+  box-sizing: border-box !important;
+  width: 70px !important;
+  min-width: 70px !important;
+  max-width: 70px !important;
+}
+.debit-note-credit-style .debit-credit-product-section .product-entry-table :is(th, td):nth-child(1) {
+  width: 38px !important;
+  min-width: 38px !important;
+  max-width: 38px !important;
+}
+.debit-note-credit-style .debit-credit-product-section .product-entry-table :is(th, td):nth-child(2),
+.debit-note-credit-style .debit-credit-product-section .product-entry-table :is(th, td):nth-child(5),
+.debit-note-credit-style .debit-credit-product-section .product-entry-table :is(th, td):last-child {
+  width: 60px !important;
+  min-width: 60px !important;
+  max-width: 60px !important;
+}
+.debit-note-credit-style .debit-credit-product-section .product-entry-table :is(th, td):nth-child(3) {
+  width: 150px !important;
+  min-width: 150px !important;
+  max-width: 150px !important;
+}
+.debit-note-credit-style .debit-credit-product-section .product-entry-table :is(th, td):nth-child(4) {
+  width: 155px !important;
+  min-width: 155px !important;
+  max-width: 155px !important;
+}
+.debit-note-credit-style .debit-credit-product-section .product-entry-table :is(input, select) {
+  width: 100% !important;
+  min-width: 0 !important;
+}
+
+/* Keep debit-note actions visible while the product grid scrolls sideways. */
+.debit-note-credit-style .debit-credit-product-section .erp-table-container {
+  overflow: visible !important;
+}
+.debit-note-credit-style .debit-credit-product-section .product-entry-table :is(th, td):last-child {
+  position: sticky !important;
+  right: 0 !important;
+  left: auto !important;
+  z-index: 6 !important;
+  background: #fff !important;
+  box-shadow: -2px 0 4px rgba(15, 35, 70, 0.1);
+}
+.debit-note-credit-style .debit-credit-product-section .product-entry-table thead th:last-child {
+  z-index: 22 !important;
+  background: #0759eb !important;
+  color: #fff !important;
 }

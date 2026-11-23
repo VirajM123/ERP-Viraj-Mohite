@@ -38,6 +38,21 @@ const router = express.Router();
 router.get('/receipt/opening-bills', securityRouter.authorizeRequest('TRANSACTIONS', 'RECEIPT', 'view'), async (req, res) => {
   res.json({ success: true, data: openingBillRows(await openingOutstanding(req, 'Dr')) });
 });
+router.get('/receipt/sales-bills', securityRouter.authorizeRequest('TRANSACTIONS', 'RECEIPT', 'view'), async (req, res) => {
+  try {
+    const filter = {
+      distributorId: req.auth.distributorId, firmId: req.auth.firmId,
+      isActive: { $ne: false }, IsBillCancelled: { $ne: true },
+      ...(req.auth.role === 'SALESMAN' ? { SalesmanCode: req.auth.salesmanCode || '__UNASSIGNED__' } : {}),
+    };
+    const data = await mongoose.connection.collection('T_Sal_Header').find(filter, {
+      projection: { BillSeries: 1, billSeries: 1, BillNo: 1, billNo: 1, BillDate: 1, billDate: 1, NetAmount: 1, netAmount: 1, BillAmount: 1, billAmount: 1, PartyName: 1, partyName: 1, AccountName: 1, accountName: 1, SalesmanCode: 1, salesmanCode: 1, SalesmanName: 1, salesmanName: 1, AreaCode: 1, areaCode: 1, AreaName: 1, areaName: 1 },
+    }).toArray();
+    res.json({ success: true, data });
+  } catch (error) {
+    res.status(500).json({ success: false, message: 'Unable to load receipt invoices.' });
+  }
+});
 router.get('/payment/opening-bills', securityRouter.authorizeRequest('TRANSACTIONS', 'PAYMENT', 'view'), async (req, res) => {
   res.json({ success: true, data: openingBillRows(await openingOutstanding(req, 'Cr')) });
 });

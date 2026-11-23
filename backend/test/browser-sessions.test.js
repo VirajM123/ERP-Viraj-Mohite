@@ -56,3 +56,25 @@ test("browser sessions expire, enforce CSRF and revoke independently", async (t)
   await authenticateApi(denied, res, () => assert.fail("expired session passed"));
   assert.equal(status, 401);
 });
+
+test("production session cookies support cross-site API requests and are cleared with matching options", async (t) => {
+  const previousEnvironment = process.env.NODE_ENV;
+  const previousSecret = process.env.JWT_SECRET;
+  const oldCollection = mongoose.connection.collection;
+  process.env.NODE_ENV = "production";
+  process.env.JWT_SECRET = "test-secret-with-at-least-thirty-two-characters";
+  t.after(() => {
+    mongoose.connection.collection = oldCollection;
+    if (previousEnvironment === undefined) delete process.env.NODE_ENV; else process.env.NODE_ENV = previousEnvironment;
+    if (previousSecret === undefined) delete process.env.JWT_SECRET; else process.env.JWT_SECRET = previousSecret;
+  });
+  mongoose.connection.collection = () => ({ async createIndex() {}, async insertOne() {} });
+  let createdOptions;
+  await createBrowserSession({ cookie(_name, _value, options) { createdOptions = options; } }, "token");
+  assert.equal(createdOptions.sameSite, "none");
+  assert.equal(createdOptions.secure, true);
+  assert.equal(createdOptions.httpOnly, true);
+  let clearedOptions;
+  await revokeBrowserSession({}, { clearCookie(_name, options) { clearedOptions = options; } });
+  assert.deepEqual(clearedOptions, { httpOnly: true, secure: true, sameSite: "none", path: "/api" });
+});
