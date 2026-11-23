@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { createPortal } from "react-dom";
 import { Columns3, ListFilter } from "lucide-react";
 
 const getColumnWidth = (column) => {
@@ -14,6 +15,7 @@ export default function CommonReportGrid({
   getTotal,
   columnFilters,
   onColumnFilterChange,
+  controlsTarget,
 }) {
   const columnSignature = useMemo(
     () => columns.map((column) => column.key).join("|"),
@@ -40,9 +42,7 @@ export default function CommonReportGrid({
     });
   };
 
-  return (
-    <div className="common-report-grid">
-      <div className="common-report-grid-controls">
+  const controls = <div className="common-report-grid-controls">
         <div className="common-report-grid-menu">
           <button
             type="button"
@@ -78,7 +78,11 @@ export default function CommonReportGrid({
         >
           <ListFilter size={13} /> Filter
         </button>
-      </div>
+      </div>;
+
+  return (
+    <div className="common-report-grid">
+      {controlsTarget ? createPortal(controls, controlsTarget) : controls}
 
       <div className="common-report-grid-scroll">
         <table className="party-report-table common-report-grid-table">

@@ -13598,7 +13598,15 @@ setTransactionFormMode((prev) => ({
 
   // Payment Form
   const renderPaymentForm = () => (
-    <div className="payment-section"><div className="form-section"><div className="section-header">Add Payment Information</div>
+    <div className="payment-section payment-compact-form">
+      <header className="payment-compact-header">
+        <div className="payment-compact-title"><h2>Payment Voucher</h2><span>New Voucher</span></div>
+        <div className="payment-compact-actions">
+          <button type="button" className="payment-compact-save" onClick={savePayment}>&#10003; Save Payment</button>
+          <button type="button" className="payment-compact-close" aria-label="Close payment form" onClick={() => openTransactionList("Payment")}>&times;</button>
+        </div>
+      </header>
+      <div className="form-section"><div className="section-header">Payment Information</div>
       <div className="payment-header-grid"><div className="labeled-input"><label>VDate</label><input type="date" name="vDate" value={paymentFormData.vDate} onChange={handlePaymentInput} /></div>
         <div className="labeled-input"><label>VNo</label><input
           type="text"
@@ -13630,7 +13638,7 @@ setTransactionFormMode((prev) => ({
             );
           }}
         /></div>
-        <div className="labeled-input payment-narration"><label>Narr</label><input name="narr" value={paymentFormData.narr} onChange={handlePaymentInput} /></div>
+        <div className="labeled-input payment-narration"><label>Narration</label><input name="narr" value={paymentFormData.narr} onChange={handlePaymentInput} /></div>
         <div className="labeled-input"><label>Party Name</label><div className="live-search-box"><input value={paymentFormData.partyName} onChange={(e) => { const value = e.target.value; setPaymentFormData(prev => ({ ...prev, partyName: value })); setPaymentPartySuggestionIndex(0); if (!value.trim()) { setPaymentPartySuggestions([]); return; } const matches = pendingPurchaseBills.filter((bill) => bill.party?.toLowerCase().includes(value.toLowerCase())).map((bill) => bill.party); setPaymentPartySuggestions([...new Set(matches)]); }} onKeyDown={(e) => { if (e.key === "ArrowDown" || e.key === "ArrowUp") { if (!paymentPartySuggestions.length) return; e.preventDefault(); setPaymentPartySuggestionIndex((index) => (index + (e.key === "ArrowDown" ? 1 : -1) + paymentPartySuggestions.length) % paymentPartySuggestions.length); } else if (e.key === "Enter" && paymentPartySuggestions.length) { e.preventDefault(); selectPaymentParty(paymentPartySuggestions[paymentPartySuggestionIndex]); } else if (e.key === "Escape") { setPaymentPartySuggestions([]); } }} />
           {paymentPartySuggestions.length > 0 && (<div className="live-dropdown">{paymentPartySuggestions.map((party, idx) => (<div key={idx} className="live-item" style={idx === paymentPartySuggestionIndex ? { background: "#eaf2ff" } : undefined} onMouseEnter={() => setPaymentPartySuggestionIndex(idx)} onClick={() => selectPaymentParty(party)}>{party}</div>))}</div>)}</div></div>
         <div className="labeled-input"><label>Dr Amt</label><input name="drAmt" value={paymentFormData.drAmt} onChange={handlePaymentInput} /></div>
@@ -13647,10 +13655,10 @@ setTransactionFormMode((prev) => ({
         <tbody>{paymentItems.map((item, index) => (<tr key={item.id}><td>{item.srNo}</td><td><input value={item.trn} onChange={(e) => updatePaymentItem(index, "trn", e.target.value)} /></td><td><input value={item.trnSeries} onChange={(e) => updatePaymentItem(index, "trnSeries", e.target.value)} /></td>
           <td><input value={item.voucherNo} onChange={(e) => updatePaymentItem(index, "voucherNo", e.target.value)} /></td><td><input value={item.amount} onChange={(e) => updatePaymentItem(index, "amount", e.target.value)} /></td>
           <td><input value={item.adjustedAmt} onChange={(e) => updatePaymentItem(index, "adjustedAmt", e.target.value)} /></td><td><input value={item.balanceAmt} readOnly /></td>
-          <td><input value={item.newAdjusted} onChange={(e) => updatePaymentItem(index, "newAdjusted", e.target.value)} /></td></tr>))}</tbody></table></div><button className="btn-secondary" onClick={addPaymentRow} style={{ marginTop: "10px" }}>+ Add Row</button></div>
+          <td><input value={item.newAdjusted} onChange={(e) => updatePaymentItem(index, "newAdjusted", e.target.value)} /></td></tr>))}</tbody></table></div><button className="btn-secondary" onClick={addPaymentRow}>+ Add Row</button></div>
       <div className="payment-bottom-grid"><div className="payment-rtgs-card"><h4>For RTGS Only</h4><div className="payment-rtgs-grid"><div className="labeled-input"><label>Party Bank Name</label><input name="partyBankName" value={paymentFormData.partyBankName} onChange={handlePaymentInput} /></div><div className="labeled-input"><label>Bank Account No</label><input name="bankAccountNo" value={paymentFormData.bankAccountNo} onChange={handlePaymentInput} /></div></div></div>
         <div className="payment-summary-grid"><div className="summary-card"><label>Adjusted Amt</label><h3>{paymentSummary.adjustedAmt}</h3></div><div className="summary-card"><label>Balance Amt</label><h3>{paymentSummary.balanceAmt}</h3></div><div className="summary-card"><label>Total Dr Amt</label><h3>{paymentSummary.totalDrAmt}</h3></div><div className="summary-card"><label>Total Cr Amt</label><h3>{paymentSummary.totalCrAmt}</h3></div></div></div>
-      <div className="form-actions"><button className="btn-primary" onClick={savePayment}>Save</button><button className="btn-secondary" onClick={() => openTransactionList("Payment")}>Cancel</button></div>
+      
     </div>
   );
 
@@ -17262,12 +17270,12 @@ setTransactionFormMode((prev) => ({
           <div className="voucher-title-row"><h2>Contra Voucher</h2><span className="voucher-new-badge">{editContraId ? "Edit Voucher" : "New Voucher"}</span></div>
           <div className="contra-header-actions">
             <button type="button" className="contra-save-header-btn" onClick={saveContra}>
-              ? {editContraId ? "Update Contra" : "Save Contra"}
+              &#10003; {editContraId ? "Update Contra" : "Save Contra"}
             </button>
             <button type="button" className="contra-close-header-btn" aria-label="Close Contra form" onClick={() => {
               resetContraForm();
               openTransactionList("Contra");
-            }}>?</button>
+            }}>&times;</button>
           </div>
           <p>Record cash deposits, withdrawals and bank transfers.</p>
         </header>
@@ -18550,7 +18558,21 @@ setTransactionFormMode((prev) => ({
           <header className="voucher-form-header">
           <div className="voucher-breadcrumb">Transactions <span>/</span> Collection Voucher</div>
           <div className="voucher-title-row"><h2>Collection Voucher</h2><span className="voucher-new-badge">{editCollectionVoucherId ? "Edit" : "New"}</span></div>
-          <p>Select outstanding bills and record collections.</p>
+          <div className="voucher-footer-actions"><button
+                type="button" className="voucher-secondary-button"
+                onClick={() => {
+                  resetCollectionVoucherForm();
+                  openTransactionList("Collection Voucher");
+                }}
+              >
+                Cancel
+              </button>
+<button
+                type="button" className="voucher-primary-button"
+                onClick={saveCollectionVoucher}
+              >
+                Save Voucher
+              </button></div>
         </header>
           <div className="collection-voucher-card">
             <section className="voucher-collection-details"><h3>Collection details</h3>
@@ -18621,6 +18643,20 @@ setTransactionFormMode((prev) => ({
                 </select>
               </div>
 
+              <div className="collection-field collection-narr-field">
+                <label>Narration</label>
+                <div className="collection-narr-row">
+                  <input
+                    type="text"
+                    name="narration"
+                    value={collectionVoucherFormData.narration}
+                    onChange={handleCollectionVoucherInput}
+                    placeholder="Enter narration"
+                  />
+
+                  
+                </div>
+              </div>
             </div>
           </section>
           <section className="voucher-collection-bills">
@@ -18768,21 +18804,7 @@ setTransactionFormMode((prev) => ({
               </table>
             </div>
 
-            <div className="voucher-collection-bottom">
-              <div className="collection-field collection-narr-field">
-                <label>Narration</label>
-                <div className="collection-narr-row">
-                  <input
-                    type="text"
-                    name="narration"
-                    value={collectionVoucherFormData.narration}
-                    onChange={handleCollectionVoucherInput}
-                    placeholder="Enter narration"
-                  />
-
-                  
-                </div>
-              </div>
+            <div className="voucher-collection-bottom"><h3>Collection Summary</h3>
 
             <div className="collection-bottom-summary">
               <span>
@@ -18803,24 +18825,7 @@ setTransactionFormMode((prev) => ({
           </div>
 
 
-<footer className="voucher-form-footer">
-          <small>Required fields marked <span>*</span></small>
-          <div className="voucher-footer-actions"><button
-                type="button" className="voucher-secondary-button"
-                onClick={() => {
-                  resetCollectionVoucherForm();
-                  openTransactionList("Collection Voucher");
-                }}
-              >
-                Cancel
-              </button>
-<button
-                type="button" className="voucher-primary-button"
-                onClick={saveCollectionVoucher}
-              >
-                Save Voucher
-              </button></div>
-        </footer>
+
         </div>
 
         {collectionVoucherFormData.collectionType === "Bill wise" && (

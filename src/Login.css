@@ -303,3 +303,60 @@ body { margin: 0; font-family: "Inter", "Segoe UI", Arial, sans-serif; }
   .auth-page .login-rocket, .auth-page .auth-btn.is-launching::after { animation: none !important; }
   .auth-page .auth-btn { transition: none; }
 }
+
+/* Distributor registration, styled like the compact billing forms. */
+.auth-page.register-page { display: block; min-height: 100vh; padding: 0 0 24px; background: #f3f7fc; overflow: auto; }
+.register-page .register-brand { display: flex; align-items: center; gap: 10px; height: 66px; padding: 0 4%; background: #fff; border-bottom: 1px solid #d7e3f2; color: #11264c; font-size: 18px; }
+.register-page .register-brand img { width: 42px; height: 42px; object-fit: contain; }
+.register-page .register-card { display: block; width: calc(100% - 48px); max-width: 1500px; margin: 20px auto 0; background: transparent; box-shadow: none; }
+.register-page .register-card .auth-left { display: block; min-height: 0; padding: 0; background: transparent; }
+.register-page .auth-form-box.register-form { position: relative; width: 100%; max-width: none; padding: 18px 20px 56px; border: 1px solid #d7e3f2; border-radius: 9px; background: #fff; box-shadow: 0 2px 5px #142b4a12; }
+.register-page .register-form h2 { margin: 0 0 10px; padding-bottom: 12px; border-bottom: 1px solid #d7e3f2; color: #11264c; font-size: 20px; }
+.register-page .register-form h2 .register-badge { display: inline-block; margin-left: 8px; padding: 4px 9px; border-radius: 12px; background: #e5efff; color: #1d55dc; font-size: 10px; vertical-align: middle; }
+.register-page .register-form .auth-subtitle, .register-page .register-form .divider { display: none; }
+.register-page .register-form form { display: grid; grid-template-columns: repeat(12, minmax(0, 1fr)); gap: 8px 10px; }
+.register-page .register-form form > div[style] { display: contents !important; }
+.register-page .register-form .register-section { grid-column: 1 / -1; display: flex; align-items: center; gap: 7px; min-height: 24px; margin: 2px 0 0; padding: 3px 8px; border-radius: 4px; background: #dce9fc; color: #11264c; font-size: 12px; }
+.register-page .register-section::before { content: ''; width: 10px; height: 10px; border-radius: 50%; background: #3479ec; }
+.register-page .register-section-firm { order: 0; }
+.register-page .register-section-business { order: 20; }
+.register-page .register-section-account { order: 30; }
+.register-page .register-form .form-group { grid-column: span 3; min-width: 0; margin: 0; }
+.register-page .register-form .form-group:has([name='firmCode']) { order: 1; grid-column: span 4; }
+.register-page .register-form .form-group:has([name='firmName']) { order: 2; grid-column: span 8; }
+.register-page .register-form .form-group:has([name='address1']) { order: 3; grid-column: span 6; }
+.register-page .register-form .form-group:has([name='address2']) { order: 4; grid-column: span 6; }
+.register-page .register-form .form-group:has([name='city']) { order: 5; }
+.register-page .register-form .form-group:has([name='pinCode']) { order: 6; }
+.register-page .register-form .form-group:has([name='state']) { order: 7; }
+.register-page .register-form .form-group:has([name='country']) { order: 8; }
+.register-page .register-form .form-group:has([name='phoneNo']) { order: 9; grid-column: span 6; }
+.register-page .register-form .form-group:has([name='mobileNo']) { order: 10; grid-column: span 6; }
+.register-page .register-form .form-group:has([name='tinNo']) { order: 21; grid-column: span 2; }
+.register-page .register-form .form-group:has([name='regNo']) { order: 22; grid-column: span 2; }
+.register-page .register-form .form-group:has([name='gstNo']) { order: 23; grid-column: span 2; }
+.register-page .register-form .form-group:has([name='drugLicNo']) { order: 24; grid-column: span 3; }
+.register-page .register-form .form-group:has([name='foodLicenceNo']) { order: 25; grid-column: span 3; }
+.register-page .register-form .form-group:has([name='distributorId']) { order: 31; grid-column: span 4; }
+.register-page .register-form .form-group:has([name='apiKey']) { order: 32; grid-column: span 4; }
+.register-page .register-form .form-group:has([name='email']) { order: 33; grid-column: span 4; }
+.register-page .register-form .form-group:has([name='userName']) { order: 34; grid-column: span 6; }
+.register-page .register-form .form-group:has([name='password']) { order: 35; grid-column: span 6; }
+.register-page .register-form .form-group label { margin-bottom: 3px; color: #11264c; font-size: 11px; font-weight: 600; }
+.register-page .register-form .input-box { height: 31px; border: 1px solid #cbd8e7; border-radius: 4px; background: #fff; box-shadow: none; }
+.register-page .register-form .input-box input, .register-page .register-form .input-box select { height: 100%; padding: 4px 8px; font-size: 12px; }
+.register-page .register-form .input-icon { display: none; }
+.register-page .register-form .auth-btn { order: 40; grid-column: 1 / -1; justify-self: end; width: auto; min-width: 125px; max-width: none; height: 34px; margin: 4px 0 0; padding: 0 14px; border-radius: 5px; background: #159b46; font-size: 12px; }
+.register-page .register-form .switch-text { position: absolute; right: 160px; bottom: 19px; max-width: none; margin: 0; font-size: 0; }
+.register-page .register-form .switch-text button { height: 34px; padding: 0 12px; border: 1px solid #2563eb; border-radius: 5px; background: #fff; color: #2563eb; font-size: 12px; font-weight: 600; }
+.register-loading-overlay { position: fixed; z-index: 9999; inset: 0; display: grid; place-items: center; padding: 20px; background: #10274c80; }
+.register-loading-card { min-width: 260px; padding: 26px 30px; border: 1px solid #d7e3f2; border-radius: 12px; background: #fff; color: #11264c; text-align: center; box-shadow: 0 16px 50px #10274c40; }
+.register-loading-card p { margin: 7px 0 0; color: #61758f; font-size: 12px; }
+.register-loading-orbit { position: relative; display: grid; place-items: center; width: 64px; height: 64px; margin: 0 auto 14px; border: 3px solid #dce9fc; border-top-color: #2563eb; border-radius: 50%; animation: register-spin 1.2s linear infinite; }
+.register-loading-orbit svg { width: 25px; color: #2563eb; animation: register-spin 1.2s linear infinite reverse; }
+.register-loading-orbit span, .register-loading-orbit i { position: absolute; width: 8px; height: 8px; border-radius: 50%; background: #159b46; }
+.register-loading-orbit span { top: 3px; right: 3px; } .register-loading-orbit i { bottom: 4px; left: 3px; background: #62a6ff; }
+@keyframes register-spin { to { transform: rotate(360deg); } }
+@media (max-width: 760px) { .register-page .register-card { width: calc(100% - 20px); margin-top: 10px; } .register-page .register-form .form-group { grid-column: span 6 !important; } }
+@media (max-width: 480px) { .register-page .register-form .form-group { grid-column: 1 / -1 !important; } .register-page .register-brand { padding: 0 14px; } }
+@media (prefers-reduced-motion: reduce) { .register-loading-orbit, .register-loading-orbit svg { animation: none; } }

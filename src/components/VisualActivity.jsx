@@ -3,7 +3,7 @@ import { startVisualLoading } from "./loadingTracker";
 
 export default function VisualActivity({ active, title, message, variant }) {
   useLayoutEffect(() => {
-    if (active) return startVisualLoading({ title, message, variant }, 1000);
+    if (active) return startVisualLoading({ title, message, variant });
   }, [active, title, message, variant]);
   return null;
 }

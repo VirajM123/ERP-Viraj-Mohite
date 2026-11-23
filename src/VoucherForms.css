@@ -467,6 +467,15 @@
 .transaction-page .voucher-contra .contra-summary-card + .contra-summary-card { border-left: 1px solid #d7e1ee !important; }
 .transaction-page .voucher-contra .contra-summary-card span { font-size: 9px !important; }
 .transaction-page .voucher-contra .contra-summary-card strong, .transaction-page .voucher-contra .contra-summary-card.amount strong { color: #172554 !important; font-size: 12px !important; text-align: left !important; }
+.transaction-page .voucher-contra .contra-summary-card,
+.transaction-page .voucher-contra .contra-summary-card.amount {
+  height: auto !important;
+  min-height: 42px !important;
+  padding: 5px 12px !important;
+  gap: 2px !important;
+}
+.transaction-page .voucher-contra .contra-summary-card span { line-height: 1.2 !important; }
+.transaction-page .voucher-contra .contra-summary-card strong { line-height: 1.2 !important; }
 @media (max-width: 800px) {
   .transaction-page .voucher-contra .contra-header-grid { grid-template-columns: repeat(2, minmax(0, 1fr)) !important; }
   .transaction-page .voucher-contra .contra-header-grid > .contra-field:nth-child(3), .transaction-page .voucher-contra .contra-header-grid > .contra-narration-field { grid-column: 1 / -1 !important; }
@@ -478,3 +487,83 @@
   .transaction-page .voucher-contra .voucher-type-options { height: auto; flex-direction: row; }
   .transaction-page .voucher-contra .voucher-type-option > span { height: 100%; }
 }
+
+/* Restore contra-specific controls over the shared voucher form rules. */
+.transaction-page .voucher-contra .contra-section-dot { display: inline-block !important; }
+.transaction-page .voucher-contra .contra-header-grid > .contra-field.contra-narration-field:nth-child(n) { grid-column: 2 / 4 !important; }
+.transaction-page .voucher-contra .voucher-type-option { display: block !important; height: 28px !important; min-height: 28px !important; padding: 0 !important; }
+.transaction-page .voucher-contra .voucher-type-option input[type="radio"] { position: absolute !important; width: 1px !important; min-width: 1px !important; height: 1px !important; min-height: 1px !important; padding: 0 !important; margin: 0 !important; opacity: 0 !important; }
+.transaction-page .voucher-contra .voucher-type-option > span { display: flex !important; width: 100% !important; height: 28px !important; min-height: 28px !important; align-items: center !important; justify-content: center !important; padding: 0 4px !important; color: #31568d !important; background: #fff !important; font-size: 10px !important; white-space: nowrap; }
+.transaction-page .voucher-contra .voucher-type-option input:checked + span { color: #fff !important; background: #2859e9 !important; }
+@media (max-width: 800px) {
+  .transaction-page .voucher-contra .contra-header-grid > .contra-field.contra-narration-field:nth-child(n) { grid-column: 1 / -1 !important; }
+}
+
+/* Payment entry: compact billing-style presentation only. */
+.transaction-page .payment-compact-form { padding: 0 12px 12px !important; box-sizing: border-box; }
+.transaction-page .payment-compact-form *, .transaction-page .payment-compact-form *::before, .transaction-page .payment-compact-form *::after { box-sizing: border-box; }
+.transaction-page .payment-compact-form .payment-compact-header { min-height: 48px; display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 7px 2px; border-bottom: 1px solid #d7e3f2; }
+.transaction-page .payment-compact-form .payment-compact-title, .transaction-page .payment-compact-form .payment-compact-actions { display: flex; align-items: center; gap: 10px; }
+.transaction-page .payment-compact-form .payment-compact-title h2 { margin: 0; color: #11264c; font-size: 16px; line-height: 1.2; }
+.transaction-page .payment-compact-form .payment-compact-title span { padding: 4px 9px; border-radius: 12px; background: #e5efff; color: #2259d8; font-size: 10px; font-weight: 600; }
+.transaction-page .payment-compact-form .payment-compact-save, .transaction-page .payment-compact-form .payment-compact-close { height: 30px; border-radius: 5px; cursor: pointer; font-family: inherit; font-weight: 600; }
+.transaction-page .payment-compact-form .payment-compact-save { padding: 0 12px; border: 1px solid #12883b; background: #159b46; color: white; font-size: 11px; }
+.transaction-page .payment-compact-form .payment-compact-close { width: 30px; padding: 0; border: 1px solid #cad8e9; background: white; color: #253e65; font-size: 19px; line-height: 1; }
+.transaction-page .payment-compact-form .payment-compact-save:focus-visible, .transaction-page .payment-compact-form .payment-compact-close:focus-visible { outline: 2px solid #2563eb; outline-offset: 2px; }
+.transaction-page .payment-compact-form > .form-section { margin: 10px 0 0 !important; padding: 0 0 8px !important; border: 1px solid #d7e3f2 !important; border-radius: 5px !important; background: #fff !important; }
+.transaction-page .payment-compact-form :is(.section-header, .payment-rtgs-card h4) { display: flex; align-items: center; gap: 7px; min-height: 23px; margin: 0 !important; padding: 3px 8px !important; border: 0 !important; border-radius: 4px; background: #dce9fc; color: #11264c; font-size: 12px; font-weight: 700; line-height: 1.3; }
+.transaction-page .payment-compact-form :is(.section-header, .payment-rtgs-card h4)::before { content: ""; flex: 0 0 10px; width: 10px; height: 10px; border-radius: 50%; background: #3479ec; }
+.transaction-page .payment-compact-form .payment-header-grid { grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 5px 8px; padding: 6px 9px 0; }
+.transaction-page .payment-compact-form .payment-header-grid .payment-narration { grid-column: auto; width: auto; min-width: 0; max-width: none; overflow: visible; }
+.transaction-page .payment-compact-form .labeled-input { min-width: 0; gap: 3px; }
+.transaction-page .payment-compact-form .labeled-input label { margin: 0; color: #11264c; font-size: 10px; line-height: 1.2; font-weight: 600; text-transform: none; letter-spacing: 0; }
+.transaction-page .payment-compact-form :is(.labeled-input input, .labeled-input select, .payment-table input) { width: 100%; min-width: 0; height: 28px !important; min-height: 28px !important; padding: 3px 7px !important; font: inherit; font-size: 11px !important; background: #fff; }
+.transaction-page .payment-compact-form .table-responsive { margin: 7px 8px 0; border: 1px solid #d7e3f2; border-radius: 4px; overflow-x: auto; }
+.transaction-page .payment-compact-form .payment-table { min-width: 850px; table-layout: fixed; }
+.transaction-page .payment-compact-form .payment-table thead { background: #2557e4; border: 0; }
+.transaction-page .payment-compact-form .payment-table thead th { padding: 4px 7px; background: #0759eb !important; color: #fff !important; border-right: 1px solid #3075ee; font-size: 10px; line-height: 1.2; letter-spacing: 0; white-space: nowrap; }
+.transaction-page .payment-compact-form .payment-table th:first-child { width: 55px; }
+.transaction-page .payment-compact-form .payment-table td { padding: 2px 5px; border-right: 1px solid #e1eaf5; border-bottom: 0; font-size: 11px; }
+.transaction-page .payment-compact-form .payment-table input[readonly] { background: #f8fafc; }
+.transaction-page .payment-compact-form .form-section > .btn-secondary { height: 27px; min-height: 0; margin: 7px 8px 0; padding: 0 10px; border: 1px solid #245bea; border-radius: 4px; background: #fff; color: #245bea; font-size: 10px; cursor: pointer; }
+.transaction-page .payment-compact-form .payment-bottom-grid { display: flex; flex-direction: column; gap: 8px; margin-top: 10px; }
+.transaction-page .payment-compact-form .payment-rtgs-card { padding: 0 0 8px; border: 1px solid #d7e3f2; border-radius: 5px; background: #fff; }
+.transaction-page .payment-compact-form .payment-rtgs-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; padding: 7px 9px 0; }
+.transaction-page .payment-compact-form .payment-summary-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 7px; margin: 0; }
+.transaction-page .payment-compact-form .payment-summary-grid .summary-card { min-height: 40px !important; padding: 5px 8px !important; text-align: left; }
+.transaction-page .payment-compact-form .payment-summary-grid .summary-card label { display: block; margin: 0 0 2px; color: #60758e; font-size: 9px; line-height: 1.2; }
+.transaction-page .payment-compact-form .payment-summary-grid .summary-card h3 { margin: 0; color: #11264c; font-size: 12px !important; }
+@media (max-width: 850px) {
+  .transaction-page .payment-compact-form .payment-header-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .transaction-page .payment-compact-form .payment-header-grid .payment-narration { grid-column: 1 / -1; }
+  .transaction-page .payment-compact-form .payment-summary-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@media (max-width: 480px) {
+  .transaction-page .payment-compact-form .payment-compact-header { flex-wrap: wrap; }
+  .transaction-page .payment-compact-form .payment-header-grid, .transaction-page .payment-compact-form .payment-rtgs-grid { grid-template-columns: minmax(0, 1fr); }
+  .transaction-page .payment-compact-form .payment-header-grid .payment-narration { grid-column: auto; }
+}
+
+/* Collection voucher: compact sales billing layout. */
+.transaction-page .voucher-collection .voucher-form-header { display: flex !important; align-items: center; justify-content: space-between; gap: 8px; padding: 7px 12px !important; }
+.transaction-page .voucher-collection .voucher-footer-actions { gap: 6px; }
+.transaction-page .voucher-collection :is(.voucher-primary-button, .voucher-secondary-button, .collection-select-btn) { min-width: 0 !important; height: 29px !important; min-height: 29px !important; padding: 0 10px !important; font-size: 11px !important; }
+.transaction-page .voucher-collection .voucher-primary-button { background: #159b46 !important; border-color: #12883b !important; }
+.transaction-page .voucher-collection .collection-voucher-card { padding: 0 10px 10px !important; }
+.transaction-page .voucher-collection :is(.voucher-collection-details, .voucher-collection-bills) { padding: 7px !important; }
+.transaction-page .voucher-collection .voucher-collection-details { margin: 0 0 6px !important; }
+.transaction-page .voucher-collection .collection-voucher-header-grid { display: grid !important; grid-template-columns: repeat(3, minmax(0, 1fr)) minmax(0, 1.5fr) !important; gap: 7px !important; }
+.transaction-page .voucher-collection :is(.voucher-collection-details > h3, .voucher-bills-heading, .voucher-collection-bottom > h3) { display: flex !important; align-items: center; min-height: 25px !important; margin: 0 0 6px !important; padding: 3px 8px !important; border-radius: 4px !important; background: #dce9fc !important; color: #11264c !important; font-size: 12px !important; }
+.transaction-page .voucher-collection :is(.voucher-collection-details > h3, .voucher-bills-heading > h3, .voucher-collection-bottom > h3)::before { content: ''; display: inline-block; width: 10px; height: 10px; margin-right: 7px; border-radius: 50%; background: #3479ec; flex: none; }
+.transaction-page .voucher-collection .voucher-bills-heading { justify-content: space-between; }
+.transaction-page .voucher-collection .voucher-bills-heading h3 { display: flex; align-items: center; font-size: 12px !important; }
+.transaction-page .voucher-collection .collection-grid-wrap { max-height: 260px !important; }
+.transaction-page .voucher-collection .collection-voucher-table thead th { height: 28px !important; padding: 4px 7px !important; background: #0759eb !important; color: #fff !important; border-color: #3075ee !important; font-size: 10px !important; }
+.transaction-page .voucher-collection .collection-voucher-table tbody td { height: 36px !important; padding: 3px 6px !important; font-size: 11px !important; }
+.transaction-page .voucher-collection .collection-voucher-table input:not([type='checkbox']) { height: 28px !important; min-height: 28px !important; }
+.transaction-page .voucher-collection .collection-voucher-table .receipt-empty-row { height: 110px !important; }
+.transaction-page .voucher-collection .voucher-collection-bottom { display: block !important; margin-top: 8px !important; }
+.transaction-page .voucher-collection .collection-bottom-summary { grid-template-columns: repeat(4, minmax(0, 1fr)) !important; gap: 6px !important; padding: 0 !important; }
+.transaction-page .voucher-collection .collection-bottom-summary > span { padding: 6px 9px !important; gap: 2px !important; }
+@media (max-width: 850px) { .transaction-page .voucher-collection .collection-voucher-header-grid { grid-template-columns: repeat(2, minmax(0, 1fr)) !important; } }
+@media (max-width: 480px) { .transaction-page .voucher-collection .voucher-form-header { flex-wrap: wrap; } .transaction-page .voucher-collection .collection-voucher-header-grid, .transaction-page .voucher-collection .collection-bottom-summary { grid-template-columns: 1fr !important; } }

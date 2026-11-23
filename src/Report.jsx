@@ -70,7 +70,7 @@ const styleExcelHeaderAndTotal = (sheet, columnCount, headerRowIndex, totalRowIn
   }
 };
 
-const ReportExportActions = ({ generate, exportCsv, exportExcel, ready, loading, generationVersion, disabled = false, showFilterToggle = true }) => {
+const ReportExportActions = ({ generate, exportCsv, exportExcel, ready, loading, generationVersion, disabled = false, showFilterToggle = true, showGenerate = true }) => {
   const [pendingFormat, setPendingFormat] = useState(null);
   const [menuOpen, setMenuOpen] = useState(false);
   const [filtersCollapsed, setFiltersCollapsed] = useState(false);
@@ -120,9 +120,9 @@ const ReportExportActions = ({ generate, exportCsv, exportExcel, ready, loading,
           {filtersCollapsed ? "Show Filters" : "Hide Filters"}
         </button>
       )}
-      <button type="button" className="report-generate-button" onClick={generate} disabled={loading || disabled}>
+      {showGenerate && <button type="button" className="report-generate-button" onClick={generate} disabled={loading || disabled}>
         <FileBarChart size={15} /> {loading ? "Generating..." : "Generate report"}
-      </button>
+      </button>}
       <button type="button" className="report-export-button" aria-haspopup="menu" aria-expanded={menuOpen} onClick={() => setMenuOpen((open) => !open)} disabled={loading || disabled}>
         <Download size={15} /> {loading ? "Preparing..." : "Export"} <ChevronDown size={14} />
       </button>
@@ -1894,6 +1894,7 @@ const Report = ({
   const [partyReportRows, setPartyReportRows] = useState([]);
   const [partyReportColumns, setPartyReportColumns] = useState([]);
   const [isPartyReportGenerated, setIsPartyReportGenerated] = useState(false);
+  const [partyGeneratedAt, setPartyGeneratedAt] = useState(null);
   const [isPartyReportLoading, setIsPartyReportLoading] = useState(false);
   const [partyReportError, setPartyReportError] = useState("");
   const [partyReportSearch, setPartyReportSearch] = useState("");
@@ -1902,6 +1903,7 @@ const Report = ({
   const [partyCurrentPage, setPartyCurrentPage] = useState(1);
   const [partyRowsPerPage, setPartyRowsPerPage] = useState(10);
   const [showAdvancedPartyFilters, setShowAdvancedPartyFilters] = useState(true);
+  const [partyGridControlsTarget, setPartyGridControlsTarget] = useState(null);
   useEffect(() => {
     setShowAdvancedPartyFilters(!isPartyReportGenerated);
   }, [isPartyReportGenerated]);
@@ -3080,6 +3082,7 @@ const Report = ({
         throw new Error("From Date cannot be greater than To Date.");
       }
 
+      setShowAdvancedPartyFilters(false);
       setIsPartyReportLoading(true);
       const effectiveProductWise =
         partySalesFilters.reportLevel === "salesDetails"
@@ -3161,6 +3164,7 @@ const Report = ({
       setPartyReportColumns(columns);
       setPartyCurrentPage(1);
       setIsPartyReportGenerated(true);
+      setPartyGeneratedAt(new Date());
       setShowAdvancedPartyFilters(false);
 
       if (rows.length === 0) {
@@ -3171,6 +3175,7 @@ const Report = ({
       setPartyReportRows([]);
       setPartyReportColumns([]);
       setIsPartyReportGenerated(false);
+      setShowAdvancedPartyFilters(true);
       setPartyReportError(error.message || "Failed to generate sales report.");
     } finally {
       setIsPartyReportLoading(false);
@@ -7513,7 +7518,6 @@ const Report = ({
                 <p>Detailed party-wise sales analysis with advanced filtering and insights</p>
               </div>
             </div>
-            <div className="party-report-breadcrumb">Reports <span>›</span> Party Wise Sales Report</div>
           </div>
 
           <div className="party-report-content-layout">
@@ -7522,6 +7526,8 @@ const Report = ({
                 <fieldset className="party-filter-group" aria-label="Report filters">
                   <div className="party-report-filter-heading">
                     <div><SlidersHorizontal size={16} /><strong>Report Criteria</strong></div>
+                    <div className="party-criteria-heading-actions">
+                    <div ref={setPartyGridControlsTarget} className="party-grid-controls-target" />
                     <button
                       type="button"
                       aria-expanded={showAdvancedPartyFilters}
@@ -7529,10 +7535,11 @@ const Report = ({
                     >
                       {showAdvancedPartyFilters ? "Collapse" : "Show Filters"}
                     </button>
+                    </div>
                   </div>
                   {showAdvancedPartyFilters && <div className="party-report-form-grid">
                     <div className="party-report-field">
-                      <label>Company</label>
+                      <label><Building2 size={14} /> Company</label>
                       <select
                         value={partySalesFilters.company}
                         disabled={isCriteriaLoading}
@@ -7566,7 +7573,7 @@ const Report = ({
                     </div>
 
                     <div className="party-report-field">
-                      <label>Report Level</label>
+                      <label><SlidersHorizontal size={14} /> Report Level</label>
                       <select
                         value={partySalesFilters.reportLevel}
                         onChange={(event) => {
@@ -7767,7 +7774,7 @@ const Report = ({
                       </select>
                     </div>
                   </div>}
-                  <div className="party-report-export-field">
+                  {showAdvancedPartyFilters && <div className="party-report-export-field">
                     <button
                       type="button"
                       className="party-report-reset-button"
@@ -7776,8 +7783,11 @@ const Report = ({
                     >
                       <RefreshCw size={14} /> Reset
                     </button>
-                    <ReportExportActions generationVersion={reportGenerationVersion} generate={generatePartySalesReport} exportCsv={exportPartyReportToCsv} exportExcel={exportPartyReportToExcel} ready={isPartyReportGenerated} loading={isPartyReportLoading} disabled={isCriteriaLoading} showFilterToggle={false} />
-                  </div>
+                    <ReportExportActions generationVersion={reportGenerationVersion} generate={generatePartySalesReport} exportCsv={exportPartyReportToCsv} exportExcel={exportPartyReportToExcel} ready={isPartyReportGenerated} loading={isPartyReportLoading} disabled={isCriteriaLoading} showFilterToggle={false} showGenerate={false} />
+                    <button type="button" className="report-generate-button party-criteria-generate" onClick={generatePartySalesReport} disabled={isPartyReportLoading || isCriteriaLoading}>
+                      <FileBarChart size={14} /> {isPartyReportLoading ? "Generating..." : "Generate Report"}
+                    </button>
+                  </div>}
                 </fieldset>
 
                 {showPartySelector && (
@@ -8063,7 +8073,7 @@ const Report = ({
                       <FileBarChart size={17} />
                     </div>
                     <div>
-                      <strong>Party Wise Sales Report</strong>
+                      <strong>Report Results</strong>
                       <span>
                         {isPartyReportGenerated
                           ? `${filteredPartySalesRows.length} records found`
@@ -8165,10 +8175,13 @@ const Report = ({
 
                 <div className="party-report-grid-container">
                   {!isPartyReportGenerated ? (
-                    <div className="party-empty-report">
-                      <FileBarChart size={40} />
-                      <strong>No report generated</strong>
-                      <span>Select the required report filters and click Generate.</span>
+                    <div className="party-report-empty-grid">
+                      <table className="party-report-table party-empty-table"><thead><tr>{["#", "Party Name", "Area", "Salesman", "Bill Count", "Bill Amount", "Credit Note Amt", "Net Sales"].map((label) => <th key={label}>{label}</th>)}</tr></thead></table>
+                      <div className="party-empty-report">
+                        <FileBarChart size={40} />
+                        <strong>No report generated</strong>
+                        <span>Please set the report criteria and click on Generate Report to view results.</span>
+                      </div>
                     </div>
                   ) : (
                     <div
@@ -8176,6 +8189,7 @@ const Report = ({
                       style={{ zoom: Number(partyReportZoom) / 100 }}
                     >
                       <CommonReportGrid
+                        controlsTarget={partyGridControlsTarget}
                         columns={partyGridColumns}
                         rows={partyPageRows}
                         rowKey={(row, rowIndex) =>
@@ -8202,9 +8216,11 @@ const Report = ({
                 </div>
 
                 <div className="party-report-statusbar">
+                  {!isPartyReportGenerated ? <><strong>ⓘ &nbsp; Party Wise Sales Report</strong><span>Total Records: <b>0</b>　 |　 Generated On: <b>–</b>　 |　 Report Level: <b>{partySalesFilters.reportLevel === "salesDetails" ? "Sales Details" : partySalesFilters.reportLevel === "selectedParty" ? "Selected Party Wise" : "Sales Summary"}</b></span></> : <>
                   <span>
                     Showing {partyStartRecord} to {partyEndRecord} of {isPartyReportGenerated ? filteredPartySalesRows.length : 0} entries
                   </span>
+                  <span className="party-generated-time">Generated On: {partyGeneratedAt?.toLocaleString()}</span>
                   <div className="party-report-pagination" aria-label="Report pagination">
                     <button type="button" onClick={() => setPartyCurrentPage(1)} disabled={partySafeCurrentPage <= 1} aria-label="First page">First</button>
                     <button type="button" onClick={() => setPartyCurrentPage((page) => Math.max(1, page - 1))} disabled={partySafeCurrentPage <= 1} aria-label="Previous page">Previous</button>
@@ -8224,6 +8240,7 @@ const Report = ({
                       </select>
                     </label>
                   </div>
+                  </>}
                 </div>
               </div>
             </main>

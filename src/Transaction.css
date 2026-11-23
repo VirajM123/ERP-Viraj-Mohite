@@ -12973,3 +12973,127 @@ background:#f3f4f6;
   .transaction-page .pdc-billing-page .pdc-header-two-rows { grid-template-columns: 1fr; }
   .transaction-page .pdc-billing-page .pdc-narration-inline { grid-column: auto; }
 }
+
+/* Compact transaction list pages, aligned with the Sales Invoice list. */
+@media screen {
+  .transaction-page .erp-transaction-list-page {
+    box-sizing: border-box;
+    width: calc(100% - 20px);
+    height: auto;
+    min-height: 0;
+    margin: 10px;
+    padding: 10px;
+    overflow: visible;
+    border: 1px solid #d4e1f2;
+    border-radius: 8px;
+    background: #fff;
+    box-shadow: 0 3px 12px rgba(30, 68, 120, .06);
+  }
+  .transaction-page .erp-transaction-list-page > [class*="premium-heading"] {
+    min-height: 34px;
+    margin-bottom: 6px;
+    padding: 1px 2px 6px;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 8px;
+    border-bottom: 1px solid #e0e9f5;
+  }
+  .transaction-page .erp-transaction-list-page [class*="premium-title"] h2 {
+    margin: 0;
+    color: #071b52;
+    font-size: 16px;
+    line-height: 1.2;
+  }
+  .transaction-page .erp-transaction-list-page [class*="premium-title"] p {
+    margin: 1px 0 0;
+    font-size: 10px;
+  }
+  .transaction-page .erp-transaction-list-page [class*="heading-actions"] {
+    flex-wrap: wrap;
+    gap: 6px;
+  }
+  .transaction-page .erp-transaction-list-page [class*="heading-actions"] button {
+    min-width: 0;
+    height: 28px;
+    padding: 0 9px;
+    border-radius: 5px;
+    box-shadow: none;
+    font-size: 10px;
+  }
+  .transaction-page .erp-transaction-list-page > [class*="summary-grid"] {
+    gap: 6px;
+    margin-bottom: 6px;
+  }
+  .transaction-page .erp-transaction-list-page [class*="summary-card"] {
+    box-sizing: border-box;
+    height: auto;
+    min-height: 48px;
+    padding: 6px 8px;
+    gap: 7px;
+    border-radius: 6px;
+  }
+  .transaction-page .erp-transaction-list-page [class*="summary-icon"] {
+    width: 28px;
+    min-width: 28px;
+    height: 28px;
+  }
+  .transaction-page .erp-transaction-list-page [class*="summary-content"] :is(span, small) { font-size: 10px; }
+  .transaction-page .erp-transaction-list-page [class*="summary-content"] strong { font-size: 13px; }
+  .transaction-page .erp-transaction-list-page > [class*="toolbar"] {
+    gap: 6px;
+    margin-bottom: 6px;
+    flex-wrap: wrap;
+  }
+  .transaction-page .erp-transaction-list-page [class*="search-box"] {
+    box-sizing: border-box;
+    min-width: 0;
+    height: 32px;
+    border-radius: 5px;
+  }
+  .transaction-page .erp-transaction-list-page [class*="search-box"] input { min-width: 0; font-size: 11px; }
+  .transaction-page .erp-transaction-list-page [class*="filter-toggle"] { height: 32px; min-height: 0; padding: 0 9px; font-size: 10px; }
+  .transaction-page .erp-transaction-list-page [class*="table-card"] { border-radius: 6px; box-shadow: none; }
+  .transaction-page .erp-transaction-list-page [class*="table-scroll"] {
+    height: auto;
+    min-height: 0;
+    max-height: min(390px, 55vh);
+    overflow: auto;
+  }
+  .transaction-page .erp-transaction-list-page table :is(th, td) {
+    box-sizing: border-box;
+    height: 32px;
+    padding: 4px 7px;
+    font-size: 11px;
+    line-height: 1.2;
+  }
+  .transaction-page .erp-transaction-list-page table thead th {
+    position: sticky;
+    top: 0;
+    background: #2459df;
+    color: #fff;
+    border-color: #4678e8;
+    font-size: 10px;
+  }
+  .transaction-page .erp-transaction-list-page table tbody tr:nth-child(even) td { background: #f7faff; }
+  .transaction-page .erp-transaction-list-page [class*="row-actions"] { gap: 3px; flex-wrap: nowrap; }
+  .transaction-page .erp-transaction-list-page [class*="row-actions"] button {
+    width: 27px;
+    min-width: 27px;
+    height: 27px;
+    padding: 0;
+    border-radius: 4px;
+  }
+  .transaction-page .erp-transaction-list-page [class*="pagination-footer"] {
+    min-height: 36px;
+    padding: 4px 8px;
+    gap: 8px;
+    flex-wrap: wrap;
+    font-size: 10px;
+  }
+  .transaction-page .erp-transaction-list-page [class*="pagination-controls"] { gap: 4px; flex-wrap: wrap; }
+  .transaction-page .erp-transaction-list-page [class*="pagination-controls"] :is(button, select) { height: 26px; min-height: 26px; font-size: 10px; }
+}
+@media screen and (max-width: 800px) {
+  .transaction-page .erp-transaction-list-page { width: calc(100% - 12px); margin: 6px; padding: 8px; }
+  .transaction-page .erp-transaction-list-page > [class*="summary-grid"] { grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); }
+}

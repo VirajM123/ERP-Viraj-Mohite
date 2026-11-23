@@ -1,0 +1,87 @@
+﻿ERP PERFORMANCE REVIEW AND ACTION REPORT
+23 November 2026
+
+PURPOSE AND SCOPE
+Review of the current local ERP source across startup and loaders, forms, stock, reports, dashboard, transactions, imports, browser state and database access. This is a broad code review, not a line-by-line audit or a production performance test. Existing earlier reports were used as leads and key observations were checked against current code. No production database, browser waterfall, representative data, live timings or deployed index inventory was examined. Therefore code patterns below are confirmed; their actual impact and ranking must be measured. No application code or data was changed.
+
+EXECUTIVE SUMMARY
+The clearest immediate issue is artificial waiting in the shared visual loader: its default minimum is 3 seconds. It is used beyond imports, including session restoration, lazy-screen fallbacks and report loading. Separately, a global overlay can block the screen while any tracked GET request lasts over 450 ms. Real work can also grow with data size: stock batch lookup can issue many requests; some reports and payment lists return large datasets; dashboard summary performs multiple database operations; and browser storage and table handling can add work. Start by measuring and correcting loader behavior, then focus on the slowest real user journeys using the evidence below. Do not remove accounting, stock, security or validation checks for speed.
+
+PRIORITY 1: LOADING EXPERIENCE
+
+1. Forced minimum loading time - CONFIRMED
+Evidence: src/components/loadingTracker.js:1,12-23 sets MINIMUM_MS to 3000 and keeps a completed task visible for the remainder. src/components/ScreenLoading.jsx:5 uses the default; src/App.jsx uses ScreenLoading for restoring the session and the lazy dashboard fallback. src/components/ReportLoading.jsx:6 also uses it, and src/api/client.js:13,68 uses it for import overlays. VisualActivity explicitly uses 1000 ms (src/components/VisualActivity.jsx:6).
+Impact: These overlays can remain visible after their associated work finishes. They do not make the database or network slower, but can delay interaction and make the software feel slow. Their exact effect depends on overlapping tasks and overlay styling.
+Solution: Remove the blanket 3-second minimum; show an overlay only after a short delay for genuinely slow work, and close promptly once complete. Use a small anti-flicker minimum only where needed. Track the actual operation and show progress for long imports. Test fast/slow session restore, dashboard opening, report generation, imports, failure and overlapping operations.
+
+2. Global GET request overlay - CONFIRMED DESIGN, IMPACT TO MEASURE
+Evidence: src/api/client.js:20-39,74-95 tracks trusted API GET requests; src/components/SmartLoadingOverlay.jsx uses a 450 ms reveal delay and keeps the overlay visible until all tracked requests finish.
+Impact: Background or secondary requests may display a full-screen loading state, and one slow request can prolong it. Inspect the overlay CSS and actual user flow to establish whether interaction is blocked in each case. The tracker stops when fetch resolves with response headers, not after JSON parsing and rendering, so its timing is not a complete measure of readiness.
+Solution: Classify essential initial loads separately from background refreshes. Use local skeletons or non-blocking indicators for secondary data, and keep forms usable where safe. Keep explicit progress for saves/imports; do not imply completion before data is ready. Check concurrent requests, errors, navigation and accessibility.
+
+PRIORITY 1: HIGH-VOLUME USER OPERATIONS
+
+3. Stock search and batches - CONFIRMED REQUEST FAN-OUT
+Evidence: src/StockManagement.jsx:71-80 filters loaded products and limits matching products to 40; lines 148-184 request /stock/batches for uncached products, with bounded concurrency. Cache and cancellation already exist.
+Impact: A cold search can require many separate round trips and database queries; effect increases with network latency. Warm searches can behave differently.
+Solution: Add a tenant- and godown-scoped bulk batch lookup for visible product codes with a response limit and only necessary fields. Use a server-side paged product search for large masters, debounce input and keep cancellation. Invalidate cached stock after stock-changing operations. Measure request count and cold/warm search latency; verify permissions, batch quantities and warehouse isolation.
+
+4. Reports and large grids - CONFIRMED IN SELECTED PATHS
+Evidence: backend/p0Features.js report branches around lines 894-1201 retrieve report data; src/CatalogReport.jsx and src/Report.jsx process report results in the browser. Some paths load matching records without a page limit. This does not apply to every report.
+Impact: Large date ranges and masters increase database work, response size, browser memory and sorting/render time. A page control in the browser does not reduce the initial API response.
+Solution: Profile each frequently used report separately. Add server-side filtering, field projection, stable sorting and pagination to interactive detail grids; compute totals over the entire filtered dataset. Provide a separate complete export, streamed or backgrounded when warranted. Test totals, rounding, date boundaries, sorting, page boundaries and complete exports against existing reports.
+
+5. Payment history and outstanding - CONFIRMED SELECTED PATHS
+Evidence: backend/transaction.js:913 retrieves all non-reversed payments sorted, with no limit in that query. backend/p0Features.js:319-331 and around 1248 read sales/purchases or accounts for outstanding and credit control. Other transaction endpoints already have limits.
+Impact: Long history can increase data transfer, memory and computation even when the user needs a small subset.
+Solution: Add tenant-scoped date, party, status and search filters, projection and stable server pagination to the affected payment list. Profile outstanding calculations and aggregate/filter early where business rules allow. Consider reconciled summaries only after defining freshness and correction rules. Verify allocations, reversals, opening balances and totals.
+
+6. Dashboard summary - CONFIRMED MULTIPLE DATABASE OPERATIONS; SLOWNESS UNMEASURED
+Evidence: backend/p0Features.js:1260-1423 builds the dashboard summary with multiple database operations, aggregates and receipt details. src/DashboardHome.jsx filters collection rows locally.
+Impact: Several users opening the dashboard at once can create significant concurrent database work, especially on long histories. Parallel requests can shorten individual waiting while increasing database contention.
+Solution: Time each widget/query independently. Push applicable date and user filters into queries, return only needed fields, and paginate detail rows. Load optional widgets separately. Consider short tenant-scoped caching or precomputed summaries only with documented freshness and invalidation. Preserve the distinction between all-time balances and date-specific figures; reconcile financial totals.
+
+7. Stock movement and historical stock - LIKELY SCALING RISK
+Evidence: backend/p0Features.js:1147-1201 handles stock movements and adjustments; backend/server.js contains stock reporting paths. Work can grow with selected history.
+Solution: Capture MongoDB explain('executionStats') for real tenant, product, warehouse and date filters. Page detail, project required fields and tune compound indexes only from actual plans and deployed index inventory. If necessary, investigate validated balance snapshots with reliable handling of backdated entries and corrections. Reconcile against stock ledgers before release.
+
+PRIORITY 2: FORM RESPONSIVENESS AND BROWSER COST
+
+8. Large screens and assets - CONFIRMED SIZE; RUNTIME IMPACT UNMEASURED
+Evidence: src/Dashboard.jsx, src/Transaction.jsx and src/Report.jsx are large modules. Existing local dist/assets includes Dashboard JS 1,359,941 bytes and CSS 970,348 bytes, uncompressed, and login-office-hero PNG 1,342,064 bytes. The existing dist may not match current code and is not a measurement of compressed transfer or production deployment. App.jsx and Dashboard.jsx already use lazy loading, so a blanket claim that all screens are eagerly loaded would be incorrect.
+Solution: Build the current revision into a separate temporary output and measure compressed network transfer, parse/evaluation and rendering on a typical client. Split the dashboard into independently loaded features where traces justify it; load export libraries only when used, remove unused CSS, and resize/compress images. Verify caching and compression at the actual host. Test cold and warm navigation and chunk-load errors.
+
+9. Browser storage and context - CONFIRMED SYNCHRONOUS WRITES
+Evidence: src/context/ERPContext.jsx:21-60 reads stored transaction arrays and serializes data with synchronous localStorage.setItem; reducer cases write complete arrays. Initialization is already done through a reducer initializer at line 405, so it is not correct to claim it parses storage on every provider render.
+Impact: Large stored arrays and repeated whole-array serialization can cause pauses or quota problems. Actual frequency and size require measurement.
+Solution: Measure storage size and long tasks during invoice, receipt and payment operations. Keep only necessary drafts/preferences locally and use paginated server data for history where compatible with existing workflows. Reduce unnecessary full-array writes and split context by domain if React profiling supports it. Preserve recovery, tenant separation and logout behavior.
+
+10. Shared table observer and DOM sorting - CONFIRMED
+Evidence: src/App.jsx:13 installs src/hooks/useSortableListTables.js globally. The hook observes child changes across the root subtree, schedules header scans and manually rearranges DOM rows when sorting.
+Impact: Frequent updates and large tables may add scanning or sorting work. DOM ordering can also conflict with React, and a page-only sort can mislead users on paginated data.
+Solution: Profile during typing and list updates. Move sorting into component state or the server for paginated data; scope any remaining observer to relevant tables. Use virtualization only where a measured large visible grid needs it. Verify keyboard access, stable rows and sorting across pages.
+
+11. Sales and purchase entry/save - REQUIRES MEASUREMENT
+Evidence: src/Transaction.jsx and backend transaction/server workflows contain complex invoice and stock operations; source review alone does not establish the slowest save step.
+Solution: Trace form open, party/product search, typing, validation, save and print separately for 1, 20 and 100 lines. Count requests and database queries; batch repeated lookups or debounce search only where traces show benefit. Keep transaction atomicity, numbering, stock and accounting validations intact. Test concurrent saves, retries and failures.
+
+12. Imports and exports - REQUIRES MEASUREMENT
+Evidence: backend/desktopImportRoutes.js and desktopImportBatch.js process import batches; reports and invoice utilities generate exports. Large operations can compete with interactive users and consume memory.
+Solution: Measure import throughput, process memory, event-loop delay and invoice latency during an import; measure export separately from report generation. Use bounded batches, progress, retry/idempotency and throttling; consider worker isolation or streaming when justified. Test incomplete imports, duplicates and full exported totals.
+
+MEASUREMENT AND VERIFICATION PLAN
+1. Choose a representative small and large firm, typical client PC/network and safe test dataset. Record data counts, database/server specs and number of simultaneous users. Avoid heavy production tests without a safe window.
+2. Record before timings for login/session restore, dashboard, sales/purchase form open, product and party search, invoice save, stock lookup, payment list, common reports, export and import. Record cold and warm results and p50/p95 over repeated runs; identify the start and end of each operation.
+3. Capture browser network waterfall, response sizes, request count, performance long tasks and React render profile. Separate overlay time, network/server time, JSON processing and render time.
+4. Use backend/observability.js request logs and its periodic process metrics (p50/p95/p99 across sampled requests, CPU, memory and event-loop delay); inspect per-route timings rather than treating aggregate percentiles as each form's latency. Slow-request logging is also present in backend/server.js:84-92. Do not log sensitive business data.
+5. For expensive MongoDB queries, inspect executionStats, documents/keys examined, sort and index usage, and deployed indexes. Indexes are already declared in the code; do not add duplicates blindly. Assess index write and storage costs.
+6. Agree practical targets after establishing baseline, then compare on identical data and concurrency. Verify stock, tax/accounting totals, backdated changes, tenant isolation, permissions, exports, retries and concurrent saves after each change.
+
+SUGGESTED DELIVERY ORDER
+A. Measure and remove unnecessary fixed loader waits; make background loading non-blocking where safe.
+B. Measure stock search; bulk the batch requests if the trace confirms the expected fan-out cost.
+C. Page the actual high-volume payment and report paths; preserve full totals and exports.
+D. Profile and optimize dashboard, outstanding and historical stock queries, then review indexes.
+E. Profile form rendering, localStorage, bundles, imports and exports; address the measured largest remaining delays.
+
+This report identifies code-backed opportunities and a practical test plan. It does not establish production root causes, guarantee a speedup, or claim every ERP screen was individually timed.

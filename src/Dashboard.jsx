@@ -61073,6 +61073,7 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                   <section className="report-catalog-detail" aria-label="Selected report">
                     {selectedReport && openFormFor === "Report" ? (
                       <Report
+                        key={selectedReport}
                         selectedReport={selectedReport}
                         companies={companies}
                         accounts={accounts}
@@ -71530,7 +71531,7 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                 </div>
               </div>
             )}
-            {activeMenu === "transactions" && (
+            {activeMenu === "transactions" && activeSubMenu === activeTransactionMenu && (
               <Transaction
                 salesInvoices={salesListData}
                 salesmen={salesmen}

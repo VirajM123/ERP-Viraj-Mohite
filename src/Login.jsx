@@ -120,6 +120,8 @@ const Login = ({ onLoginSuccess }) => {
   const [firmsLoaded, setFirmsLoaded] = useState(false);
   const [loadingFirms, setLoadingFirms] = useState(false);
   const [isLoggingIn, setIsLoggingIn] = useState(false);
+  const [isRegistering, setIsRegistering] = useState(false);
+  const registeringRef = useRef(false);
 
   const loadRequestId = useRef(0);
   const loginLoaderRequestId = useRef(0);
@@ -288,8 +290,12 @@ const Login = ({ onLoginSuccess }) => {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    if (isLoggingIn) return;
+    if (isLoggingIn || registeringRef.current) return;
     if (mode === "login") setIsLoggingIn(true);
+    if (mode === "register") {
+      registeringRef.current = true;
+      setIsRegistering(true);
+    }
 
     let loadingRequestId = null;
     try {
@@ -484,6 +490,8 @@ await loadMyPermissions(
     } finally {
       if (loadingRequestId !== null) notifyLoadingEnd(loadingRequestId);
       setIsLoggingIn(false);
+      registeringRef.current = false;
+      setIsRegistering(false);
     }
   };
 
@@ -502,6 +510,8 @@ await loadMyPermissions(
   return (
     <div className={`auth-page ${mode === "register" ? "register-page" : ""}`}>
       {isLoggingIn && <ScreenLoading variant="dashboard" title="Signing in..." message="Please wait while we prepare your workspace." />}
+      {mode === "register" && <header className="register-brand"><img src={loginLogo} alt="" /><strong>Total Solution ERP</strong></header>}
+      {isRegistering && <div className="register-loading-overlay" role="status" aria-live="polite"><div className="register-loading-card"><div className="register-loading-orbit" aria-hidden="true"><Building2 /><span /><i /></div><strong>Creating your account</strong><p>Setting up your distributor workspace...</p></div></div>}
       <div className={`auth-card ${mode === "register" ? "register-card" : ""}`}>
         <div className="auth-left">
           <div className={`auth-form-box ${mode === "register" ? "register-form" : ""}`}>
@@ -512,7 +522,7 @@ await loadMyPermissions(
                 </>
               ) : (
                 <>
-                  Register <span>Distributor!</span>
+                  Register Distributor <span className="register-badge">New Account</span>
                 </>
               )}
             </h2>
@@ -526,6 +536,9 @@ await loadMyPermissions(
             <form onSubmit={handleSubmit}>
               {mode === "register" && (
                 <>
+                  <h3 className="register-section register-section-firm">Firm Details</h3>
+                  <h3 className="register-section register-section-business">Business Registration</h3>
+                  <h3 className="register-section register-section-account">Account Details</h3>
                   <div style={threeColumnRowStyle}>
                     <div className="form-group">
                       <label>Firm Code</label>
@@ -907,8 +920,8 @@ await loadMyPermissions(
               <button
                 type="submit"
                 className={`auth-btn ${isLoggingIn ? "is-launching" : ""}`}
-                aria-busy={isLoggingIn}
-                disabled={mode === "login" && isLoggingIn}
+                aria-busy={isLoggingIn || isRegistering}
+                disabled={isLoggingIn || isRegistering}
               >
                 <span>
                   {mode === "login"
@@ -922,7 +935,7 @@ await loadMyPermissions(
                           Login
                         </>
                       )
-                    : "Register Distributor"}
+                    : isRegistering ? "Registering..." : "Register"}
                 </span>
                 <ArrowRight aria-hidden="true" />
               </button>
@@ -938,8 +951,8 @@ await loadMyPermissions(
               {mode === "login"
                 ? "Don’t have a distributor account?"
                 : "Already have an account?"}{" "}
-              <button type="button" onClick={switchMode} disabled={isLoggingIn}>
-                {mode === "login" ? "Register Now" : "Login"}
+              <button type="button" onClick={switchMode} disabled={isLoggingIn || isRegistering}>
+                {mode === "login" ? "Register Now" : "← Back to Login"}
               </button>
             </p>
           </div>

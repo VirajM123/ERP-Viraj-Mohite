@@ -623,3 +623,20 @@ body .dashboard-container.dashboard-container .sidebar .nav-item-reports .report
   background: #eaf0ff;
   color: #2449bd;
 }
+
+/* Match report choices to the report category menu. */
+body .dashboard-container.dashboard-container .sidebar .nav-item-reports .report-subreport-item {
+  border: 1px solid #cbdcf0 !important;
+  border-radius: 7px !important;
+  background: #e8f1fc !important;
+  color: #304463 !important;
+}
+body .dashboard-container.dashboard-container .sidebar .nav-item-reports .report-subreport-item:is(:hover, :focus-visible, .active) {
+  border-color: #c8ddfb !important;
+  background: #e6f1ff !important;
+  color: #2553e4 !important;
+}
+body .dashboard-container.dashboard-container .sidebar .nav-item-reports .report-subreport-item:focus-visible {
+  outline: 2px solid #3158e8;
+  outline-offset: -2px;
+}

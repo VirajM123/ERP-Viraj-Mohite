@@ -1,4 +1,4 @@
-const MINIMUM_MS = 3000;
+const REVEAL_DELAY_MS = 200;
 const tasks = new Map();
 const listeners = new Set();
 let snapshot = null;
@@ -9,17 +9,17 @@ function publish() {
 }
 export function subscribeLoading(listener) { listeners.add(listener); return () => listeners.delete(listener); }
 export function getLoadingSnapshot() { return snapshot; }
-export function startVisualLoading(content, minimumMs = MINIMUM_MS) {
+export function startVisualLoading(content) {
   const id = Symbol();
-  const started = Date.now();
-  tasks.set(id, { content });
-  publish();
+  const timer = window.setTimeout(() => {
+    tasks.set(id, { content });
+    publish();
+  }, REVEAL_DELAY_MS);
   let finished = false;
   return () => {
     if (finished) return;
     finished = true;
-    const remove = () => { tasks.delete(id); publish(); };
-    const remaining = minimumMs - (Date.now() - started);
-    if (remaining > 0) window.setTimeout(remove, remaining); else remove();
+    window.clearTimeout(timer);
+    if (tasks.delete(id)) publish();
   };
 }
