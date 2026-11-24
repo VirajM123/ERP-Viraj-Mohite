@@ -670,12 +670,19 @@
   .sales-billing-page.sales-service-form .billing-compact-summary-header { flex-wrap: wrap; }
 }
 
-/* Three service rows remain visible; additional rows scroll within the grid. */
+/* Keep more service rows visible while retaining the compact footer. */
 .sales-billing-page.sales-service-form .billing-product-table-scroll {
-  height: 133px !important;
+  height: 203px !important;
   min-height: 0 !important;
-  max-height: 133px !important;
+  max-height: 203px !important;
   overflow: auto !important;
+}
+.sales-billing-page.sales-service-form .billing-grid-footer {
+  min-height: 32px !important;
+  padding: 2px 5px !important;
+}
+.sales-billing-page.sales-service-form .billing-grid-footer-actions {
+  padding: 0 !important;
 }
 .sales-service-form .billing-product-toolbar .billing-grid-small-button {
   display: inline-flex;

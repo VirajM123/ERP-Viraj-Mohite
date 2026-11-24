@@ -1732,6 +1732,24 @@
 
 .party-report-search input { width: 100%; min-width: 0; border: 0 !important; outline: 0 !important; box-shadow: none !important; background: transparent; }
 
+/* Keep the search icon and input on one line even inside report toolbars. */
+:is(.report-page, .party-classic-report-page, .report-catalog-detail) :is(.party-report-search, .gst-result-search) {
+  display: flex !important;
+  flex-direction: row !important;
+  align-items: center !important;
+  flex-wrap: nowrap !important;
+  box-sizing: border-box;
+}
+:is(.report-page, .party-classic-report-page, .report-catalog-detail) :is(.party-report-search, .gst-result-search) > svg { flex: 0 0 auto; }
+:is(.report-page, .party-classic-report-page, .report-catalog-detail) :is(.party-report-search, .gst-result-search) > input {
+  display: block !important;
+  position: static !important;
+  flex: 1 1 0 !important;
+  width: 0 !important;
+  min-width: 0 !important;
+  margin: 0 !important;
+}
+
 .party-check-row { display: flex; min-height: 38px; align-items: center; gap: 10px; padding: 7px 14px; color: #35415b; font-size: 11px; cursor: pointer; }
 .party-check-row:hover { background: #f5f8ff; }
 .party-check-row input { width: 15px; height: 15px; accent-color: #3158ef; }

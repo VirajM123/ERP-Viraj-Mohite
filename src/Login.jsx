@@ -509,7 +509,7 @@ await loadMyPermissions(
 
   return (
     <div className={`auth-page ${mode === "register" ? "register-page" : ""}`}>
-      {isLoggingIn && <ScreenLoading variant="dashboard" title="Signing in..." message="Please wait while we prepare your workspace." />}
+      {isLoggingIn && <ScreenLoading variant="login-dashboard" title="Signing in..." message="Please wait while we prepare your workspace." />}
       {mode === "register" && <header className="register-brand"><img src={loginLogo} alt="" /><strong>Total Solution ERP</strong></header>}
       {isRegistering && <div className="register-loading-overlay" role="status" aria-live="polite"><div className="register-loading-card"><div className="register-loading-orbit" aria-hidden="true"><Building2 /><span /><i /></div><strong>Creating your account</strong><p>Setting up your distributor workspace...</p></div></div>}
       <div className={`auth-card ${mode === "register" ? "register-card" : ""}`}>

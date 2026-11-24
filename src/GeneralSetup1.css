@@ -1470,6 +1470,16 @@ select.gs-control {
   border-radius: 8px;
 }
 /* Invoice setup: switches and output fields in two vertical columns. */
+.invoice-print-setup .gs-single-toolbar h1 { border-left: 4px solid #1756e8; padding-left: 10px; }
+.invoice-print-setup .invoice-print-groups { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.3fr); gap: 12px; padding-top: 10px; }
+.invoice-print-setup .invoice-print-group { overflow: hidden; min-width: 0; border: 1px solid #b8cefa; border-radius: 7px; background: #fff; }
+.invoice-print-setup .invoice-print-group h2 { display: flex; align-items: center; gap: 8px; margin: 0; padding: 4px 10px; background: #dce9fd; color: #0a2b72; font-size: 14px; line-height: 18px; }
+.invoice-print-setup .invoice-print-group h2 svg { width: 16px; height: 16px; color: #1e5be8; }
+.invoice-print-setup .invoice-print-group-body { padding: 6px 10px; }
+.main-content .invoice-print-setup .invoice-print-group .gs-single-row { grid-template-columns: minmax(0, 190px) minmax(0, 140px); justify-content: start; gap: 16px; min-height: 34px; }
+.main-content .invoice-print-setup .invoice-print-group .gs-single-row > .gs-single-control,
+.main-content .invoice-print-setup .invoice-print-group .gs-single-row > .gs-single-switch { justify-self: start !important; }
+@media (max-width: 700px) { .invoice-print-setup .invoice-print-groups { grid-template-columns: 1fr; } }
 .invoice-print-setup .gs-single-grid {
   max-width: 880px;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -1477,6 +1487,40 @@ select.gs-control {
   grid-auto-flow: column;
   column-gap: 48px;
   padding: 14px 4px 6px;
+}
+
+/* Grouped General Setup, matching the compact billing screen. */
+.main-content .general-setup-container.gs-single {
+  background: #f8faff !important;
+  border-color: #aac6fb;
+  padding: 12px 14px;
+}
+.gs-single .gs-single-toolbar h1 { display: flex; align-items: center; gap: 8px; color: #09256a; }
+.gs-single .gs-single-toolbar h1 svg { width: 23px; height: 23px; color: #1756e8; }
+.gs-single .gs-groups { display: grid; grid-template-columns: 42% minmax(0, 1fr); gap: 12px; padding-top: 10px; }
+.gs-single .gs-group { min-width: 0; overflow: hidden; border: 1px solid #b8cefa; border-radius: 7px; background: #fff; }
+.gs-single .gs-group-defaults { grid-column: 1 / -1; }
+.gs-single .gs-group h2 { display: flex; align-items: center; gap: 8px; margin: 0; padding: 4px 10px; background: #dce9fd; color: #0a2b72; font-size: 14px; line-height: 18px; }
+.gs-single .gs-group h2 svg { width: 16px; height: 16px; flex: none; color: #1e5be8; }
+.gs-single .gs-group-body { display: grid; gap: 0 20px; padding: 5px 10px; }
+.gs-single .gs-group-billing .gs-group-body { box-sizing: border-box; max-height: 202px; overflow-y: auto; scrollbar-gutter: stable; }
+.gs-single .gs-group-billing .gs-group-body:focus-visible { outline: 2px solid #648eff; outline-offset: -2px; }
+.gs-single .gs-group-defaults .gs-group-body { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.gs-single .gs-group-other .gs-group-body { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.main-content .general-setup-container.gs-single .gs-group .gs-single-row { height: auto; min-height: 32px; padding: 2px 4px; }
+.main-content .general-setup-container.gs-single .gs-group .gs-single-row { grid-template-columns: minmax(0, max-content) minmax(0, 140px); justify-content: start; column-gap: 16px; }
+.main-content .general-setup-container.gs-single .gs-group .gs-single-row > .gs-single-control,
+.main-content .general-setup-container.gs-single .gs-group .gs-single-row > .gs-single-switch { justify-self: start !important; }
+.gs-single .gs-single-switch.is-on { border-color: #2455ed; background: #2455ed; }
+.gs-single .general-setup-footer { border: 1px solid #c5d8ff; border-radius: 6px; background: #eef4ff; color: #173d82; }
+@media (max-width: 900px) {
+  .gs-single .gs-group-defaults .gs-group-body { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .gs-single .gs-group-other .gs-group-body { grid-template-columns: 1fr; }
+}
+@media (max-width: 650px) {
+  .gs-single .gs-groups, .gs-single .gs-group-defaults .gs-group-body { grid-template-columns: 1fr; }
+  .gs-single .gs-group-defaults { grid-column: auto; }
+  .gs-single .gs-single-actions { width: 100%; }
 }
 .invoice-print-setup .gs-single-row {
   min-width: 0;

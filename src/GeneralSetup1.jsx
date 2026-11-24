@@ -1,4 +1,5 @@
 import React from "react";
+import { Settings, Building2, Calculator, ClipboardList, Tags, SlidersHorizontal } from "lucide-react";
 import { API_URL } from "./api/config";
 import "./GeneralSetup1.css";
 
@@ -1391,18 +1392,23 @@ if (
         ["qrCodeFolderName", "QR Code Folder Name", "", "text"],
         ["autoBillLockDays", "Auto Bill Lock Days", "", "number"],
     ];
-    // Place frequently used billing and tax controls first, followed by print and system options.
-    const priority = ["defaultCompany", "defaultGodown", "defaultSelection", "defaultSalesman", "allowChangeBillType", "billAllowBlacklistParty", "allowChangeSaleRate", "allowMixBilling", "productSelectionOn", "vatOn", "cashDiscountOn", "allowNegativeStock", "billingWithoutHsnCode", "allowSRateLessThanPRate", "saveAndPrint", "allowEditBillAfterLoad", "editProductAfterLoad", "saveInvoiceAfterLoad", "updateLoadQtyAfterBillEdit", "allowChangeStarAmount", "allowCessInSale", "allowCessInPurchase", "editGrossPurchase", "reverseScheme", "goodsReturn", "damageReturn", "schemeSummary", "vatSummary", "serialNo", "autoVoucherNo", "dateLocking", "showEntryDays", "autoBillLockDays", "allowGstRate", "importNegative", "settleLoadNegative", "qrCodeFolderName"];
-    settings.sort((a, b) => priority.indexOf(a[0]) - priority.indexOf(b[0]));
+    const groups = [
+        { title: "Company & Defaults", icon: Building2, className: "gs-group-defaults", keys: ["defaultCompany", "defaultGodown", "defaultSelection", "defaultSalesman", "billAllowBlacklistParty", "productSelectionOn"] },
+        { title: "Billing & Taxation", icon: Calculator, keys: ["allowChangeSaleRate", "vatOn", "billingWithoutHsnCode", "allowEditBillAfterLoad", "allowChangeStarAmount", "editGrossPurchase"] },
+        { title: "Billing Calculations & Invoice Behavior", icon: ClipboardList, className: "gs-group-billing", keys: ["allowChangeBillType", "allowMixBilling", "cashDiscountOn", "allowSRateLessThanPRate", "editProductAfterLoad", "allowCessInSale", "reverseScheme", "saveAndPrint", "allowNegativeStock"] },
+        { title: "Voucher & Load", icon: Tags, keys: ["autoVoucherNo", "autoBillLockDays", "settleLoadNegative", "updateLoadQtyAfterBillEdit", "allowCessInPurchase"] },
+        { title: "Other Settings", icon: SlidersHorizontal, className: "gs-group-other", keys: ["dateLocking", "serialNo", "allowGstRate", "showEntryDays", "qrCodeFolderName", "importNegative"] },
+    ];
     const query = search.trim().toLowerCase();
     const visibleSettings = settings.filter(([, label, description]) =>
         (label + " " + (description || "")).toLowerCase().includes(query)
     );
+    const visibleByKey = new Map(visibleSettings.map((setting) => [setting[0], setting]));
     const disabled = loading || saving;
     return (
         <div className="general-setup-container gs-single">
             <div className="gs-single-toolbar">
-                <h1>General Setup</h1>
+                <h1><Settings aria-hidden="true" /> General Setup</h1>
                 <div className="gs-single-actions">
                     <input type="search" className="gs-single-search" aria-label="Search settings" placeholder="Search settings..." value={search} onChange={(event) => setSearch(event.target.value)} />
                     <button type="button" className="gs-button gs-button-primary" onClick={handleSave} disabled={disabled || !hasChanges}>{saving ? <><span className="erp-loading-bar erp-loading-bar--inline" aria-hidden="true" /> Saving...</> : "Save Changes"}</button>
@@ -1410,8 +1416,14 @@ if (
                     <button type="button" className="gs-button gs-button-secondary" onClick={handleReset} disabled={disabled}>Reset to Default</button>
                 </div>
             </div>
-            <div className="gs-single-grid">
-                {visibleSettings.map(([key, label, description, type, options]) => {
+            <div className="gs-groups">
+                {groups.map(({ title, icon: Icon, className, keys }) => {
+                    const items = keys.map((key) => visibleByKey.get(key)).filter(Boolean);
+                    if (!items.length) return null;
+                    return <section className={`gs-group ${className || ""}`} key={title}>
+                        <h2><Icon aria-hidden="true" />{title}</h2>
+                        <div className="gs-group-body" tabIndex={className === "gs-group-billing" ? 0 : undefined} role={className === "gs-group-billing" ? "region" : undefined} aria-label={className === "gs-group-billing" ? title : undefined}>
+                {items.map(([key, label, description, type, options]) => {
                     const value = generalSetup[key];
                     let control;
                     if (!type) {
@@ -1424,7 +1436,10 @@ if (
                     } else {
                         control = <input id={`gs-${key}`} className="gs-single-control" type={type} min={type === "number" ? 0 : undefined} step={type === "number" ? 1 : undefined} maxLength={type === "text" ? 100 : undefined} value={value ?? ""} disabled={disabled} onChange={(event) => updateSetting(key, key === "autoBillLockDays" ? Math.max(0, Number(event.target.value || 0)) : event.target.value)} />;
                     }
-                    return <div className="gs-single-row" key={key}><div className="gs-single-label" title={description || undefined}><label htmlFor={type ? `gs-${key}` : undefined}>{label}</label></div>{control}</div>;
+                    return <div className="gs-single-row" key={key}><div className="gs-single-label" title={description || undefined}><label htmlFor={type ? `gs-${key}` : undefined}>{label}:</label></div>{control}</div>;
+                })}
+                        </div>
+                    </section>;
                 })}
             </div>
             {visibleSettings.length === 0 && <p>No settings match your search.</p>}

@@ -8,11 +8,16 @@
 .company-series-list-table td small { display: block; margin-top: 2px; color: #64748b; }
 .company-series-name-link { border: 0; padding: 0; background: transparent; color: #0369a1; font: inherit; font-weight: 700; cursor: pointer; text-align: left; }
 .company-series-name-link:hover { text-decoration: underline; }
-.company-series-entry { padding: 14px 18px 18px; }
+.company-series-entry { padding: 10px 14px 14px; }
 .company-series-form { display: block; }
-.company-series-company-field { max-width: 380px; margin-bottom: 14px; }
-.company-series-field-grid { display: grid; grid-template-columns: repeat(4, minmax(150px, 1fr)); gap: 12px 14px; padding-top: 14px; border-top: 1px solid #edf1f7; }
-.company-series-entry .compact-master-form { padding: 16px 18px 18px; }
+.company-series-company-field { max-width: 380px; margin: 0; }
+.company-series-field-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px 14px; padding: 6px 10px 8px; }
+.company-series-entry .compact-master-form { padding: 10px; }
+.company-series-section { overflow: hidden; border: 1px solid #c4d5f2; border-radius: 6px; background: #fff; }
+.company-series-section + .company-series-section { margin-top: 8px; }
+.company-series-section h2 { display: flex; align-items: center; gap: 7px; margin: 0; padding: 4px 10px; background: #dce9fd; color: #0a2b72; font-size: 13px; line-height: 18px; }
+.company-series-section h2 svg { color: #1e5be8; flex: none; }
+.company-series-section-body { padding: 6px 10px 8px; }
 .company-series-entry .compact-field input,
 .company-series-entry .compact-field select { height: 34px; }
 @media (max-width: 1000px) { .company-series-field-grid { grid-template-columns: repeat(2, minmax(150px, 1fr)); } }

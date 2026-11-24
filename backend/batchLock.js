@@ -55,28 +55,26 @@ export default function createBatchLockRouter({ Stock, Product, Company, authori
       const withStockOnly = text(req.query.withStockOnly || "Y").toUpperCase() !== "N";
       const search = text(req.query.search).toUpperCase();
 
-      const [stockRows, products, selectedCompany] = await Promise.all([
-        Stock.find({
-          ...scope,
-          ...(withStockOnly ? { Qty: { $gt: 0 } } : {}),
-          $or: [{ isActive: true }, { isActive: { $exists: false } }],
-        })
-          .sort({ ProdCode: 1, Batch: 1, MRP: 1 })
-          .limit(5000)
-          .lean(),
+      const [products, companies] = await Promise.all([
         Product.find({ ...scope, isActive: { $ne: false } })
           .select({ productCode: 1, productName: 1, companyId: 1, companyName: 1 })
           .lean(),
-        requestedCompany && requestedCompany !== "ALL"
-          ? Company.findOne({
-              ...scope,
-              $or: [
-                { companyCode: requestedCompany },
-                { companyName: requestedCompany },
-              ],
-            }).lean()
-          : null,
+        Company.find({ ...scope, isActive: { $ne: false } })
+          .select({ companyCode: 1, companyName: 1 }).lean(),
       ]);
+      const selectedCompany = companies.find((company) => companyKeys(company).has(requestedCompany));
+      const selectedKeys = companyKeys(selectedCompany);
+      if (requestedCompany && requestedCompany !== "ALL") selectedKeys.add(requestedCompany);
+      const companyProducts = requestedCompany && requestedCompany !== "ALL"
+        ? products.filter((product) => [product.companyId, product.companyName]
+            .some((value) => selectedKeys.has(text(value).toUpperCase())))
+        : products;
+      const stockRows = await Stock.find({
+        ...scope,
+        ...(withStockOnly ? { Qty: { $gt: 0 } } : {}),
+        ...(requestedCompany && requestedCompany !== "ALL" ? { ProdCode: { $in: companyProducts.map((product) => product.productCode) } } : {}),
+        $or: [{ isActive: true }, { isActive: { $exists: false } }],
+      }).sort({ ProdCode: 1, Batch: 1, MRP: 1 }).limit(5000).lean();
 
       const productMap = new Map(
         products.map((product) => [text(product.productCode).toUpperCase(), product])
@@ -91,8 +89,6 @@ export default function createBatchLockRouter({ Stock, Product, Company, authori
       const latestAuditMap = new Map(
         latestAuditRows.map((row) => [String(row._id), row.latest])
       );
-      const selectedKeys = companyKeys(selectedCompany);
-      if (requestedCompany && requestedCompany !== "ALL") selectedKeys.add(requestedCompany);
 
       const rows = stockRows
         .map((stock) => {
@@ -133,7 +129,7 @@ export default function createBatchLockRouter({ Stock, Product, Company, authori
         )
         .map(({ matchesCompany, ...row }) => row);
 
-      return res.json({ success: true, rows });
+      return res.json({ success: true, rows, companies });
     } catch (error) {
       console.error("Batch lock stock load error:", error);
       return res.status(500).json({ success: false, message: "Failed to load stock batches." });

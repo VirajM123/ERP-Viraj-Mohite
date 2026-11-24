@@ -60704,7 +60704,7 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                   title={sidebarCollapsed ? menu.title : undefined}
                   onClick={() => {
                     if (key === "logout") {
-                      if (window.confirm("Do you want to logout?")) handleLogout();
+                      handleLogout();
                       return;
                     }
 
@@ -69891,14 +69891,18 @@ IMPORTANT: KEEP OUTSIDE renderVoucherList()
                       <button type="button" className="gs-button gs-button-primary" disabled={invoiceSetupLoading || printAccountDetailsSaving || !invoiceSetupReady} onClick={async () => { const saved = await savePrintAccountDetails(); if (saved) setInvoiceSetupMessage("Invoice print settings saved successfully."); }}>Save Changes</button>
                     </div>
                   </div>
-                  {invoiceSetupLoading ? <p>Loading invoice print settings...</p> : !invoiceSetupReady ? <p>Settings could not be loaded. <button type="button" onClick={loadInvoicePrintSetup}>Retry</button></p> : <div className="gs-single-grid">
+                  {invoiceSetupLoading ? <p>Loading invoice print settings...</p> : !invoiceSetupReady ? <p>Settings could not be loaded. <button type="button" onClick={loadInvoicePrintSetup}>Retry</button></p> : <div className="invoice-print-groups">
+                    <section className="invoice-print-group"><h2><FileText aria-hidden="true" />Print Content</h2><div className="invoice-print-group-body">
                     {[["goodsReturn", "Goods Return"], ["damageReturn", "Damage Return"], ["showScheme", "Scheme Summary"], ["showTaxSummary", "VAT Summary"]].map(([key, label]) => (
                       <div className="gs-single-row" key={key}><div className="gs-single-label"><label>{label}</label></div><button type="button" role="switch" aria-label={label} aria-checked={Boolean(salesPrintOptions[key])} className={`gs-single-switch ${salesPrintOptions[key] ? "is-on" : "is-off"}`} disabled={printAccountDetailsSaving} onClick={() => { setInvoiceSetupMessage(""); setSalesPrintOptions((previous) => ({ ...previous, [key]: !previous[key] })); }}><span className="gs-single-switch-thumb" /></button></div>
                     ))}
+                    </div></section>
+                    <section className="invoice-print-group"><h2><Settings aria-hidden="true" />Print Settings</h2><div className="invoice-print-group-body">
                     <div className="gs-single-row"><div className="gs-single-label"><label htmlFor="invoice-setup-report">Report No.</label></div><select id="invoice-setup-report" className="gs-single-control" value={salesPrintOptions.reportNumber || "1"} disabled={printAccountDetailsSaving} onChange={(event) => { setInvoiceSetupMessage(""); setSalesPrintOptions((previous) => ({ ...previous, reportNumber: event.target.value })); }}>{SALES_BILL_REPORT_NUMBERS.map((report) => <option key={report.value} value={report.value}>{report.label}</option>)}</select></div>
                     <div className="gs-single-row"><div className="gs-single-label"><label htmlFor="invoice-setup-paper">Paper Size</label></div><select id="invoice-setup-paper" className="gs-single-control" value={salesPrintOptions.paperSize || "A4"} disabled={printAccountDetailsSaving} onChange={(event) => { const paper = SALES_BILL_PAPER_SIZES.find((item) => item.value === event.target.value) || SALES_BILL_PAPER_SIZES[0]; setInvoiceSetupMessage(""); setSalesPrintOptions((previous) => ({ ...previous, paperSize: paper.value, orientation: paper.orientation })); }}>{SALES_BILL_PAPER_SIZES.map((paper) => <option key={paper.value} value={paper.value}>{paper.label}</option>)}</select></div>
                     <div className="gs-single-row"><div className="gs-single-label"><label htmlFor="invoice-setup-copies">No. of Copies</label></div><input id="invoice-setup-copies" className="gs-single-control" type="number" min="1" max="10" step="1" value={salesPrintOptions.copies || 1} disabled={printAccountDetailsSaving} onChange={(event) => { setInvoiceSetupMessage(""); setSalesPrintOptions((previous) => ({ ...previous, copies: event.target.value })); }} /></div>
                     <div className="gs-single-row"><div className="gs-single-label"><label htmlFor="invoice-setup-font">Invoice Font Size (%)</label></div><input id="invoice-setup-font" className="gs-single-control" type="number" min="80" max="150" step="5" value={salesPrintOptions.fontSizePercent || 150} disabled={printAccountDetailsSaving} onChange={(event) => { setInvoiceSetupMessage(""); setSalesPrintOptions((previous) => ({ ...previous, fontSizePercent: Math.min(150, Math.max(80, Number(event.target.value) || 150)) })); }} /></div>
+                    </div></section>
                   </div>}
                   <div className="general-setup-footer" role="status">{invoiceSetupMessage || "Changes apply to invoice printing after saving."}</div>
                 </>}

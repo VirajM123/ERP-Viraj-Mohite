@@ -69,3 +69,39 @@
   .batch-rate-grid-scroll { max-height: none; }
   .batch-rate-grid-footer { align-items: flex-start; flex-direction: column; }
 }
+
+/* Compact entry layout, aligned with the sales billing screen. */
+.batch-rate-entry-page { padding: 8px 12px; }
+.batch-rate-entry-page .compact-master-heading { margin-bottom: 6px; padding: 0; }
+.batch-rate-entry-page .compact-master-title-icon { width: 32px; height: 32px; flex-basis: 32px; border-radius: 7px; }
+.batch-rate-entry-page .compact-master-title h1 { font-size: 15px; }
+.batch-rate-entry-page .compact-btn { min-height: 30px; padding: 0 12px; }
+.batch-rate-entry-page .compact-master-form { padding: 8px; border-radius: 8px; }
+.batch-rate-filters { grid-template-columns: minmax(140px, 1fr) minmax(105px, .5fr) minmax(230px, 1.5fr) minmax(160px, 1fr); gap: 7px 12px; margin: 6px 0 8px; }
+.batch-rate-entry-page .compact-field { gap: 3px; min-width: 0; }
+.batch-rate-entry-page .compact-field input, .batch-rate-entry-page .compact-field select { height: 30px; min-height: 30px; border-radius: 5px; }
+.batch-rate-search > div { gap: 6px; }
+.batch-rate-search input { min-width: 0; }
+.batch-rate-search button { min-width: 50px; padding: 0 10px; border-radius: 5px; }
+.batch-rate-grid-scroll { max-height: max(200px, calc(100vh - 410px)); min-height: 0; }
+.batch-rate-grid-table { min-width: 1250px; }
+.batch-rate-grid-table th { height: 30px; padding: 0 5px; color: #fff; background: #2156e8; border-color: #4776ed; }
+.batch-rate-grid-table th:nth-child(1) { width: 95px; }
+.batch-rate-grid-table th:nth-child(2) { width: 145px; }
+.batch-rate-grid-table th:nth-child(3) { width: 70px; }
+.batch-rate-grid-table th:nth-child(4), .batch-rate-grid-table th:nth-child(5), .batch-rate-grid-table th:nth-child(6) { width: 75px; }
+.batch-rate-grid-table th:nth-child(7), .batch-rate-grid-table th:nth-child(8), .batch-rate-grid-table th:nth-child(9), .batch-rate-grid-table th:nth-child(10), .batch-rate-grid-table th:nth-child(11) { width: 90px; }
+.batch-rate-grid-table th:nth-child(12) { width: 100px; }
+.batch-rate-grid-table th:nth-child(13) { width: 130px; }
+.batch-rate-grid-table td { height: 32px; padding: 2px 5px; }
+.batch-rate-grid-input { height: 26px; padding: 0 6px; border-radius: 4px; }
+.batch-rate-lock { min-width: 42px; height: 24px; border-radius: 5px; }
+.batch-rate-grid-footer { min-height: 36px; padding: 3px 8px; }
+.batch-rate-pagination button { width: 27px; height: 27px; }
+@media (max-width: 900px) {
+  .batch-rate-filters { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .batch-rate-search { grid-column: 1 / -1; }
+  .batch-rate-grid-scroll { max-height: 40vh; }
+  .batch-rate-grid-footer { flex-direction: row; align-items: center; flex-wrap: wrap; }
+}
+@media (max-width: 500px) { .batch-rate-filters { grid-template-columns: 1fr; } .batch-rate-search { grid-column: auto; } }

@@ -14,6 +14,7 @@ export default function BatchLockSalesRate({ companies = [], onStockChanged, nav
   const [view, setView] = useState("list");
   const [history, setHistory] = useState([]);
   const [stockRows, setStockRows] = useState([]);
+  const [stockCompanies, setStockCompanies] = useState([]);
   const [draftRows, setDraftRows] = useState({});
   const [companyCode, setCompanyCode] = useState("ALL");
   const [withStockOnly, setWithStockOnly] = useState("Y");
@@ -23,6 +24,7 @@ export default function BatchLockSalesRate({ companies = [], onStockChanged, nav
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const handledNavigationId = useRef(0);
+  const stockRequestId = useRef(0);
 
   const loadHistory = useCallback(async () => {
     setLoading(true);
@@ -40,17 +42,20 @@ export default function BatchLockSalesRate({ companies = [], onStockChanged, nav
     const selectedCompany = options.companyCode ?? companyCode;
     const selectedStockOnly = options.withStockOnly ?? withStockOnly;
     const selectedSearch = options.search ?? search;
+    const requestId = ++stockRequestId.current;
     setLoading(true);
     try {
       const query = new URLSearchParams({ companyCode: selectedCompany, withStockOnly: selectedStockOnly, search: selectedSearch });
       const response = await secureFetch(`${API_URL}/batch-lock/stock?${query}`);
       const result = await response.json();
+      if (requestId !== stockRequestId.current) return;
       if (!response.ok || !result.success) throw new Error(result.message || "Unable to load stock batches.");
+      if (Array.isArray(result.companies)) setStockCompanies(result.companies);
       const rows = Array.isArray(result.rows) ? result.rows : [];
       setStockRows(rows);
       setDraftRows(Object.fromEntries(rows.map((row) => [row.id, { salesRate: String(row.salesRate), locked: row.locked }])));
       setPage(1);
-    } catch (error) { alert(error.message); setStockRows([]); } finally { setLoading(false); }
+    } catch (error) { if (requestId === stockRequestId.current) { alert(error.message); setStockRows([]); } } finally { if (requestId === stockRequestId.current) setLoading(false); }
   }, [companyCode, search, withStockOnly]);
 
   const openEntry = (stockSearch = "") => {
@@ -113,7 +118,7 @@ export default function BatchLockSalesRate({ companies = [], onStockChanged, nav
     </div>
     <div className="compact-master-form batch-rate-form">
       <div className="batch-rate-filters">
-        <div className="compact-field"><label>Company</label><select value={companyCode} onChange={(event) => { setCompanyCode(event.target.value); loadStock({ companyCode: event.target.value }); }}><option value="ALL">All Companies</option>{companies.map((company) => <option key={companyCodeOf(company)} value={companyCodeOf(company)}>{companyNameOf(company)}</option>)}</select></div>
+        <div className="compact-field"><label>Company</label><select value={companyCode} onChange={(event) => { setCompanyCode(event.target.value); loadStock({ companyCode: event.target.value }); }}><option value="ALL">All Companies</option>{(stockCompanies.length ? stockCompanies : companies).map((company) => <option key={companyCodeOf(company)} value={companyCodeOf(company)}>{companyNameOf(company)}</option>)}</select></div>
         <div className="compact-field"><label>With Stock Only</label><select value={withStockOnly} onChange={(event) => { setWithStockOnly(event.target.value); loadStock({ withStockOnly: event.target.value }); }}><option value="Y">Yes</option><option value="N">No</option></select></div>
         <div className="compact-field batch-rate-search"><label>Search Product / Batch</label><div><input value={search} onChange={(event) => setSearch(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter") loadStock(); }} placeholder="Enter Product Code / Product Name / Batch No..." /><button type="button" onClick={() => loadStock()}>Go</button></div></div>
         <div className="compact-field"><label>Change Reason *</label><input value={reason} maxLength={300} onChange={(event) => setReason(event.target.value)} placeholder="Reason for rate or lock change" /></div>

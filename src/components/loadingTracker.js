@@ -1,4 +1,5 @@
 const REVEAL_DELAY_MS = 200;
+const REPORT_MIN_VISIBLE_MS = 1200;
 const tasks = new Map();
 const listeners = new Set();
 let snapshot = null;
@@ -11,15 +12,23 @@ export function subscribeLoading(listener) { listeners.add(listener); return () 
 export function getLoadingSnapshot() { return snapshot; }
 export function startVisualLoading(content) {
   const id = Symbol();
-  const timer = window.setTimeout(() => {
+  const isReport = content.variant === "report";
+  let shownAt;
+  const show = () => {
+    shownAt = Date.now();
     tasks.set(id, { content });
     publish();
-  }, REVEAL_DELAY_MS);
+  };
+  const timer = isReport ? null : window.setTimeout(show, REVEAL_DELAY_MS);
+  if (isReport) show();
   let finished = false;
   return () => {
     if (finished) return;
     finished = true;
-    window.clearTimeout(timer);
-    if (tasks.delete(id)) publish();
+    if (timer !== null) window.clearTimeout(timer);
+    const remove = () => { if (tasks.delete(id)) publish(); };
+    const remaining = isReport ? Math.max(0, REPORT_MIN_VISIBLE_MS - (Date.now() - shownAt)) : 0;
+    if (remaining) window.setTimeout(remove, remaining);
+    else remove();
   };
 }

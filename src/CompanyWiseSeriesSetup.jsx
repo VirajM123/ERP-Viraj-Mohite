@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
-import { Building2, Pencil, Plus, Save, Search, Trash2, X } from "lucide-react";
+import { Building2, Pencil, Plus, Save, Search, Trash2, X, ShoppingCart, Warehouse, Settings, Wrench } from "lucide-react";
 import { API_URL } from "./api/config";
 import { secureFetch } from "./SecuritySetup";
 import "./CompanyWiseSeriesSetup.css";
@@ -107,8 +107,16 @@ export default function CompanyWiseSeriesSetup({ companies = [], onSaved, naviga
         <div className="compact-master-actions"><button type="button" className="compact-btn compact-btn-cancel" onClick={() => setView("list")}><X size={15} /> Cancel</button><button type="button" className="compact-btn compact-btn-primary" onClick={save} disabled={saving}><Save size={15} /> {saving ? <><span className="erp-loading-bar erp-loading-bar--inline" aria-hidden="true" /> Saving...</> : "Save"}</button></div>
       </div>
       <div className="compact-master-form company-series-form">
-        <div className="compact-field company-series-company-field"><label>Company <span>*</span></label><select value={form.companyCode} onChange={(event) => selectCompany(event.target.value)} disabled={Boolean(editingId)}><option value="">Select Company</option>{companyOptions.map((company) => <option key={company.code} value={company.code}>{company.name}</option>)}</select></div>
-        <div className="company-series-field-grid">{COMPANY_SERIES_COLUMNS.map((column) => <div className="compact-field" key={column.key}><label>{column.title} ({column.label})</label><input value={form[column.key] || ""} maxLength={20} placeholder="Series" onChange={(event) => setForm((current) => ({ ...current, [column.key]: event.target.value.toUpperCase() }))} /></div>)}</div>
+        <section className="company-series-section"><h2>Details</h2><div className="company-series-section-body"><div className="compact-field company-series-company-field"><label htmlFor="series-company">Company <span>*</span></label><select id="series-company" value={form.companyCode} onChange={(event) => selectCompany(event.target.value)} disabled={Boolean(editingId)}><option value="">Select Company</option>{companyOptions.map((company) => <option key={company.code} value={company.code}>{company.name}</option>)}</select></div></div></section>
+        {[
+          { title: "Sales & Purchase Series", icon: ShoppingCart, columns: COMPANY_SERIES_COLUMNS.slice(0, 4) },
+          { title: "Stock & Material Series", icon: Warehouse, columns: COMPANY_SERIES_COLUMNS.slice(4, 8) },
+          { title: "Transfer & Manufacturing Series", icon: Settings, columns: COMPANY_SERIES_COLUMNS.slice(8, 12) },
+          { title: "Service Series", icon: Wrench, columns: COMPANY_SERIES_COLUMNS.slice(12) },
+        ].map(({ title, icon: Icon, columns }) => <section className="company-series-section" key={title}>
+          <h2><Icon size={16} aria-hidden="true" />{title}</h2>
+          <div className="company-series-field-grid">{columns.map((column) => <div className="compact-field" key={column.key}><label htmlFor={`series-${column.key}`}>{column.title} ({column.label})</label><input id={`series-${column.key}`} value={form[column.key] || ""} maxLength={20} placeholder="Series" onChange={(event) => setForm((current) => ({ ...current, [column.key]: event.target.value.toUpperCase() }))} /></div>)}</div>
+        </section>)}
       </div>
     </div>;
   }
