@@ -10481,8 +10481,12 @@ const debitNotePermission = usePermission("VOUCHERS", "DEBIT_NOTE");
     }
 
     // Check HSN Code (up to 8 digits)
-    if (formData.hsn && formData.hsn.trim() !== '') {
-      if (!validateHSN(formData.hsn)) {
+    // Imported workbooks can contain an HSN as a numeric Excel cell.  Always
+    // normalize it before validation so opening an imported product for edit
+    // cannot call String#trim on a number.
+    const hsn = String(formData.hsn ?? '').trim();
+    if (hsn !== '') {
+      if (!validateHSN(hsn)) {
         alert('HSN Code must be up to 8 digits');
         return false;
       }
@@ -44405,8 +44409,9 @@ else if (item === 'Import Data From Desktop') {
 
   // Validate HSN Code (8 digits max)
   const validateHSN = (hsn) => {
-    if (!hsn || hsn.trim() === '') return true; // Allow empty
-    return /^[0-9]{1,8}$/.test(hsn.trim());
+    const normalizedHsn = String(hsn ?? '').trim();
+    if (!normalizedHsn) return true; // Allow empty
+    return /^[0-9]{1,8}$/.test(normalizedHsn);
   };
 
   // Validate Drug License Number (format: ALPHA-NUMERIC, at least 5 chars)
@@ -45947,7 +45952,15 @@ else if (item === 'Import Data From Desktop') {
       inboxPack: product.inboxPack || "0",
       retailerMargin: product.retailerMargin || "0",
       distributorMargin: product.distributorMargin || "0",
-      hsn: product.hsn || "0",
+      // Excel commonly exposes HSNs as numbers. Form inputs and the product
+      // validator operate on text, so normalize imported and legacy values.
+      hsn: String(
+        product.hsn ??
+        product.hsnCode ??
+        product.HSN ??
+        product.HSNCode ??
+        ""
+      ).trim(),
       weight: product.weight || "0",
       eanCode: product.eanCode || "", // NEW: Load EAN Code
       Rate_Per_Unit: product.Rate_Per_Unit || "0",
